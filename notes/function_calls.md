@@ -35,6 +35,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   preposition_calls.rs UNAMBIGUOUS_LABELS). A variable named `by` stays a variable; a label the function does not take is an error naming those it takes.
   `as` labels a parameter too: `save(made, as file)` is called `save sound as: "x.wav"`
   (type_name_matching.rs AS_LABEL).
+  Standard-library functions use the same form: `"I like tea".replace "tea" with: "coffee"`.
 - Result types before a block body: `-> int { … }`, `: number { … }`, `-> int: body` (declarations.rs `typed_result`).
 - A function body block of one braceless call `def f(x){square x}` is that call (library_words.rs `body_statement`).
 - Partial application stays `add(1, _)`; `add(1)` is a missing-argument error.

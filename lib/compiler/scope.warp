@@ -7,85 +7,132 @@ use "walk.warp"
 use "words.warp"
 
 # the name a binding form gives: `x`, `x: int`, `x: int = 1`; ø for anything else
-binding_name(view: any) := {
-	kind = kind_of(view)
-	if kind == "symbol" { return view#2 }
-	if kind == "key" { return binding_name(view#3) }
-	ø
+binding_name(n: Node): any := match n {
+	Symbol(name): name
+	Key(left, op, right): binding_name(left)
+	_: ø
 }
 
 # `x => …`, `(x => …)`: a lambda
-is_lambda_view(view: any) := {
-	kind = kind_of(view)
-	if kind == "key" { return view#2 == "=>" or view#2 == "->" }
-	kind == "list" and view#2 == "(" and #view == 4 and is_lambda_view(view#4)
+is_lambda(n: Node): bool := match n {
+	Key(left, op, right): (op as text) == "=>" or (op as text) == "->"
+	List(items, bracket, separator): (bracket as text) == "(" and #items == 1 and is_lambda(items#1)
+	_: no
 }
 
-is_round(view: any) := kind_of(view) == "list" and view#2 == "("
+is_round(n: Node): bool := bracket_of(n) == "("
+
+# the name of a head `f`, `f(a)`, `f: int`
+head_word(n: Node): text := match n {
+	Symbol(name): name
+	Key(left, op, right): head_word(left)
+	List(items, bracket, separator): { if #items > 0 then head_word(items#1) else "" }
+	_: ""
+}
 
 # the parameters of a lambda's left side `(a, b)`, `a`, or of a head's items after its name; a group of them, `f (a b)`,
 # gives its items
-parameters_of(head: any) := {
-	if not is_round(head) { return [binding_name(head)] }
+parameters_of(head: Node): list := if is_round(head) then parameters_in(items_of(head)) else bound_names(head)
+
+parameters_in(items: list): list := {
 	names = []
-	for item in head[3 ..] { names += if is_round(item) then parameters_of(item) else [binding_name(item)] }
+	for item in items { names += parameters_of(item) }
 	names
 }
 
-# `def f(a) {…}` arrives as `((f (a)) {…})`: the head `(f (a))`
-definition_head(view: any) := if is_round(view) and #view > 3 and is_round(view#4) then definition_head(view#4) else view
+# the name a parameter binds, none for a pattern without one: `f([]) := 0`
+bound_names(n: Node): list := {
+	name = binding_name(n)
+	if name == ø then [] else [name]
+}
 
-as_parameters(names: any) := names.map(name => [name, "parameter"])
+# `def f(a) {…}` arrives as `((f (a)) {…})`: the head `(f (a))`
+definition_head(n: Node): Node := {
+	if not is_round(n) { return n }
+	items = items_of(n)
+	if #items > 0 and is_round(items#1) then definition_head(items#1) else n
+}
+
+as_parameters(names: list): list := names.map(name => [name, "parameter"])
 
 # `f(a, b)` as a definition's head: the function and its parameters
-function_meanings(head: any) := {
-	if not is_round(head) { return [[head_name(head), "function"]] }
-	[[head_name(head), "function"]] + as_parameters(parameters_of(["list", "(", ""] + head[4 ..]))
+function_meanings(head: Node): list := {
+	if not is_round(head) { return [[head_word(head), "function"]] }
+	[[head_word(head), "function"]] + as_parameters(parameters_in(items_of(head)[1 ..]))
 }
 
 # `x = v`, `f(a) = …`, `f := …`: a variable, or a function when v is a lambda or the head a call
-assignment_meanings(op: text, target: any, value: any) := match target {
-	["list", "(", _, _, ..._] => function_meanings(target)
-	_ => [[binding_name(target), if op == ":=" or is_lambda_view(value) then "function" else "variable"]]
+assignment_meanings(op: text, target: Node, value: Node): list := {
+	if is_round(target) and #items_of(target) > 0 { return function_meanings(target) }
+	[[binding_name(target), if op == ":=" or is_lambda(value) then "function" else "variable"]]
 }
 
 # the meanings a word gives the item after it in a phrase: `for x`, `def f(a)`
-word_meanings(word: any, next: any) := match word {
-	["symbol", "for"] => [[binding_name(next), "loop"]]
-	["symbol", keyword] if function_keywords contains keyword => function_meanings(definition_head(next))
-	_ => []
+word_meanings(word: Node, next: Node): list := match word {
+	Symbol(name): {
+		if name == "for" then [[binding_name(next), "loop"]]
+		else if function_keywords contains name then function_meanings(definition_head(next))
+		else []
+	}
+	_: []
 }
 
-# the meanings the words of a list view give
-phrase_meanings(view: any) := {
+# the meanings the words of a list give
+phrase_meanings(items: list): list := {
 	found = []
-	for at in 4 ..< #view { found += word_meanings(view#at, view#(at + 1)) }
+	for at in 1 ..< #items { found += word_meanings(items#at, items#(at + 1)) }
 	found
 }
 
-# the meanings a view gives, [name, meaning] each
-meanings_of(view: any) := match view {
-	["key", op, target, value] if op == "=" or op == ":=" => assignment_meanings(op, target, value)
-	["key", op, parameters, _] if op == "=>" or op == "->" => as_parameters(parameters_of(parameters))
-	["list", _, _, ..._] => phrase_meanings(view)
-	_ => []
+# the meanings a node gives, [name, meaning] each
+meanings_of(n: Node): list := match n {
+	Key(target, op, value): key_meanings(target, op as text, value)
+	List(items, bracket, separator): phrase_meanings(items)
+	_: []
+}
+
+key_meanings(target: Node, op: text, value: Node): list := {
+	if op == "=" or op == ":=" { return assignment_meanings(op, target, value) }
+	if op == "=>" or op == "->" { return as_parameters(parameters_of(target)) }
+	[]
 }
 
 # `{k: v}`: the field k
-fields_of(view: any) := {
+fields_of(n: Node): list := {
 	found = []
-	if kind_of(view) != "list" or view#2 != "{" { return found }
-	for item in view[3 ..] {
-		found += match item {
-			["key", ":", name, _] => [[binding_name(name), "field"]]
-			_ => []
-		}
+	if bracket_of(n) != "{" { return found }
+	for item in items_of(n) { found += field_meanings(item) }
+	found
+}
+
+field_meanings(item: Node): list := match item {
+	Key(name, op, value): { if (op as text) == ":" then [[binding_name(name), "field"]] else [] }
+	_: []
+}
+
+# every key and list of a program, the program first; an opaque view's parts (a type's name and body) as nodes
+nodes_in(top: Node): list := {
+	found = []
+	unvisited = [top]
+	while #unvisited > 0 {
+		n = unvisited#(#unvisited)
+		unvisited = unvisited[0 ..< #unvisited - 1]
+		found += [n]
+		unvisited += parts_of(n)
 	}
 	found
 }
 
+parts_of(n: Node): list := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then opaque_parts(right) else [left, right] }
+	List(items, bracket, separator): items
+	_: []
+}
+
+opaque_parts(view: any): list := view.filter(part => part is list).map(node_of)
+
 # the scope with each [name, meaning] pair added
-remember(scope: any, pairs: any) := {
+remember(scope: any, pairs: list): any := {
 	for pair in pairs {
 		name = pair#1
 		if name != ø and name != "" {
@@ -97,16 +144,13 @@ remember(scope: any, pairs: any) := {
 }
 
 # name → its meanings, of the whole program
-scope_of(program: any) := scope_of_view(view_of(program))
-
-# name → its meanings, of a program's view (parser.warp's tree)
-scope_of_view(top: any) := {
+scope_of(program: Node): any := {
 	scope = {}
-	for view in lists_in(top) {
-		scope = remember(remember(scope, meanings_of(view)), fields_of(view))
+	for n in nodes_in(program) {
+		scope = remember(remember(scope, meanings_of(n)), fields_of(n))
 	}
 	scope
 }
 
-binds(scope: any, name: text) := scope.has(name)
-binds_as(scope: any, name: text, meaning: text) := scope.has(name) and scope[name] contains meaning
+binds(scope: any, name: text): bool := scope.has(name)
+binds_as(scope: any, name: text, meaning: text): bool := scope.has(name) and scope[name] contains meaning

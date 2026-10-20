@@ -1,3 +1,0 @@
-// card xs-xs-2: a function returning a bool local gives a bool (yes/no, not 1/0)
-seen(xs) := { hit = no; for x in xs { if x > 2 { hit = yes } }; hit }
-print [seen([1, 5]), seen([1])]

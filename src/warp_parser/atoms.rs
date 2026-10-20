@@ -6,6 +6,16 @@ use crate::words::STYLE_WORD;
 use crate::words::SWITCH_WORDS;
 
 use crate::words::VOID_WORD;
+use crate::words::{WASM_INSTRUCTION_CALL, WASM_WORD};
+
+/// Rust's endless `loop { … }`
+const LOOP_WORD: &str = "loop";
+/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/control/go_blocks.rs,
+/// card error-beep), `loop{…}` loops, `do{…}` runs its block (card glued-loop); no tags `go:{…}`
+const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
+/// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
+const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
+const TO_SENTENCE_WORD: &str = "To";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
@@ -261,6 +271,7 @@ impl WarpParser {
 			return Node::Symbol(literal);
 		}
 		let symbol = or_return_error!(self.parse_symbol());
+		let symbol = self.bang_word(symbol);
 		let symbol = self.joined_type_name(symbol);
 		let symbol = self.print_spelled(symbol);
 
@@ -296,9 +307,10 @@ impl WarpParser {
 		if symbol == NONE_WORD && self.peek_char(0) == '(' && !self.options.data_mode {
 			return error(NONE_CALL_ERROR);
 		}
-		if let Some(constant) =
-			check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count()))
-		{
+		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| {
+			let length = symbol.chars().count();
+			!self.at_member_name(length) && !self.at_scoped_name(length) && !self.context.in_enum_cases
+		}) {
 			if !self.names_field(&symbol, &constant) {
 				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}
@@ -306,6 +318,9 @@ impl WarpParser {
 
 		if let Some(declaration) = self.try_parse_operator_declaration(&symbol) {
 			return declaration;
+		}
+		if let Some(instruction) = self.wasm_instruction_after(&symbol) {
+			return instruction;
 		}
 
 		// Possessive: `p's name` is the field `p.name`
@@ -440,8 +455,12 @@ impl WarpParser {
 			});
 		}
 		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
-		if symbol == ENUM_WORD && self.in_code() && self.enum_with_values_ahead() {
-			return Some(self.parse_enum_with_values());
+		if symbol == ENUM_WORD && self.in_code() {
+			match self.enum_body_ahead() {
+				Some(true) => return Some(self.parse_enum_with_values()),
+				Some(false) => return Some(self.parse_plain_enum()),
+				None => {}
+			}
 		}
 		self.foreign_form(symbol)
 	}
@@ -560,6 +579,45 @@ impl WarpParser {
 			}
 			_ => Node::symbol(&symbol),
 		}
+	}
+
+	/// `is!`: a name glued to `!` is one word when the program or a standard module defines it so (card warp-is-tests);
+	/// otherwise the `!` stays a suffix (`x!`, `name! email?`), a macro (`println!(…)`) or `!=`
+	fn bang_word(&mut self, symbol: String) -> String {
+		if self.current_char() != BANG || self.peek_char(1) == '=' || self.options.data_mode {
+			return symbol;
+		}
+		if !self.defines_bang_word(&symbol) {
+			return symbol;
+		}
+		self.advance();
+		format!("{symbol}{BANG}")
+	}
+
+	/// `wasm f64.floor`, the word wasm and an instruction name (a type, a dot, its operation): the call
+	/// `wasm_instruction("f64.floor")`; any other `wasm` stays a word
+	fn wasm_instruction_after(&mut self, symbol: &str) -> Option<Node> {
+		if symbol != WASM_WORD || self.options.data_mode || self.current_char() != ' ' {
+			return None;
+		}
+		let rest = &self.chars[self.pos + 1..];
+		let is_name_char = |c: &&char| c.is_ascii_lowercase() || c.is_ascii_digit() || **c == '_';
+		let type_length = rest.iter().take_while(|c| c.is_ascii_lowercase() || c.is_ascii_digit()).count();
+		if type_length == 0 || rest.get(type_length) != Some(&'.') {
+			return None;
+		}
+		let operation_length = rest[type_length + 1..].iter().take_while(is_name_char).count();
+		if operation_length == 0 {
+			return None;
+		}
+		self.advance();
+		let name = self.take_chars(type_length + 1 + operation_length);
+		if crate::wasm_emitter::functions::wasm_bodies::instruction(&name).is_none() {
+			return Some(error(&format!(
+				"wasm {name} is no instruction warp takes: the ones on i64 and f64, e.g. wasm f64.sqrt"
+			)));
+		}
+		Some(crate::node::call(WASM_INSTRUCTION_CALL, vec![Node::Text(name)]))
 	}
 
 	pub(super) fn parse_symbol(&mut self) -> Result<String, String> {

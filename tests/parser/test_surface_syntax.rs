@@ -1,7 +1,6 @@
 // User decisions 2026-10-03 (notes/open_decisions.md): #25/#36 a space before `[` never indexes,
 // #27 Unicode operators normalized to ASCII and `be` as `:=`, D8 similarity with a relative tolerance.
-use crate::{eq, is};
-use warp::warp_parser::parse;
+use crate::is;
 
 #[test]
 fn space_before_bracket_passes_the_list() {
@@ -15,29 +14,20 @@ fn space_before_bracket_passes_the_list() {
 
 #[test]
 fn unicode_operators_are_their_ascii_spelling() {
-	for (unicode, ascii) in [
-		("3 ≤ 4", "3 <= 4"),
-		("3 ≥ 4", "3 >= 4"),
-		("3 ≠ 4", "3 != 4"),
-		("3 × 4", "3 * 4"),
-		("8 ÷ 4", "8 / 4"),
-		("¬ x", "not x"),
-		("√ x", "sqrt x"),
-	] {
-		eq!(parse(unicode), parse(ascii));
-	}
 	is!("3 ≤ 4", true);
 	is!("4 ≥ 5", false);
 	is!("3 ≠ 4", true);
 	is!("3 × 4", 12);
 	is!("8 ÷ 4", 2);
+	is!("7 ÷ 2", 3);
+	is!("-7 ÷ 2", -4);
+	is!("x = 7; x ÷= 2; x", 3);
 	is!("¬ false", true);
 	is!("√16", 4);
 }
 
 #[test]
 fn be_defines_like_colon_equals() {
-	eq!(parse("x be 3"), parse("x := 3"));
 	is!("x be 3; x", 3);
 	is!("twice be it*2; twice 4", 8);
 }

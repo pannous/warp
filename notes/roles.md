@@ -42,49 +42,12 @@ After each batch of questions, and whenever idle, `todo try --new` lists finishe
 - The user answers in their next message: works → `todo tried <card>`; a failure → `todo add "…" Now` for the worker
   who built it; untouched ones stay in `todo try`.
 
-## Never blocked by a decision
-A session that needs a decision takes the recommended option (the one most in line with notes/welcoming.md and the
-decided rules), marks it in code/notes as an assumption, keeps working, and SendMessages the Interviewer the
-question. If the answer differs, the change is undone or redone as a normal small task. Edits to existing tests count
-as such a decision: the edit goes on the branch in its own commit (named in the message), so reverting it is one
-revert. Test upgrades need no question (notes/agents/common.md).
-
 ## Integrator (also the Tester)
-The only session that runs the full suite and the only one that pushes code to main.
-- Keeps one integration worktree (/Volumes/Worktrees/integrate, detached, follows origin/main;
-  created with `cowtree add --detach <path> origin/main`).
-- Its queue is the board's Ready column: workers push and run `todo ready <card>`, which records branch and tip and
-  refuses a branch that does not merge cleanly into origin/main; `todo list Ready` shows them. Only Ready cards are
-  merged; `todo ready --stray` reports unmerged branches without a card (never merged). It merges the tips (resolving
-  only trivial conflicts: formatting, mod/use lists, adjacent list additions; logic touched on both sides bounces to
-  the owner), runs `./test.sh` with the integration build tweak, and pushes to main only at 0 failed and no drop in
-  the test count, then `todo done <card> <commit>` (Ready → Done). Otherwise the card bounces: `todo move <card> Now`
-  + `todo note` with the failure (and the Supervisor hears if it's a decision).
-- Fix forward, don't hold the batch: when up to 10 tests fail after a merge, the Integrator marks each one
-  `#[ignore = "fixnow: <card>: <first panic line>"]` in its own commit and pushes the batch; for each test it adds a
-  `fixnow-<test>` card in Now for the owner of the branch that broke it (or the area worker). The owner fixes forward
-  and drops the ignore; `grep -rn 'fixnow' tests/` lists what's open. When the ignored test pins an old edge case the
-  new behaviour arguably improves on, the question goes to warp-interviewer (keep the old case, or change the test),
-  the ignore stays until answered. Only more than 10 failures, or a failure nobody can fix forward (wrong output
-  across a whole feature, a crash at start), leads to backtracking: the branch leaves the batch and bounces. The
-  test-count check counts fixnow ignores as present.
-- Batches of at most ~8 Ready cards per run; wide refactors and carrier branches land alone and first. Runs a
-  worker's targeted check on request.
-- Express: a card readied with `--express` (the user asked for that agent's result) goes live untested, within a
-  minute (no tests or checks; a failure shows live and is fixed forward): integrator_tools/express.sh merges it onto main, pushes, closes the card and deploys the Playground with
-  skip_checks. The next batch's gate tests it; a red one is fixed forward by its owner first.
-- Crash fixes first: a crash card or a branch fixing a panic or trap is always express.
-- User changes are signals: whenever a batch or a push meets changes by the user (commits on main, uncommitted edits
-  carried along), look for the wish behind them and a general pattern: a commented-out line or TODO is a missing
-  feature, a changed constant a complaint (speed, size), a new sample a use case. Each becomes a card (`todo add`),
-  or a question for the Interviewer when the intent is open.
-- Every landing gets a try line: the merge report names each user-visible branch to its owner, who sends
-  warp-interviewer the try line; for an owner that has retired the Integrator sends it itself.
-- Before every merge: Cargo.toml/Cargo.lock restored (a branch that changes Cargo.toml is otherwise refused, and a
-  grep for "conflict" does not show that). Before reporting a branch merged: `git merge-base --is-ancestor
-  origin/<branch> HEAD`.
-- Triggers GitHub CI only when asked or for a release (`gh workflow run "Rust CI" -R pannous/warp`).
-- Keeps the baseline (test_results.txt) and the "Merged" lines on the board; tells the Supervisor after each merge.
+The only session that runs the full suite and the only one that pushes code to main. Its queue is the board's Ready
+column (`todo ready <card>`); it merges batches of at most ~8 Ready cards in /Volumes/Worktrees/integrate, runs the
+gate, pushes at 0 failed (fix forward: up to 10 failures are ignored as `fixnow` onto the owner's card), closes the
+cards and bounces the rest to Now with a note. Express cards and crash fixes go live untested at once. How:
+notes/agents/integrator.md.
 
 ## Reviewer
 Makes sure everything is sound and beautiful according to standards. It reads each Ready card's diff in parallel
@@ -123,45 +86,8 @@ It must always run in bypass permissions mode: after every start, check
 the footer shows bypass permissions; card sends pass `--permission-mode bypassPermissions` too.
 
 ## Workers
-- One task, one branch, one worktree: `cowtree add -b <name> /Volumes/Worktrees/<name> origin/main`, on the Worktrees
-  volume (notes/churn_volume.md: Spotlight off, no fseventsd log, cowtree clones the donor /Volumes/Worktrees/warp,
-  which nobody removes). Outside the repo, so grep/IDE/cargo of the main checkout never see it. Uncommitted build tweak in it:
-  `version = "0.1.1-<name>"` (notes/build_speed.md).
-- Small changes on main: only changes that cannot break the build or a test, i.e. nothing compiled: notes, docs,
-  wiki, probes, scripts, samples, playground text, go straight onto main in the main checkout
-  /Users/me/dev/angles/warp, no worktree or branch. Anything in src/, crates/, tests/, Cargo.* or build.rs keeps its
-  worktree, however small: a half-done edit there breaks every build of the main checkout. There: commit your own
-  paths in their own commit (`git commit -- <paths>`), run the targeted tests through the queue,
-  `git pull --rebase --autostash`, push (the Integrator's next full run is the check). Never leave unpushed commits on main.
-- The user's uncommitted edits met in the main checkout are integrated at once, in the main checkout itself, not
-  left lying or parked in an Integrator batch (an unpushed batch commit leaves their checkout showing them
-  uncommitted); staged and untracked files count too, the user's `git status` must end clean. Read each diff,
-  complete it to the conventions (a new sample gets its shebang and chmod +x), fix what it breaks (a deleted
-  sample's references; a test whose meaning it changes goes to the Interviewer), run it, commit it as the user's
-  change in a commit of its own. Intent unclear → warp-interviewer.
-- Moving on demand: a change that grows (more than a few files, many build/test rounds, or another session's files)
-  moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`, `git diff -- <own paths> |
-  git -C <worktree> apply`, then undo only your own paths in the main checkout. The way back: a branch that turns out
-  small goes straight to main itself (`git pull --rebase` in the worktree, push `HEAD:main`), no Integrator batch.
-- Test first, then implement. While developing, only targeted tests and only through the queue:
-  `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
-- Cloud test lane (notes/cloud_development.md section 5): a pushed tip's targeted tests can run on a cloud VM of
-  their own instead of the Mac's queue: `scripts/cloud-test.sh --card <card> <branch> <tip from git rev-parse HEAD>
-  <filters>`, in the background (~6 min, ~$0.30 of the Cloud session credit; exit 0 = green, the result goes on the
-  card). Use it when more than a few runs wait in the queue (`ls ~/.cargo/warp-tests.lock.queue | wc -l`) and the
-  change is committed and pushed. Keep tests/queue.sh for uncommitted edits, quick re-runs of one test, and tests
-  that need the Mac (sound devices, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt). A green cloud run
-  counts as the targeted run before `todo ready`. At most 3 cloud runs at once (the script waits for a free one).
-- Done = commit on the branch, targeted tests, merge origin/main (conflicts are the worker's to resolve), push the
-  branch, `todo ready <card>` (notes/agents/common.md "Done"). A bounced card comes back to Now with a note, the
-  worker fixes it and readies it again.
-- Closing a card whose result the user can see or use (a feature, a visible fix, a sample, a playground change):
-  `todo done <card> <commit> --try "how to try it"`: one concrete line, only once it is on main and, for web changes,
-  deployed. Internal work (cleanup, tests, notes) has no --try.
-- After the merge, remove your worktree and branch: `git -C /Users/me/dev/angles/warp worktree remove --force
-  <worktree> && git -C /Users/me/dev/angles/warp branch -D <branch>` (the hook allows both when only the build tweak
-  is uncommitted and main or a remote holds the commits). Write the paths literally: the hook cannot check a shell
-  variable.
+One task, one branch, one worktree; targeted tests through the queue; done = `todo ready <card>`. Every rule:
+notes/agents/common.md (role prompts: worker.md, fixer.md, implementer.md).
 
 ## Enforcement
 - `tests/queue.sh`: every test run waits for one of 3 machine-wide slot locks (`~/.cargo/warp-tests.lock`, `.lock.2`,

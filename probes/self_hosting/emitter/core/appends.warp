@@ -1,0 +1,7 @@
+# emitter: `+=` of lists grows the list's array in place (twice as large when full), on a list local and on a local
+# that starts as ø (a comprehension's accumulator)
+xs = [1, 2]
+for i in 3..20 { xs += [i] }
+xs += [20, 21]
+squares = [v * v for v in xs]
+#xs + #squares + squares#21

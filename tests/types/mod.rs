@@ -66,6 +66,7 @@ mod test_duration_units; // card time-module
 mod test_element_field_writes;
 mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
+mod test_empty_reflection; // card crash-index
 mod test_empty_type_aliases;
 mod test_enum_cases;
 mod test_enum_parameter_type;
@@ -144,6 +145,7 @@ mod test_returned_instances; // card units-dynamic
 mod test_returned_list_alias; // card identity-copies-list
 mod test_runtime_text_ratio;
 mod test_same_identity;
+mod test_scoped_enum_cases; // card node-enum
 mod test_self_typed_field; // card empty-field
 mod test_shared_instances;
 mod test_shared_lists; // card shared-lists
@@ -154,9 +156,11 @@ mod test_struct_field_of_constructor;
 mod test_struct_instances;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_struct_types;
+mod test_subclass_is; // card animal-dog
 mod test_sum_types;
 mod test_symbol_parameters; // card symbol-parameters
 mod test_symbolism_object; // card symbolism-object
+mod test_tag_children; // tag_children.rs: the items of any tag's block
 mod test_tag_entries; // decision markup-plain-library
 mod test_tagged_objects;
 mod test_tagged_unions; // card tagged-unions
@@ -164,6 +168,7 @@ mod test_text_as_bool; // card yes-print
 mod test_text_as_number; // card units-dynamic
 mod test_text_defaults; // card empty-text-default
 mod test_text_of_text; // text(text(5)) is "5"
+mod test_time_fields_warp; // card time-fields-warp
 mod test_time_kinds_are_types; // card anchor-time
 mod test_time_now; // cards print-time, time-now
 mod test_time_programs_run; // card run-time-dates, stage B4

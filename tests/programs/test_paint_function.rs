@@ -39,8 +39,9 @@ fn has_gpu() -> bool {
 	warp::graphics::gpu::with_device(|_, _| ()).is_ok()
 }
 
-fn lowered(program: &str) -> String {
-	warp::pipeline::lower(program).expect("a program").serialize()
+/// The WGSL `paint(function, …)` compiles `function` to, as `print shader_of(function)` shows it
+fn shader_of(program: &str, function: &str) -> String {
+	crate::common::printed(&format!("{program}print shader_of({function})"))
 }
 
 /// The pixels as RGB triples: a grayscale PNG's levels repeated
@@ -68,9 +69,9 @@ fn painted_both_ways(program: &str, function: &str, width: usize, folder: &str) 
 
 #[test]
 fn a_painted_function_becomes_a_fragment_shader() {
-	let mandelbrot = lowered(&format!("{MANDELBROT}paint(ink, width, height)"));
+	let mandelbrot = shader_of(MANDELBROT, "ink");
 	assert!(mandelbrot.contains("@fragment") && mandelbrot.contains("fn warp_escape_time("), "{mandelbrot}");
-	let colored = lowered(&format!("{COLORED}paint(stripes, width, height)"));
+	let colored = shader_of(COLORED, "stripes");
 	assert!(colored.contains("fn warp_hsv_color("), "{colored}");
 }
 
@@ -96,7 +97,7 @@ fn a_painted_function_paints_on_the_gpu_what_the_cpu_paints() {
 #[test]
 fn a_function_wgsl_cannot_compute_paints_on_the_cpu() {
 	let program = "width = 6\nheight = 2\nnamed(x, y) := x < count(\"abc\")\n";
-	assert!(!lowered(&format!("{program}paint(named, width, height)")).contains("@fragment"));
+	crate::common::fails_with(&format!("{program}shader_of(named)"), "WGSL cannot compute named");
 	assert_eq!(
 		painted_rows(&format!("{program}paint(named, width, height)"), "paint-named"),
 		[0, 29, 29, 29, 250, 250, 250, 0, 29, 29, 29, 250, 250, 250]
@@ -119,7 +120,7 @@ glow(x, y) := {
 
 #[test]
 fn a_painted_function_of_vectors_becomes_a_fragment_shader() {
-	let shader = lowered(&format!("{VECTORS}paint(glow, width, height)"));
+	let shader = shader_of(VECTORS, "glow");
 	assert!(shader.contains("@fragment") && shader.contains("fn warp_turned_21(a_p: vec2f"), "{shader}");
 	if !has_gpu() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
@@ -148,8 +149,8 @@ bars(x, y) := [levels#(x + 1), 0.5, 1 - levels#(x + 1)]
 
 #[test]
 fn a_painted_function_reads_an_item_of_a_program_list() {
-	let shader = lowered(&format!("{LEVELS}paint(bars, width, height)"));
-	assert!(shader.contains("values.levels[i32(") && !shader.contains("{levels:levels}"), "{shader}");
+	let shader = shader_of(LEVELS, "bars");
+	assert!(shader.contains("values.levels[i32("), "{shader}");
 	if !has_gpu() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
@@ -165,7 +166,7 @@ spot(x, y) := norm([x, y] .- center()) < 3
 
 #[test]
 fn a_painted_function_calls_a_function_of_no_parameters() {
-	let shader = lowered(&format!("{SPOT}paint(spot, width, height)"));
+	let shader = shader_of(SPOT, "spot");
 	assert!(shader.contains("fn warp_center() -> vec2f") && shader.contains("- warp_center()"), "{shader}");
 	if !has_gpu() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
@@ -181,7 +182,7 @@ steps(x, y) := round(x / 2 + 0.5) % 2
 
 #[test]
 fn a_painted_function_rounds_halves_to_even() {
-	assert!(lowered(&format!("{STEPS}paint(steps, width, height)")).contains("round(("));
+	assert!(shader_of(STEPS, "steps").contains("round(("));
 	if !has_gpu() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
@@ -195,8 +196,8 @@ fn a_painted_function_of_a_program_with_notes_becomes_a_fragment_shader() {
 	let program = "use sound
 song = melody_samples([C4], 0.25)
 near(x, y) := x + 1 < 2
-paint(near, 4, 4)";
-	assert!(lowered(program).contains("@fragment"));
+";
+	assert!(shader_of(program, "near").contains("@fragment"));
 }
 
 /// card compile-shaders step 4, decision S1: `p.x`, `c.zxy` are WGSL's swizzles of the vector, the same colors as the
@@ -214,7 +215,7 @@ glow(x, y) := {
 
 #[test]
 fn swizzles_become_the_shaders_swizzles() {
-	let shader = lowered(&format!("{SWIZZLES}paint(glow, width, height)"));
+	let shader = shader_of(SWIZZLES, "glow");
 	assert!(shader.contains("@fragment") && shader.contains(".zxy") && shader.contains("v_p.x"), "{shader}");
 	if !has_gpu() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());

@@ -1,7 +1,7 @@
 //! `serve 8080 { get "/api/users" { users } post "/echo" { request.body } }` (card web-server, notes/web_framework.md):
-//! lowering/web_server.rs makes each route a function `route·N(request:any)` and the statement the host call
-//! `serve_routes(port, [[method, path, function] …])`; this serves HTTP on the port and calls the route's function with
-//! the request {method, path, query, body, headers} (a JSON body parsed, header names as `Content-Type`). The value answers: a text as text/plain, any other
+//! lowering/web/serve.rs adds each route to lib/router.warp's table and ends in the host call
+//! `serve_routes(port, [[method, path] …])`; this serves HTTP on the port and asks the program's page·submitted for
+//! the answer of the request {method, path, query, body, headers} (a JSON body parsed, header names as `Content-Type`). The value answers: a text as text/plain, any other
 //! value as JSON (as std json's to_json writes it, an instance as a plain object); a route's path may have typed
 //! parameters as a page route's (`get "/api/users/:id:int"`). No route is 404, a failing route 500 with its message,
 //! a refused request 400 or 404 (Route::failure_answer); a page path no route of the page matches is 404 too.
@@ -73,11 +73,10 @@ pub struct RouteFailure {
 	pub raised: bool,
 }
 
-/// A route of the program: method, path, the function answering it and whether its value is a list
+/// A route of the program: method, path and whether its value is a list
 pub struct Route {
 	pub method: String,
 	pub path: String,
-	pub function: String,
 	pub lists: bool,
 }
 
@@ -190,9 +189,7 @@ impl Answer {
 /// no class wrapper in /api and /rpc JSON); an object's own entries stay, so a map field `address:{…}` keeps its name
 fn without_classes(value: &Node) -> Node {
 	match value.drop_meta() {
-		Node::Key(_, Op::None, body) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			without_classes(body)
-		}
+		Node::Key(_, Op::None, body) if body.is_block() => without_classes(body),
 		Node::List(items, Bracket::Curly, separator) => Node::List(
 			items
 				.iter()
@@ -238,7 +235,7 @@ fn failure_status(message: &str) -> u16 {
 	}
 }
 
-/// The routes of `[[method, path, function] …]`, a list route marked `[method, path, function, serve::LIST_ANSWER]`
+/// The routes of `[[method, path] …]`, a list route marked `[method, path, serve::LIST_ANSWER]`
 pub fn routes_of(routes: &Node) -> Vec<Route> {
 	let Node::List(items, _, _) = routes.drop_meta() else {
 		return vec![];
@@ -246,11 +243,10 @@ pub fn routes_of(routes: &Node) -> Vec<Route> {
 	items
 		.iter()
 		.filter_map(|route| match route.drop_meta() {
-			Node::List(parts, _, _) if (3..=4).contains(&parts.len()) => Some(Route {
+			Node::List(parts, _, _) if (2..=3).contains(&parts.len()) => Some(Route {
 				method: parts[0].text_or_name(),
 				path: parts[1].text_or_name(),
-				function: parts[2].text_or_name(),
-				lists: parts.get(3).is_some_and(|mark| mark.text_or_name() == crate::serve::LIST_ANSWER),
+				lists: parts.get(2).is_some_and(|mark| mark.text_or_name() == crate::serve::LIST_ANSWER),
 			}),
 			_ => None,
 		})

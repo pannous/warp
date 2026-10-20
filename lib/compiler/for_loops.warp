@@ -1,0 +1,86 @@
+# `for` loops lower to the `while` loop (card pure-runs; Rust twin: src/lowering/control/for_loop.rs):
+# `for i in a..b body` → `i = a; i·end = b; while i < i·end { body; i++ }` (`to` and `...` include b: `<=`), so b is
+#   evaluated once, before the loop, and i is b (b+1) afterwards
+# `for x in xs body`   → `x·items = xs; x·index = 0; while x·index < #x·items { x = x·items#(x·index+1); body; x·index++ }`
+# `for i in b down to a body` (the parser's `reverse(a to b)`) → `i = b; while i >= a { body; i-- }`
+# `for xs body` loops with the variable `it`. Any other `for` stays as written and is refused downstream, loudly.
+# The step is marked `loop·step: i++`, as Rust marks it (node_views.rs SHOWN_STEP): a `continue` still runs it, and
+# the loop's value is the body's, not the step's.
+use "walk.warp"
+use "phrase_blocks.warp"
+
+implicit_variable = "it"
+
+marked_step(step: Node): Node := Key(symbol("loop·step"), Op.Colon, step)
+
+loop_name(variable: Node, suffix: text): Node := match variable {
+	Symbol(name): symbol(name + "·" + suffix)
+	_: variable
+}
+
+# the body's statements: a `{…}` block's lines (phrase_blocks made `{print i}` one), a bare body as it is
+body_statements(body: Node): list := match body {
+	List(items, Bracket.Curly, separator): items
+	_: [body]
+}
+
+statement_sequence(statements: list): Node := List(statements, Bracket.Round, Separator.Semicolon)
+
+while_loop(condition: Node, statements: list): Node :=
+	Key(Key(ø, Op.While, condition), Op.Do, List(statements, Bracket.Curly, Separator.Semicolon))
+
+counted_loop(variable: Node, start: Node, end: Node, inclusive: bool, body: Node): Node := {
+	condition = if inclusive then Op.Le else Op.Lt
+	stepped(variable, start, end, condition, Op.Inc, body)
+}
+
+# `variable = start; while variable <condition> end { body; variable <step> }`, end evaluated once
+stepped(variable: Node, start: Node, end: Node, condition: any, step: any, body: Node): Node := {
+	limit = end
+	setup = [Key(variable, Op.Assign, start)]
+	if not (end is number) {
+		limit = loop_name(variable, "end")
+		setup = setup + [Key(limit, Op.Assign, end)]
+	}
+	statement_sequence(setup + [while_loop(Key(variable, condition, limit), body_statements(body) + [marked_step(Key(variable, step, ø))])])
+}
+
+# `reverse(a to b)`: from b down to a
+counted_down(variable: Node, range: Node, body: Node): Node := match range {
+	Key(start, Op.To, end): stepped(variable, end, start, Op.Ge, Op.Dec, body)
+	_: walked(variable, List([symbol("reverse"), range], Bracket.Round, Separator.None), body)
+}
+
+reversed_range(variable: Node, call: list, body: Node): Node := {
+	if #call == 2 and call#1 == symbol("reverse") { return counted_down(variable, call#2, body) }
+	walked(variable, List(call, Bracket.Round, Separator.None), body)
+}
+
+walked(variable: Node, iterable: Node, body: Node): Node := {
+	items = loop_name(variable, "items")
+	index = loop_name(variable, "index")
+	item = Key(variable, Op.Assign, Key(items, Op.Hash, Key(index, Op.Add, 1)))
+	rounds = [item] + body_statements(body) + [marked_step(Key(index, Op.Inc, ø))]
+	setup = [Key(items, Op.Assign, iterable), Key(index, Op.Assign, 0)]
+	statement_sequence(setup + [while_loop(Key(index, Op.Lt, Key(ø, Op.Hash, items)), rounds)])
+}
+
+loop_over(variable: Node, iterable: Node, body: Node): Node := match iterable {
+	Key(start, Op.Range, end): counted_loop(variable, start, end, no, body)
+	Key(start, Op.To, end): counted_loop(variable, start, end, yes, body)
+	List(call, Bracket.Round, Separator.None): reversed_range(variable, call, body)
+	_: walked(variable, iterable, body)
+}
+
+lowered_for(n: Node): Node := match n {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts == 5 and parts#1 == symbol("for") and parts#3 == symbol("in") and is_name(parts#2) {
+			return loop_over(parts#2, parts#4, parts#5)
+		}
+		if #parts == 3 and parts#1 == symbol("for") { return loop_over(symbol(implicit_variable), parts#2, parts#3) }
+		n
+	}
+	_: n
+}
+
+for_loops(program: any): any := bottom_up(program, lowered_for)

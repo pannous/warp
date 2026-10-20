@@ -42,6 +42,9 @@ fn is_kebab_name(word: &str) -> bool {
 	word.contains('-') && word.split('-').all(is_plain_name)
 }
 
+/// The mark ending a bang word's name: `is!`
+pub(crate) const BANG: char = '!';
+
 pub(crate) fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
@@ -50,15 +53,18 @@ pub(crate) fn is_plain_name(word: &str) -> bool {
 /// outside comments and texts (`// the type end` declares nothing)
 pub(super) fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 	let source = code_only(source);
-	let words: Vec<&str> = source.split_whitespace().collect();
-	words
-		.windows(2)
-		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
+	// word pairs within a line: `x = type` ending one declares nothing with the next line's first word
+	let pairs = source.lines().flat_map(|line| {
+		let words: Vec<&str> = line.split_whitespace().collect();
+		words.windows(2).map(|pair| (pair[0], pair[1])).collect::<Vec<_>>()
+	});
+	pairs
+		.filter(|(word, _)| TYPE_DECLARATION_WORDS.contains(word) || *word == RECORD_WORD || *word == "type")
 		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
 		// `record = find(…)` declares nothing
-		.filter_map(|pair| {
-			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch) || *ch == '-').collect();
-			let rest = &pair[1][name.len()..];
+		.filter_map(|(_, next)| {
+			let name: String = next.chars().take_while(|ch| is_identifier_char(*ch) || *ch == '-').collect();
+			let rest = &next[name.len()..];
 			(rest.is_empty() || rest.starts_with(['(', '{', '<', '[', ':', ';'])).then_some(name)
 		})
 		.filter(|name| is_plain_name(name) || is_kebab_name(name))
@@ -82,19 +88,36 @@ pub(super) fn parameter_names(list: &str) -> Vec<String> {
 	list.split([',', '(', ')', ' ', '\t']).map(leading_name).filter(|name| is_plain_name(name)).collect()
 }
 
-/// The name of the function `statement` defines: `def f(x)`, `f(x) := …`, `f = x => …`
+/// The name a definition's head starts with: `f`, or a bang word `is!` (card warp-is-tests)
+fn defined_name(text: &str) -> String {
+	let name = leading_name(text);
+	let after = &text.trim_start()[name.len()..];
+	let bang = !name.is_empty() && after.starts_with(BANG) && !after[BANG.len_utf8()..].starts_with('=');
+	if bang {
+		format!("{name}{BANG}")
+	} else {
+		name
+	}
+}
+
+/// A name the program may define: a plain one, or a plain one ending in `!` (`is!`), a word of its own
+pub(crate) fn is_definable_name(name: &str) -> bool {
+	is_plain_name(name.strip_suffix(BANG).unwrap_or(name))
+}
+
+/// The name of the function `statement` defines: `def f(x)`, `f(x) := …`, `f = x => …`, `def is!(…) := …`
 fn definition_in(statement: &str) -> Option<String> {
 	let statement = statement.trim();
 	let first = statement.split_whitespace().next()?;
 	let name = if crate::operators::is_function_keyword(first) {
-		leading_name(&statement[first.len()..])
+		defined_name(&statement[first.len()..])
 	} else if let Some((head, _)) = statement.split_once(":=") {
-		leading_name(head)
+		defined_name(head)
 	} else {
 		let (head, value) = statement.split_once('=')?;
 		starts_as_function(value.trim_start()).then(|| head.trim().to_string())?
 	};
-	is_plain_name(&name).then_some(name)
+	is_definable_name(&name).then_some(name)
 }
 
 /// A value that starts as a function: `x => …`, `(a, b) -> …`, `function (a) {…}`
@@ -155,7 +178,7 @@ fn multi_word_types_in_line(line: &str) -> Vec<Vec<String>> {
 	types
 }
 
-/// The source with its comments (`// …`, `/* … */`) and texts (`"…"`, `'…'`) blanked out
+/// The source with its comments (`// …`, `# …`, `/* … */`, `/# … #/`) and texts (`"…"`, `'…'`) blanked out
 pub(crate) fn code_only(source: &str) -> String {
 	let chars: Vec<char> = source.chars().collect();
 	let mut code = String::with_capacity(source.len());
@@ -171,7 +194,7 @@ pub(crate) fn code_only(source: &str) -> String {
 
 /// Where the comments and texts of a source start and end, in characters; the lexer's first pass (card self-lexer,
 /// lib/compiler/lexer.warp spans is its warp twin)
-pub fn comment_and_text_spans(source: &str) -> Vec<(usize, usize)> {
+pub(crate) fn comment_and_text_spans(source: &str) -> Vec<(usize, usize)> {
 	let chars: Vec<char> = source.chars().collect();
 	let mut spans = Vec::new();
 	let mut at = 0;
@@ -187,21 +210,28 @@ pub fn comment_and_text_spans(source: &str) -> Vec<(usize, usize)> {
 	spans
 }
 
-/// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there
+/// The end of the comment (`// …`, `# …`, `/* … */`, `/# … #/`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there
 pub(crate) fn text_or_comment_end(chars: &[char], at: usize) -> Option<usize> {
 	let (c, next) = (chars[at], chars.get(at + 1).copied());
 	let skip_until = |from: usize, end: &[char]| {
 		(from..chars.len()).find(|&i| chars[i..].starts_with(end)).map_or(chars.len(), |i| i + end.len())
 	};
+	let line_end = || (at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len());
 	let after = match (c, next) {
-		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => {
-			(at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len())
-		}
+		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => line_end(),
+		('#', Some(' ' | '\t')) => line_end(),
+		('#', _) if at_line_start(chars, at) && super::comments::hash_comment_at(chars, at) => line_end(),
 		('/', Some('*')) => skip_until(at + 2, &['*', '/']),
+		('/', Some('#')) => skip_until(at + 2, &['#', '/']),
 		('"' | '\'', _) => quoted_end(chars, at + 1, c),
 		_ => return None,
 	};
 	Some(after.max(at + 1))
+}
+
+/// Only blanks stand before `chars[at]` on its line
+fn at_line_start(chars: &[char], at: usize) -> bool {
+	chars[..at].iter().rev().take_while(|&&c| c != '\n').all(|&c| c == ' ' || c == '\t')
 }
 
 /// The end of a quoted text from `from` on, past its closing quote: an escaped quote `\"` leaves it open

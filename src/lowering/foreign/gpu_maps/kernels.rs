@@ -127,6 +127,15 @@ pub(crate) fn kernel(lambda: &Node) -> Option<Kernel> {
 	})
 }
 
+/// Why WGSL cannot compute the lambda: the first construct it cannot, with its place (card kernel-refusal-reason)
+pub(crate) fn kernel_refusal(lambda: &Node) -> Option<String> {
+	let Node::Key(parameter, Op::Arrow, body) = lambda.drop_meta() else {
+		return None;
+	};
+	let mut translation = Translation { parameter: parameter.symbol_name()?.to_string(), ..Translation::default() };
+	translation.expression(body).is_none().then_some(translation.refusal).flatten()
+}
+
 /// The kernel of a lambda mapping a linear array: one calling the program's functions only when heavy, for the GPU
 /// (card gpu-functions); a light one stays a list the CPU maps by calling them, as before
 pub(crate) fn linear_kernel(lambda: &Node) -> Option<Kernel> {
@@ -165,16 +174,48 @@ pub(crate) fn with_program_functions<T>(program: &Node, run: impl FnOnce() -> T)
 			(definition.name, ProgramFunction { parameters, body })
 		})
 		.collect();
-	crate::compiler::compile_context::scoped(|context| &mut context.program_functions, functions, run)
+	let mut values = HashMap::new();
+	for (name, value) in statements.iter().filter_map(main_level_assignment) {
+		values.entry(name.to_string()).or_insert_with(|| value.clone());
+	}
+	crate::compiler::compile_context::scoped(
+		|context| &mut context.program_values,
+		values,
+		|| crate::compiler::compile_context::scoped(|context| &mut context.program_functions, functions, run),
+	)
 }
 
-/// `x + 1` of a program with a class defining plus (`use sound`: Note) reads `if x is Note then x.plus(1) else x + 1`
-/// (class_methods.rs): on the GPU no value is an instance, so only the built-in operator remains
+/// `name = value`, `name: float = value`, `global name = value`: the variable and the value the main level assigns it
+fn main_level_assignment(statement: &Node) -> Option<(&str, &Node)> {
+	let statement = match statement.drop_meta() {
+		Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(crate::words::GLOBAL_WORD) => declared.drop_meta(),
+		other => other,
+	};
+	let Node::Key(target, Op::Assign, value) = statement else {
+		return None;
+	};
+	let name = match target.drop_meta() {
+		Node::Key(name, Op::Colon, _) => name.symbol_name()?,
+		other => other.symbol_name()?,
+	};
+	Some((name, value))
+}
+
+fn program_value(name: &str) -> Option<Node> {
+	crate::compiler::compile_context::read(|context| context.program_values.get(name).cloned())
+}
+
+/// `x + 1` of a program with a class defining plus (`use sound`: Note) reads
+/// `if instance_of(x, "Note") then x.plus(1) else x + 1` (class_methods.rs): on the GPU no value is an instance, so
+/// only the built-in operator remains
 fn without_instance_dispatch(node: Node, classes: &HashSet<String>) -> Node {
 	let otherwise = crate::lowering::nodes::branches(&node).and_then(|(condition, then, otherwise)| {
-		let Node::Key(subject, Op::Eq, class) = condition.drop_meta() else { return None };
+		let (crate::words::INSTANCE_OF, [subject, class]) = crate::lowering::nodes::round_call(condition)? else {
+			return None;
+		};
 		let Node::Key(receiver, Op::Dot, _) = then.drop_meta() else { return None };
-		let is_dispatch = class.symbol_name().is_some_and(|class| classes.contains(class)) && receiver == subject;
+		let is_class = matches!(class.drop_meta(), Node::Text(class) if classes.contains(class));
+		let is_dispatch = is_class && receiver.drop_meta() == subject.drop_meta();
 		is_dispatch.then(|| otherwise.clone())
 	});
 	match otherwise {
@@ -211,6 +252,11 @@ struct Translation {
 	widths: HashMap<String, usize>,
 	/// The width every return of the function being translated gives
 	returned_width: Option<usize>,
+	/// The first construct WGSL cannot compute, with its place: the reason shader_of, paint and @gpu name
+	/// (card kernel-refusal-reason)
+	refusal: Option<String>,
+	/// The program's variables whose width is being found from their values: one naming itself has none
+	resolving: Vec<String>,
 }
 
 /// Passes over a function until its variables' widths settle: a variable assigned a vector from one read before
@@ -219,11 +265,46 @@ const MOST_WIDTH_PASSES: usize = 4;
 impl Translation {
 	/// `body` in WGSL f32 arithmetic of the parameter, number literals and the program's numbers: an f32 only
 	fn expression(&mut self, body: &Node) -> Option<String> {
-		self.typed(body).filter(|(_, width)| *width == 1).map(|(code, _)| code)
+		let (code, width) = self.typed(body)?;
+		if width != 1 {
+			self.refuse(
+				body,
+				&format!(
+					": a vector of {width} where WGSL needs a number (the dotted operators .+ .- .* ./ take vectors)"
+				),
+			);
+			return None;
+		}
+		Some(code)
 	}
 
-	/// `body` in WGSL with its width: numbers are f32, a list of 2 to 4 of them a vecNf (card compile-shaders)
+	/// `body` in WGSL with its width: numbers are f32, a list of 2 to 4 of them a vecNf (card compile-shaders); where
+	/// WGSL cannot compute it, the refusal names it
 	fn typed(&mut self, body: &Node) -> Option<Typed> {
+		let typed = self.typed_as_written(body);
+		if typed.is_none() {
+			self.refuse(body, "");
+		}
+		typed
+	}
+
+	/// The refusal, unless an inner construct gave one before: `node` as written, its place, and why if known
+	fn refuse(&mut self, node: &Node, why: &str) {
+		if self.refusal.is_some() {
+			return;
+		}
+		let written: String = node.serialize().split_whitespace().collect::<Vec<_>>().join(" ");
+		let written = match written.chars().count() > REFUSAL_EXCERPT {
+			true => format!("{}…", written.chars().take(REFUSAL_EXCERPT).collect::<String>()),
+			false => written,
+		};
+		let place = crate::errors::diagnostic::position(node)
+			.map(|(line, column)| format!(" at {line}:{column}"))
+			.unwrap_or_default();
+		self.refusal = Some(format!("`{written}`{place}{why}"));
+	}
+
+	fn typed_as_written(&mut self, body: &Node) -> Option<Typed> {
 		if let Some((condition, then, otherwise)) = branches(body) {
 			return self.selected(condition, then, otherwise);
 		}
@@ -236,7 +317,11 @@ impl Translation {
 				Some((format!("{VARIABLE_PREFIX}{name}"), self.widths.get(name).copied().unwrap_or(1)))
 			}
 			Node::Symbol(name) if *name == self.parameter => scalar(KERNEL_ITEM.to_string()),
-			Node::Symbol(name) => scalar(self.program_number(name)),
+			// `sun` of `sun() := …` (or `sun := …`): the call
+			Node::Symbol(name) if program_function(name).is_some_and(|called| called.parameters.is_empty()) => {
+				self.call_without_arguments(name)
+			}
+			Node::Symbol(name) => self.program_variable(name),
 			// every number is an f32 on the GPU (user 2026-10-13: precision does not matter there)
 			Node::Key(value, Op::As, _) => self.typed(value),
 			Node::Number(number) if !matches!(number, crate::extensions::numbers::Number::Complex(..)) => {
@@ -262,6 +347,30 @@ impl Translation {
 			},
 			_ => None,
 		}
+	}
+
+	/// A variable of the program: a number, or in a fragment shader a vector of 2 to 4 numbers when the value the main
+	/// level assigns it first is one (`camera = [0, 2.4, 0]`, `sun = normalize([…])`, card kernel-global-lists); the
+	/// shader's values carry its value as a vecNf
+	fn program_variable(&mut self, name: &str) -> Option<Typed> {
+		let width = self.program_width(name);
+		if width > 1 && !self.uniforms {
+			self.refusal.get_or_insert(format!("`{name}`: a kernel reads the program's numbers, not its lists"));
+			return None;
+		}
+		Some((self.program_number(name), width))
+	}
+
+	/// The width of the value the main level assigns the variable first: 1 where WGSL cannot compute it
+	fn program_width(&mut self, name: &str) -> usize {
+		if self.resolving.iter().any(|known| known == name) {
+			return 1;
+		}
+		let Some(value) = program_value(name) else { return 1 };
+		let mut resolving = self.resolving.clone();
+		resolving.push(name.to_string());
+		let mut translation = Translation { uniforms: self.uniforms, resolving, ..Translation::default() };
+		translation.typed(&value).map_or(1, |(_, width)| width)
 	}
 
 	fn typed_all(&mut self, nodes: &[Node]) -> Option<Vec<Typed>> {
@@ -329,8 +438,9 @@ impl Translation {
 	/// `p#1` … `p#4`: a vector's component; a computed index picks it at run time. An item of a program's list,
 	/// `levels#band`, reads the shader's values, which hold one vec4f per item (whatever the list's length)
 	fn component(&mut self, vector: &Node, index: &Node) -> Option<Typed> {
-		let program_list =
-			vector.symbol_name().filter(|list| self.uniforms && !self.locals.iter().any(|local| local == list));
+		let program_list = vector.symbol_name().filter(|list| {
+			self.uniforms && !self.locals.iter().any(|local| local == list) && self.program_width(list) == 1
+		});
 		if let Some(list) = program_list {
 			let (array, at) = (self.program_number(list), self.expression(index)?);
 			if !self.item_lists.iter().any(|known| known == list) {
@@ -492,7 +602,12 @@ impl Translation {
 					Some(format!("select({ink}, {paper}, {code} == 0.0)"))
 				}
 				(code, 3) => Some(format!("vec4f({code}, 1.0)")),
-				_ => None,
+				// red, green, blue and alpha
+				(code, 4) => Some(code),
+				(_, width) => {
+					self.refuse(node, &format!(": a color is a number or 3 or 4 channels, not {width}"));
+					None
+				}
 			},
 		}
 	}
@@ -514,6 +629,7 @@ impl Translation {
 			false => self.typed(node)?,
 		};
 		if *self.returned_width.get_or_insert(width) != width {
+			self.refuse(node, ": the function's returns give values of different widths");
 			return None;
 		}
 		Some(format!("return {code};\n"))
@@ -606,7 +722,10 @@ impl Translation {
 				Some(())
 			}
 			_ if returned_value(node).is_some() => self.statement(node, out),
-			_ if is_statement_only(node) => None,
+			_ if is_statement_only(node) => {
+				self.refuse(node, ": a function's last statement gives no value");
+				None
+			}
 			_ => {
 				*out += &self.returning(node)?;
 				Some(())
@@ -845,8 +964,22 @@ fn painted_function(node: &Node) -> Option<Node> {
 	let name = function.drop_meta().name();
 	let painted = program_function(&name).filter(|called| called.parameters.len() == 2)?;
 	let (width, height) = (width.serialize(), height.serialize());
-	let lowered = match fragment_shader(&name, &painted).filter(|_| !on_cpu) {
-		Some((shader, entries)) => {
+	let shader = match on_cpu {
+		true => Err(String::new()),
+		false => fragment_shader(&name, &painted),
+	};
+	if let Some(reason) = shader.as_ref().err().filter(|reason| !reason.is_empty()) {
+		let refused = crate::errors::diagnostic::Diagnostic::at(
+			function,
+			format!("paint: WGSL cannot compute {name} ({reason}), so the CPU paints it pixel by pixel"),
+		)
+		.weak();
+		if let Err(error) = crate::errors::diagnostic::report(&[refused]) {
+			return Some(error);
+		}
+	}
+	let lowered = match shader {
+		Ok((shader, entries)) => {
 			let values = match entries.is_empty() {
 				true => String::new(),
 				false => format!(", {{{}}}", entries.join(", ")),
@@ -859,7 +992,7 @@ fn painted_function(node: &Node) -> Option<Node> {
 				on_cpu_painted(&name, &width, &height)
 			)
 		}
-		None => on_cpu_painted(&name, &width, &height),
+		Err(_) => on_cpu_painted(&name, &width, &height),
 	};
 	let lowered = expanded_paint_each(parsed_statement(&lowered));
 	// the prelude's name of pixel_color, which no parse gives (library_words names prelude words after this pass)
@@ -912,22 +1045,26 @@ fn shader_of(arguments: &[Node]) -> Option<Node> {
 	let name = function.drop_meta().symbol_name()?.to_string();
 	let painted = program_function(&name).filter(|called| called.parameters.len() == 2)?;
 	Some(match fragment_shader(&name, &painted) {
-		Some((shader, _)) => Node::Text(shader),
-		None => crate::warp_parser::parse_generated(&format!(
+		Ok((shader, _)) => Node::Text(shader),
+		Err(reason) => crate::warp_parser::parse_generated(&format!(
 			"raise {}",
-			Node::Text(format!("{SHADER_OF_WORD}: WGSL cannot compute {name}, paint computes it on the CPU"))
-				.serialize()
+			Node::Text(format!(
+				"{SHADER_OF_WORD}: WGSL cannot compute {name} ({reason}), paint computes it on the CPU"
+			))
+			.serialize()
 		)),
 	})
 }
 
 /// The fragment shader painting each pixel the color of `function` at its column and row, and the entries of its values:
 /// the program's numbers it reads, a list it reads item by item as a list of one-number lists (one vec4f per item);
-/// none where WGSL cannot compute the function
-fn fragment_shader(name: &str, function: &ProgramFunction) -> Option<(String, Vec<String>)> {
+/// where WGSL cannot compute the function, the construct it cannot (card kernel-refusal-reason)
+fn fragment_shader(name: &str, function: &ProgramFunction) -> Result<(String, Vec<String>), String> {
 	let mut translation = Translation { uniforms: true, ..Translation::default() };
 	let pixel = vec![("floor(at.x)".to_string(), 1), ("floor(at.y)".to_string(), 1)];
-	let (painted, _) = translation.call_translated(name, function, pixel, true)?;
+	let Some((painted, _)) = translation.call_translated(name, function, pixel, true) else {
+		return Err(translation.refusal.unwrap_or_else(|| "a construct outside the shader subset".to_string()));
+	};
 	let functions: String = translation.functions.iter().map(|function| format!("{function}\n")).collect();
 	let shader = format!(
 		"{functions}@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {{\n\treturn {painted};\n}}"
@@ -936,7 +1073,7 @@ fn fragment_shader(name: &str, function: &ProgramFunction) -> Option<(String, Ve
 		true => format!("{name}: [[item] for item in {name}]"),
 		false => format!("{name}: {name}"),
 	});
-	Some((shader, entries.collect()))
+	Ok((shader, entries.collect()))
 }
 
 /// The WGSL comparison of a warp operator

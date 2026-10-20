@@ -144,3 +144,46 @@
 - Apply the standard-library-wide rule there, without hiding hints from the user's program.
 - Run the focused test before and after, then formatting, clippy, and the wasm32 check.
 - Record the diagnostic boundary in `notes/`, commit only the task files, merge current `origin/main`, push, and verify Playground CI.
+
+# Parenthesized tuple-item cleanup
+
+- Reproduce a comma tuple whose first item is a parenthesized `try … else …` expression with a focused control test.
+- Keep the outer comma as the tuple separator; the inner parentheses group only the first value.
+- Reuse the general bracket/list parser and avoid a `try`-specific rewrite.
+- Run the focused parser/control tests, formatting, clippy, and the wasm32 check.
+
+# `fi` block closer cleanup
+
+- Reproduce the reported multi-line `if … fi` program with a new outcome test before changing the parser.
+- Treat `fi` as the same closing token as `end` only while parsing a block that expects a closer; keep ordinary `fi`
+  symbols and assignments valid outside that context.
+- Reuse the existing balanced block-closing scan and parser path instead of adding an `if`-only rewrite.
+- Run the focused `fi` and existing `end` block tests, formatting, clippy, and the wasm32 check.
+
+# like-tea
+
+- Reproduce the labelled method-call form with one focused regression before changing the prelude.
+- Reuse the general preposition-label machinery by declaring `with new`; keep positional calls working.
+- Keep reflected parameter names label-free through the shared library-signature extractor.
+- Update the existing sample and call guide, then run targeted tests and the worker gates.
+
+# Text builtin argument errors
+
+- Reproduce `byte_at(3, 0)` in a new focused text test before changing production code.
+- Route every non-literal `byte_at` text operand through the existing text-argument conversion so wrong kinds become the standard `not a text` error instead of a raw `ref.cast` trap.
+- Preserve the inline byte-loop fast path, character-to-text conversion, error propagation, and bounds checking.
+- Run the focused test before and after, then formatting, clippy, and the wasm32 check.
+
+# Package sub-build workspace cleanup
+
+- Reproduce the fresh-checkout package-tool failure with the existing focused package tests before changing production configuration.
+- Keep runtime-fetched packages outside Warp's Cargo workspace without changing or copying a fetched package's sources.
+- Cover the workspace boundary with one focused regression test under `tests/modules/`.
+- Run the focused package filters, formatting, clippy, and the wasm32 check; keep the worktree-only version suffix uncommitted.
+
+# Julia floor-division alias cleanup
+
+- Upgrade the existing Unicode-operator regression from the obsolete `÷` plain-division decision before changing production code.
+- Route `÷` and `÷=` through the existing `FloorDiv` and `FloorDivAssign` operators; do not add a parallel arithmetic path.
+- Emit one shared newcomer note that explains Julia-compatible floor division and names `/` for plain division.
+- Keep the Rust and self-hosted parser operator tables aligned, update the two specified wiki sections, and run the focused parser tests, clippy, and wasm32 check.

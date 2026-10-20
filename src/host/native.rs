@@ -89,6 +89,12 @@ impl Default for HostState {
 	}
 }
 
+impl warp_runtime::c_calls::CallsC for HostState {
+	fn c_handles(&mut self) -> &mut crate::ffi::CHandles {
+		&mut self.c_handles
+	}
+}
+
 impl HostState {
 	pub fn new() -> Self {
 		HostState {
@@ -552,7 +558,11 @@ fn parse_code(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Re
 		return error_in_program(&mut caller, &format!("{PARSE_CODE}: needs a text, got {}", text.serialize().trim()));
 	};
 	match crate::lowering::parse_word::code_of(&source) {
-		Ok(code) => built_in_program(&mut caller, &code, PARSE_CODE),
+		// code the program can't hold yet fails as its error, which `try` catches, not as a trap
+		Ok(code) => {
+			let built = built_in_program(&mut caller, &crate::compiler::run_time_blocks::held_code(code), PARSE_CODE);
+			raised(&mut caller, built)
+		}
 		Err(failure) => error_in_program(&mut caller, &failure),
 	}
 }
@@ -693,7 +703,8 @@ fn with_function_markers(arguments: Node, functions: &[HostNode]) -> Node {
 	}
 }
 
-/// serve_routes(port, routes): HTTP on the port, each request answered by its route's function (src/web/web_server.rs)
+/// serve_routes(port, routes): HTTP on the port, each request a route takes answered by the program's page·submitted,
+/// lib/router.warp's dispatcher (src/web/web_server.rs)
 fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) -> wasmtime::Result<HostNode> {
 	use crate::web::web_server::{routes_of, serve};
 	let routes = routes_of(&given_node(&mut caller, routes)?);
@@ -701,7 +712,7 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 	let site = served_site(port);
 	serve(port, &routes, &site, |route, request| {
 		caller.data_mut().answer_headers.clear();
-		match route_value(&mut caller, &route.function, &request) {
+		match route_value(&mut caller, crate::serve::PAGE_SUBMITTED, &request) {
 			Ok(value) => {
 				Ok(route.answer_of(&value).with_headers(std::mem::take(&mut caller.data_mut().answer_headers)))
 			}

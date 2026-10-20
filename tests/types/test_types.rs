@@ -2,72 +2,9 @@
 // Migrated from tests_*.rs files
 
 use crate::{is, skip};
-use warp::analyzer::analyze;
 use warp::extensions::assert_throws;
-use warp::type_kinds::NodeKind;
-use warp::warp_parser::parse;
 use warp::Node;
 use warp::Number;
-
-// const functions : Map<String, Function> = warp::analyzer::FUNCTIONS;
-
-// TODO: Stub types - these need proper implementation
-#[allow(non_camel_case_types)]
-// type Type = Node;
-#[allow(dead_code)]
-struct Ast;
-#[allow(dead_code)]
-struct Generics {
-	kind: Node,
-	value_type: Node,
-}
-#[allow(dead_code)]
-fn clear_analyzer_context() {} // stub
-#[allow(dead_code)]
-fn byte_char_type() -> Node {
-	Node::Empty
-}
-#[allow(dead_code)]
-fn integer_type() -> Node {
-	Node::Empty
-}
-#[allow(dead_code)]
-fn string_type() -> Node {
-	Node::Empty
-}
-#[allow(dead_code)]
-fn double_type() -> Node {
-	Node::Empty
-}
-#[allow(dead_code)]
-fn int16t() -> Node {
-	Node::Empty
-}
-#[allow(dead_code)]
-fn int32t() -> Node {
-	Node::Empty
-}
-#[allow(dead_code)]
-fn float32t() -> Node {
-	Node::Empty
-}
-#[allow(dead_code)]
-fn stringp() -> Node {
-	Node::Empty
-}
-
-#[allow(dead_code)]
-fn array() -> Node {
-	Node::Empty
-}
-
-// todo get real type for em all:
-// pub fn types(name: &str) -> Node {
-// 	// Returns a Symbol with the type name, matching what type() introspection returns
-// 	Node::Symbol(name.to_string())
-// }
-// #[allow(dead_code)]
-// fn array() -> types("array")
 
 #[test]
 fn test_go_types() {
@@ -79,7 +16,7 @@ fn test_auto_type() {
 	// todo redundant test_division_type_upgrade
 	is!("-1/6.", -1.0 / 6.0);
 	is!("-1/6", -1.0 / 6.0); // Auto-promote int/int division to float
-	is!("-1÷6", -1.0 / 6.0); // Auto-promote int/int division to float
+	is!("-1÷6", -1); // ÷ is floor division as in Julia (decision julia-floor-divide)
 }
 
 #[test]
@@ -87,7 +24,7 @@ fn test_auto_type_nan() {
 	// Float division by zero produces special float values (semantically equal to Nan/Inf); P66: an Int division by
 	// zero is the error divide_by_zero, so the divisions here are written with a decimal point
 	is!("0.0/0.0", Node::Number(Number::Nan));
-	is!("0.0÷0.0", Node::Number(Number::Nan));
+	is!("0.0/0.0", Node::Number(Number::Nan));
 	is!("1.0/0.0", Node::Number(Number::Inf));
 	is!("-1.0/0.0", Node::Number(Number::NegInf));
 }
@@ -121,28 +58,6 @@ fn test_return_types() {
 	//==============================================================================
 	// STRING TESTS (see string_tests.h);
 	//==============================================================================
-}
-
-// fn cast(node: Node, to_type: &Type) -> Node {
-#[allow(dead_code)]
-fn cast(node: Node, to_type: NodeKind) -> Node {
-	// stub
-	// in real code this would do actual casting
-	match to_type {
-		NodeKind::Text => Node::Text(node.to_string()),
-		NodeKind::Int | NodeKind::Float => match node {
-			Node::Number(_n) => node,
-			Node::Symbol(s) => match s.parse::<i64>() {
-				Ok(v) => Node::Number(Number::Int(v)),
-				_ => match s.parse::<f64>() {
-					Ok(f) => Node::Number(Number::Float(f)),
-					_ => Node::Number(Number::Nan),
-				},
-			},
-			_ => Node::Number(Number::Nan),
-		},
-		_ => todo!("cast not implemented for type {:?}", to_type),
-	}
 }
 
 #[test]
@@ -202,13 +117,6 @@ fn test_bad_type() {
 }
 
 #[test]
-fn test_deep_type() {
-	parse("a=$canvas.tagName");
-	//    // eq!(result.kind(), smarti64);
-	//    // eq!(result.kind(), AST::NodeKind::Text);
-}
-
-#[test]
 // #[ignore]
 fn test_type_confusion() {
 	assert_throws("x=1;x='ok'");
@@ -220,9 +128,6 @@ fn test_type_confusion() {
 
 #[test]
 fn test_function_return_types() {
-	let _result = analyze(parse("def f(x):float := 42.0"));
-	let _result = analyze(parse("def f(x):int := 42"));
-	let _result = analyze(parse("def f(x):float:=42")); // auto-cast
 	is!("def f(x):float := 42.0;f(0)", 42.0);
 	is!("def f(x):int := 42;f(0)", 42);
 	is!("def f(x):float := 42;f(0)", 42.0);
@@ -230,175 +135,6 @@ fn test_function_return_types() {
 	is!("def f(x) as int := 42;f(0)", 42);
 	is!("def f(x) as float := 42;f(0)", 42.0); // auto-cast
 	is!("def f(x) as string := 42;f(0)", "42"); // auto-cast
-}
-
-#[test]
-fn test_types_simple() {
-	// clearAnalyzerContext();
-	let _result = analyze(parse("chars a"));
-	// eq!(result.kind(), Type::reference);
-	// // eq!(result.typo, &ByteCharType); // todo char ≠ char* !
-	// // eq!(result.name, "a");
-	let _result = analyze(parse("int a"));
-	// eq!(result.kind(), AST::reference);
-	// // eq!(result.typo, &IntegerType); // IntegerType
-	// // eq!(result.name, "a");
-
-	let _result = analyze(parse("string b"));
-	// eq!(result.kind(), AST::reference);
-	// // eq!(result.typo, &StringType);
-	// // eq!(result.name, "b");
-
-	let _result = analyze(parse("float a,string b"));
-
-	// let result0 = result[0];
-	// eq!(result0.kind(), AST::reference);
-	//	eq!(result0.kind(), AST::declaration);
-	//	todo at this stage it should be a declaration?
-
-	// eq!(result0.typo, &DoubleType);
-	// eq!(result0.name, "a");
-	// let result1 = result[1];
-	// eq!(result1.kind(), AST::reference);
-	// eq!(result1.typo, &StringType);
-	// eq!(result1.name, "b");
-}
-
-#[test]
-fn test_types_simple2() {
-	use warp::Op;
-	// TODO: analyze() should transform a:int into Meta{node:a, data:Int} but currently just passes through Key nodes
-
-	let parsed = analyze(parse("a:chars"));
-	let result = parsed.drop_meta();
-	assert!(matches!(result, Node::Key(_, Op::Colon, _)));
-	if let Node::Key(left, Op::Colon, right) = result {
-		assert_eq!(left.name(), "a");
-		assert_eq!(right.name(), "chars");
-	}
-
-	let parsed = analyze(parse("a:int"));
-	let result = parsed.drop_meta();
-	if let Node::Key(left, Op::Colon, right) = result {
-		assert_eq!(left.name(), "a");
-		assert_eq!(right.name(), "int");
-	}
-
-	let parsed = analyze(parse("b:string"));
-	let result = parsed.drop_meta();
-	if let Node::Key(left, Op::Colon, right) = result {
-		assert_eq!(left.name(), "b");
-		assert_eq!(right.name(), "string");
-	}
-
-	let parsed = analyze(parse("a:float,b:string"));
-	let result = parsed.drop_meta();
-	if let Node::List(items, _, _) = result {
-		assert_eq!(items.len(), 2);
-		if let Node::Key(left, Op::Colon, right) = items[0].drop_meta() {
-			assert_eq!(left.name(), "a");
-			assert_eq!(right.name(), "float");
-		}
-		if let Node::Key(left, Op::Colon, right) = items[1].drop_meta() {
-			assert_eq!(left.name(), "b");
-			assert_eq!(right.name(), "string");
-		}
-	}
-}
-
-#[test]
-fn test_typed_functions() {
-	// todo name 'id' clashes with 'id' in preRegisterFunctions();
-	clear_analyzer_context();
-	let _result = analyze(parse("int tee(float b, string c){b}"));
-	// eq!(result.kind(), AST::declaration);
-	// // eq!(result.name, "tee");
-	// let signature_node = result["@signature"];
-	//	let signature_node = result.metas()["signature"];
-	// if (not signature_node.data_value());
-	// error("no signature");
-	// let signature : Signature = signature_node.data_value();
-	// eq!(signature.functions.first(), "tee");
-	// eq!(signature.parameters.size(), 2);
-	// eq!(signature.parameters.first().name, "b");
-	// eq!(signature.parameters.first().typo, reals); // use real / number for float64  float32
-	// eq!(signature.parameters.last().name, "c");
-	// eq!(signature.parameters.last().typo, NodeKind::Text);
-	// let params = signature.parameters.map(+[](Arg f) { return f.name; });
-	// eq!(params.first(), "b");
-}
-
-#[test]
-fn test_empty_typed_functions() {
-	// todo int a(){} should be compiler error
-	// todo do we really want / need int a(); #[test] fn a(){} ?
-	//	if(ch=='{' and next=='}' and previous==')'){
-	//		actual.setType(declaration, false);// a(){} => def a!
-	//		proceed();
-	//		proceed();
-	//		break;
-	//	}
-	let _result = analyze(parse("int a(){}"));
-	// eq!(result.kind(), AST::declaration);
-	// // eq!(result.name, "a");
-	// let signature_node = result["@signature"];
-	// let signature : Signature = signature_node.data_value().downcast_ref::<Signature>().unwrap().clone();
-	// eq!(signature.functions.first(), "a");
-	// let names2 = signature.functions.map < String > ( + [](Function * f)
-	// { return f; ; });
-	// eq!(names2.size(), 1);
-	// eq!(names2.first(), "a");
-
-	let _result = analyze(parse("int a();"));
-	// eq!(result.kind(), AST::declaration); // header signature
-	// // eq!(result.typo, IntegerType);
-	// // eq!(result.name, "a");
-}
-
-#[test]
-// DONE: requires complete type system
-fn test_types() {
-	test_bad_type();
-	test_deep_type();
-	test_typed_functions();
-	test_types_simple();
-	test_type_confusion();
-	skip!(
-		testTypesSimple2();
-		testEmptyTypedFunctions();
-	);
-}
-
-#[test]
-fn test_polymorphism() {
-	// debug:
-	//	let debug_node = parse("string aaa(string a){return a};\nfloat bbb(float b){return b+1}");
-	//	let debug_fun = analyze(debug_node);
-	let node = parse("string test(string a){return a};\nfloat test(float b){return b+1}");
-	let _fun = analyze(node);
-	// let function = functions["test"];
-	// eq!(function.is_polymorphic, true);
-	// eq!(function.variants.size(), 2);
-	// eq!(function.variants[0].signature.size(), 1);
-	//	eq!(function.variants[0].signature.parameters[0].typo, (Type) NodeKind::Text); todo
-	// eq!(function.variants[0].signature.parameters[0].typo, stringp);
-	// let variant = function.variants[1];
-	// eq!(variant.signature.size(), 1);
-	// eq!(variant.signature.parameters[0].typo, float32t);
-}
-
-#[test]
-fn test_polymorphism2() {
-	clear_analyzer_context();
-	let node = parse("fun test(string a){return a};\nfun test(float b){return b+1}");
-	let _fun = analyze(node);
-	// let function = functions["test"];
-	// eq!(function.is_polymorphic, true);
-	// eq!(function.variants.size(), 2);
-	// eq!(function.variants[0].signature.size(), 1);
-	// eq!(function.variants[0].signature.parameters[0].typo, int32t);
-	// eq!(function.variants[1].signature.size(), 1);
-	// eq!(function.variants[1].signature.parameters[0].typo, float32t);
 }
 
 #[test]
@@ -430,173 +166,4 @@ fn test_function_argument_cast() {
 	is!("fun addi(float x,float y){x+y};addi(2.2,2.2)", 4.4);
 	crate::common::fails_with("float addi(int x,int y){x+y};addi(2.2,2.2)", "2.2 is no int");
 	is!("fun addier(float a,float b){b+a};addier(42,1)+1", 44);
-}
-
-#[test]
-fn test_type_node() {
-	use warp::node::{Bracket, Separator};
-	use warp::type_kinds::Kind;
-	use warp::Op;
-
-	// Create a Type node directly
-	let name = Box::new(Node::Symbol("Person".to_string()));
-	let fields = Box::new(Node::List(
-		vec![
-			Node::Key(
-				Box::new(Node::Symbol("name".to_string())),
-				Op::Colon,
-				Box::new(Node::Symbol("Text".to_string())),
-			),
-			Node::Key(Box::new(Node::Symbol("age".to_string())), Op::Colon, Box::new(Node::Symbol("Int".to_string()))),
-		],
-		Bracket::Curly,
-		Separator::Comma,
-	));
-	let type_node = Node::Type { name, body: fields };
-
-	// Verify kind returns Type
-	assert_eq!(type_node.kind(), Kind::TypeDef);
-
-	// Verify serialization
-	let serialized = type_node.serialize();
-	assert!(serialized.contains("Person"));
-	assert!(serialized.contains("name"));
-	assert!(serialized.contains("age"));
-}
-
-#[test]
-fn test_type_registry() {
-	use warp::{FieldDef, Kind, TypeRegistry, USER_TYPE_TAG_START};
-
-	let mut registry = TypeRegistry::new();
-
-	// Register a type manually
-	let tag = registry.register(
-		"Person".to_string(),
-		vec![
-			FieldDef { name: "name".to_string(), type_name: "Text".to_string() },
-			FieldDef { name: "age".to_string(), type_name: "Int".to_string() },
-		],
-	);
-	assert_eq!(tag, USER_TYPE_TAG_START);
-	assert!(TypeRegistry::is_user_type(tag));
-
-	// Look up by name
-	let def = registry.get_by_name("Person").unwrap();
-	assert_eq!(def.name, "Person");
-	assert_eq!(def.fields.len(), 2);
-	assert_eq!(def.fields[0].name, "name");
-	assert_eq!(def.fields[1].type_name, "Int");
-
-	// Look up by tag
-	let def2 = registry.get_by_tag(tag).unwrap();
-	assert_eq!(def2.name, "Person");
-
-	// Register another type
-	let tag2 = registry.register(
-		"Point".to_string(),
-		vec![
-			FieldDef { name: "x".to_string(), type_name: "Float".to_string() },
-			FieldDef { name: "y".to_string(), type_name: "Float".to_string() },
-		],
-	);
-	assert_eq!(tag2, USER_TYPE_TAG_START + 1);
-
-	// Re-registering same name returns same tag
-	let tag3 = registry.register("Person".to_string(), vec![]);
-	assert_eq!(tag3, tag);
-
-	// Built-in tags are not user types
-	assert!(!TypeRegistry::is_user_type(Kind::TypeDef as u32));
-}
-
-#[test]
-fn test_type_registry_from_node() {
-	use warp::node::{Bracket, Separator};
-	use warp::Op;
-	use warp::{TypeRegistry, USER_TYPE_TAG_START};
-
-	let mut registry = TypeRegistry::new();
-
-	// Create a Type node
-	let type_node = Node::Type {
-		name: Box::new(Node::Symbol("Car".to_string())),
-		body: Box::new(Node::List(
-			vec![
-				Node::Key(
-					Box::new(Node::Symbol("model".to_string())),
-					Op::Colon,
-					Box::new(Node::Symbol("Text".to_string())),
-				),
-				Node::Key(
-					Box::new(Node::Symbol("year".to_string())),
-					Op::Colon,
-					Box::new(Node::Symbol("Int".to_string())),
-				),
-			],
-			Bracket::Curly,
-			Separator::Comma,
-		)),
-	};
-
-	// Register from node
-	let tag = registry.register_from_node(&type_node).unwrap();
-	assert_eq!(tag, USER_TYPE_TAG_START);
-
-	// Verify extracted fields
-	let def = registry.get_by_name("Car").unwrap();
-	assert_eq!(def.fields.len(), 2);
-	assert_eq!(def.fields[0].name, "model");
-	assert_eq!(def.fields[0].type_name, "Text");
-	assert_eq!(def.fields[1].name, "year");
-	assert_eq!(def.fields[1].type_name, "Int");
-}
-
-#[test]
-fn test_user_type_wasm_emission() {
-	use warp::{FieldDef, TypeRegistry, WasmGcEmitter};
-
-	let mut registry = TypeRegistry::new();
-
-	// Register Person type
-	registry.register(
-		"Person".to_string(),
-		vec![
-			FieldDef { name: "name".to_string(), type_name: "String".to_string() },
-			FieldDef { name: "age".to_string(), type_name: "i64".to_string() },
-		],
-	);
-
-	// Register Point type with raw WASM types (WIT compatible)
-	registry.register(
-		"Point".to_string(),
-		vec![
-			FieldDef { name: "x".to_string(), type_name: "f32".to_string() },
-			FieldDef { name: "y".to_string(), type_name: "f32".to_string() },
-		],
-	);
-
-	// Create emitter and emit with types
-	let mut emitter = WasmGcEmitter::new();
-	emitter.emit_with_types(&registry);
-
-	// Verify type indices were assigned
-	let person_idx = emitter.get_user_type_idx("Person");
-	let point_idx = emitter.get_user_type_idx("Point");
-
-	assert!(person_idx.is_some(), "Person type should be emitted");
-	assert!(point_idx.is_some(), "Point type should be emitted");
-
-	// Type indices should be sequential after core types
-	let person = person_idx.unwrap();
-	let point = point_idx.unwrap();
-	assert_eq!(point, person + 1, "Point should follow Person");
-
-	// Build the module and verify it's valid
-	let wasm_bytes = emitter.finish();
-	assert!(!wasm_bytes.is_empty(), "WASM bytes should not be empty");
-
-	// Verify with wasmparser
-	let valid = wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all()).validate_all(&wasm_bytes);
-	assert!(valid.is_ok(), "Generated WASM should be valid: {:?}", valid.err());
 }

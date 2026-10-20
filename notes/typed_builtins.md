@@ -34,3 +34,28 @@ kind switches they stand for. Done in slices per word family, each with its net 
   kind; a list argument reaches it only as call_result_kind's first-line fallback.
 - PRINT_SIGNATURE `(x)` beside print's `(values...)` line: dropping it makes print variadic for library_arity.
 - The untyped single signatures still to type per kind: listed on the card (audit note 2026-10-18).
+
+## The warp analyzer's signature table (Back-end focus, branch signature-table)
+- lib/compiler/signatures.warp parses the prelude's `from warp` / `from emitter` lines (overloads, aliases) from
+  `module_source("prelude")`, a compile-time word (library_words.rs word_call) that becomes the embedded std module
+  text, so the stage reads it from any working directory and in the browser. It answers emitted_call_kind,
+  argument_result and overload_kind (call_result_kind) as Rust does: tests/parser/test_self_signatures.rs compares
+  every word, arity 0–4 and first-argument kind.
+- analyzer.warp typed_call_kind asks it after the call_kinds table; words.warp call_kinds keeps the non-prelude words.
+- Member words (map, filter, find, reduce, fold, add, pop, …) declare list and text overloads; `all` stays untyped:
+  as `f(all xs)` it is the broadcast marker, and a typed first parameter makes the nesting pass bind it to two values.
+- Traps: `.type` of an instance is reflection (class Parameter's field is `type_name`); a user function with a
+  declared result passed by name fails (card function-declared); an apostrophe-heavy # comment broke
+  analyzer.warp's parse (card comment-three).
+
+## Typing lib/compiler (decision compiler-typed, 2026-10-19)
+Every lib/compiler file declares parameter and result types, except the owners' analyzer.warp, emitter.warp,
+runtime.warp and the hot parser.warp. Types that are not usable yet stay `any`; each has a card:
+- a result that may be ø, `: text?`: "text? is no type" (card text-type; `int?` works)
+- a map: `{}` passed to `s: map` is "an Int" (card needs-map)
+- a character: a text's item analyzes as Text, `: char`/`: codepoint` of `s[at]` is "not a list" (card text-char)
+- `def f(x) as list {…}` is "undefined function: f" (card undefined-function); `def g(): G {…}` of a class G reads
+  `G {…}` as an instance (card def-int). Use `def f(x): list {…}` and `def g(): G := {…}`.
+- node views (`any`) wait for card node-enum's `enum Node`.
+Fixed on the way: a typed-result function's locals named like a module word (`tone`, `pattern` of sound) were
+"undefined function": modules/declarations.rs mentioned_names now reads the body through function_head.

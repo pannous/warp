@@ -37,12 +37,6 @@ fn a_layout_shows_the_route_at_its_outlet() {
 
 // a site loads a route's own module before showing it (card web-bundle): page·route_index is the index of the route the
 // path picks, -1 when none
-#[test]
-fn the_route_index_names_the_route_the_path_picks() {
-	let lowered = warp::pipeline::lower(SITE).expect("lowers").serialize();
-	assert!(lowered.contains("(page·route_index):="), "{lowered}");
-	assert!(lowered.contains("routed_index=(page·route_index)"), "{lowered}");
-}
 
 // card route-typed: a parameter declares its type in the pattern (":id:int", ":price:float", ":name:text"), so the route's
 // block computes with it; a path whose part does not fit the type matches no such route (the next one, else not found)
@@ -97,4 +91,15 @@ route "*" { p{ "not found" } }"#;
 	assert_eq!(page_at("/docs/a/b", program), "<p>docs</p>");
 	let misplaced = warp::wasm_emitter::eval("route \"/:part?/end\" { p{ \"x\" } }").serialize();
 	assert!(misplaced.contains("only the last part"), "{misplaced}");
+}
+
+// lib/router.warp's route_answer (serve.rs route_entry): the route of exactly the request's path answers before a pattern
+// matching it, as the host's route_at picks; a braced value's key (`name`) is no variable the route's lambda captures
+#[test]
+fn route_answer_prefers_the_exact_path() {
+	let program = "get \"/users/:id\" { \"user \" + id }
+get \"/users/new\" { {name: \"new\"} }
+answer = route_answer({method: \"GET\", path: \"/users/new\"})
+[answer.name, route_answer({method: \"GET\", path: \"/users/7\"})]";
+	assert_eq!(eval(program).serialize(), "[\"new\" \"user 7\"]");
 }

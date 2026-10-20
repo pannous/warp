@@ -3,7 +3,7 @@ mod test_as_prefixed_name;
 mod test_attributes;
 mod test_bare_operator_block;
 mod test_beautify_synonyms; // card warp-format-strict
-mod test_big_literals; // card big-literals
+pub(crate) mod test_big_literals; // card big-literals
 mod test_braceless_range_argument; // card braceless-argument
 mod test_comment_hides_bracket;
 mod test_comments;
@@ -25,7 +25,6 @@ mod test_guard_comment; // card else-comment-swallows
 mod test_home_paths; // card unix-words
 mod test_if_condition_words; // card parser-if-stops
 mod test_inline_comments;
-mod test_json;
 mod test_juxtaposition;
 mod test_meta;
 mod test_meta_attributes;
@@ -50,48 +49,45 @@ mod test_scheme_relative_url;
 #[cfg(feature = "native")]
 mod test_self_analyzer; // card inferred-kinds
 #[cfg(feature = "native")]
-mod test_self_differential; // card self-differential
-#[cfg(feature = "native")]
 mod test_self_emitter; // card emits-wasm
 #[cfg(feature = "native")]
-mod test_self_hosted_views; // card warp-pipeline-suite
+mod test_self_emitter_times; // card time-primitives
 #[cfg(feature = "native")]
-mod test_self_lexer; // card self-lexer
+mod test_self_exact_pow; // card exact-pow-warp
 #[cfg(feature = "native")]
-mod test_self_parser; // card self-parser
+mod test_self_exact_rounding; // card exact-rounding-warp
 #[cfg(feature = "native")]
-mod test_self_parser_survey; // card self-parser
+mod test_self_float_as_exact; // card float-as-exact-warp
 #[cfg(feature = "native")]
-mod test_self_pass_reports; // card carries-line
+mod test_self_float_text; // card float-text-warp
 #[cfg(feature = "native")]
-mod test_self_passes; // card twin-harness
+mod test_self_hosted_analysis; // card End-end
 #[cfg(feature = "native")]
-mod test_self_pipeline; // card parser-tree
+mod test_self_hosted_cache; // card End-end
 #[cfg(feature = "native")]
-mod test_self_serializer; // card self-serializer
+mod test_self_pure; // card pure-runs
 #[cfg(feature = "native")]
-mod test_self_words; // card library-word-tables
+mod test_self_sort; // card sort-warp
+#[cfg(feature = "native")] // a lib/compiler file on disk
+mod test_self_time_arithmetic; // card time-arithmetic-warp
+#[cfg(feature = "native")]
+mod test_self_time_text; // card time-text-warp
 mod test_semicolon_square;
 mod test_spaced_children;
 mod test_spaced_optional_type;
 mod test_spaced_required_fields;
 mod test_statement_phrases;
-mod test_statement_terminators;
 mod test_statements_after_type;
-#[cfg(feature = "native")]
-mod test_sugar_survey; // card sugar-twins
 mod test_superscript_signs;
 mod test_surface_syntax;
 mod test_symbol_hyphen;
 mod test_time_unit_keys;
 mod test_times_phrase; // card self-parser
-mod test_trailing_annotation;
 mod test_unary_plus;
 mod test_uniscript_entities;
 mod test_uniscript_hyphen_names; // card uniscript-literal-hyphen
 mod test_url_literal; // card add-http
 mod test_warp_format;
-mod test_warp_position;
 mod test_wisp_def_params;
 mod test_wisp_malformed;
 mod test_wisp_roundtrip;

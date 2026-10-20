@@ -1,0 +1,122 @@
+# A match over a node's cases (card pure-runs; Rust twin: src/lowering/types/node_cases.rs and destructuring.rs):
+# each arm tests the subject's kind and spelled parts, binds its named parts, then gives its result:
+#   match n { Key(left, Op.Colon, right): e; _: d }
+#   → if is_type(n, "key") and op_of(n) == ":" then (left = key_of(n); right = value_of(n); e) else d
+# A subject other than a name is evaluated once, into match·subject. A case of Op, Bracket or Separator anywhere,
+# `Op.Colon`, is the text a node carries, ":". A match with an arm of another form stays as written: refused downstream.
+use "walk.warp"
+use "phrase_blocks.warp"
+
+# node_cases.rs spelling, as `warp lower` shows Rust's Op·text, Bracket·text and Separator·text
+spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??", "Scope": "::", "Define": ":=",
+	"Assign": "=", "Arrow": "->", "ArrowUp": "↑", "ArrowDown": "↓", "Add": "+", "Sub": "-", "Mul": "*", "Div": "/",
+	"FloorDiv": "/!", "Mod": "%", "Rem": "rem", "Pow": "^", "LogBase": "⌞", "LogOf": "⌟", "Shl": "<<", "Shr": ">>",
+	"AddAssign": "+=", "SubAssign": "-=", "MulAssign": "*=", "DivAssign": "/=", "FloorDivAssign": "/!=",
+	"ModAssign": "%=", "PowAssign": "^=", "AndAssign": "&&=", "OrAssign": "||=", "XorAssign": "^^=", "Lt": "<",
+	"Gt": ">", "Le": "<=", "Ge": ">=", "Eq": "==", "Ne": "!=", "Identical": "===", "NotIdentical": "!==",
+	"Similar": "≈", "Rough": "~", "And": "and", "Or": "or", "Xor": "xor", "Not": "not", "BitAnd": "&", "BitOr": "|",
+	"Neg": "-", "Sqrt": "√", "Cbrt": "∛", "Abs": "‖", "Inc": "++", "Dec": "--", "Question": "?", "If": "if",
+	"Then": "then", "Else": "else", "While": "while", "Do": "do", "Hash": "#", "Range": "..", "To": "to", "As": "as",
+	"PlusMinus": "±", "None": ""},
+	"Bracket": {"Curly": "{", "Square": "[", "Round": "(", "Less": "<", "None": ""},
+	"Separator": {"Space": " ", "Comma": ",", "Semicolon": ";", "Newline": "\n", "Tab": "\t", "None": ""}}
+
+# node_cases.rs NODE_CASES: the type a case tests as (a List is any group) and the reader of each part, in order
+case_types = {"Number": "number", "Char": "codepoint", "Text": "text", "Symbol": "symbol", "Key": "key"}
+case_readers = {"Number": ["itself"], "Char": ["itself"], "Text": ["itself"], "Symbol": ["name_of"],
+	"Key": ["key_of", "op_of", "value_of"], "List": ["itself", "bracket_of", "separator_of"]}
+other_arm = "_"
+subject_name = "match·subject"
+
+applied(word: text, argument: Node): Node := List([symbol(word), argument], Bracket.Round, Separator.None)
+
+part_of(subject: Node, reader: text): Node := if reader == "itself" then subject else applied(reader, subject)
+
+spelled_case(type_name: Node, case_name: Node, n: Node): Node := match type_name {
+	Symbol(enum_name): {
+		if enum_name in spellings and name_of(case_name) in spellings[enum_name] { return spellings[enum_name][name_of(case_name)] }
+		n
+	}
+	_: n
+}
+
+# `Key(left, Op.Colon, right)`: the case's name and its parts, else ø
+case_pattern(pattern: Node): any := match pattern {
+	List(call, Bracket.Round, Separator.None): {
+		if #call > 1 and is_name(call#1) and name_of(call#1) in case_readers and #call - 1 == #case_readers[name_of(call#1)] { return call }
+		ø
+	}
+	_: ø
+}
+
+is_other_arm(pattern: Node): bool := pattern == symbol(other_arm)
+
+arm_pattern(arm: Node): Node := match arm {
+	Key(pattern, Op.Colon, result): pattern
+	_: arm
+}
+
+arm_result(arm: Node): Node := match arm {
+	Key(pattern, Op.Colon, result): result
+	_: arm
+}
+
+is_case_arm(arm: Node): bool := is_other_arm(arm_pattern(arm)) or case_pattern(arm_pattern(arm)) != ø
+
+kind_test(case_name: text, subject: Node): Node := {
+	if case_name in case_types { return List([symbol("is_type"), subject, case_types[case_name]], Bracket.Round, Separator.None) }
+	Key(applied("bracket_of", subject), Op.Ne, ø)
+}
+
+# a part written as a name binds it (`_` binds nothing); any other part is a value the part equals
+is_binding(part: Node): bool := is_name(part)
+
+arm_test(pattern: list, subject: Node): Node := {
+	readers = case_readers[name_of(pattern#1)]
+	compared = (1 to #readers).filter(i => not is_binding(pattern#(i + 1)))
+	equalities = compared.map(i => Key(part_of(subject, readers#i), Op.Eq, pattern#(i + 1)))
+	conjunction_of(kind_test(name_of(pattern#1), subject), equalities)
+}
+
+conjunction_of(test: Node, equalities: list): Node := if #equalities == 0 then test else conjunction_of(Key(test, Op.And, equalities#1), equalities[1..])
+
+arm_value(pattern: list, subject: Node, result: Node): Node := {
+	readers = case_readers[name_of(pattern#1)]
+	bound = (1 to #readers).filter(i => is_binding(pattern#(i + 1)) and pattern#(i + 1) != symbol(other_arm))
+	if #bound == 0 { return result }
+	List(bound.map(i => Key(pattern#(i + 1), Op.Assign, part_of(subject, readers#i))) + [result], Bracket.Round, Separator.Semicolon)
+}
+
+# the arms from the last back: an arm's test chooses its value, else what the arms after it give
+arm_chain(arms: list, subject: Node): Node := {
+	if #arms == 0 { return applied("switch_no_case", subject) }
+	pattern = arm_pattern(arms#1)
+	if is_other_arm(pattern) { return arm_result(arms#1) }
+	case_parts = case_pattern(pattern)
+	test = arm_test(case_parts, subject)
+	Key(Key(Key(ø, Op.If, test), Op.Then, arm_value(case_parts, subject, arm_result(arms#1))), Op.Else, arm_chain(arms[1..], subject))
+}
+
+matched(subject: Node, arms: list, n: Node): Node := {
+	if #arms == 0 or not arms.all(is_case_arm) { return n }
+	if is_name(subject) { return arm_chain(arms, subject) }
+	List([Key(symbol(subject_name), Op.Assign, subject), arm_chain(arms, symbol(subject_name))], Bracket.Round, Separator.Semicolon)
+}
+
+match_block(subject: Node, block: Node, n: Node): Node := match block {
+	List(arms, Bracket.Curly, separator): matched(subject, arms, n)
+	_: n
+}
+
+match_of(rest: Node, n: Node): Node := match rest {
+	List(parts, Bracket.None, Separator.Space): { if #parts == 2 then match_block(parts#1, parts#2, n) else n }
+	_: n
+}
+
+node_match(n: Node): Node := match n {
+	List(parts, Bracket.None, Separator.Space): { if #parts == 2 and parts#1 == symbol("match") then match_of(parts#2, n) else n }
+	Key(type_name, Op.Dot, case_name): spelled_case(type_name, case_name, n)
+	_: n
+}
+
+node_matches(program: any): any := bottom_up(program, node_match)

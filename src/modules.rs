@@ -124,6 +124,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	crate::compiler::compile_context::change(|context| {
 		context.module_files = files;
 		context.early_class_modules.clear(); // for this program only
+		context.early_file_classes.clear();
 		own_names.iter().for_each(|own| {
 			context.module_definitions.remove(own); // the program's own word wins
 		});
@@ -186,8 +187,7 @@ fn as_constructions(node: Node, classes: &HashSet<String>) -> Node {
 	}
 	match node.map_children(|child| as_constructions(child, classes)) {
 		Node::Key(name, Op::Colon, block)
-			if name.symbol_name().is_some_and(|name| classes.contains(name))
-				&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if name.symbol_name().is_some_and(|name| classes.contains(name)) && block.is_block() =>
 		{
 			Node::Key(name, Op::None, block)
 		}
@@ -237,7 +237,9 @@ pub fn insert_module_classes(program: Node) -> Node {
 		if module.first_error().is_some() {
 			continue; // the loader reports it
 		}
-		let definitions = statements(module);
+		// node.warp's Op, Bracket and Separator a module names (node_cases.rs) are its enums too: their declarations
+		// join the program with the module's classes, as its spelling functions join with its functions
+		let definitions = module_statements(crate::lowering::node_cases::lower(module));
 		// a package's uses, not a standard module's own (draw's `use math` stays draw's)
 		let reexported = if is_std { vec![] } else { modules_used_by(&definitions) };
 		for used in reexported {
@@ -254,7 +256,14 @@ pub fn insert_module_classes(program: Node) -> Node {
 				}
 				std_definitions.extend(definitions)
 			}
-			false => file_classes.extend(definitions.into_iter().filter(is_class)),
+			// one declaration per name: each module naming Op brings node.warp's
+			false => {
+				let declared: HashSet<String> = file_classes.iter().filter_map(name_declared_by).collect();
+				let new_class = |definition: &Node| {
+					is_class(definition) && name_declared_by(definition).is_none_or(|name| !declared.contains(&name))
+				};
+				file_classes.extend(definitions.into_iter().filter(new_class))
+			}
 		}
 		early.insert(path.canonicalize().unwrap_or(path));
 	}
@@ -275,10 +284,21 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let class_names: Vec<String> = std_classes.iter().filter_map(name_declared_by).collect();
 	let module_code = Node::List(std_definitions, Bracket::None, Separator::Newline);
 	let returned = crate::lowering::class_methods::returned_classes(&module_code, &class_names);
-	crate::compiler::compile_context::change(|context| context.module_returned_classes = returned);
+	let instances = crate::lowering::class_methods::top_level_instances(&module_code, &class_names);
+	crate::compiler::compile_context::change(|context| {
+		context.module_returned_classes = returned;
+		context.module_instance_classes = instances;
+	});
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
+	crate::compiler::compile_context::change(|context| context.early_file_classes.extend(file_classes.clone()));
 	let inserted: HashSet<String> = std_classes.iter().chain(&file_classes).filter_map(name_declared_by).collect();
 	let program = as_constructions(program, &inserted);
+	// `Node.True`, `x is Node` of a used file's or standard module's enum (`Extremum.Least` of extrema), which
+	// sum_variants met before its declaration was in front
+	let enums: Vec<Node> = std_classes.iter().chain(&file_classes).cloned().collect();
+	let program = crate::lowering::sum_variants::with_types_of(program, &enums);
+	// `Disambiguation::Earlier` of a used module's enum, which plain_enums met before its declaration was in front
+	let program = crate::lowering::plain_enums::with_cases_of(program, &enums);
 	let program = with_implicit_class_modules(with_statements_first(program, std_classes));
 	with_statements_first(program, file_classes)
 }

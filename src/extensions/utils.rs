@@ -1,6 +1,5 @@
-use std::fs::{create_dir_all, File};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::fs::create_dir_all;
+use std::path::PathBuf;
 //noinspection ALL
 
 /// Without the native feature (the compiler in the browser) there is no network: the page's host does the fetching at run time
@@ -11,6 +10,13 @@ const NO_NETWORK: &str = "no network in this build of warp (compiled without the
 /// it is https (card pannous-com)
 const DEFAULT_SCHEME: &str = "https";
 const SCHEME_MARK: &str = "://";
+/// The values that turn a WARP_ setting off, as unset does
+const OFF_VALUES: [&str; 5] = ["", "0", "false", "no", "off"];
+
+/// The environment setting's value; None when it is unset or off (OFF_VALUES, any case)
+pub fn setting(name: &str) -> Option<String> {
+	std::env::var(name).ok().filter(|value| !OFF_VALUES.contains(&value.to_lowercase().as_str()))
+}
 
 pub fn with_default_scheme(url: &str) -> String {
 	if url.starts_with(SCHEME_MARK) {
@@ -112,21 +118,6 @@ fn network_reason(error: ureq::Error, timeout: std::time::Duration) -> String {
 		ureq::Error::HostNotFound => "DNS: host not found".to_string(),
 		other => other.to_string(),
 	}
-}
-
-/// Write bytes to a WASM file, creating parent directories if needed
-/// Returns true on success, false on error (no panics)
-pub fn write_wasm(filename: &str, bytes: &[u8]) -> bool {
-	let path = Path::new(filename);
-
-	// Create parent directory if it doesn't exist
-	if let Some(parent) = path.parent() {
-		if !parent.exists() && create_dir_all(parent).is_err() {
-			return false;
-		}
-	}
-
-	File::create(filename).and_then(|mut f| f.write_all(bytes)).is_ok()
 }
 
 /// The bytes written to `<stem>.<extension>` in the system's temporary `folder` for the first file of a kind,

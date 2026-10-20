@@ -2,7 +2,6 @@
 // declares what a component imports and exports; its WIT is what `warp build --wit` writes. The declaration does
 // nothing when the program runs.
 use crate::is;
-use warp::warp_parser::parse;
 
 const PROGRAM: &str = "interface calculator {\n    add: (i32, i32) -> i32\n    ticks: () -> i64\n}\ncomponent my_component {\n    import host: {\n        print: (string) -> ()\n        time: () -> i64\n    }\n    export api: calculator\n}\n";
 
@@ -11,21 +10,38 @@ fn a_component_declaration_does_nothing_at_run_time() {
 	is!(&format!("{PROGRAM}6 * 7"), 42);
 }
 
+/// What `warp build --wit` makes of `program`: the WIT it writes, else what it says failing
+#[cfg(feature = "native")]
+fn built_wit(name: &str, program: &str) -> Result<String, String> {
+	let directory = crate::common::scratch_directory(name);
+	std::fs::create_dir_all(&directory).unwrap();
+	let source = directory.join("world.warp");
+	std::fs::write(&source, program).unwrap();
+	let run = crate::common::warp_command().args(["build", "--wit"]).arg(&source).output().unwrap();
+	match run.status.success() {
+		true => Ok(std::fs::read_to_string(source.with_extension("wit")).unwrap()),
+		false => Err(String::from_utf8_lossy(&run.stderr).to_string()),
+	}
+}
+
+#[cfg(feature = "native")]
 #[test]
 fn the_world_as_wit() {
-	let wit = warp::component_worlds::world_wit(&parse(PROGRAM)).expect("a world");
+	let wit = built_wit("world_wit", PROGRAM).expect("a world");
 	assert_eq!(wit, "package warp:my-component;\n\ninterface calculator {\n  add: func(p1: s32, p2: s32) -> s32;\n  ticks: func() -> s64;\n}\n\nworld my-component {\n  import host: interface {\n    print: func(p1: string);\n    time: func() -> s64;\n  }\n  export api: interface {\n    add: func(p1: s32, p2: s32) -> s32;\n    ticks: func() -> s64;\n  }\n}\n");
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn a_program_without_component_has_no_world() {
-	assert!(warp::component_worlds::world_wit(&parse("interface shape { area: (int) -> float }")).is_err());
+	assert!(built_wit("no_world_wit", "interface shape { area: (int) -> float }").is_err());
 }
 
+#[cfg(feature = "native")]
 #[test]
 fn an_unknown_interface_is_named() {
-	let failure = warp::component_worlds::world_wit(&parse("component c { export api: missing }")).unwrap_err();
-	assert!(failure.contains("missing"), "{failure}");
+	let failure = built_wit("unknown_interface_wit", "component c { export api: missing }").unwrap_err();
+	assert!(failure.contains("no interface missing"), "{failure}");
 }
 
 /// step 2: `warp build --component` makes a component of the world's exports, which another program uses like any

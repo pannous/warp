@@ -34,6 +34,10 @@ pub const RETURN_WORD: &str = "return";
 /// C's result type of a function that returns nothing: `void f() { … }`
 pub const VOID_WORD: &str = "void";
 pub const SUM_WORD: &str = "sum";
+/// `floor(a: float): float := wasm f64.floor`: a body of one wasm instruction (decision wasm-instruction-body), parsed
+/// as the call `wasm_instruction("f64.floor")`, which the emitters compile as the arguments and the instruction
+pub const WASM_WORD: &str = "wasm";
+pub const WASM_INSTRUCTION_CALL: &str = "wasm_instruction";
 
 /// `switch x {…}` / `match x {…}` (lowering/control/switch.rs)
 pub const SWITCH_WORDS: [&str; 2] = ["switch", MATCH_WORD];

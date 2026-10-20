@@ -68,6 +68,15 @@ const READ_TEXT: &str = "read_text";
 const HOST_READ: &str = "host_read";
 /// error_of(text) → Error: exported, the host builds the Error of a caught stack overflow with it (guarded_call)
 pub const ERROR_OF: &str = "error_of";
+/// class_error(text, class) → the Error of the text, of the class (a symbol; ø: none), decision error-classes
+pub const CLASS_ERROR: &str = "class_error";
+/// `raise_as(message, class)`: raise the message as an error of the class, which `except C` tests (error_class)
+pub const RAISE_AS: &str = "raise_as";
+/// `raise_on(message, class)`: raise a caught error on, as raise_as, at the position it was first raised (an `except`
+/// of another class)
+pub const RAISE_ON: &str = "raise_on";
+/// `error_class(e)`: the class of the Error e as a symbol, ø for an Error of none and for any other value
+pub const ERROR_CLASS: &str = "error_class";
 pub const WARNING: &str = "warning";
 const WARN_TEXT: &str = "warn_text";
 pub(in crate::wasm_emitter) const HOST_WARN: &str = "host_warn";
@@ -80,7 +89,7 @@ pub const TEXT_FORM: &str = "text_form";
 const KIND_MARK: &str = "kind_mark";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 24] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 27] = [
 	(KIND_MARK, 1, Kind::Int),
 	(MEMORY_BYTE, 1, Kind::Int),
 	(MEMORY_SET_BYTE, 2, Kind::Int),
@@ -92,6 +101,9 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 24] = [
 	(BYTE_SLICE, 3, Kind::Text),
 	(ERROR_WORD, 1, Kind::Empty),
 	(RAISE_WORD, 1, Kind::Text),
+	(RAISE_AS, 2, Kind::Text),
+	(RAISE_ON, 2, Kind::Text),
+	(ERROR_CLASS, 1, Kind::Empty),
 	(IS_ERROR_WORD, 1, Kind::Int),
 	(WARNING, 1, Kind::Text),
 	(TEXT_FORM, 1, Kind::Text),
@@ -158,6 +170,7 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		TEXT_ROUGH_TRIM,
 		C_STRING,
 		ERROR_OF,
+		CLASS_ERROR,
 		WARN_TEXT,
 		"list_join",
 		"text_upper",
@@ -171,7 +184,8 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 	];
 	vec![
 		// `catch e`: the caught error becomes an Error through error_of
-		any(&[CAUGHT_ERROR], &[ERROR_OF]),
+		any(&[CAUGHT_ERROR], &[ERROR_OF, CLASS_ERROR]),
+		any(&[ERROR_CLASS], &["new_empty"]),
 		any(&[LIST_TEXT], &["list_join"]), // emitted together, with the same helpers
 		any(&[NODE_SLICE], &[TEXT_GRAPHEMES, "list_join", TEXT_SLICE]),
 		// a text searched for a text (`s.contains("b")`, `"b" in s`); the map words are emitted together
@@ -254,7 +268,23 @@ impl WasmGcEmitter {
 					|| crate::errors::diagnostic::warning_mode().fails(crate::errors::diagnostic::Level::Normal) =>
 			{
 				self.emit_trap_detail(func, message);
+				if self.guards_errors {
+					self.emit_trap_class(func, &Node::Empty);
+				}
 				self.emit_runtime_error(func, super::super::lists::list_ops::RETURNED_ERROR);
+			}
+			(word @ (RAISE_AS | RAISE_ON), [message, class]) => {
+				self.emit_trap_detail(func, message);
+				self.emit_trap_class(func, class);
+				if word == RAISE_ON {
+					self.emit_restore_caught_position(func);
+				}
+				self.emit_runtime_error(func, super::super::lists::list_ops::RETURNED_ERROR);
+			}
+			(ERROR_CLASS, [error]) => {
+				self.emit_node_instructions(func, error);
+				func.instruction(&I::RefAsNonNull);
+				self.emit_call(func, ERROR_CLASS);
 			}
 			(WARNING, [message]) if self.ctx.func_registry.get(HOST_WARN).is_some() => {
 				self.emit_node_instructions(func, message);
@@ -643,8 +673,9 @@ impl WasmGcEmitter {
 		if self.should_emit_function(TEXT_ARGUMENT) {
 			self.runtime_function(TEXT_ARGUMENT, vec![node_ref], vec![node_ref], vec![], |s, f| {
 				s.emit_fail_if_error(f, 0);
+				s.emit_codepoint_as_text(f, 0);
+				s.emit_require_kind(f, 0, Kind::Text, "not_a_text");
 				f.instruction(&I::LocalGet(0));
-				s.call(f, TEXT_OF);
 			});
 		}
 	}
@@ -893,6 +924,45 @@ impl WasmGcEmitter {
 					f,
 					&[I::RefNull(HeapType::Concrete(s.type_manager.node_type)), I::StructNew(s.type_manager.node_type)],
 				);
+			});
+		}
+
+		// class_error(text, class): an Error of the text whose value is its class, none for ø
+		if self.should_emit_function(CLASS_ERROR) {
+			let node = self.type_manager.node_type;
+			let nullable_node = Ref(self.node_ref(true));
+			self.runtime_function(CLASS_ERROR, vec![node_ref, nullable_node], vec![node_ref], vec![], |s, f| {
+				Self::emit_list(f, &[I::LocalGet(0)]);
+				s.call(f, TEXT_OF);
+				Self::emit_list(f, &[I::LocalSet(0), I::I64Const(Kind::Error as i64)]);
+				s.emit_field(f, 0, 1);
+				// ø names no class
+				Self::emit_list(f, &[I::LocalGet(1), I::RefIsNull, I::If(BlockType::Result(nullable_node))]);
+				f.instruction(&I::RefNull(HeapType::Concrete(node)));
+				f.instruction(&I::Else);
+				s.emit_field(f, 1, 0);
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+				Self::emit_list(f, &[I::If(BlockType::Result(nullable_node)), I::RefNull(HeapType::Concrete(node))]);
+				Self::emit_list(f, &[I::Else, I::LocalGet(1), I::End, I::End, I::StructNew(node)]);
+			});
+		}
+
+		// error_class(node): the class of an Error, ø for none and for any other value
+		if self.should_emit_function(ERROR_CLASS) {
+			let nullable_node = Ref(self.node_ref(true));
+			self.runtime_function(ERROR_CLASS, vec![node_ref], vec![node_ref], vec![nullable_node], |s, f| {
+				s.emit_field(f, 0, 0);
+				Self::emit_kind_test(f, Kind::Error as i64, I::I64Eq);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_field(f, 0, 2);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalTee(1), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty),
+						I::LocalGet(1), I::RefAsNonNull, I::Return,
+					I::End,
+					I::End,
+				]);
+				s.call(f, "new_empty");
 			});
 		}
 

@@ -1,17 +1,31 @@
 #!/bin/bash
 # The suite through the warp compiler (card warp-pipeline-suite, notes/self_hosting.md): every test with
-# WARP_SELF_HOSTED=1 (src/compiler/self_hosted.rs: parser.warp parses, the pass twins of lib/compiler/passes.warp
-# replace their Rust passes, the rest stays Rust), the twin tests (parser::test_self_*) left out. Prints
+# WARP_SELF_HOSTED=front (src/compiler/self_hosted.rs: parser.warp parses, the pass twins of lib/compiler/passes.warp
+# replace their Rust passes, the rest stays Rust; =1 adds emitter.warp), the twin tests (parser::test_self_*) left out. Prints
 # "self-hosted: N passed / M" and the failures grouped by cause, the most frequent first.
 #   scripts/self-hosted-suite.sh [<tip>]               on the cloud lane: the pushed tip (default HEAD) plus a throwaway
-#                                                      commit switching self-hosting on (.cargo/config.toml [env]), one
+#                                                      commit with SPEED_PROFILE (the stage switches are --env settings), one
 #                                                      job per TEST_GROUPS entry at once, each on its own branch
 #                                                      SCRATCH_PREFIX/<tip>-<group>, deleted after the run
-#   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh
+#   scripts/self-hosted-suite.sh --stage <name>=<VAR>[=<value>]… [<tip>]   the same with a later stage's switch set too
+#                                                      (value 1 by default; WARP_SELF_HOSTED's own replaces "front"),
+#                                                      counted apart as run <tip>+<name>; notes/self_hosting.md
+#                                                      "Back-end focus": front end only, + emitter (--stage
+#                                                      emitter=WARP_SELF_HOSTED=1), + analyzer (--stage
+#                                                      analyzer=WARP_SELF_ANALYSIS: analyzer.warp checks each program),
+#                                                      + pure (--stage pure=WARP_SELF_HOSTED=pure: no Rust pass; the
+#                                                      report counts the programs that ran pure and ranks refusals)
+#   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh (after --stage …: with that stage,
+#                                                      e.g. --stage emitter=WARP_SELF_HOSTED=1 --local lists::)
 #   scripts/self-hosted-suite.sh --rank <log[.gz]>…    the count and the ranking of test logs
 #   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
 set -uo pipefail
 SWITCH=WARP_SELF_HOSTED
+SWITCHES=("$SWITCH=front"        # VAR=value settings of the test run (cloud-test.sh --env): the front end alone, unless --stage adds
+	"WARP_EMIT_REFUSALS=/tmp/warp-emit-refusals.txt") # each refusal of a warp stage (and pure's "pure: ran") as a
+	                                 # line of the VM's file, which cloud-test.sh appends to the log; ranked from there
+	                                 # (on stderr, the lines reached the output the CLI tests check)
+STAGE=""                         # the later stages switched on too (--stage), as the run's name suffix
 SKIPPED=parser::test_self_       # the twins compare warp with Rust themselves
 SCRATCH_PREFIX=self-hosted       # the throwaway branches
 CONFIG=.cargo/config.toml
@@ -21,11 +35,29 @@ SPEED_PROFILE=$'\n[profile.test.package.warp-lang]\nopt-level = 2'
 # 2400 s limit (6020 tests of ~6300), and a killed run prints no failure messages; the third part of ~2000 outgrew it
 # too (8f8d6dc8). Filters match anywhere in a test's path (lists:: also takes control::test_job_lists), so a test
 # may run in two parts: rank counts each test once.
+# control/functions/ffi grew to ~2150 tests and its job was killed in 6 of 8 runs (2026-10-19): split in two
 TEST_GROUPS=(
-	"control:: functions:: ffi::"
+	"control::"
+	"functions:: ffi::"
 	"types:: lists:: modules:: node:: numbers:: operators::"
 	"parser:: programs:: scope:: sweeps::"
-	"text:: wasm:: web:: welcoming::"
+	"text:: wasm:: web:: welcoming:: formats::"
+)
+# The pure lane (--stage …=WARP_SELF_HOSTED=pure) takes ~2.3 s a test against ~0.2 s: 3 of 5 parts outgrew the limit
+# (e5d5a6b7+pure), so its parts hold ≤ ~650 tests (counts of 2026-10-19), big folders split by their files' letters
+PURE_TEST_GROUPS=(
+	"$(echo control::test_{a..i})"
+	"$(echo control::test_{j..z})"
+	"$(echo functions::test_{a..l})"
+	"$(echo functions::test_{m..z}) ffi::"
+	"lists:: formats:: node::"
+	"modules:: operators:: scope:: sweeps::"
+	"numbers::"
+	"$(echo types::test_{a..l})"
+	"$(echo types::test_{m..z})"
+	"parser:: programs::"
+	"text:: wasm:: web::"
+	"welcoming::"
 )
 REPORTS=/Users/me/dev/angles/warp/data/self-hosted
 COUNTS=/Users/me/dev/angles/warp/data/self_hosting/suite_counts.txt   # the count over time, one line per cloud run
@@ -85,11 +117,30 @@ rank() {
 		}'
 }
 
+# The programs the warp stages compiled ("pure: ran", the pure lane's) and refused ("outside the core: …"), the
+# refusals ranked, digits as #; a program of a test that ran in two parts counts twice
+refusals() {
+	local log
+	for log in "$@"; do
+		if [[ "$log" == *.gz ]]; then gunzip -c "$log"; else cat "$log"; fi
+	done | LC_ALL=C grep -ao -e 'pure: ran' -e 'outside the core: .*' | LC_ALL=C awk -v shown=$SHOWN_CAUSES -v width=$CAUSE_WIDTH '
+		$0 == "pure: ran" { ran++; next }
+		{ refused++; refusal = substr($0, 1, width); gsub(/[0-9]+/, "#", refusal); refusals[refusal]++ }
+		END {
+			if (!ran && !refused) exit
+			printf "warp stages: %d programs ran pure, %d refused\nrefusals (count, refusal):\n", ran, refused
+			sorter = "LC_ALL=C sort -rn | head -" shown
+			for (refusal in refusals) printf "%6d  %s\n", refusals[refusal], refusal | sorter
+		}'
+}
+
 local_run() {
 	mkdir -p "$REPORTS"
-	local log=$REPORTS/local.log
-	env "$SWITCH=1" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
+	local log=$REPORTS/local.log local_refusals=$REPORTS/local-refusals.txt
+	rm -f "$local_refusals"
+	env "${SWITCHES[@]}" WARP_EMIT_REFUSALS="$local_refusals" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
 	rank "$log"
+	refusals "$local_refusals"
 	echo "(log: $log)"
 }
 
@@ -99,61 +150,104 @@ failed_tests() {
 	for log in "$@"; do gunzip -c "$log"; done | sed -n 's/^.*test \([^ ]*\) \.\.\. FAILED$/\1/p' | LC_ALL=C sort -u
 }
 
+# --stage <name>=<VAR>[=<value>]: the run's name grows by the stage, VAR is set (again) to the value
+set_switch() {
+	local variable=${1#*=} value=1 index
+	[[ "$variable" == *=* ]] && value=${variable#*=} variable=${variable%%=*}
+	STAGE=${STAGE:+$STAGE+}${1%%=*}
+	for index in "${!SWITCHES[@]}"; do
+		[ "${SWITCHES[$index]%%=*}" = "$variable" ] && { SWITCHES[index]="$variable=$value"; return; }
+	done
+	SWITCHES+=("$variable=$value")
+}
+
+# A run's name as its cloud results folder spells it
+folder_name() { printf %s "$1" | tr -c 'A-Za-z0-9._-' '-'; }
+
 # The tests failing now that passed in the last recorded run (a regression check), from the logs both runs left
 newly_failed() {
 	local previous=$1; shift
-	local previous_logs=("$CLOUD_RESULTS/$SCRATCH_PREFIX-$previous"-*/log.txt.gz)
+	local previous_logs=("$CLOUD_RESULTS/$(folder_name "$SCRATCH_PREFIX/$previous")"-[0-9]*-*/log.txt.gz)
 	[ -e "${previous_logs[0]}" ] || return 0
 	echo "newly failing since $previous:"
 	LC_ALL=C comm -13 <(failed_tests "${previous_logs[@]}") <(failed_tests "$@")
 }
 
-# The tip with the switch on: a commit of its own per group, so each job has its own run name
+# The tip with the speed profile, one commit for every part and stage of a tip (the tip's dates make it the same
+# commit each run): the build embeds its commit (WARP_COMMIT), so a warm VM builds a tip once
 switched_on() {
-	local tip=$1 group=$2 index blob commit
+	local tip=$1 index blob commit
 	index=$(mktemp "${TMPDIR:-/tmp}/self-hosted-index.XXXXXX")
 	GIT_INDEX_FILE=$index git read-tree "$tip"
-	blob=$({ git show "$tip:$CONFIG"; echo "$SWITCH = \"1\""; echo "$SPEED_PROFILE"; } | git hash-object -w --stdin)
+	blob=$({ git show "$tip:$CONFIG"; echo "$SPEED_PROFILE"; } | git hash-object -w --stdin)
 	GIT_INDEX_FILE=$index git update-index --cacheinfo "100644,$blob,$CONFIG"
-	commit=$(git commit-tree "$(GIT_INDEX_FILE=$index git write-tree)" -p "$tip" -m "self-hosted suite run of $tip: $group")
+	commit=$(GIT_AUTHOR_DATE=$(git log -1 --format=%aD "$tip") GIT_COMMITTER_DATE=$(git log -1 --format=%cD "$tip") \
+		git commit-tree "$(GIT_INDEX_FILE=$index git write-tree)" -p "$tip" -m "self-hosted suite run of $tip")
 	rm -f "$index"
 	echo "$commit"
 }
 
+push_branch() {
+	local attempt
+	for attempt in 1 2 3; do
+		git push -q -f origin "$1:refs/heads/$2" && return 0
+		sleep $((attempt * 20))
+	done
+	return 1
+}
+
 cloud_run() {
-	local tip group number branch commit logs=() branches=() commits=()
+	local tip run group number branch commit logs=() branches=() commits=()
 	tip=$(git rev-parse "${1:-HEAD}") || fail "no tip ${1:-HEAD}"
+	run=${tip:0:8}${STAGE:++$STAGE}
 	git branch -r --contains "$tip" | grep -q . || fail "tip $tip is not pushed"
-	[ "$(git show "$tip:$CONFIG" | grep '^\[' | tail -1)" = "[env]" ] || fail "$CONFIG of $tip does not end with its [env] table"
-	for number in "${!TEST_GROUPS[@]}"; do
-		group=${TEST_GROUPS[$number]}
-		branch=$SCRATCH_PREFIX/${tip:0:8}-$number
-		commit=$(switched_on "$tip" "$group")
-		git push -q -f origin "$commit:refs/heads/$branch" || fail "push of $branch failed"
+	local groups=("${TEST_GROUPS[@]}") settings=() switch
+	for switch in "${SWITCHES[@]}"; do settings+=(--env "$switch"); done
+	[[ " ${SWITCHES[*]} " == *" $SWITCH=pure "* ]] && groups=("${PURE_TEST_GROUPS[@]}")
+	commit=$(switched_on "$tip")
+	for number in "${!groups[@]}"; do
+		group=${groups[$number]}
+		branch=$SCRATCH_PREFIX/$run-$number
+		# GitHub now and then answers "remote rejected (failed)" (9741669b, e5d5a6b7): tried again before giving up
+		push_branch "$commit" "$branch" || fail "push of $branch failed"
 		# shellcheck disable=SC2086 # the group is a list of filters
-		scripts/cloud-test.sh --no-wait "$branch" "$commit" --all-features -- $group --skip "$SKIPPED" > /dev/null
+		scripts/cloud-test.sh --no-wait "${settings[@]}" "$branch" "$commit" --all-features -- $group --skip "$SKIPPED" > /dev/null
 		branches+=("$branch") commits+=("$commit")
 	done
 	for number in "${!branches[@]}"; do
 		branch=${branches[$number]} commit=${commits[$number]}
 		scripts/cloud-test.sh --result "$branch" "$commit" > /dev/null
 		git push -q origin --delete "$branch"
-		logs+=("$CLOUD_RESULTS/$(printf %s "$branch" | tr -c 'A-Za-z0-9._-' '-')-${commit:0:8}/log.txt.gz")
+		logs+=("$CLOUD_RESULTS/$(folder_name "$branch")-${commit:0:8}/log.txt.gz")
 	done
 	mkdir -p "$REPORTS"
-	rank "${logs[@]}" | tee "$REPORTS/${tip:0:8}.txt"
+	local report=$REPORTS/$run.txt previous
+	rank "${logs[@]}" | tee "$report"
+	refusals "${logs[@]}" | tee -a "$report"
 	mkdir -p "$(dirname "$COUNTS")"
-	# against the last complete run: a line noting "incomplete" lacks the tests of its killed part
-	[ -s "$COUNTS" ] && newly_failed "$(grep -v -e '^#' -e incomplete "$COUNTS" | tail -1 | awk '{ print $2 }')" "${logs[@]}" | tee -a "$REPORTS/${tip:0:8}.txt"
-	printf '%s  %s  %s  %s\n' "$(date +%F)" "${tip:0:8}" "$(head -1 "$REPORTS/${tip:0:8}.txt" | sed 's/^self-hosted: //; s/ passed//')" \
-		"data/self-hosted/${tip:0:8}.txt" >> "$COUNTS"
-	echo "(report: $REPORTS/${tip:0:8}.txt, logs: ${logs[*]})"
+	# against the last complete run of the same stages on an ancestor of this tip (another session's branch run would
+	# count that branch's fixes as regressions): a line noting "incomplete" lacks the tests of its killed part
+	previous=$(grep -v -e '^#' -e incomplete "$COUNTS" 2>/dev/null | awk -v stage="$STAGE" '
+		{ plus = index($2, "+"); if ((plus ? substr($2, plus + 1) : "") == stage) print $2 }' | tail -r |
+		while read -r candidate; do
+			git merge-base --is-ancestor "${candidate%%+*}" "$tip" 2>/dev/null && { echo "$candidate"; break; }
+		done)
+	[ -n "$previous" ] && newly_failed "$previous" "${logs[@]}" | tee -a "$report"
+	printf '%s  %s  %s  %s\n' "$(date +%F)" "$run" "$(head -1 "$report" | sed 's/^self-hosted: //; s/ passed//')" \
+		"data/self-hosted/$run.txt" >> "$COUNTS"
+	echo "(report: $report, logs: ${logs[*]})"
 }
 
 case "${1:-}" in
 	--rank) shift; rank "$@" ;;
 	--tests) shift; LISTED=$1; shift; rank "$@" ;;
+	--stage)
+		while [ "${1:-}" = --stage ]; do
+			set_switch "$2"
+			shift 2
+		done
+		if [ "${1:-}" = --local ]; then shift; local_run "$@"; else cloud_run "$@"; fi ;;
 	--local) shift; local_run "$@" ;;
-	--*) sed -n '2,12p' "$0"; exit 2 ;;
+	--*) sed -n '2,/^set -uo/p' "$0" | sed '$d'; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac

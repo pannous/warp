@@ -583,7 +583,9 @@ pub(super) fn visit_arguments<'a>(node: &'a Node, ctx: &Context, visit: &mut imp
 		Node::List(items, _, _) => {
 			for (name, arguments) in called_functions(items) {
 				if let Some(function) = ctx.user_functions.get(&name) {
-					for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
+					// `f·node`'s own `f(arguments·node#1, …)` carries what the start passes f directly (called_functions)
+					let arguments = arguments.into_iter().enumerate().take(function.params.len());
+					for (index, argument) in arguments.filter(|(_, argument)| !is_wrapper_argument(argument)) {
 						visit(&name, index, argument);
 					}
 				}
@@ -989,4 +991,9 @@ fn body_scope(
 	globals: &HashMap<String, Local>,
 ) -> Scope {
 	function_body_scope(&function.params, &function.body, function_kinds, globals, &ctx.closure_variable_targets)
+}
+
+/// `arguments·node#1`: an item of the list a task start hands a started function's wrapper
+fn is_wrapper_argument(argument: &Node) -> bool {
+	matches!(argument.drop_meta(), Node::Key(list, Op::Hash, _) if list.is_symbol(crate::declarations::WRAPPER_ARGUMENTS))
 }

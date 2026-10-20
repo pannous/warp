@@ -31,8 +31,10 @@ const HELP_WORD: &str = "help";
 const KEYS_WORD: &str = "keys";
 const EXPORTS_WORD: &str = "exports";
 /// The run-time choice of a class's names (Objects::dispatched)
-const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
+const TYPE_DISPATCH_TEMPLATE: &str = "if RECEIVER is TYPE then NAMES else OTHERWISE";
 const DIR_OTHERWISE_TEMPLATE: &str = "if RECEIVER is map then RECEIVER.keys else OTHERWISE";
+/// A module known only at run time (`f(m) := dir(m); f(math)`): its words from its meta (meta_values.rs)
+const DIR_MODULE_TEMPLATE: &str = "if RECEIVER is symbol then meta_of(RECEIVER).words else []";
 pub(crate) const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 /// `f.body`: the body as written, as data (card g_X_3s)
@@ -138,7 +140,9 @@ fn called_functions(
 		let written = format!("{word} {name}");
 		let warning = crate::errors::diagnostic::Diagnostic::at(
 			part,
-			format!("`{written}` calls {name}, a function without parameters; write `{word} function {name}` for the function itself"),
+			format!(
+				"`{written}` calls {name}, a function without parameters; write `{word} function {name}` for the function itself"
+			),
 		)
 		.offer("the function itself", &written, format!("{word} function {name}"));
 		if !crate::errors::diagnostic::warned_before(&warning) {
@@ -676,12 +680,7 @@ impl Objects {
 
 	/// Inherited names first, a name the class redeclares kept in its parent's place
 	fn names(&self, class: &str, own: fn(&ClassLayout) -> &Vec<String>) -> Vec<String> {
-		let Some(layout) = self.layouts.get(class) else {
-			return vec![];
-		};
-		let mut names = layout.parent.as_deref().map(|parent| self.names(parent, own)).unwrap_or_default();
-		names.extend(own(layout).iter().filter(|name| !names.contains(name)).cloned().collect::<Vec<_>>());
-		names
+		inherited_names(&self.layouts, class, own)
 	}
 
 	fn fields(&self, class: &str) -> Vec<String> {
@@ -818,7 +817,7 @@ impl Objects {
 				(false, true) => call(crate::type_tests::TYPE_WORD, vec![subject.clone()]),
 				(false, false) => word_list(word, class, &self.listed(class, word).unwrap_or_default()),
 			};
-			type_dispatch(subject, class, names, otherwise)
+			crate::class_methods::by_class(subject, class, names, otherwise)
 		}))
 	}
 
@@ -834,6 +833,20 @@ impl Objects {
 	fn map_keys(&self, subject: &Node) -> Node {
 		key(subject.clone(), Op::Dot, symbol(KEYS_WORD))
 	}
+}
+
+/// A class's names of one kind (fields or methods), inherited ones first
+pub(crate) fn inherited_names(
+	layouts: &HashMap<String, ClassLayout>,
+	class: &str,
+	own: fn(&ClassLayout) -> &Vec<String>,
+) -> Vec<String> {
+	let Some(layout) = layouts.get(class) else {
+		return vec![];
+	};
+	let mut names = layout.parent.as_deref().map(|parent| inherited_names(layouts, parent, own)).unwrap_or_default();
+	names.extend(own(layout).iter().filter(|name| !names.contains(name)).cloned().collect::<Vec<_>>());
+	names
 }
 
 /// `dir(x)` no earlier pass answered (no module, class, map, function or task it knows): a map's keys at run time, else
@@ -852,13 +865,14 @@ fn answered_dir(node: Node) -> Node {
 	}
 }
 
-/// `if subject is class then names else otherwise`
-fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> Node {
+/// `if subject is type_module then names else otherwise`, for a type module such as list; a class goes by
+/// class_methods::by_class (its exact class, not the classes extending it)
+fn type_dispatch(subject: &Node, type_module: &str, names: Node, otherwise: Node) -> Node {
 	super::nodes::filled(
-		DISPATCH_TEMPLATE,
+		TYPE_DISPATCH_TEMPLATE,
 		[
 			("RECEIVER", subject.clone()),
-			("CLASS", Node::Symbol(class.to_string())),
+			("TYPE", Node::Symbol(type_module.to_string())),
 			("NAMES", names),
 			("OTHERWISE", otherwise),
 		],
@@ -866,10 +880,11 @@ fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> N
 }
 
 /// What `dir` lists of a value that is no instance of the program's classes: a map's keys, else its type's methods
-/// as Python's dir([1, 2]) does, the words of the module named after the type (`dir([1 2])` == `dir(list)`), else none
+/// as Python's dir([1, 2]) does, the words of the module named after the type (`dir([1 2])` == `dir(list)`), a module's
+/// words, else none
 fn dir_otherwise(subject: &Node) -> Node {
 	let methods = crate::modules::type_modules().into_iter().rev().filter(|(module, _)| *module != MAP_WORD).fold(
-		text_list(&[]),
+		super::nodes::filled(DIR_MODULE_TEMPLATE, [("RECEIVER", subject.clone())]),
 		|otherwise, (module, words)| {
 			type_dispatch(subject, module, text_list(&super::members::type_dir_names(module, words)), otherwise)
 		},
@@ -962,24 +977,31 @@ fn is_listing_word(word: &Node) -> bool {
 
 /// What a reflection word lists of a class: its methods themselves, `function sq` for each (decision reflection,
 /// card module-methods), its fields and dir's names as texts
-fn word_list(word: &str, class: &str, names: &[String]) -> Node {
+pub(crate) fn word_list(word: &str, class: &str, names: &[String]) -> Node {
 	match word {
-		_ if METHODS_WORDS.contains(&word) => Node::List(
-			names.iter().map(|name| crate::closures::method_reference(name.clone(), class)).collect(),
-			Bracket::Square,
-			Separator::Space,
-		),
-		_ => text_list(names),
+		_ if METHODS_WORDS.contains(&word) => {
+			listed(references(names.iter().map(|name| crate::closures::method_reference(name.clone(), class))))
+		}
+		_ => listed(text_list(names)),
 	}
 }
 
 /// The functions of these names themselves, `[function gcd, function lcm]`
 pub(crate) fn function_list(names: &[String]) -> Node {
-	Node::List(
-		names.iter().cloned().map(crate::closures::function_reference).collect(),
-		Bracket::Square,
-		Separator::Space,
-	)
+	listed(references(names.iter().cloned().map(crate::closures::function_reference)))
+}
+
+fn references(functions: impl Iterator<Item = Node>) -> Node {
+	Node::List(functions.collect(), Bracket::Square, Separator::Space)
+}
+
+/// A reflection word's result list; none is ø, as `[]` reads (a variable can't hold an empty list node)
+fn listed(list: Node) -> Node {
+	if matches!(&list, Node::List(items, ..) if items.is_empty()) {
+		Node::Empty
+	} else {
+		list
+	}
 }
 
 /// The names a reflection word lists for a class of these fields and methods: either, or both for `dir`

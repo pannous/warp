@@ -4,6 +4,7 @@ use node::Node;
 use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
+use warp::compiler::node_views;
 use warp::node;
 use warp::run::module_cache::COMPILED_EXTENSION;
 use warp::util::{dirs_home, extract_after, file_exists, load_file};
@@ -62,6 +63,9 @@ const APP_CHECK: &str = "--check";
 const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
+/// `warp lower --json <code>`: the lowered program as the JSON node view lib/compiler reads with `node_of(json(…))`,
+/// lossless where the serialized text is not (probes/self_hosting/emitter/emit_lowered.sh)
+const LOWER_JSON_COMMAND: &str = "lower --json";
 /// The first words the command line takes as commands, for unknown_command's suggestion
 const COMMAND_WORDS: [&str; 30] = [
 	"run", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data", "tool",
@@ -138,10 +142,41 @@ fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
 	Some((only_run, path.as_str(), &args[file + 1..]))
 }
 
-/// `warp test file.warp`: the program file whose tests run
-fn test_file(args: &[String]) -> Option<&str> {
-	let path = args.get(2).filter(|path| has_warp_extension(path))?;
-	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(path.as_str())
+/// `warp test a.warp b.warp …`: the program files whose tests run
+fn test_files(args: &[String]) -> Option<&[String]> {
+	let paths = args.get(2..).filter(|paths| !paths.is_empty() && paths.iter().all(|path| has_warp_extension(path)))?;
+	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(paths)
+}
+
+/// The tests of one file run, its summary printed: (tests run, failed)
+fn run_tests_of(path: &str) -> (usize, usize) {
+	diagnostic::show_lines_of(&source_of(path));
+	let result = warp::pipeline::for_tests(|| eval(path));
+	let summary = match result.drop_meta() {
+		Node::Text(summary) => summary.clone(),
+		Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => summary.drop_meta().name(),
+		// a program without tests shows its value; one that fails outright counts as one failed test
+		other => {
+			show(other, "");
+			let failed = usize::from(matches!(other, Node::Error(_)));
+			return (failed, failed);
+		}
+	};
+	for skipped in warp::lowering::test_blocks::skipped_pairs(&source_of(path)) {
+		println!("⊘ skipped {skipped}");
+	}
+	println!("{summary}");
+	test_counts(&summary).unwrap_or((1, 1))
+}
+
+/// "✓ 3 tests passed" → (3, 0), "2 of 4 failed" → (4, 2)
+fn test_counts(summary: &str) -> Option<(usize, usize)> {
+	let numbers: Vec<usize> = summary.split(' ').filter_map(|word| word.parse().ok()).collect();
+	match numbers.as_slice() {
+		[failed, run] if summary.ends_with(" failed") => Some((*run, *failed)),
+		[run] if summary.ends_with(" passed") => Some((*run, 0)),
+		_ => None,
+	}
 }
 
 /// What the command line asks for: a file, a subcommand (`eval`, `compile`, `verify`, `tool` …) or code to evaluate
@@ -280,19 +315,24 @@ fn run_command(args: &[String]) {
 				Err(failure) => fail(format!("warp build: {failure}")),
 			}
 		}
-	} else if let Some(path) = test_file(args) {
-		// P209, P210: the file's `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero
-		diagnostic::show_lines_of(&source_of(path));
-		let result = warp::pipeline::for_tests(|| eval(path));
-		let failed = matches!(result, Node::Error(_));
-		match result.drop_meta() {
-			Node::Text(summary) => println!("{summary}"),
-			Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => {
-				println!("{}", summary.drop_meta())
+	} else if let Some(paths) = test_files(args) {
+		// P209, P210: the files' `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero;
+		// several files each print their summary under their name, and the total last
+		let several = paths.len() > 1;
+		let (mut run, mut failed) = (0, 0);
+		for path in paths {
+			if several {
+				println!("{path}:");
 			}
-			other => show(other, ""),
+			let (file_run, file_failed) = run_tests_of(path);
+			(run, failed) = (run + file_run, failed + file_failed);
 		}
-		std::process::exit(if failed { 1 } else { 0 });
+		if several {
+			let total =
+				if failed > 0 { format!("{failed} of {run} failed") } else { format!("✓ {run} tests passed") };
+			println!("{total} in {} files", paths.len());
+		}
+		std::process::exit(if failed > 0 { 1 } else { 0 });
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments(program_arguments.to_vec()); // `use os; args`
@@ -336,6 +376,11 @@ fn run_command(args: &[String]) {
 	} else if let Some(code) = command_argument(&arg_string, "eval") {
 		diagnostic::show_lines_of(code);
 		show_and_fail_on_error(&eval(code), RESULT_MARK);
+	} else if let Some(code) = command_argument(&arg_string, LOWER_JSON_COMMAND) {
+		match warp::pipeline::lower(code) {
+			Ok(lowered) => println!("{}", node_views::view_json(&node_views::plain_view(&lowered))),
+			Err(final_value) => println!("no module needed: {}", final_value.serialize()),
+		}
 	} else if let Some(code) = command_argument(&arg_string, "lower") {
 		match wasm_emitter::lower(code) {
 			Ok(lowered) => println!("{}", lowered.serialize()),
@@ -436,7 +481,7 @@ fn usage() {
 	println!("  warp run <file.warp> Run a warp file, never an executable");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
-	println!("  warp lower <code>    Show the program after the lowering passes");
+	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");
 	println!("  warp parse <code>    Show the parsed AST");
 	println!("  warp verify <file>   Test and prove the laws of a file");
 	println!("  {FORMAT_USAGE}");

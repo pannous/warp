@@ -1,6 +1,15 @@
 //! Numbers: integers, floats, exponents, repeating decimals, vulgar fractions, ordinals, literal type suffixes
 use super::*;
 
+const MAX_INTEGER_EXPONENT: i64 = 4096;
+/// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; C's `0.1l` (long double) is
+/// the litre unit instead (decision litre-suffix)
+const LITERAL_SUFFIXES: [(char, &str); 4] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float")];
+/// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
+const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
+/// A vulgar fraction such as ⅓ decomposes (NFKD) into numerator, this slash and denominator: 1⁄3
+const FRACTION_SLASH: char = '⁄';
+
 /// The litre's symbols, glued to a number only with `use units` (refused_glued_litre)
 const LITRE_SYMBOLS: [char; 2] = ['L', 'l'];
 
@@ -170,7 +179,7 @@ impl WarpParser {
 	}
 
 	pub(crate) fn parse_number_value(&mut self) -> Node {
-		self.reading_atom(AtomKind::Number, Self::read_number_value)
+		self.read_number_value()
 	}
 
 	fn read_number_value(&mut self) -> Node {

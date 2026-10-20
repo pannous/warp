@@ -1,0 +1,11 @@
+n = bracketed([1, 2, 3], "(")
+print(bracket_of(n))
+print(separator_of(n))
+m = bracketed([1, 2], "{")
+print(bracket_of(m))
+s = separated([1, 2], ";")
+print(separator_of(s))
+print(bracket_of([4, 5]))
+print(bracket_of(7))
+print(m)
+s

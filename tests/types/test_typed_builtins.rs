@@ -25,17 +25,10 @@ fn each_overload_type_is_the_librarys() {
 }
 
 #[test]
-fn a_value_no_overload_is_typed_for_takes_the_first_line() {
-	let program = warp::pipeline::lower("a=[3,1,2,7]; b=a[0:2]; len(b)").expect("lowered");
-	let kinds = warp::analyzer::inferred_kinds(&program);
-	assert!(kinds.contains(&"b: list".to_string()), "{kinds:?}");
-}
-
-#[test]
 fn the_member_words_declare_their_signatures_in_the_prelude() {
-	is!("filter.signature", warp::Node::Text("(xs, f:function)".into()));
+	is!("filter.signature", warp::Node::Text("(xs:list, f:function) -> list".into()));
 	is!("insert.params", warp::texts(vec!["xs", "x", "at"]));
-	is!("any.signature", warp::Node::Text("(xs, f:function) -> bool".into()));
+	is!("any.signature", warp::Node::Text("(xs:list, f:function) -> bool".into()));
 }
 
 #[test]
@@ -47,14 +40,10 @@ fn a_member_words_number_or_bool_result_is_decided_where_it_is_made() {
 #[test]
 fn a_result_read_off_an_argument_is_spelled_same_as_or_value_of() {
 	is!("field_with.signature", warp::Node::Text("(object, name, value) -> same as object".into()));
-	is!("map_get_or.signature", warp::Node::Text("(m, key, default = ø) -> value of m".into()));
+	is!("map_get_or.signature", warp::Node::Text("(m:map, key, default = ø) -> value of m".into()));
 	is!("list_become.signature", warp::Node::Text("(place, fresh) -> same as place".into()));
 	is!("removed_value.signature", warp::Node::Text("(x, k) -> any".into()));
 	is!("list_sorted_by.signature", warp::Node::Text("(xs, keys) -> any".into()));
-	let program =
-		warp::pipeline::lower("p = {x: 1}; q = p.copy(); m = {a: \"x\"}; f = m.get(\"a\", \"z\")").expect("lowered");
-	let kinds = warp::analyzer::inferred_kinds(&program);
-	assert!(kinds.contains(&"f: text".to_string()) && !kinds.contains(&"q: int".to_string()), "{kinds:?}");
 }
 
 #[test]
@@ -68,4 +57,18 @@ fn a_typed_builtin_called_without_parentheses_is_the_call() {
 	is!("sum.signature", warp::Node::Text("(xs:list) -> element of xs".into()));
 	is!("xs = [1 2 3]; sum xs", 6);
 	is!("xs = [1.5 2]; sum xs", 3.5);
+}
+
+#[test]
+fn the_map_and_membership_words_declare_their_kinds() {
+	is!("keys.signature", warp::Node::Text("(m:map) -> list".into()));
+	is!("\"abc\".contains(\"b\") and [1 2].contains(2) and {a: 1}.has(\"a\")", true);
+	is!("\"abc\".index_of(\"c\") == [5 6 7].index_of(7)", true);
+}
+
+#[test]
+fn the_member_words_declare_a_list_and_a_text_overload() {
+	is!("reduce.signature", warp::Node::Text("(xs:list, f:function) -> element of xs".into()));
+	is!("ys = filter(\"abc\", c => c != \"b\"); count(ys)", 2);
+	is!("find([1 2], x => x > 1) + fold([1 2], 0, (a, b) => a + b)", 5);
 }

@@ -93,7 +93,7 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 	let [init, test, step] = parts.as_slice() else {
 		return None;
 	};
-	if !keyword.is_symbol(FOR_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !keyword.is_symbol(FOR_WORD) || !body.is_block() {
 		return None;
 	}
 	let mut statements = body.body_statements();
@@ -208,7 +208,7 @@ fn counted_start(start: &Node) -> Node {
 fn counting_range(iterable: &Node) -> Node {
 	match iterable.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => counting_range(&items[0]),
-		Node::List(items, _, _) if items[0].is_symbol(RANGE_CALL) => match &items[1..] {
+		Node::List(items, _, _) if items.first().is_some_and(|head| head.is_symbol(RANGE_CALL)) => match &items[1..] {
 			[end] => key(int(FIRST_INDEX), Op::Range, end.clone()),
 			[start, end] => key(start.clone(), Op::Range, end.clone()),
 			_ => iterable.clone(),
@@ -368,9 +368,7 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 	};
 	let is_object =
 		iterable.symbol_name().is_some_and(|name| objects.contains(name)) || constructed_iterator(iterable, classes);
-	let Some(name) =
-		variable.symbol_name().filter(|_| is_object && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
-	else {
+	let Some(name) = variable.symbol_name().filter(|_| is_object && body.is_block()) else {
 		return node;
 	};
 	let iterator = symbol(&format!("{name}{ITERATOR_SUFFIX}"));

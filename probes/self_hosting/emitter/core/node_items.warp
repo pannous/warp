@@ -1,0 +1,12 @@
+// `#`, `x#i` and `x#i = v` on a value whose kind is known only at run time: a list's items, a text's characters
+second(x: any) := x#2
+size(x: any) := #x
+first_to_nine(x: any) := {
+	x#1 = 9
+	x
+}
+print second([1, 2, 3])
+print second("héllo")
+print size([1, 2])
+print size("héllo")
+print first_to_nine([1, 2])

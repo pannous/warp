@@ -1,6 +1,9 @@
 //! User operators: `infix operator ⊕`, their glyphs, precedence declarations, operator methods and calls
 use super::*;
 
+/// Pascal's floor division `7 div 2`, also the html tag `div {…}`
+const DIV_WORD: &str = "div";
+
 /// The got-it note on `infix divides(d, n) := …`, the alias of `infix operator divides(d, n) := …` (card g_mnvA)
 const INFIX_WORD_TOPIC: &str = "infix-operator-word";
 /// The Unicode blocks of symbols a program may use before anything defines them (decision unicode-symbols): arrows,
@@ -471,6 +474,15 @@ impl WarpParser {
 		self.set_hint_pos();
 		if written == DIV_WORD && !is_prefix {
 			self.warn_floor_division_spelling(DIV_WORD, "divides", FLOOR_DIVISION, Level::Normal);
+		}
+		if matches!(written.as_str(), "÷" | "÷=") && !is_prefix {
+			crate::errors::diagnostic::advise_once(
+				JULIA_FLOOR_DIVISION_TOPIC,
+				&written,
+				&written,
+				"÷ is floor division, as in Julia: 7 ÷ 2 → 3; plain division is /",
+				None,
+			);
 		}
 		norm::operator(&written, is_prefix);
 		written

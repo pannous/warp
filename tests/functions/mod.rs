@@ -1,7 +1,6 @@
 mod test_abs_square_comparison; // card abs-square
 mod test_alias_definition;
 mod test_all_calls;
-mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_any_result; // card def
@@ -84,7 +83,6 @@ mod test_foreign_modifiers;
 mod test_foreign_spellings;
 mod test_free_var_if_arms;
 mod test_function_aliases;
-mod test_function_head; // card cleanup-definition-view
 mod test_function_keyword;
 mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
@@ -153,6 +151,7 @@ mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;
 mod test_optional_words;
+mod test_overloaded_function_values;
 mod test_parameter_any;
 mod test_parameter_assignment;
 mod test_parameter_call_kinds;
@@ -176,6 +175,7 @@ mod test_ported_calls;
 mod test_precomputed;
 mod test_preposition_calls; // card prepositions-call
 mod test_print_closure; // card print-closure
+mod test_print_effects_walked; // card print-effects-walked
 mod test_print_function_value; // card print-function
 mod test_property_access;
 mod test_property_assign;
@@ -209,6 +209,7 @@ mod test_statement_blocks; // card statement-block
 mod test_suffix_word_spellings;
 mod test_suffix_words;
 mod test_swift_closures;
+mod test_symbol_flow; // card regression-module
 mod test_text_joined_parameter;
 mod test_to_definition;
 mod test_tuple_function_values;
@@ -223,5 +224,6 @@ mod test_untyped_predicate_passed; // card untyped-passed
 mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
+mod test_wasm_instruction_bodies; // card wasm-body
 mod test_whole_float_to_int_parameter;
 mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow // card is-early-return

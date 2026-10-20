@@ -140,12 +140,6 @@ fn compiling_config(fuel: bool) -> wasmtime::Config {
 	config
 }
 
-pub fn show_type_name<T>(_: &T) {
-	use std::any::type_name;
-	// println!("{}", type_name_of_val(*json!({"name": "Alice"})));
-	println!("{}", type_name::<T>());
-}
-
 pub fn dirs_home() -> std::path::PathBuf {
 	env::var("HOME").map(std::path::PathBuf::from).unwrap_or_else(|_| std::path::PathBuf::from("."))
 }

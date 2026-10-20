@@ -1,0 +1,7 @@
+// `a /! b` is the Euclidean quotient that goes with `%`
+a = 0 - 7
+print 7 /! 2
+print a /! 2
+print 7 /! (0 - 2)
+print a /! (0 - 2)
+(a /! 2) * 2 + a % 2

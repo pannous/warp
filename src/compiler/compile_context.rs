@@ -27,6 +27,8 @@ pub struct CompileContext {
 	pub serving_port: Option<u16>,
 	/// a sandboxed run on this thread (sandbox.rs)
 	pub sandboxed: bool,
+	/// a self-hosted stage program compiles (self_hosted.rs): no file of the working directory is one of its modules
+	pub beyond_working_directory: bool,
 	/// the source of the program, for excerpts and its `// got it` comments
 	pub source: String,
 	/// a line of the source says `use strict` (in_source_mode, the one reader of it)
@@ -57,9 +59,15 @@ pub struct CompileContext {
 	pub fast_functions: HashSet<String>,
 	/// the modules whose classes insert_module_classes put in front of the program: the loader leaves them out
 	pub early_class_modules: HashSet<PathBuf>,
+	/// the used files' classes it put in front: the loader's passes of a file read their fields (a match arm
+	/// `Holds(box) =>` binds box) though the declarations are left out of the file
+	pub early_file_classes: Vec<Node>,
 	/// the functions of those modules giving an instance of such a class (`note_value(C4)` a Note), with its class:
 	/// class_methods reads `n + 2` of `n = note_value(C4)` as Note's plus before the module joins the program
 	pub module_returned_classes: HashMap<String, String>,
+	/// those modules' variables holding such an instance (sound's `F = PitchClass(5)`), with its class: `F#4` of the
+	/// program is PitchClass's index
+	pub module_instance_classes: HashMap<String, String>,
 	/// the unit words the program being lowered defines itself (`m = 2`): no units while it is lowered
 	pub shadowed_units: HashSet<String>,
 	/// the program's own unit lines (`unit furlong := 201.168 m`, units/definitions.rs), set before it is parsed and kept
@@ -80,6 +88,9 @@ pub struct CompileContext {
 	pub written_problems: HashSet<String>,
 	/// the functions of the program being lowered, by name: a GPU kernel may call them (card gpu-functions)
 	pub(crate) program_functions: HashMap<String, ProgramFunction>,
+	/// the values the program's main level assigns its variables first, by name: a shader reads a vector of them as a
+	/// vecNf (card kernel-global-lists)
+	pub(crate) program_values: HashMap<String, crate::node::Node>,
 	/// the number of the next temporary the compile invents across passes (`race·0`, `item·0`)
 	pub fresh_number: usize,
 	/// how deep in compiles we are: only the outermost one starts its fresh numbers from 0
@@ -100,6 +111,7 @@ impl Default for CompileContext {
 			server_values: vec![],
 			serving_port: None,
 			sandboxed: false,
+			beyond_working_directory: false,
 			source: String::new(),
 			says_strict: false,
 			warning_mode: WarningMode::default(),
@@ -117,7 +129,9 @@ impl Default for CompileContext {
 			fast_program: false,
 			fast_functions: HashSet::new(),
 			early_class_modules: HashSet::new(),
+			early_file_classes: vec![],
 			module_returned_classes: HashMap::new(),
+			module_instance_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),
 			program_unit_lines: String::new(),
 			field_unit_words: HashMap::new(),
@@ -127,6 +141,7 @@ impl Default for CompileContext {
 			float_kernels: HashMap::new(),
 			written_problems: HashSet::new(),
 			program_functions: HashMap::new(),
+			program_values: HashMap::new(),
 			fresh_number: 0,
 			compile_depth: 0,
 			compiler_words: vec![],
@@ -190,10 +205,11 @@ pub fn scoped_flags<R>(flags: &[(Flag, bool)], run: impl FnOnce() -> R) -> R {
 pub fn lowering_inputs() -> String {
 	read(|context| {
 		format!(
-			"{:?}\n{:?}\n{} {} {} {} {} {}\n{:?}\n{:?}\n{:?}\n{}\n{:?}\n{:?}\n{:?}\n{:?}\n{:?}\n{}",
+			"{:?}\n{:?}\n{} {} {} {} {} {} {}\n{:?}\n{:?}\n{:?}\n{}\n{:?}\n{:?}\n{:?}\n{:?}\n{:?}\n{}",
 			context.mode,
 			context.granted,
 			context.sandboxed,
+			context.beyond_working_directory,
 			context.comments_as_meta,
 			context.reflection_mode,
 			context.counts_fuel,
@@ -219,6 +235,7 @@ pub fn lowering_inputs() -> String {
 pub struct LoweredEffects {
 	early_class_modules: Vec<PathBuf>,
 	module_returned_classes: Vec<(String, String)>,
+	module_instance_classes: Vec<(String, String)>,
 	field_unit_words: Vec<(String, String)>,
 	bool_functions: Vec<String>,
 }
@@ -228,6 +245,7 @@ impl LoweredEffects {
 		read(|context| LoweredEffects {
 			early_class_modules: sorted(&context.early_class_modules).into_iter().cloned().collect(),
 			module_returned_classes: sorted_entries(&context.module_returned_classes),
+			module_instance_classes: sorted_entries(&context.module_instance_classes),
 			field_unit_words: sorted_entries(&context.field_unit_words),
 			bool_functions: sorted(&context.bool_functions).into_iter().cloned().collect(),
 		})
@@ -237,6 +255,7 @@ impl LoweredEffects {
 		change(|context| {
 			context.early_class_modules = self.early_class_modules.into_iter().collect();
 			context.module_returned_classes = self.module_returned_classes.into_iter().collect();
+			context.module_instance_classes = self.module_instance_classes.into_iter().collect();
 			context.field_unit_words = self.field_unit_words.into_iter().collect();
 			context.bool_functions = self.bool_functions.into_iter().collect();
 		});

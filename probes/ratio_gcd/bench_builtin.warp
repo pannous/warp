@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+// card ratio-gcd-warp: 200 000 ratios normalized by the builtin ratio_new (int_gcd), and % and /! by int_mod and
+// int_euclid_div; compare with bench_warp.warp: warp compile --wasm each, hyperfine -N both
+above = 0
+rests = 0
+for i in 1 to 200000 {
+	if (6 * i) / (4 * i + 2) > 1 { above += 1 }
+	rests += (0 - i) % 97 + (0 - i) /! 89
+}
+print "\(above) \(rests)"

@@ -4,11 +4,12 @@
 //! index, counting from 0 as C does (unlike warp's 1-based positions `x in xs`, `c#1`), is `Coin.Dime as int`; an int
 //! becomes a case explicitly, `2 as Coin` or `Coin(2)`, an error when no case has that index.
 
+use super::node_cases;
 use super::nodes::{key, matched};
-use super::sum_variants::sum_type;
+use super::sum_variants::{case_rows, sum_type, sum_types};
 use crate::analyzer::match_exhaustive::typed_subjects;
 use crate::errors::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{call, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::RAISE_WORD;
 use crate::Number;
@@ -43,6 +44,12 @@ impl Enums {
 		self.cases.get(&enum_name.drop_meta().name()).is_some_and(|cases| cases.contains(&case.drop_meta().name()))
 	}
 
+	/// An enum of node.warp whose cases are spelled as a node carries them (node_cases.rs): `Op.Add as text` is "+"
+	fn is_spelled(&self, enum_name: &str) -> bool {
+		node_cases::SPELLED_ENUMS.contains(&enum_name)
+			&& node_cases::spelled_enum(enum_name).is_some_and(|(_, cases)| self.cases.get(enum_name) == Some(&cases))
+	}
+
 	/// The enum of a value: a case by name, or a name declared of the enum
 	fn type_of(&self, value: &Node) -> Option<&str> {
 		let name = value.symbol_name()?;
@@ -57,6 +64,22 @@ pub fn lower(program: Node) -> Node {
 			cases.extend(enum_cases(items));
 		}
 	});
+	with_cases(program, cases)
+}
+
+/// The program with the cases of a used module's plain enums lowered in it (`Disambiguation::Earlier` of `use time`):
+/// those declarations join the program after lower ran, already sum types `type @variants(Reject Earlier) Disambiguation`
+pub(crate) fn with_cases_of(program: Node, declarations: &[Node]) -> Node {
+	let module_code = Node::List(declarations.to_vec(), Bracket::None, Separator::Newline);
+	let cases = sum_types(&module_code)
+		.into_iter()
+		.filter(|(_, variants)| variants.is_plain())
+		.map(|(name, variants)| (name, variants.bare_names().collect()))
+		.collect();
+	with_cases(program, cases)
+}
+
+fn with_cases(program: Node, cases: HashMap<String, Vec<String>>) -> Node {
 	if cases.is_empty() {
 		return program;
 	}
@@ -71,7 +94,7 @@ fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let Node::List(cases, Bracket::Curly, _) = cases.drop_meta() else {
 		return None;
 	};
-	let names: Option<Vec<String>> = cases.iter().map(case_name).collect();
+	let names: Option<Vec<String>> = case_rows(cases).iter().map(case_name).collect();
 	word.is_symbol(ENUM_WORD).then_some((name.to_string(), names?))
 }
 
@@ -121,8 +144,18 @@ fn is_implicit_owner(owner: &Node) -> bool {
 /// conversions as they are
 fn converted(value: Node, target: Node, enums: &Enums) -> Node {
 	let target_name = target.drop_meta().name();
+	let is_int = matches!(value.drop_meta(), Node::Number(Number::Int(_)));
+	if enums.is_spelled(&target_name) && !is_int {
+		return call(&format!("{target_name}·case"), vec![value]);
+	}
 	if enums.cases.contains_key(&target_name) {
 		return case_at(value, &target_name, enums);
+	}
+	if let Some(enum_name) = enums
+		.type_of(&value)
+		.filter(|name| enums.is_spelled(name) && node_cases::TEXT_TYPES.contains(&target_name.as_str()))
+	{
+		return call(&format!("{enum_name}·text"), vec![value]);
 	}
 	let count_type = COUNT_TYPES.iter().find(|(count_type, _)| *count_type == target_name);
 	match enums.type_of(&value).zip(count_type) {

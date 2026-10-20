@@ -1,0 +1,16 @@
+# emitter core: a text's characters are grapheme clusters (a letter with its vowel point, CR LF), walked in linear
+# time by runtime.warp's text cursor, also with another text indexed in between and a look back
+s = "שָלוֹם"
+print #s
+print s.chars
+print reverse s
+t = "ab\r\ncd"
+print #t
+w = "xyz"
+found = 0
+i = 0
+while i < #t {
+	if i > 0 and t[i] == 'c' and #t[i - 1] == 1 and w[i % 3] != 'q' { found += 1 }
+	i += 1
+}
+found

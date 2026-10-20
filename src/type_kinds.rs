@@ -273,6 +273,8 @@ pub struct TypeRegistry {
 	name_to_idx: std::collections::HashMap<String, usize>,
 	/// (type, field) pairs declared with a default value, `class p{x=0}` or `x:int=0`: a construction may leave them out
 	defaults: std::collections::HashMap<(String, String), crate::node::Node>,
+	/// Each class's parent (`class Dog extends Animal`): `x is Animal` holds for a Dog too
+	parents: std::collections::HashMap<String, String>,
 }
 
 impl TypeRegistry {
@@ -292,23 +294,28 @@ impl TypeRegistry {
 		tag
 	}
 
+	/// The type and every class extending it, directly or further down
+	pub fn with_descendants(&self, name: &str) -> Vec<String> {
+		let descends = |class: &str| {
+			let mut ancestor = self.parents.get(class);
+			let mut steps = self.parents.len();
+			while let Some(parent) = ancestor.filter(|_| steps > 0) {
+				if parent == name {
+					return true;
+				}
+				ancestor = self.parents.get(parent);
+				steps -= 1;
+			}
+			false
+		};
+		let mut descendants: Vec<String> = self.parents.keys().filter(|class| descends(class)).cloned().collect();
+		descendants.sort();
+		[vec![name.to_string()], descendants].concat()
+	}
+
 	/// Look up type by name
 	pub fn get_by_name(&self, name: &str) -> Option<&TypeDef> {
 		self.name_to_idx.get(name).map(|&idx| &self.types[idx])
-	}
-
-	/// Look up type by tag
-	pub fn get_by_tag(&self, tag: u32) -> Option<&TypeDef> {
-		if tag < USER_TYPE_TAG_START {
-			return None;
-		}
-		let idx = (tag - USER_TYPE_TAG_START) as usize;
-		self.types.get(idx)
-	}
-
-	/// Check if tag is a user-defined type
-	pub fn is_user_type(tag: u32) -> bool {
-		tag >= USER_TYPE_TAG_START
 	}
 
 	/// Get all registered types
@@ -366,6 +373,10 @@ impl TypeRegistry {
 				return None;
 			}
 			let type_name = Self::written_name(name)?;
+			let marks = [crate::warp_parser::EXTENDS_KEYWORD, crate::class_methods::inheritance::INHERITED_FROM];
+			if let Some(parent) = marks.iter().find_map(|mark| name.attribute(mark)) {
+				self.parents.insert(type_name.clone(), parent.drop_meta().name());
+			}
 			let fields = Self::extract_fields(body);
 			for (field, value) in Self::field_items(body).filter_map(Self::field_default) {
 				self.defaults.insert((type_name.clone(), field), value);

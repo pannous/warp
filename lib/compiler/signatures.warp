@@ -1,0 +1,114 @@
+# The builtins' typed lines of lib/prelude.warp as the analyzer's signature table (decision compiler-typed; Rust twin:
+# src/ffi/mod.rs foreign_line, library_words.rs emitted_call_kind, call_result_kind and argument_result):
+# `upper(t: text): text from warp` a runtime function, `count(xs: list): int from emitter` a word the emitter expands.
+# A word may have several lines, one per type of its first value (`reverse(xs: list)`, `reverse(t: text)`).
+use "words.warp"
+
+class Parameter { name: text; type_name: text; defaulted: bool; rest: bool }
+class Line { name: text; parameters: list; result: text }
+
+prelude_text = module_source("prelude")
+runtime_library = "warp"
+emitter_library = "emitter"
+alias_start = "alias "
+rest_mark = "..."
+# a result the call's value decides: `same as object` its kind, `element of xs`, `value of m`, `key of m` an element's
+argument_results = {"same as ": "same", "element of ": "element", "value of ": "element", "key of ": "element"}
+
+# `separator: text = " "` → Parameter(separator, text, defaulted), `values...` a rest parameter
+parameter_of(written: text): Parameter := {
+	declared = written.split("=")#1.trim()
+	parts = declared.split(":")
+	name = parts#1.trim()
+	type_name = if #parts > 1 then parts#2.trim() else ""
+	Parameter(name: name.remove_suffix(rest_mark), type_name: type_name, defaulted: written.contains("="), rest: name.ends_with(rest_mark))
+}
+
+# `upper(t: text): text from warp` → Line; ø for a line of another library
+typed_line(line: text, library: text): any := {
+	line = line.trim()
+	suffix = " from " + library
+	if not line.ends_with(suffix) { return ø }
+	signature = line.remove_suffix(suffix)
+	open = signature.index_of("(")
+	close = #signature - signature.reverse().index_of(")") + 1
+	if open == 0 or close <= open { return ø }
+	written = signature[open : close - 1].trim()
+	parameters = if written == "" then [] else written.split(",").map(part => parameter_of(part))
+	Line(name: signature[0 : open - 1], parameters: parameters, result: signature[close :].trim().remove_prefix(":").trim())
+}
+
+library_lines(library: text): list := prelude_text.split("\n").map(line => typed_line(line, library)).filter(line => line != ø)
+
+runtime_lines = library_lines(runtime_library)
+emitter_lines = library_lines(emitter_library)
+typed_lines = runtime_lines + emitter_lines
+
+# `alias size = count` → ["size", "count"]
+alias_pairs = prelude_text.split("\n").filter(line => line.starts_with(alias_start)).map(line => line.remove_prefix(alias_start).split("=").map(word => word.trim()))
+
+unaliased(word: text): text := {
+	for pair in alias_pairs { if pair#1 == word { return pair#2 } }
+	word
+}
+
+lines_of(lines: list, word: text): list := lines.filter(line => line.name == word)
+
+# whether a call of `arguments` values fits a line: its parameters without a default at least, any more after a rest one
+takes(line: Line, arguments: int): bool := {
+	required = #line.parameters.filter(parameter => not parameter.defaulted)
+	rest = line.parameters.any(parameter => parameter.rest)
+	arguments >= required - (if rest then 1 else 0) and (rest or arguments <= #line.parameters)
+}
+
+# the kind a line's result is held as when it is a text or a list (`list of text` too); ø for another
+line_result_kind(line: Line): any := if line.result == "text" then "text" else if line.result.starts_with("list") then "list" else ø
+
+# the kind a call of `arguments` values to a word the emitter expands gives, as its first fitting line declares it; ø
+# when the call decides it (`number("2.5")`, a bool the emitter marks) or the line names no kind
+emitted_call_kind(word: text, arguments: int): any := {
+	fitting = lines_of(emitter_lines, unaliased(word)).filter(line => takes(line, arguments))
+	if #fitting == 0 { return ø }
+	line = fitting#1
+	match line.result {
+		"nothing" => "empty"
+		"symbol" => "symbol"
+		"number" | "bool" => ø
+		"any" => "empty"
+		_ => if line_result_kind(line) != ø then line_result_kind(line) else type_word_kind(line.result)
+	}
+}
+
+# the argument a word's result follows, and how: `field_with(object, name, value): same as object` → ["same", 1],
+# `map_get_or(m, key, default): value of m` → ["element", 1]; ø for a result of its own
+argument_result(word: text): any := {
+	lines = lines_of(typed_lines, unaliased(word))
+	if #lines == 0 { return ø }
+	line = lines#1
+	for spelling in argument_results.keys() {
+		if line.result.starts_with(spelling) {
+			followed = line.result.remove_prefix(spelling)
+			names = line.parameters.map(parameter => parameter.name)
+			return if names contains followed then [argument_results[spelling], names.index_of(followed)] else ø
+		}
+	}
+	ø
+}
+
+# the result of a runtime word for a first value of kind `first`: its overload's for that kind (`reverse(t: text): text`),
+# else the one all its overloads share; ø when the overloads give no text or list
+overload_kind(word: text, first: text): any := {
+	overloads = lines_of(runtime_lines, unaliased(word))
+	if #overloads == 0 { return ø }
+	kinds = overloads.map(line => line_result_kind(line))
+	if kinds.all(kind => kind == kinds#1) { return kinds#1 }
+	if first == "empty" { return "empty" }
+	fitting = if first == "codepoint" then "text" else first
+	for line in overloads {
+		if #line.parameters > 0 and type_word_kind(line.parameters#1.type_name) == fitting { return line_result_kind(line) }
+	}
+	kinds#1
+}
+
+# the kind a value of a built-in type word is held as: `int` int, `text` text; ø for a list, a map or no type
+type_word_kind(word: text): any := type_kinds.get(word)

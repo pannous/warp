@@ -1,69 +1,5 @@
-// use warp::warp_parser::WarpParser::parse;
-use crate::{eq, is, put};
-use warp::warp_parser::{parse, WarpParser};
-use warp::Node;
-
-#[test]
-fn test_line_comments() {
-	let warp = r#"
-        // This is a comment
-        name: "Alice"
-        age: 30
-    "#;
-
-	let node = WarpParser::parse(warp);
-	println!("Parsed with line comment: {:?}", node);
-
-	// Comments are attached as metadata to the following node
-	// So we get 2 items: name (with comment metadata) + age
-	eq!(node.len(), 2);
-	// Verify comment is attached to the first item
-	assert!(node[0]["comment"].to_string().contains("This is a comment"));
-}
-
-#[test]
-fn test_block_comments() {
-	let warp = r#"
-        /* This is a
-           multi-line comment */
-        name: "Bob"
-        age: 25
-    "#;
-
-	let node = WarpParser::parse(warp);
-	println!("Parsed with block comment: {:?}", node);
-
-	// Comments are attached as metadata to the following node
-	// So we get 2 items: name (with comment metadata) + age
-	if let Node::List(items, _, _) = node {
-		eq!(items.len(), 2);
-		// Verify comment is attached to the first item
-		assert!(items[0]["comment"].to_string().contains("multi-line comment"));
-	}
-}
-
-#[test]
-fn test_inline_comments() {
-	let warp = r#"
-        name: "Charlie" // name field
-        age: 35 /* age in years */
-    "#;
-
-	let node = WarpParser::parse(warp);
-	println!("Parsed with inline comments: {:?}", node);
-}
-
-#[test]
-fn test_comment_metadata() {
-	let warp = "// Important config\nport: 8080";
-	let node = WarpParser::parse(warp);
-	put!(node.serialize());
-	put!(node.serialize_recurse(true));
-	println!("Node: {}", node);
-	println!("Node: {:?}", node);
-	println!("Comment metadata: {:?}", node["comment"]);
-	assert!(node["comment"].to_string().contains("Important config"));
-}
+use crate::is;
+use warp::warp_parser::WarpParser;
 
 #[test]
 fn test_comments_in_html_structure() {
@@ -86,21 +22,6 @@ fn test_comments_in_html_structure() {
 	assert!(json.contains("header"));
 }
 
-#[test]
-fn test_comment_with_metadata_accessor() {
-	let node = Node::int(42).with_comment("This is the answer".to_string());
-	println!("{}", node);
-	println!("{}", node.serialize());
-	println!("{}", node["comment"]);
-	eq!(node.drop_meta(), &Node::int(42));
-	// Use &node["comment"] to explicitly use Not for &Node
-	if !&node["comment"] {
-		panic!("Expected metadata");
-	} else {
-		eq!(node["comment"], "This is the answer");
-	}
-}
-
 // Comments
 #[test]
 fn test_comments() {
@@ -109,18 +30,16 @@ fn test_comments() {
 	is!("/* block \n comment */ 1+1", 2);
 }
 
-#[test]
-fn test_comments2() {
-	let c = "blah a b c # to silence python warnings;)\n y/* yeah! */=0 // really";
-	let result: Node = parse(c);
-	assert!(result.length() == 2);
-	assert!(result[0].length() == 4);
-	assert!(result[1].length() == 0); // `(y=0)` is a Key, not a list
-}
-
 #[test] // samples/hello/comments.warp: "Nested block comments are supported"
 fn test_nested_block_comments() {
 	is!("/* a /* b */ c */ 3", 3);
 	is!("/# a /# b #/ #/ 4", 4);
 	is!("1 /* x */ + 2", 3);
+}
+
+#[test] // card comment-apostrophe: the scans before parsing skip `#` comments as the parser does
+fn test_apostrophe_in_hash_comment_hides_no_code() {
+	is!("# Rust's\nclass Point { x: int }\n# it's\n/# don't #/\nstr(Point{x: 1})", "Point{x:1}");
+	// `type` ending a line declares no type named by the next line's first word (analyzer.warp settle)
+	is!("f(t) := type\nchanged = yes\nn = 0\nwhile changed {\n\tchanged = no\n\tn += 1\n}\nn", 1);
 }

@@ -46,7 +46,12 @@ pub fn not_kept(what: &'static str) {
 
 /// The module kept for this program text, when warp keeps programs and has it
 pub fn kept(code: &str) -> Option<CompiledModule> {
-	let bytes = crate::run::module_cache::kept_bytes(&key(code)?, PROGRAM_EXTENSION)?;
+	kept_under(&key(code)?)
+}
+
+/// The module kept under `key`, for a compile whose inputs its caller keys itself (self_hosted.rs stage programs)
+pub fn kept_under(key: &str) -> Option<CompiledModule> {
+	let bytes = crate::run::module_cache::kept_bytes(key, PROGRAM_EXTENSION)?;
 	let (&needs, module) = bytes.split_first()?;
 	Some(CompiledModule {
 		bytes: module.to_vec(),
@@ -64,15 +69,27 @@ pub fn keeping<E>(code: &str, compile: impl FnOnce() -> Result<CompiledModule, E
 	let compiled = compile()?;
 	let quiet = crate::errors::diagnostic::said() == said_before;
 	if let Some(key) = key.filter(|_| quiet && NOT_KEPT.with(Cell::get).is_none()) {
-		let needs =
-			[(compiled.needs_host, NEEDS_HOST), (compiled.needs_wasi, NEEDS_WASI), (compiled.needs_ffi, NEEDS_FFI)]
-				.iter()
-				.filter(|(needed, _)| *needed)
-				.fold(0, |all, (_, bit)| all | bit);
-		let bytes: Vec<u8> = std::iter::once(needs).chain(compiled.bytes.iter().copied()).collect();
-		crate::run::module_cache::keep_bytes(&key, PROGRAM_EXTENSION, &bytes);
+		keep_under(&key, &compiled);
 	}
 	Ok(compiled)
+}
+
+/// Keep `compiled` under `key`
+pub fn keep_under(key: &str, compiled: &CompiledModule) {
+	let needs = [(compiled.needs_host, NEEDS_HOST), (compiled.needs_wasi, NEEDS_WASI), (compiled.needs_ffi, NEEDS_FFI)]
+		.iter()
+		.filter(|(needed, _)| *needed)
+		.fold(0, |all, (_, bit)| all | bit);
+	let bytes: Vec<u8> = std::iter::once(needs).chain(compiled.bytes.iter().copied()).collect();
+	crate::run::module_cache::keep_bytes(key, PROGRAM_EXTENSION, &bytes);
+}
+
+/// The WARP_ settings, which change a compile, sorted
+pub(crate) fn warp_settings() -> Vec<(String, String)> {
+	let mut settings: Vec<(String, String)> =
+		std::env::vars().filter(|(name, _)| name.starts_with(SETTINGS_PREFIX)).collect();
+	settings.sort();
+	settings
 }
 
 /// The cache key of `code` as a program file run from here; none when warp keeps no programs
@@ -80,9 +97,7 @@ fn key(code: &str) -> Option<String> {
 	let binary = BINARY.get()?;
 	let program = crate::modules::program_file()?.canonicalize().ok()?;
 	let working = std::env::current_dir().ok()?;
-	let mut settings: Vec<(String, String)> =
-		std::env::vars().filter(|(name, _)| name.starts_with(SETTINGS_PREFIX)).collect();
-	settings.sort();
+	let settings = warp_settings();
 	let mut hasher = Sha256::new();
 	hasher.update(binary);
 	let fast_math = crate::pipeline::fast_math();
@@ -90,6 +105,7 @@ fn key(code: &str) -> Option<String> {
 	for folder in searched_folders(&program, &working) {
 		hasher.update(format!("{}\n{:?}\n", folder.display(), listing(&folder)));
 	}
+	hasher.update(crate::compiler::self_hosted::compiler_key().unwrap_or_default());
 	hasher.update(code);
 	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
@@ -144,7 +160,7 @@ fn listing(folder: &Path) -> Vec<(String, Option<(u64, std::time::SystemTime)>)>
 }
 
 /// A file's size and modification time
-fn stamp(path: &Path) -> Option<(u64, std::time::SystemTime)> {
+pub(crate) fn stamp(path: &Path) -> Option<(u64, std::time::SystemTime)> {
 	let metadata = std::fs::metadata(path).ok()?;
 	Some((metadata.len(), metadata.modified().ok()?))
 }

@@ -1,0 +1,59 @@
+# A function written with a keyword (card pure-runs): `def f(x) := e` and `fun f(x) { body }` (any of
+# function_keywords) are the definition `f(x) := body`; the parser keeps the keyword before the definition, or before
+# the call and its block side by side. `f(x) = e` (also what `def f(x) = e` leaves) is the definition as well: a call
+# of parameter names on the left of `=` assigns nothing. `var x = 1` is the assignment `x = 1`.
+use "walk.warp"
+use "words.warp"
+use "phrase_blocks.warp"
+
+is_keyword(n: Node): bool := match n {
+	Symbol(name): name in function_keywords
+	_: no
+}
+
+defined(n: Node): Node := match n {
+	List(parts, Bracket.Round, Separator.None): { if #parts == 2 then Key(parts#1, Op.Define, parts#2) else n }
+	_: n
+}
+
+declaration_words = ["var"]
+
+is_declaration_word(n: Node): bool := match n {
+	Symbol(name): name in declaration_words
+	_: no
+}
+
+# `f(x, y)`: a name applied to parameter names
+is_head(n: Node): bool := match n {
+	List(call, Bracket.Round, Separator.None): #call > 0 and call.all(is_name)
+	_: no
+}
+
+definition(n: Node): Node := match n {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts == 2 and is_keyword(parts#1) { return defined(parts#2) }
+		if #parts == 2 and is_declaration_word(parts#1) { return parts#2 }
+		n
+	}
+	Key(head, Op.Assign, body): { if is_head(head) then Key(head, Op.Define, body) else n }
+	Key(annotated, Op.Define, body): result_held(annotated, body, n)
+	_: n
+}
+
+# `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
+result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
+	Key(head, Op.Colon, result_type): {
+		if not is_call(head) { return n }
+		result = symbol("the result")
+		Key(head, Op.Define, List([Key(Key(result, Op.Colon, result_type), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
+	}
+	_: n
+}
+
+# `f(x: int, y)`: a name applied to parameters
+is_call(n: Node): bool := match n {
+	List(call, Bracket.Round, Separator.None): #call > 0 and is_name(call#1)
+	_: no
+}
+
+definitions(program: any): any := bottom_up(program, definition)

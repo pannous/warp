@@ -3,6 +3,7 @@
 //! The twin tests (tests/common/twins.rs) and the self-hosted pipeline (self_hosted.rs) both cross this bridge.
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
+use crate::operators::Op;
 
 /// A list as warp writes it: the empty list is ø
 pub fn warp_list(items: impl Iterator<Item = Node>) -> Node {
@@ -108,16 +109,33 @@ impl Viewer {
 			return tagged("attribute", [Node::text(name), self.view(value), self.view(inner)]);
 		}
 		let mark = match node {
-			Node::Meta { data, .. } if self.marks => crate::mutation::mark_value(data),
+			Node::Meta { data, .. } if self.marks => bridged_mark(data),
 			_ => None,
 		};
-		if let Some(value) = mark {
-			return tagged(
-				"attribute",
-				[Node::text(crate::mutation::MUTATED_MARK), self.view(value), self.view(inner)],
-			);
+		if let Some((name, value)) = mark {
+			return tagged("attribute", [Node::text(name), self.view(value), self.view(inner)]);
 		}
 		self.view(inner)
+	}
+}
+
+/// The marks the bridge hands on as attribute layers, which the Rust passes after a warp stage read: `x!`'s,
+/// `function f`'s (closures.rs function_reference) and a function body's doc and place (doc_strings.rs), which
+/// reflection.rs and doc_strings.rs make before number_words' twin runs
+const BRIDGED_MARKS: [&str; 4] = [
+	crate::mutation::MUTATED_MARK,
+	crate::closures::FUNCTION_REFERENCE_MARK,
+	crate::lowering::doc_strings::DOC_KEY,
+	crate::lowering::doc_strings::WRITTEN_AT_KEY,
+];
+
+/// The bridged mark a Meta layer's data is, with its value
+fn bridged_mark(data: &Node) -> Option<(&'static str, &Node)> {
+	match data {
+		Node::Key(key, _, value) => {
+			BRIDGED_MARKS.into_iter().find(|mark| key.name() == *mark).map(|mark| (mark, value.as_ref()))
+		}
+		_ => None,
 	}
 }
 
@@ -173,9 +191,30 @@ pub fn plain_view(node: &Node) -> Node {
 	plain(node_view(node))
 }
 
-/// The plain view with the positions: ["at", line, column, view] around each positioned node
-pub fn positioned_plain_view(node: &Node) -> Node {
-	plain(positioned_view(node))
+/// The plain view the analysis reads: each declared type and each loop step shown in it
+pub fn analysis_view(program: &Node) -> Node {
+	plain_view(&declared_types_shown(program.clone()))
+}
+
+/// What a loop's step shows as in the analysis view, `loop·step: i++`, the way Rust's split_step tells it by its mark
+pub const SHOWN_STEP: &str = "loop·step";
+
+/// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`;
+/// the step a `for` lowering appends to its loop body is marked as metadata too: shown as `loop·step: i++`
+fn declared_types_shown(node: Node) -> Node {
+	use crate::operators::Op;
+	if crate::wasm_emitter::is_step(&node) {
+		return Node::Key(Box::new(Node::Symbol(SHOWN_STEP.into())), Op::Colon, Box::new(node.drop_meta().clone()));
+	}
+	match node {
+		Node::Key(target, Op::Assign, value)
+			if let Node::Meta { node: name, data } = *target.clone()
+				&& matches!(*data, Node::Symbol(_)) =>
+		{
+			Node::Key(Box::new(Node::Key(name, Op::Colon, data)), Op::Assign, Box::new(declared_types_shown(*value)))
+		}
+		other => other.map_children(declared_types_shown),
+	}
 }
 
 fn plain(view: Node) -> Node {
@@ -234,7 +273,10 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		"number" => crate::warp_parser::parse(&text(1)?).drop_meta().clone(),
 		"key" => {
 			let op = crate::operators::op_named(&text(1)?).ok_or_else(unreadable)?;
-			Node::Key(Box::new(node(2)?), op, Box::new(node(3)?))
+			let left = node(2)?;
+			// `-x`: Op::Neg is spelled "-" as Op::Sub is, a "-" with nothing on its left negates
+			let op = if op == Op::Sub && left.is_empty_node() { Op::Neg } else { op };
+			Node::Key(Box::new(left), op, Box::new(node(3)?))
 		}
 		"list" => {
 			let items = parts[3..].iter().map(|item| node_of(item, handles)).collect::<Result<Vec<Node>, Node>>()?;
@@ -243,7 +285,11 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		}
 		"error" => Node::Error(Box::new(node(1)?)),
 		"type" => Node::Type { name: Box::new(node(1)?), body: Box::new(node(2)?) },
-		"attribute" if text(1)? == crate::mutation::MUTATED_MARK => crate::mutation::with_mark(node(3)?, node(2)?),
+		"attribute"
+			if let Some(mark) = BRIDGED_MARKS.into_iter().find(|mark| text(1).ok().as_deref() == Some(*mark)) =>
+		{
+			Node::Meta { node: Box::new(node(3)?), data: Box::new(Node::key(mark, node(2)?)) }
+		}
 		"attribute" => node(3)?.with_attribute(&text(1)?, node(2)?),
 		"literal" | "at" => node(parts.len() - 1)?,
 		"template" => crate::text::interpolation::template_text(&text(1)?),
@@ -261,6 +307,8 @@ pub fn view_json(view: &Node) -> String {
 		Node::Empty => "null".into(),
 		Node::True => "true".into(),
 		Node::False => "false".into(),
+		// 1.0 crosses as 1.0, not 1: the lanes never change what a program computes (decision lane-floats)
+		Node::Number(Number::Float(float)) if float.is_finite() && float.fract() == 0.0 => format!("{float:.1}"),
 		number => number.serialize(),
 	}
 }

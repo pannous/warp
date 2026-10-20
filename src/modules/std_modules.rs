@@ -4,7 +4,7 @@ use super::*;
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
 /// `sheet: data` in a definition's head
 const DATA_PARAMETER: &str = ": data";
-pub(crate) const STD_MODULES: [(&str, &str); 30] = [
+pub(crate) const STD_MODULES: [(&str, &str); 36] = [
 	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
 	("memory", include_str!("../../lib/memory.warp")),
 	("net", include_str!("../../lib/net.warp")),
@@ -35,6 +35,12 @@ pub(crate) const STD_MODULES: [(&str, &str); 30] = [
 	("R", include_str!("../../lib/R.warp")),
 	("PHP", include_str!("../../lib/PHP.warp")),
 	("channels", include_str!("../../lib/channels.warp")),
+	("extrema", include_str!("../../lib/extrema.warp")),
+	("english", include_str!("../../lib/english.warp")),
+	("case_table", include_str!("../../lib/case_table.warp")),
+	("case_tables", include_str!("../../lib/case_tables.warp")),
+	("uncertain", include_str!("../../lib/uncertain.warp")),
+	("wasmtime", include_str!("../../lib/wasmtime.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 pub(crate) const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
@@ -57,12 +63,15 @@ pub(super) fn is_embedded_std_file(path: &Path) -> bool {
 		return false;
 	};
 	let folder = path.parent().unwrap_or(Path::new(""));
-	if !cfg!(feature = "native") {
-		return folder == Path::new(STD_FOLDER);
-	}
-	let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
-	standard_folder.is_some() && folder.canonicalize().ok() == standard_folder
-		|| std::fs::read_to_string(path).is_ok_and(|text| text == source)
+	let is_standard_folder = match cfg!(feature = "native") {
+		true => {
+			let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
+			standard_folder.is_some() && folder.canonicalize().ok() == standard_folder
+		}
+		false => folder == Path::new(STD_FOLDER),
+	};
+	// a verbatim copy is the standard module, its aliases (HashSet) included, natively and in the browser alike
+	is_standard_folder || crate::web::read_text(&path.to_string_lossy()).is_some_and(|text| text == source)
 }
 
 /// A file changed after the running warp was built: a standard module being edited in a checkout, not a stale copy
@@ -93,7 +102,9 @@ pub fn std_module_names() -> impl Iterator<Item = &'static str> {
 	STD_MODULES.iter().map(|(module, _)| *module)
 }
 
-pub(super) fn std_module(name: &str) -> Option<&'static str> {
+/// A standard module's source as the binary embeds it: `module_source("prelude")`, which the warp compiler reads its
+/// typed builtin lines from
+pub fn std_module(name: &str) -> Option<&'static str> {
 	let name = std_module_name(name);
 	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
@@ -172,8 +183,9 @@ pub fn defined_function_name(line: &str) -> &str {
 pub fn std_function_names() -> &'static std::collections::HashSet<String> {
 	static NAMES: std::sync::OnceLock<std::collections::HashSet<String>> = std::sync::OnceLock::new();
 	NAMES.get_or_init(|| {
+		// `ls(…) := …`, and a bang word `is!(…) := …` (card warp-is-tests)
 		let defined = |line: &str| {
-			let name: String = line.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+			let name: String = line.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '!').collect();
 			(!name.is_empty() && line[name.len()..].starts_with('(') && line.contains(":=")).then_some(name)
 		};
 		STD_MODULES.iter().flat_map(|(_, source)| source.lines().filter_map(defined)).collect()
@@ -277,6 +289,11 @@ pub fn prelude_definition(word: &str) -> Option<(Vec<Node>, Node)> {
 	})
 }
 
+/// The prelude's declaration of the class (`class Error { message: text }`), which a program's class may extend
+pub fn prelude_class(class: &str) -> Option<Node> {
+	prelude_declarations_of(&[class]).into_iter().find(|statement| matches!(statement.drop_meta(), Node::Type { .. }))
+}
+
 pub(super) fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
 	prelude_head(word).map(|(_, arity, defaults)| (*arity, *defaults))
 }
@@ -308,7 +325,8 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		let parameters = parsed_statements(source)
 			.iter()
 			.filter_map(|statement| match statement.drop_meta() {
-				Node::Key(head, Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => {
+				Node::Key(head, Op::Define, _) if matches!(called_head(head).drop_meta(), Node::List(..)) => {
+					let head = called_head(head);
 					let (fewest, most) = head_arities(head);
 					Some((leftmost_symbol(head)?, most, most - fewest))
 				}
@@ -319,6 +337,14 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		parameters
 	});
 	Some(parameters)
+}
+
+/// A definition's head without its declared result type: `f(x): int` → `f(x)`
+fn called_head(head: &Node) -> &Node {
+	match head.drop_meta() {
+		Node::Key(called, Op::Colon, _) => called,
+		_ => head,
+	}
 }
 
 /// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or

@@ -46,6 +46,8 @@ pub(crate) const PAIRED_COUNT: &str =
 	"(if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")";
 /// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
 pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
+/// A scalar word of a parameter a list may reach, decided at run time (each_any)
+const EACH_ANY_TEMPLATE: &str = "if TESTED then LISTED else SCALAR";
 const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
 
 /// P84 (user: "This should have already been done with broadcasting"): several juxtaposed arguments of a function of one
@@ -582,14 +584,26 @@ pub fn lower(program: Node) -> Node {
 	let program = each_singular(program, &list_variables, &names);
 	let other_variables = names.difference(&list_variables).cloned().collect();
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
+	let extrema = EXTREMUM_WORDS.into_iter().filter(|word| !defined.contains(&word.to_string())).collect();
 	let instances = element_shapes(&program);
+	let list_functions = super::vector_parameters::list_functions(&found);
+	let is_list = |node: &Node| {
+		is_list_literal(node)
+			|| is_range(node)
+			|| super::vector_parameters::is_list_result(node, &list_functions)
+			|| node.symbol_name().is_some_and(|name| list_variables.contains(name))
+	};
+	let vector_parameters = super::vector_parameters::vector_parameters(&found, &program, is_list, &broadcasting);
 	Broadcast {
+		vector_parameters,
+		list_functions,
 		functions: broadcasting,
 		list_variables,
 		other_variables,
 		scalar_parameters,
 		defines_dot,
 		defines_sum,
+		extrema,
 		instances,
 		paired: Default::default(),
 		shadowed: Default::default(),
@@ -658,6 +672,25 @@ fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
 	call(MAP_WORD, vec![list, each])
 }
 
+/// `element_wise_any(receiver, operand, combined)`: `combined`, a lambda of two items, of each pair at run time
+fn element_wise_call(receiver: Node, operand: Node, combined: Node) -> Node {
+	// the prelude's name for it: library_words, which names prelude words so, runs after this pass
+	let word = crate::modules::prelude_name(ELEMENT_WISE_ANY).unwrap_or(ELEMENT_WISE_ANY.to_string());
+	// min and max of vectors imply no load of it (implied_word): noted, so a compile missing it compiles again with it
+	crate::compiler::compile_context::change(|context| {
+		if !context.missing_compiler_words.iter().any(|missing| missing == ELEMENT_WISE_ANY) {
+			context.missing_compiler_words.push(ELEMENT_WISE_ANY.to_string());
+		}
+	});
+	call(&word, vec![receiver, operand, combined])
+}
+
+/// A call element_wise_call built, a list or a number at run time: `min(max(x, low), high)` of a vector x
+fn is_element_wise_call(node: &Node) -> bool {
+	let word = crate::modules::prelude_name(ELEMENT_WISE_ANY).unwrap_or(ELEMENT_WISE_ANY.to_string());
+	matches!(node.ungrouped(), Node::List(items, _, _) if items.first().is_some_and(|head| head.is_symbol(&word)))
+}
+
 /// A list each_item built: `map(xs, broadcast_item => …)`
 fn is_broadcast(node: &Node) -> bool {
 	let Node::List(items, _, _) = node.drop_meta() else { return false };
@@ -702,7 +735,10 @@ fn takes_a_scalar(param: &Node, body: &Node) -> bool {
 			annotated_kind(type_node).is_some_and(|kind| SCALAR_KINDS.contains(&kind))
 		}
 		Node::Symbol(name) => {
-			(is_arithmetic_operand(body, name) || is_scalar_word_argument(body, name)) && !tests_kind_of(body, name)
+			// `blend.x`, `p#2`: a vector parameter, the call passes the list whole (card vector-params-cpu)
+			(is_arithmetic_operand(body, name) || is_scalar_word_argument(body, name))
+				&& !tests_kind_of(body, name)
+				&& !super::vector_parameters::reads_components(body, name)
 		}
 		_ => false,
 	}
@@ -819,12 +855,15 @@ fn collect_list_variables(
 				}
 				let declared_list =
 					declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
+				let is_list_variable =
+					|node: &Node| node.symbol_name().is_some_and(|list| assigned.get(list) == Some(&true));
 				let is_list = declared_list
 					|| is_list_literal(value)
 					|| match value.drop_meta() {
 						Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 						_ if is_range(value) => true,
-						_ if element_wise_parts(value).is_some() => true,
+						// `inside = p .- cell` of a parameter p: a list or a number, as the call passes (card vector-params-cpu)
+						_ if element_wise_parts(value).is_some() => is_element_wise_of_list(value, &is_list_variable),
 						_ if crate::filled_lists::typed_array_value(value, &variables).is_some() => true,
 						Node::Empty => appended.contains(name),
 						// `x = floor [1.5 2.5]`, `ys = log(xs, 3)`: a broadcast over a list literal or a list variable
@@ -841,6 +880,18 @@ fn collect_list_variables(
 			}
 		}
 	});
+}
+
+/// `xs .* 2`, `[1, 2] .+ k`, `(xs .* 2) .- 1`: an element-wise expression with a side known to be a list
+fn is_element_wise_of_list(node: &Node, is_list_variable: &dyn Fn(&Node) -> bool) -> bool {
+	let Some((receiver, _, operand)) = element_wise_parts(node.ungrouped()) else { return false };
+	[receiver, operand].iter().any(|side| {
+		let side = side.ungrouped();
+		is_list_literal(side)
+			|| is_range(side)
+			|| is_list_variable(side)
+			|| is_element_wise_of_list(side, is_list_variable)
+	})
 }
 
 /// `xs + [i]` of the variable xs
@@ -914,24 +965,62 @@ struct Broadcast {
 	/// Per function of several parameters: which parameters take one value (`add(a, b) := a + b`: both)
 	scalar_parameters: HashMap<String, Vec<bool>>,
 	defines_dot: bool,
+	/// min and max, unless the program defines them
+	extrema: Vec<&'static str>,
 	defines_sum: bool,
 	/// The shapes of the program's variables: which field reads map over a list of instances
 	instances: Option<InstanceTypes>,
 	/// element-wise operators between two lists so far: each holds its lists under names of its own
 	paired: Counter,
 	/// The untyped parameters of the functions being rewritten: their own values, not the program's list variables of
-	/// the same names (card param-named-like-global)
-	shadowed: std::cell::RefCell<Vec<String>>,
+	/// the same names (card param-named-like-global); each marked when a list may reach it (vector_parameters)
+	shadowed: std::cell::RefCell<Vec<(String, bool)>>,
+	/// Per function, the parameters a list may reach at run time
+	vector_parameters: HashMap<String, HashSet<String>>,
+	/// The functions whose result is a list
+	list_functions: HashSet<String>,
 }
 
 impl Broadcast {
-	/// `run` with a function's `parameters` among the shadowed names: its own values inside its body
-	fn with_parameters<T>(&self, parameters: Vec<String>, run: impl FnOnce() -> T) -> T {
+	/// `run` with the `parameters` of `function` among the shadowed names: its own values inside its body
+	fn with_parameters<T>(&self, function: Option<&str>, parameters: Vec<String>, run: impl FnOnce() -> T) -> T {
+		let vectors = function.and_then(|name| self.vector_parameters.get(name));
+		let marked = parameters.into_iter().map(|name| {
+			let is_vector = vectors.is_some_and(|vectors| vectors.contains(&name));
+			(name, is_vector)
+		});
 		let outer = self.shadowed.borrow().len();
-		self.shadowed.borrow_mut().extend(parameters);
+		self.shadowed.borrow_mut().extend(marked);
 		let result = run();
 		self.shadowed.borrow_mut().truncate(outer);
 		result
+	}
+
+	fn is_shadowed(&self, variable: &str) -> bool {
+		self.shadowed.borrow().iter().any(|(name, _)| name == variable)
+	}
+
+	/// A parameter a list may reach at run time, the innermost of its name
+	fn is_vector_parameter(&self, node: &Node) -> bool {
+		let Some(variable) = node.ungrouped().symbol_name() else { return false };
+		self.shadowed.borrow().iter().rev().find(|(name, _)| name == variable).is_some_and(|(_, vector)| *vector)
+	}
+
+	/// A value that may be a list at run time, where a scalar word decides how it applies (each_any, vector_extremum):
+	/// a list, a parameter a list reaches, an element-wise result, the call of a function returning a list
+	fn may_be_list(&self, node: &Node) -> bool {
+		self.is_list_expression(node)
+			|| self.is_vector_parameter(node)
+			|| is_element_wise_call(node)
+			|| super::vector_parameters::is_list_result(node, &self.list_functions)
+	}
+
+	/// `if p is list then map(p, broadcast_item => applied(broadcast_item)) else applied(p)`: decided at run time
+	fn each_any(&self, value: &Node, applied: impl Fn(Node) -> Node) -> Node {
+		let tested = call(crate::words::IS_TYPE, vec![value.clone(), Node::Text(crate::words::LIST_WORD.to_string())]);
+		let bindings =
+			[("TESTED", tested), ("LISTED", each_item(value.clone(), &applied)), ("SCALAR", applied(value.clone()))];
+		super::nodes::filled(EACH_ANY_TEMPLATE, bindings)
 	}
 
 	fn rewrite(&self, node: Node) -> Node {
@@ -963,6 +1052,7 @@ impl Broadcast {
 					.collect();
 				self.broadcast_call(&items, &bracket, &separator)
 					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
+					.or_else(|| self.vector_extremum(&items, &bracket, &separator))
 					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) if left.is_empty_node() && SCALAR_OPERATORS.contains(&op) => {
@@ -971,7 +1061,8 @@ impl Broadcast {
 			}
 			// a definition head names parameters, it calls nothing
 			Node::Key(head, op @ (Op::Define | Op::Assign | Op::Arrow), body) if is_function_head(&head, op) => {
-				let body = self.with_parameters(untyped_parameters(&head, op), || self.rewrite(*body));
+				let function = (op != Op::Arrow).then(|| super::nodes::head_symbol(&head)).flatten();
+				let body = self.with_parameters(function, untyped_parameters(&head, op), || self.rewrite(*body));
 				Node::Key(head, op, Box::new(body))
 			}
 			Node::Key(left, op, right) => {
@@ -1005,6 +1096,7 @@ impl Broadcast {
 				Some(Node::List(applied, Bracket::Square, element_separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, vec![item]))),
+			_ if self.may_be_list(argument) => Some(self.each_any(argument, |item| call(name, vec![item]))),
 			_ => None,
 		}
 	}
@@ -1023,9 +1115,7 @@ impl Broadcast {
 	/// own words (`people.count`) and a parameter of the same name as the list stay as they are
 	fn element_fields(&self, list: &Node, field: &Node) -> Option<Node> {
 		let name = field.symbol_name()?;
-		let shadowed = list
-			.symbol_name()
-			.is_some_and(|variable| self.shadowed.borrow().iter().any(|parameter| parameter == variable));
+		let shadowed = list.symbol_name().is_some_and(|variable| self.is_shadowed(variable));
 		if shadowed || crate::library_words::is_library_word(name) {
 			return None;
 		}
@@ -1033,13 +1123,15 @@ impl Broadcast {
 		Some(each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
 	}
 
-	/// A list variable, a range or a broadcast: `sqrt xs`, `sqrt (1 to 4)`, `round(floor(xs))` map over its items
+	/// A list variable, a range, a broadcast or an element-wise expression of a list: `sqrt xs`, `sqrt (1 to 4)`,
+	/// `round(floor(xs))`, `floor([0.5] .* 0.5)` map over its items (card math-of-elementwise)
 	fn is_list_value(&self, node: &Node) -> bool {
 		is_range(node)
 			|| is_broadcast(node)
-			|| node.symbol_name().is_some_and(|variable| {
-				self.list_variables.contains(variable) && !self.shadowed.borrow().iter().any(|name| name == variable)
-			})
+			|| element_wise_parts(node.ungrouped()).is_some_and(|(receiver, _, _)| self.is_list(receiver.ungrouped()))
+			|| node
+				.symbol_name()
+				.is_some_and(|variable| self.list_variables.contains(variable) && !self.is_shadowed(variable))
 	}
 
 	/// `add [1 2] 10`, `add(10, xs)`, `add(all xs, 10)`, `square(all xs)`: a call whose one list argument goes to a
@@ -1092,10 +1184,23 @@ impl Broadcast {
 			true => key(right, Op::Colon, symbol(crate::words::ANY_TYPE)),
 			false => right,
 		};
-		let combined = key(parens(vec![left, right]), Op::Arrow, item);
-		// the prelude's name for it: library_words, which names prelude words so, runs after this pass
-		let word = crate::modules::prelude_name(ELEMENT_WISE_ANY).unwrap_or(ELEMENT_WISE_ANY.to_string());
-		Some(call(&word, vec![receiver, operand, combined]))
+		Some(element_wise_call(receiver, operand, key(parens(vec![left, right]), Op::Arrow, item)))
+	}
+
+	/// `max(p, 0)`, `min(a, b)` where a side is a list or a parameter a list may reach: the extremum of each pair of
+	/// items, as a shader's min and max of vectors, decided at run time by element_wise_any (card min-max)
+	fn vector_extremum(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let (name, arguments) = word_headed(items)?;
+		let [first, second] = arguments else { return None };
+		let is_extremum = is_call_shape(bracket, separator) && self.extrema.contains(&name);
+		if !is_extremum || ![first, second].into_iter().any(|side| self.may_be_list(side)) {
+			return None;
+		}
+		// items of any kind: the extremum compares them as their Nodes
+		let [left, right] = ELEMENT_WISE_SIDES.map(symbol);
+		let typed = [&left, &right].map(|side| key(side.clone(), Op::Colon, symbol(crate::words::ANY_TYPE)));
+		let combined = key(parens(typed.to_vec()), Op::Arrow, call(name, vec![left, right]));
+		Some(element_wise_call(first.clone(), second.clone(), combined))
 	}
 
 	/// `xs .op ys` with both sides lists: the items paired by index (lists of different lengths are an error)
@@ -1175,6 +1280,7 @@ impl Broadcast {
 				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), applied)),
+			_ if self.may_be_list(argument) => Some(self.each_any(argument, applied)),
 			_ => None,
 		}
 	}
@@ -1196,7 +1302,9 @@ impl Broadcast {
 
 /// The prelude word this pass may call where the program writes none (modules IMPLIED_WORDS): element_wise_any, of
 /// any element-wise operator (the parser wrote it as a map whose lambda parameter no module scan counts) or `dot`
-/// (`sum(a .* b)`)
+/// (`sum(a .* b)`). Not of min and max: every program naming them would load it, and its closure calls make the
+/// parameters of every function value of two parameters Nodes (`n times t` of repeat refused); min and max of vectors
+/// (vector_extremum) load it by compiling again (pipeline.rs loading_compiler_words)
 pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
 	(element_wise_parts(node).is_some() || node.is_symbol(DOT_WORD)).then_some(ELEMENT_WISE_ANY)
 }
@@ -1333,8 +1441,8 @@ fn instance_dispatch(item: &Node) -> Option<&Node> {
 		.then_some(otherwise)
 }
 
-/// `x is Note` and `x.plus(o)` as written, `is_type(x, "Note")` and `plus(x, o)` once type tests and methods are
-/// lowered: x
+/// `instance_of(x, "Note")`, `x is Note` and `x.plus(o)` as written, `is_type(x, "Note")` and `plus(x, o)` once type
+/// tests and methods are lowered: x
 fn first_operand(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
 		Node::Key(subject, Op::Eq | Op::Dot, _) => Some(subject),

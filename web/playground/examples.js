@@ -232,7 +232,7 @@ div{ h2{ "Alice" } p{ "30 years, likes:" } ul{ li{ "reading" } li{ "hiking" } } 
 	"element events": { value: 'div{button{"+1" data-warp-click:"1"} button{"reset" data-warp-click:"2"} p:"count: 0"}', code: `// a button with a click handler: click it
 count = 0
 div{ button{ "+1" on click { count += 1 } } button{ "reset" on click { count = 0 } } p{ "count: " + count } }` },
-	"fine updates": { value: 'div{style:.done:color:"green" button{data-warp-click:"1" "toggle"} p{class:"open" "state"} ul:li:"toggled 0 times"}', clicks: ["toggle", "toggle", "toggle"], clicked: 'div{style:.done:color:"green" button{data-warp-click:"1" "toggle"} p{class:"done" "state"} ul:li:"toggled 3 times"}', kept: true, code: `// after a click only what changed is redrawn
+	"fine updates": { value: 'div{style{.done{color:"green"}} button{data-warp-click:"1" "toggle"} p{class:"open" "state"} ul:li:"toggled 0 times"}', clicks: ["toggle", "toggle", "toggle"], clicked: 'div{style{.done{color:"green"}} button{data-warp-click:"1" "toggle"} p{class:"done" "state"} ul:li:"toggled 3 times"}', kept: true, code: `// after a click only what changed is redrawn
 done = false
 toggles = 0
 div{ style{ .done = "green" } button{ on click { done = not done; toggles += 1 } "toggle" } p{ class: (if done then "done" else "open") "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
@@ -257,7 +257,7 @@ div{ button{ on click { todos = todos[1..] + [todos#1] } "rotate" } ul{ [li{ key
 	"form binding": { value: 'div{label{"Name " input{value:"Ann" data-warp-input:"1"}} p:"Hello Ann"}', typed: "Bob", clicked: 'div{label{"Name " input{value:"Bob" data-warp-input:"1"}} p:"Hello Bob"}', kept: true, code: `// bind ties an input to a variable: type a name
 name = "Ann"
 div{ label{ "Name " input{ bind: name } } p{ "Hello " + name } }` },
-	styles: { value: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-warp-click:"1" "dark"} p{class:"card" style{color:"black" background:"white"} "a themed card"}}', clicks: ["dark"], clicked: 'div{style:.card{padding:8 border:"1px solid gray"} button{data-warp-click:"1" "dark"} p{class:"card" style{color:"white" background:"black"} "a themed card"}}', kept: true, code: `// styles are data too: a style sheet and inline styles
+	styles: { value: 'div{style{.card{padding:8 border:"1px solid gray"}} button{data-warp-click:"1" "dark"} p{class:"card" style{color:"black" background:"white"} "a themed card"}}', clicks: ["dark"], clicked: 'div{style{.card{padding:8 border:"1px solid gray"}} button{data-warp-click:"1" "dark"} p{class:"card" style{color:"white" background:"black"} "a themed card"}}', kept: true, code: `// styles are data too: a style sheet and inline styles
 dark = false
 div{
 	style{ ".card": { padding: 8 border: "1px solid gray" } }
@@ -278,7 +278,7 @@ route "/" {
 		ul{ for item in items { li{ item } } }
 	}
 }` },
-	transitions: { value: 'div{button{data-warp-click:"1" "rotate"} button{data-warp-click:"2" "remove"} ul{li{key:1 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"} li{key:2 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "eggs"} li{key:3 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"}}}', clicks: ["rotate", "remove"], clicked: 'div{button{data-warp-click:"1" "rotate"} button{data-warp-click:"2" "remove"} ul{li{key:3 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"} li{key:1 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"}}}', keyed: true, animated: true, code: `// CSS transitions: removed items fade out, the others glide
+	transitions: { value: 'div{button{data-warp-click:"1" "rotate"} button{data-warp-click:"2" "remove"} ul{li{key:1 starting-style:opacity:0 style{transition:"opacity 150ms, transform 150ms"} "milk"} li{key:2 starting-style:opacity:0 style{transition:"opacity 150ms, transform 150ms"} "eggs"} li{key:3 starting-style:opacity:0 style{transition:"opacity 150ms, transform 150ms"} "tea"}}}', clicks: ["rotate", "remove"], clicked: 'div{button{data-warp-click:"1" "rotate"} button{data-warp-click:"2" "remove"} ul{li{key:3 starting-style:opacity:0 style{transition:"opacity 150ms, transform 150ms"} "tea"} li{key:1 starting-style:opacity:0 style{transition:"opacity 150ms, transform 150ms"} "milk"}}}', keyed: true, animated: true, code: `// CSS transitions: removed items fade out, the others glide
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{
 	button{ on click { todos = todos[1..] + [todos#1] } "rotate" }

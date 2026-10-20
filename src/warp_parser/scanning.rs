@@ -9,39 +9,15 @@ pub(super) struct Mark {
 	line_nr: usize,
 	column: usize,
 	current_line: String,
-	atoms_read: usize,
 }
 
 impl WarpParser {
 	pub(super) fn mark(&self) -> Mark {
-		Mark {
-			pos: self.pos,
-			line_nr: self.line_nr,
-			column: self.column,
-			current_line: self.current_line.clone(),
-			atoms_read: self.atoms.len(),
-		}
+		Mark { pos: self.pos, line_nr: self.line_nr, column: self.column, current_line: self.current_line.clone() }
 	}
 
 	pub(super) fn rewind(&mut self, mark: Mark) {
-		let atoms_read;
-		Mark {
-			pos: self.pos,
-			line_nr: self.line_nr,
-			column: self.column,
-			current_line: self.current_line,
-			atoms_read,
-		} = mark;
-		self.atoms.truncate(atoms_read);
-	}
-
-	/// `read` (an atom's parser) with the atom it reads logged: kind, where it starts, the characters it took
-	pub(super) fn reading_atom<T>(&mut self, kind: AtomKind, read: impl FnOnce(&mut Self) -> T) -> T {
-		let (start, line, column) = (self.pos, self.line_nr, self.column);
-		let value = read(self);
-		let written = self.chars[start..self.pos].iter().collect();
-		self.atoms.push(Atom { kind, line, column, written });
-		value
+		Mark { pos: self.pos, line_nr: self.line_nr, column: self.column, current_line: self.current_line } = mark;
 	}
 
 	/// The next `length` characters, consumed
@@ -138,9 +114,21 @@ impl WarpParser {
 	/// The word of `length` characters just read (0: the one at the cursor) follows a `.`: `math.sqrt`, `math.pi` name
 	/// a member, no operator or constant
 	pub(super) fn at_member_name(&self, length: usize) -> bool {
+		self.word_follows(length, &['.'])
+	}
+
+	/// The word of `length` characters just read follows a capitalized `Type::`: `Node::True` names a case of the enum
+	/// Node, no constant (card node-enum); `f64::sqrt` keeps its operator word, `std::f64::consts::PI` its constant
+	pub(super) fn at_scoped_name(&self, length: usize) -> bool {
+		let scope_end = self.pos.saturating_sub(length + 2);
+		let scope_start = self.chars[..scope_end].iter().rposition(|c| !is_identifier_char(*c)).map_or(0, |i| i + 1);
+		self.word_follows(length, &[':', ':']) && self.chars.get(scope_start).is_some_and(|first| first.is_uppercase())
+	}
+
+	fn word_follows(&self, length: usize, prefix: &[char]) -> bool {
 		let start = self.pos.saturating_sub(length);
-		start > 0
-			&& self.chars.get(start - 1) == Some(&'.')
+		start >= prefix.len()
+			&& self.chars[start - prefix.len()..start] == *prefix
 			&& self.chars.get(start).is_some_and(|first| first.is_alphabetic())
 	}
 
@@ -194,6 +182,22 @@ impl WarpParser {
 		while matches!(self.current_char(), ' ' | '\t') {
 			self.advance();
 		}
+	}
+
+	/// A tab between two items of a line separates columns: `"1+1"⇥2` is a list of two (tab-separated test pairs,
+	/// decision warp-is-tests). The blanks around the cursor hold the tab; indentation and a tab before a comment
+	/// or the line's end separate nothing.
+	pub(super) fn at_tab_separator(&self) -> bool {
+		let is_blank = |c: &&char| matches!(c, ' ' | '\t');
+		let behind = self.chars[..self.pos].iter().rev().take_while(is_blank).count();
+		let ahead = self.chars[self.pos..].iter().take_while(is_blank).count();
+		let blanks = &self.chars[self.pos - behind..self.pos + ahead];
+		let content_before = self.pos > behind && self.chars[self.pos - behind - 1] != '\n';
+		let content_after = !matches!(
+			(self.peek_char(ahead), self.peek_char(ahead + 1)),
+			('\n' | '\r' | '\0', _) | ('/', '/' | '*') | ('#', ' ' | '\t' | '\n' | '\0')
+		);
+		blanks.contains(&'\t') && content_before && content_after
 	}
 
 	/// Blanks and line continuations: a `\` at the end of a line joins the next line to the statement
@@ -310,11 +314,4 @@ pub(crate) fn is_identifier_char(c: char) -> bool {
 /// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lib/sound.warp)
 pub(crate) fn is_music_accidental(c: char) -> bool {
 	matches!(c, '♯' | '♭')
-}
-
-/// The atoms the parser reads in a source, in order, as code: the token stream of this scannerless parser
-pub fn read_atoms(source: &str) -> Vec<Atom> {
-	let mut parser = WarpParser::new_with_options(source.to_string(), ParserOptions::default());
-	parser.parse_list_with_separators(None, Bracket::None);
-	parser.atoms
 }

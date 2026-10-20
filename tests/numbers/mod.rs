@@ -17,6 +17,7 @@ mod test_dimension_types; // card dimensions-units
 mod test_div_assign;
 mod test_division_by_zero;
 mod test_duration_text;
+mod test_duration_words; // card duration-warp
 mod test_dynamic_units; // card units-dynamic
 mod test_exact_parameters;
 mod test_exponent_texts; // card int-text
@@ -85,8 +86,10 @@ mod test_quantity_tolerance; // card quantity-tolerance
 mod test_range_tolerance_compare;
 mod test_ratio_compare_shortcut;
 mod test_ratio_float_division;
+mod test_ratio_gcd_warp; // card ratio-gcd-warp
 mod test_rational_quantities;
 mod test_rational_type;
+mod test_real_prefix_words; // card why-sqrt
 mod test_recursive_law; // card recursive-laws
 mod test_recursive_units; // card static-units
 mod test_repeating_decimal; // card repeating-decimals

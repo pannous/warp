@@ -10,7 +10,7 @@ the canvas's, with a hint naming `canvas.width` and the other two.
 | `window.width` | system value `window_width` | `set_system_value("window_width", it)` |
 | `display.width` | system value `display_width` | compile-time error: a program cannot resize the display |
 
-Mechanism: src/lowering/words/module_properties.rs, a table of object, property, getter, setter (warp code, `it` the
+Mechanism: src/lowering/definitions/property_accessors.rs, a table of object, property, getter, setter (warp code, `it` the
 value written) and the module it needs. Runs in SUGAR_PASSES right after the lookups are normalized (`a of b`, `(p).a`),
 before any pass reads a field write; a property brings its module (`use draw`) like std_aliases does. `+=` and its
 kin read, then write. A program binding the object or word keeps its own (`canvas = {width: 9}`, `f(width) := …`,

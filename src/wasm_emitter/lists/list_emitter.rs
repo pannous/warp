@@ -115,7 +115,6 @@ const INSERT_ORDER_TOPIC: &str = "insert-order";
 pub(in crate::wasm_emitter) const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
 /// The got-it topic of a lone word close to a defined name
 const NEAR_MISS_TOPIC: &str = "near-miss";
-const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
 	/// The word a list calls; a parameter named like a function or global is the parameter (`g(f, b) := [f, b]`)
@@ -422,7 +421,7 @@ impl WasmGcEmitter {
 		if let [word, instance, type_name] = items {
 			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
 				if name == crate::words::INSTANCE_OF {
-					self.emit_instance_of(func, instance, type_name);
+					self.emit_instance_of(func, instance, std::slice::from_ref(type_name));
 					self.emit_call(func, "new_int");
 					return;
 				}
@@ -545,16 +544,17 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Check if this is a statement sequence
-		let is_statement_sequence =
-			is_unbracketed_block(items, bracket, separator) || items.iter().any(|item| is_statement(item, bracket));
+		// A parenthesized comma tuple keeps every computed element, including a grouped control-flow expression.
+		let is_tuple = *separator == Separator::Comma && items.len() > 1;
+		let is_statement_sequence = !(*bracket == Bracket::Round && is_tuple)
+			&& (is_unbracketed_block(items, bracket, separator)
+				|| items.iter().any(|item| is_statement(item, bracket)));
 
 		if is_statement_sequence {
 			self.emit_statement_sequence(func, items, Self::emit_node_instructions);
 		} else {
 			// Check for pure numeric expressions; a square list and a comma tuple `(h + 1, 2)` keep all their items,
 			// whatever they compute
-			let is_tuple = *separator == Separator::Comma && items.len() > 1;
 			// a block with a field (`p{ class: "x" "c" + n }`) is a structure whose items stay items
 			let has_field =
 				items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
@@ -761,17 +761,10 @@ impl WasmGcEmitter {
 				}
 			}
 			// an instance's static kind is no type name: its declared type is read at run time
+			// `d is Animal` of a Dog extending Animal holds too
 			None if declared_type => {
-				let instance_test = Node::List(
-					vec![
-						Node::Symbol(crate::words::INSTANCE_OF.to_string()),
-						subject.clone(),
-						Node::Text(spec.clone()),
-					],
-					Bracket::Round,
-					Separator::None,
-				);
-				self.emit_numeric_value(func, &instance_test);
+				let classes = self.ctx.type_registry.with_descendants(spec);
+				self.emit_instance_of(func, subject, &classes);
 			}
 			// `now is instant`: a built-in type sharing its run-time kind with others (the forms of a time) by `type(x)`'s
 			// name, as `f is builtin` of a function value
@@ -931,25 +924,48 @@ impl WasmGcEmitter {
 		self.emit_truncating_cast(func);
 	}
 
-	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is T
-	pub(in crate::wasm_emitter) fn emit_instance_of(&mut self, func: &mut Function, instance: &Node, type_name: &str) {
+	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is one of the
+	/// classes, or an Error of one of them (its value, decision error-classes). The exact class alone for a dispatch,
+	/// with the classes extending it for `x is T`
+	pub(in crate::wasm_emitter) fn emit_instance_of(
+		&mut self,
+		func: &mut Function,
+		instance: &Node,
+		classes: &[String],
+	) {
 		let node_type = self.type_manager.node_type;
 		self.emit_node_instructions(func, instance);
 		let instance_local = self.node_scratch();
 		func.instruction(&I::LocalSet(instance_local));
+		let named = |emitter: &mut Self, func: &mut Function, field: u32| {
+			for (index, class) in classes.iter().enumerate() {
+				emitter.emit_field(func, instance_local, field);
+				func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+				let (pointer, length) = emitter.memory_string(class);
+				Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+				emitter.emit_call(func, "new_symbol");
+				emitter.emit_call(func, super::super::VALUES_EQUAL);
+				if index > 0 {
+					func.instruction(&I::I32Or);
+				}
+			}
+			func.instruction(&I::I64ExtendI32U);
+		};
 		self.emit_field(func, instance_local, 0);
+		Self::emit_kind_test(func, crate::Kind::Key as i64, I::I64Eq);
+		func.instruction(&I::If(BlockType::Result(ValType::I64)));
+		named(self, func, 1);
+		func.instruction(&I::Else);
+		self.emit_field(func, instance_local, 0);
+		Self::emit_kind_test(func, crate::Kind::Error as i64, I::I64Eq);
+		self.emit_field(func, instance_local, 2);
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
-			I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(crate::Kind::Key as i64), I::I64Eq,
+			I::RefIsNull, I::I32Eqz, I::I32And,
 			I::If(BlockType::Result(ValType::I64)),
 		]);
-		self.emit_field(func, instance_local, 1);
-		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
-		let (pointer, length) = self.memory_string(type_name);
-		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-		self.emit_call(func, "new_symbol");
-		self.emit_call(func, super::super::VALUES_EQUAL);
-		Self::emit_list(func, &[I::I64ExtendI32U, I::Else, I::I64Const(0), I::End]);
+		named(self, func, 2);
+		Self::emit_list(func, &[I::Else, I::I64Const(0), I::End, I::End]);
 	}
 
 	/// `a // b` as i64: the Euclidean quotient, exact for exact operands (exact_euclid_div), else of the f64 quotient
@@ -1184,12 +1200,14 @@ impl WasmGcEmitter {
 		ask(&question).map(|_| ())
 	}
 
-	/// The name of the program or the language `word` is a typo of: `pirnt` → print
+	/// The name of the program or the language `word` is a typo of: `pirnt` → print, `revrse` → reverse; the language's
+	/// names are print and the builtin methods of every type (members::MEMBERS_BY_TYPE), no list of its own
 	fn near_name(&self, word: &str) -> Option<String> {
 		let mut names: Vec<String> =
 			self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
 		names.extend(self.scope.local_names());
-		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
+		let language_words = std::iter::once(PRINT_WORD).chain(crate::members::builtin_member_words());
+		names.extend(language_words.map(String::from));
 		crate::extensions::strings::near_miss(word, names)
 	}
 

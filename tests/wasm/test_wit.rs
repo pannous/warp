@@ -3,16 +3,6 @@ use warp::warp_parser::parse_file;
 use warp::Node::*;
 
 #[test]
-fn test_timeout_protection() {
-	let do_test_timeout_protection = false;
-	if do_test_timeout_protection {
-		loop {
-			std::thread::sleep(std::time::Duration::from_millis(1)); // Should be killed at .1s
-		}
-	}
-}
-
-#[test]
 // DONE: separator precedence creates nested groups, needs flattening for WIT
 pub fn test_wit_parse() {
 	// loop {} // Should be killed at .1

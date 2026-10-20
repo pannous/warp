@@ -294,7 +294,7 @@ pub(crate) fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
 /// The forms a later pass or the emitter turns into calls of prelude words the program never names, one row each: the
 /// prelude word a node needs, if any (card lib-from-runtime). A move of a runtime function into lib/prelude.warp adds
 /// its row; a form missing here still compiles, the second time (pipeline::loading_compiler_words)
-const IMPLIED_WORDS: [fn(&Node) -> Option<&'static str>; 7] = [
+const IMPLIED_WORDS: [fn(&Node) -> Option<&'static str>; 8] = [
 	crate::lowering::broadcasting::implied_word,
 	crate::lowering::text_patterns::implied_word,
 	crate::gpu_maps::implied_word,
@@ -302,6 +302,7 @@ const IMPLIED_WORDS: [fn(&Node) -> Option<&'static str>; 7] = [
 	crate::lowering::filled_lists::implied_word,
 	crate::wasm_emitter::numbers::uncertain::implied_word,
 	crate::wasm_emitter::numbers::exact::implied_word,
+	crate::wasm_emitter::time::times::implied_word,
 ];
 
 /// The prelude words IMPLIED_WORDS finds in the statements
@@ -316,13 +317,20 @@ fn implied_words(statements: &[Node]) -> Vec<String> {
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
 pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
+	called_names_beyond(statements, &HashSet::new())
+}
+
+/// called_names without the reads `x.f` of the `fields` (`p.header` of a class's field calls no router header)
+pub(crate) fn called_names_beyond(statements: &[Node], fields: &HashSet<String>) -> HashSet<String> {
 	let implied = [
 		implied_words(statements),
 		crate::lowering::library_words::implied_count_words(statements),
 		crate::compiler::compile_context::read(|context| context.compiler_words.clone()),
 	]
 	.concat();
-	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).chain(implied).collect())
+	with_library_words(
+		mentioned_names(statements).into_iter().chain(method_names_beyond(statements, fields)).chain(implied).collect(),
+	)
 }
 
 /// The names with the library words they spell (`isdigit` → is_digit, `round` → round_to) and the prelude names of

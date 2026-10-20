@@ -18,7 +18,7 @@ use std::fs::read_to_string;
 
 use crate::node::ATTRIBUTE_MARK;
 mod declaration_scan;
-pub use declaration_scan::*;
+pub(crate) use declaration_scan::*;
 mod collections;
 mod context;
 pub use collections::*;
@@ -58,7 +58,6 @@ pub(crate) use expressions::*;
 pub(crate) use literals::*;
 pub use literals::{shader_blocks, without_shader_texts, PathLiteral};
 use lookahead::*;
-pub use scanning::read_atoms;
 use scanning::*;
 mod annotations;
 mod math_notation;
@@ -70,88 +69,27 @@ pub(crate) use math_notation::*;
 pub(crate) use types::*;
 use unicode_normalization::UnicodeNormalization;
 
-/// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
-/// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
-const URL_MARK: &str = "://";
 /// The item of the map a Julia dot call `f.(xs)` lowers to
 const BROADCAST_ITEM: &str = "broadcast_item";
-/// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
-const REST_MARKERS: [&str; 2] = ["vararg", "params"];
-const MAX_INTEGER_EXPONENT: i64 = 4096;
-/// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; C's `0.1l` (long double) is
-/// the litre unit instead (decision litre-suffix)
-const LITERAL_SUFFIXES: [(char, &str); 4] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float")];
-/// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
-pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
-/// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
-const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
-/// Other languages' list types: warp's list holds any elements, unboxed numbers too, so `Vec<int>` is `list of int`
-const FOREIGN_LIST_HEADS: [&str; 6] = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"];
-
-const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
-/// Modifiers of other languages with no meaning in warp: skipped with a note (user decision P78)
-const FOREIGN_MODIFIERS: [&str; 19] = [
-	"public",
-	"private",
-	"protected",
-	"internal",
-	"static",
-	"extern",
-	"external",
-	"C",
-	"inline",
-	"local",
-	"virtual",
-	"override",
-	"abstract",
-	"constexpr",
-	"volatile",
-	"thread_local",
-	"synchronized",
-	"transient",
-	"native",
-];
-/// Modifiers with a warp meaning that change nothing before a function definition (a function is global and constant)
-const DEFINITION_MODIFIERS: [&str; 7] = ["global", "export", "import", "const", "final", "mutable", "mut"];
-const FOREIGN_MODIFIER_TOPIC: &str = "foreign-modifier";
-/// `function add`, `func add`: a reference to a function (P82), like `&add`
-const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
 /// `nonlocal y` in a nested function: it reads the enclosing function's current y (lowering/definitions/late_binding.rs)
 const NONLOCAL_WORD: &str = "nonlocal";
-/// Rust's endless `loop { … }`
-const LOOP_WORD: &str = "loop";
-
-const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
-const LEFT_ARROW_TOPIC: &str = "left-arrow";
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
 pub(crate) const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
-/// Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
-/// `open`, `abstract`, `sealed`, `final`, visibility
-const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
 /// The keywords of a field: Kotlin's primary constructor `class Point(val x: Int, var y: Int)`, Swift's `var count = 0`
 pub(crate) const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
-/// `new Point(1, 2)`: the construction `Point(1, 2)`
-const NEW_WORD: &str = "new";
-/// `constant x = 3` is `const x = 3`, with a note naming const (card constant-alias)
-const CONSTANT_ALIAS: &str = "constant";
-const CONST_WORD: &str = "const";
 /// Java's and TypeScript's `class Square implements Shape {…}`
 pub const IMPLEMENTS_WORD: &str = "implements";
 /// `enum Color {red, green}` (declarations::enum_object), Kotlin's `enum class`
 const ENUM_WORD: &str = "enum";
-/// Swift's `enum Shape { case circle(radius: Double) }`
-const CASE_KEYWORD: &str = "case";
 /// Go's `type Shape interface {…}` declares the trait Shape
 const GO_INTERFACE_WORD: &str = "interface";
 /// Go's `type Point struct {…}` declares the class Point
 const GO_STRUCT_WORD: &str = "struct";
 /// `type Node: gc struct {…}` (WebAssembly's GC structs): every warp class is one, the word adds nothing
 const GC_WORD: &str = "gc";
-/// `left: ref Node?`: WebAssembly's reference type word before a field's type
-const REF_TYPE_WORD: &str = "ref";
 /// C++'s and C#'s `operator +(o)`: the method of `+` named by its glyph
 const OPERATOR_WORD: &str = "operator";
 /// Words before a member of a class body that change nothing in warp: Swift's `mutating func`, visibility, `override`
@@ -168,63 +106,20 @@ pub const MEMBER_MODIFIERS: [&str; 11] = [
 	"async",
 	"operator",
 ];
-/// Python's root class `class Point(object):`, no parent of its own
-const PYTHON_ROOT_CLASS: &str = "object";
 /// `record point{x:int y:int}` declares a type like `struct`, but `record` is also an everyday variable name:
 /// it is a declaration only when a name and a field block follow
 const RECORD_WORD: &str = "record";
-/// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
-const UPTO: &str = "upto";
-/// `10 down to 1` is `reverse(1 to 10)`
-const DOWN_WORD: &str = "down";
 pub(crate) const REVERSE_WORD: &str = "reverse";
-const EXCLUSIVE_DOTS: &str = "..";
-/// Topic of the Ask about `f x as T`, which casts the argument (card parameter-named-number)
-const ARGUMENT_CAST: &str = "argument-cast";
-/// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
-const KOTLIN_RANGE: &str = "kotlin-range";
-/// The control words that negate their condition: `unless c` is `if not c`, `until c` is `while not c`
-const NEGATED_CONTROL_WORDS: [(&str, Op); 2] = [("unless", Op::If), ("until", Op::While)];
-/// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
-const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
 const FAILED_WORD: &str = "failed";
-const EMPTY_WORD: &str = "empty";
-/// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
-const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
-/// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
-const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
-/// `x = data a and b`: the prefix takes the whole expression after it (card data-quoting); `data class` is a modifier
-const DATA_KEYWORD: &str = "data";
 const CLASS_KEYWORD: &str = "class";
-/// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
-const AWAIT_KEYWORD: &str = "await";
-/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/control/go_blocks.rs,
-/// card error-beep), `loop{…}` loops, `do{…}` runs its block (card glued-loop); no tags `go:{…}`
-const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
-/// `await all jobs`: every task of a list (P47)
-const AWAIT_ALL_WORD: &str = "all";
-/// `await x` binds its operand like unary minus
-const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
-/// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
-const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
-/// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
-const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
-/// What ends a loop's iterable besides its body: the statement, a comprehension's bracket or condition (`if`)
-const ITERABLE_ENDS: [char; 6] = [';', '}', ']', ')', ',', '\0'];
 const IF_WORD: &str = "if";
-/// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
+/// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`; `fi` is an `end` alias
 const END_KEYWORD: &str = "end";
-const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
-const PYTHON_LAMBDA_KEYWORD: &str = "lambda";
+const FI_KEYWORD: &str = "fi";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
-/// Ruby's field declarations `attr_accessor :x, :y`
-const RUBY_FIELD_WORDS: [&str; 3] = ["attr_accessor", "attr_reader", "attr_writer"];
 /// The words a Ruby `end` closes in a class body: `def … end`, `do … end`
 const RUBY_END_OPENERS: [&str; 3] = ["def", "do", "class"];
-const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
-/// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
-const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
 
 /// The marker calls the parser leaves for `try X else Y` and `assert C else X`, lowered in `library_words`
 pub const TRY_MARKER: &str = "try·else";
@@ -232,8 +127,6 @@ pub const TRY_MARKER: &str = "try·else";
 pub const AFTER_MARKER: &str = "after·return";
 /// `class dog extends animal {…}`: the class named on the right is the parent (P117)
 pub const EXTENDS_KEYWORD: &str = "extends";
-/// The field of a sum type's variant with one unnamed payload, `Some(T)`: `Some(3).value`; several are value1, value2…
-const VARIANT_FIELD: &str = "value";
 /// `mixin Walker{…}` declares fields and methods classes take in: `class Duck with Walker, Swimmer {…}`
 pub const MIXIN_WORD: &str = "mixin";
 pub const WITH_KEYWORD: &str = "with";
@@ -243,53 +136,25 @@ pub const CONSTRUCTOR_WORD: &str = "init";
 pub const ACCESSOR_WORDS: [&str; 2] = ["get", "set"];
 /// `static k = 3` in a class body: a member of the class, not of each instance (P122); kept as the annotation `@static`
 pub const STATIC_KEYWORD: &str = "static";
-const AFTER_KEYWORD: &str = "after";
 /// `sleep 1s and print "x"`: an `and` between two statements runs them one after the other
 const AND_KEYWORD: &str = "and";
-/// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
-/// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
-const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
-/// Words between two operands besides the operator words (operators::is_operator_word): `of`, `matches`
-const JOINING_WORDS: [&str; 2] = [OF_WORD, "matches"];
 
 pub const ASSERT_MARKER: &str = "assert·else";
-/// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
-const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
-/// `try X catch Y finally Z`: Z runs after either, the value stays X's or Y's
-const FINALLY_KEYWORD: &str = "finally";
-/// The hidden name `try X finally Z` binds X's Error to, to hand it on as the value
-const UNCAUGHT_ERROR: &str = "uncaught·error";
-/// `check C` is `assert C` (user, card check-assert)
-const GUARD_MARKERS: [(&str, &str); 3] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER), ("check", ASSERT_MARKER)];
 pub const ASSERTION_FAILED: &str = "assertion failed";
 
-/// How tight a suffix `!` binds: below the index `#`, above `^` and arithmetic
-const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
 const TO_WORD: &str = "to";
-const TO_SENTENCE_WORD: &str = "To";
-/// `to render text as pdf: …`: the word before a `to` definition's result type (card render-as)
-const RESULT_TYPE_WORD: &str = "as";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = crate::words::SLICE;
 pub(crate) const TIMES_WORD: &str = "times";
 /// The call `n times text` is parsed to: the text repeated n times
 pub const TEXT_TIMES: &str = "times·text";
-/// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
-const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 /// The severe warning on a `//` comment meant as floor division, `7//2` (decision floor-division)
 pub const FLOOR_DIVISION_TOPIC: &str = "floor-division-comment";
+const JULIA_FLOOR_DIVISION_TOPIC: &str = "julia-floor-division";
 const FLOOR_DIVISION: &str = "/!";
-/// Pascal's floor division `7 div 2`, also the html tag `div {…}`
-const DIV_WORD: &str = "div";
-const FLOOR_DIVISION_ASSIGN: &str = "/!=";
-const ELVIS_WORD: &str = "elvis";
-/// `N times` takes everything up to an assignment: `n+1 times {…}`
-const TIMES_BP: u8 = 50;
 
 /// Superscript digits ⁰…⁹ in digit order: `3⁴` is 3^4 and a run of them is one exponent (`2¹⁰` is 2^10)
 const SUPERSCRIPT_DIGITS: &str = "⁰¹²³⁴⁵⁶⁷⁸⁹";
-/// A vulgar fraction such as ⅓ decomposes (NFKD) into numerator, this slash and denominator: 1⁄3
-const FRACTION_SLASH: char = '⁄';
 
 /// Parser options for handling different file formats
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -317,42 +182,10 @@ impl ParserOptions {
 	}
 }
 
-/// Superscript letters and the letters they raise: `2ⁿ` is 2^n
-const SUPERSCRIPT_LETTERS: [(char, char); 25] = [
-	('ᵃ', 'a'),
-	('ᵇ', 'b'),
-	('ᶜ', 'c'),
-	('ᵈ', 'd'),
-	('ᵉ', 'e'),
-	('ᶠ', 'f'),
-	('ᵍ', 'g'),
-	('ʰ', 'h'),
-	('ⁱ', 'i'),
-	('ʲ', 'j'),
-	('ᵏ', 'k'),
-	('ˡ', 'l'),
-	('ᵐ', 'm'),
-	('ⁿ', 'n'),
-	('ᵒ', 'o'),
-	('ᵖ', 'p'),
-	('ʳ', 'r'),
-	('ˢ', 's'),
-	('ᵗ', 't'),
-	('ᵘ', 'u'),
-	('ᵛ', 'v'),
-	('ʷ', 'w'),
-	('ˣ', 'x'),
-	('ʸ', 'y'),
-	('ᶻ', 'z'),
-];
-
 /// `floor_quotient(a, b)`: what `a // b` and `a div b` are, the Euclidean quotient that goes with `%`
 /// (a == b*(a//b) + a%b): floor(a/b) for a positive divisor, ceil(a/b) for a negative one. Each operand is evaluated
 /// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
 pub const FLOOR_QUOTIENT: &str = "floor_quotient";
-
-/// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
-const PIPE_GLYPH: &str = "|";
 
 /// Read and parse a WARP file
 pub fn parse_file(path: &str) -> Node {
@@ -435,6 +268,8 @@ pub struct WarpParser {
 	program_functions: std::collections::HashSet<String>,
 	/// Whether the source uses `end` as a name (`end = 3`), found by a pre-scan: then no `end` closes a block
 	names_end: bool,
+	/// The corresponding name check for the `fi` block-closing alias
+	names_fi: bool,
 	/// The `end`s and openers of the source per set of openers, indexed once on the first search for a closing `end`,
 	/// so each `do`/`def` costs a lookup instead of a scan of the rest of the source
 	closing_ends: std::cell::RefCell<std::collections::HashMap<String, blocks::ClosingEnds>>,
@@ -452,9 +287,6 @@ pub struct WarpParser {
 	/// repeated elements in XML/HTML (`ul{ li: "a" li: "b" }`), no duplicate key; a plain `{…}` is a map that reports
 	/// one (user decision P176, card g-_bGo). Taken by the list it opens, so blocks inside it are not tag blocks
 	tag_block: bool,
-	/// The atoms read so far, in source order: the lexer's view of the source (read_atoms); a rewind forgets those read
-	/// after its mark
-	atoms: Vec<Atom>,
 	/// A comment between two statements: it belongs to the next one (parse_value attaches it)
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
@@ -510,9 +342,11 @@ impl WarpParser {
 		} else {
 			Default::default()
 		};
-		let names_end = blocks::names_end(&chars);
+		let names_end = blocks::names_block_closer(&chars, END_KEYWORD);
+		let names_fi = blocks::names_block_closer(&chars, FI_KEYWORD);
 		WarpParser {
 			names_end,
+			names_fi,
 			closing_ends: Default::default(),
 			user_operators,
 			source_aliases,
@@ -539,7 +373,6 @@ impl WarpParser {
 			signed_list_element: None,
 			generic_names: None,
 			tag_block: false,
-			atoms: vec![],
 			pending_comment: None,
 			after_function_keyword: false,
 			continues_definition_head: false,
@@ -578,47 +411,10 @@ impl WarpParser {
 	}
 }
 
-/// What the lexer reads (card self-lexer, lib/compiler/lexer.warp is its warp twin)
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AtomKind {
-	Number,
-	Text,
-}
-
-/// An atom the parser read: where it starts (line and column from 1, a column per character) and what was written
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Atom {
-	pub kind: AtomKind,
-	pub line: usize,
-	pub column: usize,
-	pub written: String,
-}
-
 /// The one element of `items`, moved out (cloning it copied a whole subtree, the whole program at the top)
 fn only<T>(items: Vec<T>) -> T {
 	items.into_iter().next().expect("one element")
 }
-
-/// In data only JSON's words are literals; aliases like `yes`, `no`, `none`, `pi` stay symbols.
-const DATA_WORD_LITERALS: [&str; 3] = ["true", "false", "null"];
-
-/// The glyphs that are true or false (card keyword-glyphs), longest spelling first: `✔️` is `✔` with an emoji variation
-/// selector. Most start an emoji, which would otherwise be a codepoint (atoms.rs, parse_emoji)
-pub(crate) const TRUTH_GLYPHS: [(&str, bool); 13] = [
-	("✔️", true),
-	("✓️", true),
-	("☑️", true),
-	("⊤", true),
-	("✓", true),
-	("✔", true),
-	("☑", true),
-	("✅", true),
-	("🗸", true),
-	("🗹", true),
-	("⊥", false),
-	("❌", false),
-	("✗", false),
-];
 
 // Tests moved to tests/parser/test_parser.rs
 
@@ -633,5 +429,3 @@ pub(crate) fn mentions(node: &Node, name: &str) -> bool {
 		_ => false,
 	}
 }
-
-const COMPARISON_FIRST: &str = "the comparison first, as C";

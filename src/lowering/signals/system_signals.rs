@@ -57,7 +57,7 @@ const CLICKS_TEMPLATE: &str = "on frame {
 	}
 }";
 /// The keys the page names (src/graphics/paint_window.rs key_code, canvas.js KEY_CODES give these codes); 0 is none
-const KEY_NAMES: [(i64, &str); 9] = [
+const KEY_NAMES: [(i64, &str); 13] = [
 	(0, ""),
 	(0xF700, "ArrowUp"),
 	(0xF701, "ArrowDown"),
@@ -67,6 +67,10 @@ const KEY_NAMES: [(i64, &str); 9] = [
 	(27, "Escape"),
 	(8, "Backspace"),
 	(9, "Tab"),
+	(0xF750, "Shift"),
+	(0xF751, "Control"),
+	(0xF752, "Alt"),
+	(0xF753, "Meta"),
 ];
 const DAY_WORD: &str = "day";
 const WEEKDAY_WORD: &str = "weekday";
@@ -279,9 +283,7 @@ fn event_channel(channel: &str, event: &str) -> String {
 fn named_event(value: &[Node]) -> Option<(String, Node)> {
 	let (last, words) = value.split_last()?;
 	let (last_word, data) = match last.drop_meta() {
-		Node::Key(name, Op::Colon, data) if matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			(name.as_ref().clone(), Some(data.as_ref().clone()))
-		}
+		Node::Key(name, Op::Colon, data) if data.is_block() => (name.as_ref().clone(), Some(data.as_ref().clone())),
 		_ => (last.clone(), None),
 	};
 	if words.is_empty() && data.is_none() {

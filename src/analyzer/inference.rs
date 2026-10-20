@@ -406,7 +406,8 @@ pub(super) fn infer_list_type(
 		};
 	}
 	// Data list: all items are pure data, or `[…]` computing its elements → Kind::List
-	let computed_elements = *bracket == Bracket::Square && !items.iter().any(|item| is_statement(item, bracket));
+	let computed_elements = (*bracket == Bracket::Square && !items.iter().any(|item| is_statement(item, bracket)))
+		|| (*bracket == Bracket::Round && *separator == Separator::Comma);
 	if computed_elements || (!is_unbracketed_block(items, bracket, separator) && items.iter().all(is_data_node)) {
 		return Kind::List;
 	}
@@ -534,7 +535,7 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 	if list_type == MAP_WORD
 		|| super::is_code(indexed, scope)
 		|| list_type == NODE_LIST_TYPE
-		|| infer_type(indexed, scope) == Kind::Empty
+		|| matches!(infer_type(indexed, scope), Kind::Empty | Kind::Data)
 	{
 		return Some(Kind::Empty); // values of different types, or of a value held as a Node: held as a Node, like an optional
 	}

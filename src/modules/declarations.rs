@@ -34,6 +34,21 @@ pub(crate) fn statements(module: Node) -> Vec<Node> {
 	statements_of(&module).to_vec()
 }
 
+/// A used file's statements with its enums lowered (plain_enums.rs, sum_variants.rs): the sum type and the classes of
+/// its variants each a statement, a class insert_module_classes puts in front of the program (card node-enum)
+pub(crate) fn module_statements(module: Node) -> Vec<Node> {
+	let module = crate::lowering::sum_variants::lower(crate::lowering::plain_enums::lower(module));
+	let enum_parts = |statement: &Node| match statement.drop_meta() {
+		Node::List(parts, Bracket::None, Separator::Semicolon)
+			if parts.first().is_some_and(crate::lowering::sum_variants::is_sum_type) =>
+		{
+			parts.clone()
+		}
+		_ => vec![statement.clone()],
+	};
+	statements_of(&module).iter().flat_map(enum_parts).collect()
+}
+
 pub(crate) fn is_declaration(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Type { .. } => true,
@@ -60,6 +75,26 @@ pub(crate) fn name_declared_by(statement: &Node) -> Option<String> {
 		}
 		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
 		_ => None,
+	}
+}
+
+/// What tells declarations of one name apart: a function's parameter types, `half(int)` and `half(float)` are
+/// overloads; anything else by its name alone
+pub(crate) fn declared_signature(statement: &Node) -> Option<String> {
+	let name = name_declared_by(statement)?;
+	let Some(head) = crate::lowering::nodes::function_head(statement) else {
+		return Some(name);
+	};
+	let types: Vec<String> = head.parameters().into_iter().map(parameter_type).collect();
+	Some(format!("{name}({})", types.join(", ")))
+}
+
+/// `x: int` → int, `x: int = 1` → int, an untyped `x` → any
+fn parameter_type(parameter: &Node) -> String {
+	match parameter.drop_meta() {
+		Node::Key(_, Op::Colon, kind) => kind.serialize(),
+		Node::Key(typed, Op::Assign, _) => parameter_type(typed),
+		_ => "any".to_string(),
 	}
 }
 
@@ -139,14 +174,23 @@ pub(crate) fn same_definitions(first: &[Node], second: &[Node]) -> bool {
 	first.len() == second.len() && first.iter().zip(second).all(|(a, b)| a.serialize() == b.serialize())
 }
 
-/// The methods called in statements: `f` of `x.f(…)` and of `x.f`
-pub(crate) fn method_names(statements: &[Node]) -> Vec<String> {
+/// The fields the classes of the statements declare (`header` of parser.warp's Parser), also a used file's
+pub(crate) fn declared_fields(statements: &[Node]) -> HashSet<String> {
+	statements
+		.iter()
+		.flat_map(|statement| crate::class_methods::class_fields(statement).into_values().flatten())
+		.map(|(field, _)| field)
+		.collect()
+}
+
+/// The methods called in statements: `f` of `x.f(…)` and of `x.f`, but no read `x.f` of the `fields`
+pub(crate) fn method_names_beyond(statements: &[Node], fields: &HashSet<String>) -> Vec<String> {
 	let mut names = Vec::new();
 	for statement in statements {
 		statement.visit(&mut |node| {
 			if let Node::Key(_, Op::Dot | Op::SafeDot, member) = node {
 				match member.drop_meta() {
-					Node::Symbol(name) => names.push(name.clone()),
+					Node::Symbol(name) if !fields.contains(name) => names.push(name.clone()),
 					Node::List(call, _, _) => names.extend(call.first().map(|name| name.drop_meta().name())),
 					_ => {}
 				}
@@ -155,7 +199,7 @@ pub(crate) fn method_names(statements: &[Node]) -> Vec<String> {
 	}
 	let holes = template_holes(statements);
 	if !holes.is_empty() {
-		names.extend(method_names(&holes));
+		names.extend(method_names_beyond(&holes, fields));
 	}
 	names
 }
@@ -188,14 +232,17 @@ pub(crate) fn mentioned_names(statements: &[Node]) -> Vec<String> {
 	// a function's parameters and variables are its own: `f(x, melody) := x + melody` mentions no module word melody,
 	// prelude's `dict(pairs) := { out = {}; … }` no sound word out
 	fn collect(node: &Node, names: &mut Vec<String>) {
-		let mut locals: HashSet<String> = crate::lowering::nodes::function_head(node)
+		// `f(x): int := …` too: function_head reads a typed head
+		let function = crate::lowering::nodes::function_head(node);
+		let mut locals: HashSet<String> = function
+			.as_ref()
 			.map(|function| function.parameters())
 			.unwrap_or_default()
 			.into_iter()
 			.filter_map(crate::lowering::nodes::parameter_name)
 			.collect();
-		if let Some((_, body, _)) = crate::type_tests::function_definition(node) {
-			crate::library_words::collect_assigned_names(&body, &mut locals);
+		if let Some(function) = &function {
+			crate::library_words::collect_assigned_names(function.body, &mut locals);
 		}
 		if locals.is_empty() {
 			return collect_parts(node, names);
@@ -228,14 +275,23 @@ pub(crate) fn mentioned_names(statements: &[Node]) -> Vec<String> {
 					None => collect(item, names),
 				})
 			}
+			// `Page{header: yes}`, `class Page {status: int}`: a field's name mentions no word (router's header, status)
+			Node::List(items, Bracket::Curly, _) => items.iter().for_each(|item| match item.drop_meta() {
+				Node::Key(field, Op::Colon, value) if field.drop_meta().symbol_name().is_some() => {
+					collect(value, names)
+				}
+				_ => collect(item, names),
+			}),
 			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
 			// an interpolation is lowered after the modules are resolved: `"\(zip(a, b))"` calls zip
 			Node::Meta { node: inner, .. } => crate::text::interpolation::holes(node)
 				.iter()
 				.chain([inner.as_ref()])
 				.for_each(|part| collect(part, names)),
+			// `class ParseError extends Error`: the parent too, lib/prelude.warp's Error
 			Node::Type { name, body } => {
 				collect(name, names);
+				name.attribute(crate::warp_parser::EXTENDS_KEYWORD).iter().for_each(|parent| collect(parent, names));
 				collect(body, names);
 			}
 			_ => {}

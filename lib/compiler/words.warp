@@ -13,9 +13,13 @@ any_word = "any"
 collection_words = ["list", "map"]
 foreign_list_heads = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"]
 
-is_type_word(word: text) := type_words contains word.lower()
-is_type_word_or_any(word: text) := word == any_word or is_type_word(word)
-is_collection_head(word: text) := collection_words contains word or foreign_list_heads contains word
+is_type_word(word: text): bool := type_words contains word.lower()
+# the type words a type test takes besides those (no twin: Rust's BUILTIN_TYPES in src/lowering/types/type_tests.rs)
+test_type_words = ["key", "pair", "operation", "expression", "code", "callable", "invocable", "runnable", "error", "empty",
+	"unit", "nil", "none", "null", "void", "time", "instant", "date", "duration"]
+is_tested_type_word(word: text): bool := is_type_word(word) or collection_words contains word or test_type_words contains word
+is_type_word_or_any(word: text): bool := word == any_word or is_type_word(word)
+is_collection_head(word: text): bool := collection_words contains word or foreign_list_heads contains word
 
 # the words opening a definition, `def f(x) {…}` (Rust twin: operators/mod.rs FUNCTION_KEYWORDS)
 function_keywords = ["fun", "fn", "def", "define", "function", "func"]
@@ -25,7 +29,7 @@ selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "b
 	"keys", "values"]
 # the operators a dotted spelling applies to each element, `xs .* 2` (Rust twin: operators/spellings.rs
 # ELEMENT_WISE_OPERATORS)
-element_wise_operators = ["+", "-", "*", "/", "^"]
+element_wise_operators = ["+", "-", "*", "/", "^", "%"]
 
 # the kind a call of a library or runtime word gives (Rust twin: analyzer builtin_word_kind and library_call_kind,
 # checked by tests/parser/test_self_words.rs call_kinds_are_rusts)
@@ -60,3 +64,9 @@ call_kinds = {"string": "text", "count": "int", "is_type": "int", "collection_co
 	"linear_dotf": "float", "task_forks": "int", "list_sorted_by": "empty", "set_system_value": "empty",
 	"SetTargetFPS": "int", "CloseWindow": "int", "DrawRectangle": "int", "shared_add": "int", "strlen": "int",
 	"fmin": "float", "atoi": "int", "size": "int", "fetch": "text", "fetch_reply": "empty"}
+
+# the built-in type words (Rust twin: analyzer type_word_kind) and the kind a value declared so is held as
+type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
+	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
+	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
+	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", real: "empty", exact: "empty"}

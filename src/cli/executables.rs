@@ -77,7 +77,11 @@ pub(crate) fn write_standalone_executable(code: &str, target: &str) -> Result<St
 	let program = wasm_emitter::compile_printing_result(code)
 		.map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
 	let foreign_call = (HOST_LIBRARY.to_string(), FOREIGN_CALL.to_string());
-	let kept_exports = if warp::host::host_parts::imports_of(&program.bytes)?.contains(&foreign_call) {
+	let imports = warp::host::host_parts::imports_of(&program.bytes)?;
+	let c_functions = carried_c_functions(&imports);
+	// a C text result is built in the program as foreign answers are
+	let builds_texts = c_functions.iter().any(|function| function.result == Some(warp::ffi::CPointer::Text));
+	let kept_exports = if imports.contains(&foreign_call) || builds_texts {
 		warp_runtime::standalone::stub_calls_export_with_foreign_calls
 	} else {
 		warp_runtime::standalone::stub_calls_export
@@ -87,7 +91,10 @@ pub(crate) fn write_standalone_executable(code: &str, target: &str) -> Result<St
 	let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
 	let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
 	let mut missing: Vec<String> = vec![];
-	for import in module.imports().filter(|import| !provided.contains(&(import.module(), import.name()))) {
+	let carried = |module: &str, name: &str| c_functions.iter().any(|f| f.module == module && f.name == name);
+	for import in module.imports().filter(|import| {
+		!provided.contains(&(import.module(), import.name())) && !carried(import.module(), import.name())
+	}) {
 		let feature = feature_of(import.module(), import.name());
 		if !missing.contains(&feature) {
 			missing.push(feature);
@@ -99,7 +106,8 @@ pub(crate) fn write_standalone_executable(code: &str, target: &str) -> Result<St
 	let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
 	let (stub, runtime) = runtime_stub(&PROGRAM_STUB)?;
 	let output = standalone_output_path(target);
-	let executable = warp_runtime::standalone::with_machine_code(&runtime, &machine_code);
+	let carried = warp_runtime::c_signatures::with_c_functions(&c_functions, &machine_code);
+	let executable = warp_runtime::standalone::with_machine_code(&runtime, &carried);
 	write_executable(&executable, &output)?;
 	Ok(format!(
 		"wrote {} ({} bytes: runtime {}, machine code {})",
@@ -108,6 +116,20 @@ pub(crate) fn write_standalone_executable(code: &str, target: &str) -> Result<St
 		stub.display(),
 		machine_code.len()
 	))
+}
+
+/// The C functions among `imports` the stub doesn't link itself, as their library's headers declare them: the
+/// executable carries these descriptions, so it reads no header when it runs (card exe-c-ffi)
+fn carried_c_functions(imports: &[(String, String)]) -> Vec<warp::ffi::CFunction> {
+	let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
+	let mut by_module: std::collections::BTreeMap<&str, std::collections::HashSet<String>> = Default::default();
+	for (module, name) in imports.iter().filter(|(module, name)| !provided.contains(&(module.as_str(), name.as_str())))
+	{
+		if module != HOST_LIBRARY && warp::ffi::is_ffi_library(module) {
+			by_module.entry(module).or_default().insert(name.clone());
+		}
+	}
+	by_module.iter().flat_map(|(module, names)| warp::ffi::header_c_functions(module, names)).collect()
 }
 
 /// `warp build page.warp` of a program showing a page, as `warp page.warp` opens it in a window: an app, the stub

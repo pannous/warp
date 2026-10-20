@@ -3,6 +3,10 @@
 use super::*;
 use crate::warp_parser::context::Context;
 
+/// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
+const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
+const ELVIS_WORD: &str = "elvis";
+
 /// The word between a condition and its branch: `if c then x`
 const THEN_WORD: &str = "then";
 

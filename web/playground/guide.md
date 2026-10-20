@@ -484,7 +484,8 @@ bump()
 score
 ```
 
-A function can call itself.
+A function can call itself. The Fibonacci sequence starts with 0 and 1; every later number is the sum of the two
+before it. Its first ten numbers are 0, 1, 1, 2, 3, 5, 8, 13, 21, and 34.
 
 ```warp => 55
 def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)

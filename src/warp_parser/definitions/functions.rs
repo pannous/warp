@@ -1,6 +1,14 @@
 //! Function definitions: heads, typed parameters, result types, definition blocks, function references
 use super::*;
 
+/// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
+const REST_MARKERS: [&str; 2] = ["vararg", "params"];
+/// `function add`, `func add`: a reference to a function (P82), like `&add`
+const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
+const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
+/// `to render text as pdf: …`: the word before a `to` definition's result type (card render-as)
+const RESULT_TYPE_WORD: &str = "as";
+
 /// A lowercase word that names no type, or a parameter group `(x, y)`
 pub(crate) fn is_parameter_word(node: &Node) -> bool {
 	match node.drop_meta() {
@@ -105,9 +113,7 @@ pub(crate) fn defined_function_name(target: &Node) -> Option<String> {
 
 /// `f={it*2}` defines a function like `f:={it*2}`: a name assigned a block that uses `it`; other blocks are data
 pub(crate) fn is_function_block(name: &Node, block: &Node) -> bool {
-	matches!(name.drop_meta(), Node::Symbol(_))
-		&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
-		&& mentions(block, crate::words::IMPLICIT_PARAMETER)
+	matches!(name.drop_meta(), Node::Symbol(_)) && block.is_block() && mentions(block, crate::words::IMPLICIT_PARAMETER)
 }
 
 impl WarpParser {
@@ -365,14 +371,17 @@ impl WarpParser {
 		crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
 	}
 
-	/// `Int` or `float` after the colon of a definition's head: its result type, not its body
+	/// `Int` or `float` after the colon of a definition's head: its result type, not its body; `list`, `map` and `any`
+	/// too when the body follows them (`def f(x): list := …`), as `def f(xs): map(g, xs)` calls map
 	pub(crate) fn result_type_follows(&self) -> bool {
-		let word: String = self.chars[self.pos..]
-			.iter()
-			.skip_while(|c| **c == ' ' || **c == '\t')
-			.take_while(|c| c.is_alphanumeric() || **c == '_')
-			.collect();
-		word.starts_with(char::is_uppercase) || crate::analyzer::type_word_kind(&word).is_some()
+		let is_blank = |c: &&char| **c == ' ' || **c == '\t';
+		let after_colon = self.chars[self.pos..].iter().skip_while(is_blank);
+		let word: String = after_colon.clone().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
+		let next: String = after_colon.skip(word.chars().count()).skip_while(is_blank).take(2).collect();
+		let body_follows = next.starts_with(['=', '{']) || next == ":=";
+		word.starts_with(char::is_uppercase)
+			|| crate::analyzer::type_word_kind(&word).is_some()
+			|| (body_follows && (crate::warp_parser::names_a_type(&word) || word == crate::words::ANY_TYPE))
 	}
 
 	/// `fn x -> x * 2 end`: the lambda `x => {x * 2}`

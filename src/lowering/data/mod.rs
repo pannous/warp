@@ -6,12 +6,13 @@ use super::*;
 
 pub mod database_tables;
 pub mod doc_strings;
-pub mod introspection;
 pub mod members;
 pub mod meta_entries;
+pub mod meta_values;
 pub mod printable;
 pub mod reflection;
 pub mod stored_values;
+pub mod tag_children;
 pub mod tag_entries;
 pub mod versions;
 pub mod word_help;

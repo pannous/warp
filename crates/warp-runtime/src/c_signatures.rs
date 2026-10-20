@@ -1,0 +1,223 @@
+//! C functions as warp calls them, without their headers: how each parameter and the result cross (notes/ffi_handles.md).
+//! warp reads a library's headers into these (src/ffi); an executable carries the ones its program imports in front of
+//! its machine code, so the stub links them without reading a header (c_calls.rs, card exe-c-ffi)
+
+/// What a carried program starts with when it calls C, which machine code never does
+pub const CARRIED_C_FUNCTIONS: &[u8; 8] = b"WRPCcfun";
+/// The libc functions link_libc_functions defines by hand; any other libc import is linked from the process
+pub const HAND_LINKED_LIBC: [&str; 8] = ["abs", "strlen", "atoi", "atol", "atof", "strcmp", "strncmp", "rand"];
+const FIELD_SEPARATOR: char = '\t';
+const LIST_SEPARATOR: char = ',';
+
+/// What a C pointer type crosses as
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CPointer {
+	/// `char *`, `const unsigned char *`: a warp text (a parameter its NUL-terminated letters in linear memory)
+	Text,
+	/// `void *`, `int *`: a parameter points into linear memory; a result is a handle
+	Memory,
+	/// `sqlite3 *`, `FILE *`: an id into the run's handle table (CHandles), 0 is NULL
+	Handle,
+	/// `sqlite3 **ppDb`: left out of the warp call; the first one becomes the result unless a struct output is, the others
+	/// receive NULL
+	Out,
+	/// `wasmtime_instance_t *instance` as the call's output: the struct read back as a map (c_structs.rs)
+	Struct,
+}
+
+/// A C parameter: a number by its wasm type, or a pointer by what it crosses as
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ParamType {
+	I32,
+	I64,
+	F32,
+	F64,
+	/// linear memory: a text, a buffer
+	Ptr,
+	/// a handle id (CPointer::Handle)
+	Handle,
+	/// an out-pointer, filled by the call (CPointer::Out)
+	Out,
+	/// `const uint8_t *module, size_t length`: a warp text or list of byte values, copied for the call; its length
+	/// fills the Length after it
+	Bytes,
+	/// the `size_t` after Bytes or StructsIn: left out of the warp call
+	Length,
+	/// `const wasmtime_instance_t *`: a map written into the struct's bytes (or a handle id, its pointer)
+	StructIn,
+	/// `const wasmtime_val_t *args, size_t nargs`: a list of maps; its length fills the Length after it
+	StructsIn,
+	/// a trailing `wasmtime_instance_t *`: left out of the warp call, the call's result (CPointer::Struct)
+	StructOut,
+	/// `wasm_trap_t **trap`, an error-shaped out-pointer (is_error_type): left out, non-NULL after the call fails it
+	ErrorOut,
+	/// a trailing `wasmtime_val_t *results, size_t nresults`: left out, the size_t after it says how many, the call's
+	/// result is their list
+	StructsOut,
+}
+
+impl ParamType {
+	/// Whether the warp call passes this parameter: out-pointers and lengths are filled by the call
+	pub fn is_passed(self) -> bool {
+		!matches!(
+			self,
+			ParamType::Out | ParamType::ErrorOut | ParamType::Length | ParamType::StructOut | ParamType::StructsOut
+		)
+	}
+
+	pub fn is_struct_output(self) -> bool {
+		matches!(self, ParamType::StructOut | ParamType::StructsOut)
+	}
+}
+
+/// A C result's register: none, an integer, a float, or a bool (its low byte)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RetType {
+	Void,
+	I32,
+	I64,
+	F32,
+	F64,
+	Bool,
+}
+
+const PARAM_NAMES: [(ParamType, &str); 14] = [
+	(ParamType::I32, "i32"),
+	(ParamType::I64, "i64"),
+	(ParamType::F32, "f32"),
+	(ParamType::F64, "f64"),
+	(ParamType::Ptr, "ptr"),
+	(ParamType::Handle, "handle"),
+	(ParamType::Out, "out"),
+	(ParamType::Bytes, "bytes"),
+	(ParamType::Length, "length"),
+	(ParamType::StructIn, "struct_in"),
+	(ParamType::StructsIn, "structs_in"),
+	(ParamType::StructOut, "struct_out"),
+	(ParamType::StructsOut, "structs_out"),
+	(ParamType::ErrorOut, "error_out"),
+];
+const RET_NAMES: [(RetType, &str); 6] = [
+	(RetType::Void, "void"),
+	(RetType::I32, "i32"),
+	(RetType::I64, "i64"),
+	(RetType::F32, "f32"),
+	(RetType::F64, "f64"),
+	(RetType::Bool, "bool"),
+];
+/// The pointers a result crosses as; a number result is "number"
+const RESULT_NAMES: [(Option<CPointer>, &str); 4] = [
+	(None, "number"),
+	(Some(CPointer::Text), "text"),
+	(Some(CPointer::Handle), "handle"),
+	(Some(CPointer::Struct), "struct"),
+];
+const LAYOUT_SEPARATOR: char = ';';
+
+fn name_of<T: PartialEq + Copy>(names: &[(T, &'static str)], value: T) -> &'static str {
+	names.iter().find(|(known, _)| *known == value).map_or("?", |(_, name)| name)
+}
+
+fn value_of<T: Copy>(names: &[(T, &str)], name: &str) -> Option<T> {
+	names.iter().find(|(_, known)| *known == name).map(|(value, _)| *value)
+}
+
+/// A C function as an import of a program: its import module (the library as the program names it, `zlib`), the
+/// library it loads (`z`), and how its parameters and result cross
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CFunction {
+	pub module: String,
+	pub library: String,
+	pub name: String,
+	pub param_types: Vec<ParamType>,
+	/// Text, Handle, or None for the C function's own number (ret_type)
+	pub result: Option<CPointer>,
+	pub ret_type: RetType,
+	/// what the first out-pointer points to (`sqlite3_stmt` of `sqlite3_stmt **ppStmt`), for the error of a NULL there
+	pub out_pointee: Option<String>,
+	/// the layout text of each struct parameter (c_structs.rs), "" for the others; empty without struct parameters
+	pub layouts: Vec<String>,
+	/// whether the C result reports a failure instead of being the result
+	pub failure: Failure,
+}
+
+/// How a C result reports a failure: an error-shaped pointer (`wasmtime_error_t *`) when not NULL, a bool of a function
+/// with an output when false
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Failure {
+	None,
+	NotNull,
+	False,
+}
+const FAILURE_NAMES: [(Failure, &str); 3] =
+	[(Failure::None, ""), (Failure::NotNull, "not_null"), (Failure::False, "false")];
+
+/// An error-shaped C type: a non-NULL one reports a failure (`wasmtime_error_t *`, `wasm_trap_t **`)
+pub fn is_error_type(c_type: &str) -> bool {
+	let lower = c_type.to_lowercase();
+	["error", "trap", "status", "exception"].iter().any(|word| lower.contains(word))
+}
+
+impl CFunction {
+	/// One line of the carried table, its fields tab-separated: `zlib z compressBound i64 i64 number` and an empty
+	/// out-pointee
+	pub fn line(&self) -> String {
+		let params: Vec<&str> = self.param_types.iter().map(|param| name_of(&PARAM_NAMES, *param)).collect();
+		[
+			self.module.as_str(),
+			&self.library,
+			&self.name,
+			&params.join(&LIST_SEPARATOR.to_string()),
+			name_of(&RET_NAMES, self.ret_type),
+			name_of(&RESULT_NAMES, self.result),
+			self.out_pointee.as_deref().unwrap_or_default(),
+			&self.layouts.join(&LAYOUT_SEPARATOR.to_string()),
+			name_of(&FAILURE_NAMES, self.failure),
+		]
+		.join(&FIELD_SEPARATOR.to_string())
+	}
+
+	pub fn of_line(line: &str) -> Option<CFunction> {
+		let [module, library, name, params, ret_type, result, out_pointee, layouts, failure] =
+			line.split(FIELD_SEPARATOR).collect::<Vec<_>>().try_into().ok()?;
+		let param_types = params
+			.split(LIST_SEPARATOR)
+			.filter(|param| !param.is_empty())
+			.map(|param| value_of(&PARAM_NAMES, param))
+			.collect::<Option<_>>()?;
+		Some(CFunction {
+			module: module.to_string(),
+			library: library.to_string(),
+			name: name.to_string(),
+			param_types,
+			result: value_of(&RESULT_NAMES, result)?,
+			ret_type: value_of(&RET_NAMES, ret_type)?,
+			out_pointee: (!out_pointee.is_empty()).then(|| out_pointee.to_string()),
+			layouts: layouts.split(LAYOUT_SEPARATOR).filter(|_| !layouts.is_empty()).map(str::to_string).collect(),
+			failure: value_of(&FAILURE_NAMES, failure)?,
+		})
+	}
+}
+
+/// `machine_code` with the C functions it imports in front: CARRIED_C_FUNCTIONS, the table's length (u64 LE), one
+/// line per function; machine code alone when it imports none
+pub fn with_c_functions(functions: &[CFunction], machine_code: &[u8]) -> Vec<u8> {
+	if functions.is_empty() {
+		return machine_code.to_vec();
+	}
+	let table = functions.iter().map(CFunction::line).collect::<Vec<_>>().join("\n");
+	[CARRIED_C_FUNCTIONS.as_slice(), &(table.len() as u64).to_le_bytes(), table.as_bytes(), machine_code].concat()
+}
+
+/// The C functions and the machine code `with_c_functions` joined; none for plain machine code
+pub fn split_c_functions(carried: &[u8]) -> Result<(Vec<CFunction>, &[u8]), String> {
+	let Some(rest) = carried.strip_prefix(CARRIED_C_FUNCTIONS.as_slice()) else {
+		return Ok((vec![], carried));
+	};
+	let damaged = || "the executable's table of C functions is damaged".to_string();
+	let (length, rest) = rest.split_first_chunk::<8>().ok_or_else(damaged)?;
+	let (table, machine_code) = rest.split_at_checked(u64::from_le_bytes(*length) as usize).ok_or_else(damaged)?;
+	let table = std::str::from_utf8(table).map_err(|_| damaged())?;
+	let functions = table.lines().map(CFunction::of_line).collect::<Option<_>>().ok_or_else(damaged)?;
+	Ok((functions, machine_code))
+}

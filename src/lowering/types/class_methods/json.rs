@@ -1,13 +1,13 @@
 //! `to_json(p)` of a class instance, and other languages' serializer calls
 use super::*;
 use crate::lowering::nodes::any_part;
+use crate::modules::USE_KEYWORD;
 
 /// json's word for a program with classes (lib/json.warp): the classes' names go along, so an instance is its fields
 const TO_JSON_WORD: &str = "to_json";
 const TO_JSON_OF_CLASSES_WORD: &str = "to_json_of_classes";
 /// json's word for to_json under `use strict` (decision json-exactness): a fraction is an error, not a float
 const EXACT_JSON_WORD: &str = "exact_json";
-const USE_WORD: &str = "use";
 const JSON_MODULE: &str = "json";
 /// Other languages' calls giving an instance's json or its fields: Kotlin's `Json.encodeToString(p)` is to_json(p),
 /// Python's `dataclasses.asdict(p)` the instance itself (its fields read like a map's entries)
@@ -70,6 +70,6 @@ fn with_json_classes(node: Node, classes: &Node, json_word: &str) -> Node {
 fn uses_json(program: &Node) -> bool {
 	any_part(
 		program,
-		|part| matches!(part.drop_meta(), Node::List(items, ..) if items.first().is_some_and(|word| word.drop_meta().name() == USE_WORD) && items.iter().any(|item| item.drop_meta().name() == JSON_MODULE)),
+		|part| matches!(part.drop_meta(), Node::List(items, ..) if items.first().is_some_and(|word| word.drop_meta().name() == USE_KEYWORD) && items.iter().any(|item| item.drop_meta().name() == JSON_MODULE)),
 	)
 }

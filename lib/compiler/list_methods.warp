@@ -1,0 +1,27 @@
+# A list's methods written as calls on it (card pure-runs): `xs.push(v)` appends to the list the name holds,
+# `xs += [v]`, which emitter.warp grows in place while the list is unshared. `x in xs` (a list's item, a map's key, a
+# text's part) is the runtime word collection_contains(xs, x), as Rust lowers it.
+use "walk.warp"
+use "phrase_blocks.warp"
+
+pushed(list: Node, call: list, n: Node): Node := {
+	if #call == 2 and call#1 == symbol("push") and is_name(list) {
+		return Key(list, Op.AddAssign, List([call#2], Bracket.Square, Separator.Comma))
+	}
+	n
+}
+
+method_call(receiver: Node, called: Node, n: Node): Node := match called {
+	List(call, Bracket.Round, Separator.None): pushed(receiver, call, n)
+	_: n
+}
+
+list_method(n: Node): Node := match n {
+	Key(receiver, Op.Dot, called): method_call(receiver, called, n)
+	List(words, Bracket.None, Separator.Space): {
+		if #words == 3 and words#2 == symbol("in") then List([symbol("collection_contains"), words#3, words#1], Bracket.Round, Separator.None) else n
+	}
+	_: n
+}
+
+list_methods(program: any): any := bottom_up(program, list_method)
