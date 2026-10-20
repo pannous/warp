@@ -3,6 +3,7 @@ mod test_append_words;
 mod test_auto_linear_floats; // card auto-linear-floats
 mod test_bare_list_assignment;
 mod test_byte_size;
+mod test_worklist_count; // card list-count-grows
 mod test_calls_in_blocks;
 mod test_captured_call_lists;
 mod test_comprehension_beside_own_push; // card prefix-count-field
