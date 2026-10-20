@@ -190,6 +190,8 @@ const NODE_RUNTIME: ElementRuntime = ElementRuntime {
 /// list_items(node) -> $NodeList: the items of a Node list in a fresh array (emit_list_items), what a Node list variable
 /// starts from
 pub(in crate::wasm_emitter) const LIST_ITEMS: &str = "list_items";
+/// list_item_count(node) -> i64: how many items list_items finds, without making their array
+pub(in crate::wasm_emitter) const LIST_ITEM_COUNT: &str = "list_item_count";
 
 impl ElementType {
 	const ALL: [ElementType; 2] = [ElementType::Int, ElementType::Float];
