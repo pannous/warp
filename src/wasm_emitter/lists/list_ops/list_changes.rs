@@ -526,5 +526,34 @@ impl WasmGcEmitter {
 	}
 }
 
+impl WasmGcEmitter {
+	/// node_add_assign(sum, part): `out += part` of values whose kinds are known only at run time (`out = []` grown by the
+	/// items of an `any` list): a list or ø grown by a list (or ø) grows in place as list_extend grows it, every holder
+	/// seeing it (P200b); anything else is node_add's sum (`[1] + 2` its error). Decided at run time, a number's `+=`
+	/// stays a sum
+	pub(in crate::wasm_emitter) fn emit_node_add_assign(&mut self) {
+		if !self.should_emit_function(NODE_ADD_ASSIGN) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(NODE_ADD_ASSIGN, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
+			let (sum, part) = (0, 1);
+			for local in [sum, part] {
+				for kind in [Kind::List, Kind::Empty] {
+					s.emit_field(f, local, 0);
+					Self::emit_kind_test(f, kind as i64, I::I64Eq);
+				}
+				f.instruction(&I::I32Or);
+			}
+			Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty), I::LocalGet(sum), I::LocalGet(part)]);
+			s.call(f, LIST_EXTEND);
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(sum), I::LocalGet(part)]);
+			s.call(f, NODE_ADD);
+		});
+	}
+}
+
 /// list_extend(list, items): `xs += ys` in place (emit_list_extend)
 pub const LIST_EXTEND: &str = "list_extend";
+/// node_add_assign(sum, part): `out += part` of run-time kinds, in place for a list (emit_node_add_assign)
+pub const NODE_ADD_ASSIGN: &str = "node_add_assign";

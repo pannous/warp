@@ -20,3 +20,12 @@ fn joining_parts_of_unknown_kind_keeps_their_items() {
 	is!(&format!("{JOINED}joined([[1, 2], [], [3]])"), warp::ints(vec![1, 2, 3]));
 	is!(&format!("{JOINED}joined([[\"a\"], [\"b\", \"c\"]]).join(\"\")"), "abc");
 }
+
+#[test]
+fn adding_to_a_value_of_unknown_kind_is_its_sum() {
+	const ADDED: &str = "def added(a: any, b: any) { a += b; a }\n";
+	is!(&format!("{ADDED}added(1, 2)"), 3);
+	is!(&format!("{ADDED}added(\"a\", \"b\")"), "ab");
+	is!(&format!("{ADDED}added([1], [2])"), warp::ints(vec![1, 2]));
+	is!(&format!("{ADDED}xs = [1]; added(xs, [2]); count(xs)"), 2); // a list grows in place, as `xs += [2]` does (P200b)
+}

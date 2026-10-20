@@ -71,6 +71,7 @@ impl WasmGcEmitter {
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
 		self.emit_similarity_ops(); // after the library ops and the equality ops it calls
 		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
+		self.emit_node_add_assign(); // after node_add and list_extend, which it calls
 		self.emit_node_api(); // after text_of, text_concat and error_of, which it calls
 		self.emit_function_body(); // after node_at, which its quoted code calls
 		self.gating_runtime = false;

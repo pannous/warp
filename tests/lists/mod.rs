@@ -92,7 +92,6 @@ mod test_object_list_walk; // orm identity map: index walks of object lists
 mod test_join_unknown_parts; // card warp-profile: `out += part` of an `any` part grows in place
 mod test_one_entry_map_parts; // card age-name
 mod test_one_entry_map_text;
-mod test_out_part_diagnosis; // card out-part, diagnosis only: delete once the cause is known
 mod test_pair_values;
 mod test_phrase_in_call; // card phrase-in-call
 mod test_picked_linear; // card compiler-picks-dot

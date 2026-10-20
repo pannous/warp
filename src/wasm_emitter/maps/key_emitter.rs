@@ -391,12 +391,20 @@ impl WasmGcEmitter {
 		let Some(slot) = self.node_variable_slot(name) else {
 			return false;
 		};
-		if !is_list || !self.should_emit_function(super::super::lists::list_ops::LIST_EXTEND) {
-			return false;
-		}
+		// kinds known only at run time (`out = []`, ø until it grows, by a part of an `any` list): decided then
+		let run_time_sum = crate::analyzer::node_arithmetic(self.get_type(left), &Op::Add, self.get_type(right))
+			== Some(super::super::lists::list_ops::NODE_ADD);
+		// node_add_assign is emitted after main when called (an unforeseen call), as node_add is
+		let function = match (is_list, run_time_sum) {
+			(true, _) if self.should_emit_function(super::super::lists::list_ops::LIST_EXTEND) => {
+				super::super::lists::list_ops::LIST_EXTEND
+			}
+			(false, true) => super::super::lists::list_ops::NODE_ADD_ASSIGN,
+			_ => return false,
+		};
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
-		self.emit_call(func, super::super::lists::list_ops::LIST_EXTEND);
+		self.emit_call(func, function);
 		slot.tee(func);
 		if matches!(slot, super::super::lists::list_dispatch::Slot::Global(_)) {
 			func.instruction(&I::RefAsNonNull); // a global is nullable, list_extend's list is not
