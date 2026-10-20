@@ -1,8 +1,9 @@
 # The diagnostics of the warp compiler (card pure-diagnostics, decision diagnostics-files): a check finds a fact, a
 # node such as `kind_change(x, Int, List)`, and `diagnose(fact)` says it with the message of the first row it
-# matches in errors.data, then warnings.data, then hints.data. A row is `pattern TAB message`: the pattern a node
-# whose `$name` parts take any node (`data(…)` quotes it), the message a text whose `{name}` holes give that part and
-# `{a name}` it with its article. The stage hands `diagnosed` to Rust, which says the warnings and fails on an error.
+# matches in errors.data, then warnings.data, then hints.data. A row is `pattern TAB message`, optionally `TAB fix`:
+# the pattern a node whose `$name` parts take any node (`data(…)` quotes it), the message and fix texts whose
+# `{name}` holes give that part and `{a name}` it with its article. The stage hands `diagnosed` to Rust, which says
+# the warnings and fails on an error (notes/pure_diagnostics.md).
 use "parser.warp"
 
 # the message files in the order a fact is looked up, each with the level of its messages
@@ -10,23 +11,26 @@ message_files = [["errors.data", "error"], ["warnings.data", "warning"], ["hints
 quoting_word = "data"
 hole_mark = "$"
 
-# [level, message] of each fact diagnosed so far
+# [level, message, fix] of each fact diagnosed so far ("" when it names no fix)
 global diagnosed = []
 # [level, pattern, message] of every row of the message files, read at the first fact
 global message_rows = ø
+
+# the node a check looks at: a key of the operator
+is_operator(n: any, op: text): bool := type(n) is key and op_of(n) == op
 
 diagnose(fact: any): any := {
 	diagnosed += [said_fact(fact)]
 	fact
 }
 
-# [level, message] of the first row the fact matches; a fact no row matches is an error naming it, loudly
+# [level, message, fix] of the first row the fact matches; a fact no row matches is an error naming it, loudly
 said_fact(fact: any): list := {
 	for row in rows() {
 		bound = {}
-		if matches(row#2, fact, bound) { return [row#1, filled(row#3, bound)] }
+		if matches(row#2, fact, bound) { return [row#1, filled(row#3, bound), filled(row#4, bound)] }
 	}
-	["error", "no message for the diagnostic ${fact} in lib/compiler/" + message_files.map(file => file#1).join(", ")]
+	["error", "no message for the diagnostic ${fact} in lib/compiler/" + message_files.map(file => file#1).join(", "), ""]
 }
 
 rows(): list := {
@@ -34,11 +38,12 @@ rows(): list := {
 	message_rows
 }
 
-# the rows of a message file as plain warp data: a list of lines, each a tab-separated [pattern, message]
+# the rows of a message file as plain warp data: a list of lines, each a tab-separated [pattern, message] or
+# [pattern, message, fix], as [level, pattern, message, fix]
 rows_of(file: text, level: text): list := {
 	source = try read(module_directory + "/" + file) else ""
 	lines = statements_in(plain_node(parsed(source)))
-	lines.filter(line => line != ø).map(line => [level, unquoted(line#1), line#2])
+	lines.filter(line => line != ø).map(line => [level, unquoted(line#1), line#2, if #line > 2 then line#3 else ""])
 }
 unquoted(pattern: any): any := if is_group(pattern) and #pattern == 2 and pattern#1 == symbol(quoting_word) then pattern#2 else pattern
 

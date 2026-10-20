@@ -1,1 +1,10 @@
 # The warnings of the warp compiler (lib/compiler/diagnostics.warp): pattern TAB message, the first match wins
+
+# a text spelling a number added to a number (source_checks.warp, card print-oldest)
+spelled_number_join($written, $spelled, $as_sum, $as_text)	"{written} joins the texts; {spelled} spells a number"	"{as_sum} or {as_text}"
+# user issue #17: sleep counts seconds, a bare number gets the units named
+bare_sleep($amount)	"sleep needs a unit: sleep {amount}s or sleep {amount}ms (a bare number is seconds)"
+# wiki/mutable.md: a statement dropping a copy word's result, an assignment of a mutating call, a dropped error value
+dropped_copy($word, $variable)	"unused value of {word} {variable}: assign it (y = {word} {variable}) or write {variable}.{word}! to change {variable}"
+assigned_mutation($target, $variable)	"{target} = …! changes {variable} too: assign the copy without `!`, or mutate {variable} first and then write {target} = {variable}"
+dropped_error($message)	"`error {message}` makes an error value nothing uses: `fail {message}` raises it"

@@ -35,7 +35,6 @@ kind_changes(program: any): any := {
 	program
 }
 
-is_operator(n: any, op: text): bool := type(n) is key and op_of(n) == op
 is_definition(n: any): bool := is_operator(n, ":=")
 # `(f x) := …`: the name it defines, else ""
 defined_name(n: any): text := {
@@ -133,8 +132,8 @@ evident_results(program: any): any := {
 	results
 }
 last_expression(body: any): any := {
-	statements = statements_in(if is_group(body) and (bracket_of(body) == "{" or bracket_of(body) == "(") and #body == 1 then body#1 else body)
-	last = statements#(#statements)
+	body_statements = statements_in(if is_group(body) and (bracket_of(body) == "{" or bracket_of(body) == "(") and #body == 1 then body#1 else body)
+	last = body_statements#(#body_statements)
 	if last == body then body else last_expression(last)
 }
 

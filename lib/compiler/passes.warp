@@ -28,6 +28,7 @@ use "prefix_comparisons.warp"
 use "sleep_durations.warp"
 use "lambdas.warp"
 use "kind_changes.warp"
+use "source_checks.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
@@ -43,14 +44,18 @@ lowered_node(n: any): any := {
 
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
 # it uses from `folder` (uses.warp) and the prelude's definitions they reach (prelude_words.warp)
-lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_prelude(with_uses(plain_node(parsed(source)), folder), prelude))
+lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), folder, prelude))
+with_used(program: Node, folder: text, prelude: text): Node := with_prelude(with_uses(program, folder), prelude)
 
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))
 
-# [the view of the source as the passes leave it, what its checks diagnosed: [level, message] each] (card
-# pure-diagnostics)
-checked(source: text, folder: text, prelude: text): list := [view_of(kind_changes(lowered_program(source, folder, prelude))), diagnosed]
+# [the view of the source as the passes leave it, what its checks diagnosed: [level, message, fix] each] (card
+# pure-diagnostics): the checks of the program as written, then those of the lowered program, as Rust runs them
+checked(source: text, folder: text, prelude: text): list := {
+	program = plain_node(source_checks(parsed(source), prelude))
+	[view_of(kind_changes(lowered_node(with_used(program, folder, prelude)))), diagnosed]
+}
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
 # parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them and the

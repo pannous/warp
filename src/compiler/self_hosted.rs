@@ -273,14 +273,15 @@ fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
 	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?).map(Ok)
 }
 
-/// Says what the checks of the passes stage diagnosed, [level, message] each (lib/compiler/diagnostics.warp): an
+/// Says what the checks of the passes stage diagnosed, [level, message, fix] each (lib/compiler/diagnostics.warp): an
 /// error is the program's value, a warning or hint is said as the Rust checks' are, failing under `use strict` alike
 fn reported(diagnostics: &serde_json::Value) -> Result<(), Node> {
 	use crate::errors::diagnostic::{Diagnostic, Level};
 	let mut said = Vec::new();
 	for diagnostic in diagnostics.as_array().into_iter().flatten() {
 		let text_at = |index: usize| diagnostic.get(index).and_then(serde_json::Value::as_str).unwrap_or_default();
-		let found = Diagnostic { message: text_at(1).to_string(), ..Default::default() };
+		let fix = Some(text_at(2)).filter(|fix| !fix.is_empty()).map(String::from);
+		let found = Diagnostic { message: text_at(1).to_string(), fix, ..Default::default() };
 		match text_at(0) {
 			ERROR_LEVEL => return Err(found.into_error()),
 			HINT_LEVEL => said.push(found.level(Level::Hint)),
