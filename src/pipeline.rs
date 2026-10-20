@@ -265,6 +265,9 @@ const MODULE_PASSES: &[Pass] = &[
 	// `count(x) := 7`: the program's count·any for the values the library's count is not for (typed_library_words.rs)
 	crate::lowering::typed_library_words::lower,
 	crate::modules::resolve,
+	// `play(xs: list of int)`: one parameter `xs:"list of int"` (declaration_forms.rs), the library's heads too, before
+	// any pass reads a head (function_types, shared_arrays)
+	crate::lowering::declaration_forms::lower_list_parameters,
 	// `hum(t) := …; play_signal(hum, 2)`: a function passed for a parameter typed `(float) -> float` takes its types, the
 	// library's declarations joined in resolve
 	crate::lowering::function_types::lower,
@@ -317,8 +320,6 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::declarations::lower_c_functions,
 	crate::lowering::declarations::lower_bare_declarations,
 	crate::lowering::declarations::lower_spaced_definitions,
-	// `play(xs: list of int)`: one parameter `xs:"list of int"` (declaration_forms.rs), before any pass reads a head
-	crate::lowering::declaration_forms::lower_list_parameters,
 	crate::lowering::number_words::lower,
 	crate::lowering::parameter_shapes::lower,
 	crate::lowering::blocks::lower_trailing_blocks,
