@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 const SOURCE_CHECKOUT: &str = env!("CARGO_MANIFEST_DIR");
 /// Below $HOME: shared by the user's checkout and every worktree, which re-filed the same panic each (2026-10-12)
 const FILED_LIST: &str = ".cache/warp/crash_cards.txt";
-const OFF_SWITCH: &str = "WARP_CRASH_CARDS";
+pub(crate) const OFF_SWITCH: &str = "WARP_CRASH_CARDS";
 const BOARD_COLUMN: &str = "Now";
 const TITLE_CHARS: usize = 110;
 const BACKTRACE_CHARS: usize = 20_000;

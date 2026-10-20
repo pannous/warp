@@ -115,6 +115,9 @@ After a context swap, this file and your role file win over anything a handover 
   checked with that binary, Rust changes are built and tested by the cloud lane. It reads lib/ from WARP_LIB, else
   the nearest lib/compiler above the program or cwd, so run it from your worktree (or `WARP_LIB=<worktree>/lib`).
   Standard modules (`use list`) still come from its build (card std-modules).
+  One exception (user 2026-10-20, decision speed-local-builds): warp-speed may build its own branches locally (quick
+  release, CARGO_BUILD_JOBS=2, one build at a time) to time Rust speed changes before they land; timing runs only,
+  tests stay in the cloud.
 - Long commands in the background (user 2026-10-20): anything expected to take more than a few seconds (cloud
   lane, builds, surveys, stage compiles, sweeps) runs with the Bash tool's `run_in_background`, so messages reach you
   while it runs. Never poll its output file or sleep-loop on it: the exit notice wakes you; meanwhile do other work

@@ -18,6 +18,8 @@ use wasm_emitter::eval;
 mod cli;
 use cli::*;
 
+/// `warp a.wasm -- x y`: the words after it are the program's arguments (`use os; args`), for every way to run one
+const PROGRAM_ARGUMENTS_SEPARATOR: &str = "--";
 /// `warp compile --aot` also writes the machine code (wasmtime's .cwasm), which `warp <file>.cwasm` runs
 const AOT_FLAG: &str = "--aot";
 /// P103 (user): "Just giving it a file will compile it": `warp hello.warp` runs the program and leaves the standalone
@@ -95,15 +97,26 @@ fn main() {
 	end_quietly_on_closed_pipe(); // after the crash card hook, so a closed pipe files none
 	warp::graphics::paint::allow_windows();
 	warp_runtime::engine::give_main_stack_to_wasm();
+	let given = given_arguments(&mut args); // before the flags: `-- --strict` is the program's
 	apply_flags(&mut args);
 	match args.iter().position(|arg| arg == SANDBOX_FLAG) {
 		Some(flag) => {
 			args.remove(flag);
 			warp::host::sandbox::confine_process();
-			warp::pipeline::sandboxed(|| run_command(&args))
+			warp::pipeline::sandboxed(|| run_command(&args, &given))
 		}
-		None => run_command(&args),
+		None => run_command(&args, &given),
 	}
+}
+
+/// The words after `--`, taken off the command line: the program's arguments
+fn given_arguments(args: &mut Vec<String>) -> Vec<String> {
+	let Some(separator) = args.iter().position(|arg| arg == PROGRAM_ARGUMENTS_SEPARATOR) else {
+		return vec![];
+	};
+	let given = args.split_off(separator + 1);
+	args.pop();
+	given
 }
 
 /// A reader that closed the pipe (`warp run x.warp | head -1`) ends warp by SIGPIPE, as it ends cat: Rust ignores the
@@ -145,6 +158,18 @@ fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
 	Some((only_run, path.as_str(), &args[file + 1..]))
 }
 
+/// `warp [run] a.wasm x y`: the compiled module and the words after it
+fn module_file(args: &[String]) -> Option<(&str, &[String])> {
+	let file = if args.get(1).is_some_and(|word| RUN_PREFIX.trim_end() == word) { 2 } else { 1 };
+	let path = args.get(file).filter(|path| is_module_file(path))?;
+	Some((path.as_str(), &args[file + 1..]))
+}
+
+/// `a.wasm`, `a.cwasm`: a compiled module
+fn is_module_file(word: &str) -> bool {
+	word.ends_with(".wasm") || word.ends_with(&format!(".{COMPILED_EXTENSION}"))
+}
+
 /// `warp test a.warp b.warp …`: the program files whose tests run
 fn test_files(args: &[String]) -> Option<&[String]> {
 	let paths = args.get(2..).filter(|paths| !paths.is_empty() && paths.iter().all(|path| has_warp_extension(path)))?;
@@ -184,9 +209,10 @@ fn test_counts(summary: &str) -> Option<(usize, usize)> {
 
 /// What the command line asks for: a file, a subcommand (`eval`, `compile`, `verify`, `tool` …) or code to evaluate
 #[cfg(not(test))]
-fn run_command(args: &[String]) {
+fn run_command(args: &[String], given: &[String]) {
 	// Join args (skip program name)
 	let arg_string: String = args.iter().skip(1).cloned().collect::<Vec<_>>().join(" ");
+	warp::modules::std_adapters::set_program_arguments(given.to_vec()); // `use os; args`
 
 	if args.len() == 1 {
 		// No args, just program name
@@ -238,7 +264,7 @@ fn run_command(args: &[String]) {
 		}
 		std::process::exit(failed as i32);
 	} else if args[1] == TOOL_COMMAND && args.len() >= 3 {
-		let arguments: Vec<&str> = args[3..].iter().map(String::as_str).collect();
+		let arguments: Vec<&str> = args[3..].iter().chain(given).map(String::as_str).collect();
 		match package_tools::run_package_tool(&args[2], &arguments) {
 			Ok(run) => {
 				print!("{}", run.stdout);
@@ -340,7 +366,7 @@ fn run_command(args: &[String]) {
 		print_and_exit(warp::compiler::standalone::run(std::path::Path::new(&args[2]), args[3..].to_vec()));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
-		warp::modules::std_adapters::set_program_arguments(program_arguments.to_vec()); // `use os; args`
+		warp::modules::std_adapters::set_program_arguments([program_arguments, given].concat());
 		if !file_exists(path) {
 			eprintln!("Error: Could not read file '{}'", path);
 		}
@@ -364,15 +390,20 @@ fn run_command(args: &[String]) {
 		// Compile WAT/WAST text format to WASM binary, then execute
 		let wat_code = load_file(&arg_string);
 		print_and_exit(run::wasmtime_runner::run_wat(&wat_code));
-	} else if arg_string.ends_with(".wasm") || arg_string.ends_with(&format!(".{COMPILED_EXTENSION}")) {
-		if args.len() >= 3 {
+	} else if let Some((module, more)) = module_file(args) {
+		let words = more.join(" ");
+		if !more.is_empty() && more.iter().all(|word| is_module_file(word)) {
 			fail(format!(
-				"Error: running several wasm files together (linking {}) is not supported yet; run one file",
-				args[1..].join(" ")
+				"Error: running several wasm files together (linking {module} {words}) is not supported yet; run one file"
 			));
-		} else {
-			print_and_exit(run::wasmtime_runner::run(&arg_string));
 		}
+		if !more.is_empty() {
+			eprintln!(
+				"note: got it, {words} are the program's arguments; write them after --: warp {module} -- {words}"
+			);
+			warp::modules::std_adapters::set_program_arguments([more, given].concat());
+		}
+		print_and_exit(run::wasmtime_runner::run(module));
 	} else if arg_string == "test" || arg_string == "tests" {
 		println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
 	} else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
