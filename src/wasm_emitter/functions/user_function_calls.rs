@@ -674,14 +674,13 @@ impl WasmGcEmitter {
 		self.emit_trap_position(func);
 	}
 
-	/// `g(c: codepoint)` given `s#2`: a character of a text, held as a one-character text, given as its code point
-	/// (card text-char); any other argument as it is
+	/// `g(c: codepoint)` given `s#2` or a variable `c = s#2`: a character of a text, held as a one-character text, given
+	/// as its code point, a longer text the error not_a_character (card text-char); any other argument as it is
 	fn character_as_codepoint(&self, param: &crate::compiler::context::Param, argument: Node) -> Node {
 		let declared_codepoint = param.annotation.as_ref().is_some_and(|annotation| {
 			crate::type_tests::canonical_spec_word(&annotation.name().to_lowercase()) == crate::words::CODEPOINT
 		});
-		let character_of_text = matches!(argument.drop_meta(), Node::Key(text, Op::Hash, _) if !text.is_empty_node())
-			&& self.get_type(&argument) == Kind::Text;
+		let character_of_text = !argument.is_text_literal() && self.get_type(&argument) == Kind::Text;
 		match declared_codepoint && character_of_text {
 			true => Node::Key(Box::new(argument), Op::As, Box::new(Node::Symbol(crate::words::CODEPOINT.into()))),
 			false => argument,

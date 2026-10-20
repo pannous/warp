@@ -26,3 +26,14 @@ fn a_character_of_a_text_casts_to_itself() {
 	is!("h(s: text, at: int): codepoint := s[at]; h(\"ab\", 1)", 'b');
 	is!("g(c: codepoint): codepoint := c; s = \"ab\"; g(s#2)", 'b');
 }
+
+/// A character held in a variable, or read from an untyped value, is a character too (card typed-compiler: the
+/// lexer's `c: char` and `peek(source: any, …): char`)
+#[test]
+fn a_held_or_untyped_character_casts_to_itself() {
+	is!("is_x(c: char): bool := c == 'x'; atom(s: text): bool := { c = s[0]; is_x(c) }; atom(\"xy\")", true);
+	is!("peek(source: any, at: int): char := source[at]; peek(\"ab\", 1)", 'b');
+	is!("peek(source: any, at: int): char := source[at]; peek(['a', 'b'], 1)", 'b');
+	is!("peek(source: any, at: int): char := source[at]; peek([65, 66], 1)", 'B');
+	fails_with("is_x(c: char): bool := c == 'x'; atom(s: text): bool := { c = s; is_x(c) }; atom(\"xy\")", "not a character");
+}

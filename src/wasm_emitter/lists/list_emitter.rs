@@ -615,7 +615,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A value held as a Node whose type only the run time knows: an optional, an `any` parameter, an item of a mixed list
-	fn has_unknown_static_type(&self, subject: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn has_unknown_static_type(&self, subject: &Node) -> bool {
 		!matches!(subject.drop_meta(), Node::Number(_))
 			&& matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data)
 	}

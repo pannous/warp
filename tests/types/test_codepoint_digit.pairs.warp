@@ -13,3 +13,8 @@
 's = "ab"; s[1] as char'	'b'
 'h(s: text, at: int): codepoint := s[at]; h("ab", 1)'	'b'
 'g(c: codepoint): codepoint := c; s = "ab"; g(s#2)'	'b'
+
+# a_held_or_untyped_character_casts_to_itself
+'peek(source: any, at: int): char := source[at]; peek("ab", 1)'	'b'
+«peek(source: any, at: int): char := source[at]; peek(['a', 'b'], 1)»	'b'
+'peek(source: any, at: int): char := source[at]; peek([65, 66], 1)'	'B'
