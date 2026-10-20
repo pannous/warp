@@ -119,6 +119,10 @@ Read notes/agents/common.md and notes/roles.md.
   the pull and main has superseded it, back it up to data/integrator/<name>.patch, take main's file and pull.
 - Every landing gets a try line: the merge report names each user-visible branch to its owner, who sends
   warp-interviewer the try line; for an owner that has retired, send it yourself.
+- Every push to main (gated, express, warp-only) starts `integrator_tools/refresh_main_binary.sh` in the background
+  (user 2026-10-20: "pre-compile warp-debug whenever you merge into main"): it builds main's ~/dev/bin/warp-debug
+  first, then the optimized ~/dev/bin/warp. push_tested.sh and express.sh start it; after a warp-only push start it
+  yourself.
 - Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the
   function now lives, commit it in the merge, gate as usual and tell the owner afterwards; only logic changed on
   both sides bounces.
