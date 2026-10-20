@@ -39,17 +39,17 @@ map_entries(n: any): any := {
 	out
 }
 map_keys(m: any): list := {
+	# `{}` is the empty value: its keys are the empty value too, as Rust's
+	if is_null(m) == 1 { return m }
 	out = new_list(0)
-	# `{}` is the empty value: no entries, as Rust's keys of it
-	if is_null(m) == 1 { return out }
 	if marked_kind(m) != 8 and marked_kind(m) != 6 { not_a_map() }
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
 map_values(m: any): list := {
+	# `{}` is the empty value: its values are the empty value too, as Rust's
+	if is_null(m) == 1 { return m }
 	out = new_list(0)
-	# `{}` is the empty value: no entries, as Rust's keys of it
-	if is_null(m) == 1 { return out }
 	if marked_kind(m) != 8 and marked_kind(m) != 6 { not_a_map() }
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
