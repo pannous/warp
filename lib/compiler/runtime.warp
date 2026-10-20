@@ -339,6 +339,19 @@ collection_contains(c: any, x: any): bool := {
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
 	no
 }
+# `c.index_of(x)`: a list's 1-based position of its first item equal to x, a text's of the byte part x starts at, 1 for
+# a map's entry named x; 0 when absent (Rust's collection_position, src/lowering/words/library_words.rs)
+collection_position(c: any, x: any): int := {
+	if is_null(c) == 1 { return 0 }
+	if marked_kind(c) == 8 or kind_code(c) == 6 { return if map_index(c, node_text(x)) > 0 then 1 else 0 }
+	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) + 1 }
+	position = 0
+	for item in unboxed_list(c) {
+		position += 1
+		if node_equal(item, x) { return position }
+	}
+	0
+}
 # where the bytes of part first start in t, -1 when nowhere
 text_index(t: text, part: text): int := {
 	for start in 0..(byte_count(t) - byte_count(part) + 1) {

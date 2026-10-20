@@ -631,7 +631,7 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, 
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
-	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
+	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
@@ -1175,6 +1175,9 @@ def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else
 	if not has_else { return unmatched(c, a, yes_branch is number) }
 	b = nested(body, no_branch, 1)
 	kind = joint_kind(a#1, b#1)
+	# a first reading whose branches both wait on calls still compiling: its kind is not known yet either (its code is
+	# not kept), so the function's other readings decide it
+	if kind == pending and body.function.result == pending { return [pending, c + [op.if] + value_type("node") + a#2 + [op.else] + b#2 + [op.end]] }
 	if kind == pending { kind = "int" }
 	if kind == no_kind or kind == "mixed" { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]] }
 	[kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
@@ -1511,12 +1514,16 @@ def key_expression(body: Body, n: any): list {
 	if operator == "as" and right is symbol and name_of(right) == "rational" {
 		return as_rational(expression(body, left))
 	}
-	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
+	# `t as codepoint`, `x as integer`: a type word's other names are its kind's
+	target = if not (right is symbol) then ø else if name_of(right) in core_type_words then core_type_words[name_of(right)] else name_of(right)
+	if operator == "as" and (target in type_bytes or target in references) {
 		value = expression(body, left)
-		if name_of(right) in text_readers { return cast(value, name_of(right)) }
-		if name_of(right) == "text" { return shown_text(value) }
-		if name_of(right) == "bool" and (value#1 == "node" or value#1 == "text") { return runtime_call("bool_cast", [["node", boxed(value)]]) }
-		return [name_of(right), converted(value, name_of(right))]
+		if target in text_readers { return cast(value, target) }
+		if target == "text" { return shown_text(value) }
+		# `65 as codepoint` is 'A'
+		if target == "char" and value#1 == "int" { return ["char", value#2 + [op.i32_wrap_i64]] }
+		if target == "bool" and (value#1 == "node" or value#1 == "text") { return runtime_call("bool_cast", [["node", boxed(value)]]) }
+		return [target, converted(value, target)]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
 	if left == ø or right == ø {
