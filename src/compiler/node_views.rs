@@ -270,7 +270,7 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		"number" | "data" if let Some(handle) = text(1)?.strip_prefix(HANDLE_MARK) => {
 			handle.parse::<usize>().ok().and_then(|index| handles.get(index)).cloned().ok_or_else(unreadable)?
 		}
-		"number" => crate::warp_parser::parse(&text(1)?).drop_meta().clone(),
+		"number" | "data" => crate::warp_parser::parse(&text(1)?).drop_meta().clone(),
 		"key" => {
 			let op = crate::operators::op_named(&text(1)?).ok_or_else(unreadable)?;
 			let left = node(2)?;

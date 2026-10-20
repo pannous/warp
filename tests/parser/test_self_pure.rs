@@ -130,3 +130,19 @@ fn program_names_run_pure() {
 	runs_pure("statement_block", "add := { it + 1 }; add 2", "3");
 	runs_pure("value_definition", "limit := 3; f(a) := a > limit; f 4", "yes");
 }
+
+/// parser.warp reads an integer and a time unit word as the duration Rust's parser makes (card parser-reads-day):
+/// `1day` is no `1*day`, and `1 day in h` converts
+#[test]
+fn durations_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("duration_in_unit", "d = 1 day; d in h", "24h"),
+			("glued_duration", "1day + 1 day", "2 days"),
+			("compound_duration", "1 month 2 days", "1 month 2 days"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.contains(value), "{lane} {code}: {output}");
+		}
+	}
+}
