@@ -254,3 +254,10 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("field_named_symbol", "kinds = {symbol: 1}; is_word(n) := n is symbol; is_word(:hello)", "yes");
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
+
+/// card uses-std-modules: a standard module a program uses by name (`use case_tables`, lib/case_tables.warp) brings
+/// the definitions the program reaches, its values included, in front of the program
+#[test]
+fn std_modules_run_pure() {
+	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
+}
