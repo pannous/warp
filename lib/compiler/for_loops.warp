@@ -77,11 +77,45 @@ skips_step(n: Node): bool := match n {
 	_: no
 }
 
-lowered_for(n: Node): Node := match n {
+is_entry(n: any): bool := type(n) is key and op_of(n) == ":"
+
+# `{a: 1, b: 2}` or `a: 1`: a map written out (Rust twin: objects.rs written_object)
+is_map_literal(n: any): bool := {
+	if is_entry(n) { return yes }
+	is_group(n) and bracket_of(n) == "{" and #n > 0 and #items_of(n).filter(is_entry) == #n
+}
+
+# the names assigned a written map anywhere in n (`m = {a: 1}`)
+map_names(n: any): list := {
+	if type(n) is key {
+		if op_of(n) == "=" and key_of(n) is symbol and is_map_literal(value_of(n)) { return [name_of(key_of(n))] }
+		return map_names(key_of(n)) + map_names(value_of(n))
+	}
+	names = []
+	if is_group(n) { for x in n { names = names + map_names(x) } }
+	names
+}
+
+# `k, v` or `(k, v)`: the two names a loop over a map binds
+is_name_pair(n: any): bool := is_group(n) and #n == 2 and is_name(n#1) and is_name(n#2)
+
+# `for k in m`, `for k, v in m` over a map walk its keys, as in Python: `for k in map_keys(m) { v = m[k]; body }`
+# (Rust twin: library_words.rs for_over_map)
+over_map_keys(names: Node, map: Node, body: Node): Node := {
+	keys = List([symbol("map_keys"), map], Bracket.Round, Separator.None)
+	if is_name(names) { return loop_over(names, keys, body) }
+	lookup = Key(names#2, Op.Assign, Key(map, Op.Hash, Key(names#1, Op.Add, 1)))
+	loop_over(names#1, keys, List([lookup] + body_statements(body), Bracket.Curly, Separator.Semicolon))
+}
+
+lowered_for(n: Node, maps: list): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
 		if skips_step(n) { return n }
-		if #parts == 5 and parts#1 == symbol("for") and parts#3 == symbol("in") and is_name(parts#2) {
-			return loop_over(parts#2, parts#4, parts#5)
+		if #parts == 5 and parts#1 == symbol("for") and parts#3 == symbol("in") {
+			iterable = parts#4
+			is_map = is_map_literal(iterable) or (iterable is symbol and name_of(iterable) in maps)
+			if is_map and (is_name(parts#2) or is_name_pair(parts#2)) { return over_map_keys(parts#2, iterable, parts#5) }
+			if is_name(parts#2) { return loop_over(parts#2, iterable, parts#5) }
 		}
 		if #parts == 3 and parts#1 == symbol("for") { return loop_over(symbol(implicit_variable), parts#2, parts#3) }
 		n
@@ -89,4 +123,7 @@ lowered_for(n: Node): Node := match n {
 	_: n
 }
 
-for_loops(program: any): any := bottom_up(program, lowered_for)
+for_loops(program: any): any := {
+	maps = map_names(program)
+	bottom_up(program, n => lowered_for(n, maps))
+}
