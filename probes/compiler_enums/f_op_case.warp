@@ -1,0 +1,11 @@
+n = parse_code("a + b")
+print op_of(n) == Op.Add
+print n.op == Op.Add
+l = parse_code("{a}")
+print bracket_of(l) == Bracket.Curly
+print l.bracket == Bracket.Curly
+is_plus(x: Node): bool := match x {
+	Key(_, Op.Add, _): yes
+	_: no
+}
+print is_plus(n)
