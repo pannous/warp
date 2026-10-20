@@ -142,7 +142,11 @@ pub fn literal_number(value: &Node) -> Option<Node> {
 
 /// A math word's result: a Node when its argument is one, which may be a ± interval (crate::numbers::uncertain::INTERVAL_WORDS)
 fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
-	if is_run_time_kind(&infer_type(argument, scope)) { Kind::Data } else { kind }
+	if is_run_time_kind(&infer_type(argument, scope)) {
+		Kind::Data
+	} else {
+		kind
+	}
 }
 
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
@@ -578,7 +582,11 @@ pub(crate) fn block_result(block: &Node) -> Option<Node> {
 /// `if c then error "…" else x`: τ or error (Decided #1, errors are values), a Node keeping the error until a use
 /// wants a number; a number is held as a Node of run-time kind
 fn error_or(kind: Kind) -> Kind {
-	if matches!(kind, Kind::Int | Kind::Float) { Kind::Data } else { kind }
+	if matches!(kind, Kind::Int | Kind::Float) {
+		Kind::Data
+	} else {
+		kind
+	}
 }
 
 /// The kind of a choice between two branches; an `error …` branch raises its error, so the other branch decides the
@@ -609,7 +617,11 @@ pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 		then_kind
 	} else if kinds.contains(&Kind::List) {
 		// a list and a list (or ø, the empty list) is a list; a list and anything else a Node of its run-time kind
-		if kinds.iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) { Kind::List } else { Kind::Data }
+		if kinds.iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) {
+			Kind::List
+		} else {
+			Kind::Data
+		}
 	} else if kinds.contains(&Kind::Empty) {
 		// a Node whose kind is known only at run time (an awaited job's result, ø): the value keeps that kind, so
 		// `(if c then 0 else job_result) + 1` adds at run time instead of failing as text

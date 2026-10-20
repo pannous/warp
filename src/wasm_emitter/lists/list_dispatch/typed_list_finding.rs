@@ -104,7 +104,13 @@ pub(super) fn held_last(program: &Node, members: &[String], places: &[&Node]) ->
 /// of it. `for room in rooms { s += room#i }` makes `room` once a round and reads it once, which the cons cells' cursor
 /// serves at once (card room-conversions)
 pub(super) fn reads_outrun_conversions(program: &Node, name: &str) -> bool {
-	fn walk(node: &Node, name: &str, loops: &mut Vec<usize>, count: &mut usize, found: &mut (Vec<Vec<usize>>, Vec<Vec<usize>>)) {
+	fn walk(
+		node: &Node,
+		name: &str,
+		loops: &mut Vec<usize>,
+		count: &mut usize,
+		found: &mut (Vec<Vec<usize>>, Vec<Vec<usize>>),
+	) {
 		let node = node.drop_meta();
 		let is_loop = is_while_loop(node);
 		if is_loop {
@@ -112,7 +118,9 @@ pub(super) fn reads_outrun_conversions(program: &Node, name: &str) -> bool {
 			*count += 1;
 		}
 		match node {
-			Node::Key(target, Op::Assign | Op::Define, _) if target.drop_meta().is_symbol(name) => found.0.push(loops.clone()),
+			Node::Key(target, Op::Assign | Op::Define, _) if target.drop_meta().is_symbol(name) => {
+				found.0.push(loops.clone())
+			}
 			Node::Key(list, Op::Hash, index) => {
 				let counted = if list.is_empty_node() { index } else { list };
 				if counted.drop_meta().is_symbol(name) {
@@ -129,9 +137,9 @@ pub(super) fn reads_outrun_conversions(program: &Node, name: &str) -> bool {
 	let mut found = (Vec::new(), Vec::new());
 	walk(program, name, &mut Vec::new(), &mut 0, &mut found);
 	let (assignments, reads) = found;
-	reads.iter().any(|read| {
-		assignments.iter().all(|assigned| read.len() > assigned.len() && read.starts_with(assigned))
-	})
+	reads
+		.iter()
+		.any(|read| assignments.iter().all(|assigned| read.len() > assigned.len() && read.starts_with(assigned)))
 }
 
 /// The items of `xs += [a b]`
@@ -572,7 +580,8 @@ impl WasmGcEmitter {
 				// per append
 				let indexed = indexed_lists(program);
 				let appended = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Append(_)));
-				let converted = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Converted { .. }));
+				let converted =
+					|name: &String| sources[name].iter().any(|source| matches!(source, Source::Converted { .. }));
 				let pays = |name: &String| {
 					indexed.contains(name) && (!converted(name) || reads_outrun_conversions(program, name))
 				};

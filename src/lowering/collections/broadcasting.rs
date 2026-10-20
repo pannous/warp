@@ -6,9 +6,7 @@
 //! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
 //! `people.map(p => p.name)` (card people-map).
 
-use super::nodes::{
-	any_part, call, called_name, children_rewritten, is_colon_pair, key, word_headed, Counter,
-};
+use super::nodes::{any_part, call, called_name, children_rewritten, is_colon_pair, key, word_headed, Counter};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -459,7 +457,10 @@ fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
 fn without_bound(definition: &Node, arities: &HashMap<String, Arity>) -> Option<HashMap<String, Arity>> {
 	let bound = crate::program_names::bound_inside(definition)?;
 	let unbound = arities.iter().filter(|(name, _)| !bound.contains(*name));
-	bound.iter().any(|name| arities.contains_key(name)).then(|| unbound.map(|(name, arity)| (name.clone(), *arity)).collect())
+	bound
+		.iter()
+		.any(|name| arities.contains_key(name))
+		.then(|| unbound.map(|(name, arity)| (name.clone(), *arity)).collect())
 }
 
 /// `1, add 2, 3` → `1, add 2 3`: the first braceless call short of arguments takes the items after its comma, wherever

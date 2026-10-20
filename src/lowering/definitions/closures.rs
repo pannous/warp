@@ -888,9 +888,7 @@ impl Lifting {
 		let braceless_call = bracket == Bracket::None
 			&& separator == Separator::Space
 			&& items.len() > 1
-			&& head_name
-				.as_ref()
-				.is_some_and(|name| self.may_hold_function(name, &HashSet::new()));
+			&& head_name.as_ref().is_some_and(|name| self.may_hold_function(name, &HashSet::new()));
 		let is_call = (bracket == Bracket::Round && separator == Separator::None) || braceless_call;
 		// `sqrt(angle)` parses as `√ (angle)`: the group of a local is its value
 		if let (true, [_], Some(name)) = (bracket == Bracket::Round, items.as_slice(), &head_name) {

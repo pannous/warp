@@ -15,5 +15,8 @@ fn a_loop_variable_read_once_a_round_stays_a_node_list() {
 
 #[test]
 fn a_loop_variable_read_in_an_inner_loop_keeps_its_values() {
-	is!("rows = [[1, 2], [3, 4, 5]]; total = 0; for row in rows { for j in 1..(#row + 1) { total += row#j } }; total", 15);
+	is!(
+		"rows = [[1, 2], [3, 4, 5]]; total = 0; for row in rows { for j in 1..(#row + 1) { total += row#j } }; total",
+		15
+	);
 }
