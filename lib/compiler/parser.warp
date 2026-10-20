@@ -483,7 +483,6 @@ def continued(p, left, min_power) {
 	while true {
 		if tab_separates(p) { break }
 		skip_spaces(p)
-		if continues_on_next_line(p) { skip_blanks(p) }
 		c = peek(p.code, p.at, p.n)
 		// `cd ~/notes`: a path after an operand is the next word, no operator
 		if starts_path(p) { return left }
@@ -602,16 +601,6 @@ def continued(p, left, min_power) {
 		}
 	}
 	left
-}
-
-// `if c then a⏎ else b`, `numbers⏎ .map(square)` (as in JS, Kotlin, Swift): a next line starting with `else` or a
-// method call continues the expression
-// Rust twin: scanning.rs line_continuation_length (the pipeline `|>` is not read yet)
-def continues_on_next_line(p) {
-	if not line_breaks_after(p, p.at) { return false }
-	at = p.resumes[p.at]
-	method = is_at(p.code, at, '.', p.n) and is_name_start(peek(p.code, at + 1, p.n))
-	at < p.n and (method or keyword_at_position(p, "else", at))
 }
 
 // A prefix `if` takes its own `then` and `else` wherever it stands: `pattern: if c then a else b` is the arm giving the
