@@ -273,3 +273,25 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("field_named_symbol", "kinds = {symbol: 1}; is_word(n) := n is symbol; is_word(:hello)", "yes");
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
+
+/// What the lib bench found parser.warp failing on in lib/ (scripts/lib_bench.sh): a keyword naming a key or a member
+/// (`{if: 4}`, `op.if`, emitter.warp), a membership word assigned (`alias contains = …`, prelude.warp), an operator
+/// alias line, `&f` and `∛x` (math.warp), the degree sign (`20°C`, units.warp)
+#[test]
+fn lib_forms_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("keyword_key", "m = {if: 4, x: 1}; m[\"if\"]", "4"),
+			("keyword_member", "op = {if: 4, else: 5}; op.if + op.else", "9"),
+			("assigned_membership_word", "xs = [1, 2]; includes = 3; includes + #xs", "5"),
+			("operator_alias_line", "operator × := *\n2 × 3", "6"),
+			("function_reference_sign", "f(x) := x + 1; g = &f; g(2)", "3"),
+			("cube_root_glyph", "∛27", "3"),
+			("degree_temperature", "20°C is temperature", "yes"),
+			("degree_variable", "x = 180; x° > 3.14", "yes"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}

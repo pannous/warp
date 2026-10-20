@@ -64,6 +64,40 @@ def bang_word_at(p) {
 	if p.bangs contains word or prelude_bang_words() contains word then end + 1 - p.at else 0
 }
 
+// `{if: 4, from: 1 to: 2}`: a keyword or operator word glued to a key's colon names the key; `else:`, `then:` and
+// `do:` open blocks
+// Rust twin: lookahead.rs word_names_key, BLOCK_COLON_WORDS
+BLOCK_COLON_WORDS = ["then", "else", "do"]
+def word_names_key(p, word) {
+	after = p.at + word.length
+	word != "" and not BLOCK_COLON_WORDS.contains(word) and is_at(p.code, after, ':', p.n) and not is_at(p.code, after + 1, ':', p.n) and not is_at(p.code, after + 1, '=', p.n)
+}
+
+// `operator × := *`, `prefix operator √ := sqrt` (lib/math.warp): another spelling of a built-in operator, a statement
+// declaring nothing here (the spellings themselves are not read yet: card glyph-operators)
+// Rust twin: aliases.rs alias_line
+def alias_line_at(p) {
+	end = p.at
+	while end < p.n and p.code[end] != '\n' and p.code[end] != ';' { end = end + 1 }
+	words = []
+	for word in p.code[p.at .. end].replace("\t", " ").split(" ") { if word != "" { words += [word] } }
+	if words#1 == "prefix" { words = words[1 .. words.length] }
+	words.length == 4 and words#1 == "operator" and words#3 == ":=" and is_operator_spelling(words#4)
+}
+// A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `sqrt`)
+// Rust twin: spellings.rs table_operator, PREFIX_OPERATOR_WORDS
+def is_operator_spelling(word) {
+	if not is_name_start(word[0]) { return true }
+	for op in WORD_OPERATORS { if op#1 == word { return true } }
+	form = keyword_form(word)
+	PREFIX_OPERATORS.contains(form) or form == "contains" or word == "in" or word == "approximately"
+}
+// The statement at the parser's position skipped: ø
+def skip_statement(p) {
+	while p.at < p.n and p.code[p.at] != '\n' and p.code[p.at] != ';' { p.at = p.at + 1 }
+	ø
+}
+
 // The words a type's name follows where it is declared
 // Rust twin: mod.rs TYPE_DECLARATION_WORDS, RECORD_WORD
 TYPE_SCAN_WORDS = ["class", "struct", "record", "type"]
@@ -554,7 +588,7 @@ def membership_at(p) {
 		if keyword_at(p, word) { return word }
 	}
 	word = word_at(p)
-	if keyword_form(word) == "contains" and operand_after(p, word.length) { return word }
+	if keyword_form(word) == "contains" and operand_after(p, word.length) and not assigned_at(p, p.at + word.length) { return word }
 	""
 }
 
@@ -566,6 +600,11 @@ UNIT_WORDS = ["byte", "bytes", "char", "chars", "character", "characters", "code
 
 // An operand follows `width` characters on: blanks, then no end of the expression
 // Rust twin: scanning.rs operand_after
+// `alias contains = collection_contains`: an assignment's `=` (no `==`) after the blanks at `at`
+def assigned_at(p, at) {
+	sign = blank_end(p, at)
+	is_at(p.code, sign, '=', p.n) and not is_at(p.code, sign + 1, '=', p.n)
+}
 def operand_after(p, width) {
 	at = p.at + width
 	if not (is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n)) { return false }
@@ -696,7 +735,7 @@ WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "x
 def operator_at(p) {
 	c = peek(p.code, p.at, p.n)
 	if is_name_start(c) {
-		if bang_word_at(p) > 0 { return [] }
+		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
 		for op in WORD_OPERATORS {
 			if op#1[0] == c and keyword_at(p, op#1) and not (p.branch and op#1 == "else") { return op }
 		}
@@ -897,6 +936,9 @@ def prefixed(p) {
 	if starts_path(p) { return path_literal(p) }
 	if not is_name_start(c) { return prefixed_by_symbol(p, c) }
 	word = word_at(p)
+	// `op.if`, `math.sqrt`: a member's name is no keyword
+	if word_names_key(p, word) or after_member_dot(p) { return atom(p) }
+	if (word == "operator" or word == "prefix") and alias_line_at(p) { return skip_statement(p) }
 	form = keyword_form(word)
 	if form == "return" { return returned(p) }
 	if guard_word_at(p, word) { return guarded(p, word) }
@@ -913,7 +955,7 @@ def prefixed(p) {
 	if foreign != ø { return foreign }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else count_worded(p)
 	if declared != ø { return declared }
-	if PREFIX_OPERATORS.contains(form) and not after_member_dot(p) { return word_prefixed(p, word, form) }
+	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
 	if form == "not" {
 		p.at = p.at + 3
 		skip_spaces(p)
@@ -968,9 +1010,17 @@ def prefixed_by_symbol(p, c) {
 		p.at = p.at + 1
 		return Key(ø, Op.Hash, expression(p, INDEX_POWER - 1))
 	}
-	if c == '√' {
+	if PREFIX_OPERATORS.contains("" + c) {
 		p.at = p.at + 1
-		return Key(ø, Op.Sqrt, expression(p, PREFIX_POWER))
+		return keyed("" + c, ø, expression(p, PREFIX_POWER))
+	}
+	// `&lerp`: a reference to the function, an `&` glued to the word after it and not to one before it (`a &b`)
+	// Rust twin: functions.rs starts_function_reference, closures.rs function_reference
+	if c == '&' and is_alpha(next) and not (p.at > 0 and is_name_char(p.code[p.at - 1])) {
+		end = name_end(p.code, p.at + 1, p.n)
+		name = p.code[p.at + 1 .. end]
+		p.at = end
+		return attributed(FUNCTION_REFERENCE_MARK, true, symbol(name))
 	}
 	if c == ':' and explicit_symbol_at(p) {
 		end = name_end(p.code, p.at + 1, p.n)
@@ -1302,12 +1352,23 @@ def atom(p) {
 		p.iterable = outer_iterable
 		return group
 	}
+	// `°C`, `°F`: a temperature unit; `°` alone the angle unit (units.rs)
+	// Rust twin: atoms.rs parse_atom (DEGREE)
+	if c == DEGREE {
+		end = if is_alpha(peek(p.code, p.at + 1, p.n)) then name_end(p.code, p.at + 1, p.n) else p.at + 1
+		unit = symbol(p.code[p.at .. end])
+		p.at = end
+		return unit
+	}
 	if c == 'ø' or c == ')' or c == ']' or c == '}' or c == ';' {
 		if c == 'ø' { p.at = p.at + 1 }
 		return ø
 	}
 	raise "Unexpected character '" + c + "'"
 }
+
+// The degree sign of temperatures and angles (Rust twin: numbers/units.rs DEGREE)
+DEGREE = '°'
 
 // The URL after its scheme word, up to a blank, a separator, a closer or a quote
 // Rust twin: literals/paths.rs parse_url, is_url_terminator
@@ -1572,7 +1633,7 @@ def counted_unit(amount: int, unit: text) := if amount == 1 then "1 " + unit els
 // Rust twin: literals.rs with_juxtaposed_factor
 def with_glued_factor(p, amount: any) {
 	c = peek(p.code, p.at, p.n)
-	if not (is_name_start(c) or c == '(') or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
+	if not (is_name_start(c) or c == '(' or c == DEGREE) or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
 		return amount
 	}
 	factor = atom(p)
@@ -1673,6 +1734,11 @@ def named(p) {
 		if shader != ø { return shader }
 	}
 	name = symbol(word)
+	// `x°`: a variable in degrees, as `30°` (Rust twin: atoms.rs, card angles-degrees)
+	if is_at(p.code, p.at, DEGREE, p.n) and not is_alpha(peek(p.code, p.at + 1, p.n)) {
+		p.at = p.at + 1
+		return Key(name, Op.Mul, symbol("" + DEGREE))
+	}
 	// `Point {x: 1}` with blanks constructs a declared type as the glued one does (open decision 41); a capitalized word
 	// of no declared type before a block of fields is the tagged object `Person:{…}` (card person-name)
 	declared = p.types.contains(word)
