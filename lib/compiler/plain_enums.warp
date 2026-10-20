@@ -127,7 +127,7 @@ match_over(value: Node, arms: list, enums: any): Node := matched(value, arms, ø
 # enum type
 case_number(value: Node, cases: list, first: int, enums: any): Node := {
 	numbers = 1 to #cases
-	if is_name(value) and name_of(value) in cases { return numbers.filter(i => cases#i == name_of(value))#1 - 1 + first }
+	if is_name(value) and name_of(value) in cases { return cases.index_of(name_of(value)) - 1 + first }
 	match_over(value, numbers.map(i => Key(symbol(cases#i), Op.Colon, i - 1 + first)), enums)
 }
 
