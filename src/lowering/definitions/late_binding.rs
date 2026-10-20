@@ -14,7 +14,10 @@
 
 use super::nodes::{any_part, children_rewritten, word_headed};
 use crate::analyzer::effects::EffectReport;
-use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, param_kind, Scope};
+use crate::analyzer::{
+	ask_local_or_global, captured_variables, collect_variables, declare_global, declares_local, find_assignments,
+	param_kind, starts_with_fresh_binding, Scope, MAIN_LEVEL_READING,
+};
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::errors::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::list_mutations::is_list_mutating_method;
@@ -35,6 +38,7 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	let statements = program.sequence_statements().to_vec();
 	let mut main = Scope::new();
 	collect_variables(&program, &mut main);
+	let writers = global_writers(&statements);
 	let declared = declared_global_reads(&statements, &main, false);
 	// a `global y` read of a variable main declares global already goes too (a lambda's, made global by nonlocal_cells)
 	let program = without_global_reads(program, &declared_global_reads(&statements, &main, true));
@@ -57,7 +61,98 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	late_bound.extend(declared);
 	late_bound.sort();
 	late_bound.dedup();
+	let program = with_own_locals(program, &main, &late_bound, &writers)?;
 	Ok(declare_global(without_nonlocal_declarations(crate::nonlocal_cells::lower(program)), &late_bound))
+}
+
+/// The variables each function declares `global y` for: only those functions change a global the compiler made
+fn global_writers(statements: &[Node]) -> HashMap<String, HashSet<String>> {
+	let mut writers: HashMap<String, HashSet<String>> = HashMap::new();
+	for function in statements.iter().flat_map(functions_in) {
+		let mut names = HashSet::new();
+		function.body.visit(&mut |node| names.extend(global_read(node).cloned()));
+		writers.insert(function.name, names);
+	}
+	writers
+}
+
+/// A function's `let y = …` is its own y, and so is a fresh `y = …` (Python's local) of a variable that is global only
+/// because the compiler made it one (late binding, a `global y` of another function): without `global y` the function
+/// never changes it, nor a variable of the same name in another used file (`op = op_of(n)` in analyzer.warp, emitter.warp's
+/// op table). Its own y is renamed apart, as the global would take every write and read of the name in the function.
+/// A program's own function gets the local-or-global warning, as for main's variables; a used module's stays quiet.
+fn with_own_locals(
+	program: Node,
+	main: &Scope,
+	late_bound: &[String],
+	writers: &HashMap<String, HashSet<String>>,
+) -> Result<Node, Node> {
+	let made_global = |name: &String| late_bound.contains(name) && !main.is_global(name);
+	let mut owned: Vec<(String, String)> = vec![];
+	for function in program.sequence_statements().iter().flat_map(functions_in) {
+		let writes = writers.get(&function.name);
+		for (assignment, name) in find_assignments(&function.body, &|name| main.is_global(name) || made_global(name)) {
+			if owned.iter().any(|(owner, own)| *owner == function.name && own == name) || *name == function.name {
+				continue;
+			}
+			let own = declares_local(&function.body, name)
+				|| (made_global(name)
+					&& !writes.is_some_and(|names| names.contains(name))
+					&& !function.params.iter().any(|param| param.name == *name)
+					&& starts_with_fresh_binding(&function.body, name)
+					&& (is_module_function(&function.name)
+						|| ask_local_or_global(assignment, name, &function.name, None)? != MAIN_LEVEL_READING));
+			if own {
+				owned.push((function.name.clone(), name.clone()));
+			}
+		}
+	}
+	if owned.is_empty() {
+		return Ok(program);
+	}
+	Ok(map_statements(program, &mut |statement| {
+		let defined: Vec<String> = functions_in(&statement).into_iter().map(|function| function.name).collect();
+		owned
+			.iter()
+			.filter(|(owner, _)| defined.contains(owner))
+			.fold(statement, |statement, (_, name)| own_local_renamed(statement, name, &own_local_name(name)))
+	}))
+}
+
+fn is_module_function(name: &str) -> bool {
+	crate::compiler::compile_context::read(|context| context.module_definitions.contains(name))
+}
+
+pub(crate) fn own_local_name(name: &str) -> String {
+	format!("{name}{GENERATED_NAME_MARK}own")
+}
+
+/// Every `name` that is the variable, renamed: not a field (`p.name`), nor a key or named argument (`{name: 1}`)
+fn own_local_renamed(node: Node, name: &str, own: &str) -> Node {
+	match node {
+		Node::Symbol(word) if word == name => Node::Symbol(own.to_string()),
+		Node::Key(receiver, op @ (Op::Dot | Op::SafeDot), member) => {
+			Node::Key(Box::new(own_local_renamed(*receiver, name, own)), op, member)
+		}
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) => Node::Key(
+			Box::new(declared_name_renamed(*target, name, own)),
+			op,
+			Box::new(own_local_renamed(*value, name, own)),
+		),
+		Node::Key(key, Op::Colon, value) => Node::Key(key, Op::Colon, Box::new(own_local_renamed(*value, name, own))),
+		other => children_rewritten(other, |child| own_local_renamed(child, name, own)),
+	}
+}
+
+/// The target of an assignment: `name`, the typed `name: text`, or an element or field of it (`name#1`, `name.x`)
+fn declared_name_renamed(target: Node, name: &str, own: &str) -> Node {
+	match target {
+		Node::Key(declared, Op::Colon, kind) => {
+			Node::Key(Box::new(declared_name_renamed(*declared, name, own)), Op::Colon, kind)
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(declared_name_renamed(*node, name, own)), data },
+		other => own_local_renamed(other, name, own),
+	}
 }
 
 /// The late-binding check of the functions defined in `statements` whose free variables `scope` binds: main's
