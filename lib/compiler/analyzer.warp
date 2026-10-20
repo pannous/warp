@@ -130,7 +130,7 @@ written_kind(n: any): text := match n {
 	Text(_): "text"
 	_: { if n is int then "int" else if n is number then "float" else "empty" }
 }
-error_or(kind: text): text :=if kind == "int" or kind == "float" then "data" else kind
+error_or(kind: text): text := if kind == "int" or kind == "float" then "data" else kind
 
 kind_of_list(n: any, scope: any): text := {
 	name = head_name(n)
@@ -582,7 +582,6 @@ joined_name(n: any, joined: any): text := {
 	""
 }
 
-
 # every call of a defined function in n, outside nested definitions: [name, arguments]
 calls(n: any, found: any): list := {
 	if is_definition(n) { return found }
@@ -591,13 +590,11 @@ calls(n: any, found: any): list := {
 	found
 }
 
-
 returns(n: any, found: any): list := {
 	if head_name(n) == "return" and #n == 2 { found += [n#2] }
 	for part in node_parts(n) { returns(part, found) }
 	found
 }
-
 
 # the values a function gives: what it returns and its last value; a branch raising an error gives nothing
 result_values(name: text): list := {
