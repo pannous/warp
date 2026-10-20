@@ -31,13 +31,15 @@ use "sleep_durations.warp"
 use "data_items.warp"
 use "lambdas.warp"
 use "min_max.warp"
+use "arity_overloads.warp"
+use "coalesce.warp"
 use "kind_changes.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [tries, definitions, preposition_heads, clauses, multiple_assignments, type_tests, prefix_comparisons, sleep_durations] + passes + [bare_returns, filled_lists, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, min_max, lambdas, for_loops, ranges, list_methods, number_keys]
+pure_passes = [tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, prefix_comparisons, sleep_durations] + passes + [bare_returns, filled_lists, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, min_max, coalesce, lambdas, for_loops, ranges, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
@@ -48,7 +50,7 @@ lowered_node(n: any): any := {
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
 # prelude (prelude_words.warp)
-lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_reached(with_used_modules(with_uses(plain_node(parsed(source)), folder), folder), prelude, no))
+lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_reached(with_used_modules(with_type_module_uses(with_uses(plain_node(parsed(source)), folder)), folder), prelude, no))
 
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))

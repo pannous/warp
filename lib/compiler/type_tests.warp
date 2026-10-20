@@ -7,7 +7,13 @@ use "words.warp"
 use "scope.warp"
 
 tested_word_call(subject: Node, word: text, equality: Node, scope: any): Node :=
-	if is_tested_type(word, scope) then call_of("is_type", [subject, word]) else equality
+	if is_tested_type(word, scope) then call_of("is_type", [tested(subject), word]) else equality
+
+# `type(x) is int` tests x, as the type of x is what it names (Rust: type_tests.rs is_type_call, card type-int)
+tested(subject: Node): Node := match subject {
+	List(items, bracket, separator): { if #items == 2 and items#1 == symbol("type") then items#2 else subject }
+	_: subject
+}
 
 # a type word no value of the program is named, or a type it declares (`enum Coin {…}`, `class P {…}`)
 is_tested_type(word: text, scope: any): bool :=

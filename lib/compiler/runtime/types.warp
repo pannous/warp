@@ -21,6 +21,7 @@ node_is_type(n: any, type: text): bool := {
 	if type == "map" { return marked_kind(n) == 8 }
 	if type == "key" { return kind == 6 }
 	if type == "symbol" { return kind == 5 }
+	if type == "error" { return kind == 11 }
 	no
 }
 # a type value `int`: a symbol marked 1<<54 above its kind (src/type_kinds.rs TYPE_VALUE_KIND)

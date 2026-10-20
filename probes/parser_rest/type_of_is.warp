@@ -1,0 +1,4 @@
+f(n: any): bool := type(n) is key
+print(f(Key(symbol("a"), Op.Colon, 1)))
+print(f(3))
+print(type(3) is int)

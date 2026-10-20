@@ -1,0 +1,9 @@
+# pure-compiled: parser.warp and the passes lower program.warp of the working folder, printed as the JSON view the emit stage reads
+use "../../lib/compiler/passes.warp"
+json_of(v: any): text := {
+	if v is list { return "[" + v.map(json_of).join(",") + "]" }
+	if v == ø { return "null" }
+	if v is number { return "" + v }
+	"\"" + ("" + v).replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
+}
+print(json_of(checked(read("program.warp"), ".", "")#1))

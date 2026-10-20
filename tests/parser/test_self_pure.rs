@@ -284,6 +284,29 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
 
+/// lib/compiler/analyzer.warp: a field read `p.code` is a value known at run time, so is a slice of it, held in a
+/// variable (card pure-field-slice)
+#[test]
+fn field_slices_run_pure() {
+	runs_pure("field_slice", "class P { code: text }; p = P{code: \"hello\"}; w = p.code[1 .. 3]; w + \"!\"", "el!");
+}
+
+/// lib/compiler/definitions.warp: `f = { it + 1 }` defines a function of `it` as `f := { it + 1 }` does (card pure-error)
+#[test]
+fn assigned_it_blocks_run_pure() {
+	runs_pure("assigned_it_block", "f = { it + 1 }; f(2)", "3");
+}
+
+/// lib/compiler/min_max.warp: min and max of arguments, of a list literal, of a list known at run time (card
+/// pure-library-words)
+#[test]
+fn extrema_run_pure() {
+	runs_pure("max_of_arguments", "max(3, 9, 4)", "9");
+	runs_pure("min_of_literal", "min([4, 1, 6])", "1");
+	runs_pure("max_of_computed", "xs = [5, 2, 7]; max(xs.map(x => x * 2))", "14");
+	runs_pure("min_of_variable", "xs = [5, 2, 7]; min(xs) + max(1.5, 1)", "3.5");
+}
+
 /// What the lib bench found parser.warp failing on in lib/ (scripts/lib_bench.sh): a keyword naming a key or a member
 /// (`{if: 4}`, `op.if`, emitter.warp), a membership word assigned (`alias contains = …`, prelude.warp), an operator
 /// alias line, `&f` and `∛x` (math.warp), the degree sign (`20°C`, units.warp)
@@ -404,6 +427,22 @@ fn parser_words_run_pure() {
 	runs_pure("floor_quotient_of_nodes", &probe("floor_node"), "3\n3\n2\n2");
 	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
 	runs_pure("empty_lists_join", &probe("empty_joins"), "0\n1\n0");
+	runs_pure("arity_overloads", &probe("arity_overloads"), "6\n6\n14\n6\n10\n1\n10\n12");
+	runs_pure("type_of_is", &probe("type_of_is"), "yes\nno\nyes");
+	runs_pure("match_arm_forms", &probe("match_arms"), "x\nfirst\nb\nother");
+	runs_pure("coalesce", &probe("coalesce"), "2\n1\n-2");
+	runs_pure("recursive_join", &probe("recursive_join"), "[3 2 1]\n[2 1 0]");
+	runs_pure("type_module_words", &probe("type_module_words"), "[1 2 3]\n[1 2]\n7");
+	runs_pure("nested_case_patterns", &probe("nested_patterns"), "label\n2\nother");
+	runs_pure("error_values", &probe("error_value"), "1\ntoo many\nyes");
+	let chain = |name: &str| format!("{}/probes/pure_chains/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("library_word_mapped", &chain("slice_named"), "['b']\n[2 1]");
+	runs_pure("chained_iterations", &chain("sorted_then_mapped"), "[\"use a\" \"use b\"]\n[4 6]");
+	runs_pure("module_directory", &chain("home_folder/own_folder"), "home_folder\nhelpers");
+	runs_pure("read_files", &chain("files/read_file"), "zweite Zeile ü\n26\nnone");
+	runs_pure("loop_variable_scope", &chain("slice_loops"), "['b' 'c']");
+	runs_pure("loop_of_functions", &chain("loop_of_functions"), "6\n4");
+	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
 }
 
 /// A type's name is a value, `k = int` prints `class int` (decision type-text); a parameter, a result or a variable

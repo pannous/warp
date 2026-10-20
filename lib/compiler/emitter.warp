@@ -22,11 +22,15 @@ export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
 # the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names
-exported_globals = ["trap_detail"]
+exported_globals = ["trap_detail", "text_heap"]
 import_function_byte = 0
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
 fd_write = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
 stdout = 1
+# a module that reads files imports the host's read(path address, length) → (answer address, length), as Rust's
+# import_manager.rs host_read; the host writes the answer at the exported global text_heap, past the memory's end
+host_read = ["host", "read", [96, 2, 127, 127, 2, 127, 127]]
+text_heap_name = "text_heap"
 # its linear memory, one page: fd_write's iovec {address, count} at 0, the count it wrote at 8, the bytes it writes from
 # output_address (an offset of the store, so `output_byte(i, b)` stores at output_address + i)
 memory_pages = 1
@@ -78,7 +82,7 @@ passive_segment = 1
 no_value = 64
 # opcodes (WebAssembly core spec, section 5.4)
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
-	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_store: 54, i32_store8: 58,
+	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_load: 40, i32_load8_u: 45, i32_store: 54, i32_store8: 58,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
@@ -677,12 +681,25 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 	if name == "set_byte" { return [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc.text])] }
 	if name == "output_byte" { return [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)] }
 	if name == "write_output" { return ["int", write_output(index_code(values#1))] }
+	# host_read(count): the host's read of the path in the first count output bytes, the answer's address; its length
+	# kept where fd_write's count goes, for answered_length()
+	if name == "host_read" {
+		declared_global(text_heap_name, "char")
+		length = uleb(fresh_local(body, "char"))
+		start = uleb(fresh_local(body, "char"))
+		code = [op.i32_const] + sleb(output_address) + index_code(values#1) + [op.call] + uleb(import_index(host_read))
+		code += [op.local_set] + length + [op.local_set] + start
+		code += [op.i32_const] + sleb(written_address) + [op.local_get] + length + [op.i32_store, 2, 0]
+		return ["int", code + [op.local_get] + start + [op.i64_extend_i32_u]]
+	}
+	if name == "answered_length" { return ["int", [op.i32_const] + sleb(written_address) + [op.i32_load, 2, 0, op.i64_extend_i32_s]] }
+	if name == "memory_byte" { return ["int", index_code(values#1) + [op.i32_load8_u, 0, 0, op.i64_extend_i32_u]] }
 	# copy_text(to, at, from, start, count)
 	code = values#1#2 + index_code(values#2) + values#3#2 + index_code(values#4) + index_code(values#5)
 	[no_kind, code + gc_code(gc_ops.array_copy, [gc.text, gc.text])]
 }
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
-	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
+	output_byte: 2, write_output: 1, host_read: 1, answered_length: 0, memory_byte: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, closure_text: 1}
@@ -694,7 +711,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", caught_error: "caught_error"}
+	trim: "node_trim", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error"}
 # node_order knows no user compare: a program with classes sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
@@ -702,9 +719,9 @@ sort_words = ["sorted_node", "sorted_node_by"]
 core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map"}
+	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error"}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
-	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: []}
+	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: []}
 def type_test(body: Body, subject: any, spec: text): list {
 	if spec in module.sum_types { return refuse("a test of the type " + spec + ", which has cases or subclasses") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
@@ -875,6 +892,9 @@ def local_value(body: Body, n: any): list {
 }
 
 def operation(body: Body, symbol: text, a: any, b: any): list {
+	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
+	if a#1 == pending and b#1 != pending { a = [b#1, a#2] }
+	if b#1 == pending and a#1 != pending { b = [a#1, b#2] }
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
 	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(body, a, b) }
@@ -1042,8 +1062,6 @@ def typed_declaration(body: Body, name: text, type_name: text, value: any): list
 	if value#1 != "node" and value#1 != pending { return refuse("a " + value#1 + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
-# `a Shape`, `an Animal`, as Rust's error messages name a type
-with_article(name: text): text := (if "AEIOUaeiou".contains(name#1) then "an " else "a ") + name
 # `x: int? = v` (walk.warp's `line_of(n): int? := try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet (Rust's is), a value of another kind is refused
 def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
@@ -2107,6 +2125,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.rereads = []
 	collect_types(program)
 	module.imports = if mentions_name(program, "print") then [fd_write] else []
+	if mentions_name(program, "read") { module.imports += [host_read] }
 	# imported ahead of the functions, whose indices follow them: every host word the program names
 	for name in module.host.keys {
 		if mentions_name(program, name) or (name in time_host_words and makes_time(program)) { module.imports += [host_import(name)] }
