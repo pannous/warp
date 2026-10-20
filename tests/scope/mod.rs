@@ -16,6 +16,7 @@ mod test_global_modifiers;
 mod test_global_node_widening;
 mod test_global_typed_list; // found writing samples/servers/server.warp
 mod test_globals;
+mod test_bound_names_shadow_functions; // card local-variable-named
 mod test_node_widening_in_loops;
 mod test_parameter_shadowing; // card two-signal-kinds
 mod test_parameter_shadows_function;

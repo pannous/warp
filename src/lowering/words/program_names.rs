@@ -77,6 +77,11 @@ pub fn bound_in_functions(program: &Node) -> HashSet<String> {
 	bound
 }
 
+/// The names bound inside the function `node` defines (bound_in_function); None when it defines none
+pub fn bound_inside(node: &Node) -> Option<HashSet<String>> {
+	function_head(node).map(|head| bound_in_function(&head))
+}
+
 /// The names a function binds inside: its parameters, the names its body assigns and its loop variables
 fn bound_in_function(head: &FunctionHead) -> HashSet<String> {
 	let mut bound: HashSet<String> = head.parameters().into_iter().filter_map(parameter_name).collect();
