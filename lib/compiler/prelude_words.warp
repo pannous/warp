@@ -1,9 +1,11 @@
 # The prelude's definitions a program reaches (Rust twin: src/modules/prelude_slices.rs): a call of a prelude word the
 # program defines nowhere brings that word's definition, and those it calls in turn, as Rust's resolve loads them. The
 # prelude is cut into slices, one per top-level `name(…) := …`; the reached ones are parsed after the program's own
-# statements, so its positions stay as written.
+# statements, so its positions stay as written. It runs on the parsed program after uses.warp: the source is parsed
+# once (twice put parser.warp's lowering past the stage's 60 s).
 use "parser.warp"
 use "walk.warp"
+use "uses.warp"
 
 # [name, text] of each function definition in source: a line starting with a name and its parameters, with the
 # indented or closing lines below it
@@ -40,28 +42,41 @@ is_name_part(c: char): bool := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z'
 # a line inside the definition above it: indented, or the brace closing it
 continues(line: text): bool := #line > 0 and (line#1 == '\t' or line#1 == ' ' or line#1 == '}')
 
-# the words a node mentions as symbols
+# the words a node mentions as symbols, each once (a map as the set: an 89 KB program has tens of thousands)
 symbol_words(n: any): list := {
-	words = []
-	for view in views_in(n) { if kind_of(view) == "symbol" and not (view#2 in words) { words += [view#2] } }
-	words
+	found = {}
+	waiting = [n]
+	at = 1
+	while at <= #waiting {
+		part = waiting#at
+		at += 1
+		if part is symbol { found[name_of(part)] = yes } else if type(part) is key { waiting += [key_of(part), value_of(part)] } else if is_group(part) { for item in part { waiting += [item] } }
+	}
+	found.keys
 }
 
-# the source with the prelude definitions it reaches appended, the source itself when it reaches none
-with_prelude(source: text, prelude: text): text := {
-	own = definition_slices(source).map(slice => slice#1)
-	slices = definition_slices(prelude).filter(slice => not (slice#1 in own))
+# the program with the prelude definitions it reaches after its own statements (its positions stay as written), the
+# program itself when it reaches none; each reached slice parsed once
+with_prelude(program: any, prelude: text): any := {
+	program_parts = statements_in(program)
+	own_names = program_parts.map(declared_name)
+	slices = definition_slices(prelude).filter(slice => not (slice#1 in own_names))
 	reached = []
-	wanted = symbol_words(parsed(source))
+	brought = []
+	wanted = symbol_words(program)
 	while #wanted > 0 {
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
 			if slice#1 == word and not (slice in reached) {
 				reached += [slice]
-				wanted += symbol_words(parsed(slice#2))
+				slice_node = plain_node(parsed(slice#2))
+				brought += statements_in(slice_node)
+				wanted += symbol_words(slice_node)
 			}
 		}
 	}
-	if #reached == 0 then source else source + "\n" + reached.map(slice => slice#2).join("\n")
+	if #brought == 0 { return program }
+	for definition_node in brought { program_parts += [definition_node] }
+	separated(bracketed(program_parts, ""), ";")
 }
