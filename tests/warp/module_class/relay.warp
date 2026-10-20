@@ -1,0 +1,3 @@
+// uses boxes.warp beside it, for tests/modules/test_module_classes.rs
+use "boxes.warp"
+full_box(n) := { b = Box(); b.put(n); b }

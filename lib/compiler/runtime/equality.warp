@@ -4,7 +4,7 @@
 node_equal(a: any, b: any): bool := {
 	if is_null(a) == 1 or is_null(b) == 1 { return is_null(a) == is_null(b) }
 	if kind_code(a) == 6 or kind_code(b) == 6 {
-		return marked_kind(a) == marked_kind(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
+		return code_free_kind(a) == code_free_kind(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
 	}
 	if marked_kind(a) == 8 and marked_kind(b) == 8 { return map_equal(a, b) }
 	if kind_code(a) == 8 or kind_code(b) == 8 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }

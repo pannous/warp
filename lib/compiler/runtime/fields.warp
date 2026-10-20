@@ -4,10 +4,10 @@
 has_field(m: any, name: text): bool := {
 	if is_null(m) == 1 { return no }
 	if is_position_part(m, name) { return is_meta(m) == 1 }
+	if is_list_part(m, name) { return yes }
 	if kind_code(m) == 5 { return text_order(name, "name") == 0 }
 	if node_is_error(m) { return is_error_message(m, name) }
 	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 or text_order(name, "name") == 0 or text_order(name, "op") == 0 }
-	if is_plain_list(m) { return text_order(name, "bracket") == 0 or text_order(name, "separator") == 0 }
 	if marked_kind(m) != 8 and marked_kind(m) != 6 { return no }
 	map_index(m, name) > 0
 }
@@ -23,7 +23,18 @@ is_position_part(m: any, name: text): bool := {
 position_part(m: any, name: text): int := if text_order(name, "line") == 0 then meta_line(m) else meta_column(m)
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
 is_entry(n: any): bool := kind_code(n) == 6 and marked_kind(n) != 6
-# a list that is no map: its fields are the node's parts, `n.bracket` and `n.separator`
+# `n.bracket`, `n.separator` of any node: a list's own, ø of any other node (Rust's node_api.rs); a map's entry or a
+# key's name of that name wins
+is_list_part(m: any, name: text): bool := {
+	if text_order(name, "bracket") != 0 and text_order(name, "separator") != 0 { return no }
+	if is_entry(m) and text_order(key_name(m), name) == 0 { return no }
+	not ((marked_kind(m) == 8 or marked_kind(m) == 6) and map_index(m, name) > 0)
+}
+list_part(m: any, name: text): any := {
+	if not is_plain_list(m) { return ø }
+	if text_order(name, "bracket") == 0 then list_bracket(m) else list_separator(m)
+}
+# a list that is no map
 is_plain_list(n: any): bool := kind_code(n) == 8 and marked_kind(n) != 8
 # a swizzle `p.zy` (decision S1): p a list of 2 to 4 numbers holding every component the letters x y z w pick
 swizzle_fits(p: any, letters: text): bool := {

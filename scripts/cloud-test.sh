@@ -141,10 +141,17 @@ run_tests_here() {
 	fi
 	rustup target add $RUST_TARGETS >/dev/null 2>&1
 	local source_flags=(--config net.offline=false)
+	# the vendored sources in a config above the checkout, not --config flags: a cargo the tests run themselves (the
+	# libwarp_runtime build of tests/common runtime_library_dir) reads it too (card cloud-fxprof)
+	local vendor_config=$HERE_ROOT/.cargo/config.toml
+	rm -f "$vendor_config"
 	if git diff --quiet origin/vendor HEAD -- Cargo.lock 2>/dev/null; then
 		lock_matches=1
 		git archive origin/vendor vendor | tar -x
-		source_flags=(--offline --config 'source.crates-io.replace-with="vendored-sources"' --config 'source.vendored-sources.directory="vendor"')
+		mkdir -p "$(dirname "$vendor_config")"
+		printf '[net]\noffline = true\n[source.crates-io]\nreplace-with = "vendored-sources"\n[source.vendored-sources]\ndirectory = "%s"\n' \
+			"$checkout/vendor" > "$vendor_config"
+		source_flags=(--offline)
 	fi
 	local test_args=() filters=() past_separator="" flag_value_next=""
 	if [ "${1:-}" = "--full" ]; then

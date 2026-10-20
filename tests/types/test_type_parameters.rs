@@ -45,3 +45,9 @@ fn a_type_value_parameter_tests_as_its_type() {
 	is!("f(x) := x is int; f(3)", true);
 	is!("name(t: type): text := match t { int: \"whole\"; float: \"real\"; _: \"other\" }; name(float)", "real");
 }
+
+#[test] // card rust-lane-int: a type test of a run-time value compares type values, never a word the program defines
+fn a_type_test_beside_a_function_named_like_a_type() {
+	is!("operation(a, b, c, d) := 1; f(x) := x is key; f(3) or f(key)", true);
+	is!("pair(a, b) := 1; f(t: type) := t is key; f(int)", false);
+}
