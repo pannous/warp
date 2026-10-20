@@ -116,7 +116,10 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
   whole warp-debug run (probes/sample_inclusive.py) put 98% of it in one caller: run_time_blocks::data_holders ran
   the whole kind inference (flow::settle, its main-program walk restarting thousands of times) only to learn the
   program's function names. Branch analyzer-settle reads them with function_definitions (no inference), law.rs's
-  function_definition too. Still open: why one inference of that pass state takes minutes.
+  function_definition too. That inference never ended: before declarations::lower a definition with a result type
+  in its head (`f(x): list := …`) was walked as main code, and locals of one name in many stage functions (kept,
+  found) turned each other between a list and a Node forever. Fixed on the same branch (function_definition_body
+  reads such heads; a Node widening stays one). Lldb recipe for such hunts: data/settle/ in the standalone worktree.
 
 ## Coordination
 - warp-self-analyzer (pure lane, branch prelude-for-pure): compiler.warp only composes their stages; their passes,
