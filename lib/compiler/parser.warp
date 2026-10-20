@@ -1656,7 +1656,10 @@ def atom(p) {
 		written = decimal_number(p)
 		// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
 		// i64 a float (card int-beyond)
-		if written.contains(".") or written.contains("e-") or written.contains("E-") { return with_glued_factor(p, float(written)) }
+		// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals; Rust twin:
+		// numbers.rs scientific_float); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
+		if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
+		if written.contains(".") { return with_glued_factor(p, float(written)) }
 		literal = p.code[number_start .. p.at]
 		if not (literal.contains("e") or literal.contains("E")) {
 			duration = with_time_unit(p, int(written))

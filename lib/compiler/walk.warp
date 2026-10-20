@@ -197,8 +197,13 @@ reported(view: any): list := {
 	[view, found]
 }
 
-# whether the symbol `word` occurs anywhere in n, inside an opaque view too
-mentions(n: any, word: text): bool := view_has(view_of(n), part => part == ["symbol", word])
+# whether the symbol `word` occurs anywhere in n, inside an opaque layer too
+mentions(n: any, word: text): bool := match n {
+	Symbol(name): name == word
+	Key(left, _, right): { if left == symbol(opaque_word) then view_has(right, part => part == ["symbol", word]) else mentions(left, word) or mentions(right, word) }
+	List(items, _, _): items.any(item => mentions(item, word))
+	_: no
+}
 
 # whether `found` holds for the view or a part of it
 view_has(view: any, found: function): bool := {
