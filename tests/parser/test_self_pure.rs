@@ -331,4 +331,5 @@ fn parser_words_run_pure() {
 	runs_pure("library_word_mapped", &chain("slice_named"), "['b']\n[2 1]");
 	runs_pure("chained_iterations", &chain("sorted_then_mapped"), "[\"use a\" \"use b\"]\n[4 6]");
 	runs_pure("module_directory", &chain("home_folder/own_folder"), "home_folder\nhelpers");
+	runs_pure("read_files", &chain("files/read_file"), "zweite Zeile ü\n26\nnone");
 }
