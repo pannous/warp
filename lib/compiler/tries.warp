@@ -10,6 +10,7 @@
 # Each try's names carry its number (try·value·3), as Rust's do, so two tries of a function keep their own kinds.
 use "walk.warp"
 use "phrase_blocks.warp"
+use "plain_enums.warp"
 
 tries_made = {count: 0}
 
@@ -73,10 +74,14 @@ lowered_try(value: Node, fallback: Node, binding: any): Node := {
 	}
 }
 
-# parser.warp reads `try x else y` as `try·else(x, y)` and `try x catch e { y }` as `try·else(x, {y}, e)`, as Rust's
-# parser does
+# `assert c else m`, `check c`: 1 when c holds, else it raises m (Rust twin: guards.rs lower_assert)
+asserted(condition: Node, message: Node): Node := chosen_branch(condition, braced(1), braced(applied_to(raise_word, [message])))
+
+# parser.warp reads `try x else y` as `try·else(x, y)`, `try x catch e { y }` as `try·else(x, {y}, e)` and
+# `assert c else m` as `assert·else(c, m)`, as Rust's parser does
 try_form(n: Node): Node := match n {
 	List(parts, Bracket.Round, Separator.None): {
+		if #parts == 3 and parts#1 == symbol("assert·else") { return asserted(parts#2, parts#3) }
 		if #parts < 3 or parts#1 != symbol("try·else") { return n }
 		if #parts == 3 { return lowered_try(parts#2, parts#3, ø) }
 		if #parts == 4 and is_name(parts#4) { return lowered_try(parts#2, parts#3, parts#4) }
