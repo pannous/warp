@@ -273,3 +273,14 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("field_named_symbol", "kinds = {symbol: 1}; is_word(n) := n is symbol; is_word(:hello)", "yes");
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
+
+/// lib/compiler/kind_changes.warp: a variable given a value of a kind that does not mix fails with the message of
+/// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
+#[test]
+fn kind_changes_fail_pure() {
+	let (output, _) = lane_run("pure-only", "kind_change", "x = 5; x = [1]; x");
+	assert!(output.contains("x was an Int, is given a List: use another name"), "{output}");
+	let (output, _) = lane_run("pure-only", "body_kind_change", "f() := (x = 1; x = \"a\"; x); f()");
+	assert!(output.contains("x was an Int, is given a Text"), "{output}");
+	runs_pure("kinds_that_mix", "x = 1; x = 2.5; x", "2.5");
+}

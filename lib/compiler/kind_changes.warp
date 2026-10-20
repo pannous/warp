@@ -1,0 +1,186 @@
+# Kind changes (P45, card pure-diagnostics; Rust twin: src/analyzer/checks/kind_changes.rs): a variable given values
+# of evidently different kinds that do not mix, `x = [1]; x = 5`, in the program or in one function body, is the
+# diagnosed fact `kind_change(x, List, Int)`. A first evident value fixes the kind (an Int widens to a Float); a value
+# of no evident kind ends the check of that variable.
+use "walk.warp"
+use "words.warp"
+use "scope.warp"
+use "prefix_comparisons.warp"
+use "diagnostics.warp"
+
+# Rust Op is_arithmetic and is_comparison
+arithmetic_operators = ["+", "-", "*", "/", "/!", "%", "rem", "^"]
+bool_operators = comparison_words + ["is", "===", "!=="]
+# the kinds as messages name them, by the kind type_kinds holds a type as
+shown_kinds = {int: "Int", float: "Float", text: "Text", codepoint: "Text", list: "List", symbol: "Symbol"}
+bool_kind = "Bool"
+bool_types = ["bool", "boolean"]
+function_kind = "function"
+number_kinds = {Int: 1, Float: 1}
+# marks a function's result among the known kinds, apart from a variable of the same name
+call_suffix = "()"
+# the call a closure value is made with (lambdas.warp)
+closure_word = "closure_new"
+global_word = "global"
+nonlocal_word = "nonlocal"
+
+# the program, its first kind change diagnosed
+kind_changes(program: any): any := {
+	results = evident_results(program)
+	global_names = global_variables(program)
+	for body in [program] + definition_bodies(program) {
+		change = first_kind_change(body, {}, results, global_names)
+		if change != ø { return diagnose(change) }
+	}
+	program
+}
+
+is_operator(n: any, op: text): bool := type(n) is key and op_of(n) == op
+is_definition(n: any): bool := is_operator(n, ":=")
+# `(f x) := …`: the name it defines, else ""
+defined_name(n: any): text := {
+	head = key_of(n)
+	if is_group(head) and #head > 0 and head#1 is symbol then name_of(head#1) else ""
+}
+definition_bodies(program: any): list := nodes_in(program).filter(is_definition).map(value_of)
+
+# the variables declared `global: y`
+global_variables(program: any): any := {
+	found = {}
+	for part in nodes_in(program) {
+		if is_operator(part, ":") and key_of(part) == symbol(global_word) {
+			declared = value_of(part)
+			target = if is_operator(declared, "=") then key_of(declared) else declared
+			if target is symbol { found[name_of(target)] = yes }
+		}
+	}
+	found
+}
+# `nonlocal: y` and `nonlocal: a, b` among a body's statements
+declared_nonlocals(body: any): any := {
+	found = {}
+	for statement in statements_in(body) {
+		if is_operator(statement, ":") and key_of(statement) == symbol(nonlocal_word) {
+			names = value_of(statement)
+			for name in (if names is symbol then [names] else if is_group(names) then items_of(names) else []) {
+				if name is symbol { found[name_of(name)] = yes }
+			}
+		}
+	}
+	found
+}
+
+# the kind a value evidently has as written: a literal, a list literal, `v as T`, arithmetic of numbers, or a name or
+# call whose kind `known` gives; "" for anything else
+evident_kind(value: any, known: any): text := {
+	if value is int { return "Int" }
+	if value is number { return "Float" }
+	if value is text { return "Text" }
+	if is_group(value) and bracket_of(value) == "[" { return "List" }
+	if is_operator(value, "as") { return type_kind(value_of(value)) }
+	if type(value) is key and op_of(value) in arithmetic_operators {
+		left = evident_kind(key_of(value), known)
+		right = evident_kind(value_of(value), known)
+		if left == "Int" and right == "Int" { return "Int" }
+		if left in number_kinds and right in number_kinds { return "Float" }
+		return ""
+	}
+	if value is symbol { return entry(known, name_of(value)) }
+	if is_group(value) and bracket_of(value) == "(" and #value > 0 and value#1 is symbol { return entry(known, name_of(value#1) + call_suffix) }
+	""
+}
+
+# the kind of a type word as messages name it, "" for another type
+type_kind(type_name: any): text := if type_name is symbol then entry(shown_kinds, entry(type_kinds, name_of(type_name).lower())) else ""
+# the map's entry of the key, "" when it has none (an empty map is ø)
+entry(map: any, key: text): text := if key in map then map[key] else ""
+
+# the evident kind for kind changes, bools and functions apart (card bool-assign)
+given_kind_of(value: any, results: any): text := {
+	if value is bool { return bool_kind }
+	if type(value) is key and op_of(value) in bool_operators { return bool_kind }
+	if is_operator(value, "as") and value_of(value) is symbol and name_of(value_of(value)).lower() in bool_types { return bool_kind }
+	if is_group(value) and bracket_of(value) == "(" and #value > 0 and value#1 == symbol(closure_word) { return function_kind }
+	evident_kind(value, results)
+}
+
+# the kind a variable that was `was` holds after it is given `now`, "" when they do not mix
+mixed_kind(was: text, now: text): text := {
+	if was == now { return was }
+	if was in number_kinds and now == bool_kind { return was }
+	if was in number_kinds and now in number_kinds { return "Float" }
+	""
+}
+
+# the result kind of variable function whose last expression's kind is evident, its declared parameters known:
+# `f(x: int) := x + 1` gives an Int
+evident_results(program: any): any := {
+	results = {}
+	for written in nodes_in(program).filter(is_definition) {
+		name = defined_name(written)
+		if name != "" {
+			parameters = {}
+			for parameter in items_of(key_of(written))[1..] {
+				if is_operator(parameter, ":") and key_of(parameter) is symbol {
+					kind = type_kind(value_of(parameter))
+					if kind != "" { parameters[name_of(key_of(parameter))] = kind }
+				}
+			}
+			kind = evident_kind(last_expression(value_of(written)), parameters)
+			if kind != "" { results[name + call_suffix] = kind }
+		}
+	}
+	results
+}
+last_expression(body: any): any := {
+	statements = statements_in(if is_group(body) and (bracket_of(body) == "{" or bracket_of(body) == "(") and #body == 1 then body#1 else body)
+	last = statements#(#statements)
+	if last == body then body else last_expression(last)
+}
+
+# the first kind change of the assignments in program order, not into function definitions (their own scopes):
+# `kinds` holds variable variable's evident kind, "" once it was given a value of no evident kind
+first_kind_change(n: any, kinds: any, results: any, global_names: any): any := {
+	if is_definition(n) {
+		name = defined_name(n)
+		if name == "" { return ø }
+		change = given_kind(name, function_kind, value_of(n), kinds)
+		if change != ø { return change }
+		# its body shares the globals and its `nonlocal` ones
+		nonlocals = declared_nonlocals(value_of(n))
+		body_kinds = {}
+		for variable in kinds.keys() { if variable in global_names or variable in nonlocals { body_kinds[variable] = kinds[variable] } }
+		change = first_kind_change(value_of(n), body_kinds, results, global_names)
+		for variable in body_kinds.keys() { if variable in global_names or variable in nonlocals { kinds[variable] = body_kinds[variable] } }
+		return change
+	}
+	if is_operator(n, "->") or is_operator(n, "=>") { return ø }
+	if is_operator(n, "=") {
+		change = first_kind_change(value_of(n), kinds, results, global_names)
+		if change != ø { return change }
+		target = key_of(n)
+		if is_operator(target, ":") and key_of(target) == symbol(global_word) { target = value_of(target) }
+		if not (target is symbol) { return ø }
+		return given_kind(name_of(target), given_kind_of(value_of(n), results), value_of(n), kinds)
+	}
+	for part in parts_of(n) {
+		change = first_kind_change(part, kinds, results, global_names)
+		if change != ø { return change }
+	}
+	ø
+}
+
+# the variable `name` is given `value` of the evident kind `given`: the change as a fact, else ø, its kind noted
+given_kind(name: text, given: text, value: any, kinds: any): any := {
+	was = if name in kinds then kinds[name] else ø
+	kind = given
+	if was != ø and was != "" and given != "" {
+		# P199: 1 and 0 are yes and no, a bool variable stays one
+		kind = if was == bool_kind and (value == 0 or value == 1) then bool_kind else mixed_kind(was, given)
+		if kind == "" { return call_of("kind_change", [symbol(name), was, given]) }
+	} else if was != ø {
+		kind = ""
+	}
+	kinds[name] = kind
+	ø
+}
