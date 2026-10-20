@@ -36,3 +36,21 @@ package → package name, OCI reference, newest version, description, exports/im
 warp doesn't adopt the long `ns:name` names: `use component http` looks the short name up in components.warp, the way
 config.toml maps namespaces to registries. A short name is the package name (`http`); on a clash wasi wins and the
 others get `<ns>-<name>`. `use component wasi:http@0.2.1` and full OCI references stay possible for anything unlisted.
+
+## Which public components are useful for warp (supervisor overview 2026-10-19, session b1f5f0e7)
+Asked: which public components could we easily use for networking, threads, windows, graphics, sound?
+Answer from components.warp (598 packages): almost none are ready-to-run implementations for these areas.
+
+| Area | In the index | Verdict |
+|---|---|---|
+| Networking | wasi:sockets, wasi:http | interfaces the host must implement; wasmtime has them, our loader links only WASI stdio |
+| Key-value, blobstore, SQL, messaging | wasi:keyvalue, wasi:blobstore, wasi:sql, wasi:messaging | interfaces; a few implementations (e.g. Valkey-backed as-keyvalue) |
+| Graphics | wasi:webgpu 0.3.0-rc.2 + a demo | release candidate; needs a wgpu host, stock wasmtime has none |
+| Threads | nothing | wasi-threads dropped, the new threads proposal unfinished |
+| Windows, sound | nothing | no WASI standard; stays host/FFI work (SDL, raylib, CoreAudio) |
+
+Most "components" in these areas are interfaces, not implementations: the host or another component must provide them.
+What runs right away are self-contained components importing only wasi:* (parsers, codecs, LLM wrappers, MCP tools),
+none of which warp needs. Conclusion (user): none of them are really useful for us now; the per-area research and a
+run-time component loader were parked on card components-on-the-fly (Later), the loading part shared with
+module-linking (Soon).
