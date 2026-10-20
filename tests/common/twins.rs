@@ -5,7 +5,9 @@
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
 pub use warp::compiler::node_views::{analysis_view, plain_view, view_json};
+use warp::formats::meta_section::with_entries;
 use warp::host::with_captured_stdout;
+use warp::numbers::units::static_units::{result_units_entry, UNITS_ENTRY};
 use warp::{Node, Number};
 
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
@@ -142,7 +144,9 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	let cases = in_parallel(paths.to_vec(), |path| {
 		let text = std::fs::read_to_string(path).ok()?;
 		let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
-		Some((path.display().to_string(), view_json(&analysis_view(&lowered)), text))
+		// the units of the result live in this thread's compile context: the module carries them, as the pipeline's
+		let units = result_units_entry().and_then(|(_, units)| units.text_value());
+		Some((path.display().to_string(), view_json(&analysis_view(&lowered)), text, units))
 	});
 	// one file per call: tests running at once rewrote a shared file while another read it (truncated JSON)
 	static RUNTIME_FILES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -156,14 +160,14 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	let twin = TwinProgram::with_setup("emitter", &setup, "wasm_module(node_of(json(argument)), runtime_words)");
 	let (mut inside, mut differing, mut refusals) = (vec![], vec![], std::collections::BTreeMap::new());
 	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
-		let arguments: Vec<&str> = cases.iter().map(|(_, view, _)| view.as_str()).collect();
-		for ((path, _, text), module) in cases.iter().zip(twin.values(&arguments)) {
+		let arguments: Vec<&str> = cases.iter().map(|(_, view, ..)| view.as_str()).collect();
+		for ((path, _, text, units), module) in cases.iter().zip(twin.values(&arguments)) {
 			if let Some(refusal) = module.text_value().filter(|text| text.starts_with(OUTSIDE_THE_CORE)) {
 				refusals.entry(refusal).or_insert_with(Vec::new).push(path.clone());
 				continue;
 			}
 			inside.push(path.clone());
-			let (warp_value, warp_output) = with_captured_stdout(|| module_value(&module));
+			let (warp_value, warp_output) = with_captured_stdout(|| module_value(&module, units.as_deref()));
 			let (rust_value, rust_output) = with_captured_stdout(|| warp::wasm_emitter::eval(text).drop_meta().clone());
 			if !same_value(&warp_value, &rust_value) || warp_output != rust_output {
 				let shown = |value: &Node, output: &str| format!("{} printing {output:?}", value.serialize());
@@ -196,8 +200,9 @@ const OUTSIDE_THE_CORE: &str = "outside the core";
 /// Set, the emitter twin lists why the sources outside the core are outside, the most frequent first
 const REFUSALS_REPORT: &str = "EMITTER_REFUSALS";
 
-/// The value main of a module given as a list of bytes returns (its prints through WASI), or the failure as a text
-fn module_value(module: &Node) -> Node {
+/// The value main of a module given as a list of bytes returns (its prints through WASI) in the `units` of the
+/// result, or the failure as a text
+fn module_value(module: &Node, units: Option<&str>) -> Node {
 	let Node::List(items, ..) = module.drop_meta() else {
 		return Node::text(&format!("no module: {}", module.serialize()));
 	};
@@ -205,7 +210,9 @@ fn module_value(module: &Node) -> Node {
 		Node::Number(Number::Int(byte)) => u8::try_from(*byte).ok(),
 		_ => None,
 	};
+	let units_entry = units.map(|units| (UNITS_ENTRY, Node::text(units)));
 	let bytes: Option<Vec<u8>> = items.iter().map(byte).collect();
+	let bytes = bytes.map(|bytes| with_entries(bytes, units_entry.into_iter().collect()));
 	let wasi = warp::run::wasm_reader::Imports { wasi: true, ..Default::default() };
 	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes_with_imports(&bytes, wasi)) {
 		Some(Ok(value)) => value,

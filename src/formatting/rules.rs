@@ -247,7 +247,22 @@ fn spaced_operator(characters: &[(char, bool)], at: usize) -> Option<&'static st
 	}
 	let before = characters[..at].iter().rev().map(|(c, _)| *c).find(|c| !is_space(*c))?;
 	let next = characters[after..].iter().map(|(c, _)| *c).find(|c| !is_space(*c))?;
-	(is_operand_end(before) && is_operand_start(next)).then_some(operator)
+	let operand_before = is_operand_end(before) && !keyword_before(characters, at);
+	(operand_before && is_operand_start(next)).then_some(operator)
+}
+
+/// The word before `at` (blanks between) is a keyword or a word operator, after which a value starts: the `-` in
+/// `return -1`, `then -1`, `in -1 to 1`, `and -x` is a sign (card format-turns)
+fn keyword_before(characters: &[(char, bool)], at: usize) -> bool {
+	let reversed: String = characters[..at]
+		.iter()
+		.rev()
+		.map(|(c, _)| *c)
+		.skip_while(|c| is_space(*c))
+		.take_while(|c| c.is_alphanumeric() || *c == '_')
+		.collect();
+	let word: String = reversed.chars().rev().collect();
+	crate::warp_parser::takes_a_value(&word) || crate::operators::spelled_operator(&word).is_some()
 }
 
 /// The `-` at `at` is part of a name, `my-var` or `o-b` (card chars-map): spaced it would split the name, so the line's
