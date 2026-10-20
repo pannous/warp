@@ -407,7 +407,8 @@ impl WarpParser {
 	}
 
 	/// After a type word, blanks and then the definition `:=` or a declared name `i =` after `width` characters:
-	/// `int? i = 3` and `as int? := …` are optional types, no ternary
+	/// `int? i = 3` and `as int? := …` are optional types, no ternary; `f(): Name? := …` also of a type the program
+	/// does not declare (a used file's), as a ternary has no empty branch
 	pub(super) fn declaration_follows(&self, type_word: &str, width: usize) -> bool {
 		let is_type =
 			crate::type_tests::builtin_type_name(type_word).is_some() || self.declared_types.contains(type_word);
@@ -420,7 +421,7 @@ impl WarpParser {
 			'=' => self.peek_char(at + 1) != '=',
 			_ => false,
 		};
-		is_type && blanks > 0 && if name == 0 { assigns(start) } else { assigns(after_name) }
+		blanks > 0 && if name == 0 { assigns(start) } else { is_type && assigns(after_name) }
 	}
 
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on
