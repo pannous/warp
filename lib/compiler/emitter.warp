@@ -1214,7 +1214,7 @@ def field_or_word(body: Body, value: any, name: text, word: any): list {
 	held = uleb(fresh_local(body, "node"))
 	receiver = ["node", [op.local_get] + held]
 	has_it = condition(runtime_call("has_field", [receiver, text_value_of(name)]))
-	read = boxed(map_get(receiver, name))
+	read = boxed(runtime_call("map_get", [receiver, text_value_of(name)]))
 	["node", value#2 + [op.local_set] + held + has_it + [op.if] + value_type("node") + read + [op.else] + boxed(word(receiver)) + [op.end]]
 }
 def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
