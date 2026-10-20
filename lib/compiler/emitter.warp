@@ -599,80 +599,81 @@ def is_runtime_word(body: Body, name: text): bool {
 # the words the runtime is written in, each one or two instructions
 def intrinsic(body: Body, name: text, arguments: any): list {
 	values = arguments.map(a => expression_code(body, a))
-	if name == "new_text" { return ["text", index_code(values#1) + gc_code(gc_ops.array_new_default, [gc.text])] }
-	if name == "byte_count" { return ["int", values#1#2 + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]] }
-	if name == "byte_at" { return ["int", values#1#2 + index_code(values#2) + gc_code(gc_ops.array_get_u, [gc.text]) + [op.i64_extend_i32_u]] }
-	if name == "kind_code" { return ["int", kind_code_of(values#1#2)] }
-	if name == "unboxed_int" { return ["int", unboxed(values#1#2, gc.int_box)] }
-	if name == "marked_kind" { return ["int", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 0])] }
-	if name == "unboxed_list" { return ["list", payload(values#1#2, gc.list)] }
-	if name == "unboxed_text" { return ["text", payload(values#1#2, gc.text)] }
-	if name == "unboxed_char" { return ["char", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [i31_type]) + gc_code(gc_ops.i31_get_u, [])] }
-	if name == "char_of" { return ["char", index_code(values#1)] }
-	if name == "new_list" {
-		count = [op.local_get] + uleb(fresh_local(body, "int"))
-		code = converted(values#1, "int") + [op.local_set] + count[1..] + count + [op.i32_wrap_i64] + count + [op.i32_wrap_i64]
-		return ["list", code + gc_code(gc_ops.array_new_default, [gc.items]) + gc_code(gc_ops.struct_new, [gc.list])]
+	match name {
+		"new_text": ["text", index_code(values#1) + gc_code(gc_ops.array_new_default, [gc.text])]
+		"byte_count": ["int", values#1#2 + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
+		"byte_at": ["int", values#1#2 + index_code(values#2) + gc_code(gc_ops.array_get_u, [gc.text]) + [op.i64_extend_i32_u]]
+		"kind_code": ["int", kind_code_of(values#1#2)]
+		"unboxed_int": ["int", unboxed(values#1#2, gc.int_box)]
+		"marked_kind": ["int", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 0])]
+		"unboxed_list": ["list", payload(values#1#2, gc.list)]
+		"unboxed_text": ["text", payload(values#1#2, gc.text)]
+		"unboxed_char": ["char", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [i31_type]) + gc_code(gc_ops.i31_get_u, [])]
+		"char_of": ["char", index_code(values#1)]
+		"new_list": {
+			count = [op.local_get] + uleb(fresh_local(body, "int"))
+			code = converted(values#1, "int") + [op.local_set] + count[1..] + count + [op.i32_wrap_i64] + count + [op.i32_wrap_i64]
+			["list", code + gc_code(gc_ops.array_new_default, [gc.items]) + gc_code(gc_ops.struct_new, [gc.list])]
+		}
+		"copy_items": {
+			items = x => x + gc_code(gc_ops.struct_get, [gc.list, 1])
+			code = items(values#1#2) + index_code(values#2) + items(values#3#2) + index_code(values#4) + index_code(values#5)
+			[no_kind, code + gc_code(gc_ops.array_copy, [gc.items, gc.items])]
+		}
+		# adopt_items(to, from): to takes from's length and items
+		"adopt_items": {
+			to = [op.local_get] + uleb(fresh_local(body, "list"))
+			from = [op.local_get] + uleb(fresh_local(body, "list"))
+			code = values#1#2 + [op.local_set] + to[1..] + values#2#2 + [op.local_set] + from[1..]
+			taken = field => to + from + gc_code(gc_ops.struct_get, [gc.list, field]) + gc_code(gc_ops.struct_set, [gc.list, field])
+			[no_kind, code + taken(0) + taken(1)]
+		}
+		# an entry's name, a symbol, text or character (name_node), as a text
+		"key_name": ["text", runtime_call("node_text", [["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1])]])#2]
+		"key_value": ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 2])]
+		"map_of": ["node", node(node_kind_codes.map, values#1#2)]
+		"new_key": ["node", entry_code(values#1#2, values#2#2)]
+		# item_room(list): the items its array holds, its length and the spare room after it; set_count(list, n)
+		"item_room": ["int", values#1#2 + gc_code(gc_ops.struct_get, [gc.list, 1]) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
+		"set_count": [no_kind, values#1#2 + index_code(values#2) + gc_code(gc_ops.struct_set, [gc.list, 0])]
+		# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
+		"keyed": ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code(gc_ops.struct_new, [gc.node])]
+		"entry_key": ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [gc.node])]
+		"symbol_of": ["node", node(node_kind_codes.symbol, values#1#2)]
+		# error_of(t): the Error of the message t, of no class (Rust's text_builtins.rs error_of)
+		"error_of": ["node", node(node_kind_codes.error, values#1#2)]
+		# list_node(kind, list): a list's $Node of that whole kind field, its bracket and separator in it
+		"list_node": ["node", node_code(converted(values#1, "int"), values#2#2)]
+		# meta_node(n, line, column): n's kind, data and value in a $MetaNode at that position, no comment
+		"meta_node": {
+			held = [op.local_get] + uleb(fresh_local(body, "node"))
+			part = i => as_node(held) + gc_code(gc_ops.struct_get, [gc.node, i])
+			code = values#1#2 + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, "int") + converted(values#3, "int")
+			["node", code + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.meta_node])]
+		}
+		"is_meta": ["int", values#1#2 + gc_code(gc_ops.ref_test, [gc.meta_node]) + [op.i64_extend_i32_u]]
+		"meta_line": ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc.meta_node]) + gc_code(gc_ops.struct_get, [gc.meta_node, 3])]
+		"meta_column": ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc.meta_node]) + gc_code(gc_ops.struct_get, [gc.meta_node, 4])]
+		"closure_text": call_values(made_late(closure_text_name, "text", ["closure"]), values)
+		"is_null": ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]]
+		"same_text": ["int", values#1#2 + values#2#2 + [op.ref_eq, op.i64_extend_i32_u]]
+		# the error is the word's: a variant of it by arity is named `word·arity`
+		"fail": [pending, error_throw(body.function.name.split("·")#1) + [op.unreachable]]
+		"is_ratio": ["int", ratio_test(values#1#2) + [op.i64_extend_i32_u]]
+		"ratio_of": {
+			box = v => converted(v, "int") + gc_code(gc_ops.struct_new, [gc.int_box])
+			["node", node(node_kind_codes.int, box(values#1) + box(values#2) + gc_code(gc_ops.struct_new, [gc.ratio]))]
+		}
+		"ratio_numerator": ["int", ratio_part(values#1#2, 0)]
+		"ratio_denominator": ["int", ratio_part(values#1#2, 1)]
+		"unboxed_float": ["float", unboxed(values#1#2, gc.float_box)]
+		"code_of": ["int", values#1#2 + [op.i64_extend_i32_u]]
+		"set_byte": [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc.text])]
+		"output_byte": [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)]
+		"write_output": ["int", write_output(index_code(values#1))]
+		# copy_text(to, at, from, start, count)
+		_: [no_kind, values#1#2 + index_code(values#2) + values#3#2 + index_code(values#4) + index_code(values#5) + gc_code(gc_ops.array_copy, [gc.text, gc.text])]
 	}
-	if name == "copy_items" {
-		items = x => x + gc_code(gc_ops.struct_get, [gc.list, 1])
-		code = items(values#1#2) + index_code(values#2) + items(values#3#2) + index_code(values#4) + index_code(values#5)
-		return [no_kind, code + gc_code(gc_ops.array_copy, [gc.items, gc.items])]
-	}
-	# adopt_items(to, from): to takes from's length and items
-	if name == "adopt_items" {
-		to = [op.local_get] + uleb(fresh_local(body, "list"))
-		from = [op.local_get] + uleb(fresh_local(body, "list"))
-		code = values#1#2 + [op.local_set] + to[1..] + values#2#2 + [op.local_set] + from[1..]
-		taken = field => to + from + gc_code(gc_ops.struct_get, [gc.list, field]) + gc_code(gc_ops.struct_set, [gc.list, field])
-		return [no_kind, code + taken(0) + taken(1)]
-	}
-	# an entry's name, a symbol, text or character (name_node), as a text
-	if name == "key_name" { return ["text", runtime_call("node_text", [["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1])]])#2] }
-	if name == "key_value" { return ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 2])] }
-	if name == "map_of" { return ["node", node(node_kind_codes.map, values#1#2)] }
-	if name == "new_key" { return ["node", entry_code(values#1#2, values#2#2)] }
-	# item_room(list): the items its array holds, its length and the spare room after it; set_count(list, n)
-	if name == "item_room" { return ["int", values#1#2 + gc_code(gc_ops.struct_get, [gc.list, 1]) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]] }
-	if name == "set_count" { return [no_kind, values#1#2 + index_code(values#2) + gc_code(gc_ops.struct_set, [gc.list, 0])] }
-	# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
-	if name == "keyed" { return ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code(gc_ops.struct_new, [gc.node])] }
-	if name == "entry_key" { return ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [gc.node])] }
-	if name == "symbol_of" { return ["node", node(node_kind_codes.symbol, values#1#2)] }
-	# error_of(t): the Error of the message t, of no class (Rust's text_builtins.rs error_of)
-	if name == "error_of" { return ["node", node(node_kind_codes.error, values#1#2)] }
-	# list_node(kind, list): a list's $Node of that whole kind field, its bracket and separator in it
-	if name == "list_node" { return ["node", node_code(converted(values#1, "int"), values#2#2)] }
-	# meta_node(n, line, column): n's kind, data and value in a $MetaNode at that position, no comment
-	if name == "meta_node" {
-		held = [op.local_get] + uleb(fresh_local(body, "node"))
-		part = i => as_node(held) + gc_code(gc_ops.struct_get, [gc.node, i])
-		code = values#1#2 + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, "int") + converted(values#3, "int")
-		return ["node", code + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.meta_node])]
-	}
-	if name == "is_meta" { return ["int", values#1#2 + gc_code(gc_ops.ref_test, [gc.meta_node]) + [op.i64_extend_i32_u]] }
-	if name == "meta_line" { return ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc.meta_node]) + gc_code(gc_ops.struct_get, [gc.meta_node, 3])] }
-	if name == "meta_column" { return ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc.meta_node]) + gc_code(gc_ops.struct_get, [gc.meta_node, 4])] }
-	if name == "closure_text" { return call_values(made_late(closure_text_name, "text", ["closure"]), values) }
-	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
-	if name == "same_text" { return ["int", values#1#2 + values#2#2 + [op.ref_eq, op.i64_extend_i32_u]] }
-	# the error is the word's: a variant of it by arity is named `word·arity`
-	if name == "fail" { return [pending, error_throw(body.function.name.split("·")#1) + [op.unreachable]] }
-	if name == "is_ratio" { return ["int", ratio_test(values#1#2) + [op.i64_extend_i32_u]] }
-	if name == "ratio_of" {
-		box = v => converted(v, "int") + gc_code(gc_ops.struct_new, [gc.int_box])
-		return ["node", node(node_kind_codes.int, box(values#1) + box(values#2) + gc_code(gc_ops.struct_new, [gc.ratio]))]
-	}
-	if name == "ratio_numerator" { return ["int", ratio_part(values#1#2, 0)] }
-	if name == "ratio_denominator" { return ["int", ratio_part(values#1#2, 1)] }
-	if name == "unboxed_float" { return ["float", unboxed(values#1#2, gc.float_box)] }
-	if name == "code_of" { return ["int", values#1#2 + [op.i64_extend_i32_u]] }
-	if name == "set_byte" { return [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc.text])] }
-	if name == "output_byte" { return [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)] }
-	if name == "write_output" { return ["int", write_output(index_code(values#1))] }
-	# copy_text(to, at, from, start, count)
-	code = values#1#2 + index_code(values#2) + values#3#2 + index_code(values#4) + index_code(values#5)
-	[no_kind, code + gc_code(gc_ops.array_copy, [gc.text, gc.text])]
 }
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
