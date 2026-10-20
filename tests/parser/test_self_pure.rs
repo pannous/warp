@@ -92,3 +92,21 @@ fn text_escapes_read_pure() {
 	runs_pure("hex_escape", "\"\\x41\\x42\"", "AB");
 	runs_pure("unicode_escape", "\"\\e[H\" == \"\\u{1b}[H\"", "yes");
 }
+
+/// parser.warp reads the optional field `left?` as Rust does (samples/objects/binary_tree.warp), and emitter.warp
+/// builds an instance whose float field gets an int (probes/samples/r.warp's Vec3): both through the self-hosted
+/// emitter, nothing refused (card emitter-twin-fails)
+#[test]
+fn optional_and_float_fields_run_self_hosted() {
+	let runs_emitted = |name: &str, code: &str, value: &str| {
+		let (output, refusals) = lane_run("1", name, code);
+		assert!(output.contains(value), "{code}: {output}");
+		assert_eq!(refusals, "", "{code}");
+	};
+	runs_emitted(
+		"optional_field",
+		"type T { value: int; left? }\nt = T { value: 2 }\nt.left = T { value: 1 }\nt.left.value",
+		"1",
+	);
+	runs_emitted("float_field", "type V { x: float; y: float }\nv = V { x: 1, y: 2.5 }\nv.x + v.y", "3.5");
+}
