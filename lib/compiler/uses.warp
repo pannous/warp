@@ -2,6 +2,7 @@
 # that file, read from the program's folder, as src/modules/loader.rs brings them; each used file once, the files it
 # uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written.
 use os
+use "walk.warp"
 
 import_keywords = ["use", "require", "import", "include"]
 # (function_keywords: words.warp's)
@@ -67,12 +68,6 @@ folder_of(path: text): text := {
 	parts[0..<(#parts - 1)].join("/")
 }
 file_text(path: text): any := try read(path) else ø
-
-# a program's statements: those of a block, else the one statement it is
-statements_in(program: any): list := {
-	if is_group(program) and bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n") { return items_of(program) }
-	[program]
-}
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
 # `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program); not its

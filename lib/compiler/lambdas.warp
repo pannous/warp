@@ -16,17 +16,9 @@ use "multiple_assignments.warp"
 
 lifted_prefix = "closure_lambda_"
 closure_call_word = "closure_call_"
-global lambdas_made = 0
 
 # the words that walk a list with a function: [the arguments between the list and the function]
 iteration_extras = {"map": 0, "filter": 0, "each": 0, "for_each": 0, "forEach": 0, "find": 0, "any": 0, "all": 0, "fold": 1}
-
-fresh_number(): int := {
-	lambdas_made += 1
-	lambdas_made
-}
-
-fresh_name(role: text, number: int): Node := symbol(role + "·" + number)
 
 # the items after a call's head
 arguments_of(call: list): list := call[1..]
@@ -148,10 +140,6 @@ defined_head(signature: Node, body: Node): any := match signature {
 	Key(call, Op.Colon, type): defined_head(call, body)
 	_: ø
 }
-
-# a program's statements: a sequence's, by `;` or by lines, else the one statement
-is_sequence_of_statements(program: any): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
-top_statements(program: any): list := if is_sequence_of_statements(program) then items_of(program) else [program]
 
 # the names a body assigns, binds in a `for` or declares `x: T = v`, each once; `x := v` defines, it binds no variable
 names_bound(n: any, found: list): list := {
@@ -285,7 +273,7 @@ lowered_statement(statement: any, top_locals: list, lowering: Lowering): any := 
 }
 
 lambdas(program: any): any := {
-	written = top_statements(program)
+	written = statements_in(program)
 	arities = {}
 	for statement in written {
 		parts = definition_of(statement)
@@ -297,7 +285,7 @@ lambdas(program: any): any := {
 		if definition_of(statement) == ø { top_locals = names_bound(statement, top_locals) }
 	}
 	lowered = written.map(statement => lowered_statement(statement, top_locals, lowering))
-	if is_sequence_of_statements(program) { return group_like(program, lowering.lifted + lowered) }
+	if is_statement_sequence(program) { return group_like(program, lowering.lifted + lowered) }
 	if #lowering.lifted == 0 { return lowered#1 }
 	List(lowering.lifted + lowered, Bracket.None, Separator.Semicolon)
 }
