@@ -284,3 +284,20 @@ fn enums_of_used_files_and_type_variables_run_pure() {
 	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
 	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
 }
+
+/// parser.warp's last refusals in the pure lane (card pure-parser-rest): a type test beside a local of that name in
+/// another function, `else` on the next line, a prelude alias beside a function of other arity, min and max, a member
+/// naming a library word, `/!` of a value known only at run time, the keys of `{}`
+#[test]
+fn parser_words_run_pure() {
+	let probe = |name: &str| format!("{}/probes/parser_rest/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("type_test_beside_local", &probe("is_shadowed"), "no\nyes\n3\nyes");
+	runs_pure("else_on_next_line", &probe("else_lines"), "[2]");
+	runs_pure("then_on_next_line", &probe("then_line"), "4");
+	runs_pure("method_on_next_line", &probe("method_line"), "[2 4]");
+	runs_pure("alias_beside_arity", &probe("overload"), "16\n42");
+	runs_pure("min_max", &probe("min_max"), "2\n5\n9\n1\n2\n1");
+	runs_pure("member_words", &probe("plurals"), "['h' 'é' 'l' 'l' 'o']\n['a' 'b']\n['a' 'b']\n['a' 'b']\n[1 2]\n5");
+	runs_pure("floor_quotient_of_nodes", &probe("floor_node"), "3\n3\n2\n2");
+	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
+}
