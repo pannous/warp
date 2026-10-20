@@ -31,7 +31,7 @@ const HELP_WORD: &str = "help";
 const KEYS_WORD: &str = "keys";
 const EXPORTS_WORD: &str = "exports";
 /// The run-time choice of a class's names (Objects::dispatched)
-const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
+const TYPE_DISPATCH_TEMPLATE: &str = "if RECEIVER is TYPE then NAMES else OTHERWISE";
 const DIR_OTHERWISE_TEMPLATE: &str = "if RECEIVER is map then RECEIVER.keys else OTHERWISE";
 /// A module known only at run time (`f(m) := dir(m); f(math)`): its words from its meta (meta_values.rs)
 const DIR_MODULE_TEMPLATE: &str = "if RECEIVER is symbol then meta_of(RECEIVER).words else []";
@@ -817,7 +817,7 @@ impl Objects {
 				(false, true) => call(crate::type_tests::TYPE_WORD, vec![subject.clone()]),
 				(false, false) => word_list(word, class, &self.listed(class, word).unwrap_or_default()),
 			};
-			type_dispatch(subject, class, names, otherwise)
+			crate::class_methods::by_class(subject, class, names, otherwise)
 		}))
 	}
 
@@ -865,13 +865,14 @@ fn answered_dir(node: Node) -> Node {
 	}
 }
 
-/// `if subject is class then names else otherwise`
-fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> Node {
+/// `if subject is type_module then names else otherwise`, for a type module such as list; a class goes by
+/// class_methods::by_class (its exact class, not the classes extending it)
+fn type_dispatch(subject: &Node, type_module: &str, names: Node, otherwise: Node) -> Node {
 	super::nodes::filled(
-		DISPATCH_TEMPLATE,
+		TYPE_DISPATCH_TEMPLATE,
 		[
 			("RECEIVER", subject.clone()),
-			("CLASS", Node::Symbol(class.to_string())),
+			("TYPE", Node::Symbol(type_module.to_string())),
 			("NAMES", names),
 			("OTHERWISE", otherwise),
 		],
