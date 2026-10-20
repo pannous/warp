@@ -41,4 +41,4 @@ list_method(n: Node): Node := match n {
 	_: n
 }
 
-list_methods(program: any): any := bottom_up(program, list_method)
+list_methods(program: Node): Node := bottom_up(program, list_method)

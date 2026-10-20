@@ -7,7 +7,7 @@ comparison_words = ["==", "!=", "<", ">", "<=", ">=", "≤", "≥", "≠"]
 truth_types = ["bool"]
 
 # `f(x: int) := …`: f, when its first parameter is typed as a value
-value_first_function(n: any): any := {
+value_first_function(n: Node): any := {
 	if not is_key(n, Op.Define) { return ø }
 	head = key_of(n)
 	if not (is_group(head) and bracket_of(head) == "(" and #head >= 2 and head#1 is symbol) { return ø }
@@ -17,7 +17,7 @@ value_first_function(n: any): any := {
 }
 
 # `sq (2 == 4)`: `sq(2) == 4` when sq takes a value first
-compared_call(n: any, functions: list): any := {
+compared_call(n: Node, functions: list): any := {
 	if not (is_group(n) and (bracket_of(n) == "" or bracket_of(n) == "(") and separator_of(n) == " " and #n == 2) { return n }
 	if not (n#1 is symbol and name_of(n#1) in functions) { return n }
 	comparison = n#2
@@ -25,7 +25,7 @@ compared_call(n: any, functions: list): any := {
 	Key(List([n#1, key_of(comparison)], Bracket.Round, Separator.None), op_of(comparison) as Op, value_of(comparison))
 }
 
-prefix_comparisons(program: any): any := {
+prefix_comparisons(program: Node): Node := {
 	if not is_group(program) { return program }
 	functions = items_of(program).map(x => value_first_function(x)).filter(name => name != ø)
 	bottom_up(program, n => compared_call(n, functions))

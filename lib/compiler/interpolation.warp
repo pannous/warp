@@ -77,6 +77,6 @@ template_built(n: Node): Node := match n {
 	_: n
 }
 
-interpolated_node(n: any): any := bottom_up(n, template_built)
+interpolated_node(n: Node): Node := bottom_up(n, template_built)
 
-interpolation(program: any): any := interpolated_node(program)
+interpolation(program: Node): Node := interpolated_node(program)

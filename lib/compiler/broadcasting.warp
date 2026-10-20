@@ -29,4 +29,4 @@ element_wise_phrase(n: Node): Node := match n {
 	_: n
 }
 
-element_wise_operators_pass(program: any): any := bottom_up(program, element_wise_phrase)
+element_wise_operators_pass(program: Node): Node := bottom_up(program, element_wise_phrase)

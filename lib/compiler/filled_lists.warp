@@ -29,7 +29,7 @@ zero_filled(n: Node, scope: any): Node := match n {
 	_: n
 }
 
-filled_lists(program: any): any := {
+filled_lists(program: Node): Node := {
 	scope = scope_of(program)
 	bottom_up(program, n => zero_filled(n, scope))
 }

@@ -56,7 +56,7 @@ is_name_part(c: char): bool := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z'
 continues(line: text): bool := #line > 0 and (line#1 == '\t' or line#1 == ' ' or line#1 == '}')
 
 # the words a node mentions as symbols, each once (a map as the set: an 89 KB program has tens of thousands)
-symbol_words(n: any): list := {
+symbol_words(n: Node): list := {
 	found = {}
 	waiting = [n]
 	at = 1
@@ -71,7 +71,7 @@ symbol_words(n: any): list := {
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
 # loader places them: a used module's in front of the program, the prelude's after it
-with_reached(program: any, module: text, in_front: bool): any := {
+with_reached(program: Node, module: text, in_front: bool): Node := {
 	own_names = statements_in(program).map(declared_name)
 	aliases = module_aliases(module)
 	program = aliased(program, aliases, own_heads(program))
@@ -117,12 +117,12 @@ module_aliases(source: text): any := {
 # or a function taking as many arguments (shadowing is per arity, Rust's library_words.rs word_for_unless: a program's
 # `index_of(source, part, from, n)` leaves `"abc".index_of(c)` to the library); top-down, so a method call
 # `x.f(a)` counts its receiver
-aliased(n: any, aliases: any, own: any): any := match n {
+aliased(n: Node, aliases: any, own: any): any := match n {
 	Key(receiver, Op.Dot, call): Key(aliased(receiver, aliases, own), Op.Dot, aliased_call(children(call, x => aliased(x, aliases, own)), aliases, own, 1))
 	_: children(aliased_call(n, aliases, own, 0), x => aliased(x, aliases, own))
 }
 
-aliased_call(n: any, aliases: any, own: any, receivers: int): any := {
+aliased_call(n: Node, aliases: any, own: any, receivers: int): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
 	if called not in aliases or shadows(own, called, #n - 1 + receivers) { return n }
@@ -140,7 +140,7 @@ shadows(own: any, name: text, count: int): bool := {
 }
 
 # name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
-own_heads(program: any): any := {
+own_heads(program: Node): any := {
 	heads = {}
 	for statement in statements_in(program) {
 		name = declared_name(statement)
@@ -150,7 +150,7 @@ own_heads(program: any): any := {
 }
 
 # the head of `f(a) := …`, `f(a): int := …`, `def f(a) {…}`; ø for another statement
-definition_head_of(statement: any): any := {
+definition_head_of(statement: Node): any := {
 	n = if is_keyword_group(statement) then statement#2 else statement
 	while type(n) is key { n = key_of(n) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 then n else ø
@@ -163,7 +163,7 @@ type_modules = ["list", "map", "text", "time"]
 # `xs.flatten()`, `unique(xs)`: a program calling a word of exactly one type module, a word it defines nowhere and no
 # library word, uses that module, a `use` in front of it (Rust twin: src/modules/implicit_modules.rs
 # with_type_module_uses; a word of two such modules needs its `use`)
-with_type_module_uses(program: any): any := {
+with_type_module_uses(program: Node): Node := {
 	own = own_heads(program)
 	used = statements_in(program).map(use_target).filter(target => target is symbol).map(name_of)
 	providers = type_module_providers()
@@ -192,7 +192,7 @@ type_module_providers(): any := {
 	providers
 }
 # the words the program calls, `f(x)` and `x.f(y)`, each once
-called_words(n: any): list := {
+called_words(n: Node): list := {
 	found = {}
 	waiting = [n]
 	at = 1
@@ -209,7 +209,7 @@ called_words(n: any): list := {
 
 # the program with the definitions it reaches of the standard modules it uses, those they use in turn included: `use
 # case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
-with_used_modules(program: any, folder: text): any := {
+with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(statements_in(program), folder, [])
 	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes)
 }

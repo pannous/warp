@@ -193,7 +193,7 @@ case_names_of(enums: any): any := {
 	variants
 }
 
-node_matches(program: any): any := {
+node_matches(program: Node): Node := {
 	variants = case_names_of(enums_in(program, {}))
 	bottom_up(program, n => node_match(n, variants))
 }

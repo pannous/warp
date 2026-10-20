@@ -87,4 +87,4 @@ try_form(n: Node): Node := match n {
 	_: n
 }
 
-tries(program: any): any := bottom_up(program, try_form)
+tries(program: Node): Node := bottom_up(program, try_form)

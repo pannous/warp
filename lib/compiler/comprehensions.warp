@@ -11,7 +11,7 @@ in_word = "in"
 filter_words = ["if", "where"]
 
 # the clause `for v in xs …`
-starts_with_for(n: any): bool := match n {
+starts_with_for(n: Node): bool := match n {
 	List(words, Bracket.None, separator): #words > 0 and words#1 == symbol(for_word)
 	_: no
 }
@@ -84,4 +84,4 @@ comprehension_node(n: Node): Node := match n {
 	_: n
 }
 
-comprehensions(program: any): any := bottom_up(program, comprehension_node)
+comprehensions(program: Node): Node := bottom_up(program, comprehension_node)

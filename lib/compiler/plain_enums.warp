@@ -57,7 +57,7 @@ declared_enum(n: Node): any := match n {
 }
 
 # the case names of every enum the program declares, by enum name
-enums_in(n: any, enums: any): any := {
+enums_in(n: Node, enums: any): any := {
 	declared = declared_enum(n)
 	if declared != ø { enums[declared#1] = declared#2 }
 	if is_group(n) { for part in n { enums_in(part, enums) } }
@@ -66,7 +66,7 @@ enums_in(n: any, enums: any): any := {
 
 # the names declared of an enum type, `c: Coin`, with that enum; "" for a name declared of several types
 # Rust twin: match_exhaustive.rs typed_subjects
-subjects_in(n: any, enums: any, subjects: any): any := {
+subjects_in(n: Node, enums: any, subjects: any): any := {
 	declared = match n {
 		Key(name, Op.Colon, type_name): if is_name(name) and is_name(type_name) and name_of(type_name) in enums then [name_of(name), name_of(type_name)] else ø
 		_: ø
@@ -106,7 +106,7 @@ case_of(owner: Node, case: Node, n: Node, enums: any): Node := {
 }
 
 # Swift's `.north`, and its arm `case .north:` read as the member `case.north`: north of the one enum having it
-implicit_case(owner: any, case: Node, n: Node, enums: any): Node := {
+implicit_case(owner: Node, case: Node, n: Node, enums: any): Node := {
 	if not (owner == ø or owner == symbol(case_word)) or not is_name(case) { return n }
 	if owner_of(name_of(case), enums) != ø then case else n
 }
@@ -177,7 +177,7 @@ enum_node(n: Node, enums: any, subjects: any): Node := match n {
 	}
 }
 
-plain_enums(program: any): any := {
+plain_enums(program: Node): Node := {
 	enums = enums_in(program, {})
 	if #enums.keys == 0 { return program }
 	subjects = subjects_in(program, enums, {})

@@ -8,7 +8,7 @@ use "walk.warp"
 switch_words = [symbol("switch"), symbol("match")]
 default_word = "default"
 
-is_switch_word(n: any): bool := switch_words contains n
+is_switch_word(n: Node): bool := switch_words contains n
 last_of(items: any): any := items#(#items)
 
 # `alle = (f(3) {cases})` as [alle = f(3), {cases}], else ø
@@ -83,7 +83,7 @@ colon_arms(n: Node): Node := match n {
 	_: n
 }
 
-match_arms(program: any): any := bottom_up(named_switch_subjects(program), colon_arms)
+match_arms(program: Node): Node := bottom_up(named_switch_subjects(program), colon_arms)
 
 # bare_returns (lower_bare_returns): returning ø, bare (`if t == ø { return }`) or written (`return ø`), parses as the
 # word alone; here it becomes the phrase `return ø` the emitter compiles. `return = 1` and `x.return` keep the word

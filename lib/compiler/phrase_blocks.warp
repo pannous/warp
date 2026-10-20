@@ -15,4 +15,4 @@ phrase_block(n: Node): Node := match n {
 	_: n
 }
 
-phrase_blocks(program: any): any := bottom_up(program, phrase_block)
+phrase_blocks(program: Node): Node := bottom_up(program, phrase_block)

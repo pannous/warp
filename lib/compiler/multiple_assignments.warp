@@ -61,4 +61,4 @@ multiple_assignment(n: Node): Node := match n {
 	_: n
 }
 
-multiple_assignments(program: any): any := bottom_up(program, multiple_assignment)
+multiple_assignments(program: Node): Node := bottom_up(program, multiple_assignment)

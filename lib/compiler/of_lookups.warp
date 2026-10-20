@@ -22,14 +22,14 @@ is_bare_phrase(n: Node): bool := match n {
 noun_phrase(words: list): Node := if #words == 1 then words#1 else List(words, Bracket.None, Separator.Space)
 
 # the words of a phrase that arrives grouped: `sum (of xs)`, `(((name of) q) with) a`
-flat_phrase(n: any): list := {
+flat_phrase(n: Node): list := {
 	if not is_bare_phrase(n) { return [n] }
 	words = []
 	for item in n { words += flat_phrase(item) }
 	words
 }
 
-as_one_phrase(n: any): any := {
+as_one_phrase(n: Node): any := {
 	if not is_bare_phrase(n) { return n }
 	words = flat_phrase(n)
 	for word in words {
@@ -146,7 +146,7 @@ is_phrase_group(n: Node): bool := match n {
 	_: no
 }
 
-rewrite(n: any): any := {
+rewrite(n: Node): any := {
 	n = children(as_one_phrase(n), rewrite)
 	if is_phrase_group(n) and not is_spaced_definition(items_of(n)) {
 		parts = looked_up(type_of_called(items_of(n)))
@@ -157,16 +157,16 @@ rewrite(n: any): any := {
 	n
 }
 
-mentions_any(n: any, words: any): bool := {
+mentions_any(n: Node, words: any): bool := {
 	for word in words {
 		if mentions(n, word) { return yes }
 	}
 	no
 }
 
-has_type_of(n: any): bool := view_has(view_of(n), part => kind_of(part) == "type" and part#2 == ["symbol", of_word])
+has_type_of(n: Node): bool := view_has(view_of(n), part => kind_of(part) == "type" and part#2 == ["symbol", of_word])
 
-of_lookups(program: any): any := {
+of_lookups(program: Node): Node := {
 	selecting = mentions_any(program, selector_words) and mentions_any(program, selecting_words)
 	if not mentions(program, of_word) and not selecting and not has_type_of(program) { return program }
 	scope = scope_of(program)

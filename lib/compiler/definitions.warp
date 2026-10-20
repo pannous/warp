@@ -69,4 +69,4 @@ is_call(n: Node): bool := match n {
 	_: no
 }
 
-definitions(program: any): any := bottom_up(program, definition)
+definitions(program: Node): Node := bottom_up(program, definition)

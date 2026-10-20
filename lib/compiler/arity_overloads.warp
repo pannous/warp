@@ -64,7 +64,7 @@ renamed_target(target: Node, name: text): Node := match target {
 
 # the call naming the variant that takes its arguments, `receivers` of them before the dot; the call itself when its
 # name is not overloaded or no single variant takes them
-variant_call(n: any, overloaded: any, receivers: int): any := {
+variant_call(n: Node, overloaded: any, receivers: int): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 0 and n#1 is symbol) { return n }
 	name = name_of(n#1)
 	if name not in overloaded { return n }
@@ -129,7 +129,7 @@ remember_calls(n: Node, called: any, counted_in: function): any := {
 
 # `bottom_up(n, phrase)` of phrase overloaded by arity: the argument is the variant taking as many arguments as the
 # called function calls that parameter with
-passed_variants(n: any, overloaded: any, called: any): any := {
+passed_variants(n: Node, overloaded: any, called: any): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol) { return n }
 	callee = name_of(n#1)
 	arguments = items_of(n)[1 ..]
@@ -145,7 +145,7 @@ passed_variant(argument: any, key: text, overloaded: any, called: any): any := {
 }
 
 # top-down, so a definition is renamed by its own parameters and a method call counts its receiver
-resolved(n: any, overloaded: any, called: any): any := {
+resolved(n: Node, overloaded: any, called: any): any := {
 	call = definition_call(n)
 	if call != ø and name_of(call#1) in overloaded {
 		return Key(renamed_target(key_of(n), variant_name(name_of(call#1), arity_of(call)#2)), Op.Define, resolved(value_of(n), overloaded, called))
@@ -156,7 +156,7 @@ resolved(n: any, overloaded: any, called: any): any := {
 	}
 }
 
-arity_overloads(program: any): any := {
+arity_overloads(program: Node): Node := {
 	overloaded = overloaded_arities(program)
 	if #overloaded == 0 then program else resolved(program, overloaded, called_parameters(program))
 }

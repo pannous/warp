@@ -14,11 +14,11 @@ module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
 # `module_source("prelude")` the text of that standard module
-with_uses(program: any, folder: text): any := bottom_up(used_in(with_module_directory(program, folder), folder), module_text)
+with_uses(program: Node, folder: text): Node := bottom_up(used_in(with_module_directory(program, folder), folder), module_text)
 # `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in (Rust's
 # loader.rs with_module_directory)
-with_module_directory(n: any, folder: text): any := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
-used_in(program: any, folder: text): any := {
+with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
+used_in(program: Node, folder: text): any := {
 	statements = statements_in(program)
 	brought = declarations_used(statements, folder, [])
 	if #brought#1 == 0 { return program }
@@ -28,7 +28,7 @@ used_in(program: any, folder: text): any := {
 
 # `module_source("prelude")`: lib/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
 # writes it out (the std modules are lib/<name>.warp)
-module_text(n: any): any := {
+module_text(n: Node): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	source = file_text(std_module_path(n#2))
 	if source == ø then n else source
@@ -54,13 +54,13 @@ declarations_used(statements: any, folder: text, seen: any): list := {
 std_module_path(name: text): text := folder_of(module_directory) + "/" + name + module_extension
 
 # what a `use` statement names, ø for another statement
-use_target(statement: any): any := {
+use_target(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
 	statement#2
 }
 
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
-file_used(statement: any, folder: text): any := {
+file_used(statement: Node, folder: text): any := {
 	module = use_target(statement)
 	if module is text { return path_in(folder, module) }
 	if not (module is symbol) { return ø }
@@ -77,7 +77,7 @@ file_text(path: text): any := try read(path) else ø
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
 # `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program); not its
 # main-level statements
-is_declaration(statement: any): bool := {
+is_declaration(statement: Node): bool := {
 	if declared_enum(statement) != ø { return yes }
 	if type(statement) is key {
 		operator = op_of(statement)
@@ -91,11 +91,11 @@ is_declaration(statement: any): bool := {
 	is_keyword_group(statement)
 }
 # `def f(x) …`, `global x = 0`: a group a function or declaration keyword starts
-is_keyword_group(n: any): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or name_of(n#1) in declaration_keywords)
+is_keyword_group(n: Node): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or name_of(n#1) in declaration_keywords)
 
 # the name a declaration defines, as src/modules/declarations.rs name_declared_by: `f(x) := …`, `x = …`,
 # `def f(x) …`, `def f(x): T {…}`, `global x = 0`; ø for another statement
-declared_name(statement: any): any := {
+declared_name(statement: Node): any := {
 	if is_keyword_group(statement) { return leftmost_name(statement#2) }
 	if not (type(statement) is key) { return ø }
 	operator = op_of(statement)
@@ -104,7 +104,7 @@ declared_name(statement: any): any := {
 	if operator == ":" and key_of(statement) is symbol and name_of(key_of(statement)) in declaration_keywords { return declared_name(value_of(statement)) }
 	ø
 }
-leftmost_name(n: any): any := {
+leftmost_name(n: Node): any := {
 	if n is symbol { return name_of(n) }
 	if type(n) is key { return leftmost_name(key_of(n)) }
 	if is_group(n) and #n > 0 { return leftmost_name(n#1) }

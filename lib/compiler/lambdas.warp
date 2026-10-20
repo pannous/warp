@@ -63,7 +63,7 @@ lambda_parameter_names(arrow: Node): list := written_parameters(arrow_parameters
 ## renaming
 
 # n with the symbol `from` read as `to`, a field after `.` and a key before `:` kept
-renamed(n: any, from: text, to: Node): any := match n {
+renamed(n: Node, from: text, to: Node): Node := match n {
 	Symbol(name): { if name == from then to else n }
 	Key(left, Op.Dot, right): Key(renamed(left, from, to), Op.Dot, renamed_call(right, from, to))
 	Key(left, op, right): Key(renamed(left, from, to), op, renamed(right, from, to))
@@ -131,7 +131,7 @@ iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
 ## the program's functions and values
 
 # `f(a, b) := body`: [name, parameters as written, body] of a definition, else ø
-definition_of(n: any): any := match n {
+definition_of(n: Node): any := match n {
 	Key(signature, Op.Define, body): defined_head(signature, body)
 	_: ø
 }
@@ -143,18 +143,18 @@ defined_head(signature: Node, body: Node): any := match signature {
 
 # the names a body assigns or declares `x: T = v`, each once; `x := v` defines, it binds no variable. A `for` binds its
 # variable inside its loop only (loop_variables): `for slice in slices {…}` leaves a `slice(xs, 1)` before it the library word
-names_bound(n: any, found: list): list := {
+names_bound(n: Node, found: list): list := {
 	found = newly_bound(n, found)
 	if is_lambda(n) or definition_of(n) != ø { return found }
 	for part in parts_of(n) { found = names_bound(part, found) }
 	found
 }
-newly_bound(n: any, found: list): list := match n {
+newly_bound(n: Node, found: list): list := match n {
 	Key(target, Op.Assign, value): bound_target(target, found)
 	_: found
 }
 # [x] of `for x in xs {…}`, else none
-loop_variables(n: any): list := match n {
+loop_variables(n: Node): list := match n {
 	List(parts, Bracket.None, Separator.Space): { if #parts >= 4 and parts#1 == symbol("for") and parts#3 == symbol("in") then bound_target(parts#2, []) else [] }
 	_: []
 }
@@ -165,7 +165,7 @@ bound_target(target: Node, found: list): list := match target {
 }
 
 # every name the node mentions, each once, in order
-mentioned_names(n: any, found: list): list := {
+mentioned_names(n: Node, found: list): list := {
 	if n is symbol {
 		if name_of(n) not in found { found += [name_of(n)] }
 		return found
@@ -181,7 +181,7 @@ class Lowering { arities: any; lifted: any }
 
 # n with its lambdas lifted, its iterations looped, its function names as values and its calls of variables as
 # closures; `locals` the variables and parameters in scope
-lowered_lambdas(n: any, locals: list, lowering: Lowering): any := {
+lowered_lambdas(n: Node, locals: list, lowering: Lowering): any := {
 	iteration = iteration_of(n)
 	if iteration != ø {
 		looped = iteration_over(iteration, locals, lowering)
@@ -259,7 +259,7 @@ lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 ## the pass
 
 # a definition with its body lowered, its parameters and variables the locals
-lowered_statement(statement: any, top_locals: list, lowering: Lowering): any := {
+lowered_statement(statement: Node, top_locals: list, lowering: Lowering): any := {
 	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
 	locals = parts#2.map(parameter_word) + names_bound(parts#3, [])
@@ -269,7 +269,7 @@ lowered_statement(statement: any, top_locals: list, lowering: Lowering): any := 
 	}
 }
 
-lambdas(program: any): any := {
+lambdas(program: Node): Node := {
 	written = statements_in(program)
 	arities = {}
 	for statement in written {

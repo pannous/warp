@@ -38,7 +38,7 @@ is_quoted(n: Node): bool := match n {
 	_: no
 }
 
-as_numbers(n: any): any := {
+as_numbers(n: Node): any := {
 	global hint_at
 	if is_quoted(n) { return n }
 	if is_positioned(n) { hint_at = n }
@@ -54,7 +54,7 @@ as_numbers(n: any): any := {
 	}
 }
 
-number_words_pass(program: any): any := {
+number_words_pass(program: Node): Node := {
 	global unnamed_numbers
 	global hint_at
 	hint_at = start_of(program)
