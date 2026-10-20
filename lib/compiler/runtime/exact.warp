@@ -21,8 +21,8 @@ exact_ratio(n: int, d: int): any := {
 	ratio_of(n, d)
 }
 # the numerator and denominator of an Int $Node, an int its own numerator over 1
-exact_numerator(n: any): int := if is_ratio(n) == 1 then ratio_numerator(n) else unboxed_int(n)
-exact_denominator(n: any): int := if is_ratio(n) == 1 then ratio_denominator(n) else 1
+exact_numerator(n: any): int := if is_ratio(n) then ratio_numerator(n) else unboxed_int(n)
+exact_denominator(n: any): int := if is_ratio(n) then ratio_denominator(n) else 1
 exact_add(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b) + exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
 exact_sub(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b) - exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
 exact_mul(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_numerator(b), exact_denominator(a) * exact_denominator(b))
@@ -36,7 +36,7 @@ exact_order(a: any, b: any): int := {
 # an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
 # any other as n/d
 exact_text(n: any): text := {
-	if is_ratio(n) == 0 { return int_text(unboxed_int(n)) }
+	if not is_ratio(n) { return int_text(unboxed_int(n)) }
 	numerator = ratio_numerator(n)
 	denominator = ratio_denominator(n)
 	twos = factor_count(denominator, 2)
@@ -121,13 +121,13 @@ floor_quotient(a: int, b: int): int := {
 # `base ^ exponent` of exact numbers (src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
 # inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names
 exact_pow(base: any, exponent: any): any := {
-	if is_ratio(exponent) == 1 { fail() }
+	if is_ratio(exponent) { fail() }
 	times = unboxed_int(exponent)
 	if times < 0 {
 		base = exact_ratio(exact_denominator(base), exact_numerator(base))
 		times = -times
 	}
-	if is_ratio(base) == 0 { return int_pow(unboxed_int(base), times) }
+	if not is_ratio(base) { return int_pow(unboxed_int(base), times) }
 	# a ratio in lowest terms stays in lowest terms raised to any power
 	ratio_of(int_pow(ratio_numerator(base), times), int_pow(ratio_denominator(base), times))
 }

@@ -2,36 +2,36 @@
 # -1, 0 or 1 as a sorts before, with or after b: texts and characters by their bytes, ints and exact rationals exactly,
 # a float on either side as floats; anything else traps, as Rust's not_comparable (instances and times stay Rust's)
 node_order(a: any, b: any): int := {
-	if textual_node(a) == 1 and textual_node(b) == 1 { return text_order(node_text(a), node_text(b)) }
-	if numeric_node(a) == 0 or numeric_node(b) == 0 { fail() }
-	if kind_code(a) == 1 and kind_code(b) == 1 { return exact_order(a, b) }
+	if textual_node(a) and textual_node(b) { return text_order(node_text(a), node_text(b)) }
+	if not numeric_node(a) or not numeric_node(b) { fail() }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return exact_order(a, b) }
 	float_order(float_of_node(a), float_of_node(b))
 }
 # 1 for a boxed int, exact rational or float, else 0
-numeric_node(n: any): int := if kind_code(n) == 1 or kind_code(n) == 2 then 1 else 0
+numeric_node(n: any): bool := kind_code(n) == Kind.Int or kind_code(n) == Kind.Float
 # -1, 0 or 1 as x is below, equal to or above y; NaN equals everything, as f64.gt - f64.lt gives
 float_order(x: float, y: float): int := if x < y then -1 else if x > y then 1 else 0
 # `sort xs`, `sorted "hello"`: a new list of xs's items (a new text of its characters) in ascending order
 sorted_node(xs: any): any := {
-	if is_null(xs) == 1 { return xs }
+	if is_null(xs) { return xs }
 	sorted_like(xs, sortable_items(xs))
 }
 # `xs.sort_by(p => p.k)` as `list_sorted_by(xs, keys)` (src/lowering/lambdas.rs): xs's items ordered by their keys,
 # the items themselves where keys is ø or ends early
 sorted_node_by(xs: any, keys: any): any := {
-	if is_null(keys) == 1 { return sorted_node(xs) }
-	if is_null(xs) == 1 { return xs }
+	if is_null(keys) { return sorted_node(xs) }
+	if is_null(xs) { return xs }
 	sorted_like(xs, unboxed_list(keys))
 }
 # xs's items ordered by keys, as a text again when xs is one
 sorted_like(xs: any, keys: list): any := {
 	items = sortable_items(xs)
 	sorted = sorted_items(items, sort_ranks(items, keys))
-	if kind_code(xs) == 3 { return characters_text(sorted) }
+	if kind_code(xs) == Kind.Text { return characters_text(sorted) }
 	sorted
 }
 # a list's items, a text's characters
-sortable_items(xs: any): list := if kind_code(xs) == 3 then text_graphemes(unboxed_text(xs)) else unboxed_list(xs)
+sortable_items(xs: any): list := if kind_code(xs) == Kind.Text then text_graphemes(unboxed_text(xs)) else unboxed_list(xs)
 # the characters of chars joined into one text
 characters_text(chars: list): text := {
 	out = ""

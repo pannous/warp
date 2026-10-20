@@ -1,32 +1,31 @@
 # What kind a value known only at run time is: ø, errors, texts, `x is type`, `x is Name`
-# 1 for a boxed text or character, else 0
 # `x == ø`: ø, and a list or map without items, as Rust's equality and print take them
-is_nothing(n: any): bool := if is_null(n) == 1 then yes else kind_code(n) == 8 and #unboxed_list(n) == 0
-# `is_error(x)`: x is an Error value (kind code 11)
-node_is_error(n: any): bool := is_null(n) == 0 and kind_code(n) == 11
-textual_node(n: any): int := if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) then 1 else 0
+is_nothing(n: any): bool := if is_null(n) then yes else kind_code(n) == Kind.List and #unboxed_list(n) == 0
+# `is_error(x)`: x is an Error value
+node_is_error(n: any): bool := not is_null(n) and kind_code(n) == Kind.Error
+# a boxed text or character
+textual_node(n: any): bool := not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Codepoint)
 # `x is type` of a value known only at run time, type a name of emitter.warp's covered_kinds: Rust's run-time kind
 # masks (src/lowering/types/type_tests.rs BUILTIN_TYPES): a bool has a mark of its own, ø is the empty list
 node_is_type(n: any, type: text): bool := {
-	if is_null(n) == 1 { return type == "list" }
+	if is_null(n) { return type == "list" }
 	if names_a_type(n) { return names_one_of(unboxed_text(n), covered_type_words(type)) }
-	if marked_kind(n) == 257 { return type == "bool" }
+	if marked_kind(n) == Marked.Bool { return type == "bool" }
 	kind = kind_code(n)
-	if type == "int" { return kind == 1 and is_ratio(n) == 0 }
-	if type == "rational" or type == "number" { return kind == 1 or kind == 2 }
-	if type == "float" { return kind == 2 }
-	if type == "text" { return kind == 3 or kind == 4 }
-	if type == "char" { return kind == 4 }
-	if type == "list" { return (kind == 8 and marked_kind(n) != 8) or kind == 7 }
-	if type == "map" { return marked_kind(n) == 8 }
-	if type == "key" { return kind == 6 }
-	if type == "symbol" { return kind == 5 }
-	if type == "error" { return kind == 11 }
+	if type == "int" { return kind == Kind.Int and not is_ratio(n) }
+	if type == "rational" or type == "number" { return kind == Kind.Int or kind == Kind.Float }
+	if type == "float" { return kind == Kind.Float }
+	if type == "text" { return kind == Kind.Text or kind == Kind.Codepoint }
+	if type == "char" { return kind == Kind.Codepoint }
+	if type == "list" { return (kind == Kind.List and marked_kind(n) != Marked.Map) or kind == Kind.Block }
+	if type == "map" { return marked_kind(n) == Marked.Map }
+	if type == "key" { return kind == Kind.Key }
+	if type == "symbol" { return kind == Kind.Symbol }
+	if type == "error" { return kind == Kind.Error }
 	no
 }
-# a type value `int`: a symbol marked 1<<54 above its kind (src/type_kinds.rs TYPE_VALUE_KIND)
-type_value_kind(): int := 18014398509481989
-names_a_type(n: any): bool := is_null(n) == 0 and marked_kind(n) == type_value_kind()
+# a type value `int`: a symbol marked TYPE_VALUE_MARK above its kind
+names_a_type(n: any): bool := not is_null(n) and marked_kind(n) == Marked.TypeValue
 # a type value tests as the type it names: the words of the types a core type covers (type_tests.rs type_matches)
 covered_type_words(type: text): list := {
 	ints = ["int", "integer", "long", "i64", "i32"]
@@ -48,6 +47,6 @@ names_one_of(name: text, words: list): bool := {
 }
 # `x is Name` of a class: an instance is an entry keyed by its class's name
 instance_of(n: any, name: text): bool := {
-	if is_null(n) == 1 or kind_code(n) != 6 { return no }
+	if is_null(n) or kind_code(n) != Kind.Key { return no }
 	text_order(key_name(n), name) == 0
 }
