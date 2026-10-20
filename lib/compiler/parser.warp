@@ -352,6 +352,32 @@ def code_after(p, at) := if line_ends_after(p, at) then '\n' else p.code[p.resum
 
 def skip_spaces(p) {
 	p.at = blank_end(p, p.at)
+	continuation = line_continuation_length(p)
+	if continuation > 0 {
+		p.at = p.at + continuation
+		skip_spaces(p)
+	}
+}
+
+// The width of `\` ending its line with the newline, or of a line break and the indentation before what continues the
+// line: a method call or `|>` starting the next line (`numbers⏎    .map(square)`), `else` starting it, or the line
+// ending in then/else (`if c then⏎ a⏎ else⏎ b`); else 0
+// Rust twin: scanning.rs line_continuation_length
+def line_continuation_length(p) {
+	c = peek(p.code, p.at, p.n)
+	if c == '\n' or c == '\r' {
+		at = p.at
+		while at < p.n and is_blank(p.code[at]) { at = at + 1 }
+		next = peek(p.code, at + 1, p.n)
+		starts_method = is_at(p.code, at, '.', p.n) and is_name_char(next) and not is_digit(next)
+		starts_pipeline = is_at(p.code, at, '|', p.n) and next == '>'
+		ends_in_branch_word = ["then", "else"] contains word_before(p)
+		return if starts_method or starts_pipeline or keyword_at_position(p, "else", at) or ends_in_branch_word then at - p.at else 0
+	}
+	if c != '\\' { return 0 }
+	end = spaces_end(p, p.at + 1)
+	if is_at(p.code, end, '\r', p.n) { end = end + 1 }
+	if is_at(p.code, end, '\n', p.n) then end + 1 - p.at else 0
 }
 
 // An expression of operators binding at least `min_power` on the left
