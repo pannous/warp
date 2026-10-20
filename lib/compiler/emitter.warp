@@ -892,9 +892,18 @@ declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: 
 def declaration(body: Body, name: text, type_name: text, value: any): list {
 	# `x: any = v` admits every value: the plain assignment
 	if type_name == "any" { return assignment(body, symbol(name), value) }
+	if type_name.ends_with("?") { return optional_declaration(body, name, type_name[0..<(#type_name - 1)], value) }
 	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name) }
 	body.declared[name] = declared_kinds[type_name]
 	assignment(body, symbol(name), value)
+}
+# `x: int? = v` (walk.warp's `line_of(n): int? := try n.line else ø`): a T or ø, so x holds a node; a value known
+# only at run time is not checked yet (Rust's is), a value of another kind is refused
+def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
+	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name + "?") }
+	kind = value#1
+	if kind != "node" and kind != pending and kind != declared_kinds[type_name] { return refuse("a " + kind + " given to a variable declared " + type_name + "?") }
+	assignment(body, symbol(name), ["node", boxed(value)])
 }
 # a value as the declared kind takes it: an int widened to a float, a value known only at run time checked (a list
 # one stays a node, as Rust keeps ø), else of that kind
