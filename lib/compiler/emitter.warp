@@ -899,8 +899,15 @@ def map_assignment(body: Body, target: any, name: text, value: any): list {
 def entry_assignment(body: Body, target: any, name: any, value: any): list {
 	if checks_fields(body, target) and name#1 != "text" and #module.classes.keys > 0 { return refuse("a field write by a name a typed field may refuse") }
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
-	set = dropped(field_assignment(expression(body, target), name, [value#1, held]))
+	updated = field_assignment(expression(body, target), name, [value#1, held])
+	# field_with gives the map with the entry set, a new one for ø (`m = {}; m.a = 1`): stored back into a place
+	set = dropped(if is_place(target) then assignment(body, target, updated) else updated)
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+}
+# a variable, or a field or element of one: what an assignment can write
+def is_place(target: any): bool {
+	if target is symbol { return yes }
+	type(target) is key and (op_of(target) == "." or op_of(target) == "#") and is_place(key_of(target))
 }
 # Rust checks a field write against the field's type only on a local it holds as an instance of the class
 # (struct_backend.rs find_typed_structs), never on a parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
