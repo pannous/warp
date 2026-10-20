@@ -258,13 +258,8 @@ impl WasmGcEmitter {
 						// a list + an item that is no list: the item appended, `xs + [item]` (decision list-append-plus)
 						kind_is(f, 0, Kind::List);
 						kind_is(f, 0, Kind::Block);
-						let node_type = s.type_manager.node_type;
-						#[rustfmt::skip]
-						Self::emit_list(f, &[
-							I::I32Or, I::If(BlockType::Empty),
-								I::LocalGet(0), I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(1),
-								I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
-						]);
+						Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0)]);
+						s.emit_one_item_list(f, 1);
 						s.call(f, "list_concat");
 						Self::emit_list(f, &[I::Return, I::End]);
 						// two texts (or characters): their concatenation, `await a + await b` of two text tasks

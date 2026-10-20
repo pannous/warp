@@ -581,7 +581,6 @@ impl WasmGcEmitter {
 		if !self.parses_code {
 			return;
 		}
-		let node_type = self.type_manager.node_type;
 		for (index, kind) in kinds.iter().enumerate() {
 			self.emit_field(func, local, 0);
 			Self::emit_kind_test(func, *kind as i64, I::I64Eq);
@@ -597,11 +596,7 @@ impl WasmGcEmitter {
 			I::If(BlockType::Empty),
 		]);
 		self.emit_without_code_mark(func, local);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(local),
-				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
-		]);
+		self.emit_one_item_list(func, local);
 		self.emit_empty_text(func);
 		self.call(func, super::super::reflection::library_ops::LIST_TEXT);
 		Self::emit_list(func, &[I::LocalSet(local), I::End]);
