@@ -6,7 +6,7 @@ def starts_at(source: any, part: text, at: int): bool {
 	i == part.length
 }
 code = ""
-for k in 1 .. 300 { code = code + "abc def ghi " }
+for k in 1 .. 4000 { code = code + "abc def ghi " }
 parts = ["de", "gh", "zz", "a", "def", "->", "and"]
 found = 0
 at = 0
