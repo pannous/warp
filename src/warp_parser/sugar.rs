@@ -5,10 +5,23 @@ use super::*;
 
 /// The tree with every written form rewritten, deepest first
 pub(crate) fn sugared(node: Node) -> Node {
+	rewritten(node, written_form)
+}
+
+/// The tree parser.warp gives (compiler/self_hosted.rs) with its `is`, `==` and `!=` read as parse() reads them
+pub(crate) fn equalities_read(node: Node) -> Node {
+	rewritten(node, read_equality)
+}
+
+fn rewritten(node: Node, form: fn(Node) -> Node) -> Node {
 	let node = match node {
-		Node::Type { name, body } => Node::Type { name, body: Box::new(sugared(*body)) },
-		other => crate::node::children_rewritten(other, sugared),
+		Node::Type { name, body } => Node::Type { name, body: Box::new(rewritten(*body, form)) },
+		other => crate::node::children_rewritten(other, |child| rewritten(child, form)),
 	};
+	form(node)
+}
+
+fn written_form(node: Node) -> Node {
 	match node {
 		Node::Key(target, Op::Subscript, index) => subscript(*target, *index),
 		Node::Key(target, Op::Hash, index) if hash_slice_bounds(&index).is_some() => {
@@ -23,6 +36,20 @@ pub(crate) fn sugared(node: Node) -> Node {
 		// `=>` reads as in JS while parsing (Op::FatArrow: its binding, a lambda's body, a field holding a lambda);
 		// the program has one arrow, `->` (user 2026-10-14: "equal for us, but not for others")
 		Node::Key(parameters, Op::FatArrow, body) => Node::Key(parameters, Op::Arrow, body),
+		other => read_equality(other),
+	}
+}
+
+/// `x is v` is `x == v`, which tests the type where v is a type word; `x == v` and `x != v` mark a type word v as the
+/// type value compared (type_tests.rs equality_operand: only `is` tests a type, user decision #30)
+fn read_equality(node: Node) -> Node {
+	match node {
+		Node::Key(left, Op::Is, right) => Node::Key(left, Op::Eq, right),
+		Node::Key(left, op, right) if op.is_equality() => {
+			let right = crate::type_tests::equality_operand(&left, *right);
+			let left = crate::type_tests::equality_operand(&right, *left);
+			Node::Key(Box::new(left), op, Box::new(right))
+		}
 		other => other,
 	}
 }
