@@ -115,8 +115,21 @@ call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments
 # a node with f applied to each of its children
 children(n: Node, f: function): Node := match n {
 	Key(left, op, right): { if left == symbol(opaque_word) then n else Key(f(left), op, f(right)) }
-	List(items, bracket, separator): List(items.map(f), bracket, separator)
+	List(items, bracket, separator): List(items_walked(items, bracket == Bracket.None and separator == Separator.Space, f), bracket, separator)
 	_: n
+}
+
+# `data e`, `print data e`: in a spaced line the item after the word is code as written, which no pass rewrites (Rust
+# lowers no quote)
+quote_word = "data"
+def items_walked(items: list, spaced: bool, f: function): list {
+	walked = []
+	quoting = no
+	for item in items {
+		walked += [if quoting then item else f(item)]
+		quoting = spaced and item == symbol(quote_word)
+	}
+	walked
 }
 
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest

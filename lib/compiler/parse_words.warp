@@ -10,7 +10,6 @@ eval_word = "eval"
 interpret_word = "interpret"
 as_code_word = "as_code"
 parse_code_word = "parse_code"
-quote_word = "data"
 
 called_word(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
 # `data e`: e as written (Rust's blocks.rs as_data)
