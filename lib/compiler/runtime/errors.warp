@@ -4,6 +4,26 @@ divide_by_zero(): int := {
 	fail()
 	0
 }
+# `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail (Rust's
+# emit_data_item); `q.k = e`, `{k: e}`: a field holds none
+held_list_item(item: any): any := {
+	if node_is_error(item) { a_list_item_holds_no_error(item) }
+	item
+}
+held_field(item: any): any := {
+	if node_is_error(item) { a_field_holds_no_error(item) }
+	item
+}
+a_list_item_holds_no_error(error: any): int := {
+	global trap_detail = error
+	fail()
+	0
+}
+a_field_holds_no_error(error: any): int := {
+	global trap_detail = error
+	fail()
+	0
+}
 # `xs#i` outside 1…count: "index out of range: i not in 1…count"
 # the runtime errors of the library words, named for src/wasm_emitter/control/traps.rs to read off the trace
 index_out_of_range(): int := {

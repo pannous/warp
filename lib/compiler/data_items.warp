@@ -1,0 +1,150 @@
+# Data stays clean (decision error-optional; Rust twin src/lowering/collections/data_items.rs): an item written into a
+# list or field, but a literal, is shown `data·item: e` or `data·field: e`, as Rust's analysis view shows its mark
+# (node_views.rs SHOWN_LIST_ITEM), and emitter.warp fails where it holds an Error ("a list item holds no error").
+# The writes shown: the items of a list literal `[e 2]`, `xs#1 = e`, `xs.add(e)`, `xs.insert(1, e)`, `q.k = e`,
+# `m["k"] = e`, the values of a map literal `q = {k: e}`, the items of a tuple literal `t = (e, 2)`. A place declared
+# to admit an Error stays unmarked: a variable of the scope `xs: [int or error] = …`, a parameter `f(xs: [int?])`.
+use "walk.warp"
+use "for_loops.warp"
+
+list_item_mark = "data·item"
+field_mark = "data·field"
+# the methods that write their arguments into the list they are called on (Rust's list_mutations APPEND_METHODS)
+item_writing_methods = ["add", "append", "push", "insert"]
+
+data_items(program: any): any := shown_in(program, admitting_errors(program), variables_given_maps(program))
+
+# the node with its writes shown, admitting: the variables of its scope declared to admit an Error, maps: the variables
+# given a map literal, whose `m[k] = e` writes an entry
+shown_in(n: any, admitting: list, maps: list): any := {
+	if is_key(n, ":=") {
+		inside = admitting + parameters_admitting_errors(key_of(n)) + admitting_errors(value_of(n))
+		return Key(key_of(n), Op.Define, shown_in(value_of(n), inside, maps))
+	}
+	written_shown(children(n, child => shown_in(child, admitting, maps)), admitting, maps)
+}
+
+written_shown(n: any, admitting: list, maps: list): any := {
+	if is_group(n) and bracket_of(n) == "[" { return group_like(n, items_of(n).map(item => shown_written(item, list_item_mark))) }
+	if is_key(n, "=") { return Key(with_declared_type_unmarked(key_of(n)), Op.Assign, written_value(key_of(n), value_of(n), admitting, maps)) }
+	# `a, b = e, 2` parses as `a, (b = e), 2`: values bound to variables, no tuple stored
+	if is_group(n) and separator_of(n) == "," and items_of(n).any(item => is_key(item, "=")) { return group_like(n, items_of(n).map(item => with_assigned_value_unmarked(item))) }
+	if is_key(n, "as") and admits_errors_type(value_of(n)) { return Key(unmarked(key_of(n)), Op.As, value_of(n)) }
+	if is_key(n, ".") and not admits_errors(key_of(n), admitting) { return Key(key_of(n), Op.Dot, with_written_items_marked(value_of(n))) }
+	n
+}
+
+# the value of `target = value`, shown as what the target's place holds
+written_value(target: any, value: any, admitting: list, maps: list): any := {
+	if admits_errors(target, admitting) { return unmarked(value) }
+	if is_key(target, ":") and (admits_errors_type(value_of(target)) or admits_errors(key_of(target), admitting)) { return unmarked(value) }
+	if is_key(target, "#") {
+		receiver = key_of(target)
+		into_entry = names_a_key(value_of(target)) or (receiver is symbol and name_of(receiver) in maps)
+		return shown_written(value, if into_entry then field_mark else list_item_mark)
+	}
+	if is_key(target, ".") { return shown_written(value, field_mark) }
+	if target is symbol or is_key(target, ":") { return with_literal_items_marked(value) }
+	value
+}
+
+is_key(n: any, op: text): bool := type(n) is key and op_of(n) == op
+
+# is the written place declared to admit an Error: its variable, or an item of it
+admits_errors(target: any, admitting: list): bool := {
+	if target is symbol { return name_of(target) in admitting }
+	is_key(target, "#") and admits_errors(key_of(target), admitting)
+}
+
+# does a declared type admit an Error: `int or error`, `[int or error]`, the optional `int?`
+admits_errors_type(declared: any): bool := view_has(view_of(declared), part => kind_of(part) == "symbol" and (part#2 == "error" or part#2.ends_with("?")))
+
+# the variables of one scope declared to admit an Error; a function inside has its own scope
+admitting_errors(n: any): list := {
+	if is_key(n, "=") { return declared_admitting(key_of(n)) + admitting_errors(value_of(n)) }
+	if is_key(n, ":=") { return [] }
+	if type(n) is key { return admitting_errors(key_of(n)) + admitting_errors(value_of(n)) }
+	if is_group(n) { return joined_results(items_of(n), item => admitting_errors(item)) }
+	[]
+}
+declared_admitting(target: any): list := if is_key(target, ":") and key_of(target) is symbol and admits_errors_type(value_of(target)) then [name_of(key_of(target))] else []
+
+# the parameters of a definition head `f(xs: [int or error])` declared to admit an Error
+parameters_admitting_errors(head: any): list := if is_group(head) then joined_results(items_of(head), item => declared_admitting(item)) else []
+
+# the variables given a map literal: `m = {a: 1}`
+variables_given_maps(n: any): list := {
+	if is_key(n, "=") and key_of(n) is symbol and is_curly_group(value_of(n)) { return [name_of(key_of(n))] + variables_given_maps(value_of(n)) }
+	if type(n) is key { return variables_given_maps(key_of(n)) + variables_given_maps(value_of(n)) }
+	if is_group(n) { return joined_results(items_of(n), item => variables_given_maps(item)) }
+	[]
+}
+
+# what f gives for each item, joined into one list
+joined_results(items: list, f: function): list := {
+	all = []
+	for item in items { all += f(item) }
+	all
+}
+
+with_assigned_value_unmarked(n: any): any := if is_key(n, "=") then Key(key_of(n), Op.Assign, unmarked(value_of(n))) else n
+
+# `xs: [int] = …`: the type is no list literal
+with_declared_type_unmarked(target: any): any := if is_key(target, ":") then Key(key_of(target), Op.Colon, unmarked(value_of(target))) else target
+
+# `{k: e}`, `(e, 2)`: the items of a map or tuple literal given to a variable (a list literal marks its own)
+with_literal_items_marked(value: any): any := {
+	if is_group(value) and bracket_of(value) == "(" and separator_of(value) == "," and #items_of(value) > 1 {
+		return group_like(value, items_of(value).map(item => shown_written(item, list_item_mark)))
+	}
+	with_map_values_marked(value)
+}
+
+# `{k: e}`: each value of a map literal marked as a field, nested maps through their own values
+with_map_values_marked(value: any): any := {
+	if not is_curly_group(value) or not items_of(value).all(entry => is_key(entry, ":") and not is_opaque(entry)) { return value }
+	group_like(value, items_of(value).map(entry => Key(key_of(entry), Op.Colon, field_marked(value_of(entry)))))
+}
+field_marked(value: any): any := if is_curly_group(value) then with_map_values_marked(value) else shown_written(value, field_mark)
+is_curly_group(n: any): bool := is_group(n) and bracket_of(n) == "{"
+
+# `m["k"] = e` (shifted to `m#("k" + 1)` like a 0-based index): an entry of a map, no list item
+names_a_key(index: any): bool := {
+	if index is text or index is char { return yes }
+	is_key(index, "+") and names_a_key(key_of(index))
+}
+
+# `add(e)` of `xs.add(e)`, `insert(1, e)`: the items it writes marked as list items, not the named `at: i`
+with_written_items_marked(call: any): any := {
+	if not is_group(call) { return call }
+	items = items_of(call)
+	if #items < 2 or not (items#1 is symbol) or not (name_of(items#1) in item_writing_methods) { return call }
+	arguments = items[1..]
+	group_like(call, [items#1] + arguments.map(item => if is_key(item, ":") then item else shown_written(item, list_item_mark)))
+}
+
+# the item shown as written into the place `mark` names, unless it is a literal or already shown
+shown_written(item: any, mark: text): any := if may_hold_an_error(item) and not is_shown_item(item) then Key(symbol(mark), Op.Colon, item) else item
+
+is_shown_item(item: any): bool := is_key(item, ":") and (key_of(item) == symbol(list_item_mark) or key_of(item) == symbol(field_mark))
+
+# a list, map or tuple literal given to a place that admits an Error: its own items unmarked
+unmarked(value: any): any := {
+	plain = unmarked_item(value)
+	if is_group(plain) and bracket_of(plain) in ["[", "{", "("] { return group_like(plain, items_of(plain).map(item => unmarked_item(item))) }
+	plain
+}
+unmarked_item(item: any): any := {
+	if is_shown_item(item) { return value_of(item) }
+	if is_key(item, ":") and not is_opaque(item) { return Key(key_of(item), Op.Colon, unmarked_item(value_of(item))) }
+	item
+}
+
+# any item but a literal, a nested list or map (whose items are marked themselves), a function and a layer the views
+# carry whole (a type, an error, an empty group): `e`, `f(x)`, `e+1`, `c ? e : 1`
+may_hold_an_error(item: any): bool := {
+	if item is number or item is text or item is char or item is bool or item == ø or is_opaque(item) { return no }
+	if is_group(item) and bracket_of(item) in ["[", "{"] { return no }
+	not (is_key(item, "=>") or is_key(item, ":="))
+}
+is_opaque(n: any): bool := type(n) is key and key_of(n) == symbol(opaque_word)
