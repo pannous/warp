@@ -1,0 +1,5 @@
+// card cycle-argument-kinds: a function in a cycle called with arguments of another kind than its first call's (f of
+// a list, then of an item) traps in emitter.warp's module; Rust gives 1
+def f(n) := if n is list then g(n) else 1
+def g(xs) := f(xs#1)
+f([1])

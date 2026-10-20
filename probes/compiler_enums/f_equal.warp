@@ -1,0 +1,2 @@
+enum Wasm { StructGet, StructNew, RefCast }
+print StructGet == Wasm.StructGet
