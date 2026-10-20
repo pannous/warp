@@ -282,6 +282,11 @@ fn reported(diagnostics: &serde_json::Value) -> Result<(), Node> {
 		let text_at = |index: usize| diagnostic.get(index).and_then(serde_json::Value::as_str).unwrap_or_default();
 		let fix = Some(text_at(2)).filter(|fix| !fix.is_empty()).map(String::from);
 		let found = Diagnostic { message: text_at(1).to_string(), fix, ..Default::default() };
+		// what "got it" silences: `topic@expression`
+		let found = match text_at(3).split_once('@') {
+			Some((topic, written)) => found.about(topic, written),
+			None => found,
+		};
 		match text_at(0) {
 			ERROR_LEVEL => return Err(found.into_error()),
 			HINT_LEVEL => said.push(found.level(Level::Hint)),

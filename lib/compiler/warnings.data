@@ -8,3 +8,10 @@ bare_sleep($amount)	"sleep needs a unit: sleep {amount}s or sleep {amount}ms (a 
 dropped_copy($word, $variable)	"unused value of {word} {variable}: assign it (y = {word} {variable}) or write {variable}.{word}! to change {variable}"
 assigned_mutation($target, $variable)	"{target} = …! changes {variable} too: assign the copy without `!`, or mutate {variable} first and then write {target} = {variable}"
 dropped_error($message)	"`error {message}` makes an error value nothing uses: `fail {message}` raises it"
+# lints.warp (Rust twin src/analyzer/checks/lints.rs); a 4th column `topic@expression` is what "got it" silences
+and_or($condition, $middle, $otherwise)	"`{condition} and {middle} or {otherwise}` yields {otherwise} whenever {middle} is falsy"	"if {condition} then {middle} else {otherwise}"	"and-or@{condition} and {middle} or {otherwise}"
+negative_modulo($left, $right, $euclidean, $truncated)	"`{left} % {right}` is {euclidean}: % is Euclidean as in mathematics; C/Java/JS give {truncated}; use `rem` for the truncated remainder"	""	"negative-modulo@{left} % {right}"
+negative_modulo($left, $right)	"`{left} % {right}`: % is Euclidean as in mathematics (never negative), unlike C/Java/JS; use `rem` for the truncated remainder"	""	"negative-modulo@{left} % {right}"
+float_equality($left, $right)	"`{left} == {right}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"	"use ≈ or exact numbers"
+float_inequality($left, $right)	"`{left} != {right}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"	"use ≈ or exact numbers"
+arithmetic_conversion($whole, $target, $tight)	"`{whole} as {target}` converts the whole `{whole}`, not only its last operand"	"({whole}) as {target} or {tight}"	"arithmetic-conversion@{whole} as {target}"

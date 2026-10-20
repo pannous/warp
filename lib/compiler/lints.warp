@@ -1,0 +1,69 @@
+# Warnings of well-defined code that likely does not mean what it says (card port-remaining; Rust twin:
+# src/analyzer/checks/lints.rs lint_into): `x and y or z` with a falsy y, `%` of a negative number, `==` of floats,
+# `a * b as T`. Their messages are in warnings.data; the ones "got it" silences name their topic there.
+use "walk.warp"
+use "kind_changes.warp"
+use "diagnostics.warp"
+
+# the facts of one node: each warning it gives
+lints_of(n: any): any := {
+	and_or(n)
+	negative_modulo(n)
+	float_equality(n)
+	arithmetic_conversion(n)
+	ø
+}
+
+# `done and "done" or "open"` can't go wrong: its middle is written out and never falsy (card done-done)
+and_or(n: any): any := {
+	if not is_operator(n, "or") or not is_operator(key_of(n), "and") { return ø }
+	condition = key_of(key_of(n))
+	middle = value_of(key_of(n))
+	if is_truthy_literal(middle) { return ø }
+	diagnose(call_of("and_or", [as_written(condition), as_written(middle), as_written(value_of(n))]))
+}
+is_truthy_literal(n: any): bool := (n is number or n is text or n is codepoint or n == yes) and n != 0 and n != ""
+
+# `%` is Euclidean (0 ≤ r < |b|); C, Java, JS and Rust truncate, Python floors
+negative_modulo(n: any): any := {
+	if not is_operator(n, "%") { return ø }
+	left = key_of(n)
+	right = value_of(n)
+	if not is_negative(left) and not is_negative(right) { return ø }
+	if left is int and right is int and right != 0 and left % right != left rem right {
+		return diagnose(call_of("negative_modulo", [as_written(left), as_written(right), "${left % right}", "${left rem right}"]))
+	}
+	diagnose(call_of("negative_modulo", [as_written(left), as_written(right)]))
+}
+is_negative(n: any): bool := {
+	if n is number { return n < 0 }
+	if is_operator(n, "-") { return key_of(n) == ø }
+	is_group(n) and #n == 1 and is_negative(n#1)
+}
+
+# `0.1f + 0.2 == 0.3` is false: decimals are floats, which `==` compares bit for bit (decision exact-default)
+float_equality(n: any): any := {
+	if not is_operator(n, "==") and not is_operator(n, "!=") { return ø }
+	if not is_float_value(key_of(n)) and not is_float_value(value_of(n)) { return ø }
+	diagnose(call_of(if is_operator(n, "==") then "float_equality" else "float_inequality", [as_written(key_of(n)), as_written(value_of(n))]))
+}
+# a value written as a float: decimals are exact, `0.1 as float`, `0.1:float` and arithmetic of them are floats
+is_float_value(n: any): bool := {
+	if is_operator(n, "as") or is_operator(n, ":") { return type_kind(value_of(n)) == "Float" }
+	if type(n) is key and op_of(n) in arithmetic_operators { return is_float_value(key_of(n)) or is_float_value(value_of(n)) }
+	is_group(n) and #n == 1 and is_float_value(n#1)
+}
+
+# `a * b as T` converts the whole `a * b`, not only b
+arithmetic_conversion(n: any): any := {
+	if not is_operator(n, "as") { return ø }
+	whole = key_of(n)
+	if not (type(whole) is key) or not (op_of(whole) in arithmetic_operators) { return ø }
+	last = value_of(whole)
+	target = as_written(value_of(n))
+	tight = if last is number then as_written(last) + ":" + target else "(" + as_written(last) + " as " + target + ")"
+	diagnose(call_of("arithmetic_conversion", [as_written(whole), target, as_written(key_of(whole)) + " " + op_of(whole) + " " + tight]))
+}
+
+# a node as the warnings quote it
+as_written(n: any): text := "${n}".trim()

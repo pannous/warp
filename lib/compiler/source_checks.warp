@@ -5,6 +5,7 @@ use "walk.warp"
 use "scope.warp"
 use "prelude_words.warp"
 use "diagnostics.warp"
+use "lints.warp"
 
 # words whose result is a changed copy of their argument: dropping it changes nothing (Rust COPY_WORDS)
 copy_words = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"]
@@ -20,6 +21,7 @@ source_checks(program: any, prelude: text): any := {
 		spelled_number_join(n)
 		bare_sleep(n)
 		assigned_mutation(n, spellings)
+		lints_of(without_mark(n))
 		if is_group(n) and separator_of(n) in statement_separators {
 			listed_statements = items_of(n)
 			for statement in listed_statements[0 ..< (#listed_statements - 1)] { dropped_value(statement, spellings) }
