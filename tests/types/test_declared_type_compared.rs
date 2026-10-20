@@ -12,5 +12,7 @@ fn equals_with_a_declared_class_does_not_type_test() {
 #[test]
 fn equals_with_a_declared_enum_does_not_type_test() {
 	is!("enum C {A, B}; A == C", 0);
+	is!("enum C {A, B}; A != C", 1);
+	is!("enum C {A, B}; c = B; c == C", 0);
 	is!("enum C {A, B}; A is C", 1);
 }
