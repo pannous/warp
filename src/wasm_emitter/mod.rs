@@ -538,6 +538,9 @@ impl WasmGcEmitter {
 			self.parses_code = true;
 			self.highest_key_operator = (crate::operators::OP_CODES.len() - 1) as i64;
 		}
+		if let Some(code) = reflection::node_api::foreseen_key_operator(node) {
+			self.highest_key_operator = self.highest_key_operator.max(code);
+		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.makes_floats = true;
 			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
