@@ -11,5 +11,7 @@ Only `is` tests a type (user decision #30): `3 is int` is yes, `3 == int` compar
 - Pure lane: `Op.Is` stays until type_tests.warp, which makes `x is T` of a type word T the program binds nowhere
   is_type(x, "T") and every other `x is v` `x == v`; `==` there is never a type test.
 - `x is not 4`, `x isn't 4` are `not (x is 4)` in both parsers.
-- Leftover (card operator-leftover): Rust marks only built-in type words, so `p == P` of a declared class or enum is
-  still read as a type test.
+- Declared types (card operator-leftover): read_equality also marks a bare name of a type the source declares (class,
+  struct, record, type, enum: declaration_scan.rs scan_type_names), so `p == P` and `A == C` are no; `p is P`, `A is C`
+  still test. A bare enum case compared with a marked type is no at once (sum_variants.rs), as the case moves to the
+  right of `==` there and an unbound name on the left reads as a definition written with `is` (P61).
