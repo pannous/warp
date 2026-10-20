@@ -405,3 +405,24 @@ fn parser_words_run_pure() {
 	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
 	runs_pure("empty_lists_join", &probe("empty_joins"), "0\n1\n0");
 }
+
+/// `warp compile` takes the pure lane as `warp <file>` does: under pure-only it compiled the usual way, so a profile of
+/// a pure compile measured the Rust lane (card warp-profile)
+#[test]
+fn compile_takes_the_pure_lane() {
+	let scratch = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("pure_compile_{}", std::process::id()));
+	std::fs::create_dir_all(&scratch).unwrap();
+	let (program, record) = (scratch.join("sum.warp"), scratch.join("refusals.txt"));
+	std::fs::write(&program, "1 + 2").unwrap();
+	let run = crate::common::warp_command()
+		.env("WARP_SELF_HOSTED", "pure-only")
+		.env("WARP_EMIT_REFUSALS", &record)
+		.env("WARP_MODULE_CACHE", PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("self_hosted_stage_cache"))
+		.args(["compile", "--wasm"])
+		.arg(&program)
+		.output()
+		.expect("warp runs");
+	let recorded = std::fs::read_to_string(&record).unwrap_or_default();
+	let _ = std::fs::remove_dir_all(&scratch);
+	assert_eq!(recorded.trim(), RAN_PURE, "{run:?}");
+}
