@@ -18,6 +18,7 @@ fail_word = "fail"
 source_checks(program: any, prelude: text): any := {
 	spellings = prelude_aliases(prelude)
 	for n in nodes_in(program) {
+		located_error(n)
 		spelled_number_join(n)
 		bare_sleep(n)
 		assigned_mutation(n, spellings)
@@ -28,6 +29,12 @@ source_checks(program: any, prelude: text): any := {
 		}
 	}
 	program
+}
+
+# an error the parser leaves in the tree (a negative index), the program's value
+located_error(n: any): any := {
+	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2])) }
+	ø
 }
 
 # an attribute layer `x!` as parser.warp writes it, and the node it marks

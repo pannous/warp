@@ -100,8 +100,12 @@ quotient_call(left: any, right: any): Node := listed("(", "", [symbol("floor_quo
 
 // `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
 // Rust twin: warp_parser subscript
+// A negative index is an error that names the way to the last element: warp never wraps around (Footguns.md)
 subscript(target: any, index: any): Node := {
 	bounds = slice_bounds(index)
+	for bound in subscript_positions(index) {
+		if counts_from_the_end(bound) { return error_node("index out of range: negative index " + negated_form(bound) + " does not wrap around, the last element is last(${target})") }
+	}
 	if bounds != ø { return listed("(", "", [symbol("slice"), target] + bounds) }
 	Key(target, Op.Hash, one_based(index))
 }
@@ -115,6 +119,16 @@ slice_bounds(written: any): any := match written {
 	Key(start, Op.To, last): [start, if last === ø then ø else Key(last, Op.Add, 1)]
 	_: ø
 }
+
+// The bounds of a slice index, else the index itself
+subscript_positions(index: any): list := slice_bounds(index) ?? [index]
+
+// A negative number or a negated expression: `-1`, `-k`
+// Rust twin: subscripts.rs counts_from_the_end
+counts_from_the_end(bound: any): bool := if bound is number then bound < 0 else type(bound) is key and op_of(bound) == "-" and key_of(bound) == ø
+
+// `-1`, `-k` as written
+negated_form(bound: any): text := if bound is number then "${bound}" else "-${value_of(bound)}"
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // Rust twin: warp_parser subscript
