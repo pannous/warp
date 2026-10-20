@@ -31,3 +31,12 @@ fn a_lambda_of_the_loop_variable_given_to_a_function_sees_each_turn() {
 	);
 	is!("use list; xs = [1, 2, 2, 3]; [count_by(xs, y => y == x) for x in xs]", warp::ints(vec![1, 2, 2, 1]));
 }
+
+/// card rust-analyzer-errors: a lambda given to a function reads a field of its argument (`s.name` was taken for
+/// indexing, so s for a list without the symbol's name) and its bool comes back a bool, not the Int 1
+#[test]
+fn a_lambda_given_to_a_function_reads_fields_and_gives_bools() {
+	is!("m(n, p) := p(n); m(symbol(\"it\"), s => s.name)", "it");
+	is!("m(n, p) := p(n); m(symbol(\"it\"), s => s.name == \"it\")", true);
+	is!("h(p) := p(3); h(s => s == 3)", true);
+}
