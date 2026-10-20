@@ -51,7 +51,9 @@ case_pattern(pattern: Node): any := match pattern {
 	_: ø
 }
 
-is_other_arm(pattern: Node): bool := pattern == symbol(other_arm)
+# the arm taking any other subject: `_`, `other`, `default`, `else` (Rust twin: switch.rs DEFAULT_KEYS)
+default_arms = [other_arm, "other", "default", "else"]
+is_other_arm(pattern: Node): bool := is_name(pattern) and default_arms contains name_of(pattern)
 
 arm_pattern(arm: Node): Node := match arm {
 	Key(pattern, Op.Colon, result): pattern
