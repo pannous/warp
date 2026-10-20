@@ -7,6 +7,7 @@
 # step), stays as written and is refused downstream, loudly.
 use "walk.warp"
 use "phrase_blocks.warp"
+use "words.warp"
 
 implicit_variable = "it"
 
@@ -53,11 +54,20 @@ reversed_range(variable: Node, call: list, body: Node): Node := {
 	walked(variable, List(call, Bracket.Round, Separator.None), body)
 }
 
-walked(variable: Node, iterable: Node, body: Node): Node := {
+walked(variable: Node, iterable: Node, body: Node): Node := walked_kept(variable, iterable, body, ø)
+
+# a walk whose body runs only for the items of the type `kept` (ø: every item); the item is tested as read, before
+# the variable holds it (a character held by a text variable is a text)
+walked_kept(variable: Node, iterable: Node, body: Node, kept: any): Node := {
 	items = loop_name(variable, "items")
 	index = loop_name(variable, "index")
-	item = Key(variable, Op.Assign, Key(items, Op.Hash, Key(index, Op.Add, 1)))
-	rounds = [item] + body_statements(body) + [Key(index, Op.Inc, ø)]
+	element = Key(items, Op.Hash, Key(index, Op.Add, 1))
+	statements = body_statements(body)
+	if kept != ø {
+		test = List([symbol("is_type"), element, kept], Bracket.Round, Separator.None)
+		statements = [Key(Key(ø, Op.If, test), Op.Then, List(statements, Bracket.Curly, Separator.Semicolon))]
+	}
+	rounds = [Key(variable, Op.Assign, element)] + statements + [Key(index, Op.Inc, ø)]
 	setup = [Key(items, Op.Assign, iterable), Key(index, Op.Assign, 0)]
 	statement_sequence(setup + [while_loop(Key(index, Op.Lt, Key(ø, Op.Hash, items)), rounds)])
 }
@@ -108,6 +118,13 @@ over_map_keys(names: Node, map: Node, body: Node): Node := {
 	loop_over(names#1, keys, List([lookup] + body_statements(body), Bracket.Curly, Separator.Semicolon))
 }
 
+# the type words whose loop over a text walks a unit instead of filtering (Rust: for_loop/headers.rs bytes_of)
+unit_type_words = ["byte", "codepoint"]
+
+# `for int in xs body`: a type word as the loop variable visits only the items of that type, under its own name
+# (Rust twin: for_loop/headers.rs type_test)
+is_type_word(variable: Node): bool := variable is symbol and name_of(variable) in type_words and not (name_of(variable) in unit_type_words)
+
 lowered_for(n: Node, maps: list): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
 		if skips_step(n) { return n }
@@ -115,6 +132,7 @@ lowered_for(n: Node, maps: list): Node := match n {
 			iterable = parts#4
 			is_map = is_map_literal(iterable) or (iterable is symbol and name_of(iterable) in maps)
 			if is_map and (is_name(parts#2) or is_name_pair(parts#2)) { return over_map_keys(parts#2, iterable, parts#5) }
+			if is_type_word(parts#2) { return walked_kept(parts#2, iterable, parts#5, name_of(parts#2)) }
 			if is_name(parts#2) { return loop_over(parts#2, iterable, parts#5) }
 		}
 		if #parts == 3 and parts#1 == symbol("for") { return loop_over(symbol(implicit_variable), parts#2, parts#3) }
