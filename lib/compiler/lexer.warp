@@ -377,6 +377,18 @@ def digits_end(source: any, at: int, n: int): int {
 	at
 }
 
+// After the spaces and tabs from `at` on
+def blanks_end(source: any, at: int, n: int): int {
+	while at < n and (source[at] == ' ' or source[at] == '\t') { at += 1 }
+	at
+}
+
+// After the run of `c` from `at` on: `' '` for spaces alone, where a tab separates columns
+def run_end(source: any, at: int, c: any, n: int): int {
+	while at < n and source[at] == c { at += 1 }
+	at
+}
+
 // Length of a date literal at `at` (RFC 3339 / 9557: `2024-01-31`, `2024-01-31T10:00:05.5Z`, `…+01:00[Europe/Berlin]`),
 // else 0. Rust twin: time/calendar.rs literal_len
 def date_length(source: any, at: int, n: int): int {

@@ -37,8 +37,7 @@ qualifiers(clause: Node, rest: list): any := match clause {
 			return if nested == ø then ø else found + nested
 		}
 		if not (is_name(tail#1) and name_of(tail#1) in filter_words) or #rest == 0 { return ø }
-		end = 1
-		while end <= #rest and not starts_with_for(rest#end) { end = end + 1 }
+		end = for_position(rest) ?? #rest + 1
 		if end == 1 { return ø }
 		found = found + [["if", words_phrase(rest[0 .. end - 1])]]
 		if end > #rest { return found }
@@ -47,6 +46,9 @@ qualifiers(clause: Node, rest: list): any := match clause {
 	}
 	_: ø
 }
+
+# the position of the first item starting with `for`, else ø
+for_position(items: list): any := (1 to #items).find(i => starts_with_for(items#i))
 
 # the clauses nested in order around `inner`
 looped(clauses: list, inner: Node): Node := {
@@ -61,13 +63,12 @@ looped(clauses: list, inner: Node): Node := {
 
 # `[element, (for v in xs), …]`: the list the loop builds, else ø
 comprehension(items: list): any := {
-	at = 1
-	while at <= #items and not starts_with_for(items#at) { at = at + 1 }
-	if at == 1 or at > #items { return ø }
+	at = for_position(items)
+	if at == ø or at == 1 { return ø }
 	clauses = qualifiers(items#at, items[at..])
 	if clauses == ø { return ø }
 	made = symbol(made_word + "_" + comprehensions_made)
-	comprehensions_made = comprehensions_made + 1
+	comprehensions_made += 1
 	appended = Key(made, Op.AddAssign, List([words_phrase(items[0 .. at - 1])], Bracket.Square, Separator.Space))
 	List([Key(made, Op.Assign, ø), looped(clauses, appended), made], Bracket.Round, Separator.Semicolon)
 }
