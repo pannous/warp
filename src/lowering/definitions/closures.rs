@@ -559,6 +559,22 @@ impl FunctionValues {
 		}
 	}
 
+	/// Does `function` end in a function value: a name it binds itself (`condition = cs#1; condition` beside a function
+	/// condition) is one only when assigned one
+	fn returns_function_value(&self, function: &crate::compiler::context::UserFunctionDef) -> bool {
+		let last = tail(&function.body);
+		match last.drop_meta() {
+			Node::Symbol(name) => {
+				let parameters = function.params.iter().map(|param| param.name.clone()).collect();
+				match crate::program_names::bound_in_body(parameters, &function.body).contains(name) {
+					true => self.variables.contains(name),
+					false => self.is_function_value(last),
+				}
+			}
+			_ => self.is_function_value(last),
+		}
+	}
+
 	/// A list of function values: a literal holding one, another such list, one with more appended (`out + [f]`, what
 	/// `xs.map(n => (x => x + n))` builds), a signal's listeners, or a block that ends in one
 	fn is_function_list(&self, node: &Node) -> bool {
@@ -590,7 +606,7 @@ impl FunctionValues {
 			let returning: HashSet<String> = context
 				.user_functions
 				.values()
-				.filter(|function| self.is_function_value(tail(&function.body)))
+				.filter(|function| self.returns_function_value(function))
 				.map(|function| function.name.clone())
 				.collect();
 			let (mut variables, mut lists) = (HashSet::new(), HashSet::new());
@@ -779,12 +795,13 @@ impl Lifting {
 	}
 
 	fn is_variable(&self, name: &str, bound: &HashSet<String>) -> bool {
-		bound.contains(name) || (self.variables.contains(name) && !self.functions.contains(name))
+		bound.contains(name) || (self.variables.contains(name) && self.function_named(name).is_none())
 	}
 
-	/// A parameter, or a variable assigned a function value
+	/// A parameter, or a variable assigned a function value; a function nested in an enclosing body is none
+	/// (`part = i => …; part(0)` beside another body's `for part in …` over function values)
 	fn may_hold_function(&self, name: &str, bound: &HashSet<String>) -> bool {
-		bound.contains(name) || (self.function_variables.contains(name) && !self.functions.contains(name))
+		bound.contains(name) || (self.function_variables.contains(name) && self.function_named(name).is_none())
 	}
 
 	fn walk(&mut self, node: Node, bound: &HashSet<String>) -> Node {
@@ -873,7 +890,7 @@ impl Lifting {
 			&& items.len() > 1
 			&& head_name
 				.as_ref()
-				.is_some_and(|name| self.function_variables.contains(name) && !self.functions.contains(name));
+				.is_some_and(|name| self.may_hold_function(name, &HashSet::new()));
 		let is_call = (bracket == Bracket::Round && separator == Separator::None) || braceless_call;
 		// `sqrt(angle)` parses as `√ (angle)`: the group of a local is its value
 		if let (true, [_], Some(name)) = (bracket == Bracket::Round, items.as_slice(), &head_name) {
@@ -1077,9 +1094,12 @@ impl Lifting {
 					return;
 				}
 				// `t = k * 2` before any read of t binds the lambda's own local, no capture; `global n` shares n
+				// a local of an enclosing body is read even when a function elsewhere has its name (`w in numbers`
+				// beside lexer.warp's numbers(text))
+				let is_enclosing_local = self.locals.iter().any(|locals| locals.contains(name));
 				if !params.contains(name)
 					&& !globals.contains(name)
-					&& self.is_variable(name, bound)
+					&& (self.is_variable(name, bound) || is_enclosing_local)
 					&& !captured.contains(name)
 					&& !crate::analyzer::starts_with_fresh_binding(body, name)
 				{
