@@ -1,0 +1,32 @@
+# `sq 2 == 4` and `(sq 2 == 4)` parse as `sq (2 == 4)`; a function whose first parameter is typed as a value, no yes/no,
+# takes the call: `sq(2) == 4` (P143, card pure-runs; Rust twin: src/lowering/collections/broadcasting.rs
+# nest_prefix_calls). A yes/no parameter keeps the comparison; an untyped one, where both readings work, stays as parsed.
+use "walk.warp"
+
+comparison_words = ["==", "!=", "<", ">", "<=", ">=", "≤", "≥", "≠"]
+truth_types = ["bool"]
+
+# `f(x: int) := …`: f, when its first parameter is typed as a value
+value_first_function(n: any): any := {
+	if not (type(n) is key and op_of(n) == ":=") { return ø }
+	head = key_of(n)
+	if not (is_group(head) and bracket_of(head) == "(" and #head >= 2 and head#1 is symbol) { return ø }
+	parameter = head#2
+	typed = type(parameter) is key and op_of(parameter) == ":" and value_of(parameter) is symbol
+	if typed and not (name_of(value_of(parameter)) in truth_types) then name_of(head#1) else ø
+}
+
+# `sq (2 == 4)`: `sq(2) == 4` when sq takes a value first
+compared_call(n: any, functions: list): any := {
+	if not (is_group(n) and (bracket_of(n) == "" or bracket_of(n) == "(") and separator_of(n) == " " and #n == 2) { return n }
+	if not (n#1 is symbol and name_of(n#1) in functions) { return n }
+	comparison = n#2
+	if not (type(comparison) is key and op_of(comparison) in comparison_words) { return n }
+	Key(List([n#1, key_of(comparison)], Bracket.Round, Separator.None), op_of(comparison) as Op, value_of(comparison))
+}
+
+prefix_comparisons(program: any): any := {
+	if not is_group(program) { return program }
+	functions = items_of(program).map(x => value_first_function(x)).filter(name => name != ø)
+	bottom_up(program, n => compared_call(n, functions))
+}

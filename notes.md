@@ -80,4 +80,6 @@
 - 2026-10-19 traps-wasm-trap: `text_argument` propagated Error and converted Codepoint but never required Text, so `byte_at(3, 0)` reached `emit_text_bytes` and trapped on the payload cast. Validate the shared argument after conversion, before any text storage access.
 
 - 2026-10-18 julia-floor-divide: Unicode math operator aliases are declared in lib/math.warp and read into the Rust operator table, while lib/compiler/parser.warp keeps a direct SYMBOL_OPERATORS twin; compound glyph aliases such as ÷= must be declared in both places and ordered before their shorter glyph.
-2026-10-20 size-count: origin/main already declares `alias size = count` in lib/prelude.warp; src/analyzer/counting.rs derives counting aliases from prelude_aliases and declines builtin dispatch when a program defines that name. The open card is a missing regression, not missing production behavior.
+- emitter.warp: a runtime word compiled as an arity variant is named `word·arity` (returned_error·0); error_throw uses the word before the `·`. A one-statement curly block assigned as a value (`x = {f(1)}`) is data natively, so lowerings must splice a block's statement, not hold the block (tries.warp, 2026-10-20).
+
+- 2026-10-20 size-count: origin/main already declares `alias size = count` in lib/prelude.warp; src/analyzer/counting.rs derives counting aliases from prelude_aliases and declines builtin dispatch when a program defines that name. The open card is a missing regression, not missing production behavior.
