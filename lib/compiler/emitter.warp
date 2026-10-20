@@ -1567,6 +1567,7 @@ def group_expression(body: Body, n: any): list {
 		return length_code(expression_code(body, n#2))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(expression_code(body, n#2)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("unwrap") { return unwrapped(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_words { return shown_text(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_readers { return cast(expression_code(body, n#2), name_of(n#1)) }
 	if bracket_of(n) == "(" and #n == 1 { return expression_code(body, n#1) }
@@ -1997,6 +1998,13 @@ def host_argument(value: any, kind: text): list {
 	if kind == "int" { return host_int(value) }
 	converted(value, kind)
 }
+# `x!`, Rust's unwrap: a number or text is itself; a node may be data Rust runs as code (blocks.rs), which the core
+# can't yet
+def unwrapped(value: list): list {
+	if value#1 == "node" { return refuse("running a node as code (`x!`)") }
+	value
+}
+
 # a number a host word takes as an int: a fraction or a float rounded to the nearest, as Rust passes `sleep(1/60*1000)`
 def host_int(value: any): list {
 	if value#1 == "node" or value#1 == "float" { return runtime_call("rounded", [["float", converted(value, "float")]])#2 }
