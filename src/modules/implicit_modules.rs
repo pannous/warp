@@ -191,9 +191,10 @@ pub(crate) fn tags_or_calls(program: &Node, word: &str) -> bool {
 	found || called_names(statements_of(program)).contains(word)
 }
 
-/// The first of `words` the program calls without defining it
+/// The first of `words` the program calls without defining it; a read of a declared field is no call (`p.header`)
 pub(crate) fn first_called_undefined<'a>(program: &Node, words: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
-	let called = called_names(statements_of(program));
+	let statements = statements_of(program);
+	let called = called_names_beyond(statements, &declared_fields(statements));
 	words.into_iter().find(|word| called.contains(*word) && defined(program, word).is_none())
 }
 
