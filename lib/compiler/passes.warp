@@ -12,6 +12,7 @@ use "definitions.warp"
 use "multiple_assignments.warp"
 use "clauses.warp"
 use "phrase_blocks.warp"
+use "comprehensions.warp"
 use "for_loops.warp"
 use "ranges.warp"
 use "list_methods.warp"
@@ -19,6 +20,8 @@ use "node_matches.warp"
 use "type_tests.warp"
 use "number_keys.warp"
 use "tries.warp"
+use "prelude_words.warp"
+use "preposition_heads.warp"
 use "plain_enums.warp"
 use "uses.warp"
 use "prefix_comparisons.warp"
@@ -29,7 +32,7 @@ passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_rec
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [tries, definitions, clauses, multiple_assignments, type_tests, prefix_comparisons, sleep_durations] + passes + [bare_returns, node_matches, plain_enums, phrase_blocks, lambdas, for_loops, ranges, list_methods, number_keys]
+pure_passes = [tries, definitions, preposition_heads, clauses, multiple_assignments, type_tests, prefix_comparisons, sleep_durations] + passes + [bare_returns, node_matches, plain_enums, phrase_blocks, comprehensions, lambdas, for_loops, ranges, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
@@ -38,17 +41,17 @@ lowered_node(n: any): any := {
 }
 
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
-# it uses from `folder` (uses.warp): what pure runs hand to analyzer.warp
-lowered_program(source: text, folder: text): Node := lowered_node(with_uses(plain_node(parsed(source)), folder))
+# it uses from `folder` (uses.warp) and the prelude's definitions they reach (prelude_words.warp)
+lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_prelude(with_uses(plain_node(parsed(source)), folder), prelude))
 
 # the source text as the passes leave it, as its view
-lowered(source: text, folder: text): any := view_of(lowered_program(source, folder))
+lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
 # parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them (card
-# pure-runs), the program's uses read from its folder
-stage(request: any): any := {
-	if request#1 == "pure" { return lowered(request#2, request#3) }
+# pure-runs), with the definitions of the prelude's text it reaches and the program's uses read from its folder
+stage(request: any, prelude: text): any := {
+	if request#1 == "pure" { return lowered(request#2, request#3, prelude) }
 	if request#1 == 0 { return bridged(tree(request#2)) }
 	pass = passes#(request#1)
 	view_of(pass(node_of(request#2)))

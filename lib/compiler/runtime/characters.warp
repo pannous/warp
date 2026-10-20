@@ -67,9 +67,11 @@ character_between(t: text, at: int, end: int): any := {
 	if end - at == code_point_width(byte_at(t, at)) { return char_of(code_point_at(t, at)) }
 	bytes_between(t, at, end)
 }
-# the index-th character of t, counted from 1
+# the index-th character of t, counted from 1; an index outside 1…count fails as Rust's "index out of range"
 text_char(t: text, index: int): any := {
+	if index < 1 { index_out_of_range() }
 	at = character_start(t, index)
+	if at >= byte_count(t) { index_out_of_range() }
 	character_between(t, at, character_end(t, at))
 }
 # the byte offset of t's index-th character, counted from 1; past the last, the byte count. It walks on from a walk

@@ -3730,6 +3730,7 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
@@ -3743,9 +3744,12 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
   ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
+  ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
+  ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
   ✓ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::block_definitions_hold_their_value_pure
+  ✓ parser::test_self_pure::comprehensions_run_pure
   ✓ parser::test_self_pure::defaults_run_pure
   ✓ parser::test_self_pure::durations_read_self_hosted
   ✓ parser::test_self_pure::enum_cases_run_pure
@@ -4157,6 +4161,7 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
+  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -6301,9 +6306,6 @@ PASSED:
 
 FAILED:
   ✗ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
-  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
-  ✗ programs::test_display_names::the_display_has_a_density_a_size_and_a_diagonal
-  ✗ programs::test_warp_command::debug_build_names_its_commit
 
 SUMMARY:
-11 ignored, 6297 passed, 4 failed, 6301 total tested
+11 ignored, 6302 passed, 1 failed, 6303 total tested

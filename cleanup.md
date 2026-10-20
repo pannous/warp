@@ -5,6 +5,14 @@
 - Preserve object order, array grouping and separators, integer/float handling, booleans, nulls, and the codepoint sentinel.
 - Run the focused JSON and headless tests, formatting, clippy, and the wasm32 check.
 
+# Cloud-test disk-exhaustion cleanup
+
+- Reproduce a build that still reports `No space left on device` after the existing clean retry with a focused shell probe.
+- Report persistent disk exhaustion as an environmental result instead of a red code verdict.
+- Drop the affected pooled cloud session by its job id so its full VM is not reused, while keeping the failure loud in the result and dropped-session log.
+- Reuse the existing result collection and pool helpers; keep ordinary build failures and successful retries unchanged.
+- Run the focused cloud probes, queued targeted test, formatting/style checks, clippy, wasm32 check, and Playground workflow.
+
 # Delete-list cleanup
 
 - Reproduce deletion of a list variable with a new focused probe test.
