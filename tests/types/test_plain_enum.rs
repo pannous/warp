@@ -71,3 +71,13 @@ fn case_statement_then_type_test() {
 	is!("enum Coin { Penny, Nickel, Dime }; Coin.Nickel; Dime is Coin", true);
 	is!("enum Coin { Penny, Nickel, Dime }; Coin.Nickel; 3 is int", true);
 }
+
+// card rust-lane (r1-enum-case-names): a case named like a built-in type is the case wherever the enum declares it
+#[test]
+fn a_case_named_like_a_type_is_the_case() {
+	let kind = "enum Kind { Empty, Int, Float, Text }";
+	is!(&format!("{kind}; k = Kind.Float; k == Kind.Float"), true);
+	is!(&format!("{kind}; f(k: Kind) := k == Float; f(Kind.Float)"), true);
+	is!(&format!("{kind}; name(k: Kind) := match k {{ Kind.Int: 1; Float: 2; _: 3 }}; name(Float)"), 2);
+	is!("enum Meaning { Function, Variable }; m = Meaning.Function; m == Meaning.Function", true);
+}
