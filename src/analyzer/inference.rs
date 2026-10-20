@@ -70,7 +70,7 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 /// given as `[]` (`t = []; t += "a"`; ø's own `+= "a"` fails, decision empty-plus-text). An item of run-time kind is
 /// decided at run time (list_extend, node_add)
 pub fn appends_item(left: Kind, left_is_empty_list: bool, right: Kind) -> bool {
-	(left == Kind::List || (left == Kind::Empty && left_is_empty_list))
+	(left == Kind::List || (left_is_empty_list && is_run_time_kind(&left)))
 		&& !matches!(right, Kind::List | Kind::Empty | Kind::Data | Kind::Error | Kind::Block)
 }
 

@@ -425,7 +425,7 @@ impl WasmGcEmitter {
 
 	/// A local given `[]` that holds ø still: `+= item` appends to it (Local::empty_list)
 	fn holds_empty_list(&self, name: &str) -> bool {
-		self.scope.lookup(name).is_some_and(|local| local.kind == crate::Kind::Empty && local.empty_list)
+		self.scope.lookup(name).is_some_and(|local| local.empty_list && crate::analyzer::is_run_time_kind(&local.kind))
 	}
 
 	/// `p.items += [v]` (lowered `p#(items+1) += [v]`), `m#2 += [v]`: the list a field or item holds grows in place too
