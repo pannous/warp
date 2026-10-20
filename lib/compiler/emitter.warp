@@ -152,7 +152,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); variants its enums' bare cases
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = [] }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = [] }
 
 module = Module({}, [])
 
@@ -562,6 +562,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 	if name == "is_meta" { return ["int", values#1#2 + gc_code("ref_test", [gc.meta_node]) + [op.i64_extend_i32_u]] }
 	if name == "meta_line" { return ["int", values#1#2 + gc_code("ref_cast_null", [gc.meta_node]) + gc_code("struct_get", [gc.meta_node, 3])] }
 	if name == "meta_column" { return ["int", values#1#2 + gc_code("ref_cast_null", [gc.meta_node]) + gc_code("struct_get", [gc.meta_node, 4])] }
+	if name == "closure_text" { return call_values(made_late(closure_text_name, "text", ["closure"]), values) }
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
 	if name == "same_text" { return ["int", values#1#2 + values#2#2 + [op.ref_eq, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, [op.unreachable]] }
@@ -585,7 +586,7 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, 
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, closure_text: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
@@ -641,7 +642,6 @@ def shown_text(value: any): list {
 	kind = value#1
 	if kind == "text" { return value }
 	if kind == pending { return ["text", value#2] }
-	if kind == "list" or kind == "node" { module.shows_values = yes }
 	if kind == "list" { return runtime_call("list_text", [value]) }
 	if kind == "int" { return runtime_call("int_text", [value]) }
 	if kind == "float" { return runtime_call("float_text", [value]) }
@@ -988,9 +988,11 @@ def call_values(f: Function, values: any): list {
 # target f's number names; `<target>·captured·<i>(f)`: f's i-th captured value
 closure_call_prefix = "closure_call_"
 captured_marker = "·captured·"
-# the runtime words that give a value's text: a program using one (or shown_text of a list or node) has no closures
-# here, whose text is the lambda as written
-text_words = ["node_text", "list_text", "joined"]
+# `closure_text(f)`: the text of a closure, its lambda as written (`x => x*2`) or its target's name, a function made
+# once, its code written last (closure_text_code), as Rust's function_text table
+closure_text_name = "closure_text"
+# the targets Rust's lowering lifts from a lambda (src/lowering/definitions/closures.rs is_lambda_function)
+lambda_prefixes = ["closure_lambda_", "lambda_value_"]
 # the operators a closure takes part in (node_equal compares closures)
 closure_comparisons = ["==", "!="]
 is_closure_value(n: any) := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol("closure_new")
@@ -1013,19 +1015,38 @@ def closure_call(body: Body, arity: int, arguments: any): list {
 	call_values(dispatcher(arity), arguments.map(a => expression(body, a)))
 }
 dispatcher(arity: int): any := {
-	name = closure_call_prefix + arity
+	made_late(closure_call_prefix + arity, "node", ["closure"] + range_list(arity).map(i => "argument" + (i + 1)))
+}
+# a function over closures whose code is written once the program's closures are known, made at its first call
+made_late(name: text, result: text, parameters: list): any := {
 	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
 	for known in module.dispatchers { if known.name == name { return known } }
 	f = Function(name, [], [], ø)
 	f.index = #module.imports + #module.order
 	module.order += [f]
-	f.kinds = range_list(arity + 1).map(i => "node")
-	f.result = "node"
+	f.kinds = parameters.map(p => "node")
+	f.result = result
 	f.locals = []
-	f.local_names = ["closure"] + range_list(arity).map(i => "argument" + (i + 1))
+	f.local_names = parameters
 	f.code = [op.unreachable]
 	module.dispatchers += [f]
 	f
+}
+# for each closure: if the closure's number is its own, the text it shows; another value shows "function"
+closure_text_code(f: Function): any := {
+	number = unboxed(closure_item([op.local_get, 0], 0)#2, gc.int_box)
+	f.code = text_bytes("function")
+	for k in 0..<#module.closures {
+		shown = text_bytes(closure_shown(module.closures[k]#1, module.closures[k]#2))
+		f.code = number + [op.i64_const] + sleb(k) + [int_ops["=="], op.if, no_value] + shown + [op.return, op.end] + f.code
+	}
+}
+# a lifted lambda as written, its parameters but the captured ones (`x => x*2`); another target by its name
+closure_shown(name: text, captured: int): text := {
+	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return name }
+	f = module.functions[name]
+	names = f.parameters[captured..].map(p => name_of(p))
+	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + str(f.body)
 }
 # a value called that is no closure fails in not_a_function; for each closure of f's arity: if the closure's number is
 # its own, the target's call on the captured values and the arguments; a closure of another arity fails in
@@ -1221,7 +1242,6 @@ def group_expression(body: Body, n: any): list {
 		if word in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
 		# `a /! b` of a ratio or float floors it as Rust does; floor_quotient takes ints only
 		if word == "floor_quotient" { for x in n[1..] { if expression(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
-		if not body.intrinsics and word in text_words { module.shows_values = yes }
 		return call(body, module.runtime[word], n[1..].map(x => x))
 	}
 	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
@@ -1643,7 +1663,6 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.errors = {}
 	module.closures = []
 	module.dispatchers = []
-	module.shows_values = no
 	module.surveying = env(survey_setting) != ø
 	module.refusals = []
 	module.saw_pending = no
@@ -1674,11 +1693,9 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 		seen = -1
 		while seen != #module.closures + #module.dispatchers {
 			seen = #module.closures + #module.dispatchers
-			for f in module.dispatchers { dispatcher_code(f) }
+			for f in module.dispatchers { if f.name == closure_text_name { closure_text_code(f) } else { dispatcher_code(f) } }
 		}
 		for f in module.rereads { body_code(f) }
-		# a closure's text is its lambda as written, which the lowered program no longer holds
-		if #module.closures > 0 and module.shows_values { refuse("the text of a closure") }
 		if main.result != "int" and main.result != "float" {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
