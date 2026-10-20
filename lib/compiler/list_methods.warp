@@ -1,6 +1,8 @@
-# A list's methods written as calls on it (card pure-runs): `xs.push(v)` appends to the list the name holds,
-# `xs += [v]`, which emitter.warp grows in place while the list is unshared. `x in xs` (a list's item, a map's key, a
-# text's part) is the runtime word collection_contains(xs, x), as Rust lowers it.
+# Methods written as calls on a value (card pure-runs): `xs.push(v)` appends to the list the name holds,
+# `xs += [v]`, which emitter.warp grows in place while the list is unshared; any other `x.f(a, b)` but a change in
+# place (in_place_methods) is the call `f(x, a, b)`, as Rust's library_words.rs method_call makes it of a word (card
+# pure-lane-lowers). `x in xs` (a list's item, a map's key, a text's part) is the runtime word
+# collection_contains(xs, x), as Rust lowers it.
 use "walk.warp"
 use "phrase_blocks.warp"
 
@@ -8,8 +10,13 @@ pushed(list: Node, call: list, n: Node): Node := {
 	if #call == 2 and call#1 == symbol("push") and is_name(list) {
 		return Key(list, Op.AddAssign, List([call#2], Bracket.Square, Separator.Comma))
 	}
+	if #call >= 1 and call#1 is symbol and not (name_of(call#1) in in_place_methods) {
+		return List([call#1, list] + call[1..], Bracket.Round, Separator.None)
+	}
 	n
 }
+# the methods that change the list or map they are called on, which Rust's list_mutations.rs lowers in place
+in_place_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
 
 method_call(receiver: Node, called: Node, n: Node): Node := match called {
 	List(call, Bracket.Round, Separator.None): pushed(receiver, call, n)

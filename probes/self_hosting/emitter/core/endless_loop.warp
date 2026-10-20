@@ -1,0 +1,9 @@
+// a function whose body ends in `while true` without a break gives what its returns give, as parser.warp's blank_end
+def first_over(xs, limit) {
+	at = 1
+	while true {
+		if xs#at > limit { return at }
+		at = at + 1
+	}
+}
+first_over([1, 5, 9, 12], 6)

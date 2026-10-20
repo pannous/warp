@@ -54,9 +54,9 @@ fn the_warp_emitter_emits_inside_its_core() {
 	let (curried, phases) = self_hosted_run(&cache, "x = 3; g = y => z => x + y + z; g(1)(2)");
 	assert!(curried.contains('6'), "{curried}");
 	assert!(!phases.contains("emit ("), "a closure giving a closure is inside the core: {phases}");
-	let (beyond, phases) = self_hosted_run(&cache, "try { fail(\"no\") } catch e { 5 }");
-	assert!(beyond.contains('5'), "{beyond}");
-	assert!(phases.contains("emit ("), "a try is beyond the core: {phases}");
+	let (caught, phases) = self_hosted_run(&cache, "try { fail(\"no\") } catch e { 5 }");
+	assert!(caught.contains('5'), "{caught}");
+	assert!(!phases.contains("emit ("), "a try is inside the core: {phases}");
 }
 
 /// The stage programs compile from warp's lib/ alone: a folder whose text.warp and list.warp would shadow the standard
@@ -106,5 +106,17 @@ fn the_warp_emitter_fails_with_rusts_runtime_errors() {
 		let (value, phases) = self_hosted_run(&cache, program);
 		assert!(value.contains(message), "{program}: {value}");
 		assert!(!phases.contains("emit ("), "{program}: the Rust emitter ran: {phases}");
+	}
+}
+
+/// WARP_SELF_HOSTED=0 (or off, no, false, empty) is the lane switched off, as WARP_HINTS=0: the Rust emitter emits
+/// a program emitter.warp would take (card switch-self)
+#[test]
+fn a_zero_switch_is_off() {
+	let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(CACHE_FOLDER);
+	for off in ["0", "off", ""] {
+		let (value, phases) = run_switched(off, ".", &cache, "square(x: int) := x * x; square(3)");
+		assert!(value.contains('9'), "{value}");
+		assert!(phases.contains("emit ("), "WARP_SELF_HOSTED={off:?} ran the self-hosted emitter: {phases}");
 	}
 }
