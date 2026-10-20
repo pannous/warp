@@ -15,8 +15,6 @@ pub use asserted::*;
 mod property_tests;
 pub use property_tests::*;
 
-use crate::analyzer::extract_user_functions;
-use crate::compiler::context::Context;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -180,11 +178,9 @@ pub fn extract_laws(parsed: &Node) -> Vec<Law> {
 	separate_laws(parsed.clone()).laws
 }
 
-/// Reuses the analyzer's recognizers, then reads parameter kinds from the declaration.
+/// Reuses the analyzer's recognizers (without its inference), then reads parameter kinds from the declaration.
 pub(crate) fn function_definition(item: &Node) -> Option<FunctionDefinition> {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, item);
-	let def = context.user_functions.into_values().next()?;
+	let def = crate::analyzer::function_definitions(item).user_functions.into_values().next()?;
 	let kinds = declared_parameter_kinds(item);
 	let parameters = def
 		.params
