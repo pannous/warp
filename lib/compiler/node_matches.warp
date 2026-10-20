@@ -28,7 +28,6 @@ spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??",
 case_types = {"Number": "number", "Char": "codepoint", "Text": "text", "Symbol": "symbol", "Key": "key"}
 case_readers = {"Number": ["itself"], "Char": ["itself"], "Text": ["itself"], "Symbol": ["name_of"],
 	"Key": ["key_of", "op_of", "value_of"], "List": ["itself", "bracket_of", "separator_of"]}
-other_arm = "_"
 subject_name = "match·subject"
 
 applied(word: text, argument: Node): Node := List([symbol(word), argument], Bracket.Round, Separator.None)
@@ -134,7 +133,11 @@ match_of(rest: Node, n: Node, variants: any): Node := match rest {
 }
 
 node_match(n: Node, variants: any): Node := match n {
-	List(parts, Bracket.None, Separator.Space): { if #parts == 2 and parts#1 == symbol("match") then match_of(parts#2, n, variants) else n }
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts == 0 or parts#1 != symbol("match") { return n }
+		# `match n {…}` as a statement, `match (n {…})` as a value
+		if #parts == 3 then match_block(parts#2, parts#3, n, variants) else if #parts == 2 then match_of(parts#2, n, variants) else n
+	}
 	Key(type_name, Op.Dot, case_name): spelled_case(type_name, case_name, n)
 	_: n
 }

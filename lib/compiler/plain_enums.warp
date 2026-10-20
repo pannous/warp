@@ -11,7 +11,6 @@ use "node_matches.warp"
 enum_word = "enum"
 variants_word = "variants"
 case_word = "case"
-match_word = "match"
 raise_word = "raise"
 # the types a case converts to, each with the number its first case counts as: `Coin.Dime as int` and `as index` its
 # index 2 (from 0, as C counts), `as position` its position 3 (from 1, as `xs#p` counts)
@@ -33,7 +32,7 @@ enum_rows(cases: list): list := {
 }
 
 # a case of an enum, `north` of Swift's `case north`, else ø
-case_name(case: Node): any := match case {
+enum_case_name(case: Node): any := match case {
 	Symbol(name): name
 	List(words, Bracket.None, Separator.Space): if #words == 2 and words#1 == symbol(case_word) and is_name(words#2) then name_of(words#2) else ø
 	_: ø
@@ -42,7 +41,7 @@ case_name(case: Node): any := match case {
 # `{Red, Green}`: the names of the cases, else ø
 case_names(block: Node): any := match block {
 	List(cases, Bracket.Curly, separator): {
-		names = enum_rows(cases).map(case_name)
+		names = enum_rows(cases).map(enum_case_name)
 		if names.all(name => name != ø) then names else ø
 	}
 	_: ø
@@ -118,16 +117,15 @@ implicit_case(owner: any, case: Node, n: Node, enums: any): Node := {
 	if owner_of(name_of(case), enums) != ø then case else n
 }
 
-# `match value { arms }`
-# Rust twin: nodes.rs matched
-match_over(value: Node, arms: list): Node := List([symbol(match_word), value, List(arms, Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space)
+# `match value { arms }`, lowered as node_matches.warp lowers a written one: this pass runs after it
+match_over(value: Node, arms: list, enums: any): Node := matched(value, arms, ø, case_names_of(enums))
 
 # The number of a case counting the first as `first`: `2` of `Dime` from 0, a match over the cases for a name of the
 # enum type
-case_number(value: Node, cases: list, first: int): Node := {
+case_number(value: Node, cases: list, first: int, enums: any): Node := {
 	numbers = 1 to #cases
 	if is_name(value) and name_of(value) in cases { return numbers.filter(i => cases#i == name_of(value))#1 - 1 + first }
-	match_over(value, numbers.map(i => Key(symbol(cases#i), Op.Colon, i - 1 + first)))
+	match_over(value, numbers.map(i => Key(symbol(cases#i), Op.Colon, i - 1 + first)), enums)
 }
 
 # The case at an index: `Dime` of `2`, a match over the indexes for any other value, an error past the cases
@@ -139,7 +137,7 @@ case_at(value: Node, enum_name: text, enums: any): Node := {
 	}
 	raised = List([symbol(raise_word), Key(value, Op.Add, no_case)], Bracket.None, Separator.Space)
 	arms = (1 to #cases).map(i => Key(i - 1, Op.Colon, symbol(cases#i)))
-	match_over(value, arms + [Key(symbol(other_arm), Op.Colon, raised)])
+	match_over(value, arms + [Key(symbol(other_arm), Op.Colon, raised)], enums)
 }
 
 # `Coin.Dime as int` the case's index, `as position` its position, `2 as Coin` the case at an index; other conversions,
@@ -151,7 +149,7 @@ case_conversion(value: Node, target: Node, n: Node, enums: any, subjects: any): 
 	if target_name in enums { return case_at(value, target_name, enums) }
 	enum_name = type_of(value, enums, subjects)
 	if enum_name == ø or enum_name in spelled_enums or not (target_name in count_types) { return n }
-	case_number(value, enums[enum_name], count_types[target_name])
+	case_number(value, enums[enum_name], count_types[target_name], enums)
 }
 
 enum_node(n: Node, enums: any, subjects: any): Node := match n {
