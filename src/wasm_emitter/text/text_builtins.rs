@@ -72,6 +72,9 @@ pub const ERROR_OF: &str = "error_of";
 pub const CLASS_ERROR: &str = "class_error";
 /// `raise_as(message, class)`: raise the message as an error of the class, which `except C` tests (error_class)
 pub const RAISE_AS: &str = "raise_as";
+/// `raise_on(message, class)`: raise a caught error on, as raise_as, at the position it was first raised (an `except`
+/// of another class)
+pub const RAISE_ON: &str = "raise_on";
 /// `error_class(e)`: the class of the Error e as a symbol, ø for an Error of none and for any other value
 pub const ERROR_CLASS: &str = "error_class";
 pub const WARNING: &str = "warning";
@@ -86,7 +89,7 @@ pub const TEXT_FORM: &str = "text_form";
 const KIND_MARK: &str = "kind_mark";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 26] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 27] = [
 	(KIND_MARK, 1, Kind::Int),
 	(MEMORY_BYTE, 1, Kind::Int),
 	(MEMORY_SET_BYTE, 2, Kind::Int),
@@ -99,6 +102,7 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 26] = [
 	(ERROR_WORD, 1, Kind::Empty),
 	(RAISE_WORD, 1, Kind::Text),
 	(RAISE_AS, 2, Kind::Text),
+	(RAISE_ON, 2, Kind::Text),
 	(ERROR_CLASS, 1, Kind::Empty),
 	(IS_ERROR_WORD, 1, Kind::Int),
 	(WARNING, 1, Kind::Text),
@@ -269,9 +273,12 @@ impl WasmGcEmitter {
 				}
 				self.emit_runtime_error(func, super::super::lists::list_ops::RETURNED_ERROR);
 			}
-			(RAISE_AS, [message, class]) => {
+			(word @ (RAISE_AS | RAISE_ON), [message, class]) => {
 				self.emit_trap_detail(func, message);
 				self.emit_trap_class(func, class);
+				if word == RAISE_ON {
+					self.emit_restore_caught_position(func);
+				}
 				self.emit_runtime_error(func, super::super::lists::list_ops::RETURNED_ERROR);
 			}
 			(ERROR_CLASS, [error]) => {

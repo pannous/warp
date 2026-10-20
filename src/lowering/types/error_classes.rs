@@ -20,6 +20,18 @@ const RUNTIME_ERROR_CLASSES: [(&str, &str); 9] = [
 	("MemoryError", ROOT_ERROR_CLASS),
 ];
 
+/// `class IndexError extends LookupError {}`: the declaration of a runtime error's class, which a program's class may
+/// extend (`class MyIndexError extends IndexError`)
+pub(crate) fn runtime_class_declaration(class: &str) -> Option<Node> {
+	let (_, parent) = RUNTIME_ERROR_CLASSES.iter().find(|(known, _)| *known == class)?;
+	let name = Node::Symbol(class.to_string())
+		.with_attribute(crate::warp_parser::EXTENDS_KEYWORD, Node::Symbol(parent.to_string()));
+	Some(Node::Type {
+		name: Box::new(name),
+		body: Box::new(Node::List(vec![], Bracket::Curly, crate::node::Separator::None)),
+	})
+}
+
 /// The field of an Error holding its message
 const MESSAGE_FIELD: &str = "message";
 

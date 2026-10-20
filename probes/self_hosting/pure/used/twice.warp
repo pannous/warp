@@ -1,0 +1,8 @@
+# used by 31_use_file.warp: a file using another, its main-level print not the program's
+use "next.warp"
+def twice(x: int): list := [x, x]
+def doubled_next(x: int): int {
+	y = next(x)
+	y * 2
+}
+print "not the program's"

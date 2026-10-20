@@ -1,0 +1,84 @@
+# The pure lane follows `use` (card pure-follows-use): a program's `use "lexer.warp"` brings in the declarations of
+# that file, read from the program's folder, as src/modules/loader.rs brings them; each used file once, the files it
+# uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written.
+use os
+
+import_keywords = ["use", "require", "import", "include"]
+# (function_keywords: words.warp's)
+# src/modules/declarations.rs DECLARATION_KEYWORDS and CONSTANT_KEYWORDS
+declaration_keywords = ["let", "var", "global", "stored", "const", "constant", "final", "val"]
+module_extension = ".warp"
+
+# the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
+# `module_source("prelude")` the text of that standard module
+with_uses(program: any, folder: text): any := bottom_up(used_in(program, folder), module_text)
+used_in(program: any, folder: text): any := {
+	statements = statements_in(program)
+	brought = declarations_used(statements, folder, [])
+	if #brought#1 == 0 { return program }
+	kept = statements.filter(s => file_used(s, folder) == ø)
+	separated(bracketed(brought#1 + kept, ""), ";")
+}
+
+# `module_source("prelude")`: lib/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
+# writes it out (the std modules are lib/<name>.warp)
+module_text(n: any): any := {
+	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
+	source = file_text(folder_of(module_directory) + "/" + n#2 + module_extension)
+	if source == ø then n else source
+}
+
+# [the declarations, the files read]: those of each file the statements use, not yet among `seen`
+declarations_used(statements: any, folder: text, seen: any): list := {
+	declarations = []
+	for statement in statements {
+		file = file_used(statement, folder)
+		if file != ø and not (file in seen) {
+			seen += [file]
+			used = statements_in(plain_node(parsed(file_text(file))))
+			inner = declarations_used(used, folder_of(file), seen)
+			seen = inner#2
+			declarations += inner#1 + used.filter(s => is_declaration(s) and file_used(s, folder_of(file)) == ø)
+		}
+	}
+	[declarations, seen]
+}
+
+# the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
+file_used(statement: any, folder: text): any := {
+	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
+	module = statement#2
+	if module is text { return path_in(folder, module) }
+	if not (module is symbol) { return ø }
+	path = path_in(folder, name_of(module) + module_extension)
+	if file_text(path) == ø then ø else path
+}
+path_in(folder: text, name: text): text := if name.starts_with("/") then name else folder + "/" + name
+folder_of(path: text): text := {
+	parts = split(path, "/")
+	parts[0..<(#parts - 1)].join("/")
+}
+file_text(path: text): any := try read(path) else ø
+
+# a program's statements: those of a block, else the one statement it is
+statements_in(program: any): list := {
+	if is_group(program) and bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n") { return items_of(program) }
+	[program]
+}
+
+# what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
+# `global x = 0`, `def f(x) …`; not its main-level statements
+is_declaration(statement: any): bool := {
+	if type(statement) is key {
+		operator = op_of(statement)
+		left = key_of(statement)
+		if left == symbol(opaque_word) { return kind_of(value_of(statement)) == "type" }
+		if operator == "=" or operator == ":=" { return yes }
+		# `def f(x): list {…}`: the key of the head and its result type
+		if operator == ":" and is_keyword_group(left) { return yes }
+		return operator == ":" and left is symbol and name_of(left) in declaration_keywords
+	}
+	is_keyword_group(statement)
+}
+# `def f(x) …`, `global x = 0`: a group a function or declaration keyword starts
+is_keyword_group(n: any): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or name_of(n#1) in declaration_keywords)

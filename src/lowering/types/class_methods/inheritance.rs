@@ -104,15 +104,23 @@ pub(super) fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
 	if classes.iter().all(|(_, parent, _)| parent.is_none()) {
 		return Ok((node, vec![]));
 	}
-	// a parent the program does not declare may be the prelude's (`extends Error`)
+	// a parent the program does not declare may be the prelude's (`extends Error`) or a runtime error's class
+	// (`extends IndexError`)
 	let prelude_parent = |classes: &[(String, Option<String>, Vec<Node>)]| {
 		let declared = |parent: &String| classes.iter().any(|(class, _, _)| class == parent);
 		let parents = classes.iter().filter_map(|(_, parent, _)| parent.as_ref());
-		parents.filter(|parent| !declared(parent)).find_map(|parent| crate::modules::prelude_class(parent))
+		parents.filter(|parent| !declared(parent)).find_map(|parent| {
+			crate::modules::prelude_class(parent)
+				.or_else(|| crate::lowering::error_classes::runtime_class_declaration(parent))
+		})
 	};
+	// the program declares them too, for the likeness `MyIndexError like IndexError` to relate two classes
+	let mut taken_in = vec![];
 	while let Some(prelude_class) = prelude_parent(&classes) {
 		prelude_class.visit(&mut |part| classes.extend(declared_class(part)));
+		taken_in.push(prelude_class);
 	}
+	let node = crate::lowering::nodes::with_statements_first(node, taken_in);
 	let mut likenesses = vec![];
 	for (class, parent, _) in &classes {
 		if let Some(parent) = parent {
