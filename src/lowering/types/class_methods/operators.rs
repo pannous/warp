@@ -7,7 +7,14 @@ use crate::words::STR_WORD;
 /// `a + b` of an instance a whose class defines the operator's method (`plus`, Python's `__add__`, wiki/operator.md):
 /// the method call `a.plus(b)`; an operation of such calls is an instance of the same class (`a + b + c`)
 pub(super) fn operator_calls(node: Node) -> Node {
-	let mut methods: Vec<(String, Op, String)> = vec![];
+	let mut classes = std::collections::HashSet::new();
+	node.visit(&mut |part| {
+		if let Node::Type { name, .. } = part {
+			classes.insert(name.drop_meta().name());
+		}
+	});
+	let node = named_outside_operators(node, &classes);
+	let mut methods: Vec<(String, Op, String)> = outside_operator_methods(&node, &classes);
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
 			for (method, _, _) in class_items(body).iter().filter_map(method_parts) {
@@ -49,6 +56,53 @@ pub(super) fn operator_calls(node: Node) -> Node {
 	let node = specialized_calls(node, &operands);
 	let parameters = parameter_classes(&argument_classes(&node, &operands));
 	with_operator_calls(node, &Operands { parameters: &parameters, ..operands }).0
+}
+
+/// `+(a: Vec, b: Vec) := …` outside the class (one method form, outside_methods.rs): Vec's `plus(a: Vec, b: Vec)`, as
+/// `+(o) := …` in its body
+fn named_outside_operators(node: Node, classes: &std::collections::HashSet<String>) -> Node {
+	match node {
+		Node::Type { .. } => node,
+		Node::Key(head, op @ (Op::Assign | Op::Define), body) if outside_receiver(&head, classes).is_some() => {
+			Node::Key(Box::new(glyph_named(*head)), op, body)
+		}
+		other => other.map_children(|child| named_outside_operators(child, classes)),
+	}
+}
+
+/// The class of the first parameter of a definition head `x(p:P, …)`, when P is a declared class
+fn outside_receiver(head: &Node, classes: &std::collections::HashSet<String>) -> Option<String> {
+	first_parameter(head).map(|(_, class)| class).filter(|class| classes.contains(class))
+}
+
+/// The head `+(a, b)` as `plus(a, b)`, also with a result type
+fn glyph_named(head: Node) -> Node {
+	match head {
+		Node::Key(call, Op::Colon, result) => Node::Key(Box::new(glyph_named(*call)), Op::Colon, result),
+		Node::List(mut items, bracket @ Bracket::Round, separator) => {
+			if let Some(method) = items.first().and_then(|name| glyph_method(&name.drop_meta().name())) {
+				items[0] = symbol(method);
+			}
+			Node::List(items, bracket, separator)
+		}
+		meta @ Node::Meta { .. } => meta.under_meta(glyph_named),
+		other => other,
+	}
+}
+
+/// (class, operator, method) of each outside operator method, `plus(a: Vec, b: Vec) := …`
+fn outside_operator_methods(node: &Node, classes: &std::collections::HashSet<String>) -> Vec<(String, Op, String)> {
+	match node.drop_meta() {
+		Node::Type { .. } => vec![],
+		Node::Key(head, Op::Assign | Op::Define, _) if let Some(class) = outside_receiver(head, classes) => {
+			let operator = method_parts(node.drop_meta()).and_then(|(name, _, _)| {
+				let (op, _) = OPERATOR_METHODS.iter().find(|(_, names)| names.contains(&name.as_str()))?;
+				Some((class, *op, name))
+			});
+			operator.into_iter().collect()
+		}
+		other => other.children().iter().flat_map(|child| outside_operator_methods(child, classes)).collect(),
+	}
 }
 
 /// Each class's fields: (name, type) in declaration order

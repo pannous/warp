@@ -427,6 +427,11 @@ impl WarpParser {
 			return Some(Empty);
 		}
 		let kind = declared_kind(word)?;
+		if word != OPERATOR_WORD {
+			if let Some(definition) = self.operator_method_definition(word, &words) {
+				return Some(definition);
+			}
+		}
 		let glyph: Vec<char> = declared_operator(kind, &words)?.chars().collect();
 		let has_operator_word = words.first() == Some(&OPERATOR_WORD);
 		self.skip_spaces();
@@ -464,6 +469,31 @@ impl WarpParser {
 			_ => vec![Symbol(crate::words::IMPLICIT_PARAMETER.to_string())],
 		};
 		let head = operator_call(&glyph, parameters);
+		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
+	}
+
+	/// `infix operator +(a: V, b: V) := …`, `infix +(…)`: the method of a built-in operator, `+(a: V, b: V) := …`
+	/// (class_methods operators.rs), its keywords superfluous
+	fn operator_method_definition(&mut self, word: &str, words: &[&str]) -> Option<Node> {
+		let has_operator_word = words.first() == Some(&OPERATOR_WORD);
+		let head = words.get(usize::from(has_operator_word))?;
+		let glyph: String = head.chars().take_while(|c| *c != '(').collect();
+		let is_method = crate::operators::OPERATOR_METHODS.iter().any(|(op, _)| op.as_str() == glyph);
+		if !is_method || !head[glyph.len()..].starts_with('(') {
+			return None;
+		}
+		self.skip_spaces();
+		self.set_hint_pos();
+		let keywords = if has_operator_word { format!("{word} {OPERATOR_WORD}") } else { word.to_string() };
+		crate::errors::diagnostic::note_alias(&format!("{keywords} {glyph}"), &glyph);
+		if has_operator_word {
+			self.advance_by(OPERATOR_WORD.chars().count());
+			self.skip_spaces();
+		}
+		let head = self.try_parse_operator_method_head()?;
+		self.skip_spaces();
+		self.advance_by(DEFINE.len());
+		let body = self.parse_expr(0);
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
 	}
 
