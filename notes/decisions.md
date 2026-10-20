@@ -187,6 +187,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P1 text * number repeats (`"ab"*2`); a digit text warns; text*float and text*text are type errors; `n times "ab"` is the explicit repeat.
 - brace-hole: `\(…)` canonical interpolation; `\{…}`, `${…}`, `$(…)` work; bare `"$x"` is literal (P6); single quotes stay literal; `$` holes in sql/sh templates keep working.
 - P126 texts inside containers print double-quoted; a top-level `print "a"` writes a.
+- digit-as-char: `2 as char` is the digit '2', like P25 `int('5')` is 5; a code point becomes a character by `char(0x41)`.
 - #35 lists join to "[1 2]"; `"x" as float` is a loud error. P74 `codepoint(c)` (aliases ord, ordinal, P27) gives an Int; P25 `int('5')` is 5; `int(c)` of a non-digit is invalid_number; P65 arithmetic on a character is not_a_number.
 - #26 upper/lower are Unicode, sort takes any comparable values, reverse works on text; `names.upper` = `upper names`.
 - An untyped parameter given a one-character text takes it as Text. P31 the Printable operation is `text(p:person)`, the one allowed type-word function name. P32 `print xs` prints its str(). P41 `print "x changed to " value` joins without a separator after a text literal; commas join with a space.
@@ -202,6 +203,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 ## Bool and truthiness
 - bool-type: yes/no are their own shallow type acting as 1/0; `type(yes)` is bool, prints yes/no, true/false accepted; `0 == false` yes, `0 === false` no; P195 `true + 1` is 2; P199 bool slots accept 1 and 0 only; JSON true/false read as yes/no.
 - Truthiness: ø + 1 stays an error; empty values are falsy; only 0 equals false; #38 a non-empty list (even `[ø]`) is truthy; #28 `x=ø; x.size` and `[].count` are 0; `is empty` covers "", [], {}, ø.
+- predicate-bool: predicates (`is_blank`, `is_even`, `is_odd`, every `is_…`) give yes/no, not 1/0.
 - text-bool: `as bool` / `bool(x)` read the word ("0", "no", "false" → no); `if` keeps plain truthiness.
 - in-bool: `x in list` is yes/no (also `xs.has(x)`); the position comes from `xs.index_of(x)`.
 
