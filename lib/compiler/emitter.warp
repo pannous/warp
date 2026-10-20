@@ -81,7 +81,9 @@ int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "
 checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
 # `xs.length`, `count xs`: `#xs`
-length_words = {length: yes, count: yes}
+length_words = {length: yes, count: yes, size: yes}
+# the map words read after a dot, `m.keys`, unless m has an entry of that name
+member_words = {keys: "map_keys", values: "map_values"}
 # the kinds `+` joins as texts
 characters = {text: yes, char: yes}
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
@@ -445,11 +447,15 @@ def checked_item(body: Body, list: any, index: any): list {
 	held = uleb(fresh_local(body, "list"))
 	at = [op.local_get] + uleb(fresh_local(body, "int"))
 	count = ["int", [op.local_get] + held + gc_code("struct_get", [gc.list, 0]) + [op.i64_extend_i32_u]]
-	whole = if index#1 == "node" then runtime_call("index_of_node", [index])#2 else converted(index, "int")
-	code = list#2 + [op.local_set] + held + whole + [op.local_set] + at[1..]
+	code = list#2 + [op.local_set] + held + whole_index(index)#2 + [op.local_set] + at[1..]
 	outside = at + [op.i64_const, 1, int_ops["-"]] + count#2 + [op.i64_ge_u]
 	code += outside + [op.if, no_value] + dropped(runtime_call("index_out_of_range_of", [["int", at], count])) + [op.end]
 	code + [op.local_get] + held + gc_code("struct_get", [gc.list, 1]) + at + [op.i32_wrap_i64, op.i32_const, 1, op.i32_sub]
+}
+# an index as an int; one known only at run time must be an integer ("index must be an integer", not a cast failure)
+def whole_index(index: any): list {
+	if index#1 == "node" { return runtime_call("index_of_node", [index]) }
+	["int", converted(index, "int")]
 }
 # `name(a: float): float := wasm f64.floor`: the parameters in order, then the instruction, which leaves the result
 def wasm_instruction(body: Body, name: text): list {
@@ -650,7 +656,7 @@ def operation(body: Body, symbol: text, a: any, b: any): list {
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
 	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(body, a, b) }
-	if symbol == "#" and a#1 == "text" { return runtime_call("text_char", [a, b]) }
+	if symbol == "#" and a#1 == "text" { return runtime_call("text_char", [a, whole_index(b)]) }
 	if symbol == "+" and a#1 == "list" and b#1 == "list" { return runtime_call("list_join", [a, b]) }
 	textual = a#1 in characters or b#1 in characters
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
@@ -751,6 +757,11 @@ def assignment(body: Body, target: any, value: any): list {
 	if type(target) is key and op_of(target) == "." and value_of(target) is symbol {
 		return map_assignment(body, key_of(target), name_of(value_of(target)), value)
 	}
+	# `m[k] = v` of a key known only at run time, `m#(k+1) = v` as Rust lowers it: an entry k, or a list's item k+1
+	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and op_of(value_of(target)) == "+" and value_of(value_of(target)) == 1 {
+		key = expression(body, key_of(value_of(target)))
+		if key#1 != "int" { return stored_assignment(body, key_of(target), value, (container, held) => runtime_call("node_put", [["node", boxed(container)], ["node", boxed(key)], held])) }
+	}
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
 	}
@@ -766,7 +777,8 @@ def assignment(body: Body, target: any, value: any): list {
 	if not (name in body.names) and is_shared and body.function.name == "main" { return declare_global(name, value) }
 	if is_global(body, name) and not is_shared { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
-	if not (name in body.names) and analyzed_local_kind(body.function, name) != ø { kind = analyzed_local_kind(body.function, name) }
+	# analyzer.warp's kind of the local, unless a value not held as that kind widened it (`x = 10.0; x = floor(2.5)`)
+	if not (name in body.names) and not (name in body.function.widened) and analyzed_local_kind(body.function, name) != ø { kind = analyzed_local_kind(body.function, name) }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		held = body.kinds#(body.names[name] + 1)
 		if widens(body, name, held, kind) {
@@ -803,8 +815,13 @@ def whole(value: any): list { admitted(value, "int") }
 # `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v; a variable m holds the map field_with
 # gives, so `d = {}; d["A"] = 1` makes d a map
 def map_assignment(body: Body, receiver: any, name: text, value: any): list {
+	stored_assignment(body, receiver, value, (map, held) => field_assignment(map, text_value_of(name), held))
+}
+# an assignment into the value receiver gives that `update(receiver, value)` makes, stored back in a variable receiver;
+# the assignment gives the value
+def stored_assignment(body: Body, receiver: any, value: any, update: any): list {
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
-	updated = field_assignment(expression(body, receiver), text_value_of(name), [value#1, held])
+	updated = update(expression(body, receiver), [value#1, held])
 	set = dropped(if receiver is symbol then assignment(body, receiver, updated) else updated)
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
 }
@@ -1072,6 +1089,15 @@ def loop_again(body: Body): list {
 }
 
 # a statement's code, its value dropped
+# `m.size`, `m.keys`: the entry of that name of a map that has one (`{size: 7}.size` is 7), else the word applied to m
+def field_or_word(body: Body, value: any, name: text, word: any): list {
+	if value#1 != "node" { return word(value) }
+	held = uleb(fresh_local(body, "node"))
+	receiver = ["node", [op.local_get] + held]
+	has_it = condition(runtime_call("has_field", [receiver, text_value_of(name)]))
+	read = boxed(map_get(receiver, name))
+	["node", value#2 + [op.local_set] + held + has_it + [op.if] + value_type("node") + read + [op.else] + boxed(word(receiver)) + [op.end]]
+}
 def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
 
 # `xs += e`: e's items appended to the list xs holds, in place, so every alias sees them; ø when xs holds no list
@@ -1285,7 +1311,13 @@ def key_expression(body: Body, n: any): list {
 	if operator == "-" and left == ø { return negation(body, expression(body, right)) }
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator == "#" and left == ø { return length(expression(body, right)) }
-	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
+	if operator == "." and right is symbol and name_of(right) in length_words {
+		return field_or_word(body, expression(body, left), name_of(right), length)
+	}
+	if operator == "." and right is symbol and name_of(right) in member_words {
+		word = member_words[name_of(right)]
+		return field_or_word(body, expression(body, left), name_of(right), value => runtime_call(word, [["node", boxed(value)]]))
+	}
 	# `m.a`: the entry a of the map (or instance) m, as Rust lowers it to `m#("a"+1)`
 	if operator == "." and right is symbol { return field_of(expression(body, left), name_of(right)) }
 	# (only `rational`: a float `as real` or `as exact` stays a float in Rust, type_tests.rs is_exact_fraction_type)

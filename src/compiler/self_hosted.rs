@@ -178,6 +178,10 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 	if !emits() {
 		return None;
 	}
+	if wraps_ints() {
+		record_refusal(&format!("{OUTSIDE_THE_CORE}fast arithmetic"));
+		return None;
+	}
 	let kinds = kinds.map_or_else(|| "{}".to_string(), serde_json::Value::to_string);
 	let request = format!("[{}, {kinds}]", view_json(&analysis_view(node)));
 	let module = answer(&EMIT, request).and_then(|answer| module_of(&answer));
@@ -193,6 +197,12 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
 		}
 	}
+}
+
+/// Whether the program has fast functions (card fast-scope), whose Ints wrap as i64: emitter.warp's never do
+fn wraps_ints() -> bool {
+	crate::compiler::compile_mode::is_fast_program()
+		|| crate::compiler::compile_context::read(|context| !context.fast_functions.is_empty())
 }
 
 /// The module the pure lane compiles the source to; None when the lane is off or refuses the program, the refusal then

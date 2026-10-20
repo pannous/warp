@@ -235,6 +235,8 @@ map_index(m: any, name: text): int := {
 }
 # 1 when m has fields to look up: a map, or a class instance (the key of its class name and its fields)
 has_fields(m: any): int := if is_null(m) == 0 and is_null(fields_of(m)) == 0 and kind_code(fields_of(m)) == 8 then 1 else 0
+# 1 when m has an entry `name`: `m.size`, `m.keys` read it before the word of that name (`{size: 7}.size` is 7)
+has_field(m: any, name: text): int := if has_fields(m) == 1 and map_index(m, name) > 0 then 1 else 0
 # `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
 map_get(m: any, name: text): any := {
 	at = if has_fields(m) == 1 then map_index(m, name) else 0
@@ -279,6 +281,13 @@ text_index(t: text, part: text): int := {
 node_get(n: any, key: any): any := {
 	if kind_code(key) == 1 { return node_at(n, unboxed_int(key) + 1) }
 	map_get(n, node_text(key))
+}
+# `x[key] = value` of a key known only at run time: a list's item at an int key (counted from 0), else the map's entry;
+# the list or map, as field_with gives it
+node_put(n: any, key: any, value: any): any := {
+	if kind_code(key) != 1 { return field_with(n, node_text(key), value) }
+	node_set_at(n, unboxed_int(key) + 1, value)
+	n
 }
 # `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)
 # becomes a map of the one entry
@@ -363,8 +372,9 @@ character_between(t: text, at: int, end: int): any := {
 	if end - at == code_point_width(byte_at(t, at)) { return char_of(code_point_at(t, at)) }
 	bytes_between(t, at, end)
 }
-# the index-th character of t, counted from 1
+# the index-th character of t, counted from 1; an index outside 1…count fails as Rust's "index out of range"
 text_char(t: text, index: int): any := {
+	if index < 1 { index_out_of_range() }
 	if walk_reaches(t, index) == 0 { swap_walks() }
 	if walk_reaches(t, index) == 0 {
 		walked_text = t
@@ -379,10 +389,12 @@ text_char(t: text, index: int): any := {
 		walked_before = -1
 	}
 	while walked_index < index {
+		if walked_at >= byte_count(t) { index_out_of_range() }
 		walked_before = walked_at
 		walked_at = character_end(t, walked_at)
 		walked_index += 1
 	}
+	if walked_at >= byte_count(t) { index_out_of_range() }
 	character_between(t, walked_at, character_end(t, walked_at))
 }
 # 1 when the current walk is over t, or over the start of t that t grew from, and stands at index, before it or one
