@@ -255,12 +255,13 @@ fn plain(view: Node) -> Node {
 }
 
 /// The view without the layers of the `dropped` kinds, a character as a text, an empty group but the empty map `{}`
-/// as ø (walk.warp without_layers: number_keys keys a variable that starts as `{}`)
+/// and list `[]` as ø (walk.warp without_layers: number_keys keys a variable that starts as `{}`; decision
+/// empty-is-not-missing)
 fn without_layers(view: Node, dropped: &[&str]) -> Node {
 	match view {
 		Node::List(mut items, bracket, separator) => match items.first().and_then(Node::text_value).as_deref() {
 			Some(kind) if dropped.contains(&kind) => without_layers(items.pop().unwrap_or(Node::Empty), dropped),
-			Some("list") if items.len() == 3 && items[1].text_value().as_deref() != Some("{") => Node::Empty,
+			Some("list") if items.len() == 3 && !matches!(items[1].text_value().as_deref(), Some("{" | "[")) => Node::Empty,
 			// an error and a type are opaque to a pass twin: kept whole, `class P {}` keeps its empty body and attributes
 			Some("type" | "error") => Node::List(items, bracket, separator),
 			Some("char") => {

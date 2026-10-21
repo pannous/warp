@@ -67,15 +67,17 @@ spelling_code(spellings: list, spelled: text): int := {
 	fail()
 	0
 }
-# `bracketed(items, "[")`, `separated(items, ",")`: the list with that bracket or separator; ø stays ø, as `()` parses
+# `bracketed(items, "[")`, `separated(items, ",")`: the list with that bracket or separator; no items is ø, whatever
+# its brackets, as `()` parses (Rust: node_api.rs emit_relisted)
 bracketed_node(items: Node, bracket: Node): Node := {
-	if is_null(items) { return items }
+	if has_no_items(items) { return ø }
 	if kind_code(items) != Kind.List { not_a_list() }
 	code = spelling_code(bracket_spellings(), node_text(bracket))
 	list_node(marked_kind(items) + (code - bracket_info(items)) * KindUnit.Info, unboxed_list(items))
 }
+has_no_items(items: Node): bool := is_null(items) or (kind_code(items) == Kind.List and #unboxed_list(items) == 0)
 separated_node(items: Node, separator: Node): Node := {
-	if is_null(items) { return items }
+	if has_no_items(items) { return ø }
 	if kind_code(items) != Kind.List { not_a_list() }
 	code = spelling_code(separator_spellings(), node_text(separator))
 	list_node(marked_kind(items) + (code - separator_info(items)) * KindUnit.Separator, unboxed_list(items))

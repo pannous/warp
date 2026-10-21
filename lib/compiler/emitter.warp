@@ -1614,6 +1614,8 @@ def expression_code(body: Body, n: any): list {
 	if n is bool { return ["bool", [op.i32_const, if n then 1 else 0]] }
 	if n is number { return number_value(n) }
 	if n is text { return text_value(n) }
+	# `[]`, as plain_node keeps it or a view hands it: a list of no items, not ø (decision empty-is-not-missing)
+	if is_empty_list(n) or (is_group(n) and #n == 0 and bracket_of(n) == "[") { return ["list", vector_code([])] }
 	if n is ø { return ["node", [ref_null, gc.node]] }
 	if n == symbol("break") { return loop_exit(body) }
 	if n == symbol("continue") { return loop_again(body) }

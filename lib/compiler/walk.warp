@@ -33,15 +33,20 @@ written_index_mark = "written_index"
 
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: any): bool := kind_of(view) == "list" and #view == 3
-# an empty map `{}` as plain_node keeps it, behind the opaque word
-is_empty_map(n: Node): bool := match n {
-	Key(left, op, right): left == symbol(opaque_word) and is_empty_group(right) and right#2 == "{"
+# an empty map `{}`, an empty list `[]` as plain_node keeps them, behind the opaque word: values, not ø (decision
+# empty-is-not-missing)
+is_kept_empty(n: Node, bracket: text): bool := match n {
+	Key(left, op, right): left == symbol(opaque_word) and is_empty_group(right) and right#2 == bracket
 	_: no
 }
+is_empty_map(n: Node): bool := is_kept_empty(n, "{")
+is_empty_list(n: Node): bool := is_kept_empty(n, "[")
+kept_empty_brackets = ["{", "["]
 
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø but
-# the empty map `{}` (decision empty-group-node: the bridge keeps Rust's bracket where a pass reads it, number_keys
-# keys a variable that starts as `{}`), an opaque type or error whole; Rust twin: compiler/node_views.rs plain
+# the empty map `{}` and list `[]` (decision empty-is-not-missing: the bridge keeps Rust's bracket where a pass reads
+# it, number_keys keys a variable that starts as `{}`), an opaque type or error whole; Rust twin:
+# compiler/node_views.rs plain
 plain(view: any): any := without_layers(view, no)
 
 # the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
@@ -53,19 +58,19 @@ without_layers(view: any, attributes: bool): any := {
 	kind = kind_of(view)
 	if kind == "literal" or (kind == "attribute" and not attributes) { return without_layers(view#(#view), attributes) }
 	if kind == "type" or kind == "error" { return view }
-	if is_empty_group(view) { return if view#2 == "{" then view else ø }
+	if is_empty_group(view) { return if view#2 in kept_empty_brackets then view else ø }
 	if view is list { return view.map(part => without_layers(part, attributes)) }
 	view
 }
 
 # the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
-# the empty map `{}` (number_keys.warp keys a variable that starts as one by texts), a character as a text, an opaque
-# type or error whole
+# the empty map `{}` and list `[]` (number_keys.warp keys a variable that starts as `{}` by texts; the emitter makes
+# each a value), a character as a text, an opaque type or error whole
 plain_node(n: Node): Node := match n {
 	Key(left, op, right): {
 		if left == symbol(attribute_word) and right#1 == mutated_mark { return List([symbol(unwrap_word), plain_node(right#3)], Bracket.Round, Separator.None) }
 		if left == symbol(attribute_word) { return plain_node(right#3) }
-		if left == symbol(opaque_word) { return if is_empty_group(right) and right#2 != "{" then ø else n }
+		if left == symbol(opaque_word) { return if is_empty_group(right) and right#2 not in kept_empty_brackets then ø else n }
 		Key(plain_node(left), op, plain_node(right))
 	}
 	List(items, bracket, separator): List(items.map(plain_node), bracket, separator)
@@ -87,7 +92,7 @@ node_from(view: any, keeps_maps: bool): any := {
 	// lowering reads a one-character literal as a text, as the Rust lowering does
 	if kind == "char" { return "" + view#2 }
 	if kind == "key" { return Key(part(view#3), view#2 as Op, part(view#4)) }
-	if keeps_maps and is_empty_group(view) and view#2 == "{" { return Key(symbol(opaque_word), Op.Colon, view) }
+	if keeps_maps and is_empty_group(view) and view#2 in kept_empty_brackets { return Key(symbol(opaque_word), Op.Colon, view) }
 	if kind == "list" { return List(view[3..].map(item => part(item)), view#2 as Bracket, view#3 as Separator) }
 	if kind == "at" { return positioned(part(view#4), view#2, view#3) }
 	if kind == "attribute" { return Key(symbol(attribute_word), Op.Colon, [view#2, part(view#3), part(view#4)]) }

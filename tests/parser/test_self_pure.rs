@@ -614,3 +614,10 @@ fn op_cases_run_pure() {
 		"[Square Comma]",
 	);
 }
+
+/// `[]` written in code is a list of no items, not ø (decision empty-is-not-missing, card pure-lane-literal)
+#[test]
+fn an_empty_list_literal_runs_pure() {
+	let probe = format!("{}/probes/empty_list_literal.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("empty_list_literal", &probe, "[]\n[]\n[]");
+}
