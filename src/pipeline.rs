@@ -154,10 +154,9 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::analyzer::match_exhaustive::check,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::lowering::late_binding::split_global_assignments,
-	// a hosted program without routes: its value the page at /, each function a route (card make-deploy)
-	crate::lowering::serve::with_default_routes,
-	// a run without a server: each `get "/path" {…}` is also the page at its path (cards square-int, recognized-browser)
-	crate::lowering::serve::with_page_routes,
+	// a hosted program without routes: its value the page at /, each function a route (card make-deploy); a run without
+	// a server: each `get "/path" {…}` is also the page at its path (cards square-int, recognized-browser)
+	crate::lowering::serve::with_implied_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
 	crate::lowering::serve::bind_path_parameters,
 	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
@@ -220,10 +219,9 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::modules::insert_module_classes,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
 	crate::lowering::type_aliases::lower,
-	// `f(t: type)` takes the type value itself (type_parameters.rs), before class_methods reads typed parameters
+	// `f(t: type)` takes the type value itself, `id(x: T): T` holds a type variable as any (type_parameters.rs), before
+	// class_methods reads typed parameters
 	crate::lowering::type_parameters::lower,
-	// `id(x: T): T`: a type variable of a generic signature, held as any (type_parameters.rs)
-	crate::lowering::type_parameters::lower_type_variables,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::lowering::traits::lower_trait_parameters,
 	// `stored people: [Person]`: the table's rows, inserts and field changes written through
@@ -402,8 +400,6 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::variadic::lower_list_spreads,
 	crate::lowering::phrase_words::lower,
 	crate::lowering::library_words::lower,
-	// `count x.bytes` is `byte_size(x)`, after library_words wrote x.bytes as the prelude call
-	crate::lowering::library_words::lower_byte_counts,
 	// `xs[xs.index_of(x)]`: a position meeting brackets, an index meeting `#` (index_positions.rs), once index_of is named
 	crate::lowering::index_positions::lower,
 	// after library_words names `k in d`, d.get(k) …; so after one_entry_maps (which comes before library_words lowers
@@ -416,13 +412,13 @@ const MEANING_PASSES: &[Pass] = &[
 /// A module's source after the passes the program ran before its `use` was resolved (MODULE_SOURCE_PHASES):
 /// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
 /// Not the program's own passes: getters::lower (a getter `answer := 42` is lowered with the program, whose reads of it
-/// become calls), meta_values::with_table (the program's table of its classes and modules), serve::with_default_routes (a module's functions are no routes of a hosted program) and serve::with_page_routes.
+/// become calls), meta_values::with_table (the program's table of its classes and modules) and
+/// serve::with_implied_routes (a module's functions are no routes of a hosted program).
 pub(crate) fn lower_module_source(module: Node) -> Node {
-	let program_only: [Pass; 4] = [
+	let program_only: [Pass; 3] = [
 		crate::lowering::getters::lower,
 		crate::lowering::meta_values::with_table,
-		crate::lowering::serve::with_default_routes,
-		crate::lowering::serve::with_page_routes,
+		crate::lowering::serve::with_implied_routes,
 	];
 	MODULE_SOURCE_PHASES
 		.iter()

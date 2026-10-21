@@ -66,6 +66,7 @@ mod test_dispatch;
 mod test_duration_comparison; // cards day-day, day-hours
 mod test_duration_unit_variables; // card time-unit
 mod test_duration_units; // card time-module
+mod test_element_field_like_function;
 mod test_element_field_writes;
 mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
@@ -234,4 +235,4 @@ mod test_user_counting_word; // card user-defined-size
 mod test_value_constructor;
 mod test_variant_equality; // card variant-left
 mod test_variant_payloads;
-mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body`
+mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body` // card element-field-like-function

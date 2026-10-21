@@ -285,9 +285,7 @@ fn rule_set_walker(walk: &str, number: usize, rules: &[Node]) -> Vec<Node> {
 		)
 	};
 	let arms = rules.iter().map(|rule| match rule.drop_meta() {
-		Node::Key(pattern, op @ (Op::Arrow | Op::FatArrow | Op::Colon), result) => {
-			key(*pattern.clone(), *op, walked(rule, result))
-		}
+		Node::Key(pattern, op @ (Op::Arrow | Op::Colon), result) => key(*pattern.clone(), *op, walked(rule, result)),
 		other => other.clone(),
 	});
 	let arms = arms.collect();
