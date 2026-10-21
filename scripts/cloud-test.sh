@@ -48,7 +48,7 @@ POLL_SECONDS=60                # GitHub API quota is shared by every session: ls
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
 MIN_FREE_GB=15                 # less free disk before a build: the warm VM's build output is pruned (a build ran out of disk)
-TEST_TIME_LIMIT_SECONDS=2400   # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
+TEST_TIME_LIMIT_SECONDS=3600   # the test run is killed after this (a hanging test), its unfinished tests named; a full run on a 4-core VM takes 1600-2400 s since the warp self tests rebuild their compiler (batch-1, batch-2 killed at 2400)
 STALL_SECONDS=900              # …or once no test has finished for this long (the slowest, the self-parser, takes ~230 s alone)
 WATCH_SECONDS=30               # how often the stall watchdog counts finished tests
 PURE_HELLO_TEST=parser::test_warp_pure::warp_pure_runs_hello_world
@@ -102,6 +102,19 @@ make_room() {
 	[ "$(free_gb)" -ge $MIN_FREE_GB ] && { echo "$free GB free, $(free_gb) GB after dropping the incremental caches"; return; }
 	rm -rf target
 	echo "$free GB free, $(free_gb) GB after dropping target/"
+}
+
+# compiler.wasm and compiler-self.wasm (warp pure / warp self, src/compiler/standalone.rs) built by an earlier job from
+# another lib/ or warp build: the tests ran on them with only a notice, so a verdict could be the earlier branch's
+# (card cloud-stale-compiler: "unknown name Ascii" from a compiler built before byte_codes.warp). Kept while lib/ and
+# the Rust sources are those they were built from (compiler.wasm takes ~540 s); prints what it did
+drop_stale_compilers() {
+	local stamp=$HERE_ROOT/compiler-sources sources dropped
+	sources=$(git rev-parse HEAD:lib HEAD:src HEAD:crates HEAD:build.rs HEAD:Cargo.lock 2>/dev/null | tr '\n' ' ')
+	[ "$sources" = "$(cat "$stamp" 2>/dev/null)" ] && return
+	dropped=$(find target data \( -name compiler.wasm -o -name compiler-self.wasm \) -print -delete 2>/dev/null | wc -l)
+	echo "$sources" > "$stamp"
+	echo "cloud-test: lib/ or the Rust sources differ from the last job's: dropped $((dropped)) compiler build files"
 }
 
 detect_build_environment() {
@@ -237,6 +250,7 @@ run_tests_here() {
 		[[ "$setting" == WARP_EMIT_REFUSALS=* ]] && refusals=${setting#*=}
 	done
 	[ -n "$refusals" ] && rm -f "$refusals"
+	drop_stale_compilers >> "$HERE_WORK/log.txt"
 	local test_start=$SECONDS
 	# the settings reach the tests alone: the build stays the same for every setting, so a warm VM builds a tip once
 	[ $build_status -eq 0 ] && printf 'cloud-test: in %s at %s: cargo test %s -- %s\n' "$PWD" "$(git rev-parse --short HEAD)" "${test_args[*]}" "${filters[*]}" >> "$HERE_WORK/log.txt"
