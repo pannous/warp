@@ -190,9 +190,7 @@ pub fn fold_constant_calls(program: Node) -> Node {
 	let definitions = statements
 		.iter()
 		.filter(|statement| functions_in(statement).iter().any(|function| foldable.contains(&function.name)));
-	let probe =
-		[definitions.cloned().collect(), vec![Node::List(calls.clone(), Bracket::Square, Separator::Comma)]].concat();
-	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
+	let Some(module) = probe_module(definitions.cloned().collect(), calls.clone()) else {
 		return program;
 	};
 	let values = match computed_at_compile_time(module).drop_meta() {
@@ -233,8 +231,7 @@ pub fn refuse_result_misfits(program: Node) -> Result<Node, Node> {
 		.filter(|statement| functions_in(statement).iter().any(|function| foldable.contains(&function.name)))
 		.map(|definition| without_result_checks(definition.clone()));
 	let computed = calls.iter().map(|(_, name, arguments)| call(name, arguments.clone())).collect();
-	let probe = [definitions.collect(), vec![Node::List(computed, Bracket::Square, Separator::Comma)]].concat();
-	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
+	let Some(module) = probe_module(definitions.collect(), computed) else {
 		return Ok(program);
 	};
 	let Node::List(values, _, _) = computed_at_compile_time(module).drop_meta().clone() else {
@@ -571,6 +568,17 @@ fn calls(node: &Node, name: &str) -> bool {
 		node,
 		|part| matches!(part, Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|called| called == name)),
 	)
+}
+
+/// The module computing `calls` from `definitions` alone, compiled quietly: it lacks the rest of the program (its enum
+/// declarations, its globals), so what its compile would say (`Round` names nothing) is no news of the program's; a
+/// probe that doesn't compile leaves the calls as they are
+fn probe_module(definitions: Vec<Node>, calls: Vec<Node>) -> Option<crate::pipeline::CompiledModule> {
+	let probe = [definitions, vec![Node::List(calls, Bracket::Square, Separator::Comma)]].concat();
+	crate::errors::diagnostic::quietly(|| {
+		crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline))
+	})
+	.ok()
 }
 
 /// The values of the constant calls `module` computes, within FOLDING_FUEL

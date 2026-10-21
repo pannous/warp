@@ -20,7 +20,7 @@ foreign_list_heads = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"]
 
 is_type_word(word: text): bool := type_words contains word.lower()
 # `Color`, `Ω`: a name whose first character is an upper case letter
-is_capitalized(name: text): bool := name[0].upper() == name[0] and name[0].lower() != name[0]
+is_capitalized(name: text): bool := name#1.upper() == name#1 and name#1.lower() != name#1
 # the type words a type test takes besides those (no twin: Rust's BUILTIN_TYPES in src/lowering/types/type_tests.rs)
 test_type_words = ["key", "pair", "operation", "expression", "code", "callable", "invocable", "runnable", "error", "empty",
 	"unit", "nil", "none", "null", "void", "time", "instant", "date", "duration"]
@@ -92,6 +92,11 @@ type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 
 # `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
 with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
+# the words naming the parameter after them, a preposition or `as`: `play(tone, for duration)` called `play C4 for: 2s`
+# (Rust twin: type_name_matching.rs PREPOSITIONS, AS_LABEL)
+label_words = phrase_prepositions + ["as"]
+# the words raising an event, `emit tax_rate` and its aliases (Rust twin: words.rs EMIT_WORDS, EMIT_ALIASES)
+emit_words = ["emit", "send", "fire", "trigger", "signal", "ask"]
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64), by
 # their opcodes (Rust twin: wasm_emitter/functions/wasm_bodies.rs instruction)
 wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
