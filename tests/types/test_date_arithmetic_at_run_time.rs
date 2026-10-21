@@ -94,3 +94,11 @@ fn test_constant_times_fold_and_the_run_does_the_rest() {
 	assert_eq!(eval("2024-01-01; 2024-02-01"), date(2024, 2, 1));
 	assert_eq!(eval("2 * 1 day"), Node::data(Duration { months: 0, days: 2, nanos: 0 }));
 }
+
+/// A time or duration and a text join as texts (decision empty-plus-text), as their constants do (card day-refused)
+#[test]
+fn test_a_time_plus_a_text_is_text() {
+	is!("d = 2024-02-29; print d; d + \" is day\"", "2024-02-29 is day");
+	is!("d = 1 day; print d; d + \" long\"", "1 day long");
+	is!("d = 2024-02-29; print d; \"day \" + d", "day 2024-02-29");
+}
