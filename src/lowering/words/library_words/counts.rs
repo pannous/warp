@@ -107,7 +107,7 @@ pub(super) fn count_in(items: &[Node]) -> Option<Node> {
 
 /// `count x.bytes`, `#x.bytes`, `x.bytes.number`: the count of a byte list is the byte size `byte_size(x)`, of any
 /// value, so a list's bytes count without being made (decision text-unit-plurals: `pixels.bytes.count` is 24)
-pub fn lower_byte_counts(node: Node) -> Node {
+pub(crate) fn lower_byte_counts(node: Node) -> Node {
 	let node = node.map_children(lower_byte_counts);
 	let counted = match node.drop_meta() {
 		Node::Key(list, Op::Dot, property) if names_counting(property) => list,

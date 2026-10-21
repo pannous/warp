@@ -445,14 +445,19 @@ impl WarpParser {
 			Op::Hash => self.parse_expr(left_bp - 1),
 			Op::Add => self.parse_expr(Op::Neg.binding_power().1), // `+2^2` like `-2^2`
 			// `-floor 2.5` negates the call `floor 2.5`, as `1 + floor 2.5` adds it (card leading-minus); a variable takes
-			// no argument, and in `[-x 1]` the space starts the next item
+			// no argument, in `[-x 1]` the space starts the next item, and an operator word is no argument, as after
+			// any operand: `if c then -b else b`, `-g or 2`
 			Op::Neg => {
 				let operand = self.parse_expr(right_bp);
 				let summand_bp = Op::Add.binding_power().1;
+				let at_operator_word = self.current_char().is_alphabetic() && self.peek_operator().is_some();
 				match operand.drop_meta() {
-					Node::Symbol(name) if !self.context.in_spaced_list && !self.variables.contains(name) => self
-						.try_parse_implicit_application(&operand, summand_bp, ARGUMENT_BP, summand_bp)
-						.unwrap_or(operand),
+					Node::Symbol(name)
+						if !self.context.in_spaced_list && !self.variables.contains(name) && !at_operator_word =>
+					{
+						self.try_parse_implicit_application(&operand, summand_bp, ARGUMENT_BP, summand_bp)
+							.unwrap_or(operand)
+					}
 					_ => operand,
 				}
 			}
