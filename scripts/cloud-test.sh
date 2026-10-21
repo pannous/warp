@@ -31,7 +31,7 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 JOBS_PREFIX=cloud-jobs         # cloud-jobs/<job>: the job's arguments, so the session's prompt stays one short line
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
-NO_TESTS_RAN="NO TESTS RAN: "   # the summary line of a run that executed no test: red, and its session leaves the pool
+NO_TESTS_RAN="NO TESTS RAN: "   # the summary line of a run that executed no test: red (a filter fault, its session stays pooled)
 SHOWN_ITEMS=12                 # lines of a real failure's panic message shown under it (a slice test's failing samples)
 KNOWN_FAILURES=notes/known_failures.md   # read in the tested checkout, as the gate reads it at the tested tip
 CARGO_FLAGS_WITH_VALUE='--config|--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
@@ -67,6 +67,16 @@ run_name() {
 	signature=$(printf '%s\0' "$@" | git hash-object --stdin | cut -c1-12)
 	echo "$(printf %s "$branch" | tr -c 'A-Za-z0-9._-' '-')-${tip:0:8}-$signature"
 }
+# Test names hold no space: a filter argument with spaces ("a b c", a quoted list) is several filters. Passed whole, libtest
+# matched it against no test (5 runs of 0 tests on 2026-10-21, their sessions dropped as faulty VMs)
+split_filters() {
+	local argument words
+	for argument in "$@"; do
+		read -ra words <<< "$argument"
+		[ ${#words[@]} -gt 1 ] && echo "cloud-test: the filter '$argument' is split at its spaces into ${#words[@]} filters" >&2
+		[ ${#words[@]} -gt 0 ] && printf '%s\n' "${words[@]}"
+	done
+}
 credit_used() { "$USAGE_SCRIPT" 2>/dev/null | sed -n 's/^iguana_necktie: \$\([0-9.]*\) .*/\1/p'; }
 
 # ---------------------------------------------------------------- the cloud side
@@ -97,6 +107,15 @@ make_room() {
 detect_build_environment() {
 	local status=$1 log=$2
 	[ "$status" -ne 0 ] && grep -q 'No space left on device' "$log" && echo "disk exhausted after a clean rebuild"
+}
+
+# The filters among $@ that no built test's name contains (cargo test's substring match); run_tests_here's flags
+unmatched_filters() {
+	local listed filter
+	listed=$(cargo test "${source_flags[@]}" "${test_args[@]}" -- --list 2>/dev/null | sed -n 's/: test$//p')
+	for filter in "$@"; do
+		[[ "$filter" == -* ]] || grep -qF -- "$filter" <<< "$listed" || printf '%s ' "$filter"
+	done
 }
 
 write_summary() {
@@ -188,6 +207,17 @@ run_tests_here() {
 		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
 		build_status=$?
 	fi
+	# a warm VM's build once held fewer tests than the tip (front-end-warnings-257e97ec: build 0 s, 6675 of 6755 tests,
+	# the first filters matched nothing): a filter no built test matches forces a build anew, then is named in the log
+	if [ $build_status -eq 0 ] && [ ${#filters[@]} -gt 0 ] && [ -n "$(unmatched_filters "${filters[@]}")" ]; then
+		echo "cloud-test: filters matching no built test: $(unmatched_filters "${filters[@]}"): building anew" >> "$HERE_WORK/log.txt"
+		find src tests crates -name '*.rs' -exec touch {} +
+		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run >> "$HERE_WORK/log.txt" 2>&1
+		build_status=$?
+		local unmatched
+		unmatched=$(unmatched_filters "${filters[@]}")
+		[ -n "$unmatched" ] && echo "$NO_TESTS_RAN filters matching no test after a fresh build: $unmatched" >> "$HERE_WORK/log.txt"
+	fi
 	build_environment=$(detect_build_environment "$build_status" "$HERE_WORK/log.txt")
 	build_seconds=$((SECONDS - build_start))
 	# the runtime stub the executable tests copy, built with the run's crate source as test.sh does: a test's own
@@ -274,6 +304,7 @@ summarize() {
 		}
 		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored|filtered)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
 		/^ +(Running|Doc-tests) / { started++ }
+		index($0, NO_TESTS_RAN) == 1 { unmatched_line = $0 }
 		/^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1; order[++failures] = $2 }
 		/^test [^ ]+ has been running for over/ { slow[$2] = 1 }
 		/^test [^ ]+ \.\.\. / { finished_test[$2] = 1 }
@@ -306,8 +337,9 @@ summarize() {
 			real += incomplete
 			# a run of no test is never green: filters that match nothing, or a VM whose build is not the tip
 			ran = total["passed"] + failures + incomplete
-			printf "verdict: %s\n", (real == 0 && started > 0 && ran > 0) ? "green" : "red"
+			printf "verdict: %s\n", (real == 0 && started > 0 && ran > 0 && unmatched_line == "") ? "green" : "red"
 			if (ran == 0) printf "%s%d tests filtered out, none ran\n", NO_TESTS_RAN, total["filtered"]
+			else if (unmatched_line != "") print unmatched_line
 			printf "passed: %d, failed: %d (%d environmental, %d known), ignored: %d\n", total["passed"], failures + incomplete, environmental_count, known_count, total["ignored"]
 			if (incomplete) printf "crashed or killed test binaries (no result line): %d\n", incomplete
 			for (name in slow) if (!(name in finished_test)) printf "  never finished: %s\n", name
@@ -545,7 +577,7 @@ release_session() {
 
 finish_session() {
 	local job=$1 result=$2 reason file
-	reason=$(sed -n "s/^environment: //p; s/^$NO_TESTS_RAN/no test ran: /p" "$result")
+	reason=$(sed -n "s/^environment: //p" "$result")
 	if [ -z "$reason" ]; then
 		release_session "$job"
 		return
@@ -614,6 +646,7 @@ main() {
 		[ $# -eq 2 ] || fail "--pure-hello is a complete test preset and does not take filters"
 		set -- "$1" "$2" "${PURE_HELLO_ARGS[@]}"
 	fi
+	set -- "$1" "$2" $(split_filters "${@:3}")
 	if [ -z "$result_only" ]; then launch "$@" || exit; fi
 	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card" "${@:3}"
 }
