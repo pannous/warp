@@ -101,6 +101,7 @@ mod test_pair_values;
 mod test_phrase_in_call; // card phrase-in-call
 mod test_picked_linear; // card compiler-picks-dot
 mod test_pop;
+mod test_pop_in_place; // card shrink-in-place
 mod test_python_collections; // card python-stdlib
 mod test_range_arguments;
 mod test_range_in_structure;
