@@ -73,7 +73,7 @@ fn is_function_name(node: &Node) -> Option<&'static str> {
 /// Programs that were not evaluated exactly see exact reals as their f64 value (as before), except their constant
 /// expressions with a rational or true/false value
 pub fn lower(node: Node) -> Node {
-	let node = folded_exact(node);
+	let node = folded_exact(node, &rebound_functions(&node));
 	let real_variables = real_variables(&node);
 	lower_reals(with_real_type_arguments(node, &real_variables))
 }
@@ -81,12 +81,12 @@ pub fn lower(node: Node) -> Node {
 /// In a program evaluated at run time, a constant expression of exact reals whose value is rational or a truth is that
 /// value: `xs.add(√2 * √2 == 2)` adds true, `r = √2 * √2` is 2 (card exact-reals); an irrational one (or one beyond
 /// i64) stays for lower_reals to make a float
-fn folded_exact(node: Node) -> Node {
+fn folded_exact(node: Node, rebound: &[&str]) -> Node {
 	let statement_like = matches!(
 		node.drop_meta(),
 		Node::List(_, _, Separator::Semicolon | Separator::Newline) | Node::Key(_, Op::Assign | Op::Define, _)
 	);
-	if !statement_like && mentions_generator(&node) {
+	if !statement_like && mentions_generator(&node) && !calls_any(&node, rebound) {
 		match evaluate(&node, &mut Scope::new()) {
 			Ok(Value::Bool(truth)) => return if truth { Node::True } else { Node::False },
 			// beyond i64 the run-time path stays as it was (√1e40 is a float there, floor of it out of int range)
@@ -101,7 +101,26 @@ fn folded_exact(node: Node) -> Node {
 			_ => {}
 		}
 	}
-	children_rewritten(node, folded_exact)
+	children_rewritten(node, |child| folded_exact(child, rebound))
+}
+
+/// The functions of exact reals the program defines itself (`use fast_math` brings its own sin, cos and exp): a call of
+/// one is the program's, folded by no exact value
+fn rebound_functions(program: &Node) -> Vec<&'static str> {
+	let defined = crate::analyzer::function_definitions(program).user_functions;
+	FUNCTIONS.into_iter().filter(|name| defined.contains_key(*name)).collect()
+}
+
+fn calls_any(node: &Node, functions: &[&str]) -> bool {
+	!functions.is_empty() && {
+		let mut calls = false;
+		node.visit(&mut |child| {
+			if let Node::List(items, _, _) = child {
+				calls |= items.first().and_then(is_function_name).is_some_and(|name| functions.contains(&name));
+			}
+		});
+		calls
+	}
 }
 
 /// Variables assigned once, to a value whose type lowering would change (`x=π`, `x=sqrt(2)`): their type is the type of
