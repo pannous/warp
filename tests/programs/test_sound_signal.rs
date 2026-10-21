@@ -127,3 +127,12 @@ fn play_of_a_function_plays_it_as_a_signal() {
 		"left(t) := 0.5 * sin(2 * pi * 441 * t)\nright(t) := 0.25 * sin(2 * pi * 220.5 * t)\nplay([left, right], 0.1s)";
 	assert_stereo(&rendered(pair, "play_function_pair", "rendered", "10"));
 }
+
+// `hum(block: samples, t)` (decision music-plain-details): play of a function of a block and its time fills a block of
+// 512 samples once a block, the block a linear float array the library hands it
+const SAMPLES_SINE: &str = "global calls = 0\nhum(block: samples, t) := {\n  calls = calls + 1\n  for i in 1 to #block { block#i = 0.5 * sin(2 * pi * 441 * (t + (i - 1) / sample_rate)) }\n}\nplay(hum, 0.1s)";
+
+#[test]
+fn play_of_a_function_of_samples_fills_each_block() {
+	assert_sine(&rendered(SAMPLES_SINE, "play_samples", "calls", "5"), 0.5, 441.0);
+}
