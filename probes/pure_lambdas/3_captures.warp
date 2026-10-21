@@ -1,0 +1,6 @@
+each_child(xs, f) := xs.map(f)
+scaled(xs, k) := each_child(xs, x => x * k)
+print(scaled([1, 2], 4))
+adder(n) := x => x + n
+add2 = adder(2)
+print(add2(40))

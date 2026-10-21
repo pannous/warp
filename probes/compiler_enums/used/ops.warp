@@ -1,0 +1,2 @@
+# an Op-typed parameter in a used file (f_used_op.warp)
+is_assign(op: Op): bool := op == Op.Assign

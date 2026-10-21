@@ -59,7 +59,7 @@ map_variables(n: Node): list := {
 	found = []
 	name = map_assigned(n)
 	if name != ø { found += [name] }
-	for part in parts_of(n) { found += map_variables(part) }
+	for part in parts_within(n) { found += map_variables(part) }
 	found
 }
 
@@ -73,14 +73,14 @@ names_assigned(n: Node): list := {
 		}
 		_: ø
 	}
-	for part in parts_of(n) { found += names_assigned(part) }
+	for part in parts_within(n) { found += names_assigned(part) }
 	found
 }
 
 # the maps a function body sees: those around it it neither takes nor assigns, and its own
 seen_in(parts: list, maps: list): list := {
 	own = parts#1 + names_assigned(parts#2)
-	maps.filter(name => not (name in own)) + map_variables(parts#2)
+	maps.filter(name => name not in own) + map_variables(parts#2)
 }
 
 is_map(n: Node, maps: list): bool := match n {

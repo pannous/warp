@@ -15,6 +15,7 @@ const SHORTEST_TEXTS: &str = "1e23 1.7976931348623157e308 5e-324 2.2250738585072
 
 #[test]
 fn float_texts_of_emitter_warp_are_rusts() {
+	crate::requires!(crate::common::RUST_PIPELINE);
 	let programs: Vec<PathBuf> = FLOAT_TEXT_PROGRAMS.iter().map(PathBuf::from).collect();
 	let inside = emitter_differential(&programs, programs.len());
 	assert_eq!(inside.len(), programs.len());

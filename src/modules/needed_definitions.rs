@@ -391,7 +391,8 @@ pub(crate) fn shadowed_apart(definitions: Vec<Node>, words: &ProgramWords) -> Ve
 				.into_iter()
 				.filter(|name| words.contains(name) && !declared.contains(name))
 				.collect();
-			renamed_apart(vec![definition], &locals).remove(0)
+			let definition = renamed_apart(vec![definition], &locals).remove(0);
+			crate::type_tests::module_type_words_kept(definition, &|word| words.contains(word))
 		})
 		.zip(left_to_program)
 		.flat_map(|(definition, left)| {
@@ -433,13 +434,30 @@ pub(crate) fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Nod
 pub(crate) fn renamed_words(node: Node, renames: &HashMap<String, String>) -> Node {
 	match node {
 		Node::Symbol(name) => Node::Symbol(renames.get(&name).cloned().unwrap_or(name)),
-		Node::Key(receiver, Op::Dot, field) => Node::Key(Box::new(renamed_words(*receiver, renames)), Op::Dot, field),
+		Node::Key(receiver, Op::Dot, member) => Node::Key(
+			Box::new(renamed_words(*receiver, renames)),
+			Op::Dot,
+			Box::new(renamed_arguments(*member, renames)),
+		),
 		Node::List(items, Bracket::Curly, separator) => Node::List(
 			items.into_iter().map(|item| renamed_entry_value(item, renames)).collect(),
 			Bracket::Curly,
 			separator,
 		),
 		other => other.map_children(|child| renamed_words(child, renames)),
+	}
+}
+
+/// The member after a dot: a field or method name stays, the arguments of a method call are renamed (`s.contains(c)`)
+fn renamed_arguments(member: Node, renames: &HashMap<String, String>) -> Node {
+	match member {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_arguments(*node, renames)), data },
+		Node::List(items, bracket, separator) => {
+			let mut items = items.into_iter();
+			let method = items.next().into_iter();
+			Node::List(method.chain(items.map(|item| renamed_words(item, renames))).collect(), bracket, separator)
+		}
+		field => field,
 	}
 }
 

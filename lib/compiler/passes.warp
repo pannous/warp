@@ -4,6 +4,7 @@ use "parser.warp"
 use "interpolation.warp"
 use "welcome_forms.warp"
 use "times_phrases.warp"
+use "filled_lists.warp"
 use "number_words.warp"
 use "of_lookups.warp"
 use "grouped_receivers.warp"
@@ -12,23 +13,36 @@ use "definitions.warp"
 use "multiple_assignments.warp"
 use "clauses.warp"
 use "phrase_blocks.warp"
+use "comprehensions.warp"
 use "for_loops.warp"
 use "ranges.warp"
 use "list_methods.warp"
 use "node_matches.warp"
+use "node_cases.warp"
 use "type_tests.warp"
 use "number_keys.warp"
 use "tries.warp"
+use "prelude_words.warp"
+use "preposition_heads.warp"
 use "plain_enums.warp"
 use "uses.warp"
 use "prefix_comparisons.warp"
 use "sleep_durations.warp"
+use "data_items.warp"
+use "parse_words.warp"
+use "lambdas.warp"
+use "min_max.warp"
+use "arity_overloads.warp"
+use "coalesce.warp"
+use "kind_changes.warp"
+use "source_checks.warp"
+use "main_globals.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [tries, definitions, clauses, multiple_assignments, type_tests, prefix_comparisons, sleep_durations] + passes + [bare_returns, node_matches, plain_enums, phrase_blocks, for_loops, ranges, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, prefix_comparisons, sleep_durations] + passes + [bare_returns, filled_lists, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, min_max, coalesce, lambdas, for_loops, ranges, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
@@ -37,17 +51,29 @@ lowered_node(n: any): any := {
 }
 
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
-# it uses from `folder` (uses.warp): what pure runs hand to analyzer.warp
-lowered_program(source: text, folder: text): Node := lowered_node(with_uses(plain_node(parsed(source)), folder))
+# it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
+# prelude (prelude_words.warp)
+lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), folder, prelude))
+with_used(program: Node, folder: text, prelude: text): Node := with_reached(with_used_modules(with_type_module_uses(with_uses(program, folder)), folder), prelude, no)
 
 # the source text as the passes leave it, as its view
-lowered(source: text, folder: text): any := view_of(lowered_program(source, folder))
+lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))
+
+# [the view of the source as the passes leave it, what its checks diagnosed: [level, message, fix] each] (card
+# pure-diagnostics): the checks of the program as written, then those of the lowered program, as Rust runs them
+checked(source: text, folder: text, prelude: text): list := {
+	program = plain_node(source_checks(parsed(source), prelude))
+	own_names = statements_in(program).map(declared_name)
+	lowered_checked = main_globals(kind_changes(lowered_node(with_used(program, folder, prelude))), own_names)
+	[view_of(lowered_checked), diagnosed]
+}
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
-# parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them (card
-# pure-runs), the program's uses read from its folder
-stage(request: any): any := {
-	if request#1 == "pure" { return lowered(request#2, request#3) }
+# parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them and the
+# diagnostics of its checks (cards pure-runs, pure-diagnostics), with the definitions of the prelude's text it
+# reaches and the program's uses read from its folder
+stage(request: any, prelude: text): any := {
+	if request#1 == "pure" { return checked(request#2, request#3, prelude) }
 	if request#1 == 0 { return bridged(tree(request#2)) }
 	pass = passes#(request#1)
 	view_of(pass(node_of(request#2)))

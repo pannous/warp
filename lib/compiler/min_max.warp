@@ -1,0 +1,103 @@
+# `min(a, b, …)` and `max(a, b, …)` (card pure-parser-rest): comparisons `a < b ? a : b`, each argument more than a
+# plain value or arithmetic computed once into a temporary; one list literal `max([1 5 2])` gives the candidates, one
+# list value `min(xs)` is folded at run time, the first item improved by every later one, an empty list the run time
+# error empty_extremum(min). A program's own min or max stays its function.
+# Rust twin: src/lowering/collections/min_max.rs lower
+use "walk.warp"
+use "scope.warp"
+use "shapes.warp"
+
+better_by_extremum = {min: Op.Lt, max: Op.Gt}
+temporary_word = "extremum"
+# the operators of a plain operand, cheap and free of effects to repeat in the comparisons
+plain_operators = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Rem, Op.Pow, Op.Neg, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne, Op.Question, Op.Colon]
+
+# the temporaries made so far, numbering each one
+global extremum_temporaries = 0
+
+temporary(): Node := {
+	extremum_temporaries = extremum_temporaries + 1
+	symbol(temporary_word + "_" + extremum_temporaries)
+}
+
+# a value or arithmetic on values
+is_plain(n: any): bool := match n {
+	Key(left, op, right): plain_operators contains op and is_plain(left) and is_plain(right)
+	_: n is number or n is symbol or n == ø
+}
+
+# `(t1 = a; t2 = b; value)`, or the value alone
+with_bindings(bindings: list, value: Node): Node := if #bindings == 0 then value else List(bindings + [value], Bracket.Round, Separator.Semicolon)
+
+# `best ⋚ next ? best : next` over the arguments, the best so far bound once it is a comparison
+compared(arguments: list, better: Op): Node := {
+	bindings = []
+	operands = []
+	for argument in arguments {
+		if is_plain(argument) {
+			operands += [argument]
+		} else {
+			bound = temporary()
+			bindings += [Key(bound, Op.Assign, argument)]
+			operands += [bound]
+		}
+	}
+	best = operands#1
+	for next in operands[1 ..] {
+		if is_key(best, Op.Question) {
+			bound = temporary()
+			bindings += [Key(bound, Op.Assign, best)]
+			best = bound
+		}
+		best = Key(Key(best, better, next), Op.Question, Key(best, Op.Colon, next))
+	}
+	with_bindings(bindings, best)
+}
+
+# `(t = xs; if count(t) == 0 then empty_extremum(min) else (best = t#1; for item in t { best = if item < best then item else best }; best))`
+folded(name: text, list: Node, better: Op): Node := {
+	held = temporary()
+	best = temporary()
+	item = temporary()
+	improved = Key(best, Op.Assign, Key(Key(Key(ø, Op.If, Key(item, better, best)), Op.Then, item), Op.Else, best))
+	loop = List([symbol("for"), item, symbol("in"), held, List([improved], Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space)
+	fold = List([Key(best, Op.Assign, Key(held, Op.Hash, 1)), loop, best], Bracket.Round, Separator.Semicolon)
+	none_left = Key(call_of("count", [held]), Op.Eq, 0)
+	choice = Key(Key(Key(ø, Op.If, none_left), Op.Then, call_of("empty_extremum", [symbol(name)])), Op.Else, fold)
+	with_bindings([Key(held, Op.Assign, list)], choice)
+}
+
+# `min(…)`, `min xs`: the extremum the call computes, else ø
+extremum(n: Node, extrema: any): any := {
+	if not is_group(n) or #n < 2 or not (n#1 is symbol) or not (name_of(n#1) in extrema) { return ø }
+	if not (bracket_of(n) == "(" or (bracket_of(n) == "" and separator_of(n) == " ")) { return ø }
+	name = name_of(n#1)
+	arguments = items_of(n)[1 ..]
+	listed = #arguments == 1 and is_group(arguments#1) and bracket_of(arguments#1) == "["
+	if listed { arguments = items_of(arguments#1) }
+	if #arguments == 1 and not listed {
+		if is_plain(arguments#1) and not (arguments#1 is symbol) { return error_node(name + " takes at least 2 arguments or one list, got 1") }
+		return folded(name, arguments#1, extrema[name])
+	}
+	if #arguments == 0 { return error_node(name + " of an empty list") }
+	compared(arguments, extrema[name])
+}
+
+extremum_node(n: Node, extrema: any): Node := {
+	found = extremum(n, extrema)
+	if found == ø then n else found
+}
+
+# min and max, but those the program defines
+builtin_extrema(program: any): any := {
+	defined = nodes_in(program).filter(is_function_definition).map(definition => head_word(key_of(definition)))
+	extrema = {}
+	for name in better_by_extremum.keys { if name not in defined { extrema[name] = better_by_extremum[name] } }
+	extrema
+}
+
+min_max(program: any): any := {
+	if not (mentions(program, "min") or mentions(program, "max")) { return program }
+	extrema = builtin_extrema(program)
+	bottom_up(program, n => extremum_node(n, extrema))
+}

@@ -84,6 +84,17 @@ fn built_operator_code(op: &Node) -> i64 {
 	op.text_value().and_then(written).unwrap_or(OP_CODES.len() - 1) as i64
 }
 
+/// The highest op code the program's `key(left, op, right)` calls build, foreseen so the emission needs no rerun
+pub fn foreseen_key_operator(program: &Node) -> Option<i64> {
+	let mut highest = None;
+	program.visit(&mut |node| {
+		if let Some((KEY, [_, op, _])) = node.call_parts() {
+			highest = highest.max(Some(built_operator_code(op)));
+		}
+	});
+	highest
+}
+
 /// The part a field name reads when the node has no field of that name
 pub fn node_part(field: &str) -> Option<i32> {
 	NODE_PARTS.iter().position(|part| *part == field).map(|part| part as i32)
@@ -397,8 +408,10 @@ impl WasmGcEmitter {
 				s.emit_code_or_error(f, text, code, coder, prefix);
 				// no items is the empty list ø, whatever its brackets, as `()` parses
 				Self::emit_list(f, &kind_of(items));
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
-				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(items), I::Return, I::End]);
+				Self::emit_is_empty(f);
+				f.instruction(&I::If(BlockType::Empty));
+				s.call(f, "new_empty"); // `[]` included: its square bracket is no part of ø
+				Self::emit_list(f, &[I::Return, I::End]);
 				Self::emit_list(f, &kind_of(items));
 				Self::emit_kind_test(f, Kind::List as i64, I::I64Ne);
 				s.emit_fail_if(f, "not_a_list");

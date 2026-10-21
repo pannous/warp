@@ -31,6 +31,9 @@ const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 const RUST_SIDE_THREADS: usize = 4;
 /// Stack of each of those threads: the passes recurse as deeply as a test thread's
 const RUST_SIDE_STACK: usize = 64 << 20;
+/// Longest one step of a twin may take (lowering or running one source, compiling or running a twin program): a
+/// Rust stage has no time limit of its own, and a hang ate the 2400 s of a cloud run without naming its source
+const STEP_LIMIT: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// Every sample and probe source, sorted; a file that is not UTF-8 text is no source
 pub fn sources() -> Vec<PathBuf> {
@@ -83,6 +86,22 @@ fn report(word: &str, differing: &[(String, String, String)]) {
 	);
 }
 
+/// `body`'s value; a body still running after STEP_LIMIT ends the test process, naming `step`
+fn within<R>(step: &str, body: impl FnOnce() -> R) -> R {
+	let (done, finished) = std::sync::mpsc::channel::<()>();
+	let step = step.to_string();
+	let watchdog = std::thread::spawn(move || {
+		if finished.recv_timeout(STEP_LIMIT) == Err(std::sync::mpsc::RecvTimeoutError::Timeout) {
+			eprintln!("twin step hung: {step} ran longer than {STEP_LIMIT:?}");
+			std::process::exit(101);
+		}
+	});
+	let value = body();
+	let _ = done.send(());
+	let _ = watchdog.join();
+	value
+}
+
 /// `case` of each path, in the paths' order, computed in RUST_SIDE_THREADS threads; each thread takes every
 /// RUST_SIDE_THREADS-th path, so the slow sources of one folder spread over all of them
 fn in_parallel<T: Send>(paths: Vec<PathBuf>, case: impl Fn(&Path) -> Option<T> + Sync) -> Vec<T> {
@@ -92,7 +111,9 @@ fn in_parallel<T: Send>(paths: Vec<PathBuf>, case: impl Fn(&Path) -> Option<T> +
 			.map(|first| {
 				let share = move || {
 					let mine = (first..paths.len()).step_by(RUST_SIDE_THREADS);
-					mine.filter_map(|index| Some((index, case(&paths[index])?))).collect::<Vec<_>>()
+					let lowered =
+						|index: usize| within(&format!("lowering {}", paths[index].display()), || case(&paths[index]));
+					mine.filter_map(|index| Some((index, lowered(index)?))).collect::<Vec<_>>()
 				};
 				std::thread::Builder::new().stack_size(RUST_SIDE_STACK).spawn_scoped(scope, share).unwrap()
 			})
@@ -152,7 +173,7 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	static RUNTIME_FILES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 	let number = RUNTIME_FILES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 	let runtime = Path::new(INPUT_FOLDER).join(format!("emitter-runtime-{}-{number}.json", std::process::id()));
-	let runtime_source = std::fs::read_to_string(Path::new(COMPILER_FOLDER).join(RUNTIME_WORDS)).unwrap();
+	let runtime_source = warp::compiler::self_hosted::runtime_source().unwrap();
 	let lowered_runtime = warp::pipeline::lower(&runtime_source).expect("lib/compiler/runtime.warp lowers");
 	std::fs::create_dir_all(INPUT_FOLDER).unwrap();
 	std::fs::write(&runtime, view_json(&plain_view(&lowered_runtime))).unwrap();
@@ -167,8 +188,10 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 				continue;
 			}
 			inside.push(path.clone());
-			let (warp_value, warp_output) = with_captured_stdout(|| module_value(&module, units.as_deref()));
-			let (rust_value, rust_output) = with_captured_stdout(|| warp::wasm_emitter::eval(text).drop_meta().clone());
+			let warp_run = || with_captured_stdout(|| module_value(&module, units.as_deref()));
+			let (warp_value, warp_output) = within(&format!("emitter.warp's module of {path}"), warp_run);
+			let rust_run = || with_captured_stdout(|| warp::wasm_emitter::eval(text).drop_meta().clone());
+			let (rust_value, rust_output) = within(&format!("Rust's run of {path}"), rust_run);
 			if !same_value(&warp_value, &rust_value) || warp_output != rust_output {
 				let shown = |value: &Node, output: &str| format!("{} printing {output:?}", value.serialize());
 				differing.push((path.clone(), shown(&warp_value, &warp_output), shown(&rust_value, &rust_output)));
@@ -193,8 +216,6 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	inside
 }
 
-/// The runtime words emitter.warp compiles into a module, lowered like a program, in COMPILER_FOLDER
-const RUNTIME_WORDS: &str = "runtime.warp";
 /// What lib/compiler/emitter.warp says of a program it leaves to the Rust emitter
 const OUTSIDE_THE_CORE: &str = "outside the core";
 /// Set, the emitter twin lists why the sources outside the core are outside, the most frequent first
@@ -257,6 +278,7 @@ fn twin_sources_of(paths: &[PathBuf], dropped: &[&str]) -> Vec<PathBuf> {
 struct TwinProgram {
 	module: Result<warp::pipeline::CompiledModule, Node>,
 	input: PathBuf,
+	part: String,
 }
 
 impl TwinProgram {
@@ -275,7 +297,8 @@ impl TwinProgram {
 			 for argument in read(\"{}\").split(\"\\n\") {{ twin_values += [twin_case(argument)] }}\ntwin_values",
 			input.display()
 		);
-		TwinProgram { module: warp::pipeline::compile(&program), input }
+		let module = within(&format!("compiling the {part} twin"), || warp::pipeline::compile(&program));
+		TwinProgram { module, input, part: part.to_string() }
 	}
 
 	/// The call's value for each argument; when the program fails, each half alone, down to a single argument that
@@ -297,7 +320,9 @@ impl TwinProgram {
 		assert!(arguments.iter().all(|argument| !argument.contains('\n')), "an argument is one line");
 		std::fs::write(&self.input, arguments.join("\n")).unwrap();
 		let value = match &self.module {
-			Ok(module) => warp::pipeline::run_module(module.clone()),
+			Ok(module) => within(&format!("the {} twin on {} sources", self.part, arguments.len()), || {
+				warp::pipeline::run_module(module.clone())
+			}),
 			Err(failure) => failure.clone(),
 		};
 		match value.drop_meta() {

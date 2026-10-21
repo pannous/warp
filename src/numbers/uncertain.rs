@@ -185,11 +185,6 @@ pub fn lower_certainty(node: Node) -> Node {
 		.with_meta_of(&node)
 }
 
-/// Marks the type `number` of a parameter that may hold a ± value: held as a Node and checked for a number at run time
-/// (a plain `number` parameter is an i64, which no interval fits)
-#[derive(Clone, Debug, PartialEq)]
-pub struct IntervalNumber;
-
 /// `lo(a:number) := a.low; lo(5 ± 1)`: in a program that makes ± values each `number` parameter takes one (card
 /// number-param)
 pub fn lower_interval_parameters(program: Node) -> Node {
@@ -205,27 +200,14 @@ fn with_interval_parameters(node: Node) -> Node {
 			if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) =>
 		{
 			let head = head.map_children(|parameter| match parameter.drop_meta() {
-				Node::Key(name, Op::Colon, type_node) if type_node.drop_meta().name() == NUMBER_WORD => Node::Key(
-					name.clone(),
-					Op::Colon,
-					Box::new(Node::meta(type_node.drop_meta().clone(), Node::data(IntervalNumber))),
-				),
+				Node::Key(name, Op::Colon, type_node) if type_node.drop_meta().name() == NUMBER_WORD => {
+					Node::Key(name.clone(), Op::Colon, Box::new(crate::analyzer::number_as_node(type_node)))
+				}
 				_ => parameter,
 			});
 			Node::Key(Box::new(head), op, Box::new(with_interval_parameters(*body)))
 		}
 		other => other.map_children(with_interval_parameters),
-	}
-}
-
-/// Is the type `number` of a parameter that may hold a ± value
-pub fn is_interval_number(type_node: &Node) -> bool {
-	match type_node {
-		Node::Meta { node, data } => {
-			matches!(data.as_ref(), Node::Data(dada) if dada.downcast_ref::<IntervalNumber>().is_some())
-				|| is_interval_number(node)
-		}
-		_ => false,
 	}
 }
 

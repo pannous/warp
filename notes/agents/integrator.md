@@ -18,9 +18,13 @@ Read notes/agents/common.md and notes/roles.md.
   branches without a Ready card and Ready cards whose tip is gone: a report, never merged; check it once per batch
   and tell the Supervisor about lost-looking work.
 - Batches of at most ~8 Ready cards. Express cards (and crash fixes) skip the gate:
-  `integrator_tools/express.sh [<card>…]` pushes them untested at once (merge, push, close, Playground deploy with
-  skip_checks; ~15 s), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
+  `integrator_tools/express.sh [<card>…]` pushes them untested at once (merge, cargo fmt committed, push, close,
+  Playground deploy with skip_checks; ~15 s; supervisor 2026-10-20: main stays formatted between batches), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
+- Warp-only branches land at once (user): a branch that changes no Rust (nothing in src/, crates/, tests/**/*.rs,
+  Cargo.*, build.rs; only .warp files, lib/, samples/, probes, notes) needs only the warp test run, not the Rust
+  suite: run its changed and dependent .warp tests with main's binary (/Users/me/dev/bin/warp), push it when
+  green, without waiting for a batch's cloud suite.
 - Self-hosting twins (tests/common/twins.rs: test_self_parser, test_self_pipeline, test_self_analyzer …) never bounce
   a branch: the warp compiler captures the spirit of the wiki, not an exact copy of Rust (decisions
   self-hosting-minimal). A twin difference goes through with --flaky "<test> (twin difference accepted, owner records
@@ -115,6 +119,14 @@ Read notes/agents/common.md and notes/roles.md.
   the pull and main has superseded it, back it up to data/integrator/<name>.patch, take main's file and pull.
 - Every landing gets a try line: the merge report names each user-visible branch to its owner, who sends
   warp-interviewer the try line; for an owner that has retired, send it yourself.
+- Every push to main (gated, express, warp-only) starts `integrator_tools/refresh_main_binary.sh` in the background
+  (user 2026-10-20: "pre-compile warp-debug whenever you merge into main"): it builds main's ~/dev/bin/warp-debug
+  first, then the optimized ~/dev/bin/warp. push_tested.sh and express.sh start it; after a warp-only push start it
+  yourself.
+- Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
+  `integrator_tools/pure_chain_check.sh <worktree>` runs probes/pure_chain/run.sh samples/hello/hello.warp on the
+  merged lib and stops the push when it no longer prints "Hello 🌍2026" while main's lib does (push_tested.sh and
+  express.sh call it; run it yourself before a warp-only push). Switch it to `warp pure` once that command lands.
 - Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the
   function now lives, commit it in the merge, gate as usual and tell the owner afterwards; only logic changed on
   both sides bounces.

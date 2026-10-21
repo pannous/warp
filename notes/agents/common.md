@@ -34,6 +34,9 @@ After a context swap, this file and your role file win over anything a handover 
   WebDriver BiDi, machine-to-machine buffers).
 
 ## Talking
+- A changed procedure goes into the notes (user 2026-10-20): whoever changes how we work (a new rule, script, path
+  or step) writes it into the file the sessions read (this file, the role file, AGENTS.md, notes/roles.md) and
+  removes the lines it contradicts, in the same push; a message to the agents alone is not enough.
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
 - One name per session: `warp-<role>` is its claude.ai title, its SendMessage/ListAgents address and its tmux session
@@ -54,6 +57,10 @@ After a context swap, this file and your role file win over anything a handover 
 - Suspected non-issues go through the Interviewer: when a small bug you found may not matter (the same value shown
   another way, `96px/inch` vs `96dpi`), SendMessage warp-interviewer before carding or fixing it. A confirmed
   non-issue gets no work: its card, if any, goes to Later with the verdict as a `todo note`.
+- Wrong results go to the Interviewer whenever a reinterpretation is possible (user 2026-10-20): a "wrong" value
+  (survey, test pair, twin) that a different reading of the code or the expectation could make right (`p.first()` of
+  a map, `"" is empty`, named arguments, setters) is sent to warp-interviewer with the code, the value and the
+  expected one before anyone fixes code or test; only an unambiguous bug is carded and fixed directly.
 - Never message warp-integrator with FYIs or swap notices: only requests it must act on; the card is the merge
   request. A wanted gate step (integrator_tools/gate.sh) is a request to warp-integrator, never an edit of its files.
 - Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (codex_worker.sh); Claude spawns
@@ -93,10 +100,33 @@ After a context swap, this file and your role file win over anything a handover 
   `&&`-chained commit silently doesn't happen. Check `git show --stat HEAD` after committing.
 
 ## Testing
-- Test first. Only targeted runs, only through the queue: `tests/queue.sh -- <filter>`, filtered to the test files
-  your change touches (grep tests/ for the changed syntax to find the ones pinning old behaviour), never whole
-  folders or the whole test binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set
-  CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session prompts; kill by PID).
+- Rust tests run in the cloud (user 2026-10-20: "From now on, run the Rust test suite completely in the cloud"):
+  commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs (a hook blocks them), except tests
+  needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1
+  tests/queue.sh -- <filter>`. The Integrator's full suite runs in the cloud too. Warp tests (`warp test`,
+  scripts/is_tests.py) run locally with the shared binary.
+- Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
+  to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
+  suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
+  prompts; kill by PID).
+- One local build (user 2026-10-20: "We create just one cargo build now, and every other one uses that one warp
+  build for their tests"): only main's build runs on the Mac (/Users/me/dev/bin/warp, /Users/me/dev/bin/warp-debug,
+  refreshed after each pushed batch). Workers run no cargo build, check or own-warp.sh locally: .warp changes are
+  checked with that binary, Rust changes are built and tested by the cloud lane. It reads lib/ from WARP_LIB, else
+  the nearest lib/compiler above the program or cwd, so run it from your worktree (or `WARP_LIB=<worktree>/lib`).
+  Standard modules (`use list`) still come from its build (card std-modules).
+  One exception (user 2026-10-20, decision speed-local-builds): warp-speed may build its own branches locally (quick
+  release, CARGO_BUILD_JOBS=2, one build at a time) to time Rust speed changes before they land; timing runs only,
+  tests stay in the cloud.
+- Long commands in the background (user 2026-10-20): anything expected to take more than a few seconds (cloud
+  lane, builds, surveys, stage compiles, sweeps) runs with the Bash tool's `run_in_background`, so messages reach you
+  while it runs. Never poll its output file or sleep-loop on it: the exit notice wakes you; meanwhile do other work
+  or end the turn. Note the job's PID in your handover; a job you abandon gets killed by PID.
+- Close what you start (user 2026-10-20): after every test, probe or build, kill your own leftover processes by PID
+  (warp, scratch/warp, test binaries, cargo, refusals.sh ladders); check with `ps -o pid,etime,command -U $USER | grep
+  <your worktree>` before reporting. The safety net, not a substitute: cron's ~/dev/bin/reap-orphans (every 15 min,
+  log /Users/me/warp/reap-orphans.log) kills orphaned warp/test binaries, cargo test/build and xargs sweeps after 30
+  min and a test binary's children after WARP_TEST_TIME_LIMIT (600 s).
 - Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is upgraded to the
   working value in its own commit, and `#[ignore]` is dropped from a test that passes unedited; a change of meaning,
   or editing an un-ignored test's assertions, goes to the Interviewer. Test edits a user decision implies need the
@@ -106,30 +136,25 @@ After a context swap, this file and your role file win over anything a handover 
 - Native-only test code: anything used only by a `#[cfg(feature = "native")]` test gets the same cfg; a whole test
   file running the CLI or std::os::unix gets it on its `mod` line, and a new `mod x;` never goes between a cfg line
   and the module it guards. Register a new test file in its folder's mod.rs before `cargo fmt` (fmt skips it).
-- Cloud test lane instead of the queue, for committed and pushed work: `scripts/cloud-test.sh --card <card> <branch>
-  <tip from git rev-parse HEAD> <filters>` in the background (~6 min on a cloud VM of its own, ~$0.30 of the Cloud
-  session credit, exit 0 = green, at most 3 at once; notes/cloud_development.md). Use it whenever 2 or more runs wait
-  in the queue (`ls ~/.cargo/warp-tests.lock.queue | wc -l`) or your filters take more than a few minutes;
-  tests/queue.sh for uncommitted edits, quick single-test re-runs and tests needing the Mac (sound, GPU, windows,
-  Lean, SDL: scripts/cloud-test-environmental.txt). A green cloud run counts as the targeted run.
+- Cloud test lane: `scripts/cloud-test.sh --card <card> <branch> <tip from git rev-parse HEAD> <filters>` in the
+  background (~6 min on a cloud VM of its own, ~$0.30 of the Cloud session credit, exit 0 = green;
+  notes/cloud_development.md). A green cloud run counts as the targeted run.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,
   `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`, `--chrome`, `--firefox`, `--suite
   [filter…]`, `--again`; notes/ci.md "Browser dry run"), until green; then dispatch the Playground workflow on your
   branch once (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
-- The warp CLI binary is shared: `<target-dir>/debug/warp` is whichever worktree built last. To probe your own code,
-  run `scripts/own-warp.sh` (builds offline and atomically copies into `scratch/warp`) and use that path.
 - Every CLI run of a program that might paint gets `WARP_NO_WINDOW=1` (no windows on the user's screen), except in try
   lines for the user: it also mutes sound and prints MIDI as hex.
-- Quick check first, before the test queue: run the .warp code you wrote or touched through your own binary,
-  `WARP_NO_WINDOW=1 scratch/warp probes/<x>.warp`, and for compiler work through the self-hosted pipeline:
-  `WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 scratch/warp probes/<x>.warp` (=front: front end only). The stages load your
-  worktree's lib/compiler/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
-  the stage programs (~90 s, prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
+- Quick check first, before the cloud lane: run the .warp code you wrote or touched through the shared binary from
+  your worktree, `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp probes/<x>.warp`, and for compiler work through the
+  self-hosted pipeline: `WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 /Users/me/dev/bin/warp probes/<x>.warp` (=front:
+  front end only). The stages load your worktree's lib/compiler/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
+  the stage programs (~35 s with the optimized /Users/me/dev/bin/warp, ~2 min with warp-debug: use warp-debug only for a backtrace; prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
   and wrong values in seconds. `WARP_EMIT_REFUSALS=/dev/stderr` shows whether emitter.warp refused the program
   (`outside the core: …`, then the Rust emitter emitted it); `WARP_HINTS=0` hides hints (the stage programs' own
-  warnings still show: card cli-show). Then the targeted tests via tests/queue.sh.
+  warnings still show: card cli-show). Then the targeted tests in the cloud lane.
 - GitHub's API quota (5000 requests/h) is shared by every session: `gh run watch --interval 60` or more, never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points, `todo list Now` as much, commands naming a card
   by its key ~1. Never `gh project item-list` (200-530 points, trips GitHub's secondary limit; gh refuses it): read
@@ -191,11 +216,12 @@ After a context swap, this file and your role file win over anything a handover 
   3. Push the branch, then `todo ready <card>`. It reads the tip itself and refuses a branch that is not pushed,
      differs from origin, or does not merge cleanly (naming the files); `--force` only for a branch carrying other
      branches. Several cards on one branch: ready each. First a `todo note <card>` in this fixed form: `card | branch |
-     tip (full sha) | filters | passed/failed (queue or cloud) | clippy+wasm32 ok`, then new tests, "docs: <page>"
-     and the sample. Express (the user or the Supervisor asked for your result fast, a crash fix): `todo ready <card>
+     tip (full sha) | filters | passed/failed (cloud) | clippy+wasm32 ok`, then new tests, "docs: <page>"
+     and the sample. Express (the user or the Supervisor asked for your result fast, a crash fix, and every card of
+     warp-speed, the standing speed worker: user 2026-10-20 "express route to main"): `todo ready <card>
      --express`; the Integrator pushes it to main untested at once, the gate follows. When the user says "express" or
-     "quickly", they expect about a minute: one targeted test or none, `scripts/own-warp.sh`, give the user the
-     scratch/warp path to try, ready it express.
+     "quickly", they expect about a minute: one targeted test or none, give the user a try line with
+     `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp` (a Rust change: after its express landing), ready it express.
   4. Optional: one line to warp-reviewer ("<card> ready"); it reads `todo list Ready` anyway. Report one line to the
      Supervisor.
   The Integrator merges only Ready cards and closes them. A bounce (failing test, semantic conflict, reviewer veto)

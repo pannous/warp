@@ -7,6 +7,7 @@ const SORTING_PROGRAM: &str = "probes/self_hosting/emitter/core/sorting.warp";
 
 #[test]
 fn sort_runs_as_rust_sorts() {
+	crate::requires!(crate::common::RUST_PIPELINE);
 	let inside = emitter_differential(&[PathBuf::from(SORTING_PROGRAM)], 1);
 	assert_eq!(inside, vec![SORTING_PROGRAM.to_string()]);
 }

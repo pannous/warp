@@ -1,6 +1,10 @@
 //! The standard library modules math and text (notes/stdlib.md)
 use crate::is;
 
+fn bools(values: &[bool]) -> warp::Node {
+	warp::Node::list(values.iter().map(|&value| value.into()).collect())
+}
+
 #[test]
 fn use_math_brings_libm_and_the_module() {
 	is!("use math; gcd(12, 18)", 6);
@@ -55,14 +59,14 @@ fn comprehensions_in_module_and_program_ask_nothing() {
 fn use_math_rounds_to_places_factorial_is_prime_lerp() {
 	is!("use math; round_to(1.23456, 2)", 1.23);
 	is!("use math; factorial(5)", 120);
-	is!("use math; [is_prime(7), is_prime(9), is_prime(2), is_prime(1)]", warp::ints(vec![1, 0, 1, 0]));
+	is!("use math; [is_prime(7), is_prime(9), is_prime(2), is_prime(1)]", bools(&[true, false, true, false]));
 	is!("use math; lerp(0, 10, 0.25)", 2.5);
-	is!("use text; [is_blank(\"  \"), is_blank(\" a\")]", warp::ints(vec![1, 0]));
+	is!("use text; [is_blank(\"  \"), is_blank(\" a\")]", bools(&[true, false]));
 }
 
 #[test]
 fn use_math_parity_digits_choose_mod_pow() {
-	is!("use math; [is_even(4), is_odd(4), is_odd(-3)]", warp::ints(vec![1, 0, 1]));
+	is!("use math; [is_even(4), is_odd(4), is_odd(-3)]", bools(&[true, false, true]));
 	is!("use math; digits(1234)", warp::ints(vec![1, 2, 3, 4]));
 	is!("use math; [choose(5, 2), choose(10, 3), choose(3, 5)]", warp::ints(vec![10, 120, 0]));
 	is!("use math; mod_pow(2, 10, 1000)", 24);

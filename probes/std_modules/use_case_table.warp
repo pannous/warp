@@ -1,0 +1,3 @@
+# a standard module used by a standard module (card uses-std-modules)
+use case_table
+print(case_upper("abc"))

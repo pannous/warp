@@ -108,12 +108,16 @@ const READ_CURSORS: u32 = 4;
 const TEXT_CURSORS: u32 = 2;
 /// How far (bytes) text_grapheme_back looks back from a cursor; further back, an index walks from the start of the text
 const BACK_REACH: i32 = 256;
-/// The globals of a text cursor: the text's bytes, a 1-based grapheme index in them and that grapheme's byte index
-const TEXT_CURSOR_PARTS: [&str; 3] = ["text", "index", "at"];
+/// The globals of a text cursor: the text's bytes, a 1-based grapheme index in them, that grapheme's byte index and
+/// when the cursor was used last (a stamp of text_cache_clock)
+const TEXT_CURSOR_PARTS: [&str; 4] = ["text", "index", "at", "used"];
 /// Texts whose grapheme counts are kept at once (text_grapheme_count), so a loop's `i < #text` counts once
 const TEXT_COUNTS: u32 = 2;
-/// The globals of a counted text: its bytes and its count
-const TEXT_COUNTED_PARTS: [&str; 2] = ["text", "count"];
+/// The globals of a counted text: its bytes, its count and when it was used last
+const TEXT_COUNTED_PARTS: [&str; 3] = ["text", "count", "used"];
+/// Texts below this many bytes stay out of the text cursors and counts: walking them is cheap, and a lexer's words
+/// (`starts_at(source, word, at)`) would take the slot of its long source by turns (card text-cache-lru)
+pub(super) const SHORT_TEXT: i32 = 64;
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(in crate::wasm_emitter) struct CopyCells {
@@ -166,6 +170,7 @@ impl WasmGcEmitter {
 		self.emit_list_concat();
 		self.emit_list_extend();
 		self.emit_list_become();
+		self.emit_list_drop_last();
 		self.emit_element_children();
 		self.emit_element_body();
 		self.emit_swizzled();
@@ -222,34 +227,41 @@ impl WasmGcEmitter {
 			.flat_map(|slot| TEXT_CURSOR_PARTS.map(|part| (format!("text_cursor_{slot}_{part}"), global_of(part))));
 		let counted = (0..TEXT_COUNTS)
 			.flat_map(|slot| TEXT_COUNTED_PARTS.map(|part| (format!("text_counted_{slot}_{part}"), global_of(part))));
-		let globals: Vec<_> = cursors.chain(counted).collect();
+		let clock = std::iter::once(("text_cache_clock".to_string(), global_of("used")));
+		let globals: Vec<_> = cursors.chain(counted).chain(clock).collect();
 		self.text_cursor_global = Some(self.next_global_idx);
 		for (name, (val_type, initial)) in globals {
 			self.declare_named_global(val_type, initial, name);
 		}
 	}
 
-	/// The globals (text, count) of each counted text
-	fn texts_counted(&self) -> Vec<(u32, u32)> {
+	/// The globals (text, count, used) of each counted text
+	fn texts_counted(&self) -> Vec<(u32, u32, u32)> {
 		let Some(cursors) = self.text_cursor_global else {
 			return vec![];
 		};
 		let first = cursors + TEXT_CURSORS * TEXT_CURSOR_PARTS.len() as u32;
 		(0..TEXT_COUNTS)
 			.map(|slot| first + slot * TEXT_COUNTED_PARTS.len() as u32)
-			.map(|text| (text, text + 1))
+			.map(|text| (text, text + 1, text + 2))
 			.collect()
 	}
 
-	/// The globals (text, index, at) of each text cursor, newest first
-	fn text_cursors(&self) -> Vec<(u32, u32, u32)> {
+	/// The globals (text, index, at, used) of each text cursor
+	fn text_cursors(&self) -> Vec<(u32, u32, u32, u32)> {
 		let Some(first) = self.text_cursor_global else {
 			return vec![];
 		};
 		(0..TEXT_CURSORS)
 			.map(|slot| first + slot * TEXT_CURSOR_PARTS.len() as u32)
-			.map(|text| (text, text + 1, text + 2))
+			.map(|text| (text, text + 1, text + 2, text + 3))
 			.collect()
+	}
+
+	/// The global counting the uses of the text cursors and counts, after them
+	fn text_cache_clock(&self) -> Option<u32> {
+		let cursors = self.text_cursor_global?;
+		Some(cursors + TEXT_CURSORS * TEXT_CURSOR_PARTS.len() as u32 + TEXT_COUNTS * TEXT_COUNTED_PARTS.len() as u32)
 	}
 
 	/// The globals (list, cell, index) of read cursor `slot`: the first is the list cursor's own
@@ -491,6 +503,11 @@ impl WasmGcEmitter {
 				);
 				s.emit_type_value(f, crate::analyzer::BOOL_TYPE);
 				Self::emit_list(f, &[I::Return, I::End]);
+				f.instruction(&I::LocalGet(kind));
+				Self::emit_is_empty_list(f);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_type_value(f, crate::words::LIST_WORD);
+				Self::emit_list(f, &[I::Return, I::End]);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I::LocalGet(kind), I::I64Const(crate::type_kinds::BUILTIN_FUNCTION_MARK), I::I64And, I::I64Const(0), I::I64Ne,
@@ -602,10 +619,10 @@ impl WasmGcEmitter {
 
 					// ø is the empty list
 					s.emit_field(func, 0, 0);
-					s.emit_unmarked(func);
+					Self::emit_is_empty(func);
 					#[rustfmt::skip]
 					Self::emit_list(func, &[
-						I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+						I::If(BlockType::Empty),
 							I::I64Const(0), I::Return,
 						I::End,
 					]);
@@ -889,9 +906,7 @@ impl WasmGcEmitter {
 
 	/// The number of items (i64) of the list node on the stack, as list_items finds them
 	pub(in crate::wasm_emitter) fn emit_items_length(&self, func: &mut Function) {
-		self.call(func, super::list_dispatch::LIST_ITEMS);
-		let length = I::StructGet { struct_type_index: self.type_manager.node_list_type, field_index: 0 };
-		Self::emit_list(func, &[length, I::I64ExtendI32U]);
+		self.call(func, super::list_dispatch::LIST_ITEM_COUNT);
 	}
 
 	/// The locals of an item walk, in the order of ItemWalk::at
@@ -925,7 +940,7 @@ impl WasmGcEmitter {
 		}
 		// ø is the empty list: it has no item at any index
 		self.emit_field(func, 0, 0);
-		Self::emit_kind_test(func, Kind::Empty as i64, I::I64Eq);
+		Self::emit_is_empty(func);
 		self.emit_fail_out_of_range_if(func, asked);
 		Self::emit_index_compare(func, I::I64LtS);
 		self.emit_fail_out_of_range_if(func, asked);
@@ -1151,10 +1166,10 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
 		Self::emit_list(func, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Else]);
 		self.emit_field(func, list, 0);
-		self.emit_unmarked(func);
+		Self::emit_is_empty(func);
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
-			I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+			I::If(BlockType::Empty),
 				I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::LocalSet(list),
 			I::End,
 			I::End,
@@ -1185,13 +1200,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list;
-	/// a declared list keeps its element mark
-	pub(in crate::wasm_emitter) fn emit_become_empty(&self, func: &mut Function, node: u32) {
+	/// The node in local `node` (a lone cell or entry) becomes the empty value of kind `empty` in place (`[]` of a list,
+	/// ø of a map), so every holder of it sees it; a declared list keeps its element mark
+	pub(in crate::wasm_emitter) fn emit_become_empty(&self, func: &mut Function, node: u32, empty: i64) {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		Self::emit_list(func, &self.forget_list_cursor());
-		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(Kind::Empty as i64)]);
+		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(empty)]);
 		self.emit_or_element_mark(func, node);
 		Self::emit_list(
 			func,

@@ -1,0 +1,5 @@
+counts(body: any): bool := {
+	if body is int { return no }
+	body is text
+}
+print counts("a")

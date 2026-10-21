@@ -1,0 +1,8 @@
+is_key(n: any, op: Op): bool := match n {
+	Key(_, written, _): written == op
+	_: no
+}
+n = Key(symbol("a"), Op.Colon, 1)
+print is_key(n, Op.Colon)
+print is_key(n, Op.Assign)
+print is_key(3, Op.Colon)

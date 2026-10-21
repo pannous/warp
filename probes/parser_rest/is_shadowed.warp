@@ -1,0 +1,15 @@
+f(x: any): bool := x is key
+g(x: any): bool := x is text
+h(): int := {
+	key = 1
+	text = 2
+	key + text
+}
+print f(1)
+print g("a")
+print h()
+local(x: any): bool := {
+	key = 1
+	x is key
+}
+print local(1)

@@ -65,6 +65,8 @@ mod test_self_hosted_analysis; // card End-end
 #[cfg(feature = "native")]
 mod test_self_hosted_cache; // card End-end
 #[cfg(feature = "native")]
+mod test_self_hosted_library; // card shared-warp-build
+#[cfg(feature = "native")]
 mod test_self_pure; // card pure-runs
 #[cfg(feature = "native")]
 mod test_self_sort; // card sort-warp

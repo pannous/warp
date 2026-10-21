@@ -7,11 +7,11 @@ product(xs) := { out = 1; for x in xs { out = out * x }; out }
 // loops, not slices: the type model's W0 (tests/types/test_type_model.rs) reads take and drop, and has no slices
 take(xs, n) := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }
 drop(xs, n) := { out = []; for i in n + 1 to count(xs) { out = out + [xs#i] }; out }
-flatten(xs) := { out = []; for x in xs { out = out + x }; out }
+flatten(xs) := { out = []; for x in xs { out += x }; out }
 chunk(xs, n) := { out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
 window(xs, n) := [xs[i:i + n] for i in 0 to count(xs) - n]
 median(xs) := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
-flat_map(xs, f) := { out = []; for x in xs { out = out + f(x) }; out }
+flat_map(xs, f) := { out = []; for x in xs { out += f(x) }; out }
 // [kept, rest]: the elements f holds for, and the others
 partition(xs, f) := { kept = []; rest = []; for x in xs { if f(x) { kept = kept + [x] } else { rest = rest + [x] } }; [kept, rest] }
 max_by(xs, f) := { best = xs#1; for x in xs { if f(x) > f(best) { best = x } }; best }

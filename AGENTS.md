@@ -82,7 +82,8 @@ cargo build --offline          # Offline mode (uses the local registry cache)
 ### Testing
 
 Several agent sessions share this Mac, so test runs are rationed (roles and rules: notes/roles.md):
-- Workers run targeted tests only, through the machine-wide queue: `tests/queue.sh -- <filter>`. A hook blocks direct
+- Rust tests run in the cloud (user 2026-10-20): workers run targeted tests only, with `scripts/cloud-test.sh`;
+  tests/queue.sh only for the Mac-only tests (scripts/cloud-test-environmental.txt). A hook blocks direct
   `cargo test` / `cargo browser-test` runs.
 - Only the Integrator session runs the full suite (`./test.sh`, which queues itself) and pushes code to main. Workers
   hand it "branch, tip, filters" and fix what it reports.
@@ -139,11 +140,11 @@ These are reexported in `lib.rs` for test access via `use warp::*`.
 
 ## Development Workflow
 
-0. **Run tests** - `tests/queue.sh -- <filter>` to verify we start from a clean state, check git logs
-1. **Modify parser or emitter** - Edit files in `src/`
+0. **Check state** - git log, git status
+1. **Modify parser or emitter** - `.warp` changes under lib/ run at once with the one shared build:
+   `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` (no local cargo builds besides main's)
 2. **Add tests** - Create or update tests in `tests/`
-3. **Run tests** - `tests/queue.sh -- <filter>` to verify
-4. **Build offline** - Use `--offline` for reproducible builds
+3. **Run tests** - in the cloud: `scripts/cloud-test.sh --card <card> <branch> <tip> <filters>`
 
 ## Serialization
 
@@ -225,6 +226,8 @@ is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55);
 # Important
 Don't cargo clean unless absolutely necessary!
 
+NEVER modify a README without the user's review and explicit confirmation.
+
 The /probes/ folder is NOT a place to doublicate worktrees!
 Small or non-conflicting changes may go straight onto main without a worktree (notes/agents/common.md
 "Where to work"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
@@ -234,13 +237,13 @@ Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same argument
 
 ## Folders
 - `probes/` = hand-written probe sources only (.warp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
-- `scratch/` = disposable, ignored temporary area, only for: the checkout's own warp binary (`scripts/own-warp.sh` → `scratch/warp`), temporary work folders of tests and probes, and cloned outside repos for research. Not for worktrees, repo copies or extra binary copies; logs and results go to `data/`. Deletable any time; anything older than two days gets cleared.
+- `scratch/` = disposable, ignored temporary area, only for: temporary work folders of tests and probes, and cloned outside repos for research. Not for worktrees, repo copies or extra binary copies; logs and results go to `data/`. Deletable any time; anything older than two days gets cleared.
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
 - Rust build output goes to the one shared target dir set in ~/.cargo/config.toml (`target-dir`), never into the repo; agents and exports don't set CARGO_TARGET_DIR (a per-agent dir is ~20 GB and recompiles every dependency).
 - `./test.sh` runs `probes/check_layout.sh`, which fails on tracked probes that are repo copies, too large, or of a non-source type.
 
-Workers: before and after each task, run `git status` and the tests that cover your change:
-`tests/queue.sh -- <filter>`. Do NOT run `./test.sh` (the full suite): only the Integrator runs it, after merging
+Workers: before and after each task, run `git status` and the tests that cover your change (cloud lane:
+`scripts/cloud-test.sh`). Do NOT run `./test.sh` (the full suite): only the Integrator runs it, after merging
 your branch (notes/roles.md).
 If previously passing test fail after the task as seen via git diff test_results.txt
 try to fix failing tests and if it doesn't work roll back

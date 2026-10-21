@@ -215,6 +215,9 @@ end cannot read yet (`try … else …`) is checked there before parser.warp rea
 Order: lowering passes first, then the analyzer, then the emitter; only the bootstrap waits for all three.
 - Next item: lib/math.warp and lib/units.warp become complete standalone warp files, and the parser fetches its
   lists of special functions and operators from them instead of hard-coded Rust tables (card standalone-math-units).
+  Not units (decision units-opt-in): the stage programs never import or build lib/units.warp (checked 2026-10-20:
+  parser.wasm and passes.wasm hold none of its words); parser.warp's `1 month` and sleep_durations' `sleep 2s` are
+  the time module's durations, no units.
 - Lowering passes: src/pipeline.rs runs ~150 passes, each `fn(Node) -> Node`, in SOURCE_PHASES and MEANING_PASSES. A
   pass is the smallest unit with a twin; early self-contained passes first; each twin can replace its Rust pass once
   it matches everywhere. They take node_view data, the form parser.warp's `tree` writes
@@ -332,7 +335,8 @@ Readers of the layout (each place a module's result or a value crossing the boun
   before compiling): one page of memory, exported as "memory", where the runtime word print_line copies a text's bytes
   a chunk at a time (iovec at 0, written count at 8, bytes from 16). That is the one edge helper; nothing else
   touches memory. Done (card emitter-prints); the emitter twin compares stdout too (host::with_captured_stdout).
-Runtime words are warp: lib/compiler/runtime.warp, written in idiomatic warp (for loops and all sugar) and lowered by
+Runtime words are warp: lib/compiler/runtime.warp (an index of `use "runtime/<part>.warp"` lines, one idea per part
+in lib/compiler/runtime/, joined by self_hosted.rs runtime_source), written in idiomatic warp (for loops and all sugar) and lowered by
 the same pipeline as any program before emitter.warp sees them (`wasm_module(program, runtime)`; the twin harness
 lowers it with pipeline::lower). emitter.warp handles only lowered forms, never hand-lowered source. The words use a
 handful of intrinsics, one or two instructions each and callable only from runtime words: texts (new_text, copy_text,

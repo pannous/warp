@@ -231,7 +231,7 @@ pub fn makes_floats(ctx: &Context, node: &Node) -> bool {
 fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 	use crate::wasm_emitter::{EXACT_ARITHMETIC, INT_RUNTIME, IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 	match op {
-		Op::Eq | Op::Ne => &[VALUES_EQUAL],
+		Op::Eq | Op::Is | Op::Ne => &[VALUES_EQUAL],
 		Op::Identical | Op::NotIdentical => &[VALUES_EQUAL, SAME_NODE],
 		Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or => &[IS_TRUTHY],
 		Op::Inc | Op::Dec | Op::Neg | Op::Abs => &[INT_RUNTIME, EXACT_ARITHMETIC],
@@ -260,6 +260,7 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 			crate::wasm_emitter::lists::list_ops::RETURNED_ERROR,
 		],
 		crate::list_mutations::LIST_BECOME => &[crate::list_mutations::LIST_BECOME],
+		crate::list_mutations::LIST_DROP_LAST => &[crate::list_mutations::LIST_DROP_LAST],
 		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => {
 			&[crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY]
 		}

@@ -61,6 +61,7 @@ mod test_text_as_float;
 mod test_text_builders; // card self-byte-buffer
 mod test_text_building;
 mod test_text_bytes;
+mod test_text_cache_lru; // card text-cache-lru
 mod test_text_casts;
 mod test_text_concat;
 mod test_text_cursor;

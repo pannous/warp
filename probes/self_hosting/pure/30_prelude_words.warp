@@ -1,0 +1,8 @@
+// out: yes
+// out: no
+// out: yes
+// out: 3
+print is_digit('7')
+print is_digit('x')
+print is_hex_digit('b')
+print first([3, 4])

@@ -1,0 +1,18 @@
+// The microseconds per call of lexer.warp's character tests (card profile-stage-programs)
+use "../../lib/compiler/parser.warp"
+probe_rounds = 1000
+probe_source = "alpha = beta\n"
+def timed(label, f) {
+	started = clock()
+	for round in 1 to probe_rounds { f() }
+	print(label + " " + ((clock() - started) * 1000 / probe_rounds) + " µs")
+}
+for probe_char in ['a', ' '] {
+	timed("is_name_char", () => is_name_char(probe_char))
+	timed("is_alphanumeric", () => is_alphanumeric(probe_char))
+	timed("is_letter_beyond_ascii", () => is_letter_beyond_ascii(probe_char))
+	timed("superscript contains", () => SUPERSCRIPT_LETTERS.contains(probe_char))
+	timed("== ♯", () => probe_char == '♯')
+}
+timed("source index", () => probe_source[5])
+timed("name_end", () => name_end(probe_source, 0, probe_source.length))

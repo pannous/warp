@@ -1,0 +1,15 @@
+// Where parser.warp's time goes (card profile-stage-programs): the milliseconds of each phase of parsing the file
+// args#1 names. Run: WARP_LIB=<worktree>/lib warp probes/parser_speed/phases.warp lib/compiler/lexer.warp
+use "../../lib/compiler/parser.warp"
+use os
+source = read(args#1)
+started = clock()
+found = gaps(source, source.length)
+gapped = clock()
+written = written_tree(source)
+wrote = clock()
+counted(written, scope_of(written), [])
+counts = clock()
+view_of(parsed(source))
+viewed = clock()
+print("gaps " + (gapped - started) + " ms, written_tree " + (wrote - gapped) + " ms, counted " + (counts - wrote) + " ms, parsed+view " + (viewed - counts) + " ms")

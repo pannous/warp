@@ -1,0 +1,9 @@
+# emitter core: `raise x` (also throw, fail, panic) and `print x` as a line of their own or the one line of a block
+checked(n: int): int := {
+	if n > 2 { print "big" }
+	if n > 9 { raise "too big" }
+	n
+}
+print checked(1)
+print checked(5)
+print try checked(12) else 0

@@ -1,0 +1,16 @@
+# card warp-profile: emitter.warp concatenated(parts: any) copied its list at each `out += part` (list_concat 34% of
+# parser.warp's pure-only compile); the same parts joined three ways
+def concatenated(parts: any): list {
+	out = []
+	for part in parts { out += part }
+	out
+}
+def concatenated_typed(parts: list): list {
+	out = []
+	for part in parts { out += part as list }
+	out
+}
+parts = (1 to 20000).map(i => [i, i + 1, i + 2])
+way = args#1 ?? "any"
+joined = if way == "any" then concatenated(parts) else if way == "typed" then concatenated_typed(parts) else parts.flatten()
+print #joined

@@ -97,7 +97,7 @@ pub(super) fn educate_block_assignment(assignment: &Node, name: &str, block: &st
 }
 
 pub(super) const LOCAL_OR_GLOBAL: &str = "local-or-global";
-pub(super) const MAIN_LEVEL_READING: usize = 1;
+pub(crate) const MAIN_LEVEL_READING: usize = 1;
 
 /// The main-level statement that first assigns `name`: `n=0` of `n=0; def f(x){n=5;x}`
 pub(super) fn main_assignment<'a>(program: &'a Node, name: &str) -> Option<&'a Node> {
@@ -112,7 +112,7 @@ pub(super) fn main_assignment<'a>(program: &'a Node, name: &str) -> Option<&'a N
 
 /// `n = …` inside f where main has an n: a new local of f (the default, as in Python) or main's n? The fix of main's n
 /// declares it where main assigns it: `global n=0`
-pub(super) fn ask_local_or_global(
+pub(crate) fn ask_local_or_global(
 	assignment: &Node,
 	name: &str,
 	function: &str,
@@ -143,7 +143,7 @@ fn global_at_main(meaning: &str, name: &str, main_assignment: Option<&Node>) -> 
 }
 
 /// `let n = …`, `var n = …`, `const n = …` in `body`: n is explicitly the function's own
-pub(super) fn declares_local(body: &Node, name: &str) -> bool {
+pub(crate) fn declares_local(body: &Node, name: &str) -> bool {
 	let mut declared = false;
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
@@ -200,8 +200,9 @@ fn name_before_type(target: &Node) -> Option<&String> {
 	}
 }
 
-/// Is the first mention of `name` in `body` a plain `name = value` not reading it (`primes = []`)? Then the body
-/// binds its own local, as in Python; reading or updating it first (`n += 1`, `xs#i = v`) means main's variable.
+/// Is the first mention of `name` in `body` a binding not reading it (`primes = []`, `a, b = 1, 2`, `for x in xs`)?
+/// Then the body binds its own local, as in Python; reading or updating it first (`n += 1`, `xs#i = v`) means main's
+/// variable.
 pub(crate) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
 	let mut first_mention = None;
 	body.visit(&mut |node| {
@@ -210,9 +211,14 @@ pub(crate) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
 		}
 		match node {
 			Node::Key(target, Op::Assign, value) if target.is_symbol(name) => {
-				let mut reads = false;
-				value.visit(&mut |part| reads |= matches!(part, Node::Symbol(symbol) if symbol == name));
-				first_mention = Some(!reads);
+				first_mention = Some(!mentions(value, name))
+			}
+			Node::List(items, _, _) => {
+				if let Some((_, values)) =
+					list_binder(items).filter(|(names, _)| names.iter().any(|n| n.is_symbol(name)))
+				{
+					first_mention = Some(!values.iter().any(|value| mentions(value, name)));
+				}
 			}
 			Node::Symbol(symbol) if symbol == name => first_mention = Some(false),
 			_ => {}
@@ -221,23 +227,70 @@ pub(crate) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
 	first_mention.unwrap_or(false)
 }
 
+fn mentions(node: &Node, name: &str) -> bool {
+	let mut mentioned = false;
+	node.visit(&mut |part| mentioned |= matches!(part, Node::Symbol(symbol) if symbol == name));
+	mentioned
+}
+
+/// The variables a binding list binds and the values it reads before binding them: `$destructure (a, b) v w` (the
+/// lowered `a, b = v, w`) and `for x in xs {…}`
+fn list_binder(items: &[Node]) -> Option<(&[Node], &[Node])> {
+	match items {
+		[head, names, values @ ..] if head.is_symbol(crate::tuples::DESTRUCTURE) => match names.drop_meta() {
+			Node::List(names, _, _) => Some((names.as_slice(), values)),
+			_ => None,
+		},
+		_ if crate::lowering::nodes::for_in_variable(items).is_some() => {
+			let within = items.iter().position(|item| item.is_symbol(crate::words::IN_WORD))?;
+			Some((&items[within - 1..within], items.get(within + 1..items.len() - 1).unwrap_or(&[])))
+		}
+		_ => None,
+	}
+}
+
+/// Is `node` a loop whose variable it binds (`for x in xs {…}`)?
+pub(crate) fn is_loop_binding(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if crate::lowering::nodes::for_in_variable(items).is_some())
+}
+
 /// The assignments (kept with their positions) whose changed variable satisfies `wanted`, in source order
 pub(crate) fn find_assignments<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
-	find_changes_by(node, wanted, assignment_target_root)
+	find_changes_by(node, wanted, |node| assignment_target_root(node).into_iter().collect())
+}
+
+/// The bindings (kept with their positions) of a variable satisfying `wanted`, in source order: its assignments,
+/// `a, b = …` and `for x in xs`
+pub(crate) fn find_bindings<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
+	find_changes_by(node, wanted, |node| {
+		let bound = match node {
+			Node::List(items, _, _) => list_binder(items).map(|(names, _)| names).unwrap_or(&[]),
+			_ => &[],
+		};
+		assignment_target_root(node)
+			.into_iter()
+			.chain(bound.iter().filter_map(|name| match name.drop_meta() {
+				Node::Symbol(name) => Some(name),
+				_ => None,
+			}))
+			.collect()
+	})
 }
 
 /// The assignments and list updates (`xs.add(x)`, lowered to an assignment later) whose variable satisfies `wanted`
 fn find_changes<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
-	find_changes_by(node, wanted, |node| assignment_target_root(node).or_else(|| updated_list_root(node)))
+	find_changes_by(node, wanted, |node| {
+		assignment_target_root(node).or_else(|| updated_list_root(node)).into_iter().collect()
+	})
 }
 
 fn find_changes_by<'a>(
 	node: &'a Node,
 	wanted: &dyn Fn(&String) -> bool,
-	changed: fn(&Node) -> Option<&String>,
+	changed: fn(&Node) -> Vec<&String>,
 ) -> Vec<(&'a Node, &'a String)> {
 	let mut found: Vec<(&'a Node, &'a String)> =
-		changed(node.drop_meta()).filter(|name| wanted(name)).map(|name| (node, name)).into_iter().collect();
+		changed(node.drop_meta()).into_iter().filter(|name| wanted(name)).map(|name| (node, name)).collect();
 	match node.drop_meta() {
 		Node::Key(left, _, right) => found
 			.extend(find_changes_by(left, wanted, changed).into_iter().chain(find_changes_by(right, wanted, changed))),

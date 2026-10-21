@@ -10,8 +10,6 @@ use "walk.warp"
 use "phrase_blocks.warp"
 use "words.warp"
 
-implicit_variable = "it"
-
 marked_step(step: Node): Node := Key(symbol("loop·step"), Op.Colon, step)
 
 loop_name(variable: Node, suffix: text): Node := match variable {
@@ -82,7 +80,8 @@ loop_over(variable: Node, iterable: Node, body: Node): Node := match iterable {
 	_: walked(variable, iterable, body)
 }
 
-is_entry(n: any): bool := type(n) is key and op_of(n) == ":"
+# `a: 1`; not the opaque view parser.warp writes an empty group `{}` as (shapes.warp listed), also a colon key
+is_entry(n: any): bool := is_key(n, Op.Colon) and key_of(n) != symbol(opaque_word)
 
 # `{a: 1, b: 2}` or `a: 1`: a map written out (Rust twin: objects.rs written_object)
 is_map_literal(n: any): bool := {
@@ -92,8 +91,8 @@ is_map_literal(n: any): bool := {
 
 # the names assigned a written map anywhere in n (`m = {a: 1}`)
 map_names(n: any): list := {
-	if type(n) is key {
-		if op_of(n) == "=" and key_of(n) is symbol and is_map_literal(value_of(n)) { return [name_of(key_of(n))] }
+	if n is key {
+		if is_key(n, Op.Assign) and key_of(n) is symbol and is_map_literal(value_of(n)) { return [name_of(key_of(n))] }
 		return map_names(key_of(n)) + map_names(value_of(n))
 	}
 	names = []
@@ -118,7 +117,7 @@ unit_type_words = ["byte", "codepoint"]
 
 # `for int in xs body`: a type word as the loop variable visits only the items of that type, under its own name
 # (Rust twin: for_loop/headers.rs type_test)
-filters_by_type(variable: Node): bool := variable is symbol and is_type_word(name_of(variable)) and not (name_of(variable) in unit_type_words)
+filters_by_type(variable: Node): bool := variable is symbol and is_type_word(name_of(variable)) and name_of(variable) not in unit_type_words
 
 lowered_for(n: Node, maps: list): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
@@ -129,7 +128,7 @@ lowered_for(n: Node, maps: list): Node := match n {
 			if filters_by_type(parts#2) { return walked_kept(parts#2, iterable, parts#5, name_of(parts#2)) }
 			if is_name(parts#2) { return loop_over(parts#2, iterable, parts#5) }
 		}
-		if #parts == 3 and parts#1 == symbol("for") { return loop_over(symbol(implicit_variable), parts#2, parts#3) }
+		if #parts == 3 and parts#1 == symbol("for") { return loop_over(symbol(implicit_parameter), parts#2, parts#3) }
 		n
 	}
 	_: n

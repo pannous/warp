@@ -21,6 +21,10 @@ const VALUES_INDEX: usize = 4;
 const SIZE_INDEX: usize = 2;
 /// The program's own size words, which paint(shader) takes before the view's size
 const SIZE_WORDS: [&str; 2] = ["width", "height"];
+/// The canvas's size words (lib/draw.warp), which a program sizing the canvas paints its shaders at: `canvas(w, h)`,
+/// and `canvas.height = 80`, which property_accessors made such a call
+const CANVAS_SIZE_WORDS: [&str; 2] = ["canvas_width", "canvas_height"];
+const CANVAS_WORDS: [&str; 3] = ["canvas", "canvas_width", "canvas_height"];
 /// Holes every shader has, filled by the host: the image's size in pixels, seconds since the first render, the renders
 /// before this one, the pointer over the image (in its pixels), whether a button is down, the wheel steps turned over
 /// it since the start (up adds; system value mouse_wheel), the key held down (its
@@ -133,7 +137,8 @@ pub fn lower(program: Node) -> Node {
 			}
 		}
 	});
-	let program = with_sizes(program, &sizes(&variables));
+	let sizes = sizes(&program, &variables);
+	let program = with_sizes(program, &sizes);
 	if shaders.is_empty() && !mentions_holes(&program) {
 		return program;
 	}
@@ -147,14 +152,29 @@ pub fn lower(program: Node) -> Node {
 	with_values(program, &shaders, &passed)
 }
 
-/// The width and height a paint without them takes: the program's `width` and `height`, else the view's size
-fn sizes(variables: &HashSet<String>) -> [Node; 2] {
+/// The width and height a paint without them takes: the program's `width` and `height`, else the canvas's size when the
+/// program uses the canvas, else the view's size
+fn sizes(program: &Node, variables: &HashSet<String>) -> [Node; 2] {
 	let own = SIZE_WORDS.iter().all(|word| variables.contains(*word));
-	let words = match own {
-		true => SIZE_WORDS,
-		false => [warp_runtime::host_words::VIEW_WIDTH, warp_runtime::host_words::VIEW_HEIGHT],
+	let words = if own {
+		SIZE_WORDS
+	} else if uses_the_canvas(program, variables) {
+		CANVAS_SIZE_WORDS
+	} else {
+		[warp_runtime::host_words::VIEW_WIDTH, warp_runtime::host_words::VIEW_HEIGHT]
 	};
 	words.map(|word| Node::Symbol(word.to_string()))
+}
+
+/// Does the program name the canvas of lib/draw.warp (a variable of its own named canvas is no such use)
+fn uses_the_canvas(program: &Node, variables: &HashSet<String>) -> bool {
+	let mut uses = false;
+	program.visit(&mut |node| {
+		if let Node::Symbol(word) = node {
+			uses |= CANVAS_WORDS.contains(&word.as_str()) && !variables.contains(word);
+		}
+	});
+	uses
 }
 
 /// `paint(shader)` and `paint(shader, values)` as `paint(shader, width, height, values)`

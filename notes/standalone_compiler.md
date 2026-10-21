@@ -83,7 +83,8 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
    ("the module's own code keeps calling its own play"), file and file alike: a used file's own code calls its own
    word; the error only when a file that sees both calls the word itself. No renames (card file-own-words).
 2. Runtime words lowered by warp: runtime.warp through `lowered_program` (folder lib/, so uses.warp splices its
-   `use case_tables`) runs (cold 2 min), with warnings that `Round`, `Add`, `Define` name nothing (enum variants
+   `use case_tables`; since card runtime-split its parts are `use "runtime/<part>.warp"` beside it, so the folder is
+   lib/compiler and uses.warp must also find a std module name in lib/: card uses-std-modules) runs (cold 2 min), with warnings that `Round`, `Add`, `Define` name nothing (enum variants
    written bare in runtime.warp: warp-compiler-enums). Whether emitter.warp emits the same from it as from Rust's
    lowering is the next probe. Cost: lowered once per compiler run; if that is slow, the general fix is lowering
    only the runtime words a program reaches (as the prelude words are, card prelude-for-pure), never a cached JSON.
@@ -99,6 +100,26 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
 3. compiler.warp + host_words.warp; probe it from the command line on the pure ladder.
 4. self_hosted.rs: pure/pure-only run the compiler module; pure_bytes, JSON setups go; ladder counts ≥ before.
 5. build.rs: HOST_WORD_SIGNATURES from host_words.warp.
+
+## Progress (2026-10-20, branch standalone)
+- Step 2 done by renames (user: rename for now): 14 emitter/analyzer helpers, and emitter.warp `length` → `length_code`
+  (a text's `.length` in parser.warp called it). The general rule stays card file-own-words.
+- Composing the stages found six Rust scope bugs of one kind, all fixed with tests in
+  tests/scope/test_bound_names_shadow_functions.rs (card local-variable-named): a parameter, local or loop variable
+  named like a function elsewhere was taken for that function in list heads, type inference, a returned local
+  (closure analysis), lambda captures, prefix calls (`call#1`) and nested lambdas. Plus: a text's member looked up by
+  name (`line.length` beside a map with a key length) was typed a text.
+- Step 3 written: lib/compiler/compiler.warp and host_words.warp. Not yet through: the next probe needs the scope fixes
+  in the shared build. Probe: `cd scratch/sc && WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp ../../lib/compiler/compiler.warp app.warp app.wasm`.
+- Blocked on compile time (card analyzer-settle): compiler.warp does not finish compiling (>30 min CPU); even
+  `use passes+emitter; print(1)` takes >45 min, while each stage alone compiles in ~30 s. A 23-min sample of the
+  whole warp-debug run (probes/sample_inclusive.py) put 98% of it in one caller: run_time_blocks::data_holders ran
+  the whole kind inference (flow::settle, its main-program walk restarting thousands of times) only to learn the
+  program's function names. Branch analyzer-settle reads them with function_definitions (no inference), law.rs's
+  function_definition too. That inference never ended: before declarations::lower a definition with a result type
+  in its head (`f(x): list := …`) was walked as main code, and locals of one name in many stage functions (kept,
+  found) turned each other between a list and a Node forever. Fixed on the same branch (function_definition_body
+  reads such heads; a Node widening stays one). Lldb recipe for such hunts: data/settle/ in the standalone worktree.
 
 ## Coordination
 - warp-self-analyzer (pure lane, branch prelude-for-pure): compiler.warp only composes their stages; their passes,

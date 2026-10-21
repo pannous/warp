@@ -32,8 +32,8 @@ After each batch of questions, and whenever idle, `todo try --new` lists finishe
   Never the shared-target debug/warp: it holds whichever worktree built last. Homebrew releases are occasional, so
   nothing waits for brew.
 - A feature is announced once its batch is pushed (workers run `todo done` only after their branch is on main). A
-  worker may hand over a try line as soon as its targeted test passes on its branch, with its own binary
-  (scripts/own-warp.sh → <worktree>/scratch/warp).
+  worker may hand over a try line as soon as its targeted test passes on its branch, with the shared binary
+  (`WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp`).
 - Format: the Interviewer's FINAL reply of a turn (the user's app shows only the final message in full) lists each
   feature as a ```sh code block with the expected result after it; no popup follows. Shape: `warp 'a = 1; b = 2; a + b'`,
   the program right after `warp`, statements joined by semicolons, no echo/printf pipes or newlines; a branch-only
@@ -90,6 +90,11 @@ One task, one branch, one worktree; targeted tests through the queue; done = `to
 notes/agents/common.md (role prompts: worker.md, fixer.md, implementer.md).
 
 ## Enforcement
+- Rust tests run in the cloud (`scripts/cloud-test.sh`; user 2026-10-20), one local build (main's, the Integrator's).
+  Enforced for the Rust tests only (user: "only for the Rust test, the warp tests are fine locally"): test-gate.py
+  blocks cargo test, test binaries, tests/queue.sh and ./test.sh; the queue below stays for the Mac-only tests
+  (scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1 tests/queue.sh -- <filter>`. Warp tests (`warp
+  test`, scripts/is_tests.py) run locally. Probe: probes/hooks/test_gate_cases.py.
 - `tests/queue.sh`: every test run waits for one of 3 machine-wide slot locks (`~/.cargo/warp-tests.lock`, `.lock.2`,
   `.lock.3`, lockf), so at most 3 targeted runs go at once (4 test threads each, nice 10); a full `./test.sh` holds all
   three and runs alone. Each slot's holder is in its `.owner` file. Waiters are served first come, first served by

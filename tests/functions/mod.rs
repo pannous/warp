@@ -83,11 +83,13 @@ mod test_foreign_modifiers;
 mod test_foreign_spellings;
 mod test_free_var_if_arms;
 mod test_function_aliases;
+mod test_function_binders; // card loop-variable-global
 mod test_function_keyword;
 mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
 mod test_function_type_at_run_time; // card type-function
 mod test_function_typed_parameters;
+mod test_function_value_scope; // card function-value-names
 mod test_function_values;
 mod test_function_words_consume; // card function-words-consume
 mod test_functions;
@@ -136,6 +138,7 @@ mod test_multi_value;
 mod test_named_arguments;
 mod test_named_function_argument;
 mod test_nested_it;
+mod test_nested_iterations; // card rust-lambdas
 mod test_nested_library_calls; // card broadcast-library
 mod test_nested_prefix_calls;
 mod test_nested_two_deep; // card nested-two

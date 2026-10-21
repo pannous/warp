@@ -1,0 +1,8 @@
+f(n: Node): any := match n {
+	Key(Key(a, Op.Dot, b), Op.Colon, v): b
+	Key(k, Op.Colon, Key(x, Op.Dot, y)): y
+	_: "other"
+}
+print(f(Key(Key(symbol("x"), Op.Dot, symbol("label")), Op.Colon, 1)))
+print(f(Key(symbol("k"), Op.Colon, Key(1, Op.Dot, 2))))
+print(f(Key(symbol("k"), Op.Colon, 3)))

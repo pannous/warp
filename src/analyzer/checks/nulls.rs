@@ -34,12 +34,15 @@ pub(crate) fn holds_list(operand: &Node, lists: &HashSet<String>) -> bool {
 	}
 }
 
-/// The variables the program assigns a list literal: what `+` concatenates
+/// The variables the program assigns a list literal, `[]` too (ø marked as written so): what `+` concatenates or
+/// appends to
 pub(crate) fn list_variables(program: &Node) -> HashSet<String> {
 	let mut lists = HashSet::new();
 	program.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
-			if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (target.drop_meta(), value.drop_meta()) {
+			let is_list =
+				value.is_empty_list_literal() || matches!(value.drop_meta(), Node::List(_, Bracket::Square, _));
+			if let (Node::Symbol(name), true) = (target.drop_meta(), is_list) {
 				lists.insert(name.clone());
 			}
 		}
@@ -54,6 +57,9 @@ pub(crate) fn check_null_use(
 	nullable: &mut HashMap<String, Unchecked>,
 	lists: &HashSet<String>,
 ) -> Option<Diagnostic> {
+	if let Some(found) = function_checked(node, nullable, lists) {
+		return found;
+	}
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => assignment_checked(target, value, nullable, lists),
 		Node::Key(if_condition, Op::Then, then) => {
@@ -101,6 +107,20 @@ pub(crate) fn check_null_use(
 		Node::List(items, _, _) => items.iter().find_map(|item| check_null_use(item, nullable, lists)),
 		_ => None,
 	}
+}
+
+/// A function's body checked in its own scope (program_names.rs, the one scope rule): the names it binds are its own, no
+/// null of another function's local of that name; None when `node` defines no function
+fn function_checked(
+	node: &Node,
+	nullable: &HashMap<String, Unchecked>,
+	lists: &HashSet<String>,
+) -> Option<Option<Diagnostic>> {
+	let bound = crate::program_names::bound_inside(node)?;
+	let (_, body, _) = crate::lowering::type_tests::function_definition(node)?;
+	let mut inner = nullable.clone();
+	inner.retain(|name, _| !bound.contains(name));
+	Some(check_null_use(&body, &mut inner, lists))
 }
 
 /// The variable a condition `x == ø` tests for null

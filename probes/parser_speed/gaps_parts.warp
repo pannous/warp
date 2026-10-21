@@ -1,0 +1,60 @@
+// Which part of lexer.warp gaps() grows with the square of the source (card profile-stage-programs): the milliseconds
+// of gaps itself and of its loop without the comment test, of the file args#1 names
+use "../../lib/compiler/lexer.warp"
+use os
+def blanks_only(source: any, n: int): int {
+	started = clock()
+	resumes = (n + 1) times [n]
+	breaks = (n + 1) times [false]
+	at = n - 1
+	while at >= 0 {
+		c = source[at]
+		if is_blank(c) {
+			resumes[at] = resumes[at + 1]
+			breaks[at] = if c == '\n' then true else breaks[at + 1]
+		} else {
+			resumes[at] = at
+		}
+		at = at - 1
+	}
+	clock() - started
+}
+def comments_only(source: any, n: int): int {
+	started = clock()
+	at = n - 1
+	while at >= 0 {
+		comment_end(source, at, n)
+		at = at - 1
+	}
+	clock() - started
+}
+def copied(source: any, n: int): int {
+	started = clock()
+	resumes = (n + 1) times [n]
+	breaks = (n + 1) times [false]
+	at = n - 1
+	while at >= 0 {
+		c = source[at]
+		end = comment_end(source, at, n)
+		if end > at {
+			resumes[at] = resumes[end]
+			breaks[at] = breaks[end]
+		} else if is_blank(c) {
+			resumes[at] = resumes[at + 1]
+			breaks[at] = if c == '\n' then true else breaks[at + 1]
+		} else {
+			resumes[at] = at
+		}
+		at = at - 1
+	}
+	made = Gaps{resumes: resumes, breaks: breaks}
+	clock() - started
+}
+def whole(source: any, n: int): int {
+	started = clock()
+	gaps(source, n)
+	clock() - started
+}
+source = read(args#1)
+n = source.length
+print("length " + n + ": gaps " + whole(source, n) + " ms, copied " + copied(source, n) + " ms, blanks " + blanks_only(source, n) + " ms, comments " + comments_only(source, n) + " ms")

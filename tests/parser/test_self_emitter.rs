@@ -23,6 +23,7 @@ const DROPPED: [&str; 9] = [
 #[test]
 #[ignore = "card sprint-fixes: one core program falls outside the emitter core after the sprint merges (64 of 65 inside)"]
 fn core_programs_run_as_rust_runs_them() {
+	crate::requires!(crate::common::RUST_PIPELINE);
 	let programs: Vec<PathBuf> = sources().into_iter().filter(|path| path.starts_with(CORE_PROGRAMS)).collect();
 	let inside = emitter_differential(&programs, programs.len());
 	assert_eq!(inside.len(), programs.len());
@@ -30,5 +31,6 @@ fn core_programs_run_as_rust_runs_them() {
 
 #[test]
 fn every_source_inside_the_core_runs_as_rust_runs_it() {
+	crate::requires!(crate::common::RUST_PIPELINE);
 	emitter_differential(&twin_sources(&DROPPED), LEAST_SOURCES_INSIDE);
 }

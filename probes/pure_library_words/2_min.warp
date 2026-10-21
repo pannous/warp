@@ -1,0 +1,4 @@
+# min of a list built at run time: 2
+widths = []
+for w in [5, 2, 7] { widths += [w] }
+print min(widths)

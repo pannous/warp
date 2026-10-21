@@ -1,0 +1,4 @@
+# the pure lane's lowered view of a source file (args#1), as passes.warp leaves it
+use "../../lib/compiler/passes.warp"
+use os
+print(lowered(read(args#1), "."))

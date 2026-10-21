@@ -1,0 +1,63 @@
+# Upper and lower case of texts, ASCII by shifting, any other code point through the case tables
+# `t.lower()`, `t.upper()`: an ASCII text with its letters first…last moved by shift, any other mapped code point by
+# code point through the case table (lib/case_tables.warp, the twin of src/wasm_emitter/text/text_unicode.rs)
+text_lower(t: text): text := if is_ascii(t) then ascii_case(t, 65, 90, 32) else table_case(t, lower_case_text())
+text_upper(t: text): text := if is_ascii(t) then ascii_case(t, 97, 122, 0 - 32) else table_case(t, upper_case_text())
+is_ascii(t: text): bool := {
+	for i in 0..byte_count(t) { if byte_at(t, i) >= 128 { return no } }
+	yes
+}
+ascii_case(t: text, first: int, last: int, shift: int): text := {
+	out = new_text(byte_count(t))
+	for i in 0..byte_count(t) {
+		b = byte_at(t, i)
+		set_byte(out, i, if b >= first and b <= last then b + shift else b)
+	}
+	out
+}
+# each code point of t as the table's ranges map it: six ints a range (start, last, stride, delta, second, third)
+table_case(t: text, table: text): text := {
+	ranges = table_ints(table)
+	out = ""
+	at = 0
+	while at < byte_count(t) {
+		out += case_mapped(ranges, code_point_at(t, at))
+		at += code_point_width(byte_at(t, at))
+	}
+	out
+}
+# the ints of a text of them, a space apart
+table_ints(t: text): list := {
+	ints = []
+	at = 0
+	while at < byte_count(t) {
+		end = at
+		while end < byte_count(t) and byte_at(t, end) != 32 { end += 1 }
+		ints += [text_as_int(bytes_between(t, at, end))]
+		at = end + 1
+	}
+	ints
+}
+range_field(ranges: list, at: int, index: int): int := ranges#(at * 6 + index + 1)
+# the code point's text: itself unless a range covers it, else itself moved by the range's delta, then its second and
+# third code points (`ß` is `SS`)
+case_mapped(ranges: list, code: int): text := {
+	at = range_before(ranges, code)
+	if at < 0 or code > range_field(ranges, at, 1) or int_remainder(code - range_field(ranges, at, 0), range_field(ranges, at, 2)) != 0 {
+		return char_text(char_of(code))
+	}
+	out = char_text(char_of(code + range_field(ranges, at, 3)))
+	if range_field(ranges, at, 4) != 0 { out += char_text(char_of(range_field(ranges, at, 4))) }
+	if range_field(ranges, at, 5) != 0 { out += char_text(char_of(range_field(ranges, at, 5))) }
+	out
+}
+# the last range starting at or before code, by halving; -1 when none does
+range_before(ranges: list, code: int): int := {
+	low = 0
+	high = int_quotient(#ranges, 6)
+	while low < high {
+		middle = int_quotient(low + high, 2)
+		if range_field(ranges, middle, 0) <= code { low = middle + 1 } else { high = middle }
+	}
+	low - 1
+}

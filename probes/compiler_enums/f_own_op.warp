@@ -1,0 +1,2 @@
+is_assign(op: Op): bool := op == Op.Assign
+print is_assign(Op.Assign)

@@ -1,0 +1,4 @@
+x = power(2, 3)
+print x
+print 1000 /! power(2, 3)
+print 1000 /! 2 ** 3

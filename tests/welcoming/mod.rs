@@ -18,6 +18,7 @@ mod test_dot_without_parens; // cards type-module, abc-chars
 mod test_dot_word_same_path; // card type-module follow-up
 mod test_end_and_def_blocks; // cards std-module-swallowed, end-indented, def-indented
 mod test_english_operator_words;
+mod test_enum_case_words; // card enum-case-words
 mod test_error_excerpt;
 mod test_error_positions;
 #[cfg(feature = "native")] // runs the warp binary
@@ -69,9 +70,12 @@ mod test_style_dont_care;
 mod test_template_positions; // card template-positions
 mod test_ternary_hint_got_it; // card hint-dismiss
 mod test_time_limit; // card fuel-metering
+mod test_type_word_shadowed; // card local-named-like-2
 mod test_undefined_in_text_sum; // card compile-path
 mod test_unknown_prefix_word;
 mod test_unknown_word_error;
+#[cfg(feature = "native")] // runs the warp binary
+mod test_used_file_positions; // card warning-file
 mod test_variable_applied; // card error-local
 mod test_warning_levels; // card warning-levels
 mod test_warning_mode;

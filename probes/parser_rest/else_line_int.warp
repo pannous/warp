@@ -1,0 +1,5 @@
+f(name: text): int := {
+	if name == "for" then 1
+	else 2
+}
+print f("def")

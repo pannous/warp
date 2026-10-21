@@ -1,0 +1,3 @@
+# card empty-results: an empty filter result is the empty list []
+xs = [1, 2]
+print xs.filter(x => x > 5)

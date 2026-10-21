@@ -1,0 +1,8 @@
+print "héllo".codepoints
+print "ab".chars
+print "ab".graphemes
+m = {a: 1, b: 2}
+print m.keys
+print m.values
+n = {keys: 5}
+print n.keys

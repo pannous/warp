@@ -1,0 +1,23 @@
+other(): any := {
+	arities = {}
+	arities["x"] = 1
+	arities
+}
+same(arities: list): bool := {
+	totals = []
+	for arity in arities {
+		if arity#2 in totals { return no }
+		totals += [arity#2]
+	}
+	yes
+}
+renamed(counts: list): bool := {
+	totals = []
+	for each in counts {
+		if each#2 in totals { return no }
+		totals += [each#2]
+	}
+	yes
+}
+print(renamed([[2, 2], [1, 1]]))
+print(same([[2, 2], [1, 1]]))
