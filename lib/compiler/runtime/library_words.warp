@@ -45,7 +45,7 @@ text_of_textual(n: Node): text := {
 	node_text(n)
 }
 # a space, a tab, a line feed or a carriage return
-is_space_byte(b: int): bool := b == 32 or b == 9 or b == 10 or b == 13
+is_space_byte(b: int): bool := b == Ascii.Space or b == Ascii.Tab or b == Ascii.Newline or b == Ascii.Return
 # the bytes start..<stop of t
 bytes_between(t: text, start: int, stop: int): text := {
 	out = new_text(stop - start)

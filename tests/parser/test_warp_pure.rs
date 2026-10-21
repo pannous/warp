@@ -68,7 +68,6 @@ fn warp_pure_says_what_it_refuses() {
 
 /// A library word compiles through the pure lane (card pure-not-a-list)
 #[test]
-#[ignore = "the pure lane knows no library words yet: 'outside the core: the unknown name sum'"]
 fn warp_pure_runs_a_library_word() {
 	let said = pure_said("library_word", "print sum [1, 2]\n");
 	assert!(said.lines().next() == Some("3"), "{said}");
