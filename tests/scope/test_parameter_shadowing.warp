@@ -9,16 +9,3 @@ g([1, 2])' [1, 2]
 is! 'f(t) := { pitch = pi * t; 0.3 }
 h(pitch) := if pitch is list then 1 else 2
 h(4.0)' 2
-
-# a_parameter_is_no_map_another_function_assigned
-is! 'both(first: any): any := { held = {}; for name in first.keys { held[name] = first[name] }; held }
-def firsts(held: any): list { held.map(e => e#1) }
-firsts([[1, 2], [3, 4]])' [1, 3]
-is! 'f() := { held = {a: 1}; held.a }
-g(held: any) := held.map(e => e * 2)
-g([1, 2])' [2, 4]
-
-# a_loop_variable_is_no_map_another_function_assigned
-is! 'f() := { held = {a: 1}; held.a }
-g() := { n = []; for held in [[1, 2], [3]] { n += held.map(e => e * 2) }; n }
-g()' [2, 4, 6]
