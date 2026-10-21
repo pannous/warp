@@ -44,7 +44,7 @@ pub(crate) fn piped(value: Node, stage: Node) -> Node {
 impl WarpParser {
 	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
 	pub(super) fn at_pipeline(&self) -> bool {
-		self.current_char() == '|' && self.peek_char(1) == '>'
+		self.at_text("|>")
 	}
 
 	/// `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, which the
@@ -53,13 +53,7 @@ impl WarpParser {
 		if self.current_char() != '|' || self.options.data_mode {
 			return None;
 		}
-		let mut length = 1;
-		while matches!(self.peek_char(length), ' ' | ',')
-			|| self.peek_char(length).is_alphanumeric()
-			|| self.peek_char(length) == '_'
-		{
-			length += 1;
-		}
+		let length = 1 + self.run_at(1, |ch| matches!(ch, ' ' | ',' | '_') || ch.is_alphanumeric());
 		let written: String = (1..length).map(|offset| self.peek_char(offset)).collect();
 		let names: Vec<Node> = written
 			.split([' ', ','])

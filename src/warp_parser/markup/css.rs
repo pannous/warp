@@ -16,7 +16,7 @@ impl WarpParser {
 		if !self.context.in_style_sheet || self.current_char() != '#' {
 			return None;
 		}
-		let digits = (1..).take_while(|&offset| self.peek_char(offset).is_ascii_hexdigit()).count();
+		let digits = self.run_at(1, |ch| ch.is_ascii_hexdigit());
 		let after = self.peek_char(digits + 1);
 		if !CSS_COLOR_DIGITS.contains(&digits) || after.is_alphanumeric() || matches!(after, '_' | '-') {
 			return None;

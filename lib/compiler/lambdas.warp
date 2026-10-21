@@ -13,6 +13,7 @@ use "walk.warp"
 use "phrase_blocks.warp"
 use "scope.warp"
 use "multiple_assignments.warp"
+use "signatures.warp"
 
 lifted_prefix = "closure_lambda_"
 closure_call_word = "closure_call_"
@@ -43,12 +44,6 @@ written_parameters(signature: Node): list := match signature {
 	_: [signature]
 }
 
-# `x` of `x` and of `x: int`
-parameter_word(parameter: Node): text := match parameter {
-	Key(name, Op.Colon, type): name_of(name)
-	_: name_of(parameter)
-}
-
 arrow_parameters(n: Node): Node := match lambda_of(n) {
 	Key(parameters, arrow, body): parameters
 	_: n
@@ -58,7 +53,7 @@ arrow_result(n: Node): Node := match lambda_of(n) {
 	_: n
 }
 
-lambda_parameter_names(arrow: Node): list := written_parameters(arrow_parameters(arrow)).map(parameter_word)
+lambda_parameter_names(arrow: Node): list := written_parameters(arrow_parameters(arrow)).map(parameter_name)
 
 ## renaming
 
@@ -245,7 +240,7 @@ iteration_over(iteration: list, locals: list, lowering: Lowering): any := {
 # a lambda as the closure of a top-level function taking its captured variables first
 lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 	parameters = written_parameters(arrow_parameters(arrow))
-	names = parameters.map(parameter_word)
+	names = parameters.map(parameter_name)
 	body = arrow_result(arrow)
 	captured = mentioned_names(body, []).filter(name => name in locals and name not in names).map(name => symbol(name))
 	name = lifted_prefix + fresh_number()
@@ -262,7 +257,7 @@ lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 lowered_statement(statement: any, top_locals: list, lowering: Lowering): any := {
 	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
-	locals = parts#2.map(parameter_word) + names_bound(parts#3, [])
+	locals = parts#2.map(parameter_name) + names_bound(parts#3, [])
 	match statement {
 		Key(signature, Op.Define, body): Key(signature, Op.Define, lowered_lambdas(body, locals, lowering))
 		_: statement
