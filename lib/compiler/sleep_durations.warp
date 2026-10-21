@@ -14,9 +14,9 @@ in_milliseconds(duration: any): any := {
 	Key(duration, "*" as Op, 1000)
 }
 
-sleep_call(n: any): any := {
+sleep_call(n: Node): any := {
 	if not (is_group(n) and #n == 2 and n#1 == symbol("sleep") and (bracket_of(n) == "(" or separator_of(n) == " ")) { return n }
 	List([n#1, in_milliseconds(n#2)], Bracket.Round, Separator.None)
 }
 
-sleep_durations(program: any): any := bottom_up(program, n => sleep_call(n))
+sleep_durations(program: Node): Node := bottom_up(program, n => sleep_call(n))
