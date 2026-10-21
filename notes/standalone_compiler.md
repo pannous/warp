@@ -78,7 +78,11 @@ pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
 Cold start (card pure-cold-start, empty module cache): the pure lane's try at compiler.warp (passes stage compiled ~44
 s, analysis ~6 s, emit ~21 s, then their runs) and Rust's compile of it (~90 s) ran one after the other: 166 s. Now
 Rust compiles it in a thread while the pure lane tries, and the analysis and emit workers start with the passes one:
-89 s real, 214 s user, 2.8 GB max RSS. Warm: ~3 s. The cache files' mtimes are the cheapest timeline of a cold run.
+89 s real, 214 s user, 2.8 GB max RSS. The cache files' mtimes are the cheapest timeline of a cold run.
+Warm start (card pure-warm-start): 2.9 s, of which ~97% was compiler.warp lowering runtime.warp again at every run
+(WARP_PROFILE: 590 of 613 samples). compiler.warp now keeps them, `kept(name) ?? keep(name, value)` of use os (a
+value in the module cache under stage_key: binary + lib/): warm hello 0.07 s, a new program ~0.1–0.2 s. The kept
+Node crosses to Rust and back (postcard); 38 samples give the same results with and without it.
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
 
