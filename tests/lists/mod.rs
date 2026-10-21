@@ -26,6 +26,7 @@ mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
 mod test_empty_list_value; // card run-time-empty
+mod test_empty_results; // card empty-results
 mod test_empty_start; // card start: `t = []` appends, ø + text fails
 mod test_empty_start_plus; // card local-fails: `t = []; t + "a"`, the bracket hint of `xs += [3]`
 mod test_field_count;
