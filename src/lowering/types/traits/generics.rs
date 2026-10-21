@@ -189,11 +189,16 @@ pub(super) fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &T
 	generics
 }
 
-/// The arguments the library word a method is named like takes, any number when its signature doesn't say: a
-/// class's `get()` never falls back to the library's `get(map, key)`
+/// The arguments the library word a method is named like takes: a class's `get()` never falls back to the library's
+/// `get(map, key)`. Any number when its signature doesn't say, or it is variadic, which also takes its values as one
+/// list (`[1, 2].max()`)
 fn library_method_arity(name: &str) -> Option<(usize, usize)> {
-	crate::lowering::class_methods::is_library_method(name)
-		.then(|| crate::lowering::library_signatures::library_arity(name).unwrap_or((0, usize::MAX)))
+	const ANY_ARITY: (usize, usize) = (0, usize::MAX);
+	crate::lowering::class_methods::is_library_method(name).then(|| {
+		crate::lowering::library_signatures::library_arity(name)
+			.filter(|(_, most)| *most != usize::MAX)
+			.unwrap_or(ANY_ARITY)
+	})
 }
 
 /// The arguments a definition takes, fewest and most: `add(a, b = 1)` takes 1 or 2
