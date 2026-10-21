@@ -18,7 +18,8 @@ echo $$ > $lock/pid
 trap "rm -rf $lock" EXIT
 
 cd $worktree || exit 1
-export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
+# WARP_WASM_OPT=0: the stages of a one-off build skip wasm-opt -O3, ~40% of its CPU (card self-check)
+export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib WARP_WASM_OPT=0
 $warp rebuild self >/dev/null 2>&1 || { echo "SELF CHECK RED: warp rebuild self failed in $worktree"; exit 1; }
 said=$($warp self samples/hello/hello.warp 2>&1 | tail -1)
 [[ $said == *$expected* ]] || { echo "SELF CHECK RED: warp self hello said: $said"; exit 1; }
