@@ -646,7 +646,9 @@ main() {
 		[ $# -eq 2 ] || fail "--pure-hello is a complete test preset and does not take filters"
 		set -- "$1" "$2" "${PURE_HELLO_ARGS[@]}"
 	fi
-	set -- "$1" "$2" $(split_filters "${@:3}")
+	local filters=() filter   # the Mac's bash 3.2 has no mapfile
+	while IFS= read -r filter; do filters+=("$filter"); done < <(split_filters "${@:3}")
+	set -- "$1" "$2" ${filters[@]+"${filters[@]}"}
 	if [ -z "$result_only" ]; then launch "$@" || exit; fi
 	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card" "${@:3}"
 }
