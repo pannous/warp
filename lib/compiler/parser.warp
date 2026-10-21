@@ -862,7 +862,7 @@ INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"], ["↑", "↑"], ["↓", "↓"]]
+SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["‐", "-"], ["‑", "-"], ["‒", "-"], ["–", "-"], ["—", "-"], ["―", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"], ["↑", "↑"], ["↓", "↓"]]
 // `xs .* 2` maps `*` over the elements: the phrase [xs .* 2], binding as `*` does (Rust twin: spellings.rs
 // element_wise_word)
 ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
@@ -1391,11 +1391,31 @@ def expression_ends(p: Parser): bool {
 	at > p.at and "+-*/<".contains(c) and is_blank(peek(p.code, at + 1, p.n))
 }
 
+// The dashes 0x2010..0x2015 and the minus sign: each means `-` (infix ones: SYMBOL_OPERATORS, the minus sign
+// lib/math.warp's alias line)
+// Rust twin: operators/spellings.rs OPERATOR_SPELLINGS
+DASH_GLYPHS = "‐‑‒–—―−"
+NORM_BAR = '‖'
+
+// `‖x‖` brackets a whole expression like parentheses: `‖3-5‖*2` is 4
+// Rust twin: math_notation.rs parse_norm_bars
+def norm(p: Parser): Node := {
+	closing = index_of(p.code, "" + NORM_BAR, p.at + 1, p.n)
+	if closing >= p.n { raise "Missing closing ‖" }
+	whole = p.n
+	p.at = p.at + 1
+	p.n = closing
+	inner = expression(p, 0)
+	p.n = whole
+	p.at = closing + 1
+	keyed("" + NORM_BAR, ø, inner)
+}
+
 def prefixed_by_symbol(p: Parser, c: text): Node := {
 	head = operator_method_head(p)
 	if head != ø { return head }
 	next = peek(p.code, p.at + 1, p.n)
-	if c == '-' and next != '>' and next != '-' {
+	if (c == '-' or DASH_GLYPHS.contains(c)) and next != '>' and next != '-' {
 		p.at = p.at + 1
 		skip_spaces(p)
 		operand = expression(p, 155)
@@ -1410,8 +1430,10 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		p.at = p.at + 1
 		return Key(ø, Op.Hash, expression(p, INDEX_POWER - 1))
 	}
+	if c == NORM_BAR { return norm(p) }
 	if PREFIX_OPERATORS.contains("" + c) {
 		p.at = p.at + 1
+		skip_spaces(p)
 		return keyed("" + c, ø, expression(p, PREFIX_POWER))
 	}
 	// `&lerp`: a reference to the function, an `&` glued to the word after it and not to one before it (`a &b`)
@@ -1740,6 +1762,11 @@ def atom(p: Parser): Node := {
 		loop = each_loop(p)
 		if loop != ø { return loop }
 	}
+	truth = truth_glyph_at(p)
+	if truth != "" {
+		p.at = p.at + truth.length
+		return not FALSE_GLYPHS.contains(truth)
+	}
 	if is_name_start(c) { return named(p) }
 	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
 	if c == '$' and (is_name_start(peek(p.code, p.at + 1, p.n)) or is_digit(peek(p.code, p.at + 1, p.n))) {
@@ -1791,6 +1818,16 @@ def atom(p: Parser): Node := {
 	// Rust twin: atoms.rs parse_atom (is_free_symbol, parse_emoji; the Rust lane still errors on other characters)
 	p.at = p.at + 1
 	if is_free_symbol(p, c) then symbol("" + c) else c
+}
+
+// The glyphs that are true or false, longest spelling first: `✔️` is `✔` with an emoji variation selector
+// (card keyword-glyphs)
+// Rust twin: literals/constants.rs TRUTH_GLYPHS
+TRUE_GLYPHS = ["✔️", "✓️", "☑️", "⊤", "✓", "✔", "☑", "✅", "🗸", "🗹"]
+FALSE_GLYPHS = ["⊥", "❌", "✗"]
+def truth_glyph_at(p: Parser): text {
+	for glyph in TRUE_GLYPHS + FALSE_GLYPHS { if starts_at(p.code, glyph, p.at) { return glyph } }
+	""
 }
 
 // The degree sign of temperatures and angles (Rust twin: numbers/units.rs DEGREE)
