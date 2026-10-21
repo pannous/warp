@@ -67,7 +67,7 @@ pub(crate) fn is_rest_parameter(parameter: &Node) -> bool {
 	starred(parameter).is_some()
 }
 
-fn starred(node: &Node) -> Option<String> {
+pub(crate) fn starred(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => {
 			name.strip_prefix(STARRED).filter(|name| !name.is_empty() && !name.starts_with(STARRED)).map(str::to_string)

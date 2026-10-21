@@ -195,11 +195,15 @@ fn visit_uses<'a>(node: &'a Node, name: &str, found: &mut dyn FnMut(Use<'a>)) {
 		Node::Symbol(word) if word == name => found(Use::Other),
 		Node::List(items, Bracket::Round, Separator::None) if items.first().and_then(Node::symbol_name).is_some() => {
 			let callee = items[0].symbol_name().expect("a named call");
+			// `f(*args)`: the spread is lowered before this pass (variadic.rs), a copy's `add(*args)` would stay unread;
+			// the positions after a spread are known only then
+			let spreads = items[1..].iter().any(|argument| crate::lowering::variadic::starred(argument).is_some());
 			if callee == name {
-				found(Use::Called);
+				found(if spreads { Use::Other } else { Use::Called });
 			}
 			for (position, argument) in items[1..].iter().enumerate() {
 				match argument.drop_meta() {
+					Node::Symbol(word) if word == name && spreads => found(Use::Other),
 					Node::Symbol(word) if word == name => found(Use::Passed { callee, position }),
 					_ => visit_uses(argument, name, found),
 				}
