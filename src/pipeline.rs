@@ -95,6 +95,8 @@ const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
+	// `simplify = rules { data($a * 1) => a }` as its walker (tree_walks.rs) before lower_match_arms reads the walker's arms
+	crate::lowering::tree_walks::lower_rule_sets,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
 	// a bare `return` as the phrase `return ø` (welcome_forms.rs), before any pass reads a return
