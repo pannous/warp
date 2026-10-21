@@ -105,7 +105,16 @@ fn a_local_function_value_is_called() {
 
 #[test]
 fn a_call_of_a_local_holding_a_plain_value_names_both() {
-	crate::common::fails_with("g(x) := x * 2; f() := { g = 5; g(3) }; f()", "calls the local g = 5");
+	crate::common::fails_with("g(x) := x * 2; f() := { g = 5; g(3) }; f()", "it hides the program's function g");
+}
+
+#[test]
+fn a_call_of_a_local_holding_a_computed_value_names_it_as_written() {
+	crate::common::fails_with(
+		"g(x) := x * 2; f(n: int) := { g = n + 1; g(3) }; f(1)",
+		"`g` is a variable here, so g(3)",
+	);
+	crate::common::fails_with("g(x) := x * 2; f() := { g = #[1, 2]; g(3) }; f()", "it hides the program's function g");
 }
 
 #[test]
