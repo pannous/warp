@@ -7,7 +7,7 @@ use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; phrases: list; elvis_operands: int; closing_ends: any; stops_at_end: bool }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; phrases: list; elvis_operands: int; closing_ends: any; stops_at_end: bool; word_types: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): any := view_of(parsed(source))
@@ -96,7 +96,8 @@ def entity_read(source: any, at: int, n: int): list {
 def written_tree(written: text): Node := {
 	source = expanded_entities(written)
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), phrases: [], elvis_operands: 0, closing_ends: {}, stops_at_end: false}
+	word_types = multi_word_types(source)
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), phrases: [], elvis_operands: 0, closing_ends: {}, stops_at_end: false, word_types: word_types}
 	items_until(p, ' ', "")
 }
 
@@ -237,6 +238,81 @@ def declared_type_names(source: text): list {
 		}
 	}
 	type_names
+}
+
+// The words naming a body before it, `class full name extends person {`: no word of the type's name
+// Rust twin: declaration_scan.rs WORDS_BEFORE_TYPE_BODY
+WORDS_BEFORE_TYPE_BODY = ["extends", "with", "implements", "interface", "gc", "struct"]
+
+// The type names of several words a source declares, by their words: `class full name {…}` declares `full name`,
+// written `full-name`; only on one line, up to the body's `{` (glued to the last word or the body too)
+// Rust twin: declaration_scan.rs scan_multi_word_types
+def multi_word_types(source: text): list {
+	found = []
+	for line in code_only(source).split("\n") {
+		name = []
+		naming = false
+		for word in line.replace("\t", " ").split(" ") {
+			if word == "" { continue }
+			if naming {
+				before_body = word.split("{")#1
+				name_word = is_plain_name(before_body) and not WORDS_BEFORE_TYPE_BODY.contains(before_body)
+				if word.contains("{") {
+					if name_word { name += [before_body] }
+					if name.length > 1 { found += [name] }
+					naming = false
+				} else if name_word {
+					name += [word]
+				} else {
+					naming = false
+				}
+			}
+			if not naming and TYPE_SCAN_WORDS.contains(word) {
+				name = []
+				naming = true
+			}
+		}
+	}
+	found
+}
+
+// Words naming one built-in type: warp's `x: fast int` is i64, `fast float` f64; C's names of several words the fixed
+// width they mean there, `unsigned int` uint32 (the Rust lane notes warp's word). The longest first.
+// Rust twin: types/expressions.rs COMPOUND_TYPES
+COMPOUND_TYPES = [[["unsigned", "long", "long"], "uint64"], [["long", "long", "int"], "int64"], [["unsigned", "long"], "uint64"], [["long", "long"], "int64"], [["long", "int"], "int64"], [["unsigned", "int"], "uint32"], [["signed", "int"], "int32"], [["unsigned", "short"], "uint16"], [["short", "int"], "int16"], [["unsigned", "char"], "byte"], [["signed", "char"], "int8"], [["fast", "int"], "i64"], [["fast", "float"], "f64"]]
+
+// `full name` of a declared `class full name {…}` is the one name `full-name`, `unsigned int` uint32, any other word
+// itself: [the name, the end of its words] for the word ending at `end`
+// Rust twin: types/expressions.rs joined_type_name
+def joined_type_name(p: Parser, word: text, word_end: int): list {
+	for compound in COMPOUND_TYPES {
+		compound_end = if compound#1#1 == word then words_ahead_end(p, compound#1, word_end) else 0
+		if compound_end > 0 { return [compound#2, compound_end] }
+	}
+	joined = [word, word_end]
+	joined_words = 1
+	for type_words in p.word_types {
+		type_end = if type_words#1 == word and type_words.length > joined_words then words_ahead_end(p, type_words, word_end) else 0
+		if type_end > 0 {
+			joined = [type_words.join("-"), type_end]
+			joined_words = type_words.length
+		}
+	}
+	joined
+}
+
+// The end of the blanks and whole words after the first of `words` from `at` on: ` name` of `full name`, else 0
+// Rust twin: types/expressions.rs words_ahead_length
+def words_ahead_end(p: Parser, words: list, first_end: int): int {
+	end = first_end
+	for word in words[1 .. words.length] {
+		start = spaces_end(p, end)
+		if start == end or not starts_at(p.code, word, start) { return 0 }
+		end = start + word.length
+		following = peek(p.code, end, p.n)
+		if is_name_char(following) or following == '-' { return 0 }
+	}
+	end
 }
 
 // The keyword forms: each word with a form of its own and the form's shape; a prefix word's shape is the operator it
@@ -3009,8 +3085,9 @@ ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 def named(p: Parser): Node := {
 	bang = bang_word_at(p)
 	end = if bang > 0 then p.at + bang else symbol_end(p.code, p.at, p.n)
-	word = p.code[p.at .. end]
-	p.at = end
+	joined = joined_type_name(p, p.code[p.at .. end], end)
+	word = joined#1
+	p.at = joined#2
 	if keyword_form(word) == "reference" {
 		referenced = function_reference(p)
 		if referenced != ø { return referenced }
@@ -3433,8 +3510,10 @@ def blank_end(p: Parser, from: int): int {
 def declared_type(p: Parser, word: text): Node := {
 	p.at = p.at + word.length
 	skip_blanks(p)
-	end = symbol_end(p.code, p.at, p.n)
-	name = symbol(p.code[p.at .. end])
+	word_end = symbol_end(p.code, p.at, p.n)
+	joined = joined_type_name(p, p.code[p.at .. word_end], word_end)
+	end = joined#2
+	name = symbol(joined#1)
 	// `mixin Name {…}`: the type its classes take the methods of (foreign_forms.warp)
 	if word == "mixin" { name = attributed("mixin", true, name) }
 	p.at = end

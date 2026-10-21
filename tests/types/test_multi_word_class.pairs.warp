@@ -2,3 +2,7 @@
 
 # the_words_stay_apart_without_the_class
 'full = 3; name = 4; [full name]#2'	4
+
+# a_class_of_several_words_with_a_glued_body
+'class full name {given:text}; p = full name{given:"Ann"}; p.given'	'Ann'
+'class full name{given:text}; p = full name{given:"Ann"}; p.given'	'Ann'
