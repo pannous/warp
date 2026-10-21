@@ -47,6 +47,12 @@ impl CompileMode {
 	pub fn renders_itself(&self) -> bool {
 		self.for_a_page || self.rendering_itself
 	}
+
+	/// Whether the module is written for another host, which may call any top-level function by its exported name: a
+	/// run keeps only what it calls (decision exports-kept)
+	pub fn keeps_exports(&self) -> bool {
+		self.for_any_host || self.for_a_page || self.for_dev || self.for_wagi || self.for_hosting || self.prerendering
+	}
 }
 
 /// `warp fast <file>`: every program of this process compiles as if it began with `use fast_math` (lib/fast_math.warp, card

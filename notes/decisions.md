@@ -72,6 +72,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - git-hook restore: agents may restore only Cargo.toml/Cargo.lock (the build tweak); the hook backs up the diff first.
 - #1 avoid panics, errors as values. #14 not-implemented errors unless easy.
 - P151 the crates.io package is `warp-lang`, the runtime `warp-runtime`. P150 license: the compiler AGPL-3.0-or-later, warp-runtime MIT (programs built with warp stay their authors'), contributor agreement in CONTRIBUTING.md so warp can be dual-licensed commercially. release-channels: next a PyPI wheel wrapping the binary, named warp-language (`pip install warp-language`; NVIDIA's Warp owns warp-lang there), Linux .deb/.rpm (warp-lang), AUR (warp-lang-bin).
+- exports-kept (Interviewer's decision): a module written for others (`warp compile --wasm` and the other module outputs) exports every top-level function under its name, so a JS host can call it; only a run (`warp run`, eval, tests) may drop an original nobody calls any more after specialising (card specialise-dead-originals). A function still mentioned (task by name, `&f`, an unspecialised call) always stays.
 - package-reexport (card module-own): a package's own `use` lines reach the programs that use it.
   `use webgl` (which says `use draw`) alone gives draw's words too: `canvas(200, 100)`, `star(…)`, `save "x.png"`.
 - laws-file: the human-owned laws live in samples/laws/project_laws.warp
@@ -132,7 +133,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - hash-comments: `# text` is the preferred comment; `warp format hash-comments` rewrites `//` comments; the linter hints on `//`. `#` glued to a non-space is the count expression (`#s`); `#!`, `##`, `#use`/`#include`/`#import` stay comments/directives.
 - `print a    print b` on one line is an error asking for `;`.
 - P227 a comma next to `==` without parentheses is an error asking for them.
-- P68 a braceless call whose argument holds an operator (`square 3 + square(4)`) warns naming both groupings.
+- P68 a braceless call whose argument holds an operator (`square 3 + square(4)`) warns naming both groupings. The prelude signature decides it: a word giving nothing (`: nothing`) has no second grouping and never warns. output-words-nothing: the output words (print, puts, puti, putl, putf) all give nothing, like print (Interviewer's decision).
 - P143 `f x == y` is an error naming both groupings only when both type-check; P149 an untyped parameter's type is inferred from the body first. Statement words (print, return) take the whole expression.
 - call-as-grouping: `f x as T` is `f(x as T)`, with a warning naming `f(x as T)` and `(f x) as T`.
 - P189 extra control-flow words stay display-only keywords; ambiguous names need quoting.
@@ -194,7 +195,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - #26 upper/lower are Unicode, sort takes any comparable values, reverse works on text; `names.upper` = `upper names`.
 - An untyped parameter given a one-character text takes it as Text. P31 the Printable operation is `text(p:person)`, the one allowed type-word function name. P32 `print xs` prints its str(). P41 `print "x changed to " value` joins without a separator after a text literal; commas join with a space.
 - result-keyword: after a print, `result` is the printed value.
-- chars-codepoints: `"abc".chars` is a list of characters printing `['a' 'b' 'c']`; a one-character text is a character; `'a' == "a"`. A character is a grapheme; code points are `.codepoints` ("שָלוֹם": 4 characters, 6 code points). text-unit-plurals: every plural unit word is the list (`.chars`, `.codepoints`, `.graphemes`, `.bytes`); counting is `count t.codepoints`; `.bytes` is the byte list of any value, size `x.bytes.count` / `byte_size(x)`.
+- chars-codepoints: `"abc".chars` is a list of characters printing `['a' 'b' 'c']`; a one-character text is a character; `'a' == "a"`. A character is a grapheme; code points are `.codepoints` ("שָלוֹם": 4 characters, 6 code points). text-unit-plurals: every plural unit word is the list (also as a cast: `t as words` = `t.words`, like `as chars`, for every text unit word) (`.chars`, `.codepoints`, `.graphemes`, `.bytes`); counting is `count t.codepoints`; `.bytes` is the byte list of any value, size `x.bytes.count` / `byte_size(x)`.
 - letters: `letters of "a1 b!"` → ['a' 'b'] (Unicode letters); `characters` is an alias of `chars`.
 - guillemets: «…» quotes its content as unevaluated warp data (`«x + 1»` the expression as data).
 - Emoji: a single emoji is a codepoint; multi-codepoint emoji are texts, not names.
@@ -274,6 +275,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - random-forms: bare `random` is a float in [0,1) where a value is used; `random T` is a random value of type T (`random bool`, `random int`); `random(n)` 0…n-1; `random(a, b)` whole numbers inclusive, floats [a, b); `random 1..10` picks from the range. Any parameter of type Type accepts bare type words.
 - function-references: a bare function name compared with a type or in `type(f)` is the function itself; `.floor` in argument position is a lambda (`xs.map(.floor)`, `people.sort(.age)`); `&floor` and `function floor` are the explicit references.
 - type-library-words: list/map/text library words are always available as `x.f()` and `f(x)`; `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module); `write` and `exists` are global.
+- library-own-words (user): a library file that needs an existing word (lib/extrema.warp's min, lib/fast_math.warp's sin) uses the existing one, never redefines it. The function `norm` (refused in lib/prelude.warp as the operator ‖) moves into the math module, visible only after `use math`.
 - P141/P142 a definition named like a builtin that would win is an error at the definition; library words may be redefined only where the builtin wouldn't win, methods always; a foreign export is called qualified. P39 no `id`/`square` builtins; P191 `square` lives in math.
 - builtins-name (user 2026-10-18): library words are called builtins (shorter to say and write), in notes, cards, messages and new code names; where the old split still matters, the Rust-only ones are "Rust builtins" until retired. Old names (library_words.rs, retire-library-words) are renamed along with the Rust cleanup.
 - music-plain-library (user 2026-10-18): music (lib/sound.warp and the music words) is a plain library: no compiler magic at all, no Rust pass, no rewrite rules, no module pass. It uses only core language features. music_words.rs goes away: each form becomes an ordinary function/class/operator call; a form that can't be written that way either needs a general core feature (card, useful beyond music) or is dropped/simplified. Rephrasing the syntax of some calls is fine; most forms should be doable with the general patterns (definition clauses, function-word patterns, notes/matching.md).
@@ -322,7 +324,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 ## Lists, maps and indexing
 - #4/P40 `size` = count; bytes via `byte_size` / `number of bytes`; `len(x)` counts with a hint `#x`.
 - P43 lists do not grow past the end: setting past it is a catchable `index out of range`.
-- P34 a number subscript on an empty `{}` keys it as a map. single-entry: `{a:1}` stays a pair and becomes a one-entry map where a map is needed.
+- P34 a number subscript on an empty `{}` keys it as a map. map-subscript-runtime: the same holds at run time: `m[1]` on a value that is a map when the program runs keys it (`f(m) := m[1] + 1; f({1: 5, 2: 6})` → 6), on a list or text it stays a position (`f([5, 6])` → 7) (Interviewer's decision). single-entry: `{a:1}` stays a pair and becomes a one-entry map where a map is needed.
 - stored-table-name: `stored people: [Person]` names its table after the variable; `… in "people_v2"` explicitly.
 - element-named-pair: a one-key pair named like an element (`{body: [...]}`) is markup; as data it takes a second key or a quoted key.
 - #25/#36 a space before `[` never indexes; only glued `a[..]`.

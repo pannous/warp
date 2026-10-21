@@ -863,12 +863,17 @@ impl WasmGcEmitter {
 			&& !self.ctx.user_functions.contains_key(name);
 		if holds_plain_value {
 			let arguments: Vec<String> = items[1..].iter().map(crate::normalize::operand_text).collect();
-			let call = format!("{name}({})", arguments.join(", "));
-			// a counting word stays a word; any other name has no function, as ffi::undefined_function_message says
+			let shown = crate::lowering::shadowing_bindings::written_name(name);
+			let call = format!("{shown}({})", arguments.join(", "));
+			// a counting word stays a word; a local named like the program's function hides it; any other name has no
+			// function, as ffi::undefined_function_message says
 			let message = match crate::analyzer::counting_function(name, &self.ctx) {
-				Some(_) => format!("`{name}` is a variable here, so {call} cannot count: rename the variable"),
+				Some(_) => format!("`{shown}` is a variable here, so {call} cannot count: rename the variable"),
+				None if crate::lowering::shadowing_bindings::hides_function(name) => format!(
+					"`{shown}` is a variable here, so {call} calls nothing: it hides the program's function {shown}; rename the variable"
+				),
 				None => format!(
-					"undefined function: {name} (`{name}` is a variable here, so {call} calls nothing: rename the variable)"
+					"undefined function: {shown} (`{shown}` is a variable here, so {call} calls nothing: rename the variable)"
 				),
 			};
 			self.emit_type_error(func, message);

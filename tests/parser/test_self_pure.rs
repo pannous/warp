@@ -543,6 +543,45 @@ fn compile_takes_the_pure_lane() {
 	assert_eq!(recorded.trim(), RAN_PURE, "{run:?}");
 }
 
+/// The entries of `from` linked into the new folder `to`, but the one named `except`
+#[cfg(unix)]
+fn linked_folder(from: &std::path::Path, to: &std::path::Path, except: &str) {
+	std::fs::create_dir_all(to).unwrap();
+	for entry in std::fs::read_dir(from).unwrap().flatten().filter(|entry| entry.file_name() != except) {
+		std::os::unix::fs::symlink(entry.path(), to.join(entry.file_name())).unwrap();
+	}
+}
+
+/// A copy of lib/ whose compiler folder holds `emitter` as emitter.warp, the other files linked
+#[cfg(unix)]
+fn lib_with_emitter(name: &str, emitter: &str) -> PathBuf {
+	let library = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("{name}_{}", std::process::id()));
+	let _ = std::fs::remove_dir_all(&library);
+	let shipped = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib");
+	linked_folder(&shipped, &library, "compiler");
+	linked_folder(&shipped.join("compiler"), &library.join("compiler"), "emitter.warp");
+	std::fs::write(library.join("compiler/emitter.warp"), emitter).unwrap();
+	library
+}
+
+/// A stage program that fails names its file, not only warp's bare error (card self-hosted-stage)
+#[cfg(unix)]
+#[test]
+fn a_failing_stage_names_its_file() {
+	let library =
+		lib_with_emitter("broken_emitter_lib", "typed_wasm_module(program, kinds, words, host) := no_such(1)");
+	let run = crate::common::warp_command()
+		.env("WARP_SELF_HOSTED", "pure-only")
+		.env("WARP_LIB", &library)
+		.env("WARP_MODULE_CACHE", library.join("stage_cache"))
+		.arg("1 + 2")
+		.output()
+		.expect("warp runs");
+	let output = String::from_utf8_lossy(&run.stdout).into_owned() + &String::from_utf8_lossy(&run.stderr);
+	let _ = std::fs::remove_dir_all(&library);
+	assert!(output.contains("the self-hosted stage") && output.contains("compiler/emitter.warp failed"), "{output}");
+}
+
 /// An operator case is its own value and a synonym of its spelling (decision enum-case, card pure-op-cases): the pure
 /// lane prints Op.Add as Add, converts it to and from "+", and a match binds a key's op as its case
 #[test]
