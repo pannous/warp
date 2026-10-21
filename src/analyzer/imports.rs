@@ -260,6 +260,7 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 			crate::wasm_emitter::lists::list_ops::RETURNED_ERROR,
 		],
 		crate::list_mutations::LIST_BECOME => &[crate::list_mutations::LIST_BECOME],
+		crate::list_mutations::LIST_DROP_LAST => &[crate::list_mutations::LIST_DROP_LAST],
 		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => {
 			&[crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY]
 		}

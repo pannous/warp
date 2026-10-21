@@ -1,0 +1,14 @@
+#!/usr/bin/env warp
+# card shrink-in-place: the stack idiom `xs = xs[0 ..< #xs - 1]` of scope.warp, a list of texts
+def walked(n) {
+	unvisited = ["a"]
+	seen = 0
+	while #unvisited > 0 {
+		top = unvisited#(#unvisited)
+		unvisited = unvisited[0 ..< #unvisited - 1]
+		seen += 1
+		if seen < n { unvisited += [top, top] }
+	}
+	seen
+}
+print walked(20000)
