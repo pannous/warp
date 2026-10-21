@@ -103,10 +103,10 @@ mod test_kind_marks; // card kind-reflection
 mod test_list_annotations;
 mod test_list_element_types;
 mod test_list_test_of_a_map;
-mod test_map_passed_as_any; // card map-passed
 mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
 mod test_map_field; // card map-field
+mod test_map_passed_as_any; // card map-passed
 mod test_map_read_size; // card map-read
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
