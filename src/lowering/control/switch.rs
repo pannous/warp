@@ -26,7 +26,8 @@ pub(crate) const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD
 const SOFT_DEFAULT_KEYS: [&str; 1] = ["rest"];
 /// In a pattern: any item, bound to no name
 pub(crate) const WILDCARD: &str = "_";
-const ALTERNATIVES_BIND_NO_NAMES: &str = "alternatives bind no names: write one case per pattern, or `_` for an item";
+const ALTERNATIVES_BIND_NO_NAMES: &str =
+	"alternatives bind no names unless each binds the same ones: write one case per pattern, or `_` for an item";
 /// Literal arms in a row from which they are a decision tree: fewer are tested as fast one after another
 const DECISION_TREE_ARMS: usize = 8;
 /// The literals a leaf of a decision tree compares one after another
@@ -578,14 +579,30 @@ fn condition(path: &Node, pattern: &Node, names: &Names) -> Option<Node> {
 	if alternatives.len() < 2 {
 		return None;
 	}
-	let tests = alternatives.iter().map(|alternative| {
-		let matched = Matched::of(alternative, path.clone(), names);
-		match matched.bindings.is_empty() {
-			true => joined(matched.tests, Op::And),
-			false => error(ALTERNATIVES_BIND_NO_NAMES),
-		}
+	let matches = alternatives.iter().map(|alternative| {
+		let Matched { tests, bindings, .. } = Matched::of(alternative, path.clone(), names);
+		(tests, bindings)
 	});
-	Some(joined(tests.collect(), Op::Or))
+	Some(alternatives_test(matches).unwrap_or_else(error))
+}
+
+/// Alternatives `data($k: int + $x) | data($x + $k: int)` as one test: each binds the same names, assigned as its own
+/// test holds, so the body reads the names of the alternative that matched (card binding-alternatives)
+fn alternatives_test(alternatives: impl Iterator<Item = (Vec<Node>, Vec<Node>)>) -> Result<Node, &'static str> {
+	let mut bound_names = None;
+	let mut matches = vec![];
+	for (mut tests, bindings) in alternatives {
+		let mut names: Vec<String> = bindings.iter().filter_map(bound).map(|(name, _)| name.name()).collect();
+		names.sort();
+		if *bound_names.get_or_insert_with(|| names.clone()) != names {
+			return Err(ALTERNATIVES_BIND_NO_NAMES);
+		}
+		if !bindings.is_empty() {
+			tests.push(semicolon_sequence([bindings, vec![Node::True]].concat()));
+		}
+		matches.push(joined(tests, Op::And));
+	}
+	Ok(joined(matches, Op::Or))
 }
 
 /// `data($a + 0)`: quoted code holding a hole
@@ -726,15 +743,8 @@ pub(crate) fn pattern_test(
 		let (tests, bindings) = alternative_tests(subject, single, guarded, names);
 		return Ok((joined(tests, Op::And), bindings));
 	}
-	let mut matches = vec![];
-	for alternative in &alternatives {
-		let (tests, bindings) = alternative_tests(subject, alternative, guarded, names);
-		if !bindings.is_empty() {
-			return Err(ALTERNATIVES_BIND_NO_NAMES);
-		}
-		matches.push(joined(tests, Op::And));
-	}
-	Ok((joined(matches, Op::Or), vec![]))
+	let matches = alternatives.iter().map(|alternative| alternative_tests(subject, alternative, guarded, names));
+	Ok((alternatives_test(matches)?, vec![]))
 }
 
 /// `xs is [_, 2]` and `if xs is [a, b] then b` (card is-pattern): a list or tuple holding `_`, a rest or a name defined
