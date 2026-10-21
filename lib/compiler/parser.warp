@@ -7,7 +7,7 @@ use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): any := view_of(parsed(source))
@@ -26,7 +26,7 @@ def parsed(source: text): Node := {
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
 def written_tree(source: text): Node := {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases()}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases()}
 	items_until(p, ' ', "")
 }
 
@@ -193,9 +193,9 @@ def word_at(p: Parser): text := p.code[p.at .. name_end(p.code, p.at, p.n)]
 def items_until(p: Parser, closer: text, bracket: text): Node := {
 	found = []
 	opener = p.at - 1
-	outer_branch = p.branch
+	outer_branch = p.in_branch
 	outer_grouped = p.grouped
-	p.branch = false
+	p.in_branch = false
 	p.grouped = p.grouped or closer != ' '
 	while true {
 		skip_blanks(p)
@@ -230,7 +230,7 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 		if dedent { break }
 		if p.at == before { p.at = p.at + 1 }
 	}
-	p.branch = outer_branch
+	p.in_branch = outer_branch
 	p.grouped = outer_grouped
 	grouped(found, bracket)
 }
@@ -876,7 +876,7 @@ def operator_at(p: Parser): list {
 	if is_name_start(c) {
 		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
 		for op in WORD_OPERATORS {
-			if op#1[0] == c and keyword_at(p, op#1) and not (p.branch and op#1 == "else") { return op }
+			if op#1[0] == c and keyword_at(p, op#1) and not (p.in_branch and op#1 == "else") { return op }
 		}
 		return aliased_operator_at(p)
 	}
@@ -1287,15 +1287,15 @@ def caught_parts(p: Parser, fallback_word: text): list {
 // Either part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else print 3`)
 // Rust twin: guards.rs parse_guarded_phrase
 def guarded_phrase(p: Parser): Node := {
-	outer = p.branch
-	p.branch = true
+	outer = p.in_branch
+	p.in_branch = true
 	phrase_parts = [expression(p, 0)]
 	while true {
 		skip_spaces(p)
 		if fallback_word_ahead(p) != "" or keyword_at(p, "finally") or not starts_atom(p) { break }
 		phrase_parts = phrase_parts + [expression(p, 0)]
 	}
-	p.branch = outer
+	p.in_branch = outer
 	if phrase_parts.length == 1 then phrase_parts#1 else listed("", " ", phrase_parts)
 }
 
@@ -1475,19 +1475,19 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 	body = ø
 	if is_at(p.code, p.at, ':', p.n) {
 		// `if c: x = 1 else: x = 2`: the body ends before the else
-		outer = p.branch
-		p.branch = word == "if"
+		outer = p.in_branch
+		p.in_branch = word == "if"
 		body = colon_body(p, 1)
-		p.branch = outer
+		p.in_branch = outer
 	} else if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
 		body = items_until(p, '}', "{")
 	} else if word == "if" and is_list_of(condition, "(") and at_body_start(p) {
 		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
-		outer = p.branch
-		p.branch = true
+		outer = p.in_branch
+		p.in_branch = true
 		body = expression(p, 0)
-		p.branch = outer
+		p.in_branch = outer
 	} else {
 		return keyed(word, ø, condition)
 	}
@@ -2172,7 +2172,7 @@ def named(p: Parser): Node := {
 	constant = if names_case(p, word.length) then "" else keyword_form(word.lower())
 	if constant == "true" { return true }
 	if constant == "false" { return false }
-	if constant == "empty" { return ø }
+	if constant == "empty" and not names_key(p) { return ø }
 	if not names_case(p, word.length) and EXACT_CONSTANTS.contains(word.lower()) { return exact_constant(word) }
 	// `https://pannous.com`, `ssh://host`: a URL, the rest of which reads as one text
 	if p.code[p.at .. min(p.at + 3, p.n)] == "://" { return url_text(p, word) }
@@ -2288,6 +2288,11 @@ def wasm_instruction_after(p: Parser): Node := {
 
 // A case of an enum, no constant: `Node.True`, `Node::Empty`, `None` in `enum Bracket { Round, None }`
 // Rust twin: atoms.rs check_constants (at_member_name, at_scoped_name, in_enum_cases)
+// `{empty: yes}`, `Kind = {Empty: 0}`, `class Cell{empty: bool}`: a word naming ø with a `:` glued to it is a name,
+// not with the definition `:=` nor the scope `::`
+// Rust twin: variables.rs names_field
+def names_key(p) := peek(p.code, p.at, p.n) == ':' and not "=:".contains(peek(p.code, p.at + 1, p.n))
+
 def names_case(p: Parser, length: int): bool {
 	start = p.at - length
 	if p.enum_cases or (start > 0 and p.code[start - 1] == '.') { return true }

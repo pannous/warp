@@ -358,7 +358,14 @@ impl Lowering {
 		self.written_object(node).or_else(|| self.instances.fields_template(node))
 	}
 
+	/// A construction `M{…}` written is read as its class's declared fields, defaulted ones included, not as the
+	/// one-entry object `{M: …}` its `M: {…}` key would be
 	pub(super) fn written_object(&self, node: &Node) -> Option<Node> {
+		let written = self.written_literal(node)?;
+		Some(self.instances.fields_template(&written).unwrap_or(written))
+	}
+
+	fn written_literal(&self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
 			Node::Symbol(name) => self.object_of(name),
 			Node::Key(base, Op::Hash, index) => {
@@ -367,7 +374,7 @@ impl Lowering {
 					object_entries(&self.object_literal(base)?)?.into_iter().find(|(name, _)| *name == field)?;
 				object_entries(&value).map(|_| value)
 			}
-			other => object_entries(other).map(|_| other.clone()),
+			other => object_entries(other).map(|_| node.clone()),
 		}
 	}
 }

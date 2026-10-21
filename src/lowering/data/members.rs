@@ -12,18 +12,16 @@ use crate::words::MAP_WORD;
 
 /// The builtin methods of a list, text, map and number, as they are written after a dot, the most used first; each
 /// works in the dot form (tests/control/test_member_completion.rs every_offered_builtin_is_a_method_of_its_type)
-pub const LIST_MEMBERS: [&str; 28] = [
+pub const LIST_MEMBERS: [&str; 27] = [
 	"count", "sum", "map", "filter", "first", "last", "sort", "reverse", "join", "contains", "index_of", "min", "max",
 	"mean", "reduce", "fold", "any", "all", "find", "each", "slice", "add", "insert", "remove", "pop", "clear", "copy",
-	"norm",
 ];
 pub const TEXT_MEMBERS: [&str; 18] = [
 	"count", "upper", "lower", "trim", "split", "replace", "contains", "index_of", "first", "last", "slice", "reverse",
 	"chars", "is_digit", "is_alpha", "number", "string", "copy",
 ];
 pub const MAP_MEMBERS: [&str; 8] = ["keys", "values", "get", "count", "contains", "remove", "copy", "string"];
-pub const NUMBER_MEMBERS: [&str; 10] =
-	["string", "int", "float", "round", "floor", "ceil", "abs", "sqrt", "cbrt", "norm"];
+pub const NUMBER_MEMBERS: [&str; 9] = ["string", "int", "float", "round", "floor", "ceil", "abs", "sqrt", "cbrt"];
 const LIST_WORD: &str = "list";
 const TEXT_WORD: &str = "text";
 /// The builtin methods by the type they belong to (library_signatures::library_types)

@@ -1,4 +1,11 @@
 # Maps and class instances: their entries, fields, lookups and updates
+use "intrinsics.warp"
+use "equality.warp"
+use "errors.warp"
+use "fields.warp"
+use "lists.warp"
+use "show.warp"
+use "text.warp"
 # a map is a curly list of `name:value` keys (Marked.Map and Marked.Entry, as Rust's); a class instance `Point{x:1}`
 # is the key of its class name and the map of its fields; any other key `n:20` is the map of itself, as Rust's
 # keys(n:20) is [n]
@@ -101,8 +108,8 @@ field_with(m: any, name: text, value: any): any := {
 	if at == 0 { list_append(entries, [new_key(name, value)]) } else { entries#at = new_key(name, value) }
 	m
 }
-# `map_get_or(m, key, fallback)`: the value of m's entry key, fallback when m has none
-map_get_or(m: any, key: any, fallback: any): any := {
+# `map_get_or(m, key, fallback)`: the value of m's entry key, fallback (ø when left out: `m.get(k)`) when m has none
+map_get_or(m: any, key: any, fallback: any = ø): any := {
 	if is_null(m) { return fallback }
 	at = map_index(m, node_text(key))
 	if at == 0 { return fallback }

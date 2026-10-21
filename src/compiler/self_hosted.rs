@@ -7,7 +7,8 @@
 //! has thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
 use crate::compiler::node_views::{analysis_view, handled_plain_view, json_text, node_of_handled_view, view_json};
 use crate::node::Node;
-use std::path::PathBuf;
+use std::collections::{HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 
@@ -34,11 +35,12 @@ const PASSES_PROGRAM: &str = "use \"{lib}/compiler/passes.warp\"\nuse os\nstage(
 const ANALYSIS_PROGRAM: &str =
 	"use \"{lib}/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(emitter_kinds(node_of(json(read(args#1)))))";
 /// emitter.warp `typed_wasm_module` of the request in the worker's input file, [the lowered program's view, its kinds
-/// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
+/// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE;
+/// `stage_node` keeps `{}` an empty map, as the passes get it, not ø
 const EMIT_PROGRAM: &str = concat!(
 	"use \"{lib}/compiler/emitter.warp\"\nuse os\n",
 	"request = json(read(args#1))\n",
-	"typed_wasm_module(node_of(request#1), node_of(json(read(args#2))), json(read(args#3)), request#2)"
+	"typed_wasm_module(stage_node(request#1), stage_node(json(read(args#2))), json(read(args#3)), request#2)"
 );
 /// Where a stage program names lib/, the folder library() resolves
 const LIBRARY_MARK: &str = "{lib}";
@@ -241,8 +243,7 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 			if let Some(mark) = crate::host::fuel_mark() {
 				wasm_encoder::Section::append_to(&mark, &mut bytes);
 			}
-			let needs_host = imports_from(&bytes, HOST_MODULE);
-			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
+			Some(Ok(module_of_bytes(bytes)))
 		}
 	}
 }
@@ -352,10 +353,12 @@ fn record_lines(lines: &str) {
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }
 
-/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word
+/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word, libm when it
+/// imports pow (a float raised to a power)
 pub(crate) fn module_of_bytes(bytes: Vec<u8>) -> crate::pipeline::CompiledModule {
 	let needs_host = imports_from(&bytes, HOST_MODULE);
-	crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }
+	let needs_ffi = imports_from(&bytes, crate::ffi::LIBM);
+	crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi }
 }
 
 /// Does the module import a function of `module`
@@ -419,25 +422,42 @@ fn runtime_words() -> Result<String, Node> {
 
 /// runtime.warp with the files its `use` lines name in their place, after it: a module of lib (`use case_tables`) or
 /// one of its parts (`use "runtime/text.warp"`, relative to lib/compiler). Their words become runtime words, compiled
-/// into a module only when called
+/// into a module only when called. A part's own `use "x.warp"` lines (its siblings, the intrinsics it declares, so it
+/// compiles alone) join the same way, each file once, breadth first: the parts keep runtime.warp's order. The
+/// declarations of emitter.warp's intrinsics (`is_null(x: any): bool from runtime`) stay out, left to emitter.warp as
+/// definitions.warp drops them
 pub fn runtime_source() -> std::io::Result<String> {
-	let source = std::fs::read_to_string(compiler_folder().join(RUNTIME_WORDS))?;
-	let mut joined = String::new();
-	let mut used = String::new();
-	for line in source.lines() {
-		match line.strip_prefix("use ").map(str::trim) {
-			Some(name) => used += &std::fs::read_to_string(used_file(name))?,
-			None => joined += line,
+	let first = compiler_folder().join(RUNTIME_WORDS);
+	let mut joined = HashSet::from([first.clone()]);
+	let mut waiting = VecDeque::from([first]);
+	let mut source = String::new();
+	while let Some(file) = waiting.pop_front() {
+		let folder = file.parent().unwrap_or(Path::new(".")).to_path_buf();
+		for line in std::fs::read_to_string(&file)?.lines() {
+			match line.strip_prefix("use ").map(str::trim) {
+				Some(name) => {
+					let path = used_file(&folder, name);
+					if joined.insert(path.clone()) {
+						waiting.push_back(path);
+					}
+				}
+				None if is_intrinsic_declaration(line) => {}
+				None => source += line,
+			}
+			source.push('\n');
 		}
-		joined.push('\n');
 	}
-	Ok(joined + &used)
+	Ok(source)
 }
 
-/// The file of a `use` line of runtime.warp: a quoted path beside runtime.warp, else a module of lib
-fn used_file(name: &str) -> PathBuf {
+fn is_intrinsic_declaration(line: &str) -> bool {
+	line.trim_end().ends_with(&format!(" from {}", crate::ffi::RUNTIME_LIBRARY))
+}
+
+/// The file of a `use` line: a quoted path beside the using file, else a module of lib
+fn used_file(folder: &Path, name: &str) -> PathBuf {
 	match name.strip_prefix('"').and_then(|quoted| quoted.strip_suffix('"')) {
-		Some(path) => compiler_folder().join(path),
+		Some(path) => folder.join(path),
 		None => library().join(format!("{name}.warp")),
 	}
 }
@@ -607,31 +627,43 @@ pub fn compiler_key() -> Option<&'static str> {
 	enabled().then(|| KEY.get_or_init(|| stage_key("the self-hosted compiler")).as_deref()).flatten()
 }
 
-/// The cache key of a stage program: the running binary, the program, the WARP_ settings and every file of lib/ with its
-/// path inside lib/, so an identical lib/ elsewhere (another worktree) reuses the kept modules; none when the binary has
-/// no path
+/// The cache key of a stage program: the sources warp was built from (WARP_SOURCE, build.rs), the program, the WARP_
+/// settings and every file of lib/ with its path inside lib/. Neither the binary's place nor its build profile: a
+/// release build's compiler.warp module is every copy's and the debug build's of those sources too, so an install
+/// builds it with the new binary before it goes in place (card self-warming); an identical lib/ elsewhere (another
+/// worktree) reuses the kept modules
 #[cfg(feature = "native")]
 pub(crate) fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
-	// canonical: macOS gives the path the binary was started by, `../../scratch/warp` keyed every folder apart
-	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;
 	let mut hasher = Sha256::new();
 	let library = library();
 	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
-	hasher.update(format!(
-		"{}\n{:?}\n{settings:?}\n{program}\n",
-		binary.display(),
-		crate::run::program_cache::stamp(&binary)
-	));
+	hasher.update(format!("{}\n{settings:?}\n{program}\n", env!("WARP_SOURCE")));
+	hash_library(&mut hasher);
+	Some(crate::extensions::hex_text(&hasher.finalize()))
+}
+
+/// The fingerprint of lib/: every file with its path inside lib/, the same for an identical lib/ elsewhere
+#[cfg(feature = "native")]
+pub(crate) fn library_fingerprint() -> String {
+	use sha2::{Digest, Sha256};
+	let mut hasher = Sha256::new();
+	hash_library(&mut hasher);
+	crate::extensions::hex_text(&hasher.finalize())
+}
+
+#[cfg(feature = "native")]
+fn hash_library(hasher: &mut sha2::Sha256) {
+	use sha2::Digest;
+	let library = library();
 	let mut files: Vec<PathBuf> = files_below(library.to_path_buf());
 	files.sort();
 	for file in files {
 		hasher.update(format!("{}\n", file.strip_prefix(library).unwrap_or(&file).display()));
 		hasher.update(std::fs::read(&file).unwrap_or_default());
 	}
-	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
 /// The files below `folder`, at any depth

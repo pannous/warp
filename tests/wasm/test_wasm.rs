@@ -1256,7 +1256,7 @@ fn test_host_download() {
 #[test]
 fn test_sinus2() {
 	is!(
-		r#"double sin(double x){
+		r#"double sin_test(double x){
     x = x % tau;
     let z : double = x*x
     let w : double = z*z
@@ -1266,18 +1266,18 @@ fn test_sinus2() {
     S4  =  2.75573137070700676789e-06,
     S5  = -2.50507602534068634195e-08,
     S6  =  1.58969099521155010221e-10
-    if(x >= PI) return -sin(x % PI);
+    if(x >= PI) return -sin_test(x % PI);
     let r : double = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6);
     return x + z*x*(S1 + z*r);
-}; sin π/2"#,
-		1
-	); // IT WORKS!!!
+}; sin_test(π/2)"#,
+		1.0000000002522274
+	); // IT WORKS!!! its own name, not the builtin's (decision own-name-not-builtin)
 }
 
 #[test]
 fn test_sinus() {
 	is!(
-		r#"double sin(double x){
+		r#"double sin_test(double x){
     x = x % tau
     let z : double = x*x
     let w : double = z*z
@@ -1288,12 +1288,13 @@ fn test_sinus() {
     S5  = -2.50507602534068634195e-08, /* 0xBE5AE5E6, 0x8A2B9CEB */
     S6  =  1.58969099521155010221e-10  /* 0x3DE5D93A, 0x5ACFD57C */
     //	            tau =  6.283185307179586 // 2π
-    if(x >= PI) return -sin(x % PI)
+    if(x >= PI) return -sin_test(x % PI)
     let r : double = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)
     return x + z*x*(S1 + z*r)
-    };sin π/2"#,
-		1
-	); // IT WORKS!!! the C++ wasp gave 1.0000000002522271, warp exactly 1 like test_sinus2
+    };sin_test(π/2)"#,
+		1.0000000002522274
+	); // IT WORKS!!! the C++ wasp gave 1.0000000002522271 (decision own-name-not-builtin: its own name)
+	is!("sin π/2", 1); // the builtin
 }
 
 #[test]

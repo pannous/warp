@@ -10,6 +10,7 @@ const FROM_WORD: &str = "from";
 pub fn lower(node: Node) -> Node {
 	match foreign_line_of(&node) {
 		Some((name, library)) if library == crate::ffi::BUILTIN_LIBRARY => builtin_line(&node, &name),
+		Some((_, library)) if library == crate::ffi::RUNTIME_LIBRARY => runtime_line(&node),
 		Some((name, library)) => crate::warp_parser::parse_generated(&format!("import ({name}) from '{library}'")),
 		None => node.map_children(lower),
 	}
@@ -28,6 +29,32 @@ fn builtin_line(node: &Node, name: &str) -> Node {
 		return Node::Empty;
 	}
 	crate::node::error(&format!("warp's {name} is `{declared}`: a `from warp` line repeats lib/math.warp's"))
+}
+
+/// `is_null(x: any): bool from runtime` (decision bodiless-imports): the self-hosted emitter supplies the word as an
+/// intrinsic; the Rust lane, which has none, compiles the declaration as a function that traps when called, so a
+/// runtime part of lib/compiler/runtime/ compiles alone
+fn runtime_line(node: &Node) -> Node {
+	let Some(signature) = signature_of(node) else {
+		return node.clone();
+	};
+	let unreachable = crate::wasm_emitter::functions::wasm_bodies::UNREACHABLE;
+	let call = format!("{}(\"{unreachable}\")", crate::words::WASM_INSTRUCTION_CALL);
+	crate::warp_parser::parse_generated(&format!("{} := {call}", signature.serialize()))
+}
+
+/// The typed head of a foreign line, `is_null(x: any): bool`
+fn signature_of(node: &Node) -> Option<Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Space) => items.first().cloned(),
+		Node::Key(head, Op::Colon, rest) => match rest.drop_meta() {
+			Node::List(items, Bracket::None, Separator::Space) => {
+				Some(Node::Key(head.clone(), Op::Colon, Box::new(items.first()?.clone())))
+			}
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 fn foreign_line_of(node: &Node) -> Option<(String, String)> {
@@ -55,7 +82,9 @@ fn foreign_line(items: &[Node]) -> Option<(String, String)> {
 	// `'m'`, one letter in single quotes, reads as a character
 	let library = match library.drop_meta() {
 		Node::Text(_) | Node::Char(_) => library.drop_meta().text_or_name(),
-		Node::Symbol(name) if name == crate::ffi::BUILTIN_LIBRARY => name.clone(),
+		Node::Symbol(name) if [crate::ffi::BUILTIN_LIBRARY, crate::ffi::RUNTIME_LIBRARY].contains(&name.as_str()) => {
+			name.clone()
+		}
 		_ => return None,
 	};
 	let head = match signature.drop_meta() {

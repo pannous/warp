@@ -1,4 +1,10 @@
 # `a + b`, `a += b` of values known only at run time, and int arithmetic that traps past 64 bits
+use "intrinsics.warp"
+use "conversions.warp"
+use "exact.warp"
+use "lists.warp"
+use "show.warp"
+use "types.warp"
 # `a + b` of values known only at run time: lists and texts join, numbers add
 node_add(a: any, b: any): any := {
 	# ø, also `[]` in the lowered program, beside a list is a copy of that list (ø + ø the empty list), so a later

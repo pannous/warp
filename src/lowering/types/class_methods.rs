@@ -175,18 +175,32 @@ fn from_objects(node: Node) -> Node {
 /// Each class's fields in order, with their type names
 pub(crate) fn class_fields(node: &Node) -> ClassFields {
 	let mut fields = std::collections::HashMap::new();
-	let mut add_fields = |part: &Node| {
+	visit_classes(std::slice::from_ref(node), |name, body| {
+		let typed = field_items(body).into_iter().map(|(_, name, type_name)| (name, type_name)).collect();
+		fields.insert(name.drop_meta().name(), typed);
+	});
+	fields
+}
+
+/// The names of the fields the classes of the nodes declare, of all classes of a name
+pub(crate) fn field_names(nodes: &[Node]) -> std::collections::HashSet<String> {
+	let mut names = std::collections::HashSet::new();
+	visit_classes(nodes, |_, body| names.extend(field_items(body).into_iter().map(|(_, name, _)| name)));
+	names
+}
+
+/// Each class declaration's name and body: a used file's classes, left out of its own lowering (early_file_classes),
+/// then the nodes' own, which win. Once for all nodes: the used files' classes are many (card cold-compile-of-compiler)
+fn visit_classes(nodes: &[Node], mut visit: impl FnMut(&Node, &Node)) {
+	let mut on_part = |part: &Node| {
 		if let Node::Type { name, body } = part {
-			let typed = field_items(body).into_iter().map(|(_, name, type_name)| (name, type_name)).collect();
-			fields.insert(name.drop_meta().name(), typed);
+			visit(name, body)
 		}
 	};
-	// a used file's classes, left out of its own lowering (early_file_classes); the node's own declarations win
 	crate::compiler::compile_context::read(|context| {
-		context.early_file_classes.iter().for_each(|class| class.visit(&mut add_fields))
+		context.early_file_classes.iter().for_each(|class| class.visit(&mut on_part))
 	});
-	node.visit(&mut add_fields);
-	fields
+	nodes.iter().for_each(|node| node.visit(&mut on_part));
 }
 
 /// Each field of a class body: its name, type name (empty when untyped) and default value (`legs: int = 4`)

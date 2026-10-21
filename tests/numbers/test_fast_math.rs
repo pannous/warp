@@ -36,3 +36,10 @@ fn warp_fast_uses_fast_math_also_for_a_kept_program_file() {
 	assert_eq!(printed(&["--no-ask"]), "0");
 	assert_ne!(printed(&["fast", "--no-ask"]), "0");
 }
+
+#[test]
+fn a_constant_fast_word_folds_to_the_fast_value() {
+	is!("use fast_math; x = 1.0; sin(1.0) == sin(x)", true);
+	is!("use fast_math; x = 1.0; cos(1.0) - cos(x)", 0.0);
+	is!("use fast_math; x = 1.0; exp(1.0) == exp(x)", true);
+}

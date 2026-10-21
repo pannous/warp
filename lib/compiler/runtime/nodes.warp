@@ -1,4 +1,7 @@
 # The built-in node's parts: operators, keys, symbols, brackets and separators of lists
+use "intrinsics.warp"
+use "errors.warp"
+use "show.warp"
 # a value as a boxed $Node
 held(value: any): any := value
 # the built-in node's parts (lib/compiler/node.warp): a key's operator is its code above the kind bits, the
