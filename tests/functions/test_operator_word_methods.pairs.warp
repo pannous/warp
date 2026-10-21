@@ -7,7 +7,9 @@
 'class P{x:int; fun cbrt() { x * 2 }}; P(3).cbrt()'	6
 
 # the_operator_word_stays_an_operator_elsewhere
-'class P{x:int; norm() := x}; abs(-3) + norm(-4)'	7
+'use math; class P{x:int; norm() := x}; abs(-3) + norm(-4)'	7
+'norm(x) := 777; norm(4)'	777
 
 # a_definition_of_an_operator_word_without_parentheses_is_refused
-'x := 3; norm x'	3
+'norm x := x * 10; norm -3'	-30
+'use math; x := 3; norm x'	3
