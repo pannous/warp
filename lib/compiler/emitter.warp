@@ -122,6 +122,22 @@ map_members = ["keys", "values", "get", "count", "contains", "remove", "copy", "
 # whether `x.name` is the word's call even when x has an entry of that name, as Rust's reads_entry_first: a map's own
 # member (`found.keys` of a map holding the entry "keys") or a word of a known result, which the code after it reads
 keeps_word(name: text, word: text): bool := name in map_members or module.runtime[word].signature.result not in ["", "any"]
+# whether the variable only ever holds map literals with that entry in the function: `n = {keys: 5}; n.keys` is its
+# own member 5, known as it compiles (Rust's OwnMember of a variable only holding object literals)
+holds_entry(body: Body, receiver: any, entry: text): bool := {
+	if not (receiver is symbol) { return no }
+	values = assigned_values(body.function.body, name_of(receiver))
+	#values > 0 and values.all(value => is_group(value) and bracket_of(value) == "{" and #value > 0 and value.all(is_map_entry) and value.any(item => entry_name(item) == entry))
+}
+# the values assigned to the name anywhere in n
+assigned_values(n: any, name: text): list := {
+	if type(n) is key and op_of(n) == "=" and key_of(n) == symbol(name) { return [value_of(n)] + assigned_values(value_of(n), name) }
+	if type(n) is key { return assigned_values(key_of(n), name) + assigned_values(value_of(n), name) }
+	values = []
+	if is_group(n) { for item in n { values += assigned_values(item, name) } }
+	values
+}
+entry_name(entry: any): text := if key_of(entry) is symbol then name_of(key_of(entry)) else "" + key_of(entry)
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list (Rust's node_bytes)
 byte_count_words = {bytecount: yes, byte_size: yes}
 def byte_size_code(value: any): list { runtime_call("node_bytes", [["node", boxed(value)]]) }
@@ -1858,6 +1874,7 @@ def key_expression(body: Body, n: any): list {
 	if operator == "." and right is symbol and member_word(name_of(right)) != ø {
 		word = member_word(name_of(right))
 		value = expression_code(body, left)
+		if holds_entry(body, left, name_of(right)) { return field_read(body, value, name_of(right)) }
 		if keeps_word(name_of(right), word) { return runtime_call(word, [value]) }
 		return field_or_word(body, value, name_of(right), receiver => runtime_call(word, [receiver]))
 	}
