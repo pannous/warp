@@ -566,6 +566,13 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			p.at = p.at + down_to_at(p)
 			skip_blanks(p)
 			left = listed("(", "", [symbol("reverse"), Key(expression(p, powers#2), Op.To, left)])
+		} else if trailing_guard_at(p) != "" {
+			// `a = 2 if c`, `x++ while c`: guards the whole statement (left power 0)
+			if min_power > 0 { break }
+			word = trailing_guard_at(p)
+			p.at = p.at + word.length
+			skip_blanks(p)
+			left = guarded_statement(left, word, condition_expression(p))
 		} else {
 			op = operator_at(p)
 			if op.length == 0 and free_infix_at(p, left) {
@@ -606,6 +613,53 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		}
 	}
 	left
+}
+
+// The control words that guard the statement before them: `a = 2 if c`, `a = 2 unless c`, `x++ while c`
+// Rust twin: spellings.rs (if, unless, while as infix operators), lookahead.rs operator_in_context
+TRAILING_GUARD_WORDS = ["if", "unless", "while"]
+// The trailing guard word at the parser's position, else ""; an `if` with its own `then` or block starts a branch
+def trailing_guard_at(p: Parser): text {
+	for word in TRAILING_GUARD_WORDS {
+		if keyword_at(p, word) and (word != "if" or not condition_has_branch(p, p.at + word.length)) { return word }
+	}
+	""
+}
+
+// `if c then x`, `if c {x}`: a `then` or a blank-led `{` follows the condition on its line, outside brackets and texts
+// Rust twin: if_else.rs condition_has_branch
+def condition_has_branch(p: Parser, from: int): bool {
+	depth = 0
+	quote = ""
+	at = from
+	while at < p.n {
+		c = p.code[at]
+		if quote != "" {
+			if c == quote { quote = "" }
+		} else if c == '"' or c == '\'' {
+			quote = c
+		} else if c == '(' or c == '[' {
+			depth = depth + 1
+		} else if c == ')' or c == ']' {
+			if depth == 0 { return false }
+			depth = depth - 1
+		} else if depth == 0 and c == '{' and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') {
+			return true
+		} else if depth == 0 and (c == '\n' or c == ';' or c == '}') {
+			return false
+		} else if depth == 0 and c == 't' and not is_name_char(p.code[at - 1]) and keyword_at_position(p, "then", at) {
+			return true
+		}
+		at = at + 1
+	}
+	false
+}
+
+// `x if c` is `if c then x`, `x unless c` is `if not c then x`, `x while c` is `while c do x`
+// Rust twin: conditions.rs guarded_statement
+def guarded_statement(statement: Node, word: text, condition: Node): Node := {
+	guard = if word == "unless" then Key(ø, Op.Not, condition) else condition
+	if word == "while" then Key(Key(ø, Op.While, guard), Op.Do, statement) else Key(Key(ø, Op.If, guard), Op.Then, statement)
 }
 
 // `pattern: match v {…}`: the arm's value is the whole inner match, its subject and its cases on the line, though `:`
@@ -1219,17 +1273,22 @@ def guarded_by(marker: text, guarded_part: Node, fallback: Node, caught: list): 
 	if caught_class != "" {
 		bound = if name == "" then CAUGHT_ERROR else name
 		parts = parts + [keyed(":", symbol(bound), symbol(caught_class))]
-	} else if name != "" and mentions(fallback, name) {
+	} else if name != "" and reads_name(fallback, name) {
 		parts = parts + [symbol(name)]
 	}
 	listed("(", "", parts)
 }
 
-// `try: x` as Python writes it
+// whether n reads the name, in the holes of its texts too (`catch e { "caught: \(e)" }`): this parser keeps a text's
+// holes as written, Rust's parses them
+def reads_name(n: Node, name: text): bool := mentions(n, name) or has_hole(n, code => mentions(parsed(code), name))
+
+// `try: x` as Python writes it; the block may start on the next line
+// Rust twin: blocks.rs skip_python_colon
 def skip_python_colon(p: Parser) {
 	if is_at(p.code, p.at, ':', p.n) {
 		p.at = p.at + 1
-		skip_spaces(p)
+		skip_blanks(p)
 	}
 }
 
@@ -1300,6 +1359,8 @@ def prefixed(p: Parser): Node := {
 	}
 	if not is_name_start(c) { return prefixed_by_symbol(p, c) }
 	word = word_at(p)
+	// `try: x except: y` guards as `try x except y` does: Python's colon names no key (Rust: the guard comes first)
+	if guard_word_at(p, word) and not after_member_dot(p) { return guarded(p, word) }
 	// `op.if`, `math.sqrt`: a member's name is no keyword
 	if word_names_key(p, word) or after_member_dot(p) { return atom(p) }
 	if word == "operator" or OPERATOR_KINDS.contains(word) {
@@ -1315,11 +1376,10 @@ def prefixed(p: Parser): Node := {
 	}
 	form = keyword_form(word)
 	if form == "return" { return returned(p) }
-	if guard_word_at(p, word) { return guarded(p, word) }
 	if form == "condition" {
 		p.at = p.at + word.length
 		skip_spaces(p)
-		return conditioned(word, header_expression(p, CONDITION_POWER), p)
+		return conditioned(word, condition_expression(p), p)
 	}
 	if form == "loop" {
 		loop = looped(p)
@@ -1434,6 +1494,16 @@ def returned(p: Parser): Node := {
 
 // Binds a condition until `then`, `do` or the colon of `if c: x`
 CONDITION_POWER = 81
+// The condition of `if` and `while`: a braceless call takes a variable argument as in a branch (`if area certainly > 10
+// then`, `while square i < 10`)
+// Rust twin: conditions.rs parse_condition
+def condition_expression(p: Parser): Node := {
+	outer = p.branch_power
+	p.branch_power = CONDITION_POWER
+	value = header_expression(p, CONDITION_POWER)
+	p.branch_power = outer
+	value
+}
 
 // Rust's `loop { … }` as `while true { … }`, ø when no block follows the word
 // Rust twin: atoms.rs keyword_form (LOOP_WORD)
@@ -1493,7 +1563,7 @@ def else_branch(p: Parser): list {
 	if else_if_at(p) {
 		p.at = p.at + word_at(p).length
 		skip_spaces(p)
-		return [conditioned("if", header_expression(p, CONDITION_POWER), p)]
+		return [conditioned("if", condition_expression(p), p)]
 	}
 	if not keyword_at(p, "else") { return [] }
 	p.at = p.at + 4
