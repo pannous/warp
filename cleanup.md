@@ -216,3 +216,10 @@
 - Reuse the prelude alias mechanism and the existing `count` implementation; do not add another counting path.
 - Preserve program-defined `size` functions and object fields/methods where normal dispatch gives them precedence.
 - Add focused outcome coverage, then run the targeted test, formatting, style, clippy, and wasm32 checks.
+
+# Local function-value reads cleanup
+
+- Reproduce a function value read from a nested list into a function-local variable before changing production code.
+- Extend the existing scoped function-value holder analysis so values obtained from a known function-value list remain callable inside their defining function.
+- Keep the rule general for indexed list reads and avoid naming the reported `g`, `fs`, or loop shape specially.
+- Add one focused outcome test, then run its targeted filter, formatting, style, clippy, and wasm32 checks.

@@ -328,6 +328,7 @@ fn settled_function_values(program: &Node, context: &Context) -> FunctionValues 
 		returning: HashSet::new(),
 		variables: HashSet::new(),
 		lists: HashSet::new(),
+		nested_lists: HashSet::new(),
 		passing_through,
 		class_fields: crate::class_methods::class_fields(program),
 		bound: bound_names(context),
@@ -560,6 +561,8 @@ struct FunctionValues {
 	variables: HashSet<String>,
 	/// Variables assigned a list of function values: `fs#2` is one
 	lists: HashSet<String>,
+	/// Variables assigned a list whose items are lists of function values
+	nested_lists: HashSet<String>,
 	/// Functions returning one of their parameters, by its position (`g = x => x`)
 	passing_through: HashMap<String, usize>,
 	/// Each class's fields in order: `Holder(x => x + 1)` fills the field d of `class Holder {d}`
@@ -667,6 +670,7 @@ impl FunctionValues {
 			field if is_field(field) => holder_path(field).is_some_and(|path| self.lists.contains(&self.scoped(&path))),
 			Node::List(items, Bracket::Square, _) => items.iter().any(|item| self.is_function_value(item)),
 			Node::Symbol(name) => self.lists.contains(&self.scoped(name)),
+			Node::Key(list, Op::Hash, _) => self.is_list_of_function_lists(list),
 			Node::Key(left, Op::Add, right) => self.is_function_list(left) || self.is_function_list(right),
 			// a signal's listeners (`listeners of x`, lowering/signals/signal_values.rs)
 			Node::List(items, Bracket::Round, _)
@@ -681,9 +685,17 @@ impl FunctionValues {
 		}
 	}
 
-	/// `for f in fs {…}` over a list of function values: f holds one
-	fn loop_variable_over_functions<'a>(&self, node: &'a Node) -> Option<&'a str> {
-		for_loop_parts(node).filter(|(_, list)| self.is_function_list(list)).map(|(variable, _)| variable)
+	/// A list whose items are lists of function values: `[fs]`, another such list, or joined lists of them
+	fn is_list_of_function_lists(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::List(items, Bracket::Square, _) => items.iter().any(|item| self.is_function_list(item)),
+			Node::Symbol(name) => self.nested_lists.contains(&self.scoped(name)),
+			Node::Key(left, Op::Add, right) => {
+				self.is_list_of_function_lists(left) || self.is_list_of_function_lists(right)
+			}
+			block @ Node::List(..) if !std::ptr::eq(tail(block), block) => self.is_list_of_function_lists(tail(block)),
+			_ => false,
+		}
 	}
 
 	fn settle(&mut self, context: &Context, program: &Node) {
@@ -694,10 +706,16 @@ impl FunctionValues {
 				.filter(|function| self.returns_function_value(function))
 				.map(|function| function.name.clone())
 				.collect();
-			let (mut variables, mut lists) = (HashSet::new(), HashSet::new());
+			let (mut variables, mut lists, mut nested_lists) = (HashSet::new(), HashSet::new(), HashSet::new());
 			self.visit_scoped(program, &mut |node| {
-				if let Some(variable) = self.loop_variable_over_functions(node) {
-					variables.insert(self.scoped(variable));
+				if let Some((variable, list)) = for_loop_parts(node) {
+					let variable = self.scoped(variable);
+					if self.is_function_list(list) {
+						variables.insert(variable.clone());
+					}
+					if self.is_list_of_function_lists(list) {
+						lists.insert(variable);
+					}
 				}
 				// `out.add(f)`, what `xs.map(n => (x => x + n))` builds: out holds functions
 				if let Node::Key(list, Op::Dot, call) = node {
@@ -721,17 +739,22 @@ impl FunctionValues {
 				}
 				let path = self.scoped(&name);
 				if *op != Op::AddAssign {
-					self.record_holder(&path, value, &mut variables, &mut lists);
+					self.record_holder(&path, value, &mut variables, &mut lists, &mut nested_lists);
 				} else if self.is_function_list(value) || self.is_function_value(value) {
 					lists.insert(path);
 				}
 			});
-			if returning == self.returning && variables == self.variables && lists == self.lists {
+			if returning == self.returning
+				&& variables == self.variables
+				&& lists == self.lists
+				&& nested_lists == self.nested_lists
+			{
 				return;
 			}
 			self.returning = returning;
 			self.variables = variables;
 			self.lists = lists;
+			self.nested_lists = nested_lists;
 		}
 	}
 }
@@ -739,18 +762,28 @@ impl FunctionValues {
 impl FunctionValues {
 	/// The variable or field `path` assigned `value`: a function value, a list of them, or an object whose fields hold them
 	/// (`s = {fs: [x => x * 2]}`: s.fs is a list of function values)
-	fn record_holder(&self, path: &str, value: &Node, variables: &mut HashSet<String>, lists: &mut HashSet<String>) {
+	fn record_holder(
+		&self,
+		path: &str,
+		value: &Node,
+		variables: &mut HashSet<String>,
+		lists: &mut HashSet<String>,
+		nested_lists: &mut HashSet<String>,
+	) {
 		if self.is_function_value(value) {
 			variables.insert(path.to_string());
 		}
 		if self.is_function_list(value) {
 			lists.insert(path.to_string());
 		}
+		if self.is_list_of_function_lists(value) {
+			nested_lists.insert(path.to_string());
+		}
 		let entries = crate::library_words::object_entries(value)
 			.or_else(|| self.constructed_fields(value))
 			.or_else(|| listed_entries(value));
 		for (field, value) in entries.unwrap_or_default() {
-			self.record_holder(&format!("{path}.{field}"), &value, variables, lists);
+			self.record_holder(&format!("{path}.{field}"), &value, variables, lists, nested_lists);
 		}
 	}
 

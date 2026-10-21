@@ -30,6 +30,9 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
      (`FunctionValues::settle`: lambdas, function names, calls of functions whose body ends in one, calls of closures,
      `fs#i` of a list holding function values, the variable of `for f in fs`). `(fs#2)(5)` calls an item directly, and
      `fs#2(5)` (parsed `fs#(2*(5))`) too when fs holds function values.
+     Lists containing function lists keep that nesting in the same fixed-point analysis, so a loop item such as
+     `functions` in `for functions in [fs]` remains a function list and `callback = functions#1; callback(x)` is a
+     closure call.
 4. `lambdas::lower_strict`: an iteration word over a function known only at run time (`map xs f`, `reduce xs f`) calls
    the closure in its loop body (`closure_call_1(f, item)`).
 
