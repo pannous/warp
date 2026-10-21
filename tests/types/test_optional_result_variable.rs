@@ -1,5 +1,6 @@
 //! A function declared `: T` whose last value is a variable that can hold ø warns, with `: T?` as its fix, and the ø
-//! reaches the caller unchanged (decision optional-result, card pure-lane-declared)
+//! reaches the caller unchanged; so does a call of a function whose result can be ø (decision optional-result, cards
+//! pure-lane-declared, optional-result-flow)
 use crate::common::{warnings_of, warns_with};
 use crate::is;
 use warp::Node;
@@ -13,6 +14,25 @@ fn a_variable_assigned_empty_can_answer_empty() {
 	is!(&format!("{found}; f(2)"), warp::ints(vec![2]));
 	warns_with("def f(x: int): int { a = ø; b = a; if x > 0 { b = x }; b }; f(0)", Node::Empty, CAN_ANSWER_EMPTY);
 	warns_with("def f(x: int): text { found = if x > 0 then \"big\"; found }; f(0)", Node::Empty, CAN_ANSWER_EMPTY);
+}
+
+#[test]
+fn a_call_of_a_function_that_can_answer_empty_can_answer_empty() {
+	let find = "def find(x: int): int? { if x > 0 { return x }; ø }";
+	warns_with(&format!("{find}; def first(x: int): int {{ find(x) }}; first(0)"), Node::Empty, CAN_ANSWER_EMPTY);
+	warns_with(
+		&format!("{find}; def first(x: int): int {{ return find(x) }}; first(0)"),
+		Node::Empty,
+		CAN_ANSWER_EMPTY,
+	);
+	warns_with(
+		&format!(
+			"{find}; def first(x: int): int {{ y = find(x); y }}; def outer(x: int): int {{ first(x) }}; outer(0)"
+		),
+		Node::Empty,
+		CAN_ANSWER_EMPTY,
+	);
+	is!(&format!("{find}; def first(x: int): int {{ find(x) }}; first(3)"), 3);
 }
 
 #[test]

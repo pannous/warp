@@ -11,3 +11,9 @@ def g(x: int): int { a = ø; b = a; if x > 0 { b = x }; b }
 print(g(0))
 def h(x: int): int { a = x; a = a + 1; a }
 print(h(1))
+def find(x: int): int? { if x > 0 { return x }; ø }
+def first(x: int): int { find(x) }
+print(first(0))
+print(first(3))
+def outer(x: int): int { y = first(x); y }
+print(outer(0))

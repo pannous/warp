@@ -5,3 +5,7 @@ print(f(0))
 print(f(3))
 h(x: int): int := { a = x; a = a + 1; a }
 print(h(1))
+find(x: int): int? := { if x > 0 { return x }; ø }
+first(x: int): int := find(x)
+print(first(0))
+print(first(3))
