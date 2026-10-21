@@ -180,7 +180,7 @@ impl WasmGcEmitter {
 				&[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Result(ValType::I32)), I::I32Const(1), I::Else],
 			);
 			Self::emit_list(f, &field(0, 0));
-			Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+			Self::emit_is_empty(f);
 			Self::emit_list(f, &[I::End, I::If(BlockType::Empty)]);
 			match counts_only {
 				true => Self::emit_list(f, &[I::I64Const(0)]),

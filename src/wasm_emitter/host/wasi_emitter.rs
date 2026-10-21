@@ -109,14 +109,9 @@ impl WasmGcEmitter {
 		let held = self.emit_dynamic_text(func, value);
 		let node_type = self.type_manager.node_type;
 		let consumes_text = self.type_manager.function_type(vec![ValType::Ref(self.node_ref(false))], vec![]);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 },
-			I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq,
-			I::If(BlockType::FunctionType(consumes_text)),
-				I::Drop,
-			I::Else,
-		]);
+		Self::emit_list(func, &[I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
+		Self::emit_is_nothing(func);
+		Self::emit_list(func, &[I::If(BlockType::FunctionType(consumes_text)), I::Drop, I::Else]);
 		self.emit_call(func, PRINT_VALUE);
 		Self::emit_list(func, &[I::Drop, I::End]);
 		self.emit_call(func, "new_empty");

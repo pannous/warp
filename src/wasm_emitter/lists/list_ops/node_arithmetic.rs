@@ -249,21 +249,9 @@ impl WasmGcEmitter {
 							s.emit_field(f, operand, 0);
 							Self::emit_kind_test(f, kind as i64, I::I64Eq);
 						};
-						// the whole kind (bracket included, element mark not): ø and `[]` are both Empty
-						let unmarked_kind_is = |f: &mut Function, operand: u32, kind: i64| {
-							s.emit_field(f, operand, 0);
-							Self::emit_list(
-								f,
-								&[
-									I::I64Const(crate::type_kinds::UNMARKED_KIND),
-									I::I64And,
-									I::I64Const(kind),
-									I::I64Eq,
-								],
-							);
-						};
 						// ø + text fails as ø + 1 does (decision empty-plus-text); `[]` + text appends it
-						unmarked_kind_is(f, 0, Kind::Empty as i64);
+						s.emit_field(f, 0, 0);
+						Self::emit_is_nothing(f);
 						kind_is(f, 1, Kind::Text);
 						kind_is(f, 1, Kind::Codepoint);
 						Self::emit_list(f, &[I::I32Or, I::I32And]);
@@ -271,7 +259,8 @@ impl WasmGcEmitter {
 						// a list + an item that is no list: the item appended, `xs + [item]` (decision list-append-plus)
 						kind_is(f, 0, Kind::List);
 						kind_is(f, 0, Kind::Block);
-						unmarked_kind_is(f, 0, crate::type_kinds::EMPTY_LIST_KIND);
+						s.emit_field(f, 0, 0);
+						Self::emit_is_empty_list(f);
 						Self::emit_list(f, &[I::I32Or, I::I32Or, I::If(BlockType::Empty), I::LocalGet(0)]);
 						s.emit_one_item_list(f, 1);
 						s.call(f, "list_concat");

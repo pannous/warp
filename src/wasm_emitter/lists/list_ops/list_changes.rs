@@ -217,13 +217,6 @@ impl WasmGcEmitter {
 			vec![node_ref_nullable],
 			vec![node_ref_nullable],
 			|s, f| {
-				let kind_is = |s: &Self, f: &mut Function, local: u32, kind: i64| {
-					s.emit_field(f, local, 0);
-					Self::emit_list(
-						f,
-						&[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(kind), I::I64Eq],
-					);
-				};
 				// no children (null or ø): the tail
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
@@ -232,7 +225,7 @@ impl WasmGcEmitter {
 					I::End,
 				]);
 				s.emit_field(f, children, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq); // ø or `[]`
+				Self::emit_is_empty(f);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
 				// the rest first, so each cell is built once
 				s.emit_field(f, children, 2);
@@ -246,9 +239,10 @@ impl WasmGcEmitter {
 					I::End,
 				]);
 				s.emit_field(f, item, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq); // ø or `[]`
+				Self::emit_is_empty(f);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
-				kind_is(s, f, item, SQUARE_LIST_KIND);
+				s.emit_field(f, item, 0);
+				Self::emit_whole_kind_test(f, SQUARE_LIST_KIND);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I::If(BlockType::Empty),
@@ -446,7 +440,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull]);
 				s.emit_fail_if(f, "index_out_of_range");
 				s.emit_field(f, cell, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+				Self::emit_is_empty(f);
 				s.emit_fail_if(f, "index_out_of_range");
 			};
 			Self::emit_index_compare(f, I::I64LtS);
