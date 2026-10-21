@@ -622,3 +622,10 @@ fn a_call_with_comma_arguments_parses_pure() {
 	let probe = format!("{}/probes/spelled_case_per_function.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("spelled_case_per_function", &probe, "[\"list\" '(' \"\" [\"symbol\" 'f'] [\"symbol\" 'a'] 2]\n2");
 }
+
+/// A map's own member is the word beside an entry of its name, `found.keys` of a map holding "keys" (card self-hello)
+#[test]
+fn a_map_member_beside_its_entry_runs_pure() {
+	let probe = format!("{}/probes/map_member_beside_entry.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("map_member_beside_entry", &probe, "[\"keys\" 'a']");
+}
