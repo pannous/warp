@@ -45,6 +45,14 @@ fn warp_self_writes_the_largest_int() {
 	assert!(printed.lines().any(|line| line == "9223372036854775807"), "{printed}");
 }
 
+/// A parameter name given twice, `middle(_, value, _)`: each parameter has a local of its own under `warp self`
+/// (card self-text-as-list: "out of bounds array access")
+#[test]
+fn warp_self_takes_repeated_parameter_names() {
+	let printed = said_by("self", "repeated_parameters", "def middle(_, value, _) := value\nprint middle(1, 2, 3)\n");
+	assert!(printed.lines().any(|line| line == "2"), "{printed}");
+}
+
 /// What `warp <command>` (pure or self) says of the program `code`: its output and errors
 fn said_by(command: &str, name: &str, code: &str) -> String {
 	let folder = crate::common::scratch_directory(&format!("warp_{command}"));
