@@ -121,3 +121,11 @@ fn a_call_of_a_local_holding_a_computed_value_names_it_as_written() {
 fn the_function_is_still_called_outside_the_local_scope() {
 	is!("g(x) := x * 2; f() := { g = [3]; #g }; f() + g(4)", 9);
 }
+
+/// A parameter named like a function keeps its name as the function's interface: named arguments and defaults reach it
+/// (sound's `play tone: 440Hz` beside a function tone)
+#[test]
+fn a_parameter_named_like_a_function_takes_its_named_argument() {
+	is!("tone(x) := x * 2; pitch(tone: int) := tone + 1; pitch(tone: 4)", 5);
+	is!("tone(x) := x * 2; pitch(tone: int = 7) := tone in [7]; pitch()", true);
+}
