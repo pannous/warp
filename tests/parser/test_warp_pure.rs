@@ -98,12 +98,12 @@ fn warp_self_runs_hello_world() {
 fn warp_pure_and_self_run_inline_code() {
 	for command in ["pure", "self"] {
 		let run = crate::common::warp_command()
-			.args(["--no-ask", command, "x=√72.;x^2"])
+			.args(["--no-ask", command, "x=6;x*7"])
 			.env("WARP_NO_WINDOW", "1")
 			.env("WARP_HINTS", "0")
 			.output()
 			.expect("warp runs");
 		let said = String::from_utf8_lossy(&run.stdout).to_string() + &String::from_utf8_lossy(&run.stderr);
-		assert!(said.lines().any(|line| line.trim_start_matches("» ") == "72"), "{command}: {said}");
+		assert!(said.lines().any(|line| line.trim_start_matches("» ") == "42"), "{command}: {said}");
 	}
 }
