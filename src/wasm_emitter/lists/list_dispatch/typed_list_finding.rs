@@ -704,7 +704,7 @@ impl WasmGcEmitter {
 			return HashMap::new();
 		}
 		let mut as_locals = main.clone();
-		for (name, global) in &main.globals {
+		for (name, global) in main.globals.iter() {
 			as_locals
 				.locals
 				.entry(name.clone())

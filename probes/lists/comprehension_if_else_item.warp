@@ -1,0 +1,3 @@
+t = "ab c"
+print [if c == ' ' then '_' else c for c in t]
+print [if x > 1 then 0 else x for x in [1 2 3]]

@@ -222,7 +222,7 @@ pub(super) fn trusted_external(name: &str) -> Option<External> {
 pub(super) fn main_level_globals(program: &Node) -> Vec<String> {
 	let mut main = crate::analyzer::Scope::new();
 	crate::analyzer::collect_variables(program, &mut main);
-	main.globals.into_keys().collect()
+	main.globals.keys().cloned().collect()
 }
 
 /// Does a function body read one of `globals` that is not one of its parameters?
