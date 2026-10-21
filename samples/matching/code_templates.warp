@@ -23,3 +23,10 @@ rounds(c) := match c {
 	_ => c
 }
 print rounds(data(3 times {print 1})) == data(for i in 0..3 {print 1})  # yes
+
+# a rule set is a value: it rewrites at any depth, children first, until no rule fits
+simplify = rules {
+	data($a * 1) => a
+	data($a + 0) => a
+}
+print simplify(data(y * 1 * 1 + k * 1)) == data(y + k)  # yes
