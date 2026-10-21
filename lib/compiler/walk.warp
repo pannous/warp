@@ -245,6 +245,57 @@ has_operator(n: any, operator: Op): bool := match n {
 	_: no
 }
 
+# the view kind of a text `"a \(x) b"` the parser keeps whole: ["template", "a ${x} b"] (holes `${expr}`, a literal
+# dollar `$$`), which interpolation.warp builds
+template_kind = "template"
+
+# the end of the hole whose `{` is before `at`: after its closing `}`
+hole_close(template: text, at: int): int := {
+	depth = 1
+	while at < #template {
+		if template[at] == '{' { depth += 1 }
+		if template[at] == '}' {
+			depth -= 1
+			if depth == 0 { return at + 1 }
+		}
+		at += 1
+	}
+	at
+}
+
+# the pieces of a template in order: a literal as its text, a hole as [its code]; an empty literal is none
+template_pieces(template: text): list := {
+	found = []
+	literal = ""
+	at = 0
+	while at < #template {
+		c = template[at]
+		next = if at + 1 < #template then template[at + 1] else ' '
+		if c == '$' and next == '$' {
+			literal = literal + '$'
+			at += 2
+		} else if c == '$' and next == '{' {
+			end = hole_close(template, at + 2)
+			if literal != "" { found += [literal] }
+			literal = ""
+			found += [[template[at + 2 .. end - 1]]]
+			at = end
+		} else {
+			literal = literal + c
+			at += 1
+		}
+	}
+	if literal != "" { found += [literal] }
+	found
+}
+
+# whether `found` holds for the code of a hole of a template in n, kept whole in an opaque view (`"caught: \(e)"`)
+has_hole(n: Node, found: function): bool := match n {
+	Key(left, _, right): { if left == symbol(opaque_word) then view_has(right, part => kind_of(part) == template_kind and template_pieces(part#2).any(piece => piece is list and found(piece#1))) else has_hole(left, found) or has_hole(right, found) }
+	List(items, _, _): items.any(item => has_hole(item, found))
+	_: no
+}
+
 # whether `found` holds for the view or a part of it
 view_has(view: any, found: function): bool := {
 	if found(view) { return yes }
