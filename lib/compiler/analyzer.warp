@@ -853,7 +853,9 @@ defaults(flows: list): any := {
 			own = parameter_name(parameters[index])
 			agreed = weak.get(name + "(" + "${index}" + ")")
 			if scope.kinds[own] == "" {
-				kind = used_as(own, used) ?? forwarded[name].get(own) ?? agreed
+				# a function value takes whatever the closure calls pass it: `part => … part#2` handed texts and lists by
+				# view_has holds any value, not the list its use suggests
+				kind = agreed ?? used_as(own, used) ?? forwarded[name].get(own)
 				scope.kinds[own] = if kind != ø then kind else "int"
 			}
 		}
