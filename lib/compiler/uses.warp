@@ -3,6 +3,8 @@
 # uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written.
 use os
 use "walk.warp"
+use "parser.warp"
+use "enum_declarations.warp"
 
 import_keywords = ["use", "require", "import", "include"]
 # (function_keywords: words.warp's)

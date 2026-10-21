@@ -268,6 +268,9 @@ const MODULE_PASSES: &[Pass] = &[
 	// again: the functions of a used module that itself uses the file of an alias (`use "types.warp"` in analyzer.warp)
 	// joined in resolve with the alias unresolved
 	crate::lowering::type_aliases::lower,
+	// `play(xs: list of int)`: one parameter `xs:"list of int"` (declaration_forms.rs), the library's heads too, before
+	// any pass reads a head (function_types, shared_arrays)
+	crate::lowering::declaration_forms::lower_list_parameters,
 	// `hum(t) := …; play_signal(hum, 2)`: a function passed for a parameter typed `(float) -> float` takes its types, the
 	// library's declarations joined in resolve
 	crate::lowering::function_types::lower,
@@ -320,8 +323,6 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::declarations::lower_c_functions,
 	crate::lowering::declarations::lower_bare_declarations,
 	crate::lowering::declarations::lower_spaced_definitions,
-	// `play(xs: list of int)`: one parameter `xs:"list of int"` (declaration_forms.rs), before any pass reads a head
-	crate::lowering::declaration_forms::lower_list_parameters,
 	crate::lowering::number_words::lower,
 	crate::lowering::parameter_shapes::lower,
 	crate::lowering::blocks::lower_trailing_blocks,
@@ -533,9 +534,12 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	let mut warnings = crate::compiler::phase_times::timed("lint", || crate::analyzer::lint(&node));
 	warnings.retain(|warning| !warning.file.as_deref().is_some_and(crate::modules::is_std_source));
 	crate::errors::diagnostic::report(&warnings)?;
-	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(crate::lowering::inlining::lower(
-		crate::lowering::for_loop::lifted_walked_literals(crate::lowering::declaration_forms::lower_declarations(
-			crate::lowering::kebab_names::resolve_data_scope(node),
+	// last, on the bodies as emitted: `out = out + x` of a list nothing else holds grows it in place
+	Ok(crate::lowering::self_sums::lower(crate::lowering::declaration_forms::indexed_parameter_copies(
+		crate::lowering::inlining::lower(crate::lowering::for_loop::lifted_walked_literals(
+			crate::lowering::declaration_forms::lower_declarations(crate::lowering::kebab_names::resolve_data_scope(
+				node,
+			)),
 		)),
 	)))
 }
