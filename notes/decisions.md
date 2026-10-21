@@ -212,7 +212,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 
 ## Bool and truthiness
 - bool-type: yes/no are their own shallow type acting as 1/0; `type(yes)` is bool, prints yes/no, true/false accepted; `0 == false` yes, `0 === false` no; P195 `true + 1` is 2; P199 bool slots accept 1 and 0 only; JSON true/false read as yes/no.
-- kind-kept: a value never changes kind by being passed or returned: `f(x) := x; f([])` and `g(): any := { return [] }` give [], not ø; `[] === ø` is no while `[] == ø` stays yes (like 0 == false / 0 === false; whether [] == ø at all is card discuss-what) (Interviewer's decision).
+- kind-kept: a value never changes kind by being passed or returned: `f(x) := x; f([])` and `g(): any := { return [] }` give [], not ø (Interviewer's decision).
+- empty-is-not-missing (user, card discuss-what): ø is absence; empty values are values of their own kind: `[] == ø`, `"" == ø`, `{} == ø` are no, and `x is ø` means missing only (`[] is ø` no). Emptiness is tested loosely with `is empty`, `if no x`, `if not x`; soft rule for all warp code (lib, tests, samples): test emptiness with those forms, never with an equality against ø, [] or "" (a Later card adds hints for such comparisons). `{}` written in code is an empty map (type map). `∅` is an alias of ø with a got-it note "I meant: ø", re-decided if sets come.
 - Truthiness: ø + 1 stays an error, and so does ø + text (empty-plus-text: `t = ø; t += "a"` errs with the fix `t = ""`, or `t = []` for a list; `"a" + ø` with text on the left joins its str form); empty values are falsy; only 0 equals false; #38 a non-empty list (even `[ø]`) is truthy; #28 `x=ø; x.size` and `[].count` are 0; `is empty` covers "", [], {}, ø.
 - predicate-bool: predicates (`is_blank`, `is_even`, `is_odd`, every `is_…`) give yes/no, not 1/0.
 - branch-keeps-bool: an `if`/match branch keeps its own value, the bool mark included: `if c then 2 else true` with c false is yes, not 1 (also in lists and `any` slots); only Int→Float widens.
@@ -349,7 +350,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - `pixels size` works like `size of pixels`.
 - swizzles: `.x .y .z .w` and combinations (`.xy`, `.zyx`) read a list of 2–4 numbers everywhere; Euclidean length is `norm(v)` (alias `magnitude`), `length` stays the count.
 - curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø`.
-- empty-group-node (leave as is): an empty group in code is ø (`parse("{}") == ø`, `bracketed([], "{")` is ø); self-hosting twins compare with ø ≈ {} or the bridge maps ø back to the Rust bracket.
+- empty-group-node: superseded by empty-is-not-missing: `{}` in code is an empty map, not ø.
 - node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
