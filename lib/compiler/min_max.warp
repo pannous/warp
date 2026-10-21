@@ -1,13 +1,15 @@
 # `min(a, b, …)` and `max(a, b, …)` (card pure-parser-rest): comparisons `a < b ? a : b`, each argument more than a
 # plain value or arithmetic computed once into a temporary; one list literal `max([1 5 2])` gives the candidates, one
 # list value `min(xs)` is folded at run time, the first item improved by every later one, an empty list the run time
-# error empty_extremum(min). A program's own min or max stays its function.
+# error empty_extremum(min). `sum(xs)` folds its items with + from 0, as Rust's library_words.rs expands it. A
+# program's own min, max or sum stays its function.
 # Rust twin: src/lowering/collections/min_max.rs lower
 use "walk.warp"
 use "scope.warp"
 use "shapes.warp"
 
 better_by_extremum = {min: Op.Lt, max: Op.Gt}
+sum_word = "sum"
 temporary_word = "extremum"
 # the operators of a plain operand, cheap and free of effects to repeat in the comparisons
 plain_operators = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Rem, Op.Pow, Op.Neg, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne, Op.Question, Op.Colon]
@@ -67,12 +69,22 @@ folded(name: text, list: Node, better: Op): Node := {
 	with_bindings([Key(held, Op.Assign, list)], choice)
 }
 
-# `min(…)`, `min xs`: the extremum the call computes, else ø
+# `(total = 0; for item in xs { total = total + item }; total)`
+summed(list: Node): Node := {
+	total = temporary()
+	item = temporary()
+	added = Key(total, Op.Assign, Key(total, Op.Add, item))
+	loop = List([symbol("for"), item, symbol("in"), list, List([added], Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space)
+	List([Key(total, Op.Assign, 0), loop, total], Bracket.Round, Separator.Semicolon)
+}
+
+# `min(…)`, `min xs`: the extremum the call computes, `sum(xs)` the sum, else ø
 extremum(n: Node, extrema: any): any := {
 	if not is_group(n) or #n < 2 or not (n#1 is symbol) or not (name_of(n#1) in extrema) { return ø }
 	if not (bracket_of(n) == "(" or (bracket_of(n) == "" and separator_of(n) == " ")) { return ø }
 	name = name_of(n#1)
 	arguments = items_of(n)[1 ..]
+	if name == sum_word { return if #arguments == 1 then summed(arguments#1) else ø }
 	listed = #arguments == 1 and is_group(arguments#1) and bracket_of(arguments#1) == "["
 	if listed { arguments = items_of(arguments#1) }
 	if #arguments == 1 and not listed {
@@ -88,16 +100,17 @@ extremum_node(n: Node, extrema: any): Node := {
 	if found == ø then n else found
 }
 
-# min and max, but those the program defines
+# min and max with their comparisons, and sum with its +, but those the program defines
 builtin_extrema(program: any): any := {
 	defined = nodes_in(program).filter(is_function_definition).map(definition => head_word(key_of(definition)))
 	extrema = {}
 	for name in better_by_extremum.keys { if name not in defined { extrema[name] = better_by_extremum[name] } }
+	if sum_word not in defined { extrema[sum_word] = Op.Add }
 	extrema
 }
 
 min_max(program: any): any := {
-	if not (mentions(program, "min") or mentions(program, "max")) { return program }
+	if not (mentions(program, "min") or mentions(program, "max") or mentions(program, sum_word)) { return program }
 	extrema = builtin_extrema(program)
 	bottom_up(program, n => extremum_node(n, extrema))
 }

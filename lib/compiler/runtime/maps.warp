@@ -101,8 +101,9 @@ field_with(m: any, name: text, value: any): any := {
 	if at == 0 { list_append(entries, [new_key(name, value)]) } else { entries#at = new_key(name, value) }
 	m
 }
-# `map_get_or(m, key, fallback)`: the value of m's entry key, fallback when m has none
-map_get_or(m: any, key: any, fallback: any): any := {
+# `map_get_or(m, key, fallback)`: the value of m's entry key, fallback (ø unless given, as prelude.warp has it) when m
+# has none
+map_get_or(m: any, key: any, fallback: any = ø): any := {
 	if is_null(m) { return fallback }
 	at = map_index(m, node_text(key))
 	if at == 0 { return fallback }

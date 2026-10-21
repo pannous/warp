@@ -581,3 +581,13 @@ fn a_failing_stage_names_its_file() {
 	let _ = std::fs::remove_dir_all(&library);
 	assert!(output.contains("the self-hosted stage") && output.contains("compiler/emitter.warp failed"), "{output}");
 }
+
+/// The forms lib/*.warp uses most that the pure lane refused (card pure-lib-gaps): a constant word declares as `var`
+/// does, map_get_or's fallback is ø unless given, and sum folds a list with + (the program's own sum wins)
+#[test]
+fn lib_forms_run_pure() {
+	runs_pure("let_declares", "f(n) := { let m = n * 2; m + 1 }; const k = 3; f(k)", "» 7");
+	runs_pure("map_get_or_two_arguments", "m = {a: 1}; [map_get_or(m, \"a\"), map_get_or(m, \"b\", 7)]", "» [1 7]");
+	runs_pure("sum_folds", "xs = [1.5, 2]; [sum(xs), sum([])]", "» [3.5 0]");
+	runs_pure("own_sum", "sum(xs) := 42; sum([1])", "» 42");
+}
