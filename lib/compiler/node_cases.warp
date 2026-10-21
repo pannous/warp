@@ -9,6 +9,7 @@ use "walk.warp"
 use "scope.warp"
 use "enum_declarations.warp"
 use "node_matches.warp"
+use "definitions.warp"
 
 node_type = "Node"
 spelled_enums = ["Op", "Bracket", "Separator"]
@@ -123,18 +124,25 @@ spelled_declaration(enum_name: text): Node := {
 	List([symbol(enum_word), symbol(enum_name), List(cases, Bracket.Curly, Separator.Comma)], Bracket.None, Separator.Space)
 }
 
-spelling_function(enum_name: text, function: text, body: Node): Node := Key(applied(spelled_function(enum_name, function), symbol(spelled_value)), Op.Define, body)
+# `Op·text(spelled) := body`, with the result type when given: Op·text's is text, so a spelling of one character is a
+# text, not the character an any-typed result holds
+spelling_function(enum_name: text, function: text, result_type: any, body: Node): Node := {
+	head = applied(spelled_function(enum_name, function), symbol(spelled_value))
+	if result_type == ø then Key(head, Op.Define, body) else result_held(Key(head, Op.Colon, symbol(result_type)), body, ø)
+}
 
-# `Op·text(spelled) := if spelled is text then spelled else match spelled {Add: "+", …, _: spelled}` and
+type_test(value: Node, type_name: text): Node := List([symbol("is_type"), value, type_name], Bracket.Round, Separator.None)
+
+# `Op·text(spelled): text := if spelled is text or codepoint then spelled else match spelled {Add: "+", …, _: spelled}` and
 # `Op·case(spelled) := match spelled {"+": Add, …, _: spelled}`: a text passes either, so `key(a, "+", b)` keeps working
 spelling_functions(enum_name: text): list := {
 	value = symbol(spelled_value)
 	cases = spellings[enum_name].keys
 	other = Key(symbol(other_arm), Op.Colon, value)
 	to_text = matched(value, cases.map(case => Key(symbol(case), Op.Colon, spelling(enum_name, case))) + [other], ø, cases)
-	is_text = List([symbol("is_type"), value, "text"], Bracket.Round, Separator.None)
+	is_spelling = Key(type_test(value, "text"), Op.Or, type_test(value, "codepoint"))
 	to_case = matched(value, cases.map(case => Key(spelling(enum_name, case), Op.Colon, symbol(case))) + [other], ø, cases)
-	[spelling_function(enum_name, "text", chosen(is_text, value, to_text)), spelling_function(enum_name, "case", to_case)]
+	[spelling_function(enum_name, "text", "text", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)]
 }
 
 # whether a case of the enum, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n

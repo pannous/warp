@@ -548,7 +548,7 @@ fn compile_takes_the_pure_lane() {
 #[test]
 fn op_cases_run_pure() {
 	runs_pure("op_case_value", "[Op.Add, Op.Sub]", "[Add Sub]");
-	runs_pure("op_case_as_text", "x = Op.Add; x as text", "+");
+	runs_pure("op_case_as_text", "x = Op.Add; x as text", "» \"+\"");
 	runs_pure("op_case_from_text", "\"*\" as Op", "Mul");
 	runs_pure("op_case_equals_spelling", "x = Op.Add; x == \"+\" and op_of(Key(1, x, 2)) == Op.Add", "yes");
 	runs_pure("op_case_bound", "match Key(1, Op.Add, 2) { Key(a, op, c): op; _: 0 }", "Add");
