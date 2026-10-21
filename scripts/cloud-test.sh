@@ -31,7 +31,7 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 JOBS_PREFIX=cloud-jobs         # cloud-jobs/<job>: the job's arguments, so the session's prompt stays one short line
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
-NO_TESTS_RAN="NO TESTS RAN: "   # the summary line of a run that executed no test: red, and its session leaves the pool
+NO_TESTS_RAN="NO TESTS RAN: "   # the summary line of a run that executed no test: red (a filter fault, its session stays pooled)
 SHOWN_ITEMS=12                 # lines of a real failure's panic message shown under it (a slice test's failing samples)
 KNOWN_FAILURES=notes/known_failures.md   # read in the tested checkout, as the gate reads it at the tested tip
 CARGO_FLAGS_WITH_VALUE='--config|--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
@@ -48,7 +48,7 @@ POLL_SECONDS=60                # GitHub API quota is shared by every session: ls
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
 MIN_FREE_GB=15                 # less free disk before a build: the warm VM's build output is pruned (a build ran out of disk)
-TEST_TIME_LIMIT_SECONDS=2400   # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
+TEST_TIME_LIMIT_SECONDS=3600   # the test run is killed after this (a hanging test), its unfinished tests named; a full run on a 4-core VM takes 1600-2400 s since the warp self tests rebuild their compiler (batch-1, batch-2 killed at 2400)
 STALL_SECONDS=900              # …or once no test has finished for this long (the slowest, the self-parser, takes ~230 s alone)
 WATCH_SECONDS=30               # how often the stall watchdog counts finished tests
 PURE_HELLO_TEST=parser::test_warp_pure::warp_pure_runs_hello_world
@@ -66,6 +66,16 @@ run_name() {
 	shift 2
 	signature=$(printf '%s\0' "$@" | git hash-object --stdin | cut -c1-12)
 	echo "$(printf %s "$branch" | tr -c 'A-Za-z0-9._-' '-')-${tip:0:8}-$signature"
+}
+# Test names hold no space: a filter argument with spaces ("a b c", a quoted list) is several filters. Passed whole, libtest
+# matched it against no test (5 runs of 0 tests on 2026-10-21, their sessions dropped as faulty VMs)
+split_filters() {
+	local argument words
+	for argument in "$@"; do
+		read -ra words <<< "$argument"
+		[ ${#words[@]} -gt 1 ] && echo "cloud-test: the filter '$argument' is split at its spaces into ${#words[@]} filters" >&2
+		[ ${#words[@]} -gt 0 ] && printf '%s\n' "${words[@]}"
+	done
 }
 credit_used() { "$USAGE_SCRIPT" 2>/dev/null | sed -n 's/^iguana_necktie: \$\([0-9.]*\) .*/\1/p'; }
 
@@ -94,9 +104,31 @@ make_room() {
 	echo "$free GB free, $(free_gb) GB after dropping target/"
 }
 
+# compiler.wasm and compiler-self.wasm (warp pure / warp self, src/compiler/standalone.rs) built by an earlier job from
+# another lib/ or warp build: the tests ran on them with only a notice, so a verdict could be the earlier branch's
+# (card cloud-stale-compiler: "unknown name Ascii" from a compiler built before byte_codes.warp). Kept while lib/ and
+# the Rust sources are those they were built from (compiler.wasm takes ~540 s); prints what it did
+drop_stale_compilers() {
+	local stamp=$HERE_ROOT/compiler-sources sources dropped
+	sources=$(git rev-parse HEAD:lib HEAD:src HEAD:crates HEAD:build.rs HEAD:Cargo.lock 2>/dev/null | tr '\n' ' ')
+	[ "$sources" = "$(cat "$stamp" 2>/dev/null)" ] && return
+	dropped=$(find target data \( -name compiler.wasm -o -name compiler-self.wasm \) -print -delete 2>/dev/null | wc -l)
+	echo "$sources" > "$stamp"
+	echo "cloud-test: lib/ or the Rust sources differ from the last job's: dropped $((dropped)) compiler build files"
+}
+
 detect_build_environment() {
 	local status=$1 log=$2
 	[ "$status" -ne 0 ] && grep -q 'No space left on device' "$log" && echo "disk exhausted after a clean rebuild"
+}
+
+# The filters among $@ that no built test's name contains (cargo test's substring match); run_tests_here's flags
+unmatched_filters() {
+	local listed filter
+	listed=$(cargo test "${source_flags[@]}" "${test_args[@]}" -- --list 2>/dev/null | sed -n 's/: test$//p')
+	for filter in "$@"; do
+		[[ "$filter" == -* ]] || grep -qF -- "$filter" <<< "$listed" || printf '%s ' "$filter"
+	done
 }
 
 write_summary() {
@@ -188,6 +220,17 @@ run_tests_here() {
 		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
 		build_status=$?
 	fi
+	# a warm VM's build once held fewer tests than the tip (front-end-warnings-257e97ec: build 0 s, 6675 of 6755 tests,
+	# the first filters matched nothing): a filter no built test matches forces a build anew, then is named in the log
+	if [ $build_status -eq 0 ] && [ ${#filters[@]} -gt 0 ] && [ -n "$(unmatched_filters "${filters[@]}")" ]; then
+		echo "cloud-test: filters matching no built test: $(unmatched_filters "${filters[@]}"): building anew" >> "$HERE_WORK/log.txt"
+		find src tests crates -name '*.rs' -exec touch {} +
+		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run >> "$HERE_WORK/log.txt" 2>&1
+		build_status=$?
+		local unmatched
+		unmatched=$(unmatched_filters "${filters[@]}")
+		[ -n "$unmatched" ] && echo "$NO_TESTS_RAN filters matching no test after a fresh build: $unmatched" >> "$HERE_WORK/log.txt"
+	fi
 	build_environment=$(detect_build_environment "$build_status" "$HERE_WORK/log.txt")
 	build_seconds=$((SECONDS - build_start))
 	# the runtime stub the executable tests copy, built with the run's crate source as test.sh does: a test's own
@@ -207,6 +250,7 @@ run_tests_here() {
 		[[ "$setting" == WARP_EMIT_REFUSALS=* ]] && refusals=${setting#*=}
 	done
 	[ -n "$refusals" ] && rm -f "$refusals"
+	drop_stale_compilers >> "$HERE_WORK/log.txt"
 	local test_start=$SECONDS
 	# the settings reach the tests alone: the build stays the same for every setting, so a warm VM builds a tip once
 	[ $build_status -eq 0 ] && printf 'cloud-test: in %s at %s: cargo test %s -- %s\n' "$PWD" "$(git rev-parse --short HEAD)" "${test_args[*]}" "${filters[*]}" >> "$HERE_WORK/log.txt"
@@ -274,6 +318,7 @@ summarize() {
 		}
 		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored|filtered)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
 		/^ +(Running|Doc-tests) / { started++ }
+		index($0, NO_TESTS_RAN) == 1 { unmatched_line = $0 }
 		/^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1; order[++failures] = $2 }
 		/^test [^ ]+ has been running for over/ { slow[$2] = 1 }
 		/^test [^ ]+ \.\.\. / { finished_test[$2] = 1 }
@@ -306,8 +351,9 @@ summarize() {
 			real += incomplete
 			# a run of no test is never green: filters that match nothing, or a VM whose build is not the tip
 			ran = total["passed"] + failures + incomplete
-			printf "verdict: %s\n", (real == 0 && started > 0 && ran > 0) ? "green" : "red"
+			printf "verdict: %s\n", (real == 0 && started > 0 && ran > 0 && unmatched_line == "") ? "green" : "red"
 			if (ran == 0) printf "%s%d tests filtered out, none ran\n", NO_TESTS_RAN, total["filtered"]
+			else if (unmatched_line != "") print unmatched_line
 			printf "passed: %d, failed: %d (%d environmental, %d known), ignored: %d\n", total["passed"], failures + incomplete, environmental_count, known_count, total["ignored"]
 			if (incomplete) printf "crashed or killed test binaries (no result line): %d\n", incomplete
 			for (name in slow) if (!(name in finished_test)) printf "  never finished: %s\n", name
@@ -545,7 +591,7 @@ release_session() {
 
 finish_session() {
 	local job=$1 result=$2 reason file
-	reason=$(sed -n "s/^environment: //p; s/^$NO_TESTS_RAN/no test ran: /p" "$result")
+	reason=$(sed -n "s/^environment: //p" "$result")
 	if [ -z "$reason" ]; then
 		release_session "$job"
 		return
@@ -614,6 +660,9 @@ main() {
 		[ $# -eq 2 ] || fail "--pure-hello is a complete test preset and does not take filters"
 		set -- "$1" "$2" "${PURE_HELLO_ARGS[@]}"
 	fi
+	local filters=() filter   # the Mac's bash 3.2 has no mapfile
+	while IFS= read -r filter; do filters+=("$filter"); done < <(split_filters "${@:3}")
+	set -- "$1" "$2" ${filters[@]+"${filters[@]}"}
 	if [ -z "$result_only" ]; then launch "$@" || exit; fi
 	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card" "${@:3}"
 }

@@ -149,7 +149,8 @@ After a context swap, this file and your role file win over anything a handover 
   preset gives the ignored end-to-end `warp pure hello` test its required test opt-level 2 and exact runner flags.
   Warp-only branches (user 2026-10-21, decision warp-only-acceptance: nothing in src/, crates/, tests/**/*.rs,
   Cargo.*, build.rs) need no cloud run at all: the branch is accepted when the Rust-compiled compiler.warp compiles
-  itself and that self build compiles and runs hello world (the two commands below, with main's binary). Mark it
+  itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's binary; it
+  queues behind a running check, one at a time on the Mac: never run `warp rebuild self` in parallel). Mark it
   `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. Warp
   branches have priority over Rust-change branches (user 2026-10-21): they land before any Rust batch, and work in
   .warp is preferred whenever a task can be done there.
