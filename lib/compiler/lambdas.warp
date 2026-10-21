@@ -170,7 +170,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: any; lifted: any }
+class Lowering { arities: any; lambdas_lifted: any }
 
 ## the walk
 
@@ -247,7 +247,7 @@ lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 	inner = captured.map(c => name_of(c)) + names + names_bound(body, [])
 	lowering.arities[name] = #captured + #names
 	lifted_body = lowered_lambdas(body, inner, lowering)
-	lowering.lifted += [Key(call_node(symbol(name), captured + parameters), Op.Define, lifted_body)]
+	lowering.lambdas_lifted += [Key(call_node(symbol(name), captured + parameters), Op.Define, lifted_body)]
 	call_node(symbol("closure_new"), [symbol(name)] + captured)
 }
 
@@ -271,13 +271,13 @@ lambdas(program: Node): Node := {
 		parts = definition_of(statement)
 		if parts != ø { arities[parts#1] = #(parts#2) }
 	}
-	lowering = Lowering{arities: arities, lifted: []}
+	lowering = Lowering{arities: arities, lambdas_lifted: []}
 	top_locals = []
 	for statement in written {
 		if definition_of(statement) == ø { top_locals = names_bound(statement, top_locals) }
 	}
 	lowered = written.map(statement => lowered_statement(statement, top_locals, lowering))
-	if is_statement_sequence(program) { return group_like(program, lowering.lifted + lowered) }
-	if #lowering.lifted == 0 { return lowered#1 }
-	List(lowering.lifted + lowered, Bracket.None, Separator.Semicolon)
+	if is_statement_sequence(program) { return group_like(program, lowering.lambdas_lifted + lowered) }
+	if #lowering.lambdas_lifted == 0 { return lowered#1 }
+	List(lowering.lambdas_lifted + lowered, Bracket.None, Separator.Semicolon)
 }
