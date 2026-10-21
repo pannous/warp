@@ -83,9 +83,10 @@ fn pure_compiled(file: &Path, source: String) -> Result<CompiledModule, String> 
 	.map(module_of_bytes)
 }
 
-/// `compile` as the program of `file`, in a thread with a stack deep enough for a compile of the compiler
+/// `compile` as the program of `file`, in a thread with a stack deep enough for a compile of the compiler; quietly: the
+/// compiler's own warnings and hints are no news to the user of `warp pure` (card prefix-count-warning)
 fn on_big_stack<T: Send + 'static>(file: PathBuf, compile: impl FnOnce() -> T + Send + 'static) -> T {
-	let work = move || crate::modules::with_program_file(&file, compile);
+	let work = move || crate::errors::diagnostic::quietly(|| crate::modules::with_program_file(&file, compile));
 	std::thread::Builder::new()
 		.stack_size(WORKER_STACK)
 		.spawn(work)
