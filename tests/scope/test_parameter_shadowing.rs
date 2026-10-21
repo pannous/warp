@@ -35,3 +35,23 @@ save sound as: \"SONG\"",
 	assert_eq!(seconds, "0.2");
 	assert!(samples.iter().any(|&sample| sample != 0), "the signals sound");
 }
+
+/// card local-named-like-5: a local assigned a map in one function leaves a same-named parameter of another a list
+/// (emitter.warp's entries = {} beside map_value(body, entries))
+#[test]
+fn a_parameter_is_no_map_another_function_assigned() {
+	is!(
+		"both(first: any): any := { held = {}; for name in first.keys { held[name] = first[name] }; held }\ndef firsts(held: any): list { held.map(e => e#1) }\nfirsts([[1, 2], [3, 4]])",
+		warp::ints(vec![1, 3])
+	);
+	is!("f() := { held = {a: 1}; held.a }\ng(held: any) := held.map(e => e * 2)\ng([1, 2])", warp::ints(vec![2, 4]));
+}
+
+/// card local-named-like-5 after review: each function's variables are its own scope, its loop variables too
+#[test]
+fn a_loop_variable_is_no_map_another_function_assigned() {
+	is!(
+		"f() := { held = {a: 1}; held.a }\ng() := { n = []; for held in [[1, 2], [3]] { n += held.map(e => e * 2) }; n }\ng()",
+		warp::ints(vec![2, 4, 6])
+	);
+}

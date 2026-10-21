@@ -13,11 +13,46 @@ fn git(arguments: &[&str]) -> Option<String> {
 	Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+/// What a build's behaviour comes from: its own and its workspace crates' code, the dependency versions; a build's
+/// profile (debug, release) is no part of it
+const SOURCES: [&str; 3] = ["src", "crates", "Cargo.lock"];
+
+/// The files below `path` (or `path` itself), sorted
+fn files_below(path: &std::path::Path) -> Vec<std::path::PathBuf> {
+	if !path.is_dir() {
+		return vec![path.to_path_buf()];
+	}
+	let mut entries: Vec<_> =
+		std::fs::read_dir(path).into_iter().flatten().flatten().map(|entry| entry.path()).collect();
+	entries.sort();
+	entries.iter().flat_map(|entry| files_below(entry)).collect()
+}
+
+/// WARP_SOURCE: a fingerprint of the sources and features the build compiled, the same for a debug and a release build
+/// of them, so `warp pure`'s build of compiler.warp by one is the other's too (card self-warming)
+fn embed_source_fingerprint() {
+	use std::hash::{Hash, Hasher};
+	let mut hasher = std::collections::hash_map::DefaultHasher::new();
+	for source in SOURCES {
+		println!("cargo:rerun-if-changed={source}");
+		for file in files_below(std::path::Path::new(source)) {
+			file.hash(&mut hasher);
+			std::fs::read(&file).unwrap_or_default().hash(&mut hasher);
+		}
+	}
+	let mut features: Vec<String> =
+		std::env::vars().map(|(name, _)| name).filter(|name| name.starts_with("CARGO_FEATURE_")).collect();
+	features.sort();
+	features.hash(&mut hasher);
+	println!("cargo:rustc-env=WARP_SOURCE={:016x}", hasher.finish());
+}
+
 fn main() {
 	println!("cargo:rerun-if-changed=build.rs");
 	if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
 		println!("cargo:rustc-link-arg-bin=warp=-Wl,-stack_size,{MAIN_STACK_BYTES:#x}");
 	}
+	embed_source_fingerprint();
 	// a WARP_COMMIT given by the builder (scripts/cloud-test.sh) names the build without git: a warm VM's next job,
 	// another commit of the same tree, then reuses the build instead of recompiling warp-lang for its new reflog line
 	println!("cargo:rerun-if-env-changed=WARP_COMMIT");

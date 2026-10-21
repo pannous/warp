@@ -1,0 +1,4 @@
+texts = [1, 2] as list of text
+print texts#1 + "!"
+h(xs): list of int := xs
+print h([3, 4])

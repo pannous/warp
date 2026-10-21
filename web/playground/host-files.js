@@ -479,6 +479,9 @@ addHostPart({
 			which: () => null,
 			open: () => { throw new Error(NO_PROCESSES); },
 			exec: () => { throw new Error(NO_PROCESSES); },
+			// a page keeps no values across runs (src/modules/std_adapters.rs kept_value): each run computes them
+			kept: () => null,
+			keep: (name, value) => value,
 		},
 		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/data/stored_values.rs, std_io): the page's values
 		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the

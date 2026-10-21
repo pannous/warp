@@ -1,4 +1,14 @@
 # The library words on values known only at run time: slices, join, repeat, split, reverse
+use "intrinsics.warp"
+use "arithmetic.warp"
+use "characters.warp"
+use "conversions.warp"
+use "errors.warp"
+use "lists.warp"
+use "show.warp"
+use "text.warp"
+use "text_words.warp"
+use "types.warp"
 # the library words of lib/compiler on values known only at run time, as Rust's text and list words give them
 # `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
 # or beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
@@ -6,6 +16,8 @@ node_slice(x: any, start: any, to: any = ø): any := {
 	from = if is_null(start) then 0 else index_of_node(start)
 	stop = if is_null(to) then node_length(x) else index_of_node(to)
 	if from < 0 or stop < 0 { index_out_of_range() }
+	# ø, also an empty list `[]` in the lowered program: any slice of it is empty
+	if is_null(x) { return new_list(0) }
 	if kind_code(x) == Kind.Text { return character_slice(unboxed_text(x), from, stop) }
 	if kind_code(x) == Kind.List { return items_slice(unboxed_list(x), from, stop) }
 	not_a_list()

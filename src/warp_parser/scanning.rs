@@ -277,6 +277,15 @@ impl WarpParser {
 		word.chars().rev().collect()
 	}
 
+	/// The word before the receivers of a method ending at `end`: `match` in `match xs.map(f) {…}`
+	pub(super) fn word_before_receivers(&self, mut end: usize) -> String {
+		while end > 0 && self.chars[end - 1] == '.' {
+			end -= 1;
+			end -= self.chars[..end].iter().rev().take_while(|c| is_identifier_char(**c)).count();
+		}
+		self.word_ending_before(end)
+	}
+
 	/// The source line up to the cursor
 	pub(super) fn input_before_cursor(&self) -> String {
 		let before: String = self.chars[..self.pos].iter().rev().take_while(|c| **c != '\n').collect();

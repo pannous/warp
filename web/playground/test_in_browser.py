@@ -176,6 +176,10 @@ FIREFOX_TERMINATED_PROMISING = ["uncaught exception: undefined"]  # card firefox
 # WebAssembly.promising, so whichever run replaces that worker next logs Firefox's anonymous uncaught exception (dry runs
 # 2026-10-15: on the swirl itself, also with a 3 s loop, or on the sample after it); card logs-uncaught finds the cause
 FIREFOX_SKIPPED_SAMPLES = {"warp_compiled_wgsl_shader": "its worker, replaced, logs 'uncaught exception: undefined' (card logs-uncaught)"}
+# samples no tour runs (user 2026-10-21: disable the memory hungry ones): the largest growths of the tour's memory
+# (card our-playground, isolated runs after 5b0b7f1bdb, anon)
+MEMORY_HUNGRY_SAMPLES = {"ringed_planet": "+211 MB: a 1920×1080 compute_toy painted on the CPU in headless Chrome",
+	"uniscript_text": "+195 MB: reads uniscript's 10 MB entities index", "sound_patterns": "+100 MB"}
 EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"],
 	GPU_JOBS: FIREFOX_TERMINATED_PROMISING, STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING,
 	BUG_BUTTON: ["403"]}  # the browser logs the refused wrong token itself
@@ -1044,6 +1048,9 @@ def check_examples(names, page_url=None, site=None):
 	for name, sample in chosen:
 		if sample and isinstance(webdriver, FirefoxDriver) and name in FIREFOX_SKIPPED_SAMPLES:
 			print(f"skip samples/{name} in Firefox: {FIREFOX_SKIPPED_SAMPLES[name]}")
+			continue
+		if sample and name in MEMORY_HUNGRY_SAMPLES:
+			print(f"skip samples/{name}, memory hungry: {MEMORY_HUNGRY_SAMPLES[name]}")
 			continue
 		if sample:
 			verdict(f"samples/{name}", run_sample(name))

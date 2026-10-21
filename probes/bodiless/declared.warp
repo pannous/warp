@@ -1,0 +1,2 @@
+is_null(x: any): bool from runtime
+print 5

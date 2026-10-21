@@ -67,11 +67,28 @@ The same file runs from the command line with no switch at all: `warp lib/compil
 then `warp app.wasm`. That is the independence the decision asks for; the Rust lane is only a convenience around it.
 
 ### `warp pure <program.warp> [arguments…]` (card warp-pure, user 2026-10-20: "put everything in the binary")
-src/compiler/standalone.rs: compiler.warp's module, kept in ~/.cache/warp/modules under self_hosted.rs `stage_key`
-(binary + lib/), runs as `compiler.warp <source> <wasm> <folder> <lib>`; the module it writes runs with the program's
-arguments. The pure lane compiles compiler.warp; while it refuses (card pure-compiler-callee), the Rust pipeline does,
-and every run says `warp pure: compiler.warp, Rust-compiled` on stderr. It is also the gate's
+src/compiler/standalone.rs: compiler.warp's module, the build file compiler.wasm (decision compiler-build: a build
+output, no cache), runs as `compiler.warp <source> <wasm> <folder> <lib>`; the module it writes runs with the program's
+arguments. The Rust pipeline compiles compiler.warp, always (user 2026-10-21: "pure always is Rust's compiler.warp and
+`warp self` always uses the self-hosted, self-compiled"). `warp self <program.warp>` runs the program through
+compiler.warp compiled by the pure lane, itself, the build file compiler-self.wasm; a refusal of that compile is a loud
+error, never a fallback to the Rust-compiled one. `warp pure` switches to the self-compiled compiler once more tests
+pass with it (the count self vs Rust-compiled goes to the supervisor first). It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
+Build files (decision compiler-build, card compiler-wasm): compiler.wasm and compiler-self.wasm lie next to the binary
+for the lib/ they record (custom section `warp.build`: lib/'s path, its fingerprint, the binary's WARP_SOURCE from
+build.rs); a run with any other lib/ (WARP_LIB, a worktree) uses <lib>/../data/. A missing file is built at its first
+run; an existing one only by `warp rebuild [pure|self]`, never because lib/ changed: a run on one built from another
+lib/ or warp build prints one line naming `warp rebuild`. main's binary refresh runs `warp rebuild pure` with the new
+binary before installing it next to ~/dev/bin/warp. probes/speed/compiler_build.sh checks the whole cycle.
+Cold start (card pure-cold-start, empty module cache): the pure lane's try at compiler.warp (passes stage compiled ~44
+s, analysis ~6 s, emit ~21 s, then their runs) and Rust's compile of it (~90 s) ran one after the other: 166 s. Now
+Rust compiles it in a thread while the pure lane tries, and the analysis and emit workers start with the passes one:
+89 s real, 214 s user, 2.8 GB max RSS. The cache files' mtimes are the cheapest timeline of a cold run.
+Warm start (card pure-warm-start): 2.9 s, of which ~97% was compiler.warp lowering runtime.warp again at every run
+(WARP_PROFILE: 590 of 613 samples). compiler.warp now keeps them, `kept(name) ?? keep(name, value)` of use os (a
+value in the module cache under stage_key: binary + lib/): warm hello 0.07 s, a new program ~0.1–0.2 s. The kept
+Node crosses to Rust and back (postcard); 38 samples give the same results with and without it.
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
 Card under-pure (2026-10-21): print([1, 2]) failed only here, not in the stage lane, because compiler.warp runs the

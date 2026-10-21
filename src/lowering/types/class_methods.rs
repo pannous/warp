@@ -123,14 +123,17 @@ pub fn lower(node: Node) -> Node {
 		Ok(inherited) => inherited,
 		Err(error) => return error,
 	};
-	let node = outside_receiver_reads(node);
+	// `n = 10` beside a class with a field n: a method's bare n reads the field, the global hinted as shadowed
+	let globals: Vec<String> =
+		crate::event_signals::main_level_variables(node.sequence_statements()).into_iter().collect();
+	let node = outside_receiver_reads(node, &globals);
 	let traits = [shared_method_traits(&node), likenesses].concat();
 	let shared: Vec<String> = traits.iter().filter_map(trait_operation).collect();
 	let mut changing = Changing::default();
 	let statics = static_members(&node);
 	let setters = property_setters(&node);
 	let instance_fields = class_typed_fields(&node);
-	let node = lower_classes(node, &mut changing);
+	let node = lower_classes(node, &mut changing, &globals);
 	let node = if setters.is_empty() { node } else { setter_calls(node, &setters) };
 	let node = if statics.is_empty() { node } else { static_reads(node, &statics) };
 	// `s.area`, `s.scaled(3)` of a shared method: the call `area(s)` before traits rename each class's method;
@@ -172,18 +175,32 @@ fn from_objects(node: Node) -> Node {
 /// Each class's fields in order, with their type names
 pub(crate) fn class_fields(node: &Node) -> ClassFields {
 	let mut fields = std::collections::HashMap::new();
-	let mut add_fields = |part: &Node| {
+	visit_classes(std::slice::from_ref(node), |name, body| {
+		let typed = field_items(body).into_iter().map(|(_, name, type_name)| (name, type_name)).collect();
+		fields.insert(name.drop_meta().name(), typed);
+	});
+	fields
+}
+
+/// The names of the fields the classes of the nodes declare, of all classes of a name
+pub(crate) fn field_names(nodes: &[Node]) -> std::collections::HashSet<String> {
+	let mut names = std::collections::HashSet::new();
+	visit_classes(nodes, |_, body| names.extend(field_items(body).into_iter().map(|(_, name, _)| name)));
+	names
+}
+
+/// Each class declaration's name and body: a used file's classes, left out of its own lowering (early_file_classes),
+/// then the nodes' own, which win. Once for all nodes: the used files' classes are many (card cold-compile-of-compiler)
+fn visit_classes(nodes: &[Node], mut visit: impl FnMut(&Node, &Node)) {
+	let mut on_part = |part: &Node| {
 		if let Node::Type { name, body } = part {
-			let typed = field_items(body).into_iter().map(|(_, name, type_name)| (name, type_name)).collect();
-			fields.insert(name.drop_meta().name(), typed);
+			visit(name, body)
 		}
 	};
-	// a used file's classes, left out of its own lowering (early_file_classes); the node's own declarations win
 	crate::compiler::compile_context::read(|context| {
-		context.early_file_classes.iter().for_each(|class| class.visit(&mut add_fields))
+		context.early_file_classes.iter().for_each(|class| class.visit(&mut on_part))
 	});
-	node.visit(&mut add_fields);
-	fields
+	nodes.iter().for_each(|node| node.visit(&mut on_part));
 }
 
 /// Each field of a class body: its name, type name (empty when untyped) and default value (`legs: int = 4`)
@@ -626,31 +643,31 @@ impl Changing {
 	}
 }
 
-fn lower_classes(node: Node, changing: &mut Changing) -> Node {
+fn lower_classes(node: Node, changing: &mut Changing, globals: &[String]) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let mut lowered = Vec::with_capacity(items.len());
 			for item in items {
-				match split_class(&item, changing) {
+				match split_class(&item, changing, globals) {
 					Some((class, methods)) => {
 						lowered.push(class);
 						lowered.extend(methods);
 					}
-					None => lowered.push(lower_classes(item, changing)),
+					None => lowered.push(lower_classes(item, changing, globals)),
 				}
 			}
 			Node::List(lowered, bracket, separator)
 		}
-		other => match split_class(&other, changing) {
+		other => match split_class(&other, changing, globals) {
 			Some((class, methods)) => Node::List([vec![class], methods].concat(), Bracket::None, Separator::Semicolon),
-			None => other.map_children(|child| lower_classes(child, changing)),
+			None => other.map_children(|child| lower_classes(child, changing, globals)),
 		},
 	}
 }
 
 /// A class declaration with methods in its body: the class with its fields only, and the methods as functions; the
 /// names of the methods that change their object go to `changing`
-fn split_class(node: &Node, changing: &mut Changing) -> Option<(Node, Vec<Node>)> {
+fn split_class(node: &Node, changing: &mut Changing, globals: &[String]) -> Option<(Node, Vec<Node>)> {
 	let Node::Type { name, body } = node.drop_meta() else {
 		return None;
 	};
@@ -677,7 +694,7 @@ fn split_class(node: &Node, changing: &mut Changing) -> Option<(Node, Vec<Node>)
 	let static_names: Vec<String> = statics.iter().filter_map(item_name).collect();
 	let siblings: Vec<(String, bool)> =
 		methods.iter().filter_map(method_parts).map(|(name, parameters, _)| (name, parameters.is_empty())).collect();
-	let members = Members { class: &class, fields: &field_names, methods: &siblings, statics: &static_names };
+	let members = Members { class: &class, fields: &field_names, methods: &siblings, statics: &static_names, globals };
 	let mut functions: Vec<Node> = statics.iter().flat_map(|member| static_definitions(&members, member)).collect();
 	// the constructor gives the instance it was handed, its fields set
 	let gives_itself =
@@ -739,6 +756,8 @@ struct Members<'a> {
 	fields: &'a [String],
 	methods: &'a [(String, bool)],
 	statics: &'a [String],
+	/// the main level's variables
+	globals: &'a [String],
 }
 
 /// `method(self:class, parameters…) := body`, the fields and methods in the body read from self, and whether it changes
@@ -763,7 +782,9 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 		.filter(|name| unshadowed(name))
 		.collect();
 	let statics: Vec<&String> = members.statics.iter().filter(|name| unshadowed(name)).collect();
-	let readable = Readable { receiver: SELF_WORD, class, fields: [fields, getters].concat(), methods, statics };
+	let globals = members.globals.iter().collect();
+	let readable =
+		Readable { receiver: SELF_WORD, class, fields: [fields, getters].concat(), methods, statics, globals };
 	// the holes of `"#\(n)"` as code first, so a field in one is read from self too
 	let body = crate::text::interpolation::lower_program(body);
 	let body = receiver_reads(body, &readable);
@@ -850,6 +871,8 @@ struct Readable<'a> {
 	fields: Vec<&'a String>,
 	methods: Vec<&'a String>,
 	statics: Vec<&'a String>,
+	/// the main level's variables, which a bare field name shadows
+	globals: Vec<&'a String>,
 }
 
 /// The body with each field name and getter read from self, each call of a method of the class a call on self (as in
@@ -872,9 +895,27 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 		Node::List(items, bracket, separator) if separator.separates_statements() => {
 			Node::List(statements_reads(items, readable), bracket, separator)
 		}
+		word @ Node::Meta { .. } if shadowed_global(&word, readable).is_some() => {
+			let name = shadowed_global(&word, readable).expect("guarded");
+			crate::normalize::set_position_of(&word);
+			let field = format!("{}.{name}", readable.receiver);
+			crate::normalize::hint(
+				name,
+				&field,
+				&format!("{name} reads {field}, the field; the global {name} is shadowed"),
+			);
+			word.map_children(|child| receiver_reads(child, readable))
+		}
 		other if let_binding(&other).is_some() => other.map_children(|part| value_reads(part, readable)),
 		other => other.map_children(|child| receiver_reads(child, readable)),
 	}
+}
+
+/// A bare field name that a main-level variable is named like too: `n` of `n = 10; class P { n: int }`
+fn shadowed_global<'a>(word: &'a Node, readable: &Readable) -> Option<&'a str> {
+	let name = word.symbol_name()?;
+	let named = |names: &[&String]| names.iter().any(|known| known.as_str() == name);
+	(named(&readable.fields) && named(&readable.globals)).then_some(name)
 }
 
 /// `n = value` of `let n = value`: the value reads the receiver, n is the new local

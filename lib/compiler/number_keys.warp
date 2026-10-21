@@ -149,4 +149,4 @@ number_keyed(n: Node, maps: list): Node := {
 	}
 }
 
-number_keys(program: any): any := number_keyed(program, map_variables(program))
+number_keys(program: Node): Node := number_keyed(program, map_variables(program))

@@ -17,7 +17,7 @@ fn test_prefix_operator_words_as_methods() {
 	is!("x=-3; x.abs()", 3);
 	is!("x=-3; x.abs", 3);
 	is!("x=8.0; x.cbrt", 2);
-	is!("x=-2.5; x.norm()", 2.5);
+	is!("use math; x=-2.5; x.norm()", 2.5);
 }
 
 #[test]

@@ -16,6 +16,7 @@ mod test_bare_function_name;
 mod test_bare_host_words; // card random-should
 mod test_block_function;
 mod test_block_function_argument; // card block-function-argument
+mod test_bodiless_runtime_words; // card bodiless-imports
 mod test_body_statement;
 mod test_braced_it_warning;
 mod test_braceless_call_in_logic; // card braceless-call
@@ -226,6 +227,7 @@ mod test_typed_returns;
 mod test_typed_signatures;
 mod test_undefined_calls;
 mod test_untyped_predicate_passed; // card untyped-passed
+mod test_unused_sibling_caller; // card unused-sibling
 mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
