@@ -1788,6 +1788,8 @@ def key_expression(body: Body, n: any): list {
 	left = key_of(n)
 	right = value_of(n)
 	if body.intrinsics and table_number(left, read_field(n)) != ø { return number_value(table_number(left, read_field(n))) }
+	# `{}`: a map of no entries, not ø, so the entries a function given it writes reach every holder, as in Rust's
+	if is_empty_map(n) { return ["node", node(Marked.Map, vector_code([]))] }
 	if operator == ":" and left is symbol and name_of(left) in data_item_checks { return data_item(body, name_of(left), right) }
 	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right, yes) }
 	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø, no) }
