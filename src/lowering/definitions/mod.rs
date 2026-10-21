@@ -22,6 +22,7 @@ pub mod overloads;
 pub mod parameter_patterns;
 pub mod parameter_shapes;
 pub mod pattern_clauses;
+pub mod shadowing_bindings;
 pub mod preposition_calls;
 pub mod property_accessors;
 pub mod references;
