@@ -5,7 +5,7 @@
 use super::nodes::{assign, block, call, is_call_head, key, spaced_statement};
 use super::nodes::{is_return, typed};
 use crate::analyzer::type_word_kind;
-use crate::node::{Bracket, Node, Separator, parens, symbol};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{ANY_TYPE, ERROR_WORD, IMPLICIT_PARAMETER};
 
@@ -202,11 +202,10 @@ fn typed_definitions(node: &Node, typed: &mut Vec<(String, String, Node)>) {
 		},
 		_ => None,
 	};
-	if let Some((type_name, definition)) = &definition
-		&& let Some((head, _, body)) = typed_parts(type_name, definition)
-	{
-		typed.push((function_name(head), type_name.name(), body.clone()));
-	}
+	let parts = definition.as_ref().and_then(|(type_name, definition)| {
+		typed_parts(type_name, definition).map(|(head, _, body)| (function_name(head), type_name.name(), body.clone()))
+	});
+	typed.extend(parts);
 	node.drop_meta().parts().into_iter().for_each(|part| typed_definitions(part, typed));
 }
 
