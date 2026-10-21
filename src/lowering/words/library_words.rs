@@ -416,7 +416,7 @@ pub fn lower(node: Node) -> Node {
 	let call_results = call_results(&node, &context);
 	let times = crate::time::time_variables(&node);
 	let entry_names = entry_names(&node);
-	Lowering {
+	let node = Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
 		functions,
@@ -432,7 +432,9 @@ pub fn lower(node: Node) -> Node {
 		error_classes: crate::lowering::error_classes::ErrorClasses::of(&node),
 		temporaries: Counter::default(),
 	}
-	.expand(node)
+	.expand(node);
+	// `count x.bytes` is `byte_size(x)`, once x.bytes is the prelude call
+	lower_byte_counts(node)
 }
 
 /// The variables assigned what a user function returns (`result = parse_json(text)`): any may hold an object
@@ -565,9 +567,23 @@ enum WordMeaning {
 fn is_pure_read(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(_) => true,
-		Node::Key(list, Op::Hash, index) => {
-			list.symbol_name().is_some() && matches!(index.drop_meta(), Node::Symbol(_) | Node::Number(_))
-		}
+		Node::Key(list, Op::Hash, index) => list.symbol_name().is_some() && is_pure_index(index),
+		_ => false,
+	}
+}
+
+/// An index read twice gives the same: a name, a literal, arithmetic or a conversion of those (`scopes["a"]` is
+/// `scopes#("a" + 1)`, `scopes[k]` is `scopes#((string k) + 1)`)
+pub(crate) fn is_pure_index(index: &Node) -> bool {
+	match index.drop_meta() {
+		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
+		Node::Key(left, Op::Add | Op::Sub, right) => is_pure_index(left) && is_pure_index(right),
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[word, value] => {
+				word.symbol_name().is_some_and(|word| CONVERSION_METHODS.contains(&word)) && is_pure_index(value)
+			}
+			_ => false,
+		},
 		_ => false,
 	}
 }

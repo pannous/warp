@@ -277,13 +277,46 @@ impl WarpParser {
 		word.chars().rev().collect()
 	}
 
-	/// The word before the receivers of a method ending at `end`: `match` in `match xs.map(f) {…}`
+	/// The word before the receivers of a method ending at `end`: `match` in `match xs.map(f) {…}`,
+	/// `match [1, 2].reverse() {…}`, `match f(x).y.z() {…}`
 	pub(super) fn word_before_receivers(&self, mut end: usize) -> String {
 		while end > 0 && self.chars[end - 1] == '.' {
-			end -= 1;
-			end -= self.chars[..end].iter().rev().take_while(|c| is_identifier_char(**c)).count();
+			end = self.receiver_start(end - 1);
 		}
 		self.word_ending_before(end)
+	}
+
+	/// Where the receiver ending at `end` starts: a name, a bracketed group or text, or a call of a name
+	fn receiver_start(&self, end: usize) -> usize {
+		let end = match end.checked_sub(1).map(|last| self.chars[last]) {
+			Some(closer @ (')' | ']' | '}' | '"' | '\'')) => self.group_start(end, closer),
+			_ => end,
+		};
+		end - self.chars[..end].iter().rev().take_while(|c| is_identifier_char(**c)).count()
+	}
+
+	/// The position of the opener of the group or text whose `closer` ends at `end`
+	fn group_start(&self, end: usize, closer: char) -> usize {
+		let opener = match closer {
+			')' => '(',
+			']' => '[',
+			'}' => '{',
+			quote => return self.chars[..end - 1].iter().rposition(|c| *c == quote).unwrap_or(0),
+		};
+		let mut depth = 0;
+		for position in (0..end).rev() {
+			match self.chars[position] {
+				c if c == closer => depth += 1,
+				c if c == opener => {
+					depth -= 1;
+					if depth == 0 {
+						return position;
+					}
+				}
+				_ => {}
+			}
+		}
+		0
 	}
 
 	/// The source line up to the cursor
