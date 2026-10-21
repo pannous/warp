@@ -627,31 +627,43 @@ pub fn compiler_key() -> Option<&'static str> {
 	enabled().then(|| KEY.get_or_init(|| stage_key("the self-hosted compiler")).as_deref()).flatten()
 }
 
-/// The cache key of a stage program: the running binary, the program, the WARP_ settings and every file of lib/ with its
-/// path inside lib/, so an identical lib/ elsewhere (another worktree) reuses the kept modules; none when the binary has
-/// no path
+/// The cache key of a stage program: the sources warp was built from (WARP_SOURCE, build.rs), the program, the WARP_
+/// settings and every file of lib/ with its path inside lib/. Neither the binary's place nor its build profile: a
+/// release build's compiler.warp module is every copy's and the debug build's of those sources too, so an install
+/// builds it with the new binary before it goes in place (card self-warming); an identical lib/ elsewhere (another
+/// worktree) reuses the kept modules
 #[cfg(feature = "native")]
 pub(crate) fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
-	// canonical: macOS gives the path the binary was started by, `../../scratch/warp` keyed every folder apart
-	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;
 	let mut hasher = Sha256::new();
 	let library = library();
 	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
-	hasher.update(format!(
-		"{}\n{:?}\n{settings:?}\n{program}\n",
-		binary.display(),
-		crate::run::program_cache::stamp(&binary)
-	));
+	hasher.update(format!("{}\n{settings:?}\n{program}\n", env!("WARP_SOURCE")));
+	hash_library(&mut hasher);
+	Some(crate::extensions::hex_text(&hasher.finalize()))
+}
+
+/// The fingerprint of lib/: every file with its path inside lib/, the same for an identical lib/ elsewhere
+#[cfg(feature = "native")]
+pub(crate) fn library_fingerprint() -> String {
+	use sha2::{Digest, Sha256};
+	let mut hasher = Sha256::new();
+	hash_library(&mut hasher);
+	crate::extensions::hex_text(&hasher.finalize())
+}
+
+#[cfg(feature = "native")]
+fn hash_library(hasher: &mut sha2::Sha256) {
+	use sha2::Digest;
+	let library = library();
 	let mut files: Vec<PathBuf> = files_below(library.to_path_buf());
 	files.sort();
 	for file in files {
 		hasher.update(format!("{}\n", file.strip_prefix(library).unwrap_or(&file).display()));
 		hasher.update(std::fs::read(&file).unwrap_or_default());
 	}
-	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
 /// The files below `folder`, at any depth

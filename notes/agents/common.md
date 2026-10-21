@@ -158,6 +158,11 @@ After a context swap, this file and your role file win over anything a handover 
   and wrong values in seconds. `WARP_EMIT_REFUSALS=/dev/stderr` shows whether emitter.warp refused the program
   (`outside the core: …`, then the Rust emitter emitted it); `WARP_HINTS=0` hides hints (the stage programs' own
   warnings still show: card cli-show). Then the targeted tests in the cloud lane.
+- `warp pure` / `warp self` run compiler.warp's build files compiler.wasm / compiler-self.wasm (decision
+  compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
+  (`WARP_LIB=<worktree>/lib`). They are built when missing and otherwise only by `warp rebuild [pure|self]`: after
+  editing lib/, run `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure` before judging `warp pure` (a stale
+  one only prints a one-line notice).
 - GitHub's API quota (5000 requests/h) is shared by every session: `gh run watch --interval 60` or more, never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points, `todo list Now` as much, commands naming a card
   by its key ~1. Never `gh project item-list` (200-530 points, trips GitHub's secondary limit; gh refuses it): read
