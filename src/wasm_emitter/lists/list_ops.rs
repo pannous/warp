@@ -508,6 +508,11 @@ impl WasmGcEmitter {
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_type_value(f, crate::words::LIST_WORD);
 				Self::emit_list(f, &[I::Return, I::End]);
+				f.instruction(&I::LocalGet(kind));
+				Self::emit_is_empty_map(f);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_type_value(f, crate::words::MAP_WORD);
+				Self::emit_list(f, &[I::Return, I::End]);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I::LocalGet(kind), I::I64Const(crate::type_kinds::BUILTIN_FUNCTION_MARK), I::I64And, I::I64Const(0), I::I64Ne,

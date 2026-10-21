@@ -90,6 +90,16 @@ impl WasmGcEmitter {
 		});
 	}
 
+	/// `{}`: ø marked as the empty map (type_kinds::EMPTY_MAP_KIND), built where it stands
+	pub(in crate::wasm_emitter) fn emit_new_empty_map(&self, func: &mut Function) {
+		let node_type = self.type_manager.node_type;
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const(type_kinds::EMPTY_MAP_KIND), I::RefNull(any_heap_type()),
+			I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+		]);
+	}
+
 	/// `as_code(node) -> ref $Node`: a new top node marked as code (type_kinds::CODE_MARK), its parts shared
 	fn emit_as_code(&mut self) {
 		if !self.should_emit_function(crate::words::AS_CODE) {

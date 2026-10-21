@@ -268,6 +268,7 @@ impl WasmGcEmitter {
 		let instance_texts = [self.string_table.literal(""), self.string_table.literal(Op::Colon.as_str())];
 		let empty_text = self.string_table.literal(EMPTY_TEXT);
 		let empty_list_text = self.string_table.literal(crate::node::EMPTY_LIST_LITERAL);
+		let empty_map_text = self.string_table.literal(crate::node::EMPTY_MAP_LITERAL);
 		let type_word = self.string_table.literal(TYPE_DECLARATION_WORD);
 		// the unbracketed, space-separated list that line is joined as
 		let type_line_kind =
@@ -468,13 +469,17 @@ impl WasmGcEmitter {
 					s.call(f, super::super::super::text::text_builtins::TEXT_CONCAT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
-				// `[]` reads as written (card run-time-empty)
-				s.emit_field(f, element, 0);
-				Self::emit_is_empty_list(f);
-				f.instruction(&I::If(BlockType::Empty));
-				s.emit_constant_text(f, empty_list_text);
-				Self::emit_list(f, &[I::LocalSet(element), I::End]);
-				// a ø item reads as ø, as Node::serialize writes it: also an empty map at the top (card print-empty-map)
+				// `[]` and `{}` read as written (cards run-time-empty, code-empty)
+				for (is_empty_group, text) in
+					[(Self::emit_is_empty_list as fn(&mut Function), empty_list_text), (Self::emit_is_empty_map, empty_map_text)]
+				{
+					s.emit_field(f, element, 0);
+					is_empty_group(f);
+					f.instruction(&I::If(BlockType::Empty));
+					s.emit_constant_text(f, text);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
+				// a ø item reads as ø, as Node::serialize writes it (card print-empty-map)
 				is_kind(f, Kind::Empty);
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_constant_text(f, empty_text);

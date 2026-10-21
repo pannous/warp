@@ -113,7 +113,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(kind), I::I64Eq]);
 	}
 
-	/// Is the kind field on the stack empty: ø or `[]` (type_kinds::EMPTY_LIST_KIND)
+	/// Is the kind field on the stack empty: ø, `[]` or `{}` (type_kinds::EMPTY_LIST_KIND, EMPTY_MAP_KIND)
 	pub(super) fn emit_is_empty(func: &mut Function) {
 		Self::emit_kind_test(func, crate::type_kinds::Kind::Empty as i64, I::I64Eq);
 	}
@@ -126,6 +126,11 @@ impl WasmGcEmitter {
 	/// Is the kind field on the stack `[]`, the empty list ø marked by its square bracket
 	pub(super) fn emit_is_empty_list(func: &mut Function) {
 		Self::emit_whole_kind_test(func, crate::type_kinds::EMPTY_LIST_KIND);
+	}
+
+	/// Is the kind field on the stack `{}`, the empty map ø marked by its own info
+	pub(super) fn emit_is_empty_map(func: &mut Function) {
+		Self::emit_whole_kind_test(func, crate::type_kinds::EMPTY_MAP_KIND);
 	}
 
 	/// `while condition { body }`: `condition` leaves an i32, `body` leaves nothing

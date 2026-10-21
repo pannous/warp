@@ -40,6 +40,7 @@ pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
 pub const EMPTY_LIST_LITERAL: &str = "[]";
+pub const EMPTY_MAP_LITERAL: &str = "{}";
 
 /// The key of the Meta layer holding a comment (with_comment)
 pub const COMMENT_KEY: &str = "comment";
@@ -398,6 +399,11 @@ impl Node {
 
 	pub fn is_empty_list_literal(&self) -> bool {
 		self.source_literal() == Some(EMPTY_LIST_LITERAL)
+	}
+
+	/// `{}`: the empty map, a block of no statements where it is no value (card code-empty)
+	pub fn is_empty_map_literal(&self) -> bool {
+		matches!(self.drop_meta(), List(items, Bracket::Curly, _) if items.is_empty())
 	}
 
 	pub fn source_literal(&self) -> Option<&str> {

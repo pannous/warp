@@ -609,6 +609,9 @@ impl WasmGcEmitter {
 		if arg.is_empty_list_literal() || arg.symbol_name().is_some_and(holds_empty_list) {
 			return crate::words::LIST_WORD.to_string(); // `[]` (card run-time-empty)
 		}
+		if arg.is_empty_map_literal() {
+			return crate::words::MAP_WORD.to_string(); // `{}` (card code-empty)
+		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
 			Node::Empty => crate::type_kinds::Kind::Empty,
@@ -641,6 +644,7 @@ impl WasmGcEmitter {
 		if crate::analyzer::is_boolean(subject, &self.scope)
 			|| crate::analyzer::is_code(subject, &self.scope)
 			|| matches!(subject.drop_meta(), Node::Number(_) | Node::Empty)
+			|| subject.is_empty_map_literal()
 			|| crate::analyzer::held_map_type(subject, &self.scope).is_some()
 		{
 			return false;
