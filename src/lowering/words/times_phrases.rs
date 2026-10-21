@@ -3,22 +3,23 @@
 //! `n times [x]` is the list of n x; any other operand is repeated by `times·text` (`3 times "ab"`, `3 times 4`
 //! multiplies).
 
-use super::keyword_rewrites::KeywordRewrite;
+use super::keyword_rewrites::{Facts, KeywordRewrite};
 use super::nodes::{assign, call, int, key, symbol};
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, TEXT_TIMES, TIMES_WORD};
 
 /// The keyword rewrite of the phrase, an entry of src/pipeline.rs SUGAR_PHRASES
-pub const REWRITE: KeywordRewrite = KeywordRewrite { triggered_by: |word| word == TIMES_WORD, rewrite: phrase };
+pub const REWRITE: KeywordRewrite =
+	KeywordRewrite { triggered_by: |word| word == TIMES_WORD, rewrite: phrase, reads_bindings: false };
 
-fn phrase(node: Node, loops: &mut usize) -> Node {
+fn phrase(node: Node, facts: &mut Facts) -> Node {
 	let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() else {
 		return node;
 	};
 	match items.as_slice() {
 		[count, word, operand] if word.is_symbol(TIMES_WORD) => {
-			meaning(count.clone(), operand.clone(), loops).with_meta_of(&node)
+			meaning(count.clone(), operand.clone(), &mut facts.fresh).with_meta_of(&node)
 		}
 		_ => node,
 	}

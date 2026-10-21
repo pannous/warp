@@ -2,6 +2,7 @@
 # [n times operand] as written; a block is a loop with a hidden counter of its own, so nested loops do not meet;
 # `n times [x]` is the list of n x; any other operand is repeated by `times·text` (`3 times "ab"`, `3 times 4`).
 use "walk.warp"
+use "scope.warp"
 
 times_word = "times"
 

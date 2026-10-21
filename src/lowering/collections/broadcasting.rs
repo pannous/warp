@@ -1394,6 +1394,7 @@ pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
 pub const ELEMENT_WISE: KeywordRewrite = KeywordRewrite {
 	triggered_by: |word| crate::operators::element_wise_operator(word).is_some(),
 	rewrite: |node, _| element_wise_phrase(node),
+	reads_bindings: false,
 };
 
 fn element_wise_phrase(node: Node) -> Node {

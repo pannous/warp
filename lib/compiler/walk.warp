@@ -180,26 +180,6 @@ def items_walked(items: list, quoting_allowed: bool, f: function): list {
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
 bottom_up(n: Node, f: function): Node := f(children(n, x => bottom_up(x, f)))
 
-# Keyword-triggered local rewrites (decision pass-triggers; Rust twin: src/lowering/words/keyword_rewrites.rs): each
-# entry [accepts, rewritten] of a table rewrites a node one of whose own items is a word it accepts, children first,
-# in table order, all in one walk; fresh numbers the names a rewrite makes (times·1), from 0 per walk
-fresh = 0
-keyword_rewrites(program: Node, table: list): Node := {
-	global fresh
-	fresh = 0
-	bottom_up(program, n => rewritten_by(n, table))
-}
-rewritten_by(n: Node, table: list): Node := {
-	for entry in table { n = rewritten_if(n, entry#1, entry#2) }
-	n
-}
-# TODO a function value in a local, `rewrite = entry#2; rewrite(n)`, once it is called (card function-value-read)
-rewritten_if(n: Node, accepts: function, rewritten: function): Node := if has_own_word(n, accepts) then rewritten(n) else n
-has_own_word(n: Node, accepts: function): bool := match n {
-	List(parts, _, _): parts.any(part => part is symbol and accepts(part))
-	_: no
-}
-
 # the node itself: the bridge's own twin, which every pass twin relies on
 unchanged(n: T): T := n
 

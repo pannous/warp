@@ -87,9 +87,13 @@ pub struct CompiledModule {
 type Pass = fn(Node) -> Node;
 
 /// The keyword rewrites among the sugar passes (keyword_rewrites.rs), one walk: `n times {…}`, `n times [x]`,
-/// `n times "ab"` as a loop, a filled list, a repeated text; `xs .* 2` as the operator applied to each element
-const SUGAR_PHRASES: &[KeywordRewrite] =
-	&[crate::lowering::times_phrases::REWRITE, crate::lowering::broadcasting::ELEMENT_WISE];
+/// `n times "ab"` as a loop, a filled list, a repeated text; `xs .* 2` as the operator applied to each element; `(p).a`
+/// of a variable p as `p.a`
+const SUGAR_PHRASES: &[KeywordRewrite] = &[
+	crate::lowering::times_phrases::REWRITE,
+	crate::lowering::broadcasting::ELEMENT_WISE,
+	crate::lowering::grouped_receivers::UNGROUPED,
+];
 
 pub(crate) fn sugar_phrases(node: Node) -> Node {
 	crate::lowering::keyword_rewrites::rewritten(node, SUGAR_PHRASES)
@@ -113,13 +117,12 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::welcome_forms::lower_arrow_result_types,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
 	crate::lowering::of_lookups::lower,
-	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
-	crate::lowering::grouped_receivers::lower,
+	// the phrases the parser keeps as written, keyword rewrites of one walk (SUGAR_PHRASES): `(p).a` is `p.a` before any
+	// pass reads a lookup
+	sugar_phrases,
 	// `window.width = 800`, `canvas.height`, a bare width (property_accessors.rs): getters and setters, before any pass
 	// reads a field's write; resolve brings draw for them
 	crate::lowering::property_accessors::lower,
-	// the phrases the parser keeps as written, keyword rewrites of one walk (SUGAR_PHRASES)
-	sugar_phrases,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::graphics::shader_holes::lower,
 	// `Person as text := it.name` and `p as text` (conversions.rs) before any pass reads `as` as a cast
