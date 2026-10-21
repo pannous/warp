@@ -27,6 +27,12 @@ const SOFT_DEFAULT_KEYS: [&str; 1] = ["rest"];
 /// In a pattern: any item, bound to no name
 pub(crate) const WILDCARD: &str = "_";
 const ALTERNATIVES_BIND_NO_NAMES: &str = "alternatives bind no names: write one case per pattern, or `_` for an item";
+/// Literal arms in a row from which they are a decision tree: fewer are tested as fast one after another
+const DECISION_TREE_ARMS: usize = 8;
+/// The most nodes of what follows a decision tree (later arms, the default) it copies into each of its leaves
+const COPIED_REST_NODES: usize = 12;
+/// The literals a leaf of a decision tree compares one after another
+const LEAF_LITERALS: usize = 2;
 const KEY_SPEC: &str = "key";
 const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
@@ -142,14 +148,86 @@ impl Lowering<'_> {
 			Some(default) => default.body,
 			None => no_case(subject, &subject_value),
 		};
-		let chain = cases.into_iter().rev().fold(miss, |otherwise, case| {
-			let (matches, body) = case_test(&subject_value, case, &self.names);
-			let then = if_then(matches, body);
-			key(then, Op::Else, otherwise)
-		});
+		let arms = cases.into_iter().map(|case| case_test(&subject_value, case, &self.names)).collect();
+		let chain = chained(&subject_value, arms, miss, &self.names);
 		let bind = assign(subject_value, subject.clone());
 		Some(Node::List(vec![bind, chain], Bracket::Round, Separator::Semicolon))
 	}
+}
+
+/// The arms as an if/else chain, tested in order. A run of arms comparing the subject with literals of one kind (`"+":
+/// …`, `3: …`), followed by little, is a decision tree instead: a binary search on the literals' order, so a match of
+/// 70 operator spellings compares about 7 times, not 35 (card pattern-dispatch-speed)
+fn chained(subject: &Node, mut arms: Vec<(Node, Node)>, miss: Node, names: &Names) -> Node {
+	let mut otherwise = miss;
+	while let Some((test, _)) = arms.last() {
+		let kind = literal_kind(subject, test);
+		let run =
+			arms.iter().rev().take_while(|(test, _)| kind.is_some() && literal_kind(subject, test) == kind).count();
+		if run >= DECISION_TREE_ARMS && nodes_in(&otherwise) <= COPIED_REST_NODES {
+			let literal_arms = arms.split_off(arms.len() - run);
+			otherwise = decision_tree(subject, literal_arms, otherwise, names);
+			continue;
+		}
+		let (test, body) = arms.pop().expect("an arm");
+		otherwise = key(if_then(test, body), Op::Else, otherwise);
+	}
+	otherwise
+}
+
+fn literal_kind(subject: &Node, test: &Node) -> Option<&'static str> {
+	literal_compared(subject, test).map(|(kind, _)| kind)
+}
+
+/// The type word and literal of a test `subject == "+"` (a text, `text`) or `subject == 3` (`number`)
+fn literal_compared<'a>(subject: &Node, test: &'a Node) -> Option<(&'static str, &'a Node)> {
+	let Node::Key(left, Op::Eq, literal) = test.drop_meta() else { return None };
+	if left.drop_meta() != subject {
+		return None;
+	}
+	match literal.drop_meta() {
+		Node::Text(_) => Some((crate::words::TEXT_WORD, literal)),
+		Node::Number(crate::Number::Int(_)) => Some((crate::words::NUMBER_WORD, literal)),
+		_ => None,
+	}
+}
+
+/// The literal arms as a binary search on their literals, behind a test of the subject's type (a symbol is no text,
+/// `x < "+"` of a number no order); a literal tested twice keeps its first arm, as the chain did
+fn decision_tree(subject: &Node, arms: Vec<(Node, Node)>, rest: Node, names: &Names) -> Node {
+	let (kind, _) = literal_compared(subject, &arms[0].0).expect("literal arms");
+	let mut literals: Vec<(Node, Node)> = vec![];
+	for (test, body) in arms {
+		let (_, literal) = literal_compared(subject, &test).expect("literal arms");
+		if !literals.iter().any(|(known, _)| known == literal) {
+			literals.push((literal.clone(), body));
+		}
+	}
+	literals.sort_by(|(a, _), (b, _)| match (a.drop_meta(), b.drop_meta()) {
+		(Node::Text(a), Node::Text(b)) => a.cmp(b),
+		(Node::Number(crate::Number::Int(a)), Node::Number(crate::Number::Int(b))) => a.cmp(b),
+		_ => std::cmp::Ordering::Equal,
+	});
+	let guard = type_test(subject, &Node::symbol(kind), names).expect("a builtin type word");
+	key(if_then(guard, searched(subject, &literals, &rest)), Op::Else, rest)
+}
+
+/// `if subject < middle then <search below> else <search from middle>`, down to leaves comparing a literal or two
+fn searched(subject: &Node, literals: &[(Node, Node)], rest: &Node) -> Node {
+	if literals.len() <= LEAF_LITERALS {
+		return literals.iter().rev().fold(rest.clone(), |otherwise, (literal, body)| {
+			key(if_then(key(subject.clone(), Op::Eq, literal.clone()), body.clone()), Op::Else, otherwise)
+		});
+	}
+	let (below, from_middle) = literals.split_at(literals.len() / 2);
+	let lower = key(subject.clone(), Op::Lt, from_middle[0].0.clone());
+	key(if_then(lower, searched(subject, below, rest)), Op::Else, searched(subject, from_middle, rest))
+}
+
+fn nodes_in(node: &Node) -> usize {
+	let mut count = 0;
+	node.visit(&mut |_| count += 1);
+	count
 }
 
 /// The word value in an arm as the subject; a field `x.value` and a key `{value: 1}` keep it
