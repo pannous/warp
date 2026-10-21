@@ -10,6 +10,7 @@
 
 use super::memoization::definition_parts;
 use super::nodes::{any_part, call, key, parameter_name};
+use super::one_entry_maps::MAP_OF_ENTRY;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -100,9 +101,10 @@ fn assigned_name(target: &Node) -> Option<&str> {
 	}
 }
 
-/// `{}` or `{1: 5, 2: 6}`: entries only, at least one keyed by a number
+/// `{}` or `{1: 5, 2: 6}`: entries only, at least one keyed by a number; `{1: 5}` also as one_entry_maps upgrades it,
+/// `map_of_entry({1: 5})`
 fn is_number_keyed(value: &Node) -> bool {
-	let Node::List(items, Bracket::Curly, _) = value.drop_meta() else {
+	let Node::List(items, Bracket::Curly, _) = upgraded_literal(value).drop_meta() else {
 		return false;
 	};
 	let entry_key = |item: &Node| match item.drop_meta() {
@@ -124,6 +126,23 @@ fn text_keyed(literal: Node) -> Node {
 			Node::List(items.into_iter().map(entry).collect(), Bracket::Curly, separator)
 		}
 		Node::Meta { data, node } => Node::Meta { data, node: Box::new(text_keyed(*node)) },
+		Node::List(mut items, Bracket::Round, separator) if is_map_of_entry(&items) => {
+			items[1] = text_keyed(items[1].clone());
+			Node::List(items, Bracket::Round, separator)
+		}
+		other => other,
+	}
+}
+
+/// `map_of_entry(literal)`: one_entry_maps' upgrade of a one-entry literal
+fn is_map_of_entry(items: &[Node]) -> bool {
+	matches!(items, [head, _] if head.symbol_name() == Some(MAP_OF_ENTRY))
+}
+
+/// The literal of a value, through the upgrade of a one-entry literal
+fn upgraded_literal(value: &Node) -> &Node {
+	match value.drop_meta() {
+		Node::List(items, Bracket::Round, _) if is_map_of_entry(items) => &items[1],
 		other => other,
 	}
 }

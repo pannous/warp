@@ -5,7 +5,7 @@ use "walk.warp"
 
 ranges_made = 0
 
-listed_range(start: Node, end: Node, condition: any): Node := {
+listed_range(start: Node, end: Node, condition: Node): Node := {
 	global ranges_made
 	ranges_made += 1
 	made = symbol("range·" + ranges_made)
@@ -20,7 +20,7 @@ listed_range(start: Node, end: Node, condition: any): Node := {
 is_given(n: Node): bool := not (n is ø)
 
 # a range with both ends; `rest...`, a list pattern's rest, has none after it
-bounded(start: Node, end: Node, condition: any, n: Node): Node :=
+bounded(start: Node, end: Node, condition: Node, n: Node): Node :=
 	if is_given(start) and is_given(end) then listed_range(start, end, condition) else n
 
 range_value(n: Node): Node := match n {
@@ -29,7 +29,7 @@ range_value(n: Node): Node := match n {
 	_: n
 }
 
-ranges(program: any): any := {
+ranges(program: Node): Node := {
 	global ranges_made
 	ranges_made = 0
 	bottom_up(program, range_value)

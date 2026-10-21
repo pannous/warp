@@ -72,6 +72,10 @@ src/compiler/standalone.rs: compiler.warp's module, kept in ~/.cache/warp/module
 arguments. The pure lane compiles compiler.warp; while it refuses (card pure-compiler-callee), the Rust pipeline does,
 and every run says `warp pure: compiler.warp, Rust-compiled` on stderr. It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
+Cold start (card pure-cold-start, empty module cache): the pure lane's try at compiler.warp (passes stage compiled ~44
+s, analysis ~6 s, emit ~21 s, then their runs) and Rust's compile of it (~90 s) ran one after the other: 166 s. Now
+Rust compiles it in a thread while the pure lane tries, and the analysis and emit workers start with the passes one:
+89 s real, 214 s user, 2.8 GB max RSS. Warm: ~3 s. The cache files' mtimes are the cheapest timeline of a cold run.
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
 

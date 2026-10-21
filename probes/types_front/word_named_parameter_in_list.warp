@@ -1,0 +1,5 @@
+# a parameter named like a library word (count, size) inside a list literal is the parameter: [3 4] twice
+def k(size: any): any := [size, 4]
+print(k(3))
+def c(count: any): any := [count, 4]
+print(c(3))

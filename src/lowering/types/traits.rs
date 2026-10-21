@@ -672,6 +672,12 @@ pub fn untyped_parameters(head: &Node) -> Vec<String> {
 	parameters.iter().filter_map(untyped).collect()
 }
 
+/// Every parameter a definition head declares, typed or not: `p` and `n` of `f(p: any, n)`
+pub fn parameter_names(head: &Node) -> Vec<String> {
+	let parameters = definition_head(head).map(|items| &items[1..]).unwrap_or_default();
+	parameters.iter().filter_map(crate::lowering::nodes::parameter_name).collect()
+}
+
 /// The parameters a definition head declares of this type: `c` of `live_loop(c: function, n)`
 pub fn parameters_of_type(head: &Node, type_name: &str) -> Vec<String> {
 	let parameters = definition_head(head).map(|items| &items[1..]).unwrap_or_default();
