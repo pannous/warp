@@ -633,16 +633,16 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			p.at = p.at + 5
 			skip_spaces(p)
 			left = listed("", " ", [left, symbol("times"), repeated(p)])
-		} else if floor_division_at(p).length > 0 {
+		} else if floor_division_at(p) {
 			written = floor_division_at(p)
-			powers = binding_powers("/")
-			if written == "/!=" { powers = binding_powers("=") }
+			assigns = written#2 == "/!="
+			powers = binding_powers(if assigns then "=" else "/")
 			if powers#1 < min_power { break }
-			p.at = p.at + written.length
+			p.at = p.at + written#1.length
 			skip_blanks(p)
 			right = expression(p, powers#2)
 			// `a /!= b` is the assignment `a = floor_quotient(a, b)`
-			left = if written == "/!=" then Key(left, Op.Assign, quotient_call(left, right)) else quotient_call(left, right)
+			left = if assigns then Key(left, Op.Assign, quotient_call(left, right)) else quotient_call(left, right)
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
 			if MEMBERSHIP_POWERS#1 < min_power { break }
@@ -954,13 +954,17 @@ def word_before(p: Parser): text {
 	p.code[start .. end]
 }
 
-// `7 /! 2`, `x /!= 2`, `7 div 2`: the floor division written at the parser's position, else ""; `//` is a comment
+// `7 /! 2`, `x /!= 2`, `7 div 2`, `7 ÷ 2`, `x ÷= 2`: the floor division written at the parser's position as [spelling,
+// canonical `/!` or `/!=`], else []; `//` is a comment
 // Rust twin: operators/spellings.rs `/!`, `/!=`, `div`
-def floor_division_at(p: Parser): text {
-	if keyword_at(p, "div") and not opens_block(p, 3) { return "div" }
-	if starts_at(p.code, "/!=", p.at) { return "/!=" }
-	if starts_at(p.code, "/!", p.at) { return "/!" }
-	""
+def floor_division_at(p: Parser): list {
+	if keyword_at(p, "div") and not opens_block(p, 3) { return ["div", "/!"] }
+	if starts_at(p.code, "/!=", p.at) { return ["/!=", "/!="] }
+	if starts_at(p.code, "/!", p.at) { return ["/!", "/!"] }
+	for op in SYMBOL_OPERATORS {
+		if (op#2 == "/!" or op#2 == "/!=") and starts_at(p.code, op#1, p.at) { return op }
+	}
+	[]
 }
 
 // A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag
