@@ -232,3 +232,4 @@ mod test_value_constructor;
 mod test_variant_equality; // card variant-left
 mod test_variant_payloads;
 mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body`
+mod test_typed_param_phrases; // card pure-typed-params
