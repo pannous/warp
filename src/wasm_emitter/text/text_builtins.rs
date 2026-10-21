@@ -314,8 +314,6 @@ impl WasmGcEmitter {
 				| IS_ERROR_WORD
 				| KIND_MARK
 				| RAN_WITHOUT_ERROR
-				| STARTS_WITH
-				| ENDS_WITH
 				| FLOAT_BITS
 				| crate::memoization::MEMO_KNOWN
 				| crate::memoization::MEMO_VALUE
@@ -326,6 +324,11 @@ impl WasmGcEmitter {
 			) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
+			}
+			// a text test: yes or no, as `"b" in "abc"` (decision predicate-bool)
+			(STARTS_WITH | ENDS_WITH, _) => {
+				self.emit_integer_text_builtin(func, name, arguments);
+				self.emit_call(func, crate::wasm_emitter::NEW_BOOL);
 			}
 			(BYTE_SLICE, [text, start, end]) => {
 				self.emit_text_argument(func, text);
