@@ -90,6 +90,7 @@ mod test_min_max;
 mod test_min_max_lists;
 mod test_nested_comprehension; // card double-for-comprehension
 mod test_nested_index_assignment;
+mod test_nested_map_writes;
 mod test_nested_maps;
 mod test_node_lists;
 mod test_none_word;
@@ -131,5 +132,4 @@ mod test_unpacking_declared;
 mod test_unpacking_into_existing;
 mod test_where_filter;
 mod test_word_slices;
-mod test_worklist_count; // card list-count-grows
-mod test_nested_map_writes; // card nested-write
+mod test_worklist_count; // card list-count-grows // card nested-write
