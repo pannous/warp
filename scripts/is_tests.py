@@ -2,11 +2,13 @@
 """The Rust tests' is!("code", expected) assertions as warp files (decision warp-is-tests, notes/is_tests.md).
 
     scripts/is_tests.py [tests/<topic>/test_x.rs …]   default: every tests/**/test_*.rs
-    scripts/is_tests.py run [normal|emitter|pure|pure-only …] [-- tests/<topic>/test_x.warp …]
+    scripts/is_tests.py run [normal|emitter|pure|pure-only|warp-pure|warp-self …] [-- tests/<topic>/test_x.warp …]
                                                     the fast lane: `warp test` of each file (default all) in each lane
-                                                    (default all four), passed / failed / refused counted per lane;
-                                                    pure-only judges each pair of the pairs files on its own, no Rust
-                                                    behind it: passed / wrong / refused / error;
+                                                    (default all six), passed / failed / refused counted per lane;
+                                                    pure-only, warp-pure and warp-self judge each pair of the pairs
+                                                    files on its own, no Rust behind it: passed / wrong / refused /
+                                                    error; warp-pure and warp-self run it with `warp pure` / `warp
+                                                    self`, both together end with the parity line (self vs pure);
                                                     logs in data/is_tests/, warp binary $WARP or scratch/warp
 
 Writes beside each Rust file holding a translatable is! two files, under a `# fn name` line per Rust test:
@@ -48,8 +50,15 @@ LANES = {
     "emitter": {"WARP_SELF_HOSTED": "1"},
     "pure": {"WARP_SELF_HOSTED": "pure"},
     "pure-only": {"WARP_SELF_HOSTED": "pure-only"},
+    "warp-pure": {},
+    "warp-self": {},
 }
-PAIR_LANES = {"pure-only"}  # a pair at a time: one refused pair sinks no other
+# lanes run by a command of their own (src/compiler/standalone.rs): compiler.wasm, compiler.warp built by Rust, and
+# compiler-self.wasm, compiler.warp built by itself
+LANE_COMMANDS = {"warp-pure": ["pure"], "warp-self": ["self"]}
+PAIR_LANES = {"pure-only", *LANE_COMMANDS}  # a pair at a time: one refused pair sinks no other
+# decision self-compiled-parity: warp self may pass this share fewer pairs than warp pure (reported, no gate yet)
+PARITY_SHORTFALL = 0.05
 QUIET = {"WARP_NO_WINDOW": "1", "WARP_HINTS": "0"}
 REFUSALS = "WARP_EMIT_REFUSALS"
 REFUSED = "outside the core: "  # how a refusal line starts (self_hosted.rs OUTSIDE_THE_CORE)
@@ -428,16 +437,17 @@ def run_lanes(arguments):
     files = files or sorted(target for target in beside if target.exists())
     warp = os.environ.get("WARP", str(REPO / "scratch" / "warp"))
     RUN_DATA.mkdir(parents=True, exist_ok=True)
+    passed_pairs = {}
     for lane in lanes:
         if lane in PAIR_LANES:
-            run_pairs(lane, files, warp)
+            passed_pairs[lane] = run_pairs(lane, files, warp)
             continue
         (RUN_DATA / f"{lane}.refusals").write_text("")
         with ThreadPoolExecutor(JOBS) as pool:
             results = list(pool.map(lambda file: tested(file, lane, warp), files))
         with open(RUN_DATA / f"{lane}.log", "w") as log:
             for file, (*_, output) in zip(files, results):
-                log.write(f"== {file.relative_to(REPO)}\n{output}\n")
+                log.write(f"== {os.path.relpath(file, REPO)}\n{output}\n")
         passed, failed, unrun = (sum(result[at] for result in results) for at in range(3))
         unrun_files = sum(result[2] > 0 for result in results)
         lines = (RUN_DATA / f"{lane}.refusals").read_text().splitlines()
@@ -446,6 +456,7 @@ def run_lanes(arguments):
         total = passed + failed + unrun
         print(f"{lane}: {passed} passed, {failed} failed, {unrun} unrun (no summary from {unrun_files} files) of {total}"
               f" in {len(files)} files; refusals: {refused}")
+    report_parity(passed_pairs)
 
 
 def code_of_literal(literal):
@@ -465,7 +476,8 @@ def printed(program, lane, warp, refusals=None):
     """(exit code, stdout) of the program run in the lane; the exit code is the program's int value, None on timeout"""
     environment = {**os.environ, **QUIET, **LANES[lane], **({REFUSALS: str(refusals)} if refusals else {})}
     try:
-        run = subprocess.run([warp, str(program)], capture_output=True, text=True, timeout=PAIR_SECONDS, env=environment)
+        command = [warp, *LANE_COMMANDS.get(lane, []), str(program)]
+        run = subprocess.run(command, capture_output=True, text=True, timeout=PAIR_SECONDS, env=environment)
         return run.returncode, run.stdout.strip()
     except subprocess.TimeoutExpired:
         return None, ""
@@ -519,9 +531,21 @@ def run_pairs(lane, files, warp):
         results = list(pool.map(lambda job: pair_verdict(job[0], *job[1][1:], lane, warp), enumerate(rows)))
     with open(RUN_DATA / f"{lane}.log", "w") as log:
         for (file, code, expected), (verdict, output) in zip(rows, results):
-            log.write(f"{verdict}\t{file.relative_to(REPO)}\t{code}\t{expected}\t{output[-200:]!r}\n")
+            log.write(f"{verdict}\t{os.path.relpath(file, REPO)}\t{code}\t{expected}\t{output[-200:]!r}\n")
     counts = Counter(verdict for verdict, _ in results)
     print(f"{lane}: " + ", ".join(f"{counts[v]} {v}" for v in PAIR_VERDICTS) + f" of {len(rows)} pairs in {len(files)} files")
+    return counts["passed"]
+
+
+def report_parity(passed):
+    """warp self's passed pairs against warp pure's (decision self-compiled-parity)"""
+    pure, self_compiled = passed.get("warp-pure"), passed.get("warp-self")
+    if pure is None or self_compiled is None:
+        return
+    shortfall = (pure - self_compiled) / pure if pure else 0
+    verdict = "within" if shortfall <= PARITY_SHORTFALL else "beyond"
+    print(f"parity: warp self passes {self_compiled}, warp pure {pure}: {shortfall:.1%} fewer, {verdict} the"
+          f" {PARITY_SHORTFALL:.0%} allowed")
 
 
 def main():

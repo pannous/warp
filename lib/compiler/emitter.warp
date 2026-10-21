@@ -216,10 +216,11 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # bare cases; sum_types the classes with bare cases or subclasses, which `x is T` tests outside the core (card
 # pure-lane-shape)
 # counts_fuel: the program said `use fuel`
+# aliases: the type each type alias names, `type Name = text`, by its name
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {} }
 
 module = Module({}, [])
 
@@ -832,8 +833,11 @@ def runtime_call(name: text, values: any): list { call_values(module.runtime[nam
 base_class_layers = ["extends", "inherited_from"]
 collect_types(n: any): any := {
 	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type" { return record_type(value_of(n)#2, value_of(n)#3) }
+	if is_type_alias(n) { return module.aliases[value_of(key_of(n))#2#2] = name_of(value_of(n)) }
 	if is_group(n) { for x in n { collect_types(x) } }
 }
+# `type Name = text`: a declaration of no body naming another type
+is_type_alias(n: any): bool := type(n) is key and op_of(n) == "=" and type(key_of(n)) is key and key_of(key_of(n)) == symbol(opaque_word) and kind_of(value_of(key_of(n))) == "type" and value_of(key_of(n))#3 == ø and value_of(n) is symbol
 record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" {
 		module.class_defaults[name#2] = field_defaults(body)
@@ -848,12 +852,23 @@ record_type(name: any, body: any): any := {
 	if name#2 in base_class_layers and kind_of(name#3) == "symbol" { module.sum_types[name#3#2] = yes }
 	record_type(name#4, body)
 }
+# the kind a field typed `type` holds: a type word's of the core, a node of any value (a map, a node, a function), a
+# list of a plural type word (`texts`), each through a type alias; ø untyped, "instance" of a class
+def field_kind(type: any): any {
+	if type == ø { return ø }
+	word = aliased_type(type)
+	if word in module.classes { return "instance" }
+	if word in node_annotations { return "node" }
+	if word in core_type_words { return core_type_words[word] }
+	if annotated_kind(word) == "list" { return "list" }
+	"instance"
+}
 # a character given to a field typed text is that text (`"r"` is a character here)
-def texted(type: any, value: any): list { if value#1 == "char" and type in core_type_words and core_type_words[type] == "text" then shown_text(value) else value }
+def texted(type: any, value: any): list { if value#1 == "char" and field_kind(type) == "text" then shown_text(value) else value }
 # whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion; an
 # instance of a class is a node, as Rust's class-typed fields take it
 def admits(type: any, kind: text): bool {
-	type == ø or type == "any" or (type in core_type_words and core_type_words[type] == kind) or (kind == "node" and type in module.classes)
+	type == ø or field_kind(type) == "node" or field_kind(type) == kind or (kind == "node" and aliased_type(type) in module.classes)
 }
 # a write to a field `name` of a target known only at run time: every class's field so named takes the kind; a value
 # known only at run time too is written as it is, as Rust's field writes check no field type
@@ -1115,7 +1130,8 @@ def assignment(body: Body, target: any, value: any): list {
 # `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (field_checks: int_admitted,
 # bool_checked, …), any other value Rust would check at run time (a fraction, a byte's range) is refused
 declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool"}
-def declaration(body: Body, name: text, type_name: text, value: any): list {
+def declaration(body: Body, name: text, written_type: text, value: any): list {
+	type_name = aliased_type(written_type)
 	# `x: any = v` admits every value: the plain assignment; `t: type = int` too, a type value is a node like any
 	if type_name == "any" or type_name == "type" { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, type_name[0..<(#type_name - 1)], value) }
@@ -1135,6 +1151,7 @@ def typed_declaration(body: Body, name: text, type_name: text, value: any): list
 # only at run time is not checked yet (Rust's is), a value of another kind is refused
 def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
 	if type_name not in declared_kinds { return refuse("a variable declared " + type_name + "?") }
+	value = texted(type_name, value)
 	kind = value#1
 	if kind != "node" and kind != pending and kind != declared_kinds[type_name] { return refuse("a " + kind + " given to a variable declared " + type_name + "?") }
 	assignment(body, symbol(name), ["node", boxed(value)])
@@ -1152,8 +1169,8 @@ def whole(value: any): list { admitted(value, "int") }
 # a typed field's value of another kind, or known only at run time, is checked then: "not an int" as Rust's
 # (src/wasm_emitter/declared_values.rs), a float field keeping an int
 field_checks = {int: "int_admitted", list: "list_admitted", text: "text_checked", bool: "bool_checked", float: "float_checked"}
-def checked_at_run_time(field_type: any, kind: text): bool { not admits(field_type, kind) and field_type in core_type_words and core_type_words[field_type] in field_checks }
-def field_value(field_type: any, value: any): list { if checked_at_run_time(field_type, value#1) then runtime_call(field_checks[core_type_words[field_type]], [value]) else value }
+def checked_at_run_time(field_type: any, kind: text): bool { not admits(field_type, kind) and field_kind(field_type) in field_checks }
+def field_value(field_type: any, value: any): list { if checked_at_run_time(field_type, value#1) then runtime_call(field_checks[field_kind(field_type)], [value]) else value }
 
 # `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, target: any, name: text, value: any): list {
@@ -1822,6 +1839,8 @@ def key_expression(body: Body, n: any): list {
 		grown = appended(body, left, value_of(right))
 		if grown != ø { return grown }
 	}
+	# a type alias names its type for the annotations, which collect_types read
+	if is_type_alias(n) { return [no_kind, []] }
 	if operator in assignment_operators { return assignment(body, left, expression_code(body, right)) }
 	if operator == ":" and left == symbol("global") { return global_declaration_code(body, right) }
 	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
@@ -2001,8 +2020,8 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 declared_result(f: Function): any := cast_kind(f.body)
 cast_kind(n: any): any := {
 	if type(n) is key and op_of(n) == "as" and value_of(n) is symbol {
-		word = name_of(value_of(n))
-		return if word in type_bytes or word in references then word else "node"
+		kind = annotated_kind(name_of(value_of(n)))
+		return if kind in type_bytes or kind in references then kind else "node"
 	}
 	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
 	held = held_result_type(n#1)
@@ -2075,8 +2094,24 @@ def collect_literal_arguments(n: any) {
 	}
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
-# the annotations of a parameter held as a node: any value, a function, a type value `int`
-node_annotations = ["any", "function", "type"]
+# the annotations of a parameter held as a node: any value, a node, a function, a type value `int`, a map
+node_annotations = ["any", "Node", "function", "type", "map"]
+# the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
+# plural (`ints`, `texts`, `Points`)
+annotated_kind(written: text): text := {
+	word = aliased_type(written)
+	if word in node_annotations or word in module.classes { return "node" }
+	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return "list" }
+	word
+}
+# the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`; any other word itself
+aliased_type(word: text): text := {
+	optional = word.ends_with("?")
+	resolved = if optional then word[0..<(#word - 1)] else word
+	while resolved in module.aliases { resolved = module.aliases[resolved] }
+	if optional then resolved + "?" else resolved
+}
+names_a_type(word: text): bool := word in type_bytes or word in references or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: any): any := {
 	placed(f)
 	parameter_kinds = []
@@ -2089,7 +2124,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 			for kind in module.literal_arguments[parameter_key(f.name, i)] { given = parameter_joint(given, kind) }
 		}
 		if annotation == ø { module.unannotated[parameter_key(f.name, i)] = yes }
-		parameter_kinds += [if annotation == ø then given else if annotation in node_annotations or annotation in module.classes then "node" else annotation]
+		parameter_kinds += [if annotation == ø then given else annotated_kind(annotation)]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds

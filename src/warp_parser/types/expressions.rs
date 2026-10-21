@@ -130,14 +130,23 @@ impl WarpParser {
 				break;
 			}
 			width = element_at + gap + element.chars().count();
-			phrase = format!("{phrase} {OF_WORD} {element}");
+			phrase = format!("{phrase} {OF_WORD} {}", list_type_head(&element));
 		}
 		phrase.contains(&format!(" {OF_WORD} ")).then_some((phrase, width))
 	}
 
-	/// The type phrase of of_phrase_ahead, taken
+	/// The type phrase of of_phrase_ahead, taken: another language's list word in it gets its note, and `list of int`
+	/// the list type style hint (`ints`), as `list<int>` gets it
 	pub(crate) fn take_of_phrase(&mut self) -> Option<Node> {
 		let (phrase, width) = self.of_phrase_ahead()?;
+		let start = self.blanks_at(0);
+		crate::normalize::set_hint_position(self.line_nr, self.column + start);
+		let written: String = (start..width).map(|offset| self.peek_char(offset)).collect();
+		let words: Vec<&str> = written.split_whitespace().map(noted_list_type_head).collect();
+		if let [LIST_WORD, OF_WORD, element_words @ ..] = words.as_slice() {
+			let element_words: Vec<&str> = element_words.iter().copied().filter(|word| *word != OF_WORD).collect();
+			crate::normalize::hints::list_type(crate::normalize::ListTypeStyle::Of, &element_words);
+		}
 		self.advance_by(width);
 		Some(Node::Symbol(phrase))
 	}

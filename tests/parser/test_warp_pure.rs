@@ -38,28 +38,13 @@ fn warp_self_runs_hello_world() {
 	assert!(printed.lines().next() == Some("hello world"), "{printed}\n{}", String::from_utf8_lossy(&run.stderr));
 }
 
-/// What `warp self` prints running the code (card self-compiled-parity)
-fn printed_by_warp_self(name: &str, code: &str) -> String {
-	let folder = crate::common::scratch_directory("warp_self");
-	std::fs::create_dir_all(&folder).unwrap();
-	let program = folder.join(format!("{name}.warp"));
-	std::fs::write(&program, code).unwrap();
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "self"])
-		.arg(&program)
-		.env("WARP_NO_WINDOW", "1")
-		.env("WARP_HINTS", "0")
-		.output()
-		.expect("warp runs");
-	format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr))
-}
 
 /// Loops and text concatenation under `warp self`: analyzer.warp's loop kind of a body ending in a non-group (`{ 2 }`),
 /// node_matches.warp's `True:` arm of node_text (cards match-bool-arm, self-compiled-parity)
 #[test]
 fn warp_self_runs_loops_and_texts() {
 	let code = "n = 0\nwhile n < 3 { n += 1 }\ns = \"a\"\ns += \"b\"\nprint s + n";
-	let printed = printed_by_warp_self("loops_and_texts", code);
+	let printed = said_by("self", "loops_and_texts", code);
 	assert!(printed.lines().any(|line| line == "ab3"), "{printed}");
 }
 
@@ -67,6 +52,43 @@ fn warp_self_runs_loops_and_texts() {
 /// compiler-refusal-loud)
 #[test]
 fn warp_self_names_the_refusal() {
-	let printed = printed_by_warp_self("refused", "f(x) := x.length(); f(\"abc\")");
+	let printed = said_by("self", "refused", "f(x) := x.length(); f(\"abc\")");
 	assert!(printed.contains("outside the core: "), "{printed}");
+}
+
+/// What `warp <command>` (pure or self) says of the program `code`: its output and errors
+fn said_by(command: &str, name: &str, code: &str) -> String {
+	let folder = crate::common::scratch_directory(&format!("warp_{command}"));
+	std::fs::create_dir_all(&folder).unwrap();
+	let program = folder.join(format!("{name}.warp"));
+	std::fs::write(&program, code).unwrap();
+	let run = crate::common::warp_command()
+		.args(["--no-ask", command])
+		.arg(&program)
+		.env("WARP_NO_WINDOW", "1")
+		.env("WARP_HINTS", "0")
+		.output()
+		.expect("warp runs");
+	String::from_utf8_lossy(&run.stdout).to_string() + &String::from_utf8_lossy(&run.stderr)
+}
+
+fn pure_said(name: &str, code: &str) -> String {
+	said_by("pure", name, code)
+}
+
+/// A form beyond the emitter's core is the compile's error, "outside the core: …" (card pure-not-a-list: compiler.warp
+/// wrote the refusal's text as the module's bytes and failed with "not a list")
+#[test]
+#[ignore = "slow: compiles all of compiler.warp, as warp_pure_runs_hello_world; run with --ignored"]
+fn warp_pure_says_what_it_refuses() {
+	let said = pure_said("refused", "abs -3\n");
+	assert!(said.contains("outside the core: the operator ‖ with nothing before it"), "{said}");
+}
+
+/// A library word compiles through the pure lane (card pure-not-a-list)
+#[test]
+#[ignore = "the pure lane knows no library words yet: 'outside the core: the unknown name sum'"]
+fn warp_pure_runs_a_library_word() {
+	let said = pure_said("library_word", "print sum [1, 2]\n");
+	assert!(said.lines().next() == Some("3"), "{said}");
 }
