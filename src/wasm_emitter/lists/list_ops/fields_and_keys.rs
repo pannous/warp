@@ -626,7 +626,7 @@ impl WasmGcEmitter {
 		self.emit_keyed_functions(NODE_AT_SUBSCRIPT, NODE_WITH_SUBSCRIPT, true);
 	}
 
-	fn emit_keyed_functions(&mut self, reader: &str, writer: &str, maps_by_digits: bool) {
+	fn emit_keyed_functions(&mut self, reader: &'static str, writer: &'static str, maps_by_digits: bool) {
 		let node_ref = Ref(self.node_ref(false));
 		let is_position = |s: &Self, f: &mut Function| {
 			s.emit_field(f, 1, 0);
