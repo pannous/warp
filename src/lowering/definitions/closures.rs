@@ -711,7 +711,7 @@ impl FunctionValues {
 						}
 					}
 				}
-				// `fs += [f]` appends as `fs = fs + [f]` does
+				// `fs += [f]` appends as `fs = fs + [f]` does, and so does `fs += f` (decision list-append-plus)
 				let Node::Key(target, op @ (Op::Assign | Op::Define | Op::AddAssign), value) = node else {
 					return;
 				};
@@ -722,7 +722,7 @@ impl FunctionValues {
 				let path = self.scoped(&name);
 				if *op != Op::AddAssign {
 					self.record_holder(&path, value, &mut variables, &mut lists);
-				} else if self.is_function_list(value) {
+				} else if self.is_function_list(value) || self.is_function_value(value) {
 					lists.insert(path);
 				}
 			});

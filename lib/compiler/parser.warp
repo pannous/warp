@@ -1379,7 +1379,7 @@ def returned(p) {
 	p.at = p.at + 6
 	skip_spaces(p)
 	op = operator_at(p)
-	if op.length > 0 and ASSIGNING.contains(op#2) {
+	if op.length > 0 and binding_operators.contains(op#2) {
 		p.at = before
 		return atom(p)
 	}
@@ -1389,9 +1389,6 @@ def returned(p) {
 	// `return` alone is the word
 	if value === ø then symbol("return") else listed("", " ", [symbol("return"), value])
 }
-
-// The operators after which `return` names a variable
-ASSIGNING = ["=", ":=", ":", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
 
 // Binds a condition until `then`, `do` or the colon of `if c: x`
 CONDITION_POWER = 81
@@ -1482,13 +1479,11 @@ def branch(p, min_power) {
 def branch_assignment(p, target, min_power) {
 	skip_spaces(p)
 	op = operator_at(p)
-	if op.length == 0 or not BRANCH_ASSIGNING.contains(op#2) { return target }
+	if op.length == 0 or not assigning_operators.contains(op#2) { return target }
 	p.at = p.at + op#1.length
 	skip_spaces(p)
 	keyed(op#2, target, expression(p, min_power))
 }
-
-BRANCH_ASSIGNING = ["=", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
 
 def branch_value(p, min_power) {
 	at = blank_end(p, p.at + 5)

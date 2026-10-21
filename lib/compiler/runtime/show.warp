@@ -12,14 +12,14 @@ node_text(n: any): text := if names_a_type(n) then "class " + unboxed_text(n) el
 	False: "no"
 	_: collection_text(n)
 }
-number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_text(unboxed_float(n))
+number_text(n: any): text := if kind_code(n) == Kind.Int then exact_text(n) else float_text(unboxed_float(n))
 # a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
 collection_text(n: any): text := {
-	if kind_code(n) == 8 { return list_shown(n) }
+	if kind_code(n) == Kind.List { return list_shown(n) }
 	if node_is_error(n) { return unboxed_text(n) }
-	if kind_code(n) == 18 { return time_text(n) }
+	if kind_code(n) == Kind.Time { return time_text(n) }
 	# a closure: its lambda as written (emitter.warp closure_text_code)
-	if kind_code(n) == 16 { return closure_text(n) }
+	if kind_code(n) == Kind.Function { return closure_text(n) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
@@ -65,7 +65,7 @@ joined_items(xs: list, joiner: text): text := {
 # `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
 key_text(entry: any): text := {
 	value = key_value(entry)
-	if marked_kind(entry) == 6 { return key_name(entry) + node_text(value) }
+	if marked_kind(entry) == Marked.Instance { return key_name(entry) + node_text(value) }
 	operator = key_operator(entry)
 	if text_order(operator, ":") == 0 { return key_name(entry) + ":" + node_code(value) }
 	# `y+z`, `y and z`: a word operator between spaces

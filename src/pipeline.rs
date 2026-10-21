@@ -317,6 +317,8 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::declarations::lower_c_functions,
 	crate::lowering::declarations::lower_bare_declarations,
 	crate::lowering::declarations::lower_spaced_definitions,
+	// `play(xs: list of int)`: one parameter `xs:"list of int"` (declaration_forms.rs), before any pass reads a head
+	crate::lowering::declaration_forms::lower_list_parameters,
 	crate::lowering::number_words::lower,
 	crate::lowering::parameter_shapes::lower,
 	crate::lowering::blocks::lower_trailing_blocks,

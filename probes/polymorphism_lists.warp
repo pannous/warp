@@ -1,0 +1,13 @@
+# card polymorphism-lists: the item type of a list argument picks the overload
+class note{pitch:int}
+class file{name:text}
+play(xs: list of note) = "notes {count xs}"
+play(xs: list of file) = "files {count xs}"
+print play([note(60), note(62)])
+print play([file("a.mid")])
+song = [note(1), note(2), note(3)]
+print play(song)
+count_up(xs: ints) = "ints {count xs}"
+count_up(xs: texts) = "texts {count xs}"
+print count_up([1, 2])
+print count_up(["a"])

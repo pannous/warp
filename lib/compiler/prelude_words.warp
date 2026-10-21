@@ -63,7 +63,7 @@ symbol_words(n: any): list := {
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
-		if part is symbol { found[name_of(part)] = yes } else if type(part) is key { waiting += [key_of(part), value_of(part)] } else if is_group(part) { for item in part { waiting += [item] } }
+		if part is symbol { found[name_of(part)] = yes } else if part is key { waiting += [key_of(part), value_of(part)] } else if is_group(part) { for item in part { waiting += [item] } }
 	}
 	found.keys
 }
@@ -152,7 +152,7 @@ own_heads(program: any): any := {
 # the head of `f(a) := …`, `f(a): int := …`, `def f(a) {…}`; ø for another statement
 definition_head_of(statement: any): any := {
 	n = if is_keyword_group(statement) then statement#2 else statement
-	while type(n) is key { n = key_of(n) }
+	while n is key { n = key_of(n) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 then n else ø
 }
 
@@ -199,7 +199,7 @@ called_words(n: any): list := {
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
-		if type(part) is key { waiting += [key_of(part), value_of(part)] } else if is_group(part) {
+		if part is key { waiting += [key_of(part), value_of(part)] } else if is_group(part) {
 			if bracket_of(part) == "(" and #part > 0 and part#1 is symbol { found[name_of(part#1)] = yes }
 			for item in part { waiting += [item] }
 		}

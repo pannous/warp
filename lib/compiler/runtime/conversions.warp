@@ -1,17 +1,17 @@
 # Conversions and casts of values known only at run time: `as`, typed variables, truthiness, int and char texts
 # a boxed int (kind code 1), exact rational or float as a float
 float_of_node(n: any): float := {
-	if kind_code(n) != 1 { return unboxed_float(n) }
+	if kind_code(n) != Kind.Int { return unboxed_float(n) }
 	float(exact_numerator(n)) / float(exact_denominator(n))
 }
 # `x.bytecount`: the bytes of a text's or character's UTF-8, 8 an item of a list or map; an error has none
 node_bytes(n: any): int := {
-	if is_null(n) == 0 and kind_code(n) == 11 { fail() }
-	if textual_node(n) == 1 { return byte_count(text_of_node(n)) }
+	if not is_null(n) and kind_code(n) == Kind.Error { fail() }
+	if textual_node(n) { return byte_count(text_of_node(n)) }
 	node_length(n) * 8
 }
 # `n as float` of a value known only at run time: a text or character spells the number
-float_cast(n: any): float := if textual_node(n) == 1 then text_as_float(text_of_node(n)) else float_of_node(n)
+float_cast(n: any): float := if textual_node(n) then text_as_float(text_of_node(n)) else float_of_node(n)
 # a % b of floats as in mathematics, as the floats of Rust: the truncated remainder, plus |b| when below 0
 float_mod(a: float, b: float): float := {
 	if b == 0 { divide_by_zero() }
@@ -22,71 +22,71 @@ float_mod(a: float, b: float): float := {
 }
 # a boxed number added to a number variable (`s += x`); a text or any other value traps, as Rust fails on it
 number_node(n: any): any := {
-	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { fail() }
+	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { fail() }
 	n
 }
 # a boxed int where an int is needed; any other value traps, as Rust fails on it
 int_of_node(n: any): int := {
-	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
+	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { fail() }
 	unboxed_int(n)
 }
 # a value known only at run time given to a variable declared int: a float or a fraction is no whole number, as Rust's
 int_admitted(n: any): int := {
-	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { not_an_int() }
-	if kind_code(n) == 2 or is_ratio(n) == 1 { an_int_must_be_a_whole_number() }
+	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { not_an_int() }
+	if kind_code(n) == Kind.Float or is_ratio(n) { an_int_must_be_a_whole_number() }
 	unboxed_int(n)
 }
 # … given to a variable declared list: ø or a list (a map is kind 8 in curly braces, no list), kept as it is, as Rust's
 list_admitted(n: any): any := {
-	if is_null(n) == 0 and (kind_code(n) != 8 or marked_kind(n) == 8) { not_a_list() }
+	if not is_null(n) and (kind_code(n) != Kind.List or marked_kind(n) == Marked.Map) { not_a_list() }
 	n
 }
 # … given to a typed field: kept when the type admits it, else "not a text", as Rust's
 # (src/wasm_emitter/declared_values.rs): a text or character for text, yes/no (or 0 and 1) for bool, a number for float
 text_checked(n: any): any := {
-	if is_null(n) == 1 or (kind_code(n) != 3 and kind_code(n) != 4) { returned_error("not a text") }
+	if is_null(n) or (kind_code(n) != Kind.Text and kind_code(n) != Kind.Codepoint) { returned_error("not a text") }
 	n
 }
 bool_checked(n: any): any := {
-	if is_null(n) == 1 or not (marked_kind(n) == 257 or (kind_code(n) == 1 and is_ratio(n) == 0 and unboxed_int(n) >= 0 and unboxed_int(n) <= 1)) { returned_error("not a bool") }
+	if is_null(n) or not (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1)) { returned_error("not a bool") }
 	n
 }
 float_checked(n: any): any := {
-	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { returned_error("not a float") }
+	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { returned_error("not a float") }
 	n
 }
 # `x: T = v` of a class or enum T and a value known only at run time: v when it is an object (a symbol, key, block,
 # list or data: Rust's OBJECT_KINDS, src/wasm_emitter/declared_values.rs) or an error (of every type), else the run
 # fails with the message ("not a T")
 object_checked(value: any, message: text): any := {
-	if is_null(value) == 1 or kind_code(value) < 5 or kind_code(value) == 10 or kind_code(value) > 11 { returned_error(message) }
+	if is_null(value) or kind_code(value) < Kind.Symbol or kind_code(value) == Kind.Meta or kind_code(value) > Kind.Error { returned_error(message) }
 	value
 }
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
 # empty one) where a list is needed, a boxed character where one is needed; any other value traps, as Rust fails on it
 text_of_node(n: any): text := {
-	if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 5) { return unboxed_text(n) }
-	if is_null(n) == 0 and kind_code(n) == 4 { return char_text(unboxed_char(n)) }
+	if not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Symbol) { return unboxed_text(n) }
+	if not is_null(n) and kind_code(n) == Kind.Codepoint { return char_text(unboxed_char(n)) }
 	fail()
 	""
 }
 bool_of_node(n: any): bool := {
-	if is_null(n) == 1 or marked_kind(n) != 257 { fail() }
+	if is_null(n) or marked_kind(n) != Marked.Bool { fail() }
 	unboxed_int(n) != 0
 }
 char_of_node(n: any): char := {
-	if is_null(n) == 1 or kind_code(n) != 4 { not_a_character() }
+	if is_null(n) or kind_code(n) != Kind.Codepoint { not_a_character() }
 	unboxed_char(n)
 }
 list_of_node(n: any): list := {
-	if is_null(n) == 1 { return new_list(0) }
-	if kind_code(n) != 8 { fail() }
+	if is_null(n) { return new_list(0) }
+	if kind_code(n) != Kind.List { fail() }
 	unboxed_list(n)
 }
 # `x as bool` of a value known only at run time, as Rust's cast: a text spelling a falsy word in any case ("No",
 # "false"; FALSY_TEXTS of src/wasm_emitter/mod.rs) is no, another value as a condition (card yes-print)
 bool_cast(n: any): bool := {
-	if is_null(n) == 1 or kind_code(n) != 3 { return node_truthy(n) }
+	if is_null(n) or kind_code(n) != Kind.Text { return node_truthy(n) }
 	t = unboxed_text(n)
 	falsy = byte_count(t) == 0 or spells(t, "0") or spells(t, "false") or spells(t, "no") or spells(t, "ø")
 	not (falsy or spells(t, "nil") or spells(t, "null") or spells(t, "none"))
@@ -103,22 +103,22 @@ spells(t: text, word: text): bool := {
 # a value known only at run time as a condition, the rule of Rust's is_truthy (Node::is_falsy): ø and errors are no, a
 # list or map yes when it has items, a key when its key or value is, a number, character or text when not 0 or empty
 node_truthy(n: any): bool := {
-	if is_null(n) == 1 { return no }
+	if is_null(n) { return no }
 	kind = kind_code(n)
-	if kind == 0 or kind == 11 { return no }
-	if kind == 7 or kind == 8 { return #unboxed_list(n) > 0 }
-	if kind == 6 { return node_truthy(entry_key(n)) or node_truthy(key_value(n)) }
-	if kind == 1 { return is_ratio(n) == 1 or unboxed_int(n) != 0 }
-	if kind == 2 { return unboxed_float(n) != 0 }
-	if kind == 4 { return code_of(unboxed_char(n)) != 0 }
-	if kind == 3 or kind == 5 { return byte_count(unboxed_text(n)) > 0 }
+	if kind == Kind.Empty or kind == Kind.Error { return no }
+	if kind == Kind.Block or kind == Kind.List { return #unboxed_list(n) > 0 }
+	if kind == Kind.Key { return node_truthy(entry_key(n)) or node_truthy(key_value(n)) }
+	if kind == Kind.Int { return is_ratio(n) or unboxed_int(n) != 0 }
+	if kind == Kind.Float { return unboxed_float(n) != 0 }
+	if kind == Kind.Codepoint { return code_of(unboxed_char(n)) != 0 }
+	if kind == Kind.Text or kind == Kind.Symbol { return byte_count(unboxed_text(n)) > 0 }
 	yes
 }
 # `n as int` of a boxed int, exact rational or float, truncated toward 0; a text or character spells the number
 truncated_int(n: any): int := {
-	if textual_node(n) == 1 { return text_as_int(text_of_node(n)) }
-	if is_null(n) == 0 and kind_code(n) == 2 { return truncated(unboxed_float(n)) }
-	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
+	if textual_node(n) { return text_as_int(text_of_node(n)) }
+	if not is_null(n) and kind_code(n) == Kind.Float { return truncated(unboxed_float(n)) }
+	if is_null(n) or kind_code(n) != Kind.Int { fail() }
 	int_quotient(exact_numerator(n), exact_denominator(n))
 }
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach

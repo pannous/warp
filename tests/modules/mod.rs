@@ -43,6 +43,7 @@ mod test_prelude_own_names; // card lib-math
 mod test_prelude_shadowing; // card program-own
 #[cfg(feature = "native")]
 mod test_program_arguments; // card wasm-args
+mod test_program_variable_beside_module; // card program-var-leaks
 mod test_replaced_module_function; // card use-sound-def
 mod test_rewrites; // card compiler-modules
 mod test_runtime_word_lines; // card retire-library-words
@@ -85,6 +86,8 @@ mod test_std_uncertain; // card uncertain-warp
 mod test_std_words; // card std-word
 #[cfg(feature = "native")] // files beside the program: not in the browser build
 mod test_two_used_files;
+#[cfg(feature = "native")] // files beside the program: not in the browser build
+mod test_use_cycle; // card rust-lane-use
 mod test_use_modules;
 mod test_use_several; // card std-use
 #[cfg(feature = "native")] // files beside the program: not in the browser build
