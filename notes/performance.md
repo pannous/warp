@@ -106,6 +106,10 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   reran 6 times (~6.2 s of 13.3 s emitting) until the emitter foresaw the ops of `key(left, op, right)` calls
   (node_api foreseen_key_operator): now 0 reruns, 5.4 s. A new rerun cause is a need the analysis should foresee.
 - Cold A/B: a re-signed copy (`cp warp w; codesign -s - -f w`) misses the program cache, whose key holds the binary.
+- The shared /Users/me/dev/bin/warp is replaced after every pushed batch, which changes every stage key: a series
+  run on it can recompile the stages in its middle (it looked like a missed cache). Time a copied binary.
+- Self-hosted tests in the cloud lane (card stage-cache-timeout): test_self_hosted_cache unoptimized: build 74 s + tests
+  361 s; with warp-lang at opt-level 2: 452 + 180 s, so a filtered run stays unoptimized.
 
 ## Compile time
 - Shared analysis state: function kinds and closure targets are `Rc` (analyzer FunctionKinds, ClosureTargets); passes

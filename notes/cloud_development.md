@@ -70,7 +70,8 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   one branch and tip therefore keep separate results. To collect a `--no-wait` run later, repeat those same options
   and filters after `--result`; an identical invocation keeps the same id and coalesces while it is pending.
 - Environmental failures: scripts/cloud-test-environmental.txt, one regex per line with its reason; matches are listed
-  apart and don't make the verdict red. Grown only from real runs. `--summarize <log> [list]` re-summarizes a saved log.
+  apart and don't make the verdict red. A second regex after the test's narrows it to the items its panic lists (the
+  playground sample slices: only gpu_visualizer_warp is Mac-only; dates failing there is red). Grown only from real runs. `--summarize <log> [list]` re-summarizes a saved log.
 - Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message and keeps
   its checkout and cargo output (a repeat build of the same branch: ~0 s vs ~350 s cold). Up to 5 busy
   (MAX_PARALLEL_RUNS), 8 sessions in total (MAX_CLOUD_SESSIONS). After 30 jobs a session gets `/clear`. A session that

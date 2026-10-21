@@ -1,14 +1,14 @@
 //! `{a:1}` stays its pair at run time (user, card single-entry, notes/decisions.md) and becomes the map of that one entry
-//! where a map is needed: an untyped or map-typed argument of the program's own function (`kind_of({a:1})` tests `x is map`), a variable a
+//! where a map is needed: an untyped, any- or map-typed argument of the program's own function (`kind_of({a:1})` tests
+//! `x is map`), a variable declared any or map (`z: any = {a:1}`), a variable a
 //! map method changes (`m = {a:1}; m.pop("a")`, `m.add(…)`, `m += …`, or one passed to such a function) and the entry
 //! appended into a map (`m += {b:2}`). Reading it as a map works on the pair as it is: count, keys, values, get, has,
 //! `for k in m`, `m["b"] = 2`.
 
-use super::memoization::definition_parts;
-use super::nodes::{call, is_colon_pair, key};
+use super::nodes::{call, function_head, is_colon_pair, key};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
-use crate::words::MAP_WORD;
+use crate::words::{ANY_TYPE, MAP_WORD};
 use std::collections::{HashMap, HashSet};
 
 /// `map_of_entry(x)`: the lone entry x as the map of it, any other value itself (wasm_emitter list_ops.rs)
@@ -19,10 +19,19 @@ const CHANGING_METHODS: [&str; 9] = ["pop", "remove", "delete", "add", "append",
 pub fn lower(node: Node) -> Node {
 	let functions = defined_functions(&node);
 	let changed = changed_maps(&node, &functions);
-	if functions.is_empty() && changed.is_empty() {
+	if functions.is_empty() && changed.is_empty() && !declares_any_map_slot(&node) {
 		return node;
 	}
 	upgraded(node, &functions, &changed)
+}
+
+/// `z:any = …`, `m:map = …` anywhere in the program
+fn declares_any_map_slot(program: &Node) -> bool {
+	let mut found = false;
+	program.visit(&mut |node| {
+		found |= matches!(node.drop_meta(), Node::Key(target, Op::Assign, _) if declares_map_slot(target));
+	});
+	found
 }
 
 /// `{a:1}`: a braced single pair
@@ -38,26 +47,33 @@ fn as_map(node: Node) -> Node {
 	}
 }
 
-/// The program's functions, each with whether its parameters take a map: an untyped `x` or `m:map` does, `p:photo`
-/// does not (a typed parameter checks the fields of the pair it is given, tests/operators/test_like.rs)
+/// The program's functions, each with whether its parameters take a map: an untyped `x`, `x:any` or `m:map` does,
+/// `p:photo` does not (a typed parameter checks the fields of the pair it is given, tests/operators/test_like.rs)
 type Functions = HashMap<String, Vec<bool>>;
 
 fn takes_map(parameter: &Node) -> bool {
 	match parameter.drop_meta() {
-		Node::Key(_, Op::Colon, type_name) => type_name.drop_meta().name().starts_with(MAP_WORD),
+		Node::Key(_, Op::Colon, _) => declares_map_slot(parameter),
 		_ => true,
+	}
+}
+
+/// `x:any`, `m:map`, `m:map of int`: a parameter or variable declared to hold a map
+fn declares_map_slot(declaration: &Node) -> bool {
+	match declaration.drop_meta() {
+		Node::Key(_, Op::Colon, type_name) => {
+			let name = type_name.drop_meta().name();
+			name == ANY_TYPE || name.starts_with(MAP_WORD)
+		}
+		_ => false,
 	}
 }
 
 fn defined_functions(program: &Node) -> Functions {
 	let mut functions = Functions::new();
 	program.visit(&mut |node| {
-		if let Some((head, _, _)) = definition_parts(node) {
-			if let Node::List(items, _, _) = head.drop_meta() {
-				if let Some(name) = items.first().and_then(Node::symbol_name) {
-					functions.insert(name.to_string(), items[1..].iter().map(takes_map).collect());
-				}
-			}
+		if let Some(function) = function_head(node) {
+			functions.insert(function.name.to_string(), function.parameters().into_iter().map(takes_map).collect());
 		}
 	});
 	functions
@@ -115,7 +131,7 @@ fn upgraded(node: Node, functions: &Functions, changed: &HashSet<String>) -> Nod
 		map_arguments(&node, functions).map(|arguments| arguments.into_iter().map(|(_, takes)| takes).collect());
 	match node {
 		Node::Key(target, op @ (Op::Assign | Op::AddAssign), value)
-			if target.symbol_name().is_some_and(|name| changed.contains(name)) =>
+			if target.symbol_name().is_some_and(|name| changed.contains(name)) || declares_map_slot(&target) =>
 		{
 			key(*target, op, as_map(upgraded(*value, functions, changed)))
 		}
