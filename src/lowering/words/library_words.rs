@@ -422,6 +422,7 @@ pub fn lower(node: Node) -> Node {
 		plain,
 		instances,
 		parameters: RefCell::new(vec![]),
+		bound_parameters: RefCell::new(vec![]),
 		function_parameters: RefCell::new(vec![]),
 		defining: RefCell::new(vec![]),
 		call_results,
@@ -592,6 +593,9 @@ struct Lowering {
 	instances: crate::traits::InstanceTypes,
 	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
 	parameters: RefCell<Vec<String>>,
+	/// Every parameter of the definitions being lowered, typed or not: another variable than a same-named one some
+	/// other function assigns an object or a plain value (`entries = {}` in one, `map_value(body, entries: any)`)
+	bound_parameters: RefCell<Vec<String>>,
 	/// The parameters declared `function` of the definitions being lowered: `c.name` reads the function's name, never a
 	/// class's method name()
 	function_parameters: RefCell<Vec<String>>,
@@ -743,6 +747,8 @@ impl Lowering {
 		let outer = self.shadowed.replace(locals);
 		let function_scope = self.function_parameters.borrow().len();
 		self.function_parameters.borrow_mut().extend(crate::traits::parameters_of_type(head, FUNCTION_TYPE_WORD));
+		let bound_scope = self.bound_parameters.borrow().len();
+		self.bound_parameters.borrow_mut().extend(crate::traits::parameter_names(head));
 		let lowered = self.within_function(name, parameters, || {
 			let body = self.body_statement(head, right);
 			// `x = {sum xs}` assigns that data: only its parts are lowered, the block stays no call
@@ -752,6 +758,7 @@ impl Lowering {
 			self.expand(body)
 		});
 		self.function_parameters.borrow_mut().truncate(function_scope);
+		self.bound_parameters.borrow_mut().truncate(bound_scope);
 		self.shadowed.replace(outer);
 		lowered
 	}
@@ -807,6 +814,16 @@ impl Lowering {
 	fn times_here(&self) -> HashSet<String> {
 		let parameters = self.parameters.borrow();
 		self.times.iter().filter(|name| !parameters.contains(name)).cloned().collect()
+	}
+
+	/// A parameter of a definition being lowered, typed or not, named `name`
+	fn binds_parameter(&self, name: &str) -> bool {
+		self.bound_parameters.borrow().iter().any(|parameter| parameter == name)
+	}
+
+	/// A variable assigned only plain values, not a parameter named like it
+	fn is_plain(&self, name: &str) -> bool {
+		self.plain.contains(name) && !self.binds_parameter(name)
 	}
 
 	fn is_parameter(&self, node: &Node) -> bool {
@@ -1126,8 +1143,7 @@ impl Lowering {
 		}
 		let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
 		// a parameter named like a variable assigned a plain value elsewhere holds any value
-		let is_plain = receiver.symbol_name().is_some_and(|variable| self.plain.contains(variable))
-			&& !self.is_parameter(receiver);
+		let is_plain = receiver.symbol_name().is_some_and(|variable| self.is_plain(variable));
 		match !is_plain && (is_element || self.is_object(receiver, name) || self.may_hold_object(receiver)) {
 			true => OwnMember::Maybe,
 			false => OwnMember::Not,
@@ -1263,9 +1279,7 @@ impl Lowering {
 			other => other,
 		};
 		match variable {
-			Node::Symbol(variable) => {
-				!self.plain.contains(variable) && !self.context.user_functions.contains_key(variable)
-			}
+			Node::Symbol(variable) => !self.is_plain(variable) && !self.context.user_functions.contains_key(variable),
 			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call)
 			Node::List(items, Bracket::Round, Separator::None) if word_headed(items).is_some() => true,
 			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
