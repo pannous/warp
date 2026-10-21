@@ -760,7 +760,6 @@ import_index(entry: any): int := {
 	if index < 0 { refuse("the import " + entry#2 + ", not declared") }
 	index
 }
-def code_point(value: any): list { ["int", value#2 + [op.i64_extend_i32_u]] }
 # a value as the text `+` joins it with and print writes
 def shown_text(value: any): list {
 	kind = value#1
