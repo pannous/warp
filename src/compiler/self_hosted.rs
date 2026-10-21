@@ -396,7 +396,10 @@ fn host_words() -> Result<String, Node> {
 	let source = std::fs::read_to_string(&file)
 		.map_err(|reason| crate::node::error(&format!("the host words {}: {reason}", file.display())))?;
 	let program = crate::warp_parser::parse(&source);
-	let table = program.drop_meta().iter().find_map(|statement| match statement.drop_meta() {
+	// a file of one statement parses as that statement, not as a list of it
+	let program = program.drop_meta();
+	let statements = if let Node::List(items, _, _) = program { items.clone() } else { vec![program.clone()] };
+	let table = statements.iter().find_map(|statement| match statement.drop_meta() {
 		Node::Key(name, crate::operators::Op::Assign, table) if name.drop_meta().name() == HOST_WORDS_NAME => {
 			Some(table.as_ref().clone())
 		}
