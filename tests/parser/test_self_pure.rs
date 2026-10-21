@@ -629,3 +629,10 @@ fn a_map_member_beside_its_entry_runs_pure() {
 	let probe = format!("{}/probes/map_member_beside_entry.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("map_member_beside_entry", &probe, "[\"keys\" 'a']");
 }
+
+/// A match arm of a constant, `True:`, tests the subject equals it (card match-bool-arm: node_text under warp self)
+#[test]
+fn a_match_arm_of_a_constant_runs_pure() {
+	let probe = format!("{}/probes/match_bool_arm.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("match_bool_arm", &probe, "\"yesno\"");
+}
