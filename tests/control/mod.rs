@@ -136,6 +136,7 @@ mod test_match_else_line;
 mod test_match_guarded_unit_name; // card pattern-variable
 mod test_match_guards_and_finally;
 mod test_match_item_patterns; // card list-pattern
+mod test_match_literal_receiver; // card match-method
 mod test_match_many_literals; // card pattern-dispatch-speed
 mod test_match_maps; // card map-patterns
 mod test_match_method_subject; // card match-xs
