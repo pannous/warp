@@ -470,6 +470,13 @@ fn special_form_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 	if [ZERO_FILL_CALL, INSERT_EITHER_CALL].contains(&name) {
 		return Some(Kind::List);
 	}
+	// `wasm f64.sqrt`, the trap of `is_null(x: any): bool from runtime`: its instruction's kind, no user call's Int
+	if name == crate::words::WASM_INSTRUCTION_CALL && items.len() == 2 {
+		return Some(match items[1].drop_meta() {
+			Node::Text(instruction) => crate::wasm_emitter::functions::wasm_bodies::result_kind(instruction),
+			_ => Kind::Empty,
+		});
+	}
 	// `now`, `2024-02-29`: a time, a kind the node operations meet at run time (wasm_emitter/times.rs)
 	if crate::time::TIME_CALLS.contains(&name) {
 		return Some(Kind::Data);

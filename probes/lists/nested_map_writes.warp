@@ -1,0 +1,15 @@
+#!/usr/bin/env warp
+// a write into a map held in a map changes the inner map, the key literal or a variable (card nested-write); 1 2 1
+m = {}
+k = "a"
+m[k] = {}
+m[k]["x"] = 2
+class S { kinds: map = {} }
+scopes = {}
+scopes[k] = S()
+scopes[k].kinds["x"] = 1
+n = {b: {}}
+n["b"]["x"] = 1
+print n["b"]["x"]
+print m[k]["x"]
+print(#scopes[k].kinds)
