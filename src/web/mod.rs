@@ -384,7 +384,9 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 	let value_node = || value.clone().unwrap_or(Node::Empty);
 	match kind & KIND_MASK {
 		// `[]`: ø marked by its square bracket, as wasm_reader.rs reads it natively
-		tag if tag == Kind::Empty as i64 && kind & crate::type_kinds::UNMARKED_KIND == crate::type_kinds::EMPTY_LIST_KIND => {
+		tag if tag == Kind::Empty as i64
+			&& kind & crate::type_kinds::UNMARKED_KIND == crate::type_kinds::EMPTY_LIST_KIND =>
+		{
 			Node::List(vec![], Bracket::Square, Separator::None)
 		}
 		tag if tag == Kind::Empty as i64 => Node::Empty,

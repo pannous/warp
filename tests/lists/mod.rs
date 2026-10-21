@@ -7,6 +7,7 @@ mod test_byte_size;
 mod test_calls_in_blocks;
 mod test_captured_call_lists;
 mod test_comprehension_beside_own_push; // card prefix-count-field
+mod test_comprehension_if_else_item; // card comprehension-whose
 mod test_concat_declared;
 mod test_concat_keeps_arrays; // card runtime-speed
 mod test_count_after_function; // card print-people
@@ -90,7 +91,6 @@ mod test_map_variables;
 mod test_min_max;
 mod test_min_max_lists;
 mod test_nested_comprehension; // card double-for-comprehension
-mod test_comprehension_if_else_item; // card comprehension-whose
 mod test_nested_index_assignment;
 mod test_nested_maps;
 mod test_node_lists;
