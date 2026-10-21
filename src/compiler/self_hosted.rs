@@ -228,8 +228,7 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 			if let Some(mark) = crate::host::fuel_mark() {
 				wasm_encoder::Section::append_to(&mark, &mut bytes);
 			}
-			let needs_host = imports_from(&bytes, HOST_MODULE);
-			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
+			Some(Ok(module_of_bytes(bytes)))
 		}
 	}
 }
@@ -337,10 +336,12 @@ fn record_lines(lines: &str) {
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }
 
-/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word
+/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word, libm when it
+/// imports pow (a float raised to a power)
 pub(crate) fn module_of_bytes(bytes: Vec<u8>) -> crate::pipeline::CompiledModule {
 	let needs_host = imports_from(&bytes, HOST_MODULE);
-	crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }
+	let needs_ffi = imports_from(&bytes, crate::ffi::LIBM);
+	crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi }
 }
 
 /// Does the module import a function of `module`

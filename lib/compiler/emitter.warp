@@ -32,6 +32,8 @@ stdout = 1
 # a module that reads files imports the host's read(path address, length) → (answer address, length), as Rust's
 # import_manager.rs host_read; the host writes the answer at the exported global text_heap, past the memory's end
 host_read = ["host", "read", [96, 2, 127, 127, 2, 127, 127]]
+# a module raising a float to a power imports libm's pow(base, exponent) → f64, as Rust's emit_float_power calls it
+float_pow = ["m", "pow", [96, 2, 124, 124, 1, 124]]
 text_heap_name = "text_heap"
 # its linear memory, one page: fd_write's iovec {address, count} at 0, the count it wrote at 8, the bytes it writes from
 # output_address (an offset of the store, so `output_byte(i, b)` stores at output_address + i)
@@ -922,6 +924,7 @@ def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	if symbol == "/" and kind == "int" { return runtime_call("exact_ratio", [a, b]) }
 	# a negative exponent gives an exact rational, so the power is a boxed value
 	if symbol == "^" and kind == "int" { return runtime_call("exact_pow", [["node", boxed(a)], ["node", boxed(b)]]) }
+	if symbol == "^" { return float_power(body, converted(a, kind), converted(b, kind)) }
 	ops = if kind == "float" then float_ops else int_ops
 	if symbol not in ops { return refuse("the operator " + symbol + " on " + kind) }
 	if kind == "int" and symbol in checked_words and not body.intrinsics {
@@ -929,6 +932,14 @@ def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	}
 	result = if symbol in comparisons then "bool" else kind
 	[result, converted(a, kind) + converted(b, kind) + [ops[symbol]]]
+}
+
+# base ^ exponent of floats: libm's pow; a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
+def float_power(body: Body, base: list, exponent: list): list {
+	held = uleb(fresh_local(body, "float"))
+	code = base + exponent + [op.call] + uleb(import_index(float_pow)) + [op.local_tee] + held + [op.local_get] + held
+	checked = [op.f64_ne, op.if, no_value] + dropped(runtime_call("invalid_number", [])) + [op.end]
+	["float", code + checked + [op.local_get] + held]
 }
 
 # an operator on boxed values, by the kinds they hold at run time: `+` is the runtime word node_add; a comparison
@@ -2295,6 +2306,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	if mentions(program, "read") { module.imports += [host_read] }
+	if has_operator(program, Op.Pow) { module.imports += [float_pow] }
 	# imported ahead of the functions, whose indices follow them: every host word the program names
 	for name in module.host.keys {
 		if mentions(program, name) or (name in time_host_words and makes_time(program)) { module.imports += [host_import(name)] }
