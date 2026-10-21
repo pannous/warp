@@ -21,7 +21,7 @@ compared_call(n: any, functions: list): any := {
 	if not (is_group(n) and (bracket_of(n) == "" or bracket_of(n) == "(") and separator_of(n) == " " and #n == 2) { return n }
 	if not (n#1 is symbol and name_of(n#1) in functions) { return n }
 	comparison = n#2
-	if not (type(comparison) is key and op_of(comparison) in comparison_words) { return n }
+	if not (comparison is key and op_of(comparison) in comparison_words) { return n }
 	Key(List([n#1, key_of(comparison)], Bracket.Round, Separator.None), op_of(comparison) as Op, value_of(comparison))
 }
 

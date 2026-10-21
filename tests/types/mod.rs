@@ -148,6 +148,7 @@ mod test_runtime_text_ratio;
 mod test_same_identity;
 mod test_scoped_enum_cases; // card node-enum
 mod test_self_typed_field; // card empty-field
+mod test_separated_list_writes; // card mark-separator
 mod test_shared_instances;
 mod test_shared_lists; // card shared-lists
 mod test_sized_array_values;

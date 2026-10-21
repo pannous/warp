@@ -316,7 +316,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_list_marks(&mut self) {
-		use crate::type_kinds::{ELEMENT_MARK_SHIFT, KIND_MASK, MARK_BOOL_BIT, MARK_KINDS_MASK};
+		use crate::type_kinds::{ELEMENT_MARK_SHIFT, KIND_MASK, MARK_BITS, MARK_BOOL_BIT, MARK_KINDS_MASK};
 		if !self.should_emit_function(LIST_MARK) {
 			return;
 		}
@@ -349,7 +349,8 @@ impl WasmGcEmitter {
 			s.emit_field(f, list, 0);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::I64Const(ELEMENT_MARK_SHIFT), I::I64ShrU, I::LocalTee(mark), I::I64Eqz, I::If(BlockType::Empty),
+				I::I64Const(ELEMENT_MARK_SHIFT), I::I64ShrU, I::I64Const(MARK_BITS), I::I64And, I::LocalTee(mark), I::I64Eqz,
+				I::If(BlockType::Empty),
 					I::Return,
 				I::End,
 			]);

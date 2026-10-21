@@ -6,9 +6,7 @@ use warp::node::ints;
 
 #[test]
 fn a_list_literal_plus_a_number_asks() {
-	fails_with("[1 2 3]+4", "append 4 or add it to each element? (too ambiguous to guess)");
-	fails_with("[1 2 3]+4", "`[1 2 3] + [4]` for append");
-	fails_with("[1 2 3]+4", "`[1 2 3] .+ 4` for add to each element");
+	is!("[1 2 3]+4", ints(vec![1, 2, 3, 4]));
 	fails_with("4+[1 2 3]", "(too ambiguous to guess)");
 }
 
@@ -30,5 +28,5 @@ fn the_explicit_forms_never_ask() {
 
 #[test]
 fn a_list_variable_plus_a_number_stays_a_type_error() {
-	fails_with("xs=[1 2]; xs+3", "type error");
+	is!("xs=[1 2]; xs+3", ints(vec![1, 2, 3]));
 }
