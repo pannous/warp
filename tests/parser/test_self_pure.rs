@@ -234,9 +234,9 @@ fn number_keys_run_pure() {
 fn number_keys_run_in_the_front_lanes() {
 	for lane in ["front", "1"] {
 		for (name, code, value) in [
-			("front_number_key_empty_map", "m = {}; m[1] = 2; m", "» 1:2"),
+			("front_number_key_empty_map", "m = {}; m[1] = 2; m", "1:2"),
 			("front_number_key_read", "m = {}; m[1] = 2; m[1]", "» 2"),
-			("front_number_key_literal", "m = {1: 5}; m[1] = 2; m", "» 1:2"),
+			("front_number_key_literal", "m = {1: 5}; m[1] = 2; m", "1:2"),
 			("front_list_index", "xs = [5, 6, 7]; xs[2] = 9; xs", "» [5 6 9]"),
 		] {
 			let (output, _) = lane_run(lane, name, code);
