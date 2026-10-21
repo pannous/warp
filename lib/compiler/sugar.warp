@@ -132,7 +132,9 @@ negated_form(bound: any): text := if bound is number then "${bound}" else "-${va
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // Rust twin: warp_parser subscript
-one_based(index: Node): Node := if index is number then index + 1 else Key(index, Op.Add, 1)
+// A number index keeps the number written in an attribute layer, as Rust's parser keeps WrittenIndex on `d#2`: a map
+// keyed by numbers reads it (number_keys.rs); plain_node drops the layer, number_keys.warp reads `d#2` itself
+one_based(index: Node): Node := if index is number then attributed(written_index_mark, index, index + 1) else Key(index, Op.Add, 1)
 
 // The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
 // Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS

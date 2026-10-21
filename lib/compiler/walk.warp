@@ -28,6 +28,8 @@ attribute_word = "view·attribute"
 # `x!` of a name no mutation takes: run as Rust runs what blocks.rs inlines no block for, `unwrap(x)`
 mutated_mark = "mutated"
 unwrap_word = "unwrap"
+# the number a subscript was written with, `1` of `d[1]` on its shifted index `d#2` (Rust: warp_parser WrittenIndex)
+written_index_mark = "written_index"
 
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: any): bool := kind_of(view) == "list" and #view == 3
@@ -37,20 +39,21 @@ is_empty_map(n: Node): bool := match n {
 	_: no
 }
 
-# the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø
-# (decision empty-group-node), an opaque type or error whole; Rust twin: compiler/node_views.rs plain
+# the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø but
+# the empty map `{}` (decision empty-group-node: the bridge keeps Rust's bracket where a pass reads it, number_keys
+# keys a variable that starts as `{}`), an opaque type or error whole; Rust twin: compiler/node_views.rs plain
 plain(view: any): any := without_layers(view, no)
 
 # the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
 # (mutation.rs reads the mark of `x!`); Rust twin: src/compiler/node_views.rs handled_plain_view
 bridged(view: any): any := without_layers(view, yes)
 
-# the view without literal layers, without attribute layers unless `attributes`, an empty group as ø
+# the view without literal layers, without attribute layers unless `attributes`, an empty group but `{}` as ø
 without_layers(view: any, attributes: bool): any := {
 	kind = kind_of(view)
 	if kind == "literal" or (kind == "attribute" and not attributes) { return without_layers(view#(#view), attributes) }
 	if kind == "type" or kind == "error" { return view }
-	if kind == "list" and #view == 3 { return ø }
+	if is_empty_group(view) { return if view#2 == "{" then view else ø }
 	if view is list { return view.map(part => without_layers(part, attributes)) }
 	view
 }
@@ -72,16 +75,22 @@ plain_node(n: Node): Node := match n {
 }
 
 # the node a view stands for
-node_of(view: any): Node := {
+node_of(view: any): Node := node_from(view, no)
+# the node of a view Rust hands a pass stage: the empty map `{}` behind the opaque word, as plain_node keeps it for
+# number_keys
+stage_node(view: any): any := node_from(view, yes)
+node_from(view: any, keeps_maps: bool): any := {
 	kind = kind_of(view)
+	part = inner => node_from(inner, keeps_maps)
 	if kind == "symbol" { return symbol(view#2) }
 	if kind == "text" { return view#2 }
 	// lowering reads a one-character literal as a text, as the Rust lowering does
 	if kind == "char" { return "" + view#2 }
-	if kind == "key" { return Key(node_of(view#3), view#2 as Op, node_of(view#4)) }
-	if kind == "list" { return List(view[3..].map(node_of), view#2 as Bracket, view#3 as Separator) }
-	if kind == "at" { return positioned(node_of(view#4), view#2, view#3) }
-	if kind == "attribute" { return Key(symbol(attribute_word), Op.Colon, [view#2, node_of(view#3), node_of(view#4)]) }
+	if kind == "key" { return Key(part(view#3), view#2 as Op, part(view#4)) }
+	if keeps_maps and is_empty_group(view) and view#2 == "{" { return Key(symbol(opaque_word), Op.Colon, view) }
+	if kind == "list" { return List(view[3..].map(item => part(item)), view#2 as Bracket, view#3 as Separator) }
+	if kind == "at" { return positioned(part(view#4), view#2, view#3) }
+	if kind == "attribute" { return Key(symbol(attribute_word), Op.Colon, [view#2, part(view#3), part(view#4)]) }
 	if kind == "" { return view }
 	Key(symbol(opaque_word), Op.Colon, view)
 }
