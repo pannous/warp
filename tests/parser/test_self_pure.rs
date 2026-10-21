@@ -717,3 +717,10 @@ fn spaced_prefix_calls_run_pure() {
 	let probe = format!("{}/probes/spaced_prefix_calls.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("spaced_prefix_calls", &probe, "3\n-1\n-6\n9\n2");
 }
+
+/// `[]` written in code is a list of no items, not ø (decision empty-is-not-missing, card pure-lane-literal)
+#[test]
+fn an_empty_list_literal_runs_pure() {
+	let probe = format!("{}/probes/empty_list_literal.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("empty_list_literal", &probe, "[]\n[]\n[]");
+}
