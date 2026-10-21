@@ -1555,13 +1555,13 @@ def condition_has_branch(p: Parser, at: int): bool {
 	depth = 0
 	spaced_brace_open = false
 	// ' ' while outside quotes
-	quote = ' '
+	open_quote = ' '
 	for i in at ..< p.n {
 		c = p.code[i]
-		if quote != ' ' {
-			if c == quote { quote = ' ' }
+		if open_quote != ' ' {
+			if c == open_quote { open_quote = ' ' }
 		} else if c == '"' or c == '\'' {
-			quote = c
+			open_quote = c
 		} else if c == '{' and depth == 0 {
 			// a comparison, not is_blank: a `: bool` call is an Int to the analyzer (card bool-call-int)
 			spaced_brace_open = p.code[i - 1] == ' ' or p.code[i - 1] == '\t'
