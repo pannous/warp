@@ -4,6 +4,7 @@
 
 use crate::compiler::compile_context;
 pub use crate::compiler::compile_mode::*;
+use crate::lowering::keyword_rewrites::KeywordRewrite;
 use crate::node::{Bracket, Node, Separator};
 use crate::warp_parser::WarpParser;
 use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
@@ -85,6 +86,15 @@ pub struct CompiledModule {
 
 type Pass = fn(Node) -> Node;
 
+/// The keyword rewrites among the sugar passes (keyword_rewrites.rs), one walk: `n times {…}`, `n times [x]`,
+/// `n times "ab"` as a loop, a filled list, a repeated text; `xs .* 2` as the operator applied to each element
+const SUGAR_PHRASES: &[KeywordRewrite] =
+	&[crate::lowering::times_phrases::REWRITE, crate::lowering::broadcasting::ELEMENT_WISE];
+
+pub(crate) fn sugar_phrases(node: Node) -> Node {
+	crate::lowering::keyword_rewrites::rewritten(node, SUGAR_PHRASES)
+}
+
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved; one phase after the other
 const SOURCE_PHASES: [&[Pass]; 5] = [SUGAR_PASSES, DECLARATION_PASSES, MODULE_PASSES, SIGNAL_PASSES, FUNCTION_PASSES];
@@ -108,10 +118,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `window.width = 800`, `canvas.height`, a bare width (property_accessors.rs): getters and setters, before any pass
 	// reads a field's write; resolve brings draw for them
 	crate::lowering::property_accessors::lower,
-	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
-	crate::lowering::times_phrases::lower,
-	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
-	crate::lowering::broadcasting::lower_element_wise_operators,
+	// the phrases the parser keeps as written, keyword rewrites of one walk (SUGAR_PHRASES)
+	sugar_phrases,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::graphics::shader_holes::lower,
 	// `Person as text := it.name` and `p as text` (conversions.rs) before any pass reads `as` as a cast

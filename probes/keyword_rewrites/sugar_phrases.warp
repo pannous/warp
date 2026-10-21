@@ -1,0 +1,8 @@
+# `n times x` and `xs .* 2`, the keyword rewrites of one walk (card pass-triggers), nested too
+xs = [1, 2, 3]
+print xs .* 2
+print 3 times "ab"
+count = 0
+2 times { count += 1; 2 times { count += 10 } }
+print count
+print 2 times [0]

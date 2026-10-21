@@ -1,22 +1,18 @@
-//! `n times …`: the parser keeps the phrase [n times operand] as written (suffixes.rs parse_times_loop), this pass
-//! gives it its meaning. A block is a loop with a hidden counter of its own, so nested loops do not meet; `n times [x]`
-//! is the list of n x; any other operand is repeated by `times·text` (`3 times "ab"`, `3 times 4` multiplies).
+//! `n times …`: the parser keeps the phrase [n times operand] as written (suffixes.rs parse_times_loop), this keyword
+//! rewrite gives it its meaning. A block is a loop with a hidden counter of its own, so nested loops do not meet;
+//! `n times [x]` is the list of n x; any other operand is repeated by `times·text` (`3 times "ab"`, `3 times 4`
+//! multiplies).
 
+use super::keyword_rewrites::KeywordRewrite;
 use super::nodes::{assign, call, int, key, symbol};
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, TEXT_TIMES, TIMES_WORD};
 
-pub fn lower(node: Node) -> Node {
-	if !node.mentions_any(&[TIMES_WORD]) {
-		return node;
-	}
-	let mut loops = 0;
-	expand(node, &mut loops)
-}
+/// The keyword rewrite of the phrase, an entry of src/pipeline.rs SUGAR_PHRASES
+pub const REWRITE: KeywordRewrite = KeywordRewrite { triggered_by: |word| word == TIMES_WORD, rewrite: phrase };
 
-fn expand(node: Node, loops: &mut usize) -> Node {
-	let node = node.map_children(|child| expand(child, loops));
+fn phrase(node: Node, loops: &mut usize) -> Node {
 	let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() else {
 		return node;
 	};

@@ -5,9 +5,9 @@ use crate::lowering::nodes::block;
 /// The code with each placeholder as its node and the generated variables named
 pub(super) fn generated<'a>(code: &str, placeholders: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
 	let names = GENERATED_NAMES.iter().map(|(written, name)| (written.to_string(), symbol(name)));
-	// generated after times_phrases ran: `n times "?, "` gets its meaning here
+	// generated after the sugar phrases were rewritten: `n times "?, "` gets its meaning here
 	crate::law::substitute(
-		&crate::lowering::times_phrases::lower(crate::warp_parser::parse_generated(code)),
+		&crate::pipeline::sugar_phrases(crate::warp_parser::parse_generated(code)),
 		&names.chain(placeholders.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node))).collect(),
 	)
 }
