@@ -28,6 +28,11 @@ is_tested_type_word(word: text): bool := is_type_word(word) or collection_words 
 is_type_word_or_any(word: text): bool := word == any_word or is_type_word(word)
 is_collection_head(word: text): bool := collection_words contains word or foreign_list_heads contains word
 
+# the words separating a phrase's slots, each naming the slot after it, `to add a to b`, and the articles starting a
+# noun slot, `to square a number` (Rust twin: type_name_matching.rs PREPOSITIONS, ARTICLES)
+phrase_prepositions = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"]
+phrase_articles = ["a", "an", "the"]
+
 # the words opening a definition, `def f(x) {…}` (Rust twin: operators/mod.rs FUNCTION_KEYWORDS)
 function_keywords = ["fun", "fn", "def", "define", "function", "func"]
 # the word declaring an enum, `enum Coin {Penny, Dime}`
@@ -89,6 +94,14 @@ type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
 # the words naming the parameter after them, a preposition or `as`: `play(tone, for duration)` called `play C4 for: 2s`
 # (Rust twin: type_name_matching.rs PREPOSITIONS, AS_LABEL)
-label_words = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each", "as"]
+label_words = phrase_prepositions + ["as"]
 # the words raising an event, `emit tax_rate` and its aliases (Rust twin: words.rs EMIT_WORDS, EMIT_ALIASES)
 emit_words = ["emit", "send", "fire", "trigger", "signal", "ask"]
+# the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64), by
+# their opcodes (Rust twin: wasm_emitter/functions/wasm_bodies.rs instruction)
+wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
+	"i64.div_s": 127, "i64.div_u": 128, "i64.rem_s": 129, "i64.rem_u": 130, "i64.and": 131, "i64.or": 132, "i64.xor": 133,
+	"i64.shl": 134, "i64.shr_s": 135, "i64.shr_u": 136, "i64.rotl": 137, "i64.rotr": 138, "f64.abs": 153, "f64.neg": 154,
+	"f64.ceil": 155, "f64.floor": 156, "f64.trunc": 157, "f64.nearest": 158, "f64.sqrt": 159, "f64.add": 160, "f64.sub": 161,
+	"f64.mul": 162, "f64.div": 163, "f64.min": 164, "f64.max": 165, "f64.copysign": 166, "i64.trunc_f64_s": 176,
+	"i64.trunc_f64_u": 177, "f64.convert_i64_s": 185, "f64.convert_i64_u": 186, "i64.reinterpret_f64": 189, "f64.reinterpret_i64": 191}
