@@ -29,10 +29,10 @@ pub(crate) const WILDCARD: &str = "_";
 const ALTERNATIVES_BIND_NO_NAMES: &str = "alternatives bind no names: write one case per pattern, or `_` for an item";
 /// Literal arms in a row from which they are a decision tree: fewer are tested as fast one after another
 const DECISION_TREE_ARMS: usize = 8;
-/// The most nodes of what follows a decision tree (later arms, the default) it copies into each of its leaves
-const COPIED_REST_NODES: usize = 12;
 /// The literals a leaf of a decision tree compares one after another
 const LEAF_LITERALS: usize = 2;
+/// The number of the literal arm a decision tree found, 0 for none
+const ARM_WORD: &str = "arm";
 const KEY_SPEC: &str = "key";
 const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
@@ -156,15 +156,17 @@ impl Lowering<'_> {
 }
 
 /// The arms as an if/else chain, tested in order. A run of arms comparing the subject with literals of one kind (`"+":
-/// …`, `3: …`), followed by little, is a decision tree instead: a binary search on the literals' order, so a match of
-/// 70 operator spellings compares about 7 times, not 35 (card pattern-dispatch-speed)
+/// …`, `'+': …`, `3: …`) is a decision tree instead, so a match of 70 operator spellings compares about 7 times, not 35
+/// (card pattern-dispatch-speed)
 fn chained(subject: &Node, mut arms: Vec<(Node, Node)>, miss: Node, names: &Names) -> Node {
 	let mut otherwise = miss;
 	while let Some((test, _)) = arms.last() {
 		let kind = literal_kind(subject, test);
-		let run =
-			arms.iter().rev().take_while(|(test, _)| kind.is_some() && literal_kind(subject, test) == kind).count();
-		if run >= DECISION_TREE_ARMS && nodes_in(&otherwise) <= COPIED_REST_NODES {
+		let run = match kind {
+			Some(_) => arms.iter().rev().take_while(|(test, _)| literal_kind(subject, test) == kind).count(),
+			None => 0,
+		};
+		if run >= DECISION_TREE_ARMS {
 			let literal_arms = arms.split_off(arms.len() - run);
 			otherwise = decision_tree(subject, literal_arms, otherwise, names);
 			continue;
@@ -179,21 +181,23 @@ fn literal_kind(subject: &Node, test: &Node) -> Option<&'static str> {
 	literal_compared(subject, test).map(|(kind, _)| kind)
 }
 
-/// The type word and literal of a test `subject == "+"` (a text, `text`) or `subject == 3` (`number`)
+/// The type word and literal of a test `subject == "+"` (a text or codepoint, `text`) or `subject == 3` (`number`)
 fn literal_compared<'a>(subject: &Node, test: &'a Node) -> Option<(&'static str, &'a Node)> {
 	let Node::Key(left, Op::Eq, literal) = test.drop_meta() else { return None };
 	if left.drop_meta() != subject {
 		return None;
 	}
 	match literal.drop_meta() {
-		Node::Text(_) => Some((crate::words::TEXT_WORD, literal)),
+		Node::Text(_) | Node::Char(_) => Some((crate::words::TEXT_WORD, literal)),
 		Node::Number(crate::Number::Int(_)) => Some((crate::words::NUMBER_WORD, literal)),
 		_ => None,
 	}
 }
 
-/// The literal arms as a binary search on their literals, behind a test of the subject's type (a symbol is no text,
-/// `x < "+"` of a number no order); a literal tested twice keeps its first arm, as the chain did
+/// The literal arms as two binary searches behind a test of the subject's type (a symbol is no text, `x < "+"` of a
+/// number no order): one on the literals' order giving the number of the arm matched, 0 for none, then one on that
+/// number giving its body, so each body and the rest stand once; a literal tested twice keeps its first arm, as the
+/// chain did
 fn decision_tree(subject: &Node, arms: Vec<(Node, Node)>, rest: Node, names: &Names) -> Node {
 	let (kind, _) = literal_compared(subject, &arms[0].0).expect("literal arms");
 	let mut literals: Vec<(Node, Node)> = vec![];
@@ -204,30 +208,55 @@ fn decision_tree(subject: &Node, arms: Vec<(Node, Node)>, rest: Node, names: &Na
 		}
 	}
 	literals.sort_by(|(a, _), (b, _)| match (a.drop_meta(), b.drop_meta()) {
-		(Node::Text(a), Node::Text(b)) => a.cmp(b),
 		(Node::Number(crate::Number::Int(a)), Node::Number(crate::Number::Int(b))) => a.cmp(b),
-		_ => std::cmp::Ordering::Equal,
+		(a, b) => literal_text(a).cmp(&literal_text(b)),
 	});
+	let arm = Node::Symbol(format!("{ARM_WORD}{TEMPORARY_SEPARATOR}{}", fresh_number()));
+	let numbered: Vec<(Node, Node)> = literals
+		.iter()
+		.enumerate()
+		.map(|(index, (literal, _))| (literal.clone(), Node::int(index as i64 + 1)))
+		.collect();
 	let guard = type_test(subject, &Node::symbol(kind), names).expect("a builtin type word");
-	key(if_then(guard, searched(subject, &literals, &rest)), Op::Else, rest)
+	let found = key(if_then(guard, searched(subject, &numbered)), Op::Else, Node::int(0));
+	let bodies: Vec<Node> = literals.into_iter().map(|(_, body)| body).collect();
+	let chosen = key(if_then(key(arm.clone(), Op::Eq, Node::int(0)), rest), Op::Else, body_of(&arm, &bodies, 1));
+	semicolon_sequence(vec![assign(arm, found), chosen])
 }
 
-/// `if subject < middle then <search below> else <search from middle>`, down to leaves comparing a literal or two
-fn searched(subject: &Node, literals: &[(Node, Node)], rest: &Node) -> Node {
+/// A text literal's text, a codepoint's as a text of one: the order texts compare in at run time
+fn literal_text(literal: &Node) -> String {
+	match literal {
+		Node::Char(char) => char.to_string(),
+		other => other.name(),
+	}
+}
+
+/// `if subject < middle then <search below> else <search from middle>`, down to leaves comparing a literal or two: the
+/// number of the literal equal to the subject, else 0
+fn searched(subject: &Node, literals: &[(Node, Node)]) -> Node {
 	if literals.len() <= LEAF_LITERALS {
-		return literals.iter().rev().fold(rest.clone(), |otherwise, (literal, body)| {
-			key(if_then(key(subject.clone(), Op::Eq, literal.clone()), body.clone()), Op::Else, otherwise)
+		return literals.iter().rev().fold(Node::int(0), |otherwise, (literal, number)| {
+			key(if_then(key(subject.clone(), Op::Eq, literal.clone()), number.clone()), Op::Else, otherwise)
 		});
 	}
 	let (below, from_middle) = literals.split_at(literals.len() / 2);
 	let lower = key(subject.clone(), Op::Lt, from_middle[0].0.clone());
-	key(if_then(lower, searched(subject, below, rest)), Op::Else, searched(subject, from_middle, rest))
+	key(if_then(lower, searched(subject, below)), Op::Else, searched(subject, from_middle))
 }
 
-fn nodes_in(node: &Node) -> usize {
-	let mut count = 0;
-	node.visit(&mut |_| count += 1);
-	count
+/// The body of the arm numbered `arm`, the bodies numbered from `first` on, by a binary search on the number
+fn body_of(arm: &Node, bodies: &[Node], first: usize) -> Node {
+	if let [body] = bodies {
+		return body.clone();
+	}
+	let middle = bodies.len() / 2;
+	let lower = key(arm.clone(), Op::Lt, Node::int((first + middle) as i64));
+	key(
+		if_then(lower, body_of(arm, &bodies[..middle], first)),
+		Op::Else,
+		body_of(arm, &bodies[middle..], first + middle),
+	)
 }
 
 /// The word value in an arm as the subject; a field `x.value` and a key `{value: 1}` keep it
