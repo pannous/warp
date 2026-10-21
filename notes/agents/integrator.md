@@ -21,10 +21,10 @@ Read notes/agents/common.md and notes/roles.md.
   `integrator_tools/express.sh [<card>…]` pushes them untested at once (merge, cargo fmt committed, push, close,
   Playground deploy with skip_checks; ~15 s; supervisor 2026-10-20: main stays formatted between batches), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
-- Warp-only branches land at once (user): a branch that changes no Rust (nothing in src/, crates/, tests/**/*.rs,
-  Cargo.*, build.rs; only .warp files, lib/, samples/, probes, notes) needs only the warp test run, not the Rust
-  suite: run its changed and dependent .warp tests with main's binary (/Users/me/dev/bin/warp), push it when
-  green, without waiting for a batch's cloud suite.
+- Warp-only branches land at once, before any Rust batch (user 2026-10-21): a branch that changes no Rust (nothing in
+  src/, crates/, tests/**/*.rs, Cargo.*, build.rs) needs no cloud run and no batch, only the self check on the merged
+  tip: `WARP_LIB=<tip>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp` prints
+  Hello → push (integrator_tools/warp_only.sh lands the Ready ones, one by one).
 - Self-hosting twins (tests/common/twins.rs: test_self_parser, test_self_pipeline, test_self_analyzer …) never bounce
   a branch: the warp compiler captures the spirit of the wiki, not an exact copy of Rust (decisions
   self-hosting-minimal). A twin difference goes through with --flaky "<test> (twin difference accepted, owner records
