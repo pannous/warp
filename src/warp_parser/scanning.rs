@@ -49,6 +49,16 @@ impl WarpParser {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
 
+	/// Is `text` written at `offset` from the cursor
+	pub(super) fn text_at(&self, offset: usize, text: &str) -> bool {
+		text.chars().enumerate().all(|(index, ch)| self.peek_char(offset + index) == ch)
+	}
+
+	/// Is `text` written at the cursor
+	pub(super) fn at_text(&self, text: &str) -> bool {
+		self.text_at(0, text)
+	}
+
 	/// Do blanks, an identifier, optional blanks and a `{` follow the cursor: `record point {…}`
 	pub(super) fn name_and_block_follow(&self) -> bool {
 		self.name_then('{')
@@ -142,8 +152,7 @@ impl WarpParser {
 
 	/// Check if input at current position matches a keyword (followed by non-alphanumeric)
 	pub(super) fn matches_keyword(&self, keyword: &str) -> bool {
-		keyword.chars().enumerate().all(|(i, c)| self.peek_char(i) == c)
-			&& !is_identifier_char(self.peek_char(keyword.len()))
+		self.at_text(keyword) && !is_identifier_char(self.peek_char(keyword.len()))
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -296,7 +305,12 @@ impl WarpParser {
 	}
 
 	pub(crate) fn blanks_ahead(&self) -> usize {
-		(0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()
+		self.blanks_at(0)
+	}
+
+	/// How many spaces and tabs stand at `offset` from the cursor
+	pub(crate) fn blanks_at(&self, offset: usize) -> usize {
+		(offset..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count()
 	}
 }
 

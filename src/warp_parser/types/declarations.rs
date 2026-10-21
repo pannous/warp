@@ -16,7 +16,7 @@ impl WarpParser {
 	/// `class Name {…}`, `struct`, `type Name {…}`, `record Name {…}`; `class:"btn"`, `type:email` (html attributes),
 	/// `class="btn"`, `type = "text"` (html attributes, P188), `x.class`, `type(x)` and `type 3.5` are no declarations
 	pub(in crate::warp_parser) fn declares_type(&self, symbol: &str) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		let is_assigned = self.peek_char(blanks) == '=' && self.peek_char(blanks + 1) != '=';
 		let is_key = (self.current_char() == ':' && self.peek_char(1) != '=') || is_assigned;
 		let start = self.pos.saturating_sub(symbol.chars().count());
@@ -34,7 +34,7 @@ impl WarpParser {
 		if !self.name_after_blanks() {
 			return false;
 		}
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		let name_length = (blanks..)
 			.take_while(|&offset| is_identifier_char(self.peek_char(offset)) || self.peek_char(offset) == '-')
 			.count();
@@ -104,10 +104,7 @@ impl WarpParser {
 					.find(|parent| parent != PYTHON_ROOT_CLASS)
 			})
 			.flatten();
-		let ends_statement = matches!(
-			self.peek_char((0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()),
-			'\n' | ';' | '}' | '\0'
-		);
+		let ends_statement = matches!(self.peek_char(self.blanks_ahead()), '\n' | ';' | '}' | '\0');
 		let before_body = self.mark();
 		// `class P(val x: Int)` ends at its line when no body follows on it
 		if constructor_fields.is_empty() {
@@ -230,7 +227,7 @@ impl WarpParser {
 	/// to a trait by defining its operations (notes/traits.md T2); a named one is a claim, checked (P177). Kotlin's
 	/// superclass `: Shape()` (its constructor called) is the parent, as `extends Shape`
 	pub(crate) fn skip_conformances(&mut self) -> Option<(Option<String>, Vec<Node>)> {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		let start = if self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) != '=' {
 			blanks + 1
 		} else if (0..IMPLEMENTS_WORD.len())
@@ -273,7 +270,7 @@ impl WarpParser {
 
 	/// The name of a declared type after blanks: `new Point(…)`
 	pub(crate) fn declared_type_after_blanks(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		let name: String =
 			(blanks..).map(|offset| self.peek_char(offset)).take_while(|ch| is_identifier_char(*ch)).collect();
 		blanks > 0 && self.declared_types.contains(&name)
@@ -283,8 +280,7 @@ impl WarpParser {
 	pub(crate) fn class_keyword_after_blanks(&self) -> Option<&'static str> {
 		let blanks = self.blanks_ahead();
 		TYPE_DECLARATION_WORDS.into_iter().find(|keyword| {
-			keyword.chars().enumerate().all(|(i, c)| self.peek_char(blanks + i) == c)
-				&& !is_identifier_char(self.peek_char(blanks + keyword.len()))
+			self.text_at(blanks, keyword) && !is_identifier_char(self.peek_char(blanks + keyword.len()))
 		})
 	}
 
@@ -399,7 +395,7 @@ impl WarpParser {
 	/// ` Shape { Circle(r), … }` after `enum`: whether a case is followed by its values in parentheses; none when no
 	/// name and braces follow
 	pub(crate) fn enum_body_ahead(&self) -> Option<bool> {
-		let mut offset = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let mut offset = self.blanks_ahead();
 		let name_length = (offset..).take_while(|&at| is_identifier_char(self.peek_char(at))).count();
 		if name_length == 0 {
 			return None;

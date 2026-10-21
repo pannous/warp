@@ -217,7 +217,7 @@ impl WarpParser {
 
 	/// `= …` or `:= …` after blanks, not the comparison `==` nor the arrow `=>`
 	fn assignment_follows(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		let defines = self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) == '=';
 		let assigns = self.peek_char(blanks) == '=' && !matches!(self.peek_char(blanks + 1), '=' | '>'); // `None => 0` is a match arm
 		defines || assigns

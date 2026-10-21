@@ -51,10 +51,7 @@ impl WarpParser {
 
 	/// An operand may start after `offset` characters and following blanks: not a closing bracket, separator or the end
 	pub(super) fn operand_follows(&self, offset: usize) -> bool {
-		let mut position = offset;
-		while matches!(self.peek_char(position), ' ' | '\t') {
-			position += 1;
-		}
+		let position = offset + self.blanks_at(offset);
 		!matches!(self.peek_char(position), '\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '=')
 	}
 
@@ -176,7 +173,7 @@ impl WarpParser {
 	fn spelled_here(&self, spelling: &str) -> bool {
 		let length = spelling.chars().count();
 		let after = self.peek_char(length);
-		spelling.chars().enumerate().all(|(i, c)| self.peek_char(i) == c)
+		self.at_text(spelling)
 			&& !(spelling.ends_with(char::is_alphabetic) && (is_identifier_char(after) || after == '('))
 			&& !(after == BANG && self.peek_char(length + 1) != '=' && self.defines_bang_word(spelling))
 	}
@@ -269,14 +266,13 @@ impl WarpParser {
 		if self.options.data_mode || !self.matches_keyword(AND_KEYWORD) {
 			return false;
 		}
-		let blanks = |from: usize| (from..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
-		let word_start = AND_KEYWORD.len() + blanks(AND_KEYWORD.len());
+		let word_start = AND_KEYWORD.len() + self.blanks_at(AND_KEYWORD.len());
 		let word = self.word_at(word_start);
 		if word.is_empty() || joins_operands(&word) || !self.peek_char(word_start).is_alphabetic() {
 			return false;
 		}
 		let word_end = word_start + word.chars().count();
-		let argument = word_end + blanks(word_end);
+		let argument = word_end + self.blanks_at(word_end);
 		if argument == word_end {
 			return false; // `and f(3)`, `and x`: an operand
 		}
@@ -379,10 +375,7 @@ impl WarpParser {
 	/// After the suffix at offset 0 (`%`, `abs`) of `offset` characters: the end of the expression, or an infix operator
 	/// standing apart (`10% + 1`, never the `-3` of `7 % -3`)
 	pub(super) fn expression_ends_after(&self, offset: usize) -> bool {
-		let mut position = offset;
-		while matches!(self.peek_char(position), ' ' | '\t') {
-			position += 1;
-		}
+		let position = offset + self.blanks_at(offset);
 		let infix_apart = position > offset
 			&& SUFFIX_FOLLOWERS.contains(&self.peek_char(position))
 			&& matches!(self.peek_char(position + 1), ' ' | '\t');

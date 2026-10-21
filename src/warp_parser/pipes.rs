@@ -44,7 +44,7 @@ pub(crate) fn piped(value: Node, stage: Node) -> Node {
 impl WarpParser {
 	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
 	pub(super) fn at_pipeline(&self) -> bool {
-		self.current_char() == '|' && self.peek_char(1) == '>'
+		self.at_text("|>")
 	}
 
 	/// `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, which the

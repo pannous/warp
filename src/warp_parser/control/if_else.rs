@@ -105,8 +105,7 @@ impl WarpParser {
 	pub(crate) fn else_on_a_later_line(&self) -> bool {
 		let gap = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t' | '\n' | '\r')).count();
 		let crosses_line = (0..gap).any(|at| self.peek_char(at) == '\n');
-		let word = ELSE_KEYWORD.chars().enumerate().all(|(i, c)| self.peek_char(gap + i) == c)
-			&& !is_identifier_char(self.peek_char(gap + ELSE_KEYWORD.len()));
+		let word = self.text_at(gap, ELSE_KEYWORD) && !is_identifier_char(self.peek_char(gap + ELSE_KEYWORD.len()));
 		crosses_line && word
 	}
 

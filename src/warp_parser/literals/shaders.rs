@@ -66,15 +66,11 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		let word =
-			SHADER_WORDS.iter().find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
-		let mut open = word.len();
-		if self.is_identifier_start(open) || self.peek_char(open).is_ascii_digit() {
+		let word = SHADER_WORDS.iter().find(|word| self.at_text(word))?;
+		if self.is_identifier_start(word.len()) || self.peek_char(word.len()).is_ascii_digit() {
 			return None;
 		}
-		while matches!(self.peek_char(open), ' ' | '\t') {
-			open += 1;
-		}
+		let open = word.len() + self.blanks_at(word.len());
 		if self.peek_char(open) != '{' {
 			return None;
 		}

@@ -197,9 +197,7 @@ impl WarpParser {
 
 	/// A loop's body starts here: `{…}`, `: …`, `do …`, or the next line
 	fn at_loop_body(&self) -> bool {
-		matches!(self.current_char(), '{' | ':' | '\n')
-			|| (self.current_char() == '/' && self.peek_char(1) == '/')
-			|| self.matches_keyword("do")
+		matches!(self.current_char(), '{' | ':' | '\n') || self.at_text("//") || self.matches_keyword("do")
 	}
 
 	/// `for (it>2) in xs: body` (wiki/for.md, P46): the items the condition holds for, as `it`; None (nothing consumed)
