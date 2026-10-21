@@ -1081,6 +1081,7 @@ impl Lowering {
 		let field = || Some(field_lookup(receiver, name, word_node));
 		let own_member = self.own_member(receiver, name, &arguments);
 		if name == "kinds" {
+			eprintln!("DEBUG literal {:?} written {:?}", self.object_literal(receiver).map(|l| l.serialize()), self.written_object(receiver).map(|l| l.serialize()));
 			eprintln!("DEBUG method_call kinds: receiver {} method {} args {} own {} meaning {}", receiver.serialize(), method.serialize(), arguments.len(), match own_member { OwnMember::Has => "Has", OwnMember::Lacks => "Lacks", OwnMember::Maybe => "Maybe", OwnMember::Not => "Not" }, match &meaning { WordMeaning::Call { call, typed } => format!("Call {} typed {typed}", call.serialize()), WordMeaning::Kept => "Kept".into(), WordMeaning::FieldRead => "FieldRead".into(), WordMeaning::Undefined => "Undefined".into() });
 		}
 		// `m.size` of a map read at run time with an entry size reads the entry, else counts (card map-read); only where
