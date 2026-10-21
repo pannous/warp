@@ -91,7 +91,15 @@ impl WasmGcEmitter {
 		let decided_at_run_time = unknown
 			|| self.is_untyped_parameter(target)
 			|| crate::analyzer::held_map_type(target, &self.scope).is_some();
-		let written = || crate::warp_parser::written_index(index).map(Node::Number).or_else(|| self.dynamic_key(index));
+		// a written number, or a key of no known type: an untyped parameter's inferred Int may be a map's key too
+		let untyped_key =
+			|| crate::warp_parser::subscript_key(index).filter(|key| self.is_untyped_parameter(key)).cloned();
+		let written = || {
+			crate::warp_parser::written_index(index)
+				.map(Node::Number)
+				.or_else(|| self.dynamic_key(index))
+				.or_else(untyped_key)
+		};
 		decided_at_run_time.then(written).flatten()
 	}
 
