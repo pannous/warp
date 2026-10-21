@@ -340,7 +340,6 @@ impl WarpParser {
 			dash if glyph_operator(dash) == Some(Op::Sub) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
-			'‖' => Some((Op::Abs, 1)),
 			'#' => self.css_color_length().is_none().then_some((Op::Hash, 1)), // prefix # means count/length
 			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
 			// subject; a glued `<tag` stays a bracket
