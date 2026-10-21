@@ -180,7 +180,7 @@ impl WasmGcEmitter {
 				&[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Result(ValType::I32)), I::I32Const(1), I::Else],
 			);
 			Self::emit_list(f, &field(0, 0));
-			Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+			Self::emit_is_empty(f);
 			Self::emit_list(f, &[I::End, I::If(BlockType::Empty)]);
 			match counts_only {
 				true => Self::emit_list(f, &[I::I64Const(0)]),
@@ -523,8 +523,8 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// The body of an as_node(list) runtime function (locals: position i32, rest nullable node): ø for a null or empty
-	/// list, else the cells `cell` builds from the last item to the first, each in front of the cells after it (local
+	/// The body of an as_node(list) runtime function (locals: position i32, rest nullable node): ø for a null list,
+	/// `[]` for an empty one, else the cells `cell` builds from the last item to the first, each in front of the cells after it (local
 	/// AS_NODE_REST) from the item at AS_NODE_POSITION
 	pub(super) fn emit_cells_from_last(
 		&mut self,
@@ -555,7 +555,7 @@ impl WasmGcEmitter {
 			I::End,
 			I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(Ref(self.node_ref(false)))),
 		]);
-		self.call(f, "new_empty");
+		self.call(f, crate::wasm_emitter::constructors::NEW_EMPTY_LIST); // a list of no items is `[]` (card empty-results)
 		Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
 	}
 

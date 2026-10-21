@@ -38,6 +38,13 @@ node_length(n: Node): int := {
 	if kind_code(n) == Kind.Codepoint { return 1 }
 	fail()
 }
+# `xs.pop()`: the last item, dropped from xs in place by lowering its count (Rust's list_drop_last), so every alias
+# sees the shorter list
+list_pop(xs: list): any := {
+	last = xs#(#xs)
+	set_count(xs, #xs - 1)
+	last
+}
 # `n#i = value` of a list known only at run time, in the list itself, so every alias sees it
 node_set_at(n: Node, index: int, value: Node): Node := {
 	if kind_code(n) != Kind.List { fail() }

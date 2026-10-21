@@ -586,6 +586,16 @@ impl WasmGcEmitter {
 		}
 		let runtime = list.element.runtime();
 		match value.drop_meta() {
+			// `xs.pop()`: one item fewer counted, none copied (card shrink-in-place); the pop read the last item first, so
+			// an empty list never gets here
+			_ if crate::list_mutations::dropped_last(value).is_some_and(|list| list.symbol_name() == Some(name)) => {
+				let (_, list_type) = self.typed_list_types(list.element);
+				#[rustfmt::skip]
+				Self::emit_list(func, &[
+					slot.get(), slot.get(), I::StructGet { struct_type_index: list_type, field_index: 0 }, I::I32Const(1),
+					I::I32Sub, I::StructSet { struct_type_index: list_type, field_index: 0 }, slot.get(),
+				]);
+			}
 			// the one list both variables hold (P200b)
 			Node::Symbol(_) if self.typed_list(value).is_some_and(|(_, source)| source.element == list.element) => {
 				let (source_slot, _) = self.typed_list(value).expect("guarded");

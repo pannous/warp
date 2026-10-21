@@ -52,7 +52,7 @@ impl WarpParser {
 		let mut names = Vec::new();
 		loop {
 			self.skip_spaces();
-			if self.current_char() == '-' && self.peek_char(1) == '>' {
+			if self.at_text("->") {
 				self.advance_by(2);
 				break;
 			}

@@ -39,3 +39,23 @@ fn a_function_compared_with_a_type_by_equality_is_no() {
 	assert_eq!(printed("floor != int"), "yes");
 	assert_eq!(printed("f(x):=x; function == f"), "no");
 }
+
+/// `type(declaration)` of a parameter named like a program's function is the parameter's type, in any order of the
+/// definitions (card emitter-split: emitter.warp's global_declaration_code beside its function declaration)
+#[test]
+fn a_parameter_named_like_a_function_is_the_value_of_type() {
+	assert_eq!(
+		printed("def declaration(a, b){ a }\ndef kind_word(declaration){ type(declaration) is int }\nkind_word(3)"),
+		"yes"
+	);
+	assert_eq!(
+		printed("def kind_word(declaration){ type(declaration) is int }\ndef declaration(a, b){ a }\nkind_word(3)"),
+		"yes"
+	);
+	assert_eq!(
+		printed(
+			"def declaration(a, b){ a }\ndef local_word(n){ declaration = n; type(declaration) is int }\nlocal_word(3)"
+		),
+		"yes"
+	);
+}

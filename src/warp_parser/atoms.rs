@@ -82,15 +82,13 @@ impl WarpParser {
 			'.' | '~' | '/' if self.starts_path_literal() => self.parse_path_literal(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/types/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/definitions/variadic.rs)
-			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => {
-				self.parse_starred(3)
-			}
+			'.' if self.at_prefixed_name("...") => self.parse_starred("..."),
 			// Python's `**kw`: the keyword arguments as one object (src/lowering/definitions/variadic.rs)
-			'*' if self.peek_char(1) == '*' && self.is_identifier_start(2) => match self.parse_starred(2) {
+			'*' if self.at_prefixed_name("**") => match self.parse_starred("**") {
 				Node::Symbol(name) => Node::Symbol(format!("{}{name}", crate::words::STARRED)),
 				other => other,
 			},
-			'*' if self.is_identifier_start(1) => self.parse_starred(1),
+			'*' if self.at_prefixed_name("*") => self.parse_starred("*"),
 			// `.card { … }`: a leading-dot name, a class selector in a style block (lib/markup.warp style)
 			'.' if self.is_identifier_start(1) => self.symbol_after(1, |name| Node::Symbol(format!(".{name}"))),
 			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
@@ -234,33 +232,30 @@ impl WarpParser {
 		self.current_line = self.chars[line_start..].iter().take_while(|ch| **ch != '\n').collect();
 	}
 
-	/// `*rest`, `...rest`: the name after the `prefix` characters, starred
-	fn parse_starred(&mut self, prefix: usize) -> Node {
-		self.symbol_after(prefix, |name| Node::Symbol(format!("{}{name}", crate::words::STARRED)))
+	/// `*rest`, `...rest`: the name after the prefix, starred
+	fn parse_starred(&mut self, prefix: &str) -> Node {
+		self.symbol_after(prefix.chars().count(), |name| Node::Symbol(format!("{}{name}", crate::words::STARRED)))
 	}
 
 	/// ` name(`: blanks, a name and its parenthesis
 	fn named_call_follows(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		let name = (blanks..).take_while(|&offset| is_identifier_char(self.peek_char(offset))).count();
+		let blanks = self.blanks_ahead();
+		let name = self.name_length_at(blanks);
 		blanks > 0 && name > 0 && self.is_identifier_start(blanks) && self.peek_char(blanks + name) == '('
 	}
 
 	/// ` () {` after a name
 	fn empty_parameters_and_block_follow(&self) -> bool {
-		let blanks_from =
-			|start: usize| (start..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		let blanks = blanks_from(0);
-		let inner = blanks_from(blanks + 1);
-		let closed = blanks + 1 + inner;
+		let blanks = self.blanks_ahead();
+		let closed = blanks + 1 + self.blanks_at(blanks + 1);
 		blanks > 0
 			&& self.peek_char(blanks) == '('
 			&& self.peek_char(closed) == ')'
-			&& self.peek_char(closed + 1 + blanks_from(closed + 1)) == '{'
+			&& self.peek_char(closed + 1 + self.blanks_at(closed + 1)) == '{'
 	}
 
 	pub(super) fn parameters_follow_after_blanks(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		blanks > 0 && self.peek_char(blanks) == '('
 	}
 

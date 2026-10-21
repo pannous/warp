@@ -235,8 +235,7 @@ lists_in(top: any): list := {
 	views = []
 	unvisited = [top]
 	while #unvisited > 0 {
-		view = unvisited#(#unvisited)
-		unvisited = unvisited[0 ..< #unvisited - 1]
+		view = unvisited.pop()
 		views += [view]
 		if view is list {
 			for part in view {

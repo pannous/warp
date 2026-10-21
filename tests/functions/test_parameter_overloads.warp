@@ -17,3 +17,14 @@ is! 'foo of int = it+it; foo of text = it.length; foo of any = 1; foo("abc") + f
 
 # an_overload_is_picked_at_run_time_when_only_the_value_tells
 is! 'class A{x:int}; area(a:A) := 1; area(b: list) := 2; h(v) := area(v); h([1]) * 10 + h(A(1))' 21
+
+# the_item_type_of_a_list_picks_its_variant
+is! 'play(xs: list of int) := 1; play(xs: list of text) := 2; play([1, 2]) * 10 + play(["a"])' 12
+is! 'play(xs: list of int) := 1; play(xs: list of text) := 2; ys = ["a", "b"]; play(ys)' 2
+is! 'play(xs: ints) := 1; play(xs: texts) := 2; play(["a"]) * 10 + play([3])' 21
+is! 'play(xs: [int]) := 1; play(xs: [float]) := 2; play([1.5]) * 10 + play([3])' 21
+is! 'class note{pitch:int}; class file{name:text}; play(xs: notes) := 1; play(xs: files) := 2; play([file("a")]) * 10 + play([note(60)])' 21
+is! 'play(xs: list of int) := 1; play(xs: list) := 2; play([1]) * 10 + play(["a"])' 12
+
+# a_list_of_items_known_at_run_time_goes_by_their_type
+is! 'play(xs: ints) := 1; play(xs: texts) := 2; h(v) := play(v); h(["a"]) * 10 + h([3])' 21

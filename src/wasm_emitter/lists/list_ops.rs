@@ -170,6 +170,7 @@ impl WasmGcEmitter {
 		self.emit_list_concat();
 		self.emit_list_extend();
 		self.emit_list_become();
+		self.emit_list_drop_last();
 		self.emit_element_children();
 		self.emit_element_body();
 		self.emit_swizzled();
@@ -502,6 +503,11 @@ impl WasmGcEmitter {
 				);
 				s.emit_type_value(f, crate::analyzer::BOOL_TYPE);
 				Self::emit_list(f, &[I::Return, I::End]);
+				f.instruction(&I::LocalGet(kind));
+				Self::emit_is_empty_list(f);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_type_value(f, crate::words::LIST_WORD);
+				Self::emit_list(f, &[I::Return, I::End]);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I::LocalGet(kind), I::I64Const(crate::type_kinds::BUILTIN_FUNCTION_MARK), I::I64And, I::I64Const(0), I::I64Ne,
@@ -613,10 +619,10 @@ impl WasmGcEmitter {
 
 					// ø is the empty list
 					s.emit_field(func, 0, 0);
-					s.emit_unmarked(func);
+					Self::emit_is_empty(func);
 					#[rustfmt::skip]
 					Self::emit_list(func, &[
-						I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+						I::If(BlockType::Empty),
 							I::I64Const(0), I::Return,
 						I::End,
 					]);
@@ -934,7 +940,7 @@ impl WasmGcEmitter {
 		}
 		// ø is the empty list: it has no item at any index
 		self.emit_field(func, 0, 0);
-		Self::emit_kind_test(func, Kind::Empty as i64, I::I64Eq);
+		Self::emit_is_empty(func);
 		self.emit_fail_out_of_range_if(func, asked);
 		Self::emit_index_compare(func, I::I64LtS);
 		self.emit_fail_out_of_range_if(func, asked);
@@ -1160,10 +1166,10 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
 		Self::emit_list(func, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Else]);
 		self.emit_field(func, list, 0);
-		self.emit_unmarked(func);
+		Self::emit_is_empty(func);
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
-			I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+			I::If(BlockType::Empty),
 				I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::LocalSet(list),
 			I::End,
 			I::End,
@@ -1194,13 +1200,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list;
-	/// a declared list keeps its element mark
-	pub(in crate::wasm_emitter) fn emit_become_empty(&self, func: &mut Function, node: u32) {
+	/// The node in local `node` (a lone cell or entry) becomes the empty value of kind `empty` in place (`[]` of a list,
+	/// ø of a map), so every holder of it sees it; a declared list keeps its element mark
+	pub(in crate::wasm_emitter) fn emit_become_empty(&self, func: &mut Function, node: u32, empty: i64) {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		Self::emit_list(func, &self.forget_list_cursor());
-		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(Kind::Empty as i64)]);
+		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(empty)]);
 		self.emit_or_element_mark(func, node);
 		Self::emit_list(
 			func,
