@@ -1046,8 +1046,8 @@ impl WasmGcEmitter {
 		if let Some(key) = self.map_key(index) {
 			return self.emit_entry_assignment(func, target, &key, value, crate::library_words::FIELD_WITH);
 		}
-		if let Some(key) = self.dynamic_key(index).or_else(|| self.runtime_subscript_key(target, index)) {
-			return self.emit_entry_assignment(func, target, &key, value, NODE_WITH_KEY);
+		if let Some((key, writer)) = self.keyed_access(target, index, NODE_WITH_SUBSCRIPT, NODE_WITH_KEY) {
+			return self.emit_entry_assignment(func, target, &key, value, writer);
 		}
 		if self.emit_typed_element_assignment(func, target, index, value) {
 			return;

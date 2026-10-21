@@ -15,3 +15,8 @@ fn a_number_subscript_keys_a_map_given_to_a_function() {
 fn a_one_entry_map_changed_by_a_method_keeps_its_number_key() {
 	is!("m = {1: 5}; m.add({2: 6}); m[1]", 5);
 }
+
+#[test]
+fn a_number_subscript_keys_a_map_parameter_by_its_digits() {
+	is!("f(m: map) := m[1] + 1; f({1: 5, 2: 6})", 6);
+}

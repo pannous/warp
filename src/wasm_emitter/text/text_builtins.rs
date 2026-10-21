@@ -192,13 +192,15 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		any(&MAP_WORD_FUNCTIONS, &["map_find", TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]),
 		any(&[ELEMENT_BODY], &[ELEMENT_CHILDREN]),
 		any(&[ELEMENTS_FIELD], &["map_find", TAGGED_FIELD, STRUCT_BODY]),
-		any(&[NODE_AT_KEY], &["node_index_at", "map_get", crate::type_tests::NODE_IS_MAP]),
+		any(&[NODE_AT_KEY], &["node_index_at", "map_get"]),
+		any(&[NODE_AT_SUBSCRIPT], &["node_index_at", "map_get", crate::type_tests::NODE_IS_MAP]),
 		// a function's body is quoted code, which keeps its positions
 		any(&[crate::wasm_emitter::functions::closures::FUNCTION_BODY], &[crate::wasm_emitter::NODE_AT]),
 		// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
 		any(&[INSTANCE_COPY], &[FIELD_WITH, IS_TRUTHY]),
 		any(&[FIELD_WITH], &[STRUCT_BODY]), // an instance keeps its type
-		any(&[NODE_WITH_KEY], &[NODE_WITH_NODE_AT, FIELD_WITH, crate::type_tests::NODE_IS_MAP]),
+		any(&[NODE_WITH_KEY], &[NODE_WITH_NODE_AT, FIELD_WITH]),
+		any(&[NODE_WITH_SUBSCRIPT], &[NODE_WITH_NODE_AT, FIELD_WITH, crate::type_tests::NODE_IS_MAP]),
 		any(&[NODE_WITH_NODE_AT], &["node_with_at", "get_int_value"]),
 		// a map variable held as a hash table names its keys by map_key_name, emitted with map_get; a map node found or
 		// set by name gets an index of the same tables (map_index.rs); maps compare keys by name: map_key_name reads a

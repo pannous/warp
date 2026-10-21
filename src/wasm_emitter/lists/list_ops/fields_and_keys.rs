@@ -50,6 +50,10 @@ pub const MAP_KEY_NAME: &str = "map_key_name";
 /// node_at_key(xs, key) and node_with_key(xs, key, value): `xs[key]` read and set with a key known only at runtime
 pub const NODE_AT_KEY: &str = "node_at_key";
 pub const NODE_WITH_KEY: &str = "node_with_key";
+/// node_at_subscript(m, key) and node_with_subscript(m, key, value): `m[1]` of a value of no known type, by key where
+/// node_at_key reads a position: an Int key of a map is its digits (decision map-subscript-runtime)
+pub const NODE_AT_SUBSCRIPT: &str = "node_at_subscript";
+pub const NODE_WITH_SUBSCRIPT: &str = "node_with_subscript";
 /// node_with_node_at(node, index, value): the copy with a Node value at index (node_with_at takes an Int)
 pub const NODE_WITH_NODE_AT: &str = "node_with_node_at";
 pub(super) const IS_MAP: &str = "is_map";
@@ -80,11 +84,35 @@ impl WasmGcEmitter {
 		(self.get_type(key) == Kind::Empty && !key.is_empty_node()).then(|| key.clone())
 	}
 
-	/// `m[1]`, `m[k]` of a value of no known type: a map's key by its digits, a list's position, decided at run time
-	/// (P34, decision map-subscript-runtime)
+	/// `m[1]`, `m[k]` of a value of no known type or a declared map: a map's key by its digits, a list's position,
+	/// decided at run time (P34, decision map-subscript-runtime)
 	pub(in crate::wasm_emitter) fn runtime_subscript_key(&self, target: &Node, index: &Node) -> Option<Node> {
 		let unknown = self.get_type(target) == Kind::Empty && !self.is_known_collection(target);
-		unknown.then(|| crate::warp_parser::written_subscript(index)).flatten()
+		let decided_at_run_time = unknown
+			|| self.is_untyped_parameter(target)
+			|| crate::analyzer::held_map_type(target, &self.scope).is_some();
+		let written = || crate::warp_parser::written_index(index).map(Node::Number).or_else(|| self.dynamic_key(index));
+		decided_at_run_time.then(written).flatten()
+	}
+
+	/// A parameter written without a type: the list its calls suggest (`f(m) := m[1]; f({1: 5})` makes m a list) may be
+	/// a map when the program runs
+	fn is_untyped_parameter(&self, target: &Node) -> bool {
+		let name = target.drop_meta().symbol_name();
+		name.and_then(|name| self.scope.binding(name)).is_some_and(|local| local.is_param && !local.declared)
+	}
+
+	/// The key of `target[key]` decided at run time and the function reading or writing by it: `subscript` for a target
+	/// of no known type, `by_key` for a key of no known type
+	pub(in crate::wasm_emitter) fn keyed_access(
+		&self,
+		target: &Node,
+		index: &Node,
+		subscript: &'static str,
+		by_key: &'static str,
+	) -> Option<(Node, &'static str)> {
+		let by_subscript = self.runtime_subscript_key(target, index).map(|key| (key, subscript));
+		by_subscript.or_else(|| self.dynamic_key(index).map(|key| (key, by_key)))
 	}
 
 	pub(in crate::wasm_emitter) fn map_key(&self, index: &Node) -> Option<Node> {
@@ -207,11 +235,11 @@ impl WasmGcEmitter {
 					self.emit_call(func, "map_get");
 				}
 			},
-			None => match self.dynamic_key(index).or_else(|| self.runtime_subscript_key(target, index)) {
-				Some(key) => {
+			None => match self.keyed_access(target, index, NODE_AT_SUBSCRIPT, NODE_AT_KEY) {
+				Some((key, reader)) => {
 					self.emit_node_instructions(func, target);
 					self.emit_node_instructions(func, &key);
-					self.emit_call(func, NODE_AT_KEY);
+					self.emit_call(func, reader);
 				}
 				None => self.emit_list_element_node(func, target, index),
 			},
@@ -591,25 +619,32 @@ impl WasmGcEmitter {
 		self.emit_dynamic_key_access();
 	}
 
-	/// `xs[k]` and `xs[k] = v` with a key held as a Node: an Int indexes from 0, anything else (or any key of a map) names an
-	/// entry
+	/// `xs[k]` and `xs[k] = v` with a key held as a Node: an Int indexes from 0, anything else names an entry; the
+	/// subscript twins key a map by an Int's digits too
 	pub(super) fn emit_dynamic_key_access(&mut self) {
+		self.emit_keyed_functions(NODE_AT_KEY, NODE_WITH_KEY, false);
+		self.emit_keyed_functions(NODE_AT_SUBSCRIPT, NODE_WITH_SUBSCRIPT, true);
+	}
+
+	fn emit_keyed_functions(&mut self, reader: &str, writer: &str, maps_by_digits: bool) {
 		let node_ref = Ref(self.node_ref(false));
-		// an Int key of anything but a map is a position; a map is keyed by its digits (decision map-subscript-runtime)
-		let is_int = |s: &Self, f: &mut Function| {
+		let is_position = |s: &Self, f: &mut Function| {
 			s.emit_field(f, 1, 0);
-			Self::emit_list(f, &[I::I64Const(Kind::Int as i64), I::I64Eq, I::LocalGet(0)]);
-			s.call(f, crate::type_tests::NODE_IS_MAP);
-			Self::emit_list(f, &[I::I32Eqz, I::I32And]);
+			Self::emit_list(f, &[I::I64Const(Kind::Int as i64), I::I64Eq]);
+			if maps_by_digits {
+				f.instruction(&I::LocalGet(0));
+				s.call(f, crate::type_tests::NODE_IS_MAP);
+				Self::emit_list(f, &[I::I32Eqz, I::I32And]);
+			}
 		};
 		let one_based = |s: &Self, f: &mut Function| {
 			f.instruction(&I::LocalGet(1));
 			s.call(f, "get_int_value");
 			Self::emit_list(f, &[I::I64Const(1), I::I64Add]);
 		};
-		if self.should_emit_function(NODE_AT_KEY) {
-			self.runtime_function(NODE_AT_KEY, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
-				is_int(s, f);
+		if self.should_emit_function(reader) {
+			self.runtime_function(reader, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
+				is_position(s, f);
 				Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(0)]);
 				one_based(s, f);
 				s.call(f, "node_index_at");
@@ -618,9 +653,9 @@ impl WasmGcEmitter {
 				f.instruction(&I::End);
 			});
 		}
-		if self.should_emit_function(NODE_WITH_KEY) {
-			self.runtime_function(NODE_WITH_KEY, vec![node_ref, node_ref, node_ref], vec![node_ref], vec![], |s, f| {
-				is_int(s, f);
+		if self.should_emit_function(writer) {
+			self.runtime_function(writer, vec![node_ref, node_ref, node_ref], vec![node_ref], vec![], |s, f| {
+				is_position(s, f);
 				Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(0)]);
 				one_based(s, f);
 				f.instruction(&I::LocalGet(2));
