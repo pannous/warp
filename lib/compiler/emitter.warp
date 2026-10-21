@@ -833,12 +833,14 @@ def runtime_call(name: text, values: any): list { call_values(module.runtime[nam
 # the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
 base_class_layers = ["extends", "inherited_from"]
 collect_types(n: any): any := {
-	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type" { return record_type(value_of(n)#2, value_of(n)#3) }
+	if declares_type(n) { return record_type(value_of(n)#2, value_of(n)#3) }
 	if is_type_alias(n) { return module.aliases[value_of(key_of(n))#2#2] = name_of(value_of(n)) }
 	if is_group(n) { for x in n { collect_types(x) } }
 }
+# a class or enum declaration, the opaque view ["type", name, body]
+declares_type(n: any): bool := type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type"
 # `type Name = text`: a declaration of no body naming another type
-is_type_alias(n: any): bool := type(n) is key and op_of(n) == "=" and type(key_of(n)) is key and key_of(key_of(n)) == symbol(opaque_word) and kind_of(value_of(key_of(n))) == "type" and value_of(key_of(n))#3 == ø and value_of(n) is symbol
+is_type_alias(n: any): bool := type(n) is key and op_of(n) == "=" and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and value_of(n) is symbol
 record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" {
 		module.class_defaults[name#2] = field_defaults(body)
@@ -2114,6 +2116,7 @@ node_annotations = ["any", "Node", "function", "type", "map", "number"]
 annotated_kind(written: text): text := {
 	word = aliased_type(written)
 	if word in node_annotations or word in module.classes or word.ends_with("?") { return "node" }
+	# Rust twin: type_names.rs plural_element_type
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return "list" }
 	word
 }
