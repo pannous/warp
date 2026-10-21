@@ -69,8 +69,9 @@ then `warp app.wasm`. That is the independence the decision asks for; the Rust l
 ### `warp pure <program.warp> [arguments…]` (card warp-pure, user 2026-10-20: "put everything in the binary")
 src/compiler/standalone.rs: compiler.warp's module, kept in ~/.cache/warp/modules under self_hosted.rs `stage_key`
 (binary + lib/), runs as `compiler.warp <source> <wasm> <folder> <lib>`; the module it writes runs with the program's
-arguments. The pure lane compiles compiler.warp; while it refuses (card pure-compiler-callee), the Rust pipeline does,
-and every run says `warp pure: compiler.warp, Rust-compiled` on stderr. It is also the gate's
+arguments. The Rust pipeline compiles compiler.warp; `WARP_PURE_COMPILER=self` takes the one the pure lane compiles
+(it does since card pure-compiler-callee), which becomes the default only once it behaves as the Rust-compiled one on
+all tests (user 2026-10-21, card self-compiled-parity). It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
 Cold start (card pure-cold-start, empty module cache): the pure lane's try at compiler.warp (passes stage compiled ~44
 s, analysis ~6 s, emit ~21 s, then their runs) and Rust's compile of it (~90 s) ran one after the other: 166 s. Now
