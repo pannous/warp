@@ -180,21 +180,18 @@ binds_value(scope: any, name: text): bool := value_meanings.any(meaning => binds
 
 # Keyword-triggered local rewrites (decision pass-triggers; Rust twin: src/lowering/words/keyword_rewrites.rs): each
 # entry [accepts, rewritten] of a table rewrites a node one of whose own words (an item, a key's operator) it accepts,
-# children first, in table order, all in one walk. What an entry reads besides its node: fresh numbers the names it
-# makes (times·1), from 0 per walk; rewritten_bindings() the scope of the program as it was before the walk, made once
-fresh = 0
-global rewritten_program = ø
-global rewritten_scope = ø
+# children first, in table order, all in one walk. What an entry reads besides its node: rewritten_bindings(), the
+# scope of the program as it was before the walk, made once
+global program_before_rewrites = ø
+global scope_before_rewrites = ø
 keyword_rewrites(program: Node, table: list): Node := {
-	global fresh
-	fresh = 0
-	rewritten_program = program
-	rewritten_scope = ø
+	program_before_rewrites = program
+	scope_before_rewrites = ø
 	bottom_up(program, n => rewritten_by(n, table))
 }
 rewritten_bindings(): any := {
-	if rewritten_scope == ø { rewritten_scope = scope_of(rewritten_program) }
-	rewritten_scope
+	if scope_before_rewrites == ø { scope_before_rewrites = scope_of(program_before_rewrites) }
+	scope_before_rewrites
 }
 rewritten_by(n: Node, table: list): Node := {
 	for entry in table { n = rewritten_if(n, entry#1, entry#2) }

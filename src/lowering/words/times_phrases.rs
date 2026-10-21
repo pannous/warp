@@ -9,9 +9,15 @@ use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, TEXT_TIMES, TIMES_WORD};
 
-/// The keyword rewrite of the phrase, an entry of src/pipeline.rs SUGAR_PHRASES
-pub const REWRITE: KeywordRewrite =
+/// The keyword rewrite of the phrase
+const REWRITE: KeywordRewrite =
 	KeywordRewrite { triggered_by: |word| word == TIMES_WORD, rewrite: phrase, reads_bindings: false };
+
+/// A walk of its own, outside src/pipeline.rs SUGAR_PHRASES: the warp compiler has no times twin (card
+/// phrases-out-of-core), so the Rust rewrite runs in the self-hosted front lane too
+pub fn lower(program: Node) -> Node {
+	super::keyword_rewrites::rewritten(program, &[REWRITE])
+}
 
 fn phrase(node: Node, facts: &mut Facts) -> Node {
 	let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() else {

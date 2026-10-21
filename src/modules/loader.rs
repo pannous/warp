@@ -716,7 +716,8 @@ impl<'a> Loader<'a> {
 			self.file_module_words.insert(file.clone(), own);
 			self.loading_modules.push(file.clone());
 		}
-		let module = self.resolve(module);
+		// its annotations name the types of its own aliases and its used files' (`use "types.warp"` in analyzer.warp)
+		let module = self.resolve(module).map(crate::lowering::type_aliases::lower);
 		if file_module {
 			self.loading_modules.pop();
 			self.used_file_module = Some(file);

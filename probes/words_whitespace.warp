@@ -1,0 +1,5 @@
+// card words-splits: any whitespace separates words
+t = "ab cd\nef\t g  h"
+print t.words
+print #(t as words)
+print word_count("a\nb c")

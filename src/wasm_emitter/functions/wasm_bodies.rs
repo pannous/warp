@@ -34,6 +34,18 @@ pub fn wasm_body_instruction(body: &Node) -> Option<&str> {
 	}
 }
 
+/// The kind of a `wasm_instruction("…")` value: an i64 instruction's an Int, an f64 one's a Float (emitter.warp
+/// wasm_instruction), the trap of a declared intrinsic none, a Node of unknown kind its function's declared result
+/// type holds
+pub fn result_kind(name: &str) -> crate::type_kinds::Kind {
+	use crate::type_kinds::Kind;
+	match name.split_once('.') {
+		Some(("i64", _)) => Kind::Int,
+		Some(("f64", _)) => Kind::Float,
+		_ => Kind::Empty,
+	}
+}
+
 /// The instruction of its text name, e.g. "f64.sqrt"
 pub fn instruction(name: &str) -> Option<I<'static>> {
 	Some(match name {

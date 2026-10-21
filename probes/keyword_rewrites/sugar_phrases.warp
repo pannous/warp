@@ -1,4 +1,4 @@
-# `n times x` and `xs .* 2`, the keyword rewrites of one walk (card pass-triggers), nested too
+# `n times x` (Rust, a walk of its own) and `xs .* 2` (a keyword rewrite of the sugar_phrases walk), nested too
 xs = [1, 2, 3]
 print xs .* 2
 print 3 times "ab"

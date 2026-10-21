@@ -6,6 +6,7 @@ mod test_byte_at_type_error; // card traps-wasm-trap
 mod test_byte_loop_inline; // card loop-calls
 mod test_case_table;
 mod test_cast_to_string;
+mod test_casts_to_text_units; // card selector-casts
 mod test_char_parameter_type; // chars-codepoints follow-up
 mod test_character_arithmetic;
 mod test_character_comparison;
