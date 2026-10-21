@@ -318,13 +318,9 @@ impl Lowering {
 		substitute(substitute(program, RECEIVER_PLACEHOLDER, &receiver), LOOKUP_PLACEHOLDER, &lookup)
 	}
 
-	/// The object literal a node stands for: the literal itself, a variable only ever assigned one, or a field of such an object;
-	/// of an instance its declared fields (a construction `S{kinds: {}}` too, whose one key is its class, no field)
+	/// The object literal a node stands for: the literal itself, a variable only ever assigned one, or a field of such an object
 	pub(super) fn object_literal(&self, node: &Node) -> Option<Node> {
-		match self.written_object(node) {
-			Some(written) => self.instances.fields_template(&written).or(Some(written)),
-			None => self.instances.fields_template(node),
-		}
+		self.written_object(node).or_else(|| self.instances.fields_template(node))
 	}
 
 	pub(super) fn written_object(&self, node: &Node) -> Option<Node> {
