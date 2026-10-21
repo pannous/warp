@@ -1893,16 +1893,22 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 	kept_kind(found["params"][i])
 }
 # the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
-# `… as text`
+# `… as text` (Rust's lowering) or `{the result: text = …; the result}` (definitions.warp)
 declared_result(f: Function): any := cast_kind(f.body)
 cast_kind(n: any): any := {
-	if type(n) is key and op_of(n) == "as" and value_of(n) is symbol {
-		word = name_of(value_of(n))
-		return if word in type_bytes or word in references then word else "node"
-	}
+	if type(n) is key and op_of(n) == "as" and value_of(n) is symbol { return held_word(name_of(value_of(n))) }
 	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
-	cast_kind(n#(#n))
+	last = n#(#n)
+	if last is symbol {
+		for statement in n {
+			if is_key(statement, Op.Assign) and is_key(key_of(statement), Op.Colon) and key_of(key_of(statement)) == last and value_of(key_of(statement)) is symbol {
+				return held_word(name_of(value_of(key_of(statement))))
+			}
+		}
+	}
+	cast_kind(last)
 }
+held_word(word: text): text := if word in type_bytes or word in references then word else "node"
 analyzed_result_kind(f: Function): any := {
 	found = analyzed_function(f)
 	if found == ø { return ø }
