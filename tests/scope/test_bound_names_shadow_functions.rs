@@ -74,3 +74,58 @@ fn a_lambda_reads_an_enclosing_local_named_like_a_function() {
 	is!(&format!("{held}f(n: int): any := {{ held = [1, 2]; part = i => #held + i; part(n) }}\nf(1)"), 3);
 	is!(&format!("{held}f(n: int): any := {{ held = [1, 2]; part = i => held#1 + i; part(n) }}\nf(1)"), 2);
 }
+
+// cards local-named-like-3, -4 (shadowing_bindings.rs): a local wins for membership, slices, reads and calls on it
+#[test]
+fn a_local_list_is_tested_for_membership() {
+	is!("arity(s: text): int := 1; f() := { arity = [3]; arity in [[3]] }; f()", true);
+}
+
+#[test]
+fn a_local_list_is_sliced() {
+	is!("items(p, closer, bracket) := 1; f() := { items = [1, 2, 3]; items[1..] }; f()", warp::node::ints(vec![2, 3]));
+}
+
+#[test]
+fn a_local_list_stays_a_value_beside_a_function_of_one_value() {
+	is!("g(x) := x * 2; f() := { g = [3]; g }; f()", warp::node::ints(vec![3]));
+	is!("g(x) := x * 2; f() := { g = [3, 4]; #g }; f()", 2);
+}
+
+#[test]
+fn a_local_parameter_and_loop_variable_win() {
+	is!("g(x) := x * 2; f(g) := g in [1, 2]; f(2)", true);
+	is!("g(x) := x * 2; f() := { n = 0; for g in [[1], [2, 3]] { n += #g }; n }; f()", 3);
+}
+
+#[test]
+fn a_local_function_value_is_called() {
+	is!("g(x) := x * 2; f() := { g = x => x + 1; g(3) }; f()", 4);
+}
+
+#[test]
+fn a_call_of_a_local_holding_a_plain_value_names_both() {
+	crate::common::fails_with("g(x) := x * 2; f() := { g = 5; g(3) }; f()", "it hides the program's function g");
+}
+
+#[test]
+fn a_call_of_a_local_holding_a_computed_value_names_it_as_written() {
+	crate::common::fails_with(
+		"g(x) := x * 2; f(n: int) := { g = n + 1; g(3) }; f(1)",
+		"`g` is a variable here, so g(3)",
+	);
+	crate::common::fails_with("g(x) := x * 2; f() := { g = #[1, 2]; g(3) }; f()", "it hides the program's function g");
+}
+
+#[test]
+fn the_function_is_still_called_outside_the_local_scope() {
+	is!("g(x) := x * 2; f() := { g = [3]; #g }; f() + g(4)", 9);
+}
+
+/// A parameter named like a function keeps its name as the function's interface: named arguments and defaults reach it
+/// (sound's `play tone: 440Hz` beside a function tone)
+#[test]
+fn a_parameter_named_like_a_function_takes_its_named_argument() {
+	is!("tone(x) := x * 2; pitch(tone: int) := tone + 1; pitch(tone: 4)", 5);
+	is!("tone(x) := x * 2; pitch(tone: int = 7) := tone in [7]; pitch()", true);
+}

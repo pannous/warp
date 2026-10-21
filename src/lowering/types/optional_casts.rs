@@ -1,13 +1,18 @@
 //! `x as T?` keeps ø (card text-generally): ø stays ø, any other value is cast to T, and the result auto-unwraps as an
 //! optional does (P179): used as a T it is one, ø there is the loud error of ø as a T. The value is computed once:
-//! `f() as text?` becomes `(optional·0 = f(); if optional·0 == ø then ø else optional·0 as text)`.
+//! `f() as text?` becomes `(optional·0 = f(); if optional·0 == ø then ø else optional·0 as text)`. A cast to a list type
+//! casts each item: `["1", "2"] as ints` is [1, 2].
 
 use super::nodes::{assign, if_then_else, key, Counter};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::lowering::words::library_words::BYTE_LIST;
+use crate::node::{call, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{LIST_WORD, MAP_WORD};
 
 const OPTIONAL_PREFIX: &str = "optional·";
 const OPTIONAL_MARK: char = '?';
+/// The item of a list cast item by item
+const CAST_ITEM: &str = "cast·item";
 
 pub fn lower(node: Node) -> Node {
 	Optionals { counter: Counter::default() }.rewrite(node)
@@ -26,6 +31,11 @@ impl Optionals {
 			}
 		}
 		if let Node::Key(value, Op::As, target) = node.drop_meta() {
+			// `text as bytes` is the text's UTF-8 bytes, no cast of each item
+			let element = crate::analyzer::declared_element_type(target).filter(|_| !target.is_symbol(BYTE_LIST));
+			if let Some(element) = element {
+				return items_cast(self.rewrite(value.as_ref().clone()), element);
+			}
 			if let Node::Symbol(target) = target.drop_meta() {
 				if let Some(warp_type) = target.strip_suffix(OPTIONAL_MARK).filter(|name| !name.is_empty()) {
 					return self.keeping_empty(self.rewrite(value.as_ref().clone()), warp_type);
@@ -47,4 +57,11 @@ impl Optionals {
 		let assignment = assign(held.clone(), value);
 		Node::List(vec![assignment, cast(held)], Bracket::Round, Separator::Semicolon)
 	}
+}
+
+/// `xs as texts`, `xs as [text]`: the list with each item cast to the element type, `(xs as list).map(item => item as text)`
+fn items_cast(value: Node, element: &str) -> Node {
+	let item = symbol(CAST_ITEM);
+	let lambda = key(item.clone(), Op::Arrow, key(item, Op::As, symbol(element)));
+	key(key(value, Op::As, symbol(LIST_WORD)), Op::Dot, call(MAP_WORD, vec![lambda]))
 }

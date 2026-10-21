@@ -72,9 +72,7 @@ impl WarpParser {
 		let is_length = "is".len();
 		let after_is = self.matches_keyword("is");
 		let word_start = if after_is { is_length + self.blanks_at(is_length) } else { 0 };
-		let word = TEST_WORDS.iter().find(|word| {
-			self.text_at(word_start, word) && !is_identifier_char(self.peek_char(word_start + word.len()))
-		})?;
+		let word = TEST_WORDS.iter().find(|word| self.keyword_at(word_start, word))?;
 		let end = word_start + word.len();
 		let blanks = self.blanks_at(end);
 		let next = self.peek_char(end + blanks);

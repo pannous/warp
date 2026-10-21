@@ -6,6 +6,7 @@
 use super::nodes::key;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::OF_WORD;
 use std::collections::HashMap;
 
 /// `Age?`: the optional form of a type name
@@ -105,6 +106,19 @@ fn resolved(node: Node, aliases: &HashMap<String, String>) -> Node {
 		}
 		Node::Key(name, Op::Colon, annotation) => {
 			key(resolved(*name, aliases), Op::Colon, annotated(*annotation, aliases))
+		}
+		// `f(xs: list of Name)`, parsed as the items `xs: list`, `of`, `Name`: the word after `of` is a type
+		Node::List(items, bracket, separator) if items.iter().any(|item| item.is_symbol(OF_WORD)) => {
+			let mut after_of = false;
+			let items = items.into_iter().map(|item| {
+				let typed = std::mem::replace(&mut after_of, item.is_symbol(OF_WORD));
+				if typed {
+					annotated(item, aliases)
+				} else {
+					resolved(item, aliases)
+				}
+			});
+			Node::List(items.collect(), bracket, separator)
 		}
 		other => other.map_children(|child| resolved(child, aliases)),
 	}

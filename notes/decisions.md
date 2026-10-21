@@ -133,7 +133,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - hash-comments: `# text` is the preferred comment; `warp format hash-comments` rewrites `//` comments; the linter hints on `//`. `#` glued to a non-space is the count expression (`#s`); `#!`, `##`, `#use`/`#include`/`#import` stay comments/directives.
 - `print a    print b` on one line is an error asking for `;`.
 - P227 a comma next to `==` without parentheses is an error asking for them.
-- P68 a braceless call whose argument holds an operator (`square 3 + square(4)`) warns naming both groupings.
+- P68 a braceless call whose argument holds an operator (`square 3 + square(4)`) warns naming both groupings. The prelude signature decides it: a word giving nothing (`: nothing`) has no second grouping and never warns. output-words-nothing: the output words (print, puts, puti, putl, putf) all give nothing, like print (Interviewer's decision).
 - P143 `f x == y` is an error naming both groupings only when both type-check; P149 an untyped parameter's type is inferred from the body first. Statement words (print, return) take the whole expression.
 - call-as-grouping: `f x as T` is `f(x as T)`, with a warning naming `f(x as T)` and `(f x) as T`.
 - P189 extra control-flow words stay display-only keywords; ambiguous names need quoting.
@@ -195,7 +195,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - #26 upper/lower are Unicode, sort takes any comparable values, reverse works on text; `names.upper` = `upper names`.
 - An untyped parameter given a one-character text takes it as Text. P31 the Printable operation is `text(p:person)`, the one allowed type-word function name. P32 `print xs` prints its str(). P41 `print "x changed to " value` joins without a separator after a text literal; commas join with a space.
 - result-keyword: after a print, `result` is the printed value.
-- chars-codepoints: `"abc".chars` is a list of characters printing `['a' 'b' 'c']`; a one-character text is a character; `'a' == "a"`. A character is a grapheme; code points are `.codepoints` ("שָלוֹם": 4 characters, 6 code points). text-unit-plurals: every plural unit word is the list (`.chars`, `.codepoints`, `.graphemes`, `.bytes`); counting is `count t.codepoints`; `.bytes` is the byte list of any value, size `x.bytes.count` / `byte_size(x)`.
+- chars-codepoints: `"abc".chars` is a list of characters printing `['a' 'b' 'c']`; a one-character text is a character; `'a' == "a"`. A character is a grapheme; code points are `.codepoints` ("שָלוֹם": 4 characters, 6 code points). text-unit-plurals: every plural unit word is the list (also as a cast: `t as words` = `t.words`, like `as chars`, for every text unit word) (`.chars`, `.codepoints`, `.graphemes`, `.bytes`); counting is `count t.codepoints`; `.bytes` is the byte list of any value, size `x.bytes.count` / `byte_size(x)`.
 - letters: `letters of "a1 b!"` → ['a' 'b'] (Unicode letters); `characters` is an alias of `chars`.
 - guillemets: «…» quotes its content as unevaluated warp data (`«x + 1»` the expression as data).
 - Emoji: a single emoji is a codepoint; multi-codepoint emoji are texts, not names.

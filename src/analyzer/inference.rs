@@ -417,8 +417,13 @@ pub(super) fn infer_list_type(
 		let is_variable = scope.is_parameter(name) || (*bracket == Bracket::Square && scope.lookup(name).is_some());
 		let named = special_form_kind(name, items, bracket, scope)
 			.or_else(|| closure_call_kind(name, items, scope))
-			.or_else(|| (!is_variable).then(|| scope.function_kind(name)).flatten())
-			.or_else(|| (!is_variable).then(|| builtin_word_kind(name, items, bracket, scope)).flatten());
+			// a variable heads no call
+			.or_else(|| {
+				if is_variable {
+					return None;
+				}
+				scope.function_kind(name).or_else(|| builtin_word_kind(name, items, bracket, scope))
+			});
 		if let Some(kind) = named {
 			return kind;
 		}
