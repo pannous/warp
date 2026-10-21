@@ -575,11 +575,18 @@ fn is_pure_read(node: &Node) -> bool {
 	}
 }
 
-/// An index read twice gives the same: a name, a literal or arithmetic of those (`scopes["a"]` is `scopes#("a" + 1)`)
+/// An index read twice gives the same: a name, a literal, arithmetic or a conversion of those (`scopes["a"]` is
+/// `scopes#("a" + 1)`, `scopes[k]` is `scopes#((string k) + 1)`)
 fn is_pure_index(index: &Node) -> bool {
 	match index.drop_meta() {
 		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
 		Node::Key(left, Op::Add | Op::Sub, right) => is_pure_index(left) && is_pure_index(right),
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[word, value] => {
+				word.symbol_name().is_some_and(|word| CONVERSION_METHODS.contains(&word)) && is_pure_index(value)
+			}
+			_ => false,
+		},
 		_ => false,
 	}
 }

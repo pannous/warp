@@ -9,6 +9,13 @@ fn a_field_of_a_map_element_named_like_a_function() {
 	is!(&format!("{SCOPE}scopes = {{}}\nscopes[\"a\"] = S()\n#scopes[\"a\"].kinds"), 0);
 }
 
+// card field-read: the index of a variable key, `scopes#((string k) + 1)`, is read twice by the member test
+#[test]
+fn a_field_of_a_map_element_by_a_variable_key() {
+	is!(&format!("{SCOPE}scopes = {{}}\nk = \"a\"\nscopes[k] = S()\n#scopes[k].kinds"), 0);
+	is!(&format!("{SCOPE}xs = {{}}\nk = \"a\"\nxs[k] = [1]\nxs[k].kinds"), 7);
+}
+
 // another function's `scope` of unknown value leaves the class of this function's `scope = S()` known: a construction
 // reads as its class's fields
 #[test]
