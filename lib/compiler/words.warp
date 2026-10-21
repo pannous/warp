@@ -87,3 +87,8 @@ type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 
 # `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
 with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
+# the words naming the parameter after them, a preposition or `as`: `play(tone, for duration)` called `play C4 for: 2s`
+# (Rust twin: type_name_matching.rs PREPOSITIONS, AS_LABEL)
+label_words = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each", "as"]
+# the words raising an event, `emit tax_rate` and its aliases (Rust twin: words.rs EMIT_WORDS, EMIT_ALIASES)
+emit_words = ["emit", "send", "fire", "trigger", "signal", "ask"]
