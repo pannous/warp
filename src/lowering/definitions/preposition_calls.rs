@@ -6,7 +6,7 @@
 //! range (P52); in a call of a function it labels, the bare word is an error naming the colon form, a warning where it
 //! cannot mean anything else (UNAMBIGUOUS_LABELS).
 
-use super::nodes::{any_part, key, parameter_word, word_headed};
+use super::nodes::{any_part, interface_word, key, word_headed};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -79,7 +79,7 @@ fn functions(node: &Node) -> HashMap<String, Labels> {
 				Some((preposition, parameter)) => (Some(preposition), parameter),
 				None => (None, parameter),
 			};
-			let name = parameter_word(parameter);
+			let name = interface_word(parameter);
 			if let Some(preposition) = preposition {
 				labels.by_preposition.entry(preposition).or_insert_with(|| name.clone());
 			}
