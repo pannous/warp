@@ -1488,6 +1488,8 @@ appended(body: Body, target_name: any, addition: any): any := {
 	added = expression_code(body, addition)
 	# a list takes any other value than a list as one item: `xs = []; xs += 3` is [3]
 	if target#1 == "list" and added#1 != "list" and added#1 != "node" { added = ["list", vector_code([boxed(added)])] }
+	# `for w in words { xs += w }`: an addition known only at run time is its items or one item (runtime appended_items)
+	if target#1 == "list" and added#1 == "node" { added = runtime_call("appended_items", [added]) }
 	if target#1 == "list" { return runtime_call("list_append", [target, added]) }
 	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
