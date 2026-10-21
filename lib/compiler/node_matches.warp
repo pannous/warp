@@ -66,9 +66,12 @@ arm_result(arm: Node): Node := match arm {
 	_: arm
 }
 
-# `1`, "a", 'c', an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the program declares
-# (`Red` of `enum Color { Red, Green }`): an arm the subject equals
+# `1`, "a", 'c', ø, yes, no, an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the
+# program declares (`Red` of `enum Color { Red, Green }`): an arm the subject equals
 is_value_pattern(pattern: Node, variants: any): bool := match pattern {
+	ø: yes
+	True: yes
+	False: yes
 	Symbol(name): name in variants
 	Number(value): yes
 	Text(value): yes
