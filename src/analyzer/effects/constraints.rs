@@ -110,7 +110,7 @@ pub(super) fn constraints(program: &Node) -> Vec<(String, Constraint)> {
 
 fn collect_constraints(node: &Node, found: &mut Vec<(String, Constraint)>) {
 	if let Some((definition, (allowed, events))) = split_constraint(node) {
-		let (line, column) = node.get_lineinfo().map(|info| (info.line_nr, info.column)).unwrap_or_default();
+		let (line, column) = node.first_lineinfo().map(|info| (info.line_nr, info.column)).unwrap_or_default();
 		found.push((
 			definition.defined_name().expect("checked by split_constraint"),
 			Constraint { allowed, events, line, column },
