@@ -49,6 +49,21 @@ impl WarpParser {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
 
+	/// Is `text` written at `offset` from the cursor
+	pub(super) fn text_at(&self, offset: usize, text: &str) -> bool {
+		text.chars().enumerate().all(|(index, ch)| self.peek_char(offset + index) == ch)
+	}
+
+	/// Is `text` written at the cursor
+	pub(super) fn at_text(&self, text: &str) -> bool {
+		self.text_at(0, text)
+	}
+
+	/// Does a name follow `prefix` at the cursor: `...rest`, `**kw`, `.card`
+	pub(super) fn at_prefixed_name(&self, prefix: &str) -> bool {
+		self.at_text(prefix) && self.is_identifier_start(prefix.chars().count())
+	}
+
 	/// Do blanks, an identifier, optional blanks and a `{` follow the cursor: `record point {…}`
 	pub(super) fn name_and_block_follow(&self) -> bool {
 		self.name_then('{')
@@ -142,8 +157,12 @@ impl WarpParser {
 
 	/// Check if input at current position matches a keyword (followed by non-alphanumeric)
 	pub(super) fn matches_keyword(&self, keyword: &str) -> bool {
-		keyword.chars().enumerate().all(|(i, c)| self.peek_char(i) == c)
-			&& !is_identifier_char(self.peek_char(keyword.len()))
+		self.keyword_at(0, keyword)
+	}
+
+	/// Is the whole word `keyword` written at `offset` from the cursor, no name continuing it
+	pub(super) fn keyword_at(&self, offset: usize, keyword: &str) -> bool {
+		self.text_at(offset, keyword) && !is_identifier_char(self.peek_char(offset + keyword.chars().count()))
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -170,6 +189,12 @@ impl WarpParser {
 			self.advance();
 		}
 		(had_newline, line_indent)
+	}
+
+	/// The indentation of the line holding position `at`, as skip_whitespace counts it: tabs, and spaces when they count
+	pub(super) fn indent_of_line_at(&self, at: usize, counts_spaces: bool) -> usize {
+		let line_start = self.chars[..at].iter().rposition(|ch| *ch == '\n').map_or(0, |newline| newline + 1);
+		self.chars[line_start..].iter().take_while(|ch| **ch == '\t' || (counts_spaces && **ch == ' ')).count()
 	}
 
 	/// Neither a data literal file nor a WIT file: warp code with its keywords
@@ -216,19 +241,19 @@ impl WarpParser {
 	/// Is the keyword at the cursor followed (after blanks) by `{`: `div {…}` is a tag, not the operator
 	pub(super) fn word_opens_block(&self, word: &str) -> bool {
 		let after = word.chars().count();
-		let gap = (after..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let gap = self.blanks_at(after);
 		self.peek_char(after + gap) == '{'
 	}
 
 	/// Does an operand follow, after blanks, the `width` characters at the cursor (not the line's end or a closing bracket)
 	pub(super) fn operand_after(&self, width: usize) -> bool {
-		let gap = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let gap = self.blanks_at(width);
 		gap > 0 && !matches!(self.peek_char(width + gap), '\n' | '\r' | '\0' | ')' | ']' | '}' | ';' | ',')
 	}
 
 	/// The identifier starting `offset` characters ahead
 	pub(super) fn word_at(&self, offset: usize) -> String {
-		(offset..).map(|at| self.peek_char(at)).take_while(|c| is_identifier_char(*c)).collect()
+		(offset..offset + self.name_length_at(offset)).map(|at| self.peek_char(at)).collect()
 	}
 
 	/// The identifier that ends right before the cursor and the blanks before it, on this line
@@ -262,13 +287,9 @@ impl WarpParser {
 	/// indentation before a method call that starts the next line (`numbers\n    .map(square)`, as in JS, Kotlin, Swift)
 	pub(super) fn line_continuation_length(&self) -> Option<usize> {
 		if matches!(self.current_char(), '\n' | '\r') && !self.options.data_mode {
-			let mut length = 1;
-			while matches!(self.peek_char(length), ' ' | '\t' | '\r' | '\n') {
-				length += 1;
-			}
-			let starts_method = self.peek_char(length) == '.'
-				&& (self.peek_char(length + 1).is_alphabetic() || self.peek_char(length + 1) == '_');
-			let starts_pipeline = self.peek_char(length) == '|' && self.peek_char(length + 1) == '>';
+			let length = 1 + self.run_at(1, |ch| matches!(ch, ' ' | '\t' | '\r' | '\n'));
+			let starts_method = self.peek_char(length) == '.' && self.is_identifier_start(length + 1);
+			let starts_pipeline = self.text_at(length, "|>");
 			// `if c then⏎ a⏎ else⏎ b`: a line ending in then/else, or one starting with else, continues the if
 			let starts_else = self.word_at(length) == ELSE_KEYWORD;
 			let ends_in_branch_word = matches!(self.word_before(), "then" | ELSE_KEYWORD);
@@ -277,10 +298,7 @@ impl WarpParser {
 		if self.current_char() != '\\' {
 			return None;
 		}
-		let mut length = 1;
-		while matches!(self.peek_char(length), ' ' | '\t' | '\r') {
-			length += 1;
-		}
+		let length = 1 + self.run_at(1, |ch| matches!(ch, ' ' | '\t' | '\r'));
 		(self.peek_char(length) == '\n').then_some(length + 1)
 	}
 
@@ -295,8 +313,29 @@ impl WarpParser {
 		self.current_char().is_alphabetic() || self.current_char() == '_'
 	}
 
+	/// How many spaces and tabs stand at the cursor
 	pub(crate) fn blanks_ahead(&self) -> usize {
-		(0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()
+		self.blanks_at(0)
+	}
+
+	/// How many spaces and tabs stand at `offset` from the cursor
+	pub(crate) fn blanks_at(&self, offset: usize) -> usize {
+		self.run_at(offset, |ch| matches!(ch, ' ' | '\t'))
+	}
+
+	/// How many whitespace characters, line breaks included, stand at `offset` from the cursor
+	pub(crate) fn whitespace_at(&self, offset: usize) -> usize {
+		self.run_at(offset, char::is_whitespace)
+	}
+
+	/// The length of the name at `offset` from the cursor, 0 for none
+	pub(crate) fn name_length_at(&self, offset: usize) -> usize {
+		self.run_at(offset, is_identifier_char)
+	}
+
+	/// How many characters from `offset` on `keep`
+	pub(crate) fn run_at(&self, offset: usize, keep: impl Fn(char) -> bool) -> usize {
+		(offset..).take_while(|&at| keep(self.peek_char(at))).count()
 	}
 }
 

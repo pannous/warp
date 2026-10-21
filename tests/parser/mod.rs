@@ -90,6 +90,8 @@ mod test_uniscript_entities;
 mod test_uniscript_hyphen_names; // card uniscript-literal-hyphen
 mod test_url_literal; // card add-http
 mod test_warp_format;
+#[cfg(feature = "native")]
+mod test_warp_pure; // card warp-pure
 mod test_wisp_def_params;
 mod test_wisp_malformed;
 mod test_wisp_roundtrip;

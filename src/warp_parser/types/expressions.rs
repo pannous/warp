@@ -93,12 +93,12 @@ impl WarpParser {
 	fn words_ahead_length(&self, words: &[String]) -> Option<usize> {
 		let mut offset = 0;
 		for word in words {
-			let blanks = (offset..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count() - offset;
+			let blanks = self.blanks_at(offset);
 			if blanks == 0 {
 				return None;
 			}
 			offset += blanks;
-			if !word.chars().enumerate().all(|(index, ch)| self.peek_char(offset + index) == ch) {
+			if !self.text_at(offset, word) {
 				return None;
 			}
 			offset += word.chars().count();

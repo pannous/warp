@@ -928,7 +928,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::RefNull(HeapType::Concrete(node)));
 				f.instruction(&I::Else);
 				s.emit_field(f, 1, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+				Self::emit_is_empty(f);
 				Self::emit_list(f, &[I::If(BlockType::Result(nullable_node)), I::RefNull(HeapType::Concrete(node))]);
 				Self::emit_list(f, &[I::Else, I::LocalGet(1), I::End, I::End, I::StructNew(node)]);
 			});

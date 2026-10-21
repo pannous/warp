@@ -132,14 +132,13 @@ fn signature(name: &str, head: &Node) -> String {
 	format!("{name}({})", parameters.join(", "))
 }
 
-/// `tone`, `bus: Bus`: a parameter as written, without the `any` type lowering gave an untyped one
+/// `tone`, `bus: Bus`: a parameter as written, without the `any` type lowering gave an untyped one and a name renamed apart
 fn parameter_text(parameter: &Node) -> String {
-	match parameter.drop_meta() {
-		Node::Key(name, Op::Colon, kind) if kind.is_symbol(crate::words::ANY_TYPE) => {
-			name.serialize().trim().to_string()
-		}
-		other => other.serialize().trim().to_string(),
-	}
+	let shown = match parameter.drop_meta() {
+		Node::Key(name, Op::Colon, kind) if kind.is_symbol(crate::words::ANY_TYPE) => name.serialize(),
+		other => other.serialize(),
+	};
+	crate::lowering::shadowing_bindings::written_text(shown.trim())
 }
 
 /// The program's declarations; in a function body only the nested functions, its variables are its own (a local

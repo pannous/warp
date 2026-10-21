@@ -204,6 +204,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::List(items, bracket, separator) if !items.is_empty() => {
 			infer_list_type(node, items, bracket, separator, scope)
 		}
+		// `{}`, `()`: no items is ø, as `x = {}` holds it; `[]` is the empty list (card run-time-empty)
+		Node::List(_, bracket, _) if *bracket != Bracket::Square => Kind::Empty,
 		// a range as a value is the list of its numbers (wasm_emitter emit_range), as `x = 1..5` is
 		Node::Key(_, Op::Range | Op::To, _) => Kind::List,
 		// `5 ± 1` is uncertain, a kind the node arithmetic meets at run time (wasm_emitter/uncertain.rs)
@@ -410,15 +412,18 @@ pub(super) fn infer_list_type(
 	}
 	let head = items.first().and_then(Node::symbol_name);
 	if let Some(name) = head {
+		// a parameter takes a function's or a library word's name, any other variable in a square list (wasm_emitter
+		// takes_list_head): `[size, 4]` of a parameter size lists two items
+		let is_variable = scope.is_parameter(name) || (*bracket == Bracket::Square && scope.lookup(name).is_some());
 		let named = special_form_kind(name, items, bracket, scope)
 			.or_else(|| closure_call_kind(name, items, scope))
-			// a parameter takes a function's name, any other variable in a square list (wasm_emitter takes_list_head)
+			// a variable heads no call
 			.or_else(|| {
-				let is_variable =
-					scope.is_parameter(name) || (*bracket == Bracket::Square && scope.lookup(name).is_some());
-				scope.function_kind(name).filter(|_| !is_variable)
-			})
-			.or_else(|| builtin_word_kind(name, items, bracket, scope));
+				if is_variable {
+					return None;
+				}
+				scope.function_kind(name).or_else(|| builtin_word_kind(name, items, bracket, scope))
+			});
 		if let Some(kind) = named {
 			return kind;
 		}

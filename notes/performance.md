@@ -83,7 +83,9 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   list_items + list_item_count 14% (scope.warp nodes_kept keeps its stack in a cons list: `unvisited#(#unvisited)` and
   a slice per step), text_bytes_equal + values_equal ~9%.
 - Tried, no gain: Binaryen wasm-opt -O2/-O3/-Oz (Cranelift does that work); only -O3 with aggressive inlining runs
-  12-19% faster, at 2.4x size and +1.2 s wasmtime compile (card wasm-opt-inline, probes/perf/wasm_opt_bench.sh).
+  12-19% faster, at 2.4x size and +1.2 s wasmtime compile (probes/perf/wasm_opt_bench.sh). So the self-hosted stages,
+  compiled once per lib/ and binary and kept, go through it when wasm-opt is on PATH (binaryen.rs optimized_for_speed,
+  card wasm-opt-inline): pure-only passes.warp 25.5 → 21.7 s, the cold compile +3.6 s.
   wasmtime's own inlining measured slower. Interning text literals (one text per literal, kept in a global array)
   ran 4% slower: text_literal's profile share is its call count, not its work.
 - Reading a guest profile: samples fall on function entries and loop headers (epoch ticks, notes/profiling.md), so a
@@ -94,6 +96,11 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
 - Time against a frozen copy of lib/ (`cp -R lib scratch/speed/lib_frozen`, `WARP_LIB=` it, run in its compiler/):
   every push to lib/compiler by another session recompiles the four stage programs (~40 s) in the middle of an A/B,
   which once made a 15% swing look like a result. Discard the first run of each binary (it compiles the stages).
+- A lib change is timed as two fresh copies of main's lib, one with the change reverted, on one binary: a frozen lib
+  older than the change lacks what it relies on (pop() needs list_methods.warp's lowering) and the run stops early
+  with an error, which once made a failure look like a 41% gain. Check both runs print the same output.
+- shrink-in-place (pop() for scope.warp nodes_kept and walk.warp lists_in, faa8dfd9f9): pure-only passes.warp CPU
+  35.5 → 26.1 s.
 - The Mac is shared: alternate the two binaries round by round and compare `user` time, not `real`.
 - `WARP_PHASE_TIMES=1` names each emission rerun by its cause ("missing [KeyOperator(66)]" …). A cold stage compile
   reran 6 times (~6.2 s of 13.3 s emitting) until the emitter foresaw the ops of `key(left, op, right)` calls
@@ -111,6 +118,6 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
 - Tried, no gain: a per-thread cache of parsed std modules (cloning the tree costs about what parsing it does).
 - Program cache (src/run/program_cache.rs): `warp <file>` keeps the compiled module next to the machine-code cache, so
   a second run skips the compile; its hints, warnings and assumptions are said again by each run. The working
-  directory is part of the key (probes/pure_chain/run.sh runs emit.warp from its own folder for that). Probes:
+  directory is part of the key. Probes:
   probes/program_cache/cli_cache.sh, probes/program_cache/samples_twice.sh (samples whose two runs differ do so
   without the cache too: timings, random weights, stored rows, GPU frame counts).

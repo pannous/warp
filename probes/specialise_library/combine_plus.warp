@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+# an operator passed as a function: combine·+ adds in place, not through a closure (card specialise-library-functions)
+combine(f, n) := { total = 0; for i in 1 to n { total = f(total, i % 7) }; total }
+print combine(+, 20000000)

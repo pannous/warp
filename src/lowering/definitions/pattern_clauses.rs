@@ -119,8 +119,12 @@ impl Clause {
 }
 
 /// A parameter that is not a plain name: a literal, a list, a map, code, a `$hole`
+/// Not a typed parameter, `x: int`, `f: (float) -> float`, nor a labelled one, `for duration`
 fn is_pattern(parameter: &Node) -> bool {
-	plain_name(parameter).is_none() && !matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, _))
+	plain_name(parameter).is_none()
+		&& !matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, _))
+		&& crate::lowering::function_types::declared_arity(parameter).is_none()
+		&& !super::preposition_calls::is_labelled(parameter)
 }
 
 fn plain_name(parameter: &Node) -> Option<&str> {

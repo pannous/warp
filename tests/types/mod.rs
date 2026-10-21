@@ -104,6 +104,7 @@ mod test_list_element_types;
 mod test_list_test_of_a_map;
 mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
+mod test_map_field; // card map-field
 mod test_map_read_size; // card map-read
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
@@ -128,6 +129,7 @@ mod test_optional_casts;
 mod test_optional_list_items;
 mod test_optional_number_fields;
 mod test_param_named_like_global; // card param-named-like-global
+mod test_param_named_like_library_word; // card word-param-list
 mod test_parameter_text; // card param-text
 mod test_partial_time_comparisons; // cards now-make, now-allow
 mod test_passed_list_identity; // card xs-xs
@@ -197,6 +199,7 @@ mod test_type_name_definition_forms;
 mod test_type_name_matching;
 mod test_type_of;
 mod test_type_of_consistency; // card type-of-consistency
+mod test_type_of_empty_block; // card type-class
 mod test_type_of_lambda_variable; // card type-says-symbol
 mod test_type_of_node_values;
 mod test_type_of_real_variable;
@@ -212,6 +215,7 @@ mod test_type_word_user_function;
 mod test_type_words;
 mod test_typed_arrays;
 mod test_typed_builtins; // card typed-builtins
+mod test_typed_list_annotations; // card typed-list-annotations
 mod test_typed_list_elements; // card typed-list-elements
 mod test_types;
 mod test_types_scope;
