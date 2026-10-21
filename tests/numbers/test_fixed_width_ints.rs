@@ -67,5 +67,11 @@ fn c_type_names_of_several_words_are_fixed_widths() {
 	is!("x: unsigned short = 7; x", 7);
 	is!("f(n: unsigned int) := n + 1; f(2)", 3);
 	fails_with("x: unsigned int = -1; x", "uint32 overflow");
-	crate::common::warns_with("x: unsigned int = 3; x", 3, "uint32");
+}
+
+#[test]
+fn a_c_type_name_says_its_warp_word() {
+	warp::normalize::clear_shown_hints();
+	let (_, hints) = warp::normalize::capture_hints(|| eval("x: unsigned int = 3; x"));
+	assert!(hints.iter().any(|hint| hint.original == "unsigned int" && hint.canonical == "uint32"), "{hints:?}");
 }
