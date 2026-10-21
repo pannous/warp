@@ -590,7 +590,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			}
 		}
 		user_op = user_operator_at(p)
-		if user_op != ø and user_op#2 != "prefix" and user_op#3 >= min_power {
+		if user_op != ø and user_op#2 != "prefix" and user_op#3 >= min_power and not is_glued_call(p, user_op#1) {
 			p.at = p.at + user_op#1.length
 			if user_op#2 == "suffix" {
 				left = operator_call(user_op#1, [left])
@@ -1391,6 +1391,38 @@ def user_operator_at(p: Parser): list {
 	longest
 }
 def is_at_name_char(p: Parser, at: int): bool := at < p.n and is_name_char(p.code[at])
+
+// `print matches("abd", "a.c$")`: a word operator glued to `(both, operands)` is its call, as `f(x, y)` is; a right
+// operand never holds a comma, so `"abc" matches("a.c")` stays infix
+// Rust twin: operators.rs parse_user_infix is_glued_call, holds_top_level_comma
+def is_glued_call(p: Parser, glyph: text): bool := is_name_start(glyph[0]) and holds_top_level_comma(p.code, p.at + glyph.length, p.n)
+// whether the balanced `(…)` at `at` separates items by a comma of its own; brackets and commas inside a text or a
+// nested group are none of its own
+def holds_top_level_comma(code: text, at: int, n: int): bool {
+	if not is_at(code, at, '(', n) { return false }
+	depth = 0
+	quote = ""
+	escaped = false
+	while at < n {
+		c = code[at]
+		if escaped {
+			escaped = false
+		} else if quote != "" {
+			if c == '\\' { escaped = true } else if "" + c == quote { quote = "" }
+		} else if c == '"' or c == '\'' {
+			quote = "" + c
+		} else if c == '(' or c == '[' or c == '{' {
+			depth = depth + 1
+		} else if c == ')' or c == ']' or c == '}' {
+			if depth == 1 { return false }
+			depth = depth - 1
+		} else if c == ',' and depth == 1 {
+			return true
+		}
+		at = at + 1
+	}
+	false
+}
 
 // `infix operator ⊕(a: int, b: int) := a * 10 + b`, `prefix operator ∆ := …`: the definition of the function
 // operator_⊕, whose parameters are the declared ones, else `it` (prefix, suffix) or `a b` (`left right` when the body
