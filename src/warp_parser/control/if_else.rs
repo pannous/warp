@@ -120,21 +120,34 @@ impl WarpParser {
 
 	/// `if b {y}` or `if b then y` after a statement (`if a {x} if b {y}`) starts the next statement: a trailing `if`
 	/// guards without a branch of its own. Scans the condition from `offset` to the end of the statement for a block
-	/// (a spaced `{` outside brackets: `point{x:1}` is data) or `then`
+	/// (a spaced `{` outside brackets: `point{x:1}` is data) or `then`. A match arm's guard has none: `n if n > 3 => {…}`
+	/// ends at the `=>`, and `if k in {a: 1} => …` holds a map
 	pub(crate) fn condition_has_branch(&self, offset: usize) -> bool {
 		let mut depth = 0usize;
 		let mut quote = None;
+		let mut spaced_brace_open = false;
 		for at in offset.. {
 			let character = self.peek_char(at);
 			match (quote, character) {
-				(_, '\0') => return false,
+				(_, '\0') => return spaced_brace_open,
 				(Some(open), _) => quote = (character != open).then_some(open),
 				(None, '"' | '\'') => quote = Some(character),
-				(None, '(' | '[') => depth += 1,
-				(None, ')' | ']') if depth == 0 => return false,
-				(None, ')' | ']') => depth -= 1,
-				(None, '{') if depth == 0 && matches!(self.peek_char(at - 1), ' ' | '\t') => return true,
-				(None, '\n' | ';' | '}') if depth == 0 => return false,
+				(None, '{') if depth == 0 => {
+					spaced_brace_open = matches!(self.peek_char(at - 1), ' ' | '\t');
+					depth += 1
+				}
+				(None, '(' | '[' | '{') => depth += 1,
+				(None, ')' | ']' | '}') if depth == 0 => return false,
+				(None, '}') if depth == 1 && spaced_brace_open => {
+					if !self.fat_arrow_follows(at + 1) {
+						return true;
+					}
+					spaced_brace_open = false;
+					depth -= 1
+				}
+				(None, ')' | ']' | '}') => depth -= 1,
+				(None, '=') if depth == 0 && self.peek_char(at + 1) == '>' => return false,
+				(None, '\n' | ';') if depth == 0 => return false,
 				(None, 't')
 					if depth == 0 && !is_identifier_char(self.peek_char(at - 1)) && self.word_at(at) == THEN_WORD =>
 				{
@@ -144,6 +157,12 @@ impl WarpParser {
 			}
 		}
 		false
+	}
+
+	/// A `=>` after spaces from `offset`: the arrow of a match arm
+	fn fat_arrow_follows(&self, offset: usize) -> bool {
+		let arrow = (offset..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(offset);
+		self.peek_char(arrow) == '=' && self.peek_char(arrow + 1) == '>'
 	}
 
 	/// `a ?: b` is `a ? a : b`; a left side that is not a plain name is evaluated once, into a hidden variable

@@ -15,6 +15,12 @@ fn a_declared_runtime_word_traps_when_the_rust_lane_calls_it() {
 	fails_with("is_null(x: any): bool from runtime\nis_null(3)", "unreachable");
 }
 
+/// The trap standing in for a declared word has no kind of its own: a caller reads the declared result type
+#[test]
+fn a_declared_runtime_word_gives_its_declared_type() {
+	is!("new_list(room: int): list from runtime\nfirst_of(items: list): int := 1\ncopied(count: int): int := {\n\tout = new_list(count)\n\tfirst_of(out)\n}\n7", 7);
+}
+
 /// Each part of lib/compiler/runtime/ names the intrinsics it calls (runtime/intrinsics.warp) and the parts whose words
 /// it calls, so it compiles and runs alone in the Rust lane
 #[cfg(feature = "native")]

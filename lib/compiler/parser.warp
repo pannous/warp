@@ -1072,7 +1072,7 @@ def is_plain_name(word: text): bool := word.length > 0 and name_end(word, 0, wor
 
 // The declared operator written at the parser's position, the longest glyph, a word one as a whole word, else ø
 // Rust twin: operators.rs user_operator_at
-def user_operator_at(p: Parser): list {
+def user_operator_at(p: Parser): any {
 	longest = ø
 	for declared in p.operators {
 		glyph = declared#1
@@ -2114,7 +2114,7 @@ def with_time_unit(p: Parser, count: int): Node := {
 // The time unit word at `at` after any spaces: [its length, where it ends], else ø; `{year:1970 month:1}`: a word that
 // starts the next entry or assignment is no unit
 // Rust twin: literals/units.rs time_unit_at, time/calendar.rs unit_after
-def time_unit_at(p: Parser, at: int): list {
+def time_unit_at(p: Parser, at: int): any {
 	while is_at(p.code, at, ' ', p.n) { at = at + 1 }
 	end = at
 	while end < p.n and (is_alphanumeric(p.code[end]) or p.code[end] == '_') { end = end + 1 }
@@ -2974,7 +2974,7 @@ def unescaped(content: text, interpolates: bool): text {
 
 // `\x41`, `\u{1b}` at the backslash `at`: [the character, the length read], else ø
 // Rust twin: literals/text.rs hex_byte_escape, unicode_escape
-def code_escape(written: text, at: int, n: int): list {
+def code_escape(written: text, at: int, n: int): any {
 	kind = peek(written, at + 1, n)
 	if kind == 'x' and is_hex_digit(peek(written, at + 2, n)) and is_hex_digit(peek(written, at + 3, n)) {
 		return [hex_value(written[at + 2 .. at + 4]) as codepoint, 4]
