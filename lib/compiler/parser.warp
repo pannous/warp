@@ -1096,7 +1096,7 @@ INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["|>", "|>"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["‐", "-"], ["‑", "-"], ["‒", "-"], ["–", "-"], ["—", "-"], ["―", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"], ["↑", "↑"], ["↓", "↓"]]
+SYMBOL_OPERATORS = [["...", "to"], ["..=", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["|>", "|>"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["‐", "-"], ["‑", "-"], ["‒", "-"], ["–", "-"], ["—", "-"], ["―", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"], ["↑", "↑"], ["↓", "↓"]]
 // `xs .* 2` maps `*` over the elements: the phrase [xs .* 2], binding as `*` does (Rust twin: spellings.rs
 // element_wise_word)
 ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
@@ -2555,6 +2555,14 @@ def named(p: Parser): Node := {
 		p.at = p.at + 1
 		return symbol(word + "?")
 	}
+	// `list<int>`, `option<int>`: a type applied to type arguments, the type written in words; a declared `Box<T>`
+	// keeps its brackets (Rust twin: atoms.rs parse_glued_suffix '<')
+	type_arguments = if p.types.contains(word) then 0 else type_application_length(p, p.at)
+	if type_arguments > 0 {
+		arguments = p.code[p.at + 1 .. p.at + type_arguments - 1]
+		p.at = p.at + type_arguments
+		return symbol(type_application_name(word, arguments))
+	}
 	constant = if names_case(p, word.length) then "" else keyword_form(word.lower())
 	if constant == "true" { return true }
 	if constant == "false" { return false }
@@ -2566,6 +2574,15 @@ def named(p: Parser): Node := {
 		shader = shader_block(p, word)
 		if shader != ø { return shader }
 	}
+	// the Java/C array type `int[]` is the list type `[int]` (Rust twin: types/expressions.rs try_parse_array_type_suffix)
+	if starts_at(p.code, "[]", p.at) and is_type_argument(word) {
+		p.at = p.at + 2
+		return listed("[", " ", [symbol(word)])
+	}
+	// Rust's turbofish `sum::<i32>()`, `collect::<Vec<i32>>()`: the type arguments say nothing warp needs, the call is
+	// `sum()` (Rust twin: atoms.rs skip_turbofish)
+	turbofish = if starts_at(p.code, "::", p.at) then type_application_length(p, p.at + 2) else 0
+	if turbofish > 0 { p.at = p.at + 2 + turbofish }
 	name = symbol(word)
 	// `x°`: a variable in degrees, as `30°` (Rust twin: atoms.rs, card angles-degrees)
 	if is_at(p.code, p.at, DEGREE, p.n) and not is_alpha(peek(p.code, p.at + 1, p.n)) {
@@ -2592,6 +2609,58 @@ def named(p: Parser): Node := {
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
 	listed("(", "", [name] + spread(arguments))
+}
+
+// The type names that take type arguments in angle brackets besides the plural and capitalized ones
+// Rust twin: types/expressions.rs GENERIC_TYPE_HEADS, OPTION_HEADS
+GENERIC_TYPE_HEADS = ["list", "array", "set", "map", "option", "result", "tuple"]
+OPTION_HEADS = ["option", "Option"]
+
+// The length of the type arguments `<int>`, `<list<int>>`, `<text, int>` at `start`, 0 unless every word in them
+// names a type (`i<n>` compares)
+// Rust twin: types/expressions.rs type_application_length
+def type_application_length(p: Parser, start: int): int {
+	if not is_at(p.code, start, '<', p.n) { return 0 }
+	depth = 0
+	words = []
+	word = ""
+	for at in start ..< p.n {
+		c = p.code[at]
+		if is_alphanumeric(c) or c == '_' or c == '?' {
+			word = word + c
+			continue
+		}
+		if c == '<' {
+			depth = depth + 1
+		} else if c == '>' {
+			depth = depth - 1
+		} else if not ", ()".contains(c) {
+			return 0
+		}
+		if word {
+			words += [word]
+			word = ""
+		}
+		if depth == 0 { return if at > start + 1 and words.all(is_type_argument) then at - start + 1 else 0 }
+	}
+	0
+}
+
+// `int`, `ints`, `list`, `Point`, `text?`: a word that can stand in type arguments
+def is_type_argument(word: text): bool := is_type_name(if word.ends_with("?") then word[0 ..< word.length - 1] else word)
+
+// A word that can take type arguments: a type word, its plural, `list`, `map` …, a capitalized type
+// Rust twin: types/expressions.rs names_a_type
+def is_type_name(word: text): bool := is_type_word(word) or (word.ends_with("s") and is_type_word(word[0 ..< word.length - 1])) or word in GENERIC_TYPE_HEADS or is_capitalized(word)
+
+// The type `name<arguments>` in words: `list<list<int>>` is `list of list of int`, `option<int>` is `int?`, Rust's
+// `Vec<i32>` is `list of i32`
+// Rust twin: types/expressions.rs type_application_name, list_type_head
+def type_application_name(name: text, arguments: text): text {
+	if OPTION_HEADS.contains(name) and not arguments.contains(",") and not arguments.contains("<") { return arguments.trim() + "?" }
+	head = if foreign_list_heads.contains(name) then "list" else name
+	words = arguments.replace("<", " of ").replace(">", "").split(" ").filter(w => w)
+	head + " of " + words.join(" ")
 }
 
 // `x:int?=ø`, `f(x:int?)`, the field `right? }`: the `?` after `word` marks it optional when a closer, `=`, a comment,
