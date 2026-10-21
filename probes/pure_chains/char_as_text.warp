@@ -1,0 +1,9 @@
+// a one-letter text ("?", held as a character) given where a text is declared: a result, a variable
+g(t: any): text := {
+	if t == 1 { return "one" }
+	"?"
+}
+print(g(2))
+print(g(1))
+x: text = "a"
+print(x + "b")
