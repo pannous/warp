@@ -93,7 +93,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P180 split-debuginfo "unpacked" plus the hourly sweep. P90 ./test.wasm is written at every compile. P91 one shared analysis per compile, refreshed only when a pass changed the program.
 - Repo layout: tests/ in topic folders (P14); CLAUDE.md is a symlink to AGENTS.md (P15); wisp format stays with a roundtrip test (P11); GcObject is the GC reading API (P12) with gc_struct!/wasm_struct!/wasm_object! as sugar (P97); test macros in tests/common (P100).
 - P8 vendoring deactivated, kept for a later offline agent. P7 the cdylib is built only by web/playground/build.sh. warp-ast.wit lives at samples/wit/warp-ast.wit.
-- Bee/wasp entity names go into uniscript and are regenerated into src/text/uniscript_entities.tsv, never by hand.
+- Bee/wasp entity names go into uniscript and are regenerated into lib/compiler/entities.tsv, never by hand.
 - P13 libm FFI: header-driven linking first, the LIBM tables only as fallback and as examples of hand-linked FFI.
 - uniscript-binary-import: `use uniscript` imports the released prebuilt uniscript_c.wasm (+ .h), committed in the uniscript repo at each release (uniscript-browser-wasm); warp's tests follow the released uniscript.
 - browser-server: browser checks dry-run on pannous.com over SSH first; GitHub runs only the final check plus Safari; no local browsers on the Mac. firefox-bug: the Firefox JSPI Worker-terminate bug is filed at Bugzilla (probes/firefox_jspi_terminate.html).

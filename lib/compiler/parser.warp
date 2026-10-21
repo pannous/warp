@@ -23,8 +23,79 @@ def parsed(source: text): Node := {
 	}
 }
 
+// `\:alpha` is α, `\:world` 🌍: before parsing, each known uniscript entity outside texts and comments becomes its
+// characters; an unknown one stays as written
+// Rust twin: uniscript_entities.rs expand_entities, entity_name_at
+ENTITY_MARK = "\\:"
+// `name TAB characters` lines, the table Rust include_str!s
+ENTITY_FILE = "entities.tsv"
+global entity_table = ø
+def entities(): any {
+	if entity_table == ø {
+		entity_table = {}
+		lines = (try read(module_directory + "/" + ENTITY_FILE) else "").split("\n")
+		for line in lines {
+			columns = line.split("\t")
+			if columns.length == 2 { entity_table[columns#1] = columns#2 }
+		}
+	}
+	entity_table
+}
+def expanded_entities(source: text): text {
+	if not source.contains(ENTITY_MARK) { return source }
+	points = code_points(source)
+	n = points.length
+	parts = []
+	at = 0
+	while at < n {
+		skipped = span_end(points, at, n)
+		if skipped > at {
+			parts += points[at .. skipped]
+			at = skipped
+			continue
+		}
+		name = entity_name_at(points, at, n)
+		if name == "" {
+			parts += [points[at]]
+			at = at + 1
+		} else {
+			parts += [entities()[name]]
+			at = at + 2 + name.length
+		}
+	}
+	join(parts, "")
+}
+// The known entity name written at `at` (`\:name`), else "": its run of ASCII letters, or a longer known name with
+// hyphenated parts (`\:fracture-A`)
+def entity_name_at(points: any, at: int, n: int): text {
+	if not (points[at] == '\\' and peek(points, at + 1, n) == ':') { return "" }
+	letters = at + 2
+	while letters < n and is_alpha(points[letters]) { letters = letters + 1 }
+	if letters == at + 2 { return "" }
+	run = letters
+	while run < n and (is_alphanumeric(points[run]) or points[run] == '-') { run = run + 1 }
+	end = run
+	while end > letters {
+		if end == run or points[end] == '-' {
+			name = text_between(points, at + 2, end)
+			if name in entities() { return name }
+		}
+		end = end - 1
+	}
+	name = text_between(points, at + 2, letters)
+	if name in entities() then name else ""
+}
+// The characters from `from` to `to` of a text or of its code points
+def text_between(source: any, from: int, to: int): text := if source is text then source[from .. to] else join(source[from .. to], "")
+// `\:name` inside a text at `at`: [its characters, the length read]; an unknown one stays as written
+def entity_read(source: any, at: int, n: int): list {
+	name = entity_name_at(source, at, n)
+	if name == "" then [ENTITY_MARK, 2] else [entities()[name], 2 + name.length]
+}
+
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
-def written_tree(source: text): Node := {
+def written_tree(written: text): Node := {
+	source = expanded_entities(written)
 	found = gaps(source, source.length)
 	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases()}
 	items_until(p, ' ', "")
@@ -867,7 +938,7 @@ INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"], ["↑", "↑"], ["↓", "↓"]]
+SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["‐", "-"], ["‑", "-"], ["‒", "-"], ["–", "-"], ["—", "-"], ["―", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"], ["↑", "↑"], ["↓", "↓"]]
 // `xs .* 2` maps `*` over the elements: the phrase [xs .* 2], binding as `*` does (Rust twin: spellings.rs
 // element_wise_word)
 ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
@@ -1396,11 +1467,31 @@ def expression_ends(p: Parser): bool {
 	at > p.at and "+-*/<".contains(c) and is_blank(peek(p.code, at + 1, p.n))
 }
 
+// The dashes 0x2010..0x2015 and the minus sign: each means `-` (infix ones: SYMBOL_OPERATORS, the minus sign
+// lib/math.warp's alias line)
+// Rust twin: operators/spellings.rs OPERATOR_SPELLINGS
+DASH_GLYPHS = "‐‑‒–—―−"
+NORM_BAR = '‖'
+
+// `‖x‖` brackets a whole expression like parentheses: `‖3-5‖*2` is 4
+// Rust twin: math_notation.rs parse_norm_bars
+def norm(p: Parser): Node := {
+	closing = index_of(p.code, "" + NORM_BAR, p.at + 1, p.n)
+	if closing >= p.n { raise "Missing closing ‖" }
+	whole = p.n
+	p.at = p.at + 1
+	p.n = closing
+	inner = expression(p, 0)
+	p.n = whole
+	p.at = closing + 1
+	keyed("" + NORM_BAR, ø, inner)
+}
+
 def prefixed_by_symbol(p: Parser, c: text): Node := {
 	head = operator_method_head(p)
 	if head != ø { return head }
 	next = peek(p.code, p.at + 1, p.n)
-	if c == '-' and next != '>' and next != '-' {
+	if (c == '-' or DASH_GLYPHS.contains(c)) and next != '>' and next != '-' {
 		p.at = p.at + 1
 		skip_spaces(p)
 		operand = expression(p, 155)
@@ -1415,8 +1506,10 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		p.at = p.at + 1
 		return Key(ø, Op.Hash, expression(p, INDEX_POWER - 1))
 	}
+	if c == NORM_BAR { return norm(p) }
 	if PREFIX_OPERATORS.contains("" + c) {
 		p.at = p.at + 1
+		skip_spaces(p)
 		return keyed("" + c, ø, expression(p, PREFIX_POWER))
 	}
 	// `&lerp`: a reference to the function, an `&` glued to the word after it and not to one before it (`a &b`)
@@ -1733,6 +1826,7 @@ def atom(p: Parser): Node := {
 		}
 		return with_glued_factor(p, int(written))
 	}
+	if VULGAR_FRACTIONS.contains(c) { return vulgar_fraction(p, c) }
 	if c == '"' or c == '\'' { return quoted(p) }
 	// `.5` is 0.5
 	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return float("0" + decimal_number(p)) }
@@ -1744,6 +1838,27 @@ def atom(p: Parser): Node := {
 	if keyword_at(p, "each") {
 		loop = each_loop(p)
 		if loop != ø { return loop }
+	}
+	// `\:nosuchthing`, an entity no table row names (expanded_entities replaced the known ones): the text as written
+	// Rust twin: atoms.rs parse_atom (card unknown-entity)
+	if c == '\\' and is_at(p.code, p.at + 1, ':', p.n) and is_alpha(peek(p.code, p.at + 2, p.n)) {
+		end = name_end(p.code, p.at + 2, p.n)
+		unknown = "" + p.code[p.at .. end]
+		p.at = end
+		return unknown
+	}
+	// `\alpha` written for `\:alpha`
+	// Rust twin: atoms.rs parse_atom, uniscript_entities.rs bare_entity_name_at
+	if c == '\\' and is_alpha(peek(p.code, p.at + 1, p.n)) {
+		end = p.at + 1
+		while end < p.n and is_alpha(p.code[end]) { end = end + 1 }
+		name = p.code[p.at + 1 .. end]
+		if name in entities() { raise "a uniscript entity is written \\:" + name + ", not \\" + name }
+	}
+	truth = truth_glyph_at(p)
+	if truth != "" {
+		p.at = p.at + truth.length
+		return not FALSE_GLYPHS.contains(truth)
 	}
 	if is_name_start(c) { return named(p) }
 	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
@@ -1796,6 +1911,16 @@ def atom(p: Parser): Node := {
 	// Rust twin: atoms.rs parse_atom (is_free_symbol, parse_emoji; the Rust lane still errors on other characters)
 	p.at = p.at + 1
 	if is_free_symbol(p, c) then symbol("" + c) else c
+}
+
+// The glyphs that are true or false, longest spelling first: `✔️` is `✔` with an emoji variation selector
+// (card keyword-glyphs)
+// Rust twin: literals/constants.rs TRUTH_GLYPHS
+TRUE_GLYPHS = ["✔️", "✓️", "☑️", "⊤", "✓", "✔", "☑", "✅", "🗸", "🗹"]
+FALSE_GLYPHS = ["⊥", "❌", "✗"]
+def truth_glyph_at(p: Parser): text {
+	for glyph in TRUE_GLYPHS + FALSE_GLYPHS { if starts_at(p.code, glyph, p.at) { return glyph } }
+	""
 }
 
 // The degree sign of temperatures and angles (Rust twin: numbers/units.rs DEGREE)
@@ -2080,6 +2205,19 @@ def duration_text(length: list): text {
 }
 
 def counted_unit(amount: int, unit: text): text := if amount == 1 then "1 " + unit else "" + amount + " " + unit + "s"
+
+// The Unicode vulgar fractions, each the numerator and denominator its NFKD decomposition writes (½ is 1⁄2)
+// Rust twin: numbers.rs vulgar_fraction
+VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "¼": [1, 4], "¾": [3, 4], "⅕": [1, 5], "⅖": [2, 5], "⅗": [3, 5], "⅘": [4, 5], "⅙": [1, 6], "⅚": [5, 6], "⅐": [1, 7], "⅛": [1, 8], "⅜": [3, 8], "⅝": [5, 8], "⅞": [7, 8], "⅑": [1, 9], "⅒": [1, 10]}
+
+// `⅓` is the exact 1/3; digits glued after it multiply it
+// Rust twin: numbers.rs vulgar_fraction_literal
+def vulgar_fraction(p: Parser, glyph: text): Node := {
+	p.at = p.at + 1
+	parts = VULGAR_FRACTIONS[glyph]
+	fraction = keyed("/", int(parts#1), int(parts#2))
+	if is_digit(peek(p.code, p.at, p.n)) then Key(fraction, Op.Mul, atom(p)) else fraction
+}
 
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
 // Rust twin: literals.rs with_juxtaposed_factor
@@ -2865,8 +3003,9 @@ def template(written: text) {
 			holed = yes
 			at = end
 		} else if c == '\\' and at + 1 < n and next == ':' and at + 2 < n and is_alpha(written[at + 2]) {
-			read = read + c + next
-			at = at + 2
+			entity = entity_read(written, at, n)
+			read = read + entity#1
+			at = at + entity#2
 		} else if c == '\\' and code_escape(written, at, n) != ø {
 			coded = code_escape(written, at, n)
 			read = read + coded#1
@@ -2901,8 +3040,9 @@ def unescaped(content: text, interpolates: bool): text {
 			read = read + c
 			at = at + 1
 		} else if interpolates and escaped == ':' and at + 2 < content.length and is_alpha(content[at + 2]) {
-			read = read + c + escaped
-			at = at + 2
+			entity = entity_read(content, at, content.length)
+			read = read + entity#1
+			at = at + entity#2
 		} else if code_escape(content, at, content.length) != ø {
 			coded = code_escape(content, at, content.length)
 			read = read + coded#1
