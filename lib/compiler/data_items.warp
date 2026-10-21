@@ -13,11 +13,11 @@ field_mark = "data·field"
 # the methods that write their arguments into the list they are called on (Rust's list_mutations APPEND_METHODS)
 item_writing_methods = ["add", "append", "push", "insert"]
 
-data_items(program: any): any := shown_in(program, admitting_errors(program), variables_given_maps(program))
+data_items(program: Node): Node := shown_in(program, admitting_errors(program), variables_given_maps(program))
 
 # the node with its writes shown, admitting: the variables of its scope declared to admit an Error, maps: the variables
 # given a map literal, whose `m[k] = e` writes an entry
-shown_in(n: any, admitting: list, maps: list): any := {
+shown_in(n: Node, admitting: list, maps: list): any := {
 	# an attribute layer `[name, value, node]` is no list as written: only its node is walked
 	if is_attribute(n) {
 		name, value, node = value_of(n)
@@ -30,7 +30,7 @@ shown_in(n: any, admitting: list, maps: list): any := {
 	written_shown(children(n, child => shown_in(child, admitting, maps)), admitting, maps)
 }
 
-written_shown(n: any, admitting: list, maps: list): any := match n {
+written_shown(n: Node, admitting: list, maps: list): Node := match n {
 	List(items, Bracket.Square, separator): List(items.map(item => shown_written(item, list_item_mark)), Bracket.Square, separator)
 	# `a, b = e, 2` parses as `a, (b = e), 2`: values bound to variables, no tuple stored
 	List(items, bracket, Separator.Comma): { if items.any(item => is_key(item, Op.Assign)) then List(items.map(with_assigned_value_unmarked), bracket, Separator.Comma) else n }
@@ -41,7 +41,7 @@ written_shown(n: any, admitting: list, maps: list): any := match n {
 }
 
 # the value of `target = value`, shown as what the target's place holds
-written_value(target: any, value: any, admitting: list, maps: list): any := {
+written_value(target: Node, value: any, admitting: list, maps: list): any := {
 	if admits_errors(target, admitting) { return unmarked(value) }
 	if is_key(target, Op.Colon) and (admits_errors_type(value_of(target)) or admits_errors(key_of(target), admitting)) { return unmarked(value) }
 	if is_key(target, Op.Hash) {
@@ -55,7 +55,7 @@ written_value(target: any, value: any, admitting: list, maps: list): any := {
 }
 
 # is the written place declared to admit an Error: its variable, or an item of it
-admits_errors(target: any, admitting: list): bool := {
+admits_errors(target: Node, admitting: list): bool := {
 	if target is symbol { return name_of(target) in admitting }
 	is_key(target, Op.Hash) and admits_errors(key_of(target), admitting)
 }
@@ -64,30 +64,30 @@ admits_errors(target: any, admitting: list): bool := {
 admits_errors_type(declared: any): bool := view_has(view_of(declared), part => kind_of(part) == "symbol" and (part#2 == "error" or part#2.ends_with("?")))
 
 # the variables of one scope declared to admit an Error; a function inside has its own scope
-admitting_errors(n: any): list := match n {
+admitting_errors(n: Node): list := match n {
 	Key(target, Op.Assign, value): declared_admitting(target) + admitting_errors(value)
 	Key(_, Op.Define, _): []
 	Key(left, _, right): admitting_errors(left) + admitting_errors(right)
 	List(items, _, _): items.flat_map(admitting_errors)
 	_: []
 }
-declared_admitting(target: any): list := if is_key(target, Op.Colon) and key_of(target) is symbol and admits_errors_type(value_of(target)) then [name_of(key_of(target))] else []
+declared_admitting(target: Node): list := if is_key(target, Op.Colon) and key_of(target) is symbol and admits_errors_type(value_of(target)) then [name_of(key_of(target))] else []
 
 # the parameters of a definition head `f(xs: [int or error])` declared to admit an Error
 parameters_admitting_errors(head: any): list := if is_group(head) then items_of(head).flat_map(declared_admitting) else []
 
 # the variables given a map literal: `m = {a: 1}`
-variables_given_maps(n: any): list := match n {
+variables_given_maps(n: Node): list := match n {
 	Key(target, op, value): given_map(target, op, value) + variables_given_maps(target) + variables_given_maps(value)
 	List(items, _, _): items.flat_map(variables_given_maps)
 	_: []
 }
-given_map(target: any, op: Op, value: any): list := if op == Op.Assign and target is symbol and is_curly_group(value) then [name_of(target)] else []
+given_map(target: Node, op: Op, value: any): list := if op == Op.Assign and target is symbol and is_curly_group(value) then [name_of(target)] else []
 
-with_assigned_value_unmarked(n: any): any := if is_key(n, Op.Assign) then Key(key_of(n), Op.Assign, unmarked(value_of(n))) else n
+with_assigned_value_unmarked(n: Node): any := if is_key(n, Op.Assign) then Key(key_of(n), Op.Assign, unmarked(value_of(n))) else n
 
 # `xs: [int] = …`: the type is no list literal
-with_declared_type_unmarked(target: any): any := if is_key(target, Op.Colon) then Key(key_of(target), Op.Colon, unmarked(value_of(target))) else target
+with_declared_type_unmarked(target: Node): any := if is_key(target, Op.Colon) then Key(key_of(target), Op.Colon, unmarked(value_of(target))) else target
 
 # `{k: e}`, `(e, 2)`: the items of a map or tuple literal given to a variable (a list literal marks its own)
 with_literal_items_marked(value: any): any := {
@@ -144,5 +144,5 @@ may_hold_an_error(item: any): bool := {
 	if is_group(item) and bracket_of(item) in ["[", "{"] { return no }
 	not (is_key(item, Op.Arrow) or is_key(item, Op.Define))
 }
-is_opaque(n: any): bool := n is key and key_of(n) == symbol(opaque_word)
-is_attribute(n: any): bool := n is key and key_of(n) == symbol(attribute_word)
+is_opaque(n: Node): bool := n is key and key_of(n) == symbol(opaque_word)
+is_attribute(n: Node): bool := n is key and key_of(n) == symbol(attribute_word)

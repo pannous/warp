@@ -11,7 +11,7 @@ use crate::wasm_emitter::layout::WORD;
 
 pub(crate) const WASI_START: &str = "_start";
 
-/// The WASI output words besides print: each gives an Int (analyzer)
+/// The WASI output words besides print: like print each gives nothing (prelude lines, decision output-words-nothing)
 pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
 pub(crate) const OUTPUT_CALLS: [&str; 5] =
 	["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];

@@ -46,11 +46,11 @@ fn negate_calls(
 		Node::Symbol(name) => is_builtin_callable(name) && !bound.contains(name),
 		_ => false,
 	};
-	// a function whose call has a value: the program's returning one, a built-in other than print
+	// a function whose call has a value: the program's returning one, a built-in whose signature gives one
 	let gives_value = |word: &Node| {
 		let name = word.name();
 		is_function(word, Op::Sub)
-			&& functions.get(&name).map_or(!PRINT_WORDS.contains(&name.as_str()), |function| {
+			&& functions.get(&name).map_or(!crate::library_words::gives_nothing(&name), |function| {
 				function.return_kind != crate::type_kinds::Kind::Empty
 			})
 	};
