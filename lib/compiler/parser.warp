@@ -655,7 +655,7 @@ def closing_ends_of(code: text, n: int, openers: list): ClosingEnds := {
 	}
 	// a program naming a variable `end` closes no block with it: `if a == 0 then 1 else end` hands back the variable
 	if names_end { return ClosingEnds{word_starts: [], balances: [], lowest_from: []} }
-	lowest_from = balances.copy()
+	lowest_from = [balance for balance in balances]
 	index = lowest_from.length - 1
 	while index > 0 {
 		lowest_from[index - 1] = min(lowest_from[index - 1], lowest_from[index])
@@ -1556,7 +1556,7 @@ def pipe_parameters(p: Parser): Node := {
 	while close < p.n and (" ,".contains(p.code[close]) or is_name_char(p.code[close])) { close = close + 1 }
 	names = p.code[p.at + 1 .. close].split(' ').join(",").split(',').filter(name => name)
 	body = spaces_end(p, close + 1)
-	if peek(p.code, close, p.n) != '|' or names is empty or not is_name_start(names#1#1) or body >= p.n or ";,\n})]".contains(p.code[body]) { return ø }
+	if peek(p.code, close, p.n) != '|' or names is empty or not is_name_start(names#1#1) or body >= p.n or "\n;,)]}".contains(p.code[body]) { return ø }
 	p.at = body
 	if names.length == 1 then symbol(names#1) else listed("(", ",", names.map(name => symbol(name)))
 }
