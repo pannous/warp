@@ -402,8 +402,8 @@ impl WarpParser {
 		if options == ParserOptions::default() {
 			crate::normalize::check_style(&program);
 		}
-		// marked Empty (`ø!`) is P73 force-unwrap, not a vacant program (is_nothing looks through Meta)
-		if program.is_nothing() && crate::mutation::bang_target(&program).is_none() {
+		// marked Empty (`ø!`) is P73 force-unwrap, not a vacant program (is_nothing looks through Meta); nor is `[]`
+		if program.is_nothing() && crate::mutation::bang_target(&program).is_none() && !program.is_empty_list_literal() {
 			Empty
 		} else {
 			program

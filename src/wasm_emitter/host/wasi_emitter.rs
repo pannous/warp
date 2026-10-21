@@ -88,6 +88,7 @@ impl WasmGcEmitter {
 			Node::Text(text) => self.emit_print_literal(func, text),
 			Node::Char(character) => self.emit_print_literal(func, &character.to_string()),
 			// infer_type calls a literal ø an Int, as constructors' field placeholders need (card print-error)
+			Node::Empty if value.is_empty_list_literal() => self.emit_print_literal(func, crate::node::EMPTY_LIST_LITERAL),
 			Node::Empty => self.emit_print_literal(func, &Node::Empty.serialize()),
 			_ => {
 				self.emit_written_value(func, value, PRINT_VALUE, "print");
@@ -98,7 +99,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The print of the program's value an executable ends with (CompileMode::prints_result): as emit_print, but a value
-	/// only known at run time shows nothing when it is ø, as `warp <file>` shows nothing then
+	/// only known at run time shows nothing when it is ø (`[]` shows), as `warp <file>` shows nothing then
 	pub(in crate::wasm_emitter) fn emit_result_print(&mut self, func: &mut Function, value: &Node) {
 		if !matches!(self.get_type(value), Kind::List | Kind::Key | Kind::Symbol | Kind::Empty | Kind::Data) {
 			return self.emit_print(func, value);
@@ -109,7 +110,7 @@ impl WasmGcEmitter {
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
 			I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 },
-			I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq,
+			I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq,
 			I::If(BlockType::FunctionType(consumes_text)),
 				I::Drop,
 			I::Else,
