@@ -7,7 +7,8 @@
 //! has thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
 use crate::compiler::node_views::{analysis_view, handled_plain_view, json_text, node_of_handled_view, view_json};
 use crate::node::Node;
-use std::path::PathBuf;
+use std::collections::{HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 
@@ -421,25 +422,42 @@ fn runtime_words() -> Result<String, Node> {
 
 /// runtime.warp with the files its `use` lines name in their place, after it: a module of lib (`use case_tables`) or
 /// one of its parts (`use "runtime/text.warp"`, relative to lib/compiler). Their words become runtime words, compiled
-/// into a module only when called
+/// into a module only when called. A part's own `use "x.warp"` lines (its siblings, the intrinsics it declares, so it
+/// compiles alone) join the same way, each file once, breadth first: the parts keep runtime.warp's order. The
+/// declarations of emitter.warp's intrinsics (`is_null(x: any): bool from runtime`) stay out, left to emitter.warp as
+/// definitions.warp drops them
 pub fn runtime_source() -> std::io::Result<String> {
-	let source = std::fs::read_to_string(compiler_folder().join(RUNTIME_WORDS))?;
-	let mut joined = String::new();
-	let mut used = String::new();
-	for line in source.lines() {
-		match line.strip_prefix("use ").map(str::trim) {
-			Some(name) => used += &std::fs::read_to_string(used_file(name))?,
-			None => joined += line,
+	let first = compiler_folder().join(RUNTIME_WORDS);
+	let mut joined = HashSet::from([first.clone()]);
+	let mut waiting = VecDeque::from([first]);
+	let mut source = String::new();
+	while let Some(file) = waiting.pop_front() {
+		let folder = file.parent().unwrap_or(Path::new(".")).to_path_buf();
+		for line in std::fs::read_to_string(&file)?.lines() {
+			match line.strip_prefix("use ").map(str::trim) {
+				Some(name) => {
+					let path = used_file(&folder, name);
+					if joined.insert(path.clone()) {
+						waiting.push_back(path);
+					}
+				}
+				None if is_intrinsic_declaration(line) => {}
+				None => source += line,
+			}
+			source.push('\n');
 		}
-		joined.push('\n');
 	}
-	Ok(joined + &used)
+	Ok(source)
 }
 
-/// The file of a `use` line of runtime.warp: a quoted path beside runtime.warp, else a module of lib
-fn used_file(name: &str) -> PathBuf {
+fn is_intrinsic_declaration(line: &str) -> bool {
+	line.trim_end().ends_with(&format!(" from {}", crate::ffi::RUNTIME_LIBRARY))
+}
+
+/// The file of a `use` line: a quoted path beside the using file, else a module of lib
+fn used_file(folder: &Path, name: &str) -> PathBuf {
 	match name.strip_prefix('"').and_then(|quoted| quoted.strip_suffix('"')) {
-		Some(path) => compiler_folder().join(path),
+		Some(path) => folder.join(path),
 		None => library().join(format!("{name}.warp")),
 	}
 }

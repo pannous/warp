@@ -38,7 +38,7 @@ is_head(n: Node): bool := match n {
 	_: no
 }
 
-definition(n: Node): Node := match n {
+definition(n: Node): Node := if is_runtime_declaration(n) then Node.Empty else match n {
 	List(parts, Bracket.None, Separator.Space): {
 		if #parts == 2 and is_keyword(parts#1) { return defined(parts#2) }
 		if #parts == 2 and is_declaration_word(parts#1) { return parts#2 }
@@ -47,6 +47,13 @@ definition(n: Node): Node := match n {
 	Key(head, Op.Assign, body): { if is_head(head) or is_function_block(head, body) then Key(head, Op.Define, body) else n }
 	Key(annotated, Op.Define, body): result_held(annotated, body, n)
 	_: n
+}
+
+# `is_null(x: any): bool from runtime` (decision bodiless-imports): an intrinsic the emitter supplies, declared only;
+# the line goes (Rust twin: lowering/foreign/foreign_lines.rs runtime_line, whose Rust lane traps when it is called)
+is_runtime_declaration(n: Node): bool := {
+	words = if is_key(n, Op.Colon) and is_group(value_of(n)) then value_of(n) else n
+	separator_of(words) == " " and #words == 3 and words#2 == symbol("from") and words#3 == symbol("runtime")
 }
 
 # `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
