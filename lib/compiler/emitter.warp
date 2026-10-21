@@ -804,7 +804,7 @@ def shown_text(value: any): list {
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
 # first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
 def printed_value(body: Body, n: any): list {
-	if is_quote(n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
+	if is_quote(n) or has_repetition(n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
 	if n#1 is text and text_value(n#1)#1 == "text" { return texts_joined(body, items_of(n), "") }
 	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between (Rust's spaced_values_text)
 	if n.all(is_spaced_value) and not items_of(n)[1..].any(is_negative_literal) { return texts_joined(body, items_of(n), " ") }
@@ -1712,8 +1712,34 @@ is_spaced_call(body: Body, n: any): bool := {
 }
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: any): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
+# `n times [x]`, `n times "ab"` among the items of a spaced group or a call `print(3 times [7])`: n copies, as Rust's times pass lowers them (zero_fill,
+# times·text), the count the item before; `n times {…}` waits for its library word (pending_library_words). The index
+# of `times` in items, 0 for none
+repetition_at(items: any): int := {
+	places = range_list(#items).map(i => i + 1).filter(at => at > 1 and at < #items and repeats_at(items, at))
+	if places then places#1 else 0
+}
+# whether items#at is `times` before a value it repeats
+repeats_at(items: any, at: int): bool := {
+	value = items#(at + 1)
+	items#at == symbol("times") and (value is text or (is_group(value) and bracket_of(value) == "[" and #value == 1))
+}
+repetition_call(count: any, value: any): any := if value is text then call_of("times·text", [count, value]) else call_of("zero_fill", [count, value#1])
+# the group with its repetition at `at` as one call: the group itself when only the repetition is left
+repetition_folded(n: any, at: int): any := {
+	items = items_of(n)
+	folded = items[..(at - 2)] + [repetition_call(items#(at - 1), items#(at + 1))] + items[(at + 1)..]
+	if #folded == 1 then folded#1 else separated(bracketed(folded, bracket_of(n)), separator_of(n))
+}
+has_repetition(n: any): bool := {
+	if not is_group(n) or not (bracket_of(n) == "" or bracket_of(n) == "(") { return no }
+	repetition_at(items_of(n)) > 0
+}
+# the group with each of its repetitions one call
+repetitions_folded(n: any): any := if has_repetition(n) then repetitions_folded(repetition_folded(n, repetition_at(items_of(n)))) else n
 def group_expression(body: Body, n: any): list {
 	if is_quote(n) { return ["node", quoted_code(body, n#2)] }
+	if has_repetition(n) { return expression_code(body, repetitions_folded(n)) }
 	if inline_quote_at(n) > 0 { return group_expression(body, quote_folded(n, inline_quote_at(n))) }
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, items_of(n)[2..]) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
