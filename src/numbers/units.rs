@@ -889,7 +889,8 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 				};
 				let shadows = duration.mentions_where(|name| shadowed.contains(name));
-				let call = |word: Node, argument: Node| Node::List(vec![word, argument], Bracket::Round, Separator::None);
+				let call =
+					|word: Node, argument: Node| Node::List(vec![word, argument], Bracket::Round, Separator::None);
 				if matches!(duration.drop_meta(), Node::Number(_)) {
 					if let Err(error) = warn_bare_duration(&duration) {
 						return error;
