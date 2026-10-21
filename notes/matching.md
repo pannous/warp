@@ -177,7 +177,7 @@ Rust compiler. Probe of the gaps: probes/self_hosting/code_patterns.warp. Steps 
 | 1 | code-patterns | rest holes `g($first, $rest...)`, `[$h, $t...]`; statement patterns `for $v in $it { $body }`, `if $c { $a } else { $b }`; operator holes `$l $op $r`; a `for` inside a `data(…)` pattern must stay sealed | no match; the for runs |
 | 2 | typed-holes | conditions on holes: `$r: int`, `$n: > 0`, `$s: symbol`, `$b: block` | no match |
 | 3 | patterns-as-values | `n matches p` → bindings or nothing; `p: pattern` parameters; `find`/`replace` as lib warp (notes/pattern_values.md route B) | parse error |
-| 4 | rewrite-rules | a rule set as a value, `rules { data($a * 1) => a; data($a + 0) => a }`, applied bottom-up or to a fixpoint, keeping positions: the vocabulary of a lowering pass | single `replace … with` only |
+| 4 | rewrite-rules | a rule set as a value, `rules { data($a * 1) => a; data($a + 0) => a }`, applied bottom-up or to a fixpoint, keeping positions: the vocabulary of a lowering pass | done: `simplify = rules {…}` defines simplify(code), a normal form (each result walked again), 1000 rewrites in a row stop with an error naming the rule (tree_walks.rs, tests/control/test_rule_sets.rs); keeping positions open |
 | 5 ★ | pattern-clauses | a function defined by pattern clauses `simplify(data($a * 1)) := a` … tried in order (decided) | done (pattern_clauses.rs) |
 | 6 ★ | binding-alternatives | alternatives that bind the same names `data($k: int + $x) \| data($x + $k: int) => x` | done (switch.rs alternatives_test) |
 | 7 ★ | whole-binding | `as` binds a (sub)pattern: `data($f($inner) as call)` | parse error |
