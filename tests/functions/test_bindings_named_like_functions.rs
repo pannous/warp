@@ -1,6 +1,7 @@
 //! A function's local named like one of the program's functions is the local wherever it is bound: for reads, calls
 //! on it, slices and type positions; a call of it holding no function is an error naming both (cards local-named-like)
 use crate::is;
+use warp::node::ints;
 
 #[test]
 fn a_local_list_is_tested_for_membership() {
@@ -9,12 +10,12 @@ fn a_local_list_is_tested_for_membership() {
 
 #[test]
 fn a_local_list_is_sliced() {
-	is!("items(p, closer, bracket) := 1; f() := { items = [1, 2, 3]; items[1..] }; f()", [2, 3]);
+	is!("items(p, closer, bracket) := 1; f() := { items = [1, 2, 3]; items[1..] }; f()", ints(vec![2, 3]));
 }
 
 #[test]
 fn a_local_list_stays_a_value_beside_a_function_of_one_value() {
-	is!("g(x) := x * 2; f() := { g = [3]; g }; f()", [3]);
+	is!("g(x) := x * 2; f() := { g = [3]; g }; f()", ints(vec![3]));
 	is!("g(x) := x * 2; f() := { g = [3, 4]; #g }; f()", 2);
 }
 
