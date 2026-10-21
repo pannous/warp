@@ -39,7 +39,7 @@ pieces(template: text): list := {
 			at += 2
 		} else if c == '$' and next == '{' {
 			end = hole_close(template, at + 2)
-			if literal != "" { found += [literal] }
+			if literal { found += [literal] }
 			literal = ""
 			found += [hole(template[at + 2 .. end - 1])]
 			at = end
@@ -48,7 +48,7 @@ pieces(template: text): list := {
 			at += 1
 		}
 	}
-	if literal != "" { found += [literal] }
+	if literal { found += [literal] }
 	found
 }
 

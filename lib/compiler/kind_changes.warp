@@ -117,16 +117,16 @@ evident_results(program: Node): any := {
 	results = {}
 	for written in nodes_in(program).filter(is_define_statement) {
 		name = define_statement_name(written)
-		if name != "" {
+		if name {
 			parameters = {}
 			for parameter in items_of(key_of(written))[1..] {
 				if is_operator(parameter, ":") and key_of(parameter) is symbol {
 					kind = type_kind(value_of(parameter))
-					if kind != "" { parameters[name_of(key_of(parameter))] = kind }
+					if kind { parameters[name_of(key_of(parameter))] = kind }
 				}
 			}
 			kind = evident_kind(last_expression(value_of(written)), parameters)
-			if kind != "" { results[name + call_suffix] = kind }
+			if kind { results[name + call_suffix] = kind }
 		}
 	}
 	results
@@ -144,7 +144,7 @@ last_expression(body: Node): any := {
 first_kind_change(n: Node, kinds: any, results: any, global_names: any): any := {
 	if is_define_statement(n) {
 		name = define_statement_name(n)
-		if name == "" { return ø }
+		if name is empty { return ø }
 		change = given_kind(name, function_kind, value_of(n), kinds)
 		if change != ø { return change }
 		# its body shares the globals and its `nonlocal` ones
@@ -175,10 +175,10 @@ first_kind_change(n: Node, kinds: any, results: any, global_names: any): any := 
 given_kind(name: text, given: text, value: any, kinds: any): any := {
 	was = if name in kinds then kinds[name] else ø
 	kind = given
-	if was != ø and was != "" and given != "" {
+	if was and given {
 		# P199: 1 and 0 are yes and no, a bool variable stays one
 		kind = if was == bool_kind and (value == 0 or value == 1) then bool_kind else mixed_kind(was, given)
-		if kind == "" { return call_of("kind_change", [symbol(name), was, given]) }
+		if kind is empty { return call_of("kind_change", [symbol(name), was, given]) }
 	} else if was != ø {
 		kind = ""
 	}

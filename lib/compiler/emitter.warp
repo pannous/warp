@@ -2063,7 +2063,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	parameter_kinds = []
 	for i in 0..<#f.signature.parameters {
 		declared = f.signature.parameters[i].type_name
-		annotation = if declared == "" then analyzed_parameter_kind(f, i) else declared
+		annotation = if declared is empty then analyzed_parameter_kind(f, i) else declared
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
 		given = if argument_kinds[i] == pending then "node" else argument_kinds[i]
 		if parameter_key(f.name, i) in module.literal_arguments {

@@ -38,7 +38,7 @@ typed_line(line: text, library: text): any := {
 	close = #signature - signature.reverse().index_of(")") + 1
 	if open == 0 or close <= open { return ø }
 	written = signature[open : close - 1].trim()
-	parameters = if written == "" then [] else written.split(",").map(part => written_parameter(part))
+	parameters = if written is empty then [] else written.split(",").map(part => written_parameter(part))
 	result = signature[close :].trim().remove_prefix(":").trim()
 	Builtin(name: signature[0 : open - 1], signature: Signature(parameters: parameters, result: result))
 }

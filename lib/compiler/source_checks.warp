@@ -58,7 +58,7 @@ spelled_number_join(n: any): any := {
 sum_written(left: any, right: any, spelling: text, converter: text): text := operand_form(left, spelling, converter) + " + " + operand_form(right, spelling, converter)
 operand_form(side: any, spelling: text, converter: text): text := {
 	if not (side is number) { return spelling }
-	if converter == "" then "${side}" else converter + "(${side})"
+	if converter is empty then "${side}" else converter + "(${side})"
 }
 # the text side quoted, when it spells a number and the other side is one
 spelled_number(text_side: any, number_side: any): any := {

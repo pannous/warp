@@ -16,18 +16,18 @@ definition_slices(source: text): list := {
 	written = ""
 	for line in source.split("\n") {
 		started = name_defined_in(line)
-		if started != "" {
-			if name != "" { slices += [[name, written]] }
+		if started {
+			if name { slices += [[name, written]] }
 			name = started
 			written = line
-		} else if name != "" and continues(line) {
+		} else if name and continues(line) {
 			written = written + "\n" + line
-		} else if name != "" {
+		} else if name {
 			slices += [[name, written]]
 			name = ""
 		}
 	}
-	if name != "" { slices += [[name, written]] }
+	if name { slices += [[name, written]] }
 	slices
 }
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
@@ -39,7 +39,7 @@ name_defined_in(line: text): text := {
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1 }
 	leading = leading_name(line)
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
-	if leading == "" { return "" }
+	if leading is empty { return "" }
 	following = line[#leading ..].trim()
 	is_function = following.starts_with("(") and line.contains(":=")
 	is_value = following.starts_with(":=") or (following.starts_with("=") and not following.starts_with("=="))

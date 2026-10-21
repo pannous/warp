@@ -29,7 +29,7 @@ def foreign_form(p: Parser, word: text): Node := {
 		if skipped != ø { return skipped }
 	}
 	keyword = class_keyword_after(p, word)
-	if keyword != "" and CLASS_MODIFIERS.contains(word) {
+	if keyword and CLASS_MODIFIERS.contains(word) {
 		p.at = blank_end(p, p.at + word.length)
 		return type_declaration(p, keyword)
 	}
@@ -37,7 +37,7 @@ def foreign_form(p: Parser, word: text): Node := {
 		p.at = blank_end(p, p.at + word.length)
 		return atom(p)
 	}
-	if word == "constant" and name_after_blanks(p, word) != "" {
+	if word == "constant" and name_after_blanks(p, word) {
 		p.at = p.at + word.length
 		return symbol("const")
 	}
@@ -73,7 +73,7 @@ def without_foreign_modifiers(p: Parser, first: text): Node := {
 		next = p.code[start .. at]
 		if not is_modifier(next) {
 			foreign_only = words.all(word => FOREIGN_MODIFIERS.contains(word))
-			if next == "" or not (function_keywords.contains(next) or foreign_only) { return ø }
+			if next is empty or not (function_keywords.contains(next) or foreign_only) { return ø }
 			p.at = start
 			statement = expression(p, 0)
 			return if words.contains(STATIC_WORD) then attributed(STATIC_WORD, true, statement) else statement
@@ -106,7 +106,7 @@ def ruby_fields(p: Parser, word: text): Node := {
 	end = start
 	while end < p.n and not "\n;}".contains(p.code[end]) { end = end + 1 }
 	names = p.code[start .. end].split(",").map(name => without_colon(name.trim()))
-	if not names.all(name => name != "" and name_end(name, 0, name.length) == name.length) { return ø }
+	if not names.all(name => name and name_end(name, 0, name.length) == name.length) { return ø }
 	p.at = end
 	listed("", ";", names.map(name => symbol(name)))
 }
@@ -117,5 +117,5 @@ def without_colon(name: text): text := if starts_at(name, ":", 0) then name[1 ..
 // Rust twin: scanning.rs name_and_block_follow
 def block_after_name(p: Parser, word: text): bool {
 	name = name_after_blanks(p, word)
-	name != "" and is_at(p.code, spaces_end(p, spaces_end(p, p.at + word.length) + name.length), '{', p.n)
+	not (name is empty) and is_at(p.code, spaces_end(p, spaces_end(p, p.at + word.length) + name.length), '{', p.n)
 }
