@@ -1289,10 +1289,12 @@ def declared_operators(source: text): list {
 	found
 }
 
-// The operators a parse of a source knows: its own declared ones, then the standard modules' glyph operators it writes
-// Rust twin: operators.rs scan_user_operators (the operators of a `use`d module's words, `matches`, are not read yet)
+// The operators a parse of a source knows: its own declared ones, those of the standard modules it uses (`use regex`
+// makes `matches` infix), then the standard modules' glyph operators it writes
+// Rust twin: operators.rs scan_user_operators
 def scanned_operators(source: text): list {
 	found = declared_operators(source)
+	for module in used_module_sources(source) { found += declared_operators(module) }
 	for library in library_glyph_operators() {
 		if source.contains(library#1) and declared_level(found, library#1) < 0 { found += [library] }
 	}
@@ -1310,6 +1312,24 @@ def library_glyph_operators(): list {
 		}
 	}
 	library_operators
+}
+
+// The words of a statement that uses a module: `use regex`, `require regex`, `import regex`
+// Rust twin: use_statements.rs USE_KEYWORDS
+USE_KEYWORDS = ["use", "require", "import"]
+// The sources of the standard modules a source uses by name, read from lib/ beside this compiler (module_source takes
+// a name written out only)
+// Rust twin: declaration_scan.rs used_std_modules
+def used_module_sources(source: text): list {
+	sources = []
+	for statement in code_statements(source) {
+		words = blank_words(statement)
+		if words.length == 2 and USE_KEYWORDS.contains(words#1) {
+			module = try read(folder_of(module_directory) + "/" + words#2 + ".warp") else ""
+			if module { sources += [module] }
+		}
+	}
+	sources
 }
 
 // The statements of a source's code, outside comments and texts, split at line ends and `;`
