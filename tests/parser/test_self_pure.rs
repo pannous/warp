@@ -228,6 +228,23 @@ fn number_keys_run_pure() {
 	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
 }
 
+/// The front lanes key such a map too: parser.warp's `m[1]` keeps its written number, and `{}` stays the empty map,
+/// across the bridge to the Rust passes (card self-hosted-map-null)
+#[test]
+fn number_keys_run_in_the_front_lanes() {
+	for lane in ["front", "1"] {
+		for (name, code, value) in [
+			("front_number_key_empty_map", "m = {}; m[1] = 2; m", "1:2"),
+			("front_number_key_read", "m = {}; m[1] = 2; m[1]", "» 2"),
+			("front_number_key_literal", "m = {1: 5}; m[1] = 2; m", "1:2"),
+			("front_list_index", "xs = [5, 6, 7]; xs[2] = 9; xs", "» [5 6 9]"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.contains(value), "lane {lane}, {code}: {output}");
+		}
+	}
+}
+
 /// List comprehensions lower to the loop that builds the list (card pure-comprehensions), a second `for` nesting in the
 /// first clause as Rust's parser reads it
 #[test]
@@ -454,7 +471,7 @@ fn parser_words_run_pure() {
 	runs_pure("min_max", &probe("min_max"), "2\n5\n9\n1\n2\n1");
 	runs_pure("member_words", &probe("plurals"), "['h' 'é' 'l' 'l' 'o']\n['a' 'b']\n['a' 'b']\n['a' 'b']\n[1 2]\n5");
 	runs_pure("floor_quotient_of_nodes", &probe("floor_node"), "3\n3\n2\n2");
-	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
+	runs_pure("keys_of_nothing", &probe("empty_keys"), "[]\n[]");
 	runs_pure("empty_lists_join", &probe("empty_joins"), "0\n1\n0");
 	runs_pure("arity_overloads", &probe("arity_overloads"), "6\n6\n14\n6\n10\n1\n10\n12");
 	runs_pure("type_of_is", &probe("type_of_is"), "yes\nno\nyes");
@@ -568,4 +585,59 @@ fn spaced_curly_list_is_a_value_self_hosted() {
 		let (output, _) = lane_run(lane, "spaced_list", "hi := {3 4}; hi()");
 		assert!(output.contains("{3 4}"), "lane {lane}: {output}");
 	}
+}
+
+/// The entries of `from` linked into the new folder `to`, but the one named `except`
+#[cfg(unix)]
+fn linked_folder(from: &std::path::Path, to: &std::path::Path, except: &str) {
+	std::fs::create_dir_all(to).unwrap();
+	for entry in std::fs::read_dir(from).unwrap().flatten().filter(|entry| entry.file_name() != except) {
+		std::os::unix::fs::symlink(entry.path(), to.join(entry.file_name())).unwrap();
+	}
+}
+
+/// A copy of lib/ whose compiler folder holds `emitter` as emitter.warp, the other files linked
+#[cfg(unix)]
+fn lib_with_emitter(name: &str, emitter: &str) -> PathBuf {
+	let library = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("{name}_{}", std::process::id()));
+	let _ = std::fs::remove_dir_all(&library);
+	let shipped = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib");
+	linked_folder(&shipped, &library, "compiler");
+	linked_folder(&shipped.join("compiler"), &library.join("compiler"), "emitter.warp");
+	std::fs::write(library.join("compiler/emitter.warp"), emitter).unwrap();
+	library
+}
+
+/// A stage program that fails names its file, not only warp's bare error (card self-hosted-stage)
+#[cfg(unix)]
+#[test]
+fn a_failing_stage_names_its_file() {
+	let library =
+		lib_with_emitter("broken_emitter_lib", "typed_wasm_module(program, kinds, words, host) := no_such(1)");
+	let run = crate::common::warp_command()
+		.env("WARP_SELF_HOSTED", "pure-only")
+		.env("WARP_LIB", &library)
+		.env("WARP_MODULE_CACHE", library.join("stage_cache"))
+		.arg("1 + 2")
+		.output()
+		.expect("warp runs");
+	let output = String::from_utf8_lossy(&run.stdout).into_owned() + &String::from_utf8_lossy(&run.stderr);
+	let _ = std::fs::remove_dir_all(&library);
+	assert!(output.contains("the self-hosted stage") && output.contains("compiler/emitter.warp failed"), "{output}");
+}
+
+/// An operator case is its own value and a synonym of its spelling (decision enum-case, card pure-op-cases): the pure
+/// lane prints Op.Add as Add, converts it to and from "+", and a match binds a key's op as its case
+#[test]
+fn op_cases_run_pure() {
+	runs_pure("op_case_value", "[Op.Add, Op.Sub]", "[Add Sub]");
+	runs_pure("op_case_as_text", "x = Op.Add; x as text", "» \"+\"");
+	runs_pure("op_case_from_text", "\"*\" as Op", "Mul");
+	runs_pure("op_case_equals_spelling", "x = Op.Add; x == \"+\" and op_of(Key(1, x, 2)) == Op.Add", "yes");
+	runs_pure("op_case_bound", "match Key(1, Op.Add, 2) { Key(a, op, c): op; _: 0 }", "Add");
+	runs_pure(
+		"bracket_case_bound",
+		"match List([1], Bracket.Square, Separator.Comma) { List(xs, b, s): [b, s]; _: 0 }",
+		"[Square Comma]",
+	);
 }

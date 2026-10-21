@@ -1,4 +1,5 @@
 mod test_aliased_changes; // card aliased-list
+mod test_any_plus_list; // card slice-node
 mod test_append_words;
 mod test_auto_linear_floats; // card auto-linear-floats
 mod test_bare_list_assignment;
@@ -6,6 +7,7 @@ mod test_byte_size;
 mod test_calls_in_blocks;
 mod test_captured_call_lists;
 mod test_comprehension_beside_own_push; // card prefix-count-field
+mod test_comprehension_if_else_item; // card comprehension-whose
 mod test_concat_declared;
 mod test_concat_keeps_arrays; // card runtime-speed
 mod test_count_after_function; // card print-people
@@ -25,6 +27,7 @@ mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
+mod test_empty_list_kept; // card rust-lane-literal
 mod test_empty_list_value; // card run-time-empty
 mod test_empty_results; // card empty-results
 mod test_empty_start; // card start: `t = []` appends, ø + text fails
@@ -109,6 +112,7 @@ mod test_range_in_structure;
 mod test_range_returns;
 mod test_range_values;
 mod test_remove_and_index_of;
+mod test_runtime_map_subscript; // card entry-number
 mod test_self_sum_in_place; // card out-list: `out = out + x` of an unshared list grows it in place
 mod test_set_past_the_end;
 mod test_signed_operand_list;

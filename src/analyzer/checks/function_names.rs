@@ -1,9 +1,6 @@
 //! Function names: an operator word or a type word cannot name a function
 use super::*;
 
-/// `norm` is the prelude's word (the Euclidean length of a list, decision S3), named and refused as a function like abs
-const OPERATOR_LIKE_WORDS: [(&str, Op); 1] = [("norm", Op::Abs)];
-
 /// The error for a user function named like a type word; `{name}` is the word
 pub(crate) const TYPE_WORD_FUNCTION_CLASH: &str = "{name} is a type; name your function to_{name}";
 
@@ -107,7 +104,6 @@ pub(crate) fn operator_word(head: &Node) -> Option<(String, Op)> {
 fn operator_named(name: &str) -> Option<(String, Op)> {
 	crate::warp_parser::PREFIX_OPERATOR_WORDS
 		.iter()
-		.chain(&OPERATOR_LIKE_WORDS)
 		.find(|(word, _)| *word == name)
 		.map(|(word, op)| (word.to_string(), *op))
 }

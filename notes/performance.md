@@ -83,7 +83,9 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   list_items + list_item_count 14% (scope.warp nodes_kept keeps its stack in a cons list: `unvisited#(#unvisited)` and
   a slice per step), text_bytes_equal + values_equal ~9%.
 - Tried, no gain: Binaryen wasm-opt -O2/-O3/-Oz (Cranelift does that work); only -O3 with aggressive inlining runs
-  12-19% faster, at 2.4x size and +1.2 s wasmtime compile (card wasm-opt-inline, probes/perf/wasm_opt_bench.sh).
+  12-19% faster, at 2.4x size and +1.2 s wasmtime compile (probes/perf/wasm_opt_bench.sh). So the self-hosted stages,
+  compiled once per lib/ and binary and kept, go through it when wasm-opt is on PATH (binaryen.rs optimized_for_speed,
+  card wasm-opt-inline): pure-only passes.warp 25.5 → 21.7 s, the cold compile +3.6 s.
   wasmtime's own inlining measured slower. Interning text literals (one text per literal, kept in a global array)
   ran 4% slower: text_literal's profile share is its call count, not its work.
 - Reading a guest profile: samples fall on function entries and loop headers (epoch ticks, notes/profiling.md), so a
@@ -104,6 +106,10 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   reran 6 times (~6.2 s of 13.3 s emitting) until the emitter foresaw the ops of `key(left, op, right)` calls
   (node_api foreseen_key_operator): now 0 reruns, 5.4 s. A new rerun cause is a need the analysis should foresee.
 - Cold A/B: a re-signed copy (`cp warp w; codesign -s - -f w`) misses the program cache, whose key holds the binary.
+- The shared /Users/me/dev/bin/warp is replaced after every pushed batch, which changes every stage key: a series
+  run on it can recompile the stages in its middle (it looked like a missed cache). Time a copied binary.
+- Self-hosted tests in the cloud lane (card stage-cache-timeout): test_self_hosted_cache unoptimized: build 74 s + tests
+  361 s; with warp-lang at opt-level 2: 452 + 180 s, so a filtered run stays unoptimized.
 
 ## Compile time
 - Shared analysis state: function kinds and closure targets are `Rc` (analyzer FunctionKinds, ClosureTargets); passes
@@ -119,3 +125,10 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   directory is part of the key. Probes:
   probes/program_cache/cli_cache.sh, probes/program_cache/samples_twice.sh (samples whose two runs differ do so
   without the cache too: timings, random weights, stored rows, GPU frame counts).
+
+## Playground memory
+`scripts/browser-dry-run.sh --chrome [names…]` prints the tour's memory: the peak of the processes' own memory (anon,
+page cache apart) of the scope holding Chrome, the examples that grew it most, and the processes at the peak
+(test_in_browser.py MemoryWatch). One example alone gives its growth; across the whole tour the steps vary with GC
+timing (peak 0.8–1.1 GB before 5b0b7f1bdb). A binary read must not go through `Uint8Array.from(text, …)`: it lists every
+character as a string first (uniscript's 10 MB index cost 550 MB, now 195).

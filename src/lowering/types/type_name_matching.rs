@@ -212,9 +212,10 @@ pub(crate) fn is_checked_result(word: &str) -> bool {
 		|| (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
 }
 
-/// `list`, `map`: a collection type, whose values no kind names (type_tests::held_kind)
+/// `list`, `map`, `ints`, `list of text`: a collection type, whose values no kind names (type_tests::held_kind)
 fn is_collection_type(word: &str) -> bool {
-	crate::type_tests::COLLECTION_WORDS.contains(&word.trim_end_matches('?'))
+	let word = word.trim_end_matches('?');
+	crate::type_tests::COLLECTION_WORDS.contains(&word) || crate::analyzer::names_list_type(word)
 }
 
 /// `{the result: int or text = value; the result}`: the value admitted as a variable declared of the type is, a
@@ -315,17 +316,28 @@ fn prefixed_declaration(items: &[Node]) -> Option<Node> {
 
 pub fn lower(node: Node) -> Node {
 	if let Some(definition) = return_typed_definition(&node) {
-		return definition;
+		return with_body_lowered(definition);
 	}
 	match node {
 		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [type_name, definition] if typed_return(type_name, definition).is_some()) => {
-			typed_return(&items[0], &items[1]).expect("guarded")
+			with_body_lowered(typed_return(&items[0], &items[1]).expect("guarded"))
 		}
 		Node::List(items, Bracket::None, Separator::Space) if spaced_definition(&items).is_some() => {
-			spaced_definition(&items).expect("guarded")
+			with_body_lowered(spaced_definition(&items).expect("guarded"))
 		}
+		definition @ Node::Key(_, Op::Define | Op::Assign, _) => with_body_lowered(definition),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
 		meta @ Node::Meta { .. } => meta.under_meta(lower),
+		other => other,
+	}
+}
+
+/// A definition with the definitions in its body lowered too: `def total(xs): int { def inner(): any {…} … }`
+fn with_body_lowered(definition: Node) -> Node {
+	match definition {
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) if is_call_head(&head) => {
+			Node::Key(head, op, Box::new(lower(*body)))
+		}
 		other => other,
 	}
 }

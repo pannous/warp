@@ -11,19 +11,27 @@ use file
 # lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the folder above this file's
 library_folder = if #args > 3 then args#4 else env("WARP_LIB") ?? folder_of(module_directory)
 
+# the name the lowered runtime words are kept under
+RUNTIME_WORDS = "compiler.warp's lowered runtime words of " + library_folder
+
 # the prelude's text, whose definitions a program reaches (prelude_words.warp)
 prelude_source = read(library_folder + "/prelude.warp")
 
-# the runtime words, lowered by the same passes as a program
-runtime_words = lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source)
+# the runtime words, lowered by the same passes as a program; the same at every run while lib/ stays as it is, so kept
+# across runs and lowered once (card pure-warm-start)
+runtime_words = kept(RUNTIME_WORDS) ?? keep(RUNTIME_WORDS, lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source))
 
-# the wasm module of the source, as bytes
-compile(source: text, folder: text): list := {
+# the wasm module of the source, as bytes; a form beyond the emitter's core gives its refusal, "outside the core: …"
+compile(source: text, folder: text): any := {
 	program = lowered_program(source, folder, prelude_source)
+	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules? 
 	typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program))
 }
 
 # warp compiler.warp <source file> <wasm file> [<folder of the source's uses> [<lib folder>]]
 source_file = args#1
 folder = if #args > 2 then args#3 else folder_of(source_file)
-write_bytes(args#2, compile(read(source_file), folder))
+module = compile(read(source_file), folder)
+# a refused program is the compile's error: no module is written
+if module is text { raise module }
+write_bytes(args#2, module)

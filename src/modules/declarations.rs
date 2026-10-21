@@ -176,11 +176,7 @@ pub(crate) fn same_definitions(first: &[Node], second: &[Node]) -> bool {
 
 /// The fields the classes of the statements declare (`header` of parser.warp's Parser), also a used file's
 pub(crate) fn declared_fields(statements: &[Node]) -> HashSet<String> {
-	statements
-		.iter()
-		.flat_map(|statement| crate::class_methods::class_fields(statement).into_values().flatten())
-		.map(|(field, _)| field)
-		.collect()
+	crate::class_methods::field_names(statements)
 }
 
 /// The methods called in statements: `f` of `x.f(…)` and of `x.f`, but no read `x.f` of the `fields`

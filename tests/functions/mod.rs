@@ -16,6 +16,7 @@ mod test_bare_function_name;
 mod test_bare_host_words; // card random-should
 mod test_block_function;
 mod test_block_function_argument; // card block-function-argument
+mod test_bodiless_runtime_words; // card bodiless-imports
 mod test_body_statement;
 mod test_braced_it_warning;
 mod test_braceless_call_in_logic; // card braceless-call
@@ -137,6 +138,7 @@ mod test_mixed_number_returns; // card function-returning
 mod test_multi_value;
 mod test_named_arguments;
 mod test_named_function_argument;
+mod test_nested_definitions; // card nested-def-loop
 mod test_nested_it;
 mod test_nested_iterations; // card rust-lambdas
 mod test_nested_library_calls; // card broadcast-library
@@ -202,6 +204,7 @@ mod test_rust_return_arrow;
 mod test_sequence_values; // cards sequence-value, block-data-sound
 mod test_several_arguments;
 mod test_shadowed_log;
+mod test_size_count_alias; // card size-count
 mod test_soft_keywords;
 mod test_sort_comparator_speed; // card comparator-sort
 mod test_sort_functions;
@@ -224,6 +227,7 @@ mod test_typed_returns;
 mod test_typed_signatures;
 mod test_undefined_calls;
 mod test_untyped_predicate_passed; // card untyped-passed
+mod test_unused_sibling_caller; // card unused-sibling
 mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;

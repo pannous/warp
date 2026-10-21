@@ -1,0 +1,10 @@
+type Name = text
+f(xs: list of Name) := #xs
+class Inventory { counts: map }
+i = Inventory{counts: {apples: 3}}
+ys = [1, 2] as texts
+h(x: int): ints := [x, x]
+print f(["a", "b"])
+print i.counts["apples"]
+print ys#2 + "!"
+print #h(3)

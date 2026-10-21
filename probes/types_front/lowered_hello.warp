@@ -1,0 +1,4 @@
+use "../../lib/compiler/passes.warp"
+print(tree("print \"hello world\""))
+print(view_of(plain_node(parsed("print \"hello world\""))))
+print(lowered("print \"hello world\"", ".", ""))

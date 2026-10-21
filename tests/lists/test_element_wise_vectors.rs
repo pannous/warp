@@ -33,10 +33,10 @@ fn an_element_wise_operator_of_a_call_decides_at_run_time() {
 
 #[test]
 fn norm_is_the_euclidean_length_of_a_list() {
-	is!("norm([3, 4])", 5);
-	is!("v = [3, -4]; norm v", 5);
-	is!("magnitude([6, 8])", 10);
-	is!("norm(-3)", 3);
+	is!("use math; norm([3, 4])", 5);
+	is!("use math; v = [3, -4]; norm v", 5);
+	is!("use math; magnitude([6, 8])", 10);
+	is!("use math; norm(-3)", 3);
 }
 
 #[test]

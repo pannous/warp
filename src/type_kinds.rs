@@ -464,6 +464,11 @@ pub fn named_field_type(type_name: &str) -> &str {
 	type_name.trim_end_matches(OPTIONAL_SUFFIX)
 }
 
+/// The collection word of a typed collection: `map` of `map of int`
+fn collection_head(type_name: &str) -> &str {
+	type_name.split_once(" of ").map_or(type_name, |(head, _)| head)
+}
+
 pub fn field_storage(type_name: &str) -> FieldStorage {
 	let word = type_name.trim_end_matches(OPTIONAL_SUFFIX);
 	let optional = word.len() < type_name.len();
@@ -477,8 +482,7 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 		_ if crate::analyzer::union_parts(word).is_some() => FieldStorage::Node,
 		_ if crate::analyzer::type_word_kind(word).is_some()
 			|| crate::analyzer::plural_element_type(word).is_some()
-			|| word == "list"
-			|| word.starts_with("list of ") =>
+			|| crate::lowering::declarations::is_collection_type_word(collection_head(word)) =>
 		{
 			FieldStorage::Node
 		}

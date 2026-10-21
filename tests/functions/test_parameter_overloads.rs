@@ -150,3 +150,11 @@ fn a_class_named_like_a_type_takes_its_variant() {
 	is!("f(c: text) := 1; f(b: list) := 2; g(x) := f(x) in [2]; g([1])", true);
 	is!("f(c: text) := 1; f(b: list) := 2; g(x) := f(x) == 2; g([1])", true);
 }
+
+// card play-block-overload: a parameter typed as a function takes a function of as many parameters, typed alike
+#[test]
+fn a_function_type_takes_the_variant_of_the_functions_parameters() {
+	let variants = "p(f: (float) -> float) := 1; p(f: (int, float) -> any) := 2; ";
+	is!(&format!("{variants}hum(t) := t; p(hum)"), 1);
+	is!(&format!("{variants}hum(n: int, t) := t; p(hum)"), 2);
+}

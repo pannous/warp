@@ -78,7 +78,7 @@ impl WarpParser {
 		if self.matches_keyword(crate::words::FOR_WORD) || self.matches_keyword(END_KEYWORD) {
 			return true;
 		}
-		let length = (0..).take_while(|at| is_identifier_char(self.peek_char(*at))).count();
+		let length = self.name_length_at(0);
 		match (self.peek_char(length), self.peek_char(length + 1)) {
 			('{', _) => length > 0,
 			(':', next) => length > 0 && !matches!(next, ':' | '='),
@@ -152,6 +152,10 @@ impl WarpParser {
 		if !lhs_is_callable || !self.can_start_atom() || !should_apply || (ch == '{' && self.context.in_header()) {
 			return None;
 		}
+		// `[if c then 1 else c for c in t]`: a `for` clause takes no argument of the word before it (`for:` labels one)
+		if self.matches_keyword(crate::words::FOR_WORD) && self.peek_char(crate::words::FOR_WORD.len()) != ':' {
+			return None;
+		}
 
 		let start = self.pos;
 		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's; so is a
@@ -175,7 +179,7 @@ impl WarpParser {
 	/// `r = move 1 from: 10 to: 3`: a preposition with a colon and a blank after it labels the next argument, also where
 	/// the call is an operand (decision labels-calls), as `move 1 from: 10` labels it as a statement
 	fn labelled_argument(&mut self, argument_bp: u8) -> Option<Node> {
-		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		let word = self.word_at(blanks);
 		let width = blanks + word.chars().count();
 		let labels = self.peek_char(width) == ':' && matches!(self.peek_char(width + 1), ' ' | '\t');

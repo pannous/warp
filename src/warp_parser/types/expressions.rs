@@ -93,12 +93,12 @@ impl WarpParser {
 	fn words_ahead_length(&self, words: &[String]) -> Option<usize> {
 		let mut offset = 0;
 		for word in words {
-			let blanks = (offset..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count() - offset;
+			let blanks = self.blanks_at(offset);
 			if blanks == 0 {
 				return None;
 			}
 			offset += blanks;
-			if !word.chars().enumerate().all(|(index, ch)| self.peek_char(offset + index) == ch) {
+			if !self.text_at(offset, word) {
 				return None;
 			}
 			offset += word.chars().count();
@@ -107,6 +107,48 @@ impl WarpParser {
 			}
 		}
 		Some(offset)
+	}
+
+	/// `xs: list of int`, `v as list of text`, `f(): map of int := …`: the words `of <type>` after a collection type
+	/// continue it, the one type `list of int` (as `list<int>` is read); `list of list of int` too
+	/// Read from the text before any operand is parsed: parsed, `list of int` would already be split (card cast-type)
+	pub(crate) fn of_phrase_ahead(&self) -> Option<(String, usize)> {
+		let collection = |word: &str| crate::type_tests::COLLECTION_WORDS.contains(&list_type_head(word));
+		let start = self.blanks_at(0);
+		let mut element = self.word_at(start);
+		let mut phrase = list_type_head(&element).to_string();
+		let mut width = start + element.chars().count();
+		while collection(&element) {
+			let of_at = width + self.blanks_at(width);
+			if of_at == width || self.word_at(of_at) != OF_WORD {
+				break;
+			}
+			let element_at = of_at + OF_WORD.chars().count();
+			let gap = self.blanks_at(element_at);
+			element = self.word_at(element_at + gap);
+			if gap == 0 || element.is_empty() {
+				break;
+			}
+			width = element_at + gap + element.chars().count();
+			phrase = format!("{phrase} {OF_WORD} {}", list_type_head(&element));
+		}
+		phrase.contains(&format!(" {OF_WORD} ")).then_some((phrase, width))
+	}
+
+	/// The type phrase of of_phrase_ahead, taken: another language's list word in it gets its note, and `list of int`
+	/// the list type style hint (`ints`), as `list<int>` gets it
+	pub(crate) fn take_of_phrase(&mut self) -> Option<Node> {
+		let (phrase, width) = self.of_phrase_ahead()?;
+		let start = self.blanks_at(0);
+		crate::normalize::set_hint_position(self.line_nr, self.column + start);
+		let written: String = (start..width).map(|offset| self.peek_char(offset)).collect();
+		let words: Vec<&str> = written.split_whitespace().map(noted_list_type_head).collect();
+		if let [LIST_WORD, OF_WORD, element_words @ ..] = words.as_slice() {
+			let element_words: Vec<&str> = element_words.iter().copied().filter(|word| *word != OF_WORD).collect();
+			crate::normalize::hints::list_type(crate::normalize::ListTypeStyle::Of, &element_words);
+		}
+		self.advance_by(width);
+		Some(Node::Symbol(phrase))
 	}
 
 	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
