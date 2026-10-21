@@ -115,7 +115,7 @@ pub fn lower(node: Node) -> Node {
 	let functions = functions_and_lambdas(&node);
 	// `h(x) := g(x)` of a bool function g: the signatures need the bool functions known (card signature-int)
 	crate::analyzer::note_bool_functions(functions.values(), &[]);
-	as_reflection_words(node.clone(), &functions, &defined)
+	as_reflection_words(node.clone(), &functions, &defined, &HashSet::new())
 }
 
 /// `print hi` of a function hi without parameters calls it (decision reflection: a bare name never becomes the
@@ -201,13 +201,20 @@ fn unlistened_reflection(node: &Node, listened: &HashSet<String>, defined: &Hash
 
 /// A function's `f.params`, `f.signature` and `f.body` are constants read off its definition, as are `dir(f)` and `type(f)`: the
 /// reflection words take the function itself, `f` as `&f`, never its call (P83, card dir-function)
-fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<String>) -> Node {
-	if let Some(reflected) = function_word(&node, functions, defined) {
+fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<String>, bound: &HashSet<String>) -> Node {
+	if let Some(reflected) = function_word(&node, functions, defined, bound) {
 		return reflected;
+	}
+	if let Some((parameters, body)) = crate::analyzer::defined_parameters(&node) {
+		let mut inner = bound.clone();
+		inner.extend(parameters.into_iter().map(|parameter| parameter.name));
+		inner.extend(body.assigned_names::<Vec<String>>(|op| *op == Op::Assign));
+		return node.map_children(|child| as_reflection_words(child, functions, defined, &inner));
 	}
 	if let Node::Key(subject, Op::Dot, word) = node.drop_meta() {
 		let subject = super::ambiguous_forms::written_word(subject);
-		if let (Some(name), Some(word)) = (function_named(&subject), word.symbol_name()) {
+		let function = function_named(&subject).filter(|name| !bound.contains(*name));
+		if let (Some(name), Some(word)) = (function, word.symbol_name()) {
 			let function = functions.get(name).filter(|_| !defined.contains(word));
 			let library = || library_signature(name, functions, defined).filter(|_| !defined.contains(word));
 			let word = match canonical_word(word) {
@@ -230,7 +237,7 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 			}
 		}
 	}
-	node.map_children(|child| as_reflection_words(child, functions, defined))
+	node.map_children(|child| as_reflection_words(child, functions, defined, bound))
 }
 
 /// A word a function value answers at run time (function_words)
@@ -287,15 +294,16 @@ fn library_signature(name: &str, functions: &Functions, defined: &HashSet<String
 	super::library_signatures::library_signature(name)
 }
 
-/// `dir(f)`: the reflection words of a user function; `type(f)`: function. A program's own dir or type wins
-fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) -> Option<Node> {
+/// `dir(f)`: the reflection words of a user function; `type(f)`: function. A program's own dir or type wins, and a
+/// variable named f in the function around (`type(declaration)` of a parameter declaration) is that variable
+fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>, bound: &HashSet<String>) -> Option<Node> {
 	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
 		return None;
 	};
 	let [word, subject] = items.as_slice() else { return None };
 	let subject = super::ambiguous_forms::written_word(subject);
 	let (word, name) = (word.symbol_name()?, subject.symbol_name()?);
-	if defined.contains(word) {
+	if defined.contains(word) || bound.contains(name) {
 		return None;
 	}
 	// `type a` of a function a without parameters: the type of its result (called_functions warns)

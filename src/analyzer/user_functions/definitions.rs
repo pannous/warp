@@ -50,6 +50,15 @@ fn keyword_definition(items: &[Node]) -> Option<UserFunctionDef> {
 	(items.len() >= 2 && is_function_keyword(keyword)).then(|| extract_def_function(&items[1..])).flatten()
 }
 
+/// The parameters and body of the function a statement defines, in any form: `f(x) := …`, `f(x) = …`, `def f(x) {…}`
+pub(crate) fn defined_parameters(node: &Node) -> Option<(Vec<Param>, Node)> {
+	match node.drop_meta() {
+		Node::Key(left, Op::Define | Op::Assign, body) => defined_function(left, body).map(|(_, params)| (params, (**body).clone())),
+		Node::List(items, _, _) => keyword_definition(items).map(|function| (function.params, *function.body)),
+		_ => None,
+	}
+}
+
 /// The name and parameters of the function `left := body` defines: `f x := …`, `f() := [1, 2]` (none), `f := …it…`
 /// (`it`), `f := { statements }` (`it` when read outside its own loops); None for a value, `x := 5`
 fn defined_function<'a>(left: &'a Node, body: &Node) -> Option<(&'a str, Vec<Param>)> {
