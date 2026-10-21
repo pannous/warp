@@ -82,7 +82,6 @@ mod test_map_get_kind;
 mod test_map_index;
 mod test_map_inside_loop; // card map-inside
 mod test_map_literal_number_keys; // card map-literal
-mod test_runtime_map_subscript; // card entry-number
 mod test_map_parameter_keys;
 mod test_map_starts;
 mod test_map_typed;
@@ -111,6 +110,7 @@ mod test_range_in_structure;
 mod test_range_returns;
 mod test_range_values;
 mod test_remove_and_index_of;
+mod test_runtime_map_subscript; // card entry-number
 mod test_self_sum_in_place; // card out-list: `out = out + x` of an unshared list grows it in place
 mod test_set_past_the_end;
 mod test_signed_operand_list;

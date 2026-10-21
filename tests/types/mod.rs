@@ -77,8 +77,8 @@ mod test_enums_ported;
 mod test_extension_methods;
 mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
 mod test_field_named_like_library_word; // card field-before-library-word
-mod test_fields_of_later_types; // card node-enum-order
 mod test_field_shadows_global; // card bare-name
+mod test_fields_of_later_types; // card node-enum-order
 mod test_file_declarations;
 mod test_filled_map_types; // card number-keyed
 mod test_flags;
