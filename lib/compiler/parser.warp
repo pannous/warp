@@ -573,7 +573,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			word = trailing_guard_at(p)
 			p.at = p.at + word.length
 			skip_blanks(p)
-			left = guarded_statement(left, word, header_expression(p, CONDITION_POWER))
+			left = guarded_statement(left, word, condition_expression(p))
 		} else {
 			op = operator_at(p)
 			if op.length == 0 and free_infix_at(p, left) {
@@ -1405,7 +1405,7 @@ def prefixed(p: Parser): Node := {
 	if form == "condition" {
 		p.at = p.at + word.length
 		skip_spaces(p)
-		return conditioned(word, header_expression(p, CONDITION_POWER), p)
+		return conditioned(word, condition_expression(p), p)
 	}
 	if form == "loop" {
 		loop = looped(p)
@@ -1520,6 +1520,16 @@ def returned(p: Parser): Node := {
 
 // Binds a condition until `then`, `do` or the colon of `if c: x`
 CONDITION_POWER = 81
+// The condition of `if` and `while`: a braceless call takes a variable argument as in a branch (`if area certainly > 10
+// then`, `while square i < 10`)
+// Rust twin: conditions.rs parse_condition
+def condition_expression(p: Parser): Node := {
+	outer = p.branch_power
+	p.branch_power = CONDITION_POWER
+	value = header_expression(p, CONDITION_POWER)
+	p.branch_power = outer
+	value
+}
 
 // Rust's `loop { … }` as `while true { … }`, ø when no block follows the word
 // Rust twin: atoms.rs keyword_form (LOOP_WORD)
@@ -1579,7 +1589,7 @@ def else_branch(p: Parser): list {
 	if else_if_at(p) {
 		p.at = p.at + word_at(p).length
 		skip_spaces(p)
-		return [conditioned("if", header_expression(p, CONDITION_POWER), p)]
+		return [conditioned("if", condition_expression(p), p)]
 	}
 	if not keyword_at(p, "else") { return [] }
 	p.at = p.at + 4
