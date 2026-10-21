@@ -935,6 +935,12 @@ fn function_signatures(node: &Node) -> (HashMap<String, Vec<String>>, HashMap<St
 	(function_types, functions.collect())
 }
 
+/// `samples` held as the Int naming its block, which a passed function's lowered head declares (shared_arrays.rs)
+fn is_held_as(wanted: &str, given: &str) -> bool {
+	use crate::lowering::shared_arrays::{SAMPLES_HELD_AS, SAMPLES_TYPE};
+	wanted == SAMPLES_TYPE && given == SAMPLES_HELD_AS
+}
+
 /// How well a function of the parameter types `given` fits a function type of the parameter types `wanted`: as many
 /// parameters, each declared the wanted type (an untyped one fits by 1, as it takes the type)
 fn function_fit(given: &[Option<String>], wanted: &[String]) -> Option<u32> {
@@ -946,7 +952,7 @@ fn function_fit(given: &[Option<String>], wanted: &[String]) -> Option<u32> {
 		.zip(wanted)
 		.map(|(given, wanted)| match given.as_deref() {
 			None => Some(1),
-			Some(given) if given == wanted => Some(0),
+			Some(given) if given == wanted || is_held_as(wanted, given) => Some(0),
 			Some(_) if wanted == ANY_TYPE => Some(ANY_FIT),
 			Some(_) => None,
 		})
