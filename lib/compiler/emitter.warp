@@ -1132,8 +1132,8 @@ def assignment(body: Body, target: any, value: any): list {
 declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool"}
 def declaration(body: Body, name: text, written_type: text, value: any): list {
 	type_name = aliased_type(written_type)
-	# `x: any = v` admits every value: the plain assignment; `t: type = int` too, a type value is a node like any
-	if type_name == "any" or type_name == "type" { return assignment(body, symbol(name), value) }
+	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
+	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, type_name[0..<(#type_name - 1)], value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if type_name not in declared_kinds { return refuse("a variable declared " + type_name) }
@@ -2094,13 +2094,14 @@ def collect_literal_arguments(n: any) {
 	}
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
-# the annotations of a parameter held as a node: any value, a node, a function, a type value `int`, a map
-node_annotations = ["any", "Node", "function", "type", "map"]
+# the annotations of a parameter held as a node: any value, a node, a function, a type value `int`, a map, a number
+# (an int or a float); an optional `text?` is one too, ø or the value
+node_annotations = ["any", "Node", "function", "type", "map", "number"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(written: text): text := {
 	word = aliased_type(written)
-	if word in node_annotations or word in module.classes { return "node" }
+	if word in node_annotations or word in module.classes or word.ends_with("?") { return "node" }
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return "list" }
 	word
 }

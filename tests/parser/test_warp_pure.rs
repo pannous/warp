@@ -52,7 +52,7 @@ fn warp_self_runs_loops_and_texts() {
 /// compiler-refusal-loud)
 #[test]
 fn warp_self_names_the_refusal() {
-	let printed = said_by("self", "refused", "f(x) := x.length(); f(\"abc\")");
+	let printed = said_by("self", "refused", "abs -3\n");
 	assert!(printed.contains("outside the core: "), "{printed}");
 }
 
