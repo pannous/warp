@@ -1853,8 +1853,12 @@ def key_expression(body: Body, n: any): list {
 	# `m.a`: the entry a of the map (or instance) m, as Rust lowers it to `m#("a"+1)`
 	if operator == "." and right is symbol {
 		value = expression_code(body, left)
-		# `n.sq`, `t.bytes`: a member of a value without fields naming a function of the program that takes it is its call
-		if value#1 != "node" and is_program_call(body, name_of(right), [left]) { return call_values(module.functions[name_of(right)], defaulted(body, module.functions[name_of(right)], [value], 1)) }
+		# `n.sq`, `parts.last`: a member naming a function of the program that takes the value is its call (a node's
+		# entry of that name first)
+		if is_program_call(body, name_of(right), [left]) {
+			called = module.functions[name_of(right)]
+			return field_or_word(body, value, name_of(right), receiver => call_values(called, defaulted(body, called, [receiver], 1)))
+		}
 		return field_of(body, value, name_of(right))
 	}
 	# (only `rational`: a float `as real` or `as exact` stays a float in Rust, type_tests.rs is_exact_fraction_type)
