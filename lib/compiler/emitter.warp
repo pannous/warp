@@ -713,8 +713,11 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
 	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error"}
-# node_order knows no user compare: a program with classes sorts outside the core
+# node_order knows no user compare: a program ordering instances by its own sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
+# a `compare(a: T, b: T)` of the program (its witness compare·T once Rust's traits.rs named it): the order of T's
+# instances
+def orders_instances(): bool { module.functions.keys.any(name => name == "compare" or name.starts_with("compare·")) }
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
@@ -1669,7 +1672,7 @@ def group_expression(body: Body, n: any): list {
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
 		word = library_words[name_of(n#1)]
-		if word in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
+		if word in sort_words and orders_instances() { return refuse("a sort where instances order through compare") }
 		# `a /! b` of a ratio, a float or a value known only at run time floors the quotient as Rust does;
 		# floor_quotient takes ints only
 		if word == "floor_quotient" and #n == 3 {
