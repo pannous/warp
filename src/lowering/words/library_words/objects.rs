@@ -325,8 +325,6 @@ impl Lowering {
 
 	pub(super) fn written_object(&self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
-			// a parameter holds what its call passes, whatever object a same-named variable elsewhere holds
-			Node::Symbol(name) if self.binds_parameter(name) => None,
 			Node::Symbol(name) => self.objects.get(name).cloned(),
 			Node::Key(base, Op::Hash, index) => {
 				let field = field_name(crate::warp_parser::subscript_key(index)?)?;
