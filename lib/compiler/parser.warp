@@ -369,7 +369,7 @@ def precedence(separator: text): int {
 // [[item, separator], …] as one list: the loosest separator splits first, the groups between split by the tighter ones
 // Rust twin: lists.rs group_by_separators
 def grouped(pairs: list, bracket: text): Node := {
-	if pairs.length == 0 { return if bracket == "{" then listed("{", "", []) else ø }
+	if pairs.length == 0 { return if bracket == "{" or bracket == "[" then listed(bracket, "", []) else ø }
 	if pairs.length == 1 and bracket == "" { return pairs#1#1 }
 	loosest = -1
 	for pair in pairs {
@@ -751,7 +751,7 @@ def operand_after(p: Parser, width: int): bool {
 }
 
 // `x = f y`, `1 + count xs`: a name before an operand is called with it, as an assignment's value, in an operand from
-// `or` up to `+` (not in an argument, a loop header or before `for`) or with an argument that is no name
+// `or` up to `+` (not in an argument or a loop header) or with an argument that is no name, never before `for`
 // Rust twin: suffixes.rs try_parse_implicit_application
 def applies(p: Parser, left: Node, min_power: int): bool {
 	if min_power == 0 or min_power > 151 { return false }
@@ -759,6 +759,8 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	if not callable { return false }
 	c = peek(p.code, p.at, p.n)
 	if c == '{' and p.header { return false }
+	// `[if c then 1 else c for c in t]`: a `for` clause takes no argument of the word before it (`for:` labels one)
+	if keyword_at(p, "for") and peek(p.code, p.at + 3, p.n) != ':' { return false }
 	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and not p.iterable and not word_begins_item(p)
 	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
 }
@@ -2238,14 +2240,15 @@ def next_field_follows(p: Parser, at: int): bool {
 }
 
 // After the type word `word`, spaces or tabs from `at`, then the definition `:=` or a declared name `i =`: `int? i = 3`
-// and `as int? := …` are optional types, no ternary
+// and `as int? := …` are optional types, no ternary; `f(): Name? := …` also of a type the program does not declare (a
+// used file's), as a ternary has no empty branch
 // Rust twin: lookahead.rs declaration_follows
 def declaration_follows(p: Parser, word: text, at: int): bool {
 	start = spaces_end(p, at)
 	name_after = name_end(p.code, start, p.n)
 	assigned = if name_after == start then start else spaces_end(p, name_after)
 	assigns = if is_at(p.code, assigned, ':', p.n) then peek(p.code, assigned + 1, p.n) == '=' else is_at(p.code, assigned, '=', p.n) and peek(p.code, assigned + 1, p.n) != '='
-	(is_type_word(word) or p.types.contains(word)) and start > at and assigns
+	start > at and assigns and (name_after == start or is_type_word(word) or p.types.contains(word))
 }
 
 // After the spaces and tabs from `at` on

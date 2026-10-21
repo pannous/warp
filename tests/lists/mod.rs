@@ -7,6 +7,7 @@ mod test_byte_size;
 mod test_calls_in_blocks;
 mod test_captured_call_lists;
 mod test_comprehension_beside_own_push; // card prefix-count-field
+mod test_comprehension_if_else_item; // card comprehension-whose
 mod test_concat_declared;
 mod test_concat_keeps_arrays; // card runtime-speed
 mod test_count_after_function; // card print-people
@@ -26,6 +27,7 @@ mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
+mod test_empty_list_kept; // card rust-lane-literal
 mod test_empty_list_value; // card run-time-empty
 mod test_empty_results; // card empty-results
 mod test_empty_start; // card start: `t = []` appends, ø + text fails
@@ -90,6 +92,7 @@ mod test_min_max;
 mod test_min_max_lists;
 mod test_nested_comprehension; // card double-for-comprehension
 mod test_nested_index_assignment;
+mod test_nested_map_writes;
 mod test_nested_maps;
 mod test_node_lists;
 mod test_none_word;
@@ -131,4 +134,4 @@ mod test_unpacking_declared;
 mod test_unpacking_into_existing;
 mod test_where_filter;
 mod test_word_slices;
-mod test_worklist_count; // card list-count-grows
+mod test_worklist_count; // card list-count-grows // card nested-write

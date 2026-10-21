@@ -1,0 +1,5 @@
+# the pass sleep_durations itself: each duration of a sleep call in milliseconds, other lists untouched
+use "../../lib/compiler/sleep_durations.warp"
+for code in ["sleep 0.2", "sleep(1/60)", "sleep 20ms", "sleep(2s)", "sleep(n)", "[sleep, 3]", "{sleep 3}", "nap 3"] {
+	print sleep_durations(parse(code))
+}
