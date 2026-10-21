@@ -39,7 +39,7 @@ pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
 
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
-const EMPTY_LIST_LITERAL: &str = "[]";
+pub const EMPTY_LIST_LITERAL: &str = "[]";
 
 /// The key of the Meta layer holding a comment (with_comment)
 pub const COMMENT_KEY: &str = "comment";

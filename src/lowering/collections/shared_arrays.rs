@@ -32,6 +32,14 @@ const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
 const LINEAR_WORD: &str = "linear";
 const LINEAR_TOPIC: &str = "linear-array";
 
+/// `fill(block: samples, t)` (lib/sound.warp `play(fill: (samples, float) -> any, …)`): a parameter of this type is a
+/// linear float array, the block of a sound's samples the host hands the function to fill
+pub const SAMPLES_TYPE: &str = "samples";
+/// The type a parameter of SAMPLES_TYPE is held as once lowered: the Int naming its array (array_parameter), the type
+/// written kept as its WRITTEN_TYPE
+const SAMPLES_HELD_AS: &str = "int";
+const LINEAR_FLOATS: Shared = Shared { element: Element::Float, value: false, storage: Storage::Linear };
+
 /// The cell of a shared value
 const VALUE_CELL: i64 = 1;
 /// The fewest cells a `go` map of a float kernel splits into slices on threads: an instance per slice costs about half a
@@ -127,7 +135,8 @@ fn lower_knowing_functions(node: Node) -> Node {
 	let node =
 		crate::gpu_maps::kept_on_gpu(crate::gpu_maps::automatic(node, &|list| is_linear_floats(list, &declared)));
 	let node = crate::gpu_maps::warn_unapplied(node);
-	if (declared.is_empty() && !reduces_on_gpu(&node)) || matches!(node, Node::Error(_)) {
+	let blocks = block_parameters(&node);
+	if (declared.is_empty() && blocks.is_empty() && !reduces_on_gpu(&node)) || matches!(node, Node::Error(_)) {
 		return node;
 	}
 	// hinted unless paired in a way the compiler would not pick linear memory for
@@ -138,7 +147,7 @@ fn lower_knowing_functions(node: Node) -> Node {
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
 	let functions = definitions(&node);
-	let shared_parameters = shared_parameters(&node, &functions, &declared);
+	let shared_parameters = shared_parameters(&node, &functions, &declared, blocks);
 	Rewrite { declared, functions: &functions, shared_parameters: &shared_parameters }.node(node, None)
 }
 
@@ -305,6 +314,23 @@ fn written_count(index: &Node) -> Node {
 	}
 }
 
+/// The parameters declared `samples` of each function, by their places
+fn block_parameters(node: &Node) -> HashMap<String, HashMap<usize, Shared>> {
+	let mut blocks: HashMap<String, HashMap<usize, Shared>> = HashMap::new();
+	node.visit(&mut |part| {
+		let Node::Key(head, Op::Define | Op::Assign, _) = part else { return };
+		let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return };
+		let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
+		for (index, parameter) in items[1..].iter().enumerate() {
+			if matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, annotation) if annotation.is_symbol(SAMPLES_TYPE))
+			{
+				blocks.entry(name.clone()).or_default().insert(index, LINEAR_FLOATS);
+			}
+		}
+	});
+	blocks
+}
+
 /// The parameters of each function
 fn definitions(node: &Node) -> HashMap<String, Vec<String>> {
 	let mut functions = HashMap::new();
@@ -330,13 +356,14 @@ fn definitions(node: &Node) -> HashMap<String, Vec<String>> {
 }
 
 /// `f(xs)` or `go f(xs)` (lower_tasks' `task·go(f, xs)`) with a shared xs: f's parameter is shared, of xs's element
-/// type, until nothing changes
+/// type, until nothing changes; the parameters `known` from the start (block_parameters) too
 fn shared_parameters(
 	node: &Node,
 	functions: &HashMap<String, Vec<String>>,
 	declared: &HashMap<String, Shared>,
+	known: HashMap<String, HashMap<usize, Shared>>,
 ) -> HashMap<String, HashMap<usize, Shared>> {
-	let mut shared: HashMap<String, HashMap<usize, Shared>> = HashMap::new();
+	let mut shared = known;
 	loop {
 		let mut changed = false;
 		node.visit(&mut |part| {
@@ -374,9 +401,13 @@ fn shared_parameters(
 }
 
 /// `block: floats` given an array of floats: the parameter `block`; one of another item type stays declared, refused
-/// at the call
+/// at the call. `block: samples`, which the host calls with the block, is the Int naming the array
 fn array_parameter(parameter: Node, kind: Shared) -> Node {
 	match parameter.drop_meta() {
+		Node::Key(name, Op::Colon, annotation) if annotation.is_symbol(SAMPLES_TYPE) && kind == LINEAR_FLOATS => {
+			let held = key(name.as_ref().clone(), Op::Colon, symbol(SAMPLES_HELD_AS));
+			held.with_attribute(crate::lowering::overloads::WRITTEN_TYPE, symbol(SAMPLES_TYPE))
+		}
 		Node::Key(name, Op::Colon, annotation) if takes_array(annotation, kind) => name.as_ref().clone(),
 		_ => parameter,
 	}

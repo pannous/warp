@@ -304,3 +304,36 @@ fn struct_subtype(fields: Vec<FieldType>, supertype_idx: Option<u32>) -> SubType
 		},
 	}
 }
+
+/// The declared types, each after the types its fields hold, else in declaration order: a struct type refers only to
+/// one emitted before it, so `class Function { signature: Signature }` may come before `class Signature`. Types that
+/// hold each other (a cycle) keep their declaration order
+pub(super) fn in_field_order(types: &[TypeDef]) -> Vec<&TypeDef> {
+	let mut ordered: Vec<&TypeDef> = Vec::with_capacity(types.len());
+	let mut visiting: Vec<&str> = vec![];
+	for type_def in types {
+		place_after_field_types(type_def, types, &mut ordered, &mut visiting);
+	}
+	ordered
+}
+
+fn place_after_field_types<'a>(
+	type_def: &'a TypeDef,
+	types: &'a [TypeDef],
+	ordered: &mut Vec<&'a TypeDef>,
+	visiting: &mut Vec<&'a str>,
+) {
+	let placed = |name: &str, ordered: &[&TypeDef]| ordered.iter().any(|done| done.name == name);
+	if placed(&type_def.name, ordered) || visiting.contains(&type_def.name.as_str()) {
+		return;
+	}
+	visiting.push(&type_def.name);
+	for field in &type_def.fields {
+		let held = crate::type_kinds::named_field_type(&field.type_name);
+		if let Some(held_type) = types.iter().find(|candidate| candidate.name == held) {
+			place_after_field_types(held_type, types, ordered, visiting);
+		}
+	}
+	visiting.pop();
+	ordered.push(type_def);
+}

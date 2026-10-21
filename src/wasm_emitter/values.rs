@@ -404,6 +404,8 @@ impl WasmGcEmitter {
 			Node::List(items, bracket, separator) if !items.is_empty() => {
 				self.emit_list_structure_with(func, items, &items_info(items, bracket, separator), Self::emit_literal)
 			}
+			Node::List(_, Bracket::Square, _) => self.emit_call(func, super::constructors::NEW_EMPTY_LIST),
+			Node::Empty if node.is_empty_list_literal() => self.emit_call(func, super::constructors::NEW_EMPTY_LIST),
 			Node::List(..) | Node::Empty => self.emit_call(func, "new_empty"),
 			other => self.emit_node_instructions(func, other),
 		}

@@ -43,6 +43,11 @@ pub fn lower(node: Node) -> Node {
 	rewrite(node, &Functions { labels, variables })
 }
 
+/// `for duration` among a definition's parameters
+pub(crate) fn is_labelled(parameter: &Node) -> bool {
+	labelled(parameter).is_some()
+}
+
 /// `for duration` among a definition's parameters: the preposition and the parameter
 fn labelled(parameter: &Node) -> Option<(String, &Node)> {
 	match parameter.drop_meta() {

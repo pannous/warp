@@ -221,14 +221,22 @@ impl Inference {
 				}
 			}
 		}
+		let (body, result) = match inferred {
+			Ok(inferred) => inferred,
+			Err(stop) => {
+				self.in_progress.pop();
+				return Err(stop);
+			}
+		};
+		self.new_definitions.push(specialised_definition(&specialised, definition, body));
+		let overloads = self.overloads.get(&(name.to_string(), signatures.len())).cloned().unwrap_or_default();
+		for overload in &overloads {
+			let (body, _) = self.infer_body(name, overload, &signatures).inspect_err(|_| {
+				self.in_progress.pop();
+			})?;
+			self.new_definitions.push(specialised_definition(&specialised, overload, body));
+		}
 		self.in_progress.pop();
-		let (body, result) = inferred?;
-		let head = Node::List(
-			std::iter::once(Node::Symbol(specialised.clone())).chain(definition.declared.iter().cloned()).collect(),
-			Bracket::Round,
-			Separator::None,
-		);
-		self.new_definitions.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
 		self.specialised.insert(key, (specialised.clone(), result.clone()));
 		Ok((specialised, result))
 	}
@@ -435,4 +443,14 @@ impl Inference {
 		};
 		Ok((Node::List(lowered, bracket, separator), signature))
 	}
+}
+
+/// The definition of a specialisation: the parameters as the definition declares them, the body lowered for its units
+fn specialised_definition(specialised: &str, definition: &Definition, body: Node) -> Node {
+	let head = Node::List(
+		std::iter::once(Node::Symbol(specialised.to_string())).chain(definition.declared.iter().cloned()).collect(),
+		Bracket::Round,
+		Separator::None,
+	);
+	Node::Key(Box::new(head), Op::Define, Box::new(body))
 }

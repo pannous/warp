@@ -1,0 +1,2 @@
+# card type-class: an empty block {} is ø, so its type is empty
+print type({})

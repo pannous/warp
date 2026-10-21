@@ -19,8 +19,8 @@ target_operators = ["#", ".", ":"]
 main_globals(program: any, own_names: list): any := {
 	main_names = main_variables(program)
 	global_names = global_variables(program)
-	for function_definition in nodes_in(program).filter(is_definition) {
-		defined_function = defined_name(function_definition)
+	for function_definition in nodes_in(program).filter(is_define_statement) {
+		defined_function = define_statement_name(function_definition)
 		if defined_function in own_names {
 			body = value_of(function_definition)
 			own = parameter_names(key_of(function_definition))
@@ -44,7 +44,7 @@ main_variables(program: any): any := {
 	found
 }
 add_assigned(n: any, found: any): any := {
-	if is_definition(n) { return ø }
+	if is_define_statement(n) { return ø }
 	if is_operator(n, "=") {
 		target = key_of(n)
 		if is_operator(target, ":") and key_of(target) == symbol(global_word) { target = value_of(target) }

@@ -84,7 +84,7 @@ impl WarpParser {
 		if !self.matches_keyword(DOWN_WORD) {
 			return None;
 		}
-		let blanks = (DOWN_WORD.len()..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_at(DOWN_WORD.len());
 		(blanks > 0 && self.word_at(DOWN_WORD.len() + blanks) == TO_WORD)
 			.then(|| DOWN_WORD.len() + blanks + TO_WORD.len())
 	}

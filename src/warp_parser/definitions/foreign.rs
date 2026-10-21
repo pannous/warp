@@ -50,13 +50,12 @@ impl WarpParser {
 		let mut words = vec![first.to_string()];
 		let mut offset = 0;
 		let next = loop {
-			let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+			let blanks = self.blanks_at(offset);
 			if blanks == 0 {
 				return None; // `public = 3`, `public(…)`: a name
 			}
 			let start = offset + blanks;
-			let word: String =
-				(start..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+			let word: String = self.word_at(start);
 			offset = start + word.chars().count();
 			if !is_modifier(&word) {
 				break word;

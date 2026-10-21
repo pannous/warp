@@ -947,7 +947,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(map), I::LocalGet(key)]);
 				s.call(f, "map_entry_has_key");
 				f.instruction(&I::If(BlockType::Empty));
-				s.emit_become_empty(f, map);
+				s.emit_become_empty(f, map, Kind::Empty as i64);
 				Self::emit_list(f, &[I::End, I::LocalGet(map), I::Return, I::End]);
 				// ø: nothing to remove
 				s.emit_field(f, map, 1);
@@ -956,7 +956,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_field(f, map, 2);
 				Self::emit_list(f, &[I::LocalTee(cell), I::RefIsNull, I::If(BlockType::Empty)]);
-				s.emit_become_empty(f, map);
+				s.emit_become_empty(f, map, Kind::Empty as i64);
 				Self::emit_list(f, &[I::Else, I::LocalGet(map)]);
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[set(1), I::LocalGet(map)]);

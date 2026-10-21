@@ -1,0 +1,5 @@
+# card shrink-in-place: xs.pop() drops the last item in place, every holder sees it
+xs = [1, 2, 3]
+ys = xs
+xs.pop()
+ys
