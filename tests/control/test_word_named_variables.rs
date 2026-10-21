@@ -37,3 +37,9 @@ fn a_bound_name_before_a_word_operator_is_its_value() {
 	is!("g(upper: list) := upper has \"a\"; g([\"a\"])", true);
 	is!("for words in [[1]] { print words }; def g(words: any): bool := words contains \"a\"; g([\"a\"])", true);
 }
+
+#[test]
+fn probe_prefix_calls_split() {
+	let code = "for words in [[1]] { print words }; def g(words: any): bool := words contains \"a\"; g([\"a\"])";
+	panic!("PROBE {:#?}", warp::pipeline::pass_trace(warp::parse(code)));
+}
