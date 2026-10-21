@@ -1,5 +1,6 @@
 # Maps and class instances: their entries, fields, lookups and updates
 use "intrinsics.warp"
+use "../kinds.warp"
 use "equality.warp"
 use "errors.warp"
 use "fields.warp"

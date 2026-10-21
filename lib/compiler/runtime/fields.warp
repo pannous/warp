@@ -1,5 +1,6 @@
 # What `m.name` reads beyond a map's entries: positions, entries, list parts, swizzles
 use "intrinsics.warp"
+use "../kinds.warp"
 use "maps.warp"
 use "nodes.warp"
 use "text.warp"

@@ -1,5 +1,6 @@
 # `a == b` of values known only at run time
 use "intrinsics.warp"
+use "../kinds.warp"
 use "conversions.warp"
 use "exact.warp"
 use "ordering.warp"

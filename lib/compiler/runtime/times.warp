@@ -2,6 +2,7 @@
 ## kinds.warp TimeFormCode) and a position, read by the intrinsics
 ## time_form, time_position, duration_months, duration_days, zone_index, zone_offset and made by time_of(info, position)
 use "intrinsics.warp"
+use "../kinds.warp"
 use "conversions.warp"
 use "durations.warp"
 use "exact.warp"
