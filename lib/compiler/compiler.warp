@@ -20,7 +20,10 @@ runtime_words = lowered_program(read(library_folder + "/compiler/runtime.warp"),
 # the wasm module of the source, as bytes
 compile(source: text, folder: text): list := {
 	program = lowered_program(source, folder, prelude_source)
-	typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program))
+	module = typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program))
+	# a form beyond the emitter's core gives the refusal's text, the compile's error
+	if module is text { throw module }
+	module
 }
 
 # warp compiler.warp <source file> <wasm file> [<folder of the source's uses> [<lib folder>]]
