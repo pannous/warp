@@ -1,9 +1,10 @@
 //! Type aliases (card types-alias, samples/types/types.warp): `type Name = string` names the type string wherever a type is
 //! written, `name: Name` in a class, `age: Age?`, `[Name]`, `f(n: Name)`, `a: Age = 3`; an alias of an alias is resolved
-//! to the end, and `x is Age` tests the aliased type. Aliases of other shapes (`type Predicate = int -> bool`) stay declarations only.
+//! to the end, and `x is Age` tests the aliased type; `type Code = list of int` names a type phrase. Aliases of other
+//! shapes (`type Predicate = int -> bool`) stay declarations only.
 
 use super::nodes::key;
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 
@@ -36,7 +37,7 @@ pub(crate) fn is_alias(node: &Node) -> bool {
 	alias(node.drop_meta()).is_some()
 }
 
-/// `type Name = string`: (Name, string)
+/// `type Name = string`: (Name, string); `type Code = list of int`: (Code, the type word `list of int`)
 fn alias(node: &Node) -> Option<(String, String)> {
 	let Node::Key(declared, Op::Assign, target) = node else {
 		return None;
@@ -44,8 +45,24 @@ fn alias(node: &Node) -> Option<(String, String)> {
 	let Node::Type { name, body } = declared.drop_meta() else {
 		return None;
 	};
-	let target = target.symbol_name()?;
-	body.is_empty_node().then(|| (name.drop_meta().name(), target.to_string()))
+	let target = type_word(target)?;
+	body.is_empty_node().then(|| (name.drop_meta().name(), target))
+}
+
+/// `type Name`, without a body
+fn alias_declares(declared: &Node) -> bool {
+	matches!(declared.drop_meta(), Node::Type { body, .. } if body.is_empty_node())
+}
+
+/// A type written as a word or as a phrase of words, `list of int`
+fn type_word(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::List(words, Bracket::None, Separator::Space) => {
+			let words: Option<Vec<&str>> = words.iter().map(|word| word.drop_meta().symbol_name()).collect();
+			Some(words?.join(" "))
+		}
+		other => other.symbol_name().map(str::to_string),
+	}
 }
 
 /// The type an alias names in the end, `Age?` of `Years?` when `type Years = Age; type Age = int` gives `int?`
@@ -66,7 +83,11 @@ fn target(written: &str, aliases: &HashMap<String, String>) -> Option<String> {
 
 fn resolved(node: Node, aliases: &HashMap<String, String>) -> Node {
 	match node {
-		declaration @ Node::Key(..) if alias(&declaration).is_some() => declaration,
+		// the phrase as one word: `list of int` is no call of list
+		Node::Key(declared, Op::Assign, target) if type_word(&target).is_some() && alias_declares(&declared) => {
+			let word = type_word(&target).expect("guarded");
+			Node::Key(declared, Op::Assign, Box::new(Node::Symbol(word).with_meta_of(&target)))
+		}
 		Node::Type { name, body } if body.is_empty_node() => match target(&name.drop_meta().name(), aliases) {
 			Some(target) => Node::Type { name: Box::new(Node::Symbol(target)), body },
 			None => Node::Type { name, body },
