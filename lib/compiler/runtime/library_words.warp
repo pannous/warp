@@ -17,6 +17,8 @@ node_slice(x: any, start: any, to: any = ø): any := {
 	from = if is_null(start) then 0 else index_of_node(start)
 	stop = if is_null(to) then node_length(x) else index_of_node(to)
 	if from < 0 or stop < 0 { index_out_of_range() }
+	# ø, also an empty list `[]` in the lowered program: any slice of it is empty
+	if is_null(x) { return new_list(0) }
 	if kind_code(x) == Kind.Text { return character_slice(unboxed_text(x), from, stop) }
 	if kind_code(x) == Kind.List { return items_slice(unboxed_list(x), from, stop) }
 	not_a_list()

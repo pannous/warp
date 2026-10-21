@@ -32,6 +32,9 @@ After a context swap, this file and your role file win over anything a handover 
   or merge passes whenever their work overlaps.
 - Rare edge cases go to Later: a corner real programs rarely hit (exotic literals like ∞/NaN, wording nits on code
   nobody writes, odd pairs of rarely combined features) is filed with `todo add Later "…"`, never Next/Soon.
+- Emptiness is tested loosely (user, decision empty-is-not-missing): in all warp code (lib, tests, samples) write
+  `is empty`, `if no x`, `if not x`, never an equality against ø, [] or ""; "has items" is plain `if x`, not
+  `x is not empty` / `x != ø`; `x is ø` / `x == ø` test missing only.
 - JSON5, not strict JSON, for anything people or agents write (configs, probe commands, data files), or warp
   notation. Strict JSON only where a tool or protocol requires it (package.json, .claude settings, Lake manifest,
   WebDriver BiDi, machine-to-machine buffers).
@@ -141,7 +144,9 @@ After a context swap, this file and your role file win over anything a handover 
   and the module it guards. Register a new test file in its folder's mod.rs before `cargo fmt` (fmt skips it).
 - Cloud test lane: `scripts/cloud-test.sh --card <card> <branch> <tip from git rev-parse HEAD> <filters>` in the
   background (~6 min on a cloud VM of its own, ~$0.30 of the Cloud session credit, exit 0 = green;
-  notes/cloud_development.md). A green cloud run counts as the targeted run.
+  notes/cloud_development.md). A green cloud run counts as the targeted run. A Rust change to the parser, lowering,
+  analyzer, emitter, compiler runner, or pipeline also runs `scripts/cloud-test.sh --pure-hello <branch> <tip>`: the
+  preset gives the ignored end-to-end `warp pure hello` test its required test opt-level 2 and exact runner flags.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,
@@ -158,6 +163,11 @@ After a context swap, this file and your role file win over anything a handover 
   and wrong values in seconds. `WARP_EMIT_REFUSALS=/dev/stderr` shows whether emitter.warp refused the program
   (`outside the core: …`, then the Rust emitter emitted it); `WARP_HINTS=0` hides hints (the stage programs' own
   warnings still show: card cli-show). Then the targeted tests in the cloud lane.
+- `warp pure` / `warp self` run compiler.warp's build files compiler.wasm / compiler-self.wasm (decision
+  compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
+  (`WARP_LIB=<worktree>/lib`). They are built when missing and otherwise only by `warp rebuild [pure|self]`: after
+  editing lib/, run `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure` before judging `warp pure` (a stale
+  one only prints a one-line notice).
 - GitHub's API quota (5000 requests/h) is shared by every session: `gh run watch --interval 60` or more, never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points, `todo list Now` as much, commands naming a card
   by its key ~1. Never `gh project item-list` (200-530 points, trips GitHub's secondary limit; gh refuses it): read

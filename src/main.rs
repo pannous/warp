@@ -69,13 +69,18 @@ const SERVE_COMMAND: &str = "serve";
 /// lossless where the serialized text is not (probes/self_hosting/emitter/emit_lowered.sh)
 const LOWER_JSON_COMMAND: &str = "lower --json";
 /// `warp pure <file> [arguments…]`: the program compiled by lib/compiler/compiler.warp, the warp compiler as one warp
-/// program, and run (src/compiler/standalone.rs)
+/// program, compiled by Rust, and run (src/compiler/standalone.rs)
 const PURE_COMMAND: &str = "pure";
+/// `warp self <file> [arguments…]`: as `warp pure`, with compiler.warp compiled by itself (the pure lane)
+const SELF_COMMAND: &str = "self";
+/// `warp rebuild [pure|self]`: compiler.wasm and compiler-self.wasm, the compilers of `warp pure` and `warp self`, built
+/// anew from lib/ (decision compiler-build; src/compiler/standalone.rs)
+const REBUILD_COMMAND: &str = "rebuild";
 /// The first words the command line takes as commands, for unknown_command's suggestion
-const COMMAND_WORDS: [&str; 31] = [
-	"run", "pure", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data",
-	"tool", "fetch", "dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app", "help", "version",
-	"docs", "wiki", "home", "lsp", "start",
+const COMMAND_WORDS: [&str; 33] = [
+	"run", "pure", "self", "rebuild", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix",
+	"types", "data", "tool", "fetch", "dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app",
+	"help", "version", "docs", "wiki", "home", "lsp", "start",
 ];
 /// How far a mistyped command may be from the command it suggests (`formt` → format)
 const MISTYPED_LETTERS: usize = 2;
@@ -362,8 +367,14 @@ fn run_command(args: &[String], given: &[String]) {
 			println!("{total} in {} files", paths.len());
 		}
 		std::process::exit(if failed > 0 { 1 } else { 0 });
-	} else if args[1] == PURE_COMMAND && args.get(2).is_some_and(|path| has_warp_extension(path)) {
-		print_and_exit(warp::compiler::standalone::run(std::path::Path::new(&args[2]), args[3..].to_vec()));
+	} else if args[1] == REBUILD_COMMAND {
+		rebuild_compilers(args.get(2).map(String::as_str));
+	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str())
+		&& args.get(2).is_some_and(|path| has_warp_extension(path))
+	{
+		use warp::compiler::standalone::{run, Compiler};
+		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
+		print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments([program_arguments, given].concat());
@@ -477,6 +488,30 @@ fn command_line(program: &str, arguments: &[&str]) -> Option<String> {
 	String::from_utf8_lossy(&output.stdout).lines().next().map(str::to_string)
 }
 
+/// `warp rebuild [pure|self]`: the named compiler's build file, or both, built anew; status 1 when one failed
+fn rebuild_compilers(command: Option<&str>) {
+	use warp::compiler::standalone::{rebuild, Compiler};
+	let chosen: Vec<Compiler> =
+		Compiler::ALL.into_iter().filter(|by| command.is_none_or(|word| word == by.command())).collect();
+	if chosen.is_empty() {
+		fail(format!(
+			"warp rebuild: no compiler {:?}; say `warp rebuild`, `warp rebuild pure` or `warp rebuild self`",
+			command.unwrap_or_default()
+		));
+	}
+	let mut failed = false;
+	for by in chosen {
+		match rebuild(by) {
+			Ok(path) => println!("built {}", path.display()),
+			Err(failure) => {
+				eprintln!("warp rebuild {}: {}", by.command(), failure.serialize());
+				failed = true;
+			}
+		}
+	}
+	std::process::exit(failed as i32)
+}
+
 /// The message on stderr and exit status 1
 fn fail(message: impl std::fmt::Display) -> ! {
 	eprintln!("{message}");
@@ -516,6 +551,8 @@ fn usage() {
 	println!("  warp <file.warp>     Run a warp file (env WARP_EXECUTABLE=1: also leave its standalone executable <file> next to it)");
 	println!("  warp run <file.warp> Run a warp file, never an executable");
 	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (lib/compiler/compiler.warp)");
+	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by Rust");
+	println!("  warp rebuild [pure|self] Build compiler.wasm / compiler-self.wasm, their compilers, anew from lib/");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
 	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");
