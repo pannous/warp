@@ -42,7 +42,7 @@ fn a_bound_name_before_a_word_operator_is_its_value() {
 fn probe_prefix_calls_split() {
 	let shown: Vec<String> = ["g(first) := first contains \"a\"", "first = [\"a\"]; first contains \"a\""]
 		.iter()
-		.map(|code| format!("{code} => {}", warp::broadcasting::lower_prefix_calls(warp::parse(code)).serialize()))
+		.map(|code| format!("{code} => {:#?}", warp::pipeline::pass_trace(warp::parse(code))))
 		.collect();
 	panic!("PROBE {shown:?}");
 }
