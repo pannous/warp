@@ -3,7 +3,6 @@
 const HELLO: &str = "print(\"hello world\")\n";
 
 #[test]
-#[ignore = "slow: compiles all of compiler.warp, 540 s of the 600 s test limit at opt-level 2 (cloud, 2026-10-21); run with --ignored"]
 fn warp_pure_runs_hello_world() {
 	let folder = crate::common::scratch_directory("warp_pure");
 	std::fs::create_dir_all(&folder).unwrap();
