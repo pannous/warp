@@ -89,15 +89,23 @@ is_map_literal(n: any): bool := {
 	is_group(n) and bracket_of(n) == "{" and #n > 0 and #items_of(n).filter(is_entry) == #n
 }
 
-# the names assigned a written map anywhere in n (`m = {a: 1}`)
-map_names(n: any): list := {
-	if n is key {
-		if is_key(n, Op.Assign) and key_of(n) is symbol and is_map_literal(value_of(n)) { return [name_of(key_of(n))] }
-		return map_names(key_of(n)) + map_names(value_of(n))
-	}
-	names = []
-	if is_group(n) { for x in n { names = names + map_names(x) } }
-	names
+# the names a scope assigns, each [name, yes when assigned a written map (`m = {a: 1}`)]; a definition inside is a
+# scope of its own
+assigned_in(n: any): list := {
+	if is_key(n, Op.Define) { return [] }
+	if is_key(n, Op.Assign) and key_of(n) is symbol { return [[name_of(key_of(n)), is_map_literal(value_of(n))]] + assigned_in(value_of(n)) }
+	if n is key { return assigned_in(key_of(n)) + assigned_in(value_of(n)) }
+	found = []
+	if is_group(n) { for x in n { found = found + assigned_in(x) } }
+	found
+}
+
+# the maps the loops of a scope walk: the names it assigns a map, and those of the scope around it it does not assign
+# anew (one function's map `numbers` leaves another's list `numbers` a list)
+scope_maps(n: any, outer: list): list := {
+	assigned = assigned_in(n)
+	names = assigned.map(a => a#1)
+	assigned.filter(a => a#2).map(a => a#1) + outer.filter(name => name not in names)
 }
 
 # `k, v` or `(k, v)`: the two names a loop over a map binds
@@ -134,7 +142,10 @@ lowered_for(n: Node, maps: list): Node := match n {
 	_: n
 }
 
-for_loops(program: any): any := {
-	maps = map_names(program)
-	bottom_up(program, n => lowered_for(n, maps))
+for_loops(program: any): any := loops_lowered(program, scope_maps(program, []))
+
+# the loops of n lowered, a definition's with the maps of its own scope
+loops_lowered(n: any, maps: list): any := {
+	if is_key(n, Op.Define) { return Key(key_of(n), Op.Define, loops_lowered(value_of(n), scope_maps(value_of(n), maps))) }
+	lowered_for(children(n, x => loops_lowered(x, maps)), maps)
 }
