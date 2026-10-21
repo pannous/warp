@@ -1738,6 +1738,8 @@ def key_expression(body: Body, n: any): list {
 	if is_loop_step(n) { return expression_code(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
+	# `{}`, held behind the opaque word so number_keys.warp can key it: an empty map
+	if is_empty_map(n) { return map_value(body, []) }
 	# the key of `Point{x: 1}` has no operator as parser.warp reads it, `:` as Rust's analysis view shows it
 	# `P{}`: every field its default (an empty group reads as ø, or as the opaque `{}`)
 	if operator == "" and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
