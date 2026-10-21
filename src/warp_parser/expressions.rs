@@ -427,6 +427,9 @@ impl WarpParser {
 		} else if matches!(op, Op::And | Op::Or) && self.take_braceless_print() {
 			// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start
 			print_call([self.rest_of_statement()])
+		} else if op == Op::Colon {
+			let value = self.parse_expr(r_bp);
+			self.with_switch_cases(value, r_bp)
 		} else {
 			self.parse_expr(r_bp)
 		}

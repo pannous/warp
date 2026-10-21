@@ -542,9 +542,9 @@ impl WarpParser {
 				Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}"))))
 			}),
 			'(' => {
-				// `match f(3, 4) {…}`: the block holds the cases, no body of a definition of f
+				// `match f(3, 4) {…}`, `match xs.map(f) {…}`: the block holds the cases, no body of a definition of f
 				let is_switch_subject =
-					SWITCH_WORDS.contains(&self.word_ending_before(self.pos - symbol.chars().count()).as_str());
+					SWITCH_WORDS.contains(&self.word_before_receivers(self.pos - symbol.chars().count()).as_str());
 				// Parse arguments as a proper Node
 				let args_node = self.parse_bracketed('(');
 				// `add(2)(5)`: each glued group calls what the call before returned (closures.rs), one operand

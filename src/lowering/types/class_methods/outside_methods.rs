@@ -5,20 +5,20 @@ use super::*;
 use std::collections::HashMap;
 
 /// `def x(p:P) := n + 1` of a class P with a field n: `def x(p:P) := p.n + 1`
-pub(super) fn outside_receiver_reads(node: Node) -> Node {
+pub(super) fn outside_receiver_reads(node: Node, globals: &[String]) -> Node {
 	let fields: HashMap<String, Vec<String>> =
 		declared_layouts(&node).into_iter().map(|(class, layout)| (class, layout.fields)).collect();
 	if fields.values().all(Vec::is_empty) {
 		return node;
 	}
-	with_receiver_reads(node, &fields)
+	with_receiver_reads(node, &fields, globals)
 }
 
-fn with_receiver_reads(node: Node, fields: &HashMap<String, Vec<String>>) -> Node {
+fn with_receiver_reads(node: Node, fields: &HashMap<String, Vec<String>>, globals: &[String]) -> Node {
 	match node {
 		Node::Type { .. } => node,
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) => {
-			let body = with_receiver_reads(*body, fields);
+			let body = with_receiver_reads(*body, fields, globals);
 			let receiver_fields =
 				first_parameter(&head).and_then(|(receiver, class)| Some((receiver, fields.get(&class)?)));
 			let body = match receiver_fields {
@@ -28,13 +28,17 @@ fn with_receiver_reads(node: Node, fields: &HashMap<String, Vec<String>>) -> Nod
 						class_fields.iter().filter(|field| parameters.contains(field)).collect();
 					hint_self_assignments(&body, &shadowed, &receiver);
 					let unshadowed = class_fields.iter().filter(|field| !parameters.contains(field)).collect();
-					receiver_reads(body, &Readable { receiver: &receiver, fields: unshadowed, ..Readable::default() })
+					let globals = globals.iter().collect();
+					receiver_reads(
+						body,
+						&Readable { receiver: &receiver, fields: unshadowed, globals, ..Readable::default() },
+					)
 				}
 				None => body,
 			};
 			Node::Key(head, op, Box::new(body))
 		}
-		other => other.map_children(|child| with_receiver_reads(child, fields)),
+		other => other.map_children(|child| with_receiver_reads(child, fields, globals)),
 	}
 }
 

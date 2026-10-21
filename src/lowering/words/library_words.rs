@@ -364,6 +364,13 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 	built_in.or_else(|| crate::modules::prelude_word(name))
 }
 
+/// A builtin whose signatures all give no value: `print(values...): nothing from emitter`
+pub fn gives_nothing(word: &str) -> bool {
+	let word = unaliased(word);
+	let mut lines = crate::ffi::typed_word_lines().filter(|line| line.name == word).peekable();
+	lines.peek().is_some() && lines.all(|line| line.result == NOTHING_RESULT)
+}
+
 /// The word a prelude alias names (`size` → count), else the name itself
 pub(crate) fn unaliased(name: &str) -> &str {
 	let aliases = crate::modules::prelude_aliases();
