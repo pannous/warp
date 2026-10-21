@@ -465,7 +465,7 @@ def boxed(value: any): list {
 is_curly_list(n: any): bool := bracket_of(n) == "{" and separator_of(n) == ","
 def curly_list_value(body: Body, items: any): list { ["node", node(Marked.Map, vector_code(items.map(item => boxed(expression_code(body, item)))))] }
 # a body or branch `{a, b}` runs its statements, as Rust unwraps a block there
-block_of(n: any): any := if is_curly_list(n) then separated(n, ";") else n
+statements_block(n: any): any := if is_curly_list(n) then separated(n, ";") else n
 def list_value(body: Body, items: any): list { ["list", vector_code(items.map(item => boxed(expression_code(body, item))))] }
 def vector_code(item_codes: any): list {
 	code = [op.i32_const] + sleb(#item_codes) + concatenated(item_codes)
@@ -1472,9 +1472,9 @@ def runtime_error_message(name: text): text {
 # has_else: `else ø` is a branch giving ø, no missing one
 def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else: bool): list {
 	c = condition(expression_code(body, test))
-	a = nested(body, block_of(yes_branch), 1)
+	a = nested(body, statements_block(yes_branch), 1)
 	if not has_else { return unmatched(c, a, yes_branch is number) }
-	b = nested(body, block_of(no_branch), 1)
+	b = nested(body, statements_block(no_branch), 1)
 	kind = joint_kind(a#1, b#1)
 	# a first reading whose branches both wait on calls still compiling: its kind is not known yet either (its code is
 	# not kept), so the function's other readings decide it
@@ -2165,7 +2165,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 		f.kinds = range_list(#parameter_kinds).map(i => if parameter_key(f.name, i) in f.widened then f.widened[parameter_key(f.name, i)] else parameter_kinds[i])
 		f.result = pending
 		first = new_body(f)
-		result = expression_code(first, block_of(f.body))#1
+		result = expression_code(first, statements_block(f.body))#1
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
 	if result != no_kind and analyzed_result_kind(f) != ø and (result == pending or held_as(result, analyzed_result_kind(f))) { result = analyzed_result_kind(f) }
@@ -2185,7 +2185,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 # one of those is read again once every function is compiled (module.rereads)
 body_code(f: Function) := {
 	scope = new_body(f)
-	value = expression_code(scope, block_of(f.body))
+	value = expression_code(scope, statements_block(f.body))
 	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.signature.parameters)..]
 	f.local_names = scope.order
