@@ -1200,13 +1200,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list;
-	/// a declared list keeps its element mark
-	pub(in crate::wasm_emitter) fn emit_become_empty(&self, func: &mut Function, node: u32) {
+	/// The node in local `node` (a lone cell or entry) becomes the empty value of kind `empty` in place (`[]` of a list,
+	/// ø of a map), so every holder of it sees it; a declared list keeps its element mark
+	pub(in crate::wasm_emitter) fn emit_become_empty(&self, func: &mut Function, node: u32, empty: i64) {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		Self::emit_list(func, &self.forget_list_cursor());
-		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(Kind::Empty as i64)]);
+		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(empty)]);
 		self.emit_or_element_mark(func, node);
 		Self::emit_list(
 			func,
