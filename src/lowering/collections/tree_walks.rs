@@ -6,7 +6,8 @@
 //!   inside makes its parent match (`n * 1 + 0` simplifies to `n` in one walk);
 //! - `simplify = rules { data($a * 1) => a; data($a + 0) => a }` (card rewrite-rules) defines `simplify(code)`, the
 //!   walk of a whole rule set: each node rewritten by its first matching rule until none fits, so a rewrite that makes
-//!   a new match is rewritten again (a normal form, as in term rewriting).
+//!   a new match is rewritten again (a normal form, as in term rewriting). A rule set that never settles stops after
+//!   STEP_LIMIT rewrites in a row with an error naming the rule that keeps firing (user, decision rule-sets).
 //!
 //! Each use becomes a call of its own recursive walker, defined as source before the passes that lower functions,
 //! matches and loops. The pattern is a map, list or code pattern (or a named one, named_patterns.rs): `find(xs, f)` with
@@ -28,6 +29,10 @@ const WALK: &str = "WALK";
 const PATTERN: &str = "PATTERN";
 const RESULT: &str = "RESULT";
 const ARMS: &str = "ARMS";
+const MESSAGE: &str = "MESSAGE";
+const LIMIT: &str = "LIMIT";
+/// Rewrites in a row of one node before a rule set counts as never settling
+const STEP_LIMIT: i64 = 1000;
 /// The walker's own names, apart from the program's: `node·0`, `found·0`, `child·0`
 const NODE: &str = "NODE";
 const FOUND: &str = "FOUND";
@@ -36,7 +41,9 @@ const BUILT: &str = "BUILT";
 const ITEMS: &str = "ITEMS";
 const ENTRIES: &str = "ENTRIES";
 const NAME: &str = "NAME";
-const PLACEHOLDERS: [&str; 8] = [NODE, FOUND, CHILD, BUILT, ITEMS, ENTRIES, NAME, WALK];
+const STEPS: &str = "STEPS";
+const REWRITTEN: &str = "REWRITTEN";
+const PLACEHOLDERS: [&str; 10] = [NODE, FOUND, CHILD, BUILT, ITEMS, ENTRIES, NAME, STEPS, REWRITTEN, WALK];
 /// The walker of one tree find: the matches of the node itself, then those inside its items, values or pair value
 const FINDER: &str = "WALK(NODE) := {
   FOUND = []
@@ -63,6 +70,15 @@ const REPLACER: &str = "WALK(NODE) := {
   if NODE is key then BUILT = key(WALK(NODE.key), NODE.op, WALK(NODE.value))
   match BUILT ARMS
 }";
+
+/// The rewrites in a row a rule set's walker is in, its counter
+const STEP_COUNTER: &str = "global STEPS = 0";
+/// A rule's result walked again, the rewrites in a row counted
+const REWRITE_STEP: &str = "STEPS += 1
+if STEPS > LIMIT then raise MESSAGE
+REWRITTEN = WALK(RESULT)
+STEPS -= 1
+REWRITTEN";
 
 pub fn lower(program: Node) -> Node {
 	if !program.mentions_any(&[FIND_WORD, REPLACE_WORD, RULES_WORD]) {
@@ -97,7 +113,7 @@ fn with_rule_sets(node: Node, walkers: &RefCell<Vec<Node>>) -> Node {
 	};
 	let number = walkers.borrow().len();
 	let name = temporary(RULES_WORD, number);
-	walkers.borrow_mut().push(rule_set_walker(&name, number, &rules));
+	walkers.borrow_mut().extend(rule_set_walker(&name, number, &rules));
 	let parameter = Node::Symbol(temporary(NODE, number));
 	key(parameter.clone(), Op::FatArrow, call(&name, vec![parameter]))
 }
@@ -111,7 +127,7 @@ fn defines_rule_set(statement: &Node, walkers: &RefCell<Vec<Node>>) -> bool {
 		return false;
 	};
 	let number = walkers.borrow().len();
-	walkers.borrow_mut().push(rule_set_walker(name, number, &rules));
+	walkers.borrow_mut().extend(rule_set_walker(name, number, &rules));
 	true
 }
 
@@ -238,14 +254,29 @@ fn walker(number: usize, words: &[Node]) -> Node {
 	}
 }
 
-/// The walker `walk(node) := {…}` of a rule set, each rule's result walked again
-fn rule_set_walker(walk: &str, number: usize, rules: &[Node]) -> Node {
-	let walked = |result: &Node| call(walk, vec![result.clone()]);
+/// The walker `walk(node) := {…}` of a rule set and its step counter, each rule's result walked again
+fn rule_set_walker(walk: &str, number: usize, rules: &[Node]) -> Vec<Node> {
+	let own_names = own_names(walk, number);
+	let limit = Node::int(STEP_LIMIT);
+	let walked = |rule: &Node, result: &Node| {
+		let message = format!(
+			"the rule set {walk} never settles: {} keeps firing ({STEP_LIMIT} rewrites in a row)",
+			rule.serialize()
+		);
+		let bindings = [(RESULT, result), (LIMIT, &limit), (MESSAGE, &Node::text(&message))];
+		let names = own_names.iter().map(|(placeholder, name)| (*placeholder, name));
+		Node::List(
+			template(REWRITE_STEP, &names.chain(bindings).collect::<Vec<_>>()),
+			Bracket::Curly,
+			Separator::Newline,
+		)
+	};
 	let arms = rules.iter().map(|rule| match rule.drop_meta() {
-		Node::Key(pattern, op @ (Op::FatArrow | Op::Colon), result) => key(*pattern.clone(), *op, walked(result)),
+		Node::Key(pattern, op @ (Op::FatArrow | Op::Colon), result) => key(*pattern.clone(), *op, walked(rule, result)),
 		other => other.clone(),
 	});
-	replacer(&own_names(walk, number), arms.collect())
+	let arms = arms.collect();
+	vec![filled(STEP_COUNTER, &own_names, &[]), replacer(&own_names, arms)]
 }
 
 /// The replacing walker whose match holds `arms`, then `_ => BUILT`

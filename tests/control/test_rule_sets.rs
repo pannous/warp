@@ -25,3 +25,11 @@ fn a_rule_set_rewrites_data() {
 fn an_unnamed_rule_set_is_a_function() {
 	is!("apply(f, x) := f(x)\nstr(apply(rules { data($a * 1) => a }, data(n * 1)))", "n");
 }
+
+#[test]
+fn a_rule_set_that_never_settles_names_its_rule() {
+	crate::common::fails_with(
+		"swapped = rules { data($a + $b) => data($b + $a) }\nswapped(data(x + y))",
+		"the rule set swapped never settles",
+	);
+}
