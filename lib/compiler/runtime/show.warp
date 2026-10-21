@@ -1,4 +1,12 @@
 # Values as they print: the text of any value known only at run time
+use "intrinsics.warp"
+use "conversions.warp"
+use "exact.warp"
+use "floats.warp"
+use "nodes.warp"
+use "text.warp"
+use "times.warp"
+use "types.warp"
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
 # a type value `int` prints `class int`; ahead of the match, as `Symbol(_)` tests it as the type it names
 node_text(n: any): text := if names_a_type(n) then "class " + unboxed_text(n) else match n {
