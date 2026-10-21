@@ -4,7 +4,7 @@
 use crate::host::tasks::task_failure;
 use crate::host::{calling_back, linear_doubles, list_values, module_memory, number_of, HostNode, HostState};
 use crate::node::Node;
-use wasmtime::{Caller, Extern};
+use wasmtime::{Caller, Extern, Val, ValType};
 
 /// sound_samples(samples, count, rate) natively: a WAV file, played unless headless (src/sound/mod.rs)
 pub(crate) fn sound(
@@ -46,22 +46,18 @@ pub(crate) fn played_signal(caller: &mut Caller<'_, HostState>, arguments: &Node
 	Ok(Node::int(handle as i64))
 }
 
-/// play_blocks(fill, block, seconds) (lib/sound.warp): the program's `fill(t: float)` called for each block, t its first
-/// sample's time, which fills the program's linear float arrays at `blocks` (one, or left and right); its handle
+/// play_blocks(fill, blocks, seconds) (lib/sound.warp): the program's `fill(t: float)` called for each block, t its first
+/// sample's time, which fills the program's linear float arrays at `blocks` (one, or left and right); a
+/// `fill(block: samples, t)` is handed the block to fill; its handle
 pub(crate) fn played_blocks(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
 	let ([function, blocks, seconds, rate], word) =
 		(sound_arguments(arguments, "play_blocks(fill, seconds) needs a function and its seconds")?, "play_blocks");
-	let fill = called_back(
-		caller,
-		&function,
-		word,
-		"of a block of samples and its time, as hum(block, t) := for i in 1 to #block { block#i = … }",
-	)?;
 	let (seconds, rate) = seconds_and_rate(&seconds, &rate)?;
 	let blocks = channels_of(&blocks, word)?
 		.iter()
 		.map(|block| number_of(block, &task_failure).map(|address| f64::from(address) as i64))
 		.collect::<wasmtime::Result<Vec<_>>>()?;
+	let fill = block_filler(caller, &function, blocks[0], word)?;
 	let size = linear_doubles(caller, blocks[0], &task_failure)?.len();
 	let handle = calling_back(word, |kept| {
 		crate::sound::play_blocks(seconds, rate, size, blocks.len() as u16, |first, _| {
@@ -70,6 +66,48 @@ pub(crate) fn played_blocks(caller: &mut Caller<'_, HostState>, arguments: &Node
 		})
 	})?;
 	Ok(Node::int(handle as i64))
+}
+
+/// The program's function a block is filled by: `fill(t: float)`, or `fill(block: samples, t: float)` handed the block
+enum BlockFiller {
+	OfTime(wasmtime::TypedFunc<f64, f64>),
+	OfBlock { function: wasmtime::Func, block: Val, results: usize },
+}
+
+impl BlockFiller {
+	fn call(&self, caller: &mut Caller<'_, HostState>, time: f64) -> wasmtime::Result<()> {
+		match self {
+			BlockFiller::OfTime(fill) => fill.call(&mut *caller, time).map(drop),
+			BlockFiller::OfBlock { function, block, results } => function.call(
+				&mut *caller,
+				&[block.clone(), Val::F64(time.to_bits())],
+				&mut vec![Val::I32(0); *results],
+			),
+		}
+	}
+}
+
+const BLOCK_SHAPE: &str =
+	"of a block of samples and its time, as hum(block: samples, t) := for i in 1 to #block { block#i = … }";
+
+fn block_filler(
+	caller: &mut Caller<'_, HostState>,
+	function: &Node,
+	block: i64,
+	word: &str,
+) -> wasmtime::Result<BlockFiller> {
+	let name = function.name();
+	let not_a_filler = || task_failure(format!("{word}: {name} is no function {BLOCK_SHAPE}"));
+	let exported = caller.get_export(&name).and_then(Extern::into_func).ok_or_else(not_a_filler)?;
+	let signature = exported.ty(&*caller);
+	let parameters: Vec<ValType> = signature.params().collect();
+	let block = match parameters.as_slice() {
+		[_] => return called_back(caller, function, word, BLOCK_SHAPE).map(BlockFiller::OfTime),
+		[ValType::I64, ValType::F64] => Val::I64(block),
+		[ValType::I32, ValType::F64] => Val::I32(block as i32),
+		_ => return Err(not_a_filler()),
+	};
+	Ok(BlockFiller::OfBlock { function: exported, block, results: signature.results().len() })
 }
 
 /// A sound word's one value or stereo pair [left, right] of them

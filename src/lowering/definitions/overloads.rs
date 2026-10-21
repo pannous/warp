@@ -26,6 +26,8 @@ const COMPANION_SUFFIX: &str = "_as";
 const ANY_FIT: u32 = 100;
 /// How well a list of known elements fits a plain `list`: worse than a list of its elements, even widened
 const LIST_FIT: u32 = 2;
+/// `function_of_samples_float`: the overload type of a parameter typed as a function, `fill: (samples, float) -> any`
+const FUNCTION_TYPE_PREFIX: &str = "function_of_";
 
 /// The function f whose companion f_as is `name`
 pub fn companion_of(name: &str) -> Option<&str> {
@@ -404,11 +406,14 @@ fn lower_parameter_overloads(node: Node) -> Node {
 		crate::analyzer::agreeing_kinds(&node, HashMap::new(), |_, value| Some(argument_kind(value, &HashMap::new())));
 	let classes = super::nodes::declared_class_names(&node);
 	let list_elements = list_element_variables(&node, &classes, &variables);
+	let (function_types, functions) = function_signatures(&node);
 	let mut renaming = ParameterOverloads {
 		overloaded,
 		variables,
 		classes,
 		list_elements,
+		function_types,
+		functions,
 		seen: HashMap::new(),
 		declared: vec![HashMap::new()],
 	};
@@ -897,8 +902,55 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Vec<Vec<Opti
 		signatures
 			.entry(definition.head[0].name())
 			.or_default()
-			.push(definition.head[1..].iter().map(parameter_type).collect())
+			.push(definition.head[1..].iter().map(overload_parameter_type).collect())
 	});
+}
+
+/// A parameter's type as overloads tell variants apart: `function_of_samples_float` of `fill: (samples, float) -> any`
+fn overload_parameter_type(parameter: &Node) -> Option<String> {
+	match crate::lowering::function_types::declared_parameter_types(parameter) {
+		Some(types) => Some(format!("{FUNCTION_TYPE_PREFIX}{}", types.join("_"))),
+		None => parameter_type(parameter),
+	}
+}
+
+/// The parameter types of the function types the definitions declare, by overload type, and the parameter types of
+/// the functions defined once, by name
+fn function_signatures(node: &Node) -> (HashMap<String, Vec<String>>, HashMap<String, Vec<Option<String>>>) {
+	let mut function_types = HashMap::new();
+	let mut defined: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
+	each_definition(node, &mut |definition| {
+		for parameter in &definition.head[1..] {
+			if let Some(types) = crate::lowering::function_types::declared_parameter_types(parameter) {
+				function_types.insert(overload_parameter_type(parameter).expect("a function type"), types);
+			}
+		}
+		defined
+			.entry(definition.head[0].name())
+			.or_default()
+			.push(definition.head[1..].iter().map(parameter_type).collect());
+	});
+	let functions =
+		defined.into_iter().filter_map(|(name, mut heads)| (heads.len() == 1).then(|| (name, heads.remove(0))));
+	(function_types, functions.collect())
+}
+
+/// How well a function of the parameter types `given` fits a function type of the parameter types `wanted`: as many
+/// parameters, each declared the wanted type (an untyped one fits by 1, as it takes the type)
+fn function_fit(given: &[Option<String>], wanted: &[String]) -> Option<u32> {
+	if given.len() != wanted.len() {
+		return None;
+	}
+	given
+		.iter()
+		.zip(wanted)
+		.map(|(given, wanted)| match given.as_deref() {
+			None => Some(1),
+			Some(given) if given == wanted => Some(0),
+			Some(_) if wanted == ANY_TYPE => Some(ANY_FIT),
+			Some(_) => None,
+		})
+		.sum()
 }
 
 /// The kind of an argument as overloads see it: a decimal literal (exact `1.1` too) is a Float here, it fits `x:float`
@@ -936,7 +988,10 @@ fn overload_kind(type_name: &str) -> Option<Kind> {
 /// A parameter type that takes part in an overload: `any`, a built-in type, a list type or a map, which no argument
 /// kind known at compile time fits, so a map variant is picked at run time
 fn is_overload_type(type_name: &str) -> bool {
-	type_name == ANY_TYPE || overload_kind(type_name).is_some() || crate::analyzer::is_map_type(type_name)
+	type_name == ANY_TYPE
+		|| overload_kind(type_name).is_some()
+		|| crate::analyzer::is_map_type(type_name)
+		|| type_name.starts_with(FUNCTION_TYPE_PREFIX)
 }
 
 /// How well an argument of `kind` fits a parameter of `type_name`: 0 exactly, 1 by widening an Int to a Float or any
@@ -995,6 +1050,7 @@ fn run_time_test(argument: Node, type_name: &str) -> Option<Node> {
 	use crate::lowering::type_tests::declared_type_test;
 	let tested = |type_name: &str| match takes_widened(type_name) {
 		true => crate::words::NUMBER_WORD.to_string(),
+		false if type_name.starts_with(FUNCTION_TYPE_PREFIX) => Kind::Function.to_string(),
 		false => type_name.to_string(),
 	};
 	let Some(element) = crate::analyzer::list_element_type(type_name) else {
@@ -1021,6 +1077,10 @@ struct ParameterOverloads {
 	classes: HashSet<String>,
 	/// The element type of each variable assigned lists of one (list_element_variables)
 	list_elements: HashMap<String, Option<String>>,
+	/// The parameter types of each function type a variant takes, by overload type (`function_of_samples_float`)
+	function_types: HashMap<String, Vec<String>>,
+	/// The parameter types of each function defined once, which a function type takes it by
+	functions: HashMap<String, Vec<Option<String>>>,
 	/// Definitions of each overloaded name renamed so far, in declaration order
 	seen: HashMap<String, usize>,
 	/// The parameters and declared variables in scope with their declared type (`n: any`, `leaf: any = "abc"`; none
@@ -1104,6 +1164,13 @@ impl ParameterOverloads {
 		Some((list.as_ref().clone(), type_name))
 	}
 
+	/// The parameter types of the function defined once an argument names: `hum` of `hum(block: samples, t: float)`
+	fn passed_function(&self, argument: &Node) -> Option<&Vec<Option<String>>> {
+		let name = argument.ungrouped().symbol_name()?;
+		let shadowed = self.declared.iter().any(|scope| scope.contains_key(name));
+		self.functions.get(name).filter(|_| !shadowed && !self.variables.contains_key(name))
+	}
+
 	fn variant_name(name: &str, types: &[String]) -> String {
 		// `f·list_of_int`: one word
 		types.iter().fold(name.to_string(), |variant, type_name| witness_name(&variant, &type_name.replace(' ', "_")))
@@ -1146,7 +1213,8 @@ impl ParameterOverloads {
 				Some(type_name) if type_name != ANY_TYPE => {
 					overload_kind(type_name).or_else(|| argument_kind(argument, &self.variables))
 				}
-				_ => argument_kind(argument, &self.variables),
+				_ => argument_kind(argument, &self.variables)
+					.or_else(|| self.passed_function(argument).map(|_| Kind::Function)),
 			})
 			.collect();
 		let mut elements: Vec<Option<String>> = arguments
@@ -1186,9 +1254,14 @@ impl ParameterOverloads {
 		};
 		// an argument declared `any` (a Node) fits only an `any` variant; an argument of a kind unknown at compile time
 		// fits every type for now: the run time tests it
+		// a function type takes a function of its parameters known at compile time, never one told at run time
 		let fits_argument = |position: usize, type_name: &str| match (declared[position].as_deref(), kinds[position]) {
 			(Some(ANY_TYPE), _) => (type_name == ANY_TYPE).then_some(0),
 			(_, Some(Kind::List)) => element_fit(elements[position].as_deref(), type_name),
+			(_, Some(Kind::Function)) if type_name.starts_with(FUNCTION_TYPE_PREFIX) => {
+				function_fit(self.passed_function(&arguments[position])?, self.function_types.get(type_name)?)
+			}
+			(_, _) if type_name.starts_with(FUNCTION_TYPE_PREFIX) => None,
 			(_, Some(kind)) => fit(kind, type_name),
 			(_, None) => Some(0),
 		};
@@ -1203,6 +1276,16 @@ impl ParameterOverloads {
 				Some((fits?.iter().sum(), types))
 			})
 			.collect();
+		// the variants fitting the known arguments best come first where the run time picks: `play(hum, 2s)` of a
+		// function hum taking a block
+		let known_score = |types: &Vec<String>| -> u32 {
+			(0..arguments.len())
+				.filter(|position| is_known(*position))
+				.filter_map(|position| fits_argument(position, &types[position]))
+				.sum()
+		};
+		let mut scores = scores;
+		scores.sort_by_key(|(_, types)| known_score(types));
 		let written = node.serialize().trim().to_string();
 		let listed =
 			variants.iter().map(|types| format!("{name}({})", types.join(", "))).collect::<Vec<_>>().join(", ");
