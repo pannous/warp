@@ -649,10 +649,6 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			right = expression(p, powers#2)
 			// `a /!= b` is the assignment `a = floor_quotient(a, b)`
 			left = if assigns then Key(left, Op.Assign, quotient_call(left, right)) else quotient_call(left, right)
-		} else if test_word_at(p, left, min_power) != ø {
-			found = test_word_at(p, left, min_power)
-			p.at = p.at + found#1
-			left = tested_by_word(left, found#2, found#3)
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
 			if MEMBERSHIP_POWERS#1 < min_power { break }
@@ -1716,34 +1712,6 @@ def prefixed(p: Parser): Node := {
 		return Key(ø, Op.Not, expression(p, 105))
 	}
 	atom(p)
-}
-
-// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
-// Rust twin: conditions.rs TEST_WORDS
-TEST_WORDS = ["empty", "missing", "absent", "unknown", "undefined", "failed"]
-
-// `x empty`, `x missing`, `x is absent` … ending a condition (a block, colon, operator word or the statement's end
-// follows): [the width read, the word, whether `is` came before it], else ø
-// Rust twin: conditions.rs try_parse_test_word
-def test_word_at(p: Parser, left: Node, min_power: int): any {
-	if min_power > 105 or left == ø { return ø }
-	after_is = keyword_at(p, "is")
-	start = if after_is then blank_end(p, p.at + 2) else p.at
-	word = TEST_WORDS.find(candidate => keyword_at_position(p, candidate, start))
-	if word == ø { return ø }
-	end = start + word.length
-	next = blank_end(p, end)
-	follower = p.code[next .. name_end(p.code, next, p.n)]
-	ends_condition = not operand_follows_at(p, end) or "{:".contains(peek(p.code, next, p.n)) or WORD_OPERATORS.any(pair => pair#1 == follower)
-	if ends_condition then [end - p.at, word, after_is] else ø
-}
-
-// `x failed` is is_error(x); `x is empty` holds for ø, "", [] and {} alike, count(x) == 0; the other words are `not x`
-// Rust twin: conditions.rs try_parse_test_word
-def tested_by_word(left: Node, test_word: text, after_is: bool): Node := {
-	if test_word == "failed" { return listed("(", "", [symbol("is_error"), left]) }
-	if after_is and test_word == "empty" { return Key(listed("(", "", [symbol("count"), left]), Op.Eq, 0) }
-	Key(ø, Op.Not, left)
 }
 
 // `if no xs`: in a condition `no` before an operand asks for emptiness as `not xs` does; elsewhere, or before an
