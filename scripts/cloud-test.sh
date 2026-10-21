@@ -31,6 +31,7 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 JOBS_PREFIX=cloud-jobs         # cloud-jobs/<job>: the job's arguments, so the session's prompt stays one short line
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
+NO_TESTS_RAN="NO TESTS RAN: "   # the summary line of a run that executed no test: red, and its session leaves the pool
 SHOWN_ITEMS=12                 # lines of a real failure's panic message shown under it (a slice test's failing samples)
 KNOWN_FAILURES=notes/known_failures.md   # read in the tested checkout, as the gate reads it at the tested tip
 CARGO_FLAGS_WITH_VALUE='--config|--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
@@ -208,6 +209,7 @@ run_tests_here() {
 	[ -n "$refusals" ] && rm -f "$refusals"
 	local test_start=$SECONDS
 	# the settings reach the tests alone: the build stays the same for every setting, so a warm VM builds a tip once
+	[ $build_status -eq 0 ] && printf 'cloud-test: in %s at %s: cargo test %s -- %s\n' "$PWD" "$(git rev-parse --short HEAD)" "${test_args[*]}" "${filters[*]}" >> "$HERE_WORK/log.txt"
 	[ $build_status -eq 0 ] && run_watched "$HERE_WORK/log.txt" \
 		env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
 	test_seconds=$((SECONDS - test_start))
@@ -257,7 +259,7 @@ run_watched() {
 # which the gate accepts too) apart; verdict green|red
 summarize() {
 	local log=$1 environmental=$2 known=${3:-/dev/null}
-	awk -v environmental="$environmental" -v known_list="$known" -v SHOWN_ITEMS=$SHOWN_ITEMS '
+	awk -v environmental="$environmental" -v known_list="$known" -v SHOWN_ITEMS=$SHOWN_ITEMS -v NO_TESTS_RAN="$NO_TESTS_RAN" '
 		BEGIN {
 			# a line is "<test regex>", or "<test regex> <item regex>" for a test whose panic lists items (one sample per
 			# line): then only those items are environmental, and the test is environmental only if every item it lists is
@@ -270,7 +272,7 @@ summarize() {
 			}
 			while ((getline line < known_list) > 0) if (line ~ /^- [^ |]+ \|/) { split(line, field, " "); known[field[2]] = 1 }
 		}
-		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
+		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored|filtered)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
 		/^ +(Running|Doc-tests) / { started++ }
 		/^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1; order[++failures] = $2 }
 		/^test [^ ]+ has been running for over/ { slow[$2] = 1 }
@@ -302,7 +304,10 @@ summarize() {
 				else { real_lines = real_lines line "\n"; real++ }
 			}
 			real += incomplete
-			printf "verdict: %s\n", (real == 0 && started > 0) ? "green" : "red"
+			# a run of no test is never green: filters that match nothing, or a VM whose build is not the tip
+			ran = total["passed"] + failures + incomplete
+			printf "verdict: %s\n", (real == 0 && started > 0 && ran > 0) ? "green" : "red"
+			if (ran == 0) printf "%s%d tests filtered out, none ran\n", NO_TESTS_RAN, total["filtered"]
 			printf "passed: %d, failed: %d (%d environmental, %d known), ignored: %d\n", total["passed"], failures + incomplete, environmental_count, known_count, total["ignored"]
 			if (incomplete) printf "crashed or killed test binaries (no result line): %d\n", incomplete
 			for (name in slow) if (!(name in finished_test)) printf "  never finished: %s\n", name
@@ -540,7 +545,7 @@ release_session() {
 
 finish_session() {
 	local job=$1 result=$2 reason file
-	reason=$(sed -n 's/^environment: //p' "$result")
+	reason=$(sed -n "s/^environment: //p; s/^$NO_TESTS_RAN/no test ran: /p" "$result")
 	if [ -z "$reason" ]; then
 		release_session "$job"
 		return

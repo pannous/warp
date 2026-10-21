@@ -41,24 +41,24 @@ text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else 
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
 quoted_text(t: text): text := {
 	escapes = 0
-	for i in 0..byte_count(t) { escapes += escaped_byte(byte_at(t, i)) }
+	for i in 0..byte_count(t) { if is_escaped_byte(byte_at(t, i)) { escapes += 1 } }
 	out = new_text(byte_count(t) + escapes + 2)
-	set_byte(out, 0, 34)
+	set_byte(out, 0, Ascii.Quote)
 	at = 1
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
-		if escaped_byte(b) == 1 {
-			set_byte(out, at, 92)
+		if is_escaped_byte(b) {
+			set_byte(out, at, Ascii.Backslash)
 			at += 1
 		}
 		set_byte(out, at, b)
 		at += 1
 	}
-	set_byte(out, at, 34)
+	set_byte(out, at, Ascii.Quote)
 	out
 }
-# 1 for the bytes of `"` and `\`, which a quoted text escapes
-escaped_byte(b: int): int := if b == 34 or b == 92 then 1 else 0
+# the bytes of `"` and `\`, which a quoted text escapes
+is_escaped_byte(b: int): bool := b == Ascii.Quote or b == Ascii.Backslash
 list_text(xs: list): text := "[" + items_text(xs) + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
 items_text(xs: list): text := joined_items(xs, " ")
@@ -80,4 +80,4 @@ key_text(entry: Node): text := {
 	spaced = if is_letter_byte(byte_at(operator, 0)) then " " + operator + " " else operator
 	node_code(entry_key(entry)) + spaced + node_code(value)
 }
-is_letter_byte(b: int): bool := b >= 97 and b <= 122
+is_letter_byte(b: int): bool := b >= Ascii.LowerA and b <= Ascii.LowerZ

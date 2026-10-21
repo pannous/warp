@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+# try:/except:, catch e with a "\(e)" hole and a trailing guard, through the self-hosted parser:
+# WARP_SELF_HOSTED=front /Users/me/dev/bin/warp probes/self_hosting/front/catch_forms.warp
+first = try:
+  [1 2]#5
+except:
+  7
+second = try { raise "boom" } catch e { "caught: \(e)" }
+third = 0
+third = 3 if first > 5
+print "${first} ${second} ${third}"
