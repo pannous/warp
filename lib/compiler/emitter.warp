@@ -1898,7 +1898,7 @@ def key_expression(body: Body, n: any): list {
 		return field_or_word(body, expression_code(body, left), name_of(right), length_code)
 	}
 	# `type(x).name`
-	if operator == "." and right == symbol("name") and is_type_call(left) { return runtime_call("node_text", [type_value_of(body, expression_code(body, left#2))]) }
+	if operator == "." and right == symbol("name") and is_type_call(left) { return ["text", payload(type_value_of(body, expression_code(body, left#2))#2, gc.text)] }
 	if operator == "." and right is symbol and member_word(name_of(right)) != ø {
 		word = member_word(name_of(right))
 		return field_or_word(body, expression_code(body, left), name_of(right), value => runtime_call(word, [value]))
