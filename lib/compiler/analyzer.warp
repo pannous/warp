@@ -285,7 +285,7 @@ element_kind(indexed: Node, scope: Scope): KindName? := {
 }
 
 # the kind of an element of a list or map type (list of int: int), ø when the type names none
-typed_element_kind(type_name: any): KindName? := {
+typed_element_kind(type_name: TypeWord?): KindName? := {
 	if type_name == ø { return ø }
 	if type_name == "map" or type_name == "list of node" { return "empty" }
 	element = if type_name.starts_with("list of ") then type_name[8..] else if type_name.starts_with("map of ") then type_name[7..] else ""
@@ -771,7 +771,7 @@ apply(flow: Flow): bool := {
 }
 
 # the list type both known (ø: none yet) and given fit: their common elements, a plain list when they have none
-joined_list_type(known: any, given: TypeWord): TypeWord? := {
+joined_list_type(known: TypeWord?, given: TypeWord): TypeWord? := {
 	if known == ø or known == given { return given }
 	if known.starts_with("list of ") and given.starts_with("list of ") { "list of " + joined_word(known[8..], given[8..]) } else { "list" }
 }
