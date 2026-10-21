@@ -1,3 +1,10 @@
+# Pure hello cloud check
+
+- Reuse `scripts/cloud-test.sh`; do not add a second cloud runner.
+- Add one named preset for the existing ignored end-to-end `warp pure hello` outcome test.
+- Document the preset in the worker procedure so compiler and pipeline Rust changes run it.
+- Cover argument expansion with a small source probe, then run the real targeted outcome check and static gates.
+
 # JSON-to-Node cleanup
 
 - Pin the existing foreign-call conversion behavior with a focused test before changing production code.

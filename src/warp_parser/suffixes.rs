@@ -152,6 +152,10 @@ impl WarpParser {
 		if !lhs_is_callable || !self.can_start_atom() || !should_apply || (ch == '{' && self.context.in_header()) {
 			return None;
 		}
+		// `[if c then 1 else c for c in t]`: a `for` clause takes no argument of the word before it (`for:` labels one)
+		if self.matches_keyword(crate::words::FOR_WORD) && self.peek_char(crate::words::FOR_WORD.len()) != ':' {
+			return None;
+		}
 
 		let start = self.pos;
 		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's; so is a

@@ -147,7 +147,7 @@ impl WasmGcEmitter {
 				}
 			}
 		}
-		self.ctx.declared_globals = main.globals;
+		self.ctx.declared_globals = std::rc::Rc::unwrap_or_clone(main.globals);
 	}
 
 	/// The primitive on the stack (i64 or f64 as stored, see `storage_type`) as a Node of its kind
