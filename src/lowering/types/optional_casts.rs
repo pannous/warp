@@ -1,9 +1,11 @@
 //! `x as T?` keeps ø (card text-generally): ø stays ø, any other value is cast to T, and the result auto-unwraps as an
 //! optional does (P179): used as a T it is one, ø there is the loud error of ø as a T. The value is computed once:
 //! `f() as text?` becomes `(optional·0 = f(); if optional·0 == ø then ø else optional·0 as text)`. A cast to a list type
-//! casts each item: `["1", "2"] as ints` is [1, 2].
+//! casts each item: `["1", "2"] as ints` is [1, 2]; a cast to a text unit word is that list, `t as words` is `t.words`
+//! (decision text-unit-plurals).
 
 use super::nodes::{assign, if_then_else, key, Counter};
+use crate::lowering::of_lookups::TEXT_UNIT_WORDS;
 use crate::lowering::words::library_words::BYTE_LIST;
 use crate::node::{call, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -31,10 +33,13 @@ impl Optionals {
 			}
 		}
 		if let Node::Key(value, Op::As, target) = node.drop_meta() {
-			// `text as bytes` is the text's UTF-8 bytes, no cast of each item
+			// `text as bytes` is the text's UTF-8 bytes (the unit word below), no cast of each item
 			let element = crate::analyzer::declared_element_type(target).filter(|_| !target.is_symbol(BYTE_LIST));
 			if let Some(element) = element {
 				return items_cast(self.rewrite(value.as_ref().clone()), element);
+			}
+			if let Some(unit) = target.symbol_name().filter(|word| TEXT_UNIT_WORDS.contains(word)) {
+				return key(self.rewrite(value.as_ref().clone()), Op::Dot, symbol(unit)).with_meta_of(&node);
 			}
 			if let Node::Symbol(target) = target.drop_meta() {
 				if let Some(warp_type) = target.strip_suffix(OPTIONAL_MARK).filter(|name| !name.is_empty()) {

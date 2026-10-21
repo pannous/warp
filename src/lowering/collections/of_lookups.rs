@@ -15,31 +15,25 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FROM_WORD, IN_WORD, OF_WORD};
 
-/// The words naming a selection of a value's parts, which `in` and `from` select like `of`: `words in t`
-pub const SELECTOR_WORDS: [&str; 11] = [
-	"chars",
-	"characters",
-	"glyphs",
-	"graphemes",
-	"codepoints",
-	"bytes",
-	"letters",
-	"words",
-	"lines",
-	"keys",
-	"values",
-];
+/// The plural unit words of a text, each naming the list of its parts: `t.words`, `t as words` (decision
+/// text-unit-plurals)
+pub const TEXT_UNIT_WORDS: [&str; 9] =
+	["chars", "characters", "glyphs", "graphemes", "codepoints", "bytes", "letters", "words", "lines"];
+/// With the text units, the words naming a selection of a value's parts, which `in` and `from` select like `of`:
+/// `words in t`, `keys in m`
+const MAP_PART_WORDS: [&str; 2] = ["keys", "values"];
 const SELECTING_PREPOSITIONS: [&str; 2] = [IN_WORD, FROM_WORD];
 
 pub fn lower(node: Node) -> Node {
 	let mut has_type_of = false;
 	node.visit(&mut |part| has_type_of |= type_of_body(part).is_some());
-	let has_selection = node.mentions_any(&SELECTOR_WORDS) && node.mentions_any(&SELECTING_PREPOSITIONS);
+	let selector_words = [TEXT_UNIT_WORDS.as_slice(), &MAP_PART_WORDS].concat();
+	let has_selection = node.mentions_any(&selector_words) && node.mentions_any(&SELECTING_PREPOSITIONS);
 	if !has_type_of && !has_selection && !node.mentions_any(&[OF_WORD]) {
 		return node;
 	}
 	let defined = crate::program_names::Bindings::of(&node).bound();
-	let selectors: Vec<&str> = SELECTOR_WORDS.into_iter().filter(|word| !defined.contains(*word)).collect();
+	let selectors: Vec<&str> = selector_words.into_iter().filter(|word| !defined.contains(*word)).collect();
 	rewrite(node, &selectors)
 }
 
