@@ -11,7 +11,7 @@
 'x=-3; x.abs()'	3
 'x=-3; x.abs'	3
 'x=8.0; x.cbrt'	2
-'x=-2.5; x.norm()'	2.5
+'use math; x=-2.5; x.norm()'	2.5
 
 # test_a_field_named_like_a_number_method_stays_a_field
 'p={round:7}; p.round'	7

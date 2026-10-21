@@ -20,10 +20,10 @@
 'dotted(a, b) := dot(a, b); dotted([1, 2], [3, 4])'	11
 
 # norm_is_the_euclidean_length_of_a_list
-'norm([3, 4])'	5
-'v = [3, -4]; norm v'	5
-'magnitude([6, 8])'	10
-'norm(-3)'	3
+'use math; norm([3, 4])'	5
+'use math; v = [3, -4]; norm v'	5
+'use math; magnitude([6, 8])'	10
+'use math; norm(-3)'	3
 
 # libm_words_of_one_number_map_over_a_list
 'sin([0, 0])'	[0 0]
