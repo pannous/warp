@@ -109,6 +109,36 @@ impl WarpParser {
 		Some(offset)
 	}
 
+	/// `xs: list of int`, `v as list of text`, `f(): map of int := …`: the words `of <type>` after a collection type
+	/// continue it, the one type `list of int` (as `list<int>` is read); `list of list of int` too
+	pub(crate) fn with_of_phrase(&mut self, head: Node) -> Node {
+		let Node::Symbol(word) = head.drop_meta() else {
+			return head;
+		};
+		let collection = |word: &str| crate::type_tests::COLLECTION_WORDS.contains(&list_type_head(word));
+		if !collection(word) {
+			return head;
+		}
+		let mut phrase = list_type_head(word).to_string();
+		let mut element = phrase.clone();
+		while collection(&element) {
+			let Some(after_of) = self.words_ahead_length(&[OF_WORD.to_string()]) else { break };
+			let blanks = (after_of..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
+			element =
+				(after_of + blanks..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+			if blanks == 0 || element.is_empty() {
+				break;
+			}
+			self.advance_by(after_of + blanks + element.chars().count());
+			phrase = format!("{phrase} {OF_WORD} {element}");
+		}
+		if phrase == *word {
+			head
+		} else {
+			Node::Symbol(phrase).with_meta_of(&head)
+		}
+	}
+
 	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
 	/// Length of the `<int>`, `<list<int>>`, `<text, int>`, `<int(int)>` directly at the cursor when everything inside is a type word;
 	/// `a<b`, `a<<b` and `a<b>c` are not type applications

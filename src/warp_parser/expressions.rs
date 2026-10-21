@@ -300,6 +300,7 @@ impl WarpParser {
 				Some(block) => block,
 				None => self.parse_right_operand(op, glued_pair, r_bp),
 			};
+			let rhs = if matches!(op, Op::Colon | Op::As) { self.with_of_phrase(rhs) } else { rhs };
 			let rhs_end = self.pos.min(self.chars.len());
 			let rhs_written: String = self.chars[rhs_start.min(rhs_end)..rhs_end].iter().collect();
 
