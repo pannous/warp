@@ -212,9 +212,10 @@ pub(crate) fn is_checked_result(word: &str) -> bool {
 		|| (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
 }
 
-/// `list`, `map`: a collection type, whose values no kind names (type_tests::held_kind)
+/// `list`, `map`, `ints`, `list of text`: a collection type, whose values no kind names (type_tests::held_kind)
 fn is_collection_type(word: &str) -> bool {
-	crate::type_tests::COLLECTION_WORDS.contains(&word.trim_end_matches('?'))
+	let word = word.trim_end_matches('?');
+	crate::type_tests::COLLECTION_WORDS.contains(&word) || crate::analyzer::names_list_type(word)
 }
 
 /// `{the result: int or text = value; the result}`: the value admitted as a variable declared of the type is, a
