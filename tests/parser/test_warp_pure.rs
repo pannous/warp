@@ -37,6 +37,14 @@ fn warp_self_names_the_refusal() {
 	assert!(printed.contains("outside the core: "), "{printed}");
 }
 
+/// The largest int as a literal under `warp self`: math.warp's bit_and, which sleb takes its low bits with, adds no
+/// two values beyond 64 bits (card self-text-as-list: "checked add")
+#[test]
+fn warp_self_writes_the_largest_int() {
+	let printed = said_by("self", "largest_int", "int64 x = 9223372036854775807\nprint x\n");
+	assert!(printed.lines().any(|line| line == "9223372036854775807"), "{printed}");
+}
+
 /// What `warp <command>` (pure or self) says of the program `code`: its output and errors
 fn said_by(command: &str, name: &str, code: &str) -> String {
 	let folder = crate::common::scratch_directory(&format!("warp_{command}"));
