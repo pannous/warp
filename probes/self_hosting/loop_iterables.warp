@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+// parser.warp reads a loop's iterable as Rust does: the words up to the body, a braceless call in the header's last operand (card parser-each-loops); 321123123123
+xs = [1, 2, 3]
+s = 0
+for x in reverse xs { s = s * 10 + x }
+for i in 1 to count xs { s = s * 10 + i }
+for i in 1 to count xs:
+	s = s * 10 + i
+for i in 1 to count xs do s = s * 10 + i
+s

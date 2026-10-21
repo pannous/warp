@@ -28,7 +28,9 @@ mod test_check_assert;
 mod test_check_holds;
 mod test_clipboard;
 mod test_code_hole_calls; // card code-hole-arm-state
+mod test_code_hole_conditions; // cards typed-holes, code-hole-types
 mod test_code_holes; // card code-holes
+mod test_code_statement_patterns; // card code-patterns
 mod test_colon_handlers;
 mod test_condition_block;
 mod test_constant_listener;
@@ -134,9 +136,11 @@ mod test_match_binding_alternatives; // card binding-alternatives
 mod test_match_binding_arm;
 mod test_match_deep_conditions; // card deep-conditions
 mod test_match_else_line;
+mod test_match_guard_block; // card match-guard
 mod test_match_guarded_unit_name; // card pattern-variable
 mod test_match_guards_and_finally;
 mod test_match_item_patterns; // card list-pattern
+mod test_match_literal_receiver; // card match-method
 mod test_match_many_literals; // card pattern-dispatch-speed
 mod test_match_maps; // card map-patterns
 mod test_match_method_subject; // card match-xs
@@ -183,6 +187,7 @@ mod test_reflection_synonyms; // card reflection-synonyms
 mod test_reflection_words; // card reflection
 mod test_relational_arms;
 mod test_rest_patterns;
+mod test_rule_sets; // card rewrite-rules
 mod test_run_tests; // card run-tests
 mod test_run_time_block_cache;
 mod test_run_time_blocks;
@@ -243,6 +248,7 @@ mod test_task_signals;
 mod test_task_values;
 mod test_tasks;
 mod test_test_pairs; // decision warp-is-tests: tab-separated test pairs
+mod test_text_in_logical_condition; // card lib-compiler
 mod test_text_loop_value;
 mod test_text_patterns; // card text-patterns
 mod test_threads;
