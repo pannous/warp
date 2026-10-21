@@ -4,6 +4,9 @@
 use crate::common::fails_with;
 use crate::is;
 
+/// The status of a Rust panic
+const PANIC_STATUS: i32 = 101;
+
 #[test]
 fn a_declared_runtime_word_compiles_where_it_is_not_called() {
 	is!("is_null(x: any): bool from runtime\nis_blank(n: any): bool := is_null(n)\n7", 7);
@@ -41,7 +44,9 @@ fn each_runtime_part_runs_alone() {
 		.filter_map(|part| {
 			let output = crate::common::warp_command().arg("--no-ask").arg(part).output().expect("warp runs");
 			let said = String::from_utf8_lossy(&output.stdout).to_string() + &String::from_utf8_lossy(&output.stderr);
-			(!output.status.success() || said.contains("Error")).then(|| format!("{}: {said}", part.display()))
+			// a part's value is its exit status (P77): only a crash, a signal or a panic, fails it
+			let crashed = matches!(output.status.code(), None | Some(PANIC_STATUS));
+			(crashed || said.contains("Error")).then(|| format!("{}: {said}", part.display()))
 		})
 		.collect();
 	assert!(failed.is_empty(), "{}", failed.join("\n"));
