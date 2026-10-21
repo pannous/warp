@@ -370,6 +370,15 @@ def condition(value: any): list {
 	if kind != "bool" and kind != pending { refuse("a " + kind + " as a condition") }
 	value#2
 }
+# the test of an if or a loop read inside `blocks` more blocks: in `if name and …` each side is tested by its own kind
+# (a text by its emptiness), the right one only when the left leaves the answer open
+def condition_of(body: Body, test: any, blocks: int): list {
+	if not (type(test) is key and op_of(test) in logical_words) { return condition(nested(body, test, blocks)) }
+	a = condition_of(body, key_of(test), blocks)
+	b = condition_of(body, value_of(test), blocks + 1)
+	if logical_words[op_of(test)] == "and" { return a + [op.if, type_bytes.bool] + b + [op.else, op.i32_const, 0, op.end] }
+	a + [op.if, type_bytes.bool, op.i32_const, 1, op.else] + b + [op.end]
+}
 
 def number_value(n: any): list {
 	if n is float and exact_decimal(n) != ø { return exact_decimal(n) }
@@ -1418,7 +1427,7 @@ def runtime_error_message(name: text): text {
 # `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
 # has_else: `else ø` is a branch giving ø, no missing one
 def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else: bool): list {
-	c = condition(expression_code(body, test))
+	c = condition_of(body, test, 0)
 	a = nested(body, yes_branch, 1)
 	if not has_else { return unmatched(c, a, yes_branch is number) }
 	b = nested(body, no_branch, 1)
@@ -1449,7 +1458,7 @@ def loop_of(body: Body, test: any, block: any): list {
 }
 # the code of a loop; each run of its body sets the local `last` to its value, or, with last -1, runs it for its effect
 def loop_code(body: Body, test: any, block: any, last: int): list {
-	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
+	exit_unless = condition_of(body, test, 2) + [op.i32_eqz, op.br_if, 1]
 	parts = block_statements(block)
 	has_step = #parts > 0 and is_loop_step(parts.last)
 	again = if has_step then dropped(nested(body, value_of(parts.last), 2)) + [op.br, 0] else [op.br, 0]
@@ -1485,10 +1494,10 @@ def effect(body: Body, n: any): list {
 	operator = op_of(n)
 	left = key_of(n)
 	if operator == "then" and type(left) is key and op_of(left) == "if" {
-		return condition(expression_code(body, right_of_if(left))) + [op.if, no_value] + nested_effect(body, value_of(n), 1) + [op.end]
+		return condition_of(body, right_of_if(left), 0) + [op.if, no_value] + nested_effect(body, value_of(n), 1) + [op.end]
 	}
 	if operator == "else" and type(left) is key and op_of(left) == "then" and type(key_of(left)) is key and op_of(key_of(left)) == "if" {
-		c = condition(expression_code(body, right_of_if(key_of(left))))
+		c = condition_of(body, right_of_if(key_of(left)), 0)
 		return c + [op.if, no_value] + nested_effect(body, value_of(left), 1) + [op.else] + nested_effect(body, value_of(n), 1) + [op.end]
 	}
 	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_code(body, value_of(left), value_of(n), -1) }
