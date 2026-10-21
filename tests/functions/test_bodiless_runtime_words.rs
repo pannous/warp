@@ -34,7 +34,6 @@ fn a_declared_runtime_value_is_a_global() {
 /// it calls, so it compiles and runs alone in the Rust lane
 #[cfg(feature = "native")]
 #[test]
-#[ignore = "the parts find every word; their Kind constants (card constants-exist) and Rust lane type gaps (card rust-lane-type-2) remain"]
 fn each_runtime_part_runs_alone() {
 	let mut parts: Vec<_> =
 		std::fs::read_dir("lib/compiler/runtime").unwrap().map(|entry| entry.unwrap().path()).collect();
