@@ -35,8 +35,9 @@ const LINEAR_TOPIC: &str = "linear-array";
 /// `fill(block: samples, t)` (lib/sound.warp `play(fill: (samples, float) -> any, …)`): a parameter of this type is a
 /// linear float array, the block of a sound's samples the host hands the function to fill
 pub const SAMPLES_TYPE: &str = "samples";
-/// The type a parameter of SAMPLES_TYPE is held as once lowered: the Int naming its array (array_parameter)
-pub const SAMPLES_HELD_AS: &str = "int";
+/// The type a parameter of SAMPLES_TYPE is held as once lowered: the Int naming its array (array_parameter), the type
+/// written kept as its WRITTEN_TYPE
+const SAMPLES_HELD_AS: &str = "int";
 const LINEAR_FLOATS: Shared = Shared { element: Element::Float, value: false, storage: Storage::Linear };
 
 /// The cell of a shared value
@@ -404,7 +405,8 @@ fn shared_parameters(
 fn array_parameter(parameter: Node, kind: Shared) -> Node {
 	match parameter.drop_meta() {
 		Node::Key(name, Op::Colon, annotation) if annotation.is_symbol(SAMPLES_TYPE) && kind == LINEAR_FLOATS => {
-			key(name.as_ref().clone(), Op::Colon, symbol(SAMPLES_HELD_AS))
+			let held = key(name.as_ref().clone(), Op::Colon, symbol(SAMPLES_HELD_AS));
+			held.with_attribute(crate::lowering::overloads::WRITTEN_TYPE, symbol(SAMPLES_TYPE))
 		}
 		Node::Key(name, Op::Colon, annotation) if takes_array(annotation, kind) => name.as_ref().clone(),
 		_ => parameter,

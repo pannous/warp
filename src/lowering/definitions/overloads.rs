@@ -11,6 +11,7 @@ use super::nodes::{
 };
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
+use crate::lowering::function_types::{definition_counts, times_defined};
 use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -28,6 +29,9 @@ const ANY_FIT: u32 = 100;
 const LIST_FIT: u32 = 2;
 /// `function_of_samples_float`: the overload type of a parameter typed as a function, `fill: (samples, float) -> any`
 const FUNCTION_TYPE_PREFIX: &str = "function_of_";
+/// The attribute in which a pass that holds a parameter as another type keeps the type written: `block: samples`, held
+/// as the Int naming its block (shared_arrays.rs), still fits a function type of samples
+pub(crate) const WRITTEN_TYPE: &str = "written_type";
 
 /// The function f whose companion f_as is `name`
 pub fn companion_of(name: &str) -> Option<&str> {
@@ -517,11 +521,9 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 	}
 	let called_parameters = called_parameters(&node);
 	let mut parameter_types = HashMap::new();
-	each_definition(&node, &mut |definition| {
-		parameter_types
-			.entry((definition.head[0].name(), definition.head.len() - 1))
-			.or_insert_with(|| definition.head[1..].iter().map(parameter_type).collect());
-	});
+	for (name, types) in written_signatures(&node) {
+		parameter_types.entry((name, types.len())).or_insert(types);
+	}
 	let class_fields = crate::lowering::class_methods::class_fields(&node);
 	let classes: Vec<String> = class_fields.keys().cloned().collect();
 	let node = MethodVariants {
@@ -992,27 +994,40 @@ fn overload_parameter_type(parameter: &Node) -> Option<String> {
 /// the functions defined once, by name
 fn function_signatures(node: &Node) -> (HashMap<String, Vec<String>>, HashMap<String, Vec<Option<String>>>) {
 	let mut function_types = HashMap::new();
-	let mut defined: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
 	each_definition(node, &mut |definition| {
 		for parameter in &definition.head[1..] {
 			if let Some(types) = crate::lowering::function_types::declared_parameter_types(parameter) {
 				function_types.insert(overload_parameter_type(parameter).expect("a function type"), types);
 			}
 		}
-		defined
-			.entry(definition.head[0].name())
-			.or_default()
-			.push(definition.head[1..].iter().map(parameter_type).collect());
 	});
-	let functions =
-		defined.into_iter().filter_map(|(name, mut heads)| (heads.len() == 1).then(|| (name, heads.remove(0))));
+	let signatures = written_signatures(node);
+	let counts = definition_counts(signatures.iter().map(|(name, types)| (name.clone(), types.len())));
+	let functions = signatures.into_iter().filter(|(name, _)| times_defined(&counts, name) == 1);
 	(function_types, functions.collect())
 }
 
-/// `samples` held as the Int naming its block, which a passed function's lowered head declares (shared_arrays.rs)
-fn is_held_as(wanted: &str, given: &str) -> bool {
-	use crate::lowering::shared_arrays::{SAMPLES_HELD_AS, SAMPLES_TYPE};
-	wanted == SAMPLES_TYPE && given == SAMPLES_HELD_AS
+/// Each definition's name and its parameters' types as written: `block: samples` too, which shared_arrays holds as the
+/// Int naming the block
+fn written_signatures(node: &Node) -> Vec<(String, Vec<Option<String>>)> {
+	let mut signatures = vec![];
+	each_definition(node, &mut |definition| {
+		let types = definition.head[1..].iter().map(written_parameter_type).collect();
+		signatures.push((definition.head[0].name(), types));
+	});
+	signatures
+}
+
+fn written_parameter_type(parameter: &Node) -> Option<String> {
+	match parameter.attribute(WRITTEN_TYPE) {
+		Some(written) => Some(written.name()),
+		None => parameter_type(parameter),
+	}
+}
+
+/// `function_of_samples_float`, the overload type of a parameter typed as a function
+fn is_function_type(type_name: &str) -> bool {
+	type_name.starts_with(FUNCTION_TYPE_PREFIX)
 }
 
 /// How well a function of the parameter types `given` fits a function type of the parameter types `wanted`: as many
@@ -1026,7 +1041,7 @@ fn function_fit(given: &[Option<String>], wanted: &[String]) -> Option<u32> {
 		.zip(wanted)
 		.map(|(given, wanted)| match given.as_deref() {
 			None => Some(1),
-			Some(given) if given == wanted || is_held_as(wanted, given) => Some(0),
+			Some(given) if given == wanted => Some(0),
 			Some(_) if wanted == ANY_TYPE => Some(ANY_FIT),
 			Some(_) => None,
 		})
@@ -1071,7 +1086,7 @@ fn is_overload_type(type_name: &str) -> bool {
 	type_name == ANY_TYPE
 		|| overload_kind(type_name).is_some()
 		|| crate::analyzer::is_map_type(type_name)
-		|| type_name.starts_with(FUNCTION_TYPE_PREFIX)
+		|| is_function_type(type_name)
 }
 
 /// How well an argument of `kind` fits a parameter of `type_name`: 0 exactly, 1 by widening an Int to a Float or any
@@ -1130,7 +1145,7 @@ fn run_time_test(argument: Node, type_name: &str) -> Option<Node> {
 	use crate::lowering::type_tests::declared_type_test;
 	let tested = |type_name: &str| match takes_widened(type_name) {
 		true => crate::words::NUMBER_WORD.to_string(),
-		false if type_name.starts_with(FUNCTION_TYPE_PREFIX) => Kind::Function.to_string(),
+		false if is_function_type(type_name) => Kind::Function.to_string(),
 		false => type_name.to_string(),
 	};
 	let Some(element) = crate::analyzer::list_element_type(type_name) else {
@@ -1342,10 +1357,10 @@ impl ParameterOverloads {
 		let fits_argument = |position: usize, type_name: &str| match (declared[position].as_deref(), kinds[position]) {
 			(Some(ANY_TYPE), _) => (type_name == ANY_TYPE).then_some(0),
 			(_, Some(Kind::List)) => element_fit(elements[position].as_deref(), type_name),
-			(_, Some(Kind::Function)) if type_name.starts_with(FUNCTION_TYPE_PREFIX) => {
+			(_, Some(Kind::Function)) if is_function_type(type_name) => {
 				function_fit(self.passed_function(&arguments[position])?, self.function_types.get(type_name)?)
 			}
-			(_, _) if type_name.starts_with(FUNCTION_TYPE_PREFIX) => None,
+			(_, _) if is_function_type(type_name) => None,
 			(_, Some(kind)) => fit(kind, type_name),
 			(_, None) => Some(0),
 		};
