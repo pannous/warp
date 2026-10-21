@@ -4,7 +4,7 @@ use crate::is;
 
 #[test]
 fn a_text_cast_to_a_unit_word_is_its_list() {
-	is!("t = \"ab cd\\nef\"\n#(t as words)", 3);
+	is!("#(\"ab cd ef\" as words)", 3);
 	is!("t = \"ab cd\\nef\"\n(t as lines)#2", "ef");
 	is!("#(\"a1b\" as letters)", 2);
 	is!("#(\"abc\" as glyphs)", 3);
