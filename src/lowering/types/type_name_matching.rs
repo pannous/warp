@@ -246,6 +246,13 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 			let then = key(head.as_ref().clone(), Op::Then, as_type(chosen.as_ref().clone(), type_name));
 			key(then, Op::Else, as_type(otherwise.as_ref().clone(), type_name))
 		}
+		// an optional result of `if c then x` without `else`, or of a loop, is ø when nothing gave a value
+		Node::Key(_, Op::Then, _) if type_name.name().ends_with('?') => {
+			as_type(key(value.drop_meta().clone(), Op::Else, Node::Empty), type_name)
+		}
+		Node::Key(_, Op::Do, _) if type_name.name().ends_with('?') => {
+			block(vec![value.clone(), as_type(Node::Empty, type_name)])
+		}
 		_ if is_statement_block(&value) => converted_last(value, type_name),
 		_ if type_name.symbol_name().is_some_and(is_checked_result) => checked_result(value, type_name),
 		Node::Key(_, op, _) if op.is_arithmetic() => key(parens(vec![value]), Op::As, type_name.clone()),
