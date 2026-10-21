@@ -1354,12 +1354,23 @@ def prefixed(p: Parser): Node := {
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else count_worded(p)
 	if declared != ø { return declared }
 	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
-	if form == "not" {
-		p.at = p.at + 3
+	if form == "not" or no_asks_emptiness(p, word) {
+		p.at = p.at + word.length
 		skip_spaces(p)
 		return Key(ø, Op.Not, expression(p, 105))
 	}
 	atom(p)
+}
+
+// `if no xs`: in a condition `no` before an operand asks for emptiness as `not xs` does; elsewhere, or before an
+// operator word or a block, `no` is false (decision empty-is-not-missing)
+// Rust twin: lookahead.rs no_asks_emptiness
+def no_asks_emptiness(p: Parser, word: text): bool {
+	if word != "no" or not p.header or not operand_follows(p, 2) { return false }
+	after = blank_end(p, p.at + 2)
+	if "{:".contains(peek(p.code, after, p.n)) { return false }
+	follower = p.code[after .. name_end(p.code, after, p.n)]
+	not WORD_OPERATORS.any(pair => pair#1 == follower)
 }
 
 // Whether the word at the parser's position follows a member's dot: `math.sqrt(4)` calls the member sqrt, no √
@@ -1780,8 +1791,10 @@ def atom(p: Parser): Node := {
 		p.at = end
 		return unit
 	}
-	if c == 'ø' or c == ')' or c == ']' or c == '}' or c == ';' {
-		if c == 'ø' { p.at = p.at + 1 }
+	// `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing)
+	// Rust twin: atoms.rs EMPTY_SET_SIGN
+	if c == 'ø' or c == '∅' or c == ')' or c == ']' or c == '}' or c == ';' {
+		if c == 'ø' or c == '∅' { p.at = p.at + 1 }
 		return ø
 	}
 	// `"̅"`: a quote carrying combining marks is one grapheme of the code; the marks open the text (card parser-graphemes)

@@ -18,6 +18,9 @@ const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
 const TO_SENTENCE_WORD: &str = "To";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
+/// The empty set sign: ø, absence, while warp has no sets (decision empty-is-not-missing), noted as written for ø
+const EMPTY_SET_SIGN: &str = "∅";
+const NOTHING_SIGN: &str = "ø";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
 /// The first argument of a block, what Elixir's `&1` and the element of Ruby's `&:to_s` are
 const CAPTURED_ARGUMENT: &str = "$0";
@@ -301,6 +304,10 @@ impl WarpParser {
 
 		if symbol == NONE_WORD && self.peek_char(0) == '(' && !self.options.data_mode {
 			return error(NONE_CALL_ERROR);
+		}
+		if symbol == EMPTY_SET_SIGN && !self.options.data_mode {
+			crate::errors::diagnostic::note_alias(EMPTY_SET_SIGN, NOTHING_SIGN);
+			return Empty;
 		}
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| {
 			let length = symbol.chars().count();
