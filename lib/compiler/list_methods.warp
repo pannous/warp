@@ -12,10 +12,20 @@ pushed(list: Node, call: list, n: Node): Node := {
 		return Key(list, Op.AddAssign, List([call#2], Bracket.Square, Separator.Comma))
 	}
 	if #call == 1 and call#1 == symbol("pop") { return List([symbol("list_pop"), list], Bracket.Round, Separator.None) }
+	if #call == 2 and call#1 is symbol and name_of(call#1) in removal_methods and is_name(list) { return removed(list, call#2) }
 	if #call >= 1 and call#1 is symbol and name_of(call#1) not in in_place_methods {
 		return List([call#1, list] + call[1..], Bracket.Round, Separator.None)
 	}
 	n
+}
+# `m.remove(k)`, `m.delete(k)` of a variable: the value of k, its entry removed from m (Python's dict.pop); of a list the
+# first element equal to k removed. Rust twin: list_mutations.rs removed_key
+removal_methods = ["remove", "delete"]
+removed(collection: Node, removed_key: Node): Node := {
+	held = symbol(name_of(collection) + "·removed")
+	taken = Key(held, Op.Assign, List([symbol("removed_value"), collection, removed_key], Bracket.Round, Separator.None))
+	rest = Key(collection, Op.Assign, List([symbol("map_without"), collection, removed_key], Bracket.Round, Separator.None))
+	List([taken, rest, held], Bracket.Round, Separator.Semicolon)
 }
 # the methods that change the list or map they are called on, which Rust's list_mutations.rs lowers in place
 in_place_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
