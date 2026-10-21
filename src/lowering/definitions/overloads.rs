@@ -741,6 +741,13 @@ fn passed_variants(
 	arities: &HashMap<String, Vec<Arity>>,
 	called_parameters: &HashMap<(String, usize), usize>,
 ) -> Node {
+	// a definition's head names its parameters, no function passed: `play(tone, duration) := …` beside tone·2
+	if let Node::Key(head, op @ (Op::Define | Op::Assign), body) = &node {
+		if definition(&node).is_some() {
+			let body = passed_variants(body.as_ref().clone(), arities, called_parameters);
+			return Node::Key(head.clone(), *op, Box::new(body));
+		}
+	}
 	let node = children_rewritten(node, |child| passed_variants(child, arities, called_parameters));
 	let Node::List(items, Bracket::Round, separator) = node else {
 		return node;

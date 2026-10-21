@@ -16,6 +16,9 @@ use std::collections::HashMap;
 struct Signature {
 	parameters: Vec<Node>,
 	result: Node,
+	/// declared by one of several definitions of a name and arity, which overloads.rs picks by the passed function's
+	/// parameters, only for a function defined once
+	of_overload: bool,
 }
 
 /// A definition's name and parameter count, which tell its overloads apart: `play(tone)`, `play(tone, duration)`
@@ -46,10 +49,18 @@ fn top_level(program: &Node) -> Vec<&Node> {
 /// The function-typed parameters the definitions declare, by their places
 fn declared_signatures(statements: &[&Node]) -> Signatures {
 	let mut signatures = Signatures::new();
-	for head in statements.iter().filter_map(|statement| function_head(statement)) {
+	let heads: Vec<_> = statements.iter().filter_map(|statement| function_head(statement)).collect();
+	let mut definitions: HashMap<Arity, usize> = HashMap::new();
+	for head in &heads {
+		*definitions.entry((head.name.to_string(), head.parameters().len())).or_default() += 1;
+	}
+	for head in &heads {
 		let parameters = head.parameters();
+		let of_overload = definitions[&(head.name.to_string(), parameters.len())] > 1;
 		for (index, parameter) in parameters.iter().enumerate() {
-			if let Some(signature) = declared_signature(parameter) {
+			if let Some(signature) =
+				declared_signature(parameter).map(|signature| Signature { of_overload, ..signature })
+			{
 				add_alternative(&mut signatures, (head.name.to_string(), parameters.len()), index, signature);
 			}
 		}
@@ -91,7 +102,7 @@ fn declared_signature(parameter: &Node) -> Option<Signature> {
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
-	Some(Signature { parameters, result: (**result).clone() })
+	Some(Signature { parameters, result: (**result).clone(), of_overload: false })
 }
 
 /// An untyped parameter passed on to a function-typed parameter takes its signatures, until no more do
@@ -120,7 +131,7 @@ fn passed_signatures(body: &Node, name: &str, signatures: &Signatures) -> Vec<Si
 	let mut found = vec![];
 	visit_typed_arguments(body, signatures, &mut |argument, signature| {
 		if argument.is_symbol(name) {
-			found.push(signature.clone());
+			found.push(Signature { of_overload: false, ..signature.clone() });
 		}
 	});
 	found
@@ -147,12 +158,20 @@ fn visit_typed_arguments(node: &Node, signatures: &Signatures, action: &mut dyn 
 /// definition's own parameters, as `tone` of `play(tone, duration)`, which the library's function `tone` does not answer
 fn passed_functions(statements: &[&Node], signatures: &Signatures) -> HashMap<String, Vec<Signature>> {
 	let mut passed = HashMap::new();
+	let mut definitions: HashMap<&str, usize> = HashMap::new();
+	for head in statements.iter().filter_map(|statement| function_head(statement)) {
+		*definitions.entry(head.name).or_default() += 1;
+	}
+	// `play(chord, 2s)` of a program's chord(t) beside sound's chord(root, kind): no overload picks either by its
+	// parameters, so neither takes such a type
+	let is_ambiguous = |name: &str| definitions.get(name).is_some_and(|count| *count > 1);
 	for statement in statements {
 		let own: Vec<&str> = function_head(statement)
 			.map(|head| head.parameters().iter().filter_map(|parameter| parameter.symbol_name()).collect())
 			.unwrap_or_default();
 		visit_typed_arguments(statement, signatures, &mut |argument, signature| {
-			if let Some(name) = argument.symbol_name().filter(|name| !own.contains(name)) {
+			let name = argument.symbol_name().filter(|name| !own.contains(name));
+			if let Some(name) = name.filter(|name| !(signature.of_overload && is_ambiguous(name))) {
 				let wanted: &mut Vec<Signature> = passed.entry(name.to_string()).or_default();
 				if !wanted.contains(signature) {
 					wanted.push(signature.clone());
