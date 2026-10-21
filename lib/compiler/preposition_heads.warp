@@ -2,8 +2,7 @@
 # argument labels (card prelude-for-pure; Rust twin src/lowering/definitions/preposition_calls.rs unlabelled_head): the
 # definition takes the parameter alone, `play(tone, duration) := …`. The prelude's `replace(t, old, with new)` has one.
 use "walk.warp"
-
-label_words = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each", "as"]
+use "words.warp"
 
 is_label_word(n: Node): bool := match n {
 	Symbol(name): name in label_words

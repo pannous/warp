@@ -514,6 +514,12 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			left = power
 			continue
 		}
+		test = if left == ø then [] else test_word_at(p, min_power)
+		if test.length > 0 {
+			p.at = test#1
+			left = tested(left, test#2, test#3)
+			continue
+		}
 		if (c == '+' or c == '-') and is_at(p.code, p.at + 1, c, p.n) and SUFFIX_POWER >= min_power {
 			op = p.code[p.at .. p.at + 2]
 			p.at = p.at + 2
@@ -579,7 +585,15 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			}
 			if op.length == 0 {
 				if not applies(p, left, min_power) { break }
-				left = listed("", " ", [left, argument(p, not applies_otherwise(p, min_power) or ends_with_clause_word(left))])
+				// `s + f 2 each: 3`: the labelled arguments after the argument are the call's too
+				labelled = labelled_argument(p)
+				items = [left, if labelled == ø then argument(p, not applies_otherwise(p, min_power) or ends_with_clause_word(left)) else labelled]
+				labelled = labelled_argument(p)
+				while labelled != ø {
+					items = items + [labelled]
+					labelled = labelled_argument(p)
+				}
+				left = listed("", " ", items)
 				continue
 			}
 			powers = binding_powers(op#2)
@@ -763,6 +777,44 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	if keyword_at(p, "for") and peek(p.code, p.at + 3, p.n) != ':' { return false }
 	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and not p.iterable and not word_begins_item(p)
 	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
+}
+
+// `r = move 1 from: 10 to: 3`: a label word with a colon and a blank after it labels the argument after them, also
+// where the call is an operand (decision labels-calls); ø where no label stands
+// Rust twin: suffixes.rs labelled_argument
+def labelled_argument(p: Parser): Node := {
+	at = blank_end(p, p.at)
+	end = name_end(p.code, at, p.n)
+	if end == at or not label_words.contains(p.code[at .. end]) or not is_at(p.code, end, ':', p.n) or not " \t".contains(peek(p.code, end + 1, p.n)) { return ø }
+	p.at = end + 1
+	skip_spaces(p)
+	Key(symbol(p.code[at .. end]), Op.Colon, expression(p, ARGUMENT_POWER))
+}
+
+// `x empty`, `x missing`, `x is absent` … ending a condition (wiki/null.md): [the end of the word, the word, whether
+// `is` stood before it], else []; the word ends the condition where no operand follows it, or a block, a colon or an
+// operator word does
+// Rust twin: conditions.rs try_parse_test_word
+TEST_WORDS = ["empty", "missing", "absent", "unknown", "undefined", "failed"]
+NOT_POWER = 105
+def test_word_at(p: Parser, min_power: int): list {
+	if min_power > NOT_POWER { return [] }
+	after_is = keyword_at(p, "is")
+	start = if after_is then blank_end(p, p.at + 2) else p.at
+	word = TEST_WORDS.find(candidate => keyword_at_position(p, candidate, start)) ?? ""
+	if word == "" { return [] }
+	end = start + word.length
+	after = blank_end(p, end)
+	next = peek(p.code, after, p.n)
+	following = p.code[after .. name_end(p.code, after, p.n)]
+	ends = not operand_follows_at(p, end) or next == '{' or next == ':' or WORD_OPERATORS.any(op => op#1 == following)
+	if ends then [end, word, after_is] else []
+}
+// `x failed` is `is_error(x)`, `x is empty` `count(x) == 0` (ø, "", [] and {} alike), the other words `not x`
+def tested(left: Node, word: text, after_is: bool): Node := {
+	if word == "failed" { return listed("(", "", [symbol("is_error"), left]) }
+	if after_is and word == "empty" { return keyed("==", listed("(", "", [symbol("count"), left]), 0) }
+	Key(ø, Op.Not, left)
 }
 
 // The word here begins what follows the operand: a loop clause, a block's `end`, a key (`_: 0`) or an element (`p{m}`)
