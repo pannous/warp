@@ -1,0 +1,13 @@
+# a function's local or parameter named like a program function is the local (cards local-named-like-3, -4)
+g(x) := x * 2
+arity(s: text): int := 1
+tone(x) := x * 2
+f() := { arity = [3]; arity in [[3]] }
+h(g) := g in [1, 2]
+pitch(tone: int) := tone + 1
+items_after_first() := { items = [1, 2, 3]; items[1..] }
+print f()
+print h(2)
+print pitch(tone: 4)
+print items_after_first()
+print g(4)
