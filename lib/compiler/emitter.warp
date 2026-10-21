@@ -2068,10 +2068,10 @@ function_compiled(f: Function, argument_kinds: any): any := {
 # the result kind of a first reading of f's body; a reading refused after a local widened is read again, the local
 # holding its joint kind (`held = [1]` in one branch, `held = xs#1` in another, then `w(held)` taking a text)
 def first_reading(body: Body, f: Function, widened: int): any {
-	try { return expression_code(body, f.body)#1 } catch refusal {
+	try { expression_code(body, f.body)#1 } catch refusal {
 		if #f.widened.keys == widened or not ("" + refusal).starts_with(outside_the_core) { throw refusal }
+		pending
 	}
-	pending
 }
 # the last reading of f, every call's result known but those of functions still compiling; a function that called
 # one of those is read again once every function is compiled (module.rereads)
