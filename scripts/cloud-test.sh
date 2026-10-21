@@ -104,6 +104,19 @@ make_room() {
 	echo "$free GB free, $(free_gb) GB after dropping target/"
 }
 
+# compiler.wasm and compiler-self.wasm (warp pure / warp self, src/compiler/standalone.rs) built by an earlier job from
+# another lib/ or warp build: the tests ran on them with only a notice, so a verdict could be the earlier branch's
+# (card cloud-stale-compiler: "unknown name Ascii" from a compiler built before byte_codes.warp). Kept while lib/ and
+# the Rust sources are those they were built from (compiler.wasm takes ~540 s); prints what it did
+drop_stale_compilers() {
+	local stamp=$HERE_ROOT/compiler-sources sources dropped
+	sources=$(git rev-parse HEAD:lib HEAD:src HEAD:crates HEAD:build.rs HEAD:Cargo.lock 2>/dev/null | tr '\n' ' ')
+	[ "$sources" = "$(cat "$stamp" 2>/dev/null)" ] && return
+	dropped=$(find target data \( -name compiler.wasm -o -name compiler-self.wasm \) -print -delete 2>/dev/null | wc -l)
+	echo "$sources" > "$stamp"
+	echo "cloud-test: lib/ or the Rust sources differ from the last job's: dropped $((dropped)) compiler build files"
+}
+
 detect_build_environment() {
 	local status=$1 log=$2
 	[ "$status" -ne 0 ] && grep -q 'No space left on device' "$log" && echo "disk exhausted after a clean rebuild"
@@ -237,6 +250,7 @@ run_tests_here() {
 		[[ "$setting" == WARP_EMIT_REFUSALS=* ]] && refusals=${setting#*=}
 	done
 	[ -n "$refusals" ] && rm -f "$refusals"
+	drop_stale_compilers >> "$HERE_WORK/log.txt"
 	local test_start=$SECONDS
 	# the settings reach the tests alone: the build stays the same for every setting, so a warm VM builds a tip once
 	[ $build_status -eq 0 ] && printf 'cloud-test: in %s at %s: cargo test %s -- %s\n' "$PWD" "$(git rev-parse --short HEAD)" "${test_args[*]}" "${filters[*]}" >> "$HERE_WORK/log.txt"

@@ -1,0 +1,15 @@
+// out: other
+// out: nothing
+// out: yes
+// out: no
+# a match's arms ø, True and False test the subject equals them, in the pure lane too (card under-pure)
+h(n: any): text := match n {
+	ø: "nothing"
+	True: "yes"
+	False: "no"
+	_: "other"
+}
+print h("x")
+print h(ø)
+print h(yes)
+print h(no)

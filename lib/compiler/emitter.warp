@@ -91,13 +91,6 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 # phrases whose meaning moves out of the compiler into warp library words (card phrases-out-of-core): refused by name
 # until the word exists, never compiled as an unknown name
 pending_library_words = {times: "`n times`", once: "`once …`", twice: "`twice …`", thrice: "`thrice …`"}
-# the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64)
-wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
-	"i64.div_s": 127, "i64.div_u": 128, "i64.rem_s": 129, "i64.rem_u": 130, "i64.and": 131, "i64.or": 132, "i64.xor": 133,
-	"i64.shl": 134, "i64.shr_s": 135, "i64.shr_u": 136, "i64.rotl": 137, "i64.rotr": 138, "f64.abs": 153, "f64.neg": 154,
-	"f64.ceil": 155, "f64.floor": 156, "f64.trunc": 157, "f64.nearest": 158, "f64.sqrt": 159, "f64.add": 160, "f64.sub": 161,
-	"f64.mul": 162, "f64.div": 163, "f64.min": 164, "f64.max": 165, "f64.copysign": 166, "i64.trunc_f64_s": 176,
-	"i64.trunc_f64_u": 177, "f64.convert_i64_s": 185, "f64.convert_i64_u": 186, "i64.reinterpret_f64": 189, "f64.reinterpret_i64": 191}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
@@ -247,7 +240,6 @@ bare_function(name: text): any := Function(name, Signature(), ø)
 
 # `(name params…) := body` at the program's top level, its head; `name := body` reading `it` is a function of `it`, and
 # `name := { statements }` one of none (Rust's defined_function); `x := 5` is a value (assignment_operators)
-implicit_parameter = "it"
 function_head(n: any): any := {
 	if not (type(n) is key and op_of(n) == ":=") { return ø }
 	left = key_of(n)
@@ -1195,10 +1187,13 @@ def optional_declaration(body: Body, name: text, type_name: text, value: any): l
 # a value as the declared kind takes it: an int widened to a float, a char (a one-character text) to a text, a value known only at run time checked (a list
 # one stays a node, as Rust keeps ø), else of that kind
 def admitted(value: any, kind: text): list {
-	if value#1 == kind or value#1 == pending { return value }
+	if value#1 == kind { return value }
 	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
 	if value#1 == "char" and kind == "text" { return shown_text(value) }
 	if value#1 == "node" and kind in field_checks { return runtime_call(field_checks[kind], [value]) }
+	# the result of a call still compiling (pending), or a kind guessed from one (`f(x) + g(x)` an int), is held as the
+	# declared kind: the reading is done again once the call's result is known
+	if value#1 == pending or module.saw_pending { return [kind, value#2] }
 	refuse("a " + value#1 + " given to a variable declared " + kind)
 }
 def whole(value: any): list { admitted(value, "int") }
@@ -2491,7 +2486,11 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 			seen = #module.closures + #module.dispatchers
 			for f in module.dispatchers { if f.name == closure_text_name { closure_text_code(f) } else { dispatcher_code(f) } }
 		}
-		for f in module.rereads { body_code(f) }
+		# every function compiled, no call gives a guessed kind any more
+		for f in module.rereads {
+			module.saw_pending = no
+			body_code(f)
+		}
 		if main.result != "int" and main.result != "float" {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
