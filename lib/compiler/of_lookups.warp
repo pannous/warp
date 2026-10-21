@@ -12,7 +12,7 @@ of_word = "of"
 type_call_word = "type"
 qualifier_words = ["where", "with", "without"]
 selecting_words = ["in", "from"]
-# the selector words the program at hand does not bind, set by of_lookups
+# the selector words the program at hand does not bind, set by lookup_phrase
 global selectors = []
 
 is_bare_phrase(n: Node): bool := match n {
@@ -146,8 +146,13 @@ is_phrase_group(n: Node): bool := match n {
 	_: no
 }
 
-rewrite(n: Node): any := {
-	n = children(as_one_phrase(n), rewrite)
+# the keyword rewrite of a phrase with `of` (or `in`, `from` after a selector word), an entry of passes.warp
+# sugar_phrases_table; `type of x` triggers it by the declaration head's name `of`
+is_lookup_word(word: Node): bool := is_word(word, of_word) or (word is symbol and selecting_words contains name_of(word))
+lookup_phrase(n: Node): Node := {
+	scope = rewritten_bindings()
+	selectors = selector_words.filter(word => not binds(scope, word))
+	n = as_one_phrase(n)
 	if is_phrase_group(n) and not is_spaced_definition(items_of(n)) {
 		parts = looked_up(type_of_called(items_of(n)))
 		if #parts == 1 and bracket_of(n) == "" { return parts#1 }
@@ -155,21 +160,4 @@ rewrite(n: Node): any := {
 	}
 	if type_of_body(n) != none_word { return type_of_called([n])#1 }
 	n
-}
-
-mentions_any(n: Node, words: any): bool := {
-	for word in words {
-		if mentions(n, word) { return yes }
-	}
-	no
-}
-
-has_type_of(n: Node): bool := view_has(view_of(n), part => kind_of(part) == "type" and part#2 == ["symbol", of_word])
-
-of_lookups(program: Node): Node := {
-	selecting = mentions_any(program, selector_words) and mentions_any(program, selecting_words)
-	if not mentions(program, of_word) and not selecting and not has_type_of(program) { return program }
-	scope = scope_of(program)
-	selectors = selector_words.filter(word => not binds(scope, word))
-	rewrite(program)
 }
