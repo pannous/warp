@@ -5,4 +5,4 @@
 // The parser reads `set width of p to 12` as `set width of (p to 12)`: the field rule names the words before `to`.
 rewrite set $field of $object to $value => $object.$field = $value
 // `add 4 to pixel` is `pixel.add(4)`; the parser reads `add $x to $l => …` as arithmetic, so the pattern is grouped
-rewrite (add $x to $list: symbol) => $list.add($x)
+rewrite (add $x to $list) => $list.add($x)
