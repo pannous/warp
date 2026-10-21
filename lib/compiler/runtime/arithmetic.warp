@@ -1,11 +1,11 @@
 # `a + b`, `a += b` of values known only at run time, and int arithmetic that traps past 64 bits
 # `a + b` of values known only at run time: lists and texts join, numbers add
 node_add(a: any, b: any): any := {
-	# ø, also `[]` in the lowered program, beside a list is that list (ø + ø the empty list), beside a text "ø"; beside
-	# a number Rust fails
+	# ø, also `[]` in the lowered program, beside a list is a copy of that list (ø + ø the empty list), so a later
+	# `+=` growing the sum in place leaves the list untouched; beside a text "ø"; beside a number Rust fails
 	if is_null(a) and is_null(b) { return a }
-	if is_null(a) and not is_null(b) and kind_code(b) == Kind.List { return b }
-	if is_null(b) and not is_null(a) and kind_code(a) == Kind.List { return a }
+	if is_null(a) and not is_null(b) and kind_code(b) == Kind.List { return list_join(unboxed_list(b), new_list(0)) }
+	if is_null(b) and not is_null(a) and kind_code(a) == Kind.List { return list_join(unboxed_list(a), new_list(0)) }
 	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }
 	if is_null(a) or is_null(b) { fail() }
 	if kind_code(a) == Kind.List and kind_code(b) == Kind.List { return list_join(unboxed_list(a), unboxed_list(b)) }
