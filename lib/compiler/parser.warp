@@ -600,6 +600,8 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = listed("", " ", [left, symbol(op#1), expression(p, powers#2)])
 			} else if DECLARED_ONLY_OPERATORS contains op#2 {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
+			} else if op#2 == "|>" {
+				left = piped(left, expression(p, powers#2))
 			} else {
 				right = if op#2 == "then" or op#2 == "else" then branch(p, powers#2) else expression(p, powers#2)
 				left = keyed(op#2, left, if op#2 == ":" then with_switch_cases(p, right) else right)
@@ -862,7 +864,7 @@ INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"], ["↑", "↑"], ["↓", "↓"]]
+SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["|>", "|>"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"], ["↑", "↑"], ["↓", "↓"]]
 // `xs .* 2` maps `*` over the elements: the phrase [xs .* 2], binding as `*` does (Rust twin: spellings.rs
 // element_wise_word)
 ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
@@ -1161,6 +1163,7 @@ def binding_powers(op: text): list {
 	if op == "+" or op == "-" or op == "±" { return [140, 141] }
 	if op == "<<" or op == ">>" { return [135, 136] }
 	if op == ".." or op == "to" { return [130, 131] }
+	if op == "|>" { return [127, 128] }
 	if op == "as" { return [125, 250] }
 	if op == "<" or op == ">" or op == "<=" or op == ">=" { return [120, 121] }
 	if op == "==" or op == "is" or op == "!=" or op == "===" or op == "!==" or op == "≈" or op == "~" { return [115, 116] }
@@ -1394,6 +1397,8 @@ def expression_ends(p: Parser): bool {
 def prefixed_by_symbol(p: Parser, c: text): Node := {
 	head = operator_method_head(p)
 	if head != ø { return head }
+	alone = operator_value(p)
+	if alone != ø { return alone }
 	next = peek(p.code, p.at + 1, p.n)
 	if c == '-' and next != '>' and next != '-' {
 		p.at = p.at + 1
@@ -1419,8 +1424,8 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 	// Rust twin: lookahead.rs peek_prefix_operator ('>' | '<')
 	if c == '<' or c == '>' {
 		relation = if next == '=' then "" + c + "=" else "" + c
-		after = peek(p.code, p.at + relation.length, p.n)
-		if after == ' ' or after == '\t' {
+		spacing = peek(p.code, p.at + relation.length, p.n)
+		if spacing == ' ' or spacing == '\t' {
 			p.at = p.at + relation.length
 			skip_spaces(p)
 			return keyed(relation, ø, expression(p, binding_powers(relation)#2))
@@ -1441,6 +1446,19 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		return listed("(", "", [symbol("symbol"), name])
 	}
 	atom(p)
+}
+
+// `sorted(xs, >)`, `fold(xs, +)`, `[<, >=]`: an operator standing alone before a closing parenthesis or bracket or a
+// comma is the operator itself, both sides ø; `..` also at the end of a pattern's rest (Point with x and the rest)
+// Rust twin: definitions/operators.rs try_parse_operator_value
+def operator_value(p: Parser): Node := {
+	found = operator_at(p)
+	if found.length == 0 { return ø }
+	next_char = peek(p.code, blank_end(p, p.at + found#1.length), p.n)
+	ends_rest = next_char == '}' and (found#2 == ".." or found#2 == "to")
+	if not (next_char == ')' or next_char == ',' or next_char == ']' or ends_rest) { return ø }
+	p.at = p.at + found#1.length
+	keyed(found#2, ø, ø)
 }
 
 // `:post` (wiki/symbol.md): the symbol itself, written as the call symbol("post"), never evaluated

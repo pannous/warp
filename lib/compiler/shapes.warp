@@ -25,6 +25,20 @@ def group_parts(node: Node): list := match node {
 	_: ø
 }
 
+// `value |> f(args)` is `f(value, args)`, `value |> f` is `f(value)`; a braceless call is grouped, one argument:
+// `square xs |> filter(p)` is `filter((square xs), p)`
+// Rust twin: pipes.rs piped
+def piped(value: Node, stage: Node): Node {
+	parts = group_parts(value)
+	if parts != ø and parts#1 == "" and parts#2 == " " { value = listed("(", "", [value]) }
+	stage_parts = group_parts(stage)
+	if stage_parts != ø and stage_parts#1 == "(" and stage_parts#2 == "" and #stage_parts#3 > 0 and stage_parts#3#1 is symbol {
+		items = stage_parts#3
+		return listed("(", "", [items#1, value] + items[1 .. #items])
+	}
+	listed("(", "", [stage, value])
+}
+
 def is_list_of(node: Node, bracket: text): bool {
 	parts = group_parts(node)
 	parts != ø and parts#1 == bracket
