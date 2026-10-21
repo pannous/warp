@@ -157,7 +157,12 @@ impl WarpParser {
 
 	/// Check if input at current position matches a keyword (followed by non-alphanumeric)
 	pub(super) fn matches_keyword(&self, keyword: &str) -> bool {
-		self.at_text(keyword) && !is_identifier_char(self.peek_char(keyword.len()))
+		self.keyword_at(0, keyword)
+	}
+
+	/// Is the whole word `keyword` written at `offset` from the cursor, no name continuing it
+	pub(super) fn keyword_at(&self, offset: usize, keyword: &str) -> bool {
+		self.text_at(offset, keyword) && !is_identifier_char(self.peek_char(offset + keyword.chars().count()))
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -302,6 +307,7 @@ impl WarpParser {
 		self.current_char().is_alphabetic() || self.current_char() == '_'
 	}
 
+	/// How many spaces and tabs stand at the cursor
 	pub(crate) fn blanks_ahead(&self) -> usize {
 		self.blanks_at(0)
 	}
