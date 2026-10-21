@@ -192,9 +192,8 @@ pub(super) fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &T
 /// The arguments the library word a method is named like takes, any number when its signature doesn't say: a
 /// class's `get()` never falls back to the library's `get(map, key)`
 fn library_method_arity(name: &str) -> Option<(usize, usize)> {
-	crate::lowering::class_methods::is_library_method(name).then(|| {
-		crate::lowering::library_signatures::library_arity(name).unwrap_or((0, usize::MAX))
-	})
+	crate::lowering::class_methods::is_library_method(name)
+		.then(|| crate::lowering::library_signatures::library_arity(name).unwrap_or((0, usize::MAX)))
 }
 
 /// The arguments a definition takes, fewest and most: `add(a, b = 1)` takes 1 or 2
