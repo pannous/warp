@@ -225,6 +225,7 @@ mod test_typed_returns;
 mod test_typed_signatures;
 mod test_undefined_calls;
 mod test_untyped_predicate_passed; // card untyped-passed
+mod test_unused_sibling_caller; // card unused-sibling
 mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
