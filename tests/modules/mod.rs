@@ -59,14 +59,14 @@ mod test_std_docs_comment_association; // card help-markdown
 mod test_std_exec;
 mod test_std_extrema; // card min-max-lib
 mod test_std_file;
-#[cfg(feature = "native")] // two runs of the warp command sharing a module cache
-mod test_std_kept; // card pure-warm-start
 mod test_std_file_bytes; // card path-list
 mod test_std_file_copy; // card std-file
 mod test_std_hash;
 mod test_std_implicit_use; // card std-implicit
 mod test_std_import_forms; // cards import-square include-math
 mod test_std_json;
+#[cfg(feature = "native")] // two runs of the warp command sharing a module cache
+mod test_std_kept; // card pure-warm-start
 mod test_std_list;
 mod test_std_map;
 mod test_std_math_text;
