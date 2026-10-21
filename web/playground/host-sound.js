@@ -419,11 +419,13 @@ addHostPart({
 				});
 			},
 			// play_blocks(fill, addresses, 2s) (lib/sound.warp): the program's fill(t)
-			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory
+			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory; a
+			// fill(block: samples, t) is handed its block, the Int naming it
 			blocks(caller, addresses, seconds, rate) {
 				const blocks = [addresses].flat().map(Number);
 				const program = this.holder.exports;
-				const fill = exportedOr(program, caller);
+				const filler = exportedOr(program, caller);
+				const fill = filler.length === 2 ? time => filler(BigInt(blocks[0]), time) : filler;
 				return playedSignal(this.holder, seconds, Number(rate), blocks.length, linearDoubles(program, blocks[0]).length, first => {
 					fill(first / Number(rate));
 					return blocks.map(address => linearDoubles(program, address));

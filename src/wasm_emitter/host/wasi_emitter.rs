@@ -11,7 +11,7 @@ use crate::wasm_emitter::layout::WORD;
 
 pub(crate) const WASI_START: &str = "_start";
 
-/// The WASI output words besides print: each gives an Int (analyzer)
+/// The WASI output words besides print: like print each gives nothing (prelude lines, decision output-words-nothing)
 pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
 pub(crate) const OUTPUT_CALLS: [&str; 5] =
 	["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
@@ -88,6 +88,9 @@ impl WasmGcEmitter {
 			Node::Text(text) => self.emit_print_literal(func, text),
 			Node::Char(character) => self.emit_print_literal(func, &character.to_string()),
 			// infer_type calls a literal ø an Int, as constructors' field placeholders need (card print-error)
+			Node::Empty if value.is_empty_list_literal() => {
+				self.emit_print_literal(func, crate::node::EMPTY_LIST_LITERAL)
+			}
 			Node::Empty => self.emit_print_literal(func, &Node::Empty.serialize()),
 			_ => {
 				self.emit_written_value(func, value, PRINT_VALUE, "print");
@@ -98,7 +101,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The print of the program's value an executable ends with (CompileMode::prints_result): as emit_print, but a value
-	/// only known at run time shows nothing when it is ø, as `warp <file>` shows nothing then
+	/// only known at run time shows nothing when it is ø (`[]` shows), as `warp <file>` shows nothing then
 	pub(in crate::wasm_emitter) fn emit_result_print(&mut self, func: &mut Function, value: &Node) {
 		if !matches!(self.get_type(value), Kind::List | Kind::Key | Kind::Symbol | Kind::Empty | Kind::Data) {
 			return self.emit_print(func, value);
@@ -106,14 +109,9 @@ impl WasmGcEmitter {
 		let held = self.emit_dynamic_text(func, value);
 		let node_type = self.type_manager.node_type;
 		let consumes_text = self.type_manager.function_type(vec![ValType::Ref(self.node_ref(false))], vec![]);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 },
-			I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq,
-			I::If(BlockType::FunctionType(consumes_text)),
-				I::Drop,
-			I::Else,
-		]);
+		Self::emit_list(func, &[I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
+		Self::emit_is_nothing(func);
+		Self::emit_list(func, &[I::If(BlockType::FunctionType(consumes_text)), I::Drop, I::Else]);
 		self.emit_call(func, PRINT_VALUE);
 		Self::emit_list(func, &[I::Drop, I::End]);
 		self.emit_call(func, "new_empty");

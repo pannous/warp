@@ -313,3 +313,18 @@ pub fn length_operator(var: &str, used_method: bool) {
 		_ => {}
 	}
 }
+
+/// `xs += [3]` of an item evidently no list appends it as `xs += 3` does (decision list-append-plus); an item of unknown
+/// kind keeps its brackets, as a list item would be concatenated without them
+pub fn appended_item(target: &str, item: &Node) {
+	let item_text = match item.drop_meta() {
+		Node::Char(character) => format!("{0}{character}{0}", text_quote()),
+		Node::Number(_) | Node::Text(_) | Node::True | Node::False => operand_text(item),
+		_ => return,
+	};
+	hint(
+		&format!("{target} += [{item_text}]"),
+		&format!("{target} += {item_text}"),
+		"an item is appended without brackets",
+	);
+}

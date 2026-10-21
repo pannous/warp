@@ -200,24 +200,6 @@ impl WasmGcEmitter {
 				vec![ValType::I64, ValType::F64],
 				|s, f| {
 					let (kind, power) = (2, 3);
-					// a time or duration: calendar arithmetic (time_arithmetic.rs)
-					if let Some(operator) = super::super::super::time::time_arithmetic::TIME_OPERATORS
-						.iter()
-						.position(|known| *known == op)
-						.filter(|_| s.uses_times())
-					{
-						for operand in [0, 1] {
-							s.emit_field(f, operand, 0);
-							Self::emit_kind_test(f, Kind::Time as i64, I::I64Eq);
-						}
-						#[rustfmt::skip]
-						Self::emit_list(f, &[
-							I::I32Or, I::If(BlockType::Empty),
-								I::LocalGet(0), I::LocalGet(1), I::I32Const(operator as i32),
-						]);
-						s.call(f, super::super::super::time::time_arithmetic::TIME_ARITHMETIC);
-						Self::emit_list(f, &[I::Return, I::End]);
-					}
 					// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 					if name == NODE_ADD {
 						// an Error operand is the sum, as text_concat gives it: errors propagate, and are never joined into a
@@ -243,6 +225,26 @@ impl WasmGcEmitter {
 							I::I32And, I::If(BlockType::Empty),
 								I::LocalGet(0), I::LocalGet(1),
 						]);
+						s.call(f, "list_concat");
+						Self::emit_list(f, &[I::Return, I::End]);
+						let kind_is = |f: &mut Function, operand: u32, kind: Kind| {
+							s.emit_field(f, operand, 0);
+							Self::emit_kind_test(f, kind as i64, I::I64Eq);
+						};
+						// ø + text fails as ø + 1 does (decision empty-plus-text); `[]` + text appends it
+						s.emit_field(f, 0, 0);
+						Self::emit_is_nothing(f);
+						kind_is(f, 1, Kind::Text);
+						kind_is(f, 1, Kind::Codepoint);
+						Self::emit_list(f, &[I::I32Or, I::I32And]);
+						s.emit_fail_if(f, EMPTY_PLUS_TEXT);
+						// a list + an item that is no list: the item appended, `xs + [item]` (decision list-append-plus)
+						kind_is(f, 0, Kind::List);
+						kind_is(f, 0, Kind::Block);
+						s.emit_field(f, 0, 0);
+						Self::emit_is_empty_list(f);
+						Self::emit_list(f, &[I::I32Or, I::I32Or, I::If(BlockType::Empty), I::LocalGet(0)]);
+						s.emit_one_item_list(f, 1);
 						s.call(f, "list_concat");
 						Self::emit_list(f, &[I::Return, I::End]);
 						// two texts (or characters): their concatenation, `await a + await b` of two text tasks
@@ -285,6 +287,25 @@ impl WasmGcEmitter {
 						);
 						s.emit_empty_text(f);
 						s.call(f, super::super::super::reflection::library_ops::LIST_JOIN);
+						Self::emit_list(f, &[I::Return, I::End]);
+					}
+					// a time or duration: calendar arithmetic (time_arithmetic.rs), after node_add's joins: a date + a text is
+					// text, a list + a date appends it
+					if let Some(operator) = super::super::super::time::time_arithmetic::TIME_OPERATORS
+						.iter()
+						.position(|known| *known == op)
+						.filter(|_| s.uses_times())
+					{
+						for operand in [0, 1] {
+							s.emit_field(f, operand, 0);
+							Self::emit_kind_test(f, Kind::Time as i64, I::I64Eq);
+						}
+						#[rustfmt::skip]
+						Self::emit_list(f, &[
+							I::I32Or, I::If(BlockType::Empty),
+								I::LocalGet(0), I::LocalGet(1), I::I32Const(operator as i32),
+						]);
+						s.call(f, super::super::super::time::time_arithmetic::TIME_ARITHMETIC);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
 					// an Error value fails with its own message (`x!` of ø is "unwrapped ø"), never as "not a number"
@@ -604,9 +625,12 @@ impl WasmGcEmitter {
 				}
 				true
 			}
+			// a list (a `[]` local too) plus a value of run-time kind is node_add's, decided at run time
+			Kind::List if crate::analyzer::node_arithmetic(Kind::List, op, self.get_type(right)).is_some() => false,
 			Kind::List => {
+				let item_list = self.appended_item_list(left, right);
 				self.emit_node_instructions(func, left);
-				self.emit_node_instructions(func, right);
+				self.emit_node_instructions(func, item_list.as_ref().unwrap_or(right));
 				self.emit_call(func, "list_concat");
 				true
 			}
@@ -725,7 +749,13 @@ impl WasmGcEmitter {
 		op: &crate::operators::Op,
 		right: &Node,
 	) -> Kind {
-		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right, &self.scope)
+		crate::analyzer::arithmetic_kind_of_operands(
+			self.get_type(left),
+			op,
+			self.get_type(right),
+			(left, right),
+			&self.scope,
+		)
 	}
 
 	/// Arithmetic on a value whose kind only the run time knows (`x*x` of a parameter held as a Node): maybe a float

@@ -63,7 +63,15 @@ function getSync(url, timeout, binary = false) {
 	if (binary) request.overrideMimeType("text/plain; charset=x-user-defined"); // bytes as they are
 	request.send();
 	if (request.status >= 400 || request.status === 0) throw new Error(request.status ? `HTTP status ${request.status}` : "network error (blocked by CORS?)");
-	return binary ? Uint8Array.from(request.responseText, character => character.charCodeAt(0) & 0xff) : request.responseText;
+	return binary ? bytesOfText(request.responseText) : request.responseText;
+}
+
+// the bytes of an x-user-defined text, one per character; by index: Uint8Array.from(text, …) first lists every character
+// as a string of its own (a 10 MB file, uniscript's entities.idx, cost the page 500 MB; card our-playground)
+function bytesOfText(text) {
+	const bytes = new Uint8Array(text.length);
+	for (let index = 0; index < text.length; index++) bytes[index] = text.charCodeAt(index) & 0xff;
+	return bytes;
 }
 
 // a synchronous POST of a text with its headers (stdlib net's post, src/extensions/utils.rs post_within), its answer's
@@ -471,6 +479,9 @@ addHostPart({
 			which: () => null,
 			open: () => { throw new Error(NO_PROCESSES); },
 			exec: () => { throw new Error(NO_PROCESSES); },
+			// a page keeps no values across runs (src/modules/std_adapters.rs kept_value): each run computes them
+			kept: () => null,
+			keep: (name, value) => value,
 		},
 		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/data/stored_values.rs, std_io): the page's values
 		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the

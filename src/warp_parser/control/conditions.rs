@@ -71,17 +71,10 @@ impl WarpParser {
 		}
 		let is_length = "is".len();
 		let after_is = self.matches_keyword("is");
-		let word_start = if after_is {
-			is_length + (is_length..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()
-		} else {
-			0
-		};
-		let word = TEST_WORDS.iter().find(|word| {
-			word.chars().enumerate().all(|(index, letter)| self.peek_char(word_start + index) == letter)
-				&& !is_identifier_char(self.peek_char(word_start + word.len()))
-		})?;
+		let word_start = if after_is { is_length + self.blanks_at(is_length) } else { 0 };
+		let word = TEST_WORDS.iter().find(|word| self.keyword_at(word_start, word))?;
 		let end = word_start + word.len();
-		let blanks = (end..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_at(end);
 		let next = self.peek_char(end + blanks);
 		let word_ends_condition = !self.operand_follows(end)
 			|| matches!(next, '{' | ':')

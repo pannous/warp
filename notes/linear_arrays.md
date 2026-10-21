@@ -19,7 +19,8 @@ An explicit array type for linear data, discouraged by a hint: the compiler pick
   plain `xs = float[n]` becomes linear and the map runs as the f64x2 kernel or one loop into a new block. A lambda
   calling a user function keeps the GC list. probes/perf/auto_linear_map.warp (20 maps of 10^6 in a loop): 0.08 s.
 - Reads like any list: `xs#i`, `xs#i = v`, `xs#i += v`, `#xs`, `count xs`, `xs.count`, `for x in xs {…}`, passing
-  it to a function (by reference, as shared arrays); used as a whole value (printed, returned) it is the list of its
+  it to a function (by reference, as shared arrays; a parameter declared a list of its items, `block: floats`,
+  `[float]`, `list of float` or `list`, takes it too, one of other items is refused); used as a whole value (printed, returned) it is the list of its
   cells. Outside 1..n: `index out of range`. A `go` cannot take one (an error says to use `shared`): another task has
   another memory.
 - Int cells are i64 and wrap on overflow (no big integers in a cell), unlike the automatic typed arrays.

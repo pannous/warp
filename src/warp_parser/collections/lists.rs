@@ -338,7 +338,11 @@ impl WarpParser {
 
 	pub(crate) fn group_by_separators(&self, items_with_seps: Vec<(Node, Separator)>, bracket: Bracket) -> Node {
 		if items_with_seps.is_empty() {
-			return if bracket == Bracket::Curly { Node::List(Vec::new(), bracket, Separator::None) } else { Empty };
+			return match bracket {
+				Bracket::Curly => Node::List(Vec::new(), bracket, Separator::None),
+				Bracket::Square => Node::empty_list(),
+				_ => Empty,
+			};
 			// an empty block is a value
 		}
 
@@ -348,7 +352,7 @@ impl WarpParser {
 		}
 		// the loosest separator splits first, the groups between split by the tighter ones (None ends the list)
 		let Some(loosest) =
-			items_with_seps.iter().map(|(_, sep)| sep.precedence()).filter(|&precedence| precedence < 255).max()
+			items_with_seps.iter().filter(|(_, sep)| *sep != Separator::None).map(|(_, sep)| sep.precedence()).max()
 		else {
 			return grouped_list(
 				items_with_seps.into_iter().map(|(node, _)| node).collect(),

@@ -4,7 +4,7 @@
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
 //! argument stays an error.
 
-use super::nodes::{any_part, assign, children_rewritten, key, parameter_word, word_headed, Counter};
+use super::nodes::{any_part, assign, children_rewritten, interface_word, key, parameter_word, word_headed, Counter};
 use crate::errors::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -33,8 +33,10 @@ impl Function {
 		Function { parameters, defaults, extras: vec![], overloads: vec![] }
 	}
 
-	fn has_parameter(&self, name: &String) -> bool {
-		self.parameters.contains(name) || self.overloads.iter().any(|overload| overload.parameters.contains(name))
+	/// Also a head's own `mix·local = 0.5`, which reads like a call naming its parameter as renamed apart
+	fn has_parameter(&self, name: &str) -> bool {
+		let name = crate::lowering::shadowing_bindings::written_name(name).to_string();
+		self.parameters.contains(&name) || self.overloads.iter().any(|overload| overload.parameters.contains(&name))
 	}
 
 	/// Whether `f(arguments)` fills these parameters: every name is one, the positional arguments fill the rest
@@ -88,6 +90,12 @@ fn optional(name: Node) -> Node {
 	assign(name, Node::Empty)
 }
 
+/// `t: text?`, `maybe text t`: `t: text? = ø`, the type kept for what the body gives t to (`g(t[1..])` slices a text)
+fn optional_typed(name: Node, type_word: &str) -> Node {
+	let optional_type = format!("{}{OPTIONAL_MARK}", type_word.trim_end_matches(OPTIONAL_MARK));
+	optional(key(name, Op::Colon, symbol(&optional_type)))
+}
+
 fn is_maybe(node: &Node) -> bool {
 	node.is_symbol(MAYBE_WORD)
 }
@@ -105,19 +113,26 @@ fn maybe_parameters(parameters: Vec<Node>) -> Vec<Node> {
 			}
 			_ if is_maybe(&item) => {
 				let mut name = items.next();
+				let mut type_word = None;
 				if name.as_ref().is_some_and(|word| crate::analyzer::type_word_kind(&word.drop_meta().name()).is_some())
 					&& items.peek().is_some()
 				{
+					type_word = name.map(|word| word.drop_meta().name());
 					name = items.next(); // `maybe int x`
 				}
-				match name {
-					Some(name) => forms.push(optional(Node::Symbol(parameter_word(&name)))),
-					None => forms.push(item),
+				let parameter = name.map(|name| Node::Symbol(parameter_word(&name)));
+				match (parameter, type_word) {
+					(Some(parameter), Some(type_word)) => forms.push(optional_typed(parameter, &type_word)),
+					(Some(parameter), None) => forms.push(optional(parameter)),
+					(None, _) => forms.push(item),
 				}
 			}
 			Node::Key(name, Op::Colon, _) if is_maybe_annotated(&item) => {
-				items.next_if(|word| matches!(word.drop_meta(), Node::Symbol(_))); // the type after `maybe`
-				forms.push(optional(name.as_ref().clone()));
+				// the type after `maybe`
+				match items.next_if(|word| matches!(word.drop_meta(), Node::Symbol(_))) {
+					Some(type_word) => forms.push(optional_typed(name.as_ref().clone(), &type_word.drop_meta().name())),
+					None => forms.push(optional(name.as_ref().clone())),
+				}
 			}
 			_ => forms.push(item),
 		}
@@ -142,7 +157,7 @@ fn literal_default(parameter: Node) -> Node {
 		}
 		// the value may be ø or of the type: it is held boxed, as any value
 		Node::Key(name, Op::Colon, type_name) if type_name.drop_meta().name().ends_with(OPTIONAL_MARK) => {
-			optional(*name)
+			optional_typed(*name, &type_name.drop_meta().name())
 		}
 		Node::Symbol(name) if name.len() > 1 && name.ends_with(OPTIONAL_MARK) => {
 			optional(symbol(name.trim_end_matches(OPTIONAL_MARK)))
@@ -220,7 +235,7 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 		if let Node::Key(head, Op::Define | Op::Assign, _) = part {
 			match untyped_head(head).drop_meta() {
 				Node::List(items, Bracket::Round, _) if word_headed(items).is_some() => {
-					let parameters = items[1..].iter().map(parameter_word).collect();
+					let parameters = items[1..].iter().map(interface_word).collect();
 					let defaults = items[1..].iter().map(parameter_default).collect();
 					let function = Function::new(parameters, defaults);
 					match functions.get_mut(&items[0].name()) {

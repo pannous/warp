@@ -1148,7 +1148,8 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 			}
 		});
 	}
-	let mut add_parameters = |head: &Node| match head.drop_meta() {
+	// `[op, l] if op == "=" => …`: a guarded arm's pattern binds its names as the unguarded one does (card pattern-variable)
+	let mut add_parameters = |head: &Node| match crate::lowering::switch::split_guard(head).0.drop_meta() {
 		Node::List(items, _, _) => items.iter().for_each(|item| match item.drop_meta() {
 			Node::Key(name, Op::Colon, _) => add_unit(name),
 			_ => add_unit(item),

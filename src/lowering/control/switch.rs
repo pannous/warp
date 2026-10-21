@@ -26,7 +26,14 @@ pub(crate) const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD
 const SOFT_DEFAULT_KEYS: [&str; 1] = ["rest"];
 /// In a pattern: any item, bound to no name
 pub(crate) const WILDCARD: &str = "_";
-const ALTERNATIVES_BIND_NO_NAMES: &str = "alternatives bind no names: write one case per pattern, or `_` for an item";
+const ALTERNATIVES_BIND_NO_NAMES: &str =
+	"alternatives bind no names unless each binds the same ones: write one case per pattern, or `_` for an item";
+/// Literal arms in a row from which they are a decision tree: fewer are tested as fast one after another
+const DECISION_TREE_ARMS: usize = 8;
+/// The literals a leaf of a decision tree compares one after another
+const LEAF_LITERALS: usize = 2;
+/// The number of the literal arm a decision tree found, 0 for none
+const ARM_WORD: &str = "arm";
 const KEY_SPEC: &str = "key";
 const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
@@ -142,14 +149,115 @@ impl Lowering<'_> {
 			Some(default) => default.body,
 			None => no_case(subject, &subject_value),
 		};
-		let chain = cases.into_iter().rev().fold(miss, |otherwise, case| {
-			let (matches, body) = case_test(&subject_value, case, &self.names);
-			let then = if_then(matches, body);
-			key(then, Op::Else, otherwise)
-		});
+		let arms = cases.into_iter().map(|case| case_test(&subject_value, case, &self.names)).collect();
+		let chain = chained(&subject_value, arms, miss, &self.names);
 		let bind = assign(subject_value, subject.clone());
 		Some(Node::List(vec![bind, chain], Bracket::Round, Separator::Semicolon))
 	}
+}
+
+/// The arms as an if/else chain, tested in order. A run of arms comparing the subject with literals of one kind (`"+":
+/// …`, `'+': …`, `3: …`) is a decision tree instead, so a match of 70 operator spellings compares about 7 times, not 35
+/// (card pattern-dispatch-speed)
+fn chained(subject: &Node, mut arms: Vec<(Node, Node)>, miss: Node, names: &Names) -> Node {
+	let mut otherwise = miss;
+	while let Some((test, _)) = arms.last() {
+		let kind = literal_kind(subject, test);
+		let run = match kind {
+			Some(_) => arms.iter().rev().take_while(|(test, _)| literal_kind(subject, test) == kind).count(),
+			None => 0,
+		};
+		if run >= DECISION_TREE_ARMS {
+			let literal_arms = arms.split_off(arms.len() - run);
+			otherwise = decision_tree(subject, literal_arms, otherwise, names);
+			continue;
+		}
+		let (test, body) = arms.pop().expect("an arm");
+		otherwise = key(if_then(test, body), Op::Else, otherwise);
+	}
+	otherwise
+}
+
+fn literal_kind(subject: &Node, test: &Node) -> Option<&'static str> {
+	literal_compared(subject, test).map(|(kind, _)| kind)
+}
+
+/// The type word and literal of a test `subject == "+"` (a text or codepoint, `text`) or `subject == 3` (`number`)
+fn literal_compared<'a>(subject: &Node, test: &'a Node) -> Option<(&'static str, &'a Node)> {
+	let Node::Key(left, Op::Eq, literal) = test.drop_meta() else { return None };
+	if left.drop_meta() != subject {
+		return None;
+	}
+	match literal.drop_meta() {
+		Node::Text(_) | Node::Char(_) => Some((crate::words::TEXT_WORD, literal)),
+		Node::Number(crate::Number::Int(_)) => Some((crate::words::NUMBER_WORD, literal)),
+		_ => None,
+	}
+}
+
+/// The literal arms as two binary searches behind a test of the subject's type (a symbol is no text, `x < "+"` of a
+/// number no order): one on the literals' order giving the number of the arm matched, 0 for none, then one on that
+/// number giving its body, so each body and the rest stand once; a literal tested twice keeps its first arm, as the
+/// chain did
+fn decision_tree(subject: &Node, arms: Vec<(Node, Node)>, rest: Node, names: &Names) -> Node {
+	let (kind, _) = literal_compared(subject, &arms[0].0).expect("literal arms");
+	let mut literals: Vec<(Node, Node)> = vec![];
+	for (test, body) in arms {
+		let (_, literal) = literal_compared(subject, &test).expect("literal arms");
+		if !literals.iter().any(|(known, _)| known == literal) {
+			literals.push((literal.clone(), body));
+		}
+	}
+	literals.sort_by(|(a, _), (b, _)| match (a.drop_meta(), b.drop_meta()) {
+		(Node::Number(crate::Number::Int(a)), Node::Number(crate::Number::Int(b))) => a.cmp(b),
+		(a, b) => literal_text(a).cmp(&literal_text(b)),
+	});
+	let arm = Node::Symbol(format!("{ARM_WORD}{TEMPORARY_SEPARATOR}{}", fresh_number()));
+	let numbered: Vec<(Node, Node)> = literals
+		.iter()
+		.enumerate()
+		.map(|(index, (literal, _))| (literal.clone(), Node::int(index as i64 + 1)))
+		.collect();
+	let guard = type_test(subject, &Node::symbol(kind), names).expect("a builtin type word");
+	let found = key(if_then(guard, searched(subject, &numbered)), Op::Else, Node::int(0));
+	let bodies: Vec<Node> = literals.into_iter().map(|(_, body)| body).collect();
+	let chosen = key(if_then(key(arm.clone(), Op::Eq, Node::int(0)), rest), Op::Else, body_of(&arm, &bodies, 1));
+	semicolon_sequence(vec![assign(arm, found), chosen])
+}
+
+/// A text literal's text, a codepoint's as a text of one: the order texts compare in at run time
+fn literal_text(literal: &Node) -> String {
+	match literal {
+		Node::Char(char) => char.to_string(),
+		other => other.name(),
+	}
+}
+
+/// `if subject < middle then <search below> else <search from middle>`, down to leaves comparing a literal or two: the
+/// number of the literal equal to the subject, else 0
+fn searched(subject: &Node, literals: &[(Node, Node)]) -> Node {
+	if literals.len() <= LEAF_LITERALS {
+		return literals.iter().rev().fold(Node::int(0), |otherwise, (literal, number)| {
+			key(if_then(key(subject.clone(), Op::Eq, literal.clone()), number.clone()), Op::Else, otherwise)
+		});
+	}
+	let (below, from_middle) = literals.split_at(literals.len() / 2);
+	let lower = key(subject.clone(), Op::Lt, from_middle[0].0.clone());
+	key(if_then(lower, searched(subject, below)), Op::Else, searched(subject, from_middle))
+}
+
+/// The body of the arm numbered `arm`, the bodies numbered from `first` on, by a binary search on the number
+fn body_of(arm: &Node, bodies: &[Node], first: usize) -> Node {
+	if let [body] = bodies {
+		return body.clone();
+	}
+	let middle = bodies.len() / 2;
+	let lower = key(arm.clone(), Op::Lt, Node::int((first + middle) as i64));
+	key(
+		if_then(lower, body_of(arm, &bodies[..middle], first)),
+		Op::Else,
+		body_of(arm, &bodies[middle..], first + middle),
+	)
 }
 
 /// The word value in an arm as the subject; a field `x.value` and a key `{value: 1}` keep it
@@ -471,14 +579,30 @@ fn condition(path: &Node, pattern: &Node, names: &Names) -> Option<Node> {
 	if alternatives.len() < 2 {
 		return None;
 	}
-	let tests = alternatives.iter().map(|alternative| {
-		let matched = Matched::of(alternative, path.clone(), names);
-		match matched.bindings.is_empty() {
-			true => joined(matched.tests, Op::And),
-			false => error(ALTERNATIVES_BIND_NO_NAMES),
-		}
+	let matches = alternatives.iter().map(|alternative| {
+		let Matched { tests, bindings, .. } = Matched::of(alternative, path.clone(), names);
+		(tests, bindings)
 	});
-	Some(joined(tests.collect(), Op::Or))
+	Some(alternatives_test(matches).unwrap_or_else(error))
+}
+
+/// Alternatives `data($k: int + $x) | data($x + $k: int)` as one test: each binds the same names, assigned as its own
+/// test holds, so the body reads the names of the alternative that matched (card binding-alternatives)
+fn alternatives_test(alternatives: impl Iterator<Item = (Vec<Node>, Vec<Node>)>) -> Result<Node, &'static str> {
+	let mut bound_names = None;
+	let mut matches = vec![];
+	for (mut tests, bindings) in alternatives {
+		let mut names: Vec<String> = bindings.iter().filter_map(bound).map(|(name, _)| name.name()).collect();
+		names.sort();
+		if *bound_names.get_or_insert_with(|| names.clone()) != names {
+			return Err(ALTERNATIVES_BIND_NO_NAMES);
+		}
+		if !bindings.is_empty() {
+			tests.push(semicolon_sequence([bindings, vec![Node::True]].concat()));
+		}
+		matches.push(joined(tests, Op::And));
+	}
+	Ok(joined(matches, Op::Or))
 }
 
 /// `data($a + 0)`: quoted code holding a hole
@@ -619,15 +743,8 @@ pub(crate) fn pattern_test(
 		let (tests, bindings) = alternative_tests(subject, single, guarded, names);
 		return Ok((joined(tests, Op::And), bindings));
 	}
-	let mut matches = vec![];
-	for alternative in &alternatives {
-		let (tests, bindings) = alternative_tests(subject, alternative, guarded, names);
-		if !bindings.is_empty() {
-			return Err(ALTERNATIVES_BIND_NO_NAMES);
-		}
-		matches.push(joined(tests, Op::And));
-	}
-	Ok((joined(matches, Op::Or), vec![]))
+	let matches = alternatives.iter().map(|alternative| alternative_tests(subject, alternative, guarded, names));
+	Ok((alternatives_test(matches)?, vec![]))
 }
 
 /// `xs is [_, 2]` and `if xs is [a, b] then b` (card is-pattern): a list or tuple holding `_`, a rest or a name defined
@@ -711,7 +828,7 @@ fn joined(tests: Vec<Node>, op: Op) -> Node {
 }
 
 /// `n if n < 0` (parsed as `if n < 0 then n`): the pattern n and the guard `n < 0`; any other key has no guard
-fn split_guard(case_key: &Node) -> (Node, Option<Node>) {
+pub(crate) fn split_guard(case_key: &Node) -> (Node, Option<Node>) {
 	match case_key.drop_meta() {
 		Node::Key(condition, Op::Then, pattern) => match condition.drop_meta() {
 			Node::Key(empty, Op::If, guard) if empty.is_empty_node() => {

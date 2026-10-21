@@ -7,8 +7,7 @@
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/reflection/witness.rs).
 
 use super::nodes::{
-	assign, block, call, called_name, children_rewritten, grouped_parameters, if_then, if_then_else, key,
-	statement_list, word_headed,
+	assign, block, call, called_name, children_rewritten, grouped_parameters, if_then, key, statement_list, word_headed,
 };
 use crate::analyzer::{call_name, collect_all_types};
 use crate::errors::diagnostic::Diagnostic;
@@ -671,6 +670,12 @@ pub fn untyped_parameters(head: &Node) -> Vec<String> {
 		_ => None,
 	};
 	parameters.iter().filter_map(untyped).collect()
+}
+
+/// Every parameter a definition head declares, typed or not: `p` and `n` of `f(p: any, n)`
+pub fn parameter_names(head: &Node) -> Vec<String> {
+	let parameters = definition_head(head).map(|items| &items[1..]).unwrap_or_default();
+	parameters.iter().filter_map(crate::lowering::nodes::parameter_name).collect()
 }
 
 /// The parameters a definition head declares of this type: `c` of `live_loop(c: function, n)`

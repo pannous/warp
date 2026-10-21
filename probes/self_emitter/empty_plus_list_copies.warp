@@ -1,0 +1,7 @@
+// `out = []; out += part` copies part: growing out leaves the list it came from untouched (emit lane: node_add of ø and a list)
+ys = [[1, 1], [2, 2]]
+out = []
+out += ys#1
+out += [5]
+print ys   // [[1 1] [2 2]]
+print out  // [1 1 5]

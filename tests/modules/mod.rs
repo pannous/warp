@@ -41,6 +41,10 @@ mod test_package_tools;
 mod test_packages;
 mod test_prelude_own_names; // card lib-math
 mod test_prelude_shadowing; // card program-own
+mod test_program_aliases; // card module-alias
+#[cfg(feature = "native")]
+mod test_program_arguments; // card wasm-args
+mod test_program_variable_beside_module; // card program-var-leaks
 mod test_replaced_module_function; // card use-sound-def
 mod test_rewrites; // card compiler-modules
 mod test_runtime_word_lines; // card retire-library-words
@@ -61,6 +65,8 @@ mod test_std_hash;
 mod test_std_implicit_use; // card std-implicit
 mod test_std_import_forms; // cards import-square include-math
 mod test_std_json;
+#[cfg(feature = "native")] // two runs of the warp command sharing a module cache
+mod test_std_kept; // card pure-warm-start
 mod test_std_list;
 mod test_std_map;
 mod test_std_math_text;
@@ -83,11 +89,15 @@ mod test_std_uncertain; // card uncertain-warp
 mod test_std_words; // card std-word
 #[cfg(feature = "native")] // files beside the program: not in the browser build
 mod test_two_used_files;
+#[cfg(feature = "native")] // files beside the program: not in the browser build
+mod test_use_cycle; // card rust-lane-use
 mod test_use_modules;
 mod test_use_several; // card std-use
 #[cfg(feature = "native")] // files beside the program: not in the browser build
 mod test_used_enums; // card rust-lane
 mod test_used_module_bare_words; // card one-dispatch
+#[cfg(feature = "native")] // files beside the program: not in the browser build
+mod test_used_types; // card types-back
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
 mod test_wasm_modules; // card read-chron // card map-key // card two-used-files

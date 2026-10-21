@@ -55,7 +55,7 @@ impl WarpParser {
 
 	/// A name follows after at least one blank: `nonlocal y`, not `nonlocal = 3` or `nonlocal(…)`
 	pub(crate) fn name_after_blanks(&self) -> bool {
-		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		let next = self.peek_char(blanks);
 		blanks > 0 && (next.is_alphabetic() || next == '_')
 	}
@@ -85,7 +85,7 @@ impl WarpParser {
 
 	/// `, b` after a declared name: another name, not the next item of a list
 	pub(crate) fn name_after_comma(&self) -> bool {
-		let blanks = (1..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_at(1);
 		let next = self.peek_char(1 + blanks);
 		next.is_alphabetic() || next == '_'
 	}
@@ -217,7 +217,7 @@ impl WarpParser {
 
 	/// `= …` or `:= …` after blanks, not the comparison `==` nor the arrow `=>`
 	fn assignment_follows(&self) -> bool {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		let defines = self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) == '=';
 		let assigns = self.peek_char(blanks) == '=' && !matches!(self.peek_char(blanks + 1), '=' | '>'); // `None => 0` is a match arm
 		defines || assigns

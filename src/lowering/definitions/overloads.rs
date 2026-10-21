@@ -11,6 +11,7 @@ use super::nodes::{
 };
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
+use crate::lowering::function_types::{definition_counts, times_defined};
 use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -24,6 +25,13 @@ const TOPIC: &str = "return-type";
 const COMPANION_SUFFIX: &str = "_as";
 /// How well a value fits `any`: worse than every typed fit, so the untyped variant is the fallback
 const ANY_FIT: u32 = 100;
+/// How well a list of known elements fits a plain `list`: worse than a list of its elements, even widened
+const LIST_FIT: u32 = 2;
+/// `function_of_samples_float`: the overload type of a parameter typed as a function, `fill: (samples, float) -> any`
+const FUNCTION_TYPE_PREFIX: &str = "function_of_";
+/// The attribute in which a pass that holds a parameter as another type keeps the type written: `block: samples`, held
+/// as the Int naming its block (shared_arrays.rs), still fits a function type of samples
+pub(crate) const WRITTEN_TYPE: &str = "written_type";
 
 /// The function f whose companion f_as is `name`
 pub fn companion_of(name: &str) -> Option<&str> {
@@ -377,6 +385,7 @@ impl Lowering {
 fn lower_parameter_overloads(node: Node) -> Node {
 	let mut signatures: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
 	collect_signatures(&node, &mut signatures);
+	let classes = crate::modules::needed_definitions::class_names(&node);
 	let overloaded: HashMap<String, Vec<Vec<String>>> = signatures
 		.into_iter()
 		.filter(|(_, variants)| variants.len() > 1)
@@ -387,8 +396,10 @@ fn lower_parameter_overloads(node: Node) -> Node {
 				.collect();
 			let typed = variants.iter().flatten().any(|type_name| type_name != ANY_TYPE);
 			let distinct = variants.iter().enumerate().all(|(index, types)| !variants[..index].contains(types));
-			// parameters of declared types dispatch through traits (traits.rs)
-			let builtin = variants.iter().flatten().all(|type_name| is_overload_type(type_name));
+			// parameters of declared types dispatch through traits (traits.rs), a class named like a built-in type too
+			// (`Function`)
+			let builtin =
+				variants.iter().flatten().all(|type_name| is_overload_type(type_name) && !classes.contains(type_name));
 			(distinct && builtin && typed).then_some((name, variants))
 		})
 		.collect();
@@ -397,9 +408,74 @@ fn lower_parameter_overloads(node: Node) -> Node {
 	}
 	let variables =
 		crate::analyzer::agreeing_kinds(&node, HashMap::new(), |_, value| Some(argument_kind(value, &HashMap::new())));
-	let mut renaming =
-		ParameterOverloads { overloaded, variables, seen: HashMap::new(), declared: vec![HashMap::new()] };
+	let classes = super::nodes::declared_class_names(&node);
+	let list_elements = list_element_variables(&node, &classes, &variables);
+	let (function_types, functions) = function_signatures(&node);
+	let mut renaming = ParameterOverloads {
+		overloaded,
+		variables,
+		classes,
+		list_elements,
+		function_types,
+		functions,
+		seen: HashMap::new(),
+		declared: vec![HashMap::new()],
+	};
 	renaming.rewrite(node)
+}
+
+/// Variables assigned lists of one element type, `notes = [note{…}, note{…}]`: that type, None where the assignments
+/// disagree or the items do; by name across the program, so an `xs` of other items in another function leaves both to
+/// the run-time test
+fn list_element_variables(
+	node: &Node,
+	classes: &HashSet<String>,
+	variables: &HashMap<String, Option<Kind>>,
+) -> HashMap<String, Option<String>> {
+	let mut elements: HashMap<String, Option<String>> = HashMap::new();
+	node.visit(&mut |node| {
+		let Node::Key(target, Op::Assign | Op::Define, value) = node else {
+			return;
+		};
+		let Node::Symbol(name) = target.drop_meta() else {
+			return;
+		};
+		let element = literal_element_type(value, classes, variables);
+		elements
+			.entry(name.clone())
+			.and_modify(|known| {
+				if *known != element {
+					*known = None
+				}
+			})
+			.or_insert(element);
+	});
+	elements
+}
+
+/// The element type of a list written with its items: `int` of `[1, 2]`, `note` of `[note{…}]`; None for an empty or
+/// mixed list
+fn literal_element_type(
+	value: &Node,
+	classes: &HashSet<String>,
+	variables: &HashMap<String, Option<Kind>>,
+) -> Option<String> {
+	let Node::List(items, Bracket::Square, _) = value.ungrouped() else {
+		return None;
+	};
+	let mut types = items.iter().map(|item| item_type(item, classes, variables));
+	let first = types.next()??;
+	types.all(|item_type| item_type.as_ref() == Some(&first)).then_some(first)
+}
+
+/// `note` of an instance `note{…}` of a declared type, `int` of `1`
+fn item_type(item: &Node, classes: &HashSet<String>, variables: &HashMap<String, Option<Kind>>) -> Option<String> {
+	match item.ungrouped() {
+		Node::Key(class, Op::Colon, fields) if matches!(fields.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			class.symbol_name().filter(|name| classes.contains(*name)).map(str::to_string)
+		}
+		other => argument_kind(other, variables).map(|kind| kind.to_string()),
+	}
 }
 
 /// The argument counts a definition accepts: its parameters without a default are required
@@ -444,6 +520,10 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 		return node;
 	}
 	let called_parameters = called_parameters(&node);
+	let mut parameter_types = HashMap::new();
+	for (name, types) in written_signatures(&node) {
+		parameter_types.entry((name, types.len())).or_insert(types);
+	}
 	let class_fields = crate::lowering::class_methods::class_fields(&node);
 	let classes: Vec<String> = class_fields.keys().cloned().collect();
 	let node = MethodVariants {
@@ -458,7 +538,19 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 	}
 	.rewrite(node);
 	let node = ArityOverloads { arities: arities.clone() }.rewrite(node);
-	passed_variants(node, &arities, &called_parameters)
+	passed_variants(node, &arities, &parameter_types, &called_parameters)
+}
+
+/// How well the arity variant of the parameter types `parameters` fits a place: taking its argument count, and fitting
+/// its declared function type as function_fit judges
+fn place_fit(arity: Arity, parameters: Option<&Vec<Option<String>>>, place: &CalledPlace) -> Option<u32> {
+	if !arity.accepts(place.arguments) {
+		return None;
+	}
+	match (&place.wanted, parameters) {
+		(Some(wanted), Some(parameters)) if parameters.len() == wanted.len() => function_fit(parameters, wanted),
+		_ => Some(0),
+	}
 }
 
 /// `p.label`, `p.label(x)` and `p.label = v` of label overloaded by arity: the variant taking the receiver too, label·1,
@@ -595,49 +687,81 @@ fn receiver_classes(node: &Node) -> HashMap<(String, usize), String> {
 	classes
 }
 
-/// (function, parameter index) → how many arguments the function's body calls that parameter with: 0 of
-/// `twice(h) := h() + h()`, 1 of a parameter typed `f: (float) -> float`; a parameter passed on to such a one takes its
-/// count, `play(tone) := play_signal(tone)` (card program-function), until no more do
-fn called_parameters(node: &Node) -> HashMap<(String, usize), usize> {
-	let mut called = HashMap::new();
-	each_definition(node, &mut |definition| {
+/// How a function's parameter is called: with how many arguments, and the parameter types its declared function type
+/// wants, `[samples, float]` of `fill: (samples, float) -> any`
+#[derive(Clone, PartialEq)]
+struct CalledPlace {
+	arguments: usize,
+	wanted: Option<Vec<String>>,
+}
+
+/// (function, parameter index) → how its definitions call that parameter: 0 arguments of `twice(h) := h() + h()`, 1
+/// of a parameter typed `f: (float) -> float`; a parameter passed on to such a one takes its count, `play(tone) :=
+/// play_signal(tone)` (card program-function), until no more do. Definitions of one name overloaded by type each add
+/// their place: play's first is a tone called with 1 and a fill of (samples, float)
+fn called_parameters(node: &Node) -> HashMap<(String, usize), Vec<CalledPlace>> {
+	// (definition's position, parameter index) of the places found so far, so each overload adds its own
+	let mut known: HashSet<(usize, usize)> = HashSet::new();
+	let mut found = Vec::new();
+	each_numbered_definition(node, &mut |position, definition| {
 		for (index, parameter) in definition.head[1..].iter().enumerate() {
-			let declared = crate::lowering::function_types::declared_arity(parameter);
 			let Some(name) = super::nodes::parameter_name(parameter) else { continue };
-			if let Some(arguments) = declared.or_else(|| called_arity(definition.body, &name)) {
-				called.insert((definition.head[0].name(), index), arguments);
-			}
+			let place = match crate::lowering::function_types::declared_parameter_types(parameter) {
+				Some(wanted) => Some(CalledPlace { arguments: wanted.len(), wanted: Some(wanted) }),
+				None => called_arity(definition.body, &name).map(|arguments| CalledPlace { arguments, wanted: None }),
+			};
+			found.extend(place.map(|place| ((position, index), definition.head[0].name(), place)));
 		}
 	});
+	let mut called = HashMap::new();
 	loop {
-		let known = called.len();
-		each_definition(node, &mut |definition| {
+		if found.is_empty() {
+			return called;
+		}
+		for (place_of_definition, function, place) in found.drain(..) {
+			known.insert(place_of_definition);
+			let places: &mut Vec<CalledPlace> = called.entry((function, place_of_definition.1)).or_default();
+			if !places.contains(&place) {
+				places.push(place);
+			}
+		}
+		each_numbered_definition(node, &mut |position, definition| {
 			for (index, parameter) in definition.head[1..].iter().enumerate() {
-				let function = definition.head[0].name();
 				let Some(name) = super::nodes::parameter_name(parameter) else { continue };
-				if called.contains_key(&(function.clone(), index)) {
+				if known.contains(&(position, index)) {
 					continue;
 				}
 				if let Some(arguments) = passed_on_arity(definition.body, &name, &called) {
-					called.insert((function, index), arguments);
+					let place = CalledPlace { arguments, wanted: None };
+					found.push(((position, index), definition.head[0].name(), place));
 				}
 			}
 		});
-		if called.len() == known {
-			return called;
-		}
 	}
 }
 
-/// How many arguments the function `parameter` is passed to calls it with: 1 of `apply(f, x)` when apply calls f(x)
-fn passed_on_arity(body: &Node, parameter: &str, called: &HashMap<(String, usize), usize>) -> Option<usize> {
+/// Calls `visit` with every definition and its position among them
+fn each_numbered_definition<'a>(node: &'a Node, visit: &mut impl FnMut(usize, &Definition<'a>)) {
+	let mut position = 0;
+	each_definition(node, &mut |definition| {
+		visit(position, definition);
+		position += 1;
+	});
+}
+
+/// How many arguments the function `parameter` is passed to calls it with: 1 of `apply(f, x)` when apply calls f(x);
+/// none when the overloads of that function call it differently
+fn passed_on_arity(body: &Node, parameter: &str, called: &HashMap<(String, usize), Vec<CalledPlace>>) -> Option<usize> {
 	let mut found = None;
 	body.visit(&mut |node| {
 		let Node::List(items, Bracket::Round, _) = node else { return };
 		let Some((callee, arguments)) = items.split_first() else { return };
 		for (index, argument) in arguments.iter().enumerate() {
 			if found.is_none() && argument.drop_meta().is_symbol(parameter) {
-				found = called.get(&(callee.drop_meta().name(), index)).copied();
+				found = called.get(&(callee.drop_meta().name(), index)).and_then(|places| match places.as_slice() {
+					[place] => Some(place.arguments),
+					_ => None,
+				});
 			}
 		}
 	});
@@ -667,18 +791,42 @@ fn called_arity(body: &Node, parameter: &str) -> Option<usize> {
 fn passed_variants(
 	node: Node,
 	arities: &HashMap<String, Vec<Arity>>,
-	called_parameters: &HashMap<(String, usize), usize>,
+	parameter_types: &HashMap<(String, usize), Vec<Option<String>>>,
+	called_parameters: &HashMap<(String, usize), Vec<CalledPlace>>,
 ) -> Node {
-	let node = children_rewritten(node, |child| passed_variants(child, arities, called_parameters));
+	let rewritten = |child: Node| passed_variants(child, arities, parameter_types, called_parameters);
+	// a definition's head names its parameters, no function passed: `play(tone, duration) := …` beside tone·2
+	if let Node::Key(head, op @ (Op::Define | Op::Assign), body) = &node {
+		if definition(&node).is_some() {
+			return Node::Key(head.clone(), *op, Box::new(rewritten(body.as_ref().clone())));
+		}
+	}
+	let node = children_rewritten(node, rewritten);
 	let Node::List(items, Bracket::Round, separator) = node else {
 		return node;
 	};
 	let callee = items.first().map(|head| head.drop_meta().name()).unwrap_or_default();
 	let variant = |index: usize, argument: &Node| {
 		let base = argument.drop_meta().symbol_name()?;
-		let arguments = *called_parameters.get(&(callee.clone(), index))?;
-		let fitting = arities.get(base)?.iter().find(|arity| arity.accepts(arguments))?;
-		Some(Node::Symbol(arity_variant(base, *fitting)))
+		let places = called_parameters.get(&(callee.clone(), index))?;
+		let fits: Vec<(u32, Arity)> = arities
+			.get(base)?
+			.iter()
+			.flat_map(|arity| {
+				let parameters = parameter_types.get(&(base.to_string(), arity.total));
+				places.iter().filter_map(move |place| Some((place_fit(*arity, parameters, place)?, *arity)))
+			})
+			.collect();
+		let best = fits.iter().map(|(fit, _)| *fit).min()?;
+		let mut fitting: Vec<Arity> =
+			fits.into_iter().filter(|(fit, _)| *fit == best).map(|(_, arity)| arity).collect();
+		fitting.dedup();
+		// play(chord, 1s) of chord(t) and chord(root, kind): chord·1 for a tone fits better than chord·2 of untyped
+		// parameters for a fill of (samples, float); arity variants fitting equally well leave the name as it is
+		match fitting.as_slice() {
+			[arity] => Some(Node::Symbol(arity_variant(base, *arity))),
+			_ => None,
+		}
 	};
 	let mut items = items.into_iter();
 	let head = items.next();
@@ -830,8 +978,79 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Vec<Vec<Opti
 		signatures
 			.entry(definition.head[0].name())
 			.or_default()
-			.push(definition.head[1..].iter().map(parameter_type).collect())
+			.push(definition.head[1..].iter().map(overload_parameter_type).collect())
 	});
+}
+
+/// A parameter's type as overloads tell variants apart: `function_of_samples_float` of `fill: (samples, float) -> any`
+fn overload_parameter_type(parameter: &Node) -> Option<String> {
+	match crate::lowering::function_types::declared_parameter_types(parameter) {
+		Some(types) => Some(format!("{FUNCTION_TYPE_PREFIX}{}", types.join("_"))),
+		None => parameter_type(parameter),
+	}
+}
+
+/// The parameter types of each function type, by overload type
+type FunctionTypes = HashMap<String, Vec<String>>;
+/// The (possibly undeclared) parameter types of each function defined once, by name
+type DefinedOnce = HashMap<String, Vec<Option<String>>>;
+
+/// The parameter types of the function types the definitions declare, by overload type, and the parameter types of
+/// the functions defined once, by name
+fn function_signatures(node: &Node) -> (FunctionTypes, DefinedOnce) {
+	let mut function_types = HashMap::new();
+	each_definition(node, &mut |definition| {
+		for parameter in &definition.head[1..] {
+			if let Some(types) = crate::lowering::function_types::declared_parameter_types(parameter) {
+				function_types.insert(overload_parameter_type(parameter).expect("a function type"), types);
+			}
+		}
+	});
+	let signatures = written_signatures(node);
+	let counts = definition_counts(signatures.iter().map(|(name, types)| (name.clone(), types.len())));
+	let functions = signatures.into_iter().filter(|(name, _)| times_defined(&counts, name) == 1);
+	(function_types, functions.collect())
+}
+
+/// Each definition's name and its parameters' types as written: `block: samples` too, which shared_arrays holds as the
+/// Int naming the block
+fn written_signatures(node: &Node) -> Vec<(String, Vec<Option<String>>)> {
+	let mut signatures = vec![];
+	each_definition(node, &mut |definition| {
+		let types = definition.head[1..].iter().map(written_parameter_type).collect();
+		signatures.push((definition.head[0].name(), types));
+	});
+	signatures
+}
+
+fn written_parameter_type(parameter: &Node) -> Option<String> {
+	match parameter.attribute(WRITTEN_TYPE) {
+		Some(written) => Some(written.name()),
+		None => parameter_type(parameter),
+	}
+}
+
+/// `function_of_samples_float`, the overload type of a parameter typed as a function
+fn is_function_type(type_name: &str) -> bool {
+	type_name.starts_with(FUNCTION_TYPE_PREFIX)
+}
+
+/// How well a function of the parameter types `given` fits a function type of the parameter types `wanted`: as many
+/// parameters, each declared the wanted type (an untyped one fits by 1, as it takes the type)
+fn function_fit(given: &[Option<String>], wanted: &[String]) -> Option<u32> {
+	if given.len() != wanted.len() {
+		return None;
+	}
+	given
+		.iter()
+		.zip(wanted)
+		.map(|(given, wanted)| match given.as_deref() {
+			None => Some(1),
+			Some(given) if given == wanted => Some(0),
+			Some(_) if wanted == ANY_TYPE => Some(ANY_FIT),
+			Some(_) => None,
+		})
+		.sum()
 }
 
 /// The kind of an argument as overloads see it: a decimal literal (exact `1.1` too) is a Float here, it fits `x:float`
@@ -869,7 +1088,10 @@ fn overload_kind(type_name: &str) -> Option<Kind> {
 /// A parameter type that takes part in an overload: `any`, a built-in type, a list type or a map, which no argument
 /// kind known at compile time fits, so a map variant is picked at run time
 fn is_overload_type(type_name: &str) -> bool {
-	type_name == ANY_TYPE || overload_kind(type_name).is_some() || crate::analyzer::is_map_type(type_name)
+	type_name == ANY_TYPE
+		|| overload_kind(type_name).is_some()
+		|| crate::analyzer::is_map_type(type_name)
+		|| is_function_type(type_name)
 }
 
 /// How well an argument of `kind` fits a parameter of `type_name`: 0 exactly, 1 by widening an Int to a Float or any
@@ -889,6 +1111,60 @@ fn fit(kind: Kind, type_name: &str) -> Option<u32> {
 	}
 }
 
+/// How well a list of `element`s fits a parameter of the list type `type_name`: its element as fit() takes a value,
+/// a plain `list` worse than every list of a fitting element; an element only the run time knows fits every list
+fn element_fit(element: Option<&str>, type_name: &str) -> Option<u32> {
+	let Some(wanted) = crate::analyzer::list_element_type(type_name) else {
+		return match type_name {
+			ANY_TYPE => Some(ANY_FIT),
+			_ if overload_kind(type_name) == Some(Kind::List) => Some(if element.is_some() { LIST_FIT } else { 0 }),
+			_ => None,
+		};
+	};
+	let Some(element) = element else { return Some(0) };
+	match type_word_kind(element) {
+		_ if crate::type_tests::canonical_spec_word(element) == crate::type_tests::canonical_spec_word(wanted) => {
+			Some(0)
+		}
+		Some(kind) => fit(kind, wanted),
+		None => None,
+	}
+}
+
+/// `files` of `list of file`, the cast of `[] as files` (`[] as [file]` converts each item instead)
+fn plural(list_type: &str) -> String {
+	match crate::analyzer::list_element_type(list_type) {
+		Some(element) => crate::extensions::strings::english_plural(element),
+		None => list_type.to_string(),
+	}
+}
+
+/// `[]` as written
+fn is_empty_list(argument: &Node) -> bool {
+	matches!(argument.ungrouped(), Node::List(items, Bracket::Square, _) if items.is_empty())
+}
+
+/// The run-time test of an argument for a parameter type; of a list type also of the list's first item, as a list keeps
+/// no item type at run time (decision list-variant-dispatch: an empty list fits every list type)
+fn run_time_test(argument: Node, type_name: &str) -> Option<Node> {
+	use crate::lowering::type_tests::declared_type_test;
+	let tested = |type_name: &str| match takes_widened(type_name) {
+		true => crate::words::NUMBER_WORD.to_string(),
+		false if is_function_type(type_name) => Kind::Function.to_string(),
+		false => type_name.to_string(),
+	};
+	let Some(element) = crate::analyzer::list_element_type(type_name) else {
+		return declared_type_test(argument, &tested(type_name));
+	};
+	let is_list = declared_type_test(argument.clone(), crate::words::LIST_WORD)?;
+	let empty = key(call(crate::words::COUNT_WORD, vec![argument.clone()]), Op::Eq, Node::int(0));
+	let first_item = key(argument, Op::Hash, Node::int(1));
+	// a declared type's instance: is_type names it as the emitter's type registry knows it
+	let item_test = declared_type_test(first_item.clone(), &tested(element))
+		.unwrap_or_else(|| call(crate::words::IS_TYPE, vec![first_item, Node::Text(element.to_string())]));
+	Some(key(is_list, Op::And, key(empty, Op::Or, item_test)))
+}
+
 /// `float` and `number` take any number, as fit() widens an Int: at run time an exact `1.5` is an Int node too
 fn takes_widened(type_name: &str) -> bool {
 	type_name == crate::words::FLOAT_WORD || type_name == crate::words::NUMBER_WORD
@@ -897,6 +1173,14 @@ fn takes_widened(type_name: &str) -> bool {
 struct ParameterOverloads {
 	overloaded: HashMap<String, Vec<Vec<String>>>,
 	variables: HashMap<String, Option<Kind>>,
+	/// The declared types, whose instances a list may hold
+	classes: HashSet<String>,
+	/// The element type of each variable assigned lists of one (list_element_variables)
+	list_elements: HashMap<String, Option<String>>,
+	/// The parameter types of each function type a variant takes, by overload type (`function_of_samples_float`)
+	function_types: HashMap<String, Vec<String>>,
+	/// The parameter types of each function defined once, which a function type takes it by
+	functions: HashMap<String, Vec<Option<String>>>,
 	/// Definitions of each overloaded name renamed so far, in declaration order
 	seen: HashMap<String, usize>,
 	/// The parameters and declared variables in scope with their declared type (`n: any`, `leaf: any = "abc"`; none
@@ -950,6 +1234,47 @@ impl ParameterOverloads {
 		(type_name != ANY_TYPE || any_variant).then(|| type_name.clone())
 	}
 
+	/// The element type of a list argument as far as the compile knows it: of its declared list type, of its items
+	/// written, of the lists assigned to the variable it names
+	fn element_type(&self, argument: &Node, declared: Option<&str>) -> Option<String> {
+		if let Some(element) = declared.and_then(crate::analyzer::list_element_type) {
+			return Some(element.to_string());
+		}
+		match argument.ungrouped() {
+			Node::Symbol(name) => self.list_elements.get(name).cloned().flatten(),
+			list => literal_element_type(list, &self.classes, &self.variables),
+		}
+	}
+
+	/// `[] as files`, `[] as ints`: the list and the list type it is cast to, which picks the variant
+	fn as_list_type(&self, argument: &Node) -> Option<(Node, String)> {
+		let Node::Key(list, Op::As, type_node) = argument.ungrouped() else {
+			return None;
+		};
+		let type_name = match type_node.drop_meta() {
+			Node::Symbol(word) if crate::analyzer::names_list_type(word) => word.clone(),
+			Node::Symbol(word) => {
+				let classes: Vec<&str> = self.classes.iter().map(String::as_str).collect();
+				let class = crate::extensions::strings::named_or_plural(&classes, word)
+					.filter(|class| *class != word.as_str())?;
+				format!("{}{class}", crate::analyzer::LIST_OF_PREFIX)
+			}
+			_ => return None,
+		};
+		Some((list.as_ref().clone(), type_name))
+	}
+
+	/// The parameter types of the function defined once an argument names: `hum` of `hum(block: samples, t: float)`
+	fn passed_function(&self, argument: &Node) -> Option<&Vec<Option<String>>> {
+		// `(g)` is a call of g, not g; `closure_new(hum)` the function value hum (closures.rs)
+		let name = match crate::lowering::closures::as_closure_new(argument.drop_meta()) {
+			Some((target, [])) => target,
+			_ => argument.drop_meta().symbol_name()?,
+		};
+		let shadowed = self.declared.iter().any(|scope| scope.contains_key(name));
+		self.functions.get(name).filter(|_| !shadowed && !self.variables.contains_key(name))
+	}
+
 	fn variant_name(name: &str, types: &[String]) -> String {
 		// `f·list_of_int`: one word
 		types.iter().fold(name.to_string(), |variant, type_name| witness_name(&variant, &type_name.replace(' ', "_")))
@@ -963,16 +1288,27 @@ impl ParameterOverloads {
 		let [head, arguments @ ..] = items.as_slice() else {
 			return None;
 		};
-		let variants = self.overloaded.get(&head.drop_meta().name())?.clone();
+		// `f(x) in xs` read as words: its head is the call `f(x)`, no name of a variant
+		let name = head.symbol_name()?.to_string();
+		let variants = self.overloaded.get(&name)?.clone();
 		if arguments.is_empty() || !is_call(items, bracket, separator) {
 			return None;
 		}
-		let name = head.drop_meta().name();
 		let variants: Vec<Vec<String>> = variants.into_iter().filter(|types| types.len() == arguments.len()).collect();
+		let cast: Vec<Option<(Node, String)>> = arguments.iter().map(|argument| self.as_list_type(argument)).collect();
 		let declared: Vec<Option<String>> = arguments
 			.iter()
 			.enumerate()
-			.map(|(position, argument)| self.declared_type(argument, position, &variants))
+			.map(|(position, argument)| match &cast[position] {
+				Some((_, type_name)) => Some(type_name.clone()),
+				None => self.declared_type(argument, position, &variants),
+			})
+			.collect();
+		// the list of `[] as files` goes to the variant as it is: the cast picked the variant
+		let arguments: Vec<Node> = arguments
+			.iter()
+			.zip(cast)
+			.map(|(argument, cast)| cast.map_or_else(|| argument.clone(), |(list, _)| list))
 			.collect();
 		let kinds: Vec<Option<Kind>> = arguments
 			.iter()
@@ -981,17 +1317,61 @@ impl ParameterOverloads {
 				Some(type_name) if type_name != ANY_TYPE => {
 					overload_kind(type_name).or_else(|| argument_kind(argument, &self.variables))
 				}
-				_ => argument_kind(argument, &self.variables),
+				_ => argument_kind(argument, &self.variables)
+					.or_else(|| self.passed_function(argument).map(|_| Kind::Function)),
 			})
 			.collect();
+		let mut elements: Vec<Option<String>> = arguments
+			.iter()
+			.zip(&declared)
+			.zip(&kinds)
+			.map(|((argument, declared), kind)| match kind {
+				Some(Kind::List) => self.element_type(argument, declared.as_deref()),
+				_ => None,
+			})
+			.collect();
+		let differing_elements = |position: usize| {
+			let mut taken = variants.iter().map(|types| crate::analyzer::list_element_type(&types[position]));
+			let first = taken.next().flatten();
+			taken.any(|element| element != first)
+		};
+		// decision list-variant-dispatch: `play([])` fits every list variant and takes the first, saying so
+		for (position, argument) in arguments.iter().enumerate() {
+			if declared[position].is_none() && is_empty_list(argument) && differing_elements(position) {
+				let list_types: Vec<&String> = variants.iter().map(|types| &types[position]).collect();
+				let question = format!("`[]` fits every variant of {name}: which list is it?");
+				let readings = list_types
+					.iter()
+					.map(|type_name| reading(type_name, &format!("[] as {}", plural(type_name))))
+					.collect();
+				let asked = Ask::new(TOPIC, question, readings, Fallback::Warning).written("[]").at_node(argument);
+				let taken = match ask(&asked) {
+					Ok(chosen) => list_types[chosen],
+					Err(error) => return Some(error),
+				};
+				elements[position] = crate::analyzer::list_element_type(taken).map(str::to_string);
+			}
+		}
+		// a list whose element type only the run time knows, where the variants take lists of different elements
+		let elements_untold = |position: usize| {
+			kinds[position] == Some(Kind::List) && elements[position].is_none() && differing_elements(position)
+		};
 		// an argument declared `any` (a Node) fits only an `any` variant; an argument of a kind unknown at compile time
 		// fits every type for now: the run time tests it
+		// a function type takes a function of its parameters known at compile time, never one told at run time
 		let fits_argument = |position: usize, type_name: &str| match (declared[position].as_deref(), kinds[position]) {
 			(Some(ANY_TYPE), _) => (type_name == ANY_TYPE).then_some(0),
+			(_, Some(Kind::List)) => element_fit(elements[position].as_deref(), type_name),
+			(_, Some(Kind::Function)) if is_function_type(type_name) => {
+				function_fit(self.passed_function(&arguments[position])?, self.function_types.get(type_name)?)
+			}
+			(_, _) if is_function_type(type_name) => None,
 			(_, Some(kind)) => fit(kind, type_name),
 			(_, None) => Some(0),
 		};
-		let is_known = |position: usize| kinds[position].is_some() || declared[position].as_deref() == Some(ANY_TYPE);
+		let is_known = |position: usize| {
+			(kinds[position].is_some() && !elements_untold(position)) || declared[position].as_deref() == Some(ANY_TYPE)
+		};
 		let scores: Vec<(u32, &Vec<String>)> = variants
 			.iter()
 			.filter_map(|types| {
@@ -1000,6 +1380,16 @@ impl ParameterOverloads {
 				Some((fits?.iter().sum(), types))
 			})
 			.collect();
+		// the variants fitting the known arguments best come first where the run time picks: `play(hum, 2s)` of a
+		// function hum taking a block
+		let known_score = |types: &Vec<String>| -> u32 {
+			(0..arguments.len())
+				.filter(|position| is_known(*position))
+				.filter_map(|position| fits_argument(position, &types[position]))
+				.sum()
+		};
+		let mut scores = scores;
+		scores.sort_by_key(|(_, types)| known_score(types));
 		let written = node.serialize().trim().to_string();
 		let listed =
 			variants.iter().map(|types| format!("{name}({})", types.join(", "))).collect::<Vec<_>>().join(", ");
@@ -1007,7 +1397,10 @@ impl ParameterOverloads {
 		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
 		if !(0..arguments.len()).all(is_known) && scores.len() > 1 {
 			let candidates: Vec<&Vec<String>> = scores.iter().map(|(_, types)| *types).collect();
-			return Some(Self::dispatched(&name, &candidates, &kinds, arguments, &no_variant));
+			// a list of untold elements is tested at run time, as an argument of unknown kind
+			let tested_kinds: Vec<Option<Kind>> =
+				(0..arguments.len()).map(|position| kinds[position].filter(|_| !elements_untold(position))).collect();
+			return Some(Self::dispatched(&name, &candidates, &tested_kinds, arguments, &no_variant));
 		}
 		let best = scores.iter().map(|(score, _)| *score).min();
 		let chosen: Vec<&Vec<String>> =
@@ -1042,11 +1435,7 @@ impl ParameterOverloads {
 			.into_iter()
 			.zip(kinds)
 			.map(|(argument, kind)| match (kind, argument.drop_meta()) {
-				(None, Node::List(..) | Node::Key(..)) => {
-					let temporary = Node::Symbol(format!("overload·{}", super::nodes::fresh_number()));
-					bindings.push(assign(temporary.clone(), argument));
-					temporary
-				}
+				(None, Node::List(..) | Node::Key(..)) => super::nodes::bound_once("overload", argument, &mut bindings),
 				_ => argument,
 			})
 			.collect();
@@ -1065,20 +1454,12 @@ impl ParameterOverloads {
 		let mut ordered = candidates.to_vec();
 		ordered.sort_by_key(|types| (std::cmp::Reverse(tested_types(types).len()), widened(types)));
 		let refusal = call(crate::words::RAISE_WORD, vec![Node::Text(no_variant.to_string())]);
-		let chain = ordered.iter().rev().fold(refusal, |otherwise, types| {
+		let cases = ordered.iter().map(|types| {
 			let variant = call(&Self::variant_name(name, types), arguments.clone());
-			let tests = tested_types(types).into_iter().filter_map(|(argument, type_name)| {
-				let tested = if takes_widened(&type_name) { crate::words::NUMBER_WORD } else { &type_name };
-				crate::lowering::type_tests::declared_type_test(argument, tested)
-			});
-			match tests.reduce(|all, test| key(all, Op::And, test)) {
-				Some(test) => super::nodes::if_then_else(test, variant, otherwise),
-				None => variant,
-			}
+			let tests =
+				tested_types(types).into_iter().filter_map(|(argument, type_name)| run_time_test(argument, &type_name));
+			(tests.reduce(|all, test| key(all, Op::And, test)), variant)
 		});
-		match bindings.is_empty() {
-			true => chain,
-			false => Node::List([bindings, vec![chain]].concat(), Bracket::Round, Separator::Semicolon),
-		}
+		super::nodes::after_bindings(bindings, super::nodes::tested_cases(cases.collect(), refusal))
 	}
 }

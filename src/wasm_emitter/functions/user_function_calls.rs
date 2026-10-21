@@ -140,7 +140,7 @@ impl WasmGcEmitter {
 		let mut scope = Scope::with_function_kinds(self.user_function_kinds())
 			.with_closure_targets(self.ctx.closure_variable_targets.clone());
 		scope.parent = Some(Box::new(self.enclosing_scope(&enclosing.name, main).unwrap_or_else(|| main.clone())));
-		scope.globals = self.ctx.declared_globals.clone();
+		scope.globals = self.ctx.declared_globals.clone().into();
 		for (index, param) in enclosing.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
 			scope.define_param(param, kind);
@@ -301,7 +301,7 @@ impl WasmGcEmitter {
 			..FunctionState::default()
 		});
 		// declared globals are changed in place, never shadowed by a local of the same name
-		self.scope.globals = self.function_globals(name);
+		self.scope.globals = self.function_globals(name).into();
 		for (index, param) in user_fn.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(name, index) { Kind::List } else { param_kind(param) };
 			self.scope.define_param(param, kind);
@@ -674,14 +674,13 @@ impl WasmGcEmitter {
 		self.emit_trap_position(func);
 	}
 
-	/// `g(c: codepoint)` given `s#2`: a character of a text, held as a one-character text, given as its code point
-	/// (card text-char); any other argument as it is
+	/// `g(c: codepoint)` given `s#2` or a variable `c = s#2`: a character of a text, held as a one-character text, given
+	/// as its code point, a longer text the error not_a_character (card text-char); any other argument as it is
 	fn character_as_codepoint(&self, param: &crate::compiler::context::Param, argument: Node) -> Node {
 		let declared_codepoint = param.annotation.as_ref().is_some_and(|annotation| {
 			crate::type_tests::canonical_spec_word(&annotation.name().to_lowercase()) == crate::words::CODEPOINT
 		});
-		let character_of_text = matches!(argument.drop_meta(), Node::Key(text, Op::Hash, _) if !text.is_empty_node())
-			&& self.get_type(&argument) == Kind::Text;
+		let character_of_text = !argument.is_text_literal() && self.get_type(&argument) == Kind::Text;
 		match declared_codepoint && character_of_text {
 			true => Node::Key(Box::new(argument), Op::As, Box::new(Node::Symbol(crate::words::CODEPOINT.into()))),
 			false => argument,

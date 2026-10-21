@@ -24,3 +24,14 @@ fn parenthesized_forms_do_not_warn() {
 	assert!(warnings.iter().all(|warning| !warning.contains("xs#(")), "{warnings:?}");
 	is!("xs=[1,2,3,4,5]; xs#(2…4)", warp::ints(vec![2, 3, 4]));
 }
+
+/// `name[#p..]`, `#xs down to 1`: a count `#p` before a range is no element `xs#a`, so no warning (card
+/// prefix-count-warning)
+#[test]
+fn a_prefix_count_before_a_range_does_not_warn() {
+	let (value, warnings) = warnings_of("name=\"no field x\"; p=\"no field \"; name[#p..]");
+	assert_eq!(value, warp::Node::text("x"));
+	assert!(warnings.iter().all(|warning| !warning.contains("range from the value")), "{warnings:?}");
+	let (_, warnings) = warnings_of("xs=[1,2,3]; n = 0; for i in #xs down to 1 { n += i }; n");
+	assert!(warnings.iter().all(|warning| !warning.contains("range from the value")), "{warnings:?}");
+}

@@ -22,7 +22,7 @@ ungrouped(n: Node, scope: any): Node := match n {
 	_: n
 }
 
-grouped_receivers(program: any): any := {
+grouped_receivers(program: Node): Node := {
 	if not view_has(view_of(program), part => kind_of(part) == "key" and part#2 == "." and grouped_name(node_of(part#3)) != ø) {
 		return program
 	}

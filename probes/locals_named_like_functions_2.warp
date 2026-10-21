@@ -1,0 +1,11 @@
+# each function's own locals: a local named like a function is the local only in the function that binds it (card
+# local-named-like-5); a parameter annotated with a type word a method shares keeps the type (card text-local)
+both(first: any): any := { held = {}; held }
+def firsts(held: any): list { held.map(e => e#1) }
+print firsts([[1, 2], [3, 4]])
+class Tag {
+	name: text
+	text() := "#" + name
+}
+shout(text: text) := text + "!"
+print shout("hi")

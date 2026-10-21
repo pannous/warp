@@ -499,6 +499,23 @@ impl WasmGcEmitter {
 				self.emit_call(func, "get_int_value");
 				func.instruction(&I::I32WrapI64);
 			}
+			// `s#at as char` of an untyped `s`: a number is the character of its code point, a character or
+			// one-character text is itself, anything else (a bool too: its Int is marked) the error not_a_character, which only
+			// the run time tells
+			None if self.has_unknown_static_type(value) => {
+				let held = self.node_scratch();
+				self.emit_node_instructions(func, value);
+				func.instruction(&I::LocalSet(held));
+				self.emit_field(func, held, 0);
+				Self::emit_whole_kind_test(func, Kind::Int as i64);
+				Self::emit_list(func, &[I::If(BlockType::Result(ValType::I32)), I::LocalGet(held), I::RefAsNonNull]);
+				self.emit_call(func, "get_int_value");
+				self.emit_code_point_of_int(func);
+				Self::emit_list(func, &[I::Else, I::LocalGet(held), I::RefAsNonNull]);
+				self.emit_call(func, crate::wasm_emitter::reflection::library_ops::CODEPOINT_OF);
+				self.emit_call(func, "get_int_value");
+				Self::emit_list(func, &[I::I32WrapI64, I::End]);
+			}
 			None => {
 				self.emit_numeric_value(func, value);
 				self.emit_code_point_of_int(func);

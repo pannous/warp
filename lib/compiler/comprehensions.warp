@@ -11,7 +11,7 @@ in_word = "in"
 filter_words = ["if", "where"]
 
 # the clause `for v in xs …`
-starts_with_for(n: any): bool := match n {
+starts_with_for(n: Node): bool := match n {
 	List(words, Bracket.None, separator): #words > 0 and words#1 == symbol(for_word)
 	_: no
 }
@@ -46,7 +46,7 @@ qualifiers(clause: Node, rest: list): any := match clause {
 }
 
 # the clauses nested in order around `inner`
-looped(clauses: list, inner: Node): Node := {
+looped_clauses(clauses: list, inner: Node): Node := {
 	body = inner
 	for i in #clauses down to 1 {
 		clause = clauses#i
@@ -65,7 +65,7 @@ comprehension(items: list): any := {
 	if clauses == ø { return ø }
 	made = fresh_name(made_word, fresh_number())
 	appended = Key(made, Op.AddAssign, List([words_phrase(items[0 .. at - 1])], Bracket.Square, Separator.Space))
-	List([Key(made, Op.Assign, ø), looped(clauses, appended), made], Bracket.Round, Separator.Semicolon)
+	List([Key(made, Op.Assign, ø), looped_clauses(clauses, appended), made], Bracket.Round, Separator.Semicolon)
 }
 
 # `sum(x * x for x in xs)` as `sum([x * x for x in xs])`, else n
@@ -84,4 +84,4 @@ comprehension_node(n: Node): Node := match n {
 	_: n
 }
 
-comprehensions(program: any): any := bottom_up(program, comprehension_node)
+comprehensions(program: Node): Node := bottom_up(program, comprehension_node)

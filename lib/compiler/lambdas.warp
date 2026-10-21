@@ -13,6 +13,7 @@ use "walk.warp"
 use "phrase_blocks.warp"
 use "scope.warp"
 use "multiple_assignments.warp"
+use "signatures.warp"
 
 lifted_prefix = "closure_lambda_"
 closure_call_word = "closure_call_"
@@ -43,12 +44,6 @@ written_parameters(signature: Node): list := match signature {
 	_: [signature]
 }
 
-# `x` of `x` and of `x: int`
-parameter_word(parameter: Node): text := match parameter {
-	Key(name, Op.Colon, type): name_of(name)
-	_: name_of(parameter)
-}
-
 arrow_parameters(n: Node): Node := match lambda_of(n) {
 	Key(parameters, arrow, body): parameters
 	_: n
@@ -58,12 +53,12 @@ arrow_result(n: Node): Node := match lambda_of(n) {
 	_: n
 }
 
-lambda_parameter_names(arrow: Node): list := written_parameters(arrow_parameters(arrow)).map(parameter_word)
+lambda_parameter_names(arrow: Node): list := written_parameters(arrow_parameters(arrow)).map(parameter_name)
 
 ## renaming
 
 # n with the symbol `from` read as `to`, a field after `.` and a key before `:` kept
-renamed(n: any, from: text, to: Node): any := match n {
+renamed(n: Node, from: text, to: Node): Node := match n {
 	Symbol(name): { if name == from then to else n }
 	Key(left, Op.Dot, right): Key(renamed(left, from, to), Op.Dot, renamed_call(right, from, to))
 	Key(left, op, right): Key(renamed(left, from, to), op, renamed(right, from, to))
@@ -131,7 +126,7 @@ iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
 ## the program's functions and values
 
 # `f(a, b) := body`: [name, parameters as written, body] of a definition, else ø
-definition_of(n: any): any := match n {
+definition_of(n: Node): any := match n {
 	Key(signature, Op.Define, body): defined_head(signature, body)
 	_: ø
 }
@@ -143,18 +138,18 @@ defined_head(signature: Node, body: Node): any := match signature {
 
 # the names a body assigns or declares `x: T = v`, each once; `x := v` defines, it binds no variable. A `for` binds its
 # variable inside its loop only (loop_variables): `for slice in slices {…}` leaves a `slice(xs, 1)` before it the library word
-names_bound(n: any, found: list): list := {
+names_bound(n: Node, found: list): list := {
 	found = newly_bound(n, found)
 	if is_lambda(n) or definition_of(n) != ø { return found }
 	for part in parts_of(n) { found = names_bound(part, found) }
 	found
 }
-newly_bound(n: any, found: list): list := match n {
+newly_bound(n: Node, found: list): list := match n {
 	Key(target, Op.Assign, value): bound_target(target, found)
 	_: found
 }
 # [x] of `for x in xs {…}`, else none
-loop_variables(n: any): list := match n {
+loop_variables(n: Node): list := match n {
 	List(parts, Bracket.None, Separator.Space): { if #parts >= 4 and parts#1 == symbol("for") and parts#3 == symbol("in") then bound_target(parts#2, []) else [] }
 	_: []
 }
@@ -165,7 +160,7 @@ bound_target(target: Node, found: list): list := match target {
 }
 
 # every name the node mentions, each once, in order
-mentioned_names(n: any, found: list): list := {
+mentioned_names(n: Node, found: list): list := {
 	if n is symbol {
 		if name_of(n) not in found { found += [name_of(n)] }
 		return found
@@ -175,13 +170,13 @@ mentioned_names(n: any, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: any; lifted: any }
+class Lowering { arities: any; lambdas_lifted: any }
 
 ## the walk
 
 # n with its lambdas lifted, its iterations looped, its function names as values and its calls of variables as
 # closures; `locals` the variables and parameters in scope
-lowered_lambdas(n: any, locals: list, lowering: Lowering): any := {
+lowered_lambdas(n: Node, locals: list, lowering: Lowering): any := {
 	iteration = iteration_of(n)
 	if iteration != ø {
 		looped = iteration_over(iteration, locals, lowering)
@@ -245,44 +240,44 @@ iteration_over(iteration: list, locals: list, lowering: Lowering): any := {
 # a lambda as the closure of a top-level function taking its captured variables first
 lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 	parameters = written_parameters(arrow_parameters(arrow))
-	names = parameters.map(parameter_word)
+	names = parameters.map(parameter_name)
 	body = arrow_result(arrow)
 	captured = mentioned_names(body, []).filter(name => name in locals and name not in names).map(name => symbol(name))
 	name = lifted_prefix + fresh_number()
 	inner = captured.map(c => name_of(c)) + names + names_bound(body, [])
 	lowering.arities[name] = #captured + #names
 	lifted_body = lowered_lambdas(body, inner, lowering)
-	lowering.lifted += [Key(call_node(symbol(name), captured + parameters), Op.Define, lifted_body)]
+	lowering.lambdas_lifted += [Key(call_node(symbol(name), captured + parameters), Op.Define, lifted_body)]
 	call_node(symbol("closure_new"), [symbol(name)] + captured)
 }
 
 ## the pass
 
 # a definition with its body lowered, its parameters and variables the locals
-lowered_statement(statement: any, top_locals: list, lowering: Lowering): any := {
+lowered_statement(statement: Node, top_locals: list, lowering: Lowering): any := {
 	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
-	locals = parts#2.map(parameter_word) + names_bound(parts#3, [])
+	locals = parts#2.map(parameter_name) + names_bound(parts#3, [])
 	match statement {
 		Key(signature, Op.Define, body): Key(signature, Op.Define, lowered_lambdas(body, locals, lowering))
 		_: statement
 	}
 }
 
-lambdas(program: any): any := {
+lambdas(program: Node): Node := {
 	written = statements_in(program)
 	arities = {}
 	for statement in written {
 		parts = definition_of(statement)
 		if parts != ø { arities[parts#1] = #(parts#2) }
 	}
-	lowering = Lowering{arities: arities, lifted: []}
+	lowering = Lowering{arities: arities, lambdas_lifted: []}
 	top_locals = []
 	for statement in written {
 		if definition_of(statement) == ø { top_locals = names_bound(statement, top_locals) }
 	}
 	lowered = written.map(statement => lowered_statement(statement, top_locals, lowering))
-	if is_statement_sequence(program) { return group_like(program, lowering.lifted + lowered) }
-	if #lowering.lifted == 0 { return lowered#1 }
-	List(lowering.lifted + lowered, Bracket.None, Separator.Semicolon)
+	if is_statement_sequence(program) { return group_like(program, lowering.lambdas_lifted + lowered) }
+	if #lowering.lambdas_lifted == 0 { return lowered#1 }
+	List(lowering.lambdas_lifted + lowered, Bracket.None, Separator.Semicolon)
 }
