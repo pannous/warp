@@ -9,7 +9,7 @@ character_offset(t: text, index: int): int := {
 	at = 0
 	for counted in 1..<index {
 		if at < byte_count(t) { at += 1 }
-		while at < byte_count(t) and byte_at(t, at) >= 128 and byte_at(t, at) < 192 { at += 1 }
+		while at < byte_count(t) and is_continuation_byte(byte_at(t, at)) { at += 1 }
 	}
 	at
 }
@@ -29,7 +29,7 @@ text_find(t: text, part: text): int := {
 	position = 1
 	for at in 0 to byte_count(t) - byte_count(part) {
 		if bytes_match_at(t, part, at) { return position }
-		if byte_at(t, at) < 128 or byte_at(t, at) >= 192 { position += 1 }
+		if not is_continuation_byte(byte_at(t, at)) { position += 1 }
 	}
 	0
 }

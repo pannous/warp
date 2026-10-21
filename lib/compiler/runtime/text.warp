@@ -4,8 +4,8 @@ text_join(a: text, b: text): text := {
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
 	# a walk over a stays good on out, which starts with a's bytes: `t += …` keeps t's cursor
-	if same_text(a, walked_text) == 1 { walked_text = out }
-	if same_text(a, other_text) == 1 { other_text = out }
+	if same_text(a, walked_text) { walked_text = out }
+	if same_text(a, other_text) { other_text = out }
 	out
 }
 # the text counted last, its size then and its count; the two texts `t#i` walked last, each with its size then, the
@@ -29,7 +29,7 @@ global other_before = -1
 # source's count (card text-cache-lru)
 text_count(t: text): int := {
 	if byte_count(t) < short_text() { return characters_counted(t) }
-	if same_text(t, counted_text) == 1 and byte_count(t) == counted_bytes { return counted }
+	if same_text(t, counted_text) and byte_count(t) == counted_bytes { return counted }
 	count = characters_counted(t)
 	counted_text = t
 	counted_bytes = byte_count(t)
@@ -50,7 +50,7 @@ code_point_count(t: text): int := {
 	count = 0
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
-		if b < 128 or b >= 192 { count += 1 }
+		if not is_continuation_byte(b) { count += 1 }
 	}
 	count
 }
@@ -66,7 +66,7 @@ print_line(t: text): int := {
 		write_output(stop - start)
 		start = stop
 	}
-	output_byte(0, 10)
+	output_byte(0, Ascii.Newline)
 	write_output(1)
 }
 # -1, 0 or 1 as a's bytes come before b's, equal them or come after

@@ -10,16 +10,16 @@ is_zoned(t: any): bool := time_form(t) == TimeFormCode.Zoned
 is_time_of_day(t: any): bool := time_form(t) == TimeFormCode.Clock
 # the duration of months, days and nanoseconds: its days kept as 32 unsigned bits above the form, its months above them
 duration_of(months: int, days: int, nanos: int): any := {
-	unsigned_days = if days < 0 then days + 4294967296 else days
-	time_of(TimeFormCode.Duration + unsigned_days * 8 + months * 34359738368, nanos)
+	unsigned_days = if days < 0 then days + TimeInfoUnit.DayRange else days
+	time_of(TimeFormCode.Duration + unsigned_days * TimeInfoUnit.Days + months * TimeInfoUnit.Months, nanos)
 }
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
-local_offset_at(t: any): int := local_offset(floor_quotient(time_position(t), 1000000))
+local_offset_at(t: any): int := local_offset(floor_quotient(time_position(t), millisecond_nanos()))
 
 ## times (card time-text-warp; src/wasm_emitter/time/times.rs emit_time_text and emit_fraction, calendar.rs): a $Node
-## of kind 18, its form in the info bits (src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
+## of kind Time, its form in the info bits (src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
 ## date, nanoseconds since 1970 for an instant and a local time, since midnight for a time of day
-time_form(n: any): int := int_remainder(info_byte(n), 8)
+time_form(n: any): int := int_remainder(info_byte(n), TimeInfoUnit.Days)
 # RFC 3339 as calendar.rs shows a time, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
 # local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
 time_text(n: any): text := {
@@ -50,8 +50,8 @@ date_text(days: int): text := {
 }
 # `14:43:33.682` of the nanoseconds of a day: the seconds only when there are any or it is a time of day (22:27:46)
 clock_text(nanos: int, form: int): text := {
-	hours = int_quotient(nanos, 3600 * second_nanos())
-	minutes = int_remainder(int_quotient(nanos, 60 * second_nanos()), 60)
+	hours = int_quotient(nanos, hour_nanos())
+	minutes = int_remainder(int_quotient(nanos, minute_nanos()), 60)
 	seconds = int_remainder(int_quotient(nanos, second_nanos()), 60)
 	fraction = int_remainder(nanos, second_nanos())
 	out = padded(hours, 2) + ":" + padded(minutes, 2)
@@ -63,7 +63,7 @@ fraction_text(fraction: int): text := {
 	if fraction == 0 { return "" }
 	digits = padded(fraction, 9)
 	stop = 9
-	while byte_at(digits, stop - 1) == 48 { stop -= 1 }
+	while byte_at(digits, stop - 1) == Ascii.Zero { stop -= 1 }
 	"." + bytes_between(digits, 0, stop)
 }
 # n with leading zeros to count digits

@@ -6,11 +6,13 @@
 second_nanos() := 1000000000
 day_nanos() := 86400 * second_nanos()
 hour_nanos() := 3600 * second_nanos()
-duration_months(n: any): int := floor_quotient(marked_kind(n), power(2, 43))
+minute_nanos() := 60 * second_nanos()
+millisecond_nanos() := 1000000
+duration_months(n: any): int := floor_quotient(marked_kind(n), KindUnit.Info * TimeInfoUnit.Months)
 # the 32 signed bits above the kind and the form
 duration_days(n: any): int := {
-	days = floor_quotient(marked_kind(n), power(2, 11)) % power(2, 32)
-	if days >= power(2, 31) then days - power(2, 32) else days
+	days = floor_quotient(marked_kind(n), KindUnit.Info * TimeInfoUnit.Days) % TimeInfoUnit.DayRange
+	if days >= int_quotient(TimeInfoUnit.DayRange, 2) then days - TimeInfoUnit.DayRange else days
 }
 duration_nanos(n: any): int := unboxed_int(n)
 # `3 hours`: an amount and its unit, plural unless the amount is 1

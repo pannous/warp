@@ -2,11 +2,11 @@
 ## src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in src/wasm_emitter/numbers/casts.rs): a text
 ## that spells no number fails with invalid_number
 # 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
-sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == 45 or byte_at(t, 0) == 43) then 1 else 0
+sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == Ascii.Minus or byte_at(t, 0) == Ascii.Plus) then 1 else 0
 # t starts with -
-is_negative_text(t: text): bool := byte_count(t) > 0 and byte_at(t, 0) == 45
+is_negative_text(t: text): bool := byte_count(t) > 0 and byte_at(t, 0) == Ascii.Minus
 # the digit a byte spells, -1 for any other byte
-digit_of(b: int): int := if b >= 48 and b <= 57 then b - 48 else -1
+digit_of(b: int): int := if b >= Ascii.Zero and b <= Ascii.Nine then b - Ascii.Zero else -1
 # how many digits stand in t from byte offset start on
 digit_run(t: text, start: int): int := {
 	at = start
@@ -29,14 +29,14 @@ text_as_float(t: text): float := {
 	whole = digit_run(t, start)
 	at = start + whole
 	fraction = 0
-	if at < byte_count(t) and byte_at(t, at) == 46 {
+	if at < byte_count(t) and byte_at(t, at) == Ascii.Point {
 		fraction = digit_run(t, at + 1)
 		at += 1 + fraction
 	}
 	if whole + fraction == 0 { invalid_number() }
 	stop = at
 	exponent = 0
-	if at < byte_count(t) and (byte_at(t, at) == 101 or byte_at(t, at) == 69) {
+	if at < byte_count(t) and (byte_at(t, at) == Ascii.LowerE or byte_at(t, at) == Ascii.UpperE) {
 		exponent = text_as_int(bytes_between(t, at + 1, byte_count(t)))
 		at = byte_count(t)
 	}

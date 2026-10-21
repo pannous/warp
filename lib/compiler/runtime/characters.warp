@@ -1,20 +1,22 @@
 # The characters (grapheme clusters) of texts and the walks `t#i` and `for ch in t` take over them
 # the bytes of the code point whose UTF-8 starts with the byte lead
-code_point_width(lead: int): int := if lead < 128 then 1 else if lead < 224 then 2 else if lead < 240 then 3 else 4
+code_point_width(lead: int): int := if lead < Utf8.Continuation then 1 else if lead < Utf8.ThreeByte then 2 else if lead < Utf8.FourByte then 3 else 4
 # the code point whose UTF-8 bytes start at byte `at` of t
 code_point_at(t: text, at: int): int := {
 	lead = byte_at(t, at)
-	n = if lead < 128 then lead else if lead < 224 then lead - 192 else if lead < 240 then lead - 224 else lead - 240
-	for k in 1 to code_point_width(lead) - 1 { n = n * 64 + byte_at(t, at + k) - 128 }
+	n = if lead < Utf8.Continuation then lead else if lead < Utf8.ThreeByte then lead - Utf8.TwoByte else if lead < Utf8.FourByte then lead - Utf8.ThreeByte else lead - Utf8.FourByte
+	for k in 1 to code_point_width(lead) - 1 { n = n * Utf8.ContinuationUnit + byte_at(t, at + k) - Utf8.Continuation }
 	n
 }
 within(c: int, low: int, high: int): bool := c >= low and c <= high
+# a byte 10xxxxxx that continues a code point's UTF-8
+is_continuation_byte(b: int): bool := b >= Utf8.Continuation and b < Utf8.TwoByte
 # `n as char`, `n as codepoint` (Rust's casts.rs emit_code_point, decision digit-as-char): a digit 0…9 is its digit
 # character, as '5' as int is 5; another number the character of that code point, one no character has (beyond
 # U+10FFFF, a surrogate) the error invalid_code_point
 cast_code_point(n: int): int := {
-	if within(n, 0, 9) { return n + 48 }
-	if n < 0 or n > 1114111 or within(n, 55296, 57343) { invalid_code_point() }
+	if within(n, 0, 9) { return n + Ascii.Zero }
+	if n < 0 or n > Unicode.Highest or within(n, Unicode.SurrogateFirst, Unicode.SurrogateLast) { invalid_code_point() }
 	n
 }
 # a code point that continues the character before it: combining marks, variation selectors, skin tones, ZWJ …
@@ -58,12 +60,12 @@ regional_indicator(c: int): bool := within(c, 127462, 127487)
 character_end(t: text, at: int): int := {
 	previous = code_point_at(t, at)
 	end = at + code_point_width(byte_at(t, at))
-	if previous == 13 and end < byte_count(t) and byte_at(t, end) == 10 { return end + 1 }
-	if previous < 32 or within(previous, 127, 159) { return end }
+	if previous == Ascii.Return and end < byte_count(t) and byte_at(t, end) == Ascii.Newline { return end + 1 }
+	if previous < Ascii.Space or within(previous, Ascii.Delete, Unicode.ControlLast) { return end }
 	unpaired = if regional_indicator(previous) then 1 else 0
 	while end < byte_count(t) {
 		next = code_point_at(t, end)
-		if not (extends_character(next) or (previous == 8205 and pictographic(next)) or (unpaired == 1 and regional_indicator(next))) { return end }
+		if not (extends_character(next) or (previous == Unicode.ZeroWidthJoiner and pictographic(next)) or (unpaired == 1 and regional_indicator(next))) { return end }
 		unpaired = 0
 		previous = next
 		end += code_point_width(byte_at(t, end))
@@ -119,11 +121,11 @@ back_reach(): int := 256
 # character: nothing joins an ASCII character to what precedes it, \r\n aside) and the characters counted from there
 # (Rust's text_grapheme_back); a walk over another text, or none within back_reach, starts over at t's start
 walk_back(t: text, index: int): int := {
-	if same_text(t, walked_text) == 0 and same_text(t, other_text) == 1 { swap_walks() }
-	if same_text(t, walked_text) == 0 or byte_count(t) < walked_bytes { return walk_from_start(t) }
+	if not same_text(t, walked_text) and same_text(t, other_text) { swap_walks() }
+	if not same_text(t, walked_text) or byte_count(t) < walked_bytes { return walk_from_start(t) }
 	while walked_index > index {
 		back = walked_at - 1
-		while back >= 0 and back + back_reach() > walked_at and (byte_at(t, back) >= 128 or byte_at(t, back) == 10) { back -= 1 }
+		while back >= 0 and back + back_reach() > walked_at and (byte_at(t, back) >= Utf8.Continuation or byte_at(t, back) == Ascii.Newline) { back -= 1 }
 		if back < 0 or back + back_reach() <= walked_at { return walk_from_start(t) }
 		at = back
 		while at < walked_at {
@@ -146,7 +148,7 @@ walk_from_start(t: text): int := {
 # 1 when the current walk is over t, or over the start of t that t grew from, and stands at index, before it or one
 # past it
 walk_reaches(t: text, index: int): int := {
-	if same_text(t, walked_text) == 0 or byte_count(t) < walked_bytes or index < walked_index - 1 { return 0 }
+	if not same_text(t, walked_text) or byte_count(t) < walked_bytes or index < walked_index - 1 { return 0 }
 	if index == walked_index - 1 and walked_before < 0 { return 0 }
 	1
 }
