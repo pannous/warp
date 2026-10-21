@@ -252,7 +252,15 @@ impl WasmGcEmitter {
 						// the whole kind (bracket included, element mark not): ø and `[]` are both Empty
 						let unmarked_kind_is = |f: &mut Function, operand: u32, kind: i64| {
 							s.emit_field(f, operand, 0);
-							Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(kind), I::I64Eq]);
+							Self::emit_list(
+								f,
+								&[
+									I::I64Const(crate::type_kinds::UNMARKED_KIND),
+									I::I64And,
+									I::I64Const(kind),
+									I::I64Eq,
+								],
+							);
 						};
 						// ø + text fails as ø + 1 does (decision empty-plus-text); `[]` + text appends it
 						unmarked_kind_is(f, 0, Kind::Empty as i64);
