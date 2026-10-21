@@ -141,9 +141,11 @@ Read notes/agents/common.md and notes/roles.md.
   release build (~14 min; card pure-kinds: batch-32's Rust broke the chain while main's old binary with its lib still
   printed hello), else main's binary (~2.5 min cold, seconds cached). It runs with WARP_COMPILER_WARNINGS=1 and reports
   the warning lines ("PURE CHAIN WARNINGS"), not blocking until card compiling-lib reaches zero. It also runs
-  `warp self samples/hello/hello.warp` (the self-compiled compiler.warp) and reports it ("PURE SELF"), not blocking
-  until it prints hello (user 2026-10-21); then it blocks too. A blocking `warp self` lane may pass up to 5 % fewer
-  tests than `warp pure`, as long as the main tests pass (user, 52b6ac43be). Its Rust test
+  `warp self samples/hello/hello.warp` (the self-compiled compiler.warp, "PURE SELF"), which never holds a batch
+  (user 2026-10-21 21:30): when it is red, bisect by the branches' lib/compiler/ changes (usually one branch touches
+  them), drop the culprit from the batch, bounce it to its owner with the error and merge the rest at once. No culprit
+  within one try: merge anyway and add an urgent card self-hello-red for the author of the newest lib/compiler change.
+  The `warp self` test lane may pass up to 5 % fewer tests than `warp pure`, as long as the main tests pass (user, 52b6ac43be). Its Rust test
   warp_pure_runs_hello_world is ignored as slow, so this check is the only cover.
 - Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the
   function now lives, commit it in the merge, gate as usual and tell the owner afterwards; only logic changed on

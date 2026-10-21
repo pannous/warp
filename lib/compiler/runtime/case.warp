@@ -8,10 +8,10 @@ use "library_words.warp"
 use "text_numbers.warp"
 # `t.lower()`, `t.upper()`: an ASCII text with its letters first…last moved by shift, any other mapped code point by
 # code point through the case table (lib/case_tables.warp, the twin of src/wasm_emitter/text/text_unicode.rs)
-text_lower(t: text): text := if is_ascii(t) then ascii_case(t, 65, 90, 32) else table_case(t, lower_case_text())
-text_upper(t: text): text := if is_ascii(t) then ascii_case(t, 97, 122, 0 - 32) else table_case(t, upper_case_text())
+text_lower(t: text): text := if is_ascii(t) then ascii_case(t, Ascii.UpperA, Ascii.UpperZ, Ascii.CaseShift) else table_case(t, lower_case_text())
+text_upper(t: text): text := if is_ascii(t) then ascii_case(t, Ascii.LowerA, Ascii.LowerZ, -Ascii.CaseShift) else table_case(t, upper_case_text())
 is_ascii(t: text): bool := {
-	for i in 0..byte_count(t) { if byte_at(t, i) >= 128 { return no } }
+	for i in 0..byte_count(t) { if byte_at(t, i) >= Utf8.Continuation { return no } }
 	yes
 }
 ascii_case(t: text, first: int, last: int, shift: int): text := {
@@ -39,7 +39,7 @@ table_ints(t: text): list := {
 	at = 0
 	while at < byte_count(t) {
 		end = at
-		while end < byte_count(t) and byte_at(t, end) != 32 { end += 1 }
+		while end < byte_count(t) and byte_at(t, end) != Ascii.Space { end += 1 }
 		ints += [text_as_int(bytes_between(t, at, end))]
 		at = end + 1
 	}
