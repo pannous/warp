@@ -21,10 +21,9 @@ fn lowered(node: Node, outer: &HashSet<String>) -> Node {
 	if let Some((head, body, rebuild)) = definition_parts(&node) {
 		let names: Vec<String> = self_summed_names(&body)
 			.into_iter()
-			.filter(|name| !outer.contains(name) && !mentions(&head, name))
+			.filter(|name| !outer.contains(name) && !mentions(&head, name) && stays_unshared(&body, name, true))
 			.collect();
-		let body =
-			names.iter().filter(|name| stays_unshared(&body, name, true)).fold(body, |body, name| in_place(body, name));
+		let body = names.iter().fold(body, |body, name| in_place(body, name));
 		return rebuild(head, lowered(body, outer));
 	}
 	crate::node::children_rewritten(node, |child| lowered(child, outer))
