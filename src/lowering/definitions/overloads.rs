@@ -988,9 +988,14 @@ fn overload_parameter_type(parameter: &Node) -> Option<String> {
 	}
 }
 
+/// The parameter types of each function type, by overload type
+type FunctionTypes = HashMap<String, Vec<String>>;
+/// The (possibly undeclared) parameter types of each function defined once, by name
+type DefinedOnce = HashMap<String, Vec<Option<String>>>;
+
 /// The parameter types of the function types the definitions declare, by overload type, and the parameter types of
 /// the functions defined once, by name
-fn function_signatures(node: &Node) -> (HashMap<String, Vec<String>>, HashMap<String, Vec<Option<String>>>) {
+fn function_signatures(node: &Node) -> (FunctionTypes, DefinedOnce) {
 	let mut function_types = HashMap::new();
 	let mut defined: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
 	each_definition(node, &mut |definition| {

@@ -78,11 +78,9 @@ impl BlockFiller {
 	fn call(&self, caller: &mut Caller<'_, HostState>, time: f64) -> wasmtime::Result<()> {
 		match self {
 			BlockFiller::OfTime(fill) => fill.call(&mut *caller, time).map(drop),
-			BlockFiller::OfBlock { function, block, results } => function.call(
-				&mut *caller,
-				&[block.clone(), Val::F64(time.to_bits())],
-				&mut vec![Val::I32(0); *results],
-			),
+			BlockFiller::OfBlock { function, block, results } => {
+				function.call(&mut *caller, &[*block, Val::F64(time.to_bits())], &mut vec![Val::I32(0); *results])
+			}
 		}
 	}
 }
