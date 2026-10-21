@@ -18,6 +18,7 @@ mod test_dot_without_parens; // cards type-module, abc-chars
 mod test_dot_word_same_path; // card type-module follow-up
 mod test_end_and_def_blocks; // cards std-module-swallowed, end-indented, def-indented
 mod test_english_operator_words;
+mod test_enum_case_words; // card enum-case-words
 mod test_error_excerpt;
 mod test_error_positions;
 #[cfg(feature = "native")] // runs the warp binary
@@ -49,6 +50,7 @@ mod test_lowered_error_text;
 mod test_map_broadcast_hint; // card hint-map
 mod test_near_miss_words; // card hard-coded
 mod test_open_range_slices; // card golf-open
+mod test_output_words_give_nothing; // card library-signature
 mod test_own_definition_hint; // card hint-own-definition
 mod test_parser_runtime_positions; // card runtime-parser
 mod test_piped_answers; // card yes-fix

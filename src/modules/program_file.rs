@@ -115,12 +115,12 @@ pub fn reads_beyond_folders(what: &'static str) {
 	let _ = what;
 }
 
-/// The compile looks for modules in `folder`: one the key of a kept program does not list means it is not kept
-pub fn looks_in(folder: &Path) {
+/// The compile looks for these module files, there or not: a kept program compiles again once one changes
+pub fn looks_for(files: &[PathBuf]) {
 	#[cfg(feature = "native")]
-	if !crate::run::program_cache::is_searched_folder(folder) {
-		crate::run::program_cache::not_kept("a module of a folder beside the program's");
+	for file in files {
+		crate::run::program_cache::looks_for(file);
 	}
 	#[cfg(not(feature = "native"))]
-	let _ = folder;
+	let _ = files;
 }

@@ -2,3 +2,7 @@
 
 # P45: a variable given values of two kinds that do not mix (kind_changes.warp)
 kind_change($name, $was, $now)	"{name} was {a was}, is given {a now}: use another name"
+# a function changing a main-level variable not declared global (main_globals.warp)
+main_variable_change($name)	"{name} is a main-level variable: declare it `global {name}` to change it from a function, or use a new local name"	"global {name}"
+# an error the parser leaves in the tree (sugar.warp subscript), the program's value
+parse_error($message)	"{message}"

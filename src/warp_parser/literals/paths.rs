@@ -136,7 +136,7 @@ impl WarpParser {
 
 	/// `http://…`, `file://…`, `ssh://…`: the scheme of a URL, the rest of which reads as one text
 	pub(crate) fn url_follows(&self) -> bool {
-		URL_MARK.chars().enumerate().all(|(offset, mark)| self.peek_char(offset) == mark)
+		self.at_text(URL_MARK)
 	}
 
 	pub(crate) fn parse_url(&mut self, scheme: String) -> Node {

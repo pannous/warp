@@ -1,0 +1,4 @@
+m = {}
+print m.keys
+f(x: any): list := x.keys
+print f({})

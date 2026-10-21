@@ -1,7 +1,7 @@
 # A function written with a keyword (card pure-runs): `def f(x) := e` and `fun f(x) { body }` (any of
 # function_keywords) are the definition `f(x) := body`; the parser keeps the keyword before the definition, or before
 # the call and its block side by side. `f(x) = e` (also what `def f(x) = e` leaves) is the definition as well: a call
-# of parameter names on the left of `=` assigns nothing. `var x = 1` is the assignment `x = 1`.
+# of parameter names on the left of `=` assigns nothing. `var x = 1` is the assignment `x = 1`, and `f = { it * 2 }` the definition `f := { it * 2 }`.
 use "walk.warp"
 use "words.warp"
 use "phrase_blocks.warp"
@@ -38,15 +38,22 @@ is_head(n: Node): bool := match n {
 	_: no
 }
 
-definition(n: Node): Node := match n {
+definition(n: Node): Node := if is_runtime_declaration(n) then Node.Empty else match n {
 	List(parts, Bracket.None, Separator.Space): {
 		if #parts == 2 and is_keyword(parts#1) { return defined(parts#2) }
 		if #parts == 2 and is_declaration_word(parts#1) { return parts#2 }
 		n
 	}
-	Key(head, Op.Assign, body): { if is_head(head) then Key(head, Op.Define, body) else n }
+	Key(head, Op.Assign, body): { if is_head(head) or is_function_block(head, body) then Key(head, Op.Define, body) else n }
 	Key(annotated, Op.Define, body): result_held(annotated, body, n)
 	_: n
+}
+
+# `is_null(x: any): bool from runtime` (decision bodiless-imports): an intrinsic the emitter supplies, declared only;
+# the line goes (Rust twin: lowering/foreign/foreign_lines.rs runtime_line, whose Rust lane traps when it is called)
+is_runtime_declaration(n: Node): bool := {
+	words = if is_key(n, Op.Colon) and is_group(value_of(n)) then value_of(n) else n
+	separator_of(words) == " " and #words == 3 and words#2 == symbol("from") and words#3 == symbol("runtime")
 }
 
 # `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
@@ -59,10 +66,14 @@ result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	_: n
 }
 
+# `f = { it * 2 }` defines a function as `f := { it * 2 }` does: a name assigned a block that reads `it`; other blocks
+# are data (Rust twin: warp_parser/definitions/functions.rs is_function_block)
+is_function_block(name: Node, body: Node): bool := name is symbol and bracket_of(body) == "{" and mentions(body, implicit_parameter)
+
 # `f(x: int, y)`: a name applied to parameters
 is_call(n: Node): bool := match n {
 	List(call, Bracket.Round, Separator.None): #call > 0 and is_name(call#1)
 	_: no
 }
 
-definitions(program: any): any := bottom_up(program, definition)
+definitions(program: Node): Node := bottom_up(program, definition)

@@ -1,4 +1,5 @@
 mod test_aliased_changes; // card aliased-list
+mod test_any_plus_list; // card slice-node
 mod test_append_words;
 mod test_auto_linear_floats; // card auto-linear-floats
 mod test_bare_list_assignment;
@@ -6,9 +7,11 @@ mod test_byte_size;
 mod test_calls_in_blocks;
 mod test_captured_call_lists;
 mod test_comprehension_beside_own_push; // card prefix-count-field
+mod test_comprehension_if_else_item; // card comprehension-whose
 mod test_concat_declared;
 mod test_concat_keeps_arrays; // card runtime-speed
 mod test_count_after_function; // card print-people
+mod test_count_of_field; // card count-of-field
 mod test_counting_word_operands; // card count-xs
 mod test_counting_word_variables;
 mod test_counting_words;
@@ -24,6 +27,11 @@ mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
+mod test_empty_list_kept; // card rust-lane-literal
+mod test_empty_list_value; // card run-time-empty
+mod test_empty_results; // card empty-results
+mod test_empty_start; // card start: `t = []` appends, ø + text fails
+mod test_empty_start_plus; // card local-fails: `t = []; t + "a"`, the bracket hint of `xs += [3]`
 mod test_field_count;
 mod test_filter_element_scope;
 mod test_find_any_all;
@@ -42,6 +50,7 @@ mod test_index_assignment;
 mod test_index_out_of_range;
 mod test_inserted_word; // card insert-at-warp
 pub(crate) mod test_int_map; // card int-map
+mod test_join_unknown_parts; // card warp-profile: `out += part` of an `any` part grows in place
 mod test_key_lookup;
 mod test_key_subscript_hint;
 mod test_keys_of_a_value; // card keys-value
@@ -62,6 +71,7 @@ mod test_list_of_objects;
 mod test_list_parameters;
 mod test_list_passed_to_function_value; // card fixnow-builtin-function-add
 mod test_list_plus_number;
+mod test_list_plus_parts; // card def-ps: `out = out + p` of parts of unknown kind
 mod test_list_retype;
 mod test_list_times_list;
 mod test_list_truthiness;
@@ -95,12 +105,15 @@ mod test_pair_values;
 mod test_phrase_in_call; // card phrase-in-call
 mod test_picked_linear; // card compiler-picks-dot
 mod test_pop;
+mod test_pop_in_place; // card shrink-in-place
 mod test_python_collections; // card python-stdlib
 mod test_range_arguments;
 mod test_range_in_structure;
 mod test_range_returns;
 mod test_range_values;
 mod test_remove_and_index_of;
+mod test_runtime_map_subscript; // card entry-number
+mod test_self_sum_in_place; // card out-list: `out = out + x` of an unshared list grows it in place
 mod test_set_past_the_end;
 mod test_signed_operand_list;
 mod test_size_count;
@@ -120,3 +133,4 @@ mod test_unpacking_declared;
 mod test_unpacking_into_existing;
 mod test_where_filter;
 mod test_word_slices;
+mod test_worklist_count; // card list-count-grows

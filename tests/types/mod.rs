@@ -5,6 +5,7 @@ mod test_inline_unions;
 // card union-types
 mod test_class_unions;
 // card class-field
+mod test_alias_list_type; // card alias-list-type
 mod test_any_field_text;
 mod test_any_into_annotated;
 mod test_any_into_annotated_types;
@@ -59,6 +60,7 @@ mod test_declaration_without_value;
 mod test_declaration_zero_value;
 mod test_declared_int_of_float_expression;
 mod test_declared_list_marks;
+mod test_declared_list_of_parameters; // card declared-list
 mod test_declared_type_compared; // card operator-leftover
 mod test_dispatch;
 mod test_duration_comparison; // cards day-day, day-hours
@@ -75,6 +77,8 @@ mod test_enums_ported;
 mod test_extension_methods;
 mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
 mod test_field_named_like_library_word; // card field-before-library-word
+mod test_field_shadows_global; // card bare-name
+mod test_fields_of_later_types; // card node-enum-order
 mod test_file_declarations;
 mod test_filled_map_types; // card number-keyed
 mod test_flags;
@@ -103,6 +107,8 @@ mod test_list_element_types;
 mod test_list_test_of_a_map;
 mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
+mod test_map_field; // card map-field
+mod test_map_passed_as_any; // card map-passed
 mod test_map_read_size; // card map-read
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
@@ -120,12 +126,14 @@ mod test_nested_type_calls; // text hex 255 is text(hex(255))
 mod test_number_converts; // card number-converts
 mod test_number_field; // card number-field
 mod test_number_keeps_exact; // card number-keeps-exact
+mod test_number_param_int; // card number-param-int
 mod test_one_dispatch; // card one-dispatch
 mod test_operation_type; // card parse-type
 mod test_optional_casts;
 mod test_optional_list_items;
 mod test_optional_number_fields;
 mod test_param_named_like_global; // card param-named-like-global
+mod test_param_named_like_library_word; // card word-param-list
 mod test_parameter_text; // card param-text
 mod test_partial_time_comparisons; // cards now-make, now-allow
 mod test_passed_list_identity; // card xs-xs
@@ -148,6 +156,7 @@ mod test_runtime_text_ratio;
 mod test_same_identity;
 mod test_scoped_enum_cases; // card node-enum
 mod test_self_typed_field; // card empty-field
+mod test_separated_list_writes; // card mark-separator
 mod test_shared_instances;
 mod test_shared_lists; // card shared-lists
 mod test_sized_array_values;
@@ -194,10 +203,12 @@ mod test_type_name_definition_forms;
 mod test_type_name_matching;
 mod test_type_of;
 mod test_type_of_consistency; // card type-of-consistency
+mod test_type_of_empty_block; // card type-class
 mod test_type_of_lambda_variable; // card type-says-symbol
 mod test_type_of_node_values;
 mod test_type_of_real_variable;
 mod test_type_parameters; // card random-should
+mod test_type_phrases_after_colon_and_as; // card cast-type
 mod test_type_static;
 mod test_type_test_is_only;
 mod test_type_tests;
@@ -209,6 +220,7 @@ mod test_type_word_user_function;
 mod test_type_words;
 mod test_typed_arrays;
 mod test_typed_builtins; // card typed-builtins
+mod test_typed_list_annotations; // card typed-list-annotations
 mod test_typed_list_elements; // card typed-list-elements
 mod test_types;
 mod test_types_scope;

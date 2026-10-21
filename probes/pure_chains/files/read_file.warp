@@ -1,0 +1,5 @@
+text = read(module_directory + "/sample.md")
+print(text.split("\n")#2)
+print(#text)
+missing = try read(module_directory + "/no_such_file.md") else "none"
+print(missing)

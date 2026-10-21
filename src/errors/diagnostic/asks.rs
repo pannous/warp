@@ -359,6 +359,7 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 		diagnostics.assumptions.push(diagnostic.clone());
 		asked_before
 	});
+	record(|| Said::Assumed(diagnostic.clone()));
 	if warning_mode().fails(diagnostic.level) {
 		return Err(diagnostic.into_error());
 	}

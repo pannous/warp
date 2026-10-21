@@ -4,7 +4,7 @@
 //! kind and reads the node's parts (destructuring.rs). Op, Bracket and Separator are plain enums whose cases are spelled
 //! as a node carries them: `Op.Add as text` is "+", `"+" as Op` is Add.
 
-use super::nodes::{key, matched};
+use super::nodes::{if_then_else, key, matched};
 use crate::node::{call, Bracket, Node};
 use crate::operators::{Op, OP_CODES};
 use std::collections::HashMap;
@@ -136,20 +136,25 @@ pub fn spelling(enum_name: &str, case: &str) -> Option<String> {
 	}
 }
 
-/// `Op·text(c) := match c {Add: "+", …, _: c}` and `Op·case(t) := match t {"+": Add, …, _: t}`: a text passes
-/// either, so `key(a, "+", b)` keeps working while the compiler moves to the cases
+/// `Op·text(c) := if c is text then c else match c {Add: "+", …, _: c}` and `Op·case(t) := match t {"+": Add, …, _: t}`:
+/// a text passes either, so `key(a, "+", b)` keeps working while the compiler moves to the cases; Op·text gives a text
+/// back at once, not after a test of every case (the compiler's own `op == Op.Add` compares the text a node carries)
 fn spelling_functions(enum_name: &str, cases: &[String]) -> Vec<Node> {
 	let value = Node::symbol(SPELLED_VALUE);
 	let spelled: Vec<(Node, Node)> =
 		cases.iter().filter_map(|case| Some((Node::symbol(case), Node::Text(spelling(enum_name, case)?)))).collect();
-	let function = |name: &str, arms: Vec<Node>| {
-		let other = key(Node::symbol(OTHER_ARM), Op::Colon, value.clone());
-		let body = matched(value.clone(), [arms, vec![other]].concat());
-		key(call(&spelled_function(enum_name, name), vec![value.clone()]), Op::Define, body)
-	};
-	let to_text = spelled.iter().map(|(case, text)| key(case.clone(), Op::Colon, text.clone())).collect();
-	let to_case = spelled.iter().map(|(case, text)| key(text.clone(), Op::Colon, case.clone())).collect();
-	vec![function(TEXT_FUNCTION, to_text), function(CASE_FUNCTION, to_case)]
+	let other = key(Node::symbol(OTHER_ARM), Op::Colon, value.clone());
+	let function =
+		|name: &str, body: Node| key(call(&spelled_function(enum_name, name), vec![value.clone()]), Op::Define, body);
+	let to_text = spelled.iter().map(|(case, text)| key(case.clone(), Op::Colon, text.clone()));
+	let to_case = spelled.iter().map(|(case, text)| key(text.clone(), Op::Colon, case.clone()));
+	let is_text = kind_test(node_case("Text").expect("NODE_CASES has Text"), &value);
+	let cases_to_text = matched(value.clone(), to_text.chain([other.clone()]).collect());
+	let text = if_then_else(is_text, value.clone(), cases_to_text);
+	vec![
+		function(TEXT_FUNCTION, text),
+		function(CASE_FUNCTION, matched(value.clone(), to_case.chain([other]).collect())),
+	]
 }
 
 /// The type names the program declares itself: `enum Op {…}`, `class Node {…}`

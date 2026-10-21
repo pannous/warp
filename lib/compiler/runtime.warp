@@ -6,6 +6,7 @@
 # The case tables of upper and lower
 use case_tables
 use "runtime/instructions.warp"
+use "runtime/walks.warp"
 use "runtime/text.warp"
 use "runtime/case.warp"
 use "runtime/show.warp"
@@ -23,7 +24,9 @@ use "runtime/conversions.warp"
 use "runtime/exact.warp"
 use "runtime/exact_rounding.warp"
 use "runtime/errors.warp"
+use "runtime/files.warp"
 use "runtime/nodes.warp"
+use "runtime/builders.warp"
 use "runtime/durations.warp"
 use "runtime/times.warp"
 use "runtime/ordering.warp"

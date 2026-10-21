@@ -1,3 +1,10 @@
+# Pure hello cloud check
+
+- Reuse `scripts/cloud-test.sh`; do not add a second cloud runner.
+- Add one named preset for the existing ignored end-to-end `warp pure hello` outcome test.
+- Document the preset in the worker procedure so compiler and pipeline Rust changes run it.
+- Cover argument expansion with a small source probe, then run the real targeted outcome check and static gates.
+
 # JSON-to-Node cleanup
 
 - Pin the existing foreign-call conversion behavior with a focused test before changing production code.
@@ -12,6 +19,13 @@
 - Drop the affected pooled cloud session by its job id so its full VM is not reused, while keeping the failure loud in the result and dropped-session log.
 - Reuse the existing result collection and pool helpers; keep ordinary build failures and successful retries unchanged.
 - Run the focused cloud probes, queued targeted test, formatting/style checks, clippy, wasm32 check, and Playground workflow.
+
+# Cloud-test run identity cleanup
+
+- Reproduce two launches of one branch and tip with different filters or environment settings resolving to the same run id.
+- Derive one deterministic run identity from the branch, tip, base, environment settings, and test arguments, and reuse it for launch, cloud execution, collection, and saved artifacts.
+- Keep identical invocations coalesced while making the transient job ref unique across concurrent launcher processes.
+- Update the cloud-lane guide and the self-hosted suite's result lookup, then run the focused cloud probes and prescribed gates.
 
 # Delete-list cleanup
 
@@ -195,3 +209,10 @@
 - Route `÷` and `÷=` through the existing `FloorDiv` and `FloorDivAssign` operators; do not add a parallel arithmetic path.
 - Emit one shared newcomer note that explains Julia-compatible floor division and names `/` for plain division.
 - Keep the Rust and self-hosted parser operator tables aligned, update the two specified wiki sections, and run the focused parser tests, clippy, and wasm32 check.
+
+# Global size alias cleanup
+
+- Reproduce `size(xs)` as an ordinary program outcome before changing production code.
+- Reuse the prelude alias mechanism and the existing `count` implementation; do not add another counting path.
+- Preserve program-defined `size` functions and object fields/methods where normal dispatch gives them precedence.
+- Add focused outcome coverage, then run the targeted test, formatting, style, clippy, and wasm32 checks.

@@ -31,7 +31,8 @@ pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
 		let widened = std::mem::take(&mut scope.widened_bindings);
 		split_globals.extend(split);
 		*scope = before.clone();
-		scope.globals.extend(split_globals.iter().map(|global| (global.name.clone(), global.clone())));
+		std::rc::Rc::make_mut(&mut scope.globals)
+			.extend(split_globals.iter().map(|global| (global.name.clone(), global.clone())));
 		scope.widened_bindings = widened;
 	}
 }
@@ -73,7 +74,9 @@ pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<No
 /// function's own, never the enclosing program's (where locals of one name in many functions widened each other forever)
 pub(super) fn function_definition_body(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
-		Node::Key(left, Op::Assign | Op::Define, body) if super::user_functions::signature(left).is_some() => Some(body),
+		Node::Key(left, Op::Assign | Op::Define, body) if super::user_functions::signature(left).is_some() => {
+			Some(body)
+		}
 		Node::List(items, _, _) if items.len() >= 2 && items[0].symbol_name().is_some_and(is_function_keyword) => {
 			items.last()
 		}
@@ -109,7 +112,7 @@ pub(super) fn collect_variables_inner(
 		Node::Key(left, Op::Colon, right) if left.is_symbol("global") => {
 			let count = collect_variables_inner(right, scope, true, false);
 			if let Some(global) = global_binding(right, scope).filter(|global| !scope.is_global(&global.name)) {
-				scope.globals.insert(global.name.clone(), global);
+				std::rc::Rc::make_mut(&mut scope.globals).insert(global.name.clone(), global);
 			}
 			count
 		}
@@ -159,6 +162,9 @@ fn define_new(left: &Node, right: &Node, scope: &mut Scope) {
 		if scope.lookup(name).is_none() && !scope.is_global(name) {
 			let kind = binding_kind(right, scope);
 			scope.define(name.to_string(), None, kind);
+			if let Some(local) = scope.own_binding_mut(name) {
+				local.empty_list = right.is_empty_list_literal();
+			}
 		}
 	}
 }
@@ -168,11 +174,21 @@ fn widen_by_compound_assign(left: &Node, op: &Op, right: &Node, scope: &mut Scop
 	let Some(name) = left.symbol_name() else {
 		return;
 	};
+	// `xs += 3` appends 3 as `xs += [3]` does (decision list-append-plus)
+	let item_list = scope.lookup(name).filter(|_| *op == Op::AddAssign).and_then(|local| {
+		let appends = crate::analyzer::inference::appends_item(local.kind, local.empty_list, infer_type(right, scope));
+		appends.then(|| crate::analyzer::inference::one_item_list(right))
+	});
+	let right = item_list.as_ref().unwrap_or(right);
 	mark_ratio(left, right, scope);
 	widen_to_float(scope, name, right);
 	// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
-	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
-	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
+	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error. A list stays a list, whatever it adds:
+	// `out += part` of a part of an `any` list grows it in place (list_extend), held as a Node it was copied each step
+	let grows_list = *op == Op::AddAssign
+		&& (scope.lookup(name).is_some_and(|local| local.kind == Kind::List)
+			|| crate::analyzer::inference::holds_empty_list(scope, name));
+	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) && !grows_list {
 		widen_to_node(scope, name, &Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone())));
 	}
 	// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
@@ -238,9 +254,13 @@ fn bind_assigned_kind(left: &Node, right: &Node, scope: &mut Scope) {
 			scope.define(name.clone(), type_node, kind);
 			if let Some(local) = scope.own_binding_mut(name) {
 				local.declared = declared.is_some();
+				local.empty_list = right.is_empty_list_literal();
 			}
 		}
 		Node::Symbol(name) => {
+			if let Some(local) = scope.own_binding_mut(name) {
+				local.empty_list = right.is_empty_list_literal();
+			}
 			type_list_by_first_append(name, right, scope);
 			type_map_by_first_entry(name, right, scope);
 			widen_list_type(scope, name, right);
@@ -255,7 +275,7 @@ fn bind_assigned_kind(left: &Node, right: &Node, scope: &mut Scope) {
 			};
 			let kind = declared_kind(type_node).unwrap_or(Kind::Int);
 			// `global todos` in a function, `todos:[Todo] = ø` in main (a lowered `stored todos`): the global takes the type
-			if let Some(global) = scope.globals.get_mut(name) {
+			if let Some(global) = scope.own_global_mut(name) {
 				global.kind = kind;
 				global.type_node = Some(type_node.clone());
 			} else if !scope.is_global(name) {
@@ -506,6 +526,9 @@ fn visit_read_words(node: &Node, read: &mut dyn FnMut(&str)) {
 pub type FunctionKinds = std::rc::Rc<HashMap<String, Kind>>;
 /// Variables that hold a closure → `closure_new` targets they may contain, shared like FunctionKinds
 pub type ClosureTargets = std::rc::Rc<HashMap<String, HashSet<String>>>;
+/// Declared globals by name, shared like FunctionKinds: every function body's scope starts with the same table, copied
+/// only by a body that declares or refines one (Rc::make_mut)
+pub type Globals = std::rc::Rc<HashMap<String, Local>>;
 
 /// Scope for tracking variable bindings
 #[derive(Clone, Debug, Default)]
@@ -514,7 +537,7 @@ pub struct Scope {
 	pub function_kinds: FunctionKinds, // Return kinds of user functions, which shadow FFI names like `pow`
 	/// Variables that hold a closure → `closure_new` targets they may contain (per-site closure_call kinds)
 	pub closure_variable_targets: ClosureTargets,
-	pub globals: HashMap<String, Local>, // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
+	pub globals: Globals, // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
 	/// Locals a later write widened (an int to a float, a list's element type): their kind and type from the start
 	/// (collect_variables)
 	pub widened_bindings: HashMap<String, (Kind, Option<Box<Node>>)>,
@@ -559,7 +582,15 @@ impl Scope {
 	pub fn own_binding_mut(&mut self, name: &str) -> Option<&mut Local> {
 		match self.locals.contains_key(name) {
 			true => self.locals.get_mut(name),
-			false => self.globals.get_mut(name),
+			false => self.own_global_mut(name),
+		}
+	}
+
+	/// A declared global of this scope itself, copying the shared table first (Globals)
+	fn own_global_mut(&mut self, name: &str) -> Option<&mut Local> {
+		match self.globals.contains_key(name) {
+			true => std::rc::Rc::make_mut(&mut self.globals).get_mut(name),
+			false => None,
 		}
 	}
 
@@ -607,6 +638,7 @@ impl Scope {
 			data_pointer: 0,
 			data_length: 0,
 			may_be_ratio: false,
+			empty_list: false,
 		};
 		self.locals.insert(name, local.clone());
 		local

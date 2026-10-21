@@ -25,7 +25,7 @@ struct ProgramFlows {
 }
 
 /// Parameters, results and the globals functions widen, settled together
-pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut HashMap<String, Local>) {
+pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut Globals) {
 	let usages: Usages = ctx
 		.user_functions
 		.iter()
@@ -66,11 +66,19 @@ fn given_flows(ctx: &mut Context, flows: &ProgramFlows, usages: &Usages, held: &
 			let key = (name.clone(), index);
 			let passed = flows.strong.get(&key).and_then(|kinds| joined_known(kinds));
 			// `number sine(number x)` called with `π / 2`: a number parameter given a float holds floats
-			if passed == Some(Kind::Float)
-				&& param.annotation.as_ref().is_some_and(|declared| declared.name() == NUMBER_WORD)
-			{
-				param.annotation = Some(Node::Symbol(FLOAT_WORD.to_string()));
-				changed = true;
+			// `kind_of(n: any) := number_kind(n)`: given a Node, it holds the number as one, whichever kind it is
+			let plain_number = param
+				.annotation
+				.as_ref()
+				.filter(|declared| declared.name() == NUMBER_WORD && !is_number_as_node(declared))
+				.cloned();
+			if let Some(declared) = plain_number {
+				match passed {
+					Some(Kind::Float) => param.annotation = Some(Node::Symbol(FLOAT_WORD.to_string())),
+					Some(Kind::Empty) => param.annotation = Some(number_as_node(&declared)),
+					_ => {}
+				}
+				changed |= matches!(passed, Some(Kind::Float | Kind::Empty));
 			}
 			if !takes_passed_kind(param) {
 				continue;
@@ -130,7 +138,7 @@ fn flows(
 	ctx: &Context,
 	program: &Node,
 	kinds: &FunctionKinds,
-	globals: &HashMap<String, Local>,
+	globals: &Globals,
 	judge: &ArgumentJudge,
 	usages: &Usages,
 ) -> ProgramFlows {

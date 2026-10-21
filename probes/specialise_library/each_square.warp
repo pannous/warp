@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+# a math.warp function passed by name (card specialise-library-functions)
+use math
+
+each(f, n) := { total = 0; for i in 1 to n { total = total + f(i % 1000 - 500) }; total }
+print each(square, 20000000)

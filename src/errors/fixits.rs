@@ -6,7 +6,7 @@
 use std::ops::Range;
 
 /// One reading the user might have meant: replace the text `written` (near the diagnostic's position) with `replacement`
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Fix {
 	pub meaning: String,
 	pub written: String,

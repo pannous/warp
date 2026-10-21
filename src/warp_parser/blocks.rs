@@ -137,8 +137,10 @@ impl WarpParser {
 		let before_block = self.mark();
 		let spaced =
 			Context { indent_counts_spaces: self.context.indent_counts_spaces || indented_by_spaces, ..self.context };
+		// deeper than the head's own line: inside braces (base indent 0) the lines indented as the head are its siblings
+		let head_indent = self.indent_of_line_at(self.pos, spaced.indent_counts_spaces);
 		let (_, indent) = self.within(spaced, Self::skip_whitespace);
-		if indent <= self.context.base_indent {
+		if indent <= self.context.base_indent.max(head_indent) {
 			self.rewind(before_block);
 			return None;
 		}

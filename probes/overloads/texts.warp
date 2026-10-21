@@ -1,0 +1,1 @@
+filled(message: text, bound: int): text := "text " + message

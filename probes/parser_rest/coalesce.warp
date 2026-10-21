@@ -1,0 +1,6 @@
+pick(a: any, b: any): any := a ?? b
+print(pick(ø, 2))
+print(pick(1, 2))
+f(n: int): any := if n > 0 then ø else n
+g(n: int): any := f(n) ?? f(n - 5)
+print(g(3))

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
-const SETTING: &str = "WARP_PHASE_TIMES";
+pub(crate) const SETTING: &str = "WARP_PHASE_TIMES";
 
 static ON: LazyLock<bool> = LazyLock::new(|| crate::setting(SETTING).is_some());
 /// Per phase: its total time, its calls and how many are running now

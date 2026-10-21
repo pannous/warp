@@ -31,7 +31,7 @@ host_words = {
 	sound_samples: [["node", "int", "int", "int"], []]
 	run_block: [["node", "node", "node", "node"], ["node"]]
 	parse_code: [["node"], ["node"]]
-	block·value: [["int"], ["node"]]
+	"block·value": [["int"], ["node"]]
 	foreign_call: [["node", "node", "node", "node", "node"], ["node"]]
 	sleep: [["int"], []]
 	random: [[], ["float"]]

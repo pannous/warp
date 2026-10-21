@@ -6,6 +6,7 @@ mod test_byte_at_type_error; // card traps-wasm-trap
 mod test_byte_loop_inline; // card loop-calls
 mod test_case_table;
 mod test_cast_to_string;
+mod test_casts_to_text_units; // card selector-casts
 mod test_char_parameter_type; // chars-codepoints follow-up
 mod test_character_arithmetic;
 mod test_character_comparison;
@@ -61,6 +62,7 @@ mod test_text_as_float;
 mod test_text_builders; // card self-byte-buffer
 mod test_text_building;
 mod test_text_bytes;
+mod test_text_cache_lru; // card text-cache-lru
 mod test_text_casts;
 mod test_text_concat;
 mod test_text_cursor;

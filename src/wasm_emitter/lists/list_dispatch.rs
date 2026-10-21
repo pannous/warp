@@ -78,37 +78,11 @@ fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'
 			I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array),
 	];
 	body.extend_from_slice(new_list_tail);
+	body.extend([I::LocalSet(0), I::End]);
+	let grown_items =
+		[I::LocalGet(0), I::LocalGet(grown), I::RefAsNonNull, I::StructSet { struct_type_index: list, field_index: 1 }];
+	body.extend(grown_when_full(array, &[I::LocalGet(0), length()], &[I::LocalGet(0), items()], grown, &grown_items));
 	body.extend([
-		I::LocalSet(0),
-		I::End,
-		I::LocalGet(0),
-		length(),
-		I::LocalGet(0),
-		items(),
-		I::ArrayLen,
-		I::I32Eq,
-		I::If(BlockType::Empty),
-		I::LocalGet(0),
-		length(),
-		I::I32Const(1),
-		I::I32Shl,
-		I::I32Const(FIRST_CAPACITY),
-		I::I32Add,
-		I::ArrayNewDefault(array),
-		I::LocalSet(grown),
-		I::LocalGet(grown),
-		I::I32Const(0),
-		I::LocalGet(0),
-		items(),
-		I::I32Const(0),
-		I::LocalGet(0),
-		length(),
-		I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-		I::LocalGet(0),
-		I::LocalGet(grown),
-		I::RefAsNonNull,
-		I::StructSet { struct_type_index: list, field_index: 1 },
-		I::End,
 		I::LocalGet(0),
 		items(),
 		I::LocalGet(0),
@@ -123,6 +97,28 @@ fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'
 		I::StructSet { struct_type_index: list, field_index: 0 },
 		I::LocalGet(0),
 	]);
+	body
+}
+
+/// When the array `items` pushes is full (`count` items): one twice as large (plus FIRST_CAPACITY) in local `grown`,
+/// the items copied into it, then `keep_grown` puts it in place of the full one
+pub(super) fn grown_when_full(
+	array: u32,
+	count: &[I<'static>],
+	items: &[I<'static>],
+	grown: u32,
+	keep_grown: &[I<'static>],
+) -> Vec<I<'static>> {
+	let mut body = [count, items, &[I::ArrayLen, I::I32Eq, I::If(BlockType::Empty)][..]].concat();
+	body.extend_from_slice(count);
+	body.extend([I::I32Const(1), I::I32Shl, I::I32Const(FIRST_CAPACITY), I::I32Add, I::ArrayNewDefault(array)]);
+	body.extend([I::LocalSet(grown), I::LocalGet(grown), I::I32Const(0)]);
+	body.extend_from_slice(items);
+	body.push(I::I32Const(0));
+	body.extend_from_slice(count);
+	body.push(I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array });
+	body.extend_from_slice(keep_grown);
+	body.push(I::End);
 	body
 }
 
@@ -190,6 +186,8 @@ const NODE_RUNTIME: ElementRuntime = ElementRuntime {
 /// list_items(node) -> $NodeList: the items of a Node list in a fresh array (emit_list_items), what a Node list variable
 /// starts from
 pub(in crate::wasm_emitter) const LIST_ITEMS: &str = "list_items";
+/// list_item_count(node) -> i64: how many items list_items finds, without making their array
+pub(in crate::wasm_emitter) const LIST_ITEM_COUNT: &str = "list_item_count";
 
 impl ElementType {
 	const ALL: [ElementType; 2] = [ElementType::Int, ElementType::Float];
@@ -588,6 +586,16 @@ impl WasmGcEmitter {
 		}
 		let runtime = list.element.runtime();
 		match value.drop_meta() {
+			// `xs.pop()`: one item fewer counted, none copied (card shrink-in-place); the pop read the last item first, so
+			// an empty list never gets here
+			_ if crate::list_mutations::dropped_last(value).is_some_and(|list| list.symbol_name() == Some(name)) => {
+				let (_, list_type) = self.typed_list_types(list.element);
+				#[rustfmt::skip]
+				Self::emit_list(func, &[
+					slot.get(), slot.get(), I::StructGet { struct_type_index: list_type, field_index: 0 }, I::I32Const(1),
+					I::I32Sub, I::StructSet { struct_type_index: list_type, field_index: 0 }, slot.get(),
+				]);
+			}
 			// the one list both variables hold (P200b)
 			Node::Symbol(_) if self.typed_list(value).is_some_and(|(_, source)| source.element == list.element) => {
 				let (source_slot, _) = self.typed_list(value).expect("guarded");

@@ -7,7 +7,8 @@
 //! has thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
 use crate::compiler::node_views::{analysis_view, handled_plain_view, json_text, node_of_handled_view, view_json};
 use crate::node::Node;
-use std::path::PathBuf;
+use std::collections::{HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 
@@ -34,11 +35,12 @@ const PASSES_PROGRAM: &str = "use \"{lib}/compiler/passes.warp\"\nuse os\nstage(
 const ANALYSIS_PROGRAM: &str =
 	"use \"{lib}/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(emitter_kinds(node_of(json(read(args#1)))))";
 /// emitter.warp `typed_wasm_module` of the request in the worker's input file, [the lowered program's view, its kinds
-/// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
+/// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE;
+/// `stage_node` keeps `{}` an empty map, as the passes get it, not ø
 const EMIT_PROGRAM: &str = concat!(
 	"use \"{lib}/compiler/emitter.warp\"\nuse os\n",
 	"request = json(read(args#1))\n",
-	"typed_wasm_module(node_of(request#1), node_of(json(read(args#2))), json(read(args#3)), request#2)"
+	"typed_wasm_module(stage_node(request#1), stage_node(json(read(args#2))), json(read(args#3)), request#2)"
 );
 /// Where a stage program names lib/, the folder library() resolves
 const LIBRARY_MARK: &str = "{lib}";
@@ -59,9 +61,9 @@ const RAN_PURE: &str = "pure: ran";
 #[cfg(feature = "native")]
 const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
 /// The WARP_ settings that change no stage program's compile, so not its kept module either: where lib/ lies is keyed
-/// by its contents, hints and windows only change what a run shows
+/// by its contents, hints and windows only change what a run shows, a profile only watches it
 #[cfg(feature = "native")]
-const SETTINGS_BESIDE_STAGES: [&str; 7] = [
+const SETTINGS_BESIDE_STAGES: [&str; 8] = [
 	SWITCH,
 	ANALYSIS_SWITCH,
 	REFUSALS_FILE,
@@ -69,6 +71,7 @@ const SETTINGS_BESIDE_STAGES: [&str; 7] = [
 	crate::modules::LIBRARY_SETTING,
 	crate::errors::diagnostic::HINTS_VARIABLE,
 	crate::graphics::paint::NO_WINDOW_VARIABLE,
+	warp_runtime::profile::PROFILE_VARIABLE,
 ];
 /// The stage request of the parse: [0, source]; a pass's is [its index in passes.warp `passes`, the view]
 const PARSE_STAGE: usize = 0;
@@ -79,7 +82,7 @@ const SETUP_EXTENSION: &str = "json";
 const INPUT_FOLDER: &str = "warp-self-hosted";
 /// Stack of a worker's own frames: the stage program's compile recurses as deeply as a test thread's; the wasm stack
 /// the engines get comes on top (worker_stack)
-const WORKER_STACK: usize = 64 << 20;
+pub(crate) const WORKER_STACK: usize = 64 << 20;
 
 /// Computing time of one stage request: a compiler stage lowering a large program (parser.warp parses and lowers
 /// itself and the files it uses in about 70 s of CPU) is no runaway, so it gets more than a program's 60 s;
@@ -110,28 +113,41 @@ type Request = (String, Sender<String>);
 /// The JSON text a stage program reads as one of its setup files, or why it could not be made
 type Setup = fn() -> Result<String, Node>;
 
-/// A stage program, the JSON texts a worker writes once for it to read as `args#2`, `args#3`…, and its idle workers
+/// A stage program, named by its file in lib/compiler, the JSON texts a worker writes once for it to read as `args#2`,
+/// `args#3`…, and its idle workers
 struct Stage {
+	file: &'static str,
 	program: &'static str,
 	setup: &'static [Setup],
 	workers: Mutex<Vec<Sender<Request>>>,
 }
 
-static PASSES: Stage = Stage { program: PASSES_PROGRAM, setup: &[prelude_text], workers: Mutex::new(Vec::new()) };
-static ANALYSIS: Stage = Stage { program: ANALYSIS_PROGRAM, setup: &[], workers: Mutex::new(Vec::new()) };
-static EMIT: Stage =
-	Stage { program: EMIT_PROGRAM, setup: &[runtime_words, host_words], workers: Mutex::new(Vec::new()) };
+static PASSES: Stage =
+	Stage { file: "passes.warp", program: PASSES_PROGRAM, setup: &[prelude_text], workers: Mutex::new(Vec::new()) };
+static ANALYSIS: Stage =
+	Stage { file: "analyzer.warp", program: ANALYSIS_PROGRAM, setup: &[], workers: Mutex::new(Vec::new()) };
+static EMIT: Stage = Stage {
+	file: "emitter.warp",
+	program: EMIT_PROGRAM,
+	setup: &[runtime_words, host_words],
+	workers: Mutex::new(Vec::new()),
+};
 
 impl Stage {
 	/// The stage program, naming the files of library()
 	fn text(&self) -> String {
 		self.program.replace(LIBRARY_MARK, &library().display().to_string())
 	}
+
+	/// The failure of a run of the stage, naming its file, so a bare warp error says where it came from
+	fn failed(&self, failure: &str) -> String {
+		format!("the self-hosted stage {} failed: {failure}", compiler_folder().join(self.file).display())
+	}
 }
 
 /// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses (also those
 /// runtime.warp names with `use`), resolved once per process (modules::library_folder)
-fn library() -> &'static std::path::Path {
+pub(crate) fn library() -> &'static std::path::Path {
 	static FOLDER: OnceLock<PathBuf> = OnceLock::new();
 	FOLDER.get_or_init(crate::modules::library_folder)
 }
@@ -196,7 +212,7 @@ pub fn program_kinds(program: &Node) -> Result<Option<serde_json::Value>, Node> 
 /// The kinds analyzer.warp finds in the program `view` shows, self-hosted or not
 pub fn kinds_of(view: &Node) -> Result<serde_json::Value, String> {
 	let kinds = answer(&ANALYSIS, view_json(view))?;
-	let failed = || format!("the self-hosted analysis failed: {kinds}");
+	let failed = || ANALYSIS.failed(&kinds);
 	let kinds: String = serde_json::from_str(&kinds).map_err(|_| failed())?;
 	serde_json::from_str(&kinds).map_err(|_| failed())
 }
@@ -221,14 +237,13 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 			record_refusal(&refusal);
 			None
 		}
-		Err(failure) => Some(Err(crate::node::error(&format!("the self-hosted emitter failed: {failure}")))),
+		Err(failure) => Some(Err(crate::node::error(&failure))),
 		Ok(mut bytes) => {
 			// the Rust front took the program's `use fuel`, so emitter.warp never saw it
 			if let Some(mark) = crate::host::fuel_mark() {
 				wasm_encoder::Section::append_to(&mark, &mut bytes);
 			}
-			let needs_host = imports_from(&bytes, HOST_MODULE);
-			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
+			Some(Ok(module_of_bytes(bytes)))
 		}
 	}
 }
@@ -251,52 +266,65 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 		Ok(Ok(bytes)) => {
 			record_lines(&format!("{RAN_PURE}\n"));
 			crate::wasm_emitter::write_debug_module(&bytes);
-			let needs_host = imports_from(&bytes, HOST_MODULE);
-			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
+			Some(Ok(module_of_bytes(bytes)))
 		}
 		Err(refusal) => {
 			log::info!("pure lane refused: {refusal}");
-			let refused = refusal.starts_with(OUTSIDE_THE_CORE);
-			let refusal = format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE));
-			record_refusal(&refusal);
-			let failure = if refused { refusal } else { format!("the pure lane failed: {refusal}") };
+			let recorded = format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE));
+			record_refusal(&recorded);
+			let failure = if refusal.starts_with(OUTSIDE_THE_CORE) {
+				recorded
+			} else {
+				format!("the pure lane failed: {refusal}")
+			};
 			strict.then(|| Err(crate::node::error(&failure)))
 		}
 	}
 }
 
 /// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives;
-/// the program's compile error instead when the checks of the passes stage diagnose one
-fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
+/// the program's compile error instead when the checks of the passes stage diagnose one. Their warnings are said once
+/// the module is made, so a refusal leaves them to the Rust lane, and fail it under `use strict`
+pub(crate) fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
+	started(&[&ANALYSIS, &EMIT]);
 	let checked = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
-	let failed = || format!("the passes stage failed: {checked}");
+	let failed = || PASSES.failed(&checked);
 	let parts: serde_json::Value = serde_json::from_str(&checked).map_err(|_| failed())?;
 	let [view, diagnostics] = parts.as_array().map(Vec::as_slice).ok_or_else(failed)? else { return Err(failed()) };
-	if let Err(diagnosed) = reported(diagnostics) {
-		return Ok(Err(diagnosed));
-	}
+	let warnings = match diagnosed(diagnostics) {
+		Ok(warnings) => warnings,
+		Err(error) => return Ok(Err(error)),
+	};
 	let view = view.to_string();
 	let analysis = answer(&ANALYSIS, view.clone())?;
-	let kinds: String =
-		serde_json::from_str(&analysis).map_err(|_| format!("the analysis stage failed: {analysis}"))?;
-	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?).map(Ok)
+	let kinds: String = serde_json::from_str(&analysis).map_err(|_| ANALYSIS.failed(&analysis))?;
+	let bytes = module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)?;
+	let said = crate::errors::diagnostic::in_source_mode(code, || crate::errors::diagnostic::report(&warnings));
+	Ok(said.map(|()| bytes))
 }
 
-/// Says what the checks of the passes stage diagnosed, [level, message] each (lib/compiler/diagnostics.warp): an
-/// error is the program's value, a warning or hint is said as the Rust checks' are, failing under `use strict` alike
-fn reported(diagnostics: &serde_json::Value) -> Result<(), Node> {
+/// What the checks of the passes stage diagnosed, [level, message, fix, topic@expression] each
+/// (lib/compiler/diagnostics.warp): an error is the program's value, the warnings and hints are said as the Rust
+/// checks' are
+fn diagnosed(diagnostics: &serde_json::Value) -> Result<Vec<crate::errors::diagnostic::Diagnostic>, Node> {
 	use crate::errors::diagnostic::{Diagnostic, Level};
 	let mut said = Vec::new();
 	for diagnostic in diagnostics.as_array().into_iter().flatten() {
 		let text_at = |index: usize| diagnostic.get(index).and_then(serde_json::Value::as_str).unwrap_or_default();
-		let found = Diagnostic { message: text_at(1).to_string(), ..Default::default() };
+		let fix = Some(text_at(2)).filter(|fix| !fix.is_empty()).map(String::from);
+		let found = Diagnostic { message: text_at(1).to_string(), fix, ..Default::default() };
+		// what "got it" silences: `topic@expression`
+		let found = match text_at(3).split_once('@') {
+			Some((topic, written)) => found.about(topic, written),
+			None => found,
+		};
 		match text_at(0) {
 			ERROR_LEVEL => return Err(found.into_error()),
 			HINT_LEVEL => said.push(found.level(Level::Hint)),
 			_ => said.push(found),
 		}
 	}
-	crate::errors::diagnostic::report(&said)
+	Ok(said)
 }
 
 /// The folder the program's `use`s name files of, as an absolute path: its file's, else the working directory
@@ -326,6 +354,14 @@ fn record_lines(lines: &str) {
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }
 
+/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word, libm when it
+/// imports pow (a float raised to a power)
+pub(crate) fn module_of_bytes(bytes: Vec<u8>) -> crate::pipeline::CompiledModule {
+	let needs_host = imports_from(&bytes, HOST_MODULE);
+	let needs_ffi = imports_from(&bytes, crate::ffi::LIBM);
+	crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi }
+}
+
 /// Does the module import a function of `module`
 fn imports_from(bytes: &[u8], module: &str) -> bool {
 	wasmparser::Parser::new(0).parse_all(bytes).any(|payload| match payload {
@@ -336,16 +372,18 @@ fn imports_from(bytes: &[u8], module: &str) -> bool {
 	})
 }
 
-/// The bytes of the module emitter.warp answers as a list of byte numbers, else its answer as the failure
+/// The bytes of the module emitter.warp answers as a list of byte numbers, its refusal (OUTSIDE_THE_CORE) as is, else
+/// its answer as the stage's failure
 fn module_of(answer: &str) -> Result<Vec<u8>, String> {
 	match serde_json::from_str(answer) {
 		Ok(serde_json::Value::Array(items)) => {
 			let bytes: Option<Vec<u8>> =
 				items.iter().map(|item| item.as_u64().and_then(|byte| u8::try_from(byte).ok())).collect();
-			bytes.ok_or_else(|| format!("a module byte beyond 0..255: {answer}"))
+			bytes.ok_or_else(|| EMIT.failed(&format!("a module byte beyond 0..255: {answer}")))
 		}
-		Ok(serde_json::Value::String(refusal)) => Err(refusal),
-		_ => Err(answer.to_string()),
+		Ok(serde_json::Value::String(refusal)) if refusal.starts_with(OUTSIDE_THE_CORE) => Err(refusal),
+		Ok(serde_json::Value::String(failure)) => Err(EMIT.failed(&failure)),
+		_ => Err(EMIT.failed(answer)),
 	}
 }
 
@@ -385,25 +423,42 @@ fn runtime_words() -> Result<String, Node> {
 
 /// runtime.warp with the files its `use` lines name in their place, after it: a module of lib (`use case_tables`) or
 /// one of its parts (`use "runtime/text.warp"`, relative to lib/compiler). Their words become runtime words, compiled
-/// into a module only when called
+/// into a module only when called. A part's own `use "x.warp"` lines (its siblings, the intrinsics it declares, so it
+/// compiles alone) join the same way, each file once, breadth first: the parts keep runtime.warp's order. The
+/// declarations of emitter.warp's intrinsics (`is_null(x: any): bool from runtime`) stay out, left to emitter.warp as
+/// definitions.warp drops them
 pub fn runtime_source() -> std::io::Result<String> {
-	let source = std::fs::read_to_string(compiler_folder().join(RUNTIME_WORDS))?;
-	let mut joined = String::new();
-	let mut used = String::new();
-	for line in source.lines() {
-		match line.strip_prefix("use ").map(str::trim) {
-			Some(name) => used += &std::fs::read_to_string(used_file(name))?,
-			None => joined += line,
+	let first = compiler_folder().join(RUNTIME_WORDS);
+	let mut joined = HashSet::from([first.clone()]);
+	let mut waiting = VecDeque::from([first]);
+	let mut source = String::new();
+	while let Some(file) = waiting.pop_front() {
+		let folder = file.parent().unwrap_or(Path::new(".")).to_path_buf();
+		for line in std::fs::read_to_string(&file)?.lines() {
+			match line.strip_prefix("use ").map(str::trim) {
+				Some(name) => {
+					let path = used_file(&folder, name);
+					if joined.insert(path.clone()) {
+						waiting.push_back(path);
+					}
+				}
+				None if is_intrinsic_declaration(line) => {}
+				None => source += line,
+			}
+			source.push('\n');
 		}
-		joined.push('\n');
 	}
-	Ok(joined + &used)
+	Ok(source)
 }
 
-/// The file of a `use` line of runtime.warp: a quoted path beside runtime.warp, else a module of lib
-fn used_file(name: &str) -> PathBuf {
+fn is_intrinsic_declaration(line: &str) -> bool {
+	line.trim_end().ends_with(&format!(" from {}", crate::ffi::RUNTIME_LIBRARY))
+}
+
+/// The file of a `use` line: a quoted path beside the using file, else a module of lib
+fn used_file(folder: &Path, name: &str) -> PathBuf {
 	match name.strip_prefix('"').and_then(|quoted| quoted.strip_suffix('"')) {
-		Some(path) => compiler_folder().join(path),
+		Some(path) => folder.join(path),
 		None => library().join(format!("{name}.warp")),
 	}
 }
@@ -416,7 +471,19 @@ fn stage(index: usize, argument: &str, handles: &[Node]) -> Node {
 	};
 	match serde_json::from_str(&answer) {
 		Ok(view) => node_of_handled_view(&view_of_json(view), handles),
-		Err(_) => crate::node::error(&format!("self-hosted stage {index} failed: {answer}")),
+		Err(_) => crate::node::error(&PASSES.failed(&format!("pass {index}: {answer}"))),
+	}
+}
+
+/// A worker for each stage without one, its program compiling at once: the later stages of a compile are ready when
+/// the first answers (cold, each takes tens of seconds; one after another they took most of a cold start, card
+/// pure-cold-start)
+fn started(stages: &[&'static Stage]) {
+	for stage in stages {
+		let mut workers = stage.workers.lock().unwrap();
+		if workers.is_empty() {
+			workers.push(spawn_worker(stage));
+		}
 	}
 }
 
@@ -425,7 +492,7 @@ fn answer(stage: &'static Stage, request: String) -> Result<String, String> {
 	let worker = stage.workers.lock().unwrap().pop().unwrap_or_else(|| spawn_worker(stage));
 	let (reply_to, reply) = channel();
 	let answer = worker.send((request, reply_to)).ok().and_then(|_| reply.recv().ok());
-	let answer = answer.ok_or("the self-hosted stage's worker died")?;
+	let answer = answer.ok_or_else(|| stage.failed("its worker died"))?;
 	stage.workers.lock().unwrap().push(worker);
 	Ok(answer)
 }
@@ -554,6 +621,11 @@ fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Nod
 		return Ok(module);
 	}
 	let module = crate::pipeline::compile(program)?;
+	// compiled once, run for every program: worth wasm-opt's seconds
+	let module = match crate::modules::binaryen::optimized_for_speed(&module.bytes) {
+		Some(bytes) => crate::pipeline::CompiledModule { bytes, ..module },
+		None => module,
+	};
 	if let Some(key) = key {
 		keep_under(&key, &module);
 	}
@@ -568,31 +640,43 @@ pub fn compiler_key() -> Option<&'static str> {
 	enabled().then(|| KEY.get_or_init(|| stage_key("the self-hosted compiler")).as_deref()).flatten()
 }
 
-/// The cache key of a stage program: the running binary, the program, the WARP_ settings and every file of lib/ with its
-/// path inside lib/, so an identical lib/ elsewhere (another worktree) reuses the kept modules; none when the binary has
-/// no path
+/// The cache key of a stage program: the sources warp was built from (WARP_SOURCE, build.rs), the program, the WARP_
+/// settings and every file of lib/ with its path inside lib/. Neither the binary's place nor its build profile: a
+/// release build's compiler.warp module is every copy's and the debug build's of those sources too, so an install
+/// builds it with the new binary before it goes in place (card self-warming); an identical lib/ elsewhere (another
+/// worktree) reuses the kept modules
 #[cfg(feature = "native")]
-fn stage_key(program: &str) -> Option<String> {
+pub(crate) fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
-	// canonical: macOS gives the path the binary was started by, `../../scratch/warp` keyed every folder apart
-	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;
 	let mut hasher = Sha256::new();
 	let library = library();
 	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
-	hasher.update(format!(
-		"{}\n{:?}\n{settings:?}\n{program}\n",
-		binary.display(),
-		crate::run::program_cache::stamp(&binary)
-	));
+	hasher.update(format!("{}\n{settings:?}\n{program}\n", env!("WARP_SOURCE")));
+	hash_library(&mut hasher);
+	Some(crate::extensions::hex_text(&hasher.finalize()))
+}
+
+/// The fingerprint of lib/: every file with its path inside lib/, the same for an identical lib/ elsewhere
+#[cfg(feature = "native")]
+pub(crate) fn library_fingerprint() -> String {
+	use sha2::{Digest, Sha256};
+	let mut hasher = Sha256::new();
+	hash_library(&mut hasher);
+	crate::extensions::hex_text(&hasher.finalize())
+}
+
+#[cfg(feature = "native")]
+fn hash_library(hasher: &mut sha2::Sha256) {
+	use sha2::Digest;
+	let library = library();
 	let mut files: Vec<PathBuf> = files_below(library.to_path_buf());
 	files.sort();
 	for file in files {
 		hasher.update(format!("{}\n", file.strip_prefix(library).unwrap_or(&file).display()));
 		hasher.update(std::fs::read(&file).unwrap_or_default());
 	}
-	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
 /// The files below `folder`, at any depth

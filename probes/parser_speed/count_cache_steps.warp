@@ -1,0 +1,13 @@
+// the steps of a lexer's starts_at over a 12 000 character source, with or without a longer text counted before it
+def starts_at(source: any, part: text, at: int): bool {
+	i = 0
+	while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }
+	i == part.length
+}
+earlier = "abcdefghij" * (3000 * 0 + round(random() * 0))
+counted = count(earlier)
+src = "abc def ghi " * (1000 + round(random() * 0))
+words = ["de", "gh", "zz", "def"]
+hits = 0
+for at in 0 to count(src) - 1 { for word in words { if starts_at(src, word, at) { hits += 1 } } }
+hits

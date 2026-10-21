@@ -26,8 +26,9 @@ const PLAIN_VALUE_KINDS: [Kind; 9] = [
 ];
 
 /// Runtime functions called from lowered code with their node arguments, and how many those are
-const NODE_ARGUMENT_CALLS: [(&str, usize); 3] = [
+const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
 	(crate::list_mutations::LIST_BECOME, 2),
+	(crate::list_mutations::LIST_DROP_LAST, 1),
 	(super::super::lists::list_ops::LIST_EXTEND, 2),
 	(super::super::reflection::library_ops::LIST_SORTED_BY, 2),
 ];
@@ -602,6 +603,12 @@ impl WasmGcEmitter {
 		if let Some(map_type) = crate::analyzer::held_map_type(arg, &self.scope) {
 			return map_type;
 		}
+		let holds_empty_list = |name: &str| {
+			crate::analyzer::holds_empty_list(&self.scope, name) && self.get_type(arg) == crate::type_kinds::Kind::Empty
+		};
+		if arg.is_empty_list_literal() || arg.symbol_name().is_some_and(holds_empty_list) {
+			return crate::words::LIST_WORD.to_string(); // `[]` (card run-time-empty)
+		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
 			Node::Empty => crate::type_kinds::Kind::Empty,
@@ -615,7 +622,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A value held as a Node whose type only the run time knows: an optional, an `any` parameter, an item of a mixed list
-	fn has_unknown_static_type(&self, subject: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn has_unknown_static_type(&self, subject: &Node) -> bool {
 		!matches!(subject.drop_meta(), Node::Number(_))
 			&& matches!(self.get_type(subject), crate::Kind::Empty | crate::Kind::Data)
 	}
@@ -659,16 +666,38 @@ impl WasmGcEmitter {
 		self.get_type(subject) == crate::Kind::List && self.static_type_name(subject) == crate::words::LIST_WORD
 	}
 
-	/// `t is number` of a type value t (`t = type(x)`, `int is number`): t names one of the types number covers, `t == int or
-	/// t == rational or …`; None for a value that is no symbol, or a test for a symbol
-	fn type_value_test(&self, subject: &Node, spec: &str) -> Option<Node> {
-		if self.get_type(subject) != crate::Kind::Symbol
-			|| crate::type_tests::type_matches(SYMBOL_WORD, spec)
-			|| crate::analyzer::is_code(subject, &self.scope)
-		{
-			return None;
+	/// `t is number` of a type value t (`t = type(x)`, `int is number`): whether t names one of the types number covers;
+	/// not for a value that is no symbol, or a test for a symbol
+	fn is_type_value_test(&self, subject: &Node, spec: &str) -> bool {
+		self.get_type(subject) == crate::Kind::Symbol
+			&& !crate::type_tests::type_matches(SYMBOL_WORD, spec)
+			&& !crate::analyzer::is_code(subject, &self.scope)
+	}
+
+	/// The type value `type_value` names one of the built-in types spec covers (`int`, `rational`, … of number), as an
+	/// i64 1 or 0: compared with each type value, never with a word the program may define (`operation`, a key type)
+	fn emit_names_covered_type(&mut self, func: &mut Function, type_value: &Node, spec: &str) {
+		self.emit_node_instructions(func, type_value);
+		let held = self.node_scratch();
+		Self::emit_list(func, &[I::RefAsNonNull, I::LocalSet(held)]);
+		self.emit_held_names_covered_type(func, held, spec);
+	}
+
+	fn emit_held_names_covered_type(&mut self, func: &mut Function, held: u32, spec: &str) {
+		let names = crate::type_tests::builtin_types_matching(spec);
+		if names.is_empty() {
+			func.instruction(&I::I64Const(0));
+			return;
 		}
-		Some(names_covered_type(subject, spec))
+		for (index, name) in names.iter().enumerate() {
+			func.instruction(&I::LocalGet(held));
+			self.emit_type_value(func, name);
+			self.emit_call(func, super::super::VALUES_EQUAL);
+			if index > 0 {
+				func.instruction(&I::I32Or);
+			}
+		}
+		func.instruction(&I::I64ExtendI32U);
 	}
 
 	/// `is_type(x, "spec")` as a Node: its 1 or 0
@@ -702,8 +731,8 @@ impl WasmGcEmitter {
 		let Node::Text(spec) = spec.drop_meta() else {
 			return false;
 		};
-		if let Some(names_a_covered_type) = self.type_value_test(subject, spec) {
-			self.emit_numeric_value(func, &names_a_covered_type);
+		if self.is_type_value_test(subject, spec) {
+			self.emit_names_covered_type(func, subject, spec);
 			return true;
 		}
 		let filter_loop = filter_loop_of(node);
@@ -752,6 +781,17 @@ impl WasmGcEmitter {
 		}
 		match kind_mask {
 			Some(mask) => {
+				// `f(float)` of `f(t: type) := t is number`: a type value known only at run time names a type spec covers
+				let held_type_value = subject.drop_meta().symbol_name().is_some() && !code;
+				if held_type_value {
+					self.emit_node_instructions(func, subject);
+					let held = self.node_scratch();
+					Self::emit_list(func, &[I::RefAsNonNull, I::LocalSet(held)]);
+					self.emit_is_type_value(func, held);
+					func.instruction(&I::If(BlockType::Result(ValType::I64)));
+					self.emit_held_names_covered_type(func, held, spec);
+					func.instruction(&I::Else);
+				}
 				self.emit_node_instructions(func, subject);
 				Self::emit_list(func, &[I::RefAsNonNull, I::I64Const(mask)]);
 				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
@@ -771,6 +811,9 @@ impl WasmGcEmitter {
 					self.emit_is_map(func);
 					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64And]);
 				}
+				if held_type_value {
+					func.instruction(&I::End);
+				}
 			}
 			// an instance's static kind is no type name: its declared type is read at run time
 			// `d is Animal` of a Dog extending Animal holds too
@@ -786,7 +829,7 @@ impl WasmGcEmitter {
 					Bracket::Round,
 					Separator::None,
 				);
-				self.emit_numeric_value(func, &names_covered_type(&type_value, spec));
+				self.emit_names_covered_type(func, &type_value, spec);
 			}
 			// `x = 2.5; x is int`: an exact ratio is an Int at run time, only is_ratio tells it from a whole number
 			None if self.whole_only_at_run_time(subject, spec) => {
@@ -820,12 +863,17 @@ impl WasmGcEmitter {
 			&& !self.ctx.user_functions.contains_key(name);
 		if holds_plain_value {
 			let arguments: Vec<String> = items[1..].iter().map(crate::normalize::operand_text).collect();
-			let call = format!("{name}({})", arguments.join(", "));
-			// a counting word stays a word; any other name has no function, as ffi::undefined_function_message says
+			let shown = crate::lowering::shadowing_bindings::written_name(name);
+			let call = format!("{shown}({})", arguments.join(", "));
+			// a counting word stays a word; a local named like the program's function hides it; any other name has no
+			// function, as ffi::undefined_function_message says
 			let message = match crate::analyzer::counting_function(name, &self.ctx) {
-				Some(_) => format!("`{name}` is a variable here, so {call} cannot count: rename the variable"),
+				Some(_) => format!("`{shown}` is a variable here, so {call} cannot count: rename the variable"),
+				None if crate::lowering::shadowing_bindings::hides_function(name) => format!(
+					"`{shown}` is a variable here, so {call} calls nothing: it hides the program's function {shown}; rename the variable"
+				),
 				None => format!(
-					"undefined function: {name} (`{name}` is a variable here, so {call} calls nothing: rename the variable)"
+					"undefined function: {shown} (`{shown}` is a variable here, so {call} calls nothing: rename the variable)"
 				),
 			};
 			self.emit_type_error(func, message);
@@ -1238,6 +1286,8 @@ impl WasmGcEmitter {
 		self.resolves_call(word)
 			|| crate::numbers::units::is_unit(word)
 			|| crate::analyzer::type_word_kind(word).is_some()
+			|| crate::analyzer::names_list_type(word) // a plural type word: `type Code = ints`
+			|| self.ctx.variant_names.contains(word) // an enum's case: `Op.Add` is the case Add, near add or not
 	}
 
 	/// `data cube 3`: the words after the prefix as data (P62); true when it was one
@@ -1588,15 +1638,4 @@ fn names_whole_numbers_only(spec: &str) -> bool {
 	let int = crate::Kind::Int.to_string();
 	crate::type_tests::type_matches(&int, spec)
 		&& !crate::type_tests::type_matches(crate::analyzer::RATIONAL_WORD, spec)
-}
-
-/// `t == int or t == rational or …`: the type value t names one of the built-in types spec covers
-fn names_covered_type(type_value: &Node, spec: &str) -> Node {
-	let names_type =
-		|name: &str| Node::Key(Box::new(type_value.clone()), Op::Eq, Box::new(Node::Symbol(name.to_string())));
-	crate::type_tests::builtin_types_matching(spec)
-		.into_iter()
-		.map(names_type)
-		.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test)))
-		.unwrap_or(Node::False)
 }

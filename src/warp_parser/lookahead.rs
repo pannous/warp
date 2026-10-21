@@ -51,16 +51,13 @@ impl WarpParser {
 
 	/// An operand may start after `offset` characters and following blanks: not a closing bracket, separator or the end
 	pub(super) fn operand_follows(&self, offset: usize) -> bool {
-		let mut position = offset;
-		while matches!(self.peek_char(position), ' ' | '\t') {
-			position += 1;
-		}
+		let position = offset + self.blanks_at(offset);
 		!matches!(self.peek_char(position), '\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '=')
 	}
 
 	/// `{from:1 to:2}`: an operator word directly before a key colon names the key; `else:` and `then:` open blocks
 	fn word_names_key(&self) -> bool {
-		let word: String = (0..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
+		let word = self.word_at(0);
 		let after = word.chars().count();
 		!word.is_empty()
 			&& !BLOCK_COLON_WORDS.contains(&word.as_str())
@@ -176,7 +173,7 @@ impl WarpParser {
 	fn spelled_here(&self, spelling: &str) -> bool {
 		let length = spelling.chars().count();
 		let after = self.peek_char(length);
-		spelling.chars().enumerate().all(|(i, c)| self.peek_char(i) == c)
+		self.at_text(spelling)
 			&& !(spelling.ends_with(char::is_alphabetic) && (is_identifier_char(after) || after == '('))
 			&& !(after == BANG && self.peek_char(length + 1) != '=' && self.defines_bang_word(spelling))
 	}
@@ -269,14 +266,13 @@ impl WarpParser {
 		if self.options.data_mode || !self.matches_keyword(AND_KEYWORD) {
 			return false;
 		}
-		let blanks = |from: usize| (from..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
-		let word_start = AND_KEYWORD.len() + blanks(AND_KEYWORD.len());
+		let word_start = AND_KEYWORD.len() + self.blanks_at(AND_KEYWORD.len());
 		let word = self.word_at(word_start);
 		if word.is_empty() || joins_operands(&word) || !self.peek_char(word_start).is_alphabetic() {
 			return false;
 		}
 		let word_end = word_start + word.chars().count();
-		let argument = word_end + blanks(word_end);
+		let argument = word_end + self.blanks_at(word_end);
 		if argument == word_end {
 			return false; // `and f(3)`, `and x`: an operand
 		}
@@ -379,10 +375,7 @@ impl WarpParser {
 	/// After the suffix at offset 0 (`%`, `abs`) of `offset` characters: the end of the expression, or an infix operator
 	/// standing apart (`10% + 1`, never the `-3` of `7 % -3`)
 	pub(super) fn expression_ends_after(&self, offset: usize) -> bool {
-		let mut position = offset;
-		while matches!(self.peek_char(position), ' ' | '\t') {
-			position += 1;
-		}
+		let position = offset + self.blanks_at(offset);
 		let infix_apart = position > offset
 			&& SUFFIX_FOLLOWERS.contains(&self.peek_char(position))
 			&& matches!(self.peek_char(position + 1), ' ' | '\t');
@@ -407,27 +400,28 @@ impl WarpParser {
 	}
 
 	/// After a type word, blanks and then the definition `:=` or a declared name `i =` after `width` characters:
-	/// `int? i = 3` and `as int? := …` are optional types, no ternary
+	/// `int? i = 3` and `as int? := …` are optional types, no ternary; `f(): Name? := …` also of a type the program
+	/// does not declare (a used file's), as a ternary has no empty branch
 	pub(super) fn declaration_follows(&self, type_word: &str, width: usize) -> bool {
 		let is_type =
 			crate::type_tests::builtin_type_name(type_word).is_some() || self.declared_types.contains(type_word);
-		let blanks = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_at(width);
 		let start = width + blanks;
-		let name = self.word_at(start).chars().count();
-		let after_name = start + name + (start + name..).take_while(|at| self.peek_char(*at) == ' ').count();
+		let name = self.name_length_at(start);
+		let after_name = start + name + self.run_at(start + name, |ch| ch == ' ');
 		let assigns = |at: usize| match self.peek_char(at) {
 			':' => self.peek_char(at + 1) == '=',
 			'=' => self.peek_char(at + 1) != '=',
 			_ => false,
 		};
-		is_type && blanks > 0 && if name == 0 { assigns(start) } else { assigns(after_name) }
+		blanks > 0 && if name == 0 { assigns(start) } else { is_type && assigns(after_name) }
 	}
 
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on
 	/// one line is two optional fields, no ternary
 	pub(super) fn next_field_follows(&self, width: usize) -> bool {
-		let blanks = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
-		let name = self.word_at(width + blanks).chars().count();
+		let blanks = self.blanks_at(width);
+		let name = self.name_length_at(width + blanks);
 		let colon = width + blanks + name;
 		self.type_fields.is_some()
 			&& blanks > 0
@@ -438,23 +432,21 @@ impl WarpParser {
 
 	/// Do blanks and then `bracket` follow (`c {`, not the glued `c{`)
 	pub(super) fn blanks_then(&self, bracket: char) -> bool {
-		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_ahead();
 		blanks > 0 && self.peek_char(blanks) == bracket
 	}
 
 	/// Do blanks and then a block of fields follow the cursor: `{}` or `{ name: …`, never a statement block like `{ out += x }`
 	/// `assignments`: C#'s object initializer `Point { X = 3 }` of a declared class sets its fields with `=` too
 	pub(super) fn block_after_blanks(&self, assignments: bool) -> bool {
-		let blanks_from = |start: usize| (start..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
-		let blanks = blanks_from(0);
+		let blanks = self.blanks_ahead();
 		if blanks == 0 || self.peek_char(blanks) != '{' {
 			return false;
 		}
 		// the block's first entry may start on the next line (`Person {⏎ name: "Alice" …}`)
-		let first = blanks + 1 + (blanks + 1..).take_while(|at| self.peek_char(*at).is_whitespace()).count();
-		let name =
-			(first..).take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_').count();
-		let after_name = first + name + blanks_from(first + name);
+		let first = blanks + 1 + self.whitespace_at(blanks + 1);
+		let name = self.run_at(first, |ch| ch.is_alphanumeric() || ch == '_');
+		let after_name = first + name + self.blanks_at(first + name);
 		let assigns = assignments && self.peek_char(after_name) == '=' && self.peek_char(after_name + 1) != '=';
 		self.peek_char(first) == '}'
 			|| (name > 0 && ((self.peek_char(after_name) == ':' && self.peek_char(after_name + 1) != '=') || assigns))
@@ -463,7 +455,7 @@ impl WarpParser {
 	/// Do blanks and then a closing bracket, `,`, `;`, an assignment `=`, a comment or the line end follow `offset`:
 	/// nothing a ternary could be followed by
 	pub(super) fn closes_after_blanks(&self, offset: usize) -> bool {
-		let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_at(offset);
 		let at = offset + blanks;
 		let comment_starts = self.peek_char(at) == '/' && matches!(self.peek_char(at + 1), '/' | '*');
 		blanks > 0 && (comment_starts || self.ends_optional_type(self.peek_char(at), self.peek_char(at + 1)))

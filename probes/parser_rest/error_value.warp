@@ -1,0 +1,5 @@
+f(n: int): any := if n > 1 then error("too many") else n
+print(f(1))
+x = f(2)
+print(x)
+print(x is error)

@@ -1,15 +1,17 @@
 #!/bin/bash
 # The cloud test lane (card cloud-test-lane, notes/cloud_development.md "Cloud test lane"): a branch's tests run in a
 # `claude --cloud` session, a Linux VM of its own paid by the Cloud session credit, instead of the Mac's tests/queue.sh.
-#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] <branch> <tip> [filters…|--full]
+#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] [--pure-hello] [--gate] <branch> <tip> [filters…|--full]
 #       --env: a setting of the test run alone (not the build: every setting of a tip shares one build)
+#       --pure-hello: run the ignored end-to-end `warp pure hello` check at test opt-level 2
+#       --gate: the Integrator's run (implied for batch-*/express* branches): it may use every run slot and goes first
 #       filters as for tests/queue.sh (`-- x y` or plain `x y`; `--test tests -- x` passes target flags to cargo);
 #       --full: the whole suite as test.sh runs it (--all-features, warp-lang at opt-level 2)
 #       waits for the result (run it in the background), prints it, keeps it in data/cloud/<run>/ and, with --card,
 #       adds it to the card (`todo note`); --no-wait only launches: fetch later with --result;
 #       --on-main tests the tip merged into the current origin/main, as the Integrator's gate will (--on <base>: into
 #       origin/<base>, e.g. a batch branch)
-#   scripts/cloud-test.sh --result [--card <card>] <branch> <tip>     wait for and collect a launched run's result
+#   scripts/cloud-test.sh --result [same options] [--card <card>] <branch> <tip> [same filters]   collect a --no-wait run
 #   scripts/cloud-test.sh --summarize <cargo test log> [environmental list] [known failures]    the result's summary of any log
 # The cloud session runs this same script from origin/main (the tip may predate it) with --job <job>, which reads the
 # job's arguments from the branch cloud-jobs/<job> and runs them as --run-here: it checks out
@@ -29,12 +31,15 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 JOBS_PREFIX=cloud-jobs         # cloud-jobs/<job>: the job's arguments, so the session's prompt stays one short line
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
+SHOWN_ITEMS=12                 # lines of a real failure's panic message shown under it (a slice test's failing samples)
 KNOWN_FAILURES=notes/known_failures.md   # read in the tested checkout, as the gate reads it at the tested tip
-CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
-MAX_PARALLEL_RUNS=5           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
+CARGO_FLAGS_WITH_VALUE='--config|--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
+MAX_PARALLEL_RUNS=7           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
+WORKER_RUNS=$((MAX_PARALLEL_RUNS - 2))   # slots a worker's runs may hold: the rest is kept for gate runs (user 2026-10-21)
+GATE_BRANCHES='^(batch-|express)'        # branches whose runs are gate runs without --gate
 PENDING_MINUTES=90             # a job older than this without a result: its session is dropped from the pool (a full run takes ~25)
 POOL=/Users/me/dev/angles/warp/data/cloud/pool   # one file per cloud session: its current job, or idle
-MAX_CLOUD_SESSIONS=8           # pool files plus starting ones: every session stays in the user's session list
+MAX_CLOUD_SESSIONS=10          # pool files plus starting ones: every session stays in the user's session list
 JOBS_PER_SESSION=30            # then the session's context is cleared (/clear): each job adds a little to it
 SESSION_NAME="Cloud Test Lane" # display name of new sessions; the pool addresses them by session_id
 DROPPED_SESSIONS=/Users/me/dev/angles/warp/data/cloud/dropped-sessions.txt   # to archive in the web UI
@@ -45,14 +50,22 @@ MIN_FREE_GB=15                 # less free disk before a build: the warm VM's bu
 TEST_TIME_LIMIT_SECONDS=2400   # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
 STALL_SECONDS=900              # …or once no test has finished for this long (the slowest, the self-parser, takes ~230 s alone)
 WATCH_SECONDS=30               # how often the stall watchdog counts finished tests
+PURE_HELLO_TEST=parser::test_warp_pure::warp_pure_runs_hello_world
+OPTIMIZED_TEST_PROFILE=(--config profile.test.package.warp-lang.opt-level=2)
+PURE_HELLO_ARGS=("${OPTIMIZED_TEST_PROFILE[@]}" -- "$PURE_HELLO_TEST" --ignored --exact)
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
 HERE_ROOT=${TMPDIR:-/tmp}/cloud-test # in the VM: tree/ (the checkout, kept for the next job), jobs/<job>/
-FULL_FLAGS=(--all-features --config "profile.test.package.warp-lang.opt-level=2")
+FULL_FLAGS=(--all-features "${OPTIMIZED_TEST_PROFILE[@]}")
 USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
 RUST_TARGETS="wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown" # package and crate-wrapper builds in the tests
 
 fail() { echo "cloud-test: $*" >&2; exit 1; }
-run_name() { echo "$(printf %s "$1" | tr -c 'A-Za-z0-9._-' '-')-${2:0:8}"; }
+run_name() {
+	local branch=$1 tip=$2 signature
+	shift 2
+	signature=$(printf '%s\0' "$@" | git hash-object --stdin | cut -c1-12)
+	echo "$(printf %s "$branch" | tr -c 'A-Za-z0-9._-' '-')-${tip:0:8}-$signature"
+}
 credit_used() { "$USAGE_SCRIPT" 2>/dev/null | sed -n 's/^iguana_necktie: \$\([0-9.]*\) .*/\1/p'; }
 
 # ---------------------------------------------------------------- the cloud side
@@ -106,8 +119,11 @@ run_tests_here() {
 		esac
 	done
 	local branch=$1 tip=$2; shift 2
-	local name started build_seconds test_seconds checkout lock_matches="" build_environment=""
-	name=$(run_name "$branch" "$tip")
+	local name started build_seconds test_seconds checkout lock_matches="" build_environment="" setting
+	local identity=()
+	[ -n "$base" ] && identity+=(--on "$base")
+	for setting in ${settings[@]+"${settings[@]}"}; do identity+=(--env "$setting"); done
+	name=$(run_name "$branch" "$tip" "${identity[@]}" "$@")
 	started=$SECONDS
 	local branch_ref
 	for branch_ref in "$branch" main vendor $base; do
@@ -133,10 +149,17 @@ run_tests_here() {
 	fi
 	rustup target add $RUST_TARGETS >/dev/null 2>&1
 	local source_flags=(--config net.offline=false)
+	# the vendored sources in a config above the checkout, not --config flags: a cargo the tests run themselves (the
+	# libwarp_runtime build of tests/common runtime_library_dir) reads it too (card cloud-fxprof)
+	local vendor_config=$HERE_ROOT/.cargo/config.toml
+	rm -f "$vendor_config"
 	if git diff --quiet origin/vendor HEAD -- Cargo.lock 2>/dev/null; then
 		lock_matches=1
 		git archive origin/vendor vendor | tar -x
-		source_flags=(--offline --config 'source.crates-io.replace-with="vendored-sources"' --config 'source.vendored-sources.directory="vendor"')
+		mkdir -p "$(dirname "$vendor_config")"
+		printf '[net]\noffline = true\n[source.crates-io]\nreplace-with = "vendored-sources"\n[source.vendored-sources]\ndirectory = "%s"\n' \
+			"$checkout/vendor" > "$vendor_config"
+		source_flags=(--offline)
 	fi
 	local test_args=() filters=() past_separator="" flag_value_next=""
 	if [ "${1:-}" = "--full" ]; then
@@ -178,7 +201,7 @@ run_tests_here() {
 	fi
 	# the file the --env settings name in WARP_EMIT_REFUSALS (scripts/self-hosted-suite.sh): emptied before the tests,
 	# its lines appended to the log after them (sent to stderr they reached the output the CLI tests check)
-	local refusals="" setting
+	local refusals=""
 	for setting in ${settings[@]+"${settings[@]}"}; do
 		[[ "$setting" == WARP_EMIT_REFUSALS=* ]] && refusals=${setting#*=}
 	done
@@ -234,9 +257,17 @@ run_watched() {
 # which the gate accepts too) apart; verdict green|red
 summarize() {
 	local log=$1 environmental=$2 known=${3:-/dev/null}
-	awk -v environmental="$environmental" -v known_list="$known" '
+	awk -v environmental="$environmental" -v known_list="$known" -v SHOWN_ITEMS=$SHOWN_ITEMS '
 		BEGIN {
-			while ((getline line < environmental) > 0) { sub(/[ \t]*#.*/, "", line); if (line != "") patterns[++count] = line }
+			# a line is "<test regex>", or "<test regex> <item regex>" for a test whose panic lists items (one sample per
+			# line): then only those items are environmental, and the test is environmental only if every item it lists is
+			while ((getline line < environmental) > 0) {
+				sub(/[ \t]*#.*/, "", line)
+				if (line == "") continue
+				test_pattern = line; sub(/[ \t].*/, "", test_pattern)
+				item_pattern = substr(line, length(test_pattern) + 1); sub(/^[ \t]+/, "", item_pattern)
+				patterns[++count] = test_pattern; item_patterns[count] = item_pattern
+			}
 			while ((getline line < known_list) > 0) if (line ~ /^- [^ |]+ \|/) { split(line, field, " "); known[field[2]] = 1 }
 		}
 		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
@@ -245,13 +276,27 @@ summarize() {
 		/^test [^ ]+ has been running for over/ { slow[$2] = 1 }
 		/^test [^ ]+ \.\.\. / { finished_test[$2] = 1 }
 		/^---- [^ ]+ stdout ----$/ { current = $2; want_panic = 1; next }
-		want_panic && / panicked at / { getline message; panic[current] = message; want_panic = 0 }
+		collecting && /^(stack backtrace:|note: |---- |$)/ { collecting = 0 }
+		collecting { items[current, ++item_count[current]] = $0 }
+		want_panic && / panicked at / { getline message; panic[current] = message; want_panic = 0; collecting = 1 }
+		function environmental_failure(name,    p, i, whole, listed, matched) {
+			for (p = 1; p <= count; p++) if (name ~ patterns[p] && item_patterns[p] == "") whole = 1
+			if (whole) return 1
+			if (!item_count[name]) return 0
+			for (i = 1; i <= item_count[name]; i++) {
+				matched = 0
+				for (p = 1; p <= count; p++) if (item_patterns[p] != "" && name ~ patterns[p] && items[name, i] ~ item_patterns[p]) matched = 1
+				if (!matched) return 0
+				listed = 1
+			}
+			return listed
+		}
 		END {
 			incomplete = started > finished ? started - finished : 0
 			for (i = 1; i <= failures; i++) {
 				name = order[i]; line = "  " name ": " (name in panic ? panic[name] : "(no panic line)")
-				is_environmental = 0
-				for (p = 1; p <= count; p++) if (name ~ patterns[p]) is_environmental = 1
+				is_environmental = environmental_failure(name)
+				if (!is_environmental) for (j = 1; j <= item_count[name] && j <= SHOWN_ITEMS; j++) line = line "\n    " items[name, j]
 				if (is_environmental) { environmental_lines = environmental_lines line "\n"; environmental_count++ }
 				else if (name in known) { known_lines = known_lines line "\n"; known_count++ }
 				else { real_lines = real_lines line "\n"; real++ }
@@ -347,7 +392,7 @@ lock_pool() {
 }
 unlock_pool() { rmdir "$POOL.lock" 2>/dev/null; }
 pool_field() { sed -n "s/^$2: //p" "$1"; }
-mark_session() { printf 'job: %s\nsince: %s\njobs: %s\n' "$2" "$(date +%s)" "$3" > "$1"; }
+mark_session() { printf 'job: %s\nsince: %s\njobs: %s\ngate: %s\n' "$2" "$(date +%s)" "$3" "${4:-}" > "$1"; }
 
 # A pooled session is free once its job's result is in (collected, or still on its results branch); a job that
 # never answered drops its session, which may be gone
@@ -379,22 +424,41 @@ pending_session_of() {
 	done
 }
 
-# Under the pool lock: a free session for the job (its id, marked busy; jobs 1 = its context is to be cleared first),
-# "new" when one may be started, else nothing
-claim_session() {
-	local job=$1 file jobs busy=0 sessions
-	for file in "$POOL"/session_*; do
+# Under the pool lock: whether a launcher of a gate run waits for a slot (waiting-<job> holds its process id)
+gate_waits() {
+	local file
+	for file in "$POOL"/waiting-*; do
 		[ -e "$file" ] || continue
-		jobs=$(pool_field "$file" jobs)
-		if session_is_free "$file"; then
-			[ "$jobs" -ge $JOBS_PER_SESSION ] && jobs=0
-			mark_session "$file" "$job" $((jobs + 1)); echo "${file##*/}"; return
-		fi
-		[ -e "$file" ] && busy=$((busy + 1))
+		kill -0 "$(cat "$file")" 2>/dev/null && return 0
+		rm -f "$file"
 	done
-	busy=$((busy + $(ls "$POOL" | grep -c '^starting-')))
+	return 1
+}
+
+# Under the pool lock: a free session for the job (its id, marked busy; jobs 1 = its context is to be cleared first),
+# "new" when one may be started, else nothing. A gate run may take any of the MAX_PARALLEL_RUNS slots; a worker's run
+# only one of WORKER_RUNS, and none while a gate run waits
+claim_session() {
+	local job=$1 gate=$2 file jobs free="" busy=0 worker_busy=0 sessions
+	for file in "$POOL"/session_* "$POOL"/starting-*; do
+		[ -e "$file" ] || continue
+		if [[ "${file##*/}" == session_* ]] && session_is_free "$file"; then
+			free=${free:-$file}
+			continue
+		fi
+		[ -e "$file" ] || continue
+		busy=$((busy + 1))
+		[ "$(pool_field "$file" gate)" = 1 ] || worker_busy=$((worker_busy + 1))
+	done
+	[ $busy -lt $MAX_PARALLEL_RUNS ] || return
+	[ "$gate" = 1 ] || { [ $worker_busy -lt $WORKER_RUNS ] && ! gate_waits; } || return
+	if [ -n "$free" ]; then
+		jobs=$(pool_field "$free" jobs)
+		[ "$jobs" -ge $JOBS_PER_SESSION ] && jobs=0
+		mark_session "$free" "$job" $((jobs + 1)) "$gate"; echo "${free##*/}"; return
+	fi
 	sessions=$(ls "$POOL" | grep -c -E '^(session_|starting-)')
-	[ $busy -lt $MAX_PARALLEL_RUNS ] && [ $sessions -lt $MAX_CLOUD_SESSIONS ] && { mark_session "$POOL/starting-$job" "$job" 1; echo new; }
+	[ $sessions -lt $MAX_CLOUD_SESSIONS ] && { mark_session "$POOL/starting-$job" "$job" 1 "$gate"; echo new; }
 }
 
 start_session() {
@@ -421,8 +485,8 @@ launch() {
 	[[ "$tip" =~ ^[0-9a-f]{40}$ ]] || fail "the tip must be a full 40-hex commit id (git rev-parse output), not '$tip'"
 	git -C "$MAIN_CHECKOUT" fetch -q origin "$branch" || fail "branch $branch is not on origin"
 	git -C "$MAIN_CHECKOUT" merge-base --is-ancestor "$tip" "origin/$branch" || fail "tip $tip is not on origin/$branch: push first"
-	name=$(run_name "$branch" "$tip")
-	job=$name-$(date +%s)
+	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$@")
+	job=$name-$(date +%s)-$$
 	folder=$MAIN_CHECKOUT/data/cloud/$name
 	mkdir -p "$folder"
 	rm -f "$folder/result.md"
@@ -433,8 +497,10 @@ launch() {
 	fi
 	push_job "$job" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$branch" "$tip" "$@"
 	cloud_prompt "$job" > "$folder/prompt.txt"
+	[[ "$branch" =~ $GATE_BRANCHES ]] && gate=1
+	[ "$gate" = 1 ] && { echo $$ > "$POOL/waiting-$job"; trap "rm -f '$POOL/waiting-$job'" EXIT; }
 	while [ -z "$url" ]; do
-		lock_pool; session=$(claim_session "$job"); unlock_pool
+		lock_pool; session=$(claim_session "$job" "$gate"); unlock_pool
 		case "$session" in
 			new) url=$(start_session "$job" "$folder") || exit ;;
 			session_*)
@@ -445,9 +511,10 @@ launch() {
 				else
 					lock_pool; drop_session "$POOL/$session" "refused the job: $(tail -1 "$folder/send.txt")"; unlock_pool
 				fi ;;
-			*) echo "cloud-test: all pooled cloud sessions busy (at most $MAX_PARALLEL_RUNS runs, $MAX_CLOUD_SESSIONS sessions), waiting for one" >&2; sleep $POLL_SECONDS ;;
+			*) echo "cloud-test: no run slot free (at most $MAX_PARALLEL_RUNS runs, $WORKER_RUNS of workers, $MAX_CLOUD_SESSIONS sessions; gate runs first), waiting for one" >&2; sleep $POLL_SECONDS ;;
 		esac
 	done
+	rm -f "$POOL/waiting-$job"
 	{
 		echo "branch: $branch"
 		echo "tip: $tip"
@@ -489,7 +556,8 @@ finish_session() {
 collect() {
 	local branch=$1 tip=$2 card=$3
 	local name folder ref deadline
-	name=$(run_name "$branch" "$tip")
+	shift 3
+	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$@")
 	folder=$MAIN_CHECKOUT/data/cloud/$name
 	ref=refs/heads/$RESULTS_PREFIX/$name
 	deadline=$((SECONDS + WAIT_HOURS * 3600))
@@ -522,7 +590,7 @@ main() {
 		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}" "${4:-}"; exit ;;
 	esac
-	card="" wait=1 result_only="" base=() settings=()
+	card="" wait=1 result_only="" base=() settings=() pure_hello="" gate=""
 	while [[ "${1:-}" == --* ]]; do
 		case "$1" in
 			--card) card=$2; shift 2 ;;
@@ -531,11 +599,17 @@ main() {
 			--on-main) base=(--on main); shift ;;
 			--on) base=(--on "$2"); shift 2 ;;
 			--env) settings+=(--env "$2"); shift 2 ;;
+			--pure-hello) pure_hello=1; shift ;;
+			--gate) gate=1; shift ;;
 			*) break ;;
 		esac
 	done
-	[ $# -ge 2 ] || { sed -n '2,17p' "$0"; exit 2; }
+	[ $# -ge 2 ] || { sed -n '2,18p' "$0"; exit 2; }
+	if [ -n "$pure_hello" ]; then
+		[ $# -eq 2 ] || fail "--pure-hello is a complete test preset and does not take filters"
+		set -- "$1" "$2" "${PURE_HELLO_ARGS[@]}"
+	fi
 	if [ -z "$result_only" ]; then launch "$@" || exit; fi
-	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card"
+	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card" "${@:3}"
 }
 main "$@"; exit

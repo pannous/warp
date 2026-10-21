@@ -149,7 +149,7 @@ impl WarpParser {
 			}
 			// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
 			let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
-			if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
+			if is_name && self.at_text(".(") && !self.options.data_mode {
 				let Some(arguments) = self.special_operand(1, Op::Dot.binding_power(), min_bp) else {
 					break;
 				};
@@ -298,6 +298,11 @@ impl WarpParser {
 			let rhs_start = self.pos;
 			let rhs = match block_body {
 				Some(block) => block,
+				None if matches!(op, Op::Colon | Op::As)
+					&& let Some(phrase) = self.take_of_phrase() =>
+				{
+					phrase
+				}
 				None => self.parse_right_operand(op, glued_pair, r_bp),
 			};
 			let rhs_end = self.pos.min(self.chars.len());
@@ -397,7 +402,7 @@ impl WarpParser {
 	/// `(() => 7)()`: a parenthesized function called with no arguments, the `()` glued to the group
 	fn try_parse_empty_call(&mut self, lhs: &Node) -> Option<Node> {
 		let parenthesized = matches!(lhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1);
-		if !(parenthesized && self.prev_char() == ')' && self.current_char() == '(' && self.peek_char(1) == ')') {
+		if !(parenthesized && self.prev_char() == ')' && self.at_text("()")) {
 			return None;
 		}
 		self.advance_by(2);
@@ -422,6 +427,9 @@ impl WarpParser {
 		} else if matches!(op, Op::And | Op::Or) && self.take_braceless_print() {
 			// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start
 			print_call([self.rest_of_statement()])
+		} else if op == Op::Colon {
+			let value = self.parse_expr(r_bp);
+			self.with_switch_cases(value, r_bp)
 		} else {
 			self.parse_expr(r_bp)
 		}

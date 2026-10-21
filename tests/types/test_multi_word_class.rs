@@ -35,3 +35,8 @@ fn a_phrase_slot_matches_the_class_as_a_whole() {
 fn the_words_stay_apart_without_the_class() {
 	is!("full = 3; name = 4; [full name]#2", 4);
 }
+
+#[test]
+fn a_class_of_three_words_is_its_kebab_name() {
+	is!("class home post code { digits:text }; c = home post code{digits:\"10115\"}; c.digits", "10115");
+}

@@ -76,6 +76,8 @@ impl PartialEq for Node {
 				// ignore bracket [1,2]=={1,2} and separators [1;2]==[1,2]
 				// an object of one entry is that entry: {x:1} == x:1 (but {x} is no x)
 				Key(..) => matches!(items1.as_slice(), [only] if only.drop_meta() == other),
+				// `[]` == ø, as ø == `[]`
+				Empty => items1.is_empty(),
 				_ => false,
 			},
 			Type { name: n1, body: b1 } => match other {

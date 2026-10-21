@@ -16,6 +16,9 @@ pub const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::Lis
 /// that reads the kind masked takes it as the Int it is, and printing, `type` and reading back see a bool
 pub const BOOL_INFO: i64 = 1;
 pub const BOOL_KIND: i64 = (BOOL_INFO << KIND_BITS) | Kind::Int as i64;
+/// `[]` at run time (card run-time-empty): ø marked with the square bracket above the kind bits, so every masked read
+/// (count, append, emptiness, equality) takes it as the ø it is, and printing, `type` and reading back see a list
+pub const EMPTY_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::Empty as i64;
 /// An Int shown in hex, 0xFF (card hex-printing, wasm_emitter/numbers/radix.rs): marked only where it becomes a Node
 pub const HEX_INFO: i64 = 2;
 /// An Int shown in binary, 0b101 (card binary-int, wasm_emitter/numbers/radix.rs)
@@ -45,6 +48,8 @@ const MARK_KIND_BITS: i64 = 24;
 const _: () = assert!((Kind::Function as i64) < MARK_KIND_BITS, "every Kind has its bit in the element mark");
 pub const MARK_KINDS_MASK: i64 = (1 << MARK_KIND_BITS) - 1;
 pub const MARK_BOOL_BIT: i64 = MARK_KIND_BITS;
+/// The bits of a mark, shifted down: what lies above them (the separator, other marks) is no part of it
+pub const MARK_BITS: i64 = MARK_KINDS_MASK | 1 << MARK_BOOL_BIT;
 /// The separator of a list (card keep-list: `,` `;` newline, space; 0 for none), in the kind field above the element
 /// mark; the bracket byte and the kind stay where they were, so whatever masks them reads them as before
 pub const SEPARATOR_SHIFT: i64 = 48;
@@ -459,6 +464,11 @@ pub fn named_field_type(type_name: &str) -> &str {
 	type_name.trim_end_matches(OPTIONAL_SUFFIX)
 }
 
+/// The collection word of a typed collection: `map` of `map of int`
+fn collection_head(type_name: &str) -> &str {
+	type_name.split_once(" of ").map_or(type_name, |(head, _)| head)
+}
+
 pub fn field_storage(type_name: &str) -> FieldStorage {
 	let word = type_name.trim_end_matches(OPTIONAL_SUFFIX);
 	let optional = word.len() < type_name.len();
@@ -472,8 +482,7 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 		_ if crate::analyzer::union_parts(word).is_some() => FieldStorage::Node,
 		_ if crate::analyzer::type_word_kind(word).is_some()
 			|| crate::analyzer::plural_element_type(word).is_some()
-			|| word == "list"
-			|| word.starts_with("list of ") =>
+			|| crate::lowering::declarations::is_collection_type_word(collection_head(word)) =>
 		{
 			FieldStorage::Node
 		}

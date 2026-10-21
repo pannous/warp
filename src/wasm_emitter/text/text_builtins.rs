@@ -193,12 +193,14 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		any(&[ELEMENT_BODY], &[ELEMENT_CHILDREN]),
 		any(&[ELEMENTS_FIELD], &["map_find", TAGGED_FIELD, STRUCT_BODY]),
 		any(&[NODE_AT_KEY], &["node_index_at", "map_get"]),
+		any(&[NODE_AT_SUBSCRIPT], &["node_index_at", "map_get", crate::type_tests::NODE_IS_MAP]),
 		// a function's body is quoted code, which keeps its positions
 		any(&[crate::wasm_emitter::functions::closures::FUNCTION_BODY], &[crate::wasm_emitter::NODE_AT]),
 		// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
 		any(&[INSTANCE_COPY], &[FIELD_WITH, IS_TRUTHY]),
 		any(&[FIELD_WITH], &[STRUCT_BODY]), // an instance keeps its type
 		any(&[NODE_WITH_KEY], &[NODE_WITH_NODE_AT, FIELD_WITH]),
+		any(&[NODE_WITH_SUBSCRIPT], &[NODE_WITH_NODE_AT, FIELD_WITH, crate::type_tests::NODE_IS_MAP]),
 		any(&[NODE_WITH_NODE_AT], &["node_with_at", "get_int_value"]),
 		// a map variable held as a hash table names its keys by map_key_name, emitted with map_get; a map node found or
 		// set by name gets an index of the same tables (map_index.rs); maps compare keys by name: map_key_name reads a
@@ -209,6 +211,7 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		any(&["exact_euclid_div"], &[INT_RUNTIME]),
 		any(&[FLOAT_AS_EXACT], &[INT_RUNTIME, "new_int"]),
 		any(&[LIST_EXTEND], &["list_concat"]), // of a non-list
+		any(&[NODE_ADD_ASSIGN], &[LIST_EXTEND, NODE_ADD]),
 		// two lists added are concatenated, two texts too, a text and a number joined
 		any(&[NODE_ADD], &["list_concat", TEXT_CONCAT, TEXT_OF, LIST_JOIN]),
 		any(&[TEXT_AS_NUMBER], &[TEXT_AS_FLOAT, INT_RUNTIME, "exact_div", "new_text", "new_int", "new_float"]),
@@ -552,23 +555,14 @@ impl WasmGcEmitter {
 	/// (`r = error "b"; "a" + r`, card error-value-kind)
 	fn emit_run_time_text_form(&mut self, func: &mut Function, operand: &Node) {
 		let (held, node_ref) = (self.node_scratch(), Ref(self.node_ref(false)));
-		let node_type = self.type_manager.node_type;
 		self.emit_node_instructions(func, operand);
 		func.instruction(&I::LocalSet(held));
 		self.emit_structure_as_literal(func, held, &STRUCTURE_KINDS);
 		self.emit_field(func, held, 0);
 		Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
 		Self::emit_list(func, &[I::If(BlockType::Result(node_ref))]);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::LocalGet(held), I::RefAsNonNull,
-			I::Else,
-				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(held),
-		]);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
-		]);
+		Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I::Else]);
+		self.emit_one_item_list(func, held);
 		self.emit_empty_text(func);
 		self.emit_call(func, super::super::reflection::library_ops::LIST_JOIN);
 		func.instruction(&I::End);
@@ -580,7 +574,6 @@ impl WasmGcEmitter {
 		if !self.parses_code {
 			return;
 		}
-		let node_type = self.type_manager.node_type;
 		for (index, kind) in kinds.iter().enumerate() {
 			self.emit_field(func, local, 0);
 			Self::emit_kind_test(func, *kind as i64, I::I64Eq);
@@ -596,11 +589,7 @@ impl WasmGcEmitter {
 			I::If(BlockType::Empty),
 		]);
 		self.emit_without_code_mark(func, local);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(local),
-				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
-		]);
+		self.emit_one_item_list(func, local);
 		self.emit_empty_text(func);
 		self.call(func, super::super::reflection::library_ops::LIST_TEXT);
 		Self::emit_list(func, &[I::LocalSet(local), I::End]);
@@ -941,7 +930,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::RefNull(HeapType::Concrete(node)));
 				f.instruction(&I::Else);
 				s.emit_field(f, 1, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+				Self::emit_is_empty(f);
 				Self::emit_list(f, &[I::If(BlockType::Result(nullable_node)), I::RefNull(HeapType::Concrete(node))]);
 				Self::emit_list(f, &[I::Else, I::LocalGet(1), I::End, I::End, I::StructNew(node)]);
 			});
