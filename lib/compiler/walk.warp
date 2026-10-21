@@ -38,31 +38,33 @@ is_empty_map(n: any): bool := match n {
 }
 
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø
-# (decision empty-group-node), an opaque type or error whole; Rust twin: compiler/node_views.rs plain
+# (decision empty-group-node) but `[]` the empty list, an opaque type or error whole; Rust twin: compiler/node_views.rs plain
 plain(view: any): any := without_layers(view, no)
 
 # the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
 # (mutation.rs reads the mark of `x!`); Rust twin: src/compiler/node_views.rs handled_plain_view
 bridged(view: any): any := without_layers(view, yes)
 
-# the view without literal layers, without attribute layers unless `attributes`, an empty group as ø
+# the view without literal layers, without attribute layers unless `attributes`, an empty group as ø but `[]` the
+# empty list, as grouped builds it (Rust twin: node_views.rs without_layers)
 without_layers(view: any, attributes: bool): any := {
 	kind = kind_of(view)
+	if kind == "literal" and view#2 == "[]" { return ["list", "[", ""] }
 	if kind == "literal" or (kind == "attribute" and not attributes) { return without_layers(view#(#view), attributes) }
 	if kind == "type" or kind == "error" { return view }
-	if kind == "list" and #view == 3 { return ø }
+	if kind == "list" and #view == 3 and view#2 != "[" { return ø }
 	if view is list { return view.map(part => without_layers(part, attributes)) }
 	view
 }
 
 # the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
-# the empty map `{}` (number_keys.warp keys a variable that starts as one by texts), a character as a text, an opaque
-# type or error whole
+# the empty map `{}` (number_keys.warp keys a variable that starts as one by texts) and the empty list `[]` (as
+# Rust's parser builds it), a character as a text, an opaque type or error whole
 plain_node(n: any): any := match n {
 	Key(left, op, right): {
 		if left == symbol(attribute_word) and right#1 == mutated_mark { return List([symbol(unwrap_word), plain_node(right#3)], Bracket.Round, Separator.None) }
 		if left == symbol(attribute_word) { return plain_node(right#3) }
-		if left == symbol(opaque_word) { return if is_empty_group(right) and right#2 != "{" then ø else n }
+		if left == symbol(opaque_word) { return if is_empty_group(right) and right#2 not in ["{", "["] then ø else n }
 		Key(plain_node(left), op, plain_node(right))
 	}
 	List(items, bracket, separator): List(items.map(plain_node), bracket, separator)
@@ -87,7 +89,8 @@ node_of(view: any): any := {
 }
 
 # the view of a node
-view_of(n: Node): any := match n {
+# (`[]` equals ø but is not ø itself: the empty list, square bracketed as parser.warp's grouped builds it)
+view_of(n: Node): any := if n == ø and n !== ø then ["list", "[", ""] else match n {
 	Key(left, op, right): key_view(left, op as text, right)
 	Symbol(name): ["symbol", name]
 	Char(c): ["char", c]

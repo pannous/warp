@@ -6,9 +6,12 @@ node_add(a: any, b: any): any := {
 	if is_null(a) and is_null(b) { return a }
 	if is_null(a) and not is_null(b) and kind_code(b) == Kind.List { return list_join(unboxed_list(b), new_list(0)) }
 	if is_null(b) and not is_null(a) and kind_code(a) == Kind.List { return list_join(unboxed_list(a), new_list(0)) }
+	# a list joins a list and takes any other value as its last item: `[] + 3` is [3], `[1] + "a"` [1 'a']
+	if not is_null(a) and kind_code(a) == Kind.List {
+		return list_join(unboxed_list(a), if kind_code(b) == Kind.List then unboxed_list(b) else [b])
+	}
 	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }
 	if is_null(a) or is_null(b) { fail() }
-	if kind_code(a) == Kind.List and kind_code(b) == Kind.List { return list_join(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_ratio(a) or is_ratio(b)) { return exact_add(a, b) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return checked_add(unboxed_int(a), unboxed_int(b)) }
 	float_of_node(a) + float_of_node(b)

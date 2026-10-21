@@ -369,7 +369,7 @@ def precedence(separator) {
 // [[item, separator], …] as one list: the loosest separator splits first, the groups between split by the tighter ones
 // Rust twin: lists.rs group_by_separators
 def grouped(pairs, bracket) {
-	if pairs.length == 0 { return if bracket == "{" then listed("{", "", []) else ø }
+	if pairs.length == 0 { return if bracket == "{" or bracket == "[" then listed(bracket, "", []) else ø }
 	if pairs.length == 1 and bracket == "" { return pairs#1#1 }
 	loosest = -1
 	for pair in pairs {
