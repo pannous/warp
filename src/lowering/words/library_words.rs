@@ -411,7 +411,11 @@ pub fn lower(node: Node) -> Node {
 	shadowed.extend(variants);
 	let functions = shadowed.clone();
 	crate::type_tests::collect_outer_assigned_names(&node, &mut shadowed);
-	let program_scope = VariableScope::of(&node, vec![]);
+	let mut assigned = AssignedObjects::default();
+	collect_assigned_objects(&node, &mut assigned);
+
+	let plain = assigned.plain.difference(&assigned.rebound).cloned().collect();
+	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
 	let times = crate::time::time_variables(&node);
@@ -421,9 +425,11 @@ pub fn lower(node: Node) -> Node {
 		shadowed: RefCell::new(shadowed),
 		functions,
 		program: crate::program_names::ProgramNames::of(&node),
-		scopes: RefCell::new(vec![program_scope]),
+		objects,
+		plain,
 		instances,
 		parameters: RefCell::new(vec![]),
+		bound_parameters: RefCell::new(vec![]),
 		function_parameters: RefCell::new(vec![]),
 		defining: RefCell::new(vec![]),
 		call_results,
@@ -587,13 +593,16 @@ struct Lowering {
 	functions: HashSet<String>,
 	/// The program's functions at the numbers of arguments they take
 	program: crate::program_names::ProgramNames,
-	/// The variable scopes where the lowering is: the program's outside its functions first, then each function's
-	/// being lowered, innermost last
-	scopes: RefCell<Vec<VariableScope>>,
+	objects: HashMap<String, Node>,
+	/// Variables assigned plain values (AssignedObjects::plain)
+	plain: HashSet<String>,
 	/// Values of declared types (`p:person`, `first = (sort people)#1`) read their fields like object literals
 	instances: crate::traits::InstanceTypes,
 	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
 	parameters: RefCell<Vec<String>>,
+	/// Every parameter of the definitions being lowered, typed or not: another variable than a same-named one some
+	/// other function assigns an object or a plain value (`entries = {}` in one, `map_value(body, entries: any)`)
+	bound_parameters: RefCell<Vec<String>>,
 	/// The parameters declared `function` of the definitions being lowered: `c.name` reads the function's name, never a
 	/// class's method name()
 	function_parameters: RefCell<Vec<String>>,
@@ -745,10 +754,8 @@ impl Lowering {
 		let outer = self.shadowed.replace(locals);
 		let function_scope = self.function_parameters.borrow().len();
 		self.function_parameters.borrow_mut().extend(crate::traits::parameters_of_type(head, FUNCTION_TYPE_WORD));
-		let function_scope_entered = is_function_definition_head(head);
-		if function_scope_entered {
-			self.scopes.borrow_mut().push(VariableScope::of(&right, crate::traits::parameter_names(head)));
-		}
+		let bound_scope = self.bound_parameters.borrow().len();
+		self.bound_parameters.borrow_mut().extend(crate::traits::parameter_names(head));
 		let lowered = self.within_function(name, parameters, || {
 			let body = self.body_statement(head, right);
 			// `x = {sum xs}` assigns that data: only its parts are lowered, the block stays no call
@@ -758,9 +765,7 @@ impl Lowering {
 			self.expand(body)
 		});
 		self.function_parameters.borrow_mut().truncate(function_scope);
-		if function_scope_entered {
-			self.scopes.borrow_mut().pop();
-		}
+		self.bound_parameters.borrow_mut().truncate(bound_scope);
 		self.shadowed.replace(outer);
 		lowered
 	}
@@ -818,21 +823,14 @@ impl Lowering {
 		self.times.iter().filter(|name| !parameters.contains(name)).cloned().collect()
 	}
 
-	/// The scope a variable named `name` belongs to where the lowering is: the innermost binding it, else the program's
-	fn scope_of<T>(&self, name: &str, read: impl Fn(&VariableScope) -> T) -> T {
-		let scopes = self.scopes.borrow();
-		let scope = scopes.iter().skip(1).rev().find(|scope| scope.bound.contains(name)).unwrap_or(&scopes[0]);
-		read(scope)
+	/// A parameter of a definition being lowered, typed or not, named `name`
+	fn binds_parameter(&self, name: &str) -> bool {
+		self.bound_parameters.borrow().iter().any(|parameter| parameter == name)
 	}
 
-	/// The object literal the variable `name` holds here, if it is only ever assigned one
-	fn object_of(&self, name: &str) -> Option<Node> {
-		self.scope_of(name, |scope| scope.objects.get(name).cloned())
-	}
-
-	/// A variable assigned only plain values here
+	/// A variable assigned only plain values, not a parameter named like it
 	fn is_plain(&self, name: &str) -> bool {
-		self.scope_of(name, |scope| scope.plain.contains(name))
+		self.plain.contains(name) && !self.binds_parameter(name)
 	}
 
 	fn is_parameter(&self, node: &Node) -> bool {
@@ -1241,7 +1239,7 @@ impl Lowering {
 			&& !self.is_parameter(receiver)
 			&& receiver
 				.symbol_name()
-				.is_some_and(|function| !self.is_plain(function) && self.object_of(function).is_none());
+				.is_some_and(|function| !self.plain.contains(function) && !self.objects.contains_key(function));
 		counting_method(name, &self.context).is_some()
 			|| is_list_mutating_method(name)
 			|| self.context.user_functions.contains_key(name)
