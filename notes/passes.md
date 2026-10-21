@@ -34,7 +34,19 @@ ordering constraints, not speed.
    std_aliases, rust_paths, welcome_forms (4), preposition_calls. `rewrite p => t` (modules/rewrites.rs) already
    carries such rules from lib/*.warp. Each pass whose rule is a pattern with no program-wide fact could become a
    rule in a lib file; the Rust passes then shrink to the cases needing bindings (a name the program defines wins).
-   Card sugar-as-rewrites.
+   Card sugar-as-rewrites. First move: `add x to list` (phrase_words) is `rewrite (add $x to $list: symbol) =>
+   $list.add($x)` in lib/english.warp. What keeps the others in Rust, each an extension of rewrites.rs:
+   - no notes: a rule cannot say the got-it note of the alias rule (diagnostic::note_alias), which std_aliases,
+     rust_paths, welcome_forms and word_operators give;
+   - shadowing is program-wide (a standard rule drops when the program binds its word anywhere), the passes shadow
+     per scope (program_names::rewritten_where_free: word_operators, number_words);
+   - rules run first, before every pass: member_phrases must follow the markup passes, times_phrases the parser's
+     loop shape;
+   - patterns: none may start with a hard keyword (`do`), the parser reads `add $x to $l => …` as arithmetic
+     (grouping parens fix it), and conditions are only typed holes and `where $c = shape` (member_phrases needs "no
+     operator word among the arguments").
+   With notes and scoped shadowing in rules (card rewrite-notes-scopes), word_operators, std_aliases and number_words
+   can follow.
 2. **Reflection: ten entries for one idea.** reflection::lower (twice), lower_objects, lower_component_words,
    lower_module_words, lower_unknown_dir, meta_values::lower and with_table, word_help::lower and lower_named_words,
    doc_strings. Decision reflection-plain says `meta(x)` is the one core builtin: every other word (`dir`, `.fields`,
