@@ -25,6 +25,7 @@ mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
+mod test_empty_list_kept; // card rust-lane-literal
 mod test_empty_list_value; // card run-time-empty
 mod test_empty_results; // card empty-results
 mod test_empty_start; // card start: `t = []` appends, ø + text fails
