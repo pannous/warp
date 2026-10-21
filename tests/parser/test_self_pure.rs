@@ -614,3 +614,11 @@ fn op_cases_run_pure() {
 		"[Square Comma]",
 	);
 }
+
+/// A name holds an enum case in the function that binds it: parser.warp's own `bracket = ""` leaves view_of's matched
+/// `bracket` a Bracket case, so the pure-compiled parser reads a call with comma arguments (card self-hello)
+#[test]
+fn a_call_with_comma_arguments_parses_pure() {
+	let probe = format!("{}/probes/spelled_case_per_function.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("spelled_case_per_function", &probe, "[\"list\" '(' \"\" [\"symbol\" 'f'] [\"symbol\" 'a'] 2]\n2");
+}
