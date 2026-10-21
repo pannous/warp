@@ -88,6 +88,7 @@ mod test_map_variables;
 mod test_min_max;
 mod test_min_max_lists;
 mod test_nested_comprehension; // card double-for-comprehension
+mod test_comprehension_if_else_item; // card comprehension-whose
 mod test_nested_index_assignment;
 mod test_nested_maps;
 mod test_node_lists;
