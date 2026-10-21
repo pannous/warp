@@ -70,8 +70,8 @@ then `warp app.wasm`. That is the independence the decision asks for; the Rust l
 src/compiler/standalone.rs: compiler.warp's module, kept in ~/.cache/warp/modules under self_hosted.rs `stage_key`
 (binary + lib/), runs as `compiler.warp <source> <wasm> <folder> <lib>`; the module it writes runs with the program's
 arguments. The pure lane compiles compiler.warp; while it refuses (card pure-compiler-callee), the Rust pipeline does,
-and every run says `warp pure: compiler.warp, Rust-compiled` on stderr. It replaces probes/pure_chain/run.sh and
-~/dev/bin/warp-pure (their JSON hand-offs and Rust-compiled emit.warp).
+and every run says `warp pure: compiler.warp, Rust-compiled` on stderr. It is also the gate's
+pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
 
