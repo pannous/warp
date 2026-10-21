@@ -5,6 +5,8 @@ is! 'walk = parse("for x in xs { print x }")
 match walk { data(for $v in $it { $body }) => it; _ => "no" }' 'xs'
 is! 'walk = parse("for x in xs { print x }")
 match walk { data(for $v in $it { $body }) => v; _ => "no" }' 'x'
+is! 'branch = parse("if c { a } else { b }")
+match branch { data(if $c { $a } else { $b }) => b; _ => "no" }' 'b'
 is! 'walk = parse("while c { x }")
 match walk { data(for $v in $it { $body }) => v; _ => "no" }' 'no'
 

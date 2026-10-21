@@ -9,7 +9,8 @@ use super::blocks::{as_data, quoted_data, DATA_WORD};
 use super::for_loop::walking_loop;
 use super::library_words::COLLECTION_CONTAINS;
 use super::nodes::{
-	assign, block, call, children_rewritten, fresh_number, if_then, is_kinded_type_word, key, or_operands, Counter,
+	assign, block, call, children_rewritten, fresh_number, if_then, if_then_else, is_kinded_type_word, key,
+	or_operands, Counter,
 };
 use super::text_patterns::TextPattern;
 use super::type_tests::{is_builtin_type_word, program_names, type_test, Names};
@@ -716,6 +717,18 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 			code_tests(&items[1], field(&path, OP_FIELD), tests, bindings, names);
 			code_tests(&items[2], field(&path, VALUE_FIELD), tests, bindings, names);
 		}
+		// `{ $body }`: a block of one hole takes any block, binding its single statement, else the block (`{print x}`
+		// holds the two words print x)
+		Node::List(items, Bracket::Curly, _) if items.len() == 1 && hole_name(&items[0]).is_some() => {
+			tests.push(block_test(&path));
+			let single = key(call(COUNT_WORD, vec![path.clone()]), Op::Eq, Node::int(1));
+			bind_hole(
+				hole_name(&items[0]).expect("a hole"),
+				if_then_else(single, item(&path, 1), path),
+				tests,
+				bindings,
+			);
+		}
 		Node::List(items, _, _) if has_hole(code) => {
 			let items = called_hole_items(items);
 			let is_rest = |part: &Node| rest_hole(part).is_some();
@@ -734,7 +747,7 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 /// pattern tests (a type word, a comparison, a range), else the code equals it
 fn hole_condition(path: &Node, condition: &Node, names: &Names) -> Node {
 	if condition.is_symbol(BLOCK_WORD) {
-		return key(type_named(path, LIST_WORD), Op::And, key(field(path, BRACKET_FIELD), Op::Eq, text("{")));
+		return block_test(path);
 	}
 	let test = self::condition(path, condition, names);
 	let test = test.unwrap_or_else(|| key(path.clone(), Op::Eq, as_data(condition.clone())));
@@ -756,6 +769,11 @@ fn comparable_kind(condition: &Node) -> Option<&'static str> {
 		Node::Text(_) => Some(TEXT_WORD),
 		_ => None,
 	}
+}
+
+/// The code at `path` is a block, a list in braces
+fn block_test(path: &Node) -> Node {
+	key(type_named(path, LIST_WORD), Op::And, key(field(path, BRACKET_FIELD), Op::Eq, text("{")))
 }
 
 /// The field of the code node at `path`: its key, op, value or bracket
