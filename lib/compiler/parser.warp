@@ -1405,6 +1405,8 @@ def prefixed(p: Parser): Node := {
 	}
 	foreign = foreign_form(p, word)
 	if foreign != ø { return foreign }
+	event = if emit_words.contains(word) then emitted(p, word) else ø
+	if event != ø { return event }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else count_worded(p)
 	if declared != ø { return declared }
 	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
@@ -1414,6 +1416,30 @@ def prefixed(p: Parser): Node := {
 		return Key(ø, Op.Not, expression(p, 105))
 	}
 	atom(p)
+}
+
+// `1 + emit ask`, `emit stop the machine{reason: "x"}`: the emit word and the words of its event are one phrase, each
+// binding like the operand of a unary minus (`emit missing` raises missing, no test word); ø where an operator
+// follows, the word is then a name (`send alarm{} to "x"`)
+// Rust twin: jumps.rs try_parse_emit
+def emitted(p: Parser, word: text): Node := {
+	before = p.at
+	p.at = p.at + word.length
+	skip_spaces(p)
+	phrase = [symbol(word)]
+	while is_name_start(peek(p.code, p.at, p.n)) or (phrase.length > 1 and "0123456789\"'".contains(peek(p.code, p.at, p.n))) {
+		if operator_at(p).length > 0 {
+			p.at = before
+			return ø
+		}
+		phrase = phrase + [expression(p, PREFIX_POWER)]
+		skip_spaces(p)
+	}
+	if phrase.length == 1 {
+		p.at = before
+		return ø
+	}
+	listed("", " ", phrase)
 }
 
 // Whether the word at the parser's position follows a member's dot: `math.sqrt(4)` calls the member sqrt, no √
