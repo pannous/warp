@@ -504,6 +504,13 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::Return, I::End]);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
+					I::LocalGet(kind), I::I64Const(UNMARKED_KIND), I::I64And, I::I64Const(crate::type_kinds::EMPTY_LIST_KIND),
+					I::I64Eq, I::If(BlockType::Empty),
+				]);
+				s.emit_type_value(f, crate::words::LIST_WORD);
+				Self::emit_list(f, &[I::Return, I::End]);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
 					I::LocalGet(kind), I::I64Const(crate::type_kinds::BUILTIN_FUNCTION_MARK), I::I64And, I::I64Const(0), I::I64Ne,
 					I::If(BlockType::Empty),
 				]);
@@ -613,10 +620,10 @@ impl WasmGcEmitter {
 
 					// ø is the empty list
 					s.emit_field(func, 0, 0);
-					s.emit_unmarked(func);
+					Self::emit_kind_test(func, Kind::Empty as i64, I::I64Eq);
 					#[rustfmt::skip]
 					Self::emit_list(func, &[
-						I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+						I::If(BlockType::Empty),
 							I::I64Const(0), I::Return,
 						I::End,
 					]);
@@ -1160,10 +1167,10 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
 		Self::emit_list(func, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Else]);
 		self.emit_field(func, list, 0);
-		self.emit_unmarked(func);
+		Self::emit_kind_test(func, Kind::Empty as i64, I::I64Eq);
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
-			I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+			I::If(BlockType::Empty),
 				I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::LocalSet(list),
 			I::End,
 			I::End,

@@ -602,6 +602,12 @@ impl WasmGcEmitter {
 		if let Some(map_type) = crate::analyzer::held_map_type(arg, &self.scope) {
 			return map_type;
 		}
+		let holds_empty_list = |name: &str| {
+			crate::analyzer::holds_empty_list(&self.scope, name) && self.get_type(arg) == crate::type_kinds::Kind::Empty
+		};
+		if arg.is_empty_list_literal() || arg.symbol_name().is_some_and(holds_empty_list) {
+			return crate::words::LIST_WORD.to_string(); // `[]` (card run-time-empty)
+		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
 			Node::Empty => crate::type_kinds::Kind::Empty,
