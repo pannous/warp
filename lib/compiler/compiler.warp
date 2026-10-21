@@ -8,8 +8,8 @@ use "host_words.warp"
 use os
 use file
 
-# lib/: WARP_LIB, else the folder above this file's
-library_folder = env("WARP_LIB") ?? folder_of(module_directory)
+# lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the folder above this file's
+library_folder = if #args > 3 then args#4 else env("WARP_LIB") ?? folder_of(module_directory)
 
 # the prelude's text, whose definitions a program reaches (prelude_words.warp)
 prelude_source = read(library_folder + "/prelude.warp")
@@ -23,7 +23,7 @@ compile(source: text, folder: text): list := {
 	typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program))
 }
 
-# warp compiler.warp <source file> <wasm file> [<folder of the source's uses>]
+# warp compiler.warp <source file> <wasm file> [<folder of the source's uses> [<lib folder>]]
 source_file = args#1
 folder = if #args > 2 then args#3 else folder_of(source_file)
 write_bytes(args#2, compile(read(source_file), folder))

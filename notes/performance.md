@@ -116,6 +116,6 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
 - Tried, no gain: a per-thread cache of parsed std modules (cloning the tree costs about what parsing it does).
 - Program cache (src/run/program_cache.rs): `warp <file>` keeps the compiled module next to the machine-code cache, so
   a second run skips the compile; its hints, warnings and assumptions are said again by each run. The working
-  directory is part of the key (probes/pure_chain/run.sh runs emit.warp from its own folder for that). Probes:
+  directory is part of the key. Probes:
   probes/program_cache/cli_cache.sh, probes/program_cache/samples_twice.sh (samples whose two runs differ do so
   without the cache too: timings, random weights, stored rows, GPU frame counts).
