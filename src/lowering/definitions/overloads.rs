@@ -671,8 +671,18 @@ fn receiver_classes(node: &Node) -> HashMap<(String, usize), String> {
 /// `twice(h) := h() + h()`, 1 of a parameter typed `f: (float) -> float`; a parameter passed on to such a one takes its
 /// count, `play(tone) := play_signal(tone)` (card program-function), until no more do
 fn called_parameters(node: &Node) -> HashMap<(String, usize), usize> {
+	// definitions of one name and parameter count overload by type: each place's count is the variant's, picked later
+	let mut definitions: HashMap<(String, usize), usize> = HashMap::new();
+	each_definition(node, &mut |definition| {
+		*definitions.entry((definition.head[0].name(), definition.head.len() - 1)).or_default() += 1;
+	});
+	let overloaded: HashSet<String> =
+		definitions.into_iter().filter(|(_, count)| *count > 1).map(|((name, _), _)| name).collect();
 	let mut called = HashMap::new();
 	each_definition(node, &mut |definition| {
+		if overloaded.contains(&definition.head[0].name()) {
+			return;
+		}
 		for (index, parameter) in definition.head[1..].iter().enumerate() {
 			let declared = crate::lowering::function_types::declared_arity(parameter);
 			let Some(name) = super::nodes::parameter_name(parameter) else { continue };
@@ -684,6 +694,9 @@ fn called_parameters(node: &Node) -> HashMap<(String, usize), usize> {
 	loop {
 		let known = called.len();
 		each_definition(node, &mut |definition| {
+			if overloaded.contains(&definition.head[0].name()) {
+				return;
+			}
 			for (index, parameter) in definition.head[1..].iter().enumerate() {
 				let function = definition.head[0].name();
 				let Some(name) = super::nodes::parameter_name(parameter) else { continue };
