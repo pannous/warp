@@ -6,7 +6,7 @@
 //! parameter count may declare different function types at one place, `play(fill: (samples, float) -> any, duration)`
 //! next to `play(tone, duration)`: a function passed there takes the one with as many parameters as it has.
 
-use super::nodes::{function_head, key};
+use super::nodes::{function_head, key, FunctionHead};
 use crate::node::{parens, Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -22,17 +22,19 @@ struct Signature {
 }
 
 /// A definition's name and parameter count, which tell its overloads apart: `play(tone)`, `play(tone, duration)`
-type Arity = (String, usize);
+pub(crate) type Arity = (String, usize);
 /// The function types the definitions of a name and arity declare at each place, the alternatives in declaration order
 type Signatures = HashMap<Arity, Vec<Vec<Signature>>>;
 
 pub fn lower(program: Node) -> Node {
 	let statements = top_level(&program);
-	let signatures = propagated(declared_signatures(&statements), &statements);
+	let heads: Vec<_> = statements.iter().filter_map(|statement| function_head(statement)).collect();
+	let counts = definition_counts(heads.iter().map(|head| (head.name.to_string(), head.parameters().len())));
+	let signatures = propagated(declared_signatures(&heads, &counts), &statements);
 	if signatures.is_empty() {
 		return program;
 	}
-	let passed = passed_functions(&statements, &signatures);
+	let passed = passed_functions(&statements, &signatures, &counts);
 	if passed.is_empty() {
 		return program;
 	}
@@ -46,17 +48,26 @@ fn top_level(program: &Node) -> Vec<&Node> {
 	}
 }
 
-/// The function-typed parameters the definitions declare, by their places
-fn declared_signatures(statements: &[&Node]) -> Signatures {
-	let mut signatures = Signatures::new();
-	let heads: Vec<_> = statements.iter().filter_map(|statement| function_head(statement)).collect();
-	let mut definitions: HashMap<Arity, usize> = HashMap::new();
-	for head in &heads {
-		*definitions.entry((head.name.to_string(), head.parameters().len())).or_default() += 1;
+/// How often each name and parameter count is defined: `play` twice with two parameters, once with three
+pub(crate) fn definition_counts(definitions: impl Iterator<Item = Arity>) -> HashMap<Arity, usize> {
+	let mut counts = HashMap::new();
+	for arity in definitions {
+		*counts.entry(arity).or_default() += 1;
 	}
-	for head in &heads {
+	counts
+}
+
+/// How often a name is defined, with any parameter count
+pub(crate) fn times_defined(counts: &HashMap<Arity, usize>, name: &str) -> usize {
+	counts.iter().filter(|((defined, _), _)| defined == name).map(|(_, count)| count).sum()
+}
+
+/// The function-typed parameters the definitions declare, by their places
+fn declared_signatures(heads: &[FunctionHead<'_>], counts: &HashMap<Arity, usize>) -> Signatures {
+	let mut signatures = Signatures::new();
+	for head in heads {
 		let parameters = head.parameters();
-		let of_overload = definitions[&(head.name.to_string(), parameters.len())] > 1;
+		let of_overload = counts[&(head.name.to_string(), parameters.len())] > 1;
 		for (index, parameter) in parameters.iter().enumerate() {
 			if let Some(signature) =
 				declared_signature(parameter).map(|signature| Signature { of_overload, ..signature })
@@ -156,15 +167,15 @@ fn visit_typed_arguments(node: &Node, signatures: &Signatures, action: &mut dyn 
 
 /// The functions the program passes for function-typed parameters, by name, with the signatures wanted there; not a
 /// definition's own parameters, as `tone` of `play(tone, duration)`, which the library's function `tone` does not answer
-fn passed_functions(statements: &[&Node], signatures: &Signatures) -> HashMap<String, Vec<Signature>> {
+fn passed_functions(
+	statements: &[&Node],
+	signatures: &Signatures,
+	counts: &HashMap<Arity, usize>,
+) -> HashMap<String, Vec<Signature>> {
 	let mut passed = HashMap::new();
-	let mut definitions: HashMap<&str, usize> = HashMap::new();
-	for head in statements.iter().filter_map(|statement| function_head(statement)) {
-		*definitions.entry(head.name).or_default() += 1;
-	}
 	// `play(chord, 2s)` of a program's chord(t) beside sound's chord(root, kind): no overload picks either by its
 	// parameters, so neither takes such a type
-	let is_ambiguous = |name: &str| definitions.get(name).is_some_and(|count| *count > 1);
+	let is_ambiguous = |name: &str| times_defined(counts, name) > 1;
 	for statement in statements {
 		let own: Vec<&str> = function_head(statement)
 			.map(|head| head.parameters().iter().filter_map(|parameter| parameter.symbol_name()).collect())
