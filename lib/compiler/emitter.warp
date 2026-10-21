@@ -1068,12 +1068,13 @@ def optional_declaration(body: Body, name: text, type_name: text, value: any): l
 # a value as the declared kind takes it: an int widened to a float, a value known only at run time checked (a list
 # one stays a node, as Rust keeps ø), else of that kind
 def admitted(value: any, kind: text): list {
-	if value#1 == kind or value#1 == pending { return value }
+	if value#1 == kind { return value }
 	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
 	if value#1 == "node" and kind in field_checks { return runtime_call(field_checks[kind], [value]) }
 	if value#1 == "char" and kind == "text" { return shown_text(value) }
-	# a reading that met a call still compiling guessed kinds (`f(x) + g(x)` an int) and is read again once they are known
-	if module.saw_pending { return [kind, value#2] }
+	# the result of a call still compiling (pending), or a kind guessed from one (`f(x) + g(x)` an int), is held as the
+	# declared kind: the reading is done again once the call's result is known
+	if value#1 == pending or module.saw_pending { return [kind, value#2] }
 	refuse("a " + value#1 + " given to a variable declared " + kind)
 }
 def whole(value: any): list { admitted(value, "int") }
@@ -2255,7 +2256,11 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 			seen = #module.closures + #module.dispatchers
 			for f in module.dispatchers { if f.name == closure_text_name { closure_text_code(f) } else { dispatcher_code(f) } }
 		}
-		for f in module.rereads { body_code(f) }
+		# every function compiled, no call gives a guessed kind any more
+		for f in module.rereads {
+			module.saw_pending = no
+			body_code(f)
+		}
 		if main.result != "int" and main.result != "float" {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
