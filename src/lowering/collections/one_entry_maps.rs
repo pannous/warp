@@ -5,8 +5,7 @@
 //! appended into a map (`m += {b:2}`). Reading it as a map works on the pair as it is: count, keys, values, get, has,
 //! `for k in m`, `m["b"] = 2`.
 
-use super::memoization::definition_parts;
-use super::nodes::{call, is_colon_pair, key};
+use super::nodes::{call, function_head, is_colon_pair, key};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::words::{ANY_TYPE, MAP_WORD};
@@ -73,12 +72,8 @@ fn declares_map_slot(declaration: &Node) -> bool {
 fn defined_functions(program: &Node) -> Functions {
 	let mut functions = Functions::new();
 	program.visit(&mut |node| {
-		if let Some((head, _, _)) = definition_parts(node) {
-			if let Node::List(items, _, _) = head.drop_meta() {
-				if let Some(name) = items.first().and_then(Node::symbol_name) {
-					functions.insert(name.to_string(), items[1..].iter().map(takes_map).collect());
-				}
-			}
+		if let Some(function) = function_head(node) {
+			functions.insert(function.name.to_string(), function.parameters().into_iter().map(takes_map).collect());
 		}
 	});
 	functions
