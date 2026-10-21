@@ -822,6 +822,9 @@ impl Lowering {
 	fn scope_of<T>(&self, name: &str, read: impl Fn(&VariableScope) -> T) -> T {
 		let scopes = self.scopes.borrow();
 		let scope = scopes.iter().skip(1).rev().find(|scope| scope.bound.contains(name)).unwrap_or(&scopes[0]);
+		if name == "module" {
+			eprintln!("DEBUG scope_of module: depth {} bound-in {:?} plain0 {:?} plain {:?} defining {:?}", scopes.len(), scopes.iter().map(|s| s.bound.contains(name)).collect::<Vec<_>>(), scopes[0].plain.contains(name), scope.plain.contains(name), self.defining.borrow().iter().map(|d| d.0.clone()).collect::<Vec<_>>());
+		}
 		read(scope)
 	}
 
