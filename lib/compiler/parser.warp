@@ -2156,7 +2156,7 @@ def named(p) {
 	constant = if names_case(p, word.length) then "" else keyword_form(word.lower())
 	if constant == "true" { return true }
 	if constant == "false" { return false }
-	if constant == "empty" { return ø }
+	if constant == "empty" and not names_key(p) { return ø }
 	if not names_case(p, word.length) and EXACT_CONSTANTS.contains(word.lower()) { return exact_constant(word) }
 	// `https://pannous.com`, `ssh://host`: a URL, the rest of which reads as one text
 	if p.code[p.at .. min(p.at + 3, p.n)] == "://" { return url_text(p, word) }
@@ -2272,6 +2272,11 @@ def wasm_instruction_after(p) {
 
 // A case of an enum, no constant: `Node.True`, `Node::Empty`, `None` in `enum Bracket { Round, None }`
 // Rust twin: atoms.rs check_constants (at_member_name, at_scoped_name, in_enum_cases)
+// `{empty: yes}`, `Kind = {Empty: 0}`, `class Cell{empty: bool}`: a word naming ø with a `:` glued to it is a name,
+// not with the definition `:=` nor the scope `::`
+// Rust twin: variables.rs names_field
+def names_key(p) := peek(p.code, p.at, p.n) == ':' and not "=:".contains(peek(p.code, p.at + 1, p.n))
+
 def names_case(p, length) {
 	start = p.at - length
 	if p.enum_cases or (start > 0 and p.code[start - 1] == '.') { return true }
