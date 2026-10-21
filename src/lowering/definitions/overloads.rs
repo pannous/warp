@@ -698,17 +698,17 @@ struct CalledPlace {
 /// play_signal(tone)` (card program-function), until no more do. Definitions of one name overloaded by type each add
 /// their place: play's first is a tone called with 1 and a fill of (samples, float)
 fn called_parameters(node: &Node) -> HashMap<(String, usize), Vec<CalledPlace>> {
-	// (function, parameter count, index) of the places found so far, so each overload adds its own
-	let mut known: HashSet<(String, usize, usize)> = HashSet::new();
+	// (definition's position, parameter index) of the places found so far, so each overload adds its own
+	let mut known: HashSet<(usize, usize)> = HashSet::new();
 	let mut found = Vec::new();
-	each_definition(node, &mut |definition| {
+	each_numbered_definition(node, &mut |position, definition| {
 		for (index, parameter) in definition.head[1..].iter().enumerate() {
 			let Some(name) = super::nodes::parameter_name(parameter) else { continue };
 			let place = match crate::lowering::function_types::declared_parameter_types(parameter) {
 				Some(wanted) => Some(CalledPlace { arguments: wanted.len(), wanted: Some(wanted) }),
 				None => called_arity(definition.body, &name).map(|arguments| CalledPlace { arguments, wanted: None }),
 			};
-			found.extend(place.map(|place| (definition_place(definition, index), place)));
+			found.extend(place.map(|place| ((position, index), definition.head[0].name(), place)));
 		}
 	});
 	let mut called = HashMap::new();
@@ -716,29 +716,35 @@ fn called_parameters(node: &Node) -> HashMap<(String, usize), Vec<CalledPlace>> 
 		if found.is_empty() {
 			return called;
 		}
-		for ((function, count, index), place) in found.drain(..) {
-			known.insert((function.clone(), count, index));
-			let places: &mut Vec<CalledPlace> = called.entry((function, index)).or_default();
+		for (place_of_definition, function, place) in found.drain(..) {
+			known.insert(place_of_definition);
+			let places: &mut Vec<CalledPlace> = called.entry((function, place_of_definition.1)).or_default();
 			if !places.contains(&place) {
 				places.push(place);
 			}
 		}
-		each_definition(node, &mut |definition| {
+		each_numbered_definition(node, &mut |position, definition| {
 			for (index, parameter) in definition.head[1..].iter().enumerate() {
 				let Some(name) = super::nodes::parameter_name(parameter) else { continue };
-				if known.contains(&definition_place(definition, index)) {
+				if known.contains(&(position, index)) {
 					continue;
 				}
 				if let Some(arguments) = passed_on_arity(definition.body, &name, &called) {
-					found.push((definition_place(definition, index), CalledPlace { arguments, wanted: None }));
+					let place = CalledPlace { arguments, wanted: None };
+					found.push(((position, index), definition.head[0].name(), place));
 				}
 			}
 		});
 	}
 }
 
-fn definition_place(definition: &Definition, index: usize) -> (String, usize, usize) {
-	(definition.head[0].name(), definition.head.len() - 1, index)
+/// Calls `visit` with every definition and its position among them
+fn each_numbered_definition<'a>(node: &'a Node, visit: &mut impl FnMut(usize, &Definition<'a>)) {
+	let mut position = 0;
+	each_definition(node, &mut |definition| {
+		visit(position, definition);
+		position += 1;
+	});
 }
 
 /// How many arguments the function `parameter` is passed to calls it with: 1 of `apply(f, x)` when apply calls f(x);
