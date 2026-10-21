@@ -5,6 +5,7 @@ use "equality.warp"
 use "errors.warp"
 use "fields.warp"
 use "lists.warp"
+use "nodes.warp"
 use "show.warp"
 use "text.warp"
 # a map is a curly list of `name:value` keys (Marked.Map and Marked.Entry, as Rust's); a class instance `Point{x:1}`

@@ -2,7 +2,9 @@
 use "intrinsics.warp"
 use "../kinds.warp"
 use "errors.warp"
+use "instructions.warp"
 use "show.warp"
+use "text.warp"
 # a value as a boxed $Node
 held(value: any): any := value
 # the built-in node's parts (lib/compiler/node.warp): a key's operator is its code above the kind bits, the
