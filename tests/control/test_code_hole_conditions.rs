@@ -3,15 +3,15 @@
 // `($k: int) + $x`, though `:` binds looser than `+`
 use crate::is;
 
-const CONSTANT: &str = "constant(n) := match n { data($k: int + $x) => x; data($x + $k: int) => x; _ => \"none\" }\n";
+const SUMMAND: &str = "summand(n) := match n { data($k: int + $x) => x; data($x + $k: int) => x; _ => \"none\" }\n";
 const KINDS: &str =
 	"kind(n) := match n { data(f($n: > 0)) => \"positive\"; data(f($s: symbol)) => \"name \" + s; data(f($b: block)) => \"block\"; _ => \"other\" }\n";
 
 #[test]
 fn a_typed_hole_matches_only_its_type() {
-	is!(&format!("{CONSTANT}constant(data(3 + y))"), "y");
-	is!(&format!("{CONSTANT}constant(data(y + 3))"), "y");
-	is!(&format!("{CONSTANT}constant(data(y + z))"), "none");
+	is!(&format!("{SUMMAND}summand(data(3 + y))"), "y");
+	is!(&format!("{SUMMAND}summand(data(y + 3))"), "y");
+	is!(&format!("{SUMMAND}summand(data(y + z))"), "none");
 	is!("match data(2 * 3 + 4) { data($a: int * $b: int + $c) => a * b; _ => 0 }", 6);
 }
 

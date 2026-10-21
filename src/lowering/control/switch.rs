@@ -18,7 +18,10 @@ use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::optional_field;
 use crate::warp_parser::subscript;
-use crate::words::{COUNT_WORD, LET_WORD, LIST_WORD, MAP_WORD, PAIR_WORD, SLICE, STARRED, STR_WORD, SWITCH_WORDS};
+use crate::words::{
+	COUNT_WORD, LET_WORD, LIST_WORD, MAP_WORD, NUMBER_WORD, PAIR_WORD, SLICE, STARRED, STR_WORD, SWITCH_WORDS,
+	TEXT_WORD,
+};
 
 pub(crate) const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD];
 /// Words that catch the rest as `other` does unless the program has a variable of that name or the arm reads it (then
@@ -711,7 +714,26 @@ fn hole_condition(path: &Node, condition: &Node, names: &Names) -> Node {
 		let bracket = key(path.clone(), Op::Dot, Node::Symbol(BRACKET_FIELD.to_string()));
 		return key(type_named(path, LIST_WORD), Op::And, key(bracket, Op::Eq, text("{")));
 	}
-	self::condition(path, condition, names).unwrap_or_else(|| key(path.clone(), Op::Eq, as_data(condition.clone())))
+	let test = self::condition(path, condition, names);
+	let test = test.unwrap_or_else(|| key(path.clone(), Op::Eq, as_data(condition.clone())));
+	// `$n: > 0` compares only code of the bound's kind: a name is no number
+	match comparable_kind(condition) {
+		Some(kind) => key(type_named(path, kind), Op::And, test),
+		None => test,
+	}
+}
+
+/// The kind of code a comparison `> 0` or `< "m"` takes
+fn comparable_kind(condition: &Node) -> Option<&'static str> {
+	let Node::Key(empty, op, bound) = condition.drop_meta() else { return None };
+	if !empty.is_empty_node() || !op.is_ordering() {
+		return None;
+	}
+	match bound.drop_meta() {
+		Node::Number(_) => Some(NUMBER_WORD),
+		Node::Text(_) => Some(TEXT_WORD),
+		_ => None,
+	}
 }
 
 /// A hole binds the subtree at `path`; a repeated hole must be the same subtree
