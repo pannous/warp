@@ -23,8 +23,10 @@ A path literal is a Text, glued to what follows and not to an operand before it:
 
 `sort`, `unique`, `find`, `size` take paths through class dispatch (card cross-module-overload): lib/shell.warp has
 `class Path { name: text }` and `sort(file:Path)` etc.; the list words stay the fallback. traits/generics.rs `as_path`
-wraps a path literal (parser marks it with Meta `PathLiteral`) or a variable only ever assigned one into a Path where a
-method takes Path there. find is an iteration word: lambdas.rs leaves it to the method only when its last argument is
+wraps a path literal (parser marks it with Meta `PathLiteral`) into a Path where a method takes Path there, and so
+anything holding only paths (warp_parser `WrittenPaths`, card path-written): a variable only ever assigned one, a
+parameter every call passes one (`f(p) := sort p; f(./n.txt)`), a call of a function giving only paths (`g() :=
+./n.txt; sort g()`), grown to a fixed point. A name holding a path and a text somewhere stays text. find is an iteration word: lambdas.rs leaves it to the method only when its last argument is
 a text or number (`calls_method`). The interim names sort_lines, unique_lines, find_files, file_size stay.
 A word a used module defines itself is not hidden by its own `use` (loader.rs hidden_apart). Path parameters are `text`, not `any`: a word taking anything reads
 `file_size /etc/hosts > 0` both ways (P143, broadcasting.rs ambiguous_call).
