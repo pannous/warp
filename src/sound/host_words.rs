@@ -107,7 +107,8 @@ fn block_filler(
 		[ValType::I32, ValType::F64] => Val::I32(block as i32),
 		_ => return Err(not_a_filler()),
 	};
-	Ok(BlockFiller::OfBlock { function: exported, block, results: signature.results().len() })
+	let results = signature.results().len();
+	Ok(BlockFiller::OfBlock { function: exported, block, results })
 }
 
 /// A sound word's one value or stereo pair [left, right] of them
