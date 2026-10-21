@@ -115,7 +115,11 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	for word in crate::wasm_emitter::OUTPUT_WORDS {
 		arities.entry(word.to_string()).or_insert(Arity::library(1, 1, FirstParameter::Any));
 	}
-	nest_prefix_calls(program, &arities)
+	// `first = ["a"]; first contains "a"`: a variable of the top level is its value there, as a function's are inside it
+	let functions: HashSet<&str> = found.iter().map(|definition| definition.name.as_str()).collect();
+	let variables =
+		crate::program_names::outer_variables(&program).into_iter().filter(|name| !functions.contains(name.as_str()));
+	nest_prefix_calls(program, &with_values(&arities, variables))
 }
 
 /// `square all xs` (wiki/all.md): `all` splices the list into its items, the function applies to each
@@ -183,11 +187,17 @@ struct Arity {
 	converts: bool,
 	/// A word of the language, not the program's own function
 	library: bool,
+	/// A name the scope binds as a value (a variable, a parameter): no call, whatever word it spells
+	value: bool,
 }
 
 impl Arity {
 	fn library(fewest: usize, most: usize, first: FirstParameter) -> Arity {
-		Arity { fewest, most, first, converts: false, library: true }
+		Arity { fewest, most, first, converts: false, library: true, value: false }
+	}
+
+	fn value() -> Arity {
+		Arity { library: false, value: true, ..Arity::library(0, 0, FirstParameter::Any) }
 	}
 }
 
@@ -265,7 +275,7 @@ fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
 }
 
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
-	node.symbol_name().and_then(|name| arities.get(name).copied())
+	node.symbol_name().and_then(|name| arities.get(name).copied()).filter(|takes| !takes.value)
 }
 
 /// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading; in a
@@ -295,7 +305,7 @@ fn spaced(node: &Node, first: &dyn Fn(&Node) -> String) -> String {
 
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 	if let Some((head, body, rebuild)) = crate::lowering::type_tests::function_definition(&node) {
-		if let Some(inner) = without_bound(&node, arities) {
+		if let Some(inner) = with_bound_values(&node, arities) {
 			return rebuild(head, nest_prefix_calls(body, &inner));
 		}
 	}
@@ -454,13 +464,14 @@ fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
 /// In a function's body the names it binds (parameters, locals, loop variables: program_names.rs, the one scope rule)
 /// are values, no functions of the same name: `f(name) := contains(name, "-")` beside a class's name() method,
 /// `digits = t; slice digits 1 ø` beside a used file's digits(…)
-fn without_bound(definition: &Node, arities: &HashMap<String, Arity>) -> Option<HashMap<String, Arity>> {
-	let bound = crate::program_names::bound_inside(definition)?;
-	let unbound = arities.iter().filter(|(name, _)| !bound.contains(*name));
-	bound
-		.iter()
-		.any(|name| arities.contains_key(name))
-		.then(|| unbound.map(|(name, arity)| (name.clone(), *arity)).collect())
+fn with_bound_values(definition: &Node, arities: &HashMap<String, Arity>) -> Option<HashMap<String, Arity>> {
+	crate::program_names::bound_inside(definition).map(|bound| with_values(arities, bound))
+}
+
+fn with_values(arities: &HashMap<String, Arity>, names: impl IntoIterator<Item = String>) -> HashMap<String, Arity> {
+	let mut scope = arities.clone();
+	scope.extend(names.into_iter().map(|name| (name, Arity::value())));
+	scope
 }
 
 /// `1, add 2, 3` → `1, add 2 3`: the first braceless call short of arguments takes the items after its comma, wherever
@@ -1513,19 +1524,4 @@ fn only_operand(body: &Node, name: &str) -> bool {
 		Node::List(items, _, _) => items.iter().all(|item| only_operand(item, name)),
 		_ => true,
 	}
-}
-
-/// TEMPORARY probe (card rust-lane-loop): lower_prefix_calls' steps on `program`
-pub fn prefix_calls_steps(program: Node) -> String {
-	let program = all_calls(program);
-	let found = program_definitions(&program);
-	let library_calls = LibraryCalls::of(&program, &found);
-	let named_first = library_calls.named.contains("first");
-	let nested = nest_library_calls(program.clone(), &library_calls);
-	format!(
-		"all_calls: {} | named has first: {named_first} | nest_library_calls: {} | lower_prefix_calls: {}",
-		program.serialize(),
-		nested.serialize(),
-		lower_prefix_calls(program.clone()).serialize()
-	)
 }
