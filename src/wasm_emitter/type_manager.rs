@@ -291,6 +291,29 @@ impl TypeManager {
 	}
 }
 
+/// The declared types, each after the types its fields name: a struct type refers only to earlier ones, so a field may
+/// name a type declared further down (`op: Op` in enum Node of lib/compiler/node.warp)
+pub(super) fn in_dependency_order(types: &[TypeDef]) -> Vec<&TypeDef> {
+	fn visit<'a>(type_def: &'a TypeDef, types: &'a [TypeDef], ordered: &mut Vec<&'a TypeDef>, seen: &mut Vec<&'a str>) {
+		if seen.contains(&type_def.name.as_str()) {
+			return;
+		}
+		seen.push(&type_def.name);
+		for field in &type_def.fields {
+			let named = crate::type_kinds::named_field_type(&field.type_name);
+			if let Some(dependency) = types.iter().find(|candidate| candidate.name == named) {
+				visit(dependency, types, ordered, seen);
+			}
+		}
+		ordered.push(type_def);
+	}
+	let (mut ordered, mut seen) = (vec![], vec![]);
+	for type_def in types {
+		visit(type_def, types, &mut ordered, &mut seen);
+	}
+	ordered
+}
+
 /// A struct type that other types may extend (or, with a supertype, one that extends it)
 fn struct_subtype(fields: Vec<FieldType>, supertype_idx: Option<u32>) -> SubType {
 	SubType {

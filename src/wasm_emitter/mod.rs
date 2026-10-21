@@ -276,7 +276,7 @@ impl WasmGcEmitter {
 
 	/// The struct types of the declared types, their indices noted in the context
 	fn emit_struct_types(&mut self, types: &[TypeDef]) {
-		for type_def in types {
+		for type_def in type_manager::in_dependency_order(types) {
 			self.type_manager.emit_single_user_type(type_def);
 			if let Some(idx) = self.type_manager.get_user_type_idx(&type_def.name) {
 				self.ctx.user_type_indices.insert(type_def.name.clone(), idx);
