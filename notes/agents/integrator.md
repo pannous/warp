@@ -106,6 +106,9 @@ Read notes/agents/common.md and notes/roles.md.
   new behaviour arguably improves on, the question goes to warp-interviewer and the ignore stays until answered. Only
   more than 10 failures, or a failure nobody can fix forward (wrong output across a whole feature, a crash at start),
   bounces the branch out of the batch. The test-count check counts fixnow ignores as present.
+- Revert first, bisect after (user, standing): when main's pipeline breaks (`warp pure samples/hello/hello.warp`) and
+  the suspect merge is known, `git revert` it at once without asking, name the decision revert-first in the commit,
+  push, tell the owner and the Supervisor; the owner re-lands it fixed. Only the Integrator, only for this case.
 - Read each failure's panic message in this gate's log before passing it as `--flaky`, even for a known flake's
   name: a different message is a real failure (find the branch, fix or bounce). A failure that passes alone is shared
   state: find and fix the cause in a small commit with a test (known flake: tests running the shared debug/warp
@@ -120,13 +123,18 @@ Read notes/agents/common.md and notes/roles.md.
 - Every landing gets a try line: the merge report names each user-visible branch to its owner, who sends
   warp-interviewer the try line; for an owner that has retired, send it yourself.
 - Every push to main (gated, express, warp-only) starts `integrator_tools/refresh_main_binary.sh` in the background
-  (user 2026-10-20: "pre-compile warp-debug whenever you merge into main"): it builds main's ~/dev/bin/warp-debug
-  first, then the optimized ~/dev/bin/warp. push_tested.sh and express.sh start it; after a warp-only push start it
-  yourself.
+  (user 2026-10-20: "pre-compile warp-debug whenever you merge into main"; order user 2026-10-21): it builds and
+  installs the quick-release ~/dev/bin/warp first (skipping a binary byte-identical to the installed one: a new mtime
+  makes warp pure cold again), warms it with one `warp pure samples/hello/hello.warp` from the main checkout (a run
+  without Hello logs a WARNING line in main_binary.log), and builds ~/dev/bin/warp-debug last. push_tested.sh and
+  express.sh start it; after a warp-only push start it yourself.
 - Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
   `integrator_tools/pure_chain_check.sh <worktree>` runs `warp pure samples/hello/hello.warp` with the merged lib
-  (~2.5 min cold, seconds cached) and stops the push when it no longer prints "Hello 🌍2026" while main's lib does
-  (push_tested.sh and express.sh call it; run it yourself before a warp-only push). Its Rust test
+  and stops the push when it no longer prints "Hello 🌍2026" while main does (push_tested.sh and express.sh call it;
+  run it yourself before a warp-only push). A worktree whose Rust differs from main's binary is judged with its own
+  release build (~14 min; card pure-kinds: batch-32's Rust broke the chain while main's old binary with its lib still
+  printed hello), else main's binary (~2.5 min cold, seconds cached). It runs with WARP_COMPILER_WARNINGS=1 and reports
+  the warning lines ("PURE CHAIN WARNINGS"), not blocking until card compiling-lib reaches zero. Its Rust test
   warp_pure_runs_hello_world is ignored as slow, so this check is the only cover.
 - Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the
   function now lives, commit it in the merge, gate as usual and tell the owner afterwards; only logic changed on
