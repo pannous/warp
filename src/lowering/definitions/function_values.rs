@@ -458,17 +458,12 @@ impl FunctionArguments {
 	/// parameters as the word takes: `lambda_value_1(argument·1) := is_letter(argument·1)`
 	fn library_word_lambda(&self, name: &str, argument: &Node) -> Option<Node> {
 		let word = argument.symbol_name()?;
-		// `sqrt`, `abs`: an operator word known by its signature
-		let operator_arity = crate::lowering::library_signatures::library_signature(word)
-			.filter(|_| crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().any(|(spelled, _)| *spelled == word))
-			.map(|(params, _)| params.len());
-		let known = is_standard_function(word) || prelude_word_arity(word).is_some() || operator_arity.is_some();
-		if !known || self.variables.contains(word) {
+		let word_arity = library_function_arity(word)?;
+		if self.variables.contains(word) {
 			return None;
 		}
-		let parameters: Vec<Node> = (1..=operator_arity.unwrap_or_else(|| arity(canonical_spelling(word))))
-			.map(|index| Node::Symbol(format!("{LIBRARY_WORD_PARAMETER}{index}")))
-			.collect();
+		let parameters: Vec<Node> =
+			(1..=word_arity).map(|index| Node::Symbol(format!("{LIBRARY_WORD_PARAMETER}{index}"))).collect();
 		Some(key(call(name, parameters.clone()), Op::Define, crate::closures::word_applied(word, parameters)))
 	}
 
@@ -518,6 +513,17 @@ impl FunctionArguments {
 }
 
 /// `f x` with a parameter `f` that is a function: the call `f(x)`
+/// The parameters a library word takes when given as a function (`abs`, `is_letter`, a prelude word), none for any
+/// other name
+pub(crate) fn library_function_arity(word: &str) -> Option<usize> {
+	// `sqrt`, `abs`: an operator word known by its signature
+	let operator_arity = crate::lowering::library_signatures::library_signature(word)
+		.filter(|_| crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().any(|(spelled, _)| *spelled == word))
+		.map(|(params, _)| params.len());
+	let known = is_standard_function(word) || prelude_word_arity(word).is_some() || operator_arity.is_some();
+	known.then(|| operator_arity.unwrap_or_else(|| arity(canonical_spelling(word))))
+}
+
 fn round_calls(node: Node, function_params: &[String]) -> Node {
 	match node {
 		Node::List(items, Bracket::None, Separator::Space)

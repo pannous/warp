@@ -170,14 +170,24 @@ const OPERATOR_PARAMETERS: [&str; 2] = ["operator_left", "operator_right"];
 /// The value of an operator applied to nothing: the start of a fold that leaves the list empty
 const OPERATOR_IDENTITIES: [(&str, i64); 2] = [("+", 0), ("*", 1)];
 
+/// `+` of Add, for the operators that stand alone as a value
+pub(crate) fn operator_value_text(op: Op) -> Option<&'static str> {
+	OPERATOR_VALUES.iter().find(|(known, _)| *known == op).map(|(_, text)| *text)
+}
+
+/// Add of `+`, for the operators that stand alone as a value
+pub(crate) fn operator_of_value(text: &str) -> Option<Op> {
+	OPERATOR_VALUES.iter().find(|(_, known)| *known == text).map(|(op, _)| *op)
+}
+
 fn operator_symbol(op: Op) -> Option<Node> {
-	OPERATOR_VALUES.iter().find(|(known, _)| *known == op).map(|(_, text)| symbol(text))
+	operator_value_text(op).map(symbol)
 }
 
 /// `+` as the function `(a b)->a+b`; also the operator with nothing on either side, as `by: >` parses
 fn operator_lambda(node: &Node) -> Option<Lambda> {
 	let op = match node.drop_meta() {
-		Node::Symbol(text) => OPERATOR_VALUES.iter().find(|(_, known)| known == text)?.0,
+		Node::Symbol(text) => operator_of_value(text)?,
 		Node::Key(left, op, right) if matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty)) => {
 			operator_symbol(*op).map(|_| *op)?
 		}

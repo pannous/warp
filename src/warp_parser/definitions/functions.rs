@@ -240,16 +240,15 @@ impl WarpParser {
 		if !FUNCTION_REFERENCE_WORDS.contains(&keyword) || self.options.data_mode {
 			return None;
 		}
-		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_at(0);
 		if blanks == 0 || !self.peek_char(blanks).is_alphabetic() {
 			return None;
 		}
-		let name: String = (blanks..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+		let name: String = self.word_at(blanks);
 		let after = blanks + name.chars().count();
 		let rest = (after..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(after);
 		// `map function square on [1 2 3]`: the iteration words' `on` ends it too, and `function floor is function` a test
-		let next_word: String =
-			(rest..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+		let next_word: String = self.word_at(rest);
 		let word_follows = [crate::words::ON_WORD, crate::words::IS_WORD].contains(&next_word.as_str());
 		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') && !word_follows {
 			return None;
@@ -287,7 +286,7 @@ impl WarpParser {
 	}
 
 	fn mutable_reference_follows(&self) -> bool {
-		let word: String = (1..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+		let word: String = self.word_at(1);
 		word == crate::words::MUT_WORD && matches!(self.peek_char(1 + word.len()), ' ' | '\t')
 	}
 
@@ -296,7 +295,7 @@ impl WarpParser {
 		match before {
 			Some(',' | '(' | '[') => true,
 			None | Some('\n' | ';' | '{') => {
-				let name = (1..).take_while(|&at| is_identifier_char(self.peek_char(at))).count();
+				let name = self.name_length_at(1);
 				let after = (1 + name..).map(|at| self.peek_char(at)).find(|ch| !matches!(ch, ' ' | '\t'));
 				let assigned = after == Some('=') && self.peek_char(1 + name + 1) != '=';
 				after == Some(',') || assigned
@@ -349,10 +348,7 @@ impl WarpParser {
 			}
 			offset += 1;
 		}
-		let mut next = offset + 1;
-		while matches!(self.peek_char(next), ' ' | '\t') {
-			next += 1;
-		}
+		let next = offset + 1 + self.blanks_at(offset + 1);
 		match (self.peek_char(next), self.peek_char(next + 1)) {
 			(':', '=') => true,
 			(':' | '{', _) => self.after_function_keyword_word(),

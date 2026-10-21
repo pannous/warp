@@ -233,10 +233,18 @@ impl Inference {
 			}
 		}
 		let mut definitions = HashMap::new();
+		let mut overloads: HashMap<(String, usize), Vec<Definition>> = HashMap::new();
 		program.visit(&mut |node| {
 			if let Some((name, definition)) = function_definition(node) {
 				for arity in definition.required()..=definition.parameters.len() {
-					definitions.insert((name.clone(), arity), definition.clone());
+					match definitions.entry((name.clone(), arity)) {
+						std::collections::hash_map::Entry::Vacant(first) => {
+							first.insert(definition.clone());
+						}
+						std::collections::hash_map::Entry::Occupied(_) => {
+							overloads.entry((name.clone(), arity)).or_default().push(definition.clone())
+						}
+					}
 				}
 			}
 		});
@@ -251,6 +259,7 @@ impl Inference {
 			class_lists: HashMap::new(),
 			result_fields: None,
 			definitions,
+			overloads,
 			specialised: HashMap::new(),
 			in_progress: vec![],
 			numbered: 0,
@@ -751,6 +760,9 @@ struct Inference {
 	result_fields: Option<Fields>,
 	/// by name and parameter count: `tone(p, d) := tone(p, d, "sine")` overloads by arity (overloads.rs)
 	definitions: HashMap<(String, usize), Definition>,
+	/// The later definitions of a name and parameter count, overloads by type (overloads.rs): each specialisation
+	/// specialises them too, under the same name, so the overloads pass still picks among them
+	overloads: HashMap<(String, usize), Vec<Definition>>,
 	/// Specialised functions: their name and result signature
 	specialised: HashMap<Specialisation, (String, Signature)>,
 	/// The specialisations being inferred: their name, whether they call themselves, and their result signature once a

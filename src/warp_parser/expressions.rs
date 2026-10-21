@@ -149,7 +149,7 @@ impl WarpParser {
 			}
 			// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
 			let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
-			if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
+			if is_name && self.at_text(".(") && !self.options.data_mode {
 				let Some(arguments) = self.special_operand(1, Op::Dot.binding_power(), min_bp) else {
 					break;
 				};
@@ -402,7 +402,7 @@ impl WarpParser {
 	/// `(() => 7)()`: a parenthesized function called with no arguments, the `()` glued to the group
 	fn try_parse_empty_call(&mut self, lhs: &Node) -> Option<Node> {
 		let parenthesized = matches!(lhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1);
-		if !(parenthesized && self.prev_char() == ')' && self.current_char() == '(' && self.peek_char(1) == ')') {
+		if !(parenthesized && self.prev_char() == ')' && self.at_text("()")) {
 			return None;
 		}
 		self.advance_by(2);

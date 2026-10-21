@@ -93,12 +93,12 @@ impl WarpParser {
 	fn words_ahead_length(&self, words: &[String]) -> Option<usize> {
 		let mut offset = 0;
 		for word in words {
-			let blanks = (offset..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
+			let blanks = self.blanks_at(offset);
 			if blanks == 0 {
 				return None;
 			}
 			offset += blanks;
-			if !word.chars().enumerate().all(|(index, ch)| self.peek_char(offset + index) == ch) {
+			if !self.text_at(offset, word) {
 				return None;
 			}
 			offset += word.chars().count();
@@ -113,23 +113,19 @@ impl WarpParser {
 	/// continue it, the one type `list of int` (as `list<int>` is read); `list of list of int` too
 	/// Read from the text before any operand is parsed: parsed, `list of int` would already be split (card cast-type)
 	pub(crate) fn of_phrase_ahead(&self) -> Option<(String, usize)> {
-		let blanks_from = |at: usize| (at..).take_while(|&index| matches!(self.peek_char(index), ' ' | '\t')).count();
-		let word_from = |at: usize| -> String {
-			(at..).map(|index| self.peek_char(index)).take_while(|ch| is_identifier_char(*ch)).collect()
-		};
 		let collection = |word: &str| crate::type_tests::COLLECTION_WORDS.contains(&list_type_head(word));
-		let start = blanks_from(0);
-		let mut element = word_from(start);
+		let start = self.blanks_at(0);
+		let mut element = self.word_at(start);
 		let mut phrase = list_type_head(&element).to_string();
 		let mut width = start + element.chars().count();
 		while collection(&element) {
-			let of_at = width + blanks_from(width);
-			if of_at == width || word_from(of_at) != OF_WORD {
+			let of_at = width + self.blanks_at(width);
+			if of_at == width || self.word_at(of_at) != OF_WORD {
 				break;
 			}
 			let element_at = of_at + OF_WORD.chars().count();
-			let gap = blanks_from(element_at);
-			element = word_from(element_at + gap);
+			let gap = self.blanks_at(element_at);
+			element = self.word_at(element_at + gap);
 			if gap == 0 || element.is_empty() {
 				break;
 			}
