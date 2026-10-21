@@ -204,6 +204,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::List(items, bracket, separator) if !items.is_empty() => {
 			infer_list_type(node, items, bracket, separator, scope)
 		}
+		// `{}`, `()`: no items is ø, as `x = {}` holds it; `[]` is the empty list (card run-time-empty)
+		Node::List(_, bracket, _) if *bracket != Bracket::Square => Kind::Empty,
 		// a range as a value is the list of its numbers (wasm_emitter emit_range), as `x = 1..5` is
 		Node::Key(_, Op::Range | Op::To, _) => Kind::List,
 		// `5 ± 1` is uncertain, a kind the node arithmetic meets at run time (wasm_emitter/uncertain.rs)
