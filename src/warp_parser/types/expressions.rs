@@ -93,7 +93,7 @@ impl WarpParser {
 	fn words_ahead_length(&self, words: &[String]) -> Option<usize> {
 		let mut offset = 0;
 		for word in words {
-			let blanks = (offset..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count() - offset;
+			let blanks = (offset..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
 			if blanks == 0 {
 				return None;
 			}
@@ -111,32 +111,39 @@ impl WarpParser {
 
 	/// `xs: list of int`, `v as list of text`, `f(): map of int := …`: the words `of <type>` after a collection type
 	/// continue it, the one type `list of int` (as `list<int>` is read); `list of list of int` too
-	pub(crate) fn with_of_phrase(&mut self, head: Node) -> Node {
-		let Node::Symbol(word) = head.drop_meta() else {
-			return head;
+	/// Read from the text before any operand is parsed: parsed, `list of int` would already be split (card cast-type)
+	pub(crate) fn of_phrase_ahead(&self) -> Option<(String, usize)> {
+		let blanks_from = |at: usize| (at..).take_while(|&index| matches!(self.peek_char(index), ' ' | '\t')).count();
+		let word_from = |at: usize| -> String {
+			(at..).map(|index| self.peek_char(index)).take_while(|ch| is_identifier_char(*ch)).collect()
 		};
 		let collection = |word: &str| crate::type_tests::COLLECTION_WORDS.contains(&list_type_head(word));
-		if !collection(word) {
-			return head;
-		}
-		let mut phrase = list_type_head(word).to_string();
-		let mut element = phrase.clone();
+		let start = blanks_from(0);
+		let mut element = word_from(start);
+		let mut phrase = list_type_head(&element).to_string();
+		let mut width = start + element.chars().count();
 		while collection(&element) {
-			let Some(after_of) = self.words_ahead_length(&[OF_WORD.to_string()]) else { break };
-			let blanks = (after_of..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count();
-			element =
-				(after_of + blanks..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
-			if blanks == 0 || element.is_empty() {
+			let of_at = width + blanks_from(width);
+			if of_at == width || word_from(of_at) != OF_WORD {
 				break;
 			}
-			self.advance_by(after_of + blanks + element.chars().count());
+			let element_at = of_at + OF_WORD.chars().count();
+			let gap = blanks_from(element_at);
+			element = word_from(element_at + gap);
+			if gap == 0 || element.is_empty() {
+				break;
+			}
+			width = element_at + gap + element.chars().count();
 			phrase = format!("{phrase} {OF_WORD} {element}");
 		}
-		if phrase == *word {
-			head
-		} else {
-			Node::Symbol(phrase).with_meta_of(&head)
-		}
+		phrase.contains(&format!(" {OF_WORD} ")).then_some((phrase, width))
+	}
+
+	/// The type phrase of of_phrase_ahead, taken
+	pub(crate) fn take_of_phrase(&mut self) -> Option<Node> {
+		let (phrase, width) = self.of_phrase_ahead()?;
+		self.advance_by(width);
+		Some(Node::Symbol(phrase))
 	}
 
 	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
