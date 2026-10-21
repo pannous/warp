@@ -15,4 +15,4 @@ one type word wherever a type stands (`x: …`, `unsigned int y = 3`, parameters
 
 Single words keep warp's meaning: `int`, `long` are the unbounded int. The table is COMPOUND_TYPES
 (src/warp_parser/types/expressions.rs, twin in lib/compiler/parser.warp), beside warp's own `fast int` / `fast float`.
-Open: the Interviewer was asked whether plain unbounded `int` is wanted instead of the fixed widths.
+User decision c-int-names: C's fixed widths with a got-it note, not plain unbounded `int`.
