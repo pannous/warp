@@ -1080,10 +1080,56 @@ def operator_declaration(p: Parser, word: text): Node := {
 	p.at = p.at + 2
 	skip_spaces(p)
 	body = expression(p, 0)
-	parts = if declared == ø then ø else group_parts(declared)
-	parameters = if kind != "infix" then [symbol("it")] else if declared == ø then ø else if parts != ø and parts#1 == "(" then parts#3 else [declared]
+	parameters = if kind != "infix" then [symbol("it")] else if declared == ø then ø else group_items(declared)
 	if parameters == ø { parameters = if mentions(body, "left") or mentions(body, "right") then [symbol("left"), symbol("right")] else [symbol("a"), symbol("b")] }
 	Key(operator_call(glyph, parameters), Op.Define, body)
+}
+
+// The items of a parenthesized group, the one item of any other node, none of ø: the parameters of `⊕(a, b)`
+def group_items(declared) {
+	if declared == ø { return [] }
+	parts = group_parts(declared)
+	if parts != ø and parts#1 == "(" then parts#3 else [declared]
+}
+
+// The operators a class defines as methods by their glyph: `+(o) := …` is its plus, `#(n) := …` its index
+// Rust twin: spellings.rs OPERATOR_METHODS
+METHOD_OPERATORS = ["+", "-", "*", "/", "%", "<", ">", "≈", "~", "#"]
+
+// `+(o) := …` defines a class's method of an operator by its glyph (its plus): the head is the call `+(o)`, no unary
+// plus, no count `#`; ø where no `:=` follows the parentheses
+// Rust twin: operators.rs try_parse_operator_method_head
+def operator_method_head(p) {
+	op = operator_at(p)
+	if op.length == 0 or not METHOD_OPERATORS.contains(op#2) { return ø }
+	open = p.at + op#1.length
+	if not is_at(p.code, open, '(', p.n) { return ø }
+	if not starts_at(p.code, ":=", blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n))) { return ø }
+	p.at = open
+	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
+	listed("(", "", [symbol(op#2)] + parameters)
+}
+
+// `operator #(n) := …`, `infix operator +(a: V, b: V) := …`: the method of a built-in operator, its keywords
+// superfluous; ø for any other statement starting with the word
+// Rust twin: operators.rs operator_method_definition
+def operator_method_definition(p, word) {
+	start = p.at
+	p.at = p.at + word.length
+	skip_spaces(p)
+	if word != "operator" and keyword_at(p, "operator") {
+		p.at = p.at + 8
+		skip_spaces(p)
+	}
+	head = operator_method_head(p)
+	if head == ø {
+		p.at = start
+		return ø
+	}
+	skip_spaces(p)
+	p.at = p.at + 2
+	skip_spaces(p)
+	Key(head, Op.Define, expression(p, 0))
 }
 
 // Left and right binding power of an operator
@@ -1272,6 +1318,8 @@ def prefixed(p: Parser): Node := {
 		if ranked.length == 2 or operator_alias(words).length > 0 { return skip_statement(p) }
 		declaration = operator_declaration(p, word)
 		if declaration != ø { return declaration }
+		method = operator_method_definition(p, word)
+		if method != ø { return method }
 	}
 	form = keyword_form(word)
 	if form == "return" { return returned(p) }
@@ -1328,6 +1376,8 @@ def expression_ends(p: Parser): bool {
 }
 
 def prefixed_by_symbol(p: Parser, c: text): Node := {
+	head = operator_method_head(p)
+	if head != ø { return head }
 	next = peek(p.code, p.at + 1, p.n)
 	if c == '-' and next != '>' and next != '-' {
 		p.at = p.at + 1

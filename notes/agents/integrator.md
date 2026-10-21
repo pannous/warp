@@ -124,9 +124,10 @@ Read notes/agents/common.md and notes/roles.md.
   first, then the optimized ~/dev/bin/warp. push_tested.sh and express.sh start it; after a warp-only push start it
   yourself.
 - Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
-  `integrator_tools/pure_chain_check.sh <worktree>` runs probes/pure_chain/run.sh samples/hello/hello.warp on the
-  merged lib and stops the push when it no longer prints "Hello 🌍2026" while main's lib does (push_tested.sh and
-  express.sh call it; run it yourself before a warp-only push). Switch it to `warp pure` once that command lands.
+  `integrator_tools/pure_chain_check.sh <worktree>` runs `warp pure samples/hello/hello.warp` with the merged lib
+  (~2.5 min cold, seconds cached) and stops the push when it no longer prints "Hello 🌍2026" while main's lib does
+  (push_tested.sh and express.sh call it; run it yourself before a warp-only push). Its Rust test
+  warp_pure_runs_hello_world is ignored as slow, so this check is the only cover.
 - Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the
   function now lives, commit it in the merge, gate as usual and tell the owner afterwards; only logic changed on
   both sides bounces.
