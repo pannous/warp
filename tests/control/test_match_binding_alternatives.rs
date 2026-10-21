@@ -17,5 +17,8 @@ fn alternatives_bind_the_same_names() {
 
 #[test]
 fn alternatives_binding_other_names_are_an_error() {
-	fails_with("match [1, 2] { [1, x] | [y, 1] => 0; _ => 0 }", "alternatives bind no names unless each binds the same ones");
+	fails_with(
+		"match [1, 2] { [1, x] | [y, 1] => 0; _ => 0 }",
+		"alternatives bind no names unless each binds the same ones",
+	);
 }

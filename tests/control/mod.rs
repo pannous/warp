@@ -130,6 +130,7 @@ mod test_match_alternatives;
 mod test_match_alternatives_hint;
 mod test_match_arm_if; // cards match-arm, arm-inline-if
 mod test_match_arm_nested; // card match-arm-whose
+mod test_match_binding_alternatives; // card binding-alternatives
 mod test_match_binding_arm;
 mod test_match_deep_conditions; // card deep-conditions
 mod test_match_else_line;
@@ -140,7 +141,6 @@ mod test_match_many_literals; // card pattern-dispatch-speed
 mod test_match_maps; // card map-patterns
 mod test_match_method_subject; // card match-xs
 mod test_match_negative_subject; // card match-negative-subject
-mod test_match_binding_alternatives; // card binding-alternatives
 mod test_match_other;
 mod test_match_pattern_bindings; // card pattern-names
 mod test_match_ranges;
