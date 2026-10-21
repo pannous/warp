@@ -74,6 +74,14 @@ and every run says `warp pure: compiler.warp, Rust-compiled` on stderr. It is al
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
+Card under-pure (2026-10-21): print([1, 2]) failed only here, not in the stage lane, because compiler.warp runs the
+WARP passes on the runtime words: runtime show.warp's match arms ø/True/False (node_matches.warp), a typed block
+result held whole (definitions.warp result_held now holds only the last statement), and emitter.warp refusing a
+`the result: text` given a kind guessed from a call still compiling (node_text ↔ list_shown cycle; admitted() now
+holds it as the declared kind, the reread fixes the code). A refusal is now the compile's error, not "not a list at
+23:2". Debug recipe: copy lib to scratch/upN, add prints (`print "CF " + f.name` in compile_function), run
+`WARP_LIB=<copy>/lib warp lib/compiler/compiler.warp p.warp p.wasm <dir> <copy>/lib` to keep the wasm for
+`wasm-tools validate --features all`. Remaining ladder gaps: card under-pure-2.
 
 ### WARP_SELF_HOSTED=pure (alias pure-only)
 pure and pure-only become one lane with no fallback; `pure-only` stays as an alias with a note.
