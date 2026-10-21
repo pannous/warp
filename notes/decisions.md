@@ -161,6 +161,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - float-text: floats print shortest round-trip digits (Python/JS repr) everywhere; P225 also joined to text.
 - repeating-decimals: only the overline `0.3̅` is the exact 1/3; `x as decimal` writes the period overlined; never for floats.
 - D16 Int is unbounded; `byte`, `int8..int32` are declared FFI types that trap on overflow; `u8` = `uint8` = `byte`. i64-wraps: `i64`/`int64` wrap silently at 2^63 like `fast int`; `use strict` catches it.
+- c-int-names (user): C's multi-word integer names are the fixed widths C means, each with a got-it note naming warp's word: `unsigned int` = uint32, `unsigned long (long)` = uint64, `long long` = int64, `unsigned short` = uint16, `short int` = int16, `unsigned char` = byte, `signed char` = int8 (`x: unsigned int = -1` errors "uint32 overflow"). Single words keep warp's meaning (`long`, `int` unbounded).
 - fast-scope: `fast` before a function or module makes it machine arithmetic: polynomial sin/cos/exp/pow, `/` gives f64, ints are wrapping i64; `x: fast int` is i64.
 - hex-printing: `255 as hex` is an int shown as 0xFF; arithmetic gives a plain int. binary-int: `5 as binary` shows 0b101.
 - footgun-divzero: exact numbers raise divide by zero (catchable); computed IEEE floats give ∞/NaN.
