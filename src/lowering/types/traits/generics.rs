@@ -18,9 +18,8 @@ pub(crate) struct Generic {
 	methods: Vec<Method>,
 	/// The parameter names of the first method, for the fix of a missing method
 	parameters: Vec<String>,
-	/// Other values call the library word: `sort` of lists
-	library: bool,
-	/// The untyped definitions other values call, by the arguments they take: `sort(x)` (1, 1), `take(xs, n)` (2, 2)
+	/// The untyped definitions and library words other values call, by the arguments they take: `sort(x)` (1, 1),
+	/// `take(xs, n)` (2, 2), the library's `get(map, key, default = none)` (2, 3)
 	untyped_arities: Vec<(usize, usize)>,
 }
 
@@ -70,7 +69,7 @@ impl Generic {
 	/// Whether other values of a call with `arity` arguments have a function to call: `b.take()` of a class Box
 	/// never calls list's `take(xs, n)`
 	pub(super) fn falls_back(&self, arity: usize) -> bool {
-		self.library || self.untyped_arities.iter().any(|(required, all)| (*required..=*all).contains(&arity))
+		self.untyped_arities.iter().any(|(required, all)| (*required..=*all).contains(&arity))
 	}
 
 	pub(super) fn variant(&self, method: usize) -> String {
@@ -175,16 +174,27 @@ pub(super) fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &T
 	});
 	let mut generics: HashMap<String, Generic> = HashMap::new();
 	for (name, (signature, arity), parameters) in typed {
-		let library = crate::lowering::class_methods::is_library_method(&name);
-		let untyped_arities =
-			untyped.iter().filter(|(untyped_name, _)| *untyped_name == name).map(|(_, arity)| *arity).collect();
-		let generic = generics.entry(name).or_insert(Generic { methods: vec![], parameters, library, untyped_arities });
+		let untyped_arities = untyped
+			.iter()
+			.filter(|(untyped_name, _)| *untyped_name == name)
+			.map(|(_, arity)| *arity)
+			.chain(library_method_arity(&name))
+			.collect();
+		let generic = generics.entry(name).or_insert(Generic { methods: vec![], parameters, untyped_arities });
 		if !generic.methods.iter().any(|(known, _)| *known == signature) {
 			generic.methods.push((signature, arity));
 		}
 	}
-	generics.retain(|_, generic| generic.library || !generic.untyped_arities.is_empty() || generic.methods.len() > 1);
+	generics.retain(|_, generic| !generic.untyped_arities.is_empty() || generic.methods.len() > 1);
 	generics
+}
+
+/// The arguments the library word a method is named like takes, any number when its signature doesn't say: a
+/// class's `get()` never falls back to the library's `get(map, key)`
+fn library_method_arity(name: &str) -> Option<(usize, usize)> {
+	crate::lowering::class_methods::is_library_method(name).then(|| {
+		crate::lowering::library_signatures::library_arity(name).unwrap_or((0, usize::MAX))
+	})
 }
 
 /// The arguments a definition takes, fewest and most: `add(a, b = 1)` takes 1 or 2
