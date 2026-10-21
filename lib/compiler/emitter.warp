@@ -1913,7 +1913,7 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 	kept_kind(found["params"][i])
 }
 # the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
-# `… as text`
+# `… as text`, or the block `{the result: text = …; the result}` (definitions.warp result_held)
 declared_result(f: Function): any := cast_kind(f.body)
 cast_kind(n: any): any := {
 	if type(n) is key and op_of(n) == "as" and value_of(n) is symbol {
@@ -1921,7 +1921,20 @@ cast_kind(n: any): any := {
 		return if word in type_bytes or word in references then word else "node"
 	}
 	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
+	held = held_result_type(n#1)
+	if held != ø { return result_type_kind(held) }
 	cast_kind(n#(#n))
+}
+# `T` of `the result: T = …`, else ø
+held_result_type(n: any): any := {
+	if not (type(n) is key and op_of(n) == "=" and type(key_of(n)) is key and op_of(key_of(n)) == ":") { return ø }
+	declared = key_of(n)
+	if key_of(declared) == symbol("the result") and value_of(declared) is symbol then name_of(value_of(declared)) else ø
+}
+# the kind a result declared `T` is held as: an instance or `any` a node; ø for a type word the core holds no kind of
+result_type_kind(type_name: text): any := {
+	word = if type_name in core_type_words then core_type_words[type_name] else type_name
+	if word in declared_kinds then declared_kinds[word] else if type_name == "any" or type_name in module.classes then "node" else ø
 }
 analyzed_result_kind(f: Function): any := {
 	found = analyzed_function(f)
