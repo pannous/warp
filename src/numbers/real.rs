@@ -73,7 +73,8 @@ fn is_function_name(node: &Node) -> Option<&'static str> {
 /// Programs that were not evaluated exactly see exact reals as their f64 value (as before), except their constant
 /// expressions with a rational or true/false value
 pub fn lower(node: Node) -> Node {
-	let node = folded_exact(node, &rebound_functions(&node));
+	let rebound = rebound_functions(&node);
+	let node = folded_exact(node, &rebound);
 	let real_variables = real_variables(&node);
 	lower_reals(with_real_type_arguments(node, &real_variables))
 }
