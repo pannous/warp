@@ -128,6 +128,7 @@ mod test_optional_casts;
 mod test_optional_list_items;
 mod test_optional_number_fields;
 mod test_param_named_like_global; // card param-named-like-global
+mod test_param_named_like_library_word; // card word-param-list
 mod test_parameter_text; // card param-text
 mod test_partial_time_comparisons; // cards now-make, now-allow
 mod test_passed_list_identity; // card xs-xs

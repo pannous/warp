@@ -410,15 +410,13 @@ pub(super) fn infer_list_type(
 	}
 	let head = items.first().and_then(Node::symbol_name);
 	if let Some(name) = head {
+		// a parameter takes a function's or a library word's name, any other variable in a square list (wasm_emitter
+		// takes_list_head): `[size, 4]` of a parameter size lists two items
+		let is_variable = scope.is_parameter(name) || (*bracket == Bracket::Square && scope.lookup(name).is_some());
 		let named = special_form_kind(name, items, bracket, scope)
 			.or_else(|| closure_call_kind(name, items, scope))
-			// a parameter takes a function's name, any other variable in a square list (wasm_emitter takes_list_head)
-			.or_else(|| {
-				let is_variable =
-					scope.is_parameter(name) || (*bracket == Bracket::Square && scope.lookup(name).is_some());
-				scope.function_kind(name).filter(|_| !is_variable)
-			})
-			.or_else(|| builtin_word_kind(name, items, bracket, scope));
+			.or_else(|| (!is_variable).then(|| scope.function_kind(name)).flatten())
+			.or_else(|| (!is_variable).then(|| builtin_word_kind(name, items, bracket, scope)).flatten());
 		if let Some(kind) = named {
 			return kind;
 		}
