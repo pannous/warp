@@ -134,7 +134,9 @@ Read notes/agents/common.md and notes/roles.md.
   run it yourself before a warp-only push). A worktree whose Rust differs from main's binary is judged with its own
   release build (~14 min; card pure-kinds: batch-32's Rust broke the chain while main's old binary with its lib still
   printed hello), else main's binary (~2.5 min cold, seconds cached). It runs with WARP_COMPILER_WARNINGS=1 and reports
-  the warning lines ("PURE CHAIN WARNINGS"), not blocking until card compiling-lib reaches zero. Its Rust test
+  the warning lines ("PURE CHAIN WARNINGS"), not blocking until card compiling-lib reaches zero. It also runs
+  `warp self samples/hello/hello.warp` (the self-compiled compiler.warp) and reports it ("PURE SELF"), not blocking
+  until it prints hello (user 2026-10-21); then it blocks too. Its Rust test
   warp_pure_runs_hello_world is ignored as slow, so this check is the only cover.
 - Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the
   function now lives, commit it in the merge, gate as usual and tell the owner afterwards; only logic changed on
