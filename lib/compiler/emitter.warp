@@ -835,11 +835,10 @@ def admits(type: any, kind: text): bool {
 # known only at run time too is written as it is, as Rust's field writes check no field type
 def field_admits(name: text, kind: text): bool {
 	if kind == "node" { return yes }
-	for class_name in module.classes.keys {
-		fields = module.classes[class_name]
-		if name in fields and not admits(fields[name], kind) { return no }
-	}
-	yes
+	# the class of the target is not known here: a field of that name in any class admitting the kind may be the one
+	# written (Function's `code: any` beside Parser's `code: text`)
+	holders = module.classes.keys.filter(class_name => name in module.classes[class_name])
+	#holders == 0 or holders.any(class_name => admits(module.classes[class_name][name], kind))
 }
 # the members a class body declares, a field as [name, type name (ø: untyped), default ([view], ø: none)]: `x`,
 # `left?` (untyped, ø by default), `x: int`, `x: int = 0`, `n = 0`; any other member (a method `sq() := …`, an
