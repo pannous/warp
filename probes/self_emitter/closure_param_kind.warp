@@ -1,0 +1,5 @@
+// a closure's unannotated parameter takes the kind its caller passes, not the guess its use (#part, part#2) suggests: yes no yes (card pure-chain-fails)
+check(v: any, test: function): bool := test(v)
+print(check("ab", part => #part == 2 and part#2 == 'b'))
+print(check(5, part => no and #part == 5))
+print(check([1, 2], part => part#2 == 2))

@@ -154,7 +154,7 @@ impl WasmGcEmitter {
 
 	/// list_become(list, fresh): the list takes the items of the fresh list in place, every holder sees them (`xs.pop(i)`,
 	/// `xs.clear()`, `xs.insert(v, at: i)`, card aliased-list): its first cell takes fresh's kind, item and rest, its
-	/// element mark stays and checks fresh's items; an empty fresh list makes it ø itself, ø takes nothing and is fresh
+	/// element mark stays and checks fresh's items; an empty fresh list makes it `[]` itself, ø takes nothing and is fresh
 	pub(super) fn emit_list_become(&mut self) {
 		if !self.should_emit_function(crate::list_mutations::LIST_BECOME) {
 			return;
@@ -187,7 +187,7 @@ impl WasmGcEmitter {
 					I::End,
 					I::LocalGet(fresh), I::RefIsNull, I::If(BlockType::Empty),
 				]);
-				s.emit_become_empty(f, list);
+				s.emit_become_empty(f, list, crate::type_kinds::EMPTY_LIST_KIND);
 				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End, I::LocalGet(list)]);
 				s.emit_field(f, fresh, 0);
 				s.emit_unmarked(f);
@@ -202,7 +202,7 @@ impl WasmGcEmitter {
 	}
 
 	/// list_drop_last(list): the list without its last item, in place, every holder sees it (`xs.pop()`, card
-	/// shrink-in-place): the next-to-last cell's rest cut off, no cell copied; a one-item list becomes ø itself. A kept
+	/// shrink-in-place): the next-to-last cell's rest cut off, no cell copied; a one-item list becomes `[]` itself. A kept
 	/// count of it goes down by one; the read and extend cursors, which may hold the dropped cell, are forgotten
 	pub(super) fn emit_list_drop_last(&mut self) {
 		if !self.should_emit_function(crate::list_mutations::LIST_DROP_LAST) {
@@ -224,7 +224,7 @@ impl WasmGcEmitter {
 				s.call(f, "new_empty");
 				Self::emit_list(f, &[I::Return, I::End]);
 				s.emit_field(f, list, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+				Self::emit_is_empty(f);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
 				for kind in [Kind::List, Kind::Block] {
 					s.emit_field(f, list, 0);
@@ -235,7 +235,7 @@ impl WasmGcEmitter {
 				s.emit_field(f, list, 2);
 				f.instruction(&I::RefIsNull);
 				f.instruction(&I::If(BlockType::Empty));
-				s.emit_become_empty(f, list);
+				s.emit_become_empty(f, list, crate::type_kinds::EMPTY_LIST_KIND);
 				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
 				// walk to the next-to-last cell
 				Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell)]);
@@ -279,13 +279,6 @@ impl WasmGcEmitter {
 			vec![node_ref_nullable],
 			vec![node_ref_nullable],
 			|s, f| {
-				let kind_is = |s: &Self, f: &mut Function, local: u32, kind: i64| {
-					s.emit_field(f, local, 0);
-					Self::emit_list(
-						f,
-						&[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(kind), I::I64Eq],
-					);
-				};
 				// no children (null or ø): the tail
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
@@ -294,7 +287,7 @@ impl WasmGcEmitter {
 					I::End,
 				]);
 				s.emit_field(f, children, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq); // ø or `[]`
+				Self::emit_is_empty(f);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
 				// the rest first, so each cell is built once
 				s.emit_field(f, children, 2);
@@ -308,9 +301,10 @@ impl WasmGcEmitter {
 					I::End,
 				]);
 				s.emit_field(f, item, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq); // ø or `[]`
+				Self::emit_is_empty(f);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
-				kind_is(s, f, item, SQUARE_LIST_KIND);
+				s.emit_field(f, item, 0);
+				Self::emit_whole_kind_test(f, SQUARE_LIST_KIND);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I::If(BlockType::Empty),
@@ -508,7 +502,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull]);
 				s.emit_fail_if(f, "index_out_of_range");
 				s.emit_field(f, cell, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+				Self::emit_is_empty(f);
 				s.emit_fail_if(f, "index_out_of_range");
 			};
 			Self::emit_index_compare(f, I::I64LtS);
