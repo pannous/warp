@@ -12,6 +12,12 @@ const COMPILER_FILE: &str = "compiler/compiler.warp";
 /// The kept compiler's cache names: compiled by the pure lane, or by Rust while the pure lane refuses compiler.warp
 const PURE_COMPILER: &str = "warp pure: compiler.warp, pure-compiled";
 const RUST_COMPILER: &str = "warp pure: compiler.warp, Rust-compiled";
+/// `warp pure --warm`: a freshly built binary keeps compiler.warp's module before it is installed (card self-warming)
+pub const PURE_COMMAND: &str = "pure";
+pub const WARM_FLAG: &str = "--warm";
+/// The program the warm-up compiles, in the cache folder
+const WARM_PROGRAM: &str = "warm-up.warp";
+const WARM_SOURCE: &str = "1\n";
 
 /// The program's value, run from the module compiler.warp made of it, with these arguments (`use os; args`)
 pub fn run(program: &Path, arguments: Vec<String>) -> Node {
@@ -71,6 +77,18 @@ fn compiler() -> Result<CompiledModule, Node> {
 		keep_under(&key, &module);
 	}
 	Ok(module)
+}
+
+/// `warp pure --warm`: compiler.warp's module and runtime words kept for this binary and lib/, by compiling a one-line
+/// program (0.07 s when they are kept already); the install of a new binary runs it first, so no `warp pure` of the
+/// installed one compiles compiler.warp (card self-warming). Its failure, when compiler.warp does not compile
+pub fn warm() -> Result<(), Node> {
+	let program = crate::run::module_cache::cache_file(WARM_PROGRAM)
+		.ok_or_else(|| error("warp pure --warm: the module cache is off (WARP_MODULE_CACHE=off)"))?;
+	std::fs::create_dir_all(program.parent().unwrap_or(Path::new(".")))
+		.and_then(|_| std::fs::write(&program, WARM_SOURCE))
+		.map_err(|failure| error(&format!("warp pure --warm: {}: {failure}", program.display())))?;
+	compiled(&program).map(drop)
 }
 
 /// compiler.warp compiled by the pure lane (parser.warp, the warp passes, analyzer.warp, emitter.warp), else the refusal

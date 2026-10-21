@@ -68,9 +68,10 @@ const SERVE_COMMAND: &str = "serve";
 /// `warp lower --json <code>`: the lowered program as the JSON node view lib/compiler reads with `node_of(json(…))`,
 /// lossless where the serialized text is not (probes/self_hosting/emitter/emit_lowered.sh)
 const LOWER_JSON_COMMAND: &str = "lower --json";
-/// `warp pure <file> [arguments…]`: the program compiled by lib/compiler/compiler.warp, the warp compiler as one warp
-/// program, and run (src/compiler/standalone.rs)
-const PURE_COMMAND: &str = "pure";
+// `warp pure <file> [arguments…]`: the program compiled by lib/compiler/compiler.warp, the warp compiler as one warp
+// program, and run (src/compiler/standalone.rs); `warp pure --warm` only keeps compiler.warp's module, as the install
+// of a new binary does before the binary goes in place (card self-warming)
+use warp::compiler::standalone::{PURE_COMMAND, WARM_FLAG};
 /// The first words the command line takes as commands, for unknown_command's suggestion
 const COMMAND_WORDS: [&str; 31] = [
 	"run", "pure", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data",
@@ -362,6 +363,10 @@ fn run_command(args: &[String], given: &[String]) {
 			println!("{total} in {} files", paths.len());
 		}
 		std::process::exit(if failed > 0 { 1 } else { 0 });
+	} else if args[1] == PURE_COMMAND && args.get(2).is_some_and(|flag| flag == WARM_FLAG) {
+		if let Err(failure) = warp::compiler::standalone::warm() {
+			print_and_exit(failure);
+		}
 	} else if args[1] == PURE_COMMAND && args.get(2).is_some_and(|path| has_warp_extension(path)) {
 		print_and_exit(warp::compiler::standalone::run(std::path::Path::new(&args[2]), args[3..].to_vec()));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {

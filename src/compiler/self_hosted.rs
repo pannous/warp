@@ -42,6 +42,8 @@ const EMIT_PROGRAM: &str = concat!(
 );
 /// Where a stage program names lib/, the folder library() resolves
 const LIBRARY_MARK: &str = "{lib}";
+/// The module cache's extension of a remembered binary identity (binary_identity)
+const BINARY_IDENTITY: &str = "binary-identity";
 /// The runtime words emitter.warp compiles into a module, lowered like a program, in the compiler's folder
 const RUNTIME_WORDS: &str = "runtime.warp";
 /// The module the host words are imported from
@@ -620,11 +622,7 @@ pub(crate) fn stage_key(program: &str) -> Option<String> {
 	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
-	hasher.update(format!(
-		"{}\n{:?}\n{settings:?}\n{program}\n",
-		binary.display(),
-		crate::run::program_cache::stamp(&binary)
-	));
+	hasher.update(format!("{}\n{settings:?}\n{program}\n", binary_identity(&binary)));
 	let mut files: Vec<PathBuf> = files_below(library.to_path_buf());
 	files.sort();
 	for file in files {
@@ -632,6 +630,22 @@ pub(crate) fn stage_key(program: &str) -> Option<String> {
 		hasher.update(std::fs::read(&file).unwrap_or_default());
 	}
 	Some(crate::extensions::hex_text(&hasher.finalize()))
+}
+
+/// The binary's identity, a hash of its bytes: a stage module kept by a freshly built binary is its installed copy's
+/// too, so an install keeps compiler.warp's module before the binary goes in place (`warp pure --warm`, card
+/// self-warming). Remembered in the cache under the binary's path, size and time: its ~50 MB are hashed once
+#[cfg(feature = "native")]
+fn binary_identity(binary: &std::path::Path) -> String {
+	use sha2::{Digest, Sha256};
+	let stamp = crate::run::program_cache::stamp(binary);
+	let place = crate::extensions::hex_text(&Sha256::digest(format!("{}\n{stamp:?}", binary.display())));
+	if let Some(identity) = crate::run::module_cache::kept_bytes(&place, BINARY_IDENTITY) {
+		return String::from_utf8_lossy(&identity).into_owned();
+	}
+	let identity = crate::extensions::hex_text(&Sha256::digest(std::fs::read(binary).unwrap_or_default()));
+	crate::run::module_cache::keep_bytes(&place, BINARY_IDENTITY, identity.as_bytes());
+	identity
 }
 
 /// The files below `folder`, at any depth
