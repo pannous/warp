@@ -7,7 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
-- parser-now (user, sharpens pipeline-first): only what the parser needs is implemented now; everything else goes to Soon or Later.
+- parser-now (user, sharpens pipeline-first): only what the parser needs is implemented now; everything else goes to Soon or Later. The keyword rewrite counts as part of the parser, so it continues now.
 - test-keyword (user, Soon): `warp test`, `warp pure test`, `warp self test` all take the test keyword (test blocks, soft tests) once compiler.warp knows it; until then a single file runs on Rust, folders through pure.
 - wasm-standalone (user): next big goal: the runtime built into the wasm itself, so `wasmtime warp.wasm <args>` behaves like the native binary: the compiler wasm needs only WASI, no custom host imports (`host::read` and the other host words built in) (card standalone). Running the emitted module from inside plain wasmtime: standard WASI (0.1/0.2) has no process spawn (wasi:exec is only a 2026 discussion); WASIX's proc_spawn/proc_exec exist only on Wasmer; meanwhile two steps (warp.wasm writes file.wasm, then `wasmtime file.wasm`) (Later).
 - stages-passes-dirs (user, then dropped by the user 2026-10-21): lib/compiler/*.warp stays one flat folder; the split into stages/ and passes/ churned every `use` line, needed a worker freeze, and the stage/pass line stayed blurry (card compiler-stages-passes closed as dropped).
