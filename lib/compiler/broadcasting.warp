@@ -6,7 +6,7 @@ use "words.warp"
 
 each_element = "each_element"
 
-# `.*` gives `*`, else ø
+# `.*` gives `*`, else ø  // TODO generalize to ALL operators even if not yet defined a .⨷ b => a.map{it ⨷ b}
 element_operator(word: any): any := {
 	if word is not symbol { return ø }
 	for op in element_wise_operators {
