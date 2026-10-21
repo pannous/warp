@@ -25,6 +25,7 @@ mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
 mod test_empty_start; // card start: `t = []` appends, ø + text fails
+mod test_empty_start_plus; // card local-fails: `t = []; t + "a"`, the bracket hint of `xs += [3]`
 mod test_field_count;
 mod test_filter_element_scope;
 mod test_find_any_all;
@@ -64,6 +65,7 @@ mod test_list_of_objects;
 mod test_list_parameters;
 mod test_list_passed_to_function_value; // card fixnow-builtin-function-add
 mod test_list_plus_number;
+mod test_list_plus_parts; // card def-ps: `out = out + p` of parts of unknown kind
 mod test_list_retype;
 mod test_list_times_list;
 mod test_list_truthiness;
