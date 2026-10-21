@@ -12,7 +12,7 @@ use super::nodes::{
 	assign, block, call, children_rewritten, fresh_number, if_then, is_kinded_type_word, key, or_operands, Counter,
 };
 use super::text_patterns::TextPattern;
-use super::type_tests::{program_names, type_test, Names};
+use super::type_tests::{is_builtin_type_word, program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -50,6 +50,9 @@ const HOLE_PREFIX: &str = "$";
 const OP_FIELD: &str = "op";
 const KEY_FIELD: &str = "key";
 const VALUE_FIELD: &str = "value";
+const BRACKET_FIELD: &str = "bracket";
+/// `$b: block`: a hole for a block of code
+const BLOCK_WORD: &str = "block";
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
@@ -464,7 +467,7 @@ impl<'a> Matched<'a> {
 	/// takes (card deep-conditions)
 	fn pattern(&mut self, pattern: &Node, path: Node) {
 		if let Some(code) = code_pattern(pattern) {
-			return code_tests(&code, path, &mut self.tests, &mut self.bindings);
+			return code_tests(&code, path, &mut self.tests, &mut self.bindings, self.names);
 		}
 		if let Some(text_pattern) = TextPattern::of(pattern, &|name| self.names.contains(name)) {
 			return text_pattern.matched(&path, &mut self.tests, &mut self.bindings);
@@ -597,7 +600,62 @@ pub(crate) fn code_pattern(pattern: &Node) -> Option<Node> {
 		}
 		_ => quoted_data(pattern)?.clone(),
 	};
-	has_hole(&code).then_some(code)
+	has_hole(&code).then(|| typed_holes_grouped(code))
+}
+
+/// `$k: int + $x` parses as `$k: (int + $x)`, `$x + $k: int` as `($x + $k): int`: a hole's condition word binds to the
+/// hole, `($k: int) + $x`, and the operators around it group again by their binding powers (card typed-holes)
+fn typed_holes_grouped(code: Node) -> Node {
+	let (before, after) = match children_rewritten(code, typed_holes_grouped) {
+		Node::Key(before, Op::Colon, after) => (before, after),
+		other => return other,
+	};
+	let (mut operands, mut operators) = operation_parts(&before);
+	let (after_operands, after_operators) = operation_parts(&after);
+	let joins = hole_name(operands.last().expect("an operand")).is_some() && is_hole_condition_word(&after_operands[0]);
+	if !joins {
+		return Node::Key(before, Op::Colon, after);
+	}
+	let hole = operands.pop().expect("an operand");
+	operands.push(key(hole, Op::Colon, after_operands[0].clone()));
+	operands.extend(after_operands.into_iter().skip(1));
+	operators.extend(after_operators);
+	regrouped(&operands, &operators, &mut 0, 0)
+}
+
+/// The operands and operators of a chain of binary operators, `a * b + c` → [a, b, c] and [*, +]; a pair or a prefix
+/// comparison `> 0` is one operand
+fn operation_parts(node: &Node) -> (Vec<Node>, Vec<Op>) {
+	match node.drop_meta() {
+		Node::Key(left, op, right) if *op != Op::Colon && !left.is_empty_node() => {
+			let (mut operands, mut operators) = operation_parts(left);
+			let (right_operands, right_operators) = operation_parts(right);
+			operators.push(*op);
+			operands.extend(right_operands);
+			operators.extend(right_operators);
+			(operands, operators)
+		}
+		_ => (vec![node.clone()], vec![]),
+	}
+}
+
+/// Operands and the operators between them as the parser groups them: by binding power, from the operand at `at`
+fn regrouped(operands: &[Node], operators: &[Op], at: &mut usize, min_bp: u8) -> Node {
+	let mut left = operands[*at].clone();
+	while let Some(&op) = operators.get(*at) {
+		let (left_bp, right_bp) = op.binding_power();
+		if left_bp < min_bp {
+			break;
+		}
+		*at += 1;
+		left = key(left, op, regrouped(operands, operators, at, right_bp));
+	}
+	left
+}
+
+/// `int`, `symbol`, `block`: a word a hole's condition names
+fn is_hole_condition_word(node: &Node) -> bool {
+	node.symbol_name().is_some_and(|word| word == BLOCK_WORD || is_builtin_type_word(word))
 }
 
 /// `$a` in quoted code: a, the name it binds in a pattern and splices in a template
@@ -615,17 +673,22 @@ fn has_hole(code: &Node) -> bool {
 
 /// The code at `path` has the shape of the quoted code: a hole binds the subtree there, a repeated hole must be the same
 /// subtree, a key has the same operator and a list the same length, parts without holes are equal as data
-fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
+fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>, names: &Names) {
 	if let Some(name) = hole_name(code) {
 		return bind_hole(name, path, tests, bindings);
 	}
 	match code.drop_meta() {
+		// `$r: int`, `$n: > 0`, `$b: block`: the hole binds the code there when it meets the condition (card typed-holes)
+		Node::Key(hole, Op::Colon, condition) if hole_name(hole).is_some() => {
+			tests.push(hole_condition(&path, condition, names));
+			code_tests(hole, path, tests, bindings, names);
+		}
 		Node::Key(left, op, right) if has_hole(code) => {
 			let part = |field: &str| key(path.clone(), Op::Dot, Node::Symbol(field.to_string()));
 			tests.push(type_named(&path, KEY_SPEC));
 			tests.push(key(part(OP_FIELD), Op::Eq, text(op.as_str())));
-			code_tests(left, part(KEY_FIELD), tests, bindings);
-			code_tests(right, part(VALUE_FIELD), tests, bindings);
+			code_tests(left, part(KEY_FIELD), tests, bindings, names);
+			code_tests(right, part(VALUE_FIELD), tests, bindings, names);
 		}
 		Node::List(items, _, _) if has_hole(code) => {
 			let items = called_hole_items(items);
@@ -633,12 +696,22 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 			for (part, part_path) in items.iter().zip(item_paths(&items, &path, is_rest, tests)) {
 				match rest_hole(part) {
 					Some(name) => bind_hole(name, part_path, tests, bindings),
-					None => code_tests(part, part_path, tests, bindings),
+					None => code_tests(part, part_path, tests, bindings, names),
 				}
 			}
 		}
 		_ => tests.push(key(path, Op::Eq, as_data(code.clone()))),
 	}
+}
+
+/// The test of a hole's condition on the code at `path`: a block is a list in braces, anything else what an arm's
+/// pattern tests (a type word, a comparison, a range), else the code equals it
+fn hole_condition(path: &Node, condition: &Node, names: &Names) -> Node {
+	if condition.is_symbol(BLOCK_WORD) {
+		let bracket = key(path.clone(), Op::Dot, Node::Symbol(BRACKET_FIELD.to_string()));
+		return key(type_named(path, LIST_WORD), Op::And, key(bracket, Op::Eq, text("{")));
+	}
+	self::condition(path, condition, names).unwrap_or_else(|| key(path.clone(), Op::Eq, as_data(condition.clone())))
 }
 
 /// A hole binds the subtree at `path`; a repeated hole must be the same subtree

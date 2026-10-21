@@ -28,6 +28,7 @@ mod test_check_assert;
 mod test_check_holds;
 mod test_clipboard;
 mod test_code_hole_calls; // card code-hole-arm-state
+mod test_code_hole_conditions; // cards typed-holes, code-hole-types
 mod test_code_holes; // card code-holes
 mod test_colon_handlers;
 mod test_condition_block;
