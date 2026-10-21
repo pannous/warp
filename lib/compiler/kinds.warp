@@ -1,0 +1,17 @@
+# The kind field of a $Node (src/type_kinds.rs), one table for the emitter and the runtime words, which read
+# `Kind.List` as its number (emitter.warp constant_tables): the Kind in the low byte (KIND_BITS, KIND_MASK), Rust's
+# enum Kind
+kind_bits = 8
+kind_mask = 255
+Kind = {Empty: 0, Int: 1, Float: 2, Text: 3, Codepoint: 4, Symbol: 5, Key: 6, Block: 7, List: 8, Data: 9, Meta: 10, Error: 11, TypeDef: 12, Pointer: 13, Function: 16, Uncertain: 17, Time: 18}
+# whole kind fields, a Kind with the info above it: a yes/no is an Int of BOOL_INFO 1, a map a List of the curly
+# bracket 0, a list of the square one 1 and of none 5, an instance a Key of no operator, an entry a Key of `:`
+# (Op::Colon 1, src/operators/codes.rs), a type value a Symbol marked TYPE_VALUE_MARK (1 << 54)
+Marked = {Bool: 257, Map: 8, SquareList: 264, UnbracketedList: 1288, Instance: 6, Entry: 262, TypeValue: 18014398509481989}
+# the units of the parts above the Kind: the info byte (a key's operator, a list's bracket, a time's form, KIND_BITS
+# 8), a list's separator (SEPARATOR_SHIFT 48), the code mark (CODE_MARK, 1 << 56)
+KindUnit = {Info: 256, Separator: 281474976710656, Code: 72057594037927936}
+# a list's bracket in its info byte (src/wasm_emitter/mod.rs bracket_info)
+BracketCode = {Curly: 0, Square: 1, Round: 2, Less: 3, Other: 4, None: 5}
+# a time's form in its info bits (src/time/mod.rs TimeForm), Clock the time of day
+TimeFormCode = {Instant: 0, Date: 1, Local: 2, Duration: 3, Zoned: 4, Clock: 5}

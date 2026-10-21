@@ -1532,6 +1532,11 @@ PASSED:
   ✓ functions::test_function_aliases::test_a_bare_alias_is_the_error_with_the_fix
   ✓ functions::test_function_aliases::test_a_function_argument_stays_bare
   ✓ functions::test_function_aliases::test_an_alias_names_the_function
+  ✓ functions::test_function_binders::a_caught_error_stays_local
+  ✓ functions::test_function_binders::a_lambda_parameter_stays_local
+  ✓ functions::test_function_binders::a_loop_variable_stays_local
+  ✓ functions::test_function_binders::a_match_binder_stays_local
+  ✓ functions::test_function_binders::destructured_names_stay_local
   ✓ functions::test_function_keyword::func_colon_body_calls_itself_spaced
   ✓ functions::test_function_keyword::function_defines_like_def
   ✓ functions::test_function_ref_compare::a_function_value_compares_with_a_reference
@@ -1547,6 +1552,7 @@ PASSED:
   ✓ functions::test_function_typed_parameters::a_function_typed_parameter_leaves_quantities_to_the_others
   ✓ functions::test_function_typed_parameters::a_parameter_passed_on_to_a_function_typed_one_types_the_function
   ✓ functions::test_function_typed_parameters::the_name_of_a_parameter_declared_function_is_the_function_word
+  ✓ functions::test_function_value_scope::a_local_holding_a_closure_leaves_other_functions_names_alone
   ✓ functions::test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on
   ✓ functions::test_function_values::test_a_lambda_that_captures_is_passed_as_a_closure
   ✓ functions::test_function_values::test_a_lambda_that_captures_nothing_is_a_value
@@ -1639,6 +1645,7 @@ PASSED:
   ✓ functions::test_late_binding::a_def_without_parameters_over_constants_gets_a_note
   ✓ functions::test_late_binding::a_free_variable_changed_after_the_definition_is_an_error_at_the_change
   ✓ functions::test_late_binding::a_free_variable_that_never_changes_needs_no_declaration
+  ✓ functions::test_late_binding::a_function_assigning_a_global_it_does_not_declare_makes_its_own_local
   ✓ functions::test_late_binding::a_variable_bound_after_the_definition_is_read_at_call_time
   ✓ functions::test_late_binding::declaring_global_reads_the_current_value
   ✓ functions::test_late_binding::field_names_and_entry_keys_are_not_reads_of_a_variable
@@ -1794,13 +1801,16 @@ PASSED:
   ✓ functions::test_parameter_map_patterns::a_map_without_the_field_is_an_error
   ✓ functions::test_parameter_map_patterns::pattern_names_are_no_main_level_variables
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
+  ✓ functions::test_parameter_overloads::a_class_named_like_a_type_takes_its_variant
   ✓ functions::test_parameter_overloads::a_declared_type_picks_its_variant
+  ✓ functions::test_parameter_overloads::a_list_of_items_known_at_run_time_goes_by_their_type
   ✓ functions::test_parameter_overloads::a_list_parameter_overloads_a_text_parameter
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
   ✓ functions::test_parameter_overloads::an_overload_is_picked_at_run_time_when_only_the_value_tells
   ✓ functions::test_parameter_overloads::an_untyped_variant_is_the_fallback
   ✓ functions::test_parameter_overloads::of_any_is_the_fallback_variant
+  ✓ functions::test_parameter_overloads::the_item_type_of_a_list_picks_its_variant
   ✓ functions::test_parameter_patterns::a_class_parameter_names_its_fields
   ✓ functions::test_parameter_patterns::a_list_parameter_names_its_items
   ✓ functions::test_parameter_patterns::a_value_of_another_shape_is_an_error
@@ -2072,6 +2082,8 @@ PASSED:
   ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
+  ✓ lists::test_count_of_field::a_count_of_a_field_after_a_function
+  ✓ lists::test_count_of_field::print_a_count_of_a_field
   ✓ lists::test_counting_word_operands::a_block_after_the_operand_is_the_body
   ✓ lists::test_counting_word_operands::a_counting_word_takes_the_name_after_it
   ✓ lists::test_counting_word_operands::a_variable_named_count_stays_a_variable
@@ -2128,6 +2140,10 @@ PASSED:
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
   ✓ lists::test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
+  ✓ lists::test_empty_start_plus::a_bracketed_item_appended_gets_the_bracket_hint
+  ✓ lists::test_empty_start_plus::an_empty_list_start_plus_an_item_is_a_list
+  ✓ lists::test_empty_start::an_empty_list_start_appends_each_item
+  ✓ lists::test_empty_start::nothing_plus_a_text_fails_with_the_text_start
   ✓ lists::test_field_count::a_parameter_counts_with_the_call_form
   ✓ lists::test_field_count::test_count_of_a_field
   ✓ lists::test_filter_element_scope::a_number_filter_beside_a_class_filter
@@ -2174,6 +2190,9 @@ PASSED:
   ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
   ✓ lists::test_int_map::an_entry_is_removed_by_its_number
   ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
+  ✓ lists::test_join_unknown_parts::adding_to_a_value_of_unknown_kind_is_its_sum
+  ✓ lists::test_join_unknown_parts::joining_parts_of_unknown_kind_keeps_their_items
+  ✓ lists::test_join_unknown_parts::joining_parts_of_unknown_kind_takes_linear_steps
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -2197,6 +2216,7 @@ PASSED:
   ✓ lists::test_linear_arrays::a_for_loop_over_a_linear_array_gives_its_last_value
   ✓ lists::test_linear_arrays::a_linear_array_checks_its_bounds_and_stays_in_its_task
   ✓ lists::test_linear_arrays::a_linear_array_is_a_list_as_a_whole
+  ✓ lists::test_linear_arrays::a_linear_array_passed_for_a_typed_parameter_is_written_in_place
   ✓ lists::test_linear_arrays::a_linear_array_reads_and_writes_its_cells
   ✓ lists::test_linear_arrays::a_numeric_map_of_a_linear_array_writes_a_new_block
   ✓ lists::test_linear_arrays::a_numeric_map_of_a_mapped_linear_array_writes_a_block_too
@@ -2232,6 +2252,7 @@ PASSED:
   ✓ lists::test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
   ✓ lists::test_list_plus_number::each_reading_has_its_explicit_form
   ✓ lists::test_list_plus_number::the_explicit_forms_never_ask
+  ✓ lists::test_list_plus_parts::a_list_plus_parts_of_unknown_kind_keeps_them_all
   ✓ lists::test_list_retype::a_list_variable_given_another_element_type_holds_both
   ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
   ✓ lists::test_list_times_list::round_and_curly_lists_take_the_dot_product
@@ -2348,6 +2369,8 @@ PASSED:
   ✓ lists::test_remove_and_index_of::index_of_is_the_one_based_position
   ✓ lists::test_remove_and_index_of::remove_takes_a_key_out_of_a_map_variable
   ✓ lists::test_remove_and_index_of::remove_takes_a_value_out_of_a_list_variable
+  ✓ lists::test_self_sum_in_place::a_self_sum_of_a_shared_list_leaves_its_holders_alone
+  ✓ lists::test_self_sum_in_place::a_self_sum_of_an_unshared_list_takes_linear_steps
   ✓ lists::test_set_past_the_end::setting_into_the_empty_list_is_an_index_error
   ✓ lists::test_set_past_the_end::setting_past_the_end_is_catchable
   ✓ lists::test_signed_operand_list::a_glued_sign_after_a_space_is_a_list_by_default
@@ -2435,6 +2458,7 @@ PASSED:
   ✓ modules::test_dir_any_value::dir_of_a_plain_value_lists_nothing
   ✓ modules::test_dir_builtin_members::dir_of_a_list_lists_its_builtin_methods
   ✓ modules::test_dir_builtin_members::dir_of_a_text_lists_its_builtin_methods
+  ✓ modules::test_dir_builtin_members::every_builtin_method_is_a_function_value
   ✓ modules::test_dir_builtin_members::methods_list_what_dir_lists
   ✓ modules::test_dir_value_methods::dir_of_a_value_lists_its_types_methods
   ✓ modules::test_dir::a_program_s_own_dir_wins
@@ -2534,6 +2558,8 @@ PASSED:
   ✓ modules::test_prelude_own_names::prelude_words_answer_to_their_own_names
   ✓ modules::test_prelude_shadowing::library_spellings_keep_the_prelude_word
   ✓ modules::test_prelude_shadowing::the_program_word_takes_its_own_calls_with_a_hint
+  ✓ modules::test_program_arguments::the_words_after_two_dashes_are_the_programs_arguments
+  ✓ modules::test_program_variable_beside_module::a_module_local_named_like_a_program_variable_stays_the_modules
   ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
   ✓ modules::test_replaced_module_function::a_program_function_replacing_a_module_function_warns
   ✓ modules::test_rewrites::a_phrase_rule_rewrites_runs_inside_phrases
@@ -2693,6 +2719,7 @@ PASSED:
   ✓ modules::test_std_words::router_words_match_a_pattern_and_read_its_parameters
   ✓ modules::test_two_used_files::overloads_from_two_files_stay_apart
   ✓ modules::test_two_used_files::two_files_declaring_one_function_name_both
+  ✓ modules::test_use_cycle::a_module_using_the_program_back
   ✓ modules::test_use_modules::a_module_is_used_as_an_alias
   ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
   ✓ modules::test_use_modules::a_programs_global_is_not_a_module_functions_local
@@ -3552,6 +3579,7 @@ PASSED:
   ✓ operators::test_tuple_comparison_warning::a_tuple_compared_with_a_bare_comma_list_warns
   ✓ operators::test_used_operator_call_form::a_function_the_program_names_wins
   ✓ operators::test_used_operator_call_form::the_call_form_of_a_used_modules_operator_joins_it
+  ✓ operators::test_word_named_field_updates::a_field_named_like_a_word_takes_its_update
   ✓ operators::test_xor_negated_group::xor_of_a_negated_group_combines_bits
   ✓ parser::test_and_after_comparison::a_call_with_parentheses_takes_the_comparison
   ✓ parser::test_and_after_comparison::a_group_compares_the_braceless_call
@@ -3769,6 +3797,7 @@ PASSED:
   ✓ parser::test_self_pure::assigned_it_blocks_run_pure
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::block_definitions_hold_their_value_pure
+  ✓ parser::test_self_pure::compile_takes_the_pure_lane
   ✓ parser::test_self_pure::comprehensions_run_pure
   ✓ parser::test_self_pure::defaults_run_pure
   ✓ parser::test_self_pure::digit_casts_run_pure
@@ -3998,8 +4027,10 @@ PASSED:
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_program_cache::a_changed_file_of_the_folder_compiles_again
   ✓ programs::test_program_cache::a_file_the_program_writes_beside_it_keeps_its_cached_module
-  ✓ programs::test_program_cache::a_module_looking_beyond_the_keyed_folders_is_not_kept
+  ✓ programs::test_program_cache::a_module_looking_beyond_the_keyed_folders_is_kept_until_it_changes
+  ✓ programs::test_program_cache::a_module_used_by_its_path_and_a_warning_are_kept
   ✓ programs::test_program_cache::a_program_runs_again_from_its_cached_module
+  ✓ programs::test_program_cache::a_run_only_setting_runs_the_kept_module
   ✓ programs::test_property_definitions::a_class_defines_a_property_of_its_instances
   ✓ programs::test_property_definitions::a_class_defines_a_setter_of_its_instances
   ✓ programs::test_property_definitions::a_class_property_names_its_instance_self_or_this
@@ -4549,6 +4580,8 @@ PASSED:
   ✓ text::test_trim::trim_drops_whitespace_at_both_ends
   ✓ text::test_unicode_escape::a_unicode_escape_is_its_code_point
   ✓ text::test_utf8_bytes::a_text_and_its_utf8_bytes
+  ✓ types::test_alias_list_type::an_alias_of_a_plural_type_word
+  ✓ types::test_alias_list_type::an_alias_of_a_type_phrase
   ✓ types::test_any_field_text::a_field_of_an_any_value_ignores_a_class_field_of_that_name
   ✓ types::test_any_field_text::test_arithmetic_on_an_any_typed_field_has_a_text
   ✓ types::test_any_into_annotated_types::any_into_a_declared_field_is_checked_at_run_time
@@ -4714,6 +4747,7 @@ PASSED:
   ✓ types::test_class_operators::a_class_defines_an_operator_by_its_glyph
   ✓ types::test_class_operators::a_class_defines_an_operator_by_its_name
   ✓ types::test_class_operators::a_value_either_an_instance_or_a_number_keeps_what_it_is
+  ✓ types::test_class_operators::an_operator_defined_outside_its_class
   ✓ types::test_class_operators::an_operator_on_a_value_of_unknown_class_dispatches_at_run_time
   ✓ types::test_class_operators::an_operator_with_a_typed_operand
   ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
@@ -4946,7 +4980,7 @@ PASSED:
   ✓ types::test_list_test_of_a_map::a_one_entry_map_is_upgraded_where_a_map_is_needed
   ✓ types::test_loop_item_into_annotated::a_local_annotated_inside_a_loop_body_is_checked_too
   ✓ types::test_loop_item_into_annotated::a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time
-  ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_stays_a_type_error
+  ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_appends
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
   ✓ types::test_map_read_size::a_size_entry_of_a_map_read_at_run_time
   ✓ types::test_map_read_size::any_entry_of_shell_info
@@ -4996,6 +5030,8 @@ PASSED:
   ✓ types::test_number_keeps_exact::a_float_variable_still_converts
   ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_float
   ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_ratio
+  ✓ types::test_number_param_int::a_number_parameter_given_any_keeps_the_kind
+  ✓ types::test_number_param_int::a_number_parameter_takes_a_float
   ✓ types::test_one_dispatch::a_class_member_or_variable_may_take_a_library_word
   ✓ types::test_one_dispatch::a_class_method_named_like_a_library_word_joins_its_generic_function
   ✓ types::test_one_dispatch::a_conversion_word_beside_a_field_of_that_name
@@ -5106,6 +5142,7 @@ PASSED:
   ✓ types::test_self_typed_field::a_required_field_of_the_own_class_is_an_error
   ✓ types::test_self_typed_field::an_optional_field_of_the_own_class_holds_nothing
   ✓ types::test_self_typed_field::other_fields_stay_strict
+  ✓ types::test_separated_list_writes::a_list_keeping_its_separator_takes_any_item
   ✓ types::test_shared_instances::a_change_passes_through_other_functions_and_methods
   ✓ types::test_shared_instances::a_function_changes_a_field_of_the_instance_it_is_given
   ✓ types::test_shared_instances::a_new_value_of_the_parameter_stays_inside
@@ -5304,6 +5341,7 @@ PASSED:
   ✓ types::test_type_tests_anywhere::test_items_of_a_mixed_list_are_tested_at_run_time
   ✓ types::test_type_tests_anywhere::test_type_tests_in_conditions_and_chains
   ✓ types::test_type_tests_anywhere::test_type_tests_in_function_bodies
+  ✓ types::test_type_tests::a_list_of_instances_is_a_list_of_their_class
   ✓ types::test_type_tests::test_a_variable_on_the_right_stays_equality
   ✓ types::test_type_tests::test_articles_are_optional
   ✓ types::test_type_tests::test_as_declaration
@@ -6374,4 +6412,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-11 ignored, 6369 passed, 0 failed, 6369 total tested
+11 ignored, 6407 passed, 0 failed, 6407 total tested

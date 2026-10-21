@@ -15,12 +15,12 @@ text_from_memory(address: int, length: int): text := {
 built_text(address: int, length: int): any := held(text_from_memory(address, length))
 built_symbol(address: int, length: int): any := symbol_of(text_from_memory(address, length))
 # `operator`: the operator's code (src/operators/codes.rs), above the kind bits as key_node puts it
-built_key(left: any, right: any, operator: int): any := keyed(operator * 256 + 6, left, right)
+built_key(left: any, right: any, operator: int): any := keyed(operator * KindUnit.Info + Kind.Key, left, right)
 # the host builds a list from its last item, a cell at a time: first ahead of the items of rest (ø for none); `info`
 # the list's bracket and separator above the kind bits (src/wasm_emitter/mod.rs list_info)
 built_list(first: any, rest: any, info: int): any := {
-	items = if is_null(rest) == 1 then [] else unboxed_list(rest)
-	list_node(info * 256 + 8, list_join([first], items))
+	items = if is_null(rest) then [] else unboxed_list(rest)
+	list_node(info * KindUnit.Info + Kind.List, list_join([first], items))
 }
 # a parse failure the program's `try` catches: the Error of the host's message
 built_error(message: any): any := error_of(node_text(message))

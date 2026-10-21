@@ -1379,7 +1379,7 @@ def returned(p: Parser): Node := {
 	p.at = p.at + 6
 	skip_spaces(p)
 	op = operator_at(p)
-	if op.length > 0 and ASSIGNING.contains(op#2) {
+	if op.length > 0 and binding_operators.contains(op#2) {
 		p.at = before
 		return atom(p)
 	}
@@ -1389,9 +1389,6 @@ def returned(p: Parser): Node := {
 	// `return` alone is the word
 	if value === ø then symbol("return") else listed("", " ", [symbol("return"), value])
 }
-
-// The operators after which `return` names a variable
-ASSIGNING = ["=", ":=", ":", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
 
 // Binds a condition until `then`, `do` or the colon of `if c: x`
 CONDITION_POWER = 81
@@ -1482,13 +1479,11 @@ def branch(p: Parser, min_power: int): Node := {
 def branch_assignment(p: Parser, target: Node, min_power: int): Node := {
 	skip_spaces(p)
 	op = operator_at(p)
-	if op.length == 0 or not BRANCH_ASSIGNING.contains(op#2) { return target }
+	if op.length == 0 or not assigning_operators.contains(op#2) { return target }
 	p.at = p.at + op#1.length
 	skip_spaces(p)
 	keyed(op#2, target, expression(p, min_power))
 }
-
-BRANCH_ASSIGNING = ["=", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
 
 def branch_value(p: Parser, min_power: int): Node := {
 	at = blank_end(p, p.at + 5)
@@ -2313,8 +2308,6 @@ def typed_parameter(argument: Node): Node := {
 	if words.length == 2 and is_type_symbol(first) { return typed_default(last, first, argument) }
 	argument
 }
-
-def is_capitalized(name: text): bool := name[0].upper() == name[0] and name[0].lower() != name[0]
 
 // `vararg xs`, `params int[] xs: list` as the rest parameter *xs
 def rest_parameter(last: Node, argument: Node): Node := match last {

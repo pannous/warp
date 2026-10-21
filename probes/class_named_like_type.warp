@@ -1,0 +1,8 @@
+class Function { name: text; parameters: list }
+key_of_slot(function: text, index: int): text := function + "·" + index
+key_of_slot(f: Function, i: int): text := f.name + "·" + i
+seen = {}
+seen["a·1"] = 1
+hits(f: Function) := { n = 0; for i in 0..<#f.parameters { if key_of_slot(f, i) in seen { n += 1 } }; n }
+print hits(Function(name: "a", parameters: [1, 2]))
+print key_of_slot("b", 1)

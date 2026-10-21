@@ -25,8 +25,15 @@ pub fn is_run_time_kind(kind: &Kind) -> bool {
 /// element of a parsed JSON value): Int or Float is decided by the values (wasm_emitter list_ops NODE_ARITHMETIC)
 pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str> {
 	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || is_run_time_kind(kind);
-	// a value of run-time kind added to a list: node_add concatenates when it is a list too
-	if *op == Op::Add && [left, right].contains(&Kind::Data) && [left, right].contains(&Kind::List) {
+	// a value of run-time kind added to a list: node_add concatenates when it is a list too, else appends it
+	// (`out = out + p` of the parts of an `any` list, decision list-append-plus)
+	let run_time_item = left == Kind::List && is_run_time_kind(&right);
+	if *op == Op::Add && (run_time_item || [left, right].contains(&Kind::Data) && [left, right].contains(&Kind::List)) {
+		return Some(crate::wasm_emitter::lists::list_ops::NODE_ADD);
+	}
+	// a text added to a value of run-time kind: ø + text fails (decision empty-plus-text), a list appends it, anything
+	// else joins it (node_add)
+	if *op == Op::Add && is_run_time_kind(&left) && matches!(right, Kind::Text | Kind::Codepoint) {
 		return Some(crate::wasm_emitter::lists::list_ops::NODE_ADD);
 	}
 	if ![left, right].iter().any(is_run_time_kind) || ![left, right].iter().all(numeric) {
@@ -40,8 +47,11 @@ pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str>
 
 /// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
-	if node_arithmetic(left, op, right).is_some() {
-		return Kind::Data; // Int or Float, decided at run time
+	match node_arithmetic(left, op, right) {
+		// a list plus a value of run-time kind stays a list, the value appended or its items added (node_add)
+		Some(crate::wasm_emitter::lists::list_ops::NODE_ADD) if left == Kind::List => return Kind::List,
+		Some(_) => return Kind::Data, // Int or Float, decided at run time
+		None => {}
 	}
 	match concatenation_kind(left, right) {
 		Some(kind) if *op == Op::Add => return kind,
@@ -61,11 +71,31 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	}
 }
 
+/// `xs + item` and `xs += item` of an item that is no list append it (decision list-append-plus): to a list, or to ø
+/// given as `[]` (`t = []; t += "a"`; ø's own `+= "a"` fails, decision empty-plus-text). An item of run-time kind is
+/// decided at run time (list_extend, node_add)
+pub fn appends_item(left: Kind, left_is_empty_list: bool, right: Kind) -> bool {
+	(left == Kind::List || (left_is_empty_list && is_run_time_kind(&left)))
+		&& !matches!(right, Kind::List | Kind::Empty | Kind::Data | Kind::Error | Kind::Block)
+}
+
+/// A local given `[]` that holds ø still (Local::empty_list): a list to `+` and `+=`, which append to it
+pub fn holds_empty_list(scope: &Scope, name: &str) -> bool {
+	scope.lookup(name).is_some_and(|local| local.empty_list && is_run_time_kind(&local.kind))
+}
+
+/// The appended item as the one-item list it is added as, `xs += 3` as `xs += [3]` (appends_item); `fs += (x => x)`
+/// adds the function, not the group holding it
+pub fn one_item_list(item: &Node) -> Node {
+	Node::List(vec![item.ungrouped().clone()], Bracket::Square, crate::node::Separator::Space)
+}
+
 /// `a + b` joining lists or texts: lists (an empty one too) are a list; a text with anything but a function, a value held
 /// as a Node too (a map value, a number of run-time kind), is a text
 fn concatenation_kind(left: Kind, right: Kind) -> Option<Kind> {
-	if [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List)
-	{
+	let lists = [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty))
+		&& [left, right].contains(&Kind::List);
+	if lists || appends_item(left, false, right) {
 		Some(Kind::List)
 	} else {
 		crate::wasm_emitter::text::text_builtins::concatenates(left, right).then_some(Kind::Text)
@@ -80,7 +110,19 @@ pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
 
 /// `base ^ 0.5`, `base ^ (1/3)`: an exact base with a non-integral constant exponent is no exact number, it is computed as
 /// f64; `2^(n/12)`, an exponent that may be a ratio at run time, is decided then (node_pow): exact when it is whole
-pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node, scope: &Scope) -> Kind {
+pub fn arithmetic_kind_of_operands(
+	left: Kind,
+	op: &Op,
+	right: Kind,
+	(left_operand, right_operand): (&Node, &Node),
+	scope: &Scope,
+) -> Kind {
+	// a local given `[]` is a list to `+` as to `+=`: `t = []; t + "a"` is `["a"]` (card local-fails); an operand of
+	// run-time kind is node_add's
+	let left_is_list = *op == Op::Add
+		&& !is_run_time_kind(&right)
+		&& left_operand.symbol_name().is_some_and(|name| holds_empty_list(scope, name));
+	let left = if left_is_list { Kind::List } else { left };
 	let constant_exponent = if *op == Op::Pow { constant_value(right_operand) } else { None };
 	let fractional_exponent = constant_exponent.is_some_and(|exponent| exponent.fract() != 0.0);
 	let ratio_exponent = *op == Op::Pow && constant_exponent.is_none() && may_be_ratio(right_operand, scope);
@@ -168,7 +210,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(_, Op::PlusMinus, _) => Kind::Data,
 		// Arithmetic: upgrade to Float if either operand is Float
 		Node::Key(left, op, right) if op.is_arithmetic() => {
-			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right, scope)
+			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), (left, right), scope)
 		}
 		// Assignment/definition: type comes from value, ø as the Node a variable holding it is (`if c { f = [] }`)
 		Node::Key(_left, Op::Define | Op::Assign, right) => held_kind(right, || infer_type(right, scope)),

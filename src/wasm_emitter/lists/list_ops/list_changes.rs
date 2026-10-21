@@ -28,7 +28,8 @@ impl WasmGcEmitter {
 
 	/// list_extend(list, items): `xs += ys`, what `xs.add(v)` lowers to: copies of the items' cells added to the end of
 	/// the list in place, so every holder of it sees them (P200b, Python's extend); ø (an Empty node) becomes the first
-	/// cell itself. Gives back the list, the copied items for a missing one (null), list_concat of a non-list
+	/// cell itself; items that are no list are one item, appended (emit_item_as_list). Gives back the list, the copied
+	/// items for a missing one (null), the list_concat of a list that is none
 	pub(super) fn emit_list_extend(&mut self) {
 		if !self.should_emit_function(LIST_EXTEND) {
 			return;
@@ -63,6 +64,7 @@ impl WasmGcEmitter {
 				// list, so a loop over a list appending to this one walks on (a comprehension over a table's rows); this
 				// list's count grows by the items (emit_count_grown), so a worklist's `at <= #waiting` counts it once
 				Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Extended]));
+				s.emit_item_as_list(f, items, kind);
 				s.emit_item_check(f, super::super::super::declared_values::LIST_ITEMS_CHECK, list, items);
 				s.emit_empty_as_null(f, items);
 				s.emit_collect_cells(f, items, None, &copy);
@@ -298,6 +300,35 @@ impl WasmGcEmitter {
 		vec![node_ref_nullable, cells, ValType::I32, node_ref_nullable, node_ref_nullable]
 	}
 
+	/// list_extend's items when they are no list (`out += part` of a part of unknown kind, a number or a text): the one
+	/// item appended, as the one-item list `[part]` (decision list-append-plus); an Error is the result, as node_add gives
+	fn emit_item_as_list(&self, f: &mut Function, items: u32, kind: u32) {
+		Self::emit_list(f, &[I::LocalGet(items), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
+		self.emit_field(f, items, 0);
+		self.emit_unmarked(f);
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Error as i64), I::I64Eq,
+			I::If(BlockType::Empty), I::LocalGet(items), I::RefAsNonNull, I::Return, I::End,
+			I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne,
+			I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And,
+			I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Ne, I::I32And,
+			I::If(BlockType::Empty),
+		]);
+		self.emit_one_item_list(f, items);
+		Self::emit_list(f, &[I::LocalSet(items), I::End, I::End]);
+	}
+
+	/// `[item]` of the node local `item`: a square list of that one cell (decision list-append-plus)
+	pub(in crate::wasm_emitter) fn emit_one_item_list(&self, f: &mut Function, item: u32) {
+		let node_type = self.type_manager.node_type;
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(item),
+			I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+		]);
+	}
+
 	/// The first cells of `list` (all, or as many as the i64 local `limit` says; a negative limit is all) into an array,
 	/// counted, then filled: no recursion, so a long list never exhausts the call stack. `cell` ends at the first cell
 	/// not taken
@@ -519,5 +550,34 @@ impl WasmGcEmitter {
 	}
 }
 
+impl WasmGcEmitter {
+	/// node_add_assign(sum, part): `out += part` of values whose kinds are known only at run time (`out = []` grown by the
+	/// items of an `any` list): a list grows in place as list_extend grows it, by a list's items or by one item
+	/// (list-append-plus), every holder seeing it (P200b); so does ø by a list; anything else is node_add's sum (ø + "a"
+	/// its error, decision empty-plus-text). Decided at run time, a number's `+=` stays a sum
+	pub(in crate::wasm_emitter) fn emit_node_add_assign(&mut self) {
+		if !self.should_emit_function(NODE_ADD_ASSIGN) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(NODE_ADD_ASSIGN, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
+			let (sum, part) = (0, 1);
+			for (local, kind) in [(sum, Kind::List), (sum, Kind::Empty), (part, Kind::List), (part, Kind::Empty)] {
+				s.emit_field(f, local, 0);
+				Self::emit_kind_test(f, kind as i64, I::I64Eq);
+			}
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Or, I::I32And, I::I32Or, I::If(BlockType::Empty), I::LocalGet(sum), I::LocalGet(part),
+			]);
+			s.call(f, LIST_EXTEND);
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(sum), I::LocalGet(part)]);
+			s.call(f, NODE_ADD);
+		});
+	}
+}
+
 /// list_extend(list, items): `xs += ys` in place (emit_list_extend)
 pub const LIST_EXTEND: &str = "list_extend";
+/// node_add_assign(sum, part): `out += part` of run-time kinds, in place for a list (emit_node_add_assign)
+pub const NODE_ADD_ASSIGN: &str = "node_add_assign";
