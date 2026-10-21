@@ -94,9 +94,9 @@ pub fn lower_tasks(node: Node) -> Node {
 			}
 		}
 	});
-	// `def go(n) {…}`, `fun f(x) {…}` too
-	let user_functions = crate::analyzer::function_definitions(&node).user_functions.into_keys();
-	functions.extend(user_functions);
+	// `def go(n) {…}`, `fun go(n) {…}` too: every definition form (function_head), still unlowered here
+	node.visit(&mut |part| functions.extend(crate::lowering::function_head(part).map(|head| head.name.to_string())));
+	functions.extend(crate::analyzer::function_definitions(&node).user_functions.into_keys());
 	let words: Vec<&str> =
 		TASK_WORDS.into_iter().filter(|word| !defined.contains(*word) && !functions.contains(*word)).collect();
 	if words.is_empty() {
