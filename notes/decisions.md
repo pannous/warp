@@ -7,7 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
-- stages-passes-dirs (user): "sort them into stages and passes" means the self-hosted compiler: lib/compiler/*.warp splits into stages/ (ordered whole-program transformations) and passes/ (local keyword-triggered rewrites); Rust's src/lowering/ stays as is.
+- stages-passes-dirs (user, then dropped by the user 2026-10-21): lib/compiler/*.warp stays one flat folder; the split into stages/ and passes/ churned every `use` line, needed a worker freeze, and the stage/pass line stayed blurry (card compiler-stages-passes, Later).
 - no-pass-proliferation (user): avoid the proliferation of passes: a feature extends or generalizes an existing pass, a new pass needs a reason named in its commit (notes/agents/common.md "No new passes"); an agent audits today's passes for ones that can be simplified or generalized (warp-passes).
 - revert-first (user, standing permission): when main's pipeline (`warp pure hello`) breaks and the suspect merge is known, the Integrator reverts it at once without asking and its owner re-lands it fixed (notes/agents/integrator.md); the only exception to never-revert-unprompted.
 - pure-vs-self (user): `warp pure <file>` always compiles with the Rust-compiled compiler.warp, `warp self <file>` always with the self-hosted, self-compiled one; no environment variable (WARP_PURE_COMPILER=self goes).
