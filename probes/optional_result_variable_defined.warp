@@ -1,0 +1,7 @@
+pick(x: int): int := { if x > 0 { x } }
+print(pick(-1))
+f(x: int): list := { found = ø; if x > 0 { found = [x] }; found }
+print(f(0))
+print(f(3))
+h(x: int): int := { a = x; a = a + 1; a }
+print(h(1))

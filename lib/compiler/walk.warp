@@ -21,6 +21,17 @@ is_key(n: Node, op: Op): bool := match n {
 	Key(_, written, _): written == op
 	_: no
 }
+# every value `name = v` or `name: T = v` assigns in n, outside the definitions and lambdas inside
+assigned_values(n: Node, name: text): list := {
+	if is_key(n, Op.Define) or is_key(n, Op.Arrow) { return [] }
+	inner = parts_of(n).flat_map(part => assigned_values(part, name))
+	if is_key(n, Op.Assign) and assigned_variable(key_of(n)) == symbol(name) { return [value_of(n)] + inner }
+	inner
+}
+assigned_variable(target: Node): Node := match target {
+	Key(variable, Op.Colon, _): variable
+	_: target
+}
 
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into

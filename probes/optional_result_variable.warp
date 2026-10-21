@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+# a `: list` result held in a variable that can be ø warns and gives ø (card pure-lane-declared)
+def f(x: int): list {
+	found = ø
+	if x > 0 { found = [x] }
+	found
+}
+print(f(0))
+print(f(2))
+def g(x: int): int { a = ø; b = a; if x > 0 { b = x }; b }
+print(g(0))
+def h(x: int): int { a = x; a = a + 1; a }
+print(h(1))

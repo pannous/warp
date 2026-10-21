@@ -97,9 +97,9 @@ with_empty_otherwise(value: Node): Node := match value {
 loop_words = ["for", "each"]
 is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
 
-# a `return ø` or a bare `return`, or ø as its value: ø itself, an `if` without `else`, a loop, or a choice with such
-# a branch; the definitions and lambdas inside answer for themselves
-can_answer_empty(body: Node): bool := returns_empty(body) or value_can_be_empty(body)
+# a `return ø` or a bare `return`, or ø as its value: ø itself, an `if` without `else`, a loop, a choice with such a
+# branch, or a variable assigned such a value; the definitions and lambdas inside answer for themselves
+can_answer_empty(body: Node): bool := returns_empty(body) or value_can_be_empty(body, body, [])
 
 returns_empty(n: Node): bool := {
 	if is_word(n, "return") { return yes }
@@ -108,16 +108,24 @@ returns_empty(n: Node): bool := {
 	parts_of(n).any(returns_empty)
 }
 
-value_can_be_empty(value: Node): bool := match value {
-	Key(then, Op.Else, otherwise): is_key(then, Op.Then) and (value_can_be_empty(value_of(then)) or value_can_be_empty(otherwise))
-	Key(_, Op.Then, _): yes
-	Key(_, Op.Do, _): yes
-	Key(_, Op.Question, branches): is_key(branches, Op.Colon) and (value_can_be_empty(key_of(branches)) or value_can_be_empty(value_of(branches)))
-	_: {
-		if value == ø or is_loop(value) { return yes }
-		if not is_curly_group(value) or #value == 0 { return no }
-		last = value#(#value)
-		not (is_group(last) and #last == 2 and is_word(last#1, "return")) and value_can_be_empty(last)
+# a value given back by `body`, whose assignments give its variables their values; the variables `looked_up` are
+# being followed already
+value_can_be_empty(value: Node, body: Node, looked_up: list): bool := {
+	can_be_empty = part => value_can_be_empty(part, body, looked_up)
+	match value {
+		Key(then, Op.Else, otherwise): is_key(then, Op.Then) and (can_be_empty(value_of(then)) or can_be_empty(otherwise))
+		Key(_, Op.Then, _): yes
+		Key(_, Op.Do, _): yes
+		Key(_, Op.Question, branches): is_key(branches, Op.Colon) and (can_be_empty(key_of(branches)) or can_be_empty(value_of(branches)))
+		_: {
+			if value == ø or is_loop(value) { return yes }
+			if value is symbol and not (name_of(value) in looked_up) {
+				return assigned_values(body, name_of(value)).any(assigned => value_can_be_empty(assigned, body, looked_up + [name_of(value)]))
+			}
+			if not is_curly_group(value) or #value == 0 { return no }
+			last = value#(#value)
+			not (is_group(last) and #last == 2 and is_word(last#1, "return")) and can_be_empty(last)
+		}
 	}
 }
 

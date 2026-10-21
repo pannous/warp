@@ -187,9 +187,42 @@ fn optional_when_answering_empty(head: &Node, body: &Node, type_name: &Node) -> 
 }
 
 /// Whether a body can give back ø: a `return ø` or a bare `return`, or ø as its value: ø itself, an `if` without
-/// `else`, a loop, or a choice with such a branch. The definitions and lambdas inside answer for themselves
+/// `else`, a loop, a choice with such a branch, or a variable assigned such a value. The definitions and lambdas
+/// inside answer for themselves
 fn can_answer_empty(body: &Node) -> bool {
-	returns_empty(body) || value_can_be_empty(body)
+	returns_empty(body) || value_can_be_empty(body, &EmptyScope { body, looked_up: vec![] })
+}
+
+/// The body whose assignments a variable's value comes from, and the variables already being looked up there
+struct EmptyScope<'a> {
+	body: &'a Node,
+	looked_up: Vec<String>,
+}
+
+/// Every value `name = v` or `name: T = v` assigns in `node`, outside the definitions and lambdas inside
+fn assigned_values<'a>(node: &'a Node, name: &str, values: &mut Vec<&'a Node>) {
+	match node.drop_meta() {
+		Node::Key(head, Op::Assign | Op::Define, _) if is_call_head(head) => {}
+		Node::Key(_, Op::Arrow, _) => {}
+		Node::Key(target, Op::Assign, value) if assigned_name(target) == Some(name) => {
+			values.push(value);
+			assigned_values(value, name, values);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| assigned_values(item, name, values)),
+		Node::Key(left, _, right) => {
+			assigned_values(left, name, values);
+			assigned_values(right, name, values);
+		}
+		_ => {}
+	}
+}
+
+fn assigned_name(target: &Node) -> Option<&str> {
+	match target.drop_meta() {
+		Node::Symbol(name) => Some(name),
+		Node::Key(name, Op::Colon, _) => name.symbol_name(),
+		_ => None,
+	}
 }
 
 fn returns_empty(node: &Node) -> bool {
@@ -215,20 +248,28 @@ fn is_loop(node: &Node) -> bool {
 	}
 }
 
-fn value_can_be_empty(value: &Node) -> bool {
+fn value_can_be_empty(value: &Node, scope: &EmptyScope) -> bool {
+	let can_be_empty = |value: &Node| value_can_be_empty(value, scope);
 	match value.drop_meta() {
 		Node::Empty => true,
+		Node::Symbol(name) if !scope.looked_up.contains(name) => {
+			let mut values = vec![];
+			assigned_values(scope.body, name, &mut values);
+			let scope =
+				EmptyScope { body: scope.body, looked_up: [scope.looked_up.clone(), vec![name.clone()]].concat() };
+			values.into_iter().any(|value| value_can_be_empty(value, &scope))
+		}
 		Node::List(items, Bracket::Curly, _) if is_statement_block(value) => {
-			items.last().is_some_and(|last| !is_return_statement(last) && value_can_be_empty(last))
+			items.last().is_some_and(|last| !is_return_statement(last) && can_be_empty(last))
 		}
 		Node::Key(_, Op::Then, _) => true,
 		_ if is_loop(value) => true,
 		Node::Key(then, Op::Else, otherwise) => match then.drop_meta() {
-			Node::Key(_, Op::Then, chosen) => value_can_be_empty(chosen) || value_can_be_empty(otherwise),
+			Node::Key(_, Op::Then, chosen) => can_be_empty(chosen) || can_be_empty(otherwise),
 			_ => false,
 		},
 		Node::Key(_, Op::Question, branches) => match branches.drop_meta() {
-			Node::Key(chosen, Op::Colon, otherwise) => value_can_be_empty(chosen) || value_can_be_empty(otherwise),
+			Node::Key(chosen, Op::Colon, otherwise) => can_be_empty(chosen) || can_be_empty(otherwise),
 			_ => false,
 		},
 		_ => false,
