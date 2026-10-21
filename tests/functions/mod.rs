@@ -16,6 +16,7 @@ mod test_bare_function_name;
 mod test_bare_host_words; // card random-should
 mod test_block_function;
 mod test_block_function_argument; // card block-function-argument
+mod test_bodiless_runtime_words; // card bodiless-imports
 mod test_body_statement;
 mod test_braced_it_warning;
 mod test_braceless_call_in_logic; // card braceless-call
