@@ -306,7 +306,8 @@ def defined_names(program: any): list {
 # depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block,
 # continuable: whether each takes a continue (continued_safely)
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; continuable: any; unshared: any }
+# globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
+class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; continuable: any; unshared: any; globals: any }
 
 local_index(body: Body, name: text, kind: text): int := {
 	if name in body.names { return body.names[name] }
@@ -1060,8 +1061,9 @@ def assignment(body: Body, target: any, value: any): list {
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
 	kind = value#1
-	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local
-	is_shared = name in module.shared
+	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
+	# unless the function declared it `global`
+	is_shared = name in module.shared and name not in body.globals
 	if name not in body.names and is_shared and body.function.name == "main" { return declare_global(name, value) }
 	if is_global(body, name) and not is_shared { return global_assignment(name, value) }
 	if name not in body.names and name in body.function.widened { kind = body.function.widened[name] }
@@ -1185,6 +1187,7 @@ widens(body: Body, name: text, held: text, kind: text): bool := {
 # and reads it: a function declaring it on each call keeps its value
 def global_declaration_code(body: Body, declaration: any): list {
 	if declaration is symbol {
+		body.globals[name_of(declaration)] = yes
 		entry = declared_global(name_of(declaration), "node")
 		# a runtime word's `global trap_detail = …`, lowered `global: trap_detail; trap_detail = …`, writes the global
 		if body.intrinsics and name_of(declaration) not in module.runtime_globals { module.runtime_globals += [name_of(declaration)] }
@@ -1193,6 +1196,7 @@ def global_declaration_code(body: Body, declaration: any): list {
 	if not (type(declaration) is key and op_of(declaration) == "=" and key_of(declaration) is symbol) {
 		return refuse("the declaration global " + form_of(declaration))
 	}
+	body.globals[name_of(key_of(declaration))] = yes
 	if body.intrinsics { module.runtime_globals += [name_of(key_of(declaration))] }
 	declare_global(name_of(key_of(declaration)), expression_code(body, value_of(declaration)))
 }
@@ -1931,7 +1935,7 @@ def logical(body: Body, symbol: text, left: any, right: any): list {
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_body(f: Function): Body := {
-	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [])
+	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [], {})
 	for i in 0..<#f.signature.parameters { local_index(scope, f.signature.parameters[i].name, f.kinds[i]) }
 	scope
 }

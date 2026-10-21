@@ -1,0 +1,11 @@
+# a main variable a function declares global and replaces: fill() sets it, read() sees it
+table = {}
+fill(): any := {
+	global table
+	table = {}
+	table["x"] = [2]
+	0
+}
+read(): any := table["x"]
+fill()
+read()
