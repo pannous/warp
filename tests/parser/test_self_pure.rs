@@ -614,3 +614,25 @@ fn op_cases_run_pure() {
 		"[Square Comma]",
 	);
 }
+
+/// A name holds an enum case in the function that binds it: parser.warp's own `bracket = ""` leaves view_of's matched
+/// `bracket` a Bracket case, so the pure-compiled parser reads a call with comma arguments (card self-hello)
+#[test]
+fn a_call_with_comma_arguments_parses_pure() {
+	let probe = format!("{}/probes/spelled_case_per_function.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("spelled_case_per_function", &probe, "[\"list\" '(' \"\" [\"symbol\" 'f'] [\"symbol\" 'a'] 2]\n2");
+}
+
+/// A map's own member is the word beside an entry of its name, `found.keys` of a map holding "keys" (card self-hello)
+#[test]
+fn a_map_member_beside_its_entry_runs_pure() {
+	let probe = format!("{}/probes/map_member_beside_entry.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("map_member_beside_entry", &probe, "[\"keys\" 'a']");
+}
+
+/// A match arm of a constant, `True:`, tests the subject equals it (card match-bool-arm: node_text under warp self)
+#[test]
+fn a_match_arm_of_a_constant_runs_pure() {
+	let probe = format!("{}/probes/match_bool_arm.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("match_bool_arm", &probe, "\"yesno\"");
+}

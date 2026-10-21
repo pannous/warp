@@ -76,6 +76,7 @@ mod test_list_plus_parts; // card def-ps: `out = out + p` of parts of unknown ki
 mod test_list_retype;
 mod test_list_times_list;
 mod test_list_truthiness;
+mod test_list_write_by_run_time_key; // card self-asserted
 mod test_lists;
 mod test_lists_read_by_turns; // several long lists read by turns: a read cursor each
 mod test_long_list_copies;
@@ -93,6 +94,7 @@ mod test_min_max;
 mod test_min_max_lists;
 mod test_nested_comprehension; // card double-for-comprehension
 mod test_nested_index_assignment;
+mod test_nested_map_writes;
 mod test_nested_maps;
 mod test_node_lists;
 mod test_none_word;
@@ -134,4 +136,4 @@ mod test_unpacking_declared;
 mod test_unpacking_into_existing;
 mod test_where_filter;
 mod test_word_slices;
-mod test_worklist_count; // card list-count-grows
+mod test_worklist_count; // card list-count-grows // card nested-write
