@@ -822,9 +822,6 @@ impl Lowering {
 	fn scope_of<T>(&self, name: &str, read: impl Fn(&VariableScope) -> T) -> T {
 		let scopes = self.scopes.borrow();
 		let scope = scopes.iter().skip(1).rev().find(|scope| scope.bound.contains(name)).unwrap_or(&scopes[0]);
-		if name == "module" {
-			eprintln!("DEBUG scope_of module: depth {} bound-in {:?} plain0 {:?} plain {:?} defining {:?}", scopes.len(), scopes.iter().map(|s| s.bound.contains(name)).collect::<Vec<_>>(), scopes[0].plain.contains(name), scope.plain.contains(name), self.defining.borrow().iter().map(|d| d.0.clone()).collect::<Vec<_>>());
-		}
 		read(scope)
 	}
 
@@ -1080,10 +1077,6 @@ impl Lowering {
 		let meaning = self.word_meaning(receiver, name, word_node, &arguments, is_bare);
 		let field = || Some(field_lookup(receiver, name, word_node));
 		let own_member = self.own_member(receiver, name, &arguments);
-		if name == "kinds" {
-			eprintln!("DEBUG literal {:?} written {:?}", self.object_literal(receiver).map(|l| l.serialize()), self.written_object(receiver).map(|l| l.serialize()));
-			eprintln!("DEBUG method_call kinds: receiver {} method {} args {} own {} meaning {}", receiver.serialize(), method.serialize(), arguments.len(), match own_member { OwnMember::Has => "Has", OwnMember::Lacks => "Lacks", OwnMember::Maybe => "Maybe", OwnMember::Not => "Not" }, match &meaning { WordMeaning::Call { call, typed } => format!("Call {} typed {typed}", call.serialize()), WordMeaning::Kept => "Kept".into(), WordMeaning::FieldRead => "FieldRead".into(), WordMeaning::Undefined => "Undefined".into() });
-		}
 		// `m.size` of a map read at run time with an entry size reads the entry, else counts (card map-read); only where
 		// the program writes such an entry, as the check makes the count no longer known to be an Int (`xs.length - 1`).
 		// `number of bytes in t` reads `bytes.number`: the unit, no variable
