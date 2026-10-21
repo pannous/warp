@@ -99,7 +99,7 @@ gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_
 # the abstract heap type i31 (a character boxed in a $Node), as a cast's immediate
 i31_type = 108
 ref_null = 208
-int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
+int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "xor": 133, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
 # where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
 checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
@@ -1824,6 +1824,8 @@ def key_expression(body: Body, n: any): list {
 		return [target, converted(value, target)]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression_code(body, right)) + [op.i32_eqz]] }
+	# `√x`: the float root, as Rust's emitter gives it
+	if operator == "√" and left == ø { return ["float", converted(expression_code(body, right), "float") + [wasm_instructions["f64.sqrt"]]] }
 	if left == ø or right == ø {
 		# `x === ø` is `x == ø`: ø is one value, as Rust's identity of it
 		equality = if operator in identities then identities[operator] else operator

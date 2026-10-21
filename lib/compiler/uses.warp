@@ -1,6 +1,7 @@
 # The pure lane follows `use` (card pure-follows-use): a program's `use "lexer.warp"` brings in the declarations of
 # that file, read from the program's folder, as src/modules/loader.rs brings them; each used file once, the files it
-# uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written.
+# uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written, a used file's too,
+# so prelude_words.warp brings the words reached of that module.
 use os
 use "walk.warp"
 use "parser.warp"
@@ -50,7 +51,7 @@ declarations_used(statements: any, folder: text, seen: any): list := {
 			used = statements_in(with_module_directory(plain_node(parsed(file_text(file))), folder_of(file)))
 			inner = declarations_used(used, folder_of(file), seen)
 			seen = inner#2
-			declarations += inner#1 + used.filter(s => is_declaration(s) and file_used(s, folder_of(file)) == ø)
+			declarations += inner#1 + used.filter(s => (is_declaration(s) or use_target(s) is symbol) and file_used(s, folder_of(file)) == ø)
 		}
 	}
 	[declarations, seen]
