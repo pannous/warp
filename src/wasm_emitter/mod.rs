@@ -922,6 +922,10 @@ impl WasmGcEmitter {
 			self.emit_closure_new(func, target, captured);
 			return;
 		}
+		if node.is_empty_list_literal() {
+			self.emit_call(func, constructors::NEW_EMPTY_LIST);
+			return;
+		}
 		let node = node.drop_meta();
 
 		match node {

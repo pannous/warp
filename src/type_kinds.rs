@@ -16,6 +16,9 @@ pub const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::Lis
 /// that reads the kind masked takes it as the Int it is, and printing, `type` and reading back see a bool
 pub const BOOL_INFO: i64 = 1;
 pub const BOOL_KIND: i64 = (BOOL_INFO << KIND_BITS) | Kind::Int as i64;
+/// `[]` at run time (card run-time-empty): ø marked with the square bracket above the kind bits, so every masked read
+/// (count, append, emptiness, equality) takes it as the ø it is, and printing, `type` and reading back see a list
+pub const EMPTY_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::Empty as i64;
 /// An Int shown in hex, 0xFF (card hex-printing, wasm_emitter/numbers/radix.rs): marked only where it becomes a Node
 pub const HEX_INFO: i64 = 2;
 /// An Int shown in binary, 0b101 (card binary-int, wasm_emitter/numbers/radix.rs)

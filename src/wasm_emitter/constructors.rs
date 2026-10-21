@@ -74,6 +74,22 @@ impl WasmGcEmitter {
 		});
 	}
 
+	/// `new_empty_list() -> ref $Node`: `[]`, ø marked as the empty list (type_kinds::EMPTY_LIST_KIND)
+	fn emit_new_empty_list(&mut self) {
+		if !self.should_emit_function(NEW_EMPTY_LIST) {
+			return;
+		}
+		let node = Ref(self.node_ref(false));
+		let node_type = self.type_manager.node_type;
+		self.exported_function(NEW_EMPTY_LIST, vec![], vec![node], vec![], |_, func| {
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::I64Const(type_kinds::EMPTY_LIST_KIND), I::RefNull(any_heap_type()),
+				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+			]);
+		});
+	}
+
 	/// `as_code(node) -> ref $Node`: a new top node marked as code (type_kinds::CODE_MARK), its parts shared
 	fn emit_as_code(&mut self) {
 		if !self.should_emit_function(crate::words::AS_CODE) {
@@ -93,6 +109,7 @@ impl WasmGcEmitter {
 }
 
 pub const NEW_BOOL: &str = "new_bool";
+pub const NEW_EMPTY_LIST: &str = "new_empty_list";
 /// new_type(name, body): a type declaration in code, `class P {x: int}` (Kind::TypeDef)
 pub const NEW_TYPE: &str = "new_type";
 /// new_text_of(text) / new_symbol_of(text): a Text or Symbol node of the $Text
@@ -130,6 +147,7 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 	let no_value = || RefNull(HeapType::Concrete(node_type));
 
 	emitter.emit_node_constructor("new_empty", Kind::Empty, vec![], Plain, vec![RefNull(any_heap_type()), no_value()]);
+	emitter.emit_new_empty_list();
 	if emitter.int_runtime() {
 		emitter.emit_new_unbounded_int();
 	} else {

@@ -25,6 +25,7 @@ mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
+mod test_empty_list_value; // card run-time-empty
 mod test_empty_start; // card start: `t = []` appends, ø + text fails
 mod test_empty_start_plus; // card local-fails: `t = []; t + "a"`, the bracket hint of `xs += [3]`
 mod test_field_count;
@@ -100,6 +101,7 @@ mod test_pair_values;
 mod test_phrase_in_call; // card phrase-in-call
 mod test_picked_linear; // card compiler-picks-dot
 mod test_pop;
+mod test_pop_in_place; // card shrink-in-place
 mod test_python_collections; // card python-stdlib
 mod test_range_arguments;
 mod test_range_in_structure;

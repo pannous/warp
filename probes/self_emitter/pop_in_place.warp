@@ -1,0 +1,9 @@
+// xs.pop() takes the last item and shortens xs in place, every lane alike: 3 [1 2] [1 2] 5 [4] 0 (card pure-chain-fails)
+xs = [1, 2, 3]
+ys = xs
+print(xs.pop())
+print(xs)
+print(ys)
+zs = [[4], 5]
+while #zs > 0 { print(zs.pop()) }
+print(#zs)

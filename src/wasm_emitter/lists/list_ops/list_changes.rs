@@ -201,6 +201,68 @@ impl WasmGcEmitter {
 		);
 	}
 
+	/// list_drop_last(list): the list without its last item, in place, every holder sees it (`xs.pop()`, card
+	/// shrink-in-place): the next-to-last cell's rest cut off, no cell copied; a one-item list becomes ø itself. A kept
+	/// count of it goes down by one; the read and extend cursors, which may hold the dropped cell, are forgotten
+	pub(super) fn emit_list_drop_last(&mut self) {
+		if !self.should_emit_function(crate::list_mutations::LIST_DROP_LAST) {
+			return;
+		}
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let node_ref = Ref(self.node_ref(false));
+		let node_type = self.type_manager.node_type;
+		let rest = I::StructGet { struct_type_index: node_type, field_index: 2 };
+		self.runtime_function(
+			crate::list_mutations::LIST_DROP_LAST,
+			vec![node_ref_nullable],
+			vec![node_ref],
+			vec![node_ref_nullable, node_ref_nullable],
+			|s, f| {
+				let (list, cell, next) = (0, 1, 2);
+				Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::List, CursorPart::Extended]));
+				Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
+				s.call(f, "new_empty");
+				Self::emit_list(f, &[I::Return, I::End]);
+				s.emit_field(f, list, 0);
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+				for kind in [Kind::List, Kind::Block] {
+					s.emit_field(f, list, 0);
+					Self::emit_kind_test(f, kind as i64, I::I64Ne);
+				}
+				f.instruction(&I::I32And);
+				s.emit_fail_if(f, "not_a_list");
+				s.emit_field(f, list, 2);
+				f.instruction(&I::RefIsNull);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_become_empty(f, list);
+				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+				// walk to the next-to-last cell
+				Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell)]);
+				Self::emit_while(
+					f,
+					&[I::LocalGet(cell), rest.clone(), I::LocalTee(next), rest.clone(), I::RefIsNull, I::I32Eqz],
+					&[I::LocalGet(next), I::LocalSet(cell)],
+				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(cell), I::RefNull(HeapType::Concrete(node_type)),
+					I::StructSet { struct_type_index: node_type, field_index: 2 },
+				]);
+				if let Some((counted, count)) = s.list_cursor(CursorPart::Counted).zip(s.list_cursor(CursorPart::Count))
+				{
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::GlobalGet(counted), I::LocalGet(list), I::RefEq, I::If(BlockType::Empty),
+							I::GlobalGet(count), I::I64Const(1), I::I64Sub, I::GlobalSet(count),
+						I::End,
+					]);
+				}
+				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull]);
+			},
+		);
+	}
+
 	/// element_children(children, tail): an element's `{…}` with each `[…]` among them spliced in, recursively, as its
 	/// own children in front of tail: `ul{ h2 [[li li]] }` is `ul{ h2 li li }` (card ul-li-fruit); empty items vanish
 	pub(super) fn emit_element_children(&mut self) {
@@ -231,7 +293,8 @@ impl WasmGcEmitter {
 						I::LocalGet(tail), I::Return,
 					I::End,
 				]);
-				kind_is(s, f, children, Kind::Empty as i64);
+				s.emit_field(f, children, 0);
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq); // ø or `[]`
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
 				// the rest first, so each cell is built once
 				s.emit_field(f, children, 2);
@@ -244,7 +307,8 @@ impl WasmGcEmitter {
 						I::LocalGet(tail), I::Return,
 					I::End,
 				]);
-				kind_is(s, f, item, Kind::Empty as i64);
+				s.emit_field(f, item, 0);
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq); // ø or `[]`
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
 				kind_is(s, f, item, SQUARE_LIST_KIND);
 				#[rustfmt::skip]
