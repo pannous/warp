@@ -8,6 +8,7 @@ use "durations.warp"
 use "exact.warp"
 use "instructions.warp"
 use "library_words.warp"
+use "nodes.warp"
 is_time(n: any): bool := not is_null(n) and kind_code(n) == Kind.Time
 is_instant(t: any): bool := time_form(t) == TimeFormCode.Instant
 is_date(t: any): bool := time_form(t) == TimeFormCode.Date
