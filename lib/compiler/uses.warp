@@ -69,13 +69,13 @@ claim_signatures(declarations: any, file: text, claimed: any) := {
 	for declaration in declarations {
 		signature = declared_signature(declaration)
 		if signature == ø { continue }
-		written = "${declaration}"
 		if signature not in claimed {
-			claimed[signature] = [file, written]
+			claimed[signature] = [file, declaration]
 			continue
 		}
 		earlier = claimed[signature]
-		if earlier#1 != file and earlier#2 != written {
+		# written out only on a clash: serializing every declaration of the compiler's files took the self build minutes
+		if earlier#1 != file and "${earlier#2}" != "${declaration}" {
 			raise signature + " is declared in both " + earlier#1 + " and " + file + ": rename one, or keep one of them"
 		}
 	}
