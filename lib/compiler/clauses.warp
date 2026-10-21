@@ -85,7 +85,7 @@ merged(parts: list): list := {
 	kept.map(i => if single(i) then parts#i else merged_function(owners#i, places_named(owners, owners#i).map(j => clause_of(parts#j))))
 }
 
-clauses(program: any): any := match program {
+clauses(program: Node): Node := match program {
 	List(parts, Bracket.None, separator): List(merged(parts), Bracket.None, separator)
 	_: program
 }

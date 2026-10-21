@@ -404,6 +404,8 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::library_words::lower_byte_counts,
 	// `xs[xs.index_of(x)]`: a position meeting brackets, an index meeting `#` (index_positions.rs), once index_of is named
 	crate::lowering::index_positions::lower,
+	// after library_words names `k in d`, d.get(k) …; so after one_entry_maps (which comes before library_words lowers
+	// m.pop(k)) too, and it reads a literal `{1: 5}` through map_of_entry: its number keys still mark the map
 	crate::lowering::number_keys::lower_key_words,
 	crate::lowering::traits::lower_dispatch,
 	crate::lowering::memoization::lower,

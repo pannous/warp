@@ -61,3 +61,12 @@ fn an_operator_passed_as_a_function_is_applied() {
 	is!(&format!("{COMBINE}; combine(+, 10)"), 27);
 	is!("pair(f, a, b) := f(a, b); via(f, a, b) := pair(f, a, b); via(*, 10, 4) * 100 + count([1 for i in 1 to 2 if via(<, i, 2)])", 4001);
 }
+
+#[test]
+fn an_original_still_called_stays() {
+	// card specialise-dead-originals: twice·ink replaces one call, the lambda's call keeps the original twice
+	is!("twice(f, x) := f(f(x)); ink(x) := x * 3; twice(ink, 2) + twice(x => x + 1, 0)", 20);
+	is!("twice(f, x) := f(f(x)); ink(x) := x * 3; g = &twice; twice(ink, 2)", 18);
+	// an operator passed on to a call left unspecialised is passed as written
+	is!("myfold(f, xs, start) := if #xs == 0 then start else myfold(f, xs[1..], f(start, xs#1)); myfold(+, [1, 2, 3], 0)", 6);
+}

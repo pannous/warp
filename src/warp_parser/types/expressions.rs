@@ -109,6 +109,39 @@ impl WarpParser {
 		Some(offset)
 	}
 
+	/// `xs: list of int`, `v as list of text`, `f(): map of int := …`: the words `of <type>` after a collection type
+	/// continue it, the one type `list of int` (as `list<int>` is read); `list of list of int` too
+	/// Read from the text before any operand is parsed: parsed, `list of int` would already be split (card cast-type)
+	pub(crate) fn of_phrase_ahead(&self) -> Option<(String, usize)> {
+		let collection = |word: &str| crate::type_tests::COLLECTION_WORDS.contains(&list_type_head(word));
+		let start = self.blanks_at(0);
+		let mut element = self.word_at(start);
+		let mut phrase = list_type_head(&element).to_string();
+		let mut width = start + element.chars().count();
+		while collection(&element) {
+			let of_at = width + self.blanks_at(width);
+			if of_at == width || self.word_at(of_at) != OF_WORD {
+				break;
+			}
+			let element_at = of_at + OF_WORD.chars().count();
+			let gap = self.blanks_at(element_at);
+			element = self.word_at(element_at + gap);
+			if gap == 0 || element.is_empty() {
+				break;
+			}
+			width = element_at + gap + element.chars().count();
+			phrase = format!("{phrase} {OF_WORD} {element}");
+		}
+		phrase.contains(&format!(" {OF_WORD} ")).then_some((phrase, width))
+	}
+
+	/// The type phrase of of_phrase_ahead, taken
+	pub(crate) fn take_of_phrase(&mut self) -> Option<Node> {
+		let (phrase, width) = self.of_phrase_ahead()?;
+		self.advance_by(width);
+		Some(Node::Symbol(phrase))
+	}
+
 	/// `tuple<s64, list<node>>` → `tuple` followed by the angle-bracketed argument list
 	/// Length of the `<int>`, `<list<int>>`, `<text, int>`, `<int(int)>` directly at the cursor when everything inside is a type word;
 	/// `a<b`, `a<<b` and `a<b>c` are not type applications

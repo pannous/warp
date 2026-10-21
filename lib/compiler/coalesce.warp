@@ -3,7 +3,7 @@
 # Rust twin: src/lowering/words/library_words.rs lower_coalesce
 use "min_max.warp"
 
-coalesced(n: any): any := match n {
+coalesced(n: Node): Node := match n {
 	Key(left, Op.Coalesce, right): {
 		tested = if is_plain(left) then left else temporary()
 		bindings = if tested == left then [] else [Key(tested, Op.Assign, left)]
@@ -12,4 +12,4 @@ coalesced(n: any): any := match n {
 	_: n
 }
 
-coalesce(program: any): any := bottom_up(program, coalesced)
+coalesce(program: Node): Node := bottom_up(program, coalesced)
