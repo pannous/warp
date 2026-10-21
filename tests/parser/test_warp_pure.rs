@@ -62,3 +62,11 @@ fn warp_self_runs_loops_and_texts() {
 	let printed = printed_by_warp_self("loops_and_texts", code);
 	assert!(printed.lines().any(|line| line == "ab3"), "{printed}");
 }
+
+/// A program outside the emitter's core fails under `warp self` with the refusal, not a bare trap (card
+/// compiler-refusal-loud)
+#[test]
+fn warp_self_names_the_refusal() {
+	let printed = printed_by_warp_self("refused", "f(x) := x.length(); f(\"abc\")");
+	assert!(printed.contains("outside the core: "), "{printed}");
+}
