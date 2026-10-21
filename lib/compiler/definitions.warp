@@ -49,14 +49,22 @@ definition(n: Node): Node := match n {
 	_: n
 }
 
-# `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
+# `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it; of a block
+# `{a; e}` only its last statement e is the result (`{at = 1; text_of(at)}: text` holds no int)
 result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
 		if not is_call(head) { return n }
 		result = symbol("the result")
-		Key(head, Op.Define, List([Key(Key(result, Op.Colon, result_type), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
+		statements = result_statements(body)
+		held = Key(Key(result, Op.Colon, result_type), Op.Assign, statements.last)
+		Key(head, Op.Define, List(statements[0..<(#statements - 1)] + [held, result], Bracket.Curly, Separator.Semicolon))
 	}
 	_: n
+}
+# a block's statements `{a; b}`; any other body (`{cube 3}`, a map `{x: 1, y: 2}`) is its one statement
+result_statements(body: Node): list := {
+	if bracket_of(body) == "{" and #body > 1 and (separator_of(body) == ";" or separator_of(body) == "\n") { return items_of(body) }
+	[body]
 }
 
 # `f = { it * 2 }` defines a function as `f := { it * 2 }` does: a name assigned a block that reads `it`; other blocks
