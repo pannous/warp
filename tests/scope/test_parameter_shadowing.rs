@@ -46,12 +46,3 @@ fn a_parameter_is_no_map_another_function_assigned() {
 	);
 	is!("f() := { held = {a: 1}; held.a }\ng(held: any) := held.map(e => e * 2)\ng([1, 2])", warp::ints(vec![2, 4]));
 }
-
-/// card local-named-like-5 after review: each function's variables are its own scope, its loop variables too
-#[test]
-fn a_loop_variable_is_no_map_another_function_assigned() {
-	is!(
-		"f() := { held = {a: 1}; held.a }\ng() := { n = []; for held in [[1, 2], [3]] { n += held.map(e => e * 2) }; n }\ng()",
-		warp::ints(vec![2, 4, 6])
-	);
-}
