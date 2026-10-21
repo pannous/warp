@@ -255,9 +255,9 @@ impl WasmGcEmitter {
 					let written: Vec<(i64, &str)> =
 						OP_CODES.iter().enumerate().map(|(code, op)| (code as i64, op.as_str())).collect();
 					s.emit_part_text(f, &part_is(OP_PART), &is_kind(kind, Kind::Key), code, &written);
-					// `[]`, ø marked by its square bracket, has that bracket
+					// `[]`, ø marked by its square bracket, has that bracket and no separator ("")
 					#[rustfmt::skip]
-					let bracketed = [
+					let group = [
 						&is_kind(kind, Kind::List)[..],
 						&[I::LocalGet(kind), I::I64Const(UNMARKED_KIND), I::I64And, I::I64Const(EMPTY_LIST_KIND), I::I64Eq, I::I32Or],
 					]
@@ -265,7 +265,7 @@ impl WasmGcEmitter {
 					s.emit_part_text(
 						f,
 						&part_is(BRACKET_PART),
-						&bracketed,
+						&group,
 						code,
 						&BRACKETS.map(|(bracket, info)| (info, bracket)),
 					);
@@ -277,7 +277,7 @@ impl WasmGcEmitter {
 					let separators = super::super::separator_texts();
 					let separators: Vec<(i64, &str)> =
 						separators.iter().map(|(code, text)| (*code, text.as_str())).collect();
-					s.emit_part_text(f, &part_is(SEPARATOR_PART), &is_kind(kind, Kind::List), code, &separators);
+					s.emit_part_text(f, &part_is(SEPARATOR_PART), &group, code, &separators);
 					// a node that is no group has no bracket and no separator: ø, so a walk tests groups without `try`
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
