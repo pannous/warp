@@ -134,6 +134,9 @@ fn a_parameter_named_like_a_function_takes_its_named_argument() {
 /// Note's `text()`) is renamed apart from the method, its annotation stays the type (card text-local)
 #[test]
 fn a_parameter_named_like_its_type_keeps_the_type() {
-	is!("class Tag {\n\tname: text\n\ttext() := \"#\" + name\n}\nshout(text: text) := text + \"!\"\nshout(\"hi\")", "hi!");
+	is!(
+		"class Tag {\n\tname: text\n\ttext() := \"#\" + name\n}\nshout(text: text) := text + \"!\"\nshout(\"hi\")",
+		"hi!"
+	);
 	is!("class Tag {\n\tname: text\n\ttext() := \"#\" + name\n}\nf(n: int) := { text: text = \"x\"; text }\nf(1)", "x");
 }
