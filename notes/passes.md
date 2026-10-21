@@ -47,6 +47,20 @@ ordering constraints, not speed.
      operator word among the arguments").
    With notes and scoped shadowing in rules (card rewrite-notes-scopes), word_operators, std_aliases and number_words
    can follow.
+
+   Expressed in existing warp syntax (user 2026-10-21: "can they be expressed with given warp syntax, so as a lib"):
+   - plain definitions, as lib/PHP.warp and lib/R.warp already do (`array_sum(xs) := sum(xs)`): foreign words that
+     are ordinary calls. Missing: the got-it note, and a module-qualified name (`json.loads`) can't be defined that way.
+   - `alias X = Y` exists in lib/collections.warp for class names (with a note) but not for words: in a program
+     `alias root = sqrt` fails ("root is a keyword"). Proposed generalization: `alias PATTERN => TEMPLATE` is a
+     rewrite rule that says the alias note, so the tables of std_aliases (`alias re.sub($p, $r, $t) =>
+     replace_all($t, $p, $r)`, its module brought by `use regex` as a fired rule brings it), rust_paths (`alias
+     Vec::new() => []`, `alias i32::MAX => 2147483647`), word_operators (`alias root $x => sqrt($x)`) and the
+     welcome forms move to lib/python.warp, lib/rust.warp, lib/js.warp beside PHP.warp and R.warp. `rewrite` stays
+     for canonical warp phrases (english.warp), `alias` for other ecosystems' words.
+   - what stays a pass: forms the parser shapes (`(p).a`, `xs .* 2`, `"\(x)"`, `x | f`, `n times {…}`), forms
+     needing bindings (of_lookups' "a word the program defines", grouped_receivers' bound variables, negated_calls'
+     functions) and keyword-headed forms (`do`).
 2. **Reflection: ten entries for one idea.** reflection::lower (twice), lower_objects, lower_component_words,
    lower_module_words, lower_unknown_dir, meta_values::lower and with_table, word_help::lower and lower_named_words,
    doc_strings. Decision reflection-plain says `meta(x)` is the one core builtin: every other word (`dir`, `.fields`,
