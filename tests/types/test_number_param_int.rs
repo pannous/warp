@@ -11,7 +11,7 @@ fn a_number_parameter_takes_a_float() {
 #[test]
 fn a_number_parameter_given_any_keeps_the_kind() {
 	let program = "number_kind(n: number): text := if n is int then \"int\" else \"other\"
-		kind_of(n: any): text := if n is number then number_kind(n) else \"no number\"";
+kind_of(n: any): text := if n is number then number_kind(n) else \"no number\"";
 	is!(&format!("{program}\nkind_of(2.5 as float)"), "other");
 	is!(&format!("{program}\nkind_of(3)"), "int");
 	is!(&format!("{program}\nkind_of(\"a\")"), "no number");
