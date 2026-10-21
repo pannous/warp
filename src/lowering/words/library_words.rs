@@ -488,10 +488,10 @@ fn field_step(method: &Node) -> Option<(Node, Op)> {
 	}
 }
 
-/// A place deeper than a variable, its element or its field (`b.n += 1` sets a struct field in place): `p.b.n`,
-/// `bags#1.n`, `xs#1#2`
-fn is_nested_place(place: &Node) -> bool {
+/// A field of anything (`p.size`, `p.b.n`, `bags#1.n`) or an element deeper than a variable's (`xs#1#2`)
+fn is_field_place(place: &Node) -> bool {
 	match place.drop_meta() {
+		Node::Key(_, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => true,
 		Node::Key(base, Op::Dot | Op::Hash, _) => base.symbol_name().is_none(),
 		_ => false,
 	}
@@ -647,15 +647,8 @@ impl Lowering {
 			{
 				self.expand(stepped(*left, op))
 			}
-			// `bags#1.n += 4`, `p.b.n += 2`, `xs#1#2 += 1`: `place = place + 4`, stored back into the place
-			Node::Key(left, op, right) if op.is_compound_assign() && is_nested_place(&left) => {
-				let combined = Node::Key(left.clone(), op.base_op(), right);
-				let left = self.expand(*left);
-				let combined = self.expand(combined);
-				self.stored(&left, combined.clone()).unwrap_or(key(left, Op::Assign, combined))
-			}
-			// `p.size += 1` of a field named like a word: `p.size = p.size + 1`, written back into the field
-			Node::Key(left, op, right) if op.is_compound_assign() && self.is_word_named_field(&left) => {
+			// `p.size += 1`, `bags#1.n += 4`, `xs#1#2 += 1`: `place = place + 4`, written back into the place
+			Node::Key(left, op, right) if op.is_compound_assign() && is_field_place(&left) => {
 				let combined = Node::Key(left.clone(), op.base_op(), right);
 				self.expand(key(*left, Op::Assign, combined))
 			}
@@ -736,18 +729,6 @@ impl Lowering {
 	fn writes_field(&self, receiver: &Node, name: &str) -> bool {
 		let has_setter = self.program.function_takes(name, 2) == Some(true) && !is_loaded_module_word(name);
 		!has_setter && matches!(self.own_member(receiver, name, &[]), OwnMember::Maybe | OwnMember::Lacks)
-	}
-
-	/// `p.size += 1`, `m.bytes += b`: a field the receiver may hold, named like a word, whose read is the run-time choice
-	/// between the field and the word, no place to update
-	fn is_word_named_field(&self, place: &Node) -> bool {
-		let Node::Key(receiver, Op::Dot, field) = place.drop_meta() else {
-			return false;
-		};
-		let (receiver, name) = (self.expand(receiver.as_ref().clone()), field.name());
-		matches!(field.drop_meta(), Node::Symbol(_))
-			&& self.writes_field(&receiver, &name)
-			&& self.method_call(&receiver, field).is_some_and(|read| read != field_lookup(&receiver, &name, field))
 	}
 
 	/// The right side of `head = right` or `head := right`, with the untyped parameters of a definition head in scope
