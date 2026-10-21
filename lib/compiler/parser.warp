@@ -178,8 +178,12 @@ KEYWORD_FORMS = {"return": "return", "if": "condition", "while": "condition", "f
 	"where": "clause", "match": "clause", "switch": "clause", "contains": "contains", "has": "contains",
 	"includes": "contains", "function": "reference", "func": "reference", "true": "true", "yes": "true",
 	"false": "false", "no": "false", "null": "empty", "nul": "empty", "none": "empty", "nil": "empty", "nill": "empty",
-	"nix": "empty", "nada": "empty", "nothing": "empty", "empty": "empty", "void": "empty"}
+	"nix": "empty", "nada": "empty", "nothing": "empty", "empty": "empty", "void": "empty",
+	"unless": "condition", "until": "condition"}
 PREFIX_OPERATORS = ["√", "∛", "‖"]
+// `unless c {…}`, `until c {…}`: the `if`/`while` each reads as, its condition negated
+// Rust twin: conditions.rs NEGATED_CONTROL_WORDS, negate_condition
+NEGATED_CONTROL_WORDS = {"unless": "if", "until": "while"}
 
 // The shape of the keyword form `word` opens, else ""
 def keyword_form(word: text): text := if word in KEYWORD_FORMS then KEYWORD_FORMS[word] else ""
@@ -1349,7 +1353,8 @@ def prefixed(p: Parser): Node := {
 	if form == "condition" {
 		p.at = p.at + word.length
 		skip_spaces(p)
-		return conditioned(word, header_expression(p, CONDITION_POWER), p)
+		if word not in NEGATED_CONTROL_WORDS { return conditioned(word, header_expression(p, CONDITION_POWER), p) }
+		return negated_condition(conditioned(NEGATED_CONTROL_WORDS[word], header_expression(p, CONDITION_POWER), p))
 	}
 	if form == "loop" {
 		loop = looped(p)
@@ -1542,6 +1547,16 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 	otherwise = else_branch(p)
 	if otherwise.length == 0 { return branches }
 	Key(branches, Op.Else, otherwise#1)
+}
+// The conditional with its `if`/`while` condition negated; its branches and body stay
+// Rust twin: conditions.rs negate_condition
+def negated_condition(conditional: Node): Node := match conditional {
+	Key(head, Op.Then, body): Key(negated_condition(head), Op.Then, body)
+	Key(head, Op.Else, body): Key(negated_condition(head), Op.Else, body)
+	Key(head, Op.Do, body): Key(negated_condition(head), Op.Do, body)
+	Key(left, Op.If, condition): { if left is ø then Key(ø, Op.If, Key(ø, Op.Not, condition)) else conditional }
+	Key(left, Op.While, condition): { if left is ø then Key(ø, Op.While, Key(ø, Op.Not, condition)) else conditional }
+	_: conditional
 }
 
 // Whether a statement starts at the parser's position, no end of one, `then`, `else` or `do`
