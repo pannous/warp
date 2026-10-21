@@ -6,16 +6,12 @@ use "intrinsics.warp"
 use "instructions.warp"
 use "case.warp"
 use "pow_tables.warp"
-global pow_log_ints = []
-global pow_exp_ints = []
 # the tables as ints, parsed at the first power
 pow_log_entry(index: int): int := {
-	if not pow_log_ints { pow_log_ints = table_ints(pow_log_table_text()) }
-	pow_log_ints#(index + 1)
+	table_ints(pow_log_table_text())#(index + 1)
 }
 pow_exp_entry(index: int): int := {
-	if not pow_exp_ints { pow_exp_ints = table_ints(pow_exp_table_text()) }
-	pow_exp_ints#(index + 1)
+	table_ints(pow_exp_table_text())#(index + 1)
 }
 # a < b of the ints read as unsigned 64-bit numbers
 unsigned_below(a: int, b: int): bool := (a + least_float_sign()) < (b + least_float_sign())
