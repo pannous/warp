@@ -136,6 +136,24 @@ pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 	}
 }
 
+/// The number a subscript was written with, `1` of `d[1]` (its WrittenIndex on the shifted `d#2`)
+pub fn written_index(index: &Node) -> Option<Number> {
+	match index {
+		Node::Meta { data, node } => match data.as_ref() {
+			Node::Data(dada) => {
+				dada.downcast_ref::<WrittenIndex>().map(|WrittenIndex(number)| *number).or_else(|| written_index(node))
+			}
+			_ => written_index(node),
+		},
+		_ => None,
+	}
+}
+
+/// The 0-based key a subscript was written with, `1` of `d[1]` and `k` of `d[k]`; none for a plain `d#2`
+pub fn written_subscript(index: &Node) -> Option<Node> {
+	written_index(index).map(Node::Number).or_else(|| subscript_key(index).cloned())
+}
+
 pub(crate) fn is_unindexable_keyword(node: &Node) -> bool {
 	node.symbol_name().is_some_and(takes_a_value)
 }

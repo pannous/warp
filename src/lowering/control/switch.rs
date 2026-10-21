@@ -818,7 +818,7 @@ fn joined(tests: Vec<Node>, op: Op) -> Node {
 }
 
 /// `n if n < 0` (parsed as `if n < 0 then n`): the pattern n and the guard `n < 0`; any other key has no guard
-fn split_guard(case_key: &Node) -> (Node, Option<Node>) {
+pub(crate) fn split_guard(case_key: &Node) -> (Node, Option<Node>) {
 	match case_key.drop_meta() {
 		Node::Key(condition, Op::Then, pattern) => match condition.drop_meta() {
 			Node::Key(empty, Op::If, guard) if empty.is_empty_node() => {

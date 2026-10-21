@@ -1,16 +1,39 @@
 # A value of kind Node (card pure-node-values; Rust twin src/lowering/types/node_cases.rs): `Node` is the type of any
 # node, so `n: Node`, `f(…): Node` and `x: Node = v` hold any value; `Node.Key` is the case Key; after the matches took
 # their patterns apart (node_matches.warp), `Key(a, op, b)` builds the key, `List(items, bracket, separator)` the list,
-# unless the program gives Key or List a meaning of its own. Op, Bracket and Separator cases are the texts a node
-# carries by then (`Op.Add` is "+"), so `"+" as Op` is the text itself.
+# unless the program gives Key or List a meaning of its own. Op, Bracket and Separator are node.warp's enums whose cases
+# are spelled as a node carries them (decision enum-case, card pure-op-cases): `print Op.Add` prints Add, `Op.Add as
+# text` is "+", `"+" as Op` is Add, and a case equals its spelling, `Op.Add == "+"`. A program naming them, or building
+# keys and lists, gets their declarations and the spelling functions `Op·text(c)` and `Op·case(t)`.
 use "walk.warp"
 use "scope.warp"
 use "enum_declarations.warp"
+use "node_matches.warp"
+use "definitions.warp"
 
 node_type = "Node"
 spelled_enums = ["Op", "Bracket", "Separator"]
 # `Node.True` and the cases without values
 valued_cases = {"True": yes, "False": no, "Empty": ø}
+# the parameter of the spelling functions
+spelled_value = "spelled"
+
+# node.warp's cases in its order, each with the text a node carries for it (node_cases.rs spelling)
+spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??", "Scope": "::", "Define": ":=",
+	"Assign": "=", "Arrow": "->", "ArrowUp": "↑", "ArrowDown": "↓", "Add": "+", "Sub": "-", "Mul": "*", "Div": "/",
+	"FloorDiv": "/!", "Mod": "%", "Rem": "rem", "Pow": "^", "LogBase": "⌞", "LogOf": "⌟", "Shl": "<<", "Shr": ">>",
+	"AddAssign": "+=", "SubAssign": "-=", "MulAssign": "*=", "DivAssign": "/=", "FloorDivAssign": "/!=",
+	"ModAssign": "%=", "PowAssign": "^=", "AndAssign": "&&=", "OrAssign": "||=", "XorAssign": "^^=", "Lt": "<",
+	"Gt": ">", "Le": "<=", "Ge": ">=", "Eq": "==", "Is": "is", "Ne": "!=", "Identical": "===", "NotIdentical": "!==",
+	"Similar": "≈", "Rough": "~", "And": "and", "Or": "or", "Xor": "xor", "Not": "not", "BitAnd": "&", "BitOr": "|",
+	"Neg": "-", "Sqrt": "√", "Cbrt": "∛", "Abs": "‖", "Inc": "++", "Dec": "--", "Question": "?", "If": "if",
+	"Then": "then", "Else": "else", "While": "while", "Do": "do", "Hash": "#", "Range": "..", "To": "to", "As": "as",
+	"PlusMinus": "±", "None": ""},
+	"Bracket": {"Curly": "{", "Square": "[", "Round": "(", "Less": "<", "None": ""},
+	"Separator": {"Space": " ", "Comma": ",", "Semicolon": ";", "Newline": "\n", "Tab": "\t", "None": ""}}
+
+# the text a node carries for a case, `+` of Add, a text even of one character
+spelling(enum_name: text, case: text): text := "" + spellings[enum_name][case]
 
 # `Node.Key` → Key, `Node.True` → yes, `Node.Key(a, op, b)` → the key built (the parser reads `Node . Key(…)`)
 node_case(case_name: Node): Node := match case_name {
@@ -18,28 +41,132 @@ node_case(case_name: Node): Node := match case_name {
 	_: case_name
 }
 
-# `Key(a, op, b)` → key(a, op, b); `List(xs, bracket, separator)` → separated(bracketed(xs, bracket), separator)
-construction(parts: list, n: Node, builds: any): Node := {
+# the spelled enum of a case written `Op.Add` or `Op::Add`, unless the program declares that enum itself, else ø
+spelled_owner(owner: Node, case_name: Node, declared: any): any := {
+	if not is_name(owner) or not is_name(case_name) or name_of(owner) in declared or name_of(owner) not in spellings { return ø }
+	if name_of(case_name) in spellings[name_of(owner)] then name_of(owner) else ø
+}
+
+spelled_enum_of(n: Node, declared: any): any := match n {
+	Key(owner, Op.Dot, case_name): spelled_owner(owner, case_name, declared)
+	Key(owner, Op.Scope, case_name): spelled_owner(owner, case_name, declared)
+	_: ø
+}
+
+# a reader's part, `op_of(n)`, is the spelling already
+is_spelled_read(n: Node): bool := match n {
+	List(parts, Bracket.Round, Separator.None): #parts == 2 and parts#1 is symbol and name_of(parts#1) in spelled_readers
+	_: no
+}
+
+# `Op·text(value)`: a case written `Op.Add` its spelling at once; a text or character, a reader's part or the wildcard `_` of a
+# pattern a match left as written (`Key(_, _, _): …` of runtime/show.warp) as it is
+spelled_text(enum_name: text, value: Node, declared: any): Node := {
+	if spelled_enum_of(value, declared) == enum_name { return spelling(enum_name, name_of(value_of(value))) }
+	held_text(enum_name, value)
+}
+
+held_text(enum_name: text, value: Node): Node := {
+	if value is text or value is codepoint or is_spelled_read(value) or (is_name(value) and name_of(value) == other_arm) { return value }
+	applied(spelled_function(enum_name, "text"), value)
+}
+
+# `Key(a, op, b)` → key(a, Op·text(op), b); `List(xs, bracket, separator)` → separated(bracketed(xs, bracket),
+# separator), the bracket and separator spelled
+construction(parts: list, n: Node, builds: any, declared: any): Node := {
 	if #parts != 4 or not (parts#1 is symbol) or name_of(parts#1) not in builds { return n }
-	if name_of(parts#1) == "Key" { return call_of("key", [parts#2, parts#3, parts#4]) }
-	call_of("separated", [call_of("bracketed", [parts#2, parts#3]), parts#4])
+	if name_of(parts#1) == "Key" { return call_of("key", [parts#2, spelled_text("Op", parts#3, declared), parts#4]) }
+	bracketed_items = call_of("bracketed", [parts#2, spelled_text("Bracket", parts#3, declared)])
+	call_of("separated", [bracketed_items, spelled_text("Separator", parts#4, declared)])
+}
+
+# `"+" as Op` → Op.Add, `t as Op` → Op·case(t); an index as it is, for plain_enums.warp
+spelled_case(value: Node, enum_name: text, n: Node): Node := {
+	if value is int { return n }
+	if value is text or value is codepoint {
+		cases = spellings[enum_name].keys.filter(case => spelling(enum_name, case) == "" + value)
+		if #cases > 0 { return Key(symbol(enum_name), Op.Dot, symbol(cases#1)) }
+	}
+	applied(spelled_function(enum_name, "case"), value)
+}
+
+# `Op.Add == x` → "+" == Op·text(x): a case equals its spelling
+spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: any): Node := {
+	enum_name = spelled_enum_of(left, declared) ?? spelled_enum_of(right, declared)
+	if enum_name == ø { return n }
+	Key(spelled_text(enum_name, left, declared), op, spelled_text(enum_name, right, declared))
 }
 
 # the annotations that hold any value, unless the program declares that type itself: Node; Op, Bracket and Separator,
-# whose cases are texts here; a type variable `T` of a generic signature (Rust twin: type_parameters.rs
+# whose cases a text stands for; a type variable `T` of a generic signature (Rust twin: type_parameters.rs
 # lower_type_variables)
 holds_any(type: Node, declared: any): bool := match type {
 	Symbol(name): name not in declared and (name == node_type or name in spelled_enums or (#name == 1 and is_capitalized(name)))
 	_: no
 }
 
+is_spelled_type(type: Node, declared: any): bool := type is symbol and name_of(type) in spelled_enums and name_of(type) not in declared
+
 node_value(n: Node, builds: any, declared: any): Node := match n {
 	Key(owner, Op.Dot, case_name): if is_word(owner, node_type) then node_case(case_name) else n
 	Key(owner, Op.Scope, case_name): if is_word(owner, node_type) then node_case(case_name) else n
 	Key(subject, Op.Colon, type): if holds_any(type, declared) then Key(subject, Op.Colon, symbol("any")) else n
-	Key(value, Op.As, type): if type is symbol and name_of(type) in spelled_enums then value else n
-	List(parts, Bracket.Round, Separator.None): construction(parts, n, builds)
+	Key(value, Op.As, type): if is_spelled_type(type, declared) then spelled_case(value, name_of(type), n) else n
+	Key(left, Op.Eq, right): spelled_equality(left, Op.Eq, right, n, declared)
+	Key(left, Op.Ne, right): spelled_equality(left, Op.Ne, right, n, declared)
+	List(parts, Bracket.Round, Separator.None): construction(parts, n, builds, declared)
 	_: n
+}
+
+# node.warp's `enum Op {Colon, Dot, …}`
+spelled_declaration(enum_name: text): Node := {
+	cases = spellings[enum_name].keys.map(case => symbol(case))
+	List([symbol(enum_word), symbol(enum_name), List(cases, Bracket.Curly, Separator.Comma)], Bracket.None, Separator.Space)
+}
+
+# `Op·text(spelled) := body`, with the result type when given: Op·text's is text, so a spelling of one character is a
+# text, not the character an any-typed result holds
+spelling_function(enum_name: text, function: text, result_type: any, body: Node): Node := {
+	head = applied(spelled_function(enum_name, function), symbol(spelled_value))
+	if result_type == ø then Key(head, Op.Define, body) else result_held(Key(head, Op.Colon, symbol(result_type)), body, ø)
+}
+
+type_test(value: Node, type_name: text): Node := List([symbol("is_type"), value, type_name], Bracket.Round, Separator.None)
+
+# `Op·text(spelled): text := if spelled is text or codepoint then spelled else match spelled {Add: "+", …, _: spelled}` and
+# `Op·case(spelled) := match spelled {"+": Add, …, _: spelled}`: a text passes either, so `key(a, "+", b)` keeps working
+spelling_functions(enum_name: text): list := {
+	value = symbol(spelled_value)
+	cases = spellings[enum_name].keys
+	other = Key(symbol(other_arm), Op.Colon, value)
+	to_text = matched(value, cases.map(case => Key(symbol(case), Op.Colon, spelling(enum_name, case))) + [other], ø, cases)
+	is_spelling = Key(type_test(value, "text"), Op.Or, type_test(value, "codepoint"))
+	to_case = matched(value, cases.map(case => Key(spelling(enum_name, case), Op.Colon, symbol(case))) + [other], ø, cases)
+	[spelling_function(enum_name, "text", "text", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)]
+}
+
+# whether a case of the enum, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n
+is_spelling_needed(n: any, enum_name: text, declared: any): bool := match n {
+	Symbol(name): name == spelled_function(enum_name, "text") or name == spelled_function(enum_name, "case")
+	Key(left, op, right): {
+		if left == symbol(opaque_word) { return no }
+		if spelled_enum_of(n, declared) == enum_name { return yes }
+		is_spelling_needed(left, enum_name, declared) or is_spelling_needed(right, enum_name, declared)
+	}
+	List(items, _, _): {
+		for item in items { if is_spelling_needed(item, enum_name, declared) { return yes } }
+		no
+	}
+	_: no
+}
+
+# node.warp's spelled enums and their spelling functions in front of a program naming them
+with_spelled_enums(program: any, declared: any): any := {
+	declarations = []
+	for enum_name in spelled_enums {
+		if enum_name not in declared and is_spelling_needed(program, enum_name, declared) { declarations += [spelled_declaration(enum_name)] + spelling_functions(enum_name) }
+	}
+	if #declarations == 0 then program else separated(bracketed(declarations + statements_in(program), ""), ";")
 }
 
 node_cases(program: Node): Node := {
@@ -47,5 +174,5 @@ node_cases(program: Node): Node := {
 	builds = {}
 	for case in ["Key", "List"] { if not (binds_value(scope, case) or binds_as(scope, case, Meaning.Function)) { builds[case] = yes } }
 	declared = enums_in(program, {})
-	bottom_up(program, n => node_value(n, builds, declared))
+	with_spelled_enums(bottom_up(program, n => node_value(n, builds, declared)), declared)
 }

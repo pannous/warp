@@ -601,11 +601,27 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			} else if DECLARED_ONLY_OPERATORS contains op#2 {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
 			} else {
-				left = keyed(op#2, left, if op#2 == "then" or op#2 == "else" then branch(p, powers#2) else expression(p, powers#2))
+				right = if op#2 == "then" or op#2 == "else" then branch(p, powers#2) else expression(p, powers#2)
+				left = keyed(op#2, left, if op#2 == ":" then with_switch_cases(p, right) else right)
 			}
 		}
 	}
 	left
+}
+
+// `pattern: match v {…}`: the arm's value is the whole inner match, its subject and its cases on the line, though `:`
+// binds tighter than the words after it (card match-arm-whose)
+// Rust twin: control/switch.rs with_switch_cases
+def with_switch_cases(p, value) {
+	opens_switch = value == symbol("match") or value == symbol("switch")
+	if not opens_switch or not starts_atom_at(p, blank_end(p, p.at)) { return value }
+	skip_blanks(p)
+	parts = [value, argument(p, true)]
+	if is_at(p.code, blank_end(p, p.at), '{', p.n) {
+		skip_blanks(p)
+		parts = parts + [atom(p)]
+	}
+	listed("", " ", parts)
 }
 
 // A prefix `if` takes its own `then` and `else` wherever it stands: `pattern: if c then a else b` is the arm giving the
