@@ -1,0 +1,4 @@
+# a function of a used file writing an entry of the file's main-level instance changes it for every function
+use "global_entry/registry.warp"
+forget_all()
+[remember("a"), remember("b"), remember("a"), known()]
