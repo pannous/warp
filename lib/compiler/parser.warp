@@ -1414,6 +1414,18 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		p.at = p.at + 1
 		return keyed("" + c, ø, expression(p, PREFIX_POWER))
 	}
+	// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
+	// subject; a glued `<tag` stays a bracket
+	// Rust twin: lookahead.rs peek_prefix_operator ('>' | '<')
+	if c == '<' or c == '>' {
+		relation = if next == '=' then "" + c + "=" else "" + c
+		after = peek(p.code, p.at + relation.length, p.n)
+		if after == ' ' or after == '\t' {
+			p.at = p.at + relation.length
+			skip_spaces(p)
+			return keyed(relation, ø, expression(p, binding_powers(relation)#2))
+		}
+	}
 	// `&lerp`: a reference to the function, an `&` glued to the word after it and not to one before it (`a &b`)
 	// Rust twin: functions.rs starts_function_reference, closures.rs function_reference
 	if c == '&' and is_alpha(next) and not (p.at > 0 and is_name_char(p.code[p.at - 1])) {
