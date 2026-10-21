@@ -1,7 +1,8 @@
 //! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): lib/compiler/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. Rust only keeps the compiler: it
 //! is compiled once and kept in the module cache (~/.cache/warp/modules) under the key of the binary and lib/, by the
-//! pure lane; while that lane refuses it, by the Rust pipeline, said on stderr at every run.
+//! Rust pipeline; `warp self <program.warp>` takes the one the pure lane compiles, compiler.warp compiled by itself
+//! (user 2026-10-21).
 use crate::compiler::self_hosted::{library, module_of_bytes, pure_bytes, stage_key, WORKER_STACK};
 use crate::node::{error, Node};
 use crate::pipeline::CompiledModule;
@@ -9,13 +10,20 @@ use crate::run::program_cache::{keep_under, kept_under};
 use std::path::{Path, PathBuf};
 
 const COMPILER_FILE: &str = "compiler/compiler.warp";
-/// The kept compiler's cache names: compiled by the pure lane, or by Rust while the pure lane refuses compiler.warp
-const PURE_COMPILER: &str = "warp pure: compiler.warp, pure-compiled";
+/// The kept compiler's cache names: compiled by the pure lane or by Rust
+const SELF_COMPILER: &str = "warp self: compiler.warp, compiled by itself";
 const RUST_COMPILER: &str = "warp pure: compiler.warp, Rust-compiled";
 
+/// Who compiles compiler.warp: `warp pure` the Rust pipeline, `warp self` the pure lane, compiler.warp itself
+#[derive(Clone, Copy)]
+pub enum Compiler {
+	RustCompiled,
+	SelfCompiled,
+}
+
 /// The program's value, run from the module compiler.warp made of it, with these arguments (`use os; args`)
-pub fn run(program: &Path, arguments: Vec<String>) -> Node {
-	match compiled(program) {
+pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
+	match compiled(program, by) {
 		Ok(module) => {
 			crate::modules::std_adapters::set_program_arguments(arguments);
 			crate::pipeline::run_module(module)
@@ -25,7 +33,7 @@ pub fn run(program: &Path, arguments: Vec<String>) -> Node {
 }
 
 /// The module compiler.warp makes of the program file: `compiler.warp <source> <wasm> <folder> <lib>`
-pub fn compiled(program: &Path) -> Result<CompiledModule, Node> {
+pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let program = program.canonicalize().map_err(|failure| error(&format!("{}: {failure}", program.display())))?;
 	let folder = program.parent().unwrap_or(Path::new("/")).to_path_buf();
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
@@ -34,7 +42,7 @@ pub fn compiled(program: &Path) -> Result<CompiledModule, Node> {
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
-	let compiler = compiler()?;
+	let compiler = compiler(by)?;
 	let said = crate::pipeline::run_module(compiler);
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
@@ -45,26 +53,26 @@ pub fn compiled(program: &Path) -> Result<CompiledModule, Node> {
 	}
 }
 
-/// compiler.warp's module, kept; the pure lane's when it compiles compiler.warp, else Rust's, said on stderr
-fn compiler() -> Result<CompiledModule, Node> {
+/// compiler.warp's module, kept: the Rust pipeline's, or the pure lane's, which refuses loudly rather than falling back
+/// to the Rust-compiled one
+fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
 	let file = library().join(COMPILER_FILE);
 	let source = std::fs::read_to_string(&file).map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
-	let (pure_key, rust_key) = (stage_key(PURE_COMPILER), stage_key(RUST_COMPILER));
-	if let Some(module) = pure_key.as_deref().and_then(kept_under) {
+	let key = stage_key(match by {
+		Compiler::RustCompiled => RUST_COMPILER,
+		Compiler::SelfCompiled => SELF_COMPILER,
+	});
+	if let Some(module) = key.as_deref().and_then(kept_under) {
 		return Ok(module);
 	}
-	if let Some(module) = rust_key.as_deref().and_then(kept_under) {
-		eprintln!("{RUST_COMPILER} (the pure lane refuses it; its first compile said why)");
-		return Ok(module);
-	}
-	let (module, key) = match pure_compiled(&file, source.clone()) {
-		Ok(module) => (module, pure_key),
-		Err(refusal) => {
-			eprintln!("{RUST_COMPILER}: the pure lane refuses it: {refusal}");
+	let module = match by {
+		Compiler::SelfCompiled => pure_compiled(&file, source)
+			.map_err(|refusal| error(&format!("{SELF_COMPILER}: the pure lane refuses it: {refusal}")))?,
+		Compiler::RustCompiled => {
 			// a Node stays on its thread: the failure crosses as its text
 			let compiled =
 				on_big_stack(file, move || crate::pipeline::compile(&source).map_err(|failed| failed.serialize()));
-			(compiled.map_err(|failed| error(&failed))?, rust_key)
+			compiled.map_err(|failed| error(&failed))?
 		}
 	};
 	if let Some(key) = key {

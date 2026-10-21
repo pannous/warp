@@ -1,0 +1,6 @@
+# a host word handing a module an int beyond the fixnums: a module of emitter.warp (the pure lane) holds machine i64s,
+# and takes it as is, without the Int runtime's builders (`warp self` reading the runtime words `warp pure` kept)
+use os
+big = 4611686018427387904 + 1
+keep("probe big int handed in", big)
+kept("probe big int handed in") == big

@@ -34,11 +34,12 @@ const PASSES_PROGRAM: &str = "use \"{lib}/compiler/passes.warp\"\nuse os\nstage(
 const ANALYSIS_PROGRAM: &str =
 	"use \"{lib}/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(emitter_kinds(node_of(json(read(args#1)))))";
 /// emitter.warp `typed_wasm_module` of the request in the worker's input file, [the lowered program's view, its kinds
-/// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
+/// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE;
+/// `stage_node` keeps `{}` an empty map, as the passes get it, not ø
 const EMIT_PROGRAM: &str = concat!(
 	"use \"{lib}/compiler/emitter.warp\"\nuse os\n",
 	"request = json(read(args#1))\n",
-	"typed_wasm_module(node_of(request#1), node_of(json(read(args#2))), json(read(args#3)), request#2)"
+	"typed_wasm_module(stage_node(request#1), stage_node(json(read(args#2))), json(read(args#3)), request#2)"
 );
 /// Where a stage program names lib/, the folder library() resolves
 const LIBRARY_MARK: &str = "{lib}";
@@ -241,8 +242,7 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 			if let Some(mark) = crate::host::fuel_mark() {
 				wasm_encoder::Section::append_to(&mark, &mut bytes);
 			}
-			let needs_host = imports_from(&bytes, HOST_MODULE);
-			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
+			Some(Ok(module_of_bytes(bytes)))
 		}
 	}
 }
@@ -352,10 +352,12 @@ fn record_lines(lines: &str) {
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }
 
-/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word
+/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word, libm when it
+/// imports pow (a float raised to a power)
 pub(crate) fn module_of_bytes(bytes: Vec<u8>) -> crate::pipeline::CompiledModule {
 	let needs_host = imports_from(&bytes, HOST_MODULE);
-	crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }
+	let needs_ffi = imports_from(&bytes, crate::ffi::LIBM);
+	crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi }
 }
 
 /// Does the module import a function of `module`
