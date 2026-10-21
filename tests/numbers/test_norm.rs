@@ -3,6 +3,6 @@ use crate::is;
 
 #[test]
 fn norm_is_abs() {
-	is!("norm -2.5", 2.5);
-	is!("x = -7; norm(x) + abs(x)", 14);
+	is!("use math; norm -2.5", 2.5);
+	is!("use math; x = -7; norm(x) + abs(x)", 14);
 }
