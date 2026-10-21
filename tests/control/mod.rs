@@ -187,6 +187,7 @@ mod test_reflection_synonyms; // card reflection-synonyms
 mod test_reflection_words; // card reflection
 mod test_relational_arms;
 mod test_rest_patterns;
+mod test_rule_sets; // card rewrite-rules
 mod test_run_tests; // card run-tests
 mod test_run_time_block_cache;
 mod test_run_time_blocks;
@@ -256,7 +257,6 @@ mod test_top_level_block;
 mod test_trap_messages;
 mod test_tree_find; // card tree-find
 mod test_tree_replace; // card tree-replace
-mod test_rule_sets; // card rewrite-rules
 mod test_try_braceless_call;
 mod test_try_catch_except;
 mod test_try_deep;

@@ -12,7 +12,10 @@ fn a_statement_pattern_matches_a_loop() {
 		"walk = parse(\"for x in xs { print x }\")\nmatch walk { data(for $v in $it { $body }) => v; _ => \"no\" }",
 		"x"
 	);
-	is!("branch = parse(\"if c { a } else { b }\")\nmatch branch { data(if $c { $a } else { $b }) => b; _ => \"no\" }", "b");
+	is!(
+		"branch = parse(\"if c { a } else { b }\")\nmatch branch { data(if $c { $a } else { $b }) => b; _ => \"no\" }",
+		"b"
+	);
 	is!("walk = parse(\"while c { x }\")\nmatch walk { data(for $v in $it { $body }) => v; _ => \"no\" }", "no");
 }
 
