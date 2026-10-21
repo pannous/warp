@@ -32,8 +32,8 @@ const SPEED_FLAGS: [&str; 6] = [
 	"--quiet",
 ];
 /// Set to 0: the self-hosted stages run as compiled, without wasm-opt, for a one-off check (`warp rebuild self` of a
-/// branch): -O3 takes ~40% of a fresh self build's CPU, at ~240% of a core, more than its 15% saves on one build. A
-/// WARP_ setting, so the stages kept this way are other modules than the optimized ones (stage_key)
+/// branch): -O3 takes ~15% of a fresh self build's CPU (306 → 260 s, same wall time, on the Mac), in bursts of ~240%
+/// of a core. A WARP_ setting, so the stages kept this way are other modules than the optimized ones (stage_key)
 const OPTIMIZE_SETTING: &str = "WARP_WASM_OPT";
 
 /// The module wasm-opt made faster, for one compiled once and run often (a self-hosted stage); None with

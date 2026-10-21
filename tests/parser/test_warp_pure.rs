@@ -22,8 +22,6 @@ fn build_self_compiler() {
 	let built = crate::common::warp_command()
 		.args(["rebuild", "self"])
 		.env("WARP_TIME_LIMIT", SELF_BUILD_TIME_LIMIT_SECONDS)
-		// a build for this run only: wasm-opt on the stages costs more than it saves (src/modules/binaryen.rs)
-		.env("WARP_WASM_OPT", "0")
 		.output()
 		.expect("warp runs");
 	assert!(built.status.success(), "warp rebuild self: {}", String::from_utf8_lossy(&built.stderr));
