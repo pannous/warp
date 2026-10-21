@@ -148,9 +148,15 @@ divisors(n: int) := [d for d in 1..n + 1 if n % d == 0]
 prime_factors(n: int) := { out = []; rest = n; d = 2; while d * d <= rest { while rest % d == 0 { out = out + [d]; rest = rest /! d }; d++ }; if rest > 1 { out = out + [rest] }; out }
 // the one bits of whole numbers ≥ 0 (`&` and `|` are logical, `xor` is bitwise already): bit_count(6) is 2
 bit_count(n: int) := { out = 0; rest = n; while rest > 0 { out = out + rest % 2; rest = rest /! 2 }; out }
-// two's-complement bits of any whole numbers, by a + b = (a xor b) + 2 * bit_and(a, b): bit_and(-129, 127) is 127
-bit_and(a: int, b: int) := (a + b - (a xor b)) / 2
-bit_or(a: int, b: int) := (a + b + (a xor b)) / 2
+// two's-complement bits of any whole numbers, by a + b = (a xor b) + 2 * bit_and(a, b): bit_and(-129, 127) is 127;
+// on the halves a >> 1 and b >> 1 and the lowest bits, so no sum leaves 64 bits (bit_and(9223372036854775807, 127))
+bit_and(a: int, b: int) := {
+	high_a = a >> 1
+	high_b = b >> 1
+	(high_a + high_b - (high_a xor high_b)) + (a % 2) * (b % 2)
+}
+// the bits of a xor b and of bit_and(a, b) are apart: their sum carries nothing
+bit_or(a: int, b: int) := (a xor b) + bit_and(a, b)
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here: the alias lines (wiki/alias.md)
 

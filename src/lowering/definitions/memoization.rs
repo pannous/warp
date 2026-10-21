@@ -7,7 +7,7 @@
 
 use super::nodes::{is_call_head, key};
 use crate::analyzer::effects::{Effect, EffectReport, EffectSet};
-use crate::analyzer::{captured_variables, collect_variables, param_kind, Scope};
+use crate::analyzer::{annotated_kind, captured_variables, collect_variables, param_kind, Scope};
 use crate::compiler::context::UserFunctionDef;
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
@@ -25,7 +25,11 @@ const BODY_PLACEHOLDER: &str = "memo_body";
 pub fn lower(program: Node) -> Node {
 	// the shape first: the analysis, effects and variables of the whole program only when some function has it
 	let definitions = crate::analyzer::function_definitions(&program);
-	if !definitions.user_functions.values().any(has_recursive_expression_shape) {
+	if !definitions
+		.user_functions
+		.values()
+		.any(|function| has_recursive_expression_shape(function) && may_take_int(function))
+	{
 		return program;
 	}
 	let context = crate::analyzer::function_context(&program);
@@ -58,6 +62,13 @@ fn has_memoizable_shape(function: &UserFunctionDef) -> bool {
 		&& param_kind(param) == Kind::Int
 		&& function.return_kind == Kind::Int
 		&& function.tuple_kinds.is_empty()
+}
+
+/// A parameter declared another type than a number (`text`, `list`, a class) stays that type through the analysis: such
+/// a function is no candidate, and a program of only such functions needs no analysis
+fn may_take_int(function: &UserFunctionDef) -> bool {
+	let declared = function.params.first().and_then(|param| param.annotation.as_ref()).and_then(annotated_kind);
+	declared.is_none_or(|kind| matches!(kind, Kind::Int | Kind::Float | Kind::Empty | Kind::Data))
 }
 
 /// One parameter and an expression body calling the function itself at least twice: what the definitions alone tell

@@ -1,0 +1,9 @@
+// a text's UTF-8 bytes: t.bytes, their count, byte_size(t), and a loop over them
+print("aü".bytes)
+t = "x"
+print(t.bytes.map(b => b + 1))
+f(name: text): int := #name.bytes
+print(f("ü"))
+print(byte_size("ü"))
+print(byte_size([1,2]))
+for b in "ab".bytes { print(b) }
