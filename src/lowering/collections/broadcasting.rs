@@ -304,11 +304,9 @@ fn spaced(node: &Node, first: &dyn Fn(&Node) -> String) -> String {
 }
 
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
-	// every definition form, a result-typed head `g(words: any): bool := …` too
-	if let Some((head, body, rebuild)) = crate::memoization::definition_parts(&node) {
-		if let Some(inner) = with_bound_values(&node, arities) {
-			return rebuild(head, nest_prefix_calls(body, &inner));
-		}
+	if let Some(scoped) = scoped_definition(&node, |body, bound| nest_prefix_calls(body, &with_values(arities, bound)))
+	{
+		return scoped;
 	}
 	// `print g 3, 4`, `f(max 3, 4)`: the call's arguments, a comma list, of which one is a braceless call
 	if let Node::List(items, Bracket::Round, Separator::None) = &node {
@@ -462,11 +460,14 @@ fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
 	}
 }
 
-/// In a function's body the names it binds (parameters, locals, loop variables: program_names.rs, the one scope rule)
-/// are values, no functions of the same name: `f(name) := contains(name, "-")` beside a class's name() method,
-/// `digits = t; slice digits 1 ø` beside a used file's digits(…)
-fn with_bound_values(definition: &Node, arities: &HashMap<String, Arity>) -> Option<HashMap<String, Arity>> {
-	crate::program_names::bound_inside(definition).map(|bound| with_values(arities, bound))
+/// A definition's body lowered knowing the names it binds (parameters, locals, loop variables: program_names.rs, the
+/// one scope rule), which are values there, no functions of the same name: `f(name) := contains(name, "-")` beside a
+/// class's name() method, `digits = t; slice digits 1 ø` beside a used file's digits(…). Every definition form, a
+/// result-typed head `g(words: any): bool := …` too
+fn scoped_definition(node: &Node, lower: impl FnOnce(Node, HashSet<String>) -> Node) -> Option<Node> {
+	let (head, body, rebuild) = crate::memoization::definition_parts(node)?;
+	let bound = crate::program_names::bound_inside(node)?;
+	Some(rebuild(head, lower(body, bound)))
 }
 
 fn with_values(arities: &HashMap<String, Arity>, names: impl IntoIterator<Item = String>) -> HashMap<String, Arity> {
@@ -518,6 +519,10 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 
 /// `f 1 2 3` → `f [1 2 3]` of the functions `single`
 fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -> Node {
+	let unbound = |bound: HashSet<String>| single.difference(&bound).cloned().collect();
+	if let Some(scoped) = scoped_definition(&node, |body, bound| gather_arguments(body, &unbound(bound), gathered)) {
+		return scoped;
+	}
 	match node {
 		Node::List(items, Bracket::None, Separator::Space)
 			if items.len() > 2 && items[0].symbol_name().is_some_and(|name| single.contains(name)) =>

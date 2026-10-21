@@ -736,25 +736,3 @@ pub fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: C
 pub fn run_module(module: CompiledModule) -> Node {
 	crate::numbers::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
 }
-
-/// TEMPORARY probe (card rust-lane-loop): the program after each source and meaning pass that changed it
-pub fn pass_trace(node: Node) -> Vec<String> {
-	let mut shown = vec![];
-	let mut last = node.serialize();
-	let phases = SOURCE_PHASES.iter().chain(std::iter::once(&MEANING_PASSES));
-	let node = crate::lowering::nodes::numbering_fresh_names(|| {
-		phases.enumerate().fold(node, |node, (phase, passes)| {
-			passes.iter().enumerate().fold(node, |node, (index, pass)| {
-				let node = pass(node);
-				let now = node.serialize();
-				if now != last {
-					shown.push(format!("{phase}.{index}: {now}"));
-					last = now;
-				}
-				node
-			})
-		})
-	});
-	drop(node);
-	shown
-}
