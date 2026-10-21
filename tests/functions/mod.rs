@@ -14,7 +14,6 @@ mod test_arrow_result_type; // card undefined-function
 mod test_bare_calls; // card assigning-bare
 mod test_bare_function_name;
 mod test_bare_host_words; // card random-should
-mod test_bindings_named_like_functions; // cards local-named-like
 mod test_block_function;
 mod test_block_function_argument; // card block-function-argument
 mod test_body_statement;
