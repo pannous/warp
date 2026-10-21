@@ -231,7 +231,8 @@ impl WasmGcEmitter {
 						I::LocalGet(tail), I::Return,
 					I::End,
 				]);
-				kind_is(s, f, children, Kind::Empty as i64);
+				s.emit_field(f, children, 0);
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq); // ø or `[]`
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
 				// the rest first, so each cell is built once
 				s.emit_field(f, children, 2);
@@ -244,7 +245,8 @@ impl WasmGcEmitter {
 						I::LocalGet(tail), I::Return,
 					I::End,
 				]);
-				kind_is(s, f, item, Kind::Empty as i64);
+				s.emit_field(f, item, 0);
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq); // ø or `[]`
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
 				kind_is(s, f, item, SQUARE_LIST_KIND);
 				#[rustfmt::skip]
