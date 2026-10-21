@@ -38,8 +38,8 @@ items_slice(items: list, from: int, to: int): list := {
 	out
 }
 # `starts_with(t, part)`, `ends_with(t, part)`: 1 when part's bytes begin or end t, else 0, as Rust's give an int
-node_starts_with(t: Node, part: Node): int := if text_starts_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
-node_ends_with(t: Node, part: Node): int := if text_ends_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
+node_starts_with(t: Node, part: Node): bool := text_starts_with(text_of_textual(t), text_of_textual(part))
+node_ends_with(t: Node, part: Node): bool := text_ends_with(text_of_textual(t), text_of_textual(part))
 node_trim(t: Node): text := text_trim(text_of_textual(t))
 # a text or a character as its text; anything else fails
 text_of_textual(n: Node): text := {
