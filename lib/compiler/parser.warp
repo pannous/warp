@@ -1031,7 +1031,7 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	if c == '{' and p.header { return false }
 	// `[if c then 1 else c for c in t]`: a `for` clause takes no argument of the word before it (`for:` labels one)
 	if keyword_at(p, "for") and peek(p.code, p.at + 3, p.n) != ':' { return false }
-	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and not p.iterable and not word_begins_item(p)
+	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and (if p.iterable then word_ends_header(p) else not word_begins_item(p))
 	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
 }
 
@@ -1045,6 +1045,20 @@ def word_begins_item(p: Parser): bool {
 	c = peek(p.code, at, p.n)
 	next = peek(p.code, at + 1, p.n)
 	c == '{' or (c == ':' and not (next == ':' or next == '='))
+}
+
+// The word here is a loop header's last, the body follows it (`for i in 1 to count xs {…}`, `… do …`, `…:` or an
+// indented line): it is the argument of the word before rather than that word's body
+// Rust twin: suffixes.rs word_ends_header
+def word_ends_header(p: Parser): bool {
+	if not is_name_start(peek(p.code, p.at, p.n)) { return false }
+	start = p.at
+	p.at = name_end(p.code, p.at, p.n)
+	skip_spaces(p)
+	indented_line_follows = is_at(p.code, p.at, '\n', p.n) and " \t".contains(peek(p.code, p.at + 1, p.n))
+	ends = at_to_header_end(p) or keyword_at(p, "do") or indented_line_follows
+	p.at = start
+	ends
 }
 
 // An assignment's value, a branch or an argument that is no name is called with whatever the operand is
@@ -2117,13 +2131,7 @@ def branch_value(p: Parser, min_power: int): Node := {
 	at = blank_end(p, p.at + 5)
 	if not (keyword_at(p, "print") and at > p.at + 5 and starts_atom_at(p, at)) { return expression(p, min_power) }
 	p.at = at
-	arguments = [expression(p, min_power)]
-	while is_at(p.code, p.at, ',', p.n) {
-		p.at = p.at + 1
-		skip_spaces(p)
-		arguments += [expression(p, min_power)]
-	}
-	listed("(", "", [PRINT] + arguments)
+	print_call_from(p, one_expression(words_binding(p, min_power)), min_power)
 }
 
 def keyword_at_position(p: Parser, word: text, at: int): bool := starts_at(p.code, word, at) and not (at + word.length < p.n and is_name_char(p.code[at + word.length]))
@@ -2141,9 +2149,54 @@ def looped(p: Parser): Node := {
 	if named != ø { return named }
 	p.at = before + 3
 	skip_spaces(p)
+	// `for(i=0;i<n;i++)`
+	if at_c_style_for_head(p) { return c_style_for(p) }
 	ranged = ranged_loop(p)
 	if ranged == ø { p.at = before }
 	ranged
+}
+
+// `(i=0;i<n;i++)`: a group here whose top level holds a `;`
+// Rust twin: loops.rs at_c_style_for_head
+def at_c_style_for_head(p: Parser): bool {
+	if not is_at(p.code, p.at, '(', p.n) { return false }
+	at = p.at
+	depth = 0
+	while at < p.n {
+		c = p.code[at]
+		skipped = if c == '"' or c == '\'' then text_end(p.code, at + 1, c, p.n) else comment_end(p.code, at, p.n)
+		if skipped > at {
+			at = skipped
+		} else if "([{".contains(c) {
+			depth = depth + 1
+		} else if ")]}".contains(c) {
+			if depth == 1 { return false }
+			depth = depth - 1
+		} else if c == ';' and depth == 1 {
+			return true
+		}
+		at = at + 1
+	}
+	false
+}
+
+// `for (i=0;i<3;i++) {…}`, `… : body`, `… do body`, the lines indented below or the rest of the statement: the call
+// for(head) glued to the body as a block
+// Rust twin: loops.rs c_style_for
+def c_style_for(p: Parser): Node := {
+	head = atom(p)
+	skip_spaces(p)
+	width = body_word_width(p)
+	body = ø
+	if width > 0 {
+		body = colon_body(p, width)
+	} else if is_at(p.code, p.at, '{', p.n) {
+		body = atom(p)
+	} else {
+		body = indented_block(p)
+		if body == ø { body = statement_words(p) }
+	}
+	listed("", "", [listed("(", "", [symbol("for"), head]), if is_block(body) then body else listed("{", ";", [body])])
 }
 
 // `each x in xs {…}` is `for each x in xs {…}`, else ø, nothing read
@@ -2165,20 +2218,49 @@ def named_loop(p: Parser): Node := {
 	if not keyword_at(p, "in") { return ø }
 	p.at = p.at + 2
 	skip_spaces(p)
-	p.iterable = true
-	iterable = header_expression(p, 81)
-	p.iterable = false
+	iterable = iterable_words(p)
 	skip_spaces(p)
 	listed("", " ", [symbol("for"), variable, symbol("in"), iterable, loop_body(p)])
+}
+
+// A loop's iterable: one expression, or the words up to the body as a space list, `reverse xs` of
+// `for x in reverse xs {…}`
+// Rust twin: loops.rs parse_iterable
+def iterable_words(p: Parser): Node := {
+	p.iterable = true
+	first = header_expression(p, 81)
+	after_first = p.at
+	words = [first]
+	while true {
+		skip_spaces(p)
+		start = p.at
+		if p.at >= p.n or at_loop_body(p) or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") { break }
+		words += [header_expression(p, 81)]
+		if p.at == start { break }
+	}
+	p.iterable = false
+	if words.length == 1 or not at_loop_body(p) {
+		p.at = after_first
+		return first
+	}
+	listed("", " ", words)
+}
+
+// Rust twin: loops.rs ITERABLE_ENDS
+ITERABLE_ENDS = ";}]),"
+
+// A loop's body starts here: `{…}`, `: …`, `do …`, or the next line
+// Rust twin: loops.rs at_loop_body
+def at_loop_body(p: Parser): bool {
+	c = peek(p.code, p.at, p.n)
+	c == '{' or c == ':' or c == '\n' or starts_at(p.code, "//", p.at) or keyword_at(p, "do")
 }
 
 // `for 1…100: print it`, `for xs {…}` and `for 0 to 2` with the lines indented below: a loop over the iterable without
 // a name, its body a block; ø if no body follows
 // Rust twin: loops.rs try_parse_for_in (only the colon and do forms), as_block
 def ranged_loop(p: Parser): Node := {
-	p.iterable = true
-	iterable = header_expression(p, 81)
-	p.iterable = false
+	iterable = iterable_words(p)
 	skip_spaces(p)
 	width = body_word_width(p)
 	body = ø
@@ -2218,14 +2300,37 @@ def body_word_width(p: Parser): int {
 // The words up to the end of the statement, one expression: `print ord c` of `for c in s: print ord c`
 // Rust twin: statements.rs rest_of_statement, words_binding
 def statement_words(p: Parser): Node := {
+	words = words_binding(p, 0)
+	// `for i in 1…3: print i, i*2` prints both
+	if words.length >= 2 and words#1 == PRINT and is_at(p.code, p.at, ',', p.n) { return print_call_from(p, one_expression(words[1:]), 0) }
+	if words.length == 1 { return words#1 }
+	phrase("", words)
+}
+
+// The words of an expression up to a comma, the line's end or an `else`, each binding at least `min_power`
+// Rust twin: commands.rs words_binding
+def words_binding(p: Parser, min_power: int): list {
 	words = []
 	while true {
-		words = words + [expression(p, 0)]
+		words = words + [expression(p, min_power)]
 		skip_spaces(p)
 		if ends_branch(p) or not starts_atom(p) { break }
 	}
-	if words.length == 1 { return words#1 }
-	phrase("", words)
+	words
+}
+
+def one_expression(words: list): Node := if words.length == 1 then words#1 else listed("", " ", words)
+
+// The call print(first, …): the arguments after `first` follow commas, each the words up to the next one
+// Rust twin: commands.rs print_call_from
+def print_call_from(p: Parser, first: Node, min_power: int): Node := {
+	arguments = [first]
+	while is_at(p.code, p.at, ',', p.n) {
+		p.at = p.at + 1
+		skip_spaces(p)
+		arguments += [one_expression(words_binding(p, min_power))]
+	}
+	listed("(", "", [PRINT] + arguments)
 }
 
 def ends_branch(p: Parser): bool := keyword_at(p, "else") or else_if_at(p)
