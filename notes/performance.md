@@ -121,3 +121,10 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   directory is part of the key. Probes:
   probes/program_cache/cli_cache.sh, probes/program_cache/samples_twice.sh (samples whose two runs differ do so
   without the cache too: timings, random weights, stored rows, GPU frame counts).
+
+## Playground memory
+`scripts/browser-dry-run.sh --chrome [names…]` prints the tour's memory: the peak of the processes' own memory (anon,
+page cache apart) of the scope holding Chrome, the examples that grew it most, and the processes at the peak
+(test_in_browser.py MemoryWatch). One example alone gives its growth; across the whole tour the steps vary with GC
+timing (peak 0.8–1.1 GB before 5b0b7f1bdb). A binary read must not go through `Uint8Array.from(text, …)`: it lists every
+character as a string first (uniscript's 10 MB index cost 550 MB, now 195).
