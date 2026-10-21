@@ -72,6 +72,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - git-hook restore: agents may restore only Cargo.toml/Cargo.lock (the build tweak); the hook backs up the diff first.
 - #1 avoid panics, errors as values. #14 not-implemented errors unless easy.
 - P151 the crates.io package is `warp-lang`, the runtime `warp-runtime`. P150 license: the compiler AGPL-3.0-or-later, warp-runtime MIT (programs built with warp stay their authors'), contributor agreement in CONTRIBUTING.md so warp can be dual-licensed commercially. release-channels: next a PyPI wheel wrapping the binary, named warp-language (`pip install warp-language`; NVIDIA's Warp owns warp-lang there), Linux .deb/.rpm (warp-lang), AUR (warp-lang-bin).
+- exports-kept (Interviewer's decision): a module written for others (`warp compile --wasm` and the other module outputs) exports every top-level function under its name, so a JS host can call it; only a run (`warp run`, eval, tests) may drop an original nobody calls any more after specialising (card specialise-dead-originals). A function still mentioned (task by name, `&f`, an unspecialised call) always stays.
 - package-reexport (card module-own): a package's own `use` lines reach the programs that use it.
   `use webgl` (which says `use draw`) alone gives draw's words too: `canvas(200, 100)`, `star(…)`, `save "x.png"`.
 - laws-file: the human-owned laws live in samples/laws/project_laws.warp
