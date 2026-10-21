@@ -24,7 +24,5 @@ or plain text.
 ## Open (cards)
 - optional-text-slice: `t[1..]` of a `text?` picks the list overload in the Rust lane, so analyzer.warp's
   `joined_list_type(known)` and `typed_element_kind(type_name)` stay `any`.
-- alias-list-type: `type Code = ints` / `list of int` for byte lists (emitter.warp's Code).
-- count-of-field: `#s.names` of an instance's list field.
 - emitter.warp itself and host_words.warp wait for the emitter split (card emitter-split); Function/Signature are
   warp-reviewer's (card function-signature).
