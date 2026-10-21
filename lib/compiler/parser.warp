@@ -1732,6 +1732,12 @@ def atom(p: Parser): Node := {
 			p.at = p.at + 2
 			return radix_value(p, 2)
 		}
+		// `2024-01-31`, `2024-01-31T10:00Z`: a time, the data view Rust's parser gives it
+		time_length = time_literal_length(p, p.at)
+		if time_length > 0 {
+			p.at = p.at + time_length
+			return opaque(["data", p.code[p.at - time_length .. p.at]])
+		}
 		number_start = p.at
 		written = decimal_number(p)
 		// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
@@ -2066,6 +2072,59 @@ def with_time_unit(p: Parser, count: int): Node := {
 		p.at = following#2
 	}
 	opaque(["data", duration_text(length)])
+}
+
+// The length of the RFC 3339 / RFC 9557 time literal at `at`: `2024-01-31`, `2024-01-31T10:00:30.5+01:00`,
+// `2024-01-31T10:00[Europe/Berlin]`; 0 if none starts there
+// Rust twin: time/calendar.rs literal_len
+def time_literal_length(p: Parser, at: int): int {
+	if not (digits_at(p, at, 4) and is_at(p.code, at + 4, '-', p.n) and digits_at(p, at + 5, 2) and is_at(p.code, at + 7, '-', p.n) and digits_at(p, at + 8, 2)) { return 0 }
+	end = at + 10
+	if (is_at(p.code, end, 'T', p.n) or is_at(p.code, end, 't', p.n)) and clock_at(p, end + 1) {
+		end = end + 6
+		if is_at(p.code, end, ':', p.n) and digits_at(p, end + 1, 2) {
+			end = end + 3
+			if is_at(p.code, end, '.', p.n) and digits_at(p, end + 1, 1) {
+				end = end + 1
+				while end < p.n and is_digit(p.code[end]) { end = end + 1 }
+			}
+		}
+		if is_at(p.code, end, 'Z', p.n) or is_at(p.code, end, 'z', p.n) {
+			end = end + 1
+		} else if (is_at(p.code, end, '+', p.n) or is_at(p.code, end, '-', p.n)) and clock_at(p, end + 1) {
+			end = end + 6
+		}
+		// RFC 9557 suffixes: `[Europe/Berlin]`, then `[key=value]` like `[_tzdata=warp-2026a]`
+		while is_at(p.code, end, '[', p.n) {
+			close = suffix_close(p, end + 1)
+			if close == 0 { break }
+			end = close + 1
+		}
+	}
+	if end < p.n and (is_alphanumeric(p.code[end]) or p.code[end] == '_') { return 0 }
+	end - at
+}
+
+// `count` digits from `at`
+def digits_at(p: Parser, at: int, count: int): bool {
+	for i in at ..< at + count {
+		if i >= p.n or not is_digit(p.code[i]) { return false }
+	}
+	true
+}
+
+// `10:00` at `at`: two digits, a colon, two digits
+def clock_at(p: Parser, at: int): bool := digits_at(p, at, 2) and is_at(p.code, at + 2, ':', p.n) and digits_at(p, at + 3, 2)
+
+// The `]` closing a time literal's suffix whose name starts at `at`, a name of letters, digits and `/_+-=.!`; 0 if none
+def suffix_close(p: Parser, at: int): int {
+	close = at
+	while close < p.n and p.code[close] != ']' {
+		c = p.code[close]
+		if not (is_alphanumeric(c) or "/_+-=.!".contains(c)) { return 0 }
+		close = close + 1
+	}
+	if close >= p.n or close == at then 0 else close
 }
 
 // The time unit word at `at` after any spaces: [its length, where it ends], else ø; `{year:1970 month:1}`: a word that
