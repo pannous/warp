@@ -1,7 +1,7 @@
 //! `m#2#1 = 9` (`m[1][0] = 9`) sets the item inside the inner list (card nested-index): an index assignment stores the
 //! changed list back into its target, and `m#2` is no variable to store into. So the inner list is taken out, changed
 //! and put back: `nested·0 = m#2; nested·0#1 = 9; m#2 = nested·0`, also for `+=` and deeper chains. An index that is a
-//! computation is evaluated once.
+//! computation (a call) is evaluated once.
 //! A field of an element changes the same way (card list-field-receivers): `bags#1.n = 5`, `bags#1.items.add(v)` and
 //! `bags#1.items#2 = v` take the instance out, change it and put it back. A store into a call's result
 //! (`make().n = 5`) would change a copy nobody keeps, so it is an error.
@@ -34,9 +34,10 @@ fn lowered(node: Node, counter: &mut usize) -> Node {
 	let number = *counter;
 	*counter += 1;
 	let Node::Key(base, Op::Hash, index) = element.drop_meta() else { unreachable!("element_below finds an index") };
-	let (index_binding, index) = match index.drop_meta() {
-		Node::Number(_) | Node::Symbol(_) => (None, index.as_ref().clone()),
-		_ => {
+	// a pure index stays as written: `m#('a' + 1)` is the map key the emitter reads, a variable holding 'a' + 1 no index
+	let (index_binding, index) = match crate::library_words::is_pure_index(index) {
+		true => (None, index.as_ref().clone()),
+		false => {
 			let name = Node::Symbol(format!("{INDEX}{number}"));
 			(Some(assign(name.clone(), index.as_ref().clone())), name)
 		}
