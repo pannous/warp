@@ -112,7 +112,7 @@ counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes
 # is that word's call (a node's entry of that name first), as Rust's library_words.rs method_call; else ø
 member_word(name: text): any := {
 	word = library_words.get(unaliased(name)) ?? ""
-	if word in module.runtime and #module.runtime[word].parameters == 1 then word else ø
+	if word in module.runtime and #module.runtime[word].signature.parameters == 1 then word else ø
 }
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list (Rust's node_bytes)
 byte_count_words = {bytecount: yes, byte_size: yes}
@@ -177,8 +177,9 @@ def name_bytes(name: text): list { vector(name.bytes.map(b => [b])) }
 def section(id: int, content: any): list { [id] + uleb(#content) + content }
 
 ## the program's functions
-# a function as written; compiling it gives the rest
-class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no; defaults: any = [] }
+# a function as written, its name, signature and body; compiling it gives the rest: kinds its parameters' kinds, result
+# its result's kind
+class Function { name: text; signature: Signature; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
@@ -210,21 +211,9 @@ form_of(n: any): text := {
 	"a " + type(n)
 }
 
-# `y = 2`: the parameter y, its default 2
-without_default(p: any): any := if type(p) is key and op_of(p) == "=" then key_of(p) else p
-# a parameter's default as [node], ø when it has none (ø itself is a default: `to = ø`)
-default_of(p: any): any := if type(p) is key and op_of(p) == "=" then [value_of(p)] else ø
-parameter_symbol(given: any): any := {
-	p = without_default(given)
-	if type(p) is key and op_of(p) == ":" then key_of(p) else p
-}
-annotation_of(given: any): any := {
-	p = without_default(given)
-	if type(p) is key and op_of(p) == ":" and value_of(p) is symbol { return name_of(value_of(p)) }
-	# `xs: [int]` and other type forms Rust checks at each call: no kind, so the function is refused
-	if type(p) is key and op_of(p) == ":" { return form_of(value_of(p)) }
-	ø
-}
+# a function made with no parameters, its body given later or its code written by the caller
+# `: any` until card class-named: a class Function as a result type fails in the Rust lane
+bare_function(name: text): any := Function(name, Signature(), ø)
 
 # `(name params…) := body` at the program's top level, its head; `name := body` reading `it` is a function of `it`, and
 # `name := { statements }` one of none (Rust's defined_function); `x := 5` is a value (assignment_operators)
@@ -269,11 +258,7 @@ def collect_functions(program: any, functions: any): list {
 	for n in program_statements(program).map(unkeyworded) {
 		head = function_head(n)
 		if head == ø and not is_import(n) { kept += [n] } else if head != ø {
-			parameters = head[1..].map(parameter_symbol)
-			annotations = head[1..].map(annotation_of)
-			f = Function(name_of(head#1), parameters, annotations, value_of(n))
-			f.defaults = head[1..].map(default_of)
-			functions[name_of(head#1)] = f
+			functions[name_of(head#1)] = Function(name_of(head#1), signature_of(head), value_of(n))
 		}
 	}
 	kept
@@ -292,8 +277,7 @@ shared_names(statements: any) := {
 }
 reads_free(f: Function, name: text) := {
 	if not mentions(f.body, name) or assigns(f.body, name) { return no }
-	for p in f.parameters { if name_of(p) == name { return no } }
-	yes
+	name not in taken_names(f.signature)
 }
 # whether n assigns the symbol `name` anywhere
 assigns(n: any, name: text) := {
@@ -597,7 +581,7 @@ def whole_index(index: any): list {
 def wasm_instruction(body: Body, name: text): list {
 	if name not in wasm_instructions { return refuse("wasm " + name) }
 	code = []
-	for i in 0..<#body.function.parameters { code += [op.local_get] + uleb(i) }
+	for i in 0..<#body.function.signature.parameters { code += [op.local_get] + uleb(i) }
 	[if name.starts_with("i64") then "int" else "float", code + [wasm_instructions[name]]]
 }
 # a word runtime.warp's own functions call: theirs, even where the program defines a function of that name
@@ -1131,7 +1115,7 @@ def is_place(target: any): bool {
 # Rust checks a field write against the field's type only on a local it holds as an instance of the class
 # (struct_backend.rs find_typed_structs), never on a parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
 def checks_fields(body: Body, target: any): bool {
-	not (target is symbol and name_of(target) in body.names and body.names[name_of(target)] < #body.function.parameters)
+	not (target is symbol and name_of(target) in body.names and body.names[name_of(target)] < #body.function.signature.parameters)
 }
 # whether a local (not a parameter) of kind `held` assigned a `kind` takes their joint kind from the next reading of
 # its function on: `x = 7; x /= 2` makes x a boxed value, `x = 0; x += 0.5` a float; a local analyzer.warp gave a kind
@@ -1139,7 +1123,7 @@ def checks_fields(body: Body, target: any): bool {
 widens(body: Body, name: text, held: text, kind: text): bool := {
 	if analyzed_local_kind(body.function, name) != ø and held_as(kind, analyzed_local_kind(body.function, name)) { return no }
 	# a yes/no stays one (a number given to it counts as yes when not 0), an int given a yes/no takes 1 or 0
-	if body.names[name] < #body.function.parameters or held == pending or kind == pending or held == "bool" or kind == "bool" { return no }
+	if body.names[name] < #body.function.signature.parameters or held == pending or kind == pending or held == "bool" or kind == "bool" { return no }
 	joint = joint_kind(held, kind)
 	joint != held and (joint in type_bytes or joint in references)
 }
@@ -1186,11 +1170,12 @@ def return_value(body: Body, value: any): list {
 }
 
 def call(body: Body, f: Function, arguments: any): list {
-	if #arguments > #f.parameters { return refuse_arguments(f, #arguments) }
-	slots = placed_arguments(f.parameters.map(p => name_of(p)), arguments)
+	parameters = f.signature.parameters
+	if #arguments > #parameters { return refuse_arguments(f, #arguments) }
+	slots = placed_arguments(taken_names(f.signature), arguments)
 	if not (slots is list) { return refuse_arguments(f, #arguments) }
 	given = range_list(#slots).map(i => if slots[i] == ø then default_value(body, f, i, #arguments) else expression_code(body, slots[i]#1))
-	call_values(f, given + range_list(#f.parameters - #given).map(i => default_value(body, f, #given + i, #arguments)))
+	call_values(f, given + range_list(#parameters - #given).map(i => default_value(body, f, #given + i, #arguments)))
 }
 # `name = value` naming one of `names` (P37)
 is_named_argument(argument: any, names: any): bool := type(argument) is key and op_of(argument) == "=" and key_of(argument) is symbol and name_of(key_of(argument)) in names
@@ -1216,9 +1201,9 @@ placed_arguments(names: any, arguments: any): any := {
 refuse_arguments(f: Function, count: int): any := refuse("a call of " + f.name + " with " + count + " arguments")
 # the default of f's parameter i a call leaves out, compiled where the call is: refused when it reads a parameter
 def default_value(body: Body, f: Function, i: int, count: int): list {
-	default = if i < #f.defaults then f.defaults[i] else ø
+	default = f.signature.parameters[i].defaulted_to
 	if default == ø { return refuse_arguments(f, count) }
-	for p in f.parameters { if mentions(default#1, name_of(p)) { return refuse("a default of " + f.name + " reading " + name_of(p)) } }
+	for name in taken_names(f.signature) { if mentions(default#1, name) { return refuse("a default of " + f.name + " reading " + name) } }
 	expression_code(body, default#1)
 }
 def call_values(f: Function, values: any): list {
@@ -1303,7 +1288,7 @@ closure_text_code(f: Function): any := {
 closure_shown(name: text, captured: int): text := {
 	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return function_name(name) }
 	f = module.functions[name]
-	names = f.parameters[captured..].map(p => name_of(p))
+	names = taken_names(f.signature)[captured..]
 	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + str(f.body)
 }
 # the name a function value shows, as Rust's (closures.rs function_name): `len` of a class's method that became the
@@ -1327,7 +1312,7 @@ dispatcher_code(f: Function): any := {
 	for k in 0..<#module.closures {
 		target = module.functions[module.closures[k]#1]
 		captured = module.closures[k]#2
-		if #target.parameters - captured == arity {
+		if #target.signature.parameters - captured == arity {
 			values = range_list(captured).map(i => closure_item(closure, i + 1)) + range_list(arity).map(j => ["node", [op.local_get] + uleb(j + 1)])
 			called = boxed(call_values(target, values))
 			code += number + [op.i64_const] + sleb(k) + [op.i64_eq, op.if, no_value] + called + [op.return, op.end]
@@ -1609,7 +1594,7 @@ def quoted_code(body: Body, e: any): list {
 is_spaced_call(body: Body, n: any): bool := {
 	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
 	name = name_of(n#1)
-	name in module.functions and name not in body.names and #module.functions[name].parameters == #n - 1
+	name in module.functions and name not in body.names and #module.functions[name].signature.parameters == #n - 1
 }
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: any): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
@@ -1877,7 +1862,7 @@ def logical(body: Body, symbol: text, left: any, right: any): list {
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_scope(f: Function): Body := {
 	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [])
-	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
+	for i in 0..<#f.signature.parameters { local_index(scope, f.signature.parameters[i].name, f.kinds[i]) }
 	scope
 }
 
@@ -1976,9 +1961,9 @@ node_annotations = ["any", "function", "type"]
 function_compiled(f: Function, argument_kinds: any): any := {
 	placed(f)
 	parameter_kinds = []
-	for i in 0..<#f.parameters {
-		annotation = f.annotations[i]
-		if annotation == ø { annotation = analyzed_parameter_kind(f, i) }
+	for i in 0..<#f.signature.parameters {
+		declared = f.signature.parameters[i].type_name
+		annotation = if declared == "" then analyzed_parameter_kind(f, i) else declared
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
 		given = if argument_kinds[i] == pending then "node" else argument_kinds[i]
 		if parameter_key(f, i) in module.literal_arguments {
@@ -2016,7 +2001,7 @@ body_code(f: Function) := {
 	scope = new_scope(f)
 	value = expression_code(scope, f.body)
 	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
-	f.locals = scope.kinds[(#f.parameters)..]
+	f.locals = scope.kinds[(#f.signature.parameters)..]
 	f.local_names = scope.order
 }
 
@@ -2153,7 +2138,7 @@ placed(f: Function): any := {
 }
 # a function made by the emitter (no source), at the next index, its code written by the caller
 added_function(name: text, kinds: list, result: text, local_names: list): any := {
-	f = placed(Function(name, [], [], ø))
+	f = placed(bare_function(name))
 	f.kinds = kinds
 	f.result = result
 	f.locals = []
@@ -2248,7 +2233,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 		word = module.runtime[name]
 		word.is_runtime = yes
 	}
-	main = Function("main", [], [], ø)
+	main = bare_function("main")
 	try {
 		main.body = separated(bracketed(collect_functions(program, module.functions), ""), ";")
 		collect_literal_arguments(main.body)
@@ -2259,7 +2244,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 		# a program with one it cannot compile fails there (not the prelude's helpers, compiled when called)
 		for name in module.functions.keys {
 			f = module.functions[name]
-			if f.kinds == ø and not name.starts_with(prelude_prefix) { compile_function(f, f.parameters.map(p => "node")) }
+			if f.kinds == ø and not name.starts_with(prelude_prefix) { compile_function(f, f.signature.parameters.map(p => "node")) }
 		}
 		# a dispatcher's call may compile a target that makes more closures or dispatchers: again until none is new
 		seen = -1
