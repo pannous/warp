@@ -7,6 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
+- wasm-standalone (user): next big goal: the runtime built into the wasm itself, so `wasmtime warp.wasm <args>` behaves like the native binary: the compiler wasm needs only WASI, no custom host imports (`host::read` and the other host words built in) (card standalone).
 - stages-passes-dirs (user, then dropped by the user 2026-10-21): lib/compiler/*.warp stays one flat folder; the split into stages/ and passes/ churned every `use` line, needed a worker freeze, and the stage/pass line stayed blurry (card compiler-stages-passes closed as dropped).
 - pass-triggers (user): the architecture changes from many passes to a few, with keyword-triggered local rewrites (a rewrite runs where its keyword occurs, not as a whole-program pass); card pass-triggers, led by warp-passes-audit.
 - no-pass-proliferation (user): avoid the proliferation of passes: a feature extends or generalizes an existing pass, a new pass needs a reason named in its commit (notes/agents/common.md "No new passes"); an agent audits today's passes for ones that can be simplified or generalized (warp-passes).
