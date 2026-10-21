@@ -132,3 +132,4 @@ mod test_unpacking_into_existing;
 mod test_where_filter;
 mod test_word_slices;
 mod test_worklist_count; // card list-count-grows
+mod test_nested_map_writes; // card nested-write
