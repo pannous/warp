@@ -227,6 +227,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P45 a variable given kinds that don't mix (`x=[1]; x=5`) is a compile error; Int→Float widening stays; undeclared lists stay `list any`.
 - P28 `real x;` read before assignment is its type's zero value.
 - P23/P20/type-words-reserved: every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`. type-word-local-warns: binding a variable to a type word (`symbol = ":"`) warns, since it shadows the type in `is`/`as` (Interviewer's decision).
+- list-cast-each: `as` a list type converts each item like `as` its item type (`["1", "2"] as ints` → [1 2], `[1, 2] as texts` → ["1" "2"]; an item that can't convert is that item's error); a declared result type `: ints` checks, never converts.
 - #9 `list of int`; plural type words (`numbers`) are lists; `list<int>` reads too; `x : 100 int` and `pixel:int[100]` declare typed arrays.
 - `type(ø)` prints "empty". static-int: a constant call misfitting its declared int result is refused at compile time.
 - D5 any noun can name a type/parameter (notes/matching.md).
