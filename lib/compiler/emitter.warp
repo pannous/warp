@@ -1777,7 +1777,7 @@ def data_item(body: Body, mark: text, item: any): list {
 	runtime_call(data_item_checks[mark], [value])
 }
 # the tables a runtime word reads a number of by name, `Kind.List` (kinds.warp), folded into the code
-constant_tables = {Kind: Kind, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode, TimeFieldUnit: TimeFieldUnit, TimeFieldSize: TimeFieldSize}
+constant_tables = {Kind: Kind, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode}
 # the number `Kind.List` names in its table, else ø
 table_number(table: any, case: any): any := {
 	if not (table is symbol and name_of(table) in constant_tables) { return ø }

@@ -15,7 +15,3 @@ KindUnit = {Info: 256, Separator: 281474976710656, Code: 72057594037927936}
 BracketCode = {Curly: 0, Square: 1, Round: 2, Less: 3, Other: 4, None: 5}
 # a time's form in its info bits (src/time/mod.rs TimeForm), Clock the time of day
 TimeFormCode = {Instant: 0, Date: 1, Local: 2, Duration: 3, Zoned: 4, Clock: 5}
-# a time's signed amounts in its info bits (src/time/mod.rs info_field), each below the marks: the unit of a field,
-# its lowest bit in the kind word, and its size, the count of amounts it holds, half of them negative
-TimeFieldUnit = {Days: 2048, Months: 34359738368, Offset: 524288}
-TimeFieldSize = {Days: 16777216, Months: 131072, Offset: 2048}

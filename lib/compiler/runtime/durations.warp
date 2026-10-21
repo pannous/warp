@@ -6,13 +6,19 @@
 second_nanos() := 1000000000
 day_nanos() := 86400 * second_nanos()
 hour_nanos() := 3600 * second_nanos()
-# the signed amount of a time's info field of that unit and size (kinds.warp TimeFieldUnit)
+# a duration's signed amounts in its info fields (src/time/mod.rs info_field), below the marks of the kind word: a
+# field's unit, its lowest bit in the kind word, and its size, the count of amounts it holds, half of them negative
+days_unit() := 2048
+days_size() := 16777216
+months_unit() := 34359738368
+months_size() := 131072
+# the signed amount of a time's info field of that unit and size
 info_amount(n: any, unit: int, size: int): int := {
 	amount = floor_quotient(marked_kind(n), unit) % size
 	if amount >= size / 2 then amount - size else amount
 }
-duration_months(n: any): int := info_amount(n, TimeFieldUnit.Months, TimeFieldSize.Months)
-duration_days(n: any): int := info_amount(n, TimeFieldUnit.Days, TimeFieldSize.Days)
+duration_months(n: any): int := info_amount(n, months_unit(), months_size())
+duration_days(n: any): int := info_amount(n, days_unit(), days_size())
 duration_nanos(n: any): int := unboxed_int(n)
 # `3 hours`: an amount and its unit, plural unless the amount is 1
 amount_text(amount: int, unit: text): text := {

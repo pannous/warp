@@ -10,11 +10,11 @@ is_zoned(t: any): bool := time_form(t) == TimeFormCode.Zoned
 is_time_of_day(t: any): bool := time_form(t) == TimeFormCode.Clock
 # the duration of months, days and nanoseconds: its days and months in their info fields above the form
 duration_of(months: int, days: int, nanos: int): any := {
-	days_bits = info_field(days, TimeFieldSize.Days) * TimeFieldUnit.Days
-	months_bits = info_field(months, TimeFieldSize.Months) * TimeFieldUnit.Months
+	days_bits = info_field(days, days_size()) * days_unit()
+	months_bits = info_field(months, months_size()) * months_unit()
 	time_of(TimeFormCode.Duration + (days_bits + months_bits) / KindUnit.Info, nanos)
 }
-# a signed amount as the bits of its info field of that size (kinds.warp TimeFieldSize)
+# a signed amount as the bits of its info field of that size (durations.warp days_size)
 info_field(amount: int, size: int): int := if amount < 0 then amount + size else amount
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
 local_offset_at(t: any): int := local_offset(floor_quotient(time_position(t), 1000000))
