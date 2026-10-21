@@ -369,13 +369,17 @@ fn run_command(args: &[String], given: &[String]) {
 		std::process::exit(if failed > 0 { 1 } else { 0 });
 	} else if args[1] == REBUILD_COMMAND {
 		rebuild_compilers(args.get(2).map(String::as_str));
-	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str())
-		&& args.get(2).is_some_and(|path| has_warp_extension(path))
-	{
-		use warp::compiler::standalone::{run, Compiler};
+	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
+		use warp::compiler::standalone::{run, run_code, Compiler};
 		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
-		diagnostic::show_lines_of(&source_of(&args[2]), Some(&args[2]));
-		print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
+		// `warp pure <file.warp> [arguments…]`, or inline code as plain `warp <code>` takes it
+		if has_warp_extension(&args[2]) {
+			diagnostic::show_lines_of(&source_of(&args[2]), Some(&args[2]));
+			print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
+		}
+		let code = args[2..].join(" ");
+		diagnostic::show_lines_of(&code, None);
+		print_and_exit(run_code(&code, by));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments([program_arguments, given].concat());

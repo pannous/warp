@@ -224,6 +224,7 @@ mod test_typed_arrays;
 mod test_typed_builtins; // card typed-builtins
 mod test_typed_list_annotations; // card typed-list-annotations
 mod test_typed_list_elements; // card typed-list-elements
+mod test_typed_param_phrases;
 mod test_types;
 mod test_types_scope;
 mod test_union_returns;
@@ -235,4 +236,4 @@ mod test_user_counting_word; // card user-defined-size
 mod test_value_constructor;
 mod test_variant_equality; // card variant-left
 mod test_variant_payloads;
-mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body` // card element-field-like-function
+mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body` // card element-field-like-function // card pure-typed-params

@@ -1,0 +1,371 @@
+# `rewrite PATTERN => TEMPLATE` (cards compiler-modules, pure-rewrite): code extending the compiler. A pattern's holes
+# `$a` and `$xs...` bind as in a code pattern of a match, the template splices them in. `where $c = channel()` holds
+# where the hole binds a variable assigned code of that shape, or a parameter of a function called with one; `$x: text`
+# (also symbol, list, block, int, number) only code of that kind. A phrase pattern (`$n beat`) matches each run of those
+# words in a longer phrase (of `x = 2 beats`, which the parser keeps as `(x = 2) beats`, the value), a statement
+# pattern also a block of just that statement, and a template of several statements `($a; $b)` takes the statement's
+# place. Rules go bottom-up, children first, each node rewritten once. A program's own rules apply to it; a standard
+# module's rules apply to every program mentioning their words but binding none itself, and one that fires brings its
+# module along with `use` (lib/channels.warp, lib/english.warp).
+# Rust twin: src/modules/rewrites.rs lower
+use "walk.warp"
+use "scope.warp"
+use "uses.warp"
+use "prelude_words.warp"
+
+rewrite_word = "rewrite"
+rewrite_line_start = "rewrite "
+where_word = "where"
+rule_hole_mark = "$"
+# the characters of a word in a rule's text besides letters and digits
+rule_word_marks = "_$"
+# the kinds a typed hole `$x: text` names
+hole_kinds = ["text", "symbol", "list", "block", "int", "number"]
+# the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
+std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
+
+# a rule: `where $hole = shape` its origin (ø both without one), `module` the standard module declaring it, else ""
+class Rule { pattern: any; template: any; hole: any; shape: any; module: text }
+
+# the standard modules whose rules fired during a rewrite
+global fired_modules = []
+
+# the program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out
+rewritten_program(program: any): any := {
+	rules = []
+	kept = []
+	for statement in statements_in(program) {
+		rule = rule_of(statement, "")
+		if rule == ø { kept += [statement] } else { rules += [rule] }
+	}
+	if #rules > 0 { program = separated(bracketed(kept, ""), ";") }
+	mentioned = word_set(symbol_words(program))
+	module_rules = []
+	for module in std_module_names {
+		source = file_text(std_module_path(module))
+		if source != ø and rule_needs(source).any(word => mentioned.has(word)) {
+			module_rules += module_rules_of(source, module).filter(rule => mentioned.has(needed_word(rule)))
+		}
+	}
+	if #module_rules > 0 {
+		scope = scope_of(program)
+		rules += module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(scope, word) or binds_as(scope, word, Meaning.Function)))
+	}
+	if #rules == 0 { return program }
+	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
+	fired_modules = []
+	program = bottom_up(program, n => rule_rewritten(n, rules, origins))
+	uses = []
+	for module in fired_modules {
+		statement = plain_node(parsed("use " + module))
+		if statement not in uses { uses += [statement] }
+	}
+	if #uses == 0 then program else separated(bracketed(uses + statements_in(program), ""), ";")
+}
+
+word_set(words: list): any := {
+	set = {}
+	for word in words { set[word] = yes }
+	set
+}
+
+# the word each rule of a module needs, read off its text: a program mentioning none parses no rules. The first word of
+# the origin's shape after `where … =`, else of the pattern
+rule_needs(source: text): list := {
+	if not source.contains(rewrite_line_start) { return [] }
+	needs = []
+	for line in source.split("\n") {
+		if line.starts_with(rewrite_line_start) {
+			rule = line[#rewrite_line_start ..]
+			parts = rule.split(" " + where_word + " ")
+			needing = if #parts > 1 then parts#2.split("=")#2 else rule.split("=>")#1
+			word = first_alphabetic_word(needing)
+			if word != "" { needs += [word] }
+		}
+	}
+	needs
+}
+
+# the first run of letters, digits, `_` and `$` starting with a letter
+first_alphabetic_word(written: text): text := {
+	start = 0
+	while start < #written {
+		end = start
+		while end < #written and (is_alphanumeric(written[end]) or rule_word_marks.contains(written[end])) { end += 1 }
+		if end > start and is_alpha(written[start]) { return written[start ..< end] }
+		start = end + 1
+	}
+	""
+}
+
+module_rules_of(source: text, module: text): list := statements_in(plain_node(parsed(source))).map(statement => rule_of(statement, module)).filter(rule => rule != ø)
+
+# the word a program must mention for the rule to fire: the first of its origin's shape, else of its pattern
+needed_word(rule: Rule): text := first_word_of(rule.shape ?? rule.pattern) ?? ""
+
+# `rewrite p => t` and `rewrite p => t where $c = shape`, as parser.warp reads them: the words before the arrow's key
+# start the pattern (`rewrite channel $name => …` reads as `rewrite channel ($name => …)`), the words after it continue
+# the template up to `where`, whose `=` holds only the shape's first word (`where $c = channel $name`)
+rule_of(statement: any, module: text): any := {
+	if not is_group(statement) or bracket_of(statement) != "" or separator_of(statement) != " " { return ø }
+	items = items_of(statement)
+	if #items < 2 or items#1 != symbol(rewrite_word) { return ø }
+	arrow_at = 0
+	for index in 1 ..< #items { if arrow_at == 0 and is_key(items[index], Op.Arrow) { arrow_at = index } }
+	if arrow_at == 0 { return ø }
+	arrow = items[arrow_at]
+	words = items[1 ..< arrow_at]
+	pattern = if #words == 0 then statement_pattern(key_of(arrow)) else rule_phrase(words_of_all(words + [key_of(arrow)]))
+	after = items[arrow_at + 1 ..]
+	where_at = #after
+	for index in 0 ..< #after { if where_at == #after and after[index] == symbol(where_word) { where_at = index } }
+	continued = after[0 ..< where_at]
+	template = statements_template(if #continued == 0 then value_of(arrow) else rule_phrase(words_of_all([value_of(arrow)] + continued)))
+	origin = after[where_at ..]
+	if #origin == 0 { return Rule(pattern, template, ø, ø, module) }
+	if #origin < 2 or not is_key(origin#2, Op.Assign) { return ø }
+	assignment = origin#2
+	more = origin[2 ..]
+	shape = if #more == 0 then value_of(assignment) else rule_phrase(words_of_all([value_of(assignment)] + more))
+	Rule(pattern, template, key_of(assignment), shape, module)
+}
+
+# `($a; $b)`: statements that take the rewritten statement's place
+statements_template(template: any): any := {
+	if is_group(template) and bracket_of(template) == "(" and separator_of(template) in statement_separators {
+		return separated(bracketed(items_of(template), ""), separator_of(template))
+	}
+	template
+}
+
+# `(for $x in $c $body)`: parentheses around the words of a statement only group them
+statement_pattern(pattern: any): any := {
+	if is_group(pattern) and (bracket_of(pattern) == "(" or bracket_of(pattern) == "") and separator_of(pattern) == " " and #pattern > 1 {
+		return rule_phrase(words_of_all(items_of(pattern)))
+	}
+	pattern
+}
+
+rule_phrase(words: list): any := List(words, Bracket.None, Separator.Space)
+
+# the words of a phrase, its unbracketed groups taken apart
+words_of(part: any): list := match part {
+	List(items, Bracket.None, Separator.Space): words_of_all(items)
+	_: [part]
+}
+words_of_all(parts: list): list := {
+	words = []
+	for part in parts { words += words_of(part) }
+	words
+}
+
+# `$x`: the hole's name, else ø
+rule_hole(n: any): any := {
+	if not (n is symbol) { return ø }
+	name = name_of(n)
+	if #name > 1 and name.starts_with(rule_hole_mark) then name else ø
+}
+
+# `$xs...`: the rest hole's name, else ø
+rest_hole_name(n: any): any := match n {
+	Key(start, op, end): { if (op == Op.Range or op == Op.To) and end == ø then rule_hole(start) else ø }
+	_: ø
+}
+
+# `$x: text`: [the hole, the kind of code it takes], else ø
+typed_hole(n: any): any := match n {
+	Key(hole, Op.Colon, kind): { if rule_hole(hole) != ø and kind is symbol and name_of(kind) in hole_kinds then [rule_hole(hole), name_of(kind)] else ø }
+	_: ø
+}
+
+is_hole_kind(code: any, kind: text): bool := {
+	if kind == "text" { return code is text }
+	if kind == "number" { return code is number }
+	if kind == "int" { return code is int }
+	if kind == "list" { return is_group(code) and bracket_of(code) == "[" }
+	if kind == "block" { return is_curly_group(code) }
+	code is symbol and rule_hole(code) == ø
+}
+
+# the pattern's words that are no holes
+literal_words(pattern: any): list := mentioned_names(pattern, []).filter(name => not name.starts_with(rule_hole_mark))
+
+first_word_of(pattern: any): any := {
+	if pattern is symbol { return if rule_hole(pattern) == ø then name_of(pattern) else ø }
+	for part in parts_of(pattern) {
+		word = first_word_of(part)
+		if word != ø { return word }
+	}
+	ø
+}
+
+# a pattern of words without a rest: it matches runs of a phrase
+is_run_pattern(pattern: any): bool := match pattern {
+	List(words, Bracket.None, Separator.Space): not words.any(word => rest_hole_name(word) != ø)
+	_: no
+}
+
+# the node rewritten by the first rule matching it, a statement sequence's statement sequences spliced in, a phrase's
+# runs rewritten
+rule_rewritten(n: any, rules: list, origins: list): any := {
+	if is_group(n) and separator_of(n) in statement_separators {
+		statements = []
+		for statement in n {
+			statements += if is_group(statement) and bracket_of(statement) == "" and separator_of(statement) in statement_separators then items_of(statement) else [statement]
+		}
+		n = group_like(n, statements)
+	} else if is_group(n) and #n > 0 {
+		runs = with_runs(items_of(n), rules, origins)
+		n = if bracket_of(n) == "" and separator_of(n) == " " and #runs == 1 then runs#1 else group_like(n, runs)
+	}
+	for index in 0 ..< #rules {
+		if not is_run_pattern(rules[index].pattern) {
+			result = rule_applied(rules[index], origins[index], n)
+			if result != ø { return result }
+		}
+	}
+	n
+}
+
+# the items with each run a phrase rule matches rewritten, left to right
+with_runs(items: list, rules: list, origins: list): list := {
+	at = 0
+	while at < #items {
+		found = run_at(items[at ..], rules, origins)
+		if found == ø {
+			at += 1
+		} else {
+			replaced = words_of(found#2)
+			items = items[0 ..< at] + replaced + items[at + found#1 ..]
+			at += #replaced
+		}
+	}
+	items
+}
+
+# [the length of a run starting the items that a phrase rule matches, its rewrite], else ø; a run starting with `x = v`
+# or `x: v` rewrites v
+run_at(items: list, rules: list, origins: list): any := {
+	for index in 0 ..< #rules {
+		rule = rules[index]
+		if is_run_pattern(rule.pattern) and #items >= #rule.pattern {
+			run = items[0 ..< #rule.pattern]
+			first = run#1
+			target = ø
+			if is_key(first, Op.Assign) or is_key(first, Op.Colon) {
+				target = first
+				run = [value_of(first)] + run[1 ..]
+			}
+			result = rule_applied(rule, origins[index], rule_phrase(run))
+			if result != ø {
+				return [#rule.pattern, if target == ø then result else Key(key_of(target), op_of(target), result)]
+			}
+		}
+	}
+	ø
+}
+
+# the rule's template for the node; a block of a statement the pattern matches keeps its block
+rule_applied(rule: Rule, origin: any, n: any): any := {
+	bound = {}
+	if rule_matches(rule.pattern, n, bound) and origin_holds(rule, origin, bound) { return fired(rule, rule_spliced(rule.template, bound)) }
+	if not (is_group(rule.pattern) and bracket_of(rule.pattern) == "" and is_curly_group(n)) { return ø }
+	bound = {}
+	statement = separated(bracketed(items_of(n), ""), separator_of(n))
+	if not (rule_matches(rule.pattern, statement, bound) and origin_holds(rule, origin, bound)) { return ø }
+	fired(rule, List(statements_in(rule_spliced(rule.template, bound)), Bracket.Curly, Separator.Semicolon))
+}
+
+fired(rule: Rule, result: any): any := {
+	if rule.module != "" { fired_modules += [rule.module] }
+	result
+}
+
+# `where $c = shape`: the hole binds a name of the variables assigned that shape
+origin_holds(rule: Rule, origin: any, bound: any): bool := {
+	if rule.shape == ø { return yes }
+	code = bound[name_of(rule.hole)]
+	code is symbol and origin.has(name_of(code))
+}
+
+# whether the code has the pattern's shape: a hole binds the subtree there, a repeated hole must be the same subtree, a
+# key has the same operator, a group the same bracket and length (a rest hole binds the items from there on), other
+# parts are equal
+rule_matches(pattern: any, code: any, bound: any): bool := {
+	hole = rule_hole(pattern)
+	if hole != ø { return hole_binding(hole, code, bound) }
+	typed = typed_hole(pattern)
+	if typed != ø { return is_hole_kind(code, typed#2) and hole_binding(typed#1, code, bound) }
+	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
+	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and items_match(items_of(pattern), items_of(code), bound) }
+	if code is key or is_group(code) { return no }
+	pattern == code
+}
+
+items_match(patterns: list, items: list, bound: any): bool := {
+	rest_at = ø
+	for index in 0 ..< #patterns { if rest_at == ø and rest_hole_name(patterns[index]) != ø { rest_at = index } }
+	if rest_at == ø { return each_matches(patterns, items, bound) }
+	after = #patterns - rest_at - 1
+	if #items < rest_at + after { return no }
+	rest_end = #items - after
+	each_matches(patterns[0 ..< rest_at], items[0 ..< rest_at], bound) and each_matches(patterns[rest_at + 1 ..], items[rest_end ..], bound) and hole_binding(rest_hole_name(patterns[rest_at]), rule_phrase(items[rest_at ..< rest_end]), bound)
+}
+
+each_matches(patterns: list, items: list, bound: any): bool := {
+	if #patterns != #items { return no }
+	for index in 0 ..< #patterns { if not rule_matches(patterns[index], items[index], bound) { return no } }
+	yes
+}
+
+hole_binding(name: text, code: any, bound: any): bool := {
+	if bound.has(name) { return bound[name] == code }
+	bound[name] = code
+	yes
+}
+
+# the template with each hole's code, a rest hole's items in its place
+rule_spliced(template: any, bound: any): any := {
+	hole = rule_hole(template)
+	if hole != ø and bound.has(hole) { return bound[hole] }
+	if template is key { return Key(rule_spliced(key_of(template), bound), op_of(template), rule_spliced(value_of(template), bound)) }
+	if not is_group(template) { return template }
+	items = []
+	for item in template {
+		rest = rest_hole_name(item)
+		items += if rest != ø and bound.has(rest) then items_of(bound[rest]) else [rule_spliced(item, bound)]
+	}
+	group_like(template, items)
+}
+
+# the variables assigned code of the shape, then the parameters of the functions called with one, until none is new
+names_assigned_shape(program: any, shape: any): any := {
+	names = {}
+	functions = {}
+	nodes = nodes_in(program)
+	for n in nodes {
+		if is_key(n, Op.Assign) and key_of(n) is symbol and rule_matches(shape, value_of(n), {}) { names[name_of(key_of(n))] = yes }
+		if is_key(n, Op.Define) and is_round(key_of(n)) and #key_of(n) > 0 {
+			head = items_of(key_of(n))
+			functions[head_word(head#1)] = head[1 ..].map(parameter => head_word(parameter))
+		}
+	}
+	growing = #names.keys > 0 and #functions.keys > 0
+	while growing {
+		growing = no
+		for n in nodes {
+			if is_round(n) and #n > 1 and n#1 is symbol and functions.has(name_of(n#1)) {
+				parameters = functions[name_of(n#1)]
+				arguments = items_of(n)[1 ..]
+				for index in 0 ..< min(#parameters, #arguments) {
+					argument = arguments[index]
+					if argument is symbol and names.has(name_of(argument)) and not names.has(parameters[index]) {
+						names[parameters[index]] = yes
+						growing = yes
+					}
+				}
+			}
+		}
+	}
+	names
+}
