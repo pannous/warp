@@ -110,13 +110,34 @@ bool_ops = {"==": 70, "!=": 71}
 # `xs.length`, `count xs`: `#xs`; a property also by count's other names, and `x.number` (not `number x`, a conversion)
 length_words = {length: yes, count: yes}
 counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
-# the map words read after a dot, `m.keys`, unless m has an entry of that name
 # `m.keys`, `t.chars`, `t.codepoints`: a member name naming a library word of one value, by itself or as a prelude alias,
-# is that word's call (a node's entry of that name first), as Rust's library_words.rs method_call; else ø
+# is that word's call (a node's entry of that name first, unless keeps_word), as Rust's library_words.rs method_call;
+# else ø
 member_word(name: text): any := {
 	word = library_words.get(unaliased(name)) ?? ""
 	if word in module.runtime and #module.runtime[word].signature.parameters == 1 then word else ø
 }
+# a map's own members (src/lowering/data/members.rs MAP_MEMBERS)
+map_members = ["keys", "values", "get", "count", "contains", "remove", "copy", "string"]
+# whether `x.name` is the word's call even when x has an entry of that name, as Rust's reads_entry_first: a map's own
+# member (`found.keys` of a map holding the entry "keys") or a word of a known result, which the code after it reads
+keeps_word(name: text, word: text): bool := name in map_members or module.runtime[word].signature.result not in ["", "any"]
+# whether the variable only ever holds map literals with that entry in the function: `n = {keys: 5}; n.keys` is its
+# own member 5, known as it compiles (Rust's OwnMember of a variable only holding object literals)
+holds_entry(body: Body, receiver: any, entry: text): bool := {
+	if not (receiver is symbol) { return no }
+	values = assigned_values(body.function.body, name_of(receiver))
+	#values > 0 and values.all(value => is_group(value) and bracket_of(value) == "{" and #value > 0 and value.all(is_map_entry) and value.any(item => entry_name(item) == entry))
+}
+# the values assigned to the name anywhere in n
+assigned_values(n: any, name: text): list := {
+	if type(n) is key and op_of(n) == "=" and key_of(n) == symbol(name) { return [value_of(n)] + assigned_values(value_of(n), name) }
+	if type(n) is key { return assigned_values(key_of(n), name) + assigned_values(value_of(n), name) }
+	values = []
+	if is_group(n) { for item in n { values += assigned_values(item, name) } }
+	values
+}
+entry_name(entry: any): text := if key_of(entry) is symbol then name_of(key_of(entry)) else "" + key_of(entry)
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list (Rust's node_bytes)
 byte_count_words = {bytecount: yes, byte_size: yes}
 def byte_size_code(value: any): list { runtime_call("node_bytes", [["node", boxed(value)]]) }
@@ -124,7 +145,7 @@ def byte_size_code(value: any): list { runtime_call("node_bytes", [["node", boxe
 characters = {text: yes, char: yes}
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
 equalities = {"==": yes, "!=": yes}
-identities = {"===": "==", "!==": "!="}
+identities = {"===": yes, "!==": yes}
 compiled_compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
 steps = {"++": "+", "--": "-"}
 smallest_int = -9223372036854775808
@@ -922,6 +943,8 @@ def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(body, a, b) }
 	if symbol == "#" and a#1 == "text" { return runtime_call("text_char", [a, whole_index(b)]) }
 	if symbol == "+" and a#1 == "list" and b#1 == "list" { return runtime_call("list_join", [a, b]) }
+	# a list takes any other value as its last item: `[1] + "a"` is [1 'a'] (runtime arithmetic.warp node_add)
+	if symbol == "+" and a#1 == "list" and b#1 != "node" { return runtime_call("list_join", [a, ["list", vector_code([boxed(b)])]]) }
 	textual = a#1 in characters or b#1 in characters
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
 	structured = a#1 == "list" or b#1 == "list" or a#1 == "node" or b#1 == "node"
@@ -980,16 +1003,18 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 }
 # `x == ø`, `x != ø` (a match's `ø:` case): ø and an empty list are nothing, as Rust's equality takes them
 def nothing_test(body: Body, symbol: text, n: any): list {
-	held_nothing = runtime_call("is_nothing", [["node", boxed(expression_code(body, n))]])
-	if symbol == "==" { return held_nothing }
-	["bool", condition(held_nothing) + [op.i32_eqz]]
+	asserted(symbol, runtime_call("is_nothing", [["node", boxed(expression_code(body, n))]]))
+}
+# `x === ø`, `x !== ø`: x is ø itself, the empty list not (== compares values, === also the kind, as Rust's)
+def identity_with_nothing(body: Body, symbol: text, n: any): list {
+	asserted(symbol, ["bool", boxed(expression_code(body, n)) + [op.ref_is_null]])
 }
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
 def equality(body: Body, symbol: text, a: any, b: any): list {
-	equal = runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]])
-	if symbol == "==" { return equal }
-	["bool", equal#2 + [op.i32_eqz]]
+	asserted(symbol, runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]]))
 }
+# the bool test as `==`, `===` ask it, negated for `!=`, `!==`
+def asserted(symbol: text, test: list): list := if symbol.starts_with("!") then ["bool", condition(test) + [op.i32_eqz]] else test
 # an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
 # operators without one take the floats
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod"}
@@ -1560,8 +1585,13 @@ def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 
 # `xs += e`: e's items appended to the list xs holds, in place, so every alias sees them; ø when xs holds no list
 appended(body: Body, target_name: any, addition: any): any := {
 	target = expression_code(body, target_name)
-	if target#1 == "list" { return runtime_call("list_append", [target, expression_code(body, addition)]) }
-	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, expression_code(body, addition)])) }
+	added = expression_code(body, addition)
+	# a list takes any other value than a list as one item: `xs = []; xs += 3` is [3]
+	if target#1 == "list" and added#1 != "list" and added#1 != "node" { added = ["list", vector_code([boxed(added)])] }
+	# `for w in words { xs += w }`: an addition known only at run time is its items or one item (runtime appended_items)
+	if target#1 == "list" and added#1 == "node" { added = runtime_call("appended_items", [added]) }
+	if target#1 == "list" { return runtime_call("list_append", [target, added]) }
+	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
 }
 # the statements in order, the value that of the last
@@ -1614,9 +1644,7 @@ def expression_code(body: Body, n: any): list {
 	if n is bool { return ["bool", [op.i32_const, if n then 1 else 0]] }
 	if n is number { return number_value(n) }
 	if n is text { return text_value(n) }
-	# `[]`, as plain_node keeps it or a view hands it: a list of no items, not ø (decision empty-is-not-missing)
-	if is_empty_list(n) or (is_group(n) and #n == 0 and bracket_of(n) == "[") { return ["list", vector_code([])] }
-	if n is ø { return ["node", [ref_null, gc.node]] }
+	if n === ø { return ["node", [ref_null, gc.node]] }
 	if n == symbol("break") { return loop_exit(body) }
 	if n == symbol("continue") { return loop_again(body) }
 	# `{ return ø }`: the block keeps a bare return, its ø no item of the group
@@ -1873,7 +1901,10 @@ def key_expression(body: Body, n: any): list {
 	}
 	if operator == "." and right is symbol and member_word(name_of(right)) != ø {
 		word = member_word(name_of(right))
-		return field_or_word(body, expression_code(body, left), name_of(right), value => runtime_call(word, [value]))
+		value = expression_code(body, left)
+		if holds_entry(body, left, name_of(right)) { return field_read(body, value, name_of(right)) }
+		if keeps_word(name_of(right), word) { return runtime_call(word, [value]) }
+		return field_or_word(body, value, name_of(right), receiver => runtime_call(word, [receiver]))
 	}
 	if operator == "." and right is symbol and name_of(right) in byte_count_words { return byte_size_code(expression_code(body, left)) }
 	# `m.a`: the entry a of the map (or instance) m, as Rust lowers it to `m#("a"+1)`
@@ -1905,11 +1936,11 @@ def key_expression(body: Body, n: any): list {
 	if operator == "not" and left == ø { return ["bool", condition(expression_code(body, right)) + [op.i32_eqz]] }
 	# `√x`: the float root, as Rust's emitter gives it
 	if operator == "√" and left == ø { return ["float", converted(expression_code(body, right), "float") + [wasm_instructions["f64.sqrt"]]] }
-	if left == ø or right == ø {
-		# `x === ø` is `x == ø`: ø is one value, as Rust's identity of it
-		equality = if operator in identities then identities[operator] else operator
-		if equality in equalities { return nothing_test(body, equality, if left == ø then right else left) }
-		return refuse("the operator " + operator + " with nothing " + (if left == ø then "before" else "after") + " it")
+	if left === ø or right === ø {
+		other = if left === ø then right else left
+		if operator in identities { return identity_with_nothing(body, operator, other) }
+		if operator in equalities { return nothing_test(body, operator, other) }
+		return refuse("the operator " + operator + " with nothing " + (if left === ø then "before" else "after") + " it")
 	}
 	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }
 	operation_code(body, operator, expression_code(body, left), expression_code(body, right))
