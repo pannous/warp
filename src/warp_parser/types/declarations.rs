@@ -226,11 +226,8 @@ impl WarpParser {
 		let blanks = self.blanks_ahead();
 		let start = if self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) != '=' {
 			blanks + 1
-		} else if (0..IMPLEMENTS_WORD.len())
-			.all(|i| self.peek_char(blanks + i) == IMPLEMENTS_WORD.as_bytes()[i] as char)
-			&& !is_identifier_char(self.peek_char(blanks + IMPLEMENTS_WORD.len()))
-		{
-			blanks + IMPLEMENTS_WORD.len()
+		} else if self.keyword_at(blanks, IMPLEMENTS_WORD) {
+			blanks + IMPLEMENTS_WORD.chars().count()
 		} else {
 			return None;
 		};
@@ -274,9 +271,7 @@ impl WarpParser {
 	/// `class` or `struct` after blanks, the word a class modifier stands before
 	pub(crate) fn class_keyword_after_blanks(&self) -> Option<&'static str> {
 		let blanks = self.blanks_ahead();
-		TYPE_DECLARATION_WORDS.into_iter().find(|keyword| {
-			self.text_at(blanks, keyword) && !is_identifier_char(self.peek_char(blanks + keyword.len()))
-		})
+		TYPE_DECLARATION_WORDS.into_iter().find(|keyword| self.keyword_at(blanks, keyword))
 	}
 
 	/// `constant x`: a name after one or more blanks

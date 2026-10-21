@@ -254,7 +254,12 @@ pub(in crate::analyzer) fn check_declared_types(
 		Node::Key(target, Op::Assign | Op::Define, value)
 			if super::super::variables::function_definition_body(node).is_some() =>
 		{
-			check_declared_types(value, &mut with_parameters_declared(target, declared), &mut Scope::new(), classes)
+			check_declared_types(
+				value,
+				&mut with_parameters_declared(target, declared),
+				&mut parameters_scope(target),
+				classes,
+			)
 		}
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			assignment_checked(node, target, value, declared, lists, classes)
@@ -344,6 +349,23 @@ pub(super) fn with_parameters_declared(head: &Node, declared: &HashMap<String, S
 		};
 	}
 	inner
+}
+
+/// The parameters of a head `f(x: int, xs: texts)` declared with their types, so a list of them (`[x, x]`) has their
+/// element type: an int list takes `[x, x]`
+fn parameters_scope(head: &Node) -> Scope {
+	let mut scope = Scope::new();
+	let Node::List(items, _, _) = head.drop_meta() else {
+		return scope;
+	};
+	for (name, type_name) in items.iter().skip(1).filter_map(|parameter| declaring_name_and_type(parameter.drop_meta()))
+	{
+		let annotation = Node::Symbol(type_name);
+		if let Some(kind) = annotated_kind(&annotation) {
+			scope.define(name, Some(Box::new(annotation)), kind);
+		}
+	}
+	scope
 }
 
 /// `a, b = 2.5, 6` and `a, b = [2.5, 6]`: each value written for a declared name must fit its type, as in `a = 2.5`

@@ -276,7 +276,7 @@ pub(super) fn name_map(names: &mut Vec<(u32, &str)>) -> NameMap {
 	names.dedup_by_key(|(idx, _)| *idx);
 	let mut map = NameMap::new();
 	for (idx, name) in names.iter() {
-		map.append(*idx, name);
+		map.append(*idx, crate::lowering::shadowing_bindings::written_name(name));
 	}
 	map
 }

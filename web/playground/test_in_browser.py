@@ -955,34 +955,56 @@ def wait_for_isolation():
 
 
 class MemoryWatch:
-	"""the memory of this process's cgroup v2 (on the dry run's server: the scope that holds the browser too) after
-	each example, so a tour that grows it names its biggest steps; silent where there is no cgroup v2 (macOS)"""
+	"""the processes' own memory (anon: without the page cache) of this process's cgroup v2, on the dry run's server the
+	scope that holds the browser too, after each example, so a tour that grows it names its biggest steps; silent where
+	there is no cgroup v2 (macOS)"""
 	def __init__(self):
 		try:
 			with open("/proc/self/cgroup") as entries:
 				path = next(line.split("::", 1)[1].strip() for line in entries if line.startswith("0::"))
 			self.folder = f"/sys/fs/cgroup{path}"
-			self.last = self.read("memory.current")
+			self.last = self.anon()
 		except (OSError, StopIteration, ValueError):
 			self.folder = None
 		self.growths = []
+		self.at_peak = []
 	def read(self, name):
 		with open(os.path.join(self.folder, name)) as value:
-			return int(value.read())
+			return value.read()
+	def anon(self):
+		return next(int(line.split()[1]) for line in self.read("memory.stat").splitlines() if line.startswith("anon "))
 	def after(self, name):
 		if self.folder:
-			now = self.read("memory.current")
+			now = self.anon()
+			if now > max((then for _, then, _ in self.growths), default=0):
+				self.at_peak = self.processes()
 			self.growths.append((now - self.last, now, name))
 			self.last = now
 	def report(self):
 		if not self.folder:
 			return
 		try:
-			peak = f"peak {self.read('memory.peak') >> 20} MB, "
+			peak = f", page cache included {int(self.read('memory.peak')) >> 20} MB"
 		except OSError:
 			peak = ""  # kernels before 5.19 keep no peak
+		highest = max((now for _, now, _ in self.growths), default=self.last)
 		largest = sorted(self.growths, reverse=True)[:MEMORY_GROWTHS_SHOWN]
-		print(f"\nmemory: {peak}now {self.last >> 20} MB; grew most: " + ", ".join(f"{name} +{growth >> 20} MB (to {now >> 20})" for growth, now, name in largest))
+		print(f"\nmemory: peak {highest >> 20} MB{peak}, at the end {self.last >> 20} MB; grew most: " + ", ".join(f"{name} +{growth >> 20} MB (to {now >> 20})" for growth, now, name in largest))
+		print("memory at the peak, by process: " + ", ".join(f"{kind} {resident >> 10} MB" for resident, kind in self.at_peak[:MEMORY_GROWTHS_SHOWN]))
+	def processes(self):
+		"""the cgroup's processes, largest resident first: (KB, kind), a Chrome process by its --type (renderer, gpu-process …)"""
+		found = []
+		for pid in self.read("cgroup.procs").split():
+			try:
+				with open(f"/proc/{pid}/status") as status:
+					resident = next((int(line.split()[1]) for line in status if line.startswith("VmRSS:")), 0)
+				with open(f"/proc/{pid}/cmdline") as command:
+					words = command.read().replace("\0", " ").split()  # Chrome rewrites its arguments as one
+			except OSError:
+				continue  # ended meanwhile
+			kind = next((word.split("=", 1)[1] for word in words if word.startswith("--type=")), os.path.basename(words[0]))
+			found.append((resident, kind))
+		return sorted(found, reverse=True)
 
 
 def check_examples(names, page_url=None, site=None):
