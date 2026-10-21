@@ -43,3 +43,16 @@ fn a_value_either_an_instance_or_a_number_keeps_what_it_is() {
 	is!("class V{x:int}; r = if 1 < 0 then V(7) else 5; r + 1", 6);
 	is!("r = if 1 > 0 then {a:1} else 5; r.a", 1);
 }
+
+// card class-operator: an operator defined outside its class, its first operand typed by the class, is that class's
+// operator as one written in the class body (one method form); `infix operator +(…)` works with a got-it note
+#[test]
+fn an_operator_defined_outside_its_class() {
+	let vec = "class Vec{x:int; y:int}; ";
+	is!(&format!("{vec}+(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); (Vec(1, 2) + Vec(3, 4)).y"), 6);
+	is!(&format!("{vec}plus(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); (Vec(1, 2) + Vec(3, 4)).x"), 4);
+	is!(&format!("{vec}infix operator +(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); (Vec(1, 2) + Vec(3, 4)).x"), 4);
+	is!(&format!("{vec}infix +(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); (Vec(1, 2) + Vec(3, 4)).x"), 4);
+	is!(&format!("{vec}*(v: Vec, k: int) := Vec(v.x * k, v.y * k); (Vec(1, 2) * 3).y"), 6);
+	is!(&format!("{vec}+(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); 1 + 2"), 3);
+}
