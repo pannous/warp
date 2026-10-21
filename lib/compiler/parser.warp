@@ -844,11 +844,14 @@ THEN_CLOSER = "end else"
 // Rust twin: blocks.rs at_block_close
 def closes_block(p: Parser, closer: text): bool := p.stops_at_end and (keyword_at(p, "end") or (closer == THEN_CLOSER and keyword_at(p, "else")))
 
-// The control words that guard the statement before them: `a = 2 if c`, `a = 2 unless c`, `x++ while c`
-// Rust twin: spellings.rs (if, unless, while as infix operators), lookahead.rs operator_in_context
-TRAILING_GUARD_WORDS = ["if", "unless", "while"]
-// The trailing guard word at the parser's position, else ""; an `if` with its own `then` or block starts a branch
+// The control words that guard the statement before them: `a = 2 if c`, `a = 2 unless c`, `x++ while c`, `x++ until c`
+// Rust twin: spellings.rs (if, unless, while as infix operators), lookahead.rs operator_in_context, conditions.rs
+// NEGATED_CONTROL_WORDS
+TRAILING_GUARD_WORDS = ["if", "unless", "while", "until"]
+// The trailing guard word at the parser's position, else ""; an `if` with its own `then` or block starts a branch, and
+// in a loop's iterable `until` is the range's
 def trailing_guard_at(p: Parser): text {
+	if p.iterable and iterable_operator_at(p).length > 0 { return "" }
 	for word in TRAILING_GUARD_WORDS {
 		if keyword_at(p, word) and (word != "if" or not condition_has_branch(p, p.at + word.length)) { return word }
 	}
@@ -891,11 +894,12 @@ def condition_has_branch(p: Parser, at: int): bool {
 	spaced_brace_open
 }
 
-// `x if c` is `if c then x`, `x unless c` is `if not c then x`, `x while c` is `while c do x`
+// `x if c` is `if c then x`, `x unless c` is `if not c then x`, `x while c` is `while c do x`, `x until c` is
+// `while not c do x`
 // Rust twin: conditions.rs guarded_statement
 def guarded_statement(statement: Node, word: text, condition: Node): Node := {
-	guard = if word == "unless" then Key(ø, Op.Not, condition) else condition
-	if word == "while" then Key(Key(ø, Op.While, guard), Op.Do, statement) else Key(Key(ø, Op.If, guard), Op.Then, statement)
+	guard = if word == "unless" or word == "until" then Key(ø, Op.Not, condition) else condition
+	if word == "while" or word == "until" then Key(Key(ø, Op.While, guard), Op.Do, statement) else Key(Key(ø, Op.If, guard), Op.Then, statement)
 }
 
 // `pattern: match v {…}`: the arm's value is the whole inner match, its subject and its cases on the line, though `:`
@@ -1154,6 +1158,14 @@ SYMBOL_OPERATORS = [["...", "to"], ["..=", "to"], ["===", "==="], ["!==", "!=="]
 ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
 // The operators written as words, each with its canonical name
 WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "is"], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"], ["upto", ".."]]
+// The words that are operators in a loop's iterable alone: Kotlin's `for i in 0 until n` (elsewhere `until` guards)
+// Rust twin: lookahead.rs operator_in_context (in_for_header)
+ITERABLE_WORD_OPERATORS = [["until", ".."]]
+// The iterable's own operator at the parser's position as [written, canonical], else []
+def iterable_operator_at(p: Parser): list {
+	for op in ITERABLE_WORD_OPERATORS { if keyword_at(p, op#1) { return op } }
+	[]
+}
 
 // The operator at the parser's position as [written, canonical], else []
 // (each text read is a walk from its start, card text-costs: the character is read once and picks the candidates)
@@ -1164,6 +1176,7 @@ def operator_at(p: Parser): list {
 		for op in WORD_OPERATORS {
 			if op#1[0] == c and keyword_at(p, op#1) and not (p.in_branch and op#1 == "else") { return op }
 		}
+		if p.iterable and iterable_operator_at(p).length > 0 { return iterable_operator_at(p) }
 		return aliased_operator_at(p)
 	}
 	if starts_at(p.code, "?:", p.at) or starts_at(p.code, "//", p.at) { return [] }
