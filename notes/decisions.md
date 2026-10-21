@@ -7,7 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
-- self-compiled-parity (user): before the Rust build is replaced, the self-compiled compiler.warp must give the same results on the whole suite under `warp pure` as the Rust-compiled one, and reach a fixpoint (the self-compiled compiler compiling itself gives the same module); only then the default switches (card self-compiled-parity).
+- self-compiled-parity (user): the parity check is off for now: switching to the self-compiled compiler.warp needs only that more tests pass under `warp pure` than before, no suite parity with the Rust-compiled one and no bitwise fixpoint yet.
 - pipeline-first (user): the main focus is the self-hosted compiler pipeline (parser → lowering → analysis → emitter in warp, `warp pure`); fixes for library user modules (sound, dates, extrema …) are normal priority, not Now/express, unless they break the pipeline.
 - quality-before-gap (user, at 49/116 lib files pure-compiled): raise the warp compiler's code quality before closing the final gap: the beautify cards (magic-numbers, function-signature, typed-compiler front and back) go first; gap cards (runtime-word-calls and the like) continue only where they don't touch the same lines, preferably on the cleaned-up code.
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
