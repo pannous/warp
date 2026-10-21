@@ -623,13 +623,29 @@ pub(crate) fn stage_key(program: &str) -> Option<String> {
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
 	hasher.update(format!("{}\n{settings:?}\n{program}\n", env!("WARP_SOURCE")));
+	hash_library(&mut hasher);
+	Some(crate::extensions::hex_text(&hasher.finalize()))
+}
+
+/// The fingerprint of lib/: every file with its path inside lib/, the same for an identical lib/ elsewhere
+#[cfg(feature = "native")]
+pub(crate) fn library_fingerprint() -> String {
+	use sha2::{Digest, Sha256};
+	let mut hasher = Sha256::new();
+	hash_library(&mut hasher);
+	crate::extensions::hex_text(&hasher.finalize())
+}
+
+#[cfg(feature = "native")]
+fn hash_library(hasher: &mut sha2::Sha256) {
+	use sha2::Digest;
+	let library = library();
 	let mut files: Vec<PathBuf> = files_below(library.to_path_buf());
 	files.sort();
 	for file in files {
 		hasher.update(format!("{}\n", file.strip_prefix(library).unwrap_or(&file).display()));
 		hasher.update(std::fs::read(&file).unwrap_or_default());
 	}
-	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
 /// The files below `folder`, at any depth

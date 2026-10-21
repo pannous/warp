@@ -22,7 +22,8 @@ fn files_below(path: &std::path::Path) -> Vec<std::path::PathBuf> {
 	if !path.is_dir() {
 		return vec![path.to_path_buf()];
 	}
-	let mut entries: Vec<_> = std::fs::read_dir(path).into_iter().flatten().flatten().map(|entry| entry.path()).collect();
+	let mut entries: Vec<_> =
+		std::fs::read_dir(path).into_iter().flatten().flatten().map(|entry| entry.path()).collect();
 	entries.sort();
 	entries.iter().flat_map(|entry| files_below(entry)).collect()
 }
@@ -39,7 +40,8 @@ fn embed_source_fingerprint() {
 			std::fs::read(&file).unwrap_or_default().hash(&mut hasher);
 		}
 	}
-	let mut features: Vec<String> = std::env::vars().map(|(name, _)| name).filter(|name| name.starts_with("CARGO_FEATURE_")).collect();
+	let mut features: Vec<String> =
+		std::env::vars().map(|(name, _)| name).filter(|name| name.starts_with("CARGO_FEATURE_")).collect();
 	features.sort();
 	features.hash(&mut hasher);
 	println!("cargo:rustc-env=WARP_SOURCE={:016x}", hasher.finish());
