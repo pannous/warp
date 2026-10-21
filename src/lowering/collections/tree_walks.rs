@@ -128,7 +128,7 @@ fn with_rule_sets(node: Node, walkers: &RefCell<Vec<Node>>) -> Node {
 	let name = temporary(RULES_WORD, number);
 	walkers.borrow_mut().extend(rule_set_walker(&name, number, &rules));
 	let parameter = Node::Symbol(temporary(NODE, number));
-	key(parameter.clone(), Op::FatArrow, call(&name, vec![parameter]))
+	key(parameter.clone(), Op::Arrow, call(&name, vec![parameter]))
 }
 
 /// Whether `statement` is `name = rules {…}`, whose walker it adds
@@ -258,7 +258,7 @@ fn walker(number: usize, words: &[Node]) -> Node {
 	let own_names = own_names(&walk, number);
 	match words {
 		[_, pattern, _, replacement] => {
-			replacer(&own_names, vec![key(pattern.clone(), Op::FatArrow, replacement.clone())])
+			replacer(&own_names, vec![key(pattern.clone(), Op::Arrow, replacement.clone())])
 		}
 		[_, pattern] => {
 			filled(FINDER, &own_names, &[(PATTERN, pattern), (RESULT, &found_result(pattern, &own_names[0].1))])
@@ -285,7 +285,9 @@ fn rule_set_walker(walk: &str, number: usize, rules: &[Node]) -> Vec<Node> {
 		)
 	};
 	let arms = rules.iter().map(|rule| match rule.drop_meta() {
-		Node::Key(pattern, op @ (Op::FatArrow | Op::Colon), result) => key(*pattern.clone(), *op, walked(rule, result)),
+		Node::Key(pattern, op @ (Op::Arrow | Op::FatArrow | Op::Colon), result) => {
+			key(*pattern.clone(), *op, walked(rule, result))
+		}
 		other => other.clone(),
 	});
 	let arms = arms.collect();
@@ -295,7 +297,7 @@ fn rule_set_walker(walk: &str, number: usize, rules: &[Node]) -> Vec<Node> {
 /// The replacing walker whose match holds `arms`, then `_ => BUILT`
 fn replacer(own_names: &[(&str, Node)], mut arms: Vec<Node>) -> Node {
 	let built = &own_names.iter().find(|(placeholder, _)| *placeholder == BUILT).expect("BUILT is a placeholder").1;
-	arms.push(key(Node::symbol("_"), Op::FatArrow, built.clone()));
+	arms.push(key(Node::symbol("_"), Op::Arrow, built.clone()));
 	crate::welcome_forms::lower_match_arms(with_arms(filled(REPLACER, own_names, &[]), &arms))
 }
 
