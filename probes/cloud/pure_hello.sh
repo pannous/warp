@@ -13,5 +13,6 @@ actual=$(main --no-wait --pure-hello "${expected[0]}" "${expected[1]}")
 	printf 'expected:\n%s\nactual:\n%s\n' "$(printf '%s\n' "${expected[@]}")" "$actual"
 	exit 1
 }
+[[ --config =~ ^($CARGO_FLAGS_WITH_VALUE)$ ]] || { echo "pure hello cloud preset probe: FAIL, --config is parsed as a filter"; exit 1; }
 rejected=$(main --no-wait --pure-hello "${expected[0]}" "${expected[1]}" another-test 2>&1 || true)
 [[ "$rejected" == *"does not take filters"* ]] || { echo "pure hello cloud preset probe: FAIL, extra filters accepted"; exit 1; }
