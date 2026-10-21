@@ -92,6 +92,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		context.fast_functions.clear();
 	});
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
+	let program = with_own_aliases(program, &own_names);
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
 	loader.program_words = crate::compiler::phase_times::timed("resolve: program words", || program_words(&program));
@@ -130,6 +131,20 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		});
 	});
 	resolved.unwrap_or_else(|failure| failure)
+}
+
+/// The program's own alias lines (`alias pw = power`, wiki/alias.md) read as a used module's: taken out, each alias
+/// naming its word wherever the program declares nothing of that name (lib/math.warp's `exp` stays its own)
+fn with_own_aliases(program: Node, own_names: &[String]) -> Node {
+	if !statements_of(&program).iter().any(|statement| word_alias(statement).is_some()) {
+		return program;
+	}
+	let (alias_lines, kept): (Vec<Node>, Vec<Node>) =
+		statements(program).into_iter().partition(|statement| word_alias(statement).is_some());
+	let aliases: Vec<(String, String)> =
+		alias_lines.iter().filter_map(word_alias).filter(|(alias, _)| !own_names.contains(alias)).collect();
+	let aliases: Vec<(&str, &str)> = aliases.iter().map(|(alias, word)| (alias.as_str(), word.as_str())).collect();
+	with_std_aliases(crate::node::sequence(kept), &aliases)
 }
 
 /// The modules a program `use`s and the implicit ones it needs (`play` → sound): their classes go in front alike, the

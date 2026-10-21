@@ -41,6 +41,7 @@ mod test_package_tools;
 mod test_packages;
 mod test_prelude_own_names; // card lib-math
 mod test_prelude_shadowing; // card program-own
+mod test_program_aliases; // card module-alias
 #[cfg(feature = "native")]
 mod test_program_arguments; // card wasm-args
 mod test_program_variable_beside_module; // card program-var-leaks
