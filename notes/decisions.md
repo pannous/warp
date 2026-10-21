@@ -7,6 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
+- revert-first (user, standing permission): when main's pipeline (`warp pure hello`) breaks and the suspect merge is known, the Integrator reverts it at once without asking and its owner re-lands it fixed (notes/agents/integrator.md); the only exception to never-revert-unprompted.
 - self-compiled-parity (user): the parity check is off for now: switching to the self-compiled compiler.warp needs only that more tests pass under `warp pure` than before, no suite parity with the Rust-compiled one and no bitwise fixpoint yet.
 - pipeline-first (user): the main focus is the self-hosted compiler pipeline (parser → lowering → analysis → emitter in warp, `warp pure`); fixes for library user modules (sound, dates, extrema …) are normal priority, not Now/express, unless they break the pipeline.
 - quality-before-gap (user, at 49/116 lib files pure-compiled): raise the warp compiler's code quality before closing the final gap: the beautify cards (magic-numbers, function-signature, typed-compiler front and back) go first; gap cards (runtime-word-calls and the like) continue only where they don't touch the same lines, preferably on the cleaned-up code.
