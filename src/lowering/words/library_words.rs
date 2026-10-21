@@ -416,7 +416,7 @@ pub fn lower(node: Node) -> Node {
 	let call_results = call_results(&node, &context);
 	let times = crate::time::time_variables(&node);
 	let entry_names = entry_names(&node);
-	Lowering {
+	let node = Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
 		functions,
@@ -432,7 +432,9 @@ pub fn lower(node: Node) -> Node {
 		error_classes: crate::lowering::error_classes::ErrorClasses::of(&node),
 		temporaries: Counter::default(),
 	}
-	.expand(node)
+	.expand(node);
+	// `count x.bytes` is `byte_size(x)`, once x.bytes is the prelude call
+	lower_byte_counts(node)
 }
 
 /// The variables assigned what a user function returns (`result = parse_json(text)`): any may hold an object
