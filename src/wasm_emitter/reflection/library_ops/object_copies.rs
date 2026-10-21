@@ -177,7 +177,8 @@ impl WasmGcEmitter {
 	}
 
 	/// field_set_in_place(fields, name, value) -> found: the entry `name:…` among an object's fields (one entry, or a
-	/// cons list of them) gets the value in place
+	/// cons list of them) gets the value in place. No list's links or count change, so the list cursors stay: a loop
+	/// setting `p.at` and reading `p.items[p.at]` walks on from the last read (parser.warp, card list-field)
 	pub(super) fn emit_field_set_in_place(&mut self) {
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
@@ -187,7 +188,6 @@ impl WasmGcEmitter {
 			vec![ValType::I32],
 			vec![nullable, ValType::I64],
 			|s, f| {
-				Self::emit_list(f, &s.forget_list_cursor_keeping_map_indexes());
 				let (cells, name, value, entry, kind) = (0, 1, 2, 3, 4);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
