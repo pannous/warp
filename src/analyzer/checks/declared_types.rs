@@ -351,18 +351,24 @@ pub(super) fn with_parameters_declared(head: &Node, declared: &HashMap<String, S
 	inner
 }
 
-/// The parameters of a head `f(x: int, xs: texts)` declared with their types, so a list of them (`[x, x]`) has their
-/// element type: an int list takes `[x, x]`
+/// The parameters of a head `f(x: int, xs: texts, y)` declared with their types, so a list of them (`[x, x]`) has their
+/// element type: an int list takes `[x, x]`; an untyped one holds a Node, its value checked when it runs (P204)
 fn parameters_scope(head: &Node) -> Scope {
 	let mut scope = Scope::new();
 	let Node::List(items, _, _) = head.drop_meta() else {
 		return scope;
 	};
-	for (name, type_name) in items.iter().skip(1).filter_map(|parameter| declaring_name_and_type(parameter.drop_meta()))
-	{
-		let annotation = Node::Symbol(type_name);
-		if let Some(kind) = annotated_kind(&annotation) {
-			scope.define(name, Some(Box::new(annotation)), kind);
+	for parameter in items.iter().skip(1).map(Node::drop_meta) {
+		match (declaring_name_and_type(parameter), parameter) {
+			(Some((name, type_name)), _) => {
+				let annotation = Node::Symbol(type_name);
+				let kind = annotated_kind(&annotation).unwrap_or(Kind::Empty);
+				scope.define(name, Some(Box::new(annotation)), kind);
+			}
+			(None, Node::Symbol(name)) => {
+				scope.define(name.clone(), None, Kind::Empty);
+			}
+			_ => {}
 		}
 	}
 	scope

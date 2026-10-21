@@ -14,7 +14,7 @@ use super::one_entry_maps::MAP_OF_ENTRY;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
-use crate::warp_parser::WrittenIndex;
+use crate::warp_parser::written_index;
 use std::collections::HashSet;
 
 /// The word that makes a key of a number known only at run time
@@ -212,17 +212,5 @@ fn key_text(key: Node) -> Node {
 		Node::Text(_) | Node::Char(_) => key,
 		Node::Number(number) => Node::Text(number.to_string()),
 		_ => call(KEY_TEXT, vec![key]),
-	}
-}
-
-fn written_index(index: &Node) -> Option<crate::extensions::numbers::Number> {
-	match index {
-		Node::Meta { data, node } => match data.as_ref() {
-			Node::Data(dada) => {
-				dada.downcast_ref::<WrittenIndex>().map(|WrittenIndex(number)| *number).or_else(|| written_index(node))
-			}
-			_ => written_index(node),
-		},
-		_ => None,
 	}
 }

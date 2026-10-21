@@ -43,10 +43,10 @@ sum(xs: list): element of xs from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
-puts(t: text): int from emitter
-puti(n: int): int from emitter
-putl(n: int): int from emitter
-putf(x: float): int from emitter
+puts(t: text): nothing from emitter
+puti(n: int): nothing from emitter
+putl(n: int): nothing from emitter
+putf(x: float): nothing from emitter
 fetch(url: text, options...): text from emitter
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
 // over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
