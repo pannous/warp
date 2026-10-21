@@ -4,7 +4,8 @@
 //! Only top-level functions defined once, whose parameter is only called or passed on, and only names no assignment,
 //! parameter or one-parameter lambda binds too (a loop variable or a destructured name of the same name is not looked
 //! for: a call's head is the function anyway); a copy's own calls are specialised in turn (`fold(f, xs) := … fold(f,
-//! rest)`), up to a cap.
+//! rest)`), up to a cap. A library word the program doesn't bind itself is passed so too: `each(abs, n)` adds
+//! `each·abs(n)`, which calls abs as written code does (card specialise-library-functions).
 
 use super::inlining::renamed_names;
 use super::nodes::{children_rewritten, key};
@@ -42,14 +43,19 @@ impl Definition {
 		key(Node::List(head.collect(), Bracket::Round, Separator::None), self.op, self.body.clone())
 	}
 
-	/// The copy of this function for the function `passed` given as its parameter at `index`
-	fn specialised(&self, index: usize, passed: &str) -> Definition {
+	/// The copy of this function for the function `passed` given as its parameter at `index`; a library word is
+	/// called as the lambda it would become calls it (function_values.rs library_word_lambda)
+	fn specialised(&self, index: usize, passed: &str, is_library_word: bool) -> Definition {
 		let mut params = self.params.clone();
 		let param = params.remove(index);
+		let body = match is_library_word {
+			true => library_word_called(self.body.clone(), &param, passed),
+			false => self.body.clone(),
+		};
 		Definition {
 			name: copy_name(&self.name, passed),
 			params,
-			body: renamed_names(self.body.clone(), &HashSet::from([param]), &|_| passed.to_string()),
+			body: renamed_names(body, &HashSet::from([param]), &|_| passed.to_string()),
 			op: self.op,
 		}
 	}
@@ -64,6 +70,34 @@ impl Definition {
 		});
 		used && !other_use
 	}
+}
+
+/// Each call `param(a, b)` as the library word's own call `word(a, b)` (`abs x` an operator's)
+fn library_word_called(node: Node, param: &str, word: &str) -> Node {
+	match node {
+		Node::List(items, Bracket::Round, Separator::None)
+			if items.first().is_some_and(|head| head.is_symbol(param)) =>
+		{
+			let arguments = items.into_iter().skip(1).map(|item| library_word_called(item, param, word)).collect();
+			crate::closures::word_applied(word, arguments)
+		}
+		other => children_rewritten(other, |child| library_word_called(child, param, word)),
+	}
+}
+
+/// `abs` given as a function, the parser's bare operator `‖` that ambiguous_forms.rs operator_values made the lambda
+/// `value => ‖value`: its word
+fn operator_word(argument: &Node) -> Option<&'static str> {
+	let Node::Key(parameter, Op::Arrow, body) = argument.drop_meta() else {
+		return None;
+	};
+	let Node::Key(nothing, op, operand) = body.drop_meta() else {
+		return None;
+	};
+	let applied =
+		nothing.is_nothing() && operand.drop_meta() == parameter.drop_meta() && parameter.symbol_name().is_some();
+	let words = crate::warp_parser::PREFIX_OPERATOR_WORDS.iter();
+	words.filter(|_| applied).find(|(_, word_op)| word_op == op).map(|(word, _)| *word)
 }
 
 fn copy_name(function: &str, passed: &str) -> String {
@@ -110,6 +144,8 @@ struct Specialiser {
 	definitions: HashMap<String, Definition>,
 	/// The functions a call may pass by name: defined once at the top level, their names bound nowhere else
 	passable: HashSet<String>,
+	/// Every name the program defines or binds: a library word of such a name is not the library's
+	own_names: HashSet<String>,
 	/// The copies made, in order, each after the function it copies
 	copies: Vec<(String, Definition)>,
 }
@@ -142,22 +178,29 @@ impl Specialiser {
 		if arguments.len() != function.params.len() {
 			return None;
 		}
-		let (index, passed) = arguments.iter().enumerate().find_map(|(index, argument)| {
-			let passed = argument.symbol_name().filter(|name| self.passable.contains(*name))?;
+		let (index, passed, is_library_word) = arguments.iter().enumerate().find_map(|(index, argument)| {
+			let passed = argument.symbol_name().or_else(|| operator_word(argument))?;
+			let is_library_word = !self.passable.contains(passed) && self.is_library_word(passed);
 			let free = !function.params.iter().any(|param| param == passed);
-			(free && function.takes_function_at(index)).then(|| (index, passed.to_string()))
+			let passable = self.passable.contains(passed) || is_library_word;
+			(passable && free && function.takes_function_at(index))
+				.then(|| (index, passed.to_string(), is_library_word))
 		})?;
 		let name = copy_name(&function.name, &passed);
 		if !self.definitions.contains_key(&name) {
 			if self.copies.len() >= MAX_COPIES {
 				return None;
 			}
-			let copy = function.specialised(index, &passed);
+			let copy = function.specialised(index, &passed, is_library_word);
 			let original = self.original_of(&function.name);
 			self.definitions.insert(name.clone(), copy.clone());
 			self.copies.push((original, copy));
 		}
 		Some((index, name))
+	}
+
+	fn is_library_word(&self, name: &str) -> bool {
+		!self.own_names.contains(name) && crate::lowering::function_values::library_function_arity(name).is_some()
 	}
 
 	/// The top-level function a copy (of a copy) was made from: its copies follow it in the program
@@ -212,6 +255,7 @@ pub fn lower(program: Node) -> Node {
 	let once: Vec<&Definition> = found.iter().filter(|definition| counts[definition.name.as_str()] == 1).collect();
 	let passable =
 		once.iter().map(|definition| definition.name.clone()).filter(|name| !bound_as_value(&bindings, name)).collect();
+	let own_names = counts.keys().map(|name| name.to_string()).chain(bindings.bound()).collect();
 	let higher_order: HashMap<String, Definition> = once
 		.into_iter()
 		.filter(|definition| (0..definition.params.len()).any(|index| definition.takes_function_at(index)))
@@ -220,7 +264,7 @@ pub fn lower(program: Node) -> Node {
 	if higher_order.is_empty() {
 		return program;
 	}
-	let mut specialiser = Specialiser { definitions: higher_order, passable, copies: vec![] };
+	let mut specialiser = Specialiser { definitions: higher_order, passable, own_names, copies: vec![] };
 	let rewritten = specialiser.rewrite(program.clone());
 	if specialiser.copies.is_empty() {
 		return program;

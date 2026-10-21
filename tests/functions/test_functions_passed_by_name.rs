@@ -39,3 +39,15 @@ bump(n) := if n is list then n else n + 1
 walk([1, [2, 3]], bump)";
 	is!(WALK, parse("[2 [3 4]]"));
 }
+
+#[test]
+fn a_library_word_passed_by_name_is_called_by_name() {
+	// card specialise-library-functions (probes/specialise_library): a builtin, a math.warp word and a prelude word
+	const EACH: &str = "each(f, n) := { total = 0; for i in 1 to n { total = total + f(i - 3) }; total }";
+	is!(&format!("{EACH}; each(abs, 5)"), 6);
+	is!(&format!("use math; {EACH}; each(square, 5)"), 10);
+	is!("twice(f, x) := f(f(x)); twice(sqrt, 16.0)", 2.0);
+	is!("twice(f, x) := f(f(x)); twice(upper, \"ab\")", "AB");
+	// a word the program defines itself is its own, not the library's
+	is!("upper(t) := t + \"!\"; twice(f, x) := f(f(x)); twice(upper, \"a\")", "a!!");
+}
