@@ -60,7 +60,15 @@ is_value_pattern(pattern: Node, variants: any): bool := match pattern {
 	Char(value): yes
 	Key(type_name, Op.Dot, case_name): is_name(type_name) and is_name(case_name)
 	Key(type_name, Op.Scope, case_name): is_name(type_name) and is_name(case_name)
+	# alternatives `"number" | "bool"`, each a value (Rust twin: switch.rs alternatives)
+	Key(left, Op.Or, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
 	_: no
+}
+
+# the subject equals the value, or one of the alternatives
+value_test(subject: Node, pattern: Node): Node := match pattern {
+	Key(left, Op.Or, right): Key(value_test(subject, left), Op.Or, value_test(subject, right))
+	_: Key(subject, Op.Eq, pattern)
 }
 
 # `int: e`: an arm of a type word tests the subject's type, as Rust's `match 3 { int: … }` does
@@ -127,7 +135,7 @@ arm_chain(arms: list, subject: Node, variants: any): Node := {
 	if #arms == 0 { return applied("switch_no_case", subject) }
 	pattern = arm_pattern(arms#1)
 	if is_other_arm(pattern) { return arm_result(arms#1) }
-	if is_value_pattern(pattern, variants) { return chosen(Key(subject, Op.Eq, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
+	if is_value_pattern(pattern, variants) { return chosen(value_test(subject, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
 	if is_type_pattern(pattern) {
 		test = List([symbol("is_type"), subject, name_of(pattern)], Bracket.Round, Separator.None)
 		return chosen(test, arm_result(arms#1), arm_chain(arms[1..], subject, variants))
@@ -161,13 +169,17 @@ match_of(rest: Node, n: Node, variants: any): Node := match rest {
 }
 
 node_match(n: Node, variants: any): Node := match n {
-	List(parts, Bracket.None, Separator.Space): {
-		if #parts == 2 and is_match_head(parts#1) { return match_block(parts#1#2, parts#2, n, variants) }
-		if #parts == 0 or parts#1 != symbol("match") { return n }
-		# `match n {…}` as a statement, `match (n {…})` as a value
-		if #parts == 3 then match_block(parts#2, parts#3, n, variants) else if #parts == 2 then match_of(parts#2, n, variants) else n
-	}
+	List(parts, Bracket.None, Separator.Space): spaced_match(parts, n, variants)
+	# a block of the one statement: `{ match word {…} }`
+	List(parts, Bracket.Curly, Separator.Space): spaced_match(parts, n, variants)
 	_: n
+}
+
+spaced_match(parts: list, n: Node, variants: any): Node := {
+	if #parts == 2 and is_match_head(parts#1) { return match_block(parts#1#2, parts#2, n, variants) }
+	if #parts == 0 or parts#1 != symbol("match") { return n }
+	# `match n {…}` as a statement, `match (n {…})` as a value
+	if #parts == 3 then match_block(parts#2, parts#3, n, variants) else if #parts == 2 then match_of(parts#2, n, variants) else n
 }
 
 node_matches(program: Node): Node := {
