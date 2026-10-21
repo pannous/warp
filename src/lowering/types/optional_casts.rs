@@ -4,9 +4,9 @@
 //! casts each item: `["1", "2"] as ints` is [1, 2].
 
 use super::nodes::{assign, if_then_else, key, Counter};
+use crate::lowering::words::library_words::BYTE_LIST;
 use crate::node::{call, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::lowering::words::library_words::BYTE_LIST;
 use crate::words::{LIST_WORD, MAP_WORD};
 
 const OPTIONAL_PREFIX: &str = "optional·";

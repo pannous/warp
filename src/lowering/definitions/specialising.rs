@@ -225,7 +225,7 @@ impl Specialiser {
 		}
 		let (index, passed) = arguments.iter().enumerate().find_map(|(index, argument)| {
 			let passed = self.passed(argument)?;
-			let free = !function.params.iter().any(|param| *param == passed.name);
+			let free = !function.params.contains(&passed.name);
 			(free && function.takes_function_at(index)).then_some((index, passed))
 		})?;
 		let name = copy_name(&function.name, &passed.name);
