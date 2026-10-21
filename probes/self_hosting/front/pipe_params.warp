@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+# pipe parameters |x| body and Ruby/Lua do … end, then … else … end blocks, through the self-hosted parser:
+# WARP_SELF_HOSTED=front /Users/me/dev/bin/warp probes/self_hosting/front/pipe_params.warp
+twice = |x| x * 2
+add = |a, b| a + b
+n = 0
+while n < 3 do
+  n = n + 1
+end
+size = if n > 2 then "big" else "small" end
+print "${twice(4)} ${add(2, 3)} ${n} ${size}"

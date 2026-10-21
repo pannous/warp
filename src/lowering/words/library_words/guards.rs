@@ -12,8 +12,18 @@ const INDEX_PLACEHOLDER: &str = "try_placeholder_index";
 const DIVIDEND_PLACEHOLDER: &str = "try_placeholder_dividend";
 const DIVISOR_PLACEHOLDER: &str = "try_placeholder_divisor";
 const ASSERT_CONDITION_PLACEHOLDER: &str = "assert_placeholder_condition";
+/// Becomes the marker `ran·without·error` once parsed: written in the template text, `·` would read as a product
+const RAN_PLACEHOLDER: &str = "try_placeholder_ran";
 
 impl Lowering {
+	/// A `try` template, its placeholders and the marker filled in
+	fn instantiate_guarded(&self, template: &str, replacements: &[(&str, &Node)]) -> Node {
+		let marker = Node::Symbol(RAN_WITHOUT_ERROR.to_string());
+		let mut filled = replacements.to_vec();
+		filled.push((RAN_PLACEHOLDER, &marker));
+		self.instantiate_template(template, &filled)
+	}
+
 	/// A list or text written in place (`[1 2]#3`, `"ab"#5`): `count` of it cannot fail
 	fn is_known_list(&self, list: &Node) -> bool {
 		matches!(list.drop_meta(), Node::List(_, Bracket::Square, _) | Node::Text(_))
@@ -21,7 +31,7 @@ impl Lowering {
 
 	/// `try X else Y`: X, or Y when X fails. Errors are values: an Error result is replaced. An index out of range and a
 	/// division or modulo by zero directly under `try` are checked before they happen; a runtime error deeper inside X
-	/// (an index in a sum, a called function) is caught as a wasm exception (`ran_without_error`, wasm_emitter/control/try_guard.rs).
+	/// (an index in a sum, a called function) is caught as a wasm exception (`ran·without·error`, wasm_emitter/control/try_guard.rs).
 	pub(super) fn lower_try(&self, guarded: Node, fallback: Node) -> Node {
 		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
 		match guarded.drop_meta() {
@@ -35,15 +45,15 @@ impl Lowering {
 				&[(LIST_PLACEHOLDER, list), (INDEX_PLACEHOLDER, index), (fallback_placeholder, &fallback)],
 			),
 			// the divisor checked first; any other error of the division (a text divided) is caught as below
-			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) => self.instantiate_template(
+			Node::Key(dividend, op @ (Op::Div | Op::Mod | Op::Rem), divisor) => self.instantiate_guarded(
 				&format!("(try_tmp_divisor={DIVISOR_PLACEHOLDER}; if try_tmp_divisor==0 {{{fallback_placeholder}}} else {{\
-					try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={DIVIDEND_PLACEHOLDER} {op} try_tmp_divisor}}); \
+					try_tmp_finished={RAN_PLACEHOLDER}({{try_tmp_value={DIVIDEND_PLACEHOLDER} {op} try_tmp_divisor}}); \
 					if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}}}})"),
 				&[(DIVISOR_PLACEHOLDER, divisor), (DIVIDEND_PLACEHOLDER, dividend), (fallback_placeholder, &fallback)],
 			),
-			_ => self.instantiate_template(
+			_ => self.instantiate_guarded(
 				// the guarded assignment comes first, so the kind of try_tmp_value is known where it is read
-				&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}})"),
+				&format!("(try_tmp_finished={RAN_PLACEHOLDER}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{{fallback_placeholder}}})"),
 				&[(value, &guarded), (fallback_placeholder, &fallback)],
 			),
 		}
@@ -79,8 +89,8 @@ impl Lowering {
 			}
 			None => fallback_placeholder.to_string(),
 		};
-		self.instantiate_template(
-			&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{\
+		self.instantiate_guarded(
+			&format!("(try_tmp_finished={RAN_PLACEHOLDER}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{\
 				{CAUGHT_BINDING_PLACEHOLDER} = {CAUGHT_ERROR}(try_tmp_finished, try_tmp_value); {handled}}})"),
 			&[(value, &guarded), (fallback_placeholder, &fallback), (CAUGHT_BINDING_PLACEHOLDER, &name)],
 		)
