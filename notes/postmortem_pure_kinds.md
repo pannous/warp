@@ -44,5 +44,6 @@ corrected as local-named-like-6.
 - Rule (supervisor.md "Pipeline breaks"): within 15 min of a red pure chain on main, the Supervisor names ONE owner
   — the session owning the area the error message points at, else the author of the newest suspect merge — and
   tells everyone else not to bisect.
-- Proposed rule, waiting for the user (standing permission needed): revert first, bisect after — when main's pure
-  chain breaks and the suspect batch is known, the Integrator reverts it at once and the owner re-lands it fixed.
+- Rule revert-first (user, standing, 2026-10-21; notes/decisions.md, notes/agents/integrator.md): when main's
+  `warp pure hello` breaks and the suspect merge is known, the Integrator reverts it at once without asking, names
+  revert-first in the commit, tells the owner and the Supervisor; the owner re-lands it fixed.
