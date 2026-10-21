@@ -55,8 +55,9 @@ arm_result(arm: Node): Node := match arm {
 }
 
 # `1`, "a", 'c', an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the program declares
-# (`Red` of `enum Color { Red, Green }`): an arm the subject equals; `"b" | "c"` (read as `or`): one it equals one of
-is_value_pattern(pattern: Node, variants: any): bool := match pattern {
+# (`Red` of `enum Color { Red, Green }`), a constant `True`, `no`: an arm the subject equals; `"b" | "c"` (read as
+# `or`): one it equals one of
+is_value_pattern(pattern: Node, variants: any): bool := pattern is bool or match pattern {
 	Key(left, Op.Or, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
 	Symbol(name): name in variants
 	Number(value): yes

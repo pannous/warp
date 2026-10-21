@@ -787,6 +787,8 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 		Readable { receiver: SELF_WORD, class, fields: [fields, getters].concat(), methods, statics, globals };
 	// the holes of `"#\(n)"` as code first, so a field in one is read from self too
 	let body = crate::text::interpolation::lower_program(body);
+	let shadowed: Vec<&String> = members.fields.iter().filter(|field| !unshadowed(field)).collect();
+	hint_self_assignments(&body, &shadowed, SELF_WORD);
 	let body = receiver_reads(body, &readable);
 	let receiver = symbol(SELF_WORD);
 	let changes = match changes_fields_of(&body, SELF_WORD) {
@@ -909,6 +911,24 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 		other if let_binding(&other).is_some() => other.map_children(|part| value_reads(part, readable)),
 		other => other.map_children(|child| receiver_reads(child, readable)),
 	}
+}
+
+/// `def setx(x) { x = x }`: a parameter named like a field assigned to itself changes nothing, a hint names the field
+fn hint_self_assignments(body: &Node, shadowed_fields: &[&String], receiver: &str) {
+	body.visit(&mut |part| {
+		let Node::Key(target, Op::Assign, value) = part.drop_meta() else {
+			return;
+		};
+		let Some(name) = target.symbol_name().filter(|name| value.symbol_name() == Some(*name)) else {
+			return;
+		};
+		if shadowed_fields.iter().any(|field| field.as_str() == name) {
+			crate::normalize::set_position_of(part);
+			let field = format!("{receiver}.{name}");
+			let reason = format!("{name} = {name} assigns the parameter {name} to itself; the field is {field}");
+			crate::normalize::hint(&format!("{name} = {name}"), &format!("{field} = {name}"), &reason);
+		}
+	});
 }
 
 /// A bare field name that a main-level variable is named like too: `n` of `n = 10; class P { n: int }`
