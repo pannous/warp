@@ -5,7 +5,7 @@ use crate::is;
 
 const SUMMAND: &str = "summand(n) := match n { data($k: int + $x) => x; data($x + $k: int) => x; _ => \"none\" }\n";
 const KINDS: &str =
-	"kind(n) := match n { data(f($n: > 0)) => \"positive\"; data(f($s: symbol)) => \"name \" + s; data(f($b: block)) => \"block\"; _ => \"other\" }\n";
+	"kind(n) := match n { data(f($n: > 0)) => \"positive\"; data(f($s: symbol)) => s; data(f($b: block)) => \"block\"; _ => \"other\" }\n";
 
 #[test]
 fn a_typed_hole_matches_only_its_type() {
@@ -18,7 +18,7 @@ fn a_typed_hole_matches_only_its_type() {
 #[test]
 fn a_hole_meets_its_condition() {
 	is!(&format!("{KINDS}kind(data(f(5)))"), "positive");
-	is!(&format!("{KINDS}kind(data(f(y)))"), "name y");
+	is!(&format!("{KINDS}kind(data(f(y)))"), "y");
 	is!(&format!("{KINDS}kind(data(f({{y}})))"), "block");
 	is!(&format!("{KINDS}kind(data(f(-5)))"), "other");
 	is!("match data([1, 2, 3]) { data([$h: int, $t...]) => h; _ => 0 }", 1);
