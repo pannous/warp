@@ -153,3 +153,21 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
   edit: merge after prelude-for-pure lands.
 - warp-compiler-enums: the bare `Round`/`Add`/`Define` symbols in the warp-lowered runtime; walk.warp's `Op`,
   `Bracket`, `Separator` enums are no longer crossed through text views in this lane.
+
+## warp self runs hello (2026-10-21, card self-hello, branch self-hello)
+What stopped compiler.warp compiled by itself, in the order found (each a general fix with a probe and a test):
+- The pure-compiled parser read every call with comma arguments as Error("spelling code"), so runtime.warp's `use`
+  files parsed into one statement and the runtime words lacked char_text ("no field char_text"). Cause: plain_enums.warp
+  decided program-wide, by name, which names hold enum cases; parser.warp's own `bracket = ""` made view_of's matched
+  `bracket` ambiguous, so `bracket as text` gave the case name "None". Now per function scope (the Rust twin
+  plain_enums.rs assigned_cases is still program-wide; the Rust lane does not run its matches through it).
+- prelude_words.warp's symbol_words returned `found.keys` of a map holding the entry "keys" (the word of
+  runtime/ordering.warp's parameter): emitter.warp read the entry. Now a map's own member and a word of known result
+  stay the word's call, as Rust's reads_entry_first.
+- A kept value (os.kept of the lowered runtime words) holding an Int beyond the fixnums: the host built it through the
+  Int runtime's builders, which an emitter.warp module lacks; such a module holds machine i64s (src/host/tasks/values.rs
+  holds_machine_ints).
+- Debugging: a bare `unreachable` trap of compiler.wasm is an error function whose name the runner dropped; bisect with
+  prints in compiler.warp's steps, then reproduce the failing step as a pure-lane program (`WARP_SELF_HOSTED=pure-only
+  warp probe.warp` runs the same emitted code, no compiler rebuild). Set WARP_LIB to the worktree's lib for those runs:
+  from a scratch folder the stages otherwise come from the main checkout's lib.
