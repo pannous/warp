@@ -33,7 +33,7 @@ host_words = {
 	parse_code: [["node"], ["node"]]
 	"block·value": [["int"], ["node"]]
 	foreign_call: [["node", "node", "node", "node", "node"], ["node"]]
-	sleep: [["int"], []]
+	sleep_ms: [["int"], []]
 	random: [[], ["float"]]
 	random_below: [["int"], ["int"]]
 	random_seed: [["int"], []]

@@ -17,6 +17,9 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - pure-vs-self (user): `warp pure <file>` always compiles with the Rust-compiled compiler.warp, `warp self <file>` always with the self-hosted, self-compiled one; no environment variable (WARP_PURE_COMPILER=self goes).
 - compiler-build (user): no warm-up or cache concept for the warp compiler: compiler.wasm (compiler.warp built by Rust, for `warp pure`) and compiler-self.wasm (built by itself, for `warp self`) are outputs of the normal build chain, produced next to the binary by the release build / main's binary refresh, rebuilt only when triggered with `warp rebuild` (user), never automatically when lib/ changed (a run on a build older than lib/compiler prints a one-line notice naming `warp rebuild`); `warp rebuild` writes next to the binary only for the lib/ the binary was installed with; another lib/ (a worktree's WARP_LIB) gets its own <lib>/../data/compiler.wasm, so a branch never overwrites the user's; the notice fires when the lib/compiler fingerprint or the warp build differs from the recorded one (Interviewer's decision); code, CLI messages and notes say build, not cache/warm/cold (Supervisor's reading of the user's words).
 - self-compiled-parity (user): the parity check is off for now; `warp self` may even pass up to 5 % fewer tests than `warp pure`, as long as the main tests pass, the gap fixed later; no bitwise fixpoint yet.
+- self-check-soft (user): `warp self hello` is no merge gate: a batch whose self check fails drops and bounces the culprit branch and merges the rest; an unknown culprit becomes an urgent card. Workers still run it before Ready, as advice. `warp pure hello` stays blocking.
+- warp-only-acceptance (user): a branch that touches only warp code (lib/, samples, probes; no Rust) is accepted when the Rust-compiled compiler.warp compiles itself and that self-compiled compiler compiles hello world (`warp rebuild self && warp self samples/hello/hello.warp`); the full Rust suite is not needed for it. For such branches this is the gate, refining self-check-soft (which covers Rust branches).
+- warp-first (user): branches that change only warp code merge before branches that change Rust.
 - pipeline-first (user): the main focus is the self-hosted compiler pipeline (parser → lowering → analysis → emitter in warp, `warp pure`); fixes for library user modules (sound, dates, extrema …) are normal priority, not Now/express, unless they break the pipeline.
 - quality-before-gap (user, at 49/116 lib files pure-compiled): raise the warp compiler's code quality before closing the final gap: the beautify cards (magic-numbers, function-signature, typed-compiler front and back) go first; gap cards (runtime-word-calls and the like) continue only where they don't touch the same lines, preferably on the cleaned-up code.
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
@@ -93,7 +96,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P180 split-debuginfo "unpacked" plus the hourly sweep. P90 ./test.wasm is written at every compile. P91 one shared analysis per compile, refreshed only when a pass changed the program.
 - Repo layout: tests/ in topic folders (P14); CLAUDE.md is a symlink to AGENTS.md (P15); wisp format stays with a roundtrip test (P11); GcObject is the GC reading API (P12) with gc_struct!/wasm_struct!/wasm_object! as sugar (P97); test macros in tests/common (P100).
 - P8 vendoring deactivated, kept for a later offline agent. P7 the cdylib is built only by web/playground/build.sh. warp-ast.wit lives at samples/wit/warp-ast.wit.
-- Bee/wasp entity names go into uniscript and are regenerated into src/text/uniscript_entities.tsv, never by hand.
+- Bee/wasp entity names go into uniscript and are regenerated into lib/compiler/entities.tsv, never by hand.
 - P13 libm FFI: header-driven linking first, the LIBM tables only as fallback and as examples of hand-linked FFI.
 - uniscript-binary-import: `use uniscript` imports the released prebuilt uniscript_c.wasm (+ .h), committed in the uniscript repo at each release (uniscript-browser-wasm); warp's tests follow the released uniscript.
 - browser-server: browser checks dry-run on pannous.com over SSH first; GitHub runs only the final check plus Safari; no local browsers on the Mac. firefox-bug: the Firefox JSPI Worker-terminate bug is filed at Bugzilla (probes/firefox_jspi_terminate.html).
@@ -114,6 +117,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P107 the playground offers only the .wasm download plus a `warp hello.warp` line. P108 Warp.sublime-syntax takes .wasp/.warp/.a/.angle. P229 double-clicking a .warp file opens the editor.
 
 ## Welcoming, diagnostics and newcomer forms
+- errors-name-file (user): every error, warning and hint, in every lane (Rust, pure, self), prints file:line:column and the source line; a refusal never names internal words (`view·opaque`) but the user's code. Cards error-names, pure-error-candidate.
 - Newcomer syntax is eaten, its intent compiled and the warp form hinted, only where it does not clash with a known footgun.
 - Asks become got-it warnings; error-fallback cases (`[x]*n`, insert order, `[1 2 3]+4`, `1+2 squared`) stay loud errors naming the explicit forms (D3, D9/P5).
 - Got-it scope: `[y = this one, a = all of this kind, n]`; an expression is remembered by its text; a `// got it` comment silences the line.
@@ -161,6 +165,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - float-text: floats print shortest round-trip digits (Python/JS repr) everywhere; P225 also joined to text.
 - repeating-decimals: only the overline `0.3̅` is the exact 1/3; `x as decimal` writes the period overlined; never for floats.
 - D16 Int is unbounded; `byte`, `int8..int32` are declared FFI types that trap on overflow; `u8` = `uint8` = `byte`. i64-wraps: `i64`/`int64` wrap silently at 2^63 like `fast int`; `use strict` catches it.
+- c-int-names (user): C's multi-word integer names are the fixed widths C means, each with a got-it note naming warp's word: `unsigned int` = uint32, `unsigned long (long)` = uint64, `long long` = int64, `unsigned short` = uint16, `short int` = int16, `unsigned char` = byte, `signed char` = int8 (`x: unsigned int = -1` errors "uint32 overflow"). Single words keep warp's meaning (`long`, `int` unbounded).
 - fast-scope: `fast` before a function or module makes it machine arithmetic: polynomial sin/cos/exp/pow, `/` gives f64, ints are wrapping i64; `x: fast int` is i64.
 - hex-printing: `255 as hex` is an int shown as 0xFF; arithmetic gives a plain int. binary-int: `5 as binary` shows 0b101.
 - footgun-divzero: exact numbers raise divide by zero (catchable); computed IEEE floats give ∞/NaN.
@@ -219,7 +224,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - kind-kept: a value never changes kind by being passed or returned: `f(x) := x; f([])` and `g(): any := { return [] }` give [], not ø (Interviewer's decision).
 - empty-is-not-missing (user, card discuss-what): ø is absence; empty values are values of their own kind: `[] == ø`, `"" == ø`, `{} == ø` are no, and `x is ø` means missing only (`[] is ø` no). Emptiness is tested loosely with `is empty`, `if no x`, `if not x`; soft rule for all warp code (lib, tests, samples): test emptiness with those forms, never with an equality against ø, [] or ""; "has items" is plain truthy `if x`, not `x is not empty` / `x != ø` (Later card empty-equality-hint hints at all of these). `{}` written in code is an empty map (type map) and prints `{}`, never `ø`. `∅` is an alias of ø with a got-it note "I meant: ø", re-decided if sets come.
 - Truthiness: ø + 1 stays an error, and so does ø + text (empty-plus-text: `t = ø; t += "a"` errs with the fix `t = ""`, or `t = []` for a list; `"a" + ø` with text on the left joins its str form); empty values are falsy; only 0 equals false; #38 a non-empty list (even `[ø]`) is truthy; #28 `x=ø; x.size` and `[].count` are 0; `is empty` covers "", [], {}, ø.
-- predicate-bool: predicates (`is_blank`, `is_even`, `is_odd`, every `is_…`) give yes/no, not 1/0.
+- predicate-bool: predicates (`is_blank`, `is_even`, `is_odd`, every `is_…`, and `starts_with`, `ends_with`, `contains`, like `in`) give yes/no, not 1/0.
 - branch-keeps-bool: an `if`/match branch keeps its own value, the bool mark included: `if c then 2 else true` with c false is yes, not 1 (also in lists and `any` slots); only Int→Float widens.
 - text-bool: `as bool` / `bool(x)` read the word ("0", "no", "false" → no); `if` keeps plain truthiness.
 - in-bool: `x in list` is yes/no (also `xs.has(x)`); the position comes from `xs.index_of(x)`.
@@ -234,6 +239,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - union-or: in types `or` = `|` (`x: int or text`); in values `or` is boolean.
 - return-as (also union-return): return types are `def f(x) as int or text`; `->` works with a hint; no `returns`.
 - error-type / error-optional: a function that can fail has type `T or error`, never Result; `T?` is T, ø or an error. Writing an Error into a field or list element raises; `x is ø` missing only, `x failed` failed only, `if no x` / `x or 0` both; at a WIT export: `result`, `option` or `result<option<T>>`; an Error propagates where a caller can take it.
+- optional-result (user): a function that can answer ø declares `T?` (`def f(x: int): list? { … }`); a plain `: list` that can answer ø warns "f can answer ø; declare `: list?`" (warp fix adds the ?), and the ø reaches the caller unchanged (kind-kept), in every lane: no ø → [] conversion.
 - empty-field: ø needs `?` everywhere (`class Tree{left: Tree}` errs, fix `left: Tree?`).
 - P185 `none(xs, f)`, the null spelling with arguments, is an error naming the null.
 - P125 optional parameters: `x=ø`, `maybe x`, `x?` alike; typed `x:int?`; `a ?? b` only for ø.

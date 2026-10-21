@@ -241,6 +241,19 @@ impl WasmGcEmitter {
 		// `if odd x`: an unknown word is an error as in any other code, never a truthy list (card undefined-word)
 		if let Some(message) = self.unknown_word_refusal(condition) {
 			self.emit_type_error(func, message);
+		} else if let Node::Key(left, op @ (Op::And | Op::Or), right) = condition.drop_meta() {
+			// `if name and …`: each side is tested for truth by its own kind (a text by its emptiness), the right one
+			// only when the left leaves the answer open
+			self.emit_condition(func, left, emit_number);
+			func.instruction(&I::If(BlockType::Result(ValType::I32)));
+			if *op == Op::Or {
+				Self::emit_list(func, &[I::I32Const(1), I::Else]);
+			}
+			self.emit_condition(func, right, emit_number);
+			if *op == Op::And {
+				Self::emit_list(func, &[I::Else, I::I32Const(0)]);
+			}
+			func.instruction(&I::End);
 		} else if self.is_structural_operand(condition)
 			|| self.is_held_cell_value(condition)
 			|| self.holds_run_time_kind(condition)
