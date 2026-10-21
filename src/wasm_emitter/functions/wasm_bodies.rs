@@ -7,6 +7,9 @@ use crate::operators::Op;
 use crate::words::WASM_INSTRUCTION_CALL;
 use wasm_encoder::Instruction as I;
 
+/// The body of a declared intrinsic in the Rust lane (`is_null(x: any): bool from runtime`): a trap if ever called
+pub const UNREACHABLE: &str = "unreachable";
+
 /// The instruction a definition's body names, through what lowering adds for its result type: `… as float`, or
 /// `{the result = …; the result}` of an int
 pub fn wasm_body_instruction(body: &Node) -> Option<&str> {
@@ -72,6 +75,7 @@ pub fn instruction(name: &str) -> Option<I<'static>> {
 		"i64.trunc_f64_s" => I::I64TruncF64S,
 		"i64.trunc_f64_u" => I::I64TruncF64U,
 		"i64.reinterpret_f64" => I::I64ReinterpretF64,
+		UNREACHABLE => I::Unreachable,
 		_ => return None,
 	})
 }

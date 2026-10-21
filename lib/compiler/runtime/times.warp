@@ -1,6 +1,12 @@
 ## times (card time-primitives; Rust twin: src/wasm_emitter/time): a time node of a form (src/time/mod.rs TimeForm:
 ## kinds.warp TimeFormCode) and a position, read by the intrinsics
 ## time_form, time_position, duration_months, duration_days, zone_index, zone_offset and made by time_of(info, position)
+use "intrinsics.warp"
+use "conversions.warp"
+use "durations.warp"
+use "exact.warp"
+use "instructions.warp"
+use "library_words.warp"
 is_time(n: any): bool := not is_null(n) and kind_code(n) == Kind.Time
 is_instant(t: any): bool := time_form(t) == TimeFormCode.Instant
 is_date(t: any): bool := time_form(t) == TimeFormCode.Date
