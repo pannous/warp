@@ -83,7 +83,9 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   list_items + list_item_count 14% (scope.warp nodes_kept keeps its stack in a cons list: `unvisited#(#unvisited)` and
   a slice per step), text_bytes_equal + values_equal ~9%.
 - Tried, no gain: Binaryen wasm-opt -O2/-O3/-Oz (Cranelift does that work); only -O3 with aggressive inlining runs
-  12-19% faster, at 2.4x size and +1.2 s wasmtime compile (card wasm-opt-inline, probes/perf/wasm_opt_bench.sh).
+  12-19% faster, at 2.4x size and +1.2 s wasmtime compile (probes/perf/wasm_opt_bench.sh). So the self-hosted stages,
+  compiled once per lib/ and binary and kept, go through it when wasm-opt is on PATH (binaryen.rs optimized_for_speed,
+  card wasm-opt-inline): pure-only passes.warp 25.5 → 21.7 s, the cold compile +3.6 s.
   wasmtime's own inlining measured slower. Interning text literals (one text per literal, kept in a global array)
   ran 4% slower: text_literal's profile share is its call count, not its work.
 - Reading a guest profile: samples fall on function entries and loop headers (epoch ticks, notes/profiling.md), so a
