@@ -31,8 +31,6 @@ wasi_start = "_start"
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
 fd_write = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
 stdout = 1
-# a module raising a float to a power imports libm's pow(base, exponent) → f64, as Rust's emit_float_power calls it
-float_pow = ["m", "pow", [96, 2, 124, 124, 1, 124]]
 text_heap_name = "text_heap"
 # its linear memory, one page: fd_write's iovec {address, count} at 0, the count it wrote at 8, the bytes it writes from
 # output_address (an offset of the store, so `output_byte(i, b)` stores at output_address + i)
@@ -925,10 +923,10 @@ def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	[result, converted(a, kind) + converted(b, kind) + [ops[symbol]]]
 }
 
-# base ^ exponent of floats: libm's pow; a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
+# base ^ exponent of floats: the runtime word float_pow (runtime/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
 def float_power(body: Body, base: list, exponent: list): list {
 	held = uleb(fresh_local(body, "float"))
-	code = base + exponent + [op.call] + uleb(import_index(float_pow)) + [op.local_tee] + held + [op.local_get] + held
+	code = runtime_call("float_pow", [["float", base], ["float", exponent]])#2 + [op.local_tee] + held + [op.local_get] + held
 	checked = [op.f64_ne, op.if, no_value] + dropped(runtime_call("invalid_number", [])) + [op.end]
 	["float", code + checked + [op.local_get] + held]
 }
@@ -2357,7 +2355,6 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	reached = reached_words(program)
 	module.imports = if "print" in reached then [fd_write] else []
-	if has_operator(program, Op.Pow) { module.imports += [float_pow] }
 	# imported ahead of the functions, whose indices follow them: every host or WASI word the program reaches
 	for name in module.host.keys {
 		if (name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
