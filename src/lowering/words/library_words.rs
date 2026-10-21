@@ -570,9 +570,16 @@ enum WordMeaning {
 fn is_pure_read(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(_) => true,
-		Node::Key(list, Op::Hash, index) => {
-			list.symbol_name().is_some() && matches!(index.drop_meta(), Node::Symbol(_) | Node::Number(_))
-		}
+		Node::Key(list, Op::Hash, index) => list.symbol_name().is_some() && is_pure_index(index),
+		_ => false,
+	}
+}
+
+/// An index read twice gives the same: a name, a literal or arithmetic of those (`scopes["a"]` is `scopes#("a" + 1)`)
+fn is_pure_index(index: &Node) -> bool {
+	match index.drop_meta() {
+		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
+		Node::Key(left, Op::Add | Op::Sub, right) => is_pure_index(left) && is_pure_index(right),
 		_ => false,
 	}
 }
