@@ -181,6 +181,30 @@ fn test_files(args: &[String]) -> Option<&[String]> {
 	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(paths)
 }
 
+/// `warp test [folder…]`: the folders whose test files run through `warp pure` (src/compiler/pure_tests.rs), tests/
+/// when none is named and it exists
+fn test_folders(args: &[String]) -> Option<Vec<String>> {
+	use warp::compiler::pure_tests::DEFAULT_FOLDER;
+	let folders = args.get(2..).unwrap_or_default();
+	if args.get(1).is_none_or(|word| TEST_WORD != word) {
+		return None;
+	}
+	if folders.is_empty() {
+		return std::path::Path::new(DEFAULT_FOLDER).is_dir().then(|| vec![DEFAULT_FOLDER.to_string()]);
+	}
+	folders.iter().all(|folder| std::path::Path::new(folder).is_dir()).then(|| folders.to_vec())
+}
+
+/// `warp test --case <file> <index>`: one test of a file, run by a child of `warp test [folder…]`
+fn test_case(args: &[String]) -> Option<&[String; 2]> {
+	match args {
+		[_, word, flag, rest @ ..] if TEST_WORD == word && flag == warp::compiler::pure_tests::CASE_FLAG => {
+			rest.try_into().ok()
+		}
+		_ => None,
+	}
+}
+
 /// The tests of one file run, its summary printed: (tests run, failed)
 fn run_tests_of(path: &str) -> (usize, usize) {
 	diagnostic::show_lines_of(&source_of(path));
@@ -349,6 +373,10 @@ fn run_command(args: &[String], given: &[String]) {
 				Err(failure) => fail(format!("warp build: {failure}")),
 			}
 		}
+	} else if let Some([file, index]) = test_case(args) {
+		std::process::exit(if warp::compiler::pure_tests::run_child_case(file, index) { 0 } else { 1 });
+	} else if let Some(folders) = test_folders(args) {
+		std::process::exit(if warp::compiler::pure_tests::run_folders(&folders) { 0 } else { 1 });
 	} else if let Some(paths) = test_files(args) {
 		// P209, P210: the files' `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero;
 		// several files each print their summary under their name, and the total last
@@ -416,7 +444,9 @@ fn run_command(args: &[String], given: &[String]) {
 		}
 		print_and_exit(run::wasmtime_runner::run(module));
 	} else if arg_string == "test" || arg_string == "tests" {
-		println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
+		println!(
+			"warp test <file.warp> runs the tests of a program, warp test [folder…] the test files under the folders"
+		);
 	} else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
 		println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
 		warp::web::dev_server::open_in_browser("https://github.com/pannous/warp/");

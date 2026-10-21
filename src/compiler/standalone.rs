@@ -48,21 +48,35 @@ impl Compiler {
 /// The program's value, run from the module compiler.warp made of it, with these arguments (`use os; args`)
 pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
 	match compiled(program, by) {
-		Ok(module) => {
-			crate::modules::std_adapters::set_program_arguments(arguments);
-			crate::pipeline::run_module(module)
-		}
+		Ok(module) => run_with(module, arguments),
 		Err(failure) => failure,
 	}
+}
+
+/// As `run`, with `use` reading from `folder` instead of the program's own: a test case of tests/x/test_y.warp written
+/// to a file elsewhere
+pub fn run_in(program: &Path, folder: &Path, by: Compiler) -> Node {
+	match compiled_in(program, folder, by) {
+		Ok(module) => run_with(module, vec![]),
+		Err(failure) => failure,
+	}
+}
+
+fn run_with(module: CompiledModule, arguments: Vec<String>) -> Node {
+	crate::modules::std_adapters::set_program_arguments(arguments);
+	crate::pipeline::run_module(module)
 }
 
 /// The module compiler.warp makes of the program file: `compiler.warp <source> <wasm> <folder> <lib>`
 pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let program = program.canonicalize().map_err(|failure| error(&format!("{}: {failure}", program.display())))?;
-	let folder = program.parent().unwrap_or(Path::new("/")).to_path_buf();
+	compiled_in(&program, program.parent().unwrap_or(Path::new("/")), by)
+}
+
+fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
-	let arguments = [program.as_path(), output.as_path(), folder.as_path(), library()];
+	let arguments = [program, output.as_path(), folder, library()];
 	let compiler = compiler(by)?;
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
