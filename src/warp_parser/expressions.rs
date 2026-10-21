@@ -298,6 +298,11 @@ impl WarpParser {
 			let rhs_start = self.pos;
 			let rhs = match block_body {
 				Some(block) => block,
+				None if matches!(op, Op::Colon | Op::As)
+					&& let Some(phrase) = self.take_of_phrase() =>
+				{
+					phrase
+				}
 				None => self.parse_right_operand(op, glued_pair, r_bp),
 			};
 			let rhs_end = self.pos.min(self.chars.len());
@@ -422,6 +427,9 @@ impl WarpParser {
 		} else if matches!(op, Op::And | Op::Or) && self.take_braceless_print() {
 			// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start
 			print_call([self.rest_of_statement()])
+		} else if op == Op::Colon {
+			let value = self.parse_expr(r_bp);
+			self.with_switch_cases(value, r_bp)
 		} else {
 			self.parse_expr(r_bp)
 		}

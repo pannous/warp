@@ -132,14 +132,13 @@ fn signature(name: &str, head: &Node) -> String {
 	format!("{name}({})", parameters.join(", "))
 }
 
-/// `tone`, `bus: Bus`: a parameter as written, without the `any` type lowering gave an untyped one
+/// `tone`, `bus: Bus`: a parameter as written, without the `any` type lowering gave an untyped one and a name renamed apart
 fn parameter_text(parameter: &Node) -> String {
-	match parameter.drop_meta() {
-		Node::Key(name, Op::Colon, kind) if kind.is_symbol(crate::words::ANY_TYPE) => {
-			name.serialize().trim().to_string()
-		}
-		other => other.serialize().trim().to_string(),
-	}
+	let shown = match parameter.drop_meta() {
+		Node::Key(name, Op::Colon, kind) if kind.is_symbol(crate::words::ANY_TYPE) => name.serialize(),
+		other => other.serialize(),
+	};
+	crate::lowering::shadowing_bindings::written_text(shown.trim())
 }
 
 /// The program's declarations; in a function body only the nested functions, its variables are its own (a local
@@ -430,10 +429,13 @@ pub(crate) fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Nod
 }
 
 /// Each word a key of `renames` renamed its value, in one walk; a field `x.from` and a map's key `{from: …}` keep their
-/// name (card map-key)
+/// name (card map-key), the type word of an annotation `text: text` its type (card text-local)
 pub(crate) fn renamed_words(node: Node, renames: &HashMap<String, String>) -> Node {
 	match node {
 		Node::Symbol(name) => Node::Symbol(renames.get(&name).cloned().unwrap_or(name)),
+		Node::Key(name, Op::Colon, type_word) if is_annotation(&name, &type_word) => {
+			Node::Key(Box::new(renamed_words(*name, renames)), Op::Colon, type_word)
+		}
 		Node::Key(receiver, Op::Dot, member) => Node::Key(
 			Box::new(renamed_words(*receiver, renames)),
 			Op::Dot,
@@ -446,6 +448,12 @@ pub(crate) fn renamed_words(node: Node, renames: &HashMap<String, String>) -> No
 		),
 		other => other.map_children(|child| renamed_words(child, renames)),
 	}
+}
+
+/// `x: int`: a name annotated with a type word
+fn is_annotation(name: &Node, type_word: &Node) -> bool {
+	matches!(name.drop_meta(), Node::Symbol(_))
+		&& matches!(type_word.drop_meta(), Node::Symbol(word) if crate::analyzer::is_type_word(word))
 }
 
 /// The member after a dot: a field or method name stays, the arguments of a method call are renamed (`s.contains(c)`)

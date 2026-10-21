@@ -240,7 +240,7 @@ impl WarpParser {
 		if !FUNCTION_REFERENCE_WORDS.contains(&keyword) || self.options.data_mode {
 			return None;
 		}
-		let blanks = self.blanks_at(0);
+		let blanks = self.blanks_ahead();
 		if blanks == 0 || !self.peek_char(blanks).is_alphabetic() {
 			return None;
 		}
@@ -371,10 +371,18 @@ impl WarpParser {
 	/// too when the body follows them (`def f(x): list := …`), as `def f(xs): map(g, xs)` calls map
 	pub(crate) fn result_type_follows(&self) -> bool {
 		let is_blank = |c: &&char| **c == ' ' || **c == '\t';
-		let after_colon = self.chars[self.pos..].iter().skip_while(is_blank);
-		let word: String = after_colon.clone().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
-		let next: String = after_colon.skip(word.chars().count()).skip_while(is_blank).take(2).collect();
-		let body_follows = next.starts_with(['=', '{']) || next == ":=";
+		let body_follows_at = |at: usize| {
+			let next: String = self.chars[at.min(self.chars.len())..].iter().skip_while(is_blank).take(2).collect();
+			next.starts_with(['=', '{']) || next == ":="
+		};
+		// `h(xs): list of int := xs`
+		if let Some((_, width)) = self.of_phrase_ahead() {
+			return body_follows_at(self.pos + width);
+		}
+		let blanks = self.chars[self.pos..].iter().take_while(is_blank).count();
+		let word: String =
+			self.chars[self.pos + blanks..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
+		let body_follows = body_follows_at(self.pos + blanks + word.chars().count());
 		word.starts_with(char::is_uppercase)
 			|| crate::analyzer::type_word_kind(&word).is_some()
 			|| (body_follows && (crate::warp_parser::names_a_type(&word) || word == crate::words::ANY_TYPE))

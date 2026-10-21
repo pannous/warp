@@ -55,7 +55,7 @@ impl WarpParser {
 
 	/// A name follows after at least one blank: `nonlocal y`, not `nonlocal = 3` or `nonlocal(…)`
 	pub(crate) fn name_after_blanks(&self) -> bool {
-		let blanks = self.blanks_at(0);
+		let blanks = self.blanks_ahead();
 		let next = self.peek_char(blanks);
 		blanks > 0 && (next.is_alphabetic() || next == '_')
 	}

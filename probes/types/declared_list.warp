@@ -1,0 +1,2 @@
+h(x) := { ys: ints = [x, x]; ys }
+print h(4)

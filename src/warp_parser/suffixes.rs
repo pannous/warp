@@ -175,7 +175,7 @@ impl WarpParser {
 	/// `r = move 1 from: 10 to: 3`: a preposition with a colon and a blank after it labels the next argument, also where
 	/// the call is an operand (decision labels-calls), as `move 1 from: 10` labels it as a statement
 	fn labelled_argument(&mut self, argument_bp: u8) -> Option<Node> {
-		let blanks = self.blanks_at(0);
+		let blanks = self.blanks_ahead();
 		let word = self.word_at(blanks);
 		let width = blanks + word.chars().count();
 		let labels = self.peek_char(width) == ':' && matches!(self.peek_char(width + 1), ' ' | '\t');

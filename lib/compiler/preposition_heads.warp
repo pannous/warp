@@ -28,4 +28,4 @@ unlabelled_definition(n: Node): Node := match n {
 	_: n
 }
 
-preposition_heads(program: any): any := bottom_up(program, unlabelled_definition)
+preposition_heads(program: Node): Node := bottom_up(program, unlabelled_definition)

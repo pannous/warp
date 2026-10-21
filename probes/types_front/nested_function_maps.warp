@@ -1,0 +1,12 @@
+# a nested function's map stays its own: the enclosing function's list `found` is walked as a list: 11
+def total(xs: list): int {
+	def inner(): any {
+		found = {}
+		found
+	}
+	found = xs
+	sum = 0
+	for item in found { sum += item }
+	sum
+}
+print(total([5, 6]))

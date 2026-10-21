@@ -18,7 +18,7 @@ called_word(word: text, arguments: list): Node := List([symbol(word)] + argument
 quoted_code_of(code: any): Node := List([symbol(quote_word), code], Bracket.None, Separator.Space)
 
 # `parse "…"`, `parse(t)`, `parse t`: what the word is given, else ø
-word_argument(n: any, word: text): any := {
+word_argument(n: Node, word: text): any := {
 	if not (is_group(n) and #n == 2 and n#1 == symbol(word) and (bracket_of(n) == "(" or bracket_of(n) == "")) { return ø }
 	given = n#2
 	if is_group(given) and bracket_of(given) == "(" and #given == 1 { return given#1 }
@@ -29,14 +29,14 @@ word_argument(n: any, word: text): any := {
 # written, where a constant's `class P {…}` would read as the program's own type P
 folds(given: any): bool := given is text and not view_has(view_of(plain_node(parsed(given))), part => kind_of(part) == "error" or kind_of(part) == "type")
 
-parse_call(n: any): any := {
+parse_call(n: Node): any := {
 	given = word_argument(n, parse_word)
 	if given == ø { return n }
 	if folds(given) { return called_word(as_code_word, [quoted_code_of(plain_node(parsed(given)))]) }
 	called_word(as_code_word, [called_word(parse_code_word, [given])])
 }
 
-eval_call(n: any): any := {
+eval_call(n: Node): any := {
 	given = word_argument(n, eval_word)
 	if given == ø { return n }
 	called_word(interpret_word, [called_word(parse_word, [given])])
@@ -44,7 +44,7 @@ eval_call(n: any): any := {
 
 # the words rewritten everywhere but on the right of `.` and inside a definition binding the word itself (notes/
 # dispatch.md: shadowing is scoped): `f(t) := { parse = x => 7; parse(t) }` calls its own
-words_rewritten(n: any, rewrite: function, words: list): any := {
+words_rewritten(n: Node, rewrite: function, words: list): any := {
 	if is_key(n, Op.Dot) { return Key(words_rewritten(key_of(n), rewrite, words), Op.Dot, value_of(n)) }
 	if is_key(n, Op.Define) and words.any(word => binds_word(n, word)) { return n }
 	rewrite(children(n, child => words_rewritten(child, rewrite, words)))
@@ -56,7 +56,7 @@ binds_word(definition: any, word: text): bool := {
 	is_group(head) and items_of(head).any(part => part == symbol(word)) or body_statements(value_of(definition)).any(statement => declared_name(statement) == word)
 }
 
-parse_words(program: any): any := {
+parse_words(program: Node): Node := {
 	words = [parse_word, eval_word]
 	# the program's own `parse(t) := …`, `parse = …`
 	if statements_in(program).any(statement => declared_name(statement) in words) { return program }
