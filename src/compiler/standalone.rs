@@ -13,6 +13,8 @@ const COMPILER_FILE: &str = "compiler/compiler.warp";
 /// The kept compiler's cache names: compiled by the pure lane or by Rust
 const SELF_COMPILER: &str = "warp self: compiler.warp, compiled by itself";
 const RUST_COMPILER: &str = "warp pure: compiler.warp, Rust-compiled";
+/// Set to 1: the warnings and hints of compiling compiler.warp itself are shown
+const COMPILER_WARNINGS: &str = "WARP_COMPILER_WARNINGS";
 
 /// Who compiles compiler.warp: `warp pure` the Rust pipeline, `warp self` the pure lane, compiler.warp itself
 #[derive(Clone, Copy)]
@@ -91,9 +93,18 @@ fn pure_compiled(file: &Path, source: String) -> Result<CompiledModule, String> 
 	.map(module_of_bytes)
 }
 
-/// `compile` as the program of `file`, in a thread with a stack deep enough for a compile of the compiler
+/// `compile` as the program of `file`, in a thread with a stack deep enough for a compile of the compiler; quietly: the
+/// compiler's own warnings and hints are no news to the user of `warp pure` (card prefix-count-warning), but they are
+/// to whoever works on lib/compiler: WARP_COMPILER_WARNINGS=1 shows them (the Integrator's pure-chain check)
 fn on_big_stack<T: Send + 'static>(file: PathBuf, compile: impl FnOnce() -> T + Send + 'static) -> T {
-	let work = move || crate::modules::with_program_file(&file, compile);
+	let work = move || {
+		let compile = || crate::modules::with_program_file(&file, compile);
+		if std::env::var(COMPILER_WARNINGS).is_ok_and(|shown| shown == "1") {
+			compile()
+		} else {
+			crate::errors::diagnostic::quietly(compile)
+		}
+	};
 	std::thread::Builder::new()
 		.stack_size(WORKER_STACK)
 		.spawn(work)

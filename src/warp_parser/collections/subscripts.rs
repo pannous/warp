@@ -81,7 +81,8 @@ pub(crate) fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) 
 	let Node::Key(target, Op::Hash, index) = lhs.drop_meta() else {
 		return None;
 	};
-	if !matches!(op, Op::Range | Op::To) {
+	// `#p..`: the count of p, no element of a value
+	if !matches!(op, Op::Range | Op::To) || target.is_empty_node() {
 		return None;
 	}
 	let (target, index, end) = (target.serialize(), index.serialize(), rhs.serialize());
