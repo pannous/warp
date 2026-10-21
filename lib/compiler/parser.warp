@@ -560,6 +560,13 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			p.at = p.at + written.length
 			skip_blanks(p)
 			left = Key(ø, Op.Not, operation(left, positive, expression(p, powers#2)))
+		} else if left != ø and trailing_guard_at(p) != "" {
+			// `a = 2 if c`, `n if n > 0 => …`: a guard word after a statement guards all of it (Rust's (0, 78))
+			if min_power > 0 { break }
+			word = trailing_guard_at(p)
+			p.at = p.at + word.length
+			skip_spaces(p)
+			left = guarded_statement(left, word, header_expression(p, CONDITION_POWER))
 		} else if down_to_at(p) > 0 {
 			// `10 down to 1` is `reverse(1 to 10)`, which for_loop counts down (Rust twin: ranges.rs binary_node)
 			powers = binding_powers("to")
@@ -587,6 +594,11 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			if op#1 == "=>" { powers = binding_powers("=>") }
 			owns = owns_branches(left, op#2, took_own_then)
 			if powers#1 < min_power and not owns { break }
+			// `match -3 {…}`, `xs where #it > 1`, `where to#i == n`: after a clause word a glued `#` or `-`, or an
+			// operator word, starts its subject
+			// Rust twin: expressions.rs continue_expr (starts_operand)
+			glued_sign = (op#1 == "-" or op#1 == "#") and not is_blank(peek(p.code, p.at + 1, p.n))
+			if (glued_sign or is_alpha(c)) and ends_with_clause_word(left) { break }
 			took_own_then = owns and powers#1 < min_power and op#2 == "then"
 			p.at = p.at + op#1.length
 			// `f(n):` ending its line: the block indented below is its value
@@ -1543,6 +1555,56 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 	otherwise = else_branch(p)
 	if otherwise.length == 0 { return branches }
 	Key(branches, Op.Else, otherwise#1)
+}
+
+// The words that guard the statement before them, each with the guard it is: `a = 2 unless c` is `a = 2 if not c`
+// Rust twin: spellings.rs ("if", "unless", "while"), conditions.rs NEGATED_CONTROL_WORDS
+TRAILING_GUARDS = {"if": "if", "unless": "if", "while": "while"}
+
+// The guard word at the parser's position, else ""; an `if` whose condition has a branch of its own starts the next
+// statement (`if a {x} if b {y}`)
+// Rust twin: lookahead.rs operator_in_context ("if")
+def trailing_guard_at(p: Parser): text {
+	word = word_at(p)
+	if not (word in TRAILING_GUARDS) or not keyword_at(p, word) { return "" }
+	if word == "if" and condition_has_branch(p, p.at + 2) { return "" }
+	word
+}
+
+// Whether the condition from `at` to the end of its statement has a branch: a spaced `{` outside brackets
+// (`point{x:1}` is data) or `then`
+// Rust twin: if_else.rs condition_has_branch
+def condition_has_branch(p: Parser, at: int): bool {
+	depth = 0
+	// ' ' while outside quotes
+	quote = ' '
+	for i in at ..< p.n {
+		c = p.code[i]
+		if quote != ' ' {
+			if c == quote { quote = ' ' }
+		} else if c == '"' or c == '\'' {
+			quote = c
+		} else if c == '(' or c == '[' {
+			depth = depth + 1
+		} else if c == ')' or c == ']' {
+			if depth == 0 { return false }
+			depth = depth - 1
+		} else if depth == 0 {
+			if c == '{' and is_blank(p.code[i - 1]) { return true }
+			if c == '\n' or c == ';' or c == '}' { return false }
+			if c == 't' and not is_name_char(p.code[i - 1]) and keyword_at_position(p, "then", i) { return true }
+		}
+	}
+	false
+}
+
+// `x++ if c` is `if c then x++`, `x++ while c` is `while c do x++`; `unless c` guards with `not c`
+// Rust twin: conditions.rs guarded_statement
+def guarded_statement(statement: Node, word: text, condition: Node): Node := {
+	guard = TRAILING_GUARDS[word]
+	test = if word == "unless" then Key(ø, Op.Not, condition) else condition
+	head = keyed(guard, ø, test)
+	if guard == "while" then Key(head, Op.Do, statement) else Key(head, Op.Then, statement)
 }
 
 // Whether a statement starts at the parser's position, no end of one, `then`, `else` or `do`
