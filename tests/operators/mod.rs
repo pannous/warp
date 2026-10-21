@@ -33,6 +33,7 @@ mod test_nand_spellings;
 mod test_natural_phrases;
 mod test_negated_call;
 mod test_negated_call_operand; // card leading-minus
+mod test_negated_name_before_operator_word; // card rust-lane-type-2
 mod test_operator_declarations;
 mod test_operator_default_infix; // card operator-infix
 mod test_operator_parsing;
