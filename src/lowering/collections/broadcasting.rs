@@ -304,7 +304,8 @@ fn spaced(node: &Node, first: &dyn Fn(&Node) -> String) -> String {
 }
 
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
-	if let Some((head, body, rebuild)) = crate::lowering::type_tests::function_definition(&node) {
+	// every definition form, a result-typed head `g(words: any): bool := …` too
+	if let Some((head, body, rebuild)) = crate::memoization::definition_parts(&node) {
 		if let Some(inner) = with_bound_values(&node, arities) {
 			return rebuild(head, nest_prefix_calls(body, &inner));
 		}
