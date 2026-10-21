@@ -3,7 +3,11 @@
 //! - `tree find pattern` (card tree-find) gives the values of the pattern's one name, a map of its names when it binds
 //!   several, or the matching subtrees when it binds none;
 //! - `tree replace pattern with replacement` (card tree-replace) rewrites each match, children first, so a rewrite
-//!   inside makes its parent match (`n * 1 + 0` simplifies to `n` in one walk).
+//!   inside makes its parent match (`n * 1 + 0` simplifies to `n` in one walk);
+//! - `simplify = rules { data($a * 1) => a; data($a + 0) => a }` (card rewrite-rules) defines `simplify(code)`, the
+//!   walk of a whole rule set: each node rewritten by its first matching rule until none fits, so a rewrite that makes
+//!   a new match is rewritten again (a normal form, as in term rewriting). A rule set that never settles stops after
+//!   STEP_LIMIT rewrites in a row with an error naming the rule that keeps firing (user, decision rule-sets).
 //!
 //! Each use becomes a call of its own recursive walker, defined as source before the passes that lower functions,
 //! matches and loops. The pattern is a map, list or code pattern (or a named one, named_patterns.rs): `find(xs, f)` with
@@ -19,10 +23,16 @@ use std::cell::RefCell;
 
 pub(crate) const FIND_WORD: &str = "find";
 pub(crate) const REPLACE_WORD: &str = "replace";
+pub(crate) const RULES_WORD: &str = "rules";
 const WITH_WORD: &str = "with";
 const WALK: &str = "WALK";
 const PATTERN: &str = "PATTERN";
 const RESULT: &str = "RESULT";
+const ARMS: &str = "ARMS";
+const MESSAGE: &str = "MESSAGE";
+const LIMIT: &str = "LIMIT";
+/// Rewrites in a row of one node before a rule set counts as never settling
+const STEP_LIMIT: i64 = 1000;
 /// The walker's own names, apart from the program's: `node·0`, `found·0`, `child·0`
 const NODE: &str = "NODE";
 const FOUND: &str = "FOUND";
@@ -31,7 +41,9 @@ const BUILT: &str = "BUILT";
 const ITEMS: &str = "ITEMS";
 const ENTRIES: &str = "ENTRIES";
 const NAME: &str = "NAME";
-const PLACEHOLDERS: [&str; 8] = [NODE, FOUND, CHILD, BUILT, ITEMS, ENTRIES, NAME, WALK];
+const STEPS: &str = "STEPS";
+const REWRITTEN: &str = "REWRITTEN";
+const PLACEHOLDERS: [&str; 10] = [NODE, FOUND, CHILD, BUILT, ITEMS, ENTRIES, NAME, STEPS, REWRITTEN, WALK];
 /// The walker of one tree find: the matches of the node itself, then those inside its items, values or pair value
 const FINDER: &str = "WALK(NODE) := {
   FOUND = []
@@ -41,7 +53,8 @@ const FINDER: &str = "WALK(NODE) := {
   if NODE is pair then FOUND += WALK(NODE#2)
   FOUND
 }";
-/// The walker of one tree replace: the node rebuilt of its rewritten items, values or key parts, then itself rewritten
+/// The walker of one tree replace or rule set: the node rebuilt of its rewritten items, values or key parts, then
+/// itself rewritten by the arms
 const REPLACER: &str = "WALK(NODE) := {
   BUILT = NODE
   if NODE is list then {
@@ -55,8 +68,17 @@ const REPLACER: &str = "WALK(NODE) := {
     BUILT = ENTRIES
   }
   if NODE is key then BUILT = key(WALK(NODE.key), NODE.op, WALK(NODE.value))
-  match BUILT { PATTERN => RESULT; _ => BUILT }
+  match BUILT { ARMS => ARMS }
 }";
+
+/// The rewrites in a row a rule set's walker is in, its counter
+const STEP_COUNTER: &str = "global STEPS = 0";
+/// A rule's result walked again, the rewrites in a row counted
+const REWRITE_STEP: &str = "STEPS += 1
+if STEPS > LIMIT then raise MESSAGE
+REWRITTEN = WALK(RESULT)
+STEPS -= 1
+REWRITTEN";
 
 pub fn lower(program: Node) -> Node {
 	if !program.mentions_any(&[FIND_WORD, REPLACE_WORD]) {
@@ -64,7 +86,21 @@ pub fn lower(program: Node) -> Node {
 	}
 	let walkers = RefCell::new(vec![]);
 	let program = with_walker_calls(program, &walkers);
-	let walkers = walkers.into_inner();
+	with_walkers(program, walkers.into_inner())
+}
+
+/// Rule sets as their walkers, before any pass reads their arms `data(…) => …` as definitions or lambdas
+pub fn lower_rule_sets(program: Node) -> Node {
+	if !program.mentions_any(&[RULES_WORD]) {
+		return program;
+	}
+	let walkers = RefCell::new(vec![]);
+	let program = with_rule_sets(program, &walkers);
+	with_walkers(program, walkers.into_inner())
+}
+
+/// The program after the walkers' definitions
+fn with_walkers(program: Node, walkers: Vec<Node>) -> Node {
 	if walkers.is_empty() {
 		return program;
 	}
@@ -73,6 +109,53 @@ pub fn lower(program: Node) -> Node {
 		single => vec![single],
 	};
 	Node::List(walkers.into_iter().chain(statements).collect(), Bracket::None, Separator::Newline)
+}
+
+/// `simplify = rules {…}` (or `:=`) defines the walker simplify; a rule set anywhere else is a function of the node
+fn with_rule_sets(node: Node, walkers: &RefCell<Vec<Node>>) -> Node {
+	let node = match node {
+		Node::List(items, bracket, separator) if separator.separates_statements() => {
+			let kept = items.into_iter().filter(|statement| !defines_rule_set(statement, walkers)).collect();
+			Node::List(kept, bracket, separator)
+		}
+		other => other,
+	};
+	let node = crate::node::children_rewritten(node, |child| with_rule_sets(child, walkers));
+	let Some(rules) = rule_set(&node) else {
+		return node;
+	};
+	let number = walkers.borrow().len();
+	let name = temporary(RULES_WORD, number);
+	walkers.borrow_mut().extend(rule_set_walker(&name, number, &rules));
+	let parameter = Node::Symbol(temporary(NODE, number));
+	key(parameter.clone(), Op::Arrow, call(&name, vec![parameter]))
+}
+
+/// Whether `statement` is `name = rules {…}`, whose walker it adds
+fn defines_rule_set(statement: &Node, walkers: &RefCell<Vec<Node>>) -> bool {
+	let Node::Key(name, Op::Assign | Op::Define, value) = statement.drop_meta() else {
+		return false;
+	};
+	let (Node::Symbol(name), Some(rules)) = (name.drop_meta(), rule_set(value)) else {
+		return false;
+	};
+	let number = walkers.borrow().len();
+	walkers.borrow_mut().extend(rule_set_walker(name, number, &rules));
+	true
+}
+
+/// The rules of `rules {…}`
+fn rule_set(node: &Node) -> Option<Vec<Node>> {
+	let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() else {
+		return None;
+	};
+	let [word, block] = items.as_slice() else {
+		return None;
+	};
+	let Node::List(rules, Bracket::Curly, _) = block.drop_meta() else {
+		return None;
+	};
+	word.is_symbol(RULES_WORD).then(|| block.body_statements()).filter(|_| !rules.is_empty())
 }
 
 fn with_walker_calls(node: Node, walkers: &RefCell<Vec<Node>>) -> Node {
@@ -171,17 +254,77 @@ fn temporary(name: &str, number: usize) -> String {
 
 /// The walker's definition, `find·0(node·0) := {…}`, of the words `find P` or `replace P with Q`
 fn walker(number: usize, words: &[Node]) -> Node {
-	let own_names = PLACEHOLDERS.map(|placeholder| {
-		let name = if placeholder == WALK { words[0].name() } else { placeholder.to_string() };
-		Node::Symbol(temporary(&name, number))
-	});
-	let (source, pattern, result) = match words {
-		[_, pattern, _, replacement] => (REPLACER, pattern, replacement.clone()),
-		[_, pattern] => (FINDER, pattern, found_result(pattern, &own_names[0])),
+	let walk = temporary(words[0].name().as_str(), number);
+	let own_names = own_names(&walk, number);
+	match words {
+		[_, pattern, _, replacement] => {
+			replacer(&own_names, vec![key(pattern.clone(), Op::Arrow, replacement.clone())])
+		}
+		[_, pattern] => {
+			filled(FINDER, &own_names, &[(PATTERN, pattern), (RESULT, &found_result(pattern, &own_names[0].1))])
+		}
 		_ => unreachable!("walk_length gives 3 or 5 words"),
+	}
+}
+
+/// The walker `walk(node) := {…}` of a rule set and its step counter, each rule's result walked again
+fn rule_set_walker(walk: &str, number: usize, rules: &[Node]) -> Vec<Node> {
+	let own_names = own_names(walk, number);
+	let limit = Node::int(STEP_LIMIT);
+	let walked = |rule: &Node, result: &Node| {
+		let message = format!(
+			"the rule set {walk} never settles: {} keeps firing ({STEP_LIMIT} rewrites in a row)",
+			rule.serialize()
+		);
+		let bindings = [(RESULT, result), (LIMIT, &limit), (MESSAGE, &Node::text(&message))];
+		let names = own_names.iter().map(|(placeholder, name)| (*placeholder, name));
+		Node::List(
+			template(REWRITE_STEP, &names.chain(bindings).collect::<Vec<_>>()),
+			Bracket::Curly,
+			Separator::Newline,
+		)
 	};
-	let mut bindings: Vec<(&str, &Node)> = PLACEHOLDERS.iter().copied().zip(own_names.iter()).collect();
-	bindings.extend([(PATTERN, pattern), (RESULT, &result)]);
+	let arms = rules.iter().map(|rule| match rule.drop_meta() {
+		Node::Key(pattern, op @ (Op::Arrow | Op::FatArrow | Op::Colon), result) => {
+			key(*pattern.clone(), *op, walked(rule, result))
+		}
+		other => other.clone(),
+	});
+	let arms = arms.collect();
+	vec![filled(STEP_COUNTER, &own_names, &[]), replacer(&own_names, arms)]
+}
+
+/// The replacing walker whose match holds `arms`, then `_ => BUILT`
+fn replacer(own_names: &[(&str, Node)], mut arms: Vec<Node>) -> Node {
+	let built = &own_names.iter().find(|(placeholder, _)| *placeholder == BUILT).expect("BUILT is a placeholder").1;
+	arms.push(key(Node::symbol("_"), Op::Arrow, built.clone()));
+	crate::welcome_forms::lower_match_arms(with_arms(filled(REPLACER, own_names, &[]), &arms))
+}
+
+/// The match block `{ ARMS => ARMS }` of a walker's source holding `arms`
+fn with_arms(node: Node, arms: &[Node]) -> Node {
+	match node {
+		Node::List(items, Bracket::Curly, _) if matches!(items.as_slice(), [only] if is_arms_placeholder(only)) => {
+			Node::List(arms.to_vec(), Bracket::Curly, Separator::Newline)
+		}
+		other => crate::node::children_rewritten(other, |child| with_arms(child, arms)),
+	}
+}
+
+fn is_arms_placeholder(arm: &Node) -> bool {
+	matches!(arm.drop_meta(), Node::Key(pattern, _, _) if pattern.is_symbol(ARMS))
+}
+
+/// The walker's own names, `node·0` …, its own name `walk`
+fn own_names(walk: &str, number: usize) -> Vec<(&'static str, Node)> {
+	let name = |placeholder: &str| if placeholder == WALK { walk.to_string() } else { temporary(placeholder, number) };
+	PLACEHOLDERS.iter().map(|placeholder| (*placeholder, Node::Symbol(name(placeholder)))).collect()
+}
+
+/// The walker's source with its own names and `bindings` filled in, as one definition
+fn filled(source: &str, own_names: &[(&str, Node)], bindings: &[(&str, &Node)]) -> Node {
+	let names = own_names.iter().map(|(placeholder, name)| (*placeholder, name));
+	let bindings: Vec<(&str, &Node)> = names.chain(bindings.iter().copied()).collect();
 	let statements = template(source, &bindings);
 	match <[Node; 1]>::try_from(statements) {
 		Ok([definition]) => definition,
