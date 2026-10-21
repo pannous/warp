@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+# bit_and and bit_or of whole numbers anywhere in 64 bits, the largest and negative ones included
+use math
+print bit_and(6, 3)
+print bit_or(6, 3)
+print bit_and(-129, 127)
+print bit_or(-128, 127)
+print bit_and(-1, -1)
+print bit_and(9223372036854775807, 127)
+print bit_or(9223372036854775680, 127)
+print bit_and(-9223372036854775807, -2)
