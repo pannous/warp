@@ -41,17 +41,21 @@ map_entries(n: any): any := {
 map_keys(m: any): list := {
 	# `{}` is the empty value: its keys are the empty value too, as Rust's
 	if is_null(m) { return m }
-	out = new_list(0)
 	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance { not_a_map() }
-	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
+	entries = unboxed_list(fields_of(m))
+	if #entries == 0 { return ø }
+	out = new_list(0)
+	for entry in entries { out += [key_name(entry)] }
 	out
 }
 map_values(m: any): list := {
 	# `{}` is the empty value: its values are the empty value too, as Rust's
 	if is_null(m) { return m }
-	out = new_list(0)
 	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance { not_a_map() }
-	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
+	entries = unboxed_list(fields_of(m))
+	if #entries == 0 { return ø }
+	out = new_list(0)
+	for entry in entries { out += [key_value(entry)] }
 	out
 }
 # the name a key looks up an entry by: a symbol's letters, so the type value `float` names the entry `float:` (Rust:
