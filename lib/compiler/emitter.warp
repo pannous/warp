@@ -724,14 +724,20 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		}
 		"answered_length": ["int", [op.i32_const] + sleb(written_address) + [op.i32_load, 2, 0, op.i64_extend_i32_s]]
 		"memory_byte": ["int", index_code(values#1) + [op.i32_load8_u, 0, 0, op.i64_extend_i32_u]]
+		# the value written, as `x = v` is v
+		"memory_set_byte": {
+			written = uleb(fresh_local(body, "int"))
+			["int", index_code(values#1) + converted(values#2, "int") + [op.local_tee] + written + [op.i32_wrap_i64, op.i32_store8, 0, 0, op.local_get] + written]
+		}
 		# copy_text(to, at, from, start, count)
 		_: [no_kind, values#1#2 + index_code(values#2) + values#3#2 + index_code(values#4) + index_code(values#5) + gc_code(gc_ops.array_copy, [gc.text, gc.text])]
 	}
 }
-# the intrinsics a program calls too, as Rust's text builtins byte_at(text, offset) and memory_byte(address)
-program_intrinsics = ["byte_at", "memory_byte"]
+# the intrinsics a program calls too, as Rust's text builtins byte_at(text, offset), memory_byte(address) and
+# memory_set_byte(address, value)
+program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte"]
 intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
-	output_byte: 2, write_output: 1, host_read: 1, answered_length: 0, memory_byte: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
+	output_byte: 2, write_output: 1, host_read: 1, answered_length: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, closure_text: 1}
