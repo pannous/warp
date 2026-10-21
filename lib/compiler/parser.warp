@@ -1548,10 +1548,12 @@ def trailing_guard_at(p: Parser): text {
 }
 
 // Whether the condition from `at` to the end of its statement has a branch: a spaced `{` outside brackets
-// (`point{x:1}` is data) or `then`
+// (`point{x:1}` is data) or `then`. A match arm's guard has none: `n if n > 3 => {…}` ends at the `=>`, and
+// `if k in {a: 1} => …` holds a map
 // Rust twin: if_else.rs condition_has_branch
 def condition_has_branch(p: Parser, at: int): bool {
 	depth = 0
+	spaced_brace_open = false
 	// ' ' while outside quotes
 	quote = ' '
 	for i in at ..< p.n {
@@ -1560,18 +1562,25 @@ def condition_has_branch(p: Parser, at: int): bool {
 			if c == quote { quote = ' ' }
 		} else if c == '"' or c == '\'' {
 			quote = c
-		} else if c == '(' or c == '[' {
+		} else if c == '{' and depth == 0 {
+			// a comparison, not is_blank: a `: bool` call is an Int to the analyzer (card bool-call-int)
+			spaced_brace_open = p.code[i - 1] == ' ' or p.code[i - 1] == '\t'
 			depth = depth + 1
-		} else if c == ')' or c == ']' {
+		} else if c == '(' or c == '[' or c == '{' {
+			depth = depth + 1
+		} else if c == ')' or c == ']' or c == '}' {
 			if depth == 0 { return false }
+			if c == '}' and depth == 1 and spaced_brace_open {
+				if not starts_at(p.code, "=>", blank_end(p, i + 1)) { return true }
+				spaced_brace_open = false
+			}
 			depth = depth - 1
 		} else if depth == 0 {
-			if c == '{' and is_blank(p.code[i - 1]) { return true }
-			if c == '\n' or c == ';' or c == '}' { return false }
+			if starts_at(p.code, "=>", i) or c == '\n' or c == ';' { return false }
 			if c == 't' and not is_name_char(p.code[i - 1]) and keyword_at_position(p, "then", i) { return true }
 		}
 	}
-	false
+	spaced_brace_open
 }
 
 // `x++ if c` is `if c then x++`, `x++ while c` is `while c do x++`; `unless c` guards with `not c`
