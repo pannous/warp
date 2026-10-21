@@ -245,11 +245,12 @@ form_of(n: any): text := {
 # a template, an error value or an empty group, which travel behind the opaque word (walk.warp), in the program's words
 opaque_form(view: any): text := {
 	kind = kind_of(view)
-	if kind == "list" { return "the empty group " + opening_of(view#2) + closing_of(opening_of(view#2)) }
+	if kind == "list" { return "the empty group " + bracket_pair(view#2) }
 	if kind == "error" { return "an error value" }
 	"a " + kind
 }
 opening_of(bracket: text): text := if bracket == "" then "(" else bracket
+bracket_pair(bracket: text): text := {"(": "()", "[": "[]", "{": "{}"}[opening_of(bracket)] ?? "()"
 
 # a function made with no parameters, its body given later or its code written by the caller
 # `: any` until card class-named: a class Function as a result type fails in the Rust lane
