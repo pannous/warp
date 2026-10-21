@@ -291,29 +291,6 @@ impl TypeManager {
 	}
 }
 
-/// The declared types, each after the types its fields name: a struct type refers only to earlier ones, so a field may
-/// name a type declared further down (`op: Op` in enum Node of lib/compiler/node.warp)
-pub(super) fn in_dependency_order(types: &[TypeDef]) -> Vec<&TypeDef> {
-	fn visit<'a>(type_def: &'a TypeDef, types: &'a [TypeDef], ordered: &mut Vec<&'a TypeDef>, seen: &mut Vec<&'a str>) {
-		if seen.contains(&type_def.name.as_str()) {
-			return;
-		}
-		seen.push(&type_def.name);
-		for field in &type_def.fields {
-			let named = crate::type_kinds::named_field_type(&field.type_name);
-			if let Some(dependency) = types.iter().find(|candidate| candidate.name == named) {
-				visit(dependency, types, ordered, seen);
-			}
-		}
-		ordered.push(type_def);
-	}
-	let (mut ordered, mut seen) = (vec![], vec![]);
-	for type_def in types {
-		visit(type_def, types, &mut ordered, &mut seen);
-	}
-	ordered
-}
-
 /// A struct type that other types may extend (or, with a supertype, one that extends it)
 fn struct_subtype(fields: Vec<FieldType>, supertype_idx: Option<u32>) -> SubType {
 	SubType {
@@ -326,4 +303,37 @@ fn struct_subtype(fields: Vec<FieldType>, supertype_idx: Option<u32>) -> SubType
 			describes: None,
 		},
 	}
+}
+
+/// The declared types, each after the types its fields hold, else in declaration order: a struct type refers only to
+/// one emitted before it, so `class Function { signature: Signature }` may come before `class Signature`. Types that
+/// hold each other (a cycle) keep their declaration order
+pub(super) fn in_field_order(types: &[TypeDef]) -> Vec<&TypeDef> {
+	let mut ordered: Vec<&TypeDef> = Vec::with_capacity(types.len());
+	let mut visiting: Vec<&str> = vec![];
+	for type_def in types {
+		place_after_field_types(type_def, types, &mut ordered, &mut visiting);
+	}
+	ordered
+}
+
+fn place_after_field_types<'a>(
+	type_def: &'a TypeDef,
+	types: &'a [TypeDef],
+	ordered: &mut Vec<&'a TypeDef>,
+	visiting: &mut Vec<&'a str>,
+) {
+	let placed = |name: &str, ordered: &[&TypeDef]| ordered.iter().any(|done| done.name == name);
+	if placed(&type_def.name, ordered) || visiting.contains(&type_def.name.as_str()) {
+		return;
+	}
+	visiting.push(&type_def.name);
+	for field in &type_def.fields {
+		let held = crate::type_kinds::named_field_type(&field.type_name);
+		if let Some(held_type) = types.iter().find(|candidate| candidate.name == held) {
+			place_after_field_types(held_type, types, ordered, visiting);
+		}
+	}
+	visiting.pop();
+	ordered.push(type_def);
 }

@@ -4,9 +4,10 @@
 //! Only top-level functions defined once, whose parameter is only called or passed on, and only names no assignment,
 //! parameter or one-parameter lambda binds too (a loop variable or a destructured name of the same name is not looked
 //! for: a call's head is the function anyway); a copy's own calls are specialised in turn (`fold(f, xs) := … fold(f,
-//! rest)`), up to a cap.
+//! rest)`), up to a cap. A library word the program doesn't bind itself and an operator are passed so too:
+//! `each(abs, n)` adds `each·abs(n)`, which calls abs as written code does, `fold(+, xs)` `fold·+(xs)`, which adds
+//! (card specialise-library-functions).
 
-use super::inlining::renamed_names;
 use super::nodes::{children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -43,13 +44,13 @@ impl Definition {
 	}
 
 	/// The copy of this function for the function `passed` given as its parameter at `index`
-	fn specialised(&self, index: usize, passed: &str) -> Definition {
+	fn specialised(&self, index: usize, passed: &Passed) -> Definition {
 		let mut params = self.params.clone();
 		let param = params.remove(index);
 		Definition {
-			name: copy_name(&self.name, passed),
+			name: copy_name(&self.name, &passed.name),
 			params,
-			body: renamed_names(self.body.clone(), &HashSet::from([param]), &|_| passed.to_string()),
+			body: passed.put_in(self.body.clone(), &param),
 			op: self.op,
 		}
 	}
@@ -64,6 +65,84 @@ impl Definition {
 		});
 		used && !other_use
 	}
+}
+
+/// What a copy is made for, and how it calls it
+enum Calling {
+	/// a function of the program, by name
+	Function,
+	/// a library word, as the lambda it would become calls it (function_values.rs library_word_lambda): `abs x` an
+	/// operator's
+	LibraryWord,
+	/// `+`: `a + b`
+	Operator(Op),
+}
+
+/// A function given as an argument: its name in the copy's, the node passing it on, how it is called
+struct Passed {
+	name: String,
+	argument: Node,
+	calling: Calling,
+}
+
+impl Passed {
+	/// The body with each call `param(a, b)` the passed function's, any other use (passing it on) the argument
+	fn put_in(&self, node: Node, param: &str) -> Node {
+		match node {
+			Node::Symbol(name) if name == param => self.argument.clone(),
+			Node::List(items, Bracket::Round, Separator::None)
+				if items.first().is_some_and(|head| head.is_symbol(param)) =>
+			{
+				let arguments: Vec<Node> = items.into_iter().skip(1).map(|item| self.put_in(item, param)).collect();
+				self.called(arguments)
+			}
+			other => children_rewritten(other, |child| self.put_in(child, param)),
+		}
+	}
+
+	fn called(&self, mut arguments: Vec<Node>) -> Node {
+		match self.calling {
+			Calling::Function => {
+				let head = Node::Symbol(self.name.clone());
+				Node::List([vec![head], arguments].concat(), Bracket::Round, Separator::None)
+			}
+			Calling::LibraryWord => crate::closures::word_applied(&self.name, arguments),
+			Calling::Operator(op) if arguments.len() == 2 => {
+				let right = arguments.pop().expect("two arguments");
+				key(arguments.pop().expect("two arguments"), op, right)
+			}
+			// a binary operator called with another count, as its closure would be: refused alike
+			Calling::Operator(_) => {
+				Node::List([vec![self.argument.clone()], arguments].concat(), Bracket::Round, Separator::None)
+			}
+		}
+	}
+}
+
+/// `+` given as a function, the parser's operator with nothing on either side (`(+ ø ø)`), or its symbol when a copy
+/// passes it on
+fn binary_operator(argument: &Node) -> Option<Op> {
+	let op = match argument.drop_meta() {
+		Node::Key(left, op, right) if left.is_nothing() && right.is_nothing() => *op,
+		Node::Symbol(text) => crate::lambdas::operator_of_value(text)?,
+		_ => return None,
+	};
+	crate::lambdas::operator_value_text(op).map(|_| op)
+}
+
+/// `abs` given as a function, the parser's bare operator `‖` that ambiguous_forms.rs operator_values made the lambda
+/// `value => ‖value`: its word
+fn operator_word(argument: &Node) -> Option<&'static str> {
+	let Node::Key(parameter, Op::Arrow, body) = argument.drop_meta() else {
+		return None;
+	};
+	let Node::Key(nothing, op, operand) = body.drop_meta() else {
+		return None;
+	};
+	let applied =
+		nothing.is_nothing() && operand.drop_meta() == parameter.drop_meta() && parameter.symbol_name().is_some();
+	let words = crate::warp_parser::PREFIX_OPERATOR_WORDS.iter();
+	words.filter(|_| applied).find(|(_, word_op)| word_op == op).map(|(word, _)| *word)
 }
 
 fn copy_name(function: &str, passed: &str) -> String {
@@ -110,6 +189,8 @@ struct Specialiser {
 	definitions: HashMap<String, Definition>,
 	/// The functions a call may pass by name: defined once at the top level, their names bound nowhere else
 	passable: HashSet<String>,
+	/// Every name the program defines or binds: a library word of such a name is not the library's
+	own_names: HashSet<String>,
 	/// The copies made, in order, each after the function it copies
 	copies: Vec<(String, Definition)>,
 }
@@ -143,11 +224,11 @@ impl Specialiser {
 			return None;
 		}
 		let (index, passed) = arguments.iter().enumerate().find_map(|(index, argument)| {
-			let passed = argument.symbol_name().filter(|name| self.passable.contains(*name))?;
-			let free = !function.params.iter().any(|param| param == passed);
-			(free && function.takes_function_at(index)).then(|| (index, passed.to_string()))
+			let passed = self.passed(argument)?;
+			let free = !function.params.iter().any(|param| *param == passed.name);
+			(free && function.takes_function_at(index)).then_some((index, passed))
 		})?;
-		let name = copy_name(&function.name, &passed);
+		let name = copy_name(&function.name, &passed.name);
 		if !self.definitions.contains_key(&name) {
 			if self.copies.len() >= MAX_COPIES {
 				return None;
@@ -158,6 +239,29 @@ impl Specialiser {
 			self.copies.push((original, copy));
 		}
 		Some((index, name))
+	}
+
+	/// The argument as a function a copy can call: a function of the program, a library word or an operator
+	fn passed(&self, argument: &Node) -> Option<Passed> {
+		if let Some(op) = binary_operator(argument) {
+			let text = crate::lambdas::operator_value_text(op)?;
+			return Some(Passed {
+				name: text.to_string(),
+				argument: Node::Symbol(text.to_string()),
+				calling: Calling::Operator(op),
+			});
+		}
+		let name = argument.symbol_name().or_else(|| operator_word(argument))?;
+		let calling = if self.passable.contains(name) {
+			Calling::Function
+		} else if !self.own_names.contains(name)
+			&& crate::lowering::function_values::library_function_arity(name).is_some()
+		{
+			Calling::LibraryWord
+		} else {
+			return None;
+		};
+		Some(Passed { name: name.to_string(), argument: Node::Symbol(name.to_string()), calling })
 	}
 
 	/// The top-level function a copy (of a copy) was made from: its copies follow it in the program
@@ -212,6 +316,7 @@ pub fn lower(program: Node) -> Node {
 	let once: Vec<&Definition> = found.iter().filter(|definition| counts[definition.name.as_str()] == 1).collect();
 	let passable =
 		once.iter().map(|definition| definition.name.clone()).filter(|name| !bound_as_value(&bindings, name)).collect();
+	let own_names = counts.keys().map(|name| name.to_string()).chain(bindings.bound()).collect();
 	let higher_order: HashMap<String, Definition> = once
 		.into_iter()
 		.filter(|definition| (0..definition.params.len()).any(|index| definition.takes_function_at(index)))
@@ -220,7 +325,7 @@ pub fn lower(program: Node) -> Node {
 	if higher_order.is_empty() {
 		return program;
 	}
-	let mut specialiser = Specialiser { definitions: higher_order, passable, copies: vec![] };
+	let mut specialiser = Specialiser { definitions: higher_order, passable, own_names, copies: vec![] };
 	let rewritten = specialiser.rewrite(program.clone());
 	if specialiser.copies.is_empty() {
 		return program;

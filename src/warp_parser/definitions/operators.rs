@@ -210,11 +210,8 @@ impl WarpParser {
 	pub(crate) fn try_parse_operator_method_head(&mut self) -> Option<Node> {
 		let (op, chars) = self.peek_operator()?;
 		crate::operators::operator_method(op)?;
-		let mut offset = chars + self.parenthesis_length(chars)?;
-		while matches!(self.peek_char(offset), ' ' | '\t') {
-			offset += 1;
-		}
-		if (self.peek_char(offset), self.peek_char(offset + 1)) != (':', '=') {
+		let offset = chars + self.parenthesis_length(chars)?;
+		if !self.text_at(offset + self.blanks_at(offset), ":=") {
 			return None;
 		}
 		self.advance_by(chars);
@@ -269,7 +266,7 @@ impl WarpParser {
 		if self.current_char().is_alphabetic() {
 			return None; // a word operator alone is a name: the parameter `to` of `hanoi(n, from, to, via)`
 		}
-		let blanks = (chars..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
+		let blanks = self.blanks_at(chars);
 		// a pattern's rest `Point{x, ..}` (lowering/switch.rs rest_pattern) also ends a block
 		let ends_rest = matches!(op, Op::Range | Op::To) && self.peek_char(chars + blanks) == '}';
 		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') && !ends_rest {
