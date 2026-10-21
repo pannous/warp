@@ -1,4 +1,9 @@
 # What `m.name` reads beyond a map's entries: positions, entries, list parts, swizzles
+use "intrinsics.warp"
+use "maps.warp"
+use "nodes.warp"
+use "text.warp"
+use "types.warp"
 # whether `m.name` reads a field: m a map or an instance with an entry so named, an entry's key, value or name, a
 # symbol's name
 has_field(m: Node, name: text): bool := {

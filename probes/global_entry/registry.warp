@@ -1,0 +1,12 @@
+# a used file's main-level instance, whose map its functions write entries of and replace
+class Registry { names: any = {}; count: int = 0 }
+registry = Registry({}, 0)
+def remember(name: text): int {
+	if name not in registry.names { registry.names[name] = #registry.names.keys }
+	registry.names[name]
+}
+def forget_all(): int {
+	registry.names = {}
+	0
+}
+def known(): any { registry.names.keys }

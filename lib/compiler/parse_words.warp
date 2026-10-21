@@ -53,7 +53,8 @@ words_rewritten(n: Node, rewrite: function, words: list): any := {
 # does the definition bind the word: a parameter of that name, or a definition of it in its body
 binds_word(definition: any, word: text): bool := {
 	head = key_of(definition)
-	is_group(head) and items_of(head).any(part => part == symbol(word)) or body_statements(value_of(definition)).any(statement => declared_name(statement) == word)
+	if is_group(head) and items_of(head).any(part => part == symbol(word)) { return yes }
+	body_statements(value_of(definition)).any(statement => declared_name(statement) == word)
 }
 
 parse_words(program: Node): Node := {

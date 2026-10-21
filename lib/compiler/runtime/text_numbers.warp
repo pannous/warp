@@ -1,6 +1,14 @@
 ## texts as numbers at run time (card card-4; Rust's text_as_int and text_as_float in
 ## src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in src/wasm_emitter/numbers/casts.rs): a text
 ## that spells no number fails with invalid_number
+use "intrinsics.warp"
+use "conversions.warp"
+use "errors.warp"
+use "exact.warp"
+use "floats.warp"
+use "instructions.warp"
+use "library_words.warp"
+use "text.warp"
 # 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
 sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == 45 or byte_at(t, 0) == 43) then 1 else 0
 # t starts with -

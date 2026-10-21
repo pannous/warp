@@ -1,4 +1,9 @@
 # Floats: rounding, their shortest text and digits
+use "intrinsics.warp"
+use "conversions.warp"
+use "exact.warp"
+use "instructions.warp"
+use "library_words.warp"
 # `round(x)`: the nearest int, half to even as wasm rounds (f64.nearest)
 rounded(x: float): int := truncated(float_nearest(x))
 # the text of a run-time float (src/wasm_emitter/numbers/float_text.rs): its shortest digits that read back,

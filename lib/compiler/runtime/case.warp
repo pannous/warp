@@ -1,4 +1,11 @@
 # Upper and lower case of texts, ASCII by shifting, any other code point through the case tables
+use case_tables
+use "intrinsics.warp"
+use "characters.warp"
+use "conversions.warp"
+use "instructions.warp"
+use "library_words.warp"
+use "text_numbers.warp"
 # `t.lower()`, `t.upper()`: an ASCII text with its letters first…last moved by shift, any other mapped code point by
 # code point through the case table (lib/case_tables.warp, the twin of src/wasm_emitter/text/text_unicode.rs)
 text_lower(t: text): text := if is_ascii(t) then ascii_case(t, 65, 90, 32) else table_case(t, lower_case_text())
