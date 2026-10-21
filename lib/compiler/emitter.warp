@@ -847,7 +847,7 @@ def texted(type: any, value: any): list { if value#1 == "char" and field_kind(ty
 # whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion; an
 # instance of a class is a node, as Rust's class-typed fields take it
 def admits(type: any, kind: text): bool {
-	type == ø or field_kind(type) == "node" or field_kind(type) == kind or (kind == "node" and field_kind(type) == "instance")
+	type == ø or field_kind(type) == "node" or field_kind(type) == kind or (kind == "node" and aliased_type(type) in module.classes)
 }
 # a write to a field `name` of a target known only at run time: every class's field so named takes the kind; a value
 # known only at run time too is written as it is, as Rust's field writes check no field type
