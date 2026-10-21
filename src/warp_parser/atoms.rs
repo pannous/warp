@@ -107,6 +107,12 @@ impl WarpParser {
 				self.advance();
 				return Empty;
 			}
+			// `∅`, the empty set sign, is ø while warp has no sets (decision empty-is-not-missing)
+			'∅' if !self.options.data_mode => {
+				self.advance();
+				crate::errors::diagnostic::note_alias(EMPTY_SET_SIGN, NOTHING_SIGN);
+				return Empty;
+			}
 			'∞' => {
 				self.advance();
 				return Node::Number(Number::Inf);
@@ -304,10 +310,6 @@ impl WarpParser {
 
 		if symbol == NONE_WORD && self.peek_char(0) == '(' && !self.options.data_mode {
 			return error(NONE_CALL_ERROR);
-		}
-		if symbol == EMPTY_SET_SIGN && !self.options.data_mode {
-			crate::errors::diagnostic::note_alias(EMPTY_SET_SIGN, NOTHING_SIGN);
-			return Empty;
 		}
 		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| {
 			let length = symbol.chars().count();
