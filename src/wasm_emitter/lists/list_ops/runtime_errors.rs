@@ -10,6 +10,8 @@ pub(super) const COUNT_NOT_INTEGRAL: &str = "count_must_be_an_integer";
 pub(in crate::wasm_emitter) const INT_NOT_WHOLE: &str = "an_int_must_be_a_whole_number";
 /// `m.a * 2` with a text in m.a, where the kinds are known only at run time (NODE_ARITHMETIC)
 pub(in crate::wasm_emitter) const NOT_A_NUMBER: &str = "not_a_number";
+/// `t = ø; t += "a"` with ø held at run time: ø + text fails as ø + 1 does (decision empty-plus-text)
+pub(in crate::wasm_emitter) const EMPTY_PLUS_TEXT: &str = "ø_plus_a_text";
 /// P65: arithmetic a text can't do on a character fails; its code point is ord(c)
 pub(in crate::wasm_emitter) const CHARACTER_IS_NO_NUMBER: &str =
 	"a character is not a number in arithmetic: codepoint(c) gives its code point";
@@ -29,7 +31,7 @@ pub(super) fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
 pub(super) const WHOLE_NUMBER_FIX: &str = "fix: compute it with /! (floor division) or `… as int`";
-pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 8] = [
+pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 9] = [
 	(
 		super::super::super::numbers::casts::INVALID_CODE_POINT,
 		"a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF",
@@ -41,6 +43,7 @@ pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 8] = [
 	(super::super::super::declared_values::LIST_CANNOT_HOLD, "its declared element type does not admit it (P215)"),
 	(ERROR_IN_DATA, ERROR_IN_DATA_FIX),
 	(ERROR_IN_FIELD, ERROR_IN_DATA_FIX),
+	(EMPTY_PLUS_TEXT, "fix: start a text with `t = \"\"`, a list with `t = []`"),
 ];
 
 /// The class of a caught runtime error, Python's name for it (decision error-classes): each a subclass of Error in
@@ -103,7 +106,7 @@ const ERROR_IN_DATA_FIX: &str = "handle it with try … else, or declare `or err
 /// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
 pub(super) const NOT_A_MAP: &str = "not_a_map";
 
-pub const RUNTIME_ERRORS: [&str; 34] = [
+pub const RUNTIME_ERRORS: [&str; 35] = [
 	"index_out_of_range",
 	INDEX_NOT_INTEGRAL,
 	"invalid_number",
@@ -138,6 +141,7 @@ pub const RUNTIME_ERRORS: [&str; 34] = [
 	super::super::super::numbers::float_text::NOT_FINITE,
 	ERROR_IN_DATA,
 	ERROR_IN_FIELD,
+	EMPTY_PLUS_TEXT,
 ];
 
 impl WasmGcEmitter {

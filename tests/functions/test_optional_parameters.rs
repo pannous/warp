@@ -27,3 +27,12 @@ fn maybe_marks_an_optional_parameter() {
 	is!("def f(maybe int x){ x ?? 5 }; f()", 5);
 	is!("def f(x: maybe int){ x ?? 5 }; f()", 5);
 }
+
+// card optional-text-slice: an optional parameter keeps its type for the words given it, `t: text?` sliced is a text
+#[test]
+fn an_optional_parameter_keeps_its_type() {
+	is!("g(a: text) := a; tail(t: text?): text := g(t[1..]); tail(\"abc\")", "bc");
+	is!("g(a: text) := a; f(t: text?) := g(t.reverse()); f(\"abc\")", "cba");
+	is!("g(xs: list) := count xs; tail(xs: list?) := g(xs[1..]); tail([1, 2, 3])", 2);
+	is!("tail(t: text?) := t[1..] ?? \"\"; tail(\"abc\")", "bc");
+}

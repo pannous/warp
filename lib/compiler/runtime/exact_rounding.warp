@@ -17,7 +17,7 @@ exact_abs(x: any): any := {
 }
 # the integer part, rounded toward 0
 exact_trunc(x: any): any := {
-	if is_ratio(x) == 0 { return x }
+	if not is_ratio(x) { return x }
 	int_quotient(ratio_numerator(x), ratio_denominator(x))
 }
 # a - b * trunc(a / b), the sign of a as i64.rem_s
@@ -30,7 +30,7 @@ exact_mod(a: any, b: any): any := {
 }
 # the largest integer <= x, exact beyond the float range: a negative ratio truncates up, so one less
 exact_floor(x: any): any := {
-	if is_ratio(x) == 0 { return x }
+	if not is_ratio(x) { return x }
 	whole = exact_trunc(x)
 	if ratio_numerator(x) < 0 { return exact_sub(whole, 1) }
 	whole
@@ -42,11 +42,11 @@ exact_euclid_div(a: any, b: any): any := {
 }
 # x /= y: an int x stays an int, the Euclidean quotient (x - x % y) / y; a ratio x divides exactly
 exact_div_assign(x: any, y: any): any := {
-	if is_ratio(x) == 1 { return exact_div(x, y) }
+	if is_ratio(x) { return exact_div(x, y) }
 	exact_div(exact_sub(x, exact_mod(x, y)), y)
 }
 # `floor x` of a boxed number: exact for an int or ratio, a float's floor as an int
 floored_node(n: any): any := {
-	if kind_code(n) != 1 { return truncated(float_floor(unboxed_float(n))) }
+	if kind_code(n) != Kind.Int { return truncated(float_floor(unboxed_float(n))) }
 	exact_floor(n)
 }

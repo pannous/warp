@@ -170,6 +170,7 @@ impl WasmGcEmitter {
 		self.emit_list_concat();
 		self.emit_list_extend();
 		self.emit_list_become();
+		self.emit_list_drop_last();
 		self.emit_element_children();
 		self.emit_element_body();
 		self.emit_swizzled();
@@ -504,6 +505,13 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::Return, I::End]);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
+					I::LocalGet(kind), I::I64Const(UNMARKED_KIND), I::I64And, I::I64Const(crate::type_kinds::EMPTY_LIST_KIND),
+					I::I64Eq, I::If(BlockType::Empty),
+				]);
+				s.emit_type_value(f, crate::words::LIST_WORD);
+				Self::emit_list(f, &[I::Return, I::End]);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
 					I::LocalGet(kind), I::I64Const(crate::type_kinds::BUILTIN_FUNCTION_MARK), I::I64And, I::I64Const(0), I::I64Ne,
 					I::If(BlockType::Empty),
 				]);
@@ -613,10 +621,10 @@ impl WasmGcEmitter {
 
 					// ø is the empty list
 					s.emit_field(func, 0, 0);
-					s.emit_unmarked(func);
+					Self::emit_kind_test(func, Kind::Empty as i64, I::I64Eq);
 					#[rustfmt::skip]
 					Self::emit_list(func, &[
-						I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+						I::If(BlockType::Empty),
 							I::I64Const(0), I::Return,
 						I::End,
 					]);
@@ -900,9 +908,7 @@ impl WasmGcEmitter {
 
 	/// The number of items (i64) of the list node on the stack, as list_items finds them
 	pub(in crate::wasm_emitter) fn emit_items_length(&self, func: &mut Function) {
-		self.call(func, super::list_dispatch::LIST_ITEMS);
-		let length = I::StructGet { struct_type_index: self.type_manager.node_list_type, field_index: 0 };
-		Self::emit_list(func, &[length, I::I64ExtendI32U]);
+		self.call(func, super::list_dispatch::LIST_ITEM_COUNT);
 	}
 
 	/// The locals of an item walk, in the order of ItemWalk::at
@@ -1162,10 +1168,10 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
 		Self::emit_list(func, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Else]);
 		self.emit_field(func, list, 0);
-		self.emit_unmarked(func);
+		Self::emit_kind_test(func, Kind::Empty as i64, I::I64Eq);
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
-			I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
+			I::If(BlockType::Empty),
 				I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::LocalSet(list),
 			I::End,
 			I::End,

@@ -338,7 +338,11 @@ impl WarpParser {
 
 	pub(crate) fn group_by_separators(&self, items_with_seps: Vec<(Node, Separator)>, bracket: Bracket) -> Node {
 		if items_with_seps.is_empty() {
-			return if bracket == Bracket::Curly { Node::List(Vec::new(), bracket, Separator::None) } else { Empty };
+			return match bracket {
+				Bracket::Curly => Node::List(Vec::new(), bracket, Separator::None),
+				Bracket::Square => Node::empty_list(),
+				_ => Empty,
+			};
 			// an empty block is a value
 		}
 

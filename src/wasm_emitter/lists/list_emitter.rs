@@ -26,8 +26,9 @@ const PLAIN_VALUE_KINDS: [Kind; 9] = [
 ];
 
 /// Runtime functions called from lowered code with their node arguments, and how many those are
-const NODE_ARGUMENT_CALLS: [(&str, usize); 3] = [
+const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
 	(crate::list_mutations::LIST_BECOME, 2),
+	(crate::list_mutations::LIST_DROP_LAST, 1),
 	(super::super::lists::list_ops::LIST_EXTEND, 2),
 	(super::super::reflection::library_ops::LIST_SORTED_BY, 2),
 ];
@@ -601,6 +602,12 @@ impl WasmGcEmitter {
 		}
 		if let Some(map_type) = crate::analyzer::held_map_type(arg, &self.scope) {
 			return map_type;
+		}
+		let holds_empty_list = |name: &str| {
+			crate::analyzer::holds_empty_list(&self.scope, name) && self.get_type(arg) == crate::type_kinds::Kind::Empty
+		};
+		if arg.is_empty_list_literal() || arg.symbol_name().is_some_and(holds_empty_list) {
+			return crate::words::LIST_WORD.to_string(); // `[]` (card run-time-empty)
 		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
@@ -1274,6 +1281,7 @@ impl WasmGcEmitter {
 		self.resolves_call(word)
 			|| crate::numbers::units::is_unit(word)
 			|| crate::analyzer::type_word_kind(word).is_some()
+			|| crate::analyzer::names_list_type(word) // a plural type word: `type Code = ints`
 			|| self.ctx.variant_names.contains(word) // an enum's case: `Op.Add` is the case Add, near add or not
 	}
 

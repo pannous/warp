@@ -245,6 +245,37 @@ impl WasmGcEmitter {
 						]);
 						s.call(f, "list_concat");
 						Self::emit_list(f, &[I::Return, I::End]);
+						let kind_is = |f: &mut Function, operand: u32, kind: Kind| {
+							s.emit_field(f, operand, 0);
+							Self::emit_kind_test(f, kind as i64, I::I64Eq);
+						};
+						// the whole kind (bracket included, element mark not): ø and `[]` are both Empty
+						let unmarked_kind_is = |f: &mut Function, operand: u32, kind: i64| {
+							s.emit_field(f, operand, 0);
+							Self::emit_list(
+								f,
+								&[
+									I::I64Const(crate::type_kinds::UNMARKED_KIND),
+									I::I64And,
+									I::I64Const(kind),
+									I::I64Eq,
+								],
+							);
+						};
+						// ø + text fails as ø + 1 does (decision empty-plus-text); `[]` + text appends it
+						unmarked_kind_is(f, 0, Kind::Empty as i64);
+						kind_is(f, 1, Kind::Text);
+						kind_is(f, 1, Kind::Codepoint);
+						Self::emit_list(f, &[I::I32Or, I::I32And]);
+						s.emit_fail_if(f, EMPTY_PLUS_TEXT);
+						// a list + an item that is no list: the item appended, `xs + [item]` (decision list-append-plus)
+						kind_is(f, 0, Kind::List);
+						kind_is(f, 0, Kind::Block);
+						unmarked_kind_is(f, 0, crate::type_kinds::EMPTY_LIST_KIND);
+						Self::emit_list(f, &[I::I32Or, I::I32Or, I::If(BlockType::Empty), I::LocalGet(0)]);
+						s.emit_one_item_list(f, 1);
+						s.call(f, "list_concat");
+						Self::emit_list(f, &[I::Return, I::End]);
 						// two texts (or characters): their concatenation, `await a + await b` of two text tasks
 						let is_text = |f: &mut Function, operand: u32| {
 							s.emit_field(f, operand, 0);
@@ -604,9 +635,12 @@ impl WasmGcEmitter {
 				}
 				true
 			}
+			// a list (a `[]` local too) plus a value of run-time kind is node_add's, decided at run time
+			Kind::List if crate::analyzer::node_arithmetic(Kind::List, op, self.get_type(right)).is_some() => false,
 			Kind::List => {
+				let item_list = self.appended_item_list(left, right);
 				self.emit_node_instructions(func, left);
-				self.emit_node_instructions(func, right);
+				self.emit_node_instructions(func, item_list.as_ref().unwrap_or(right));
 				self.emit_call(func, "list_concat");
 				true
 			}
@@ -725,7 +759,13 @@ impl WasmGcEmitter {
 		op: &crate::operators::Op,
 		right: &Node,
 	) -> Kind {
-		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right, &self.scope)
+		crate::analyzer::arithmetic_kind_of_operands(
+			self.get_type(left),
+			op,
+			self.get_type(right),
+			(left, right),
+			&self.scope,
+		)
 	}
 
 	/// Arithmetic on a value whose kind only the run time knows (`x*x` of a parameter held as a Node): maybe a float

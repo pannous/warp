@@ -11,6 +11,7 @@
 use "walk.warp"
 use "words.warp"
 use "signatures.warp"
+use "kinds.warp"
 use math
 use os
 
@@ -71,10 +72,6 @@ gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [80, 0, 95, 
 	[79, 1, 3, 95, 6] + node_fields + [126, 0, 126, 0, 99, 3, 0]]
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
 	["MetaNode", ["kind", "data", "value", "line", "column", "comment"]]]
-# a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
-node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, error: 11, bool: 257, list: 264, unbracketed_list: 1288, map: 8, entry: 262, instance: 6, function: 16, type_value: 18014398509481989}
-# a type value `int` is a symbol marked 1<<54 above its kind (src/type_kinds.rs TYPE_VALUE_KIND)
-# a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 # a time, a $Node of Kind time held as anyref like a node, is its own kind so that only what handles times takes one
 references = {text: [99, gc.text], list: [99, gc.list], node: [110], time: [110]}
@@ -85,7 +82,7 @@ no_value = 64
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_load: 40, i32_load8_u: 45, i32_store: 54, i32_store8: 58,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_sub: 107, i32_and: 113, i32_or: 114,
-	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_abs: 153, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
+	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_trunc: 157, f64_nearest: 158, f64_sub: 161, f64_mul: 162, f64_div: 163, f64_abs: 153, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64)
 wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
@@ -101,11 +98,13 @@ gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_
 # the abstract heap type i31 (a character boxed in a $Node), as a cast's immediate
 i31_type = 108
 ref_null = 208
-int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89,
-	"rem": 129, "xor": 133, "<<": 134, ">>": 135}
+int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89,
+	"xor": 133, "<<": 134, ">>": 135}
 # where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
 checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
+# yes/no held as i32: only equal or not
+bool_ops = {"==": 70, "!=": 71}
 # `xs.length`, `count xs`: `#xs`; a property also by count's other names, and `x.number` (not `number x`, a conversion)
 length_words = {length: yes, count: yes}
 counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
@@ -412,7 +411,7 @@ exact_decimal(n: float): any := {
 	if divisor < 0 { divisor = -divisor }
 	if divisor == denominator { return number_value(numerator / divisor) }
 	box = x => [op.i64_const] + sleb(x) + gc_code(gc_ops.struct_new, [gc.int_box])
-	["node", node(node_kind_codes.int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc.ratio]))]
+	["node", node(Kind.Int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc.ratio]))]
 }
 
 # the offset of a text's bytes in the data segment, each text stored once
@@ -441,13 +440,13 @@ def boxed(value: any): list {
 	kind = value#1
 	code = value#2
 	if kind == "node" or kind == "time" { return code }
-	if kind == "text" { return node(node_kind_codes.text, code) }
-	if kind == "list" { return node(node_kind_codes.list, code) }
-	if kind == "char" { return node(node_kind_codes.codepoint, code + gc_code(gc_ops.ref_i31, [])) }
-	if kind == "float" { return node(node_kind_codes.float, code + gc_code(gc_ops.struct_new, [gc.float_box])) }
-	if kind == "bool" { return node(node_kind_codes.bool, code + [op.i64_extend_i32_u] + gc_code(gc_ops.struct_new, [gc.int_box])) }
+	if kind == "text" { return node(Kind.Text, code) }
+	if kind == "list" { return node(Marked.SquareList, code) }
+	if kind == "char" { return node(Kind.Codepoint, code + gc_code(gc_ops.ref_i31, [])) }
+	if kind == "float" { return node(Kind.Float, code + gc_code(gc_ops.struct_new, [gc.float_box])) }
+	if kind == "bool" { return node(Marked.Bool, code + [op.i64_extend_i32_u] + gc_code(gc_ops.struct_new, [gc.int_box])) }
 	if kind != "int" and kind != pending { refuse("a " + kind + " as a value") }
-	node(node_kind_codes.int, code + gc_code(gc_ops.struct_new, [gc.int_box]))
+	node(Kind.Int, code + gc_code(gc_ops.struct_new, [gc.int_box]))
 }
 # `[a, b, c]`: a vector of its items, boxed, read in order
 def list_value(body: Body, items: any): list { ["list", vector_code(items.map(item => boxed(expression_code(body, item))))] }
@@ -457,14 +456,14 @@ def vector_code(item_codes: any): list {
 }
 ## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
 # `name: value` as a map entry: its name a symbol, its value boxed
-def entry_code(name_code: any, value_code: any): list { keyed_code(node(node_kind_codes.symbol, name_code), value_code) }
-def keyed_code(name_node: any, value_code: any): list { key_code(node_kind_codes.entry, name_node, value_code) }
+def entry_code(name_code: any, value_code: any): list { keyed_code(node(Kind.Symbol, name_code), value_code) }
+def keyed_code(name_node: any, value_code: any): list { key_code(Marked.Entry, name_node, value_code) }
 def key_code(kind: int, name_node: any, value_code: any): list { [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code(gc_ops.struct_new, [gc.node]) }
 # an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
 def name_node(name: any): list {
-	if name is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(name))) }
-	if one_code_point(name) { return node(node_kind_codes.codepoint, [op.i32_const] + sleb(ord(name)) + gc_code(gc_ops.ref_i31, [])) }
-	node(node_kind_codes.text, text_bytes(name))
+	if name is symbol { return node(Kind.Symbol, text_bytes(name_of(name))) }
+	if one_code_point(name) { return node(Kind.Codepoint, [op.i32_const] + sleb(ord(name)) + gc_code(gc_ops.ref_i31, [])) }
+	node(Kind.Text, text_bytes(name))
 }
 # (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry)
 is_map_entry(n: any): bool := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global")
@@ -474,7 +473,7 @@ def map_value(body: Body, entries: any): list { ["node", entries_code(body, entr
 def entries_code(body: Body, entry_names: any, entry_values: any): list {
 	codes = []
 	for i in 0..<#entry_names { codes += [keyed_code(name_node(entry_names[i]), boxed(expression_code(body, entry_values[i])))] }
-	node(node_kind_codes.map, vector_code(codes))
+	node(Marked.Map, vector_code(codes))
 }
 # `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
 # an instance's key has no operator (Op::None), as Rust's has
@@ -515,8 +514,8 @@ def instance_of_fields(body: Body, class_name: text, field_names: any, field_val
 		if not checked_at_run_time(field_type, value#1) and not admits(field_type, value#1) { return refuse("a " + value#1 + " for a typed field of " + class_name) }
 		codes += [keyed_code(name_node(symbol(field_names[i])), boxed(field_value(field_type, value)))]
 	}
-	name = node(node_kind_codes.symbol, text_bytes(class_name))
-	["node", key_code(node_kind_codes.instance, name, node(node_kind_codes.map, vector_code(codes)))]
+	name = node(Kind.Symbol, text_bytes(class_name))
+	["node", key_code(Marked.Instance, name, node(Marked.Map, vector_code(codes)))]
 }
 # `m.x`, lowered as the subscript `m#("x"+1)`: the name's text, else ø
 subscript_name(index: any): any := {
@@ -642,7 +641,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		# an entry's name, a symbol, text or character (name_node), as a text
 		"key_name": ["text", runtime_call("node_text", [["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1])]])#2]
 		"key_value": ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 2])]
-		"map_of": ["node", node(node_kind_codes.map, values#1#2)]
+		"map_of": ["node", node(Marked.Map, values#1#2)]
 		"new_key": ["node", entry_code(values#1#2, values#2#2)]
 		# item_room(list): the items its array holds, its length and the spare room after it; set_count(list, n)
 		"item_room": ["int", values#1#2 + gc_code(gc_ops.struct_get, [gc.list, 1]) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
@@ -656,9 +655,9 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		}
 		"keyed": ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code(gc_ops.struct_new, [gc.node])]
 		"entry_key": ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [gc.node])]
-		"symbol_of": ["node", node(node_kind_codes.symbol, values#1#2)]
+		"symbol_of": ["node", node(Kind.Symbol, values#1#2)]
 		# error_of(t): the Error of the message t, of no class (Rust's text_builtins.rs error_of)
-		"error_of": ["node", node(node_kind_codes.error, values#1#2)]
+		"error_of": ["node", node(Kind.Error, values#1#2)]
 		# list_node(kind, list): a list's $Node of that whole kind field, its bracket and separator in it
 		"list_node": ["node", node_code(converted(values#1, "int"), values#2#2)]
 		# meta_node(n, line, column): n's kind, data and value in a $MetaNode at that position, no comment
@@ -668,18 +667,18 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 			code = values#1#2 + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, "int") + converted(values#3, "int")
 			["node", code + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.meta_node])]
 		}
-		"is_meta": ["int", values#1#2 + gc_code(gc_ops.ref_test, [gc.meta_node]) + [op.i64_extend_i32_u]]
+		"is_meta": ["bool", values#1#2 + gc_code(gc_ops.ref_test, [gc.meta_node])]
 		"meta_line": ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc.meta_node]) + gc_code(gc_ops.struct_get, [gc.meta_node, 3])]
 		"meta_column": ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc.meta_node]) + gc_code(gc_ops.struct_get, [gc.meta_node, 4])]
 		"closure_text": call_values(made_late(closure_text_name, "text", ["closure"]), values)
-		"is_null": ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]]
+		"is_null": ["bool", values#1#2 + [op.ref_is_null]]
 		"same_text": ["int", values#1#2 + values#2#2 + [op.ref_eq, op.i64_extend_i32_u]]
 		# the error is the word's: a variant of it by arity is named `word·arity`
 		"fail": [pending, error_throw(body.function.name.split("·")#1) + [op.unreachable]]
-		"is_ratio": ["int", ratio_test(values#1#2) + [op.i64_extend_i32_u]]
+		"is_ratio": ["bool", ratio_test(values#1#2)]
 		"ratio_of": {
 			box = v => converted(v, "int") + gc_code(gc_ops.struct_new, [gc.int_box])
-			["node", node(node_kind_codes.int, box(values#1) + box(values#2) + gc_code(gc_ops.struct_new, [gc.ratio]))]
+			["node", node(Kind.Int, box(values#1) + box(values#2) + gc_code(gc_ops.struct_new, [gc.ratio]))]
 		}
 		"ratio_numerator": ["int", ratio_part(values#1#2, 0)]
 		"ratio_denominator": ["int", ratio_part(values#1#2, 1)]
@@ -712,7 +711,7 @@ intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, closure_text: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
-	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
+	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", list_pop: "list_pop",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
@@ -740,7 +739,7 @@ def type_test(body: Body, subject: any, spec: text): list {
 }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 def as_node(code: any): list { code + gc_code(gc_ops.ref_cast_null, [gc.node]) }
-def kind_code_of(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and] }
+def kind_code_of(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
 def payload(code: any, held: int): list { as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
 def unboxed(code: any, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
 # whether an Int $Node holds a $Ratio (an i32); the numerator (0) or denominator (1) of one
@@ -884,9 +883,9 @@ def local_value(body: Body, n: any): list {
 		return [entry#2, [op.global_get] + uleb(entry#1)]
 	}
 	# a bare enum case is its name, a symbol, at run time
-	if name not in body.names and name in module.variants { return ["node", node(node_kind_codes.symbol, text_bytes(name))] }
+	if name not in body.names and name in module.variants { return ["node", node(Kind.Symbol, text_bytes(name))] }
 	# a type's name, unbound, is the type value: `k = int` (Rust: names_a_type_value)
-	if name not in body.names and names_a_type_value(name) { return ["node", node(node_kind_codes.type_value, text_bytes(name))] }
+	if name not in body.names and names_a_type_value(name) { return ["node", node(Marked.TypeValue, text_bytes(name))] }
 	if name not in body.names { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
@@ -916,9 +915,11 @@ def operation(body: Body, symbol: text, a: any, b: any): list {
 	if symbol in comparisons and textual and a#1 in characters and b#1 in characters {
 		return operation(body, symbol, runtime_call("text_order", [shown_text(a), shown_text(b)]), number_value(0))
 	}
+	if kind == "bool" and symbol in bool_ops { return ["bool", a#2 + b#2 + [bool_ops[symbol]]] }
 	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
 	if symbol == "%" { return runtime_call("float_mod", [["float", converted(a, kind)], ["float", converted(b, kind)]]) }
+	if symbol == "rem" and kind == "float" { return float_remainder(body, converted(a, kind), converted(b, kind)) }
 	if symbol == "/" and kind == "int" { return runtime_call("exact_ratio", [a, b]) }
 	# a negative exponent gives an exact rational, so the power is a boxed value
 	if symbol == "^" and kind == "int" { return runtime_call("exact_pow", [["node", boxed(a)], ["node", boxed(b)]]) }
@@ -944,7 +945,7 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	kind = if ints#1 == "bool" then "bool" else "node"
 	exact = exact_operation(body, symbol, left, right, floats)
 	integers = ratio_test(left#2) + ratio_test(right#2) + [op.i32_or] + if_else_code(kind, exact, ints)
-	numbers = both_of_kind(left#2, right#2, node_kind_codes.int) + if_else_code(kind, [kind, integers], floats)
+	numbers = both_of_kind(left#2, right#2, Kind.Int) + if_else_code(kind, [kind, integers], floats)
 	code = a + [op.local_set] + left#2[1..] + b + [op.local_set] + right#2[1..]
 	if symbol not in comparisons { return [kind, code + numbers] }
 	texts = operation(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
@@ -1006,6 +1007,16 @@ def euclidean_remainder(body: Body, a: any, b: any): list {
 	absolute = zero + get_divisor + [op.i64_sub] + get_divisor + get_divisor + zero + [op.i64_lt_s, op.select]
 	code = a#2 + b#2 + [op.local_tee] + divisor + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [op.i64_lt_s]
 	["int", code + [op.if, type_bytes.int] + get_rest + absolute + [op.i64_add, op.else] + get_rest + [op.end]]
+}
+
+# a rem b of floats, the sign of a as with ints: a - trunc(a / b) * b (wasm has no f64 remainder)
+def float_remainder(body: Body, a: list, b: list): list {
+	dividend = uleb(fresh_local(body, "float"))
+	divisor = uleb(fresh_local(body, "float"))
+	get_dividend = [op.local_get] + dividend
+	get_divisor = [op.local_get] + divisor
+	kept = a + [op.local_set] + dividend + b + [op.local_set] + divisor
+	["float", kept + get_dividend + get_dividend + get_divisor + [op.f64_div, op.f64_trunc] + get_divisor + [op.f64_mul, op.f64_sub]]
 }
 
 def assignment(body: Body, target: any, value: any): list {
@@ -1273,7 +1284,7 @@ def closure_value(body: Body, target: any, captured: any): list {
 	if not (target is symbol and name_of(target) in module.functions) { return refuse("a closure of " + form_of(target)) }
 	number = closure_number(name_of(target), #captured)
 	items = [boxed(number_value(number))] + captured.map(c => boxed(expression_code(body, c)))
-	["node", key_code(node_kind_codes.function, vector_code(items), name_node(target))]
+	["node", key_code(Kind.Function, vector_code(items), name_node(target))]
 }
 closure_number(name: text, captured: int): int := {
 	for i in 0..<#module.closures { if module.closures[i]#1 == name { return i } }
@@ -1332,7 +1343,7 @@ dispatcher_code(f: Function): any := {
 	number = unboxed(closure_item(closure, 0)#2, gc.int_box)
 	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
-	code += kind_code_of(closure) + [op.i64_const] + sleb(node_kind_codes.function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
+	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
 	for k in 0..<#module.closures {
 		target = module.functions[module.closures[k]#1]
 		captured = module.closures[k]#2
@@ -1585,15 +1596,21 @@ quote_folded(n: any, at: int): any := {
 }
 # `code.line`, `code.column`, `e.comment` (Rust's view: `code#("line" + 1)`): the views carry no positions or comments
 position_fields = ["line", "column", "comment"]
+# the field a key reads, `x.name`, also as Rust's analysis view writes it, `x#("name" + 1)`; ø of another key
+read_field(n: any): any := {
+	if op_of(n) == "." and value_of(n) is symbol { return name_of(value_of(n)) }
+	field = value_of(n)
+	if op_of(n) == "#" and type(field) is key and op_of(field) == "+" and key_of(field) is text and value_of(field) == 1 { return key_of(field) }
+	ø
+}
 reads_position(n: any): bool := {
-	if type(n) is key and op_of(n) == "." and value_of(n) is symbol and name_of(value_of(n)) in position_fields { return yes }
-	if type(n) is key and op_of(n) == "#" and type(value_of(n)) is key and key_of(value_of(n)) is text and key_of(value_of(n)) in position_fields { return yes }
+	if type(n) is key and read_field(n) in position_fields { return yes }
 	if type(n) is key { return reads_position(key_of(n)) or reads_position(value_of(n)) }
 	is_group(n) and n.any(reads_position)
 }
 def quoted_code(body: Body, e: any): list {
 	if module.reads_positions { return refuse("quoted code whose position or comment is read") }
-	if e is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(e))) }
+	if e is symbol { return node(Kind.Symbol, text_bytes(name_of(e))) }
 	# `data (a + 1)`: parentheses around one item only group it
 	if is_group(e) and bracket_of(e) == "(" and #e == 1 { return quoted_code(body, e#1) }
 	if type(e) is key {
@@ -1602,7 +1619,7 @@ def quoted_code(body: Body, e: any): list {
 	}
 	if is_group(e) {
 		if #e == 0 { return [ref_null, gc.node] }
-		items = ["node", node(node_kind_codes.list, vector_code(e.map(item => quoted_code(body, item))))]
+		items = ["node", node(Marked.SquareList, vector_code(e.map(item => quoted_code(body, item))))]
 		bracketed = ["node", runtime_call("bracketed_node", [items, text_value(bracket_of(e))])#2]
 		return runtime_call("separated_node", [bracketed, text_value(separator_of(e))])#2
 	}
@@ -1715,7 +1732,7 @@ def group_expression(body: Body, n: any): list {
 	if separator_of(n) == " " and #n > 1 and assigns(n#1) { refuse("a value after an assignment") }
 	# `y 1+1`: values side by side are a list without brackets, as Rust's emitter holds a spaced group (only `;` and
 	# lines are statements); its text is the items with a space between
-	if separator_of(n) == " " and #n > 1 { return ["node", node(node_kind_codes.unbracketed_list, list_value(body, items_of(n))#2)] }
+	if separator_of(n) == " " and #n > 1 { return ["node", node(Marked.UnbracketedList, list_value(body, items_of(n))#2)] }
 	sequence(body, items_of(n))
 }
 
@@ -1726,10 +1743,19 @@ def data_item(body: Body, mark: text, item: any): list {
 	if value#1 != "node" { return value }
 	runtime_call(data_item_checks[mark], [value])
 }
+# the tables a runtime word reads a number of by name, `Kind.List` (kinds.warp), folded into the code
+constant_tables = {Kind: Kind, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode}
+# the number `Kind.List` names in its table, else ø
+table_number(table: any, case: any): any := {
+	if not (table is symbol and name_of(table) in constant_tables) { return ø }
+	numbers = constant_tables[name_of(table)]
+	if case in numbers then numbers[case] else ø
+}
 def key_expression(body: Body, n: any): list {
 	operator = op_of(n)
 	left = key_of(n)
 	right = value_of(n)
+	if body.intrinsics and table_number(left, read_field(n)) != ø { return number_value(table_number(left, read_field(n))) }
 	if operator == ":" and left is symbol and name_of(left) in data_item_checks { return data_item(body, name_of(left), right) }
 	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right, yes) }
 	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø, no) }
@@ -2023,7 +2049,7 @@ body_code(f: Function) := {
 ## the module
 def value_type(kind: text): list { if kind in references then references[kind] else [type_bytes[kind]] }
 # a global's first value, before its declaration sets it
-def zero_of(kind: text): list {
+def zero_code_of(kind: text): list {
 	if kind == "int" { return [op.i64_const, 0] }
 	if kind == "float" { return [op.f64_const] + le64(0) }
 	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
@@ -2031,7 +2057,7 @@ def zero_of(kind: text): list {
 	if kind in references { return [ref_null] + (if kind == "time" then [110] else uleb(references[kind]#2)) }
 	[op.i32_const, 0]
 }
-def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end] }
+def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2) + [op.end] }
 def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + value_type(f.result)) }
 def function_body(f: Function): list {
 	content = vector(f.locals.map(k => [1] + value_type(k))) + f.code + [op.end]
@@ -2285,15 +2311,12 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 ## times (card time-primitives; Rust twin: src/wasm_emitter/time, layout: src/time/mod.rs TimeForm): a $Node of the
 ## Kind time, its info (form, then a duration's days and months or a zoned time's zone and offset) above the kind
 ## bits, its data an $i64box of the position (days since 1970 for a date, nanoseconds for the others)
-time_kind_code = 18
-kind_bits = 8
 nanos_per_milli = 1000000
 # the info bits: a duration's days (32 bits, unsigned) above the form, its months above them; a zoned time's zone
 # index (8 bits) above the form, its offset in minutes above that
 form_bits = 3
 form_mask = 7
-# the form of a zoned time: its text names its zone, which only Rust's zone table knows
-zoned_form = 4
+# the form of a zoned time (TimeFormCode.Zoned): its text names its zone, which only Rust's zone table knows
 months_shift = 35
 zone_mask = 255
 offset_shift = 11
@@ -2310,7 +2333,7 @@ makes_time(program: any): bool := mentions(program, "instant_at") or mentions(pr
 # time_of(info, position): the time node; instant_at(milliseconds since 1970): an instant
 def time_call(body: Body, name: text, arguments: any): list {
 	if #arguments != time_words[name] { return refuse("a call of " + name + " with " + #arguments + " arguments") }
-	if name == "time_of" and arguments#1 is number and arguments#1 % (form_mask + 1) == zoned_form { return refuse("a zoned time") }
+	if name == "time_of" and arguments#1 is number and arguments#1 % (form_mask + 1) == TimeFormCode.Zoned { return refuse("a zoned time") }
 	values = arguments.map(a => expression_code(body, a))
 	if name == "instant_at" {
 		nanos = converted(values#1, "int") + [op.i64_const] + sleb(nanos_per_milli) + [shift_ops.i64_mul]
@@ -2319,7 +2342,7 @@ def time_call(body: Body, name: text, arguments: any): list {
 	["time", time_node(converted(values#1, "int"), converted(values#2, "int"))]
 }
 def time_node(info: any, position: any): list {
-	kind = info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(time_kind_code) + [shift_ops.i64_or]
+	kind = info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(Kind.Time) + [shift_ops.i64_or]
 	kind + position + gc_code(gc_ops.struct_new, [gc.int_box]) + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.node])
 }
 # the kind word of a time node shifted right by `shift` bits, arithmetic (`signed`) or logical

@@ -101,3 +101,15 @@ fn test_bare_type_names_are_type_values() {
 	is!("int == int", 1);
 	is!("int == number", 0);
 }
+
+// card list-class: a list of instances is a list of their class, also where only the run time knows the items
+#[test]
+fn a_list_of_instances_is_a_list_of_their_class() {
+	let classes = "class note{n:int}; class file{name:text}; ";
+	is!(&format!("{classes}xs = [note(1), note(2)]; xs is list of note"), 1);
+	is!(&format!("{classes}xs = [note(1), note(2)]; xs is list of file"), 0);
+	is!(&format!("{classes}f(v) := v is list of note; f([note(1)]) * 10 + f([file(\"a\")])"), 10);
+	is!(&format!("{classes}f(v) := v is list of note; f([1])"), 0);
+	is!("f(v) := v is ints; f([1, 2]) * 10 + f([\"a\"])", 10);
+	is!("f(v) := v is list of int; f([])", 1);
+}

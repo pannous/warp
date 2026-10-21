@@ -1,0 +1,8 @@
+#!/usr/bin/env warp
+# every declaration form of a used file reaches the program, not its main-level statements: prints 5, 10, 8, 9, 3
+use "used/forms.warp"
+print counter
+print base
+print twice(4)
+print thrice(3)
+print half(6)

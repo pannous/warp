@@ -35,7 +35,6 @@ kind_changes(program: any): any := {
 	program
 }
 
-is_operator(n: any, op: text): bool := type(n) is key and op_of(n) == op
 is_definition(n: any): bool := is_operator(n, ":=")
 # `(f x) := …`: the name it defines, else ""
 defined_name(n: any): text := {
@@ -78,7 +77,7 @@ evident_kind(value: any, known: any): text := {
 	if value is text { return "Text" }
 	if is_group(value) and bracket_of(value) == "[" { return "List" }
 	if is_operator(value, "as") { return type_kind(value_of(value)) }
-	if type(value) is key and op_of(value) in arithmetic_operators {
+	if value is key and op_of(value) in arithmetic_operators {
 		left = evident_kind(key_of(value), known)
 		right = evident_kind(value_of(value), known)
 		if left == "Int" and right == "Int" { return "Int" }
@@ -98,7 +97,7 @@ entry(map: any, key: text): text := if key in map then map[key] else ""
 # the evident kind for kind changes, bools and functions apart (card bool-assign)
 given_kind_of(value: any, results: any): text := {
 	if value is bool { return bool_kind }
-	if type(value) is key and op_of(value) in bool_operators { return bool_kind }
+	if value is key and op_of(value) in bool_operators { return bool_kind }
 	if is_operator(value, "as") and value_of(value) is symbol and name_of(value_of(value)).lower() in bool_types { return bool_kind }
 	if is_group(value) and bracket_of(value) == "(" and #value > 0 and value#1 == symbol(closure_word) { return function_kind }
 	evident_kind(value, results)
@@ -132,10 +131,12 @@ evident_results(program: any): any := {
 	}
 	results
 }
+# a `{a; b}` or `a; b` body's last statement, a `{a}` body's only one
 last_expression(body: any): any := {
-	statements = statements_in(if is_group(body) and (bracket_of(body) == "{" or bracket_of(body) == "(") and #body == 1 then body#1 else body)
-	last = statements#(#statements)
-	if last == body then body else last_expression(last)
+	if not is_group(body) or #body == 0 { return body }
+	if (bracket_of(body) == "{" or bracket_of(body) == "") and separator_of(body) in statement_separators { return last_expression(body#(#body)) }
+	if bracket_of(body) == "{" and #body == 1 { return last_expression(body#1) }
+	body
 }
 
 # the first kind change of the assignments in program order, not into function definitions (their own scopes):
@@ -149,9 +150,9 @@ first_kind_change(n: any, kinds: any, results: any, global_names: any): any := {
 		# its body shares the globals and its `nonlocal` ones
 		nonlocals = declared_nonlocals(value_of(n))
 		body_kinds = {}
-		for variable in kinds.keys() { if variable in global_names or variable in nonlocals { body_kinds[variable] = kinds[variable] } }
+		for outer_name in kinds.keys() { if outer_name in global_names or outer_name in nonlocals { body_kinds[outer_name] = kinds[outer_name] } }
 		change = first_kind_change(value_of(n), body_kinds, results, global_names)
-		for variable in body_kinds.keys() { if variable in global_names or variable in nonlocals { kinds[variable] = body_kinds[variable] } }
+		for outer_name in body_kinds.keys() { if outer_name in global_names or outer_name in nonlocals { kinds[outer_name] = body_kinds[outer_name] } }
 		return change
 	}
 	if is_operator(n, "->") or is_operator(n, "=>") { return ø }
