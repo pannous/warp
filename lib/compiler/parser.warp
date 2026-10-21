@@ -120,7 +120,7 @@ def alias_at(p: Parser): list {
 	longest = []
 	for alias in p.aliases {
 		spelled = alias#1
-		here = starts_at(p.code, spelled, p.at) and not (is_name_start(spelled[0]) and is_at_name_char(p, p.at + spelled.length))
+		here = starts_at(p.code, spelled, p.at) and not (is_name_start(spelled#1) and is_at_name_char(p, p.at + spelled.length))
 		if here and (longest.length == 0 or spelled.length > longest#1.length) { longest = alias }
 	}
 	longest
@@ -134,7 +134,7 @@ def aliased_operator_at(p: Parser): list {
 // A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `sqrt`)
 // Rust twin: spellings.rs table_operator, PREFIX_OPERATOR_WORDS
 def is_operator_spelling(word: text): bool {
-	if not is_name_start(word[0]) { return true }
+	if not is_name_start(word#1) { return true }
 	for op in WORD_OPERATORS { if op#1 == word { return true } }
 	form = keyword_form(word)
 	PREFIX_OPERATORS.contains(form) or form == "contains" or word == "in" or word == "approximately"
@@ -906,7 +906,7 @@ def operator_at(p: Parser): list {
 	if is_name_start(c) {
 		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
 		for op in WORD_OPERATORS {
-			if op#1[0] == c and keyword_at(p, op#1) and not (p.in_branch and op#1 == "else") { return op }
+			if op#1#1 == c and keyword_at(p, op#1) and not (p.in_branch and op#1 == "else") { return op }
 		}
 		return aliased_operator_at(p)
 	}
@@ -914,7 +914,7 @@ def operator_at(p: Parser): list {
 	// `x = 1  # one` is a comment, `xs #1` the index operator (card parser-parses)
 	if c == '#' and skipped_end(p.code, p.at, p.n) > p.at { return [] }
 	for op in SYMBOL_OPERATORS {
-		if op#1[0] == c and starts_at(p.code, op#1, p.at) and (op#1 != ">>" or operand_follows(p, 2)) { return op }
+		if op#1#1 == c and starts_at(p.code, op#1, p.at) and (op#1 != ">>" or operand_follows(p, 2)) { return op }
 	}
 	aliased_operator_at(p)
 }
@@ -979,10 +979,10 @@ def declared_operator(kind: text, words: list): text {
 	if glyph != "" and is_operator_glyph(glyph) { return glyph }
 	if kind != "infix" or not words.contains(":=") or words.length == 0 { return "" }
 	head = if words#1 == "operator" and words.length > 1 then words#2 else words#1
-	end = if is_name_start(head[0]) then name_end(head, 0, head.length) else 0
-	if not is_name_start(head[0]) { while end < head.length and head[end] != '(' { end = end + 1 } }
+	end = if is_name_start(head#1) then name_end(head, 0, head.length) else 0
+	if not is_name_start(head#1) { while end < head.length and head[end] != '(' { end = end + 1 } }
 	word = head[0 .. end]
-	operator = (is_name_start(head[0]) and word != "operator") or is_operator_glyph(word)
+	operator = (is_name_start(head#1) and word != "operator") or is_operator_glyph(word)
 	if operator and (end == head.length or head[end] == '(') then word else ""
 }
 
@@ -1037,7 +1037,7 @@ def library_glyph_operators(): list {
 	if library_operators == ø {
 		library_operators = []
 		for operator in declared_operators(module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex")) {
-			if not is_name_start(operator#1[0]) { library_operators += [operator] }
+			if not is_name_start(operator#1#1) { library_operators += [operator] }
 		}
 	}
 	library_operators
@@ -1096,7 +1096,7 @@ def user_operator_at(p: Parser): list {
 	longest = ø
 	for declared in p.operators {
 		glyph = declared#1
-		glyph_here = starts_at(p.code, glyph, p.at) and not (is_name_start(glyph[0]) and is_at_name_char(p, p.at + glyph.length))
+		glyph_here = starts_at(p.code, glyph, p.at) and not (is_name_start(glyph#1) and is_at_name_char(p, p.at + glyph.length))
 		if glyph_here and (longest == ø or glyph.length > longest#1.length) { longest = declared }
 	}
 	longest
@@ -1412,7 +1412,7 @@ def word_prefixed(p: Parser, word: text, operator: text): Node := {
 	if expression_ends(p) { return keyed(operator, ø, ø) }
 	glued = peek(p.code, p.at, p.n) == '('
 	skip_spaces(p)
-	keyed(operator, ø, expression(p, glued ? PREFIX_POWER : ARGUMENT_POWER))
+	keyed(operator, ø, expression(p, if glued then PREFIX_POWER else ARGUMENT_POWER))
 }
 
 PREFIX_POWER = 162
@@ -2789,7 +2789,7 @@ def variant_class(type_name: Node, variant: text, payload: list, parameters: lis
 		if is_list_of(field, "(") and #group_parts(field)#3 == 1 { field = group_parts(field)#3#1 }
 		if is_typed_field(field) {
 			fields += [field]
-		} else if is_symbol(field) and name_of(field)[0].lower() == name_of(field)[0] and not BUILTIN_TYPE_WORDS.contains(name_of(field)) {
+		} else if is_symbol(field) and name_of(field)#1.lower() == name_of(field)#1 and not BUILTIN_TYPE_WORDS.contains(name_of(field)) {
 			fields += [Key(field, Op.Colon, symbol("any"))]
 		} else {
 			field_name = if payload.length == 1 then "value" else "value" + position
@@ -2885,7 +2885,7 @@ def quoted(p: Parser): Node := {
 	holed = if quote == '"' then template(written) else ø
 	if holed != ø { return template_node(holed) }
 	content = unescaped(written, quote == '"')
-	if content.length == 1 then content[0] else content
+	if content.length == 1 then content#1 else content
 }
 
 // An interpolating text with a hole as its template: holes `\(x)` `\{x}` `$(x)` as `${x}`, escapes read, a literal
