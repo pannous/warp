@@ -68,7 +68,7 @@ const REPLACER: &str = "WALK(NODE) := {
     BUILT = ENTRIES
   }
   if NODE is key then BUILT = key(WALK(NODE.key), NODE.op, WALK(NODE.value))
-  match BUILT ARMS
+  match BUILT { ARMS => ARMS }
 }";
 
 /// The rewrites in a row a rule set's walker is in, its counter
@@ -81,13 +81,26 @@ STEPS -= 1
 REWRITTEN";
 
 pub fn lower(program: Node) -> Node {
-	if !program.mentions_any(&[FIND_WORD, REPLACE_WORD, RULES_WORD]) {
+	if !program.mentions_any(&[FIND_WORD, REPLACE_WORD]) {
+		return program;
+	}
+	let walkers = RefCell::new(vec![]);
+	let program = with_walker_calls(program, &walkers);
+	with_walkers(program, walkers.into_inner())
+}
+
+/// Rule sets as their walkers, before any pass reads their arms `data(…) => …` as definitions or lambdas
+pub fn lower_rule_sets(program: Node) -> Node {
+	if !program.mentions_any(&[RULES_WORD]) {
 		return program;
 	}
 	let walkers = RefCell::new(vec![]);
 	let program = with_rule_sets(program, &walkers);
-	let program = with_walker_calls(program, &walkers);
-	let walkers = walkers.into_inner();
+	with_walkers(program, walkers.into_inner())
+}
+
+/// The program after the walkers' definitions
+fn with_walkers(program: Node, walkers: Vec<Node>) -> Node {
 	if walkers.is_empty() {
 		return program;
 	}
@@ -283,7 +296,21 @@ fn rule_set_walker(walk: &str, number: usize, rules: &[Node]) -> Vec<Node> {
 fn replacer(own_names: &[(&str, Node)], mut arms: Vec<Node>) -> Node {
 	let built = &own_names.iter().find(|(placeholder, _)| *placeholder == BUILT).expect("BUILT is a placeholder").1;
 	arms.push(key(Node::symbol("_"), Op::FatArrow, built.clone()));
-	filled(REPLACER, own_names, &[(ARMS, &Node::List(arms, Bracket::Curly, Separator::Semicolon))])
+	crate::welcome_forms::lower_match_arms(with_arms(filled(REPLACER, own_names, &[]), &arms))
+}
+
+/// The match block `{ ARMS => ARMS }` of a walker's source holding `arms`
+fn with_arms(node: Node, arms: &[Node]) -> Node {
+	match node {
+		Node::List(items, Bracket::Curly, _) if matches!(items.as_slice(), [only] if is_arms_placeholder(only)) => {
+			Node::List(arms.to_vec(), Bracket::Curly, Separator::Newline)
+		}
+		other => crate::node::children_rewritten(other, |child| with_arms(child, arms)),
+	}
+}
+
+fn is_arms_placeholder(arm: &Node) -> bool {
+	matches!(arm.drop_meta(), Node::Key(pattern, _, _) if pattern.is_symbol(ARMS))
 }
 
 /// The walker's own names, `node·0` …, its own name `walk`
