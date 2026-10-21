@@ -13,6 +13,7 @@ mod test_global_assignment_in_function;
 mod test_global_constant_words;
 mod test_global_declaration;
 mod test_global_float_widening;
+mod test_global_object_field_named_like_function;
 mod test_global_modifiers;
 mod test_global_node_widening;
 mod test_global_typed_list; // found writing samples/servers/server.warp
