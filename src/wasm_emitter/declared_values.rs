@@ -65,7 +65,7 @@ impl WasmGcEmitter {
 		let type_name = declared.name();
 		let object_mask = OBJECT_KINDS.iter().fold(0, |mask, kind| mask | 1 << *kind as i64);
 		let spec = match crate::analyzer::annotated_kind(declared) {
-			Some(Kind::Empty) if crate::numbers::uncertain::is_interval_number(declared) => "number",
+			Some(Kind::Empty) if crate::analyzer::is_number_as_node(declared) => "number",
 			// an inline union admits what its parts admit; any admits everything
 			Some(Kind::Empty) => {
 				return crate::analyzer::union_parts(type_name.trim_end_matches('?'))

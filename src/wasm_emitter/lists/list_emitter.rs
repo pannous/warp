@@ -1280,6 +1280,7 @@ impl WasmGcEmitter {
 		self.resolves_call(word)
 			|| crate::numbers::units::is_unit(word)
 			|| crate::analyzer::type_word_kind(word).is_some()
+			|| crate::analyzer::names_list_type(word) // a plural type word: `type Code = ints`
 			|| self.ctx.variant_names.contains(word) // an enum's case: `Op.Add` is the case Add, near add or not
 	}
 

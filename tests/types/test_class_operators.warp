@@ -19,3 +19,11 @@ is! 'data class V(val x: Int) { operator fun plus(o: V) = V(x + o.x) }
 # an_operator_on_a_value_of_unknown_class_dispatches_at_run_time
 is! 'class V{x:int; plus(o) := V(x + o.x)}; class W{y:int; plus(o) := W(y - o.y)}; t = 0; for q in [V(1), W(9)] { r = q + q; t = t * 100 + (r is V ? r.x : r.y) }; t' 200
 is! 'class V{x:int; plus(o) := V(x + o.x)}; class W{y:int; plus(o) := W(y - o.y)}; t = 0; for n in [1, 2] { t = t + n + n }; t' 6
+
+# an_operator_defined_outside_its_class
+is! 'class Vec{x:int; y:int}; +(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); (Vec(1, 2) + Vec(3, 4)).y' 6
+is! 'class Vec{x:int; y:int}; plus(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); (Vec(1, 2) + Vec(3, 4)).x' 4
+is! 'class Vec{x:int; y:int}; infix operator +(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); (Vec(1, 2) + Vec(3, 4)).x' 4
+is! 'class Vec{x:int; y:int}; infix +(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); (Vec(1, 2) + Vec(3, 4)).x' 4
+is! 'class Vec{x:int; y:int}; *(v: Vec, k: int) := Vec(v.x * k, v.y * k); (Vec(1, 2) * 3).y' 6
+is! 'class Vec{x:int; y:int}; +(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); 1 + 2' 3
