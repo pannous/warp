@@ -2220,10 +2220,10 @@ def named(p: Parser): Node := {
 	}
 	// `list<int>`, `option<int>`: a type applied to type arguments, the type written in words; a declared `Box<T>`
 	// keeps its brackets (Rust twin: atoms.rs parse_glued_suffix '<')
-	applied = if p.types.contains(word) then 0 else type_application_length(p, p.at)
-	if applied > 0 {
-		arguments = p.code[p.at + 1 .. p.at + applied - 1]
-		p.at = p.at + applied
+	type_arguments = if p.types.contains(word) then 0 else type_application_length(p, p.at)
+	if type_arguments > 0 {
+		arguments = p.code[p.at + 1 .. p.at + type_arguments - 1]
+		p.at = p.at + type_arguments
 		return symbol(type_application_name(word, arguments))
 	}
 	constant =if names_case(p, word.length) then "" else keyword_form(word.lower())
@@ -2310,10 +2310,11 @@ def type_application_length(p: Parser, start: int): int {
 }
 
 // `int`, `ints`, `list`, `Point`, `text?`: a word that can stand in type arguments
-def is_type_argument(word: text): bool {
-	bare = if word.ends_with("?") then word[0 ..< word.length - 1] else word
-	is_type_word(bare) or (bare.ends_with("s") and is_type_word(bare[0 ..< bare.length - 1])) or GENERIC_TYPE_HEADS.contains(bare) or is_capitalized(bare)
-}
+def is_type_argument(word: text): bool := is_type_name(if word.ends_with("?") then word[0 ..< word.length - 1] else word)
+
+// A word that can take type arguments: a type word, its plural, `list`, `map` …, a capitalized type
+// Rust twin: types/expressions.rs names_a_type
+def is_type_name(word: text): bool := is_type_word(word) or (word.ends_with("s") and is_type_word(word[0 ..< word.length - 1])) or word in GENERIC_TYPE_HEADS or is_capitalized(word)
 
 // The type `name<arguments>` in words: `list<list<int>>` is `list of list of int`, `option<int>` is `int?`, Rust's
 // `Vec<i32>` is `list of i32`
