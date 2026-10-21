@@ -1461,6 +1461,22 @@ def operator_value(p: Parser): Node := {
 	keyed(found#2, ø, ø)
 }
 
+// `a, *rest = xs`: the starred name takes the items the other names leave; JS's `...rest` is the starred `*rest` too,
+// Python's `**kw` the starred `**kw`; ø unless a name follows the prefix
+// Rust twin: atoms.rs parse_starred
+STAR_PREFIXES = [["...", "*"], ["**", "**"], ["*", "*"]]
+def starred_name(p: Parser): Node := {
+	for prefix in STAR_PREFIXES {
+		start = p.at + prefix#1.length
+		if starts_at(p.code, prefix#1, p.at) and is_name_start(peek(p.code, start, p.n)) {
+			end = name_end(p.code, start, p.n)
+			p.at = end
+			return symbol(prefix#2 + p.code[start .. end])
+		}
+	}
+	ø
+}
+
 // `:post` (wiki/symbol.md): the symbol itself, written as the call symbol("post"), never evaluated
 // Rust twin: atoms.rs parse_atom (':' at_explicit_symbol), lookahead.rs at_explicit_symbol
 def explicit_symbol_at(p: Parser): bool {
@@ -1771,6 +1787,8 @@ def atom(p: Parser): Node := {
 		if loop != ø { return loop }
 	}
 	if is_name_start(c) { return named(p) }
+	starred = starred_name(p)
+	if starred != ø { return starred }
 	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
 	if c == '$' and (is_name_start(peek(p.code, p.at + 1, p.n)) or is_digit(peek(p.code, p.at + 1, p.n))) {
 		end = symbol_end(p.code, p.at + 1, p.n)
