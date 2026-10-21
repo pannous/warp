@@ -94,7 +94,7 @@ entry_of_lambda(lambda_head: Node, lambda_body: Node, item: Node): Node := match
 is_parameter_word(node: Node): bool := {
 	if is_list_of(node, "(") { return yes }
 	if not (node is symbol) { return no }
-	first = name_of(node)[0]
+	first = name_of(node)#1
 	lower(first) == first and upper(first) != first and not is_type_word(name_of(node))
 }
 
