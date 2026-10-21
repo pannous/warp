@@ -28,7 +28,7 @@ fn a_list_holding_an_empty_list_holds_no_nothing() {
 }
 
 #[test]
-#[ignore = "card empty-map-literal: `{}` in code is still ø"]
+#[ignore = "card code-empty: `{}` in code is still ø"]
 fn braces_in_code_are_an_empty_map() {
 	is!("{} == ø", false);
 	is!("x = {}; x == ø", false);
