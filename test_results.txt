@@ -1309,6 +1309,8 @@ PASSED:
   ✓ functions::test_block_function_argument::a_lambda_or_function_still_passes_as_is
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
+  ✓ functions::test_bodiless_runtime_words::a_declared_runtime_word_compiles_where_it_is_not_called
+  ✓ functions::test_bodiless_runtime_words::a_declared_runtime_word_traps_when_the_rust_lane_calls_it
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
   ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
   ✓ functions::test_braced_it_warning::a_braced_it_body_is_the_parameter_and_warns
@@ -1857,6 +1859,7 @@ PASSED:
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
   ✓ functions::test_ported_calls::every_ported_call_form_keeps_its_value
   ✓ functions::test_ported_calls::linq_methods_work_with_a_note_naming_warps_word
+  ✓ functions::test_ported_calls::other_languages_list_types_are_lists_with_a_note
   ✓ functions::test_ported_calls::types_built_from_type_parameters_drop_with_them
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
@@ -2095,6 +2098,7 @@ PASSED:
   ✓ lists::test_calls_in_blocks::calls_are_lowered_inside_single_statement_blocks
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
   ✓ lists::test_comprehension_beside_own_push::a_comprehension_beside_an_own_push_function
+  ✓ lists::test_comprehension_if_else_item::an_else_branch_ending_in_a_name_leaves_the_for_clause_to_the_list
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
   ✓ lists::test_concat_keeps_arrays::a_concatenation_is_a_copy_of_both_lists
@@ -2160,6 +2164,8 @@ PASSED:
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
   ✓ lists::test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
+  ✓ lists::test_empty_list_kept::a_returned_empty_list_prints_as_the_empty_list
+  ✓ lists::test_empty_list_kept::an_empty_list_passed_or_returned_is_not_nothing_itself
   ✓ lists::test_empty_list_value::a_returned_empty_list_takes_items
   ✓ lists::test_empty_list_value::an_empty_list_is_a_list
   ✓ lists::test_empty_list_value::an_empty_list_prints_as_written
@@ -2196,6 +2202,7 @@ PASSED:
   ✓ lists::test_global_typed_lists::a_global_typed_list_reads_as_its_list
   ✓ lists::test_global_typed_lists::an_element_of_another_type_widens_the_list
   ✓ lists::test_hash_range_slices::hash_slices_are_one_based
+  ✓ lists::test_hash_range_warning::a_prefix_count_before_a_range_does_not_warn
   ✓ lists::test_hash_range_warning::an_unparenthesized_hash_range_warns
   ✓ lists::test_hash_range_warning::parenthesized_forms_do_not_warn
   ✓ lists::test_held_element_compare::a_float_element_of_a_returned_list_equals_its_value
@@ -2776,6 +2783,10 @@ PASSED:
   ✓ modules::test_used_enums::an_enum_of_a_file_a_used_file_uses
   ✓ modules::test_used_module_bare_words::a_used_modules_word_is_called_bare
   ✓ modules::test_used_module_bare_words::without_the_use_or_with_an_own_parse_the_word_keeps_its_meaning
+  ✓ modules::test_used_types::a_field_typed_map_holds_a_map
+  ✓ modules::test_used_types::an_alias_of_a_used_file_names_its_type
+  ✓ modules::test_used_types::an_alias_reaches_the_functions_of_a_file_using_its_file
+  ✓ modules::test_used_types::an_optional_result_of_a_used_files_type
   ✓ modules::test_versions::a_package_used_twice_is_loaded_once
   ✓ modules::test_versions::an_empty_symbol_is_no_version
   ✓ modules::test_versions::an_older_version_comes_from_its_git_tag
@@ -2840,9 +2851,12 @@ PASSED:
   ✓ node::test_normalization::test_length_prefix_under_bracket_style
   ✓ node::test_normalization::test_list_of_lists_has_no_plural_spelling
   ✓ node::test_normalization::test_list_type_hint_is_emitted_once_when_evaluated
+  ✓ node::test_normalization::test_list_type_hint_with_values_and_position
+  ✓ node::test_normalization::test_list_type_style_generic
   ✓ node::test_normalization::test_list_type_style_of
   ✓ node::test_normalization::test_logical_operators
   ✓ node::test_normalization::test_logical_operators_symbol_style
+  ✓ node::test_normalization::test_of_list_type_hints_plural
   ✓ node::test_normalization::test_one_character_strings_have_no_canonical_quote
   ✓ node::test_normalization::test_plural_list_type_is_canonical
   ✓ node::test_normalization::test_power_operator
@@ -3808,8 +3822,6 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
-  ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
@@ -4271,7 +4283,6 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
-  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -4355,6 +4366,8 @@ PASSED:
   ✓ scope::test_globals::test_global_reassignment
   ✓ scope::test_globals::test_global_with_expression
   ✓ scope::test_node_widening_in_loops::a_read_before_a_node_widening_in_a_loop_holds_the_node
+  ✓ scope::test_parameter_shadowing::a_loop_variable_is_no_map_another_function_assigned
+  ✓ scope::test_parameter_shadowing::a_parameter_is_no_map_another_function_assigned
   ✓ scope::test_parameter_shadowing::a_parameter_is_not_typed_by_another_functions_real_value
   ✓ scope::test_parameter_shadowing::a_parameter_may_walk_what_another_function_assigned_a_number
   ✓ scope::test_parameter_shadowing::a_signal_and_a_block_play_in_one_program
@@ -4426,6 +4439,9 @@ PASSED:
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
+  ✓ text::test_casts_to_text_units::a_list_cast_to_an_element_type_casts_each_item
+  ✓ text::test_casts_to_text_units::a_text_cast_to_a_unit_word_is_its_list
+  ✓ text::test_casts_to_text_units::words_split_at_any_whitespace
   ✓ text::test_char_parameter_type::test_a_parameter_holding_more_or_fewer_characters_is_a_text
   ✓ text::test_char_parameter_type::test_a_parameter_holding_one_character_is_a_codepoint
   ✓ text::test_character_arithmetic::a_character_is_no_number_in_arithmetic
@@ -4861,6 +4877,7 @@ PASSED:
   ✓ types::test_data::test_node_data_various_types
   ✓ types::test_date_arithmetic_at_run_time::test_a_date_plus_a_duration
   ✓ types::test_date_arithmetic_at_run_time::test_a_local_time_and_an_instant_plus_a_duration
+  ✓ types::test_date_arithmetic_at_run_time::test_a_time_plus_a_text_is_text
   ✓ types::test_date_arithmetic_at_run_time::test_arithmetic_prints
   ✓ types::test_date_arithmetic_at_run_time::test_constant_times_fold_and_the_run_does_the_rest
   ✓ types::test_date_arithmetic_at_run_time::test_durations_add_and_scale
@@ -6482,6 +6499,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✗ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
 
 SUMMARY:
-12 ignored, 6479 passed, 0 failed, 6479 total tested
+12 ignored, 6496 passed, 2 failed, 6498 total tested

@@ -95,9 +95,12 @@ impl WarpParser {
 			let value = self.parse_expr(Op::Assign.binding_power().1);
 			self.continue_expr(value, 0)
 		};
-		// returning ø, bare (`if t == ø { return }`) or written (`return ø`), is the word alone (lower_bare_returns)
+		// returning ø, bare (`if t == ø { return }`) or written (`return ø`), is the word alone (lower_bare_returns);
+		// `return []` returns the empty list
 		Some(match value {
-			returned if matches!(returned.drop_meta(), Node::Empty) => Symbol(RETURN_WORD.to_string()),
+			returned if returned.is_empty_node() && !returned.is_empty_list_literal() => {
+				Symbol(RETURN_WORD.to_string())
+			}
 			value => Node::List(vec![Symbol(RETURN_WORD.to_string()), value], Bracket::None, Separator::Space),
 		})
 	}

@@ -1,0 +1,7 @@
+# optional results and parameters the compiler's sources use (card types-back): `text?` may be ø
+found(word: text): text? := if word == "a" then "A" else ø
+joined(known: text?, given: text): text := if known == ø then given else known + given
+print found("a")
+print found("b")
+print joined(ø, "x")
+print joined("y", "x")

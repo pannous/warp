@@ -200,24 +200,6 @@ impl WasmGcEmitter {
 				vec![ValType::I64, ValType::F64],
 				|s, f| {
 					let (kind, power) = (2, 3);
-					// a time or duration: calendar arithmetic (time_arithmetic.rs)
-					if let Some(operator) = super::super::super::time::time_arithmetic::TIME_OPERATORS
-						.iter()
-						.position(|known| *known == op)
-						.filter(|_| s.uses_times())
-					{
-						for operand in [0, 1] {
-							s.emit_field(f, operand, 0);
-							Self::emit_kind_test(f, Kind::Time as i64, I::I64Eq);
-						}
-						#[rustfmt::skip]
-						Self::emit_list(f, &[
-							I::I32Or, I::If(BlockType::Empty),
-								I::LocalGet(0), I::LocalGet(1), I::I32Const(operator as i32),
-						]);
-						s.call(f, super::super::super::time::time_arithmetic::TIME_ARITHMETIC);
-						Self::emit_list(f, &[I::Return, I::End]);
-					}
 					// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 					if name == NODE_ADD {
 						// an Error operand is the sum, as text_concat gives it: errors propagate, and are never joined into a
@@ -305,6 +287,25 @@ impl WasmGcEmitter {
 						);
 						s.emit_empty_text(f);
 						s.call(f, super::super::super::reflection::library_ops::LIST_JOIN);
+						Self::emit_list(f, &[I::Return, I::End]);
+					}
+					// a time or duration: calendar arithmetic (time_arithmetic.rs), after node_add's joins: a date + a text is
+					// text, a list + a date appends it
+					if let Some(operator) = super::super::super::time::time_arithmetic::TIME_OPERATORS
+						.iter()
+						.position(|known| *known == op)
+						.filter(|_| s.uses_times())
+					{
+						for operand in [0, 1] {
+							s.emit_field(f, operand, 0);
+							Self::emit_kind_test(f, Kind::Time as i64, I::I64Eq);
+						}
+						#[rustfmt::skip]
+						Self::emit_list(f, &[
+							I::I32Or, I::If(BlockType::Empty),
+								I::LocalGet(0), I::LocalGet(1), I::I32Const(operator as i32),
+						]);
+						s.call(f, super::super::super::time::time_arithmetic::TIME_ARITHMETIC);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
 					// an Error value fails with its own message (`x!` of ø is "unwrapped ø"), never as "not a number"
