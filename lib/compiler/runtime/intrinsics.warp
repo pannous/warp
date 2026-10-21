@@ -52,7 +52,9 @@ write_output(count: int): int from runtime
 host_read(count: int): int from runtime
 answered_length(): int from runtime
 memory_byte(address: int): int from runtime
-# times and durations, packed in the kind field
+# times and durations, packed in the kind field; time_of(info, position) builds one (emitter.warp time_words, which
+# Rust's lane knows only of a constant info)
+time_of(info: int, position: int): any from runtime
 time_position(t: any): int from runtime
 zone_index(t: any): int from runtime
 zone_offset(t: any): int from runtime
