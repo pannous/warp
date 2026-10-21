@@ -1,0 +1,14 @@
+#!/usr/bin/env warp
+# A loop setting a field and reading a long list field through a function, as parser.warp does with
+# `p.at = p.resumes[p.at]` (card list-field): each field set used to forget the list's read cursor, so every read
+# walked from the head (200000 reads near 31000: 9.6 s); now it walks on from the last read
+class Found { resumes: list; breaks: list }
+class Box { code: text; at: int; items: list; other: list }
+offset = int(random() * 10)
+def scan(n) := { xs = []; for i in 1 to n { xs.add(i + offset) }; Found{resumes: xs, breaks: xs} }
+found = scan(32000)
+b = Box{code: "abc", at: 0, items: found.resumes, other: found.breaks}
+def read(p, at) := p.items[at]
+total = 0
+for k in 1 to 200000 { b.at = 31000 + (k + offset) % 900; total = total + read(b, b.at) }
+print total > 0
