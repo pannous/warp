@@ -234,6 +234,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - union-or: in types `or` = `|` (`x: int or text`); in values `or` is boolean.
 - return-as (also union-return): return types are `def f(x) as int or text`; `->` works with a hint; no `returns`.
 - error-type / error-optional: a function that can fail has type `T or error`, never Result; `T?` is T, ø or an error. Writing an Error into a field or list element raises; `x is ø` missing only, `x failed` failed only, `if no x` / `x or 0` both; at a WIT export: `result`, `option` or `result<option<T>>`; an Error propagates where a caller can take it.
+- optional-result (user): a function that can answer ø declares `T?` (`def f(x: int): list? { … }`); a plain `: list` that can answer ø warns "f can answer ø; declare `: list?`" (warp fix adds the ?), and the ø reaches the caller unchanged (kind-kept), in every lane: no ø → [] conversion.
 - empty-field: ø needs `?` everywhere (`class Tree{left: Tree}` errs, fix `left: Tree?`).
 - P185 `none(xs, f)`, the null spelling with arguments, is an error naming the null.
 - P125 optional parameters: `x=ø`, `maybe x`, `x?` alike; typed `x:int?`; `a ?? b` only for ø.
