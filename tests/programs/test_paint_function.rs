@@ -158,7 +158,8 @@ fn a_painted_function_reads_an_item_of_a_program_list() {
 }
 
 /// `center()` parses as `(center)`: in a shader it calls the program function of no parameters
-const SPOT: &str = "width = 8
+const SPOT: &str = "use math
+width = 8
 height = 8
 center() := [width / 2, height / 2]
 spot(x, y) := norm([x, y] .- center()) < 3

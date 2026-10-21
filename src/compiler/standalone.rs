@@ -1,21 +1,51 @@
 //! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): lib/compiler/compiler.warp,
-//! the warp compiler as one warp program, makes the program's module, which then runs. Rust only keeps the compiler: it
-//! is compiled once and kept in the module cache (~/.cache/warp/modules) under the key of the binary and lib/, by the
-//! pure lane; while that lane refuses it, by the Rust pipeline, said on stderr at every run.
-use crate::compiler::self_hosted::{library, module_of_bytes, pure_bytes, stage_key, WORKER_STACK};
+//! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
+//! build output (decision compiler-build): compiler.wasm, built by the Rust pipeline, for `warp pure`; compiler-self.wasm,
+//! compiler.warp compiled by itself through the pure lane, for `warp self`. Both lie next to the binary for the lib/ they
+//! record, for any other lib/ in <lib>/../data/; a missing one is built at its first run, an existing one only by
+//! `warp rebuild`, and a run on one built from another lib/ or warp build says so in one line.
+use crate::compiler::self_hosted::{library, library_fingerprint, module_of_bytes, pure_bytes, WORKER_STACK};
 use crate::node::{error, Node};
 use crate::pipeline::CompiledModule;
-use crate::run::program_cache::{keep_under, kept_under};
 use std::path::{Path, PathBuf};
 
 const COMPILER_FILE: &str = "compiler/compiler.warp";
-/// The kept compiler's cache names: compiled by the pure lane, or by Rust while the pure lane refuses compiler.warp
-const PURE_COMPILER: &str = "warp pure: compiler.warp, pure-compiled";
-const RUST_COMPILER: &str = "warp pure: compiler.warp, Rust-compiled";
+/// The custom section of a build file naming what it was built from: lib/, lib/'s fingerprint, the warp build
+const BUILD_SECTION: &str = "warp.build";
+const BUILD_SEPARATOR: &str = "\n";
+/// Where a lib/ other than the binary's keeps its build files, beside lib/
+const OTHER_LIBRARY_FOLDER: &str = "data";
+
+/// Who compiles compiler.warp: `warp pure` the Rust pipeline, `warp self` the pure lane, compiler.warp itself
+#[derive(Clone, Copy)]
+pub enum Compiler {
+	RustCompiled,
+	SelfCompiled,
+}
+
+impl Compiler {
+	pub const ALL: [Compiler; 2] = [Compiler::RustCompiled, Compiler::SelfCompiled];
+
+	/// The build file's name
+	fn file_name(self) -> &'static str {
+		match self {
+			Compiler::RustCompiled => "compiler.wasm",
+			Compiler::SelfCompiled => "compiler-self.wasm",
+		}
+	}
+
+	/// The command that runs programs with it
+	pub fn command(self) -> &'static str {
+		match self {
+			Compiler::RustCompiled => "pure",
+			Compiler::SelfCompiled => "self",
+		}
+	}
+}
 
 /// The program's value, run from the module compiler.warp made of it, with these arguments (`use os; args`)
-pub fn run(program: &Path, arguments: Vec<String>) -> Node {
-	match compiled(program) {
+pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
+	match compiled(program, by) {
 		Ok(module) => {
 			crate::modules::std_adapters::set_program_arguments(arguments);
 			crate::pipeline::run_module(module)
@@ -25,16 +55,16 @@ pub fn run(program: &Path, arguments: Vec<String>) -> Node {
 }
 
 /// The module compiler.warp makes of the program file: `compiler.warp <source> <wasm> <folder> <lib>`
-pub fn compiled(program: &Path) -> Result<CompiledModule, Node> {
+pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let program = program.canonicalize().map_err(|failure| error(&format!("{}: {failure}", program.display())))?;
 	let folder = program.parent().unwrap_or(Path::new("/")).to_path_buf();
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
 	let arguments = [program.as_path(), output.as_path(), folder.as_path(), library()];
+	let compiler = compiler(by)?;
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
-	let compiler = compiler()?;
 	let said = crate::pipeline::run_module(compiler);
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
@@ -45,32 +75,85 @@ pub fn compiled(program: &Path) -> Result<CompiledModule, Node> {
 	}
 }
 
-/// compiler.warp's module, kept; the pure lane's when it compiles compiler.warp, else Rust's, said on stderr
-fn compiler() -> Result<CompiledModule, Node> {
+/// `warp rebuild`: the build file of each compiler built anew from the current lib/, its path, or why it failed
+pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
+	let path = build_path(by);
+	build(by, &path)?;
+	Ok(path)
+}
+
+/// compiler.warp's module from its build file, built first when missing; one line when it was built from another lib/
+/// or warp build
+fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
+	let path = build_path(by);
+	let Ok(bytes) = std::fs::read(&path) else {
+		eprintln!("building {} (later: warp rebuild)", path.display());
+		return build(by, &path);
+	};
+	if built_from(&bytes) != current_build() {
+		eprintln!("{} was built from another lib/ or warp build: `warp rebuild` builds it anew", path.display());
+	}
+	Ok(module_of_bytes(bytes))
+}
+
+/// compiler.warp compiled by `by`, written to `path` with the build section
+fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let file = library().join(COMPILER_FILE);
 	let source = std::fs::read_to_string(&file).map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
-	let (pure_key, rust_key) = (stage_key(PURE_COMPILER), stage_key(RUST_COMPILER));
-	if let Some(module) = pure_key.as_deref().and_then(kept_under) {
-		return Ok(module);
-	}
-	if let Some(module) = rust_key.as_deref().and_then(kept_under) {
-		eprintln!("{RUST_COMPILER} (the pure lane refuses it; its first compile said why)");
-		return Ok(module);
-	}
-	let (module, key) = match pure_compiled(&file, source.clone()) {
-		Ok(module) => (module, pure_key),
-		Err(refusal) => {
-			eprintln!("{RUST_COMPILER}: the pure lane refuses it: {refusal}");
+	let module = match by {
+		Compiler::SelfCompiled => pure_compiled(&file, source).map_err(|refusal| {
+			error(&format!("compiler.warp compiled by itself: the pure lane refuses it: {refusal}"))
+		})?,
+		Compiler::RustCompiled => {
 			// a Node stays on its thread: the failure crosses as its text
 			let compiled =
 				on_big_stack(file, move || crate::pipeline::compile(&source).map_err(|failed| failed.serialize()));
-			(compiled.map_err(|failed| error(&failed))?, rust_key)
+			compiled.map_err(|failed| error(&failed))?
 		}
 	};
-	if let Some(key) = key {
-		keep_under(&key, &module);
-	}
+	let mut bytes = module.bytes.clone();
+	let section = current_build().join(BUILD_SEPARATOR);
+	wasm_encoder::Section::append_to(
+		&wasm_encoder::CustomSection { name: BUILD_SECTION.into(), data: section.as_bytes().into() },
+		&mut bytes,
+	);
+	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| write_new(path, &bytes));
+	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	Ok(module)
+}
+
+/// A new file moved into place: writing over a module another warp run reads would hand it half a module
+fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+	let new = path.with_extension(format!("new-{}", std::process::id()));
+	std::fs::write(&new, bytes)?;
+	std::fs::rename(&new, path)
+}
+
+/// What a build of now is made from: lib/, its fingerprint, the sources of this warp (WARP_SOURCE, build.rs)
+fn current_build() -> Vec<String> {
+	vec![library().display().to_string(), library_fingerprint(), env!("WARP_SOURCE").to_string()]
+}
+
+/// What a build file was made from, as current_build says it
+fn built_from(bytes: &[u8]) -> Vec<String> {
+	crate::host::host_parts::section_names(bytes, BUILD_SECTION, BUILD_SEPARATOR).unwrap_or_default()
+}
+
+/// The build file: next to the binary when that one is for this lib/ (or none is there yet), else beside lib/
+fn build_path(by: Compiler) -> PathBuf {
+	let beside_binary = std::env::current_exe()
+		.ok()
+		.and_then(|binary| binary.canonicalize().ok())
+		.and_then(|binary| binary.parent().map(|folder| folder.join(by.file_name())));
+	let library_path = library().display().to_string();
+	let for_this_library = |path: &PathBuf| match std::fs::read(path) {
+		Ok(bytes) => built_from(&bytes).first() == Some(&library_path),
+		Err(_) => true,
+	};
+	match beside_binary.filter(for_this_library) {
+		Some(path) => path,
+		None => library().parent().unwrap_or(library()).join(OTHER_LIBRARY_FOLDER).join(by.file_name()),
+	}
 }
 
 /// compiler.warp compiled by the pure lane (parser.warp, the warp passes, analyzer.warp, emitter.warp), else the refusal

@@ -1,10 +1,7 @@
 // `kept(name) ?? keep(name, value)` of use os (card pure-warm-start): a value computed by one run is the next run's
 fn printed_by(program: &std::path::Path, cache: &std::path::Path) -> String {
-	let output = crate::common::warp_command()
-		.arg(program)
-		.env("WARP_MODULE_CACHE", cache)
-		.output()
-		.expect("warp runs");
+	let output =
+		crate::common::warp_command().arg(program).env("WARP_MODULE_CACHE", cache).output().expect("warp runs");
 	String::from_utf8_lossy(&output.stdout).trim().to_string()
 }
 
