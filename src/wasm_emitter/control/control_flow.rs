@@ -360,8 +360,12 @@ impl WasmGcEmitter {
 				&[I::LocalGet(ran_local), I::I32WrapI64, I::If(BlockType::Result(Ref(self.node_ref(false))))],
 			);
 			match value {
+				// a continue or break that skipped the body's last statement on every pass held nothing: empty
 				LoopValue::Held(local) => {
-					Self::emit_list(func, &[I::LocalGet(local), I::RefAsNonNull]);
+					let node = Ref(self.node_ref(false));
+					Self::emit_list(func, &[I::LocalGet(local), I::RefIsNull, I::If(BlockType::Result(node))]);
+					self.emit_call(func, "new_empty");
+					Self::emit_list(func, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
 					self.loop_values.depth -= 1;
 				}
 				LoopValue::Updated(variable) => self.emit_node_instructions(func, &variable),

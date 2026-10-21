@@ -2,7 +2,7 @@
 // `[]` is an empty list and `xs.copy()` a list a change to xs no longer reaches, under `warp pure` too
 // (card pure-error-candidate; samples/functions/sudoku.warp uses both)
 def firsts(xs) {
-	if xs == [] { return [] }
+	if xs is empty { return [] }
 	return [xs#1]
 }
 print firsts([])

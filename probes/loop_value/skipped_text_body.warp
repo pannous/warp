@@ -1,0 +1,5 @@
+x = for n in ["a"] { if n == "a" { continue }; n }
+print(x is empty)
+f() := { for n in ["a"] { if n == "a" { break } } }
+f()
+print(for n in ["a" "b"] { if n == "b" { continue }; n })
