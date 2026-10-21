@@ -248,6 +248,7 @@ mod test_task_signals;
 mod test_task_values;
 mod test_tasks;
 mod test_test_pairs; // decision warp-is-tests: tab-separated test pairs
+mod test_text_in_logical_condition; // card lib-compiler
 mod test_text_loop_value;
 mod test_text_patterns; // card text-patterns
 mod test_threads;

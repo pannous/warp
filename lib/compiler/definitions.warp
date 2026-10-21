@@ -25,7 +25,9 @@ typed_block(head: Node, typed_body: Node, n: Node): Node := match typed_body {
 	_: n
 }
 
-declaration_words = ["var"]
+# `var x = 1`, and `let`, `const` and the other constant words (Rust twin: words.rs CONSTANT_KEYWORDS): the assignment
+# `x = 1`; that a constant binds once is the checks' to say
+declaration_words = ["var", "let", "const", "constant", "final", "val"]
 
 is_declaration_word(n: Node): bool := match n {
 	Symbol(name): name in declaration_words
