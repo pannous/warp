@@ -138,6 +138,7 @@ mod test_match_many_literals; // card pattern-dispatch-speed
 mod test_match_maps; // card map-patterns
 mod test_match_negative_subject; // card match-negative-subject
 mod test_match_arm_nested; // card match-arm-whose
+mod test_match_method_subject; // card match-xs
 mod test_match_other;
 mod test_match_pattern_bindings; // card pattern-names
 mod test_match_ranges;
