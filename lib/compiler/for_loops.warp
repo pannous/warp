@@ -126,14 +126,11 @@ lowered_for(n: Node, maps: list): Node := match n {
 	_: n
 }
 
-# a loop sees the maps of its function and of the program outside function bodies, as Rust's Names::within: a list
-# `found` stays a list beside another function's map `found`
+# a loop sees the maps of its own function and of the functions and program around it, as Rust's Names::within: a
+# list `found` stays a list beside another function's map `found`, a nested function's maps stay its own
 scoped_for_loops(n: Node, outer: list): Node := {
-	if is_function_definition(n) {
-		inner = outer + map_names(nodes_in(n))
-		return bottom_up(n, x => lowered_for(x, inner))
-	}
-	lowered_for(children(n, x => scoped_for_loops(x, outer)), outer)
+	maps = if is_function_definition(n) then outer + map_names(outer_nodes_in(value_of(n))) else outer
+	lowered_for(children(n, x => scoped_for_loops(x, maps)), maps)
 }
 
 for_loops(program: Node): Node := scoped_for_loops(program, map_names(outer_nodes_in(program)))
