@@ -228,6 +228,23 @@ fn number_keys_run_pure() {
 	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
 }
 
+/// The front lanes key such a map too: parser.warp's `m[1]` keeps its written number, and `{}` stays the empty map,
+/// across the bridge to the Rust passes (card self-hosted-map-null)
+#[test]
+fn number_keys_run_in_the_front_lanes() {
+	for lane in ["front", "1"] {
+		for (name, code, value) in [
+			("front_number_key_empty_map", "m = {}; m[1] = 2; m", "1:2"),
+			("front_number_key_read", "m = {}; m[1] = 2; m[1]", "» 2"),
+			("front_number_key_literal", "m = {1: 5}; m[1] = 2; m", "1:2"),
+			("front_list_index", "xs = [5, 6, 7]; xs[2] = 9; xs", "» [5 6 9]"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.contains(value), "lane {lane}, {code}: {output}");
+		}
+	}
+}
+
 /// List comprehensions lower to the loop that builds the list (card pure-comprehensions), a second `for` nesting in the
 /// first clause as Rust's parser reads it
 #[test]
@@ -580,4 +597,20 @@ fn a_failing_stage_names_its_file() {
 	let output = String::from_utf8_lossy(&run.stdout).into_owned() + &String::from_utf8_lossy(&run.stderr);
 	let _ = std::fs::remove_dir_all(&library);
 	assert!(output.contains("the self-hosted stage") && output.contains("compiler/emitter.warp failed"), "{output}");
+}
+
+/// An operator case is its own value and a synonym of its spelling (decision enum-case, card pure-op-cases): the pure
+/// lane prints Op.Add as Add, converts it to and from "+", and a match binds a key's op as its case
+#[test]
+fn op_cases_run_pure() {
+	runs_pure("op_case_value", "[Op.Add, Op.Sub]", "[Add Sub]");
+	runs_pure("op_case_as_text", "x = Op.Add; x as text", "» \"+\"");
+	runs_pure("op_case_from_text", "\"*\" as Op", "Mul");
+	runs_pure("op_case_equals_spelling", "x = Op.Add; x == \"+\" and op_of(Key(1, x, 2)) == Op.Add", "yes");
+	runs_pure("op_case_bound", "match Key(1, Op.Add, 2) { Key(a, op, c): op; _: 0 }", "Add");
+	runs_pure(
+		"bracket_case_bound",
+		"match List([1], Bracket.Square, Separator.Comma) { List(xs, b, s): [b, s]; _: 0 }",
+		"[Square Comma]",
+	);
 }

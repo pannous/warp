@@ -1,4 +1,5 @@
 mod test_aliased_changes; // card aliased-list
+mod test_any_plus_list; // card slice-node
 mod test_append_words;
 mod test_auto_linear_floats; // card auto-linear-floats
 mod test_bare_list_assignment;
@@ -110,6 +111,7 @@ mod test_range_in_structure;
 mod test_range_returns;
 mod test_range_values;
 mod test_remove_and_index_of;
+mod test_runtime_map_subscript; // card entry-number
 mod test_self_sum_in_place; // card out-list: `out = out + x` of an unshared list grows it in place
 mod test_set_past_the_end;
 mod test_signed_operand_list;

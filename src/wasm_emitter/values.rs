@@ -146,7 +146,7 @@ impl WasmGcEmitter {
 				if self.emit_struct_field_int(func, list, index) {
 					return;
 				}
-				if self.map_is_indexed_by_key(index) {
+				if self.map_is_indexed_by_key(list, index) {
 					self.emit_indexed_node(func, list, index);
 					self.emit_call(func, "get_int_value");
 					return;

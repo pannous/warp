@@ -1,5 +1,7 @@
 # Tests that fail in the cloud test lane's Linux VM for want of the Mac (scripts/cloud-test.sh): one awk regex per
 # line, matched against the failing test's path; their failures are listed apart and don't make the verdict red.
+# "<test regex> <item regex>" narrows a test whose panic lists one failing item per line (a slice of samples) to those
+# items: the test is environmental only when every item it lists matches, any other item makes it red.
 # Grown from real cloud runs only (notes/cloud_development.md "Cloud test lane"); a test fixed to skip itself on Linux
 # leaves the list.
 ffi::test_cargo_crates::test_cargo_crate_prebuilt_download   # the cloud's TLS proxy: invalid peer certificate, UnknownIssuer
@@ -10,7 +12,7 @@ numbers::test_bend_laws::the_project_laws_file                # Lean is not inst
 programs::test_brush_ripples::                                # no GPU adapter (wgpu)
 programs::test_sound_spectrum::the_gpu_visualizer             # no GPU adapter
 web::test_webgpu::                                            # no GPU adapter
-programs::test_playground_samples::.*slice_2                  # its GPU samples without an adapter (gpu_visualizer, wgsl shader loop)
+programs::test_playground_samples:: ^gpu_visualizer_warp:     # without an adapter its shader run answers "not an int" (card gpu-visualizer-no-adapter)
 web::test_deploy::                                            # wrangler is not installed
 welcoming::test_shell_words::which_finds_a_program            # Linux's sh is /usr/bin/sh
 control::test_try_host_failure::try_catches_a_file_or_http    # the VM runs as root: write() creates /no/such/folder

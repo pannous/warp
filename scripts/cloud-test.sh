@@ -29,6 +29,7 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 JOBS_PREFIX=cloud-jobs         # cloud-jobs/<job>: the job's arguments, so the session's prompt stays one short line
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
+SHOWN_ITEMS=12                 # lines of a real failure's panic message shown under it (a slice test's failing samples)
 KNOWN_FAILURES=notes/known_failures.md   # read in the tested checkout, as the gate reads it at the tested tip
 CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
 MAX_PARALLEL_RUNS=5           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
@@ -249,9 +250,17 @@ run_watched() {
 # which the gate accepts too) apart; verdict green|red
 summarize() {
 	local log=$1 environmental=$2 known=${3:-/dev/null}
-	awk -v environmental="$environmental" -v known_list="$known" '
+	awk -v environmental="$environmental" -v known_list="$known" -v SHOWN_ITEMS=$SHOWN_ITEMS '
 		BEGIN {
-			while ((getline line < environmental) > 0) { sub(/[ \t]*#.*/, "", line); if (line != "") patterns[++count] = line }
+			# a line is "<test regex>", or "<test regex> <item regex>" for a test whose panic lists items (one sample per
+			# line): then only those items are environmental, and the test is environmental only if every item it lists is
+			while ((getline line < environmental) > 0) {
+				sub(/[ \t]*#.*/, "", line)
+				if (line == "") continue
+				test_pattern = line; sub(/[ \t].*/, "", test_pattern)
+				item_pattern = substr(line, length(test_pattern) + 1); sub(/^[ \t]+/, "", item_pattern)
+				patterns[++count] = test_pattern; item_patterns[count] = item_pattern
+			}
 			while ((getline line < known_list) > 0) if (line ~ /^- [^ |]+ \|/) { split(line, field, " "); known[field[2]] = 1 }
 		}
 		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
@@ -260,13 +269,27 @@ summarize() {
 		/^test [^ ]+ has been running for over/ { slow[$2] = 1 }
 		/^test [^ ]+ \.\.\. / { finished_test[$2] = 1 }
 		/^---- [^ ]+ stdout ----$/ { current = $2; want_panic = 1; next }
-		want_panic && / panicked at / { getline message; panic[current] = message; want_panic = 0 }
+		collecting && /^(stack backtrace:|note: |---- |$)/ { collecting = 0 }
+		collecting { items[current, ++item_count[current]] = $0 }
+		want_panic && / panicked at / { getline message; panic[current] = message; want_panic = 0; collecting = 1 }
+		function environmental_failure(name,    p, i, whole, listed, matched) {
+			for (p = 1; p <= count; p++) if (name ~ patterns[p] && item_patterns[p] == "") whole = 1
+			if (whole) return 1
+			if (!item_count[name]) return 0
+			for (i = 1; i <= item_count[name]; i++) {
+				matched = 0
+				for (p = 1; p <= count; p++) if (item_patterns[p] != "" && name ~ patterns[p] && items[name, i] ~ item_patterns[p]) matched = 1
+				if (!matched) return 0
+				listed = 1
+			}
+			return listed
+		}
 		END {
 			incomplete = started > finished ? started - finished : 0
 			for (i = 1; i <= failures; i++) {
 				name = order[i]; line = "  " name ": " (name in panic ? panic[name] : "(no panic line)")
-				is_environmental = 0
-				for (p = 1; p <= count; p++) if (name ~ patterns[p]) is_environmental = 1
+				is_environmental = environmental_failure(name)
+				if (!is_environmental) for (j = 1; j <= item_count[name] && j <= SHOWN_ITEMS; j++) line = line "\n    " items[name, j]
 				if (is_environmental) { environmental_lines = environmental_lines line "\n"; environmental_count++ }
 				else if (name in known) { known_lines = known_lines line "\n"; known_count++ }
 				else { real_lines = real_lines line "\n"; real++ }
