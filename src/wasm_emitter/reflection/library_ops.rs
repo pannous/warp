@@ -165,11 +165,11 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// The list in local `acc` (null when empty) as a node: ø for the empty list
+	/// The list in local `acc` (null when empty) as a node: `[]` for the empty list (card empty-results)
 	fn emit_list_result(&self, func: &mut Function, acc: u32) {
 		let node_ref = Ref(self.node_ref(false));
 		Self::emit_list(func, &[I::LocalGet(acc), I::RefIsNull, I::If(BlockType::Result(node_ref))]);
-		self.call(func, "new_empty");
+		self.call(func, crate::wasm_emitter::constructors::NEW_EMPTY_LIST);
 		Self::emit_list(func, &[I::Else, I::LocalGet(acc), I::RefAsNonNull, I::End]);
 	}
 
