@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+# curly lists in the warp-compiled lane: a value is the list of its values, an argument keeps its bracket
+# WARP_SELF_HOSTED=pure /Users/me/dev/bin/warp probes/self_hosting/pure/curly_lists.warp
+pair = {1, 2}
+items_in(xs) := #xs
+print "${pair} ${items_in({1, 2})} ${items_in({3 4 5})}"
