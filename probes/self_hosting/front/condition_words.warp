@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# an if/while condition takes a braceless call of a variable, through the self-hosted parser:
+# WARP_SELF_HOSTED=front /Users/me/dev/bin/warp probes/self_hosting/front/condition_words.warp
+square x := x*x
+y = 3
+area = 12 ± 1
+i = 0
+while square i < 10 { i = i + 1 }
+print "${if square y > 5 then 1 else 2} ${if area certainly > 10 then "big" else "small"} ${i}"

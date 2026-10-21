@@ -56,7 +56,7 @@ exact_text(n: Node): text := {
 	whole = byte_count(padded) - digits
 	out = new_text(byte_count(padded) + 1)
 	copy_text(out, 0, padded, 0, whole)
-	set_byte(out, whole, 46)
+	set_byte(out, whole, Ascii.Point)
 	copy_text(out, whole + 1, padded, whole, digits)
 	if numerator < 0 { return "-" + out }
 	out
@@ -113,7 +113,7 @@ multiplied_within_64_bits(n: int, factor: int, times: int): int := {
 # a text of count zero digits
 zeros(count: int): text := {
 	out = new_text(if count > 0 then count else 0)
-	for i in 0..count { set_byte(out, i, 48) }
+	for i in 0..count { set_byte(out, i, Ascii.Zero) }
 	out
 }
 # `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
