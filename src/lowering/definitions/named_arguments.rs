@@ -33,8 +33,10 @@ impl Function {
 		Function { parameters, defaults, extras: vec![], overloads: vec![] }
 	}
 
-	fn has_parameter(&self, name: &String) -> bool {
-		self.parameters.contains(name) || self.overloads.iter().any(|overload| overload.parameters.contains(name))
+	/// Also a head's own `mix·local = 0.5`, which reads like a call naming its parameter as renamed apart
+	fn has_parameter(&self, name: &str) -> bool {
+		let name = crate::lowering::shadowing_bindings::written_name(name).to_string();
+		self.parameters.contains(&name) || self.overloads.iter().any(|overload| overload.parameters.contains(&name))
 	}
 
 	/// Whether `f(arguments)` fills these parameters: every name is one, the positional arguments fill the rest
