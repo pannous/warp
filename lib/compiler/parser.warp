@@ -172,7 +172,7 @@ def declared_type_names(source: text): list {
 // The keyword forms: each word with a form of its own and the form's shape; a prefix word's shape is the operator it
 // spells (`sqrt x` is `√x`), a constant word's the constant (any case: `True`, `NULL`)
 // Rust twin: atoms.rs keyword_form, expressions.rs parse_expr, if_else.rs, conditions.rs, warp_parser check_constants
-KEYWORD_FORMS = {"return": "return", "if": "condition", "while": "condition", "for": "loop", "loop": "endless",
+KEYWORD_FORMS = {"return": "return", "if": "condition", "while": "condition", "unless": "condition", "until": "condition", "for": "loop", "loop": "endless",
 	"class": "type", "struct": "type", "type": "type", "global": "global", "export": "global", "not": "not",
 	"sqrt": "√", "cbrt": "∛", "abs": "‖", "elif": "else if", "elsif": "else if", "elseif": "else if",
 	"where": "clause", "match": "clause", "switch": "clause", "contains": "contains", "has": "contains",
@@ -403,6 +403,8 @@ def grouped(pairs: list, bracket: text): Node := {
 // Words side by side; `print ord c` and `{ print ord c }` print the rest of the line as one value
 // Rust twin: commands.rs grouped_list
 def phrase(bracket: text, nodes: list): Node := {
+	guarded = if bracket == "[" then ø else guarded_command(nodes)
+	if guarded != ø { return guarded }
 	if not (bracket == "" or bracket == "{") or nodes.length < 3 or nodes#1 != PRINT { return listed(bracket, " ", nodes) }
 	listed(bracket, " ", [nodes#1, listed("", " ", nodes[1:])])
 }
@@ -489,6 +491,13 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		c = peek(p.code, p.at, p.n)
 		// `cd ~/notes`: a path after an operand is the next word, no operator
 		if starts_path(p) { return left }
+		guard = trailing_control_word(p, left, min_power)
+		if guard != "" {
+			p.at = p.at + guard.length
+			skip_spaces(p)
+			left = guarded_statement(left, guard, header_expression(p, CONDITION_POWER))
+			continue
+		}
 		if c == '@' and left != ø and min_power <= binding_powers("=")#2 {
 			marked = trailing_attribute(p, left)
 			if marked != ø {
@@ -1345,7 +1354,7 @@ def prefixed(p: Parser): Node := {
 	if form == "condition" {
 		p.at = p.at + word.length
 		skip_spaces(p)
-		return conditioned(word, header_expression(p, CONDITION_POWER), p)
+		return conditioned(CONTROL_WORDS[word], control_condition(word, header_expression(p, CONDITION_POWER)), p)
 	}
 	if form == "loop" {
 		loop = looped(p)
@@ -1484,12 +1493,15 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 	} else if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
 		body = items_until(p, '}', "{")
-	} else if word == "if" and is_list_of(condition, "(") and at_body_start(p) {
-		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
+	} else if is_list_of(condition, "(") and at_body_start(p) {
+		// `if (x < 0) return -1`, `while (i < 9) i++`: C's parenthesized condition, then the statement on the same line
 		outer = p.in_branch
-		p.in_branch = true
+		p.in_branch = word == "if"
 		body = expression(p, 0)
 		p.in_branch = outer
+	} else if word == "while" {
+		// `while x-- > 0`: a loop without a body, its condition does the work
+		return Key(keyed(word, ø, condition), Op.Do, ø)
 	} else {
 		return keyed(word, ø, condition)
 	}
@@ -1499,6 +1511,82 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 	otherwise = else_branch(p)
 	if otherwise.length == 0 { return branches }
 	Key(branches, Op.Else, otherwise#1)
+}
+
+// The control words and the condition word each reads as: `unless c` is `if not c`, `until c` is `while not c`
+// Rust twin: conditions.rs NEGATED_CONTROL_WORDS, spellings.rs
+CONTROL_WORDS = {"if": "if", "unless": "if", "while": "while", "until": "while"}
+NEGATED_CONTROL_WORDS = ["unless", "until"]
+def control_condition(word: text, condition: Node): Node := if NEGATED_CONTROL_WORDS contains word then Key(ø, Op.Not, condition) else condition
+
+// `a = 2 if c`, `i++ while c`, `a = 2 unless c`: a control word behind a statement guards or loops all of it, ""
+// where none follows; `if b {y}` after a statement starts the next one (condition_has_branch)
+// Rust twin: lookahead.rs operator_in_context, binding_power.rs (if and while bind at the statement's level)
+def trailing_control_word(p: Parser, left: Node, min_power: int): text {
+	if min_power > 0 or left == ø { return "" }
+	word = word_at(p)
+	if not CONTROL_WORDS.has(word) or not keyword_at(p, word) or not operand_after(p, word.length) { return "" }
+	if word == "until" and p.iterable { return "" }
+	if word == "if" and condition_has_branch(p, p.at + 2) { return "" }
+	word
+}
+
+// The statement guarded or looped by the control word behind it; a trailing `while` tests before the first round
+// like the leading one (user decision #22)
+// Rust twin: conditions.rs guarded_statement
+def guarded_statement(statement: Node, word: text, condition: Node): Node := {
+	head = keyed(CONTROL_WORDS[word], ø, control_condition(word, condition))
+	if CONTROL_WORDS[word] == "while" then Key(head, Op.Do, statement) else Key(head, Op.Then, statement)
+}
+
+// `print it if it%2`, `do {i++} while c`: a trailing `if` guards and a trailing `while` loops the whole command, not its
+// last word; else ø
+// Rust twin: conditions.rs guarded_command
+def guarded_command(nodes: list): any := {
+	if nodes.length < 2 or nodes#1 is not symbol { return ø }
+	match nodes#(nodes.length) {
+		Key(head, Op.Do, body): { if bare_control(head, "while") then Key(head, Op.Do, command_with(nodes, body)) else ø }
+		Key(head, Op.Then, body): { if bare_control(head, "if") then Key(head, Op.Then, command_with(nodes, body)) else ø }
+		_: ø
+	}
+}
+// `if c`, `while c` with nothing before the word
+def bare_control(n: Node, control: text): bool := match n {
+	Key(before, Op.If, test): control == "if" and before == ø
+	Key(before, Op.While, test): control == "while" and before == ø
+	_: no
+}
+// the command's words with its last one replaced by `tail`
+def command_with(nodes: list, tail: Node): Node := listed("", " ", nodes[0 .. nodes.length - 1] + [tail])
+
+// `if b {y}` or `if b then y` after a statement starts the next statement: the condition from `from` to the end of the
+// statement holds a block (a spaced `{` outside brackets: `point{x:1}` is data) or `then`
+// Rust twin: if_else.rs condition_has_branch
+def condition_has_branch(p: Parser, from: int): bool {
+	depth = 0
+	quote = ""
+	at = from
+	while at < p.n {
+		c = p.code[at]
+		if quote != "" {
+			if c == quote { quote = "" }
+		} else if c == '"' or c == '\'' {
+			quote = c
+		} else if c == '(' or c == '[' {
+			depth += 1
+		} else if c == ')' or c == ']' {
+			if depth == 0 { return false }
+			depth -= 1
+		} else if depth == 0 and c == '{' and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') {
+			return true
+		} else if depth == 0 and (c == '\n' or c == ';' or c == '}') {
+			return false
+		} else if depth == 0 and c == 't' and not is_name_char(p.code[at - 1]) and keyword_at_position(p, "then", at) {
+			return true
+		}
+		at += 1
+	}
+	false
 }
 
 // Whether a statement starts at the parser's position, no end of one, `then`, `else` or `do`
@@ -2151,6 +2239,10 @@ def position_in(table: text, c: text): int := index_of(table, c, 0, table.length
 
 ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 
+// The words of a block of code, also glued to it: `go{…}` starts a task, `loop{…}` loops, `do{…}` runs its block;
+// no tags `go:{…}` (Rust twin: atoms.rs GLUED_BLOCK_KEYWORDS)
+GLUED_BLOCK_WORDS = ["go", "loop", "do"]
+
 // A name and what is glued to it: `f(x)` calls f, `f(x) {…}` defines it, `a{…}` is the tagged block `a:{…}`
 // Rust twin: atoms.rs parse_symbol_with_suffix, parse_glued_suffix, function_call
 def named(p: Parser): Node := {
@@ -2193,6 +2285,7 @@ def named(p: Parser): Node := {
 	declared = p.types.contains(word)
 	if (declared or is_capitalized(word)) and block_after_blanks(p, declared) { skip_spaces(p) }
 	if is_at(p.code, p.at, '{', p.n) {
+		if GLUED_BLOCK_WORDS.contains(word) { return name }
 		p.at = p.at + 1
 		// `Point{x: 1}` of a declared type constructs a point, any other `name{…}` stays the tagged block (D4)
 		return Key(name, if declared then Op.None else Op.Colon, braced_items(p))
