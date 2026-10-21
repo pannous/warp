@@ -68,7 +68,6 @@ fn warp_pure_says_what_it_refuses() {
 
 /// A library word compiles through the pure lane (card pure-not-a-list)
 #[test]
-#[ignore = "the pure lane knows no library words yet: 'outside the core: the unknown name sum'"]
 fn warp_pure_runs_a_library_word() {
 	let said = pure_said("library_word", "print sum [1, 2]\n");
 	assert!(said.lines().next() == Some("3"), "{said}");
@@ -90,4 +89,20 @@ fn warp_self_runs_hello_world() {
 		.expect("warp runs");
 	let printed = String::from_utf8_lossy(&run.stdout);
 	assert!(printed.lines().next() == Some("hello world"), "{printed}\n{}", String::from_utf8_lossy(&run.stderr));
+}
+
+/// `warp pure <code>` and `warp self <code>` compile inline code as plain `warp <code>` runs it (card pure-inline: the
+/// command word was read as a variable, "undefined variable: pure")
+#[test]
+fn warp_pure_and_self_run_inline_code() {
+	for command in ["pure", "self"] {
+		let run = crate::common::warp_command()
+			.args(["--no-ask", command, "x=6;x*7"])
+			.env("WARP_NO_WINDOW", "1")
+			.env("WARP_HINTS", "0")
+			.output()
+			.expect("warp runs");
+		let said = String::from_utf8_lossy(&run.stdout).to_string() + &String::from_utf8_lossy(&run.stderr);
+		assert!(said.lines().any(|line| line.trim_start_matches("» ") == "42"), "{command}: {said}");
+	}
 }
