@@ -24,6 +24,7 @@ runtime_words = kept(RUNTIME_WORDS) ?? keep(RUNTIME_WORDS, lowered_program(read(
 # the wasm module of the source, as bytes
 compile(source: text, folder: text): list := {
 	program = lowered_program(source, folder, prelude_source)
+	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules? 
 	typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program))
 }
 
