@@ -135,7 +135,9 @@ impl Builders {
 	/// The Int handle of an integer: a fixnum as it is, a larger one composed from 32-bit limbs
 	fn integer_handle(&self, n: &num_bigint::BigInt, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
 		use num_traits::ToPrimitive;
-		if let Some(small) = n.to_i64().filter(|small| self.holds_machine_ints() || crate::wasm_emitter::is_fixnum(*small)) {
+		if let Some(small) =
+			n.to_i64().filter(|small| self.holds_machine_ints() || crate::wasm_emitter::is_fixnum(*small))
+		{
 			return Ok(small);
 		}
 		let (sign, limbs) = n.to_u32_digits();
