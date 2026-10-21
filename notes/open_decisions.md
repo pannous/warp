@@ -5,7 +5,6 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
-- keywordless-def (warp-pure-lambdas, card unused-sibling): at statement start, is `f(x) { x + 1 }` (no def, no :=) a definition when f is defined nowhere and the parameters are bare names (got-it note "I meant: def f(x) { … }"), and a call with a trailing block when f exists? Options: definition-if-undefined (recommended; footgun: a typo of a defined name defines a new function, the note shows it) / always an error naming `def f(x) {…}` and `f(x) := …` / leave as is ("undefined function: f"). Today: undefined function; nothing depends on it.
 
 ## Parked
 - graphics-plain (warp-markup, parked): display alias table with notes (stays in Rust); bare width/height as canvas sides with did-you-mean (stays).
