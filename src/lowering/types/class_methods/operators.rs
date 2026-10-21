@@ -7,12 +7,7 @@ use crate::words::STR_WORD;
 /// `a + b` of an instance a whose class defines the operator's method (`plus`, Python's `__add__`, wiki/operator.md):
 /// the method call `a.plus(b)`; an operation of such calls is an instance of the same class (`a + b + c`)
 pub(super) fn operator_calls(node: Node) -> Node {
-	let mut classes = std::collections::HashSet::new();
-	node.visit(&mut |part| {
-		if let Node::Type { name, .. } = part {
-			classes.insert(name.drop_meta().name());
-		}
-	});
+	let classes = crate::modules::needed_definitions::class_names(&node);
 	let node = named_outside_operators(node, &classes);
 	let mut methods: Vec<(String, Op, String)> = outside_operator_methods(&node, &classes);
 	node.visit(&mut |part| {
@@ -92,17 +87,14 @@ fn glyph_named(head: Node) -> Node {
 
 /// (class, operator, method) of each outside operator method, `plus(a: Vec, b: Vec) := …`
 fn outside_operator_methods(node: &Node, classes: &std::collections::HashSet<String>) -> Vec<(String, Op, String)> {
-	match node.drop_meta() {
-		Node::Type { .. } => vec![],
-		Node::Key(head, Op::Assign | Op::Define, _) if let Some(class) = outside_receiver(head, classes) => {
-			let operator = method_parts(node.drop_meta()).and_then(|(name, _, _)| {
-				let (op, _) = OPERATOR_METHODS.iter().find(|(_, names)| names.contains(&name.as_str()))?;
-				Some((class, *op, name))
-			});
-			operator.into_iter().collect()
-		}
-		other => other.children().iter().flat_map(|child| outside_operator_methods(child, classes)).collect(),
-	}
+	first_parameter_methods(node)
+		.into_iter()
+		.filter(|(class, _)| classes.contains(class))
+		.filter_map(|(class, name)| {
+			let (op, _) = OPERATOR_METHODS.iter().find(|(_, names)| names.contains(&name.as_str()))?;
+			Some((class, *op, name))
+		})
+		.collect()
 }
 
 /// Each class's fields: (name, type) in declaration order
