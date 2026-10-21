@@ -16,6 +16,9 @@ fn a_library_word_referenced_is_a_function() {
 #[test]
 fn a_bare_library_word_assigned_needs_its_arguments() {
 	// decision reflection: a bare name is never the function value implicitly (P82)
+	let error = printed("f = sin; f(0)");
+	assert!(error.contains("sin needs 1 argument"), "{error}");
+	assert!(error.contains("fix: function sin"), "{error}");
 }
 
 #[test]

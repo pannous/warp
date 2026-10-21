@@ -216,3 +216,10 @@
 - Reuse the prelude alias mechanism and the existing `count` implementation; do not add another counting path.
 - Preserve program-defined `size` functions and object fields/methods where normal dispatch gives them precedence.
 - Add focused outcome coverage, then run the targeted test, formatting, style, clippy, and wasm32 checks.
+
+# Assigned library-word diagnostic cleanup
+
+- Reproduce `f = sin; f(0)` with a focused outcome test before changing production code.
+- Apply the existing bare-library-word rule uniformly: assignment requires `function sin`, rather than leaving a later `undefined function: f`.
+- Reuse the welcoming callable lookup used by `floor` and `reverse`; do not add a `sin` or libm special case.
+- Run the focused function-binding tests, formatting, style, clippy, wasm32 checking, and Playground workflow.

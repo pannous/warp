@@ -169,6 +169,14 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 - Shaped parameters: the type word of `phone number` is not checked (the wiki passes the text "899-573-5842"), nor
   `mutable`.
 
+## Bare assigned standard words
+
+- P82 applies to every standard function: `f = sin` is a call missing its argument and reports `sin needs 1 argument;
+  fix: function sin`; `f = function sin` explicitly stores the function value.
+- `welcoming::ambiguous_forms::library_word_values` uses the shared library signature lookup, which includes libm,
+  builtins, prelude, text, emitter, and runtime words. Keep assignment diagnostics on that shared lookup instead of
+  adding per-word handling.
+
 ## Python and Ruby definitions
 - `def f(*args): body` (colon body, Python): declarations::keyword_definition reads `def head: body` as `head := body`
   early, so variadic.rs sees the rest parameter (it ran before the later pass that knew the colon form).
