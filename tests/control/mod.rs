@@ -136,6 +136,7 @@ mod test_match_binding_alternatives; // card binding-alternatives
 mod test_match_binding_arm;
 mod test_match_deep_conditions; // card deep-conditions
 mod test_match_else_line;
+mod test_match_guard_block; // card match-guard
 mod test_match_guarded_unit_name; // card pattern-variable
 mod test_match_guards_and_finally;
 mod test_match_item_patterns; // card list-pattern
