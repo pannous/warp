@@ -120,7 +120,7 @@ group_like(n: Node, items: list): Node := match n {
 # the call `name(arguments…)`
 # the symbol `word`
 is_word(n: Node, word: text): bool := n == symbol(word)
-call_of(name: text, arguments: any): Node := bracketed([symbol(name)] + arguments, "(")
+call_of(name: text, arguments: list): Node := bracketed([symbol(name)] + arguments, "(")
 
 # the numbers of the names the passes make, counted across all of them as Rust's nodes.rs fresh_number counts
 global names_made = 0
