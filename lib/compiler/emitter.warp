@@ -826,8 +826,10 @@ def texted(type: any, value: any): list { if value#1 == "char" and type in core_
 def admits(type: any, kind: text): bool {
 	type == ø or type == "any" or (type in core_type_words and core_type_words[type] == kind) or (kind == "node" and type in module.classes)
 }
-# a write to a field `name` of a value known only at run time: every class's field so named takes the kind
+# a write to a field `name` of a target known only at run time: every class's field so named takes the kind; a value
+# known only at run time too is written as it is, as Rust's field writes check no field type
 def field_admits(name: text, kind: text): bool {
+	if kind == "node" { return yes }
 	for class_name in module.classes.keys {
 		fields = module.classes[class_name]
 		if name in fields and not admits(fields[name], kind) { return no }
