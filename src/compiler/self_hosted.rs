@@ -42,8 +42,6 @@ const EMIT_PROGRAM: &str = concat!(
 );
 /// Where a stage program names lib/, the folder library() resolves
 const LIBRARY_MARK: &str = "{lib}";
-/// The module cache's extension of a remembered binary identity (binary_identity)
-const BINARY_IDENTITY: &str = "binary-identity";
 /// The runtime words emitter.warp compiles into a module, lowered like a program, in the compiler's folder
 const RUNTIME_WORDS: &str = "runtime.warp";
 /// The module the host words are imported from
@@ -609,20 +607,20 @@ pub fn compiler_key() -> Option<&'static str> {
 	enabled().then(|| KEY.get_or_init(|| stage_key("the self-hosted compiler")).as_deref()).flatten()
 }
 
-/// The cache key of a stage program: the running binary, the program, the WARP_ settings and every file of lib/ with its
-/// path inside lib/, so an identical lib/ elsewhere (another worktree) reuses the kept modules; none when the binary has
-/// no path
+/// The cache key of a stage program: the sources warp was built from (WARP_SOURCE, build.rs), the program, the WARP_
+/// settings and every file of lib/ with its path inside lib/. Neither the binary's place nor its build profile: a
+/// release build's compiler.warp module is every copy's and the debug build's of those sources too, so an install
+/// builds it with the new binary before it goes in place (card self-warming); an identical lib/ elsewhere (another
+/// worktree) reuses the kept modules
 #[cfg(feature = "native")]
 pub(crate) fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
-	// canonical: macOS gives the path the binary was started by, `../../scratch/warp` keyed every folder apart
-	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;
 	let mut hasher = Sha256::new();
 	let library = library();
 	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
-	hasher.update(format!("{}\n{settings:?}\n{program}\n", binary_identity(&binary)));
+	hasher.update(format!("{}\n{settings:?}\n{program}\n", env!("WARP_SOURCE")));
 	let mut files: Vec<PathBuf> = files_below(library.to_path_buf());
 	files.sort();
 	for file in files {
@@ -630,22 +628,6 @@ pub(crate) fn stage_key(program: &str) -> Option<String> {
 		hasher.update(std::fs::read(&file).unwrap_or_default());
 	}
 	Some(crate::extensions::hex_text(&hasher.finalize()))
-}
-
-/// The binary's identity, a hash of its bytes: a stage module kept by a freshly built binary is its installed copy's
-/// too, so an install builds compiler.warp's module with the new binary before it goes in place (card self-warming).
-/// Remembered in the cache under the binary's path, size and time: its ~50 MB are hashed once
-#[cfg(feature = "native")]
-fn binary_identity(binary: &std::path::Path) -> String {
-	use sha2::{Digest, Sha256};
-	let stamp = crate::run::program_cache::stamp(binary);
-	let place = crate::extensions::hex_text(&Sha256::digest(format!("{}\n{stamp:?}", binary.display())));
-	if let Some(identity) = crate::run::module_cache::kept_bytes(&place, BINARY_IDENTITY) {
-		return String::from_utf8_lossy(&identity).into_owned();
-	}
-	let identity = crate::extensions::hex_text(&Sha256::digest(std::fs::read(binary).unwrap_or_default()));
-	crate::run::module_cache::keep_bytes(&place, BINARY_IDENTITY, identity.as_bytes());
-	identity
 }
 
 /// The files below `folder`, at any depth
