@@ -190,7 +190,7 @@ def word_at(p: Parser): text := p.code[p.at .. name_end(p.code, p.at, p.n)]
 // The items up to `closer` (' ' for the end of the source), grouped by their separators; outside brackets the lines
 // indented below an item are its body (`repeat⏎⇥x` is `repeat: x`) and a line indented less ends the items
 // Rust twin: lists.rs parse_list_with_separators
-def items(p: Parser, closer: char, bracket: text): Node := {
+def items(p: Parser, closer: text, bracket: text): Node := {
 	found = []
 	opener = p.at - 1
 	outer_branch = p.branch
@@ -325,7 +325,7 @@ def colon_body(p: Parser, width: int): Node := {
 
 // The separator after an item, consumed: "," ";" a newline, a blank, or "" before the closer
 // Rust twin: lists.rs parse_separator
-def separator(p: Parser, closer: char, newline: bool): text {
+def separator(p: Parser, closer: text, newline: bool): text {
 	if p.at >= p.n or p.code[p.at] == closer { return "" }
 	c = p.code[p.at]
 	if c == ',' {
@@ -433,7 +433,7 @@ def line_ends_after(p: Parser, at: int): bool := p.resumes[at] >= p.n or line_br
 def line_breaks_after(p: Parser, at: int): bool := p.breaks[at] == true
 
 // The character the code goes on with after `at` and its blanks and comments: '\n' where the line ends first
-def code_after(p: Parser, at: int): char := if line_ends_after(p, at) then '\n' else p.code[p.resumes[at]]
+def code_after(p: Parser, at: int): text := if line_ends_after(p, at) then '\n' else p.code[p.resumes[at]]
 
 def skip_spaces(p: Parser) {
 	p.at = blank_end(p, p.at)
@@ -1327,7 +1327,7 @@ def expression_ends(p: Parser): bool {
 	at > p.at and "+-*/<".contains(c) and is_blank(peek(p.code, at + 1, p.n))
 }
 
-def prefixed_by_symbol(p: Parser, c: char): Node := {
+def prefixed_by_symbol(p: Parser, c: text): Node := {
 	next = peek(p.code, p.at + 1, p.n)
 	if c == '-' and next != '>' and next != '-' {
 		p.at = p.at + 1
@@ -1741,7 +1741,7 @@ DEGREE = '°'
 FREE_SYMBOL_BLOCKS = [['←', '⏿'], ['■', '◿'], ['➔', '➿'], ['⟀', '⟿'], ['⤀', '⫿'], ['⬀', '⯿'], ['￩', '￬']]
 // A symbol character no built-in operator, prefix operator or alias spells: a free operator or symbol name
 // Rust twin: operators.rs is_free_symbol
-def is_free_symbol(p: Parser, c: char): bool {
+def is_free_symbol(p: Parser, c: text): bool {
 	glyph = "" + c
 	if glyph.length != 1 or PREFIX_OPERATORS.contains(glyph) { return false }
 	in_block = false
@@ -1796,9 +1796,9 @@ def path_literal(p: Parser): text {
 	path
 }
 
-def is_operand_end(c: char): bool := is_name_char(c) or c == ')' or c == ']' or c == '}' or c == '"' or c == '\''
-def ends_path(c: char): bool := is_blank(c) or c == ']' or c == ')' or c == '}' or c == ',' or c == ';'
-def starts_path_name(c: char): bool := is_name_start(c) or c == '.'
+def is_operand_end(c: text): bool := is_name_char(c) or c == ')' or c == ']' or c == '}' or c == '"' or c == '\''
+def ends_path(c: text): bool := is_blank(c) or c == ']' or c == ')' or c == '}' or c == ',' or c == ';'
+def starts_path_name(c: text): bool := is_name_start(c) or c == '.'
 
 // Whether an operand ends before the blanks before `start`
 def operand_before(p: Parser, start: int): bool {
@@ -2084,7 +2084,7 @@ def raised_terms(p: Parser): list {
 }
 
 // Where the character c stands in `table`, else the table's length
-def position_in(table: text, c: char): int := index_of(table, c, 0, table.length)
+def position_in(table: text, c: text): int := index_of(table, c, 0, table.length)
 
 ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 
@@ -2158,7 +2158,7 @@ def optional_mark_follows(p: Parser, word: text): bool {
 
 // What ends an optional type after its `?`: a closer, a separator, the line's or source's end, or an assignment's `=`
 // Rust twin: lookahead.rs ends_optional_type
-def ends_optional_type(next: char, after: char): bool := ")]},;\n\r".contains(next) or (next == '=' and after != '=')
+def ends_optional_type(next: text, after: text): bool := ")]},;\n\r".contains(next) or (next == '=' and after != '=')
 
 // Spaces or tabs from `at`, then a comment or what ends an optional type
 // Rust twin: lookahead.rs closes_after_blanks
@@ -2711,7 +2711,7 @@ def radix_value(p: Parser, base: int): int {
 }
 
 // The value of a hex digit, 16 for any other character
-def digit_value(c: char): int {
+def digit_value(c: text): int {
 	small = "0123456789abcdef"
 	capital = "0123456789ABCDEF"
 	i = 0
@@ -2867,7 +2867,7 @@ def hex_value(digits: text): int {
 	value
 }
 
-def escape_character(c: char): char {
+def escape_character(c: text): text {
 	if c == 'n' { return '\n' }
 	if c == 't' { return '\t' }
 	if c == 'r' { return '\r' }
