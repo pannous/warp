@@ -1,0 +1,13 @@
+# card match-arm-whose: an arm whose body is an unbraced nested match keeps the outer match's next arms
+unbraced(n: Node): any := match n {
+	Key(v, Op.Else, f): match v { Key(c, Op.Then, y): "then"; _: "inner default" }
+	_: "outer default"
+}
+braced(n: Node): any := match n {
+	Key(v, Op.Else, f): { match v { Key(c, Op.Then, y): "then"; _: "inner default" } }
+	_: "outer default"
+}
+print braced(symbol("x"))
+print unbraced(symbol("x"))
+print unbraced(Key(symbol("a"), Op.Else, symbol("b")))
+print unbraced(Key(Key(ø, Op.Then, symbol("y")), Op.Else, symbol("b")))
