@@ -538,6 +538,9 @@ impl WasmGcEmitter {
 			self.parses_code = true;
 			self.highest_key_operator = (crate::operators::OP_CODES.len() - 1) as i64;
 		}
+		if let Some(code) = reflection::node_api::foreseen_key_operator(node) {
+			self.highest_key_operator = self.highest_key_operator.max(code);
+		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.makes_floats = true;
 			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
@@ -589,8 +592,13 @@ impl WasmGcEmitter {
 			if unforeseen.is_empty() && missing.is_empty() {
 				return;
 			}
-			let compiled_without = unforeseen.iter().any(|name| self.compiled_without.borrow().contains(*name));
-			if missing.is_empty() && !compiled_without {
+			let compiled_without: Vec<&str> =
+				unforeseen.iter().copied().filter(|name| self.compiled_without.borrow().contains(*name)).collect();
+			let mut cause = match missing.is_empty() {
+				true => format!("compiled without {compiled_without:?}"),
+				false => format!("missing {missing:?}"),
+			};
+			if missing.is_empty() && compiled_without.is_empty() {
 				trace!("emitting the unforeseen functions {unforeseen:?} after main");
 				self.ctx.required_functions.extend(&unforeseen);
 				let installed = self.installed_at_start();
@@ -600,9 +608,10 @@ impl WasmGcEmitter {
 				if all_emitted && self.installed_at_start() == installed {
 					continue;
 				}
+				cause = format!("late for the start function: {unforeseen:?}");
 			}
 			missing.extend(unforeseen.into_iter().map(Need::Function));
-			return self.rerun_with(missing, node);
+			return self.rerun_with(missing, node, cause);
 		}
 	}
 
@@ -628,7 +637,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The whole emission again, the needs found required from the start; a need found again cannot be provided
-	fn rerun_with(&mut self, needs: Vec<Need>, node: &Node) {
+	fn rerun_with(&mut self, needs: Vec<Need>, node: &Node, cause: String) {
 		if let Some(unprovidable) = needs.iter().find(|need| self.inherited_needs.contains(need)) {
 			let message = format!("the compiler found it needs {unprovidable:?} but cannot provide it");
 			return self.type_errors.push(message);
@@ -639,8 +648,8 @@ impl WasmGcEmitter {
 		rerun.discovered_needs = needs.into_iter().chain(self.discovered_needs.drain()).collect();
 		rerun.inherited_needs = rerun.discovered_needs.clone();
 		trace!("emitting again for {:?}", rerun.discovered_needs);
-		// each rerun also listed under the needs that caused it, the ones the analysis should have foreseen
-		let phase = format!("emit rerun for {:?}", rerun.inherited_needs);
+		// each rerun also listed under its cause, what the analysis should have foreseen
+		let phase = format!("emit rerun, {cause}");
 		let emit_again = || crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass hinted it
 		use crate::compiler::phase_times::{timed, timed_as};
 		timed("emit rerun", || timed_as(|| phase, emit_again));

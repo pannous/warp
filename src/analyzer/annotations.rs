@@ -9,8 +9,8 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if crate::type_constructor::instance_parts_marked(type_node) {
 		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
 	}
-	if crate::numbers::uncertain::is_interval_number(type_node) {
-		return Some(Kind::Empty); // `a:number` given a ± value: a Node, checked at run time (wasm_emitter admitted)
+	if is_number_as_node(type_node) {
+		return Some(Kind::Empty);
 	}
 	let type_name = type_node.name();
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
@@ -28,6 +28,27 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 		return Some(Kind::Empty);
 	}
 	type_word_kind(&type_name)
+}
+
+/// Marks the type `number` of a parameter given what no i64 holds, a ± value or a number of any kind held as a Node
+/// (`kind_of(n: any) := number_kind(n)`): held as a Node and checked for a number at run time (wasm_emitter admitted)
+#[derive(Clone, Debug, PartialEq)]
+struct NumberAsNode;
+
+/// The type `number` of a parameter, held as a Node
+pub(crate) fn number_as_node(type_node: &Node) -> Node {
+	Node::meta(type_node.drop_meta().clone(), Node::data(NumberAsNode))
+}
+
+/// Is the type a `number` held as a Node
+pub(crate) fn is_number_as_node(type_node: &Node) -> bool {
+	match type_node {
+		Node::Meta { node, data } => {
+			matches!(data.as_ref(), Node::Data(dada) if dada.downcast_ref::<NumberAsNode>().is_some())
+				|| is_number_as_node(node)
+		}
+		_ => false,
+	}
 }
 
 pub(crate) fn is_map_type(type_name: &str) -> bool {

@@ -303,7 +303,6 @@ impl WasmGcEmitter {
 	/// list_extend's items when they are no list (`out += part` of a part of unknown kind, a number or a text): the one
 	/// item appended, as the one-item list `[part]` (decision list-append-plus); an Error is the result, as node_add gives
 	fn emit_item_as_list(&self, f: &mut Function, items: u32, kind: u32) {
-		let node_type = self.type_manager.node_type;
 		Self::emit_list(f, &[I::LocalGet(items), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
 		self.emit_field(f, items, 0);
 		self.emit_unmarked(f);
@@ -315,10 +314,18 @@ impl WasmGcEmitter {
 			I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And,
 			I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Ne, I::I32And,
 			I::If(BlockType::Empty),
-				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(items),
-				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::LocalSet(items),
-			I::End,
-			I::End,
+		]);
+		self.emit_one_item_list(f, items);
+		Self::emit_list(f, &[I::LocalSet(items), I::End, I::End]);
+	}
+
+	/// `[item]` of the node local `item`: a square list of that one cell (decision list-append-plus)
+	pub(in crate::wasm_emitter) fn emit_one_item_list(&self, f: &mut Function, item: u32) {
+		let node_type = self.type_manager.node_type;
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(item),
+			I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
 		]);
 	}
 

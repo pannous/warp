@@ -5,6 +5,7 @@ mod test_inline_unions;
 // card union-types
 mod test_class_unions;
 // card class-field
+mod test_alias_list_type; // card alias-list-type
 mod test_any_field_text;
 mod test_any_into_annotated;
 mod test_any_into_annotated_types;
@@ -120,6 +121,7 @@ mod test_nested_type_calls; // text hex 255 is text(hex(255))
 mod test_number_converts; // card number-converts
 mod test_number_field; // card number-field
 mod test_number_keeps_exact; // card number-keeps-exact
+mod test_number_param_int; // card number-param-int
 mod test_one_dispatch; // card one-dispatch
 mod test_operation_type; // card parse-type
 mod test_optional_casts;
@@ -148,6 +150,7 @@ mod test_runtime_text_ratio;
 mod test_same_identity;
 mod test_scoped_enum_cases; // card node-enum
 mod test_self_typed_field; // card empty-field
+mod test_separated_list_writes; // card mark-separator
 mod test_shared_instances;
 mod test_shared_lists; // card shared-lists
 mod test_sized_array_values;

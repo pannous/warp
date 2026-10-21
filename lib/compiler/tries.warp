@@ -64,7 +64,7 @@ lowered_try(value: Node, fallback: Node, binding: any): Node := {
 		}
 		# `try { x } …`: a block of one statement guards the statement (held as a value, `{x}` would be data)
 		List(statements, Bracket.Curly, separator): {
-			if #statements == 1 and not (statements#1 is key and op_of(statements#1) == ":") { return guarded(statements#1, fallback, binding, number) }
+			if #statements == 1 and not is_key(statements#1, Op.Colon) { return guarded(statements#1, fallback, binding, number) }
 			guarded(value, fallback, binding, number)
 		}
 		_: guarded(value, fallback, binding, number)

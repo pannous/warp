@@ -2,8 +2,8 @@
 # Overloads by the item type of a list: play(notes) and play(files) are different variants
 class note{pitch:int}
 class file{name:text}
-play(xs: notes) = "playing {count xs} notes"
-play(xs: files) = "playing {count xs} files"
+play(xs: notes) = "playing \(count xs) notes"
+play(xs: files) = "playing \(count xs) files"
 print play([note(60), note(64), note(67)])
 print play([file("intro.mid")])
 total(xs: ints) = sum xs

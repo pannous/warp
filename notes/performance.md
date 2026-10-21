@@ -95,7 +95,10 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   every push to lib/compiler by another session recompiles the four stage programs (~40 s) in the middle of an A/B,
   which once made a 15% swing look like a result. Discard the first run of each binary (it compiles the stages).
 - The Mac is shared: alternate the two binaries round by round and compare `user` time, not `real`.
-- `WARP_PHASE_TIMES=1` names each emission rerun with the needs that caused it (6 per cold stage compile, ~6.7 s).
+- `WARP_PHASE_TIMES=1` names each emission rerun by its cause ("missing [KeyOperator(66)]" …). A cold stage compile
+  reran 6 times (~6.2 s of 13.3 s emitting) until the emitter foresaw the ops of `key(left, op, right)` calls
+  (node_api foreseen_key_operator): now 0 reruns, 5.4 s. A new rerun cause is a need the analysis should foresee.
+- Cold A/B: a re-signed copy (`cp warp w; codesign -s - -f w`) misses the program cache, whose key holds the binary.
 
 ## Compile time
 - Shared analysis state: function kinds and closure targets are `Rc` (analyzer FunctionKinds, ClosureTargets); passes

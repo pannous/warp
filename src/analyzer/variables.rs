@@ -185,9 +185,8 @@ fn widen_by_compound_assign(left: &Node, op: &Op, right: &Node, scope: &mut Scop
 	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error. A list stays a list, whatever it adds:
 	// `out += part` of a part of an `any` list grows it in place (list_extend), held as a Node it was copied each step
 	let grows_list = *op == Op::AddAssign
-		&& scope.lookup(name).is_some_and(|local| {
-			local.kind == Kind::List || (local.empty_list && crate::analyzer::inference::is_run_time_kind(&local.kind))
-		});
+		&& (scope.lookup(name).is_some_and(|local| local.kind == Kind::List)
+			|| crate::analyzer::inference::holds_empty_list(scope, name));
 	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) && !grows_list {
 		widen_to_node(scope, name, &Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone())));
 	}

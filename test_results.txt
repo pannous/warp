@@ -2078,7 +2078,6 @@ PASSED:
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
   ✓ lists::test_concat_keeps_arrays::a_concatenation_is_a_copy_of_both_lists
-  ✓ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
   ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
@@ -2138,6 +2137,8 @@ PASSED:
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
   ✓ lists::test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
+  ✓ lists::test_empty_start_plus::a_bracketed_item_appended_gets_the_bracket_hint
+  ✓ lists::test_empty_start_plus::an_empty_list_start_plus_an_item_is_a_list
   ✓ lists::test_empty_start::an_empty_list_start_appends_each_item
   ✓ lists::test_empty_start::nothing_plus_a_text_fails_with_the_text_start
   ✓ lists::test_field_count::a_parameter_counts_with_the_call_form
@@ -2247,6 +2248,7 @@ PASSED:
   ✓ lists::test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
   ✓ lists::test_list_plus_number::each_reading_has_its_explicit_form
   ✓ lists::test_list_plus_number::the_explicit_forms_never_ask
+  ✓ lists::test_list_plus_parts::a_list_plus_parts_of_unknown_kind_keeps_them_all
   ✓ lists::test_list_retype::a_list_variable_given_another_element_type_holds_both
   ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
   ✓ lists::test_list_times_list::round_and_curly_lists_take_the_dot_product
@@ -2507,6 +2509,7 @@ PASSED:
   ✓ modules::test_module_signals::a_listener_sees_the_writes_of_a_used_module
   ✓ modules::test_module_signals::a_stored_value_of_a_used_module_is_kept_by_the_program
   ✓ modules::test_netbase_package::a_query_is_a_url_path
+  ✓ modules::test_netbase_package::without_a_server_the_failure_names_it
   ✓ modules::test_node_json::a_field_named_json_wins
   ✓ modules::test_node_json::a_fraction_in_json_warns_of_its_loss
   ✓ modules::test_node_json::decimal_fractions_are_exact_json
@@ -3761,7 +3764,6 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
@@ -4220,6 +4222,7 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
+  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -4731,6 +4734,7 @@ PASSED:
   ✓ types::test_class_operators::a_class_defines_an_operator_by_its_glyph
   ✓ types::test_class_operators::a_class_defines_an_operator_by_its_name
   ✓ types::test_class_operators::a_value_either_an_instance_or_a_number_keeps_what_it_is
+  ✓ types::test_class_operators::an_operator_defined_outside_its_class
   ✓ types::test_class_operators::an_operator_on_a_value_of_unknown_class_dispatches_at_run_time
   ✓ types::test_class_operators::an_operator_with_a_typed_operand
   ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
@@ -4963,6 +4967,7 @@ PASSED:
   ✓ types::test_list_test_of_a_map::a_one_entry_map_is_upgraded_where_a_map_is_needed
   ✓ types::test_loop_item_into_annotated::a_local_annotated_inside_a_loop_body_is_checked_too
   ✓ types::test_loop_item_into_annotated::a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time
+  ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_appends
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
   ✓ types::test_map_read_size::a_size_entry_of_a_map_read_at_run_time
   ✓ types::test_map_read_size::any_entry_of_shell_info
@@ -5122,6 +5127,7 @@ PASSED:
   ✓ types::test_self_typed_field::a_required_field_of_the_own_class_is_an_error
   ✓ types::test_self_typed_field::an_optional_field_of_the_own_class_holds_nothing
   ✓ types::test_self_typed_field::other_fields_stay_strict
+  ✓ types::test_separated_list_writes::a_list_keeping_its_separator_takes_any_item
   ✓ types::test_shared_instances::a_change_passes_through_other_functions_and_methods
   ✓ types::test_shared_instances::a_function_changes_a_field_of_the_instance_it_is_given
   ✓ types::test_shared_instances::a_new_value_of_the_parameter_stays_inside
@@ -6001,6 +6007,7 @@ PASSED:
   ✓ welcoming::test_fixits::filter_loop_fixes
   ✓ welcoming::test_fixits::int_for_enum_parameter_fix
   ✓ welcoming::test_fixits::kebab_key_fixes
+  ✓ welcoming::test_fixits::list_operator_fixes
   ✓ welcoming::test_fixits::local_or_global_fixes
   ✓ welcoming::test_fixits::loop_it_fix
   ✓ welcoming::test_fixits::missing_closer_fixes
@@ -6388,9 +6395,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ modules::test_netbase_package::without_a_server_the_failure_names_it
-  ✗ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_stays_a_type_error
-  ✗ welcoming::test_fixits::list_operator_fixes
+  ✗ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6385 passed, 3 failed, 6388 total tested
+11 ignored, 6392 passed, 2 failed, 6394 total tested
