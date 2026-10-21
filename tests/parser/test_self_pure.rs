@@ -471,7 +471,7 @@ fn parser_words_run_pure() {
 	runs_pure("min_max", &probe("min_max"), "2\n5\n9\n1\n2\n1");
 	runs_pure("member_words", &probe("plurals"), "['h' 'é' 'l' 'l' 'o']\n['a' 'b']\n['a' 'b']\n['a' 'b']\n[1 2]\n5");
 	runs_pure("floor_quotient_of_nodes", &probe("floor_node"), "3\n3\n2\n2");
-	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
+	runs_pure("keys_of_nothing", &probe("empty_keys"), "[]\n[]");
 	runs_pure("empty_lists_join", &probe("empty_joins"), "0\n1\n0");
 	runs_pure("arity_overloads", &probe("arity_overloads"), "6\n6\n14\n6\n10\n1\n10\n12");
 	runs_pure("type_of_is", &probe("type_of_is"), "yes\nno\nyes");

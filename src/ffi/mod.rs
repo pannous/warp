@@ -46,6 +46,8 @@ const PRELUDE_SOURCE: &str = include_str!("../../lib/prelude.warp");
 pub const BUILTIN_LIBRARY: &str = "warp";
 /// `count(xs): int from emitter`: a builtin the emitter expands in place, without a runtime function
 pub const EMITTER_LIBRARY: &str = "emitter";
+/// `is_null(x: any): bool from runtime`: an intrinsic the self-hosted emitter supplies (emitter.warp `intrinsics`)
+pub const RUNTIME_LIBRARY: &str = "runtime";
 
 /// `atan2(y: float, x: float): float from 'm'`: a function's name, parameters and result as its foreign line writes them
 #[derive(Clone, Copy)]

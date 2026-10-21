@@ -897,6 +897,10 @@ impl WasmGcEmitter {
 			self.emit_object_identity(func, identity);
 			return self.emit_call(func, "new_int");
 		}
+		if let Some(identity) = self.nothing_identity(node) {
+			self.emit_nothing_identity(func, identity);
+			return self.emit_call(func, "new_int");
+		}
 		if let Some(equality) = self.identity_as_equality(node) {
 			return self.emit_node_value(func, &equality);
 		}

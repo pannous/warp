@@ -1,5 +1,10 @@
 ## runtime errors: each fails inside a function of its name, which src/wasm_emitter/control/traps.rs reads off the
 ## trace as the error's message; the global trap_detail holds the value the message names
+use "intrinsics.warp"
+use "nodes.warp"
+use "show.warp"
+use "text.warp"
+use "types.warp"
 divide_by_zero(): int := {
 	fail()
 	0

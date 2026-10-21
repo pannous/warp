@@ -7,6 +7,7 @@ mod test_byte_size;
 mod test_calls_in_blocks;
 mod test_captured_call_lists;
 mod test_comprehension_beside_own_push; // card prefix-count-field
+mod test_comprehension_if_else_item; // card comprehension-whose
 mod test_concat_declared;
 mod test_concat_keeps_arrays; // card runtime-speed
 mod test_count_after_function; // card print-people
@@ -26,6 +27,7 @@ mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
+mod test_empty_list_kept; // card rust-lane-literal
 mod test_empty_list_value; // card run-time-empty
 mod test_empty_results; // card empty-results
 mod test_empty_start; // card start: `t = []` appends, ø + text fails

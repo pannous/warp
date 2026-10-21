@@ -1,4 +1,12 @@
 ## ordering: node_order and the sort words (Rust's src/wasm_emitter/reflection/library_ops/ordering.rs)
+use "intrinsics.warp"
+use "arithmetic.warp"
+use "conversions.warp"
+use "exact.warp"
+use "library_words.warp"
+use "show.warp"
+use "text.warp"
+use "types.warp"
 # -1, 0 or 1 as a sorts before, with or after b: texts and characters by their bytes, ints and exact rationals exactly,
 # a float on either side as floats; anything else traps, as Rust's not_comparable (instances and times stay Rust's)
 node_order(a: Node, b: Node): int := {

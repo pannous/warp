@@ -434,6 +434,8 @@ PASSED:
   ✓ control::test_match_arm_if::an_arm_gives_its_inline_if
   ✓ control::test_match_arm_nested::an_unbraced_inner_match_keeps_the_outer_arms
   ✓ control::test_match_arm_nested::an_unbraced_inner_match_over_a_node
+  ✓ control::test_match_binding_alternatives::alternatives_bind_the_same_names
+  ✓ control::test_match_binding_alternatives::alternatives_binding_other_names_are_an_error
   ✓ control::test_match_binding_arm::bare_name_arm_binds_the_subject
   ✓ control::test_match_binding_arm::bare_name_unused_by_its_body_is_a_symbol_case
   ✓ control::test_match_binding_arm::variable_arm_compares
@@ -1307,6 +1309,8 @@ PASSED:
   ✓ functions::test_block_function_argument::a_lambda_or_function_still_passes_as_is
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
+  ✓ functions::test_bodiless_runtime_words::a_declared_runtime_word_compiles_where_it_is_not_called
+  ✓ functions::test_bodiless_runtime_words::a_declared_runtime_word_traps_when_the_rust_lane_calls_it
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
   ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
   ✓ functions::test_braced_it_warning::a_braced_it_body_is_the_parameter_and_warns
@@ -1855,6 +1859,7 @@ PASSED:
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
   ✓ functions::test_ported_calls::every_ported_call_form_keeps_its_value
   ✓ functions::test_ported_calls::linq_methods_work_with_a_note_naming_warps_word
+  ✓ functions::test_ported_calls::other_languages_list_types_are_lists_with_a_note
   ✓ functions::test_ported_calls::types_built_from_type_parameters_drop_with_them
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
@@ -2061,6 +2066,7 @@ PASSED:
   ✓ functions::test_variadic::a_spread_in_a_list_literal_splices_its_items
   ✓ functions::test_variadic::calls_without_parentheses_fill_the_rest_too
   ✓ functions::test_variadic::kotlin_vararg_and_csharp_params
+  ✓ functions::test_variadic::spreading_into_a_function_parameter
   ✓ functions::test_wasm_instruction_bodies::float_instruction_bodies
   ✓ functions::test_wasm_instruction_bodies::int_instruction_bodies
   ✓ functions::test_wasm_instruction_bodies::unknown_instruction_is_an_error
@@ -2092,6 +2098,7 @@ PASSED:
   ✓ lists::test_calls_in_blocks::calls_are_lowered_inside_single_statement_blocks
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
   ✓ lists::test_comprehension_beside_own_push::a_comprehension_beside_an_own_push_function
+  ✓ lists::test_comprehension_if_else_item::an_else_branch_ending_in_a_name_leaves_the_for_clause_to_the_list
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
   ✓ lists::test_concat_keeps_arrays::a_concatenation_is_a_copy_of_both_lists
@@ -2157,6 +2164,8 @@ PASSED:
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
   ✓ lists::test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
+  ✓ lists::test_empty_list_kept::a_returned_empty_list_prints_as_the_empty_list
+  ✓ lists::test_empty_list_kept::an_empty_list_passed_or_returned_is_not_nothing_itself
   ✓ lists::test_empty_list_value::a_returned_empty_list_takes_items
   ✓ lists::test_empty_list_value::an_empty_list_is_a_list
   ✓ lists::test_empty_list_value::an_empty_list_prints_as_written
@@ -2193,6 +2202,7 @@ PASSED:
   ✓ lists::test_global_typed_lists::a_global_typed_list_reads_as_its_list
   ✓ lists::test_global_typed_lists::an_element_of_another_type_widens_the_list
   ✓ lists::test_hash_range_slices::hash_slices_are_one_based
+  ✓ lists::test_hash_range_warning::a_prefix_count_before_a_range_does_not_warn
   ✓ lists::test_hash_range_warning::an_unparenthesized_hash_range_warns
   ✓ lists::test_hash_range_warning::parenthesized_forms_do_not_warn
   ✓ lists::test_held_element_compare::a_float_element_of_a_returned_list_equals_its_value
@@ -2279,6 +2289,7 @@ PASSED:
   ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
   ✓ lists::test_list_times_list::round_and_curly_lists_take_the_dot_product
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
+  ✓ lists::test_lists_read_by_turns::a_field_set_keeps_the_read_cursors
   ✓ lists::test_lists_read_by_turns::lists_read_by_turns_after_an_in_place_change
   ✓ lists::test_lists_read_by_turns::lists_read_by_turns_take_linear_steps
   ✓ lists::test_lists::test_array_creation
@@ -2587,6 +2598,8 @@ PASSED:
   ✓ modules::test_prelude_own_names::prelude_words_answer_to_their_own_names
   ✓ modules::test_prelude_shadowing::library_spellings_keep_the_prelude_word
   ✓ modules::test_prelude_shadowing::the_program_word_takes_its_own_calls_with_a_hint
+  ✓ modules::test_program_aliases::a_program_alias_leaves_a_declared_word_alone
+  ✓ modules::test_program_aliases::a_program_alias_names_its_word
   ✓ modules::test_program_arguments::the_words_after_two_dashes_are_the_programs_arguments
   ✓ modules::test_program_variable_beside_module::a_module_local_named_like_a_program_variable_stays_the_modules
   ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
@@ -2651,6 +2664,7 @@ PASSED:
   ✓ modules::test_std_json::a_json_word_without_its_use_names_the_module
   ✓ modules::test_std_json::malformed_json_is_an_error_naming_it
   ✓ modules::test_std_json::use_json_parses_and_writes_json
+  ✓ modules::test_std_kept::a_kept_value_is_the_next_runs
   ✓ modules::test_std_list::a_module_word_without_its_use_names_the_module
   ✓ modules::test_std_list::a_programs_own_word_wins_over_the_module
   ✓ modules::test_std_list::chunk_window_median
@@ -2769,6 +2783,10 @@ PASSED:
   ✓ modules::test_used_enums::an_enum_of_a_file_a_used_file_uses
   ✓ modules::test_used_module_bare_words::a_used_modules_word_is_called_bare
   ✓ modules::test_used_module_bare_words::without_the_use_or_with_an_own_parse_the_word_keeps_its_meaning
+  ✓ modules::test_used_types::a_field_typed_map_holds_a_map
+  ✓ modules::test_used_types::an_alias_of_a_used_file_names_its_type
+  ✓ modules::test_used_types::an_alias_reaches_the_functions_of_a_file_using_its_file
+  ✓ modules::test_used_types::an_optional_result_of_a_used_files_type
   ✓ modules::test_versions::a_package_used_twice_is_loaded_once
   ✓ modules::test_versions::an_empty_symbol_is_no_version
   ✓ modules::test_versions::an_older_version_comes_from_its_git_tag
@@ -2833,9 +2851,12 @@ PASSED:
   ✓ node::test_normalization::test_length_prefix_under_bracket_style
   ✓ node::test_normalization::test_list_of_lists_has_no_plural_spelling
   ✓ node::test_normalization::test_list_type_hint_is_emitted_once_when_evaluated
+  ✓ node::test_normalization::test_list_type_hint_with_values_and_position
+  ✓ node::test_normalization::test_list_type_style_generic
   ✓ node::test_normalization::test_list_type_style_of
   ✓ node::test_normalization::test_logical_operators
   ✓ node::test_normalization::test_logical_operators_symbol_style
+  ✓ node::test_normalization::test_of_list_type_hints_plural
   ✓ node::test_normalization::test_one_character_strings_have_no_canonical_quote
   ✓ node::test_normalization::test_plural_list_type_is_canonical
   ✓ node::test_normalization::test_power_operator
@@ -2956,6 +2977,7 @@ PASSED:
   ✓ numbers::test_fast_int::a_fast_loop_counts_as_the_exact_one
   ✓ numbers::test_fast_int::int64_wraps_and_traps_only_when_strict
   ✓ numbers::test_fast_int::nested_fast_operations_wrap
+  ✓ numbers::test_fast_math::a_constant_fast_word_folds_to_the_fast_value
   ✓ numbers::test_fast_math::fast_words_are_close_to_the_c_library
   ✓ numbers::test_fast_math::fast_words_reach_the_math_module_and_stay_out_of_other_programs
   ✓ numbers::test_fast_math::warp_fast_uses_fast_math_also_for_a_kept_program_file
@@ -3800,7 +3822,6 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
@@ -4336,6 +4357,7 @@ PASSED:
   ✓ scope::test_global_modifiers::test_type_word_alone_is_still_a_name
   ✓ scope::test_global_modifiers::test_typed_global_without_initializer_is_zero
   ✓ scope::test_global_node_widening::a_value_of_run_time_kind_widens_an_exact_global
+  ✓ scope::test_global_object_field_named_like_function::a_field_named_like_a_function_reads_the_field_beside_a_same_named_local
   ✓ scope::test_global_typed_list::a_function_changes_a_typed_global_list
   ✓ scope::test_global_typed_list::a_function_reads_a_typed_global_list_of_instances
   ✓ scope::test_globals::test_global_float_with_pi
@@ -4417,6 +4439,9 @@ PASSED:
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
+  ✓ text::test_casts_to_text_units::a_list_cast_to_an_element_type_casts_each_item
+  ✓ text::test_casts_to_text_units::a_text_cast_to_a_unit_word_is_its_list
+  ✓ text::test_casts_to_text_units::words_split_at_any_whitespace
   ✓ text::test_char_parameter_type::test_a_parameter_holding_more_or_fewer_characters_is_a_text
   ✓ text::test_char_parameter_type::test_a_parameter_holding_one_character_is_a_codepoint
   ✓ text::test_character_arithmetic::a_character_is_no_number_in_arithmetic
@@ -4852,6 +4877,7 @@ PASSED:
   ✓ types::test_data::test_node_data_various_types
   ✓ types::test_date_arithmetic_at_run_time::test_a_date_plus_a_duration
   ✓ types::test_date_arithmetic_at_run_time::test_a_local_time_and_an_instant_plus_a_duration
+  ✓ types::test_date_arithmetic_at_run_time::test_a_time_plus_a_text_is_text
   ✓ types::test_date_arithmetic_at_run_time::test_arithmetic_prints
   ✓ types::test_date_arithmetic_at_run_time::test_constant_times_fold_and_the_run_does_the_rest
   ✓ types::test_date_arithmetic_at_run_time::test_durations_add_and_scale
@@ -6473,12 +6499,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ functions::test_ported_calls::other_languages_list_types_are_lists_with_a_note
-  ✗ functions::test_variadic::spreading_into_a_function_parameter
-  ✗ node::test_normalization::test_list_type_hint_with_values_and_position
-  ✗ node::test_normalization::test_list_type_style_generic
-  ✗ node::test_normalization::test_of_list_type_hints_plural
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✗ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
 
 SUMMARY:
-12 ignored, 6470 passed, 6 failed, 6476 total tested
+12 ignored, 6496 passed, 2 failed, 6498 total tested
