@@ -25,6 +25,7 @@ pub mod pattern_clauses;
 pub mod preposition_calls;
 pub mod property_accessors;
 pub mod references;
+pub mod shadowing_bindings;
 pub mod specialising;
 pub mod typed_block_arguments;
 pub mod undo_history;
