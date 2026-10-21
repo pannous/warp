@@ -82,7 +82,7 @@ no_value = 64
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_load: 40, i32_load8_u: 45, i32_store: 54, i32_store8: 58,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_sub: 107, i32_and: 113, i32_or: 114,
-	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
+	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_trunc: 157, f64_nearest: 158, f64_sub: 161, f64_mul: 162, f64_div: 163, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64)
 wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
@@ -98,7 +98,7 @@ gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_
 # the abstract heap type i31 (a character boxed in a $Node), as a cast's immediate
 i31_type = 108
 ref_null = 208
-int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
+int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
 # where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
 checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
@@ -913,6 +913,7 @@ def operation(body: Body, symbol: text, a: any, b: any): list {
 	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
 	if symbol == "%" { return runtime_call("float_mod", [["float", converted(a, kind)], ["float", converted(b, kind)]]) }
+	if symbol == "rem" and kind == "float" { return float_remainder(body, converted(a, kind), converted(b, kind)) }
 	if symbol == "/" and kind == "int" { return runtime_call("exact_ratio", [a, b]) }
 	# a negative exponent gives an exact rational, so the power is a boxed value
 	if symbol == "^" and kind == "int" { return runtime_call("exact_pow", [["node", boxed(a)], ["node", boxed(b)]]) }
@@ -989,6 +990,16 @@ def euclidean_remainder(body: Body, a: any, b: any): list {
 	absolute = zero + get_divisor + [op.i64_sub] + get_divisor + get_divisor + zero + [op.i64_lt_s, op.select]
 	code = a#2 + b#2 + [op.local_tee] + divisor + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [op.i64_lt_s]
 	["int", code + [op.if, type_bytes.int] + get_rest + absolute + [op.i64_add, op.else] + get_rest + [op.end]]
+}
+
+# a rem b of floats, the sign of a as with ints: a - trunc(a / b) * b (wasm has no f64 remainder)
+def float_remainder(body: Body, a: list, b: list): list {
+	dividend = uleb(fresh_local(body, "float"))
+	divisor = uleb(fresh_local(body, "float"))
+	get_dividend = [op.local_get] + dividend
+	get_divisor = [op.local_get] + divisor
+	kept = a + [op.local_set] + dividend + b + [op.local_set] + divisor
+	["float", kept + get_dividend + get_dividend + get_divisor + [op.f64_div, op.f64_trunc] + get_divisor + [op.f64_mul, op.f64_sub]]
 }
 
 def assignment(body: Body, target: any, value: any): list {
