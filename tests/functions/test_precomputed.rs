@@ -20,3 +20,16 @@ fn a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module() {
 		warp::pipeline::compile("def fib(n): n<2 ? n : fib(n-1)+fib(n-2); x = fib(20); x+1").expect("compiles");
 	eq!(warp::run::wasm_reader::read_bytes(&module.bytes).expect("runs"), 6766);
 }
+
+// card front-prints: the folding compiles its own module of the foldable definitions alone; what that module's compile
+// says about them (`Round` names nothing, the enum declaration being outside it) never reaches the program's compile
+#[test]
+#[cfg(feature = "native")] // reads the compiled module with wasmtime
+fn folding_says_nothing_of_its_own() {
+	warp::errors::diagnostic::take_warnings();
+	let code = "enum Shape { Round, Square }\nshape_of(n: int): Shape := if n > 0 then Shape.Round else Shape.Square\nshape_of(1)";
+	let module = warp::pipeline::compile(code).expect("compiles");
+	let warnings: Vec<String> = warp::errors::diagnostic::take_warnings().iter().map(|w| w.to_string()).collect();
+	assert!(warnings.is_empty(), "{warnings:?}");
+	eq!(warp::run::wasm_reader::read_bytes(&module.bytes).expect("runs"), Node::Symbol("Round".into()));
+}
