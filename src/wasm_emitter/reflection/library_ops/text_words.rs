@@ -470,11 +470,8 @@ impl WasmGcEmitter {
 				}
 				// `[]` reads as written (card run-time-empty)
 				s.emit_field(f, element, 0);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(crate::type_kinds::EMPTY_LIST_KIND),
-					I::I64Eq, I::If(BlockType::Empty),
-				]);
+				Self::emit_is_empty_list(f);
+				f.instruction(&I::If(BlockType::Empty));
 				s.emit_constant_text(f, empty_list_text);
 				Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				// a ø item reads as ø, as Node::serialize writes it: also an empty map at the top (card print-empty-map)
