@@ -2042,9 +2042,11 @@ def logical(body: Body, symbol: text, left: any, right: any): list {
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_body(f: Function): Body := {
 	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [], {})
-	for i in 0..<#f.signature.parameters { local_index(scope, f.signature.parameters[i].name, f.kinds[i]) }
+	for i in 0..<#f.signature.parameters { local_index(scope, parameter_local_name(scope, f.signature.parameters[i].name, i), f.kinds[i]) }
 	scope
 }
+# every parameter has a local of its own: a name given twice, `middle(_, value, _)`, names only the first
+parameter_local_name(scope: Body, name: text, i: int): text := if name in scope.names then "·parameter" + i else name
 
 # is the program analyzed (WARP_SELF_ANALYSIS): then a node meeting a list or text holds one, as analyzer.warp found
 analyzed_program(): bool := module.kinds != ø and "value" in module.kinds
