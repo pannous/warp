@@ -447,7 +447,7 @@ def run_lanes(arguments):
             results = list(pool.map(lambda file: tested(file, lane, warp), files))
         with open(RUN_DATA / f"{lane}.log", "w") as log:
             for file, (*_, output) in zip(files, results):
-                log.write(f"== {file.relative_to(REPO)}\n{output}\n")
+                log.write(f"== {os.path.relpath(file, REPO)}\n{output}\n")
         passed, failed, unrun = (sum(result[at] for result in results) for at in range(3))
         unrun_files = sum(result[2] > 0 for result in results)
         lines = (RUN_DATA / f"{lane}.refusals").read_text().splitlines()
@@ -531,7 +531,7 @@ def run_pairs(lane, files, warp):
         results = list(pool.map(lambda job: pair_verdict(job[0], *job[1][1:], lane, warp), enumerate(rows)))
     with open(RUN_DATA / f"{lane}.log", "w") as log:
         for (file, code, expected), (verdict, output) in zip(rows, results):
-            log.write(f"{verdict}\t{file.relative_to(REPO)}\t{code}\t{expected}\t{output[-200:]!r}\n")
+            log.write(f"{verdict}\t{os.path.relpath(file, REPO)}\t{code}\t{expected}\t{output[-200:]!r}\n")
     counts = Counter(verdict for verdict, _ in results)
     print(f"{lane}: " + ", ".join(f"{counts[v]} {v}" for v in PAIR_VERDICTS) + f" of {len(rows)} pairs in {len(files)} files")
     return counts["passed"]
