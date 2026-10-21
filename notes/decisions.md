@@ -7,6 +7,9 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
+- revert-first (user, standing permission): when main's pipeline (`warp pure hello`) breaks and the suspect merge is known, the Integrator reverts it at once without asking and its owner re-lands it fixed (notes/agents/integrator.md); the only exception to never-revert-unprompted.
+- self-compiled-parity (user): the parity check is off for now: switching to the self-compiled compiler.warp needs only that more tests pass under `warp pure` than before, no suite parity with the Rust-compiled one and no bitwise fixpoint yet.
+- pipeline-first (user): the main focus is the self-hosted compiler pipeline (parser → lowering → analysis → emitter in warp, `warp pure`); fixes for library user modules (sound, dates, extrema …) are normal priority, not Now/express, unless they break the pipeline.
 - quality-before-gap (user, at 49/116 lib files pure-compiled): raise the warp compiler's code quality before closing the final gap: the beautify cards (magic-numbers, function-signature, typed-compiler front and back) go first; gap cards (runtime-word-calls and the like) continue only where they don't touch the same lines, preferably on the cleaned-up code.
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
 - ready-queue: the board's Ready column is the merge queue (`todo ready <card>`, refuses only a branch that doesn't merge cleanly into origin/main); batches of ≤ ~8 cards, wide refactors and carrier branches alone and first; the Integrator resolves only trivial conflicts, others go back to the owner (card to Now + note with the hunk); a reviewer veto moves the card back to Now.
@@ -205,6 +208,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 
 ## Bool and truthiness
 - bool-type: yes/no are their own shallow type acting as 1/0; `type(yes)` is bool, prints yes/no, true/false accepted; `0 == false` yes, `0 === false` no; P195 `true + 1` is 2; P199 bool slots accept 1 and 0 only; JSON true/false read as yes/no.
+- kind-kept: a value never changes kind by being passed or returned: `f(x) := x; f([])` and `g(): any := { return [] }` give [], not ø; `[] === ø` is no while `[] == ø` stays yes (like 0 == false / 0 === false; whether [] == ø at all is card discuss-what) (Interviewer's decision).
 - Truthiness: ø + 1 stays an error, and so does ø + text (empty-plus-text: `t = ø; t += "a"` errs with the fix `t = ""`, or `t = []` for a list; `"a" + ø` with text on the left joins its str form); empty values are falsy; only 0 equals false; #38 a non-empty list (even `[ø]`) is truthy; #28 `x=ø; x.size` and `[].count` are 0; `is empty` covers "", [], {}, ø.
 - predicate-bool: predicates (`is_blank`, `is_even`, `is_odd`, every `is_…`) give yes/no, not 1/0.
 - branch-keeps-bool: an `if`/match branch keeps its own value, the bool mark included: `if c then 2 else true` with c false is yes, not 1 (also in lists and `any` slots); only Int→Float widens.
@@ -275,7 +279,9 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - random-forms: bare `random` is a float in [0,1) where a value is used; `random T` is a random value of type T (`random bool`, `random int`); `random(n)` 0…n-1; `random(a, b)` whole numbers inclusive, floats [a, b); `random 1..10` picks from the range. Any parameter of type Type accepts bare type words.
 - function-references: a bare function name compared with a type or in `type(f)` is the function itself; `.floor` in argument position is a lambda (`xs.map(.floor)`, `people.sort(.age)`); `&floor` and `function floor` are the explicit references.
 - type-library-words: list/map/text library words are always available as `x.f()` and `f(x)`; `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module); `write` and `exists` are global.
-- library-own-words (user): a library file that needs an existing word (lib/extrema.warp's min, lib/fast_math.warp's sin) uses the existing one, never redefines it. The function `norm` (refused in lib/prelude.warp as the operator ‖) moves into the math module, visible only after `use math`.
+- module-alias: an `alias pw = power` line in a program or a directly run file adds a name and never shadows one (`alias exp = exponential` beside a builtin exp leaves exp the builtin) (Interviewer's decision).
+- own-name-not-builtin (user): a program wanting its own version of a builtin math word (a Taylor-series sin) defines it under its own name (`sin_test` in the tests), not by redefining `sin`; test_sinus/test_sinus2 are rewritten that way.
+- library-own-words (user): a library file that needs an existing word (lib/extrema.warp's min, lib/fast_math.warp's sin) uses the existing one, never redefines it. The function `norm` (refused in lib/prelude.warp as the operator ‖) moves into the math module, visible only after `use math`. A std module under lib/ that deliberately replaces a library word (lib/extrema.warp's min/max in warp, lib/fast_math.warp's fast sin/cos/exp for `warp fast`) is allowed to, also when the file is run directly (user).
 - P141/P142 a definition named like a builtin that would win is an error at the definition; library words may be redefined only where the builtin wouldn't win, methods always; a foreign export is called qualified. P39 no `id`/`square` builtins; P191 `square` lives in math.
 - builtins-name (user 2026-10-18): library words are called builtins (shorter to say and write), in notes, cards, messages and new code names; where the old split still matters, the Rust-only ones are "Rust builtins" until retired. Old names (library_words.rs, retire-library-words) are renamed along with the Rust cleanup.
 - music-plain-library (user 2026-10-18): music (lib/sound.warp and the music words) is a plain library: no compiler magic at all, no Rust pass, no rewrite rules, no module pass. It uses only core language features. music_words.rs goes away: each form becomes an ordinary function/class/operator call; a form that can't be written that way either needs a general core feature (card, useful beyond music) or is dropped/simplified. Rephrasing the syntax of some calls is fine; most forms should be doable with the general patterns (definition clauses, function-word patterns, notes/matching.md).
@@ -343,6 +349,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
+- rewrite-rules (user): a rule set `rules { data($a * 1) => a; … }` is a value; calling it rewrites bottom-up to a normal form (a rewritten node is tried again until no rule fires: `simplify(data(y * 1 * 1 + 0))` → y); a step cap stops a rule set that never settles with a loud error naming the rule that keeps firing. `tree replace P with Q` stays a single pass.
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
 - match-alternatives: `1 | 2`, `1 or 2`, `1, 2` as case keys all mean either; `int or text` as a key is the type test; `other` is a catch-all like `_`/`default`/`else`.
 - match-exhaustive: a match on a known enum or sealed class missing a case is a compile error.
@@ -394,6 +401,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - go-voice: a `go {}` task is a voice sounding along from where its starter stands. deleted-loop: a live_loop deleted from the source stops on re-evaluation (≤ ~4 s fade).
 
 ## Modules, library and foreign code
+- bodiless-imports (user): a function without a body is its typed head with who supplies it: `is_null(x: any): bool from warp` (the foreign-signature line, `from runtime`/`from 'm'` alike); `import is_null(x: any): bool` works too (WASM's word). `import m` without a head stays `use m` (P139).
 - foreign-signature: a libm function is declared by a typed foreign line `sin(x: float): float from 'm'`; builtin math words use the same line with `from warp`; a bare `floor` is warp's, C's only qualified (`m.floor`); `import (…) from 'm'` keeps working for headers. Open (card foreign-line): a program's own line should win over the header's signature.
 - P169 `use math` is the module with readable names; raw C math is `use cmath`.
 - P182 Set, Stack, Queue, Deque, Counter only in `collections`. P183 std modules are backed only by warp, host words or C compiled to wasm; regex is the common Rust/JS subset; `file.append(path, text)`.

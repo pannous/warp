@@ -38,6 +38,9 @@ notes/agents/common.md.
   user's drafts marked "(user)" first: rate the cards easy / medium / hard and hand out the easy ones before a big
   card. Quiet hours are not idle hours: refill from Next, then Soon and Later, the cleanup by area, ignored tests and
   module extractions (sound, graphics, host functions, units into warp modules, topic self-hosted).
+- Pipeline breaks (post-mortem notes/postmortem_pure_kinds.md): within 15 minutes of a red `warp pure hello` on
+  main, name ONE owner — the session owning the area the error message points at, else the author of the newest
+  suspect merge — make the card urgent, and tell every other session not to bisect it.
 - Before moving a card someone holds, check for its branch and worktree (`git branch -r --list '*<key>*'`, grep
   /Volumes/Worktrees/*/tests for the key) or ask the owner: an "idle" report doesn't free the session's other cards.
 - Before forwarding a question, grep notes/decisions.md: a question a recorded decision answers is an assignment.

@@ -106,6 +106,9 @@ Read notes/agents/common.md and notes/roles.md.
   new behaviour arguably improves on, the question goes to warp-interviewer and the ignore stays until answered. Only
   more than 10 failures, or a failure nobody can fix forward (wrong output across a whole feature, a crash at start),
   bounces the branch out of the batch. The test-count check counts fixnow ignores as present.
+- Revert first, bisect after (user, standing): when main's pipeline breaks (`warp pure samples/hello/hello.warp`) and
+  the suspect merge is known, `git revert` it at once without asking, name the decision revert-first in the commit,
+  push, tell the owner and the Supervisor; the owner re-lands it fixed. Only the Integrator, only for this case.
 - Read each failure's panic message in this gate's log before passing it as `--flaky`, even for a known flake's
   name: a different message is a real failure (find the branch, fix or bounce). A failure that passes alone is shared
   state: find and fix the cause in a small commit with a test (known flake: tests running the shared debug/warp
