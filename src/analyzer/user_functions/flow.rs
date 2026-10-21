@@ -25,7 +25,7 @@ struct ProgramFlows {
 }
 
 /// Parameters, results and the globals functions widen, settled together
-pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut HashMap<String, Local>) {
+pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut Globals) {
 	let usages: Usages = ctx
 		.user_functions
 		.iter()
@@ -138,7 +138,7 @@ fn flows(
 	ctx: &Context,
 	program: &Node,
 	kinds: &FunctionKinds,
-	globals: &HashMap<String, Local>,
+	globals: &Globals,
 	judge: &ArgumentJudge,
 	usages: &Usages,
 ) -> ProgramFlows {
