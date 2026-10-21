@@ -1,8 +1,9 @@
 #!/bin/bash
 # The cloud test lane (card cloud-test-lane, notes/cloud_development.md "Cloud test lane"): a branch's tests run in a
 # `claude --cloud` session, a Linux VM of its own paid by the Cloud session credit, instead of the Mac's tests/queue.sh.
-#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] <branch> <tip> [filters…|--full]
+#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] [--pure-hello] <branch> <tip> [filters…|--full]
 #       --env: a setting of the test run alone (not the build: every setting of a tip shares one build)
+#       --pure-hello: run the ignored end-to-end `warp pure hello` check at test opt-level 2
 #       filters as for tests/queue.sh (`-- x y` or plain `x y`; `--test tests -- x` passes target flags to cargo);
 #       --full: the whole suite as test.sh runs it (--all-features, warp-lang at opt-level 2)
 #       waits for the result (run it in the background), prints it, keeps it in data/cloud/<run>/ and, with --card,
@@ -46,9 +47,12 @@ MIN_FREE_GB=15                 # less free disk before a build: the warm VM's bu
 TEST_TIME_LIMIT_SECONDS=2400   # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
 STALL_SECONDS=900              # …or once no test has finished for this long (the slowest, the self-parser, takes ~230 s alone)
 WATCH_SECONDS=30               # how often the stall watchdog counts finished tests
+PURE_HELLO_TEST=parser::test_warp_pure::warp_pure_runs_hello_world
+OPTIMIZED_TEST_PROFILE=(--config profile.test.package.warp-lang.opt-level=2)
+PURE_HELLO_ARGS=("${OPTIMIZED_TEST_PROFILE[@]}" -- "$PURE_HELLO_TEST" --ignored --exact)
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
 HERE_ROOT=${TMPDIR:-/tmp}/cloud-test # in the VM: tree/ (the checkout, kept for the next job), jobs/<job>/
-FULL_FLAGS=(--all-features --config "profile.test.package.warp-lang.opt-level=2")
+FULL_FLAGS=(--all-features "${OPTIMIZED_TEST_PROFILE[@]}")
 USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
 RUST_TARGETS="wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown" # package and crate-wrapper builds in the tests
 
@@ -561,7 +565,7 @@ main() {
 		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}" "${4:-}"; exit ;;
 	esac
-	card="" wait=1 result_only="" base=() settings=()
+	card="" wait=1 result_only="" base=() settings=() pure_hello=""
 	while [[ "${1:-}" == --* ]]; do
 		case "$1" in
 			--card) card=$2; shift 2 ;;
@@ -570,10 +574,15 @@ main() {
 			--on-main) base=(--on main); shift ;;
 			--on) base=(--on "$2"); shift 2 ;;
 			--env) settings+=(--env "$2"); shift 2 ;;
+			--pure-hello) pure_hello=1; shift ;;
 			*) break ;;
 		esac
 	done
 	[ $# -ge 2 ] || { sed -n '2,17p' "$0"; exit 2; }
+	if [ -n "$pure_hello" ]; then
+		[ $# -eq 2 ] || fail "--pure-hello is a complete test preset and does not take filters"
+		set -- "$1" "$2" "${PURE_HELLO_ARGS[@]}"
+	fi
 	if [ -z "$result_only" ]; then launch "$@" || exit; fi
 	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card" "${@:3}"
 }

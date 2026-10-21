@@ -138,7 +138,9 @@ After a context swap, this file and your role file win over anything a handover 
   and the module it guards. Register a new test file in its folder's mod.rs before `cargo fmt` (fmt skips it).
 - Cloud test lane: `scripts/cloud-test.sh --card <card> <branch> <tip from git rev-parse HEAD> <filters>` in the
   background (~6 min on a cloud VM of its own, ~$0.30 of the Cloud session credit, exit 0 = green;
-  notes/cloud_development.md). A green cloud run counts as the targeted run.
+  notes/cloud_development.md). A green cloud run counts as the targeted run. A Rust change to the parser, lowering,
+  analyzer, emitter, compiler runner, or pipeline also runs `scripts/cloud-test.sh --pure-hello <branch> <tip>`: the
+  preset gives the ignored end-to-end `warp pure hello` test its required test opt-level 2 and exact runner flags.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,
