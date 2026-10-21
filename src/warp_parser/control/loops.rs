@@ -365,7 +365,7 @@ impl WarpParser {
 	/// `times [x]` fills a list, binding to the count right before it: `xs = 100 times [0]`
 	pub(crate) fn times_fills_list(&self) -> bool {
 		let after_word = TIMES_WORD.len();
-		let blanks = (after_word..).take_while(|&offset| self.peek_char(offset) == ' ').count();
+		let blanks = self.run_at(after_word, |ch| ch == ' ');
 		self.peek_char(after_word + blanks) == '['
 	}
 

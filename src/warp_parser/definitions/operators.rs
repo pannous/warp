@@ -210,11 +210,8 @@ impl WarpParser {
 	pub(crate) fn try_parse_operator_method_head(&mut self) -> Option<Node> {
 		let (op, chars) = self.peek_operator()?;
 		crate::operators::operator_method(op)?;
-		let mut offset = chars + self.parenthesis_length(chars)?;
-		while matches!(self.peek_char(offset), ' ' | '\t') {
-			offset += 1;
-		}
-		if (self.peek_char(offset), self.peek_char(offset + 1)) != (':', '=') {
+		let offset = chars + self.parenthesis_length(chars)?;
+		if !self.text_at(offset + self.blanks_at(offset), ":=") {
 			return None;
 		}
 		self.advance_by(chars);

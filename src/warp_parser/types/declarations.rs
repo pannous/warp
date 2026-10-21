@@ -35,16 +35,12 @@ impl WarpParser {
 			return false;
 		}
 		let blanks = self.blanks_ahead();
-		let name_length = (blanks..)
-			.take_while(|&offset| is_identifier_char(self.peek_char(offset)) || self.peek_char(offset) == '-')
-			.count();
-		let after_name = (blanks + name_length..)
-			.find(|&offset| !matches!(self.peek_char(offset), ' ' | '\t'))
-			.unwrap_or(blanks + name_length);
+		let name_length = self.run_at(blanks, |ch| is_identifier_char(ch) || ch == '-');
+		let after_name = blanks + name_length + self.blanks_at(blanks + name_length);
 		let body_follows =
 			TYPE_BODY_STARTS.contains(&self.peek_char(after_name)) && self.peek_char(after_name + 1) != '=';
 		// `type of x` arrives as the declaration of `of`, which lowering (type_tests::type_of_word) reads as `type(x)`
-		let of_follows = (blanks..blanks + name_length).map(|offset| self.peek_char(offset)).eq("of".chars());
+		let of_follows = name_length == "of".len() && self.text_at(blanks, "of");
 		self.peek_char(blanks).is_uppercase() || body_follows || of_follows
 	}
 
@@ -271,8 +267,7 @@ impl WarpParser {
 	/// The name of a declared type after blanks: `new Point(…)`
 	pub(crate) fn declared_type_after_blanks(&self) -> bool {
 		let blanks = self.blanks_ahead();
-		let name: String =
-			(blanks..).map(|offset| self.peek_char(offset)).take_while(|ch| is_identifier_char(*ch)).collect();
+		let name = self.word_at(blanks);
 		blanks > 0 && self.declared_types.contains(&name)
 	}
 
@@ -320,7 +315,7 @@ impl WarpParser {
 	/// `= Some(T) | None`, `: red | rgb(int, int, int)`, Elm's `= Failure HttpError | …` on lines of their own: the
 	/// offset after the `=` or `:` when the declaration lists alternatives one of which carries a payload
 	pub(crate) fn variants_ahead(&self) -> Option<usize> {
-		let blanks = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		let blanks = self.whitespace_at(0);
 		let (sign, next) = (self.peek_char(blanks), self.peek_char(blanks + 1));
 		let opens = (sign == '=' && !matches!(next, '=' | '>')) || (sign == ':' && next != '=');
 		if !opens {
@@ -335,7 +330,7 @@ impl WarpParser {
 			match ch {
 				'\0' | ';' if depth == 0 => break,
 				'\n' if depth == 0 => {
-					let blanks = (offset + 1..).take_while(|&at| self.peek_char(at).is_whitespace()).count();
+					let blanks = self.whitespace_at(offset + 1);
 					if self.peek_char(offset + 1 + blanks) != '|' {
 						break;
 					}
@@ -384,7 +379,7 @@ impl WarpParser {
 				true => bare_variants.push(Symbol(variant)),
 				false => declarations.push(self.variant_class(&type_name, variant, payload, type_parameters)),
 			}
-			let blanks = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+			let blanks = self.whitespace_at(0);
 			if self.peek_char(blanks) != '|' {
 				return crate::lowering::sum_variants::sum_type(type_name, bare_variants, declarations);
 			}
@@ -396,12 +391,12 @@ impl WarpParser {
 	/// name and braces follow
 	pub(crate) fn enum_body_ahead(&self) -> Option<bool> {
 		let mut offset = self.blanks_ahead();
-		let name_length = (offset..).take_while(|&at| is_identifier_char(self.peek_char(at))).count();
+		let name_length = self.name_length_at(offset);
 		if name_length == 0 {
 			return None;
 		}
 		offset += name_length;
-		offset += (offset..).take_while(|&at| self.peek_char(at).is_whitespace()).count();
+		offset += self.whitespace_at(offset);
 		if self.peek_char(offset) != '{' {
 			return None;
 		}

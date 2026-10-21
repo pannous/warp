@@ -57,7 +57,7 @@ impl WarpParser {
 
 	/// `{from:1 to:2}`: an operator word directly before a key colon names the key; `else:` and `then:` open blocks
 	fn word_names_key(&self) -> bool {
-		let word: String = (0..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
+		let word = self.word_at(0);
 		let after = word.chars().count();
 		!word.is_empty()
 			&& !BLOCK_COLON_WORDS.contains(&word.as_str())
@@ -404,10 +404,10 @@ impl WarpParser {
 	pub(super) fn declaration_follows(&self, type_word: &str, width: usize) -> bool {
 		let is_type =
 			crate::type_tests::builtin_type_name(type_word).is_some() || self.declared_types.contains(type_word);
-		let blanks = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_at(width);
 		let start = width + blanks;
-		let name = self.word_at(start).chars().count();
-		let after_name = start + name + (start + name..).take_while(|at| self.peek_char(*at) == ' ').count();
+		let name = self.name_length_at(start);
+		let after_name = start + name + self.run_at(start + name, |ch| ch == ' ');
 		let assigns = |at: usize| match self.peek_char(at) {
 			':' => self.peek_char(at + 1) == '=',
 			'=' => self.peek_char(at + 1) != '=',
@@ -419,8 +419,8 @@ impl WarpParser {
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on
 	/// one line is two optional fields, no ternary
 	pub(super) fn next_field_follows(&self, width: usize) -> bool {
-		let blanks = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
-		let name = self.word_at(width + blanks).chars().count();
+		let blanks = self.blanks_at(width);
+		let name = self.name_length_at(width + blanks);
 		let colon = width + blanks + name;
 		self.type_fields.is_some()
 			&& blanks > 0
@@ -431,22 +431,21 @@ impl WarpParser {
 
 	/// Do blanks and then `bracket` follow (`c {`, not the glued `c{`)
 	pub(super) fn blanks_then(&self, bracket: char) -> bool {
-		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_at(0);
 		blanks > 0 && self.peek_char(blanks) == bracket
 	}
 
 	/// Do blanks and then a block of fields follow the cursor: `{}` or `{ name: …`, never a statement block like `{ out += x }`
 	/// `assignments`: C#'s object initializer `Point { X = 3 }` of a declared class sets its fields with `=` too
 	pub(super) fn block_after_blanks(&self, assignments: bool) -> bool {
-		let blanks_from = |start: usize| (start..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks_from = |start: usize| self.blanks_at(start);
 		let blanks = blanks_from(0);
 		if blanks == 0 || self.peek_char(blanks) != '{' {
 			return false;
 		}
 		// the block's first entry may start on the next line (`Person {⏎ name: "Alice" …}`)
-		let first = blanks + 1 + (blanks + 1..).take_while(|at| self.peek_char(*at).is_whitespace()).count();
-		let name =
-			(first..).take_while(|at| self.peek_char(*at).is_alphanumeric() || self.peek_char(*at) == '_').count();
+		let first = blanks + 1 + self.whitespace_at(blanks + 1);
+		let name = self.run_at(first, |ch| ch.is_alphanumeric() || ch == '_');
 		let after_name = first + name + blanks_from(first + name);
 		let assigns = assignments && self.peek_char(after_name) == '=' && self.peek_char(after_name + 1) != '=';
 		self.peek_char(first) == '}'
@@ -456,7 +455,7 @@ impl WarpParser {
 	/// Do blanks and then a closing bracket, `,`, `;`, an assignment `=`, a comment or the line end follow `offset`:
 	/// nothing a ternary could be followed by
 	pub(super) fn closes_after_blanks(&self, offset: usize) -> bool {
-		let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let blanks = self.blanks_at(offset);
 		let at = offset + blanks;
 		let comment_starts = self.peek_char(at) == '/' && matches!(self.peek_char(at + 1), '/' | '*');
 		blanks > 0 && (comment_starts || self.ends_optional_type(self.peek_char(at), self.peek_char(at + 1)))
