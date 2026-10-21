@@ -7,6 +7,9 @@ impl WasmGcEmitter {
 		if let Some(identity) = self.object_identity(node) {
 			return self.emit_object_identity(func, identity);
 		}
+		if let Some(identity) = self.nothing_identity(node) {
+			return self.emit_nothing_identity(func, identity);
+		}
 		if let Some(product) = self
 			.numeric_times(node)
 			.or_else(|| self.identity_as_equality(node))
