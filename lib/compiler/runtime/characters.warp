@@ -13,6 +13,8 @@ code_point_at(t: text, at: int): int := {
 	for k in 1 to code_point_width(lead) - 1 { n = n * Utf8.ContinuationUnit + byte_at(t, at + k) - Utf8.Continuation }
 	n
 }
+# `ord(c)`: the code point of the character c (a text of one)
+first_code_point(t: text): int := code_point_at(t, 0)
 within(c: int, low: int, high: int): bool := c >= low and c <= high
 # a byte 10xxxxxx that continues a code point's UTF-8
 is_continuation_byte(b: int): bool := b >= Utf8.Continuation and b < Utf8.TwoByte

@@ -489,6 +489,19 @@ fn parser_words_run_pure() {
 	runs_pure("loop_variable_scope", &chain("slice_loops"), "['b' 'c']");
 	runs_pure("loop_of_functions", &chain("loop_of_functions"), "6\n4");
 	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
+	runs_pure("pending_results", &chain("pending_results"), "[\"int\" 4]\n[5 5 0 5 5 0 0]");
+	runs_pure("map_get_default", &chain("map_get_default"), "ø\n1\n7");
+	runs_pure("own_special_forms", &chain("own_special_forms"), "3\n12\n2\n0");
+	runs_pure("bit_operators", &chain("bit_operators"), "6\n-5\n48\n-1\n6");
+	runs_pure("ord", &chain("ord"), "97\n252\n122\n98");
+	runs_pure("std_module_of_a_used_file", &chain("std_in_used/main"), "6");
+	runs_pure("text_bytes", &chain("text_bytes"), "[97 195 188]\n[121]\n2\n2\n16\n97\n98");
+	runs_pure("float_bits", &chain("float_bits"), "4609434218613702656\n-4625196817309499392");
+	runs_pure("char_as_text", &chain("char_as_text"), "?\none\nab");
+	runs_pure("colon_named_arguments", &chain("colon_named_arguments"), "3\ny\n72");
+	runs_pure("arrow_match_arms", &chain("arrow_arms"), "two\nbig\nfew");
+	runs_pure("absolute_value", &chain("absolute_value"), "7\n2.5\n43\n1.5");
+	runs_pure("type_names", &chain("type_names"), "int\nrational\ntext\nbool\nlist\nempty\nerror\nmap\na float");
 }
 
 /// A type's name is a value, `k = int` prints `class int` (decision type-text); a parameter, a result or a variable
