@@ -27,7 +27,7 @@ def parsed(source: text): Node := {
 def written_tree(source: text): Node := {
 	found = gaps(source, source.length)
 	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases()}
-	items(p, ' ', "")
+	items_until(p, ' ', "")
 }
 
 // The names glued to `!` a source defines as words of their own: `def is!(warp, expected) := …`, `is!(…) := …`;
@@ -190,7 +190,7 @@ def word_at(p: Parser): text := p.code[p.at .. name_end(p.code, p.at, p.n)]
 // The items up to `closer` (' ' for the end of the source), grouped by their separators; outside brackets the lines
 // indented below an item are its body (`repeat⏎⇥x` is `repeat: x`) and a line indented less ends the items
 // Rust twin: lists.rs parse_list_with_separators
-def items(p: Parser, closer: text, bracket: text): Node := {
+def items_until(p: Parser, closer: text, bracket: text): Node := {
 	found = []
 	opener = p.at - 1
 	outer_branch = p.branch
@@ -276,7 +276,7 @@ def line_indent(p: Parser): int {
 def lines_below(p: Parser): Node := {
 	outer = p.indent
 	p.indent = line_indent(p)
-	block = items(p, ' ', "")
+	block = items_until(p, ' ', "")
 	p.indent = outer
 	// the line break after the block still separates the next statement
 	while p.at > 0 and is_blank(p.code[p.at - 1]) { p.at = p.at - 1 }
@@ -1449,7 +1449,7 @@ def endless_loop(p: Parser): Node := {
 	at = blank_end(p, p.at + 4)
 	if not is_at(p.code, at, '{', p.n) { return ø }
 	p.at = at + 1
-	Key(Key(ø, Op.While, true), Op.Do, items(p, '}', "{"))
+	Key(Key(ø, Op.While, true), Op.Do, items_until(p, '}', "{"))
 }
 
 // `if c {…} else {…}` and `while c {…}`: the block after the condition is its branch or body
@@ -1465,7 +1465,7 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 		p.branch = outer
 	} else if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
-		body = items(p, '}', "{")
+		body = items_until(p, '}', "{")
 	} else if word == "if" and is_list_of(condition, "(") and at_body_start(p) {
 		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
 		outer = p.branch
@@ -1751,7 +1751,7 @@ def atom(p: Parser): Node := {
 		outer_iterable = p.iterable
 		p.header = outer and c == '('
 		p.iterable = outer_iterable and c == '('
-		group = if c == '{' then braced_items(p) else items(p, closing_of(c), "" + c)
+		group = if c == '{' then braced_items(p) else items_until(p, closing_of(c), "" + c)
 		p.header = outer
 		p.iterable = outer_iterable
 		return group
@@ -2181,11 +2181,11 @@ def named(p: Parser): Node := {
 	}
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
-	arguments = typed_parameters(items(p, ')', "("))
+	arguments = typed_parameters(items_until(p, ')', "("))
 	skip_spaces(p)
 	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
-		body = items(p, '}', "{")
+		body = items_until(p, '}', "{")
 		// the head is the call f(x, y)
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
@@ -2286,7 +2286,7 @@ def names_case(p: Parser, length: int): bool {
 def braced_items(p: Parser): Node := {
 	outer = p.enum_cases
 	p.enum_cases = outer or enum_body_at(p)
-	block = items(p, '}', "{")
+	block = items_until(p, '}', "{")
 	p.enum_cases = outer
 	block
 }
@@ -2518,7 +2518,7 @@ def declared_type(p: Parser, word: text): Node := {
 	if is_at(p.code, p.at, ':', p.n) and peek(p.code, blank_end(p, p.at + 1), p.n) == '{' { p.at = blank_end(p, p.at + 1) }
 	if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
-		body = items(p, '}', "{")
+		body = items_until(p, '}', "{")
 		fields = group_parts(body)
 		if fields != ø and fields#1 == "{" { body = listed("{", fields#2, fields#3.map(field => untyped(field, parameters))) }
 		return declared_type_node(name, body)
@@ -2618,7 +2618,7 @@ def sum_type(p: Parser, name: Node, start: int, parameters: list): Node := {
 		payload = []
 		if is_at(p.code, p.at, '(', p.n) {
 			p.at = p.at + 1
-			group = items(p, ')', "(")
+			group = items_until(p, ')', "(")
 			payload = if is_list_of(group, "(") then group_parts(group)#3 else [group]
 		}
 		// Elm's `Failure HttpError`: the payload's types after the name
