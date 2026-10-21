@@ -2,10 +2,10 @@
 //! instant under the Europe and United States daylight saving rules, resolving a wall time that a transition skips or
 //! repeats, and `t in "Zone"`, as calendar.rs `Zone::offset_at`, `Zone::resolve` and `Time::in_zone` do for constants.
 
-use super::super::time::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL};
+use super::super::time::times::{info_field, CIVIL_FROM_DAYS, DAYS_FROM_CIVIL};
 use super::super::WasmGcEmitter;
 use crate::time::calendar::{Dst, DAY_SECONDS, HOUR, MINUTE, SECOND, ZONES};
-use crate::time::{TimeForm, OFFSET_SHIFT, TIME_FORM_BITS};
+use crate::time::{TimeForm, OFFSET_BITS, OFFSET_SHIFT, TIME_FORM_BITS};
 use crate::type_kinds::{Kind, KIND_BITS};
 use wasm_encoder::*;
 use Instruction as I;
@@ -244,9 +244,11 @@ impl WasmGcEmitter {
 			Self::emit_floor_split(f, instant, NANOS_PER_SECOND, kind, spare);
 			Self::emit_list(f, &[I::LocalGet(zone), I::LocalGet(kind)]);
 			s.call(f, ZONE_OFFSET_AT);
+			Self::emit_list(f, &[I::I64Const(MINUTE), I::I64DivS]);
+			Self::emit_list(f, &info_field(OFFSET_SHIFT, OFFSET_BITS));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::I64Const(MINUTE), I::I64DivS, I::I64Const(KIND_BITS + OFFSET_SHIFT), I::I64Shl, I::LocalGet(zone),
+				I::LocalGet(zone),
 				I::I64Const(KIND_BITS + TIME_FORM_BITS), I::I64Shl, I::I64Or,
 				I::I64Const(((TimeForm::Zoned as i64) << KIND_BITS) | Kind::Time as i64), I::I64Or,
 				I::LocalGet(instant), I::StructNew(i64_box), I::RefNull(HeapType::Concrete(node)), I::StructNew(node),

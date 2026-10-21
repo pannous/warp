@@ -10,6 +10,7 @@ pub mod partial_comparisons;
 use crate::extensions::numbers::Number;
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_kinds::{BUILTIN_FUNCTION_MARK, KIND_BITS};
 use crate::wasm_emitter::time::time_zones::{EARLIER, LATER, REJECT};
 pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
 use std::collections::{HashMap, HashSet};
@@ -83,11 +84,30 @@ pub const TIME_FORM_MASK: i64 = 7;
 /// The type of every time, covering the type of each form (card anchor-time): `now is time`, `now is instant`
 pub const TIME_WORD: &str = "time";
 pub const TIME_FORM_BITS: i64 = 3;
-/// A duration's months above its days, which take 32 bits
-pub const MONTHS_SHIFT: i64 = TIME_FORM_BITS + 32;
-/// A zoned time's index in calendar::ZONES, then its offset in minutes east of UTC
+/// A duration's days above the form, then its months; signed amounts of a fixed width (info_field), so a negative
+/// one leaves the marks above them alone (`type(0 days - 2 months)` stays a duration, not code)
+pub const DAYS_BITS: i64 = 24;
+pub const MONTHS_SHIFT: i64 = TIME_FORM_BITS + DAYS_BITS;
+pub const MONTHS_BITS: i64 = 17;
+/// A zoned time's index in calendar::ZONES, then its offset in minutes east of UTC (±14 hours)
 pub const ZONE_INDEX_MASK: i64 = 0xff;
 pub const OFFSET_SHIFT: i64 = TIME_FORM_BITS + 8;
+pub const OFFSET_BITS: i64 = 11;
+const _: () = assert!(
+	1 << (KIND_BITS + MONTHS_SHIFT + MONTHS_BITS) <= BUILTIN_FUNCTION_MARK,
+	"a time's info bits lie below the lowest mark any node carries"
+);
+
+/// The info bits of a signed amount in its field, None when it doesn't fit
+pub fn info_field(amount: i64, shift: i64, bits: i64) -> Option<i64> {
+	let limit = 1 << (bits - 1);
+	(-limit..limit).contains(&amount).then_some((amount & ((1 << bits) - 1)) << shift)
+}
+
+/// The signed amount of the info field at shift
+pub const fn info_amount(info: i64, shift: i64, bits: i64) -> i64 {
+	info << (64 - shift - bits) >> (64 - bits)
+}
 
 impl TimeForm {
 	/// What `type(t)` says of a time of this form, wiki/time.md's words; each a type under TIME_WORD
@@ -131,14 +151,13 @@ fn time_info(value: &Value) -> Option<(i64, i64)> {
 		Value::Time(time @ Time::Clock(_)) => Some((TimeForm::Clock as i64, time.position() as i64)),
 		Value::Time(Time::Zoned(zoned)) => {
 			let index = calendar::ZONES.iter().position(|zone| zone.name == zoned.zone.name)? as i64;
-			Some((
-				TimeForm::Zoned as i64 | index << TIME_FORM_BITS | (zoned.offset / calendar::MINUTE) << OFFSET_SHIFT,
-				zoned.instant() as i64,
-			))
+			let offset = info_field(zoned.offset / calendar::MINUTE, OFFSET_SHIFT, OFFSET_BITS)?;
+			Some((TimeForm::Zoned as i64 | index << TIME_FORM_BITS | offset, zoned.instant() as i64))
 		}
 		Value::Duration(duration) => {
-			let days = (duration.days as u32 as i64) << TIME_FORM_BITS;
-			Some((TimeForm::Duration as i64 | days | duration.months << MONTHS_SHIFT, duration.nanos as i64))
+			let days = info_field(duration.days, TIME_FORM_BITS, DAYS_BITS)?;
+			let months = info_field(duration.months, MONTHS_SHIFT, MONTHS_BITS)?;
+			Some((TimeForm::Duration as i64 | days | months, duration.nanos as i64))
 		}
 		_ => None,
 	}
@@ -214,12 +233,13 @@ pub fn time_node(info: i64, position: Option<Number>) -> Node {
 		}
 		Some(TimeForm::Clock) => Node::data(Time::Clock(calendar::from_wall_nanos(position).1)),
 		Some(TimeForm::Duration) => {
-			let days = (info >> TIME_FORM_BITS) as i32 as i64;
-			Node::data(Duration { months: info >> MONTHS_SHIFT, days, nanos: position })
+			let (days, months) =
+				(info_amount(info, TIME_FORM_BITS, DAYS_BITS), info_amount(info, MONTHS_SHIFT, MONTHS_BITS));
+			Node::data(Duration { months, days, nanos: position })
 		}
 		Some(TimeForm::Zoned) => match calendar::ZONES.get(((info >> TIME_FORM_BITS) & ZONE_INDEX_MASK) as usize) {
 			Some(zone) => {
-				let offset = (info >> OFFSET_SHIFT) * calendar::MINUTE;
+				let offset = info_amount(info, OFFSET_SHIFT, OFFSET_BITS) * calendar::MINUTE;
 				let (date, clock) = calendar::local_at(position, offset);
 				Node::data(Time::Zoned(Zoned { date, clock, offset, zone, rules: calendar::rules() }))
 			}

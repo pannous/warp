@@ -12,8 +12,8 @@ use crate::time::calendar::{
 	YEARS_PER_ERA, ZONES,
 };
 use crate::time::{
-	TimeForm, INSTANT_AT, MONTHS_SHIFT, OFFSET_SHIFT, TIME_FORMS, TIME_FORM_BITS, TIME_FORM_MASK, TZDATA_FIELD,
-	ZONE_INDEX_MASK,
+	TimeForm, DAYS_BITS, INSTANT_AT, MONTHS_BITS, MONTHS_SHIFT, OFFSET_BITS, OFFSET_SHIFT, TIME_FORMS, TIME_FORM_BITS,
+	TIME_FORM_MASK, TZDATA_FIELD, ZONE_INDEX_MASK,
 };
 use crate::type_kinds::{Kind, KIND_BITS};
 use wasm_encoder::*;
@@ -65,6 +65,16 @@ const ZERO_DIGIT: i64 = b'0' as i64;
 const MISMATCHED_TIMES: &str = "cannot compare a date, a local time, an instant and a zoned time with each other: no implicit conversion between kinds of time";
 /// The offset and length of a constant in the literal segment
 type Literal = (u32, u32);
+
+/// The signed amount in the info field at `shift` of the kind word on the stack (crate::time::info_amount)
+pub(in crate::wasm_emitter) fn info_amount(shift: i64, bits: i64) -> Vec<I<'static>> {
+	vec![I::I64Const(64 - KIND_BITS - shift - bits), I::I64Shl, I::I64Const(64 - bits), I::I64ShrS]
+}
+
+/// The kind word's info field at `shift` of the signed amount on the stack (crate::time::info_field)
+pub(in crate::wasm_emitter) fn info_field(shift: i64, bits: i64) -> Vec<I<'static>> {
+	vec![I::I64Const((1 << bits) - 1), I::I64And, I::I64Const(KIND_BITS + shift), I::I64Shl]
+}
 
 /// The prelude word a time's fields need, for modules IMPLIED_WORDS: `now`, a time call or a date or time literal makes
 /// a time, whose fields (and text) time_field reads through time_field_of
@@ -481,19 +491,17 @@ impl WasmGcEmitter {
 				I::LocalSet(nanos),
 				I::I32Const(DURATION_TEXT_BYTES), I::ArrayNewDefault(text_type), I::LocalSet(bytes),
 			]);
-			let info = |shift: i64| {
-				[
+			let info = |shift: i64, bits: i64| {
+				let mut amount = vec![
 					I::LocalGet(0),
 					I::RefAsNonNull,
 					I::StructGet { struct_type_index: s.type_manager.node_type, field_index: 0 },
-					I::I64Const(KIND_BITS + shift),
-					I::I64ShrS,
-				]
+				];
+				amount.extend(info_amount(shift, bits));
+				amount
 			};
-			part(f, &info(MONTHS_SHIFT), months);
-			let mut day_count = info(TIME_FORM_BITS).to_vec();
-			day_count.extend([I::I32WrapI64, I::I64ExtendI32S]);
-			part(f, &day_count, days);
+			part(f, &info(MONTHS_SHIFT, MONTHS_BITS), months);
+			part(f, &info(TIME_FORM_BITS, DAYS_BITS), days);
 			// whole seconds read as hours, minutes and seconds: `3 hours`, not `10800 seconds`
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
@@ -634,7 +642,8 @@ impl WasmGcEmitter {
 	/// The offset of the zoned time node in `local`, seconds east of UTC
 	fn emit_zone_offset(&self, func: &mut Function, local: u32) {
 		self.emit_field(func, local, 0);
-		Self::emit_list(func, &[I::I64Const(KIND_BITS + OFFSET_SHIFT), I::I64ShrS, I::I64Const(MINUTE), I::I64Mul]);
+		Self::emit_list(func, &info_amount(OFFSET_SHIFT, OFFSET_BITS));
+		Self::emit_list(func, &[I::I64Const(MINUTE), I::I64Mul]);
 	}
 
 	/// The `[Zone/Name]` of every zone and the rules suffix of a prediction, in linear memory, when a zoned time is shown

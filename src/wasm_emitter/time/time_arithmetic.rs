@@ -4,12 +4,17 @@
 
 use super::super::lists::list_ops::RETURNED_ERROR;
 use super::super::time::time_zones::{REJECT, ZONED_NODE};
-use super::super::time::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL, DAY_NANOS, TIME_FIELD, TIME_PARTS, ZONE_NAMES};
+use super::super::time::times::{
+	info_amount, info_field, CIVIL_FROM_DAYS, DAYS_FROM_CIVIL, DAY_NANOS, TIME_FIELD, TIME_PARTS, ZONE_NAMES,
+};
 use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
 use crate::time::calendar::{HOUR, LENGTHS_VARY, MINUTE, SECOND};
-use crate::time::{TimeForm, MONTHS_SHIFT, OFFSET_SHIFT, TIME_FORM_BITS, TIME_FORM_MASK, ZONE_INDEX_MASK};
+use crate::time::{
+	TimeForm, DAYS_BITS, MONTHS_BITS, MONTHS_SHIFT, OFFSET_BITS, OFFSET_SHIFT, TIME_FORM_BITS, TIME_FORM_MASK,
+	ZONE_INDEX_MASK,
+};
 use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK};
 use wasm_encoder::*;
 use Instruction as I;
@@ -25,11 +30,8 @@ const HOUR_NANOS: i64 = HOUR * SECOND as i64;
 /// The operators a time takes at run time
 pub const TIME_OPERATORS: [Op; 3] = [Op::Add, Op::Sub, Op::Mul];
 
-/// Where a duration keeps its days and months in the kind word: the info bits above the kind and form
-const DAYS_SHIFT: i64 = KIND_BITS + TIME_FORM_BITS;
-const MONTHS_IN_KIND: i64 = KIND_BITS + MONTHS_SHIFT;
-const DAYS_MASK: i64 = 0xffff_ffff;
-const DAYS_WIDTH: i64 = 32;
+/// Where a zoned time keeps its zone index in the kind word: the info bits above the kind and form
+const ZONE_INDEX_SHIFT: i64 = KIND_BITS + TIME_FORM_BITS;
 const MONTHS_PER_YEAR: i64 = 12;
 const DURATION_KIND: i64 = ((TimeForm::Duration as i64) << KIND_BITS) | Kind::Time as i64;
 const NO_TIME_OF_DAY: &str = "a date has no time of day: add that duration to a local time";
@@ -108,16 +110,8 @@ enum Part {
 
 fn part_of(kind: u32, position: u32, part: Part) -> Emit {
 	match part {
-		Part::Months => vec![I::LocalGet(kind), I::I64Const(MONTHS_IN_KIND), I::I64ShrS],
-		Part::Days => vec![
-			I::LocalGet(kind),
-			I::I64Const(DAYS_SHIFT),
-			I::I64ShrU,
-			I::I64Const(DAYS_WIDTH),
-			I::I64Shl,
-			I::I64Const(DAYS_WIDTH),
-			I::I64ShrS,
-		],
+		Part::Months => [vec![I::LocalGet(kind)], info_amount(MONTHS_SHIFT, MONTHS_BITS)].concat(),
+		Part::Days => [vec![I::LocalGet(kind)], info_amount(TIME_FORM_BITS, DAYS_BITS)].concat(),
 		Part::Nanos => vec![I::LocalGet(position)],
 	}
 }
@@ -379,7 +373,7 @@ impl WasmGcEmitter {
 		Self::emit_if(f, &is_zoned, |f| {
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(KIND_A), I::I64Const(DAYS_SHIFT), I::I64ShrU, I::I64Const(ZONE_INDEX_MASK), I::I64And,
+				I::LocalGet(KIND_A), I::I64Const(ZONE_INDEX_SHIFT), I::I64ShrU, I::I64Const(ZONE_INDEX_MASK), I::I64And,
 				I::LocalSet(ZONE),
 			]);
 			#[rustfmt::skip]
@@ -392,9 +386,10 @@ impl WasmGcEmitter {
 				self.call(f, ZONED_NODE);
 				f.instruction(&I::Return);
 			});
+			Self::emit_list(f, &[I::LocalGet(KIND_A)]);
+			Self::emit_list(f, &info_amount(OFFSET_SHIFT, OFFSET_BITS));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(KIND_A), I::I64Const(KIND_BITS + OFFSET_SHIFT), I::I64ShrS,
 				I::I64Const(MINUTE * SECOND as i64), I::I64Mul, I::LocalGet(POSITION_A), I::I64Add,
 				I::LocalSet(POSITION_A),
 				I::I64Const(TimeForm::Local as i64), I::LocalSet(FORM),
@@ -448,12 +443,14 @@ impl WasmGcEmitter {
 
 	/// The duration of MONTHS, DAYS and NANOS as the result
 	fn emit_return_duration(&mut self, f: &mut Function) {
-		#[rustfmt::skip]
-		Self::emit_list(f, &[
-			I::I64Const(DURATION_KIND), I::LocalGet(DAYS), I::I64Const(DAYS_MASK), I::I64And, I::I64Const(DAYS_SHIFT),
-			I::I64Shl, I::I64Or, I::LocalGet(MONTHS), I::I64Const(MONTHS_IN_KIND), I::I64Shl, I::I64Or,
-			I::LocalSet(KIND_A),
-		]);
+		let fields = [(DAYS, TIME_FORM_BITS, DAYS_BITS), (MONTHS, MONTHS_SHIFT, MONTHS_BITS)];
+		f.instruction(&I::I64Const(DURATION_KIND));
+		for (amount, shift, bits) in fields {
+			f.instruction(&I::LocalGet(amount));
+			Self::emit_list(f, &info_field(shift, bits));
+			f.instruction(&I::I64Or);
+		}
+		f.instruction(&I::LocalSet(KIND_A));
 		self.emit_return_time(f, KIND_A, NANOS);
 	}
 

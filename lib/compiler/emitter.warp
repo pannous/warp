@@ -1777,7 +1777,7 @@ def data_item(body: Body, mark: text, item: any): list {
 	runtime_call(data_item_checks[mark], [value])
 }
 # the tables a runtime word reads a number of by name, `Kind.List` (kinds.warp), folded into the code
-constant_tables = {Kind: Kind, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode}
+constant_tables = {Kind: Kind, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode, TimeFieldUnit: TimeFieldUnit, TimeFieldSize: TimeFieldSize}
 # the number `Kind.List` names in its table, else ø
 table_number(table: any, case: any): any := {
 	if not (table is symbol and name_of(table) in constant_tables) { return ø }
@@ -2370,14 +2370,17 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 ## Kind time, its info (form, then a duration's days and months or a zoned time's zone and offset) above the kind
 ## bits, its data an $i64box of the position (days since 1970 for a date, nanoseconds for the others)
 nanos_per_milli = 1000000
-# the info bits: a duration's days (32 bits, unsigned) above the form, its months above them; a zoned time's zone
-# index (8 bits) above the form, its offset in minutes above that
+# the info bits (src/time/mod.rs): a duration's days (24 bits, signed) above the form, its months (17 bits) above
+# them; a zoned time's zone index (8 bits) above the form, its offset in minutes (11 bits) above that
 form_bits = 3
 form_mask = 7
 # the form of a zoned time (TimeFormCode.Zoned): its text names its zone, which only Rust's zone table knows
-months_shift = 35
+days_bits = 24
+months_shift = 27
+months_bits = 17
 zone_mask = 255
 offset_shift = 11
+offset_bits = 11
 seconds_per_minute = 60
 shift_ops = {i64_or: 132, i64_shl: 134, i64_shr_s: 135, i64_shr_u: 136, i64_mul: 126}
 # the calls a lowered program makes a time with (src/time/mod.rs: `now` is instant_at(clock()), a constant time_of)
@@ -2403,26 +2406,23 @@ def time_node(info: any, position: any): list {
 	kind = info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(Kind.Time) + [shift_ops.i64_or]
 	kind + position + gc_code(gc_ops.struct_new, [gc.int_box]) + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.node])
 }
-# the kind word of a time node shifted right by `shift` bits, arithmetic (`signed`) or logical
-def kind_word_shifted(code: any, shift: int, signed: bool): list {
-	shifted = as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(shift)
-	shift_op = if signed then shift_ops.i64_shr_s else shift_ops.i64_shr_u
-	shifted + [shift_op]
+def kind_word(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 0]) }
+# the kind word of a time node shifted right by `shift` bits
+def kind_word_shifted(code: any, shift: int): list { kind_word(code) + [op.i64_const] + sleb(shift) + [shift_ops.i64_shr_u] }
+# the signed amount `bits` wide at `shift` of a time node's info bits: shifted to the top of the word, then down again
+def info_amount(code: any, shift: int, bits: int): list {
+	top = kind_word(code) + [op.i64_const] + sleb(64 - kind_bits - shift - bits) + [shift_ops.i64_shl]
+	top + [op.i64_const] + sleb(64 - bits) + [shift_ops.i64_shr_s]
 }
 def masked(code: any, mask: int): list { code + [op.i64_const] + sleb(mask) + [op.i64_and] }
 def time_intrinsic(body: Body, name: text, arguments: any): list {
 	t = expression_code(body, arguments#1)#2
-	if name == "time_form" { return ["int", masked(kind_word_shifted(t, kind_bits, no), form_mask)] }
+	if name == "time_form" { return ["int", masked(kind_word_shifted(t, kind_bits), form_mask)] }
 	if name == "time_position" { return ["int", unboxed(t, gc.int_box)] }
-	if name == "duration_months" { return ["int", kind_word_shifted(t, kind_bits + months_shift, yes)] }
-	# the 32 days bits, sign-extended: shifted to the top of the word, then down again
-	if name == "duration_days" {
-		top = 64 - kind_bits - months_shift
-		days = as_node(t) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(top) + [shift_ops.i64_shl]
-		return ["int", days + [op.i64_const] + sleb(32) + [shift_ops.i64_shr_s]]
-	}
-	if name == "zone_index" { return ["int", masked(kind_word_shifted(t, kind_bits + form_bits, no), zone_mask)] }
+	if name == "duration_months" { return ["int", info_amount(t, months_shift, months_bits)] }
+	if name == "duration_days" { return ["int", info_amount(t, form_bits, days_bits)] }
+	if name == "zone_index" { return ["int", masked(kind_word_shifted(t, kind_bits + form_bits), zone_mask)] }
 	# seconds east of UTC
-	offset = kind_word_shifted(t, kind_bits + offset_shift, yes)
+	offset = info_amount(t, offset_shift, offset_bits)
 	["int", offset + [op.i64_const] + sleb(seconds_per_minute) + [shift_ops.i64_mul]]
 }

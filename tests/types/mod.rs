@@ -180,6 +180,7 @@ mod test_text_defaults; // card empty-text-default
 mod test_text_of_text; // text(text(5)) is "5"
 mod test_time_fields_warp; // card time-fields-warp
 mod test_time_kinds_are_types; // card anchor-time
+mod test_negative_time_fields; // card type-zoned
 mod test_time_now; // cards print-time, time-now
 mod test_time_programs_run; // card run-time-dates, stage B4
 mod test_time_type_names;
