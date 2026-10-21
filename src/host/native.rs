@@ -973,11 +973,29 @@ use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 /// The most a captured stdout keeps
 const CAPTURED_STDOUT_BYTES: usize = 16 << 20;
 
+/// WASI's first command line item, the program's name: `args` gives the items after it
+const WASI_PROGRAM_NAME: &str = "warp";
+
 /// WASI of a run: stdout and stderr the process's, or stdout captured (with_captured_stdout); the process environment
-/// as `use os; env(name)` reads it natively, for wasi_environment()
+/// as `use os; env(name)` reads it natively, for wasi_environment(); the program's arguments; the file system as "/"
+/// and the working folder as "." (runtime/wasi.warp reads and writes files through them, card standalone); sandboxed,
+/// "/" only read and "." the state folder, the one place it writes
 fn wasi_context() -> wasmtime_wasi::p1::WasiP1Ctx {
+	use std::path::PathBuf;
+	use wasmtime_wasi::FsPerms::{ReadOnly, ReadWrite};
 	let mut context = wasmtime_wasi::WasiCtxBuilder::new();
 	context.inherit_stderr().inherit_env();
+	context.arg(WASI_PROGRAM_NAME).args(&crate::modules::std_adapters::program_arguments());
+	let working_folder = crate::modules::working_folder().unwrap_or_else(|| PathBuf::from("."));
+	let preopens = match crate::host::sandbox::is_sandboxed() {
+		true => [(PathBuf::from("/"), "/", ReadOnly), (crate::host::sandbox::state_folder().map(PathBuf::from).unwrap_or(working_folder), ".", ReadWrite)],
+		false => [(PathBuf::from("/"), "/", ReadWrite), (working_folder, ".", ReadWrite)],
+	};
+	for (folder, name, permissions) in preopens {
+		if let Err(reason) = context.preopened_dir(&folder, name, permissions) {
+			trace!("WASI: no preopened {name}: {reason}");
+		}
+	}
 	match CAPTURED_STDOUT.with(|captured| captured.borrow().clone()) {
 		Some(pipe) => context.stdout(pipe),
 		None => context.inherit_stdout(),

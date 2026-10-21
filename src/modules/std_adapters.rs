@@ -230,7 +230,7 @@ fn net(member: &str, arguments: &[Node]) -> Result<Node, String> {
 fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
-		("args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
+		("args", []) => Ok(texts(program_arguments())),
 		("cwd", []) => working_folder(),
 		("input", prompt) => typed_line(prompt),
 		("stdin", []) => std::io::read_to_string(std::io::stdin()).map(Node::Text).map_err(said),
@@ -324,6 +324,11 @@ thread_local! {
 /// The arguments the running program gets as `args`
 pub fn set_program_arguments(arguments: Vec<String>) {
 	PROGRAM_ARGUMENTS.with(|kept| *kept.borrow_mut() = arguments);
+}
+
+/// The arguments `args` gives: WASI's command line after its first item, the program (host::native wasi_context)
+pub fn program_arguments() -> Vec<String> {
+	PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone())
 }
 
 thread_local! {
