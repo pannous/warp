@@ -220,10 +220,7 @@ fn scanned_definitions(source: String) -> Option<Vec<Node>> {
 	let module = crate::normalize::without_hints(|| WarpParser::parse(&source));
 	// node.warp's Op, Bracket and Separator a module names (node_cases.rs) are its enums too: their declarations
 	// join the program with the module's classes, as its spelling functions join with its functions
-	let scanned = module
-		.first_error()
-		.is_none()
-		.then(|| module_statements(crate::lowering::node_cases::lower(module)));
+	let scanned = module.first_error().is_none().then(|| module_statements(crate::lowering::node_cases::lower(module)));
 	SCANNED.with(|cache| cache.borrow_mut().insert(source, scanned.clone()));
 	scanned
 }
