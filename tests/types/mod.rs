@@ -5,6 +5,7 @@ mod test_inline_unions;
 // card union-types
 mod test_class_unions;
 // card class-field
+mod test_alias_list_type; // card alias-list-type
 mod test_any_field_text;
 mod test_any_into_annotated;
 mod test_any_into_annotated_types;
