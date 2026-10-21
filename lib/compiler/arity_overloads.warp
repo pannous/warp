@@ -6,6 +6,7 @@
 use "walk.warp"
 use "phrase_blocks.warp"
 use "scope.warp"
+use "signatures.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
 target_call(target: Node): any := match target {
@@ -21,10 +22,7 @@ definition_call(n: Node): any := match n {
 }
 
 # [how many arguments a call must pass, how many it may]: `b = 1` may be left out
-arity_of(call: Node): list := {
-	parameters = items_of(call)[1 ..]
-	[#parameters.filter(parameter => not is_key(parameter, Op.Assign)), #parameters]
-}
+arity_of(call: Node): list := arity(signature_of(items_of(call)))
 
 # name → its arities, for each name defined with several parameter counts, no two of them the same
 overloaded_arities(program: Node): any := {
@@ -33,9 +31,9 @@ overloaded_arities(program: Node): any := {
 		call = definition_call(n)
 		if call != ø {
 			name = name_of(call#1)
-			arity = arity_of(call)
+			span = arity_of(call)
 			if name not in arities { arities[name] = [] }
-			if not (arity in arities[name]) { arities[name] = arities[name] + [arity] }
+			if not (span in arities[name]) { arities[name] = arities[name] + [span] }
 		}
 	}
 	overloaded = {}
@@ -47,9 +45,9 @@ overloaded_arities(program: Node): any := {
 
 distinct_totals(variants: list): bool := {
 	totals = []
-	for arity in variants {
-		if arity#2 in totals { return no }
-		totals += [arity#2]
+	for span in variants {
+		if span#2 in totals { return no }
+		totals += [span#2]
 	}
 	yes
 }
@@ -69,13 +67,10 @@ variant_call(n: any, overloaded: any, receivers: int): any := {
 	name = name_of(n#1)
 	if name not in overloaded { return n }
 	count = #n - 1 + receivers
-	fitting = overloaded[name].filter(arity => arity#1 <= count and count <= arity#2)
+	fitting = overloaded[name].filter(span => span#1 <= count and count <= span#2)
 	if #fitting != 1 { return n }
 	group_like(n, [symbol(variant_name(name, fitting#1#2))] + items_of(n)[1 ..])
 }
-
-# a function's parameter, as the key of called_parameters: `bottom_up·2`
-parameter_key(function: text, index: int): text := function + "·" + index
 
 # how many arguments `body` calls `parameter` with: 1 of `f(x)`; ø when its calls differ or there are none
 called_count(body: Node, parameter: text): any := {
@@ -140,7 +135,7 @@ passed_variants(n: any, overloaded: any, called: any): any := {
 passed_variant(argument: any, key: text, overloaded: any, called: any): any := {
 	if not (argument is symbol and name_of(argument) in overloaded and key in called) { return argument }
 	count = called[key]
-	fitting = overloaded[name_of(argument)].filter(arity => arity#1 <= count and count <= arity#2)
+	fitting = overloaded[name_of(argument)].filter(span => span#1 <= count and count <= span#2)
 	if #fitting == 1 then symbol(variant_name(name_of(argument), fitting#1#2)) else argument
 }
 

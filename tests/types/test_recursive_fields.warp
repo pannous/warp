@@ -20,3 +20,6 @@ tree = Node {
     right: ø
 }
 tree.tag' 5
+
+# a_field_holds_a_class_declared_later
+is! 'class F { name: text; signature: S }; class S { arity: int }; f = F("m", S(2)); f.signature.arity' 2
