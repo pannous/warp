@@ -75,7 +75,12 @@ fn assigned_values(body: &Node, local: &str) -> Vec<Node> {
 fn is_plain_value(value: &Node) -> bool {
 	matches!(
 		value.drop_meta(),
-		Node::True | Node::False | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square | Bracket::Curly, _)
+		Node::True
+			| Node::False
+			| Node::Number(_)
+			| Node::Text(_)
+			| Node::Char(_)
+			| Node::List(_, Bracket::Square | Bracket::Curly, _)
 	)
 }
 
