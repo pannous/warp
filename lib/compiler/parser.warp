@@ -302,7 +302,7 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 		dedent = bracket == "" and newline and line_indent(p) < p.indent
 		after = if dedent then "" else separator(p, closer, newline)
 		if tabbed and after == " " { after = "\t" }
-		found += [[field_holding_lambda(statement), after] for statement in statements_of(item)]
+		found += [[statement, after] for statement in statements_of(item)]
 		if dedent { break }
 		if p.at == before { p.at = p.at + 1 }
 	}
@@ -690,6 +690,8 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			} else {
 				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else expression(p, powers#2)
 				left = keyed(op#2, left, if op#2 == ":" then with_switch_cases(p, right) else right)
+				// `{f: x => x * 2}`: the field f holds the lambda; `f: (float) -> float` stays a typed name
+				if op#1 == "=>" { left = field_holding_lambda(left) }
 			}
 		}
 	}
