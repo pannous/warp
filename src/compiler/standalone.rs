@@ -62,6 +62,17 @@ pub fn run_in(program: &Path, folder: &Path, by: Compiler) -> Node {
 	}
 }
 
+/// The value of `code` (`warp pure "2+3*4"`, a test case), written to a file of its own and run as `run_in` runs it
+pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
+	let program = std::env::temp_dir().join(format!("warp-code-{}.warp", std::process::id()));
+	if let Err(failure) = std::fs::write(&program, format!("{code}\n")) {
+		return error(&format!("{}: {failure}", program.display()));
+	}
+	let value = run_in(&program, folder, by);
+	let _ = std::fs::remove_file(&program);
+	value
+}
+
 fn run_with(module: CompiledModule, arguments: Vec<String>) -> Node {
 	crate::modules::std_adapters::set_program_arguments(arguments);
 	crate::pipeline::run_module(module)
@@ -96,6 +107,11 @@ pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	let path = build_path(by);
 	build(by, &path)?;
 	Ok(path)
+}
+
+/// The compiler's build file there, built first when missing: before many runs start at once, so none waits on a build
+pub fn prepare(by: Compiler) -> Result<(), Node> {
+	compiler(by).map(|_| ())
 }
 
 /// compiler.warp's module from its build file, built first when missing; one line when it was built from another lib/

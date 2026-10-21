@@ -1,8 +1,9 @@
 //! `warp test [folder…]` (card warp-test-runner, decision warp-is-tests, notes/is_tests.md): the test files under the
 //! folders (default tests/), `*.pairs.warp` and the `is!` lines of `test_*.warp`, run by the installed binary through
-//! `warp pure`, no cargo. Each test runs as its own program in a child process, `warp test --case <file> <index>`, so a
-//! hang, trap or crash fails only its own test; the children run in parallel.
-use crate::compiler::standalone::{run_in, Compiler};
+//! `warp pure` (`--self`: `warp self`), no cargo. Each test runs as its own program in a child process,
+//! `warp test --case <pure|self> <file> <index>`, so a hang, trap or crash fails only its own test; the children run in
+//! parallel, their verdicts print in file order (`--each`: a line for every test, to diff two compilers' runs).
+use crate::compiler::standalone::{prepare, run_code, Compiler};
 use crate::lowering::test_blocks::{skipped_pairs, test_cases};
 use crate::node::{error, Node};
 use std::path::{Path, PathBuf};
@@ -12,8 +13,13 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 pub const DEFAULT_FOLDER: &str = "tests";
-/// The hidden command a child runs: `warp test --case <file> <index>`
+/// The hidden command a child runs: `warp test --case <pure|self> <file> <index>`
 pub const CASE_FLAG: &str = "--case";
+/// `warp test --self`: the tests compiled by compiler-self.wasm, as `warp self` runs programs
+const SELF_FLAG: &str = "--self";
+/// `warp test --each`: a ✓ line for each passed test too
+const EACH_FLAG: &str = "--each";
+pub const FLAGS: [&str; 2] = [SELF_FLAG, EACH_FLAG];
 const PAIRS_SUFFIX: &str = ".pairs.warp";
 const TEST_PREFIX: &str = "test_";
 const WARP_SUFFIX: &str = ".warp";
@@ -34,8 +40,12 @@ struct Case {
 	expected: String,
 }
 
-/// `warp test [folder…]`: every test of the folders' test files run, ✗ lines and a total printed; false when one failed
-pub fn run_folders(folders: &[String]) -> bool {
+/// `warp test [--self] [--each] [folder…]`: every test of the folders' test files run, ✗ lines (`--each`: ✓ lines too)
+/// and a total printed; false when one failed
+pub fn run_folders(words: &[String]) -> bool {
+	let by = if words.iter().any(|word| word == SELF_FLAG) { Compiler::SelfCompiled } else { Compiler::RustCompiled };
+	let each = words.iter().any(|word| word == EACH_FLAG);
+	let folders: Vec<&String> = words.iter().filter(|word| !FLAGS.contains(&word.as_str())).collect();
 	let files: Vec<PathBuf> = folders.iter().flat_map(|folder| test_files(Path::new(folder))).collect();
 	let mut skipped = 0;
 	let mut cases = vec![];
@@ -47,7 +57,21 @@ pub fn run_folders(folders: &[String]) -> bool {
 		}
 		cases.extend(cases_of(file, &source));
 	}
-	let failed = run_cases(&cases);
+	if let Err(failure) = prepare(by) {
+		println!("✗ no compiler to run the tests: {}", failure.serialize());
+		return false;
+	}
+	let verdicts = run_cases(&cases, by);
+	for (case, verdict) in cases.iter().zip(&verdicts) {
+		// {:?}: a code of several lines stays on its line, its newlines escaped
+		let test = format!("{}:{} {:?} {}", case.file.display(), case.line, case.code, case.expected);
+		match verdict {
+			Err(why) => println!("✗ {test}: {why}"),
+			Ok(()) if each => println!("✓ {test}"),
+			Ok(()) => {}
+		}
+	}
+	let failed = verdicts.iter().filter(|verdict| verdict.is_err()).count();
 	let skipped = if skipped > 0 { format!(", {skipped} skipped") } else { String::new() };
 	let run = cases.len();
 	let total = if failed > 0 { format!("{failed} of {run} failed") } else { format!("✓ {run} tests passed") };
@@ -91,33 +115,28 @@ fn cases_of(file: &Path, source: &str) -> Vec<Case> {
 		.collect()
 }
 
-/// The cases run by children, MAX_PARALLEL at once, each failure's ✗ line printed as it comes: how many failed
-fn run_cases(cases: &[Case]) -> usize {
+/// The cases run by children, MAX_PARALLEL at once: their verdicts in the cases' order
+fn run_cases(cases: &[Case], by: Compiler) -> Vec<Result<(), String>> {
 	let next = AtomicUsize::new(0);
-	let failed = AtomicUsize::new(0);
-	let printing = Mutex::new(());
+	let verdicts = Mutex::new(vec![Ok(()); cases.len()]);
 	let parallel = std::thread::available_parallelism().map_or(1, |cores| cores.get() / 2).clamp(1, MAX_PARALLEL);
 	std::thread::scope(|scope| {
 		for _ in 0..parallel {
-			scope.spawn(|| {
-				while let Some(case) = cases.get(next.fetch_add(1, Ordering::Relaxed)) {
-					if let Err(why) = run_case(case) {
-						failed.fetch_add(1, Ordering::Relaxed);
-						let _printing = printing.lock();
-						// {:?}: a code of several lines stays on the ✗ line, its newlines escaped
-						println!("✗ {}:{} {:?} {}: {why}", case.file.display(), case.line, case.code, case.expected);
-					}
-				}
+			scope.spawn(|| loop {
+				let index = next.fetch_add(1, Ordering::Relaxed);
+				let Some(case) = cases.get(index) else { break };
+				let verdict = run_case(case, by);
+				verdicts.lock().unwrap_or_else(|poisoned| poisoned.into_inner())[index] = verdict;
 			});
 		}
 	});
-	failed.into_inner()
+	verdicts.into_inner().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// One case in its child: Ok when it gave the expected value, else what it gave
-fn run_case(case: &Case) -> Result<(), String> {
+fn run_case(case: &Case, by: Compiler) -> Result<(), String> {
 	let child = Command::new(std::env::current_exe().map_err(|failure| failure.to_string())?)
-		.args(["test", CASE_FLAG, &case.file.display().to_string(), &case.index.to_string()])
+		.args(["test", CASE_FLAG, by.command(), &case.file.display().to_string(), &case.index.to_string()])
 		.envs(QUIET_CHILD)
 		.stdin(Stdio::null())
 		.stdout(Stdio::piped())
@@ -170,10 +189,12 @@ fn read_in_background(mut pipe: impl std::io::Read + Send + 'static) -> std::thr
 	})
 }
 
-/// `warp test --case <file> <index>`, in the child: the case's code run through `warp pure` against its expected value,
+/// `warp test --case <pure|self> <file> <index>`, in the child: the case's code run through `warp pure` or `warp self`
+/// against its expected value,
 /// matched permissively (decision warp-is-tests): `got == expected`, or both empty/falsy. Prints `got <value>` and
 /// returns false when it differs
-pub fn run_child_case(file: &str, index: &str) -> bool {
+pub fn run_child_case(command: &str, file: &str, index: &str) -> bool {
+	let by = if command == Compiler::SelfCompiled.command() { Compiler::SelfCompiled } else { Compiler::RustCompiled };
 	let file = Path::new(file).canonicalize().unwrap_or_else(|_| PathBuf::from(file));
 	let source = std::fs::read_to_string(&file).unwrap_or_default();
 	let cases = test_cases(&crate::warp_parser::parse(&source));
@@ -182,8 +203,8 @@ pub fn run_child_case(file: &str, index: &str) -> bool {
 		return false;
 	};
 	let folder = file.parent().unwrap_or(Path::new("/"));
-	let got = pure_value(&code, folder);
-	let expected = if is_data(&expected) { expected } else { pure_value(&expected.serialize(), folder) };
+	let got = run_code(&code, folder, by);
+	let expected = if is_data(&expected) { expected } else { run_code(&expected.serialize(), folder, by) };
 	let matches =
 		!matches!(got.drop_meta(), Node::Error(_)) && (got == expected || (got.is_falsy() && expected.is_falsy()));
 	if !matches {
@@ -199,15 +220,4 @@ fn is_data(expected: &Node) -> bool {
 		Node::List(items, crate::node::Bracket::Square, _) => items.iter().all(is_data),
 		_ => false,
 	}
-}
-
-/// The value of `code` compiled by compiler.warp, its `use` reading from `folder`
-fn pure_value(code: &str, folder: &Path) -> Node {
-	let program = std::env::temp_dir().join(format!("warp-test-{}.warp", std::process::id()));
-	if let Err(failure) = std::fs::write(&program, format!("{code}\n")) {
-		return error(&format!("{}: {failure}", program.display()));
-	}
-	let value = run_in(&program, folder, Compiler::RustCompiled);
-	let _ = std::fs::remove_file(&program);
-	value
 }

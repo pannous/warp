@@ -181,22 +181,24 @@ fn test_files(args: &[String]) -> Option<&[String]> {
 	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(paths)
 }
 
-/// `warp test [folder…]`: the folders whose test files run through `warp pure` (src/compiler/pure_tests.rs), tests/
-/// when none is named and it exists
+/// `warp test [--self] [--each] [folder…]`: the folders whose test files run through `warp pure`
+/// (src/compiler/pure_tests.rs), tests/ when none is named and it exists; the words after `test`, flags kept
 fn test_folders(args: &[String]) -> Option<Vec<String>> {
-	use warp::compiler::pure_tests::DEFAULT_FOLDER;
-	let folders = args.get(2..).unwrap_or_default();
+	use warp::compiler::pure_tests::{DEFAULT_FOLDER, FLAGS};
 	if args.get(1).is_none_or(|word| TEST_WORD != word) {
 		return None;
 	}
+	let words = args.get(2..).unwrap_or_default();
+	let (flags, folders): (Vec<&String>, Vec<&String>) = words.iter().partition(|word| FLAGS.contains(&word.as_str()));
 	if folders.is_empty() {
-		return std::path::Path::new(DEFAULT_FOLDER).is_dir().then(|| vec![DEFAULT_FOLDER.to_string()]);
+		let default = std::path::Path::new(DEFAULT_FOLDER).is_dir().then(|| DEFAULT_FOLDER.to_string())?;
+		return Some(flags.into_iter().cloned().chain([default]).collect());
 	}
-	folders.iter().all(|folder| std::path::Path::new(folder).is_dir()).then(|| folders.to_vec())
+	folders.iter().all(|folder| std::path::Path::new(folder).is_dir()).then(|| words.to_vec())
 }
 
-/// `warp test --case <file> <index>`: one test of a file, run by a child of `warp test [folder…]`
-fn test_case(args: &[String]) -> Option<&[String; 2]> {
+/// `warp test --case <pure|self> <file> <index>`: one test of a file, run by a child of `warp test [folder…]`
+fn test_case(args: &[String]) -> Option<&[String; 3]> {
 	match args {
 		[_, word, flag, rest @ ..] if TEST_WORD == word && flag == warp::compiler::pure_tests::CASE_FLAG => {
 			rest.try_into().ok()
@@ -373,8 +375,8 @@ fn run_command(args: &[String], given: &[String]) {
 				Err(failure) => fail(format!("warp build: {failure}")),
 			}
 		}
-	} else if let Some([file, index]) = test_case(args) {
-		std::process::exit(if warp::compiler::pure_tests::run_child_case(file, index) { 0 } else { 1 });
+	} else if let Some([by, file, index]) = test_case(args) {
+		std::process::exit(if warp::compiler::pure_tests::run_child_case(by, file, index) { 0 } else { 1 });
 	} else if let Some(folders) = test_folders(args) {
 		std::process::exit(if warp::compiler::pure_tests::run_folders(&folders) { 0 } else { 1 });
 	} else if let Some(paths) = test_files(args) {
@@ -403,6 +405,12 @@ fn run_command(args: &[String], given: &[String]) {
 		use warp::compiler::standalone::{run, Compiler};
 		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
 		print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
+	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
+		// `warp pure "2+3*4"`: the words after the command are the code, its `use` reading from the current folder
+		use warp::compiler::standalone::{run_code, Compiler};
+		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
+		let folder = env::current_dir().unwrap_or_default();
+		print_and_exit(run_code(&args[2..].join(" "), &folder, by));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments([program_arguments, given].concat());
