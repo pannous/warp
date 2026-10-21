@@ -1989,9 +1989,9 @@ annotated_kind(written: text): text := {
 # the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`; any other word itself
 aliased_type(word: text): text := {
 	optional = word.ends_with("?")
-	named = if optional then word[0..<(#word - 1)] else word
-	while named in module.aliases { named = module.aliases[named] }
-	if optional then named + "?" else named
+	resolved = if optional then word[0..<(#word - 1)] else word
+	while resolved in module.aliases { resolved = module.aliases[resolved] }
+	if optional then resolved + "?" else resolved
 }
 names_a_type(word: text): bool := word in type_bytes or word in references or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: any): any := {
