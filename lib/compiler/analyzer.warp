@@ -231,7 +231,7 @@ loop_kind(body: any, scope: any): text := {
 	statements = without_step(body)
 	# `{print x}` holds the words of its one statement, the call
 	last = if is_curly_group(statements) and separator_of(statements) == " " and #statements > 1 then statements else last_statement(statements)
-	if #last == 2 and head_name(last) in output_words { return "empty" }
+	if is_group(last) and #last == 2 and head_name(last) in output_words { return "empty" }
 	kind = inferred_kind(statements, scope)
 	if kind == "" or kind == "text" or kind == "codepoint" or kind == "list" { kind } else { "data" }
 }
