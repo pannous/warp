@@ -2,7 +2,7 @@
 //! node_of / view_of, notes/self_hosting.md): a number, bool or ø is itself, every other node a list tagged by its kind.
 //! The twin tests (tests/common/twins.rs) and the self-hosted pipeline (self_hosted.rs) both cross this bridge.
 use crate::extensions::numbers::Number;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Separator, EMPTY_LIST_LITERAL};
 use crate::operators::Op;
 
 /// A list as warp writes it: the empty list is ø
@@ -115,7 +115,24 @@ impl Viewer {
 		if let Some((name, value)) = mark {
 			return tagged("attribute", [Node::text(name), self.view(value), self.view(inner)]);
 		}
+		if let Some(written) = self.marks.then(|| written_index(node)).flatten() {
+			return tagged("attribute", [Node::text(WRITTEN_INDEX_MARK), Node::Number(written), self.view(inner)]);
+		}
 		self.view(inner)
+	}
+}
+
+/// The attribute layer parser.warp keeps a subscript's written number in (walk.warp written_index_mark)
+const WRITTEN_INDEX_MARK: &str = "written_index";
+
+/// The number `d[1]` was written with, on its shifted index `d#2`
+fn written_index(node: &Node) -> Option<Number> {
+	match node {
+		Node::Meta { data, .. } => match data.as_ref() {
+			Node::Data(dada) => dada.downcast_ref::<crate::warp_parser::WrittenIndex>().map(|written| written.0),
+			_ => None,
+		},
+		_ => None,
 	}
 }
 
@@ -237,13 +254,18 @@ fn plain(view: Node) -> Node {
 	without_layers(view, &["literal", "attribute"])
 }
 
-/// The view without the layers of the `dropped` kinds, a character as a text, an empty group as ø (walk.warp
-/// without_layers)
+/// The view without the layers of the `dropped` kinds, a character as a text, an empty group but the empty map `{}`
+/// (walk.warp without_layers: number_keys keys a variable that starts as `{}`) and the empty list `[]` (as parser.warp
+/// groups it) as ø
 fn without_layers(view: Node, dropped: &[&str]) -> Node {
+	let glyph = |items: &[Node]| items.get(1).and_then(Node::text_value);
 	match view {
 		Node::List(mut items, bracket, separator) => match items.first().and_then(Node::text_value).as_deref() {
+			Some("literal") if dropped.contains(&"literal") && glyph(&items).as_deref() == Some(EMPTY_LIST_LITERAL) => {
+				tagged("list", [Node::text(&bracket_glyphs(&Bracket::Square)), Node::text("")])
+			}
 			Some(kind) if dropped.contains(&kind) => without_layers(items.pop().unwrap_or(Node::Empty), dropped),
-			Some("list") if items.len() == 3 => Node::Empty,
+			Some("list") if items.len() == 3 && !matches!(glyph(&items).as_deref(), Some("{" | "[")) => Node::Empty,
 			// an error and a type are opaque to a pass twin: kept whole, `class P {}` keeps its empty body and attributes
 			Some("type" | "error") => Node::List(items, bracket, separator),
 			Some("char") => {
@@ -297,6 +319,10 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		"list" => {
 			let items = parts[3..].iter().map(|item| node_of(item, handles)).collect::<Result<Vec<Node>, Node>>()?;
 			let bracket = bracket_of_glyphs(&text(1)?).ok_or_else(unreadable)?;
+			// `[]` as the parser builds it (lists.rs group_by_separators)
+			if items.is_empty() && bracket == Bracket::Square {
+				return Ok(Node::empty_list());
+			}
 			Node::List(items, bracket, separator_of_glyph(&text(2)?).ok_or_else(unreadable)?)
 		}
 		"error" => Node::Error(Box::new(node(1)?)),
@@ -306,6 +332,11 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		{
 			Node::Meta { node: Box::new(node(3)?), data: Box::new(Node::key(mark, node(2)?)) }
 		}
+		// `d[1]` read by parser.warp: the shifted index `d#2` keeps the number written, as the Rust parser marks it
+		"attribute" if text(1).ok().as_deref() == Some(WRITTEN_INDEX_MARK) => match node(2)? {
+			Node::Number(written) => Node::meta(node(3)?, Node::data(crate::warp_parser::WrittenIndex(written))),
+			_ => return Err(unreadable()),
+		},
 		"attribute" => node(3)?.with_attribute(&text(1)?, node(2)?),
 		"literal" | "at" => node(parts.len() - 1)?,
 		"template" => crate::text::interpolation::template_text(&text(1)?),

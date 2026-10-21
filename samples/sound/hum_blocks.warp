@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# A signal filled a block at a time: hum gets a block of 512 samples and the time of its first one, once every 23 ms,
+# instead of being called for every sample.
+use sound
+hum(block: samples, t) := for i in 1 to #block {
+	time = t + (i - 1) / sample_rate
+	block#i = 0.3 * sin(2 * pi * 220 * time) + 0.1 * sin(2 * pi * 330 * time)
+}
+play(hum, 3s)

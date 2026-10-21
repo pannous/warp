@@ -25,7 +25,7 @@ global_word = "global"
 nonlocal_word = "nonlocal"
 
 # the program, its first kind change diagnosed
-kind_changes(program: any): any := {
+kind_changes(program: Node): Node := {
 	results = evident_results(program)
 	global_names = global_variables(program)
 	for body in [program] + definition_bodies(program) {
@@ -41,10 +41,10 @@ define_statement_name(n: any): text := {
 	head = key_of(n)
 	if is_group(head) and #head > 0 and head#1 is symbol then name_of(head#1) else ""
 }
-definition_bodies(program: any): list := nodes_in(program).filter(is_define_statement).map(value_of)
+definition_bodies(program: Node): list := nodes_in(program).filter(is_define_statement).map(value_of)
 
 # the variables declared `global: y`
-global_variables(program: any): any := {
+global_variables(program: Node): any := {
 	found = {}
 	for part in nodes_in(program) {
 		if is_operator(part, ":") and key_of(part) == symbol(global_word) {
@@ -56,7 +56,7 @@ global_variables(program: any): any := {
 	found
 }
 # `nonlocal: y` and `nonlocal: a, b` among a body's statements
-declared_nonlocals(body: any): any := {
+declared_nonlocals(body: Node): any := {
 	found = {}
 	for statement in statements_in(body) {
 		if is_operator(statement, ":") and key_of(statement) == symbol(nonlocal_word) {
@@ -113,7 +113,7 @@ mixed_kind(was: text, now: text): text := {
 
 # the result kind of variable function whose last expression's kind is evident, its declared parameters known:
 # `f(x: int) := x + 1` gives an Int
-evident_results(program: any): any := {
+evident_results(program: Node): any := {
 	results = {}
 	for written in nodes_in(program).filter(is_define_statement) {
 		name = define_statement_name(written)
@@ -132,7 +132,7 @@ evident_results(program: any): any := {
 	results
 }
 # a `{a; b}` or `a; b` body's last statement, a `{a}` body's only one
-last_expression(body: any): any := {
+last_expression(body: Node): any := {
 	if not is_group(body) or #body == 0 { return body }
 	if (bracket_of(body) == "{" or bracket_of(body) == "") and separator_of(body) in statement_separators { return last_expression(body#(#body)) }
 	if bracket_of(body) == "{" and #body == 1 { return last_expression(body#1) }
@@ -141,7 +141,7 @@ last_expression(body: any): any := {
 
 # the first kind change of the assignments in program order, not into function definitions (their own scopes):
 # `kinds` holds variable variable's evident kind, "" once it was given a value of no evident kind
-first_kind_change(n: any, kinds: any, results: any, global_names: any): any := {
+first_kind_change(n: Node, kinds: any, results: any, global_names: any): any := {
 	if is_define_statement(n) {
 		name = define_statement_name(n)
 		if name == "" { return ø }

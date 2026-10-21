@@ -57,6 +57,7 @@ webdriver = None  # the FirefoxDriver or SafariDriver of a --firefox or --safari
 SAFARI_PORT = 4445
 SAFARI_START_SECONDS = 10
 SAFARI_SCRIPT_MS = 300_000  # an example that runs this long is stuck
+MEMORY_GROWTHS_SHOWN = 5  # the examples that grew the cgroup's memory most (card our-playground)
 # agent-browser's eval for classic WebDriver: the expression's value, awaited, as JSON text ("" for undefined)
 SAFARI_EVAL = """const done = arguments[arguments.length - 1];
 Promise.resolve().then(() => (0, eval)(arguments[0])).then(value => done(value === undefined ? "" : JSON.stringify(value)), failure => done(`✗ ${failure?.message ?? failure}`));"""
@@ -175,6 +176,10 @@ FIREFOX_TERMINATED_PROMISING = ["uncaught exception: undefined"]  # card firefox
 # WebAssembly.promising, so whichever run replaces that worker next logs Firefox's anonymous uncaught exception (dry runs
 # 2026-10-15: on the swirl itself, also with a 3 s loop, or on the sample after it); card logs-uncaught finds the cause
 FIREFOX_SKIPPED_SAMPLES = {"warp_compiled_wgsl_shader": "its worker, replaced, logs 'uncaught exception: undefined' (card logs-uncaught)"}
+# samples no tour runs (user 2026-10-21: disable the memory hungry ones): the largest growths of the tour's memory
+# (card our-playground, isolated runs after 5b0b7f1bdb, anon)
+MEMORY_HUNGRY_SAMPLES = {"ringed_planet": "+211 MB: a 1920×1080 compute_toy painted on the CPU in headless Chrome",
+	"uniscript_text": "+195 MB: reads uniscript's 10 MB entities index", "sound_patterns": "+100 MB"}
 EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"],
 	GPU_JOBS: FIREFOX_TERMINATED_PROMISING, STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING,
 	BUG_BUTTON: ["403"]}  # the browser logs the refused wrong token itself
@@ -953,6 +958,59 @@ def wait_for_isolation():
 		time.sleep(0.5)
 
 
+class MemoryWatch:
+	"""the processes' own memory (anon: without the page cache) of this process's cgroup v2, on the dry run's server the
+	scope that holds the browser too, after each example, so a tour that grows it names its biggest steps; silent where
+	there is no cgroup v2 (macOS)"""
+	def __init__(self):
+		try:
+			with open("/proc/self/cgroup") as entries:
+				path = next(line.split("::", 1)[1].strip() for line in entries if line.startswith("0::"))
+			self.folder = f"/sys/fs/cgroup{path}"
+			self.last = self.anon()
+		except (OSError, StopIteration, ValueError):
+			self.folder = None
+		self.growths = []
+		self.at_peak = []
+	def read(self, name):
+		with open(os.path.join(self.folder, name)) as value:
+			return value.read()
+	def anon(self):
+		return next(int(line.split()[1]) for line in self.read("memory.stat").splitlines() if line.startswith("anon "))
+	def after(self, name):
+		if self.folder:
+			now = self.anon()
+			if now > max((then for _, then, _ in self.growths), default=0):
+				self.at_peak = self.processes()
+			self.growths.append((now - self.last, now, name))
+			self.last = now
+	def report(self):
+		if not self.folder:
+			return
+		try:
+			peak = f", page cache included {int(self.read('memory.peak')) >> 20} MB"
+		except OSError:
+			peak = ""  # kernels before 5.19 keep no peak
+		highest = max((now for _, now, _ in self.growths), default=self.last)
+		largest = sorted(self.growths, reverse=True)[:MEMORY_GROWTHS_SHOWN]
+		print(f"\nmemory: peak {highest >> 20} MB{peak}, at the end {self.last >> 20} MB; grew most: " + ", ".join(f"{name} +{growth >> 20} MB (to {now >> 20})" for growth, now, name in largest))
+		print("memory at the peak, by process: " + ", ".join(f"{kind} {resident >> 10} MB" for resident, kind in self.at_peak[:MEMORY_GROWTHS_SHOWN]))
+	def processes(self):
+		"""the cgroup's processes, largest resident first: (KB, kind), a Chrome process by its --type (renderer, gpu-process …)"""
+		found = []
+		for pid in self.read("cgroup.procs").split():
+			try:
+				with open(f"/proc/{pid}/status") as status:
+					resident = next((int(line.split()[1]) for line in status if line.startswith("VmRSS:")), 0)
+				with open(f"/proc/{pid}/cmdline") as command:
+					words = command.read().replace("\0", " ").split()  # Chrome rewrites its arguments as one
+			except OSError:
+				continue  # ended meanwhile
+			kind = next((word.split("=", 1)[1] for word in words if word.startswith("--type=")), os.path.basename(words[0]))
+			found.append((resident, kind))
+		return sorted(found, reverse=True)
+
+
 def check_examples(names, page_url=None, site=None):
 	"""every example of the tour shows its value and prints its text in the playground (the local build, the collected
 	`site` directory, or the deployed one at `page_url`), and neither loading the page nor showing an example or a sample
@@ -974,7 +1032,9 @@ def check_examples(names, page_url=None, site=None):
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
 	failures = []
+	memory = MemoryWatch()
 	def verdict(name, wrong):
+		memory.after(name)
 		expected = EXPECTED_CONSOLE.get(name, [])
 		logged = console.take()
 		wrong += [f"console {message}" for message in logged if not any(line in message for line in expected)]
@@ -988,6 +1048,9 @@ def check_examples(names, page_url=None, site=None):
 	for name, sample in chosen:
 		if sample and isinstance(webdriver, FirefoxDriver) and name in FIREFOX_SKIPPED_SAMPLES:
 			print(f"skip samples/{name} in Firefox: {FIREFOX_SKIPPED_SAMPLES[name]}")
+			continue
+		if sample and name in MEMORY_HUNGRY_SAMPLES:
+			print(f"skip samples/{name}, memory hungry: {MEMORY_HUNGRY_SAMPLES[name]}")
 			continue
 		if sample:
 			verdict(f"samples/{name}", run_sample(name))
@@ -1006,6 +1069,7 @@ def check_examples(names, page_url=None, site=None):
 		server.shutdown()
 		if failures:
 			show_served()
+	memory.report()
 	checked = len(chosen) + 1 + len(extra_checks)
 	print(f"\nexamples and samples: {checked - len(failures)} of {checked} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)

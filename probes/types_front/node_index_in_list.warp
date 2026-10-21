@@ -1,0 +1,4 @@
+# an element of a Node-typed value inside a list literal: the list is a list, not an Int
+def firsts(count: any, operand: Node): list := [count, operand#1]
+def takes(xs: list): int := #xs
+print(takes(firsts(3, [7, 8])))

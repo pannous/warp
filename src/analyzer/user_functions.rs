@@ -13,7 +13,7 @@ pub fn function_body_scope(
 	params: &[Param],
 	body: &Node,
 	function_kinds: &FunctionKinds,
-	globals: &HashMap<String, Local>,
+	globals: &Globals,
 	closure_variable_targets: &ClosureTargets,
 ) -> Scope {
 	let mut scope = Scope::with_function_kinds(function_kinds.clone()) // shared: a cheap copy
@@ -30,7 +30,7 @@ pub fn function_body_scope(
 /// as a main-level assignment widens it (widen_to_float), and a Node once a function gives it a value of run-time kind
 /// (`global g = 0.3; set() := { g = f(-9) }`, widen_to_node). True when one was widened.
 pub fn widen_globals_by_functions<'a>(
-	globals: &mut HashMap<String, Local>,
+	globals: &mut Globals,
 	functions: impl Iterator<Item = &'a UserFunctionDef>,
 	function_kinds: &FunctionKinds,
 	closure_variable_targets: &ClosureTargets,
@@ -45,12 +45,13 @@ pub fn widen_globals_by_functions<'a>(
 }
 
 /// The known globals that `seen` holds wider: as a Node, or as an f64 where they were exact. True when one was widened.
-pub(super) fn widen_globals(globals: &mut HashMap<String, Local>, seen: &HashMap<String, Local>) -> bool {
+pub(super) fn widen_globals(globals: &mut Globals, seen: &HashMap<String, Local>) -> bool {
 	let wider =
 		|kind: Kind, than: Kind| kind != than && (kind == Kind::Empty || kind == Kind::Float && than != Kind::Empty);
 	let mut widened_any = false;
 	for (name, global) in seen {
-		if let Some(widened) = globals.get_mut(name).filter(|known| wider(global.kind, known.kind)) {
+		if globals.get(name).is_some_and(|known| wider(global.kind, known.kind)) {
+			let widened = std::rc::Rc::make_mut(globals).get_mut(name).expect("a known global");
 			widened.kind = global.kind;
 			widened.type_node = global.type_node.clone();
 			widened_any = true;
@@ -213,7 +214,7 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, &body);
-	let mut scope = function_body_scope(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
+	let mut scope = function_body_scope(&params, &body, &Default::default(), &Globals::default(), &Default::default());
 	// `number sine(number x){ x = x % turn …` with a float turn: the `number` parameter holds a float throughout
 	let mut params = params;
 	let mut widened = false;
@@ -226,7 +227,7 @@ pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserF
 		}
 	}
 	if widened {
-		scope = function_body_scope(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
+		scope = function_body_scope(&params, &body, &Default::default(), &Globals::default(), &Default::default());
 	}
 	let return_kind = infer_function_return_kind(&body, &scope);
 	UserFunctionDef {
@@ -534,7 +535,7 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	check_call_arguments(ctx, node);
 	infer_forwarded_parameters(ctx);
 	ctx.field_kinds = program_field_kinds(node);
-	let mut globals = with_closure_captures(ctx, node, declared_globals(node));
+	let mut globals = Globals::new(with_closure_captures(ctx, node, declared_globals(node)));
 	flow::settle(ctx, node, &mut globals);
 	if type_float_list_parameters(ctx, node) {
 		flow::settle(ctx, node, &mut globals);
@@ -664,7 +665,7 @@ pub(crate) fn declared_globals(program: &Node) -> HashMap<String, Local> {
 
 pub(super) fn declared_globals_in(mut scope: Scope, program: &Node) -> HashMap<String, Local> {
 	collect_variables(program, &mut scope);
-	scope.globals
+	std::rc::Rc::unwrap_or_clone(scope.globals)
 }
 
 /// The program's own functions that take arguments
@@ -951,7 +952,7 @@ pub(super) fn assume_int_results(ctx: &mut Context) {
 
 /// Each function's result kinds inferred once from the kinds of the last round (a call of a float-returning function
 /// is itself Float); whether one changed
-pub(super) fn step_result_kinds(ctx: &mut Context, kinds: &FunctionKinds, globals: &HashMap<String, Local>) -> bool {
+pub(super) fn step_result_kinds(ctx: &mut Context, kinds: &FunctionKinds, globals: &Globals) -> bool {
 	let results: Vec<(String, Kind, Vec<Kind>)> = ctx
 		.user_functions
 		.values()
@@ -980,7 +981,7 @@ fn settled_return_kind(
 	function: &UserFunctionDef,
 	ctx: &Context,
 	function_kinds: &FunctionKinds,
-	globals: &HashMap<String, Local>,
+	globals: &Globals,
 ) -> Kind {
 	let returned =
 		|kinds: &FunctionKinds| infer_function_return_kind(&function.body, &body_scope(function, ctx, kinds, globals));
@@ -998,12 +999,7 @@ fn settled_return_kind(
 }
 
 /// The scope of a user function's body, given the kinds of the functions it calls
-fn body_scope(
-	function: &UserFunctionDef,
-	ctx: &Context,
-	function_kinds: &FunctionKinds,
-	globals: &HashMap<String, Local>,
-) -> Scope {
+fn body_scope(function: &UserFunctionDef, ctx: &Context, function_kinds: &FunctionKinds, globals: &Globals) -> Scope {
 	function_body_scope(&function.params, &function.body, function_kinds, globals, &ctx.closure_variable_targets)
 }
 

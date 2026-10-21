@@ -97,14 +97,14 @@ impl WarpParser {
 
 	/// The blanks before a following `finally`, if one follows
 	fn finally_ahead(&self) -> Option<usize> {
-		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		let ahead = self.whitespace_at(0);
 		(self.word_at(ahead) == FINALLY_KEYWORD).then_some(ahead)
 	}
 
 	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
 	/// with how many blanks (line breaks included) come before it
 	pub(crate) fn fallback_word_ahead(&self) -> Option<(&'static str, usize)> {
-		let ahead = (0..).take_while(|&offset| self.peek_char(offset).is_whitespace()).count();
+		let ahead = self.whitespace_at(0);
 		FALLBACK_WORDS.iter().find(|word| self.word_at(ahead) == **word).map(|word| (*word, ahead))
 	}
 

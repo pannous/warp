@@ -4,7 +4,7 @@
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
 //! argument stays an error.
 
-use super::nodes::{any_part, assign, children_rewritten, key, parameter_word, word_headed, Counter};
+use super::nodes::{any_part, assign, children_rewritten, interface_word, key, parameter_word, word_headed, Counter};
 use crate::errors::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -33,8 +33,10 @@ impl Function {
 		Function { parameters, defaults, extras: vec![], overloads: vec![] }
 	}
 
-	fn has_parameter(&self, name: &String) -> bool {
-		self.parameters.contains(name) || self.overloads.iter().any(|overload| overload.parameters.contains(name))
+	/// Also a head's own `mix·local = 0.5`, which reads like a call naming its parameter as renamed apart
+	fn has_parameter(&self, name: &str) -> bool {
+		let name = crate::lowering::shadowing_bindings::written_name(name).to_string();
+		self.parameters.contains(&name) || self.overloads.iter().any(|overload| overload.parameters.contains(&name))
 	}
 
 	/// Whether `f(arguments)` fills these parameters: every name is one, the positional arguments fill the rest
@@ -233,7 +235,7 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 		if let Node::Key(head, Op::Define | Op::Assign, _) = part {
 			match untyped_head(head).drop_meta() {
 				Node::List(items, Bracket::Round, _) if word_headed(items).is_some() => {
-					let parameters = items[1..].iter().map(parameter_word).collect();
+					let parameters = items[1..].iter().map(interface_word).collect();
 					let defaults = items[1..].iter().map(parameter_default).collect();
 					let function = Function::new(parameters, defaults);
 					match functions.get_mut(&items[0].name()) {

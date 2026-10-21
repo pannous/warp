@@ -7,6 +7,9 @@ impl WasmGcEmitter {
 		if let Some(identity) = self.object_identity(node) {
 			return self.emit_object_identity(func, identity);
 		}
+		if let Some(identity) = self.nothing_identity(node) {
+			return self.emit_nothing_identity(func, identity);
+		}
 		if let Some(product) = self
 			.numeric_times(node)
 			.or_else(|| self.identity_as_equality(node))
@@ -143,7 +146,7 @@ impl WasmGcEmitter {
 				if self.emit_struct_field_int(func, list, index) {
 					return;
 				}
-				if self.map_is_indexed_by_key(index) {
+				if self.map_is_indexed_by_key(list, index) {
 					self.emit_indexed_node(func, list, index);
 					self.emit_call(func, "get_int_value");
 					return;

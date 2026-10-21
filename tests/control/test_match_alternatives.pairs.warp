@@ -14,3 +14,6 @@
 # alternatives_of_list_patterns
 'match [2] { [1] | [2] => "one item"; _ => "other" }'	'one item'
 'match [3, 4] { [] | [_] => 0; [a, b] => a + b }'	7
+
+# a_name_bound_in_an_alternative_is_an_error
+'match [1] { [a] | [a, _] => a; _ => 0 }'	1

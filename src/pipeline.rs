@@ -132,6 +132,9 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::pattern_clauses::lower,
 	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
 	crate::lowering::parameter_patterns::lower,
+	// a function's local named like one of the program's functions is the local in it (shadowing_bindings.rs), renamed
+	// apart before any pass reads the word as the function's call
+	crate::lowering::shadowing_bindings::lower,
 	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
 	crate::lowering::index_positions::mark_declarations,
 	// `int age = 30` is `age: int = 30` before the passes that read declarations, the signal passes among them
@@ -265,6 +268,9 @@ const MODULE_PASSES: &[Pass] = &[
 	// `count(x) := 7`: the program's count·any for the values the library's count is not for (typed_library_words.rs)
 	crate::lowering::typed_library_words::lower,
 	crate::modules::resolve,
+	// again: the functions of a used module that itself uses the file of an alias (`use "types.warp"` in analyzer.warp)
+	// joined in resolve with the alias unresolved
+	crate::lowering::type_aliases::lower,
 	// `play(xs: list of int)`: one parameter `xs:"list of int"` (declaration_forms.rs), the library's heads too, before
 	// any pass reads a head (function_types, shared_arrays)
 	crate::lowering::declaration_forms::lower_list_parameters,
@@ -398,6 +404,8 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::library_words::lower_byte_counts,
 	// `xs[xs.index_of(x)]`: a position meeting brackets, an index meeting `#` (index_positions.rs), once index_of is named
 	crate::lowering::index_positions::lower,
+	// after library_words names `k in d`, d.get(k) …; so after one_entry_maps (which comes before library_words lowers
+	// m.pop(k)) too, and it reads a literal `{1: 5}` through map_of_entry: its number keys still mark the map
 	crate::lowering::number_keys::lower_key_words,
 	crate::lowering::traits::lower_dispatch,
 	crate::lowering::memoization::lower,

@@ -126,10 +126,18 @@ impl Builders {
 		Ok(self.call_into(name, &[Val::I64(a), Val::I64(b)], Val::I64(0), store)?.unwrap_i64())
 	}
 
+	/// Whether the module's Ints are machine i64s, not fixnums and handles: it has no Int runtime (emitter.warp's
+	/// modules, a program that does not calculate), so it exports none of its builders
+	fn holds_machine_ints(&self) -> bool {
+		!self.functions.contains_key(EXACT_BUILDERS[0])
+	}
+
 	/// The Int handle of an integer: a fixnum as it is, a larger one composed from 32-bit limbs
 	fn integer_handle(&self, n: &num_bigint::BigInt, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
 		use num_traits::ToPrimitive;
-		if let Some(small) = n.to_i64().filter(|small| crate::wasm_emitter::is_fixnum(*small)) {
+		if let Some(small) =
+			n.to_i64().filter(|small| self.holds_machine_ints() || crate::wasm_emitter::is_fixnum(*small))
+		{
 			return Ok(small);
 		}
 		let (sign, limbs) = n.to_u32_digits();
@@ -162,7 +170,7 @@ impl Builders {
 	/// An Int of this instance as a value of its own: a fixnum as it is, a handle (a big integer, a ratio) read
 	/// through the instance's Int node
 	pub(super) fn integer(&self, n: i64, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
-		if crate::wasm_emitter::is_fixnum(n) {
+		if self.holds_machine_ints() || crate::wasm_emitter::is_fixnum(n) {
 			return Ok(TaskValue::Int(n));
 		}
 		let node = self.call("new_int", &[Val::I64(n)], store)?;

@@ -190,7 +190,7 @@ impl WasmGcEmitter {
 		let scope = Scope::with_function_kinds(self.user_function_kinds())
 			.with_closure_targets(self.ctx.closure_variable_targets.clone());
 		let saved_scope = std::mem::replace(&mut self.scope, scope);
-		self.scope.globals = self.function_globals(&function.name);
+		self.scope.globals = self.function_globals(&function.name).into();
 		for (param, is_list) in function.params.iter().zip(list_params) {
 			self.scope.define_param(param, if *is_list { Kind::List } else { param_kind(param) });
 		}

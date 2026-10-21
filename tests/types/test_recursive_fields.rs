@@ -21,3 +21,9 @@ fn gc_struct_and_ref_are_wasm_spellings() {
 fn ref_fields_on_their_own_lines() {
 	is!("type Node: gc struct {\n    tag: i32\n    left: ref Node?\n    right: ref Node?\n}\ntree = Node {\n    tag: 5\n    left: ø\n    right: ø\n}\ntree.tag", 5);
 }
+
+// card function-signature: a field may hold a class declared after it (emitter.warp's Function holds a Signature)
+#[test]
+fn a_field_holds_a_class_declared_later() {
+	is!("class F { name: text; signature: S }; class S { arity: int }; f = F(\"m\", S(2)); f.signature.arity", 2);
+}

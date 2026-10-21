@@ -104,6 +104,38 @@ impl WasmGcEmitter {
 		(may_be_object(left) && may_be_object(right)).then_some((left, right, *op == Op::NotIdentical))
 	}
 
+	/// `x === ø` / `x !== ø`: is x ø itself, `[]` not, whatever x's static type (`f(n: any) := n === ø; f([])` is no): the
+	/// other side and whether the question is negated
+	pub(in crate::wasm_emitter) fn nothing_identity<'a>(&self, node: &'a Node) -> Option<(&'a Node, bool)> {
+		let Node::Key(left, op @ (Op::Identical | Op::NotIdentical), right) = node.drop_meta() else {
+			return None;
+		};
+		let nothing_itself = |side: &Node| side.is_empty_node() && !side.is_empty_list_literal();
+		let other = if nothing_itself(right) {
+			left
+		} else if nothing_itself(left) {
+			right
+		} else {
+			return None;
+		};
+		Some((other, *op == Op::NotIdentical))
+	}
+
+	/// Push i64 1/0: is the value ø itself
+	pub(in crate::wasm_emitter) fn emit_nothing_identity(
+		&mut self,
+		func: &mut Function,
+		(side, negated): (&Node, bool),
+	) {
+		self.emit_node_instructions(func, side);
+		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
+		Self::emit_is_nothing(func);
+		if negated {
+			func.instruction(&I::I32Eqz);
+		}
+		func.instruction(&I::I64ExtendI32U);
+	}
+
 	/// Push i64 1/0: are the two objects one
 	pub(in crate::wasm_emitter) fn emit_object_identity(
 		&mut self,

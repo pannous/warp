@@ -11,3 +11,8 @@
 
 # fast_words_reach_the_math_module_and_stay_out_of_other_programs
 'x = 1.0; sin(x) == 0.8414709848078965'	true
+
+# a_constant_fast_word_folds_to_the_fast_value
+'use fast_math; x = 1.0; sin(1.0) == sin(x)'	true
+'use fast_math; x = 1.0; cos(1.0) - cos(x)'	0.0
+'use fast_math; x = 1.0; exp(1.0) == exp(x)'	true
