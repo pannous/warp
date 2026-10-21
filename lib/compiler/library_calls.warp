@@ -62,10 +62,12 @@ functions_with_parameters(program: any): list := {
 }
 
 # whether `word#x` counts x for the word: a printing word or a library word of one value the program leaves free, or
-# a function of the program with parameters. A type takes no count: `int#101` is the subscript of a typed array.
+# a function of the program with parameters. A type takes no count: `int#101` is the subscript of a typed array; nor
+# does a variable or parameter named like a function: `words = [p]; words#1` beside a function words
 counts_after(word: any, functions: list, scope: any): bool := {
 	if not (word is symbol) { return no }
 	written = name_of(word)
+	if binds_value(scope, written) { return no }
 	if functions contains written { return yes }
 	not binds(scope, written) and (printing_words contains written or takes_one_typed_value(unaliased(written)))
 }
