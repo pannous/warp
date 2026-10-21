@@ -11,11 +11,15 @@ use file
 # lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the folder above this file's
 library_folder = if #args > 3 then args#4 else env("WARP_LIB") ?? folder_of(module_directory)
 
+# the name the lowered runtime words are kept under
+RUNTIME_WORDS = "compiler.warp's lowered runtime words of " + library_folder
+
 # the prelude's text, whose definitions a program reaches (prelude_words.warp)
 prelude_source = read(library_folder + "/prelude.warp")
 
-# the runtime words, lowered by the same passes as a program
-runtime_words = lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source)
+# the runtime words, lowered by the same passes as a program; the same at every run while lib/ stays as it is, so kept
+# across runs and lowered once (card pure-warm-start)
+runtime_words = kept(RUNTIME_WORDS) ?? keep(RUNTIME_WORDS, lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source))
 
 # the wasm module of the source, as bytes
 compile(source: text, folder: text): list := {
