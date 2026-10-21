@@ -16,6 +16,7 @@ mod test_global_float_widening;
 mod test_global_object_field_named_like_function;
 mod test_global_modifiers;
 mod test_global_node_widening;
+mod test_global_object_field_named_like_function;
 mod test_global_typed_list; // found writing samples/servers/server.warp
 mod test_globals;
 mod test_node_widening_in_loops;
