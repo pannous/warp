@@ -1,0 +1,4 @@
+def pick(x: int): int {
+	if x > 0 { x }
+}
+print pick(-1)

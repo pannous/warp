@@ -5,7 +5,7 @@
 use super::nodes::{assign, block, call, is_call_head, key, spaced_statement};
 use super::nodes::{is_return, typed};
 use crate::analyzer::type_word_kind;
-use crate::node::{parens, symbol, Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Separator, parens, symbol};
 use crate::operators::Op;
 use crate::words::{ANY_TYPE, ERROR_WORD, IMPLICIT_PARAMETER};
 
@@ -147,17 +147,79 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 		(is_kinded_type_or_any(word.trim_end_matches('?')) || is_union(word) || is_collection_type(word))
 			&& !crate::operators::FUNCTION_KEYWORDS.contains(word)
 	})?;
-	let type_name = type_name.drop_meta();
-	match definition.drop_meta() {
+	let (head, op, body) = match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
-			Some(Node::Key(head.clone(), *op, Box::new(converted(body, type_name))))
+			(head.as_ref(), *op, body.as_ref())
 		}
 		// `int half(x){ … }`: the signature glued to its block. Without the type word `half(x){…}` stays no definition
 		// (`if(c){…}` has the same shape); with it the definition is unambiguous: `half(x) := {…}`
 		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [head, body] if is_call_head(head) && body.is_block()) => {
-			Some(key(items[0].clone(), Op::Define, converted(&items[1], type_name)))
+			(&items[0], Op::Define, &items[1])
 		}
-		_ => None,
+		_ => return None,
+	};
+	let type_name = match optional_when_answering_empty(head, body, type_name) {
+		Ok(type_name) => type_name,
+		Err(warning_failed) => return Some(warning_failed),
+	};
+	Some(key(head.clone(), op, converted(body, &type_name)))
+}
+
+/// A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
+/// the `?` as its fix and reads its result as `list?`, so the ø reaches the caller unchanged
+fn optional_when_answering_empty(head: &Node, body: &Node, type_name: &Node) -> Result<Node, Node> {
+	let written = type_name.name();
+	if written.ends_with('?') || written == ANY_TYPE || !can_answer_empty(body) {
+		return Ok(type_name.drop_meta().clone());
+	}
+	let function = match head.drop_meta() {
+		Node::List(items, _, _) => items[0].name(),
+		_ => head.name(),
+	};
+	let place = if crate::errors::diagnostic::line_info(type_name).is_some() { type_name } else { head };
+	let optional = format!("{written}?");
+	let warning =
+		crate::errors::diagnostic::Diagnostic::at(place, format!("{function} can answer ø; declare `: {optional}`"))
+			.offer("the result can be ø", &written, &optional)
+			.about("optional-result", &function);
+	crate::errors::diagnostic::report(&[warning])?;
+	Ok(symbol(&optional))
+}
+
+/// Whether a body can give back ø: a `return ø` or a bare `return`, or ø as its value: ø itself, an `if` without
+/// `else`, a loop, or a choice with such a branch. The definitions and lambdas inside answer for themselves
+fn can_answer_empty(body: &Node) -> bool {
+	returns_empty(body) || value_can_be_empty(body)
+}
+
+fn returns_empty(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(word) => word == crate::words::RETURN_WORD,
+		Node::List(items, _, _) if is_return(items) => items[1].is_empty_node(),
+		Node::Key(head, Op::Assign | Op::Define, _) if is_call_head(head) => false,
+		Node::Key(_, Op::Arrow, _) => false,
+		Node::List(items, _, _) => items.iter().any(returns_empty),
+		Node::Key(left, _, right) => returns_empty(left) || returns_empty(right),
+		_ => false,
+	}
+}
+
+fn value_can_be_empty(value: &Node) -> bool {
+	match value.drop_meta() {
+		Node::Empty => true,
+		Node::List(items, Bracket::Curly, _) if is_statement_block(value) => {
+			items.last().is_some_and(|last| !is_return_statement(last) && value_can_be_empty(last))
+		}
+		Node::Key(_, Op::Then | Op::Do, _) => true,
+		Node::Key(then, Op::Else, otherwise) => match then.drop_meta() {
+			Node::Key(_, Op::Then, chosen) => value_can_be_empty(chosen) || value_can_be_empty(otherwise),
+			_ => false,
+		},
+		Node::Key(_, Op::Question, branches) => match branches.drop_meta() {
+			Node::Key(chosen, Op::Colon, otherwise) => value_can_be_empty(chosen) || value_can_be_empty(otherwise),
+			_ => false,
+		},
+		_ => false,
 	}
 }
 
@@ -319,8 +381,11 @@ pub fn lower(node: Node) -> Node {
 		return with_body_lowered(definition);
 	}
 	match node {
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [type_name, definition] if typed_return(type_name, definition).is_some()) => {
-			with_body_lowered(typed_return(&items[0], &items[1]).expect("guarded"))
+		Node::List(items, Bracket::None, Separator::Space)
+			if let [type_name, definition] = items.as_slice()
+				&& let Some(typed) = typed_return(type_name, definition) =>
+		{
+			with_body_lowered(typed)
 		}
 		Node::List(items, Bracket::None, Separator::Space) if spaced_definition(&items).is_some() => {
 			with_body_lowered(spaced_definition(&items).expect("guarded"))
