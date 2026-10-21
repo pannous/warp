@@ -228,6 +228,23 @@ fn number_keys_run_pure() {
 	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
 }
 
+/// The front lanes key such a map too: parser.warp's `m[1]` keeps its written number, and `{}` stays the empty map,
+/// across the bridge to the Rust passes (card self-hosted-map-null)
+#[test]
+fn number_keys_run_in_the_front_lanes() {
+	for lane in ["front", "1"] {
+		for (name, code, value) in [
+			("front_number_key_empty_map", "m = {}; m[1] = 2; m", "{1:2}"),
+			("front_number_key_read", "m = {}; m[1] = 2; m[1]", "2"),
+			("front_number_key_literal", "m = {1: 5}; m[1] = 2; m", "{1:2}"),
+			("front_list_index", "xs = [5, 6, 7]; xs[2] = 9; xs", "[5 6 9]"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.contains(value), "lane {lane}, {code}: {output}");
+		}
+	}
+}
+
 /// List comprehensions lower to the loop that builds the list (card pure-comprehensions), a second `for` nesting in the
 /// first clause as Rust's parser reads it
 #[test]

@@ -76,5 +76,5 @@ stage(request: any, prelude: text): any := {
 	if request#1 == "pure" { return checked(request#2, request#3, prelude) }
 	if request#1 == 0 { return bridged(tree(request#2)) }
 	pass = passes#(request#1)
-	view_of(pass(node_of(request#2)))
+	view_of(pass(stage_node(request#2)))
 }
