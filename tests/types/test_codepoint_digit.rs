@@ -40,3 +40,9 @@ fn a_held_or_untyped_character_casts_to_itself() {
 		"not a character",
 	);
 }
+
+/// A bool read from an untyped value is no character: the loud error, not the code point of its Int (warp-reviewer)
+#[test]
+fn an_untyped_bool_is_no_character() {
+	fails_with("peek(source: any, at: int): char := source[at]; peek([yes, no], 1)", "not a character");
+}
