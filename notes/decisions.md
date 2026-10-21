@@ -7,7 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
-- self-compiled-parity (user): before the Rust build is replaced, the self-compiled compiler.warp must give the same results on the whole suite under `warp pure` as the Rust-compiled one, and reach a fixpoint (the self-compiled compiler compiling itself gives the same module); only then the default switches (card self-compiled-parity).
+- self-compiled-parity (user): the parity check is off for now: switching to the self-compiled compiler.warp needs only that more tests pass under `warp pure` than before, no suite parity with the Rust-compiled one and no bitwise fixpoint yet.
 - pipeline-first (user): the main focus is the self-hosted compiler pipeline (parser → lowering → analysis → emitter in warp, `warp pure`); fixes for library user modules (sound, dates, extrema …) are normal priority, not Now/express, unless they break the pipeline.
 - quality-before-gap (user, at 49/116 lib files pure-compiled): raise the warp compiler's code quality before closing the final gap: the beautify cards (magic-numbers, function-signature, typed-compiler front and back) go first; gap cards (runtime-word-calls and the like) continue only where they don't touch the same lines, preferably on the cleaned-up code.
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
@@ -207,6 +207,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 
 ## Bool and truthiness
 - bool-type: yes/no are their own shallow type acting as 1/0; `type(yes)` is bool, prints yes/no, true/false accepted; `0 == false` yes, `0 === false` no; P195 `true + 1` is 2; P199 bool slots accept 1 and 0 only; JSON true/false read as yes/no.
+- kind-kept: a value never changes kind by being passed or returned: `f(x) := x; f([])` and `g(): any := { return [] }` give [], not ø; `[] === ø` is no while `[] == ø` stays yes (like 0 == false / 0 === false; whether [] == ø at all is card discuss-what) (Interviewer's decision).
 - Truthiness: ø + 1 stays an error, and so does ø + text (empty-plus-text: `t = ø; t += "a"` errs with the fix `t = ""`, or `t = []` for a list; `"a" + ø` with text on the left joins its str form); empty values are falsy; only 0 equals false; #38 a non-empty list (even `[ø]`) is truthy; #28 `x=ø; x.size` and `[].count` are 0; `is empty` covers "", [], {}, ø.
 - predicate-bool: predicates (`is_blank`, `is_even`, `is_odd`, every `is_…`) give yes/no, not 1/0.
 - branch-keeps-bool: an `if`/match branch keeps its own value, the bool mark included: `if c then 2 else true` with c false is yes, not 1 (also in lists and `any` slots); only Int→Float widens.
