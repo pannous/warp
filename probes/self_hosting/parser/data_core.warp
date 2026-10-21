@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // the data core parser.warp reads (card self-parser): atoms, groups, separators, keys and arithmetic
 person: {
 	name: "Alice"
