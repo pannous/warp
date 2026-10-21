@@ -371,7 +371,11 @@ impl WarpParser {
 				self.functions.insert(lhs.name());
 				Op::Define
 			} else if bitwise && !crate::pipes::is_pipe_stage(&rhs) {
-				if op == Op::And { Op::BitAnd } else { Op::BitOr }
+				if op == Op::And {
+					Op::BitAnd
+				} else {
+					Op::BitOr
+				}
 			} else {
 				op
 			};

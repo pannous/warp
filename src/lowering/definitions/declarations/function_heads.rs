@@ -37,7 +37,10 @@ pub(crate) fn result_typed_head(target: &Node) -> Option<(Node, Node)> {
 /// paths return (`def f(w) as any`, card def); each also optional, `def f(): list? {…}` (decision optional-result)
 fn is_result_type(result_type: &Node) -> bool {
 	let required = |name: &str| name.strip_suffix('?').unwrap_or(name).to_string();
-	result_type.symbol_name().map(required).is_some_and(|name| crate::warp_parser::names_a_type(&name) || name == ANY_TYPE)
+	result_type
+		.symbol_name()
+		.map(required)
+		.is_some_and(|name| crate::warp_parser::names_a_type(&name) || name == ANY_TYPE)
 }
 
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`

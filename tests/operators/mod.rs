@@ -5,8 +5,8 @@ mod test_approximately; // cards approximately, approximately-all
 mod test_bar_pipe;
 mod test_bar_pipe_module_calls; // card pipes-after
 mod test_bit_operators_on_ints;
-mod test_circumfix_operators; // card circumfix-operators-user
 mod test_braceless_operator_words; // card braceless-prefix
+mod test_circumfix_operators; // card circumfix-operators-user
 mod test_comma_next_to_comparison; // P227
 mod test_compound_assignment;
 mod test_contains_infix;

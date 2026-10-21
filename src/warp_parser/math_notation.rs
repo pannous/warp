@@ -1,6 +1,6 @@
 //! Math notation: superscript powers `x²`, `xⁿ`, circumfix operators `‖v‖`, `⌊x⌋`
 use super::*;
-use crate::operators::{CircumfixAlias, math_circumfixes};
+use crate::operators::{math_circumfixes, CircumfixAlias};
 
 /// Superscript letters and the letters they raise: `2ⁿ` is 2^n
 const SUPERSCRIPT_LETTERS: [(char, char); 25] = [

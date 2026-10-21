@@ -423,7 +423,10 @@ impl WarpParser {
 		let before = &self.chars[..self.pos];
 		let word_start = before.iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
 		let mut written = before[..word_start].iter().rev().filter(|ch| !ch.is_whitespace());
-		blanks > 0 && self.peek_char(width + blanks) == '{' && written.next() == Some(&':') && written.next() == Some(&')')
+		blanks > 0
+			&& self.peek_char(width + blanks) == '{'
+			&& written.next() == Some(&':')
+			&& written.next() == Some(&')')
 	}
 
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on
