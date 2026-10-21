@@ -588,6 +588,11 @@ fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Nod
 		return Ok(module);
 	}
 	let module = crate::pipeline::compile(program)?;
+	// compiled once, run for every program: worth wasm-opt's seconds
+	let module = match crate::modules::binaryen::optimized_for_speed(&module.bytes) {
+		Some(bytes) => crate::pipeline::CompiledModule { bytes, ..module },
+		None => module,
+	};
 	if let Some(key) = key {
 		keep_under(&key, &module);
 	}
