@@ -751,7 +751,7 @@ def operand_after(p: Parser, width: int): bool {
 }
 
 // `x = f y`, `1 + count xs`: a name before an operand is called with it, as an assignment's value, in an operand from
-// `or` up to `+` (not in an argument, a loop header or before `for`) or with an argument that is no name
+// `or` up to `+` (not in an argument or a loop header) or with an argument that is no name, never before `for`
 // Rust twin: suffixes.rs try_parse_implicit_application
 def applies(p: Parser, left: Node, min_power: int): bool {
 	if min_power == 0 or min_power > 151 { return false }
@@ -759,6 +759,8 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	if not callable { return false }
 	c = peek(p.code, p.at, p.n)
 	if c == '{' and p.header { return false }
+	// `[if c then 1 else c for c in t]`: a `for` clause takes no argument of the word before it (`for:` labels one)
+	if keyword_at(p, "for") and peek(p.code, p.at + 3, p.n) != ':' { return false }
 	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and not p.iterable and not word_begins_item(p)
 	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
 }
