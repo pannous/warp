@@ -516,6 +516,12 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 		return node;
 	}
 	let called_parameters = called_parameters(&node);
+	let mut parameter_types = HashMap::new();
+	each_definition(&node, &mut |definition| {
+		parameter_types
+			.entry((definition.head[0].name(), definition.head.len() - 1))
+			.or_insert_with(|| definition.head[1..].iter().map(parameter_type).collect());
+	});
 	let class_fields = crate::lowering::class_methods::class_fields(&node);
 	let classes: Vec<String> = class_fields.keys().cloned().collect();
 	let node = MethodVariants {
@@ -530,7 +536,19 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 	}
 	.rewrite(node);
 	let node = ArityOverloads { arities: arities.clone() }.rewrite(node);
-	passed_variants(node, &arities, &called_parameters)
+	passed_variants(node, &arities, &parameter_types, &called_parameters)
+}
+
+/// How well the arity variant of the parameter types `parameters` fits a place: taking its argument count, and fitting
+/// its declared function type as function_fit judges
+fn place_fit(arity: Arity, parameters: Option<&Vec<Option<String>>>, place: &CalledPlace) -> Option<u32> {
+	if !arity.accepts(place.arguments) {
+		return None;
+	}
+	match (&place.wanted, parameters) {
+		(Some(wanted), Some(parameters)) if parameters.len() == wanted.len() => function_fit(parameters, wanted),
+		_ => Some(0),
+	}
 }
 
 /// `p.label`, `p.label(x)` and `p.label = v` of label overloaded by arity: the variant taking the receiver too, label·1,
@@ -667,62 +685,75 @@ fn receiver_classes(node: &Node) -> HashMap<(String, usize), String> {
 	classes
 }
 
-/// (function, parameter index) → how many arguments the function's body calls that parameter with: 0 of
-/// `twice(h) := h() + h()`, 1 of a parameter typed `f: (float) -> float`; a parameter passed on to such a one takes its
-/// count, `play(tone) := play_signal(tone)` (card program-function), until no more do
-fn called_parameters(node: &Node) -> HashMap<(String, usize), usize> {
-	// definitions of one name and parameter count overload by type: each place's count is the variant's, picked later
-	let mut definitions: HashMap<(String, usize), usize> = HashMap::new();
+/// How a function's parameter is called: with how many arguments, and the parameter types its declared function type
+/// wants, `[samples, float]` of `fill: (samples, float) -> any`
+#[derive(Clone, PartialEq)]
+struct CalledPlace {
+	arguments: usize,
+	wanted: Option<Vec<String>>,
+}
+
+/// (function, parameter index) → how its definitions call that parameter: 0 arguments of `twice(h) := h() + h()`, 1
+/// of a parameter typed `f: (float) -> float`; a parameter passed on to such a one takes its count, `play(tone) :=
+/// play_signal(tone)` (card program-function), until no more do. Definitions of one name overloaded by type each add
+/// their place: play's first is a tone called with 1 and a fill of (samples, float)
+fn called_parameters(node: &Node) -> HashMap<(String, usize), Vec<CalledPlace>> {
+	// (function, parameter count, index) of the places found so far, so each overload adds its own
+	let mut known: HashSet<(String, usize, usize)> = HashSet::new();
+	let mut found = Vec::new();
 	each_definition(node, &mut |definition| {
-		*definitions.entry((definition.head[0].name(), definition.head.len() - 1)).or_default() += 1;
-	});
-	let overloaded: HashSet<String> =
-		definitions.into_iter().filter(|(_, count)| *count > 1).map(|((name, _), _)| name).collect();
-	let mut called = HashMap::new();
-	each_definition(node, &mut |definition| {
-		if overloaded.contains(&definition.head[0].name()) {
-			return;
-		}
 		for (index, parameter) in definition.head[1..].iter().enumerate() {
-			let declared = crate::lowering::function_types::declared_arity(parameter);
 			let Some(name) = super::nodes::parameter_name(parameter) else { continue };
-			if let Some(arguments) = declared.or_else(|| called_arity(definition.body, &name)) {
-				called.insert((definition.head[0].name(), index), arguments);
-			}
+			let place = match crate::lowering::function_types::declared_parameter_types(parameter) {
+				Some(wanted) => Some(CalledPlace { arguments: wanted.len(), wanted: Some(wanted) }),
+				None => called_arity(definition.body, &name).map(|arguments| CalledPlace { arguments, wanted: None }),
+			};
+			found.extend(place.map(|place| (definition_place(definition, index), place)));
 		}
 	});
+	let mut called = HashMap::new();
 	loop {
-		let known = called.len();
-		each_definition(node, &mut |definition| {
-			if overloaded.contains(&definition.head[0].name()) {
-				return;
+		if found.is_empty() {
+			return called;
+		}
+		for ((function, count, index), place) in found.drain(..) {
+			known.insert((function.clone(), count, index));
+			let places: &mut Vec<CalledPlace> = called.entry((function, index)).or_default();
+			if !places.contains(&place) {
+				places.push(place);
 			}
+		}
+		each_definition(node, &mut |definition| {
 			for (index, parameter) in definition.head[1..].iter().enumerate() {
-				let function = definition.head[0].name();
 				let Some(name) = super::nodes::parameter_name(parameter) else { continue };
-				if called.contains_key(&(function.clone(), index)) {
+				if known.contains(&definition_place(definition, index)) {
 					continue;
 				}
 				if let Some(arguments) = passed_on_arity(definition.body, &name, &called) {
-					called.insert((function, index), arguments);
+					found.push((definition_place(definition, index), CalledPlace { arguments, wanted: None }));
 				}
 			}
 		});
-		if called.len() == known {
-			return called;
-		}
 	}
 }
 
-/// How many arguments the function `parameter` is passed to calls it with: 1 of `apply(f, x)` when apply calls f(x)
-fn passed_on_arity(body: &Node, parameter: &str, called: &HashMap<(String, usize), usize>) -> Option<usize> {
+fn definition_place(definition: &Definition, index: usize) -> (String, usize, usize) {
+	(definition.head[0].name(), definition.head.len() - 1, index)
+}
+
+/// How many arguments the function `parameter` is passed to calls it with: 1 of `apply(f, x)` when apply calls f(x);
+/// none when the overloads of that function call it differently
+fn passed_on_arity(body: &Node, parameter: &str, called: &HashMap<(String, usize), Vec<CalledPlace>>) -> Option<usize> {
 	let mut found = None;
 	body.visit(&mut |node| {
 		let Node::List(items, Bracket::Round, _) = node else { return };
 		let Some((callee, arguments)) = items.split_first() else { return };
 		for (index, argument) in arguments.iter().enumerate() {
 			if found.is_none() && argument.drop_meta().is_symbol(parameter) {
-				found = called.get(&(callee.drop_meta().name(), index)).copied();
+				found = called.get(&(callee.drop_meta().name(), index)).and_then(|places| match places.as_slice() {
+					[place] => Some(place.arguments),
+					_ => None,
+				});
 			}
 		}
 	});
@@ -752,25 +783,42 @@ fn called_arity(body: &Node, parameter: &str) -> Option<usize> {
 fn passed_variants(
 	node: Node,
 	arities: &HashMap<String, Vec<Arity>>,
-	called_parameters: &HashMap<(String, usize), usize>,
+	parameter_types: &HashMap<(String, usize), Vec<Option<String>>>,
+	called_parameters: &HashMap<(String, usize), Vec<CalledPlace>>,
 ) -> Node {
+	let rewritten = |child: Node| passed_variants(child, arities, parameter_types, called_parameters);
 	// a definition's head names its parameters, no function passed: `play(tone, duration) := …` beside tone·2
 	if let Node::Key(head, op @ (Op::Define | Op::Assign), body) = &node {
 		if definition(&node).is_some() {
-			let body = passed_variants(body.as_ref().clone(), arities, called_parameters);
-			return Node::Key(head.clone(), *op, Box::new(body));
+			return Node::Key(head.clone(), *op, Box::new(rewritten(body.as_ref().clone())));
 		}
 	}
-	let node = children_rewritten(node, |child| passed_variants(child, arities, called_parameters));
+	let node = children_rewritten(node, rewritten);
 	let Node::List(items, Bracket::Round, separator) = node else {
 		return node;
 	};
 	let callee = items.first().map(|head| head.drop_meta().name()).unwrap_or_default();
 	let variant = |index: usize, argument: &Node| {
 		let base = argument.drop_meta().symbol_name()?;
-		let arguments = *called_parameters.get(&(callee.clone(), index))?;
-		let fitting = arities.get(base)?.iter().find(|arity| arity.accepts(arguments))?;
-		Some(Node::Symbol(arity_variant(base, *fitting)))
+		let places = called_parameters.get(&(callee.clone(), index))?;
+		let fits: Vec<(u32, Arity)> = arities
+			.get(base)?
+			.iter()
+			.flat_map(|arity| {
+				let parameters = parameter_types.get(&(base.to_string(), arity.total));
+				places.iter().filter_map(move |place| Some((place_fit(*arity, parameters, place)?, *arity)))
+			})
+			.collect();
+		let best = fits.iter().map(|(fit, _)| *fit).min()?;
+		let mut fitting: Vec<Arity> =
+			fits.into_iter().filter(|(fit, _)| *fit == best).map(|(_, arity)| arity).collect();
+		fitting.dedup();
+		// play(chord, 1s) of chord(t) and chord(root, kind): chord·1 for a tone fits better than chord·2 of untyped
+		// parameters for a fill of (samples, float); arity variants fitting equally well leave the name as it is
+		match fitting.as_slice() {
+			[arity] => Some(Node::Symbol(arity_variant(base, *arity))),
+			_ => None,
+		}
 	};
 	let mut items = items.into_iter();
 	let head = items.next();
