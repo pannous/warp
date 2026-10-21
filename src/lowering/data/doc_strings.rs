@@ -35,7 +35,7 @@ fn documented(statement: Node) -> Node {
 	}
 	let comment = leading_comment(&statement).map(str::to_string);
 	let position = crate::compiler::compile_context::read(|context| context.reflection_mode)
-		.then(|| statement.first_lineinfo())
+		.then(|| crate::errors::diagnostic::line_info(&statement))
 		.flatten();
 	functions.into_iter().fold(statement, |statement, function| {
 		let (text, body) = leading_text(&function.body);

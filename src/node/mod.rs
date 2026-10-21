@@ -678,17 +678,6 @@ impl Node {
 		}
 	}
 
-	/// The first position the parser recorded in this node or below it: a statement the front parser builds keeps
-	/// positions on its atoms only
-	pub fn first_lineinfo(&self) -> Option<LineInfo> {
-		self.get_lineinfo().or_else(|| match self {
-			Meta { node, .. } => node.first_lineinfo(),
-			Key(left, _, right) => left.first_lineinfo().or_else(|| right.first_lineinfo()),
-			List(items, _, _) => items.iter().find_map(Node::first_lineinfo),
-			_ => None,
-		})
-	}
-
 	/// Where the Meta layers around this node say it was written: line and column (0 when unknown) and the comment
 	/// before it, or None when they say neither (card data-meta: `n.line`, `n.column`, `n.comment`)
 	pub fn written_at(&self) -> Option<(i64, i64, Option<String>)> {
