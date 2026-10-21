@@ -2,6 +2,14 @@
 
 use super::*;
 
+const PROCESSING_INSTRUCTION_END: &str = "?>";
+/// After the `<!` of `<!--`
+const XML_COMMENT_START: &str = "--";
+const XML_COMMENT_END: &str = "-->";
+/// After the `<!` of `<![CDATA[`
+const CDATA_START: &str = "[CDATA[";
+const CDATA_END: &str = "]]>";
+
 impl WarpParser {
 	/// Parse XML text content (everything until '<' or end of input)
 	pub(crate) fn parse_xml_text_content(&mut self) -> String {
@@ -16,27 +24,29 @@ impl WarpParser {
 	/// Skip XML processing instruction: <?xml ... ?>
 	pub(crate) fn skip_processing_instruction(&mut self) -> Node {
 		self.advance(); // skip '?'
-		while !self.end_of_input() {
-			if self.current_char() == '?' && self.peek_char(1) == '>' {
-				self.advance_by(2);
-				return Empty;
-			}
-			self.advance();
-		}
+		self.text_through(PROCESSING_INSTRUCTION_END);
 		Empty
 	}
 
 	/// Skip XML comment: <!--...-->
 	pub(crate) fn skip_xml_comment(&mut self) -> Node {
-		self.advance_by(2); // skip '--'
+		self.advance_by(XML_COMMENT_START.len());
+		self.text_through(XML_COMMENT_END);
+		Empty
+	}
+
+	/// The text up to `end` (or to the end of input), the cursor after `end`
+	fn text_through(&mut self, end: &str) -> String {
+		let mut text = String::new();
 		while !self.end_of_input() {
-			if self.current_char() == '-' && self.peek_char(1) == '-' && self.peek_char(2) == '>' {
-				self.advance_by(3);
-				return Empty;
+			if self.at_text(end) {
+				self.advance_by(end.chars().count());
+				break;
 			}
+			text.push(self.current_char());
 			self.advance();
 		}
-		Empty
+		text
 	}
 
 	/// Skip DOCTYPE declaration: <!DOCTYPE ...>
@@ -65,23 +75,11 @@ impl WarpParser {
 
 	/// Parse CDATA section: <![CDATA[...]]>
 	pub(crate) fn parse_cdata(&mut self) -> Node {
-		// Expect: [CDATA[
-		let marker = "[CDATA[";
-		if !marker.chars().enumerate().all(|(i, c)| self.peek_char(i) == c) {
+		if !self.at_text(CDATA_START) {
 			return Empty;
 		}
-		self.advance_by(marker.len());
-
-		let mut content = String::new();
-		while !self.end_of_input() {
-			if self.current_char() == ']' && self.peek_char(1) == ']' && self.peek_char(2) == '>' {
-				self.advance_by(3);
-				return Node::Text(content);
-			}
-			content.push(self.current_char());
-			self.advance();
-		}
-		Node::Text(content)
+		self.advance_by(CDATA_START.len());
+		Node::Text(self.text_through(CDATA_END))
 	}
 
 	pub(crate) fn is_at_line_end(&self) -> bool {
@@ -107,7 +105,7 @@ impl WarpParser {
 			// Could be: <!--comment-->, <!DOCTYPE...>, or <![CDATA[...]]>
 			self.advance(); // skip '!'
 
-			if self.current_char() == '-' && self.peek_char(1) == '-' {
+			if self.at_text(XML_COMMENT_START) {
 				// Comment: <!--...-->
 				return self.skip_xml_comment();
 			}
@@ -152,7 +150,7 @@ impl WarpParser {
 
 		let mut body_items = attributes;
 		while !self.end_of_input() {
-			if self.current_char() == '<' && self.peek_char(1) == '/' {
+			if self.at_text("</") {
 				self.advance(); // skip '<'
 				let closing_name = self.parse_closing_tag();
 				if closing_name != tag_name {

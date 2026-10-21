@@ -197,9 +197,7 @@ impl WarpParser {
 
 	/// A loop's body starts here: `{…}`, `: …`, `do …`, or the next line
 	fn at_loop_body(&self) -> bool {
-		matches!(self.current_char(), '{' | ':' | '\n')
-			|| (self.current_char() == '/' && self.peek_char(1) == '/')
-			|| self.matches_keyword("do")
+		matches!(self.current_char(), '{' | ':' | '\n') || self.at_text("//") || self.matches_keyword("do")
 	}
 
 	/// `for (it>2) in xs: body` (wiki/for.md, P46): the items the condition holds for, as `it`; None (nothing consumed)
@@ -367,7 +365,7 @@ impl WarpParser {
 	/// `times [x]` fills a list, binding to the count right before it: `xs = 100 times [0]`
 	pub(crate) fn times_fills_list(&self) -> bool {
 		let after_word = TIMES_WORD.len();
-		let blanks = (after_word..).take_while(|&offset| self.peek_char(offset) == ' ').count();
+		let blanks = self.run_at(after_word, |ch| ch == ' ');
 		self.peek_char(after_word + blanks) == '['
 	}
 

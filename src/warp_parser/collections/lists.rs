@@ -352,7 +352,7 @@ impl WarpParser {
 		}
 		// the loosest separator splits first, the groups between split by the tighter ones (None ends the list)
 		let Some(loosest) =
-			items_with_seps.iter().map(|(_, sep)| sep.precedence()).filter(|&precedence| precedence < 255).max()
+			items_with_seps.iter().filter(|(_, sep)| *sep != Separator::None).map(|(_, sep)| sep.precedence()).max()
 		else {
 			return grouped_list(
 				items_with_seps.into_iter().map(|(node, _)| node).collect(),

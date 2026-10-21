@@ -69,9 +69,9 @@ tried(name: text, clauses: list, at: int): Node := {
 }
 
 merged_function(name: text, clauses: list): Node := {
-	arity = #clauses#1#2
-	if not clauses.all(clause => #clause#2 == arity) { return untaken(name) }
-	head = List([symbol(name)] + (1 to arity).map(i => parameter(name, i)), Bracket.Round, Separator.None)
+	taken = #clauses#1#2
+	if not clauses.all(clause => #clause#2 == taken) { return untaken(name) }
+	head = List([symbol(name)] + (1 to taken).map(i => parameter(name, i)), Bracket.Round, Separator.None)
 	Key(head, Op.Define, tried(name, clauses, 1))
 }
 
