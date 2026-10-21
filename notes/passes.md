@@ -68,6 +68,14 @@ ordering constraints, not speed.
    into one entry each is cosmetic; do it when the file is touched. The twinned ones need their warp twin merged in
    the same commit.
 
+10. **Every pass walks the whole program; none is picked by keyword.** The pipeline folds each list over the tree,
+    so all ~200 steps run on every program. About 40 passes open with a guard (`mentions_any(&[OF_WORD])`, a
+    `visit` pre-scan) and return the node unchanged when their word is absent, but the guard is itself a full walk.
+    Generalization: each pass declares its trigger (words, or a node shape such as `(p).a` or `x | f`); the
+    program's symbol set is collected once per phase (again after `modules::resolve` and after passes that generate
+    code) and a pass whose trigger is absent is skipped. Turns ~40 hand-written guards into data and makes "which
+    passes does this program hit" visible (`WARP_PHASE_TIMES`). Card pass-triggers.
+
 ## Done (branch passes-audit)
 
 - type_parameters: `lower` and `lower_type_variables` walked the same definition heads with two predicates; one walk
