@@ -1245,17 +1245,22 @@ def guarded_by(marker: text, guarded_part: Node, fallback: Node, caught: list): 
 	if caught_class != "" {
 		bound = if name == "" then CAUGHT_ERROR else name
 		parts = parts + [keyed(":", symbol(bound), symbol(caught_class))]
-	} else if name != "" and mentions(fallback, name) {
+	} else if name != "" and reads_name(fallback, name) {
 		parts = parts + [symbol(name)]
 	}
 	listed("(", "", parts)
 }
 
-// `try: x` as Python writes it
+// whether n reads the name, in the holes of its texts too (`catch e { "caught: \(e)" }`): this parser keeps a text's
+// holes as written, Rust's parses them
+def reads_name(n: Node, name: text): bool := mentions(n, name) or has_hole(n, code => mentions(parsed(code), name))
+
+// `try: x` as Python writes it; the block may start on the next line
+// Rust twin: blocks.rs skip_python_colon
 def skip_python_colon(p: Parser) {
 	if is_at(p.code, p.at, ':', p.n) {
 		p.at = p.at + 1
-		skip_spaces(p)
+		skip_blanks(p)
 	}
 }
 
@@ -1326,6 +1331,8 @@ def prefixed(p: Parser): Node := {
 	}
 	if not is_name_start(c) { return prefixed_by_symbol(p, c) }
 	word = word_at(p)
+	// `try: x except: y` guards as `try x except y` does: Python's colon names no key (Rust: the guard comes first)
+	if guard_word_at(p, word) and not after_member_dot(p) { return guarded(p, word) }
 	// `op.if`, `math.sqrt`: a member's name is no keyword
 	if word_names_key(p, word) or after_member_dot(p) { return atom(p) }
 	if word == "operator" or OPERATOR_KINDS.contains(word) {
@@ -1341,7 +1348,6 @@ def prefixed(p: Parser): Node := {
 	}
 	form = keyword_form(word)
 	if form == "return" { return returned(p) }
-	if guard_word_at(p, word) { return guarded(p, word) }
 	if form == "condition" {
 		p.at = p.at + word.length
 		skip_spaces(p)
