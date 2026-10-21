@@ -95,6 +95,13 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		Node::Key(left, Op::Add, right) if [left, right].iter().all(|list| infer_type(list, scope) == Kind::List) => {
 			joined_list_type(left, right, scope)
 		}
+		// `parts + [symbol("a")]` of a value known only at run time (`parts: any`): its items are of any type
+		Node::Key(left, Op::Add, right)
+			if [left, right].iter().any(|operand| infer_type(operand, scope) == Kind::Empty)
+				&& [left, right].iter().any(|operand| infer_type(operand, scope) == Kind::List) =>
+		{
+			NODE_LIST_TYPE.to_string()
+		}
 		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an element of a `list of list of int`
 		// a `list of int`; an element of a `list of list` (`[("a", 2)]`, tuples of mixed items) holds its items as Nodes
 		Node::Key(map, Op::Hash, _) => element_list_type(map, scope),
