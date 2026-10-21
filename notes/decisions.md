@@ -347,6 +347,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
+- rewrite-rules (user): a rule set `rules { data($a * 1) => a; … }` is a value; calling it rewrites bottom-up to a normal form (a rewritten node is tried again until no rule fires: `simplify(data(y * 1 * 1 + 0))` → y); a step cap stops a rule set that never settles with a loud error naming the rule that keeps firing. `tree replace P with Q` stays a single pass.
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
 - match-alternatives: `1 | 2`, `1 or 2`, `1, 2` as case keys all mean either; `int or text` as a key is the type test; `other` is a catch-all like `_`/`default`/`else`.
 - match-exhaustive: a match on a known enum or sealed class missing a case is a compile error.
