@@ -2260,7 +2260,23 @@ def named(p: Parser): Node := {
 def optional_mark_follows(p: Parser, word: text): bool {
 	if not is_at(p.code, p.at, '?', p.n) { return false }
 	after = p.at + 1
-	ends_optional_type(peek(p.code, after, p.n), peek(p.code, after + 1, p.n)) or closes_after_blanks(p, after) or next_field_follows(p, after) or declaration_follows(p, word, after)
+	ends_optional_type(peek(p.code, after, p.n), peek(p.code, after + 1, p.n)) or closes_after_blanks(p, after) or next_field_follows(p, after) or declaration_follows(p, word, after) or result_body_follows(p, word, after)
+}
+
+// `def f(x: int): list? {…}`: `word` follows a signature's `):` and spaces or tabs from `at` lead to a `{`, so it is
+// an optional result type before the body, no ternary (decision optional-result)
+// Rust twin: lookahead.rs result_body_follows
+def result_body_follows(p: Parser, word: text, at: int): bool {
+	colon = blank_before(p, p.at - word.length)
+	body = spaces_end(p, at)
+	body > at and is_at(p.code, body, '{', p.n) and colon > 0 and is_at(p.code, colon, ':', p.n) and blank_before(p, colon) >= 0 and is_at(p.code, blank_before(p, colon), ')', p.n)
+}
+
+// The position of the last character before `at` that is no blank, -1 at the source's start
+def blank_before(p: Parser, at: int): int {
+	before = at - 1
+	while before >= 0 and is_blank(p.code[before]) { before = before - 1 }
+	before
 }
 
 // What ends an optional type after its `?`: a closer, a separator, the line's or source's end, or an assignment's `=`

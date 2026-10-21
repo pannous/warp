@@ -134,6 +134,7 @@ mod test_operation_type; // card parse-type
 mod test_optional_casts;
 mod test_optional_list_items;
 mod test_optional_number_fields;
+mod test_optional_result_body;
 mod test_param_named_like_global; // card param-named-like-global
 mod test_param_named_like_library_word; // card word-param-list
 mod test_parameter_text; // card param-text
