@@ -377,6 +377,10 @@ impl WasmGcEmitter {
 			}
 			Node::Empty => Source::Empty,
 			Node::List(items, Bracket::Square, _) if items.is_empty() => Source::Empty,
+			// `xs = list_drop_last(xs)` (`xs.pop()`): its own items, fewer; fits any element type as the empty list does
+			_ if crate::list_mutations::dropped_last(value).is_some_and(|list| list.symbol_name() == Some(target)) => {
+				Source::Empty
+			}
 			Node::Key(list, Op::Add, appended) if matches!(list.drop_meta(), Node::Symbol(name) if name == target) => {
 				match appended.drop_meta() {
 					Node::List(items, Bracket::Square, _) if !items.is_empty() => {

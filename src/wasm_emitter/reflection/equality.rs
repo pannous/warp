@@ -541,7 +541,14 @@ impl WasmGcEmitter {
 			Self::return_if(f, 0);
 			for (from, to) in [(0, 2), (1, 3)] {
 				Self::field(f, from, node, 0);
-				Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalSet(to)]);
+				// `[]` is ø (type_kinds::EMPTY_LIST_KIND): an Empty kind compares without its bracket
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalTee(to),
+					I::I64Const(KIND_MASK), I::I64And, I::I64Eqz, I::If(BlockType::Empty),
+						I::I64Const(Kind::Empty as i64), I::LocalSet(to),
+					I::End,
+				]);
 			}
 			s.emit_character_equals_text(f, node, recurse);
 			Self::emit_list(f, &[I::LocalGet(2), I::LocalGet(3), I::I64Ne, I::If(BlockType::Empty)]);

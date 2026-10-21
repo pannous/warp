@@ -124,6 +124,7 @@ impl Context {
 			used_functions: HashSet::new(),
 			required_functions: HashSet::from([
 				"new_empty",
+				"new_empty_list",
 				"new_int",
 				"new_bool",
 				"as_bool",

@@ -81,7 +81,8 @@ loop_over(variable: Node, iterable: Node, body: Node): Node := match iterable {
 	_: walked(variable, iterable, body)
 }
 
-is_entry(n: Node): bool := is_key(n, Op.Colon)
+# `a: 1`; not the opaque view parser.warp writes an empty group `{}` as (shapes.warp listed), also a colon key
+is_entry(n: Node): bool := is_key(n, Op.Colon) and key_of(n) != symbol(opaque_word)
 
 # `{a: 1, b: 2}` or `a: 1`: a map written out (Rust twin: objects.rs written_object)
 is_map_literal(n: Node): bool := {

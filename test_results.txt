@@ -1777,6 +1777,7 @@ PASSED:
   ✓ functions::test_operator_word_methods::a_method_named_like_an_operator_word_is_called
   ✓ functions::test_operator_word_methods::the_operator_word_stays_an_operator_elsewhere
   ✓ functions::test_optional_parameters::a_missing_optional_argument_is_empty
+  ✓ functions::test_optional_parameters::an_optional_parameter_keeps_its_type
   ✓ functions::test_optional_parameters::coalescing_keeps_zero_and_false
   ✓ functions::test_optional_parameters::maybe_marks_an_optional_parameter
   ✓ functions::test_optional_words::is_empty_holds_for_an_empty_text_list_or_map
@@ -2140,6 +2141,9 @@ PASSED:
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
   ✓ lists::test_empty_list_count::the_count_of_an_empty_list_is_zero
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
+  ✓ lists::test_empty_list_value::a_returned_empty_list_takes_items
+  ✓ lists::test_empty_list_value::an_empty_list_is_a_list
+  ✓ lists::test_empty_list_value::an_empty_list_prints_as_written
   ✓ lists::test_empty_start_plus::a_bracketed_item_appended_gets_the_bracket_hint
   ✓ lists::test_empty_start_plus::an_empty_list_start_plus_an_item_is_a_list
   ✓ lists::test_empty_start::an_empty_list_start_appends_each_item
@@ -2345,6 +2349,10 @@ PASSED:
   ✓ lists::test_picked_linear::float_arrays_paired_by_dot_are_linear
   ✓ lists::test_picked_linear::float_arrays_used_otherwise_stay_lists
   ✓ lists::test_picked_linear::the_linear_hint_names_float_arrays
+  ✓ lists::test_pop_in_place::a_pop_gives_the_last_item_and_shrinks_the_list
+  ✓ lists::test_pop_in_place::draining_a_list_by_pops_takes_linear_steps
+  ✓ lists::test_pop_in_place::the_last_pop_leaves_an_empty_list_that_grows_again
+  ✓ lists::test_pop_in_place::the_pseudo_call_pop_lowers_to_drops_the_last_item
   ✓ lists::test_pop::a_bare_pop_or_clear_changes_the_list_as_the_call_does
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
@@ -6412,4 +6420,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-11 ignored, 6407 passed, 0 failed, 6407 total tested
+11 ignored, 6415 passed, 0 failed, 6415 total tested
