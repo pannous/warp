@@ -21,7 +21,7 @@ temporary(): Node := {
 }
 
 # a value or arithmetic on values
-is_plain(n: any): bool := match n {
+is_plain(n: Node): bool := match n {
 	Key(left, op, right): plain_operators contains op and is_plain(left) and is_plain(right)
 	_: n is number or n is symbol or n == ø
 }
@@ -89,14 +89,14 @@ extremum_node(n: Node, extrema: any): Node := {
 }
 
 # min and max, but those the program defines
-builtin_extrema(program: any): any := {
+builtin_extrema(program: Node): any := {
 	defined = nodes_in(program).filter(is_function_definition).map(definition => head_word(key_of(definition)))
 	extrema = {}
 	for name in better_by_extremum.keys { if name not in defined { extrema[name] = better_by_extremum[name] } }
 	extrema
 }
 
-min_max(program: any): any := {
+min_max(program: Node): Node := {
 	if not (mentions(program, "min") or mentions(program, "max")) { return program }
 	extrema = builtin_extrema(program)
 	bottom_up(program, n => extremum_node(n, extrema))

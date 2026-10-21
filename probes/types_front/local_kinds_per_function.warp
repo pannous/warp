@@ -1,0 +1,14 @@
+# a local's kind belongs to its function: a loop over the list `found` beside another function's map `found` walks
+# the list (pure lane too): 11 and {}
+def total(xs: list): int {
+	found = xs
+	sum = 0
+	for item in found { sum += item }
+	sum
+}
+seen(): any := {
+	found = {}
+	found
+}
+print(total([5, 6]))
+print(seen())

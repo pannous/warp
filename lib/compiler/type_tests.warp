@@ -39,4 +39,4 @@ scoped_type_tests(n: Node, outer: any): Node := {
 	type_test_node(children(n, x => scoped_type_tests(x, outer)), outer)
 }
 
-type_tests(program: any): any := scoped_type_tests(program, scope_with({}, outer_nodes_in(program)))
+type_tests(program: Node): Node := scoped_type_tests(program, scope_with({}, outer_nodes_in(program)))

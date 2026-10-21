@@ -298,6 +298,11 @@ impl WarpParser {
 			let rhs_start = self.pos;
 			let rhs = match block_body {
 				Some(block) => block,
+				None if matches!(op, Op::Colon | Op::As)
+					&& let Some(phrase) = self.take_of_phrase() =>
+				{
+					phrase
+				}
 				None => self.parse_right_operand(op, glued_pair, r_bp),
 			};
 			let rhs_end = self.pos.min(self.chars.len());

@@ -1084,7 +1084,7 @@ def optional_declaration(body: Body, name: text, type_name: text, value: any): l
 	if kind != "node" and kind != pending and kind != declared_kinds[type_name] { return refuse("a " + kind + " given to a variable declared " + type_name + "?") }
 	assignment(body, symbol(name), ["node", boxed(value)])
 }
-# a value as the declared kind takes it: an int widened to a float, a value known only at run time checked (a list
+# a value as the declared kind takes it: an int widened to a float, a char (a one-character text) to a text, a value known only at run time checked (a list
 # one stays a node, as Rust keeps ø), else of that kind
 def admitted(value: any, kind: text): list {
 	if value#1 == kind or value#1 == pending { return value }
