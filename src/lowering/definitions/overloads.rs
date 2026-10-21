@@ -1166,8 +1166,11 @@ impl ParameterOverloads {
 
 	/// The parameter types of the function defined once an argument names: `hum` of `hum(block: samples, t: float)`
 	fn passed_function(&self, argument: &Node) -> Option<&Vec<Option<String>>> {
-		// `(g)` is a call of g, not g
-		let name = argument.drop_meta().symbol_name()?;
+		// `(g)` is a call of g, not g; `closure_new(hum)` the function value hum (closures.rs)
+		let name = match crate::lowering::closures::as_closure_new(argument.drop_meta()) {
+			Some((target, [])) => target,
+			_ => argument.drop_meta().symbol_name()?,
+		};
 		let shadowed = self.declared.iter().any(|scope| scope.contains_key(name));
 		self.functions.get(name).filter(|_| !shadowed && !self.variables.contains_key(name))
 	}

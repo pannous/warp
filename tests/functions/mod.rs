@@ -230,3 +230,4 @@ mod test_variadic;
 mod test_wasm_instruction_bodies; // card wasm-body
 mod test_whole_float_to_int_parameter;
 mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow // card is-early-return
+mod test_zz_probe_play;
