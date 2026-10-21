@@ -170,6 +170,7 @@ impl WasmGcEmitter {
 		self.emit_list_concat();
 		self.emit_list_extend();
 		self.emit_list_become();
+		self.emit_list_drop_last();
 		self.emit_element_children();
 		self.emit_element_body();
 		self.emit_swizzled();
