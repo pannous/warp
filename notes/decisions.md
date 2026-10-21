@@ -7,7 +7,8 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
-- self-compiled-parity (user): before the Rust build is replaced, the self-compiled compiler.warp must give the same results on the whole suite under `warp pure` as the Rust-compiled one, and reach a fixpoint (the self-compiled compiler compiling itself gives the same module); only then the default switches (card self-compiled-parity).
+- revert-first (user, standing permission): when main's pipeline (`warp pure hello`) breaks and the suspect merge is known, the Integrator reverts it at once without asking and its owner re-lands it fixed (notes/agents/integrator.md); the only exception to never-revert-unprompted.
+- self-compiled-parity (user): the parity check is off for now: switching to the self-compiled compiler.warp needs only that more tests pass under `warp pure` than before, no suite parity with the Rust-compiled one and no bitwise fixpoint yet.
 - pipeline-first (user): the main focus is the self-hosted compiler pipeline (parser → lowering → analysis → emitter in warp, `warp pure`); fixes for library user modules (sound, dates, extrema …) are normal priority, not Now/express, unless they break the pipeline.
 - quality-before-gap (user, at 49/116 lib files pure-compiled): raise the warp compiler's code quality before closing the final gap: the beautify cards (magic-numbers, function-signature, typed-compiler front and back) go first; gap cards (runtime-word-calls and the like) continue only where they don't touch the same lines, preferably on the cleaned-up code.
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
@@ -279,6 +280,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - function-references: a bare function name compared with a type or in `type(f)` is the function itself; `.floor` in argument position is a lambda (`xs.map(.floor)`, `people.sort(.age)`); `&floor` and `function floor` are the explicit references.
 - type-library-words: list/map/text library words are always available as `x.f()` and `f(x)`; `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module); `write` and `exists` are global.
 - module-alias: an `alias pw = power` line in a program or a directly run file adds a name and never shadows one (`alias exp = exponential` beside a builtin exp leaves exp the builtin) (Interviewer's decision).
+- own-name-not-builtin (user): a program wanting its own version of a builtin math word (a Taylor-series sin) defines it under its own name (`sin_test` in the tests), not by redefining `sin`; test_sinus/test_sinus2 are rewritten that way.
 - library-own-words (user): a library file that needs an existing word (lib/extrema.warp's min, lib/fast_math.warp's sin) uses the existing one, never redefines it. The function `norm` (refused in lib/prelude.warp as the operator ‖) moves into the math module, visible only after `use math`. A std module under lib/ that deliberately replaces a library word (lib/extrema.warp's min/max in warp, lib/fast_math.warp's fast sin/cos/exp for `warp fast`) is allowed to, also when the file is run directly (user).
 - P141/P142 a definition named like a builtin that would win is an error at the definition; library words may be redefined only where the builtin wouldn't win, methods always; a foreign export is called qualified. P39 no `id`/`square` builtins; P191 `square` lives in math.
 - builtins-name (user 2026-10-18): library words are called builtins (shorter to say and write), in notes, cards, messages and new code names; where the old split still matters, the Rust-only ones are "Rust builtins" until retired. Old names (library_words.rs, retire-library-words) are renamed along with the Rust cleanup.
@@ -347,6 +349,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
+- rewrite-rules (user): a rule set `rules { data($a * 1) => a; … }` is a value; calling it rewrites bottom-up to a normal form (a rewritten node is tried again until no rule fires: `simplify(data(y * 1 * 1 + 0))` → y); a step cap stops a rule set that never settles with a loud error naming the rule that keeps firing. `tree replace P with Q` stays a single pass.
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
 - match-alternatives: `1 | 2`, `1 or 2`, `1, 2` as case keys all mean either; `int or text` as a key is the type test; `other` is a catch-all like `_`/`default`/`else`.
 - match-exhaustive: a match on a known enum or sealed class missing a case is a compile error.
