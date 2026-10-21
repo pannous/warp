@@ -878,8 +878,9 @@ field_defaults(body: any): any := {
 	defaults
 }
 
-# a runtime word sees only the globals runtime.warp declares, never those of the program
-is_global(body: Body, name: text): bool := name not in body.names and name in module.globals and (not body.intrinsics or name in module.runtime_globals)
+# a runtime word sees only the globals runtime.warp declares, the program only its own: its local `counted` is no
+# runtime word's global of that name
+is_global(body: Body, name: text): bool := name not in body.names and name in module.globals and body.intrinsics == (name in module.runtime_globals)
 # a built-in type's name, `type` or a declared class's
 names_a_type_value(name: text): bool := is_tested_type_word(name) or name == "type" or name in module.classes
 def local_value(body: Body, n: any): list {
