@@ -603,7 +603,22 @@ pub(crate) fn code_pattern(pattern: &Node) -> Option<Node> {
 		}
 		_ => quoted_data(pattern)?.clone(),
 	};
-	has_hole(&code).then(|| typed_holes_grouped(code))
+	has_hole(&code).then(|| typed_holes_grouped(phrase_groups_taken_apart(code)))
+}
+
+/// `for $v in $it { $body }` parses as `for ($v in $it) {$body}`, where the code a program holds is the phrase `for x in
+/// xs {…}`: in a phrase an unbracketed group only groups its words (as in a rewrite rule, rewrites.rs words)
+fn phrase_groups_taken_apart(code: Node) -> Node {
+	match children_rewritten(code, phrase_groups_taken_apart) {
+		Node::List(items, Bracket::None, Separator::Space) => {
+			let words = items.into_iter().flat_map(|item| match item.drop_meta() {
+				Node::List(words, Bracket::None, Separator::Space) => words.clone(),
+				_ => vec![item],
+			});
+			Node::List(words.collect(), Bracket::None, Separator::Space)
+		}
+		other => other,
+	}
 }
 
 /// `$k: int + $x` parses as `$k: (int + $x)`, `$x + $k: int` as `($x + $k): int`: a hole's condition word binds to the
@@ -687,11 +702,19 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 			code_tests(hole, path, tests, bindings, names);
 		}
 		Node::Key(left, op, right) if has_hole(code) => {
-			let part = |field: &str| key(path.clone(), Op::Dot, Node::Symbol(field.to_string()));
 			tests.push(type_named(&path, KEY_SPEC));
-			tests.push(key(part(OP_FIELD), Op::Eq, text(op.as_str())));
-			code_tests(left, part(KEY_FIELD), tests, bindings, names);
-			code_tests(right, part(VALUE_FIELD), tests, bindings, names);
+			tests.push(key(field(&path, OP_FIELD), Op::Eq, text(op.as_str())));
+			code_tests(left, field(&path, KEY_FIELD), tests, bindings, names);
+			code_tests(right, field(&path, VALUE_FIELD), tests, bindings, names);
+		}
+		// `$l $op $r`: an operator hole binds the operator of a key, `a - b` gives op "-" (card code-patterns)
+		Node::List(items, Bracket::None, Separator::Space)
+			if items.len() == 3 && items.iter().all(|item| hole_name(item).is_some()) =>
+		{
+			tests.push(type_named(&path, KEY_SPEC));
+			code_tests(&items[0], field(&path, KEY_FIELD), tests, bindings, names);
+			code_tests(&items[1], field(&path, OP_FIELD), tests, bindings, names);
+			code_tests(&items[2], field(&path, VALUE_FIELD), tests, bindings, names);
 		}
 		Node::List(items, _, _) if has_hole(code) => {
 			let items = called_hole_items(items);
@@ -711,8 +734,7 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 /// pattern tests (a type word, a comparison, a range), else the code equals it
 fn hole_condition(path: &Node, condition: &Node, names: &Names) -> Node {
 	if condition.is_symbol(BLOCK_WORD) {
-		let bracket = key(path.clone(), Op::Dot, Node::Symbol(BRACKET_FIELD.to_string()));
-		return key(type_named(path, LIST_WORD), Op::And, key(bracket, Op::Eq, text("{")));
+		return key(type_named(path, LIST_WORD), Op::And, key(field(path, BRACKET_FIELD), Op::Eq, text("{")));
 	}
 	let test = self::condition(path, condition, names);
 	let test = test.unwrap_or_else(|| key(path.clone(), Op::Eq, as_data(condition.clone())));
@@ -734,6 +756,11 @@ fn comparable_kind(condition: &Node) -> Option<&'static str> {
 		Node::Text(_) => Some(TEXT_WORD),
 		_ => None,
 	}
+}
+
+/// The field of the code node at `path`: its key, op, value or bracket
+fn field(path: &Node, name: &str) -> Node {
+	key(path.clone(), Op::Dot, Node::Symbol(name.to_string()))
 }
 
 /// A hole binds the subtree at `path`; a repeated hole must be the same subtree

@@ -174,7 +174,7 @@ Rust compiler. Probe of the gaps: probes/self_hosting/code_patterns.warp. Steps 
 
 | step | card | what | today |
 |---|---|---|---|
-| 1 | code-patterns | rest holes `g($first, $rest...)`, `[$h, $t...]`; statement patterns `for $v in $it { $body }`, `if $c { $a } else { $b }`; operator holes `$l $op $r`; a `for` inside a `data(…)` pattern must stay sealed | no match; the for runs |
+| 1 | code-patterns | rest holes `g($first, $rest...)`, `[$h, $t...]`; statement patterns `for $v in $it { $body }`, `if $c { $a } else { $b }`; operator holes `$l $op $r`; a `for` inside a `data(…)` pattern must stay sealed | done (switch.rs: phrase groups taken apart, `$l $op $r` binds a key's operator; the probe's `print match loop {…}` read the variable `loop` as the endless-loop keyword) |
 | 2 | typed-holes | conditions on holes: `$r: int`, `$n: > 0`, `$s: symbol`, `$b: block` | done (switch.rs hole_condition; `$k: int + $x` groups as `($k: int) + $x`) |
 | 3 | patterns-as-values | `n matches p` → bindings or nothing; `p: pattern` parameters; `find`/`replace` as lib warp (notes/pattern_values.md route B) | parse error |
 | 4 | rewrite-rules | a rule set as a value, `rules { data($a * 1) => a; data($a + 0) => a }`, applied bottom-up or to a fixpoint, keeping positions: the vocabulary of a lowering pass | single `replace … with` only |
