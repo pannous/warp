@@ -27,6 +27,9 @@ After a context swap, this file and your role file win over anything a handover 
   thing, make the recommended word canonical and the others aliases that work with a got-it note and an "I meant:
   <word>" fix (diagnostic::note_alias; which hint call: notes/fixits.md "Hints, notes and advice"). Ask the
   Interviewer only about differences in meaning.
+- No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
+  generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
+  or merge passes whenever their work overlaps.
 - Rare edge cases go to Later: a corner real programs rarely hit (exotic literals like ∞/NaN, wording nits on code
   nobody writes, odd pairs of rarely combined features) is filed with `todo add Later "…"`, never Next/Soon.
 - JSON5, not strict JSON, for anything people or agents write (configs, probe commands, data files), or warp
