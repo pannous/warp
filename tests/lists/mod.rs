@@ -9,6 +9,7 @@ mod test_comprehension_beside_own_push; // card prefix-count-field
 mod test_concat_declared;
 mod test_concat_keeps_arrays; // card runtime-speed
 mod test_count_after_function; // card print-people
+mod test_count_of_field; // card count-of-field
 mod test_counting_word_operands; // card count-xs
 mod test_counting_word_variables;
 mod test_counting_words;
@@ -24,6 +25,7 @@ mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
+mod test_empty_list_value; // card run-time-empty
 mod test_empty_start; // card start: `t = []` appends, ø + text fails
 mod test_empty_start_plus; // card local-fails: `t = []; t + "a"`, the bracket hint of `xs += [3]`
 mod test_field_count;
@@ -99,12 +101,14 @@ mod test_pair_values;
 mod test_phrase_in_call; // card phrase-in-call
 mod test_picked_linear; // card compiler-picks-dot
 mod test_pop;
+mod test_pop_in_place; // card shrink-in-place
 mod test_python_collections; // card python-stdlib
 mod test_range_arguments;
 mod test_range_in_structure;
 mod test_range_returns;
 mod test_range_values;
 mod test_remove_and_index_of;
+mod test_self_sum_in_place; // card out-list: `out = out + x` of an unshared list grows it in place
 mod test_set_past_the_end;
 mod test_signed_operand_list;
 mod test_size_count;

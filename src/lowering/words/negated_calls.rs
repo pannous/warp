@@ -57,6 +57,10 @@ fn negate_calls(
 	if let Err(error) = super::braceless_arguments::ask_braceless_argument(&node, gives_value) {
 		return error;
 	}
+	// `print #s.names` parses as `(print#s).names`: it counts the field, `print(#s.names)`
+	if let Some((function, argument)) = counted_member(&node, &is_function) {
+		return negate_calls(key(function, Op::Hash, argument), functions, bound, locals);
+	}
 	match node {
 		Node::Key(function, op @ (Op::Sub | Op::Hash), argument)
 			if is_function(&function, op) && !(op == Op::Sub && is_spaced_minus(&function)) =>
@@ -76,6 +80,21 @@ fn negate_calls(
 		}
 		other => children_rewritten(other, |child| negate_calls(child, functions, bound, locals)),
 	}
+}
+
+/// The function and the counted value of a member chain on a count after a function: `(print#s).names.first` is
+/// print and `s.names.first`
+fn counted_member(node: &Node, is_function: &impl Fn(&Node, Op) -> bool) -> Option<(Node, Node)> {
+	let Node::Key(base, Op::Dot, member) = node.drop_meta() else {
+		return None;
+	};
+	let (function, counted) = match base.drop_meta() {
+		Node::Key(function, Op::Hash, counted) if is_function(function, Op::Hash) => {
+			(function.as_ref().clone(), counted.as_ref().clone())
+		}
+		_ => counted_member(base, is_function)?,
+	};
+	Some((function, key(counted, Op::Dot, member.as_ref().clone())))
 }
 
 /// The word `w` of `-w`

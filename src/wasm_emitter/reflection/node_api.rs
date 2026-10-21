@@ -409,7 +409,9 @@ impl WasmGcEmitter {
 				// no items is the empty list ø, whatever its brackets, as `()` parses
 				Self::emit_list(f, &kind_of(items));
 				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
-				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(items), I::Return, I::End]);
+				f.instruction(&I::If(BlockType::Empty));
+				s.call(f, "new_empty"); // `[]` included: its square bracket is no part of ø
+				Self::emit_list(f, &[I::Return, I::End]);
 				Self::emit_list(f, &kind_of(items));
 				Self::emit_kind_test(f, Kind::List as i64, I::I64Ne);
 				s.emit_fail_if(f, "not_a_list");

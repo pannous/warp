@@ -12,12 +12,15 @@ any_word = "any"
 implicit_parameter = "it"
 # the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic (Rust twin: errors/run_time.rs RAISE_WORDS)
 raise_words = {raise: 1, throw: 1, fail: 1, panic: 1}
+raise_word = "raise"
 # a collection type's head words, before `of` (`list of int`; Rust twin: type_tests.rs COLLECTION_WORDS) and the
 # foreign spellings of list (warp_parser/mod.rs FOREIGN_LIST_HEADS)
 collection_words = ["list", "map"]
 foreign_list_heads = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"]
 
 is_type_word(word: text): bool := type_words contains word.lower()
+# `Color`, `Ω`: a name whose first character is an upper case letter
+is_capitalized(name: text): bool := name[0].upper() == name[0] and name[0].lower() != name[0]
 # the type words a type test takes besides those (no twin: Rust's BUILTIN_TYPES in src/lowering/types/type_tests.rs)
 test_type_words = ["key", "pair", "operation", "expression", "code", "callable", "invocable", "runnable", "error", "empty",
 	"unit", "nil", "none", "null", "void", "time", "instant", "date", "duration"]
