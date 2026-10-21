@@ -35,5 +35,8 @@ fn a_held_or_untyped_character_casts_to_itself() {
 	is!("peek(source: any, at: int): char := source[at]; peek(\"ab\", 1)", 'b');
 	is!("peek(source: any, at: int): char := source[at]; peek(['a', 'b'], 1)", 'b');
 	is!("peek(source: any, at: int): char := source[at]; peek([65, 66], 1)", 'B');
-	fails_with("is_x(c: char): bool := c == 'x'; atom(s: text): bool := { c = s; is_x(c) }; atom(\"xy\")", "not a character");
+	fails_with(
+		"is_x(c: char): bool := c == 'x'; atom(s: text): bool := { c = s; is_x(c) }; atom(\"xy\")",
+		"not a character",
+	);
 }
