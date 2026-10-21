@@ -191,6 +191,12 @@ impl WarpParser {
 		(had_newline, line_indent)
 	}
 
+	/// The indentation of the line holding position `at`, as skip_whitespace counts it: tabs, and spaces when they count
+	pub(super) fn indent_of_line_at(&self, at: usize, counts_spaces: bool) -> usize {
+		let line_start = self.chars[..at].iter().rposition(|ch| *ch == '\n').map_or(0, |newline| newline + 1);
+		self.chars[line_start..].iter().take_while(|ch| **ch == '\t' || (counts_spaces && **ch == ' ')).count()
+	}
+
 	/// Neither a data literal file nor a WIT file: warp code with its keywords
 	pub(super) fn in_code(&self) -> bool {
 		!self.options.wit_mode && !self.options.data_mode
