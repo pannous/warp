@@ -1,0 +1,4 @@
+f(xs: list of int) := #xs
+g(x: text|list) := #x
+h(t: text): char? := t#1
+[f([1, 2, 3]), g("ab"), g([1]), h("xy")]

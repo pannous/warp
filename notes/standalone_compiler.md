@@ -93,6 +93,17 @@ value in the module cache under stage_key: binary + lib/): warm hello 0.07 s, a 
 Node crosses to Rust and back (postcard); 38 samples give the same results with and without it.
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
+Card under-pure (2026-10-21): print([1, 2]) failed only here, not in the stage lane, because compiler.warp runs the
+WARP passes on the runtime words: runtime show.warp's match arm ø (node_matches.warp; main took True/False), and
+emitter.warp refusing a `the result: text` given a kind guessed from a call still compiling (node_text ↔ list_shown
+cycle; admitted() now holds it as the declared kind, the reread fixes the code). A refusal is now the compile's
+error, not "not a list at 23:2". Holding only a typed block's last statement as the result (definitions.warp
+result_held) is no longer needed with admitted() and made `warp rebuild self` refuse ("the operator # on int"), so
+it was dropped. Debug recipe: copy lib to scratch/upN, add prints (`print "CF " + f.name` in compile_function), run
+`WARP_LIB=<copy>/lib warp lib/compiler/compiler.warp p.warp p.wasm <dir> <copy>/lib` to keep the wasm for
+`wasm-tools validate --features all`. A self-build refusal reproduces in ~4 min with `WARP_SELF_HOSTED=pure-only
+WARP_LIB=<copy>/lib warp <copy>/lib/compiler/compiler.warp`; bisect it by copying main's lib and swapping one changed
+file in at a time. Remaining ladder gaps: card under-pure-2.
 
 ### WARP_SELF_HOSTED=pure (alias pure-only)
 pure and pure-only become one lane with no fallback; `pure-only` stays as an alias with a note.
@@ -155,6 +166,24 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
   edit: merge after prelude-for-pure lands.
 - warp-compiler-enums: the bare `Round`/`Add`/`Define` symbols in the warp-lowered runtime; walk.warp's `Op`,
   `Bracket`, `Separator` enums are no longer crossed through text views in this lane.
+
+## warp self runs hello (2026-10-21, card self-hello, branch self-hello)
+What stopped compiler.warp compiled by itself, in the order found (each a general fix with a probe and a test):
+- The pure-compiled parser read every call with comma arguments as Error("spelling code"), so runtime.warp's `use`
+  files parsed into one statement and the runtime words lacked char_text ("no field char_text"). Cause: plain_enums.warp
+  decided program-wide, by name, which names hold enum cases; parser.warp's own `bracket = ""` made view_of's matched
+  `bracket` ambiguous, so `bracket as text` gave the case name "None". Now per function scope (the Rust twin
+  plain_enums.rs assigned_cases is still program-wide; the Rust lane does not run its matches through it).
+- prelude_words.warp's symbol_words returned `found.keys` of a map holding the entry "keys" (the word of
+  runtime/ordering.warp's parameter): emitter.warp read the entry. Now a map's own member and a word of known result
+  stay the word's call, as Rust's reads_entry_first.
+- A kept value (os.kept of the lowered runtime words) holding an Int beyond the fixnums: the host built it through the
+  Int runtime's builders, which an emitter.warp module lacks; such a module holds machine i64s (src/host/tasks/values.rs
+  holds_machine_ints).
+- Debugging: a bare `unreachable` trap of compiler.wasm is an error function whose name the runner dropped; bisect with
+  prints in compiler.warp's steps, then reproduce the failing step as a pure-lane program (`WARP_SELF_HOSTED=pure-only
+  warp probe.warp` runs the same emitted code, no compiler rebuild). Set WARP_LIB to the worktree's lib for those runs:
+  from a scratch folder the stages otherwise come from the main checkout's lib.
 
 ## warp.wasm under plain wasmtime (card standalone, reopened 2026-10-21, user: "build in the runtime itself.
 ## wasmtime warp.wasm should behave like the native binary")
