@@ -204,13 +204,25 @@ fn returns_empty(node: &Node) -> bool {
 	}
 }
 
+/// `while c do …`, and `for x in xs {…}` / `each x in xs {…}` before the loop passes lower them
+fn is_loop(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, Op::Do, _) => true,
+		Node::List(items, _, _) => items
+			.first()
+			.is_some_and(|word| word.is_symbol(crate::words::FOR_WORD) || word.is_symbol(crate::words::EACH_WORD)),
+		_ => false,
+	}
+}
+
 fn value_can_be_empty(value: &Node) -> bool {
 	match value.drop_meta() {
 		Node::Empty => true,
 		Node::List(items, Bracket::Curly, _) if is_statement_block(value) => {
 			items.last().is_some_and(|last| !is_return_statement(last) && value_can_be_empty(last))
 		}
-		Node::Key(_, Op::Then | Op::Do, _) => true,
+		Node::Key(_, Op::Then, _) => true,
+		_ if is_loop(value) => true,
 		Node::Key(then, Op::Else, otherwise) => match then.drop_meta() {
 			Node::Key(_, Op::Then, chosen) => value_can_be_empty(chosen) || value_can_be_empty(otherwise),
 			_ => false,
@@ -250,7 +262,7 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 		Node::Key(_, Op::Then, _) if type_name.name().ends_with('?') => {
 			as_type(key(value.drop_meta().clone(), Op::Else, Node::Empty), type_name)
 		}
-		Node::Key(_, Op::Do, _) if type_name.name().ends_with('?') => {
+		_ if is_loop(&value) && type_name.name().ends_with('?') => {
 			block(vec![value.clone(), as_type(Node::Empty, type_name)])
 		}
 		_ if is_statement_block(&value) => converted_last(value, type_name),
