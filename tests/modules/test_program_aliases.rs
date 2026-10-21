@@ -10,5 +10,5 @@ fn a_program_alias_names_its_word() {
 
 #[test]
 fn a_program_alias_leaves_a_declared_word_alone() {
-	is!("twice(x) := 2 * x; alias double = twice; double(x) := 3 * x; double(2)", 6);
+	is!("twice(x) := 2 * x; alias thrice = twice; thrice(x) := 3 * x; thrice(2)", 6);
 }
