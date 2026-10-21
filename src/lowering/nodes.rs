@@ -275,6 +275,11 @@ pub(crate) fn parameter_word(parameter: &Node) -> String {
 	parameter_head(parameter).name()
 }
 
+/// The word a caller names a parameter by: as written, also when renamed apart from a function (shadowing_bindings)
+pub(crate) fn interface_word(parameter: &Node) -> String {
+	crate::lowering::shadowing_bindings::written_name(&parameter_word(parameter)).to_string()
+}
+
 /// `x` of `x`, `x:int`, `x:int=1`, `for x` (preposition_calls.rs): the innermost left side
 fn parameter_head(parameter: &Node) -> &Node {
 	match parameter.drop_meta() {

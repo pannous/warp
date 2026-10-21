@@ -98,6 +98,11 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an element of a `list of list of int`
 		// a `list of int`; an element of a `list of list` (`[("a", 2)]`, tuples of mixed items) holds its items as Nodes
 		Node::Key(map, Op::Hash, _) => element_list_type(map, scope),
+		// `xs as list` keeps the list's own type; the list another value turns into (a text's characters) holds Nodes
+		Node::Key(value, Op::As, target) if target.is_symbol(LIST_WORD) => match infer_type(value, scope) {
+			Kind::List => list_type_name(value, scope),
+			_ => NODE_LIST_TYPE.to_string(),
+		},
 		Node::List(items, _, separator) => literal_list_type(items, separator, scope),
 		// `if c then xs else ø`, `c ? xs : ys`: the list either branch gives
 		Node::Key(if_then, Op::Else, else_expr) if let Node::Key(_, Op::Then, then_expr) = if_then.drop_meta() => {

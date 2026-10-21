@@ -240,7 +240,7 @@ impl WarpParser {
 		if !FUNCTION_REFERENCE_WORDS.contains(&keyword) || self.options.data_mode {
 			return None;
 		}
-		let blanks = self.blanks_at(0);
+		let blanks = self.blanks_ahead();
 		if blanks == 0 || !self.peek_char(blanks).is_alphabetic() {
 			return None;
 		}

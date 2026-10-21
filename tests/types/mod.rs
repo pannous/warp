@@ -105,6 +105,7 @@ mod test_list_test_of_a_map;
 mod test_map_passed_as_any; // card map-passed
 mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
+mod test_map_field; // card map-field
 mod test_map_read_size; // card map-read
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
@@ -215,6 +216,7 @@ mod test_type_word_user_function;
 mod test_type_words;
 mod test_typed_arrays;
 mod test_typed_builtins; // card typed-builtins
+mod test_typed_list_annotations; // card typed-list-annotations
 mod test_typed_list_elements; // card typed-list-elements
 mod test_types;
 mod test_types_scope;

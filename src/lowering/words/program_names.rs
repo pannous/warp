@@ -39,6 +39,11 @@ impl ProgramNames {
 		self.bound.contains(word) || self.functions.contains_key(word)
 	}
 
+	/// Does the program define a function `word`, of any number of arguments
+	pub fn is_function(&self, word: &str) -> bool {
+		self.functions.contains_key(word)
+	}
+
 	/// Does a variable or parameter here take `word`
 	pub fn binds(&self, word: &str) -> bool {
 		self.bound.contains(word)
