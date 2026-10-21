@@ -182,3 +182,16 @@ compiler.wasm, emitter.warp for compiler-self.wasm):
 Open question (warp-interviewer): running the compiled program inside the same wasmtime process needs either the
 host (instantiate is no WASI call) or an evaluator in warp; default until answered: warp.wasm compiles to a .wasm and
 prints how to run it.
+
+### Float pow without libm (parked 2026-10-21, branch wasi-runtime 69c3d3ac12)
+- lib/compiler/runtime/pow.warp ports musl's pow (src/math/pow.c, the Arm optimized-routines one glibc also has) on
+  its non-fma path (wasm has no fma); pow_tables.warp holds pow_data.c / exp_data.c as the ints of the doubles' bits.
+  C's uint64_t compares go through unsigned_below (add 2^63 to both sides), shifts through shifted_right/_signed.
+- Bitwise oracle: fetch pow.c pow_data.c pow_data.h exp_data.c exp_data.h from
+  https://git.musl-libc.org/cgit/musl/plain/src/math/, add a libm.h shim (asuint64/asdouble via memcpy,
+  predict_false(x) x, WANT_ROUNDING 1, TOINT_INTRINSICS 0, eval_as_double identity, fp_barrier via volatile,
+  issignaling_inline 0, __math_oflow/uflow/invalid as in musl) and a features.h defining `hidden` empty; rename pow to
+  musl_pow and build with `clang -O2 -ffp-contract=off` next to a driver reading hex bit pairs from stdin. Compare
+  against the system pow too: Apple's libm is no musl, a rare last-bit difference there is no bug.
+- Open: `global pow_log_ints = []` then assigning table_ints(…) to it refuses in emitter.warp ("a list where a text
+  is needed"), so the tables are parsed on every call without the cache.
