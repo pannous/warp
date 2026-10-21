@@ -1,0 +1,3 @@
+# result types of the compiler's own sources (card types-back): a plural type word gives a list
+names(): texts := ["a", "b"]
+print #names()

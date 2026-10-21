@@ -73,8 +73,10 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   apart and don't make the verdict red. A second regex after the test's narrows it to the items its panic lists (the
   playground sample slices: only gpu_visualizer_warp is Mac-only; dates failing there is red). Grown only from real runs. `--summarize <log> [list]` re-summarizes a saved log.
 - Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message and keeps
-  its checkout and cargo output (a repeat build of the same branch: ~0 s vs ~350 s cold). Up to 5 busy
-  (MAX_PARALLEL_RUNS), 8 sessions in total (MAX_CLOUD_SESSIONS). After 30 jobs a session gets `/clear`. A session that
+  its checkout and cargo output (a repeat build of the same branch: ~0 s vs ~350 s cold). Up to 7 busy
+  (MAX_PARALLEL_RUNS), 10 sessions in total (MAX_CLOUD_SESSIONS). Gate runs first (user 2026-10-21): workers' runs
+  hold at most 5 of the 7 slots (WORKER_RUNS) and take none while a gate run waits; a gate run (the Integrator's: a
+  batch-*/express* branch, or `--gate`) may take any slot (probes/cloud/gate_priority.sh). After 30 jobs a session gets `/clear`. A session that
   refuses or never answers (90 min) is dropped into data/cloud/dropped-sessions.txt: archive those in the web UI. New
   sessions are named "Cloud Test Lane".
 - Model: defaults to Haiku. A session keeps the model it was created with; reused sessions get a `/model` message

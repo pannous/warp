@@ -12,8 +12,8 @@ format(template, values) := {
 	}
 	result
 }
-// the words between runs of spaces
-words(t) := [w for w in split(t, " ") if w]
+// the words between runs of whitespace: spaces, tabs, newlines (Python's split())
+words(t) := [w for w in split(join([if not is_space(c) then c else " " for c in t], ""), " ") if w]
 lines(t) := split(t, "\n")
 // the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15);
 // a letter with a case beyond ASCII too (é, Ω), not yet the caseless scripts (card unicode-letters)

@@ -140,7 +140,7 @@ impl WasmGcEmitter {
 		let mut scope = Scope::with_function_kinds(self.user_function_kinds())
 			.with_closure_targets(self.ctx.closure_variable_targets.clone());
 		scope.parent = Some(Box::new(self.enclosing_scope(&enclosing.name, main).unwrap_or_else(|| main.clone())));
-		scope.globals = self.ctx.declared_globals.clone();
+		scope.globals = self.ctx.declared_globals.clone().into();
 		for (index, param) in enclosing.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
 			scope.define_param(param, kind);
@@ -301,7 +301,7 @@ impl WasmGcEmitter {
 			..FunctionState::default()
 		});
 		// declared globals are changed in place, never shadowed by a local of the same name
-		self.scope.globals = self.function_globals(name);
+		self.scope.globals = self.function_globals(name).into();
 		for (index, param) in user_fn.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(name, index) { Kind::List } else { param_kind(param) };
 			self.scope.define_param(param, kind);
