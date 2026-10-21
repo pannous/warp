@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+// `print #xs` counts the list after the word, as print(#xs) does (card print-hash-count); want 3, 2, 1, 4, 8
+xs = [1, 2, 3]
+print #xs
+twice(n) := n * 2
+s = {names: ["a", "b"]}
+print #s.names
+puts #[7]
+print twice #xs
+numbers = [10, 20, 30, 40]
+print numbers#4 / 5
