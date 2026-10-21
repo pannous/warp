@@ -63,6 +63,7 @@ result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 		if not is_call(head) { return n }
 		result = symbol("the result")
 		held = optional_when_answering_empty(head, body, result_type)
+		if name_of(held).ends_with("?") { body = with_empty_otherwise(body) }
 		Key(head, Op.Define, List([Key(Key(result, Op.Colon, held), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
 	}
 	_: n
@@ -77,6 +78,24 @@ optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node :
 	diagnose(call_of("optional_result", [name_of(head#1), written]))
 	symbol(written + "?")
 }
+
+# an optional result of `if c then x` without `else`, or of a loop, is ø when nothing gave a value, not the kind's zero
+# (Rust twin: type_name_matching.rs as_type)
+with_empty_otherwise(value: Node): Node := match value {
+	Key(then, Op.Else, otherwise): Key(then, Op.Else, with_empty_otherwise(otherwise))
+	Key(_, Op.Then, _): Key(value, Op.Else, ø)
+	Key(_, Op.Do, _): List([value, ø], Bracket.Curly, Separator.Semicolon)
+	_: {
+		if is_loop(value) { return List([value, ø], Bracket.Curly, Separator.Semicolon) }
+		if not is_curly_group(value) or #value == 0 { return value }
+		items = items_of(value)
+		group_like(value, items[0..<(#items - 1)] + [with_empty_otherwise(items#(#items))])
+	}
+}
+
+# `for x in xs {…}`, `each x in xs {…}` before for_loops.warp lowers them; `while c {…}` is a `do` key already
+loop_words = ["for", "each"]
+is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
 
 # a `return ø` or a bare `return`, or ø as its value: ø itself, an `if` without `else`, a loop, or a choice with such
 # a branch; the definitions and lambdas inside answer for themselves
@@ -95,7 +114,7 @@ value_can_be_empty(value: Node): bool := match value {
 	Key(_, Op.Do, _): yes
 	Key(_, Op.Question, branches): is_key(branches, Op.Colon) and (value_can_be_empty(key_of(branches)) or value_can_be_empty(value_of(branches)))
 	_: {
-		if value == ø { return yes }
+		if value == ø or is_loop(value) { return yes }
 		if not is_curly_group(value) or #value == 0 { return no }
 		last = value#(#value)
 		not (is_group(last) and #last == 2 and is_word(last#1, "return")) and value_can_be_empty(last)
