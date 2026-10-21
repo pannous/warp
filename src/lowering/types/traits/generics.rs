@@ -211,9 +211,9 @@ pub(super) fn generic_calls(node: Node, functions: HashMap<String, Generic>) -> 
 	collect_declared(&node, &mut likenesses);
 	let plain = crate::analyzer::literal_variable_kinds(&node, &crate::analyzer::function_context(&node));
 	let classes = types.registry.types().iter().map(|type_def| type_def.name.clone()).collect();
-	let path_variables = crate::warp_parser::path_variables(&node);
+	let written_paths = crate::warp_parser::WrittenPaths::of(&node);
 	let calls = GenericCalls {
-		path_variables,
+		written_paths,
 		functions,
 		types,
 		likenesses,
@@ -245,8 +245,8 @@ pub(super) struct GenericCalls {
 	/// The variables only ever holding literals, which are no instances
 	plain: HashMap<String, crate::type_kinds::Kind>,
 	classes: Vec<String>,
-	/// The variables only ever holding paths written without quotes (`notes = ~/notes.txt`)
-	path_variables: HashSet<String>,
+	/// What only ever holds paths written without quotes (`notes = ~/notes.txt`), through the functions too
+	written_paths: crate::warp_parser::WrittenPaths,
 	failed: RefCell<Option<Node>>,
 	/// (function, number of arguments) → its dispatcher's cases
 	dispatched: RefCell<std::collections::BTreeMap<(String, usize), DispatchCases>>,
@@ -331,7 +331,7 @@ impl GenericCalls {
 			};
 		}
 		let cases = self.cases(generic, &positions, arguments.len());
-		let variants: std::collections::HashSet<&String> = cases.iter().map(|(_, variant)| variant).collect();
+		let variants: HashSet<&String> = cases.iter().map(|(_, variant)| variant).collect();
 		match (variants.len(), fallback) {
 			(0, true) => None,
 			(1, false) => Some(witness_call(name, &cases[0].1, arguments)),
@@ -342,10 +342,11 @@ impl GenericCalls {
 		}
 	}
 
-	/// `sort ./names.txt` with a method sort(file:Path) (lib/shell.warp): a path written without quotes, or a variable
-	/// only holding such paths, becomes a Path where a method takes one; elsewhere it stays the text
+	/// `sort ./names.txt` with a method sort(file:Path) (lib/shell.warp): a path written without quotes, or a variable,
+	/// parameter or call only holding such paths (WrittenPaths), becomes a Path where a method takes one; elsewhere it
+	/// stays the text
 	fn as_path(&self, generic: &Generic, position: usize, argument: &Node) -> Node {
-		let written_as_path = crate::warp_parser::is_written_path(argument, &self.path_variables);
+		let written_as_path = self.written_paths.is_written(argument);
 		let takes_path = generic.methods.iter().any(|(signature, _)| {
 			signature.get(position).is_some_and(|class| class.as_deref() == Some(crate::words::PATH_CLASS))
 		});

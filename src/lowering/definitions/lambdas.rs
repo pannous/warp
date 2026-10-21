@@ -119,10 +119,9 @@ fn lowering(node: Node, strict: bool) -> Node {
 	let context = crate::analyzer::function_context(&node);
 	let classes = crate::modules::needed_definitions::class_names(&node);
 	let first_fresh = first_fresh_number(&node);
-	let path_variables = crate::warp_parser::path_variables(&node);
+	let written_paths = crate::warp_parser::WrittenPaths::of(&node);
 	let bound = crate::program_names::Bindings::of(&node).bound();
-	Lowering { context, classes, path_variables, bound, counter: Counter::starting_at(first_fresh), strict }
-		.expand(node)
+	Lowering { context, classes, written_paths, bound, counter: Counter::starting_at(first_fresh), strict }.expand(node)
 }
 
 /// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
@@ -978,7 +977,7 @@ struct Lowering {
 	context: Context,
 	/// the program's classes: a function whose first parameter is one is a method, the iteration word stays for other values
 	classes: HashSet<String>,
-	path_variables: HashSet<String>,
+	written_paths: crate::warp_parser::WrittenPaths,
 	/// the names the program gives (program_names::Bindings::bound): a function value may be any of them
 	bound: HashSet<String>,
 	counter: Counter,
@@ -989,7 +988,7 @@ impl Lowering {
 	/// A word no variable, parameter, function or library word of the program is
 	fn names_nothing(&self, name: &str) -> bool {
 		!self.bound.contains(name)
-			&& !self.path_variables.contains(name)
+			&& !self.written_paths.holds(name)
 			&& !self.context.user_functions.contains_key(name)
 			&& crate::lowering::library_signatures::library_signature(name).is_none()
 	}
@@ -1063,7 +1062,7 @@ impl Lowering {
 	fn calls_method(&self, word: &Node, first_argument: &Node) -> bool {
 		let takes_path = |defined| first_parameter_type(defined).is_some_and(|class| class == crate::words::PATH_CLASS);
 		self.context.user_functions.get(&word.drop_meta().name()).is_some_and(takes_path)
-			&& crate::warp_parser::is_written_path(first_argument, &self.path_variables)
+			&& self.written_paths.is_written(first_argument)
 	}
 
 	fn is_method(&self, defined: &UserFunctionDef) -> bool {

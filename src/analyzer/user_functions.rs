@@ -589,7 +589,7 @@ pub(crate) fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
 
 /// Each argument a call in `node` passes a parameter of a user function, by function and index, not looking into nested
 /// definitions
-pub(super) fn visit_arguments<'a>(node: &'a Node, ctx: &Context, visit: &mut impl FnMut(&str, usize, &'a Node)) {
+pub(crate) fn visit_arguments<'a>(node: &'a Node, ctx: &Context, visit: &mut impl FnMut(&str, usize, &'a Node)) {
 	if function_definition_body(node).is_some() {
 		return;
 	}
