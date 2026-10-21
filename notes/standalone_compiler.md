@@ -94,13 +94,16 @@ Node crosses to Rust and back (postcard); 38 samples give the same results with 
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
 Card under-pure (2026-10-21): print([1, 2]) failed only here, not in the stage lane, because compiler.warp runs the
-WARP passes on the runtime words: runtime show.warp's match arms ø/True/False (node_matches.warp), a typed block
-result held whole (definitions.warp result_held now holds only the last statement), and emitter.warp refusing a
-`the result: text` given a kind guessed from a call still compiling (node_text ↔ list_shown cycle; admitted() now
-holds it as the declared kind, the reread fixes the code). A refusal is now the compile's error, not "not a list at
-23:2". Debug recipe: copy lib to scratch/upN, add prints (`print "CF " + f.name` in compile_function), run
+WARP passes on the runtime words: runtime show.warp's match arm ø (node_matches.warp; main took True/False), and
+emitter.warp refusing a `the result: text` given a kind guessed from a call still compiling (node_text ↔ list_shown
+cycle; admitted() now holds it as the declared kind, the reread fixes the code). A refusal is now the compile's
+error, not "not a list at 23:2". Holding only a typed block's last statement as the result (definitions.warp
+result_held) is no longer needed with admitted() and made `warp rebuild self` refuse ("the operator # on int"), so
+it was dropped. Debug recipe: copy lib to scratch/upN, add prints (`print "CF " + f.name` in compile_function), run
 `WARP_LIB=<copy>/lib warp lib/compiler/compiler.warp p.warp p.wasm <dir> <copy>/lib` to keep the wasm for
-`wasm-tools validate --features all`. Remaining ladder gaps: card under-pure-2.
+`wasm-tools validate --features all`. A self-build refusal reproduces in ~4 min with `WARP_SELF_HOSTED=pure-only
+WARP_LIB=<copy>/lib warp <copy>/lib/compiler/compiler.warp`; bisect it by copying main's lib and swapping one changed
+file in at a time. Remaining ladder gaps: card under-pure-2.
 
 ### WARP_SELF_HOSTED=pure (alias pure-only)
 pure and pure-only become one lane with no fallback; `pure-only` stays as an alias with a note.
