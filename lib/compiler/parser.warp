@@ -219,6 +219,7 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 		newline = skip_blanks(p)
 		if bracket == "" and newline and line_indent(p) > p.indent {
 			body = lines_below(p)
+			skip_end_line(p)
 			lines = group_parts(body)
 			item = Key(item, Op.Colon, if lines != ø and lines#1 == "" and lines#2 == "\n" then listed("{", "\n", lines#3) else body)
 			newline = skip_blanks(p)
@@ -297,9 +298,24 @@ def indented_block(p: Parser): Node := {
 	}
 	block = lines_below(p)
 	p.spaces = outer_spaces
+	skip_end_line(p)
 	lines = group_parts(block)
 	if lines != ø and lines#1 == "" { return listed("{", lines#2, lines#3) }
 	listed("{", "", [block])
+}
+
+// The `end` or `fi` alone on the line after a block read by indentation, at the head's indent, read; the line break
+// before the next statement stays
+// Rust twin: blocks.rs skip_end_line
+def skip_end_line(p: Parser) {
+	before = p.at
+	newline = skip_blanks(p)
+	closer = if keyword_at(p, "end") then 3 else if keyword_at(p, "fi") then 2 else 0
+	if newline and closer > 0 and line_indent(p) == p.indent and line_ends_after(p, p.at + closer) {
+		p.at = p.at + closer
+		return
+	}
+	p.at = before
 }
 
 def line_blanks(p: Parser): int {
@@ -1468,7 +1484,8 @@ def endless_loop(p: Parser): Node := {
 	Key(Key(ø, Op.While, true), Op.Do, items_until(p, '}', "{"))
 }
 
-// `if c {…} else {…}` and `while c {…}`: the block after the condition is its branch or body
+// `if c {…} else {…}`, `while c {…}`, `if c` and the lines indented below: the block after the condition is its
+// branch or body
 // Rust twin: expressions.rs finish_if_prefix, finish_while_prefix
 def conditioned(word: text, condition: Node, p: Parser): Node := {
 	skip_spaces(p)
@@ -1489,7 +1506,9 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 		body = expression(p, 0)
 		p.in_branch = outer
 	} else {
-		return keyed(word, ø, condition)
+		// `while m > 1` ending its line: the lines indented below (Rust twin: blocks.rs indented_lines_below)
+		body = if only_blanks_before_newline(p) then indented_block(p) else ø
+		if body == ø { return keyed(word, ø, condition) }
 	}
 	head = keyed(word, ø, condition)
 	if word == "while" { return Key(head, Op.Do, body) }
