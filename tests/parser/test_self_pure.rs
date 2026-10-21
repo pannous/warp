@@ -620,6 +620,18 @@ fn rewrites_run_pure() {
 	runs_pure("rewrite_english", "p = {width: 3}\nset width of p to 12\np.width", "» 12");
 }
 
+/// `print reverse [1, 2]`: a library word of one typed value calls itself on the value after it (lib/compiler/
+/// library_calls.warp, card pure-lane-knows), a program function's spaced call prints its value
+#[test]
+fn spaced_library_words_run_pure() {
+	runs_pure("spaced_reverse", "print reverse [1, 2]", "[2 1]");
+	runs_pure("spaced_upper", "print upper \"ab\"", "AB");
+	runs_pure("spaced_floor", "print floor 2.5", "2");
+	runs_pure("spaced_synonym", "print sorted [2, 1]", "[1 2]");
+	runs_pure("spaced_sum", "print sum [1, 2]", "3");
+	runs_pure("spaced_prelude_word", "print first [3, 4]", "3");
+}
+
 /// An operator case is its own value and a synonym of its spelling (decision enum-case, card pure-op-cases): the pure
 /// lane prints Op.Add as Add, converts it to and from "+", and a match binds a key's op as its case
 #[test]
