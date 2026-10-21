@@ -1,5 +1,5 @@
-# Methods written as calls on a value (card pure-runs): `xs.push(v)` appends to the list the name holds,
-# `xs += [v]`, which emitter.warp grows in place while the list is unshared; `xs.pop()` is the runtime word
+# Methods written as calls on a value (card pure-runs): `xs.push(v)` (also add, append, and insert of one value)
+# appends to the list the name holds, `xs += [v]`, which emitter.warp grows in place while the list is unshared; `xs.pop()` is the runtime word
 # list_pop(xs), which shortens xs in place; any other `x.f(a, b)` but a change in
 # place (in_place_methods) is the call `f(x, a, b)`, as Rust's library_words.rs method_call makes it of a word (card
 # pure-lane-lowers). `x in xs` (a list's item, a map's key, a text's part) is the runtime word
@@ -8,8 +8,8 @@ use "walk.warp"
 use "phrase_blocks.warp"
 
 pushed(list: Node, call: list, n: Node): Node := {
-	if #call == 2 and call#1 == symbol("push") and is_name(list) {
-		return Key(list, Op.AddAssign, List([call#2], Bracket.Square, Separator.Comma))
+	if #call >= 2 and appends(call) and is_name(list) {
+		return Key(list, Op.AddAssign, List(call[1..], Bracket.Square, Separator.Comma))
 	}
 	if #call == 1 and call#1 == symbol("pop") { return List([symbol("list_pop"), list], Bracket.Round, Separator.None) }
 	if #call == 2 and call#1 is symbol and name_of(call#1) in removal_methods and is_name(list) { return removed(list, call#2) }
@@ -18,6 +18,11 @@ pushed(list: Node, call: list, n: Node): Node := {
 	}
 	n
 }
+# the methods appending their arguments, `xs.insert(i, v)` inserting at a position instead. Rust twin:
+# list_mutations.rs appends
+append_methods = ["add", "append", "push", "insert"]
+appends(call: list): bool := call#1 is symbol and name_of(call#1) in append_methods and (call#1 != symbol("insert") or #call == 2)
+
 # `m.remove(k)`, `m.delete(k)` of a variable: the value of k, its entry removed from m (Python's dict.pop); of a list the
 # first element equal to k removed. Rust twin: list_mutations.rs removed_key
 removal_methods = ["remove", "delete"]
