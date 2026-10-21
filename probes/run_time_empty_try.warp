@@ -1,0 +1,5 @@
+# card run-time-empty: [] stays the empty list at run time: printed [], typed list, appended to by +
+xs = []
+print xs
+print type(xs)
+xs + "a"
