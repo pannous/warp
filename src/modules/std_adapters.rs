@@ -234,6 +234,11 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		("cwd", []) => working_folder(),
 		("input", prompt) => typed_line(prompt),
 		("stdin", []) => std::io::read_to_string(std::io::stdin()).map(Node::Text).map_err(said),
+		("kept", [name]) => Ok(kept_value(&text_of(name)?).unwrap_or(Node::Empty)),
+		("keep", [name, value]) => {
+			keep_value(&text_of(name)?, value);
+			Ok(value.clone())
+		}
 		// `command("ls | wc -l")`: the line run by sh, the explicit opt-in to text as shell (decision use-script)
 		#[cfg(feature = "native")]
 		("command", [line]) => executed(&["sh".into(), "-c".into(), content_of(line)]).map(Node::Text),
@@ -245,6 +250,34 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		_ => shell_adapters::os(member, arguments),
 	}
 }
+
+/// The value kept under `name` (os.keep) while warp and its lib/ stay as they are: a value the program computes the same
+/// way at every run, such as compiler.warp's lowered runtime words (card pure-warm-start)
+#[cfg(feature = "native")]
+fn kept_value(name: &str) -> Option<Node> {
+	let key = crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {name}"))?;
+	postcard::from_bytes(&crate::run::module_cache::kept_bytes(&key, KEPT_VALUE)?).ok()
+}
+
+#[cfg(feature = "native")]
+fn keep_value(name: &str, value: &Node) {
+	let key = crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {name}"));
+	if let (Some(key), Ok(bytes)) = (key, postcard::to_allocvec(value)) {
+		crate::run::module_cache::keep_bytes(&key, KEPT_VALUE, &bytes);
+	}
+}
+
+/// The browser keeps no values across runs: each run computes them
+#[cfg(not(feature = "native"))]
+fn kept_value(_: &str) -> Option<Node> {
+	None
+}
+
+#[cfg(not(feature = "native"))]
+fn keep_value(_: &str, _: &Node) {}
+
+/// The module cache's extension of a kept value, and its key's prefix
+const KEPT_VALUE: &str = "kept-value";
 
 /// `stored theme = "dark"` (lowering/data/stored_values.rs): the values kept by name in a store file
 fn store(member: &str, arguments: &[Node]) -> Result<Node, String> {

@@ -1,4 +1,11 @@
 # Conversions and casts of values known only at run time: `as`, typed variables, truthiness, int and char texts
+use "intrinsics.warp"
+use "errors.warp"
+use "exact.warp"
+use "instructions.warp"
+use "lists.warp"
+use "text_numbers.warp"
+use "types.warp"
 # a boxed int (kind code 1), exact rational or float as a float
 float_of_node(n: any): float := {
 	if kind_code(n) != Kind.Int { return unboxed_float(n) }

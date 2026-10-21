@@ -23,8 +23,12 @@ const ARGUMENT_PLACEHOLDER: &str = "memo_argument";
 const BODY_PLACEHOLDER: &str = "memo_body";
 
 pub fn lower(program: Node) -> Node {
+	// the shape first: the analysis, effects and variables of the whole program only when some function has it
+	let definitions = crate::analyzer::function_definitions(&program);
+	if !definitions.user_functions.values().any(has_recursive_expression_shape) {
+		return program;
+	}
 	let context = crate::analyzer::function_context(&program);
-	// the shape first: the effects and variables of the whole program only when some function has it
 	let candidates: Vec<&UserFunctionDef> =
 		context.user_functions.values().filter(|function| has_memoizable_shape(function)).collect();
 	if candidates.is_empty() {
@@ -50,6 +54,17 @@ fn has_memoizable_shape(function: &UserFunctionDef) -> bool {
 	let [param] = function.params.as_slice() else {
 		return false;
 	};
+	has_recursive_expression_shape(function)
+		&& param_kind(param) == Kind::Int
+		&& function.return_kind == Kind::Int
+		&& function.tuple_kinds.is_empty()
+}
+
+/// One parameter and an expression body calling the function itself at least twice: what the definitions alone tell
+fn has_recursive_expression_shape(function: &UserFunctionDef) -> bool {
+	if function.params.len() != 1 {
+		return false;
+	}
 	let mut self_calls = 0;
 	function.body.visit(&mut |part| {
 		if let Node::List(items, _, _) = part.drop_meta() {
@@ -63,11 +78,7 @@ fn has_memoizable_shape(function: &UserFunctionDef) -> bool {
 			Node::List(_, Bracket::Curly, _) | Node::List(_, _, Separator::Semicolon | Separator::Newline)
 		) && part.drop_meta().name() != "return"
 	});
-	expression
-		&& self_calls >= 2
-		&& param_kind(param) == Kind::Int
-		&& function.return_kind == Kind::Int
-		&& function.tuple_kinds.is_empty()
+	expression && self_calls >= 2
 }
 
 /// A function of that shape that is pure (but for dividing) and reads no variable of main

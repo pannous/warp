@@ -434,6 +434,8 @@ PASSED:
   ✓ control::test_match_arm_if::an_arm_gives_its_inline_if
   ✓ control::test_match_arm_nested::an_unbraced_inner_match_keeps_the_outer_arms
   ✓ control::test_match_arm_nested::an_unbraced_inner_match_over_a_node
+  ✓ control::test_match_binding_alternatives::alternatives_bind_the_same_names
+  ✓ control::test_match_binding_alternatives::alternatives_binding_other_names_are_an_error
   ✓ control::test_match_binding_arm::bare_name_arm_binds_the_subject
   ✓ control::test_match_binding_arm::bare_name_unused_by_its_body_is_a_symbol_case
   ✓ control::test_match_binding_arm::variable_arm_compares
@@ -2061,6 +2063,7 @@ PASSED:
   ✓ functions::test_variadic::a_spread_in_a_list_literal_splices_its_items
   ✓ functions::test_variadic::calls_without_parentheses_fill_the_rest_too
   ✓ functions::test_variadic::kotlin_vararg_and_csharp_params
+  ✓ functions::test_variadic::spreading_into_a_function_parameter
   ✓ functions::test_wasm_instruction_bodies::float_instruction_bodies
   ✓ functions::test_wasm_instruction_bodies::int_instruction_bodies
   ✓ functions::test_wasm_instruction_bodies::unknown_instruction_is_an_error
@@ -2279,6 +2282,7 @@ PASSED:
   ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
   ✓ lists::test_list_times_list::round_and_curly_lists_take_the_dot_product
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
+  ✓ lists::test_lists_read_by_turns::a_field_set_keeps_the_read_cursors
   ✓ lists::test_lists_read_by_turns::lists_read_by_turns_after_an_in_place_change
   ✓ lists::test_lists_read_by_turns::lists_read_by_turns_take_linear_steps
   ✓ lists::test_lists::test_array_creation
@@ -2587,6 +2591,8 @@ PASSED:
   ✓ modules::test_prelude_own_names::prelude_words_answer_to_their_own_names
   ✓ modules::test_prelude_shadowing::library_spellings_keep_the_prelude_word
   ✓ modules::test_prelude_shadowing::the_program_word_takes_its_own_calls_with_a_hint
+  ✓ modules::test_program_aliases::a_program_alias_leaves_a_declared_word_alone
+  ✓ modules::test_program_aliases::a_program_alias_names_its_word
   ✓ modules::test_program_arguments::the_words_after_two_dashes_are_the_programs_arguments
   ✓ modules::test_program_variable_beside_module::a_module_local_named_like_a_program_variable_stays_the_modules
   ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
@@ -2651,6 +2657,7 @@ PASSED:
   ✓ modules::test_std_json::a_json_word_without_its_use_names_the_module
   ✓ modules::test_std_json::malformed_json_is_an_error_naming_it
   ✓ modules::test_std_json::use_json_parses_and_writes_json
+  ✓ modules::test_std_kept::a_kept_value_is_the_next_runs
   ✓ modules::test_std_list::a_module_word_without_its_use_names_the_module
   ✓ modules::test_std_list::a_programs_own_word_wins_over_the_module
   ✓ modules::test_std_list::chunk_window_median
@@ -2956,6 +2963,7 @@ PASSED:
   ✓ numbers::test_fast_int::a_fast_loop_counts_as_the_exact_one
   ✓ numbers::test_fast_int::int64_wraps_and_traps_only_when_strict
   ✓ numbers::test_fast_int::nested_fast_operations_wrap
+  ✓ numbers::test_fast_math::a_constant_fast_word_folds_to_the_fast_value
   ✓ numbers::test_fast_math::fast_words_are_close_to_the_c_library
   ✓ numbers::test_fast_math::fast_words_reach_the_math_module_and_stay_out_of_other_programs
   ✓ numbers::test_fast_math::warp_fast_uses_fast_math_also_for_a_kept_program_file
@@ -3800,6 +3808,7 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
@@ -4262,6 +4271,7 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
+  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -4336,6 +4346,7 @@ PASSED:
   ✓ scope::test_global_modifiers::test_type_word_alone_is_still_a_name
   ✓ scope::test_global_modifiers::test_typed_global_without_initializer_is_zero
   ✓ scope::test_global_node_widening::a_value_of_run_time_kind_widens_an_exact_global
+  ✓ scope::test_global_object_field_named_like_function::a_field_named_like_a_function_reads_the_field_beside_a_same_named_local
   ✓ scope::test_global_typed_list::a_function_changes_a_typed_global_list
   ✓ scope::test_global_typed_list::a_function_reads_a_typed_global_list_of_instances
   ✓ scope::test_globals::test_global_float_with_pi
@@ -4344,8 +4355,6 @@ PASSED:
   ✓ scope::test_globals::test_global_reassignment
   ✓ scope::test_globals::test_global_with_expression
   ✓ scope::test_node_widening_in_loops::a_read_before_a_node_widening_in_a_loop_holds_the_node
-  ✓ scope::test_parameter_shadowing::a_loop_variable_is_no_map_another_function_assigned
-  ✓ scope::test_parameter_shadowing::a_parameter_is_no_map_another_function_assigned
   ✓ scope::test_parameter_shadowing::a_parameter_is_not_typed_by_another_functions_real_value
   ✓ scope::test_parameter_shadowing::a_parameter_may_walk_what_another_function_assigned_a_number
   ✓ scope::test_parameter_shadowing::a_signal_and_a_block_play_in_one_program
@@ -6473,12 +6482,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ functions::test_ported_calls::other_languages_list_types_are_lists_with_a_note
-  ✗ functions::test_variadic::spreading_into_a_function_parameter
-  ✗ node::test_normalization::test_list_type_hint_with_values_and_position
-  ✗ node::test_normalization::test_list_type_style_generic
-  ✗ node::test_normalization::test_of_list_type_hints_plural
-  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-12 ignored, 6470 passed, 6 failed, 6476 total tested
+12 ignored, 6479 passed, 0 failed, 6479 total tested
