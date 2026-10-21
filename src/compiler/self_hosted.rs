@@ -633,8 +633,8 @@ pub(crate) fn stage_key(program: &str) -> Option<String> {
 }
 
 /// The binary's identity, a hash of its bytes: a stage module kept by a freshly built binary is its installed copy's
-/// too, so an install keeps compiler.warp's module before the binary goes in place (`warp pure --warm`, card
-/// self-warming). Remembered in the cache under the binary's path, size and time: its ~50 MB are hashed once
+/// too, so an install builds compiler.warp's module with the new binary before it goes in place (card self-warming).
+/// Remembered in the cache under the binary's path, size and time: its ~50 MB are hashed once
 #[cfg(feature = "native")]
 fn binary_identity(binary: &std::path::Path) -> String {
 	use sha2::{Digest, Sha256};

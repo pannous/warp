@@ -222,11 +222,6 @@ pub fn kept_bytes(key: &str, extension: &str) -> Option<Vec<u8>> {
 	Some(bytes)
 }
 
-/// The cache's file of that name, there or not; none with the cache off
-pub fn cache_file(name: &str) -> Option<PathBuf> {
-	cache_directory().map(|directory| directory.join(name))
-}
-
 /// Keep the bytes under `key` with `extension` in the cache, unless it is off
 pub fn keep_bytes(key: &str, extension: &str, bytes: &[u8]) {
 	let Some(directory) = cache_directory() else { return };
