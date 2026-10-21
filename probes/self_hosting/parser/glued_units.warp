@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // card self-parser-glued-units: a number glued to a name or `(` multiplies it; ordinals do not
 sleep(500ms)
 x = 2x + 3(4)

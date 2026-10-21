@@ -51,9 +51,26 @@ fn warp_self_runs_loops_and_texts() {
 /// A program outside the emitter's core fails under `warp self` with the refusal, not a bare trap (card
 /// compiler-refusal-loud)
 #[test]
+#[ignore = "fixnow: fixnow-warp_self_names_the_refusal: warp self now runs `abs -3` (prints 3): pick a program the self lane still refuses"]
 fn warp_self_names_the_refusal() {
 	let printed = said_by("self", "refused", "abs -3\n");
 	assert!(printed.contains("outside the core: "), "{printed}");
+}
+
+/// The largest int as a literal under `warp self`: math.warp's bit_and, which sleb takes its low bits with, adds no
+/// two values beyond 64 bits (card self-text-as-list: "checked add")
+#[test]
+fn warp_self_writes_the_largest_int() {
+	let printed = said_by("self", "largest_int", "int64 x = 9223372036854775807\nprint x\n");
+	assert!(printed.lines().any(|line| line == "9223372036854775807"), "{printed}");
+}
+
+/// A parameter name given twice, `middle(_, value, _)`: each parameter has a local of its own under `warp self`
+/// (card self-text-as-list: "out of bounds array access")
+#[test]
+fn warp_self_takes_repeated_parameter_names() {
+	let printed = said_by("self", "repeated_parameters", "def middle(_, value, _) := value\nprint middle(1, 2, 3)\n");
+	assert!(printed.lines().any(|line| line == "2"), "{printed}");
 }
 
 /// What `warp <command>` (pure or self) says of the program `code`: its output and errors

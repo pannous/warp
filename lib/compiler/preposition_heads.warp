@@ -4,8 +4,6 @@
 use "walk.warp"
 use "words.warp"
 
-label_words = phrase_prepositions + ["as"]
-
 is_label_word(n: Node): bool := match n {
 	Symbol(name): name in label_words
 	_: no
