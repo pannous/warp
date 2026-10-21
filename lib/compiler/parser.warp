@@ -600,6 +600,9 @@ def continued(p, left, min_power) {
 				left = listed("", " ", [left, symbol(op#1), expression(p, powers#2)])
 			} else if DECLARED_ONLY_OPERATORS contains op#2 {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
+			} else if (op#2 == ".." or op#2 == "to") and starts_at(p.code, "=>", p.at) {
+				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`: a range without end
+				left = keyed(op#2, left, ø)
 			} else {
 				left = keyed(op#2, left, if op#2 == "then" or op#2 == "else" then branch(p, powers#2) else expression(p, powers#2))
 			}
