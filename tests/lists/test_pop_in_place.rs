@@ -27,3 +27,8 @@ fn the_last_pop_leaves_an_empty_list_that_grows_again() {
 	is!("xs = [5]; xs.pop(); xs.add(7); xs", ints(vec![7]));
 	is!("def f() { xs = [5]; xs.pop(); xs.add(7); xs.pop() + #xs }\nf()", 7);
 }
+
+#[test]
+fn the_pseudo_call_pop_lowers_to_drops_the_last_item() {
+	is!("xs = [1, 2]; ys = xs; xs = list_drop_last(xs); ys", ints(vec![1]));
+}
