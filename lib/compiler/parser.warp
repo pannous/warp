@@ -7,7 +7,7 @@ use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; elvis_operands: int }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): any := view_of(parsed(source))
@@ -26,7 +26,7 @@ def parsed(source: text): Node := {
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
 def written_tree(source: text): Node := {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases()}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), elvis_operands: 0}
 	items_until(p, ' ', "")
 }
 
@@ -509,6 +509,11 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		}
 		// a declared operator binding looser than the context ends the operand, unless a built-in one of the glyph binds
 		if user_op != ø and user_op#2 != "prefix" and operator_at(p).length == 0 { break }
+		if c == '?' and is_at(p.code, p.at + 1, ':', p.n) {
+			if binding_powers("?")#1 < min_power { break }
+			left = elvis(p, left)
+			continue
+		}
 		power = superscript_power(p, left, min_power)
 		if power != ø {
 			left = power
@@ -608,6 +613,21 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 	}
 	left
 }
+
+// `a ?: b` is `a ? a : b`, also the schema field `debug?: bool`; a left side that is no plain name is evaluated once,
+// into a hidden variable
+// Rust twin: if_else.rs try_parse_elvis
+def elvis(p: Parser, left: Node): Node := {
+	p.at = p.at + 2
+	skip_blanks(p)
+	// left-associative: `a ?: b ?: c` is `(a ?: b) ?: c`, the same value
+	alternative = expression(p, binding_powers("?")#1 + 1)
+	if left is symbol { return Key(left, Op.Question, Key(left, Op.Colon, alternative)) }
+	p.elvis_operands += 1
+	operand = symbol(ELVIS_WORD + "·" + p.elvis_operands)
+	listed("(", ";", [Key(operand, Op.Assign, left), Key(operand, Op.Question, Key(operand, Op.Colon, alternative))])
+}
+ELVIS_WORD = "elvis"
 
 // `pattern: match v {…}`: the arm's value is the whole inner match, its subject and its cases on the line, though `:`
 // binds tighter than the words after it (card match-arm-whose)
