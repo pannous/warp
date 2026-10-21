@@ -67,9 +67,10 @@ spelling_code(spellings: list, spelled: text): int := {
 	fail()
 	0
 }
-# `bracketed(items, "[")`, `separated(items, ",")`: the list with that bracket or separator; ø stays ø, as `()` parses
+# `bracketed(items, "[")`, `separated(items, ",")`: the list with that bracket or separator; no items is ø, as `()`
+# and `{}` parse, but `[]` in square brackets, the empty list (Rust's new_bracketed)
 bracketed_node(items: Node, bracket: Node): Node := {
-	if is_null(items) { return items }
+	if is_nothing(items) { return if text_order(node_text(bracket), "[") == 0 then list_node(Marked.SquareList, []) else ø }
 	if kind_code(items) != Kind.List { not_a_list() }
 	code = spelling_code(bracket_spellings(), node_text(bracket))
 	list_node(marked_kind(items) + (code - bracket_info(items)) * KindUnit.Info, unboxed_list(items))
