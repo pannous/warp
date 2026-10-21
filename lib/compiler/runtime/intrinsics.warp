@@ -53,9 +53,6 @@ host_read(count: int): int from runtime
 answered_length(): int from runtime
 memory_byte(address: int): int from runtime
 # times and durations, packed in the kind field
-time_form(t: any): int from runtime
 time_position(t: any): int from runtime
-duration_months(d: any): int from runtime
-duration_days(d: any): int from runtime
 zone_index(t: any): int from runtime
 zone_offset(t: any): int from runtime

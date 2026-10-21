@@ -426,7 +426,9 @@ pub fn runtime_source() -> std::io::Result<String> {
 	joined_source(&compiler_folder().join(RUNTIME_WORDS), &mut HashSet::new())
 }
 
-/// The file's lines, its `use` lines blank, then the files they name not yet in `joined`, each with its own uses
+/// The file's lines, its `use` lines and declarations of emitter.warp's intrinsics (`is_null(x: any): bool from
+/// runtime`, which the runtime view leaves to emitter.warp, as definitions.warp drops them) blank, then the files they
+/// name not yet in `joined`, each with its own uses
 fn joined_source(file: &Path, joined: &mut HashSet<PathBuf>) -> std::io::Result<String> {
 	let source = std::fs::read_to_string(file)?;
 	let folder = file.parent().unwrap_or(Path::new("."));
@@ -440,11 +442,16 @@ fn joined_source(file: &Path, joined: &mut HashSet<PathBuf>) -> std::io::Result<
 					used += &joined_source(&path, joined)?;
 				}
 			}
+			None if is_intrinsic_declaration(line) => {}
 			None => own += line,
 		}
 		own.push('\n');
 	}
 	Ok(own + &used)
+}
+
+fn is_intrinsic_declaration(line: &str) -> bool {
+	line.trim_end().ends_with(&format!(" from {}", crate::ffi::RUNTIME_LIBRARY))
 }
 
 /// The file of a `use` line: a quoted path beside the using file, else a module of lib
