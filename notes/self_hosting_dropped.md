@@ -48,10 +48,6 @@ are error nodes; `3 times: print it` runs the whole rest of the line.
 
 ## Passes: dropped forms
 Per form: the form, the sources showing it, why it is left out, how to bring it back.
-- sql and sh templates: `sql "SELECT … $name"`, `exec sh "ls"` as parameterized calls (src/text/injection.rs
-  lower_templates, run first by interpolation.rs lower_program). Sources: probes/docs_sync/sandbox_exec.warp,
-  probes/sandbox/escape.warp, probes/sandbox/exec.warp, samples/system/crontab.warp. Left out for now: a library
-  feature, not text building. Back: port lower_templates in front of lib/compiler/interpolation.warp.
 - Rust Option forms: `if let Some(v) = o { A } else { B }`, `match o { Some(v) => A, None => B }`, `o.unwrap_or(d)`,
   `o.expect(m)`, `o.is_some()`. Sources: probes/rust_reading/option.warp. Left out: warp's own forms say it
   (`if o != ø`, `o ?? d`, `o ?? raise(m)`). The Rust compiler dropped it too (decision rust-cleanup-drops). Back:
