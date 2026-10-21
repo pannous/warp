@@ -1080,6 +1080,9 @@ impl Lowering {
 		let meaning = self.word_meaning(receiver, name, word_node, &arguments, is_bare);
 		let field = || Some(field_lookup(receiver, name, word_node));
 		let own_member = self.own_member(receiver, name, &arguments);
+		if name == "kinds" {
+			eprintln!("DEBUG method_call kinds: receiver {} method {} args {} own {} meaning {}", receiver.serialize(), method.serialize(), arguments.len(), match own_member { OwnMember::Has => "Has", OwnMember::Lacks => "Lacks", OwnMember::Maybe => "Maybe", OwnMember::Not => "Not" }, match &meaning { WordMeaning::Call { call, typed } => format!("Call {} typed {typed}", call.serialize()), WordMeaning::Kept => "Kept".into(), WordMeaning::FieldRead => "FieldRead".into(), WordMeaning::Undefined => "Undefined".into() });
+		}
 		// `m.size` of a map read at run time with an entry size reads the entry, else counts (card map-read); only where
 		// the program writes such an entry, as the check makes the count no longer known to be an Int (`xs.length - 1`).
 		// `number of bytes in t` reads `bytes.number`: the unit, no variable
