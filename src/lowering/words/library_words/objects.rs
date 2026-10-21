@@ -115,8 +115,43 @@ pub(super) struct AssignedObjects {
 	pub(super) rebound: HashSet<String>,
 }
 
-pub(super) fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjects) {
+/// The variables of one scope, the program outside its functions or one function's body: each function's are its own,
+/// so `entries = {}` in one leaves a same-named variable or parameter of another as it is
+#[derive(Default)]
+pub(super) struct VariableScope {
+	/// the names the scope binds: a function's parameters, the names its body assigns and its loop variables
+	pub(super) bound: HashSet<String>,
+	/// the variables only ever assigned one object literal, with it
+	pub(super) objects: HashMap<String, Node>,
+	/// the variables assigned plain values (AssignedObjects::plain) and nothing that may hold an object
+	pub(super) plain: HashSet<String>,
+}
+
+impl VariableScope {
+	/// The scope of `body`, binding `parameters` besides what it assigns; the bodies of functions it defines are theirs
+	pub(super) fn of(body: &Node, parameters: Vec<String>) -> Self {
+		let mut assigned = AssignedObjects::default();
+		collect_assigned_objects(body, &mut assigned);
+		VariableScope {
+			bound: crate::program_names::bound_in_body(parameters.into_iter().collect(), body),
+			objects: assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect(),
+			plain: assigned.plain.difference(&assigned.rebound).cloned().collect(),
+		}
+	}
+}
+
+/// `f(x)`, `f(x): T`: the head of a function definition, whose body is a scope of its own
+pub(super) fn is_function_definition_head(head: &Node) -> bool {
+	match head.drop_meta() {
+		Node::List(items, Bracket::Round, _) => word_headed(items).is_some(),
+		Node::Key(inner, Op::Colon | Op::As, _) => is_function_definition_head(inner),
+		_ => false,
+	}
+}
+
+fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjects) {
 	match node.drop_meta() {
+		Node::Key(head, Op::Assign | Op::Define, _) if is_function_definition_head(head) => {}
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			if let Node::Symbol(name) = target.drop_meta() {
 				if is_plain_literal(value) {
@@ -325,9 +360,7 @@ impl Lowering {
 
 	pub(super) fn written_object(&self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
-			// a parameter holds what its call passes, whatever object a same-named variable elsewhere holds
-			Node::Symbol(name) if self.binds_parameter(name) => None,
-			Node::Symbol(name) => self.objects.get(name).cloned(),
+			Node::Symbol(name) => self.object_of(name),
 			Node::Key(base, Op::Hash, index) => {
 				let field = field_name(crate::warp_parser::subscript_key(index)?)?;
 				let (_, value) =
