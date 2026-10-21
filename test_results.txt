@@ -881,6 +881,7 @@ PASSED:
   ✓ control::test_test_pairs::a_tab_separates_the_columns_of_a_line
   ✓ control::test_test_pairs::each_pair_is_a_test
   ✓ control::test_test_pairs::warp_test_reports_commented_pairs_as_skipped
+  ✓ control::test_text_in_logical_condition::a_text_in_a_logical_condition_is_true_when_it_has_characters
   ✓ control::test_text_loop_value::a_loop_ending_in_a_character_gives_that_character
   ✓ control::test_text_loop_value::a_loop_ending_in_a_text_gives_that_text
   ✓ control::test_text_loop_value::a_text_loop_that_never_ran_is_empty
@@ -1877,6 +1878,7 @@ PASSED:
   ✓ functions::test_ported_calls::types_built_from_type_parameters_drop_with_them
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
+  ✓ functions::test_precomputed::folding_says_nothing_of_its_own
   ✓ functions::test_preposition_calls::a_call_with_prepositions_inside_another_call
   ✓ functions::test_preposition_calls::a_call_without_brackets_names_arguments
   ✓ functions::test_preposition_calls::a_label_without_its_colon_is_an_error
@@ -2116,6 +2118,7 @@ PASSED:
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
   ✓ lists::test_concat_keeps_arrays::a_concatenation_is_a_copy_of_both_lists
+  ✓ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
   ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
@@ -3840,9 +3843,11 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
+  ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
+  ✓ parser::test_self_floor_division::self_hosted_floor_division_prints_as_rust_prints_it
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
   ✓ parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
@@ -3861,6 +3866,7 @@ PASSED:
   ✓ parser::test_self_pure::a_map_member_beside_its_entry_runs_pure
   ✓ parser::test_self_pure::a_match_arm_of_a_constant_runs_pure
   ✓ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
+  ✓ parser::test_self_pure::an_empty_list_literal_runs_pure
   ✓ parser::test_self_pure::arm_inline_if_reads_self_hosted
   ✓ parser::test_self_pure::assigned_it_blocks_run_pure
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
@@ -3901,6 +3907,7 @@ PASSED:
   ✓ parser::test_self_pure::recursive_results_run_pure
   ✓ parser::test_self_pure::rewrites_run_pure
   ✓ parser::test_self_pure::spaced_library_words_run_pure
+  ✓ parser::test_self_pure::spaced_prefix_calls_run_pure
   ✓ parser::test_self_pure::std_modules_run_pure
   ✓ parser::test_self_pure::text_escapes_read_pure
   ✓ parser::test_self_pure::the_core_runs_pure
@@ -3959,7 +3966,12 @@ PASSED:
   ✓ parser::test_warp_format::test_nested_structures
   ✓ parser::test_warp_format::test_warp_roundtrip
   ✓ parser::test_warp_format::test_warp_to_json
+  ✓ parser::test_warp_pure::warp_pure_and_self_run_inline_code
   ✓ parser::test_warp_pure::warp_pure_runs_a_library_word
+  ✓ parser::test_warp_pure::warp_self_runs_hello_world
+  ✓ parser::test_warp_pure::warp_self_runs_loops_and_texts
+  ✓ parser::test_warp_pure::warp_self_takes_repeated_parameter_names
+  ✓ parser::test_warp_pure::warp_self_writes_the_largest_int
   ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
   ✓ parser::test_wisp_malformed::malformed_wisp_is_an_error_not_a_repaired_value
   ✓ parser::test_wisp_malformed::malformed_wisp_never_panics
@@ -4310,6 +4322,7 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
+  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -6539,12 +6552,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
-  ✗ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✗ parser::test_warp_pure::warp_self_names_the_refusal
-  ✗ parser::test_warp_pure::warp_self_runs_hello_world
-  ✗ parser::test_warp_pure::warp_self_runs_loops_and_texts
 
 SUMMARY:
-13 ignored, 6536 passed, 6 failed, 6542 total tested
+13 ignored, 6549 passed, 2 failed, 6551 total tested

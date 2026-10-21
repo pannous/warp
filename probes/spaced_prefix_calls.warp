@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+# `print #xs`, `print -1`, `f -x`: the word before a glued # or - calls it with the count or the negative
+xs = [5, 6, 7]
+print #xs
+print -1
+twice(x) := x * 2
+print twice -3
+size = 10
+print size -1
+s = {names: ["a", "b"]}
+print #s.names

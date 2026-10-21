@@ -187,7 +187,7 @@ def longest_spelled_at(p: Parser, candidates: list): any {
 	longest = ø
 	for candidate in candidates {
 		spelled = candidate#1
-		here = starts_at(p.code, spelled, p.at) and not (is_name_start(spelled[0]) and is_at_name_char(p, p.at + spelled.length))
+		here = starts_at(p.code, spelled, p.at) and not (is_name_start(spelled#1) and is_at_name_char(p, p.at + spelled.length))
 		if here and (longest == ø or spelled.length > longest#1.length) { longest = candidate }
 	}
 	longest
@@ -201,7 +201,7 @@ def aliased_operator_at(p: Parser): list {
 // A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `sqrt`)
 // Rust twin: spellings.rs table_operator, PREFIX_OPERATOR_WORDS
 def is_operator_spelling(word: text): bool {
-	if not is_name_start(word[0]) or word in WORD_OPERATORS { return true }
+	if not is_name_start(word#1) or word in WORD_OPERATORS { return true }
 	form = keyword_form(word)
 	PREFIX_OPERATORS.contains(form) or form == "contains" or word == "in" or word == "approximately"
 }
@@ -602,6 +602,12 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			left = power
 			continue
 		}
+		test = if left == ø then [] else test_word_at(p, min_power)
+		if test.length > 0 {
+			p.at = test#1
+			left = tested(left, test#2, test#3)
+			continue
+		}
 		if (c == '+' or c == '-') and is_at(p.code, p.at + 1, c, p.n) and SUFFIX_POWER >= min_power {
 			op = p.code[p.at .. p.at + 2]
 			p.at = p.at + 2
@@ -674,7 +680,15 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			}
 			if op.length == 0 {
 				if not applies(p, left, min_power) { break }
-				left = listed("", " ", [left, argument(p, not applies_otherwise(p, min_power) or ends_with_clause_word(left))])
+				// `s + f 2 each: 3`: the labelled arguments after the argument are the call's too
+				labelled = labelled_argument(p)
+				items = [left, if labelled == ø then argument(p, not applies_otherwise(p, min_power) or ends_with_clause_word(left)) else labelled]
+				labelled = labelled_argument(p)
+				while labelled != ø {
+					items = items + [labelled]
+					labelled = labelled_argument(p)
+				}
+				left = listed("", " ", items)
 				continue
 			}
 			powers = binding_powers(op#2)
@@ -1025,6 +1039,44 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
 }
 
+// `r = move 1 from: 10 to: 3`: a label word with a colon and a blank after it labels the argument after them, also
+// where the call is an operand (decision labels-calls); ø where no label stands
+// Rust twin: suffixes.rs labelled_argument
+def labelled_argument(p: Parser): Node := {
+	at = blank_end(p, p.at)
+	end = name_end(p.code, at, p.n)
+	if end == at or not label_words.contains(p.code[at .. end]) or not is_at(p.code, end, ':', p.n) or not " \t".contains(peek(p.code, end + 1, p.n)) { return ø }
+	p.at = end + 1
+	skip_spaces(p)
+	Key(symbol(p.code[at .. end]), Op.Colon, expression(p, ARGUMENT_POWER))
+}
+
+// `x empty`, `x missing`, `x is absent` … ending a condition (wiki/null.md): [the end of the word, the word, whether
+// `is` stood before it], else []; the word ends the condition where no operand follows it, or a block, a colon or an
+// operator word does
+// Rust twin: conditions.rs try_parse_test_word
+TEST_WORDS = ["empty", "missing", "absent", "unknown", "undefined", "failed"]
+NOT_POWER = 105
+def test_word_at(p: Parser, min_power: int): list {
+	if min_power > NOT_POWER { return [] }
+	after_is = keyword_at(p, "is")
+	start = if after_is then blank_end(p, p.at + 2) else p.at
+	word = TEST_WORDS.find(candidate => keyword_at_position(p, candidate, start)) ?? ""
+	if word == "" { return [] }
+	end = start + word.length
+	after = blank_end(p, end)
+	next = peek(p.code, after, p.n)
+	following = p.code[after .. name_end(p.code, after, p.n)]
+	ends = not operand_follows_at(p, end) or next == '{' or next == ':' or WORD_OPERATORS.any(op => op#1 == following)
+	if ends then [end, word, after_is] else []
+}
+// `x failed` is `is_error(x)`, `x is empty` `count(x) == 0` (ø, "", [] and {} alike), the other words `not x`
+def tested(left: Node, word: text, after_is: bool): Node := {
+	if word == "failed" { return listed("(", "", [symbol("is_error"), left]) }
+	if after_is and word == "empty" { return keyed("==", listed("(", "", [symbol("count"), left]), 0) }
+	Key(ø, Op.Not, left)
+}
+
 // The word here begins what follows the operand: a loop clause, a block's `end`, a key (`_: 0`) or an element (`p{m}`)
 // Rust twin: suffixes.rs word_begins_item
 def word_begins_item(p: Parser): bool {
@@ -1152,7 +1204,7 @@ def operator_at(p: Parser): list {
 	if is_name_start(c) {
 		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
 		for written, canonical in WORD_OPERATORS {
-			if written[0] == c and keyword_at(p, written) and not (p.in_branch and written == "else") { return [written, canonical] }
+			if written#1 == c and keyword_at(p, written) and not (p.in_branch and written == "else") { return [written, canonical] }
 		}
 		return aliased_operator_at(p)
 	}
@@ -1160,7 +1212,7 @@ def operator_at(p: Parser): list {
 	// `x = 1  # one` is a comment, `xs #1` the index operator (card parser-parses)
 	if c == '#' and skipped_end(p.code, p.at, p.n) > p.at { return [] }
 	for written, canonical in SYMBOL_OPERATORS {
-		if written[0] == c and starts_at(p.code, written, p.at) and (written != ">>" or operand_follows(p, 2)) { return [written, canonical] }
+		if written#1 == c and starts_at(p.code, written, p.at) and (written != ">>" or operand_follows(p, 2)) { return [written, canonical] }
 	}
 	aliased_operator_at(p)
 }
@@ -1222,10 +1274,10 @@ def declared_operator(kind: text, words: list): text {
 	if glyph != "" and is_operator_glyph(glyph) { return glyph }
 	if kind != "infix" or not words.contains(":=") or words.length == 0 { return "" }
 	head = if words#1 == "operator" and words.length > 1 then words#2 else words#1
-	end = if is_name_start(head[0]) then name_end(head, 0, head.length) else 0
-	if not is_name_start(head[0]) { while end < head.length and head[end] != '(' { end = end + 1 } }
+	end = if is_name_start(head#1) then name_end(head, 0, head.length) else 0
+	if not is_name_start(head#1) { while end < head.length and head[end] != '(' { end = end + 1 } }
 	word = head[0 .. end]
-	operator = (is_name_start(head[0]) and word != "operator") or is_operator_glyph(word)
+	operator = (is_name_start(head#1) and word != "operator") or is_operator_glyph(word)
 	if operator and (end == head.length or head[end] == '(') then word else ""
 }
 
@@ -1273,7 +1325,7 @@ global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
 		declared = declared_operators(module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex"))
-		library_operators = declared.filter(operator => not is_name_start(operator#1[0]))
+		library_operators = declared.filter(operator => not is_name_start(operator#1#1))
 	}
 	library_operators
 }
@@ -1327,7 +1379,7 @@ def is_plain_name(word: text): bool := word.length > 0 and name_end(word, 0, wor
 
 // The declared operator written at the parser's position, the longest glyph, a word one as a whole word, else ø
 // Rust twin: operators.rs user_operator_at
-def user_operator_at(p: Parser): list := longest_spelled_at(p, p.operators)
+def user_operator_at(p: Parser): list? := longest_spelled_at(p, p.operators)
 def is_at_name_char(p: Parser, at: int): bool := at < p.n and is_name_char(p.code[at])
 
 // `infix operator ⊕(a: int, b: int) := a * 10 + b`, `prefix operator ∆ := …`: the definition of the function
@@ -1616,6 +1668,8 @@ def prefixed(p: Parser): Node := {
 	}
 	foreign = foreign_form(p, word)
 	if foreign != ø { return foreign }
+	event = if emit_words.contains(word) then emitted(p, word) else ø
+	if event != ø { return event }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else ø
 	if declared != ø { return declared }
 	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
@@ -1625,6 +1679,30 @@ def prefixed(p: Parser): Node := {
 		return Key(ø, Op.Not, expression(p, 105))
 	}
 	atom(p)
+}
+
+// `1 + emit ask`, `emit stop the machine{reason: "x"}`: the emit word and the words of its event are one phrase, each
+// binding like the operand of a unary minus (`emit missing` raises missing, no test word); ø where an operator
+// follows, the word is then a name (`send alarm{} to "x"`)
+// Rust twin: jumps.rs try_parse_emit
+def emitted(p: Parser, word: text): Node := {
+	before = p.at
+	p.at = p.at + word.length
+	skip_spaces(p)
+	phrase = [symbol(word)]
+	while is_name_start(peek(p.code, p.at, p.n)) or (phrase.length > 1 and "0123456789\"'".contains(peek(p.code, p.at, p.n))) {
+		if operator_at(p).length > 0 {
+			p.at = before
+			return ø
+		}
+		phrase = phrase + [expression(p, PREFIX_POWER)]
+		skip_spaces(p)
+	}
+	if phrase.length == 1 {
+		p.at = before
+		return ø
+	}
+	listed("", " ", phrase)
 }
 
 // Whether the word at the parser's position follows a member's dot: `math.sqrt(4)` calls the member sqrt, no √
@@ -1641,7 +1719,7 @@ def word_prefixed(p: Parser, word: text, operator: text): Node := {
 	if expression_ends(p) { return keyed(operator, ø, ø) }
 	glued = peek(p.code, p.at, p.n) == '('
 	skip_spaces(p)
-	keyed(operator, ø, expression(p, glued ? PREFIX_POWER : ARGUMENT_POWER))
+	keyed(operator, ø, expression(p, if glued then PREFIX_POWER else ARGUMENT_POWER))
 }
 
 PREFIX_POWER = 162
@@ -3547,7 +3625,7 @@ def variant_class(type_name: Node, variant: text, payload: list, parameters: lis
 		if is_list_of(field, "(") and #group_parts(field)#3 == 1 { field = group_parts(field)#3#1 }
 		if is_typed_field(field) {
 			fields += [field]
-		} else if is_symbol(field) and name_of(field)[0].lower() == name_of(field)[0] and not BUILTIN_TYPE_WORDS.contains(name_of(field)) {
+		} else if is_symbol(field) and name_of(field)#1.lower() == name_of(field)#1 and not BUILTIN_TYPE_WORDS.contains(name_of(field)) {
 			fields += [Key(field, Op.Colon, symbol("any"))]
 		} else {
 			field_name = if payload.length == 1 then "value" else "value" + position
@@ -3642,7 +3720,7 @@ def quoted(p: Parser): Node := {
 	holed = if quote == '"' then template(written) else ø
 	if holed != ø { return template_node(holed) }
 	content = unescaped(written, quote == '"')
-	if content.length == 1 then content[0] else content
+	if content.length == 1 then content#1 else content
 }
 
 // An interpolating text with a hole as its template: holes `\(x)` `\{x}` `$(x)` as `${x}`, escapes read, a literal
