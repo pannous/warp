@@ -4,10 +4,10 @@
 //! Only top-level functions defined once, whose parameter is only called or passed on, and only names no assignment,
 //! parameter or one-parameter lambda binds too (a loop variable or a destructured name of the same name is not looked
 //! for: a call's head is the function anyway); a copy's own calls are specialised in turn (`fold(f, xs) := … fold(f,
-//! rest)`), up to a cap. A library word the program doesn't bind itself is passed so too: `each(abs, n)` adds
-//! `each·abs(n)`, which calls abs as written code does (card specialise-library-functions).
+//! rest)`), up to a cap. A library word the program doesn't bind itself and an operator are passed so too:
+//! `each(abs, n)` adds `each·abs(n)`, which calls abs as written code does, `fold(+, xs)` `fold·+(xs)`, which adds
+//! (card specialise-library-functions).
 
-use super::inlining::renamed_names;
 use super::nodes::{children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -43,19 +43,14 @@ impl Definition {
 		key(Node::List(head.collect(), Bracket::Round, Separator::None), self.op, self.body.clone())
 	}
 
-	/// The copy of this function for the function `passed` given as its parameter at `index`; a library word is
-	/// called as the lambda it would become calls it (function_values.rs library_word_lambda)
-	fn specialised(&self, index: usize, passed: &str, is_library_word: bool) -> Definition {
+	/// The copy of this function for the function `passed` given as its parameter at `index`
+	fn specialised(&self, index: usize, passed: &Passed) -> Definition {
 		let mut params = self.params.clone();
 		let param = params.remove(index);
-		let body = match is_library_word {
-			true => library_word_called(self.body.clone(), &param, passed),
-			false => self.body.clone(),
-		};
 		Definition {
-			name: copy_name(&self.name, passed),
+			name: copy_name(&self.name, &passed.name),
 			params,
-			body: renamed_names(body, &HashSet::from([param]), &|_| passed.to_string()),
+			body: passed.put_in(self.body.clone(), &param),
 			op: self.op,
 		}
 	}
@@ -72,17 +67,67 @@ impl Definition {
 	}
 }
 
-/// Each call `param(a, b)` as the library word's own call `word(a, b)` (`abs x` an operator's)
-fn library_word_called(node: Node, param: &str, word: &str) -> Node {
-	match node {
-		Node::List(items, Bracket::Round, Separator::None)
-			if items.first().is_some_and(|head| head.is_symbol(param)) =>
-		{
-			let arguments = items.into_iter().skip(1).map(|item| library_word_called(item, param, word)).collect();
-			crate::closures::word_applied(word, arguments)
+/// What a copy is made for, and how it calls it
+enum Calling {
+	/// a function of the program, by name
+	Function,
+	/// a library word, as the lambda it would become calls it (function_values.rs library_word_lambda): `abs x` an
+	/// operator's
+	LibraryWord,
+	/// `+`: `a + b`
+	Operator(Op),
+}
+
+/// A function given as an argument: its name in the copy's, the node passing it on, how it is called
+struct Passed {
+	name: String,
+	argument: Node,
+	calling: Calling,
+}
+
+impl Passed {
+	/// The body with each call `param(a, b)` the passed function's, any other use (passing it on) the argument
+	fn put_in(&self, node: Node, param: &str) -> Node {
+		match node {
+			Node::Symbol(name) if name == param => self.argument.clone(),
+			Node::List(items, Bracket::Round, Separator::None)
+				if items.first().is_some_and(|head| head.is_symbol(param)) =>
+			{
+				let arguments: Vec<Node> = items.into_iter().skip(1).map(|item| self.put_in(item, param)).collect();
+				self.called(arguments)
+			}
+			other => children_rewritten(other, |child| self.put_in(child, param)),
 		}
-		other => children_rewritten(other, |child| library_word_called(child, param, word)),
 	}
+
+	fn called(&self, mut arguments: Vec<Node>) -> Node {
+		match self.calling {
+			Calling::Function => {
+				let head = Node::Symbol(self.name.clone());
+				Node::List([vec![head], arguments].concat(), Bracket::Round, Separator::None)
+			}
+			Calling::LibraryWord => crate::closures::word_applied(&self.name, arguments),
+			Calling::Operator(op) if arguments.len() == 2 => {
+				let right = arguments.pop().expect("two arguments");
+				key(arguments.pop().expect("two arguments"), op, right)
+			}
+			// a binary operator called with another count, as its closure would be: refused alike
+			Calling::Operator(_) => {
+				Node::List([vec![self.argument.clone()], arguments].concat(), Bracket::Round, Separator::None)
+			}
+		}
+	}
+}
+
+/// `+` given as a function, the parser's operator with nothing on either side (`(+ ø ø)`), or its symbol when a copy
+/// passes it on
+fn binary_operator(argument: &Node) -> Option<Op> {
+	let op = match argument.drop_meta() {
+		Node::Key(left, op, right) if left.is_nothing() && right.is_nothing() => *op,
+		Node::Symbol(text) => crate::lambdas::operator_of_value(text)?,
+		_ => return None,
+	};
+	crate::lambdas::operator_value_text(op).map(|_| op)
 }
 
 /// `abs` given as a function, the parser's bare operator `‖` that ambiguous_forms.rs operator_values made the lambda
@@ -178,20 +223,17 @@ impl Specialiser {
 		if arguments.len() != function.params.len() {
 			return None;
 		}
-		let (index, passed, is_library_word) = arguments.iter().enumerate().find_map(|(index, argument)| {
-			let passed = argument.symbol_name().or_else(|| operator_word(argument))?;
-			let is_library_word = !self.passable.contains(passed) && self.is_library_word(passed);
-			let free = !function.params.iter().any(|param| param == passed);
-			let passable = self.passable.contains(passed) || is_library_word;
-			(passable && free && function.takes_function_at(index))
-				.then(|| (index, passed.to_string(), is_library_word))
+		let (index, passed) = arguments.iter().enumerate().find_map(|(index, argument)| {
+			let passed = self.passed(argument)?;
+			let free = !function.params.iter().any(|param| *param == passed.name);
+			(free && function.takes_function_at(index)).then_some((index, passed))
 		})?;
-		let name = copy_name(&function.name, &passed);
+		let name = copy_name(&function.name, &passed.name);
 		if !self.definitions.contains_key(&name) {
 			if self.copies.len() >= MAX_COPIES {
 				return None;
 			}
-			let copy = function.specialised(index, &passed, is_library_word);
+			let copy = function.specialised(index, &passed);
 			let original = self.original_of(&function.name);
 			self.definitions.insert(name.clone(), copy.clone());
 			self.copies.push((original, copy));
@@ -199,8 +241,27 @@ impl Specialiser {
 		Some((index, name))
 	}
 
-	fn is_library_word(&self, name: &str) -> bool {
-		!self.own_names.contains(name) && crate::lowering::function_values::library_function_arity(name).is_some()
+	/// The argument as a function a copy can call: a function of the program, a library word or an operator
+	fn passed(&self, argument: &Node) -> Option<Passed> {
+		if let Some(op) = binary_operator(argument) {
+			let text = crate::lambdas::operator_value_text(op)?;
+			return Some(Passed {
+				name: text.to_string(),
+				argument: Node::Symbol(text.to_string()),
+				calling: Calling::Operator(op),
+			});
+		}
+		let name = argument.symbol_name().or_else(|| operator_word(argument))?;
+		let calling = if self.passable.contains(name) {
+			Calling::Function
+		} else if !self.own_names.contains(name)
+			&& crate::lowering::function_values::library_function_arity(name).is_some()
+		{
+			Calling::LibraryWord
+		} else {
+			return None;
+		};
+		Some(Passed { name: name.to_string(), argument: Node::Symbol(name.to_string()), calling })
 	}
 
 	/// The top-level function a copy (of a copy) was made from: its copies follow it in the program

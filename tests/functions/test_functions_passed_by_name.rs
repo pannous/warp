@@ -50,4 +50,14 @@ fn a_library_word_passed_by_name_is_called_by_name() {
 	is!("twice(f, x) := f(f(x)); twice(upper, \"ab\")", "AB");
 	// a word the program defines itself is its own, not the library's
 	is!("upper(t) := t + \"!\"; twice(f, x) := f(f(x)); twice(upper, \"a\")", "a!!");
+	// passed on to another higher-order function
+	is!("twice(f, x) := f(f(x)); via(f, x) := twice(f, x); via(abs, -4)", 4);
+}
+
+#[test]
+fn an_operator_passed_as_a_function_is_applied() {
+	// card specialise-library-functions: combine·+ adds, as the closure of + did
+	const COMBINE: &str = "combine(f, n) := { total = 0; for i in 1 to n { total = f(total, i % 7) }; total }";
+	is!(&format!("{COMBINE}; combine(+, 10)"), 27);
+	is!("pair(f, a, b) := f(a, b); via(f, a, b) := pair(f, a, b); via(*, 10, 4) * 100 + count([1 for i in 1 to 2 if via(<, i, 2)])", 4001);
 }
