@@ -32,6 +32,8 @@ After a context swap, this file and your role file win over anything a handover 
   or merge passes whenever their work overlaps.
 - Rare edge cases go to Later: a corner real programs rarely hit (exotic literals like ∞/NaN, wording nits on code
   nobody writes, odd pairs of rarely combined features) is filed with `todo add Later "…"`, never Next/Soon.
+- Emptiness is tested loosely (user, decision empty-is-not-missing): in all warp code (lib, tests, samples) write
+  `is empty`, `if no x`, `if not x`, never an equality against ø, [] or ""; `x is ø` / `x == ø` test missing only.
 - JSON5, not strict JSON, for anything people or agents write (configs, probe commands, data files), or warp
   notation. Strict JSON only where a tool or protocol requires it (package.json, .claude settings, Lake manifest,
   WebDriver BiDi, machine-to-machine buffers).
