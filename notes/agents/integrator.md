@@ -24,7 +24,7 @@ Read notes/agents/common.md and notes/roles.md.
 - Warp-only branches land at once, before any Rust batch (user 2026-10-21): a branch that changes no Rust (nothing in
   src/, crates/, tests/**/*.rs, Cargo.*, build.rs) needs no cloud run and no batch, only the self check on the merged
   tip: `WARP_LIB=<tip>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp` prints
-  Hello → push (integrator_tools/warp_only.sh lands the Ready ones, one by one).
+  Hello → push (`integrator_tools/express.sh --warp-only` lands the Ready ones: together, one by one when the check is red).
 - Self-hosting twins (tests/common/twins.rs: test_self_parser, test_self_pipeline, test_self_analyzer …) never bounce
   a branch: the warp compiler captures the spirit of the wiki, not an exact copy of Rust (decisions
   self-hosting-minimal). A twin difference goes through with --flaky "<test> (twin difference accepted, owner records
