@@ -54,10 +54,10 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		{
 			true
 		}
-		// as `sleep(10)`, which gives nothing
+		// as `sleep(10)` and `sleep_ms(10)`, which give nothing
 		Node::List(list_items, _, _)
 			if *bracket != Bracket::Square
-				&& matches!(list_items.as_slice(), [word, _] if word.is_symbol(PRINT_WORD) || word.is_symbol(crate::host::SLEEP)) =>
+				&& matches!(list_items.as_slice(), [word, _] if word.is_symbol(PRINT_WORD) || word.is_symbol(crate::host::SLEEP) || word.is_symbol(crate::host::SLEEP_MS)) =>
 		{
 			true
 		}

@@ -51,9 +51,9 @@ arm_result(arm: Node): Node := match arm {
 	_: arm
 }
 
-# `1`, "a", 'c', an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the program declares
-# (`Red` of `enum Color { Red, Green }`): an arm the subject equals
-is_value_pattern(pattern: Node, variants: any): bool := match pattern {
+# `1`, "a", 'c', ø, yes, an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the program declares
+# (`Red` of `enum Color { Red, Green }`), a constant `True`, `no`: an arm the subject equals
+is_value_pattern(pattern: Node, variants: any): bool := pattern is bool or match pattern {
 	Symbol(name): name in variants
 	Number(value): yes
 	Text(value): yes
@@ -62,7 +62,8 @@ is_value_pattern(pattern: Node, variants: any): bool := match pattern {
 	Key(type_name, Op.Scope, case_name): is_name(type_name) and is_name(case_name)
 	# alternatives `"number" | "bool"`, each a value (Rust twin: switch.rs alternatives)
 	Key(left, Op.Or, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
-	_: no
+	# `ø: e`, `True: e` (the parser reads True as yes), as Rust's node_cases.rs reads Node.Empty and Node.True
+	_: pattern == ø or pattern is bool
 }
 
 # the subject equals the value, or one of the alternatives

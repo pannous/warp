@@ -13,6 +13,7 @@ use "words.warp"
 use "signatures.warp"
 use "builtin_signatures.warp"
 use "kinds.warp"
+use "byte_codes.warp"
 use math
 use os
 
@@ -87,6 +88,9 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_trunc: 157, f64_nearest: 158, f64_sub: 161, f64_mul: 162, f64_div: 163, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
+# phrases whose meaning moves out of the compiler into warp library words (card phrases-out-of-core): refused by name
+# until the word exists, never compiled as an unknown name
+pending_library_words = {times: "`n times`", once: "`once …`", twice: "`twice …`", thrice: "`thrice …`"}
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64)
 wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
 	"i64.div_s": 127, "i64.div_u": 128, "i64.rem_s": 129, "i64.rem_u": 130, "i64.and": 131, "i64.or": 132, "i64.xor": 133,
@@ -459,6 +463,12 @@ def boxed(value: any): list {
 	node(Kind.Int, code + gc_code(gc_ops.struct_new, [gc.int_box]))
 }
 # `[a, b, c]`: a vector of its items, boxed, read in order
+# `{1, 2}` as a value is a curly list of its values, as Rust builds the list structure; `{a; b}` and the spaced `{3 4}`
+# run as statements (user 2026-10-20: `hi := {3 4}; hi()` giving 4 is reasonable), and a body or branch runs its block
+is_curly_list(n: any): bool := bracket_of(n) == "{" and separator_of(n) == ","
+def curly_list_value(body: Body, items: any): list { ["node", node(Marked.Map, vector_code(items.map(item => boxed(expression_code(body, item)))))] }
+# a body or branch `{a, b}` runs its statements, as Rust unwraps a block there
+statements_block(n: any): any := if is_curly_list(n) then separated(n, ";") else n
 def list_value(body: Body, items: any): list { ["list", vector_code(items.map(item => boxed(expression_code(body, item))))] }
 def vector_code(item_codes: any): list {
 	code = [op.i32_const] + sleb(#item_codes) + concatenated(item_codes)
@@ -693,7 +703,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		"meta_column": ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc.meta_node]) + gc_code(gc_ops.struct_get, [gc.meta_node, 4])]
 		"closure_text": call_values(made_late(closure_text_name, "text", ["closure"]), values)
 		"is_null": ["bool", values#1#2 + [op.ref_is_null]]
-		"same_text": ["int", values#1#2 + values#2#2 + [op.ref_eq, op.i64_extend_i32_u]]
+		"same_text": ["bool", values#1#2 + values#2#2 + [op.ref_eq]]
 		# the error is the word's: a variant of it by arity is named `word·arity`
 		"fail": [pending, error_throw(body.function.name.split("·")#1) + [op.unreachable]]
 		"is_ratio": ["bool", ratio_test(values#1#2)]
@@ -801,7 +811,8 @@ def shown_text(value: any): list {
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
 # first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
 def printed_value(body: Body, n: any): list {
-	if is_quote(n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
+	# `print first xs`: a call of a program function prints its value
+	if is_quote(n) or is_spaced_call(body, n) or has_repetition(n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
 	if n#1 is text and text_value(n#1)#1 == "text" { return texts_joined(body, items_of(n), "") }
 	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between (Rust's spaced_values_text)
 	if n.all(is_spaced_value) and not items_of(n)[1..].any(is_negative_literal) { return texts_joined(body, items_of(n), " ") }
@@ -832,12 +843,14 @@ def runtime_call(name: text, values: any): list { call_values(module.runtime[nam
 # the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
 base_class_layers = ["extends", "inherited_from"]
 collect_types(n: any): any := {
-	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type" { return record_type(value_of(n)#2, value_of(n)#3) }
+	if declares_type(n) { return record_type(value_of(n)#2, value_of(n)#3) }
 	if is_type_alias(n) { return module.aliases[value_of(key_of(n))#2#2] = name_of(value_of(n)) }
 	if is_group(n) { for x in n { collect_types(x) } }
 }
+# a class or enum declaration, the opaque view ["type", name, body]
+declares_type(n: any): bool := type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type"
 # `type Name = text`: a declaration of no body naming another type
-is_type_alias(n: any): bool := type(n) is key and op_of(n) == "=" and type(key_of(n)) is key and key_of(key_of(n)) == symbol(opaque_word) and kind_of(value_of(key_of(n))) == "type" and value_of(key_of(n))#3 == ø and value_of(n) is symbol
+is_type_alias(n: any): bool := type(n) is key and op_of(n) == "=" and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and value_of(n) is symbol
 record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" {
 		module.class_defaults[name#2] = field_defaults(body)
@@ -929,6 +942,7 @@ def local_value(body: Body, n: any): list {
 	if name not in body.names and name in module.variants { return ["node", node(Kind.Symbol, text_bytes(name))] }
 	# a type's name, unbound, is the type value: `k = int` (Rust: names_a_type_value)
 	if name not in body.names and names_a_type_value(name) { return ["node", node(Marked.TypeValue, text_bytes(name))] }
+	if name not in body.names and name in pending_library_words { return refuse(pending_library_words[name] + " (library word pending)") }
 	if name not in body.names { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
@@ -1003,18 +1017,18 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 }
 # `x == ø`, `x != ø` (a match's `ø:` case): ø and an empty list are nothing, as Rust's equality takes them
 def nothing_test(body: Body, symbol: text, n: any): list {
-	asserted(symbol, runtime_call("is_nothing", [["node", boxed(expression_code(body, n))]]))
+	tested_as(symbol, runtime_call("is_nothing", [["node", boxed(expression_code(body, n))]]))
 }
 # `x === ø`, `x !== ø`: x is ø itself, the empty list not (== compares values, === also the kind, as Rust's)
 def identity_with_nothing(body: Body, symbol: text, n: any): list {
-	asserted(symbol, ["bool", boxed(expression_code(body, n)) + [op.ref_is_null]])
+	tested_as(symbol, ["bool", boxed(expression_code(body, n)) + [op.ref_is_null]])
 }
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
 def equality(body: Body, symbol: text, a: any, b: any): list {
-	asserted(symbol, runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]]))
+	tested_as(symbol, runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]]))
 }
 # the bool test as `==`, `===` ask it, negated for `!=`, `!==`
-def asserted(symbol: text, test: list): list := if symbol.starts_with("!") then ["bool", condition(test) + [op.i32_eqz]] else test
+def tested_as(symbol: text, test: list): list := if symbol.starts_with("!") then ["bool", condition(test) + [op.i32_eqz]] else test
 # an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
 # operators without one take the floats
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod"}
@@ -1087,6 +1101,8 @@ def assignment(body: Body, target: any, value: any): list {
 		# a value known only at run time takes an int k as its item k+1, any other k as the entry named so
 		held = expression_code(body, key_of(target))
 		if held#1 == "node" { return keyed_assignment(body, key_of(target), held, subscript, value) }
+		# a list takes the put in place, its variable keeps the same list (no place to write back: ø)
+		if held#1 == "list" and subscript#1 == "node" { return keyed_assignment(body, ø, ["node", boxed(held)], subscript, value) }
 		if subscript#1 == "node" { return refuse("a write by a key known only at run time, an index or a name") }
 	}
 	if type(target) is key and op_of(target) == "." and value_of(target) is symbol {
@@ -1136,8 +1152,8 @@ def assignment(body: Body, target: any, value: any): list {
 declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool"}
 def declaration(body: Body, name: text, written_type: text, value: any): list {
 	type_name = aliased_type(written_type)
-	# `x: any = v` admits every value: the plain assignment; `t: type = int` too, a type value is a node like any
-	if type_name == "any" or type_name == "type" { return assignment(body, symbol(name), value) }
+	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
+	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, type_name[0..<(#type_name - 1)], value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if type_name not in declared_kinds { return refuse("a variable declared " + type_name) }
@@ -1292,7 +1308,7 @@ placed_arguments(names: any, arguments: any): any := {
 	for argument in arguments {
 		if is_named_argument(argument, names) {
 			name = name_of(key_of(argument))
-			at = range_list(#names).filter(i => names[i] == name)#1
+			at: int = range_list(#names).filter(i => names[i] == name)#1
 			while #slots <= at { slots += [ø] }
 			if slots[at] != ø { return ø }
 			slots[at] = [value_of(argument)]
@@ -1460,9 +1476,9 @@ def runtime_error_message(name: text): text {
 # has_else: `else ø` is a branch giving ø, no missing one
 def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else: bool): list {
 	c = condition(expression_code(body, test))
-	a = nested(body, yes_branch, 1)
+	a = nested(body, statements_block(yes_branch), 1)
 	if not has_else { return unmatched(c, a, yes_branch is number) }
-	b = nested(body, no_branch, 1)
+	b = nested(body, statements_block(no_branch), 1)
 	kind = joint_kind(a#1, b#1)
 	# a first reading whose branches both wait on calls still compiling: its kind is not known yet either (its code is
 	# not kept), so the function's other readings decide it
@@ -1708,8 +1724,34 @@ is_spaced_call(body: Body, n: any): bool := {
 }
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: any): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
+# `n times [x]`, `n times "ab"` among the items of a spaced group or a call `print(3 times [7])`: n copies, as Rust's times pass lowers them (zero_fill,
+# times·text), the count the item before; `n times {…}` waits for its library word (pending_library_words). The index
+# of `times` in items, 0 for none
+repetition_at(items: any): int := {
+	places = range_list(#items).map(i => i + 1).filter(at => at > 1 and at < #items and repeats_at(items, at))
+	if places then places#1 else 0
+}
+# whether items#at is `times` before a value it repeats
+repeats_at(items: any, at: int): bool := {
+	value = items#(at + 1)
+	items#at == symbol("times") and (value is text or (is_group(value) and bracket_of(value) == "[" and #value == 1))
+}
+repetition_call(count: any, value: any): any := if value is text then call_of("times·text", [count, value]) else call_of("zero_fill", [count, value#1])
+# the group with its repetition at `at` as one call: the group itself when only the repetition is left
+repetition_folded(n: any, at: int): any := {
+	items = items_of(n)
+	folded = items[..(at - 2)] + [repetition_call(items#(at - 1), items#(at + 1))] + items[(at + 1)..]
+	if #folded == 1 then folded#1 else separated(bracketed(folded, bracket_of(n)), separator_of(n))
+}
+has_repetition(n: any): bool := {
+	if not is_group(n) or not (bracket_of(n) == "" or bracket_of(n) == "(") { return no }
+	repetition_at(items_of(n)) > 0
+}
+# the group with each of its repetitions one call
+repetitions_folded(n: any): any := if has_repetition(n) then repetitions_folded(repetition_folded(n, repetition_at(items_of(n)))) else n
 def group_expression(body: Body, n: any): list {
 	if is_quote(n) { return ["node", quoted_code(body, n#2)] }
+	if has_repetition(n) { return expression_code(body, repetitions_folded(n)) }
 	if inline_quote_at(n) > 0 { return group_expression(body, quote_folded(n, inline_quote_at(n))) }
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, items_of(n)[2..]) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
@@ -1804,6 +1846,7 @@ def group_expression(body: Body, n: any): list {
 		if checks_fields(body, n#2) and not (n#3 is text and field_admits(n#3, value#1)) and #module.classes.keys > 0 { return refuse("a field write a typed field may refuse") }
 		return field_assignment(expression_code(body, n#2), expression_code(body, n#3), value)
 	}
+	if is_curly_list(n) { return curly_list_value(body, items_of(n)) }
 	# a call of a program's function it can't take: refused naming the count
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions { return call(body, module.functions[name_of(n#1)], items_of(n)[1..]) }
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
@@ -1824,7 +1867,7 @@ def data_item(body: Body, mark: text, item: any): list {
 	runtime_call(data_item_checks[mark], [value])
 }
 # the tables a runtime word reads a number of by name, `Kind.List` (kinds.warp), folded into the code
-constant_tables = {Kind: Kind, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode}
+constant_tables = {Kind: Kind, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode, TimeInfoUnit: TimeInfoUnit, Ascii: Ascii, Utf8: Utf8, Unicode: Unicode}
 # the number `Kind.List` names in its table, else ø
 table_number(table: any, case: any): any := {
 	if not (table is symbol and name_of(table) in constant_tables) { return ø }
@@ -1856,6 +1899,8 @@ def key_expression(body: Body, n: any): list {
 	if is_loop_step(n) { return expression_code(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
+	# `{}`, held behind the opaque word so number_keys.warp can key it: an empty map
+	if is_empty_map(n) { return map_value(body, []) }
 	# the key of `Point{x: 1}` has no operator as parser.warp reads it, `:` as Rust's analysis view shows it
 	# `P{}`: every field its default (an empty group reads as ø, or as the opaque `{}`)
 	if operator == "" and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
@@ -2103,13 +2148,15 @@ def collect_literal_arguments(n: any) {
 	}
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
-# the annotations of a parameter held as a node: any value, a node, a function, a type value `int`, a map
-node_annotations = ["any", "Node", "function", "type", "map"]
+# the annotations of a parameter held as a node: any value, a node, a function, a type value `int`, a map, a number
+# (an int or a float); an optional `text?` is one too, ø or the value
+node_annotations = ["any", "Node", "function", "type", "map", "number"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(written: text): text := {
 	word = aliased_type(written)
-	if word in node_annotations or word in module.classes { return "node" }
+	if word in node_annotations or word in module.classes or word.ends_with("?") { return "node" }
+	# Rust twin: type_names.rs plural_element_type
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return "list" }
 	word
 }
@@ -2126,9 +2173,12 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	parameter_kinds = []
 	for i in 0..<#f.signature.parameters {
 		declared = f.signature.parameters[i].type_name
-		annotation = if declared == "" then analyzed_parameter_kind(f, i) else declared
+		annotation = if declared == "" then ø else declared
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
 		given = if argument_kinds[i] == pending then "node" else argument_kinds[i]
+		# analyzer.warp's kind, but a node stays one where it found a list: it may be a list of other brackets (`{1 2}`)
+		analyzed = analyzed_parameter_kind(f, i)
+		if annotation == ø and analyzed != ø and not (given == "node" and analyzed == "list") { annotation = analyzed }
 		if parameter_key(f.name, i) in module.literal_arguments {
 			for kind in module.literal_arguments[parameter_key(f.name, i)] { given = parameter_joint(given, kind) }
 		}
@@ -2145,7 +2195,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 		f.kinds = range_list(#parameter_kinds).map(i => if parameter_key(f.name, i) in f.widened then f.widened[parameter_key(f.name, i)] else parameter_kinds[i])
 		f.result = pending
 		first = new_body(f)
-		result = expression_code(first, f.body)#1
+		result = expression_code(first, statements_block(f.body))#1
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
 	if result != no_kind and analyzed_result_kind(f) != ø and (result == pending or held_as(result, analyzed_result_kind(f))) { result = analyzed_result_kind(f) }
@@ -2165,7 +2215,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 # one of those is read again once every function is compiled (module.rereads)
 body_code(f: Function) := {
 	scope = new_body(f)
-	value = expression_code(scope, f.body)
+	value = expression_code(scope, statements_block(f.body))
 	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.signature.parameters)..]
 	f.local_names = scope.order
