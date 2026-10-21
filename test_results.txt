@@ -432,6 +432,8 @@ PASSED:
   ✓ control::test_match_alternatives::bar_and_or_are_alternatives
   ✓ control::test_match_alternatives::commas_are_alternatives
   ✓ control::test_match_arm_if::an_arm_gives_its_inline_if
+  ✓ control::test_match_arm_nested::an_unbraced_inner_match_keeps_the_outer_arms
+  ✓ control::test_match_arm_nested::an_unbraced_inner_match_over_a_node
   ✓ control::test_match_binding_arm::bare_name_arm_binds_the_subject
   ✓ control::test_match_binding_arm::bare_name_unused_by_its_body_is_a_symbol_case
   ✓ control::test_match_binding_arm::variable_arm_compares
@@ -442,6 +444,7 @@ PASSED:
   ✓ control::test_match_deep_conditions::nested_alternatives_bind_no_names
   ✓ control::test_match_else_line::else_arm_on_its_own_line
   ✓ control::test_match_else_line::else_branch_on_its_own_line_stays
+  ✓ control::test_match_guarded_unit_name::a_guarded_arm_binds_a_unit_named_variable
   ✓ control::test_match_guards_and_finally::a_guard_binds_and_tests
   ✓ control::test_match_guards_and_finally::an_assigned_match_takes_arrow_cases
   ✓ control::test_match_guards_and_finally::finally_runs_and_keeps_the_value
@@ -459,6 +462,7 @@ PASSED:
   ✓ control::test_match_maps::map_arm_ignores_fields_not_named
   ✓ control::test_match_maps::map_arm_needs_its_fields
   ✓ control::test_match_maps::map_arms_match_at_any_depth
+  ✓ control::test_match_method_subject::a_method_call_is_the_subject
   ✓ control::test_match_negative_subject::a_negative_subject_is_matched
   ✓ control::test_match_negative_subject::a_variable_named_match_still_subtracts
   ✓ control::test_match_other::a_variable_named_other_stays_a_variable
@@ -1548,6 +1552,7 @@ PASSED:
   ✓ functions::test_function_references::test_a_bare_name_needing_arguments_is_an_error_with_the_fix
   ✓ functions::test_function_references::test_a_body_returns_a_function_reference
   ✓ functions::test_function_references::test_a_function_reference_as_a_value_and_an_argument
+  ✓ functions::test_function_type_at_run_time::a_builtin_passed_on_has_its_builtin_type
   ✓ functions::test_function_type_at_run_time::a_function_value_has_its_params_at_run_time
   ✓ functions::test_function_type_at_run_time::every_spelling_of_a_function_has_its_signature_as_type
   ✓ functions::test_function_type_at_run_time::other_values_keep_their_type
@@ -2390,6 +2395,9 @@ PASSED:
   ✓ lists::test_remove_and_index_of::index_of_is_the_one_based_position
   ✓ lists::test_remove_and_index_of::remove_takes_a_key_out_of_a_map_variable
   ✓ lists::test_remove_and_index_of::remove_takes_a_value_out_of_a_list_variable
+  ✓ lists::test_runtime_map_subscript::a_number_subscript_keys_a_map_given_to_a_function
+  ✓ lists::test_runtime_map_subscript::a_number_subscript_keys_a_map_parameter_by_its_digits
+  ✓ lists::test_runtime_map_subscript::a_one_entry_map_changed_by_a_method_keeps_its_number_key
   ✓ lists::test_self_sum_in_place::a_self_sum_of_a_shared_list_leaves_its_holders_alone
   ✓ lists::test_self_sum_in_place::a_self_sum_of_an_unshared_list_takes_linear_steps
   ✓ lists::test_set_past_the_end::setting_into_the_empty_list_is_an_index_error
@@ -3840,6 +3848,7 @@ PASSED:
   ✓ parser::test_self_pure::negated_operators_run_pure
   ✓ parser::test_self_pure::number_keys_run_in_the_front_lanes
   ✓ parser::test_self_pure::number_keys_run_pure
+  ✓ parser::test_self_pure::op_cases_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
   ✓ parser::test_self_pure::parser_words_run_pure
   ✓ parser::test_self_pure::program_names_run_pure
@@ -4283,6 +4292,7 @@ PASSED:
   ✓ scope::test_bound_names_shadow_functions::a_loop_variable_named_like_a_function_is_indexed
   ✓ scope::test_bound_names_shadow_functions::a_parameter_is_not_another_functions_local_of_that_name
   ✓ scope::test_bound_names_shadow_functions::a_parameter_named_like_a_function_takes_its_named_argument
+  ✓ scope::test_bound_names_shadow_functions::a_parameter_named_like_its_type_keeps_the_type
   ✓ scope::test_bound_names_shadow_functions::the_function_is_still_called_outside_the_local_scope
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
@@ -4572,6 +4582,7 @@ PASSED:
   ✓ text::test_text_concat::text_plus_number_stays_an_error
   ✓ text::test_text_concat::text_variables_and_compound_assignment
   ✓ text::test_text_concat::texts_concatenate_with_plus
+  ✓ text::test_text_cursor::a_cursor_reads_a_text_by_character_classes
   ✓ text::test_text_cursor::space_tests_a_character
   ✓ text::test_text_functions::a_block_with_an_if_statement_is_code_not_data
   ✓ text::test_text_functions::an_if_with_text_branches_makes_a_text_function
@@ -4865,6 +4876,7 @@ PASSED:
   ✓ types::test_declared_list_marks::a_write_of_another_type_through_a_hidden_alias_fails_at_run_time
   ✓ types::test_declared_list_marks::an_empty_declared_list_checks_its_items
   ✓ types::test_declared_list_marks::an_inferred_element_type_marks_nothing
+  ✓ types::test_declared_list_of_parameters::a_declared_list_of_untyped_parameters
   ✓ types::test_declared_type_compared::equals_with_a_declared_class_does_not_type_test
   ✓ types::test_declared_type_compared::equals_with_a_declared_enum_does_not_type_test
   ✓ types::test_dispatch::a_call_with_more_arguments_is_the_same_call_either_way
@@ -4930,6 +4942,9 @@ PASSED:
   ✓ types::test_field_named_like_builtin::a_texts_length_beside_a_map_with_a_length_key
   ✓ types::test_field_named_like_library_word::a_known_instance_reads_its_field
   ✓ types::test_field_named_like_library_word::a_list_keeps_the_library_word
+  ✓ types::test_field_shadows_global::a_class_body_method_reads_the_field_with_a_hint
+  ✓ types::test_field_shadows_global::a_field_without_a_global_of_its_name_reads_silently
+  ✓ types::test_field_shadows_global::an_outside_method_reads_the_field_with_a_hint
   ✓ types::test_fields_of_later_types::a_case_field_of_an_enum_declared_later
   ✓ types::test_fields_of_later_types::a_field_of_a_class_declared_later
   ✓ types::test_file_declarations::a_braced_empty_class_takes_nothing_in
@@ -6286,6 +6301,7 @@ PASSED:
   ✓ welcoming::test_near_miss_words::test_every_builtin_method_is_offered_once
   ✓ welcoming::test_open_range_slices::a_slice_from_the_start
   ✓ welcoming::test_open_range_slices::a_slice_to_the_end
+  ✓ welcoming::test_output_words_give_nothing::an_output_word_taking_arithmetic_does_not_warn
   ✓ welcoming::test_own_definition_hint::the_program_s_own_parse_json_gets_no_note
   ✓ welcoming::test_parser_runtime_positions::an_index_after_a_call_names_the_caller_line
   ✓ welcoming::test_parser_runtime_positions::an_index_in_a_function_names_its_line
@@ -6465,4 +6481,4 @@ FAILED:
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-12 ignored, 6454 passed, 6 failed, 6460 total tested
+12 ignored, 6470 passed, 6 failed, 6476 total tested

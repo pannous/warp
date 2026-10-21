@@ -598,3 +598,19 @@ fn a_failing_stage_names_its_file() {
 	let _ = std::fs::remove_dir_all(&library);
 	assert!(output.contains("the self-hosted stage") && output.contains("compiler/emitter.warp failed"), "{output}");
 }
+
+/// An operator case is its own value and a synonym of its spelling (decision enum-case, card pure-op-cases): the pure
+/// lane prints Op.Add as Add, converts it to and from "+", and a match binds a key's op as its case
+#[test]
+fn op_cases_run_pure() {
+	runs_pure("op_case_value", "[Op.Add, Op.Sub]", "[Add Sub]");
+	runs_pure("op_case_as_text", "x = Op.Add; x as text", "» \"+\"");
+	runs_pure("op_case_from_text", "\"*\" as Op", "Mul");
+	runs_pure("op_case_equals_spelling", "x = Op.Add; x == \"+\" and op_of(Key(1, x, 2)) == Op.Add", "yes");
+	runs_pure("op_case_bound", "match Key(1, Op.Add, 2) { Key(a, op, c): op; _: 0 }", "Add");
+	runs_pure(
+		"bracket_case_bound",
+		"match List([1], Bracket.Square, Separator.Comma) { List(xs, b, s): [b, s]; _: 0 }",
+		"[Square Comma]",
+	);
+}
