@@ -71,7 +71,8 @@ pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
-		(Node::Error(_), _) => Err(said),
+		// a position the compiler's run names is one in compiler.warp (its `raise`), not in the program
+		(Node::Error(_), _) => Err(crate::errors::diagnostic::located_in_file(&said, &library().join(COMPILER_FILE))),
 		(_, Ok(bytes)) => Ok(module_of_bytes(bytes)),
 		(_, Err(_)) => Err(error(&format!("compiler.warp wrote no module, it gave {}", said.serialize()))),
 	}
