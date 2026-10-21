@@ -6,6 +6,7 @@
 use super::nodes::{assign, if_then_else, key, Counter};
 use crate::node::{call, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::lowering::words::library_words::BYTE_LIST;
 use crate::words::{LIST_WORD, MAP_WORD};
 
 const OPTIONAL_PREFIX: &str = "optional·";
@@ -30,7 +31,9 @@ impl Optionals {
 			}
 		}
 		if let Node::Key(value, Op::As, target) = node.drop_meta() {
-			if let Some(element) = crate::analyzer::declared_element_type(target) {
+			// `text as bytes` is the text's UTF-8 bytes, no cast of each item
+			let element = crate::analyzer::declared_element_type(target).filter(|_| !target.is_symbol(BYTE_LIST));
+			if let Some(element) = element {
 				return items_cast(self.rewrite(value.as_ref().clone()), element);
 			}
 			if let Node::Symbol(target) = target.drop_meta() {
