@@ -21,6 +21,12 @@ fn a_declared_runtime_word_gives_its_declared_type() {
 	is!("new_list(room: int): list from runtime\nfirst_of(items: list): int := 1\ncopied(count: int): int := {\n\tout = new_list(count)\n\tfirst_of(out)\n}\n7", 7);
 }
 
+/// A value the emitter supplies, `failed_in: text from runtime`, is a global the Rust lane starts at its type's zero
+#[test]
+fn a_declared_runtime_value_is_a_global() {
+	is!("g: text from runtime\nf() := { global g; g + \"!\" }\nf()", "!");
+}
+
 /// Each part of lib/compiler/runtime/ names the intrinsics it calls (runtime/intrinsics.warp) and the parts whose words
 /// it calls, so it compiles and runs alone in the Rust lane
 #[cfg(feature = "native")]
