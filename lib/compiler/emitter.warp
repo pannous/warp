@@ -590,6 +590,17 @@ def wasm_instruction(body: Body, name: text): list {
 def is_runtime_word(body: Body, name: text): bool {
 	body.intrinsics and (name in intrinsics or name in time_intrinsics or name in module.runtime)
 }
+# a call of a function of the program that takes its arguments, not of a runtime word: a call it can't take is a form
+# of the parser's or the lowering's of that name (`wasm f64.floor`, `try x`; emitter.warp compiling itself defines each)
+def is_program_call(body: Body, name: text, arguments: any): bool {
+	name in module.functions and not is_runtime_word(body, name) and takes_arguments(module.functions[name], arguments)
+}
+# whether f takes these arguments: no more than its parameters, a name given once, each place left out defaulted
+def takes_arguments(f: Function, arguments: any): bool {
+	slots = placed_arguments(taken_names(f.signature), arguments)
+	parameters = f.signature.parameters
+	slots is list and range_list(#parameters).all(i => (i < #slots and slots[i] != ø) or parameters[i].defaulted_to != ø)
+}
 # the words the runtime is written in, each one or two instructions
 def intrinsic(body: Body, name: text, arguments: any): list {
 	values = arguments.map(a => expression_code(body, a))
@@ -810,8 +821,11 @@ record_type(name: any, body: any): any := {
 }
 # a character given to a field typed text is that text (`"r"` is a character here)
 def texted(type: any, value: any): list { if value#1 == "char" and type in core_type_words and core_type_words[type] == "text" then shown_text(value) else value }
-# whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion
-def admits(type: any, kind: text): bool { type == ø or type == "any" or (type in core_type_words and core_type_words[type] == kind) }
+# whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion; an
+# instance of a class is a node, as Rust's class-typed fields take it
+def admits(type: any, kind: text): bool {
+	type == ø or type == "any" or (type in core_type_words and core_type_words[type] == kind) or (kind == "node" and type in module.classes)
+}
 # a write to a field `name` of a value known only at run time: every class's field so named takes the kind
 def field_admits(name: text, kind: text): bool {
 	for class_name in module.classes.keys {
@@ -1609,9 +1623,7 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1).contains(captured_marker) {
 		return closure_item(expression_code(body, n#2)#2, captured_index(name_of(n#1)))
 	}
-	# a body `wasm f64.floor` as the parser writes it, ahead of a program's own function of that name (emitter.warp's)
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("wasm_instruction") and n#2 is text { return wasm_instruction(body, n#2) }
-	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions and not is_runtime_word(body, name_of(n#1)) {
+	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and is_program_call(body, name_of(n#1), items_of(n)[1..]) {
 		return call(body, module.functions[name_of(n#1)], items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.classes {
@@ -1620,6 +1632,7 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host {
 		return host_call(body, name_of(n#1), items_of(n)[1..])
 	}
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("wasm_instruction") and n#2 is text { return wasm_instruction(body, n#2) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in intrinsics and body.intrinsics {
 		return intrinsic(body, name_of(n#1), items_of(n)[1..])
 	}
@@ -1679,8 +1692,8 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("global") { return global_declaration_code(body, n#2) }
 	if bracket_of(n) == "[" { return list_value(body, items_of(n)) }
 	# `{ Run: {…} }` is a block giving an instance to Rust's lowering as often as a map: neither is sure; with a
-	# statement beside it (`{ xs = …; Gaps{…} }`) it is a block, its instance a statement
-	if bracket_of(n) == "{" and n.all(is_map_entry) and n.any(x => is_map_entry(x) and key_of(x) is symbol and name_of(key_of(x)) in module.classes) {
+	# statement beside it (`{ xs = …; Gaps{…} }`) it is a block, its instance a statement; `{Error: 11}` is a map
+	if bracket_of(n) == "{" and n.all(is_map_entry) and n.any(x => is_map_entry(x) and key_of(x) is symbol and name_of(key_of(x)) in module.classes and is_group(value_of(x)) and bracket_of(value_of(x)) == "{") {
 		return refuse("a block or map holding an instance")
 	}
 	if bracket_of(n) == "{" and n.all(is_map_entry) { return map_value(body, items_of(n)) }
@@ -1691,6 +1704,8 @@ def group_expression(body: Body, n: any): list {
 		if checks_fields(body, n#2) and not (n#3 is text and field_admits(n#3, value#1)) and #module.classes.keys > 0 { return refuse("a field write a typed field may refuse") }
 		return field_assignment(expression_code(body, n#2), expression_code(body, n#3), value)
 	}
+	# a call of a program's function it can't take: refused naming the count
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions { return call(body, module.functions[name_of(n#1)], items_of(n)[1..]) }
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
 	# `y = 2 x`: Rust's "`x` after `y=2` does nothing"
 	assigns = x => type(x) is key and op_of(x) in assignment_operators
@@ -1807,7 +1822,7 @@ def key_expression(body: Body, n: any): list {
 		# `x === ø` is `x == ø`: ø is one value, as Rust's identity of it
 		equality = if operator in identities then identities[operator] else operator
 		if equality in equalities { return nothing_test(body, equality, if left == ø then right else left) }
-		return refuse("the operator " + operator)
+		return refuse("the operator " + operator + " with nothing " + (if left == ø then "before" else "after") + " it")
 	}
 	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }
 	operation_code(body, operator, expression_code(body, left), expression_code(body, right))
