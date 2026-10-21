@@ -709,3 +709,11 @@ fn a_match_arm_of_a_constant_runs_pure() {
 	let probe = format!("{}/probes/match_bool_arm.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("match_bool_arm", &probe, "\"yesno\"");
 }
+
+/// `print #xs`, `print -1`, `f -x`: a word taking a value calls it with the count or the negative; a variable before
+/// them subtracts, `size -1` (card pure-lane-print)
+#[test]
+fn spaced_prefix_calls_run_pure() {
+	let probe = format!("{}/probes/spaced_prefix_calls.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("spaced_prefix_calls", &probe, "3\n-1\n-6\n9\n2");
+}
