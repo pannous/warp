@@ -73,6 +73,10 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   notice; passed whole, libtest matched it against no test (2026-10-21: five runs of 0 tests whose sessions were
   dropped as faulty VMs; probes/cloud_test_filters.sh). A run that executes no test is red with a `NO TESTS RAN` line,
   a filter fault: its session stays in the pool.
+- Compiler build files: a warm VM keeps compiler.wasm / compiler-self.wasm (warp pure / self) in target/ or data/,
+  and a later job's tests ran on them with only a notice. They are dropped before the tests whenever lib/, src/,
+  crates/, build.rs or Cargo.lock differ from the last job's (stamp $HERE_ROOT/compiler-sources; card
+  cloud-stale-compiler; probes/cloud_stale_compilers.sh).
 - Environmental failures: scripts/cloud-test-environmental.txt, one regex per line with its reason; matches are listed
   apart and don't make the verdict red. A second regex after the test's narrows it to the items its panic lists (the
   playground sample slices: only gpu_visualizer_warp is Mac-only; dates failing there is red). Grown only from real runs. `--summarize <log> [list]` re-summarizes a saved log.
