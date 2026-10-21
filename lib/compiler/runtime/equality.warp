@@ -1,4 +1,11 @@
 # `a == b` of values known only at run time
+use "intrinsics.warp"
+use "conversions.warp"
+use "exact.warp"
+use "ordering.warp"
+use "show.warp"
+use "text.warp"
+use "types.warp"
 # `a == b` of values known only at run time: ø equals only ø, lists equal item by item, closures by their target and
 # captured values (emitter.warp closure_value), texts and characters as texts, numbers as numbers (an int and a float alike)
 node_equal(a: any, b: any): bool := {

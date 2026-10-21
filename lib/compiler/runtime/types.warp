@@ -1,4 +1,7 @@
 # What kind a value known only at run time is: ø, errors, texts, `x is type`, `x is Name`
+use "intrinsics.warp"
+use "show.warp"
+use "text.warp"
 # `x == ø`: ø, and a list or map without items, as Rust's equality and print take them
 is_nothing(n: any): bool := if is_null(n) then yes else kind_code(n) == Kind.List and #unboxed_list(n) == 0
 # `is_error(x)`: x is an Error value

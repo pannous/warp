@@ -73,7 +73,9 @@ arguments. The Rust pipeline compiles compiler.warp, always (user 2026-10-21: "p
 `warp self` always uses the self-hosted, self-compiled"). `warp self <program.warp>` runs the program through
 compiler.warp compiled by the pure lane, itself, the build file compiler-self.wasm; a refusal of that compile is a loud
 error, never a fallback to the Rust-compiled one. `warp pure` switches to the self-compiled compiler once more tests
-pass with it (the count self vs Rust-compiled goes to the supervisor first). It is also the gate's
+pass with it (the count self vs Rust-compiled goes to the supervisor first: `scripts/is_tests.py run warp-pure
+warp-self` runs every test pair both ways, ~35 min a lane, and ends with the parity line; decision
+self-compiled-parity: self may pass 5 % fewer, reported, no gate yet). It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
 Build files (decision compiler-build, card compiler-wasm): compiler.wasm and compiler-self.wasm lie next to the binary
 for the lib/ they record (custom section `warp.build`: lib/'s path, its fingerprint, the binary's WARP_SOURCE from
@@ -153,3 +155,30 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
   edit: merge after prelude-for-pure lands.
 - warp-compiler-enums: the bare `Round`/`Add`/`Define` symbols in the warp-lowered runtime; walk.warp's `Op`,
   `Bracket`, `Separator` enums are no longer crossed through text views in this lane.
+
+## warp.wasm under plain wasmtime (card standalone, reopened 2026-10-21, user: "build in the runtime itself.
+## wasmtime warp.wasm should behave like the native binary")
+Today `wasmtime run -W gc=y,function-references=y,exceptions=y --dir . compiler.wasm hello.warp h.wasm` stops at the
+first host import. Imports found (2026-10-21):
+- compiler.wasm (Rust-compiled): host.fetch, fetch_within, read, warn, run, std_io + wasi fd_write.
+- compiler-self.wasm (self-compiled): all 69 host words + m.pow: emitter.warp imports a host word whenever the
+  program `mentions` its name, and compiler.warp includes host_words.warp, whose map keys name every one.
+What each is for in compiler.warp: std_io carries `use os` (args, env, kept, keep) and `use file` (write_bytes,
+exists …); read is the prelude's file/URL read (fetch/fetch_within its URL half); warn the compile's warnings; run
+probably a mention only.
+
+Plan, one import at a time, each a WASI-backed runtime part in both emitters (Rust wasm_emitter for the bootstrap
+compiler.wasm, emitter.warp for compiler-self.wasm):
+1. Imports only for words called: a map key or text naming a host word imports nothing (emitter.warp `mentions`,
+   and the Rust side's equivalent). Takes compiler-self.wasm from 69 host imports to the handful it calls.
+2. `_start`: a WASI command export calling main, so `wasmtime warp.wasm …` needs no `--invoke`.
+3. os.args, os.env: args_sizes_get/args_get, environ (emit_wasi_environment exists).
+4. read / file.read_bytes / exists: path_open on the preopened dirs (fd_prestat_get), fd_read, fd_close; a URL under
+   plain WASI is a loud error (no network in preview1).
+5. file.write_bytes / write: path_open with O_CREAT|O_TRUNC, fd_write.
+6. warn: fd_write to stderr (fd 2).
+7. kept/keep: ø / the value under WASI (no module cache); a cache file later.
+8. Outcome test: `wasmtime … warp.wasm hello.warp hello.wasm` writes a module that prints Hello.
+Open question (warp-interviewer): running the compiled program inside the same wasmtime process needs either the
+host (instantiate is no WASI call) or an evaluator in warp; default until answered: warp.wasm compiles to a .wasm and
+prints how to run it.

@@ -1,5 +1,11 @@
 ## exact rationals: int `/` gives one, an int over a positive int in lowest terms (the Rust twin's Number::Quotient),
 ## held in an Int $Node as a $Ratio (intrinsics is_ratio, ratio_of, ratio_numerator, ratio_denominator)
+use "intrinsics.warp"
+use "arithmetic.warp"
+use "conversions.warp"
+use "errors.warp"
+use "floats.warp"
+use "instructions.warp"
 int_gcd(a: int, b: int): int := {
 	if a < 0 { a = -a }
 	if b < 0 { b = -b }

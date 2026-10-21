@@ -411,11 +411,7 @@ pub fn lower(node: Node) -> Node {
 	shadowed.extend(variants);
 	let functions = shadowed.clone();
 	crate::type_tests::collect_outer_assigned_names(&node, &mut shadowed);
-	let mut assigned = AssignedObjects::default();
-	collect_assigned_objects(&node, &mut assigned);
-
-	let plain = assigned.plain.difference(&assigned.rebound).cloned().collect();
-	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
+	let program_scope = VariableScope::of(&node, vec![]);
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
 	let times = crate::time::time_variables(&node);
@@ -425,8 +421,7 @@ pub fn lower(node: Node) -> Node {
 		shadowed: RefCell::new(shadowed),
 		functions,
 		program: crate::program_names::ProgramNames::of(&node),
-		objects,
-		plain,
+		scopes: RefCell::new(vec![program_scope]),
 		instances,
 		parameters: RefCell::new(vec![]),
 		function_parameters: RefCell::new(vec![]),
@@ -592,9 +587,9 @@ struct Lowering {
 	functions: HashSet<String>,
 	/// The program's functions at the numbers of arguments they take
 	program: crate::program_names::ProgramNames,
-	objects: HashMap<String, Node>,
-	/// Variables assigned plain values (AssignedObjects::plain)
-	plain: HashSet<String>,
+	/// The variable scopes where the lowering is: the program's outside its functions first, then each function's
+	/// being lowered, innermost last
+	scopes: RefCell<Vec<VariableScope>>,
 	/// Values of declared types (`p:person`, `first = (sort people)#1`) read their fields like object literals
 	instances: crate::traits::InstanceTypes,
 	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
@@ -750,6 +745,10 @@ impl Lowering {
 		let outer = self.shadowed.replace(locals);
 		let function_scope = self.function_parameters.borrow().len();
 		self.function_parameters.borrow_mut().extend(crate::traits::parameters_of_type(head, FUNCTION_TYPE_WORD));
+		let function_scope_entered = is_function_definition_head(head);
+		if function_scope_entered {
+			self.scopes.borrow_mut().push(VariableScope::of(&right, crate::traits::parameter_names(head)));
+		}
 		let lowered = self.within_function(name, parameters, || {
 			let body = self.body_statement(head, right);
 			// `x = {sum xs}` assigns that data: only its parts are lowered, the block stays no call
@@ -759,6 +758,9 @@ impl Lowering {
 			self.expand(body)
 		});
 		self.function_parameters.borrow_mut().truncate(function_scope);
+		if function_scope_entered {
+			self.scopes.borrow_mut().pop();
+		}
 		self.shadowed.replace(outer);
 		lowered
 	}
@@ -814,6 +816,23 @@ impl Lowering {
 	fn times_here(&self) -> HashSet<String> {
 		let parameters = self.parameters.borrow();
 		self.times.iter().filter(|name| !parameters.contains(name)).cloned().collect()
+	}
+
+	/// The scope a variable named `name` belongs to where the lowering is: the innermost binding it, else the program's
+	fn scope_of<T>(&self, name: &str, read: impl Fn(&VariableScope) -> T) -> T {
+		let scopes = self.scopes.borrow();
+		let scope = scopes.iter().skip(1).rev().find(|scope| scope.bound.contains(name)).unwrap_or(&scopes[0]);
+		read(scope)
+	}
+
+	/// The object literal the variable `name` holds here, if it is only ever assigned one
+	fn object_of(&self, name: &str) -> Option<Node> {
+		self.scope_of(name, |scope| scope.objects.get(name).cloned())
+	}
+
+	/// A variable assigned only plain values here
+	fn is_plain(&self, name: &str) -> bool {
+		self.scope_of(name, |scope| scope.plain.contains(name))
 	}
 
 	fn is_parameter(&self, node: &Node) -> bool {
@@ -1133,8 +1152,7 @@ impl Lowering {
 		}
 		let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
 		// a parameter named like a variable assigned a plain value elsewhere holds any value
-		let is_plain = receiver.symbol_name().is_some_and(|variable| self.plain.contains(variable))
-			&& !self.is_parameter(receiver);
+		let is_plain = receiver.symbol_name().is_some_and(|variable| self.is_plain(variable));
 		match !is_plain && (is_element || self.is_object(receiver, name) || self.may_hold_object(receiver)) {
 			true => OwnMember::Maybe,
 			false => OwnMember::Not,
@@ -1223,7 +1241,7 @@ impl Lowering {
 			&& !self.is_parameter(receiver)
 			&& receiver
 				.symbol_name()
-				.is_some_and(|function| !self.plain.contains(function) && !self.objects.contains_key(function));
+				.is_some_and(|function| !self.is_plain(function) && self.object_of(function).is_none());
 		counting_method(name, &self.context).is_some()
 			|| is_list_mutating_method(name)
 			|| self.context.user_functions.contains_key(name)
@@ -1270,9 +1288,7 @@ impl Lowering {
 			other => other,
 		};
 		match variable {
-			Node::Symbol(variable) => {
-				!self.plain.contains(variable) && !self.context.user_functions.contains_key(variable)
-			}
+			Node::Symbol(variable) => !self.is_plain(variable) && !self.context.user_functions.contains_key(variable),
 			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call)
 			Node::List(items, Bracket::Round, Separator::None) if word_headed(items).is_some() => true,
 			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
