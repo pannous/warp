@@ -57,6 +57,7 @@ webdriver = None  # the FirefoxDriver or SafariDriver of a --firefox or --safari
 SAFARI_PORT = 4445
 SAFARI_START_SECONDS = 10
 SAFARI_SCRIPT_MS = 300_000  # an example that runs this long is stuck
+MEMORY_GROWTHS_SHOWN = 5  # the examples that grew the cgroup's memory most (card our-playground)
 # agent-browser's eval for classic WebDriver: the expression's value, awaited, as JSON text ("" for undefined)
 SAFARI_EVAL = """const done = arguments[arguments.length - 1];
 Promise.resolve().then(() => (0, eval)(arguments[0])).then(value => done(value === undefined ? "" : JSON.stringify(value)), failure => done(`✗ ${failure?.message ?? failure}`));"""
@@ -953,6 +954,41 @@ def wait_for_isolation():
 		time.sleep(0.5)
 
 
+class MemoryWatch:
+	"""the processes' own memory (anon: without the page cache) of this process's cgroup v2, on the dry run's server the
+	scope that holds the browser too, after each example, so a tour that grows it names its biggest steps; silent where
+	there is no cgroup v2 (macOS)"""
+	def __init__(self):
+		try:
+			with open("/proc/self/cgroup") as entries:
+				path = next(line.split("::", 1)[1].strip() for line in entries if line.startswith("0::"))
+			self.folder = f"/sys/fs/cgroup{path}"
+			self.last = self.anon()
+		except (OSError, StopIteration, ValueError):
+			self.folder = None
+		self.growths = []
+	def read(self, name):
+		with open(os.path.join(self.folder, name)) as value:
+			return value.read()
+	def anon(self):
+		return next(int(line.split()[1]) for line in self.read("memory.stat").splitlines() if line.startswith("anon "))
+	def after(self, name):
+		if self.folder:
+			now = self.anon()
+			self.growths.append((now - self.last, now, name))
+			self.last = now
+	def report(self):
+		if not self.folder:
+			return
+		try:
+			peak = f", page cache included {int(self.read('memory.peak')) >> 20} MB"
+		except OSError:
+			peak = ""  # kernels before 5.19 keep no peak
+		highest = max((now for _, now, _ in self.growths), default=self.last)
+		largest = sorted(self.growths, reverse=True)[:MEMORY_GROWTHS_SHOWN]
+		print(f"\nmemory: peak {highest >> 20} MB{peak}, at the end {self.last >> 20} MB; grew most: " + ", ".join(f"{name} +{growth >> 20} MB (to {now >> 20})" for growth, now, name in largest))
+
+
 def check_examples(names, page_url=None, site=None):
 	"""every example of the tour shows its value and prints its text in the playground (the local build, the collected
 	`site` directory, or the deployed one at `page_url`), and neither loading the page nor showing an example or a sample
@@ -974,7 +1010,9 @@ def check_examples(names, page_url=None, site=None):
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
 	failures = []
+	memory = MemoryWatch()
 	def verdict(name, wrong):
+		memory.after(name)
 		expected = EXPECTED_CONSOLE.get(name, [])
 		logged = console.take()
 		wrong += [f"console {message}" for message in logged if not any(line in message for line in expected)]
@@ -1006,6 +1044,7 @@ def check_examples(names, page_url=None, site=None):
 		server.shutdown()
 		if failures:
 			show_served()
+	memory.report()
 	checked = len(chosen) + 1 + len(extra_checks)
 	print(f"\nexamples and samples: {checked - len(failures)} of {checked} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
