@@ -57,13 +57,17 @@ fn compiler() -> Result<CompiledModule, Node> {
 		eprintln!("{RUST_COMPILER} (the pure lane refuses it; its first compile said why)");
 		return Ok(module);
 	}
-	let (module, key) = match pure_compiled(&file, source.clone()) {
+	// Rust compiles it meanwhile: cold, the pure lane's try and Rust's compile each take over a minute, one after the
+	// other they made most of a cold start (card pure-cold-start); a Node stays on its thread: a failure crosses as text
+	let rust_source = source.clone();
+	let rust_compile = started_on_big_stack(file.clone(), move || {
+		crate::pipeline::compile(&rust_source).map_err(|failed| failed.serialize())
+	});
+	let (module, key) = match pure_compiled(&file, source) {
 		Ok(module) => (module, pure_key),
 		Err(refusal) => {
 			eprintln!("{RUST_COMPILER}: the pure lane refuses it: {refusal}");
-			// a Node stays on its thread: the failure crosses as its text
-			let compiled =
-				on_big_stack(file, move || crate::pipeline::compile(&source).map_err(|failed| failed.serialize()));
+			let compiled = rust_compile.join().expect("the compile");
 			(compiled.map_err(|failed| error(&failed))?, rust_key)
 		}
 	};
@@ -85,11 +89,14 @@ fn pure_compiled(file: &Path, source: String) -> Result<CompiledModule, String> 
 
 /// `compile` as the program of `file`, in a thread with a stack deep enough for a compile of the compiler
 fn on_big_stack<T: Send + 'static>(file: PathBuf, compile: impl FnOnce() -> T + Send + 'static) -> T {
+	started_on_big_stack(file, compile).join().expect("the compile")
+}
+
+/// `compile` as the program of `file`, started in a thread with a stack deep enough for a compile of the compiler
+fn started_on_big_stack<T: Send + 'static>(
+	file: PathBuf,
+	compile: impl FnOnce() -> T + Send + 'static,
+) -> std::thread::JoinHandle<T> {
 	let work = move || crate::modules::with_program_file(&file, compile);
-	std::thread::Builder::new()
-		.stack_size(WORKER_STACK)
-		.spawn(work)
-		.expect("a compiler thread")
-		.join()
-		.expect("the compile")
+	std::thread::Builder::new().stack_size(WORKER_STACK).spawn(work).expect("a compiler thread")
 }
