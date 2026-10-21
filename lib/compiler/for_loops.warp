@@ -90,7 +90,7 @@ is_map_literal(n: any): bool := {
 
 # the names assigned a written map anywhere in n (`m = {a: 1}`)
 map_names(n: any): list := {
-	if type(n) is key {
+	if n is key {
 		if is_key(n, Op.Assign) and key_of(n) is symbol and is_map_literal(value_of(n)) { return [name_of(key_of(n))] }
 		return map_names(key_of(n)) + map_names(value_of(n))
 	}

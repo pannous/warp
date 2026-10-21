@@ -1,0 +1,2 @@
+let base = 10
+print base

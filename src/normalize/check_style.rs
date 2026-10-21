@@ -157,6 +157,14 @@ pub fn check_style(program: &Node) {
 				hints::function_keyword(":=", &name, &parameters, BodyForm::Assign);
 			}
 		}
+		Node::Key(target, Op::AddAssign, value) => {
+			if let Node::List(items, Bracket::Square, _) = value.drop_meta() {
+				if let [item] = items.as_slice() {
+					set_position_of(positioned);
+					hints::appended_item(&operand_text(target), item);
+				}
+			}
+		}
 		Node::Key(target, Op::Dot, call) => {
 			if matches!(call.drop_meta(), Node::List(words, _, _) if words.len() == 1 && (words[0]).symbol_name() == Some("length"))
 			{

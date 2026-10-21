@@ -34,12 +34,15 @@ pub(crate) fn holds_list(operand: &Node, lists: &HashSet<String>) -> bool {
 	}
 }
 
-/// The variables the program assigns a list literal: what `+` concatenates
+/// The variables the program assigns a list literal, `[]` too (ø marked as written so): what `+` concatenates or
+/// appends to
 pub(crate) fn list_variables(program: &Node) -> HashSet<String> {
 	let mut lists = HashSet::new();
 	program.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
-			if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (target.drop_meta(), value.drop_meta()) {
+			let is_list =
+				value.is_empty_list_literal() || matches!(value.drop_meta(), Node::List(_, Bracket::Square, _));
+			if let (Node::Symbol(name), true) = (target.drop_meta(), is_list) {
 				lists.insert(name.clone());
 			}
 		}
