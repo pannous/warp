@@ -73,9 +73,9 @@ const LOWER_JSON_COMMAND: &str = "lower --json";
 const PURE_COMMAND: &str = "pure";
 /// The first words the command line takes as commands, for unknown_command's suggestion
 const COMMAND_WORDS: [&str; 31] = [
-	"run", "pure", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data", "tool",
-	"fetch", "dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app", "help", "version", "docs",
-	"wiki", "home", "lsp", "start",
+	"run", "pure", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data",
+	"tool", "fetch", "dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app", "help", "version",
+	"docs", "wiki", "home", "lsp", "start",
 ];
 /// How far a mistyped command may be from the command it suggests (`formt` → format)
 const MISTYPED_LETTERS: usize = 2;
