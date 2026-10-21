@@ -1,0 +1,10 @@
+print []
+print type([])
+print [[], []]
+fresh() := []
+t = fresh()
+t += "a"
+print t
+show(xs) := print xs
+show([])
+print [] == ø

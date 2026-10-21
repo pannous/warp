@@ -12,6 +12,9 @@ const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
 /// Pseudo-call `list_become(xs, ys)`: xs takes the items of the fresh list ys in place, so every holder of xs sees them
 /// (`xs.pop(i)`, `xs.clear()`; wasm_emitter list_ops emit_list_become, card aliased-list)
 pub const LIST_BECOME: &str = "list_become";
+/// Pseudo-call `list_drop_last(xs)`: xs without its last item, in place: a typed array's count lowered, a Node list's
+/// last cell cut off with no copy (`xs.pop()`, card shrink-in-place; wasm_emitter list_changes emit_list_drop_last)
+pub const LIST_DROP_LAST: &str = "list_drop_last";
 /// The list a pop template takes from, replaced by the variable or field popped
 const POP_PLACE: &str = "pop_place";
 pub const REMOVE_METHOD: &str = "remove";
@@ -73,7 +76,7 @@ pub(crate) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 	match called_on_place(list, call)? {
 		(POP_WORD, []) => {
 			let template = format!(
-				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_BECOME}({POP_PLACE}, {POP_PLACE}[0:count({POP_PLACE}) - 1]); {POP_TEMPORARY})"
+				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"
 			);
 			Some(super::nodes::filled(&template, [(POP_PLACE, list.clone())]))
 		}
@@ -120,6 +123,17 @@ pub(crate) fn cleared_collection(collection: &Node, call: &Node) -> Option<Node>
 			Box::new(became(collection, prelude_call(CLEARED_CALL, vec![collection.clone()]))),
 		)
 	})
+}
+
+/// The list `list_drop_last(xs)` shortens: xs
+pub(crate) fn dropped_last(value: &Node) -> Option<&Node> {
+	match value.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[word, list] if word.symbol_name() == Some(LIST_DROP_LAST) => Some(list),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// `list_become(place, fresh)`: the place takes the fresh list's items in place (LIST_BECOME)
