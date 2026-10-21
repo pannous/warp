@@ -967,6 +967,7 @@ class MemoryWatch:
 		except (OSError, StopIteration, ValueError):
 			self.folder = None
 		self.growths = []
+		self.at_peak = []
 	def read(self, name):
 		with open(os.path.join(self.folder, name)) as value:
 			return value.read()
@@ -975,6 +976,8 @@ class MemoryWatch:
 	def after(self, name):
 		if self.folder:
 			now = self.anon()
+			if now > max((then for _, then, _ in self.growths), default=0):
+				self.at_peak = self.processes()
 			self.growths.append((now - self.last, now, name))
 			self.last = now
 	def report(self):
@@ -987,6 +990,21 @@ class MemoryWatch:
 		highest = max((now for _, now, _ in self.growths), default=self.last)
 		largest = sorted(self.growths, reverse=True)[:MEMORY_GROWTHS_SHOWN]
 		print(f"\nmemory: peak {highest >> 20} MB{peak}, at the end {self.last >> 20} MB; grew most: " + ", ".join(f"{name} +{growth >> 20} MB (to {now >> 20})" for growth, now, name in largest))
+		print("memory at the peak, by process: " + ", ".join(f"{kind} {resident >> 10} MB" for resident, kind in self.at_peak[:MEMORY_GROWTHS_SHOWN]))
+	def processes(self):
+		"""the cgroup's processes, largest resident first: (KB, kind), a Chrome process by its --type (renderer, gpu-process …)"""
+		found = []
+		for pid in self.read("cgroup.procs").split():
+			try:
+				with open(f"/proc/{pid}/status") as status:
+					resident = next((int(line.split()[1]) for line in status if line.startswith("VmRSS:")), 0)
+				with open(f"/proc/{pid}/cmdline") as command:
+					words = command.read().replace("\0", " ").split()  # Chrome rewrites its arguments as one
+			except OSError:
+				continue  # ended meanwhile
+			kind = next((word.split("=", 1)[1] for word in words if word.startswith("--type=")), os.path.basename(words[0]))
+			found.append((resident, kind))
+		return sorted(found, reverse=True)
 
 
 def check_examples(names, page_url=None, site=None):
