@@ -11,6 +11,8 @@ use "instructions.warp"
 second_nanos() := 1000000000
 day_nanos() := 86400 * second_nanos()
 hour_nanos() := 3600 * second_nanos()
+minute_nanos() := 60 * second_nanos()
+millisecond_nanos() := 1000000
 duration_months(n: Node): int := floor_quotient(marked_kind(n), power(2, 43))
 # the 32 signed bits above the kind and the form
 duration_days(n: Node): int := {
