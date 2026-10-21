@@ -6,6 +6,7 @@
 use super::nodes::key;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::OF_WORD;
 use std::collections::HashMap;
 
 /// `Age?`: the optional form of a type name
@@ -76,12 +77,6 @@ fn target(written: &str, aliases: &HashMap<String, String>) -> Option<String> {
 	Some(format!("{resolved}{optional}"))
 }
 
-/// A type word or phrase with each alias in it resolved: `list of Name` is `list of text`
-fn phrase_resolved(written: &str, aliases: &HashMap<String, String>) -> String {
-	let words = written.split(' ').map(|word| target(word, aliases).unwrap_or_else(|| word.to_string()));
-	words.collect::<Vec<_>>().join(" ")
-}
-
 fn resolved(node: Node, aliases: &HashMap<String, String>) -> Node {
 	match node {
 		// the phrase as one word: `list of int` is no call of list
@@ -112,6 +107,19 @@ fn resolved(node: Node, aliases: &HashMap<String, String>) -> Node {
 		Node::Key(name, Op::Colon, annotation) => {
 			key(resolved(*name, aliases), Op::Colon, annotated(*annotation, aliases))
 		}
+		// `f(xs: list of Name)`, parsed as the items `xs: list`, `of`, `Name`: the word after `of` is a type
+		Node::List(items, bracket, separator) if items.iter().any(|item| item.is_symbol(OF_WORD)) => {
+			let mut after_of = false;
+			let items = items.into_iter().map(|item| {
+				let typed = std::mem::replace(&mut after_of, item.is_symbol(OF_WORD));
+				if typed {
+					annotated(item, aliases)
+				} else {
+					resolved(item, aliases)
+				}
+			});
+			Node::List(items.collect(), bracket, separator)
+		}
 		other => other.map_children(|child| resolved(child, aliases)),
 	}
 }
@@ -124,7 +132,7 @@ fn is_test(subject: &Node) -> bool {
 /// The type after a colon, `Name`, `[Name]`, `Age?`, with its alias names resolved; any other value as it is
 fn annotated(annotation: Node, aliases: &HashMap<String, String>) -> Node {
 	match annotation {
-		Node::Symbol(written) => Node::Symbol(phrase_resolved(&written, aliases)),
+		Node::Symbol(written) => Node::Symbol(target(&written, aliases).unwrap_or(written)),
 		Node::List(..) | Node::Meta { .. } => annotation.map_children(|child| annotated(child, aliases)),
 		other => resolved(other, aliases),
 	}
