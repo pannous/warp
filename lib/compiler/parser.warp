@@ -1821,6 +1821,7 @@ def atom(p: Parser): Node := {
 		}
 		return with_glued_factor(p, int(written))
 	}
+	if VULGAR_FRACTIONS.contains(c) { return vulgar_fraction(p, c) }
 	if c == '"' or c == '\'' { return quoted(p) }
 	// `.5` is 0.5
 	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return float("0" + decimal_number(p)) }
@@ -1840,6 +1841,14 @@ def atom(p: Parser): Node := {
 		unknown = "" + p.code[p.at .. end]
 		p.at = end
 		return unknown
+	}
+	// `\alpha` written for `\:alpha`
+	// Rust twin: atoms.rs parse_atom, uniscript_entities.rs bare_entity_name_at
+	if c == '\\' and is_alpha(peek(p.code, p.at + 1, p.n)) {
+		end = p.at + 1
+		while end < p.n and is_alpha(p.code[end]) { end = end + 1 }
+		name = p.code[p.at + 1 .. end]
+		if name in entities() { raise "a uniscript entity is written \\:" + name + ", not \\" + name }
 	}
 	truth = truth_glyph_at(p)
 	if truth != "" {
@@ -2191,6 +2200,19 @@ def duration_text(length: list): text {
 }
 
 def counted_unit(amount: int, unit: text): text := if amount == 1 then "1 " + unit else "" + amount + " " + unit + "s"
+
+// The Unicode vulgar fractions, each the numerator and denominator its NFKD decomposition writes (½ is 1⁄2)
+// Rust twin: numbers.rs vulgar_fraction
+VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "¼": [1, 4], "¾": [3, 4], "⅕": [1, 5], "⅖": [2, 5], "⅗": [3, 5], "⅘": [4, 5], "⅙": [1, 6], "⅚": [5, 6], "⅐": [1, 7], "⅛": [1, 8], "⅜": [3, 8], "⅝": [5, 8], "⅞": [7, 8], "⅑": [1, 9], "⅒": [1, 10]}
+
+// `⅓` is the exact 1/3; digits glued after it multiply it
+// Rust twin: numbers.rs vulgar_fraction_literal
+def vulgar_fraction(p: Parser, glyph: text): Node := {
+	p.at = p.at + 1
+	parts = VULGAR_FRACTIONS[glyph]
+	fraction = keyed("/", int(parts#1), int(parts#2))
+	if is_digit(peek(p.code, p.at, p.n)) then Key(fraction, Op.Mul, atom(p)) else fraction
+}
 
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
 // Rust twin: literals.rs with_juxtaposed_factor
