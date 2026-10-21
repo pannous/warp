@@ -66,15 +66,25 @@ use crate::library_words::{
 use crate::one_entry_maps::MAP_OF_ENTRY;
 
 impl WasmGcEmitter {
-	/// The key of `target[key]`: an index that is a symbol or a text (not a number) selects the entry of that name
-	pub(in crate::wasm_emitter) fn map_is_indexed_by_key(&self, index: &Node) -> bool {
-		self.map_key(index).is_some() || self.dynamic_key(index).is_some()
+	/// The key of `target[key]`: an index that is a symbol or a text (not a number) selects the entry of that name; a
+	/// subscript of a value of no known type is decided at run time
+	pub(in crate::wasm_emitter) fn map_is_indexed_by_key(&self, target: &Node, index: &Node) -> bool {
+		self.map_key(index).is_some()
+			|| self.dynamic_key(index).is_some()
+			|| self.runtime_subscript_key(target, index).is_some()
 	}
 
 	/// A key held as a Node (`edge[0]` of a map's value): a number indexes, a name looks up, decided at runtime
 	pub(in crate::wasm_emitter) fn dynamic_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::warp_parser::subscript_key(index)?;
 		(self.get_type(key) == Kind::Empty && !key.is_empty_node()).then(|| key.clone())
+	}
+
+	/// `m[1]`, `m[k]` of a value of no known type: a map's key by its digits, a list's position, decided at run time
+	/// (P34, decision map-subscript-runtime)
+	pub(in crate::wasm_emitter) fn runtime_subscript_key(&self, target: &Node, index: &Node) -> Option<Node> {
+		let unknown = self.get_type(target) == Kind::Empty && !self.is_known_collection(target);
+		unknown.then(|| crate::warp_parser::written_subscript(index)).flatten()
 	}
 
 	pub(in crate::wasm_emitter) fn map_key(&self, index: &Node) -> Option<Node> {
@@ -197,7 +207,7 @@ impl WasmGcEmitter {
 					self.emit_call(func, "map_get");
 				}
 			},
-			None => match self.dynamic_key(index) {
+			None => match self.dynamic_key(index).or_else(|| self.runtime_subscript_key(target, index)) {
 				Some(key) => {
 					self.emit_node_instructions(func, target);
 					self.emit_node_instructions(func, &key);
@@ -581,12 +591,16 @@ impl WasmGcEmitter {
 		self.emit_dynamic_key_access();
 	}
 
-	/// `xs[k]` and `xs[k] = v` with a key held as a Node: an Int indexes from 0, anything else names an entry
+	/// `xs[k]` and `xs[k] = v` with a key held as a Node: an Int indexes from 0, anything else (or any key of a map) names an
+	/// entry
 	pub(super) fn emit_dynamic_key_access(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
+		// an Int key of anything but a map is a position; a map is keyed by its digits (decision map-subscript-runtime)
 		let is_int = |s: &Self, f: &mut Function| {
 			s.emit_field(f, 1, 0);
-			Self::emit_list(f, &[I::I64Const(Kind::Int as i64), I::I64Eq]);
+			Self::emit_list(f, &[I::I64Const(Kind::Int as i64), I::I64Eq, I::LocalGet(0)]);
+			s.call(f, crate::type_tests::NODE_IS_MAP);
+			Self::emit_list(f, &[I::I32Eqz, I::I32And]);
 		};
 		let one_based = |s: &Self, f: &mut Function| {
 			f.instruction(&I::LocalGet(1));

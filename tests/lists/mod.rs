@@ -81,6 +81,7 @@ mod test_map_get_kind;
 mod test_map_index;
 mod test_map_inside_loop; // card map-inside
 mod test_map_literal_number_keys; // card map-literal
+mod test_runtime_map_subscript; // card entry-number
 mod test_map_parameter_keys;
 mod test_map_starts;
 mod test_map_typed;
