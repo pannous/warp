@@ -130,8 +130,9 @@ Read notes/agents/common.md and notes/roles.md.
   as it is; ~/dev/bin/warp-debug is built last. The last 10 distinct main builds stay runnable as
   ~/dev/bin/warp-<commit> (links into ~/dev/bin/main-builds/<commit>/, the binary with its compiler.wasm; card
   keep-main-binaries), for bisecting a regression without a build. The main-binary worktree's own data/compiler.wasm
-  is rebuilt too (`warp rebuild pure`; self once it builds), so `warp pure` there never runs the previous main's
-  compiler (supervisor 2026-10-21). push_tested.sh and
+  is rebuilt too (`warp rebuild pure` and `warp rebuild self`), so `warp pure` and `warp self` there never run the
+  previous main's compiler; the main checkout's stale data/compiler-self.wasm is deleted, its next `warp self` builds
+  it anew (a stale one printed hello while main refused to compile itself; supervisor 2026-10-21). push_tested.sh and
   express.sh start it; after a warp-only push start it yourself.
 - Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
   `integrator_tools/pure_chain_check.sh <worktree>` runs `warp pure samples/hello/hello.warp` with the merged lib
@@ -140,8 +141,8 @@ Read notes/agents/common.md and notes/roles.md.
   release build (~14 min; card pure-kinds: batch-32's Rust broke the chain while main's old binary with its lib still
   printed hello), else main's binary (~2.5 min cold, seconds cached). It runs with WARP_COMPILER_WARNINGS=1 and reports
   the warning lines ("PURE CHAIN WARNINGS"), not blocking until card compiling-lib reaches zero. It also runs
-  `warp self samples/hello/hello.warp` (the self-compiled compiler.warp) and reports it ("PURE SELF"), not blocking
-  until it prints hello (user 2026-10-21); then it blocks too. A blocking `warp self` lane may pass up to 5 % fewer
+  `warp self samples/hello/hello.warp` (the self-compiled compiler.warp, "PURE SELF"), which blocks too since it
+  prints hello on main (152e944ecf; user 2026-10-21), again only while main's prints it. A blocking `warp self` lane may pass up to 5 % fewer
   tests than `warp pure`, as long as the main tests pass (user, 52b6ac43be). Its Rust test
   warp_pure_runs_hello_world is ignored as slow, so this check is the only cover.
 - Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the
