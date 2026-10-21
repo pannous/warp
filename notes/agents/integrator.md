@@ -127,7 +127,9 @@ Read notes/agents/common.md and notes/roles.md.
   installs the quick-release ~/dev/bin/warp first, together with compiler.wasm, `warp pure`'s compiler, which the new
   binary builds for the main checkout's lib/ (`warp rebuild pure`, decision compiler-build) and checks with one `warp
   pure samples/hello/hello.warp` (a run without Hello logs a WARNING line in main_binary.log); an identical file stays
-  as it is; ~/dev/bin/warp-debug is built last. push_tested.sh and
+  as it is; ~/dev/bin/warp-debug is built last. The last 10 distinct main builds stay runnable as
+  ~/dev/bin/warp-<commit> (links into ~/dev/bin/main-builds/<commit>/, the binary with its compiler.wasm; card
+  keep-main-binaries), for bisecting a regression without a build. push_tested.sh and
   express.sh start it; after a warp-only push start it yourself.
 - Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
   `integrator_tools/pure_chain_check.sh <worktree>` runs `warp pure samples/hello/hello.warp` with the merged lib
