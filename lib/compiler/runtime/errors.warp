@@ -4,6 +4,28 @@ divide_by_zero(): int := {
 	fail()
 	0
 }
+# `error("boom")`: the Error of the message, a value, not raised (Rust's text_builtins.rs error)
+error_node(message: any): any := error_of(node_text(message))
+# `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail (Rust's
+# emit_data_item); `q.k = e`, `{k: e}`: a field holds none
+held_list_item(item: any): any := {
+	if node_is_error(item) { a_list_item_holds_no_error(item) }
+	item
+}
+held_field(item: any): any := {
+	if node_is_error(item) { a_field_holds_no_error(item) }
+	item
+}
+a_list_item_holds_no_error(error: any): int := {
+	global trap_detail = error
+	fail()
+	0
+}
+a_field_holds_no_error(error: any): int := {
+	global trap_detail = error
+	fail()
+	0
+}
 # `xs#i` outside 1…count: "index out of range: i not in 1…count"
 # the runtime errors of the library words, named for src/wasm_emitter/control/traps.rs to read off the trace
 index_out_of_range(): int := {
@@ -23,6 +45,10 @@ not_an_int(): int := {
 	0
 }
 not_a_character(): int := {
+	fail()
+	0
+}
+invalid_code_point(): int := {
 	fail()
 	0
 }
@@ -65,7 +91,7 @@ caught_error(finished: bool, value: any): any := {
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
 index_of_node(n: any): int := {
-	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { index_must_be_an_integer() }
+	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { index_must_be_an_integer() }
 	unboxed_int(n)
 }
 # a product beyond the int range (Rust's would be a big int)

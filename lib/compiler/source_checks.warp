@@ -1,0 +1,140 @@
+# The checks of a program as written (card pure-diagnostics; Rust twins: src/analyzer/checks/lints.rs,
+# discarded_values.rs, src/numbers/units.rs): they read parser.warp's nodes with their attribute layers (the mark of
+# `x.upper!`) and diagnose facts, whose messages are in warnings.data
+use "walk.warp"
+use "scope.warp"
+use "prelude_words.warp"
+use "diagnostics.warp"
+use "lints.warp"
+
+# words whose result is a changed copy of their argument: dropping it changes nothing (Rust COPY_WORDS)
+copy_words = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"]
+sleep_word = "sleep"
+error_word = "error"
+fail_word = "fail"
+
+# the program, each check's facts diagnosed; `prelude` names the other spellings of the words (`uppercase`)
+source_checks(program: any, prelude: text): any := {
+	aliases = module_aliases(prelude)
+	for n in nodes_in(program) {
+		located_error(n)
+		spelled_number_join(n)
+		bare_sleep(n)
+		assigned_mutation(n, aliases)
+		lints_of(without_mark(n))
+		if is_group(n) and separator_of(n) in statement_separators {
+			listed_statements = items_of(n)
+			for statement in listed_statements[0 ..< (#listed_statements - 1)] { dropped_value(statement, aliases) }
+		}
+	}
+	program
+}
+
+# an error the parser leaves in the tree (a negative index), the program's value
+located_error(n: any): any := {
+	if n is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2])) }
+	ø
+}
+
+# an attribute layer `x!` as parser.warp writes it, and the node it marks
+has_mutation_mark(n: any): bool := n is key and key_of(n) == symbol(attribute_word) and "${value_of(n)#1}" == mutated_mark
+without_mark(n: any): any := if n is key and key_of(n) == symbol(attribute_word) then without_mark(value_of(n)#3) else n
+
+# --- `"3" + 3` joins the texts (card print-oldest; "a" + 3 does not warn) ---
+
+spelled_number_join(n: any): any := {
+	if not is_operator(n, "+") { return ø }
+	left = key_of(n)
+	right = value_of(n)
+	spelled = spelled_number(left, right) ?? spelled_number(right, left)
+	if spelled == ø { return ø }
+	conversion = if spelled.contains(".") then "float" else "int"
+	written = sum_written(left, right, spelled, "")
+	as_sum = sum_written(left, right, conversion + "(" + spelled + ")", "")
+	as_text = sum_written(left, right, spelled, "str")
+	diagnose(call_of("spelled_number_join", [written, spelled, as_sum, as_text]))
+}
+# `left + right` with the text side written `spelling`, the number side as a numeral, inside `converter(…)` if any
+sum_written(left: any, right: any, spelling: text, converter: text): text := operand_form(left, spelling, converter) + " + " + operand_form(right, spelling, converter)
+operand_form(side: any, spelling: text, converter: text): text := {
+	if not (side is number) { return spelling }
+	if converter == "" then "${side}" else converter + "(${side})"
+}
+# the text side quoted, when it spells a number and the other side is one
+spelled_number(text_side: any, number_side: any): any := {
+	if not (number_side is number) or not (text_side is text or text_side is codepoint) { return ø }
+	digits = ("" + text_side).trim()
+	if is_numeral(digits) then "\"" + digits + "\"" else ø
+}
+# `12`, `-4.5`: an optional sign, digits, at most one decimal point
+is_numeral(t: text): bool := {
+	digits = if t.starts_with("-") or t.starts_with("+") then t[1..] else t
+	parts = digits.split(".")
+	#parts <= 2 and #digits > #parts - 1 and parts.all(part => part.chars().all(c => "0123456789".contains(c)))
+}
+
+# --- `sleep(1)` needs a unit (user issue #17; a bare number is seconds, decision sleep-seconds) ---
+
+bare_sleep(n: any): any := {
+	if is_group(n) and #n == 2 and n#1 == symbol(sleep_word) and n#2 is number { diagnose(call_of("bare_sleep", ["${n#2}"])) }
+	ø
+}
+
+# --- values a statement drops (wiki/mutable.md) ---
+
+# `uppercase x;` drops the copy; a dropped `error "…"` makes an error value nothing raises (card error-if)
+dropped_value(statement: any, aliases: any): any := {
+	call = copy_call(statement, aliases)
+	if call != ø { diagnose(call_of("dropped_copy", call)) }
+	for dropped in dropped_errors(statement) { diagnose(call_of("dropped_error", ["\"" + dropped + "\""])) }
+	ø
+}
+
+# `y = x.upper!` changes x too
+assigned_mutation(n: any, aliases: any): any := {
+	if not (is_operator(n, "=") or is_operator(n, ":=")) { return ø }
+	variable = marked_copy_variable(value_of(n), aliases)
+	if variable != ø { diagnose(call_of("assigned_mutation", ["${without_mark(key_of(n))}", variable])) }
+	ø
+}
+
+# [word, variable, marked] of a copy word called on a variable as written: `upper x`, `upper(x)`, `x.upper`,
+# `x.upper()`, marked by a `!` on the call or the variable (`x.upper!`, `upper x!`)
+copy_word_call(call: any, aliases: any): any := {
+	parts = word_and_variable(without_mark(call))
+	if #parts != 2 { return ø }
+	copy_word_of(callee_of(parts#1), without_mark(parts#2), has_mutation_mark(call) or has_mutation_mark(parts#2), aliases)
+}
+# [word, variable] of `x.word` and `word x`, else []
+word_and_variable(inner: any): list := if is_operator(inner, ".") then [value_of(inner), key_of(inner)] else if is_group(inner) and #inner == 2 then items_of(inner) else []
+# `upper` of `x.upper()`
+callee_of(word: any): any := if is_group(word) and bracket_of(word) == "(" and #word == 1 then word#1 else word
+copy_word_of(callee: any, variable: any, marked: bool, aliases: any): any := {
+	if not (callee is symbol) or not (variable is symbol) { return ø }
+	called = name_of(callee)
+	canonical = if called in aliases then aliases[called] else called
+	if canonical in copy_words then [called, name_of(variable), marked] else ø
+}
+# [word, variable] of an unmarked copy call
+copy_call(call: any, aliases: any): any := {
+	found = copy_word_call(call, aliases)
+	if found == ø { return ø }
+	if found#3 then ø else [found#1, found#2]
+}
+# the variable a marked copy call changes
+marked_copy_variable(value: any, aliases: any): any := {
+	found = copy_word_call(value, aliases)
+	if found == ø { return ø }
+	if found#3 then found#2 else ø
+}
+
+# the messages of the `error "…"` calls a dropped statement drops: the statement itself, the branches of an if, the
+# last statement of a block
+dropped_errors(statement: any): list := {
+	n = without_mark(statement)
+	if is_group(n) and #n == 2 and n#1 == symbol(error_word) and separator_of(n) != ";" { return ["" + n#2] }
+	if is_operator(n, "then") { return dropped_errors(value_of(n)) }
+	if is_operator(n, "else") { return dropped_errors(key_of(n)) + dropped_errors(value_of(n)) }
+	if is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) in statement_separators) { return dropped_errors(n#(#n)) }
+	[]
+}

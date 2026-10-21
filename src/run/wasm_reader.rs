@@ -92,8 +92,8 @@ fn run_main<S: 'static>(
 ) -> Result<(Val, Store<S>, Instance)> {
 	crate::sound::start_run();
 	let (engine, _) = engine_for(bytes);
-	let mut store = crate::util::limited_store(&engine, state);
 	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
+	let mut store = crate::util::profiled_store(&engine, state, &module);
 	let mut linker = Linker::new(&engine);
 	link(&mut linker, &engine, &module)?;
 	define_imported_entities(&mut linker, &mut store, &module)?;
@@ -400,6 +400,9 @@ fn struct_node<T>(
 	// a runtime word that builds a node wrongly (a text kind over a non-text) fails loudly, never reads as ""
 	let malformed = || crate::node::error(&format!("malformed node: kind {kind:#x} holds no text"));
 	match Kind::of_field(kind) {
+		Some(Kind::Empty) if kind & crate::type_kinds::UNMARKED_KIND == crate::type_kinds::EMPTY_LIST_KIND => {
+			Node::List(vec![], Bracket::Square, crate::node::Separator::None)
+		}
 		Some(Kind::Empty) => Node::Empty,
 		Some(Kind::Int) => int_node(store, &data, high_byte),
 		Some(Kind::Float) => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),

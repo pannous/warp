@@ -39,6 +39,7 @@ mod test_operator_parsing;
 mod test_operator_precedence;
 mod test_operator_spellings; // card operator-spelling
 mod test_operators;
+mod test_or_chain_once; // card or-once
 mod test_pipe_stages;
 mod test_pipeline;
 mod test_postfix_words;
@@ -53,4 +54,5 @@ mod test_then_pipe;
 mod test_truthiness_of_objects;
 mod test_tuple_comparison_warning; // int -3 is int(-3), f - 2 subtracts
 mod test_used_operator_call_form; // card used-module
+mod test_word_named_field_updates; // card word-field-update
 mod test_xor_negated_group; // card xor-xor

@@ -1,5 +1,5 @@
 # `[x * x for x in 1..10]` and `[x for x in xs if x % 2 == 0]`: a list built by a loop,
-# `(comprehension_list_0 = []; for x in xs { if c { comprehension_list_0 += [x * x] } }; comprehension_list_0)`, before
+# `(comprehension_list·1 = []; for x in xs { if c { comprehension_list·1 += [x * x] } }; comprehension_list·1)`, before
 # for_loops.warp lowers the loop (card pure-comprehensions). Python's generator argument `sum(x * x for x in xs)` is the
 # call of that list. Rust twin: src/lowering/collections/comprehensions.rs lower
 use "walk.warp"
@@ -9,9 +9,6 @@ made_word = "comprehension_list"
 for_word = "for"
 in_word = "in"
 filter_words = ["if", "where"]
-
-# the comprehensions made so far, numbering each one's list
-global comprehensions_made = 0
 
 # the clause `for v in xs …`
 starts_with_for(n: any): bool := match n {
@@ -66,8 +63,7 @@ comprehension(items: list): any := {
 	if at == 1 or at > #items { return ø }
 	clauses = qualifiers(items#at, items[at..])
 	if clauses == ø { return ø }
-	made = symbol(made_word + "_" + comprehensions_made)
-	comprehensions_made = comprehensions_made + 1
+	made = fresh_name(made_word, fresh_number())
 	appended = Key(made, Op.AddAssign, List([words_phrase(items[0 .. at - 1])], Bracket.Square, Separator.Space))
 	List([Key(made, Op.Assign, ø), looped(clauses, appended), made], Bracket.Round, Separator.Semicolon)
 }

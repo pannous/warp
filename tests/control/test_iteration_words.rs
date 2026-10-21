@@ -14,7 +14,7 @@ fn test_filter() {
 	assert_eq!(printed("filter([1 2 3 4], x=>x>1)"), "[2 3 4]");
 	assert_eq!(printed("big(x):=x>2; filter [1 2 3 4] big"), "[3 4]");
 	assert_eq!(printed("xs=[1 2 3 4]; k=3; xs.filter {it < k}"), "[1 2]");
-	assert_eq!(printed("filter [1 2 3] {it>5}"), "ø");
+	assert_eq!(printed("filter [1 2 3] {it>5}"), "[]");
 }
 
 #[test]

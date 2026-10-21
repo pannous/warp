@@ -1,3 +1,4 @@
+mod test_bound_names_shadow_functions; // card local-variable-named
 mod test_colon_body_assignment;
 mod test_colon_body_extent;
 mod test_compiler_temporaries;

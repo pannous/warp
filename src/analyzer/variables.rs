@@ -69,11 +69,11 @@ pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<No
 	(kind, type_name.map(|name| Box::new(Node::Symbol(name))))
 }
 
-/// The body of a function definition `f(x) = …`, `f(x) := …`, `def f(x) {…}`: its variables are the function's own
+/// The body of a function definition `f(x) = …`, `f(x) := …`, `f(x): list := …`, `def f(x) {…}`: its variables are the
+/// function's own, never the enclosing program's (where locals of one name in many functions widened each other forever)
 pub(super) fn function_definition_body(node: &Node) -> Option<&Node> {
-	let starts_with_symbol = |items: &[Node]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)));
 	match node.drop_meta() {
-		Node::Key(left, Op::Assign | Op::Define, body) if matches!(left.drop_meta(), Node::List(items, _, _) if starts_with_symbol(items)) => {
+		Node::Key(left, Op::Assign | Op::Define, body) if super::user_functions::signature(left).is_some() => {
 			Some(body)
 		}
 		Node::List(items, _, _) if items.len() >= 2 && items[0].symbol_name().is_some_and(is_function_keyword) => {
@@ -161,6 +161,9 @@ fn define_new(left: &Node, right: &Node, scope: &mut Scope) {
 		if scope.lookup(name).is_none() && !scope.is_global(name) {
 			let kind = binding_kind(right, scope);
 			scope.define(name.to_string(), None, kind);
+			if let Some(local) = scope.own_binding_mut(name) {
+				local.empty_list = right.is_empty_list_literal();
+			}
 		}
 	}
 }
@@ -170,11 +173,21 @@ fn widen_by_compound_assign(left: &Node, op: &Op, right: &Node, scope: &mut Scop
 	let Some(name) = left.symbol_name() else {
 		return;
 	};
+	// `xs += 3` appends 3 as `xs += [3]` does (decision list-append-plus)
+	let item_list = scope.lookup(name).filter(|_| *op == Op::AddAssign).and_then(|local| {
+		let appends = crate::analyzer::inference::appends_item(local.kind, local.empty_list, infer_type(right, scope));
+		appends.then(|| crate::analyzer::inference::one_item_list(right))
+	});
+	let right = item_list.as_ref().unwrap_or(right);
 	mark_ratio(left, right, scope);
 	widen_to_float(scope, name, right);
 	// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
-	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
-	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
+	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error. A list stays a list, whatever it adds:
+	// `out += part` of a part of an `any` list grows it in place (list_extend), held as a Node it was copied each step
+	let grows_list = *op == Op::AddAssign
+		&& (scope.lookup(name).is_some_and(|local| local.kind == Kind::List)
+			|| crate::analyzer::inference::holds_empty_list(scope, name));
+	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) && !grows_list {
 		widen_to_node(scope, name, &Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone())));
 	}
 	// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
@@ -240,9 +253,13 @@ fn bind_assigned_kind(left: &Node, right: &Node, scope: &mut Scope) {
 			scope.define(name.clone(), type_node, kind);
 			if let Some(local) = scope.own_binding_mut(name) {
 				local.declared = declared.is_some();
+				local.empty_list = right.is_empty_list_literal();
 			}
 		}
 		Node::Symbol(name) => {
+			if let Some(local) = scope.own_binding_mut(name) {
+				local.empty_list = right.is_empty_list_literal();
+			}
 			type_list_by_first_append(name, right, scope);
 			type_map_by_first_entry(name, right, scope);
 			widen_list_type(scope, name, right);
@@ -330,7 +347,7 @@ fn set_widened_list_type(scope: &mut Scope, name: &str, widened: String) {
 	if let Some(local) = scope.own_binding_mut(name) {
 		local.type_node = Some(type_node.clone());
 	}
-	scope.widened_bindings.insert(name.to_string(), (Kind::List, Some(type_node)));
+	scope.widen_binding(name, Kind::List, Some(type_node));
 }
 
 /// `ys = ["a"]; ys = [3]`: a variable given lists of two element types holds the items of both, of their common type
@@ -374,7 +391,7 @@ pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 			local.kind = Kind::Float;
 			// a read before this write (`y = x * 2` earlier in the loop) is a float too, once collected again
 			if is_local {
-				scope.widened_bindings.insert(name.to_string(), (Kind::Float, None));
+				scope.widen_binding(name, Kind::Float, None);
 			}
 		}
 	}
@@ -409,7 +426,7 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 		local.type_node = None;
 		// a read before this write (`x2 = x1` earlier in the loop) holds the Node too, once collected again
 		if scope.locals.contains_key(name) {
-			scope.widened_bindings.insert(name.to_string(), (Kind::Empty, None));
+			scope.widen_binding(name, Kind::Empty, None);
 		}
 	}
 }
@@ -565,6 +582,14 @@ impl Scope {
 		}
 	}
 
+	/// `name` holds `kind` from its definition on once collected again (collect_variables); a Node stays one, so the
+	/// collections end: a list widening after it would turn it back and forth
+	fn widen_binding(&mut self, name: &str, kind: Kind, type_node: Option<Box<Node>>) {
+		if self.widened_bindings.get(name).is_none_or(|(widened, _)| *widened != Kind::Empty) {
+			self.widened_bindings.insert(name.to_string(), (kind, type_node));
+		}
+	}
+
 	pub fn function_kind(&self, name: &str) -> Option<Kind> {
 		self.function_kinds.get(name).copied().or_else(|| self.parent.as_ref().and_then(|p| p.function_kind(name)))
 	}
@@ -601,6 +626,7 @@ impl Scope {
 			data_pointer: 0,
 			data_length: 0,
 			may_be_ratio: false,
+			empty_list: false,
 		};
 		self.locals.insert(name, local.clone());
 		local

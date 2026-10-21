@@ -77,12 +77,21 @@ pub fn bound_in_functions(program: &Node) -> HashSet<String> {
 	bound
 }
 
+/// The names bound inside the function `node` defines (bound_in_function); None when it defines none
+pub fn bound_inside(node: &Node) -> Option<HashSet<String>> {
+	function_head(node).map(|head| bound_in_function(&head))
+}
+
 /// The names a function binds inside: its parameters, the names its body assigns and its loop variables
 fn bound_in_function(head: &FunctionHead) -> HashSet<String> {
-	let mut bound: HashSet<String> = head.parameters().into_iter().filter_map(parameter_name).collect();
-	crate::library_words::collect_assigned_names(head.body, &mut bound);
-	bound.extend(crate::for_loop::loop_variables(head.body));
-	bound
+	bound_in_body(head.parameters().into_iter().filter_map(parameter_name).collect(), head.body)
+}
+
+/// `parameters` and the names `body` assigns or loops over: what a function with that body binds inside
+pub fn bound_in_body(mut parameters: HashSet<String>, body: &Node) -> HashSet<String> {
+	crate::library_words::collect_assigned_names(body, &mut parameters);
+	parameters.extend(crate::for_loop::loop_variables(body));
+	parameters
 }
 
 /// `rewrite` of a pass giving `word` its library or host meaning, applied where the program leaves the word free:

@@ -1,0 +1,4 @@
+# the passes and emitter stages in one program (card analyzer-settle: this compile hung before 3bbc7178cf; it prints 1)
+use "../lib/compiler/passes.warp"
+use "../lib/compiler/emitter.warp"
+print(1)

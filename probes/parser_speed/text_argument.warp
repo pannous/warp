@@ -1,0 +1,27 @@
+// Does passing a text to a function cost its length? The milliseconds of one call per codepoint, with the text
+// passed typed `any` and typed `text`, of the file args#1 names (card profile-stage-programs)
+use os
+def peek_any(source: any, at: int, n: int): any := if at < n then source[at] else '\n'
+def peek_text(source: text, at: int, n: int): any := if at < n then source[at] else '\n'
+def walk_any(source: any): int {
+	started = clock()
+	n = source.length
+	at = n - 1
+	while at >= 0 {
+		peek_any(source, at, n)
+		at = at - 1
+	}
+	clock() - started
+}
+def walk_text(source: text): int {
+	started = clock()
+	n = source.length
+	at = n - 1
+	while at >= 0 {
+		peek_text(source, at, n)
+		at = at - 1
+	}
+	clock() - started
+}
+source = read(args#1)
+print("length " + source.length + ": any " + walk_any(source) + " ms, text " + walk_text(source) + " ms")

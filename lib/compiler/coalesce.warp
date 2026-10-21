@@ -1,0 +1,15 @@
+# `a ?? b` (card pure-lane-merges): `if a == ø then b else a`, an operand more than a plain value computed once into
+# a temporary
+# Rust twin: src/lowering/words/library_words.rs lower_coalesce
+use "min_max.warp"
+
+coalesced(n: any): any := match n {
+	Key(left, Op.Coalesce, right): {
+		tested = if is_plain(left) then left else temporary()
+		bindings = if tested == left then [] else [Key(tested, Op.Assign, left)]
+		with_bindings(bindings, Key(Key(Key(ø, Op.If, Key(tested, Op.Eq, ø)), Op.Then, right), Op.Else, tested))
+	}
+	_: n
+}
+
+coalesce(program: any): any := bottom_up(program, coalesced)

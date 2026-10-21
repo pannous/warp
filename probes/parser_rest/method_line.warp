@@ -1,0 +1,4 @@
+xs = [1, 2]
+ys = xs
+	.map(x => x * 2)
+print ys

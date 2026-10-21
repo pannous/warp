@@ -50,7 +50,9 @@ impl Op {
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
 
 			// Equality binds weaker and never chains: a<b == c<d compares the two results, a==b==c is ambiguous
-			Op::Eq | Op::Is | Op::Ne | Op::Identical | Op::NotIdentical | Op::Similar | Op::Rough | Op::In => (115, 116),
+			Op::Eq | Op::Is | Op::Ne | Op::Identical | Op::NotIdentical | Op::Similar | Op::Rough | Op::In => {
+				(115, 116)
+			}
 			// below arithmetic, above comparison: `xs |> sum > 3` is `sum(xs) > 3`
 			Op::Pipe => (127, 128),
 

@@ -1,0 +1,2 @@
+kept(slices: list, own_names: list): list := slices.filter(slice => not (slice#1 in own_names) or slice#1.starts_with("operator_"))
+print(kept([["a", "x"], ["operator_+", "y"], ["c", "z"]], ["a", "operator_+"]))

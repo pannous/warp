@@ -1,0 +1,15 @@
+# emitter core: slices and indexes looking back over a text walk back from the walk, not from the start
+# (runtime.warp character_start, walk_back): words of a mixed text, then its last characters backwards
+# ["héllo" "wörld" "🇩🇪" 'é' "ok"] ko ["é " "🇩🇪"]
+source = "héllo wörld 🇩🇪 é ok "
+words = []
+start = -1
+for i in 0..#source {
+	c = source[i]
+	if c == ' ' {
+		if start >= 0 { words += [source[start..i]]; start = -1 }
+	} else if start < 0 { start = i }
+}
+print words
+print source[#source - 2] + source[#source - 3]
+print [source[14..16], source[12..13]]

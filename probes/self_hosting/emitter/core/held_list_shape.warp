@@ -1,0 +1,7 @@
+# a list held in a variable keeps its bracket and separator: bracketed and separated give a node, not a plain list
+xs = bracketed([1, 2], "(")
+ys = separated(xs, ";")
+print [xs.bracket, ys.separator, ys.bracket]
+print ys
+xs = [3, 4]
+xs

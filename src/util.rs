@@ -90,6 +90,12 @@ pub fn limited_store<T: 'static>(engine: &Engine, data: T) -> Store<T> {
 	warp_runtime::engine::limited_store(engine, data, fuel_budget(), time_limit())
 }
 
+/// limited_store profiling `module`'s run when WARP_PROFILE names a file (warp_runtime::profile)
+#[cfg(feature = "native")]
+pub fn profiled_store<T: 'static>(engine: &Engine, data: T, module: &wasmtime::Module) -> Store<T> {
+	warp_runtime::engine::profiled_store(engine, data, fuel_budget(), time_limit(), module)
+}
+
 /// The body at `url`, empty (and reported on stderr) when the download fails
 #[cfg(feature = "native")]
 pub fn fetch(url: &str) -> String {

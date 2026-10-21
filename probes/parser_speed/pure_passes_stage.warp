@@ -1,0 +1,28 @@
+// The milliseconds of each step of the pure lane's passes stage (passes.warp checked: parse, uses, used modules,
+// prelude, passes, kind changes) on the file
+// args#1 names, its uses read from the folder args#2; its view goes to args#3 for pure_analysis_stage.warp. Run from
+// this folder: WARP_LIB=<checkout>/lib warp pure_passes_stage.warp <file> <its folder> <view.json>
+use "../../lib/compiler/passes.warp"
+use os
+use json
+probe_started = clock()
+probe_times = ""
+probe_step = clock()
+# timed: the milliseconds since the last step, added to the line under `name`
+timed(name: text, value: any): any := {
+	global probe_times
+	global probe_step
+	probe_times += name + " " + (clock() - probe_step) + " ms, "
+	probe_step = clock()
+	value
+}
+probe_tree = timed("parse", plain_node(parsed(read(args#1))))
+probe_tree = timed("uses", with_uses(probe_tree, args#2))
+probe_tree = timed("used modules", with_used_modules(probe_tree, args#2))
+probe_tree = timed("prelude", with_reached(probe_tree, module_source("prelude"), no))
+probe_tree = timed("passes", lowered_node(probe_tree))
+probe_tree = timed("kind changes", kind_changes(probe_tree))
+probe_view = timed("view", view_of(probe_tree))
+timed("diagnosed", diagnosed)
+print(probe_times + "total " + (clock() - probe_started) + " ms")
+write(args#3, to_json(probe_view))

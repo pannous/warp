@@ -1,0 +1,4 @@
+use "parser.warp"
+print tree("def index_of(source: any, part: text, from: int, n: int): int {\n 42\n}")
+print tree("f(a, b: int = 1): int := a")
+print tree("def g(a) := a")

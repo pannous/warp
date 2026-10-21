@@ -25,18 +25,24 @@ global other_bytes = 0
 global other_index = 0
 global other_at = 0
 global other_before = -1
-# the characters (grapheme clusters) of a text
+# the characters (grapheme clusters) of a text; a short one stays out of the count kept, so a lexer's words leave its
+# source's count (card text-cache-lru)
 text_count(t: text): int := {
+	if byte_count(t) < short_text() { return characters_counted(t) }
 	if same_text(t, counted_text) == 1 and byte_count(t) == counted_bytes { return counted }
+	count = characters_counted(t)
+	counted_text = t
+	counted_bytes = byte_count(t)
+	counted = count
+	count
+}
+characters_counted(t: text): int := {
 	count = 0
 	at = 0
 	while at < byte_count(t) {
 		at = character_end(t, at)
 		count += 1
 	}
-	counted_text = t
-	counted_bytes = byte_count(t)
-	counted = count
 	count
 }
 # the code points of a text: its bytes that start one, all but the continuation bytes 10xxxxxx

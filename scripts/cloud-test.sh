@@ -9,7 +9,7 @@
 #       adds it to the card (`todo note`); --no-wait only launches: fetch later with --result;
 #       --on-main tests the tip merged into the current origin/main, as the Integrator's gate will (--on <base>: into
 #       origin/<base>, e.g. a batch branch)
-#   scripts/cloud-test.sh --result [--card <card>] <branch> <tip>     wait for and collect a launched run's result
+#   scripts/cloud-test.sh --result [same options] [--card <card>] <branch> <tip> [same filters]   collect a --no-wait run
 #   scripts/cloud-test.sh --summarize <cargo test log> [environmental list] [known failures]    the result's summary of any log
 # The cloud session runs this same script from origin/main (the tip may predate it) with --job <job>, which reads the
 # job's arguments from the branch cloud-jobs/<job> and runs them as --run-here: it checks out
@@ -52,7 +52,12 @@ USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
 RUST_TARGETS="wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown" # package and crate-wrapper builds in the tests
 
 fail() { echo "cloud-test: $*" >&2; exit 1; }
-run_name() { echo "$(printf %s "$1" | tr -c 'A-Za-z0-9._-' '-')-${2:0:8}"; }
+run_name() {
+	local branch=$1 tip=$2 signature
+	shift 2
+	signature=$(printf '%s\0' "$@" | git hash-object --stdin | cut -c1-12)
+	echo "$(printf %s "$branch" | tr -c 'A-Za-z0-9._-' '-')-${tip:0:8}-$signature"
+}
 credit_used() { "$USAGE_SCRIPT" 2>/dev/null | sed -n 's/^iguana_necktie: \$\([0-9.]*\) .*/\1/p'; }
 
 # ---------------------------------------------------------------- the cloud side
@@ -106,8 +111,11 @@ run_tests_here() {
 		esac
 	done
 	local branch=$1 tip=$2; shift 2
-	local name started build_seconds test_seconds checkout lock_matches="" build_environment=""
-	name=$(run_name "$branch" "$tip")
+	local name started build_seconds test_seconds checkout lock_matches="" build_environment="" setting
+	local identity=()
+	[ -n "$base" ] && identity+=(--on "$base")
+	for setting in ${settings[@]+"${settings[@]}"}; do identity+=(--env "$setting"); done
+	name=$(run_name "$branch" "$tip" "${identity[@]}" "$@")
 	started=$SECONDS
 	local branch_ref
 	for branch_ref in "$branch" main vendor $base; do
@@ -133,10 +141,17 @@ run_tests_here() {
 	fi
 	rustup target add $RUST_TARGETS >/dev/null 2>&1
 	local source_flags=(--config net.offline=false)
+	# the vendored sources in a config above the checkout, not --config flags: a cargo the tests run themselves (the
+	# libwarp_runtime build of tests/common runtime_library_dir) reads it too (card cloud-fxprof)
+	local vendor_config=$HERE_ROOT/.cargo/config.toml
+	rm -f "$vendor_config"
 	if git diff --quiet origin/vendor HEAD -- Cargo.lock 2>/dev/null; then
 		lock_matches=1
 		git archive origin/vendor vendor | tar -x
-		source_flags=(--offline --config 'source.crates-io.replace-with="vendored-sources"' --config 'source.vendored-sources.directory="vendor"')
+		mkdir -p "$(dirname "$vendor_config")"
+		printf '[net]\noffline = true\n[source.crates-io]\nreplace-with = "vendored-sources"\n[source.vendored-sources]\ndirectory = "%s"\n' \
+			"$checkout/vendor" > "$vendor_config"
+		source_flags=(--offline)
 	fi
 	local test_args=() filters=() past_separator="" flag_value_next=""
 	if [ "${1:-}" = "--full" ]; then
@@ -178,7 +193,7 @@ run_tests_here() {
 	fi
 	# the file the --env settings name in WARP_EMIT_REFUSALS (scripts/self-hosted-suite.sh): emptied before the tests,
 	# its lines appended to the log after them (sent to stderr they reached the output the CLI tests check)
-	local refusals="" setting
+	local refusals=""
 	for setting in ${settings[@]+"${settings[@]}"}; do
 		[[ "$setting" == WARP_EMIT_REFUSALS=* ]] && refusals=${setting#*=}
 	done
@@ -421,8 +436,8 @@ launch() {
 	[[ "$tip" =~ ^[0-9a-f]{40}$ ]] || fail "the tip must be a full 40-hex commit id (git rev-parse output), not '$tip'"
 	git -C "$MAIN_CHECKOUT" fetch -q origin "$branch" || fail "branch $branch is not on origin"
 	git -C "$MAIN_CHECKOUT" merge-base --is-ancestor "$tip" "origin/$branch" || fail "tip $tip is not on origin/$branch: push first"
-	name=$(run_name "$branch" "$tip")
-	job=$name-$(date +%s)
+	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$@")
+	job=$name-$(date +%s)-$$
 	folder=$MAIN_CHECKOUT/data/cloud/$name
 	mkdir -p "$folder"
 	rm -f "$folder/result.md"
@@ -489,7 +504,8 @@ finish_session() {
 collect() {
 	local branch=$1 tip=$2 card=$3
 	local name folder ref deadline
-	name=$(run_name "$branch" "$tip")
+	shift 3
+	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$@")
 	folder=$MAIN_CHECKOUT/data/cloud/$name
 	ref=refs/heads/$RESULTS_PREFIX/$name
 	deadline=$((SECONDS + WAIT_HOURS * 3600))
@@ -536,6 +552,6 @@ main() {
 	done
 	[ $# -ge 2 ] || { sed -n '2,17p' "$0"; exit 2; }
 	if [ -z "$result_only" ]; then launch "$@" || exit; fi
-	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card"
+	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card" "${@:3}"
 }
 main "$@"; exit

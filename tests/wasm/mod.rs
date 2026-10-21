@@ -19,6 +19,8 @@ mod test_memory_cap;
 mod test_no_cwd_debris; // card cwd-artifacts
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_own_runtime_stub; // card stub-race
+#[cfg(feature = "native")] // runs the warp binary
+mod test_profile; // card warp-profile
 mod test_read_bytes_plain_result;
 mod test_reproducible_builds;
 mod test_runtime_stub_found;

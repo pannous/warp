@@ -56,6 +56,16 @@ fn for_loops_run_pure() {
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
 
+/// lib/compiler/parser.warp reads `for each x in xs` and `each x in xs` as `for x in xs`; a loop variable named `each`
+/// stays one (card pure-error-undefined)
+#[test]
+fn for_each_loops_run_pure() {
+	let basket = "basket = [{price: 2} {price: 3}]; t = 0;";
+	runs_pure("for_each", &format!("{basket} for each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("each_in", &format!("{basket} each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("variable_each", "t = 0; for each in [10, 20] { t = t + each }; t", "30");
+}
+
 /// node_matches.warp: an arm of a number, text or character tests the subject equals it
 #[test]
 fn match_values_run_pure() {
@@ -74,6 +84,25 @@ fn enum_cases_run_pure() {
 		"bare_case_arms",
 		&format!("enum Coin {{ Penny, Dime }}\n{cents}\ncents(Dime) + cents(Coin.Penny)"),
 		"11",
+	);
+}
+
+/// plain_enums.warp converts a case to its index and back, node_matches.warp takes `other:` as the default arm and a
+/// case named like a type word (`Int` of node.warp's Kind) as the case (card enum-leftovers)
+#[test]
+fn enum_conversions_and_default_arms_run_pure() {
+	let coin = "enum Coin { Penny, Nickel, Dime }";
+	runs_pure("case_as_int", &format!("{coin}\nCoin.Dime as int"), "2");
+	runs_pure("case_as_position", &format!("{coin}\nCoin.Dime as position"), "3");
+	runs_pure("int_as_case", &format!("{coin}\n2 as Coin"), "Dime");
+	runs_pure("case_call", &format!("{coin}\nCoin(1)"), "Nickel");
+	let cost = "cost(c) := match c { Penny: 1; other: 3 }";
+	runs_pure("other_arm", &format!("{coin}\n{cost}\ncost(Coin.Dime) * 10 + cost(Coin.Penny)"), "31");
+	let name = "name(k) := match k { Int: \"int\"; Float: \"float\"; _: \"node\" }";
+	runs_pure(
+		"type_named_cases",
+		&format!("enum Kind {{ Empty, Int, Float }}\n{name}\nname(Kind.Int) + name(Kind.Empty)"),
+		"intnode",
 	);
 }
 
@@ -253,6 +282,265 @@ fn lambdas_run_pure() {
 fn type_words_named_by_fields_run_pure() {
 	runs_pure("field_named_symbol", "kinds = {symbol: 1}; is_word(n) := n is symbol; is_word(:hello)", "yes");
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
+}
+
+/// lib/compiler/analyzer.warp: a field read `p.code` is a value known at run time, so is a slice of it, held in a
+/// variable (card pure-field-slice)
+#[test]
+fn field_slices_run_pure() {
+	runs_pure("field_slice", "class P { code: text }; p = P{code: \"hello\"}; w = p.code[1 .. 3]; w + \"!\"", "el!");
+}
+
+/// lib/compiler/definitions.warp: `f = { it + 1 }` defines a function of `it` as `f := { it + 1 }` does (card pure-error)
+#[test]
+fn assigned_it_blocks_run_pure() {
+	runs_pure("assigned_it_block", "f = { it + 1 }; f(2)", "3");
+}
+
+/// lib/compiler/min_max.warp: min and max of arguments, of a list literal, of a list known at run time (card
+/// pure-library-words)
+#[test]
+fn extrema_run_pure() {
+	runs_pure("max_of_arguments", "max(3, 9, 4)", "9");
+	runs_pure("min_of_literal", "min([4, 1, 6])", "1");
+	runs_pure("max_of_computed", "xs = [5, 2, 7]; max(xs.map(x => x * 2))", "14");
+	runs_pure("min_of_variable", "xs = [5, 2, 7]; min(xs) + max(1.5, 1)", "3.5");
+}
+
+/// What the lib bench found parser.warp failing on in lib/ (scripts/lib_bench.sh): a keyword naming a key or a member
+/// (`{if: 4}`, `op.if`, emitter.warp), a membership word assigned (`alias contains = …`, prelude.warp), an operator
+/// alias line, `&f` and `∛x` (math.warp), the degree sign (`20°C`, units.warp)
+#[test]
+fn lib_forms_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("keyword_key", "m = {if: 4, x: 1}; m[\"if\"]", "4"),
+			("keyword_member", "op = {if: 4, else: 5}; op.if + op.else", "9"),
+			("assigned_membership_word", "xs = [1, 2]; includes = 3; includes + #xs", "5"),
+			("operator_alias_line", "operator × := *\n2 × 3", "6"),
+			("function_reference_sign", "f(x) := x + 1; g = &f; g(2)", "3"),
+			("cube_root_glyph", "∛27", "3"),
+			("degree_temperature", "20°C is temperature", "yes"),
+			("degree_variable", "x = 180; x° > 3.14", "yes"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
+/// parser.warp consumes every Unicode character by its class (card unicode-glyphs): arrow and declared glyph operators,
+/// operator aliases (lib/math.warp), free symbols as values, a quote carrying a combining mark
+#[test]
+fn unicode_glyphs_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("arrow_down", "8↓2", "3"),
+			("declared_glyph", "infix operator ⊕(a: int, b: int) := a * 10 + b; 4 ⊕ 2", "42"),
+			("alias_dot", "2 · 3", "6"),
+			("alias_and", "yes ∧ no", "no"),
+			("alias_element", "2 ∈ [1, 2]", "yes"),
+			("free_symbol_value", "x = ↯\nx", "↯"),
+			("free_symbols_listed", "[↯ ↯]", "[↯ ↯]"),
+			("technical_symbol_value", "x = ⌘\nx", "⌘"),
+			("quote_with_mark", "x = \"\u{305}\"\nx.length", "1"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
+/// lib/compiler/kind_changes.warp: a variable given a value of a kind that does not mix fails with the message of
+/// A type word after `global` types the declared name, every type word Rust knows (`long`, `double`), not only `int`
+#[test]
+fn global_type_words_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in
+			[("global_long", "global long k=7; k", "7"), ("global_double", "global double d = 1.5; d + 1", "2.5")]
+		{
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
+/// A prefix `if` takes its own `then` and `else` in a match arm (card arm-inline-if)
+#[test]
+fn arm_inline_if_reads_self_hosted() {
+	for lane in ["front", "pure"] {
+		let code = "f(x: any): any := match x {\n\t1: if x > 0 then 1 else 2\n\t_: 0\n}\nf(1)";
+		let (output, _) = lane_run(lane, "arm_inline_if", code);
+		assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == "1"), "{lane} {code}: {output}");
+	}
+}
+
+/// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
+#[test]
+fn kind_changes_fail_pure() {
+	let (output, _) = lane_run("pure-only", "kind_change", "x = 5; x = [1]; x");
+	assert!(output.contains("x was an Int, is given a List: use another name"), "{output}");
+	let (output, _) = lane_run("pure-only", "body_kind_change", "f() := (x = 1; x = \"a\"; x); f()");
+	assert!(output.contains("x was an Int, is given a Text"), "{output}");
+	runs_pure("kinds_that_mix", "x = 1; x = 2.5; x", "2.5");
+}
+
+/// card uses-std-modules: a standard module a program uses by name (`use case_tables`, lib/case_tables.warp) brings
+/// the definitions the program reaches, its values included, in front of the program
+#[test]
+fn std_modules_run_pure() {
+	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
+}
+
+/// lib/compiler/emitter.warp: an instance leaving out fields gives them their declared defaults, an optional field ø
+/// (card pure-field-defaults)
+#[test]
+fn field_defaults_run_pure() {
+	runs_pure("call_defaults", "class point{x:int=0; y:int=3}; point(5)", "point{x:5 y:3}");
+	runs_pure("brace_defaults", "class counter{n=0; step:int=1}; c = counter{}; c.n + c.step", "1");
+	runs_pure("optional_field", "class opt { a: int; b? }; opt(4).a", "4");
+}
+
+/// lib/compiler/emitter.warp: a named argument `name = value` takes its parameter's or field's place (P37), a left-out
+/// one its default (card pure-named-arguments)
+#[test]
+fn named_arguments_run_pure() {
+	runs_pure("named_call", "f(a, b) := a * 10 + b; f(b=2, a=7)", "72");
+	runs_pure("named_instance", "class P { x: int; y: int }; p = P(y=2, x=7); p.x * 10 + p.y", "72");
+	runs_pure("named_and_default", "class P { x: int; y: int = 5 }; P(x=1)", "P{x:1 y:5}");
+}
+
+/// card scope-binding: a used file's plain enum reaches the program (scope.warp's Meaning in parser.warp); a parameter
+/// of kind Op, Bracket or Separator holds the text a node carries, and a type variable `T` any value
+#[test]
+fn enums_of_used_files_and_type_variables_run_pure() {
+	let probe = |name: &str| format!("{}/probes/compiler_enums/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("used_enum", &probe("f_used_enum2"), "Function\nyes\nyes");
+	runs_pure("used_op", &probe("f_used_op"), "yes\nno");
+	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
+	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
+}
+
+/// lib/compiler/parser.warp reads every negated spelling as Rust's spellings.rs NEGATED_SPELLINGS: `x not in xs`,
+/// `x ∉ xs`, `a nand b`, `a ⊼ b`, `a ¬& b`, `x is not y`, `x isn't y` are the negated operation
+#[test]
+fn negated_operators_run_pure() {
+	let code = "print 5 not in [1 2 3]; print 2 ∉ [1 2 3]; print yes nand no; print yes ⊼ yes; print yes ¬& no; print 3 is not 4; print 3 isn't 3";
+	runs_pure("negated", code, "yes\nno\nyes\nno\nyes\nyes\nno");
+}
+
+/// lib/compiler/emitter.warp: a host word taking or giving nodes (parse_code, std_pure) builds the program's values with
+/// the constructors the module exports for the host, as Rust's do (card emitter-imports)
+#[test]
+fn host_words_on_nodes_run_pure() {
+	runs_pure("parse_at_run_time", "t = \"1 + 2\"; parse(t)", "1+2");
+	runs_pure("parsed_operator", "t = \"a * b\"; parse(t).op", "*");
+	runs_pure("parse_failure_caught", "t = \"((\"; try { parse(t) } catch e { \"bad\" }", "bad");
+	runs_pure("std_pure_json", "use json; parse_json(\"[1, 2, 3]\")", "[1 2 3]");
+	runs_pure("std_pure_hash", "use hash; crc32(\"abc\")", "891568578");
+}
+
+/// parser.warp's last refusals in the pure lane (card pure-parser-rest): a type test beside a local of that name in
+/// another function, `else` on the next line, a prelude alias beside a function of other arity, min and max, a member
+/// naming a library word, `/!` of a value known only at run time, the keys of `{}`
+#[test]
+fn parser_words_run_pure() {
+	let probe = |name: &str| format!("{}/probes/parser_rest/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("type_test_beside_local", &probe("is_shadowed"), "no\nyes\n3\nyes");
+	runs_pure("else_on_next_line", &probe("else_lines"), "[2]");
+	runs_pure("then_on_next_line", &probe("then_line"), "4");
+	runs_pure("method_on_next_line", &probe("method_line"), "[2 4]");
+	runs_pure("alias_beside_arity", &probe("overload"), "16\n42");
+	runs_pure("min_max", &probe("min_max"), "2\n5\n9\n1\n2\n1");
+	runs_pure("member_words", &probe("plurals"), "['h' 'é' 'l' 'l' 'o']\n['a' 'b']\n['a' 'b']\n['a' 'b']\n[1 2]\n5");
+	runs_pure("floor_quotient_of_nodes", &probe("floor_node"), "3\n3\n2\n2");
+	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
+	runs_pure("empty_lists_join", &probe("empty_joins"), "0\n1\n0");
+	runs_pure("arity_overloads", &probe("arity_overloads"), "6\n6\n14\n6\n10\n1\n10\n12");
+	runs_pure("type_of_is", &probe("type_of_is"), "yes\nno\nyes");
+	runs_pure("match_arm_forms", &probe("match_arms"), "x\nfirst\nb\nother");
+	runs_pure("coalesce", &probe("coalesce"), "2\n1\n-2");
+	runs_pure("recursive_join", &probe("recursive_join"), "[3 2 1]\n[2 1 0]");
+	runs_pure("type_module_words", &probe("type_module_words"), "[1 2 3]\n[1 2]\n7");
+	runs_pure("nested_case_patterns", &probe("nested_patterns"), "label\n2\nother");
+	runs_pure("error_values", &probe("error_value"), "1\ntoo many\nyes");
+	let chain = |name: &str| format!("{}/probes/pure_chains/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("library_word_mapped", &chain("slice_named"), "['b']\n[2 1]");
+	runs_pure("chained_iterations", &chain("sorted_then_mapped"), "[\"use a\" \"use b\"]\n[4 6]");
+	runs_pure("module_directory", &chain("home_folder/own_folder"), "home_folder\nhelpers");
+	runs_pure("read_files", &chain("files/read_file"), "zweite Zeile ü\n26\nnone");
+	runs_pure("loop_variable_scope", &chain("slice_loops"), "['b' 'c']");
+	runs_pure("loop_of_functions", &chain("loop_of_functions"), "6\n4");
+	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
+}
+
+/// A type's name is a value, `k = int` prints `class int` (decision type-text); a parameter, a result or a variable
+/// declared `type` holds one, a map entry named by it is found, and a match arm of a type word tests the subject's type
+/// (card pure-lane-reads); `float[2]` stays the typed array
+#[test]
+fn type_values_run_pure() {
+	runs_pure("type_value", "k = int; k", "class int");
+	runs_pure("type_value_member", "k = text; [int, text] contains k", "yes");
+	runs_pure(
+		"type_value_parameter",
+		"wider(a: type, b: type): type := if [a, b] contains float then float else int; wider(int, float)",
+		"class float",
+	);
+	runs_pure("type_value_key", "held = {int: 1, float: 2}; held[float]", "2");
+	runs_pure("type_arm", "name(t: any): text := match t { int: \"whole\"; _: \"other\" }; name(3)", "whole");
+	runs_pure("typed_array", "ys = float[2]; ys", "[0 0]");
+	runs_pure(
+		"type_value_arm",
+		"name(t: type): text := match t { int: \"whole\"; float: \"real\"; _: \"other\" }; name(float)",
+		"real",
+	);
+	runs_pure("type_value_covered", "f(t: type) := t is number; f(int)", "yes");
+}
+
+/// `n as char` (decision digit-as-char): a digit 0…9 is its digit character, another number the character of its code
+/// point, one no character has an error (card pure-lane-x02)
+#[test]
+fn digit_casts_run_pure() {
+	runs_pure("digit_cast", "x = 7; x as char", "'7'");
+	runs_pure("code_point_cast", "x = 65; x as codepoint", "'A'");
+	runs_pure("invalid_code_point", "x = 55296; try (x as codepoint) else \"fallback\"", "fallback");
+}
+
+/// parser.warp reads a float literal through float(text): more digits than a double holds give the nearest float (card
+/// pure-lane-prints)
+#[test]
+fn long_float_literals_read_pure() {
+	runs_pure("long_float_literal", "x = 8.33333333332248946124e+03; x - 8333", "0.33333332248912484");
+}
+
+/// card text-cache-lru: the pure runtime keeps the count and walks of a lexer's source while it compares short words
+/// with it (`starts_at`); the words took them by turns, so each `source.length` recounted the source (minutes)
+#[test]
+fn a_lexer_over_short_words_takes_linear_time_pure() {
+	let starts_at = "def starts_at(source: any, part: text, at: int): bool { i = 0; while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }; i == part.length }";
+	let lexer = format!("{starts_at}; src = \"\"; for k in 0..2000 {{ src = src + \"abc def ghi \" }}; words = [\"de\", \"gh\", \"zz\", \"def\"]; hits = 0; t0 = clock(); for at in 0..src.length {{ for word in words {{ if starts_at(src, word, at) {{ hits += 1 }} }} }}; if clock() - t0 < 3000 then hits else -1");
+	runs_pure("lexer_short_words", &lexer, "6000");
+}
+
+/// `warp compile` takes the pure lane as `warp <file>` does: under pure-only it compiled the usual way, so a profile of
+/// a pure compile measured the Rust lane (card warp-profile)
+#[test]
+fn compile_takes_the_pure_lane() {
+	let scratch = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("pure_compile_{}", std::process::id()));
+	std::fs::create_dir_all(&scratch).unwrap();
+	let (program, record) = (scratch.join("sum.warp"), scratch.join("refusals.txt"));
+	std::fs::write(&program, "1 + 2").unwrap();
+	let run = crate::common::warp_command()
+		.env("WARP_SELF_HOSTED", "pure-only")
+		.env("WARP_EMIT_REFUSALS", &record)
+		.env("WARP_MODULE_CACHE", PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("self_hosted_stage_cache"))
+		.args(["compile", "--wasm"])
+		.arg(&program)
+		.output()
+		.expect("warp runs");
+	let recorded = std::fs::read_to_string(&record).unwrap_or_default();
+	let _ = std::fs::remove_dir_all(&scratch);
+	assert_eq!(recorded.trim(), RAN_PURE, "{run:?}");
 }
 
 /// The entries of `from` linked into the new folder `to`, but the one named `except`

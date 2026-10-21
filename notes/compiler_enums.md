@@ -60,6 +60,10 @@ Needs, probes/compiler_enums/f_type_values*.warp, f_type_match.warp (2026-10-20)
 - T2 Rust lane (card rust-lane-int): a match on a value declared `type` with arms naming types (`match t { int: …;
   float: … }`) takes `_`, the arms test t's own type; `t: type = int` is "unknown type type". Membership
   (`[int, text] contains k`) works; the first probe's "no" was right.
+  Done on type-holders 675a498033 (Ready): `t: type = v` is `t: any = v` (type_parameters.rs); a type value known only
+  at run time tests as the type it names (list_emitter.rs emit_type_test_value), as top-level `x = float; x is float`
+  already did (assumption A, asked through warp-interviewer). Open: the pure twin, runtime/types.warp node_is_type of a
+  type value (needs Rust's BUILTIN_TYPES coverage, `number` covers int, rational, float …).
 
 ## Declarations (superseded for Kind and Held by the section above)
 

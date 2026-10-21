@@ -1,0 +1,11 @@
+// out: 1+x
+// out: yes
+// out: +
+// out: (a b)
+// a value of kind Node: parameters, variables and results typed Node, and nodes built by their cases
+grown(n: Node): Node := Node.Key(n, Op.Add, symbol("x"))
+made: Node = grown(1)
+print made
+print made is key
+print op_of(made)
+print List([symbol("a"), symbol("b")], Bracket.Round, Separator.Space)

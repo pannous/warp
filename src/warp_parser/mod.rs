@@ -397,12 +397,14 @@ impl WarpParser {
 			return glued_floor_division(Diagnostic::default().message(message), input, line, column).into_error();
 		}
 		let mut parser = WarpParser::new_with_options(input.to_string(), options);
-		let program = sugar::sugared(parser.parse_list_with_separators(None, Bracket::None));
+		let types = if options.data_mode { Default::default() } else { declaration_scan::scan_type_names(input) };
+		let program = sugar::sugared(parser.parse_list_with_separators(None, Bracket::None), &types);
 		if options == ParserOptions::default() {
 			crate::normalize::check_style(&program);
 		}
-		// marked Empty (`ø!`) is P73 force-unwrap, not a vacant program (is_nothing looks through Meta)
-		if program.is_nothing() && crate::mutation::bang_target(&program).is_none() {
+		// marked Empty (`ø!`) is P73 force-unwrap, not a vacant program (is_nothing looks through Meta); nor is `[]`
+		if program.is_nothing() && crate::mutation::bang_target(&program).is_none() && !program.is_empty_list_literal()
+		{
 			Empty
 		} else {
 			program

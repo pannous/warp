@@ -13,6 +13,13 @@
 - Reuse the existing result collection and pool helpers; keep ordinary build failures and successful retries unchanged.
 - Run the focused cloud probes, queued targeted test, formatting/style checks, clippy, wasm32 check, and Playground workflow.
 
+# Cloud-test run identity cleanup
+
+- Reproduce two launches of one branch and tip with different filters or environment settings resolving to the same run id.
+- Derive one deterministic run identity from the branch, tip, base, environment settings, and test arguments, and reuse it for launch, cloud execution, collection, and saved artifacts.
+- Keep identical invocations coalesced while making the transient job ref unique across concurrent launcher processes.
+- Update the cloud-lane guide and the self-hosted suite's result lookup, then run the focused cloud probes and prescribed gates.
+
 # Delete-list cleanup
 
 - Reproduce deletion of a list variable with a new focused probe test.

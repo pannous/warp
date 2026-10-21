@@ -442,6 +442,8 @@ impl<'a> Loader<'a> {
 					crate::modules::reads_beyond_folders("a C library");
 					Ok(vec![as_use(statement)])
 				}
+				// each file loads once: the program's words are there already
+				false if import == Import::Use && self.names_the_program(name) => Ok(vec![]),
 				false => Err(self.not_found(name, import)),
 			};
 		};
@@ -785,14 +787,17 @@ impl<'a> Loader<'a> {
 		if !cfg!(feature = "native") && program_file().is_none() && std_module(name).is_some() {
 			return None;
 		}
-		let program = program_file().and_then(|file| file.canonicalize().ok());
-		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
 		self.candidates_with(name, extensions).into_iter().find(|path| {
 			module_exists(path)
-				&& !is_program(path)
+				&& !is_program_file(path)
 				&& !is_embedded_std_file(path)
 				&& !crate::modules::shadows_with_a_sample(path)
 		})
+	}
+
+	/// A module used back, a.warp using b.warp using a.warp: the program's own file, loaded already
+	fn names_the_program(&self, name: &str) -> bool {
+		self.candidates(name).iter().any(|path| module_exists(path) && is_program_file(path))
 	}
 
 	pub(super) fn candidates(&self, name: &str) -> Vec<PathBuf> {
@@ -807,15 +812,13 @@ impl<'a> Loader<'a> {
 		};
 		// `use "./helper.warp"`, `use "/srv/helper.warp"`: that file, `./` from the including file's folder
 		if is_explicit_path(name) {
-			crate::modules::reads_beyond_folders("a module by its path");
 			let base = self.including_directory.clone().unwrap_or_default();
-			return file_names.iter().map(|file_name| base.join(file_name)).collect();
+			let candidates: Vec<PathBuf> = file_names.iter().map(|file_name| base.join(file_name)).collect();
+			crate::modules::looks_for(&candidates);
+			return candidates;
 		}
 		if !is_plain_relative_path(name) {
 			return vec![];
-		}
-		if name.contains('/') {
-			crate::modules::reads_beyond_folders("a module of a subfolder");
 		}
 		let beyond_working_directory =
 			crate::compiler::compile_context::read(|context| context.beyond_working_directory);
@@ -824,10 +827,10 @@ impl<'a> Loader<'a> {
 		let mut candidates = Vec::new();
 		for base in &bases {
 			for directory in self.directories {
-				crate::modules::looks_in(&base.join(directory));
 				candidates.extend(file_names.iter().map(|file_name| base.join(directory).join(file_name)));
 			}
 		}
+		crate::modules::looks_for(&candidates);
 		candidates
 	}
 
@@ -930,7 +933,11 @@ impl<'a> Loader<'a> {
 	}
 }
 
-/// A module's path as failures name it: without `./` steps (`./././greeting.warp` is `greeting.warp`)
+fn is_program_file(path: &Path) -> bool {
+	let program = program_file().and_then(|file| file.canonicalize().ok());
+	program.is_some() && path.canonicalize().ok() == program
+}
+
 /// Whether insert_module_classes put the module's classes in front of the program already
 fn classes_early(import: Import, file: &PathBuf) -> bool {
 	import == Import::Use
@@ -948,6 +955,10 @@ fn lowered_source(path: &Path, module: Node, classes_early: bool) -> Result<Node
 		|| format!("module source passes of {}", shown.display()),
 		|| crate::pipeline::lower_module_source(module),
 	);
+	// `Meaning.Function` of an enum another used file declares, in front of the program already (modules.rs)
+	let early = crate::compiler::compile_context::read(|context| context.early_file_classes.clone());
+	let module = crate::lowering::sum_variants::with_types_of(module, &early);
+	let module = crate::lowering::plain_enums::with_cases_of(module, &early);
 	// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
 	match module.drop_meta() {
 		Node::Error(_) => Err(crate::errors::diagnostic::located_in_file(&module, &shown)),
@@ -955,6 +966,7 @@ fn lowered_source(path: &Path, module: Node, classes_early: bool) -> Result<Node
 	}
 }
 
+/// A module's path as failures name it: without `./` steps (`./././greeting.warp` is `greeting.warp`)
 pub(crate) fn shown_path(path: &Path) -> PathBuf {
 	path.components().filter(|component| !matches!(component, std::path::Component::CurDir)).collect()
 }

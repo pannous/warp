@@ -10,8 +10,7 @@
 # Each try's names carry its number (try·value·3), as Rust's do, so two tries of a function keep their own kinds.
 use "walk.warp"
 use "phrase_blocks.warp"
-
-tries_made = {count: 0}
+use "words.warp"
 
 applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
 # `{n}`, a block of one item, as Rust writes it
@@ -20,7 +19,7 @@ try_statements(parts: list): Node := List(parts, Bracket.Round, Separator.Semico
 try_assigned(name: Node, value: Node): Node := Key(name, Op.Assign, value)
 chosen_branch(test: Node, yes_branch: Node, no_branch: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, yes_branch), Op.Else, no_branch)
 
-try_name(role: text, number: int): Node := symbol("try·" + role + "·" + number)
+try_name(role: text, number: int): Node := fresh_name("try·" + role, number)
 
 # `try x else y`; with a catch binding (a name, else ø) the else branch binds it to the error before y
 guarded(value: Node, fallback: Node, binding: any, number: int): Node := {
@@ -55,8 +54,7 @@ is_division(op: any): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
 
 # the value under try, its fallback, the catch binding or ø
 lowered_try(value: Node, fallback: Node, binding: any): Node := {
-	tries_made.count = tries_made.count + 1
-	number = tries_made.count
+	number = fresh_number()
 	match value {
 		Key(target, Op.Assign, assigned_value): { if is_name(target) and binding == ø then try_assigned(target, lowered_try(assigned_value, fallback, binding)) else guarded(value, fallback, binding, number) }
 		Key(left, op, right): {
@@ -66,17 +64,21 @@ lowered_try(value: Node, fallback: Node, binding: any): Node := {
 		}
 		# `try { x } …`: a block of one statement guards the statement (held as a value, `{x}` would be data)
 		List(statements, Bracket.Curly, separator): {
-			if #statements == 1 and not (statements#1 is key and op_of(statements#1) == ":") { return guarded(statements#1, fallback, binding, number) }
+			if #statements == 1 and not is_key(statements#1, Op.Colon) { return guarded(statements#1, fallback, binding, number) }
 			guarded(value, fallback, binding, number)
 		}
 		_: guarded(value, fallback, binding, number)
 	}
 }
 
-# parser.warp reads `try x else y` as `try·else(x, y)` and `try x catch e { y }` as `try·else(x, {y}, e)`, as Rust's
-# parser does
+# `assert c else m`, `check c`: 1 when c holds, else it raises m (Rust twin: guards.rs lower_assert)
+asserted(condition: Node, message: Node): Node := chosen_branch(condition, braced(1), braced(applied_to(raise_word, [message])))
+
+# parser.warp reads `try x else y` as `try·else(x, y)`, `try x catch e { y }` as `try·else(x, {y}, e)` and
+# `assert c else m` as `assert·else(c, m)`, as Rust's parser does
 try_form(n: Node): Node := match n {
 	List(parts, Bracket.Round, Separator.None): {
+		if #parts == 3 and parts#1 == symbol("assert·else") { return asserted(parts#2, parts#3) }
 		if #parts < 3 or parts#1 != symbol("try·else") { return n }
 		if #parts == 3 { return lowered_try(parts#2, parts#3, ø) }
 		if #parts == 4 and is_name(parts#4) { return lowered_try(parts#2, parts#3, parts#4) }

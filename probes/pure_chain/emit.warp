@@ -1,0 +1,12 @@
+# Rust-compiled, as the emit stage runs today: emitter.warp turns the view (args#1, JSON) into the module's bytes
+# (args#3), with the runtime words lowered as src/compiler/self_hosted.rs lowers them (args#2, JSON) and the host words
+# of host_words.warp
+use "../../lib/compiler/emitter.warp"
+use "../../lib/compiler/analyzer.warp"
+use "../../lib/compiler/host_words.warp"
+use os
+use json
+use file
+program = node_of(json(read(args#1)))
+runtime_words = node_of(json(read(args#2)))
+write_bytes(args#3, typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program)))

@@ -1,7 +1,8 @@
+use crate::profile::Profile;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Config, Engine, Module, Store};
 
 /// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every
 /// frame of a deep recursion) at each of its many small growths
@@ -111,20 +112,43 @@ pub fn checked_store<T: 'static>(
 	data: T,
 	fuel: u64,
 	time: Duration,
+	checkpoint: impl FnMut() -> wasmtime::Result<()> + Send + Sync + 'static,
+) -> Store<T> {
+	store_with(engine, data, fuel, time, checkpoint, None)
+}
+
+/// limited_store sampling where `module`'s run spends its time when WARP_PROFILE names a file (profile.rs)
+pub fn profiled_store<T: 'static>(engine: &Engine, data: T, fuel: u64, time: Duration, module: &Module) -> Store<T> {
+	store_with(engine, data, fuel, time, || Ok(()), Profile::of(engine, module))
+}
+
+fn store_with<T: 'static>(
+	engine: &Engine,
+	data: T,
+	fuel: u64,
+	time: Duration,
 	mut checkpoint: impl FnMut() -> wasmtime::Result<()> + Send + Sync + 'static,
+	profile: Option<Profile>,
 ) -> Store<T> {
 	let mut store = Store::new(engine, data);
 	let mut clock = store.set_fuel(fuel).is_err().then(|| ComputingClock::new(time));
-	if let Some(clock) = &clock {
-		let new_turn = clock.new_turn.clone();
-		store.call_hook(move |_, hook| {
-			if matches!(hook, wasmtime::CallHook::CallingWasm) {
+	let new_turn = clock.as_ref().map(|clock| clock.new_turn.clone());
+	if new_turn.is_some() || profile.is_some() {
+		let hook_profile = profile.clone();
+		store.call_hook(move |store, hook| {
+			if let (Some(new_turn), wasmtime::CallHook::CallingWasm) = (&new_turn, hook) {
 				new_turn.store(true, Ordering::Relaxed);
+			}
+			if let Some(profile) = &hook_profile {
+				profile.call_hook(&store, hook);
 			}
 			Ok(())
 		});
 	}
-	store.epoch_deadline_callback(move |_| {
+	store.epoch_deadline_callback(move |store| {
+		if let Some(profile) = &profile {
+			profile.sample(&store);
+		}
 		checkpoint()?;
 		if let Some(clock) = clock.as_mut() {
 			clock.check()?;
@@ -175,7 +199,7 @@ impl ComputingClock {
 }
 
 #[cfg(unix)]
-fn thread_cpu_time() -> Duration {
+pub(crate) fn thread_cpu_time() -> Duration {
 	let mut time = libc::timespec { tv_sec: 0, tv_nsec: 0 };
 	// SAFETY: fills the timespec it is given, about the calling thread
 	unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut time) };
@@ -184,7 +208,7 @@ fn thread_cpu_time() -> Duration {
 
 /// Without a thread clock: the time since the process's first check, waiting included
 #[cfg(not(unix))]
-fn thread_cpu_time() -> Duration {
+pub(crate) fn thread_cpu_time() -> Duration {
 	static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 	START.get_or_init(std::time::Instant::now).elapsed()
 }

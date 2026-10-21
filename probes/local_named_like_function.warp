@@ -1,0 +1,10 @@
+# a local named like a used file's function (parser.warp items(p, closer, bracket)) is the local: 3 (card local-variable-named)
+use "../lib/compiler/walk.warp"
+use "../lib/compiler/parser.warp"
+t(n: Node): any := {
+	items = items_of(n)
+	arguments = items[1..]
+	if #arguments == 1 and bracket_of(arguments#1) == "[" { return 1 }
+	#arguments
+}
+print t(plain_node(parsed("max(3, 9, 4)")))

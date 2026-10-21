@@ -2,16 +2,28 @@
 # that file, read from the program's folder, as src/modules/loader.rs brings them; each used file once, the files it
 # uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written.
 use os
+use "walk.warp"
+use "parser.warp"
+use "enum_declarations.warp"
 
 import_keywords = ["use", "require", "import", "include"]
 # (function_keywords: words.warp's)
 # src/modules/declarations.rs DECLARATION_KEYWORDS and CONSTANT_KEYWORDS
 declaration_keywords = ["let", "var", "global", "stored", "const", "constant", "final", "val"]
+# the declarations that keep a name main's: `global n = 0`; the others make it the function's own, `let n = 5` (Rust
+# is_declaration_word)
+global_declaration_keywords = ["global", "stored"]
+local_declaration_keywords = declaration_keywords.filter(word => word not in global_declaration_keywords)
 module_extension = ".warp"
+# the word a module reads as the folder of its own file (Rust twin: src/modules/loader.rs MODULE_DIRECTORY)
+module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
 # `module_source("prelude")` the text of that standard module
-with_uses(program: any, folder: text): any := bottom_up(used_in(program, folder), module_text)
+with_uses(program: any, folder: text): any := bottom_up(used_in(with_module_directory(program, folder), folder), module_text)
+# `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in (Rust's
+# loader.rs with_module_directory)
+with_module_directory(n: any, folder: text): any := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
 used_in(program: any, folder: text): any := {
 	statements = statements_in(program)
 	brought = declarations_used(statements, folder, [])
@@ -24,7 +36,7 @@ used_in(program: any, folder: text): any := {
 # writes it out (the std modules are lib/<name>.warp)
 module_text(n: any): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
-	source = file_text(folder_of(module_directory) + "/" + n#2 + module_extension)
+	source = file_text(std_module_path(n#2))
 	if source == ø then n else source
 }
 
@@ -33,9 +45,9 @@ declarations_used(statements: any, folder: text, seen: any): list := {
 	declarations = []
 	for statement in statements {
 		file = file_used(statement, folder)
-		if file != ø and not (file in seen) {
+		if file != ø and file not in seen {
 			seen += [file]
-			used = statements_in(plain_node(parsed(file_text(file))))
+			used = statements_in(with_module_directory(plain_node(parsed(file_text(file))), folder_of(file)))
 			inner = declarations_used(used, folder_of(file), seen)
 			seen = inner#2
 			declarations += inner#1 + used.filter(s => is_declaration(s) and file_used(s, folder_of(file)) == ø)
@@ -44,10 +56,18 @@ declarations_used(statements: any, folder: text, seen: any): list := {
 	[declarations, seen]
 }
 
+# lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one)
+std_module_path(name: text): text := folder_of(module_directory) + "/" + name + module_extension
+
+# what a `use` statement names, ø for another statement
+use_target(statement: any): any := {
+	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
+	statement#2
+}
+
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
 file_used(statement: any, folder: text): any := {
-	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
-	module = statement#2
+	module = use_target(statement)
 	if module is text { return path_in(folder, module) }
 	if not (module is symbol) { return ø }
 	path = path_in(folder, name_of(module) + module_extension)
@@ -60,43 +80,37 @@ folder_of(path: text): text := {
 }
 file_text(path: text): any := try read(path) else ø
 
-# a program's statements: those of a block, else the one statement it is
-statements_in(program: any): list := {
-	if is_group(program) and bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n") { return items_of(program) }
-	[program]
-}
-
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
-# `global x = 0`, `def f(x) …`; not its main-level statements
-is_declaration(statement: any): bool := {
-	if type(statement) is key {
-		operator = op_of(statement)
-		left = key_of(statement)
-		if left == symbol(opaque_word) { return kind_of(value_of(statement)) == "type" }
-		if operator == "=" or operator == ":=" { return yes }
+# `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program); not its
+# main-level statements
+is_declaration(statement: any): bool := match statement {
+	Key(left, op, right): {
+		if left == symbol(opaque_word) { return kind_of(right) == "type" }
+		if assigns_or_defines(op) { return yes }
 		# `def f(x): list {…}`: the key of the head and its result type
-		if operator == ":" and is_keyword_group(left) { return yes }
-		return operator == ":" and left is symbol and name_of(left) in declaration_keywords
+		op == Op.Colon and (is_keyword_group(left) or is_declaration_keyword(left))
 	}
-	is_keyword_group(statement)
+	_: declared_enum(statement) != ø or is_keyword_group(statement)
 }
+assigns_or_defines(op: Op): bool := op == Op.Assign or op == Op.Define
+is_declaration_keyword(n: any): bool := n is symbol and name_of(n) in declaration_keywords
 # `def f(x) …`, `global x = 0`: a group a function or declaration keyword starts
-is_keyword_group(n: any): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or name_of(n#1) in declaration_keywords)
+is_keyword_group(n: any): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or is_declaration_keyword(n#1))
 
 # the name a declaration defines, as src/modules/declarations.rs name_declared_by: `f(x) := …`, `x = …`,
 # `def f(x) …`, `def f(x): T {…}`, `global x = 0`; ø for another statement
-declared_name(statement: any): any := {
-	if is_keyword_group(statement) { return leftmost_name(statement#2) }
-	if not (type(statement) is key) { return ø }
-	operator = op_of(statement)
-	if operator == "=" or operator == ":=" { return leftmost_name(key_of(statement)) }
-	if operator == ":" and is_keyword_group(key_of(statement)) { return leftmost_name(key_of(statement)#2) }
-	if operator == ":" and key_of(statement) is symbol and name_of(key_of(statement)) in declaration_keywords { return declared_name(value_of(statement)) }
-	ø
+declared_name(statement: any): any := match statement {
+	Key(left, op, right): {
+		if assigns_or_defines(op) { return leftmost_name(left) }
+		if op != Op.Colon { return ø }
+		if is_keyword_group(left) { return leftmost_name(left#2) }
+		if is_declaration_keyword(left) then declared_name(right) else ø
+	}
+	_: if is_keyword_group(statement) then leftmost_name(statement#2) else ø
 }
 leftmost_name(n: any): any := {
 	if n is symbol { return name_of(n) }
-	if type(n) is key { return leftmost_name(key_of(n)) }
+	if n is key { return leftmost_name(key_of(n)) }
 	if is_group(n) and #n > 0 { return leftmost_name(n#1) }
 	ø
 }
