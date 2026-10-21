@@ -539,6 +539,19 @@ fn a_lexer_over_short_words_takes_linear_time_pure() {
 	runs_pure("lexer_short_words", &lexer, "6000");
 }
 
+/// `n times` and sleep's units are no passes of the warp compiler (card phrases-out-of-core): `n times` is refused by
+/// name until it is a library word, `sleep(seconds)` is the prelude word calling the host word sleep_ms
+#[test]
+fn phrases_out_of_the_core() {
+	let (output, _) = lane_run("pure-only", "times_pending", "a = 0; 3 times { a += 1 }; a");
+	assert!(output.contains("outside the core: pure: `n times` (library word pending)"), "{output}");
+	let (output, _) = lane_run("pure-only", "twice_pending", "n = 0; twice { n += 1 }; n");
+	assert!(output.contains("outside the core: pure: `twice …` (library word pending)"), "{output}");
+	runs_pure("own_twice", "twice(x) := x * 2; twice(4)", "8");
+	let sleep = format!("{}/probes/pure_chains/sleep_seconds.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("sleep_seconds", &sleep, "yes\nwoke");
+}
+
 /// `warp compile` takes the pure lane as `warp <file>` does: under pure-only it compiled the usual way, so a profile of
 /// a pure compile measured the Rust lane (card warp-profile)
 #[test]
@@ -628,4 +641,11 @@ fn a_call_with_comma_arguments_parses_pure() {
 fn a_map_member_beside_its_entry_runs_pure() {
 	let probe = format!("{}/probes/map_member_beside_entry.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("map_member_beside_entry", &probe, "[\"keys\" 'a']");
+}
+
+/// A match arm of a constant, `True:`, tests the subject equals it (card match-bool-arm: node_text under warp self)
+#[test]
+fn a_match_arm_of_a_constant_runs_pure() {
+	let probe = format!("{}/probes/match_bool_arm.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("match_bool_arm", &probe, "\"yesno\"");
 }

@@ -24,6 +24,9 @@ fn with_receiver_reads(node: Node, fields: &HashMap<String, Vec<String>>, global
 			let body = match receiver_fields {
 				Some((receiver, class_fields)) => {
 					let parameters = parameter_names(&head);
+					let shadowed: Vec<&String> =
+						class_fields.iter().filter(|field| parameters.contains(field)).collect();
+					hint_self_assignments(&body, &shadowed, &receiver);
 					let unshadowed = class_fields.iter().filter(|field| !parameters.contains(field)).collect();
 					let globals = globals.iter().collect();
 					receiver_reads(
