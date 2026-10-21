@@ -1,0 +1,3 @@
+n = 100
+class P { n: int; def get() := n }
+print P(3).get()
