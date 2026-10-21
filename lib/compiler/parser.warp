@@ -2152,7 +2152,6 @@ def phrase_redefinition(p: Parser, name: text, parameters: list): text {
 	if #classes == 0 { return "" }
 	name + " is defined twice; declare " + classes.join(" and ") + " to dispatch on them"
 }
-
 // Whether a statement starts at the parser's position, no end of one, `then`, `else` or `do`
 // Rust twin: blocks.rs at_body_start
 def at_body_start(p: Parser): bool {
