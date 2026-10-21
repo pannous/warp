@@ -73,7 +73,9 @@ arguments. The Rust pipeline compiles compiler.warp, always (user 2026-10-21: "p
 `warp self` always uses the self-hosted, self-compiled"). `warp self <program.warp>` runs the program through
 compiler.warp compiled by the pure lane, itself, the build file compiler-self.wasm; a refusal of that compile is a loud
 error, never a fallback to the Rust-compiled one. `warp pure` switches to the self-compiled compiler once more tests
-pass with it (the count self vs Rust-compiled goes to the supervisor first). It is also the gate's
+pass with it (the count self vs Rust-compiled goes to the supervisor first: `scripts/is_tests.py run warp-pure
+warp-self` runs every test pair both ways, ~35 min a lane, and ends with the parity line; decision
+self-compiled-parity: self may pass 5 % fewer, reported, no gate yet). It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
 Build files (decision compiler-build, card compiler-wasm): compiler.wasm and compiler-self.wasm lie next to the binary
 for the lib/ they record (custom section `warp.build`: lib/'s path, its fingerprint, the binary's WARP_SOURCE from
