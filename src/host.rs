@@ -15,7 +15,7 @@ pub use warp_runtime::host_words::{
 	CLIPBOARD_TEXT, CLOCK, EXIT, FETCH_HANDLER_PREFIX, FILE_HANDLER_PREFIX, GPU_COMPUTE, GPU_COMPUTE_LINEAR,
 	GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, INTERRUPT_HANDLER, KEY_HELD, LOCAL_OFFSET, NOTIFY,
 	PAGE_PATH, RANDOM, RANDOM_BELOW, RANDOM_SEED, SET_SYSTEM_VALUE, SHARED_HANDLER, SIGNAL_LISTEN, SIGNAL_POLL,
-	SIGNAL_WATCH, SLEEP, SYSTEM_VALUE, TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
+	SIGNAL_WATCH, SLEEP, SLEEP_MS, SYSTEM_VALUE, TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
 };
 pub const TASK_CONTROL: &str = "task_control";
 /// `go f(x)` on a thread (tasks.rs) of a function of numbers, texts, characters or lists: task_spawn_values(name, [arguments]) → task id,
@@ -245,7 +245,7 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(PARSE_CODE, &[NODE], &[NODE]),
 	(BLOCK_VALUE, &[I64], &[NODE]),
 	(FOREIGN_CALL, &[NODE, NODE, NODE, NODE, NODE], &[NODE]),
-	(SLEEP, &[I64], &[]),
+	(SLEEP_MS, &[I64], &[]),
 	(RANDOM, &[], &[F64]),
 	(RANDOM_BELOW, &[I64], &[I64]),
 	(RANDOM_SEED, &[I64], &[]),
