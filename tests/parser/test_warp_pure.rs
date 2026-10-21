@@ -20,7 +20,6 @@ fn warp_pure_runs_hello_world() {
 	assert!(printed.lines().next() == Some("hello world"), "{printed}\n{}", String::from_utf8_lossy(&run.stderr));
 }
 
-
 /// Loops and text concatenation under `warp self`: analyzer.warp's loop kind of a body ending in a non-group (`{ 2 }`),
 /// node_matches.warp's `True:` arm of node_text (cards match-bool-arm, self-compiled-parity)
 #[test]
