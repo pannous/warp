@@ -2,15 +2,13 @@
 
 use super::*;
 
+/// What follows the key of a match arm
+const ARM_ARROW: &str = "=>";
+
 impl WarpParser {
 	/// `else => …` at the cursor: the catch-all arm of a match on its own line, no else branch of the line before
 	pub(crate) fn else_arm_key(&self) -> bool {
-		let after: String = self.chars[(self.pos + 4).min(self.chars.len())..]
-			.iter()
-			.skip_while(|ch| matches!(ch, ' ' | '\t'))
-			.take(2)
-			.collect();
-		after == "=>"
+		self.text_at(ELSE_KEYWORD.len() + self.blanks_at(ELSE_KEYWORD.len()), ARM_ARROW)
 	}
 
 	/// The cursor is in the key of a match arm: `=>` follows before the statement or block ends (`1 | 2 | 3 => …`)

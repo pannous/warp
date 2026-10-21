@@ -246,7 +246,7 @@ impl WarpParser {
 		let (op, chars) = SLICE_FROM_START
 			.iter()
 			.copied()
-			.find(|(written, _)| written.chars().enumerate().all(|(offset, ch)| self.peek_char(offset) == ch))
+			.find(|(written, _)| self.at_text(written))
 			.map(|(written, op)| (op, written.chars().count()))?;
 		self.advance_by(chars);
 		self.skip_whitespace();

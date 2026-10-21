@@ -6,9 +6,12 @@
 use "walk.warp"
 use "words.warp"
 use "signatures.warp"
+use "builtin_signatures.warp"
 
-# name → the function's definition `(f a b) := body`, its result kind, and the scope of its body ("" for main)
+# name → the function's definition `(f a b) := body`, its signature, its result kind, and the scope of its body ("" for
+# main)
 defined_functions = {}
+defined_signatures = {}
 results = {}
 # name → the list type of a function giving a list (`list of int`), so a call's elements keep their type
 result_types = {}
@@ -254,7 +257,7 @@ subscript_kind(indexed: any, index: any, scope: any): text := {
 	if index is text or inferred_kind(index, scope) == "text" or inferred_kind(index, scope) == "codepoint" { "empty" } else { "int" }
 }
 
-# a call of a builtin the prelude types (signatures.warp; Rust emitted_call_kind, then library_call_kind): the kind
+# a call of a builtin the prelude types (builtin_signatures.warp; Rust emitted_call_kind, then library_call_kind): the kind
 # its line declares, that of an argument (`same as object`, `element of xs`), of its overload for the first value; ø
 # for no typed builtin
 typed_call_kind(n: any, scope: any): any := {
@@ -460,8 +463,7 @@ joined_word(a: text, b: text): text := {
 	if common == ø { "node" } else { common }
 }
 
-declared_kind(type_node: any): any := {
-	name = if type_node is symbol then name_of(type_node) else ""
+declared_kind(name: text): any := {
 	if name.ends_with("?") or name in node_types or name.starts_with("map") { return "empty" }
 	# an inline union `int or text` and `number` hold a value of any of their kinds as a node
 	if name == "number" or name.contains(" or ") and not name.starts_with("list of ") { return "empty" }
@@ -471,23 +473,14 @@ declared_kind(type_node: any): any := {
 
 # --- functions ---
 
-# symbol first: `type(symbol("key")) is key` (card type-symbol)
-# `x`, `x: T`, `x = 1`, `with new` (a label word before the name; Rust parameter_head)
-parameter_name(parameter: any): text := {
-	if parameter is symbol { return name_of(parameter) }
-	if parameter is key { return parameter_name(key_of(parameter)) }
-	parameter_name(parameter#(#parameter))
-}
-function_parameters(name: text): any := defined_parameters(defined_functions[name])
+function_parameters(name: text): list := defined_signatures[name].parameters
 
-# the kind a parameter is pinned to: as declared, else its default's; "" when its calls decide
-pinned_kind(parameter: any): text := {
-	if is_key(parameter, Op.Colon) {
-		declared = declared_kind(value_of(parameter))
-		return if declared != ø then declared else "empty"
-	}
-	if is_key(parameter, Op.Assign) {
-		kind = held_kind(value_of(parameter), new_scope())
+# the kind a parameter is pinned to: as declared, else its default's (a defaulted one by its default, as Rust's flow.rs);
+# "" when its calls decide
+pinned_kind(parameter: Parameter): text := {
+	if parameter.type_name != "" and parameter.defaulted_to == ø { return declared_kind(parameter.type_name) ?? "empty" }
+	if parameter.defaulted_to != ø {
+		kind = held_kind(parameter.defaulted_to#1, new_scope())
 		if kind == "float" or kind == "text" or kind == "list" { return kind }
 		if kind == "codepoint" { return "text" }
 	}
@@ -719,7 +712,7 @@ closure_targets_in(n: any, found: list): list := {
 # `x: T = v`: the slot is pinned to T
 declare(name: text, type_node: any, context: text): any := {
 	scope = scopes[context]
-	declared = declared_kind(type_node)
+	declared = declared_kind(if type_node is symbol then name_of(type_node) else "")
 	if declared != ø {
 		scope.kinds[name] = declared
 		scope.pinned[name] = yes
@@ -742,8 +735,8 @@ apply(flow: any): bool := {
 	if flow#1 == "weak" { return no }
 	if flow#1 == "parameter" {
 		parameter = function_parameters(target#1)[target#2]
-		if parameter_name(parameter) in scopes[target#1].pinned { return no }
-		return set_slot(scopes[target#1], parameter_name(parameter), flowing_kind(value, scope))
+		if parameter.name in scopes[target#1].pinned { return no }
+		return set_slot(scopes[target#1], parameter.name, flowing_kind(value, scope))
 	}
 	if flow#1 == "element" {
 		name = target
@@ -809,14 +802,14 @@ settle(flows: any): any := {
 # parameter name → the kind of the declared or given parameter it is passed on to, not an int: `g(t) := f(t)` with f's
 # `s: text` (Rust twin: flow.rs forwarded)
 forwarded_kinds(name: text): any := {
-	own = function_parameters(name).map(parameter_name)
+	own = taken_names(defined_signatures[name])
 	forwarded = {}
 	for call in calls(value_of(defined_functions[name]), []) {
 		callee = function_parameters(call#1)
 		arguments = call#2
 		for index in 0..<min(#arguments, #callee) {
 			argument = arguments[index]
-			kind = scopes[call#1].kinds[parameter_name(callee[index])]
+			kind = scopes[call#1].kinds[callee[index].name]
 			if argument is symbol and name_of(argument) in own and kind != "" and kind != "int" {
 				passed = name_of(argument)
 				forwarded[passed] = joined_kind(forwarded.get(passed) ?? "", kind)
@@ -850,7 +843,7 @@ defaults(flows: list): any := {
 		used = usages(value_of(defined_functions[name]))
 		parameters = function_parameters(name)
 		for index in 0..<#parameters {
-			own = parameter_name(parameters[index])
+			own = parameters[index].name
 			agreed = weak.get(name + "(" + "${index}" + ")")
 			if scope.kinds[own] == "" {
 				# a function value takes whatever the closure calls pass it: `part => … part#2` handed texts and lists by
@@ -884,27 +877,33 @@ register(flows: any): any := {
 
 analyze(program: any): any := {
 	global defined_functions
+	global defined_signatures
 	global results
 	global result_types
 	global scopes
 	global closure_targets
 	closure_targets = closure_targets_in(program, [])
 	defined_functions = {}
+	defined_signatures = {}
 	results = {}
 	result_types = {}
 	scopes = {}
 	scopes[""] = new_scope()
 	for statement in flat_statements(program) {
-		if is_definition(statement) { defined_functions[defined_name(statement)] = statement }
+		if is_definition(statement) {
+			defined_functions[defined_name(statement)] = statement
+			defined_signatures[defined_name(statement)] = Signature(parameters: defined_parameters(statement).map(parameter_of))
+		}
 	}
 	for name in defined_functions.keys() {
 		scope = new_scope()
 		scope.globals = scopes[""].kinds
 		tested = usages(value_of(defined_functions[name])).tested
 		for parameter in function_parameters(name) {
-			own = parameter_name(parameter)
+			own = parameter.name
 			# `if x is list then … else x`: a plain parameter whose kind the body tests takes any value, as `x: any`
-			kind = if parameter is symbol and own in tested then "empty" else pinned_kind(parameter)
+			plain = parameter.type_name == "" and parameter.defaulted_to == ø
+			kind = if plain and own in tested then "empty" else pinned_kind(parameter)
 			scope.kinds[own] = kind
 			if kind != "" { scope.pinned[own] = yes }
 			scope.parameters[own] = yes
@@ -927,7 +926,7 @@ kinds(program: any): any := {
 	functions = {}
 	for name in defined_functions.keys() {
 		scope = scopes[name]
-		functions[name] = {params: function_parameters(name).map(parameter => scope.kinds[parameter_name(parameter)]), result: results[name]}
+		functions[name] = {params: taken_names(defined_signatures[name]).map(own => scope.kinds[own]), result: results[name]}
 	}
 	main = scopes[""]
 	variables = {}
@@ -963,7 +962,7 @@ emitter_kinds(program: any): any := {
 	functions = {}
 	for name in defined_functions.keys() {
 		scope = scopes[name]
-		parameters = function_parameters(name).map(parameter_name)
+		parameters = taken_names(defined_signatures[name])
 		functions[name] = {params: parameters.map(own => emitter_kind(scope.kinds[own])), result: emitter_kind(results[name]), locals: emitter_locals(scope, parameters), elements: emitter_elements(scope)}
 	}
 	main = scopes[""]
