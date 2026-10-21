@@ -193,10 +193,12 @@ binary_text(n: int) := radix_text(n, 2, "0b")
 // a value's form as its kind field holds it (card kind-reflection, src/type_kinds.rs), what the lib printers read:
 // the Kind in the low byte (Int 1, Text 3, Key 6, List 8, Error 11, …), the info byte above it (a key's operator, a
 // list's bracket, an Int's bool 1, hex 2 or binary 3), and the mark of a type value (`int`, `type(x)`; code is
-// `x is code`)
-kind_number(x: any) := kind_mark(x) % 256
-kind_info(x: any) := (kind_mark(x) >> 8) % 256
-is_type_value(x: any) := (kind_mark(x) >> 54) % 2 == 1
+// `x is code`); the Kind and the info byte are KIND_BITS wide, the type value mark is bit 54 (TYPE_VALUE_MARK)
+kind_bits() := 8
+type_value_bit() := 54
+kind_number(x: any) := kind_mark(x) % (1 << kind_bits())
+kind_info(x: any) := (kind_mark(x) >> kind_bits()) % (1 << kind_bits())
+is_type_value(x: any) := (kind_mark(x) >> type_value_bit()) % 2 == 1
 // n copies of value, ø for none (list.warp fill): `n times [x]` and `int[n]` where no typed array holds them; the
 // compiler calls it (wasm_emitter/lists/list_emitter.rs), so a fractional count is the error the runtime gives
 filled_list(n, value: any) := { if n > floor(n) { raise "count must be an integer; fix: compute it with /! (floor division) or `… as int`" }; out = []; for i in 1 to n { out = out + [value] }; out }
@@ -326,10 +328,10 @@ random_between(a, b) := if a is int and b is int then random_until(a, b + 1) els
 random_element(xs) := xs#(random_below(count(xs)) + 1)
 random_of(x) := if x is list then random_element(x) else if x is int then random_below(x) else random_fraction(0, x)
 // random int, random bool, random codepoint: a random value of the type; random int spans the whole 64-bit range
-random_int() := (random_below(4294967296) - 2147483648) * 4294967296 + random_below(4294967296)
+random_int() := (random_below(0x100000000) - 0x80000000) * 0x100000000 + random_below(0x100000000)
 random_bool() := random_below(2) == 1
 // a Unicode scalar value: the surrogates 0xD800…0xDFFF are no characters
-random_codepoint() := { n = random_below(1112064); if n >= 55296 then n = n + 2048; n as codepoint }
+random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then n = n + 0x800; n as codepoint }
 // the paint window's size (the playground: the paintings' frame), system values, so `whenever window.width > 800 {…}`
 // listens; written, the window resizes
 window.width := window_width
