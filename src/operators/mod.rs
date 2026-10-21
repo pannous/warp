@@ -84,6 +84,7 @@ pub enum Op {
 	Le,           // <=  ≤
 	Ge,           // >=  ≥
 	Eq,           // ==
+	Is,           // is  ==, of a type word a type test; only while parsing: parse() makes it == (sugar.rs)
 	Ne,           // !=  ≠
 	Identical,    // ===  equal and of the same type: 0 === false is false (card zero-false)
 	NotIdentical, // !==
@@ -156,7 +157,7 @@ impl Op {
 	pub fn holds(&self, ordering: std::cmp::Ordering) -> bool {
 		use std::cmp::Ordering::*;
 		match self {
-			Op::Eq | Op::Identical => ordering == Equal,
+			Op::Eq | Op::Is | Op::Identical => ordering == Equal,
 			Op::Ne | Op::NotIdentical => ordering != Equal,
 			Op::Lt => ordering == Less,
 			Op::Le => ordering != Greater,
@@ -177,7 +178,7 @@ impl Op {
 
 	/// Check if this is a comparison operator
 	pub fn is_comparison(&self) -> bool {
-		matches!(self, Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge)
+		matches!(self, Op::Eq | Op::Is | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge)
 	}
 
 	/// A comparison or a similarity (≈, ~): `combine 1.1 with 2.2 ≈ 3.3` compares the phrase's value
@@ -191,7 +192,7 @@ impl Op {
 	}
 
 	pub fn is_equality(&self) -> bool {
-		matches!(self, Op::Eq | Op::Ne)
+		matches!(self, Op::Eq | Op::Is | Op::Ne)
 	}
 
 	/// An operator the parser knows but the language gives no meaning of its own: a declaration gives it one,

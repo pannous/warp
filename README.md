@@ -14,7 +14,10 @@ The same notation holds your config, your markup and your program. Warp compiles
 Worker.
 
 ## Why Warp
-
+- Even when 99% of code is written by AI we can aim for the perfect programming language:  
+- ideal both for humans and AI: type save but not verbose  
+- Universal and fast (via aot web assembly)  
+- Highly structured and expressive:  
 - **Data is code.** Like Lisp, but with blocks, lists, key-value pairs and tags instead of s-expressions.
   JSON-like, but no quotes around keys or symbols. Reads and writes JSON, XML and YAML.
 - **Wasm GC first.** A `class Person{name:String age:i64}` becomes a real `(struct …)` type, and the module carries
@@ -49,22 +52,26 @@ Worker.
 brew install pannous/tap/warp
 ```
 
+**Cargo** <!--(any platform with [Rust](https://rustup.rs))-->:
+```bash
+cargo install --locked warp-lang warp-runtime
+```
+
+
 **pip** (macOS, Linux; any Python 3):
 ```bash
 pip install warp-language
 ```
-
+<!--
 **Debian, Ubuntu, Fedora** (glibc 2.39 or newer: Ubuntu 24.04, Debian 13, Fedora 40): the `.deb` or `.rpm` of the
 [latest release](https://github.com/pannous/warp/releases/latest), e.g.
+-->
+**Linux**:  
 `sudo apt install ./warp-lang_*_amd64.deb` or `sudo dnf install ./warp-lang-*.x86_64.rpm`.
 
 **Prebuilt binaries** (macOS arm64 and x86_64, Linux x86_64 and arm64): download the archive for your platform from the
 [latest release](https://github.com/pannous/warp/releases/latest) and put `warp` and `warp-runtime` together on your `PATH`.
 
-**Cargo** (any platform with [Rust](https://rustup.rs)):
-```bash
-cargo install --locked warp-lang warp-runtime
-```
 
 **From source:**
 ```bash
@@ -78,12 +85,10 @@ cargo build --release && cargo build --release -p warp-runtime   # binaries in t
 ## Run
 
 ```bash
-warp run samples/functions/fibonacci.warp   # run a file
-warp samples/functions/fibonacci.warp       # run it too (WARP_EXECUTABLE=1: also leave the standalone executable samples/functions/fibonacci)
-warp build samples/functions/fibonacci.warp # the standalone executable samples/functions/fibonacci
-warp eval "6*7"                   # evaluate code: 42
-warp repl                         # interactive console
+warp               # interactive console "repl"
 warp help                         # all commands
+warp sample.warp   # run a file, server, webapp our gui
+warp build sample.warp # the standalone executable (aot native and .wasm)
 ```
 
 `samples/` contains classics (game of life, Dijkstra, Levenshtein, a JSON parser, a neural net) in both a
@@ -97,7 +102,6 @@ Python-like style and an idiomatic Warp style, one folder per chapter of the gui
 use colors
 to_hex(mix(from_hex("#ff0000"), from_hex("#0000ff"), 0.5))   # "#800080"
 ```
-Packages so far: `colors`, `geometry`, `webgl`, `ciphers`, `life` and `uniscript`; `packages.warp` pins versions
 ([use](https://github.com/pannous/warp/wiki/use)).
 
 ## Rust ⇄ Wasm GC round trip

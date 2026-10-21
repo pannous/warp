@@ -1,0 +1,5 @@
+used(names: list): list := names.sort().map(name => "use " + name)
+print(used(["b", "a"]))
+is_big(n: int): bool := n > 1
+doubled(n: int): int := n * 2
+print([1, 2, 3].filter(is_big).map(doubled))

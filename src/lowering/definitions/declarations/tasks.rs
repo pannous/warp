@@ -755,7 +755,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 	}
 	let mut context = crate::compiler::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, &node);
-	crate::analyzer::note_bool_functions(context.user_functions.values());
+	crate::analyzer::note_bool_functions(context.user_functions.values(), &context.closure_targets);
 	let path = |function: &str| {
 		let Some(definition) = context.user_functions.get(function) else {
 			return TaskPath::Inline;

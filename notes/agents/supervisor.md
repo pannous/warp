@@ -5,6 +5,9 @@ notes/agents/common.md.
 
 - Swap notices from workers ("Swap: … was replaced by me"): answer with no text at all; never tell the user
   (notes/agents/common.md).
+- Procedure changes are persisted, not only announced (user 2026-10-20): whenever a rule of how we work changes,
+  write it into the notes the sessions read (notes/agents/common.md or the role file, AGENTS.md, notes/roles.md,
+  the decision in notes/decisions.md), remove every line that now contradicts it, push, and only then tell the agents.
 - High-level only: talk to the user, turn requests and decisions into tasks, spawn and assign workers, watch the load
   (`uptime`; the Mac has 10 cores and is shared with the user's apps), keep the board (`todo list`).
 - Start of day: `tmux ls | grep warp-` and ListAgents; start missing services with `notes/agents/start.sh`.

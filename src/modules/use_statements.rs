@@ -76,18 +76,17 @@ pub(super) fn with_fast_names(node: Node, words: &[String]) -> Node {
 	renamed_words(node, &words.iter().map(|word| (word.clone(), fast_name(word))).collect())
 }
 
-/// `a / b` of fast code as `(a as float) / b`: a float, never an exact ratio
-pub(crate) fn float_division(node: Node) -> Node {
+/// Fast code's numbers as machine numbers: `a / b` as `(a as float) / b` and a decimal `0.5` as `0.5 as float`, floats,
+/// never exact ratios (card fast-decimals)
+pub(crate) fn machine_numbers(node: Node) -> Node {
+	let as_float =
+		|node: Node| Node::Key(Box::new(node), Op::As, Box::new(Node::Symbol(crate::words::FLOAT_WORD.into())));
 	match node {
 		Node::Key(left, Op::Div, right) => {
-			let left = Node::Key(
-				Box::new(float_division(*left)),
-				Op::As,
-				Box::new(Node::Symbol(crate::words::FLOAT_WORD.into())),
-			);
-			Node::Key(Box::new(left), Op::Div, Box::new(float_division(*right)))
+			Node::Key(Box::new(as_float(machine_numbers(*left))), Op::Div, Box::new(machine_numbers(*right)))
 		}
-		other => other.map_children(float_division),
+		Node::Number(crate::Number::Float(_)) => as_float(node),
+		other => other.map_children(machine_numbers),
 	}
 }
 

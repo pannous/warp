@@ -1,0 +1,3 @@
+use "../../lib/compiler/parser.warp"
+print str(plain(tree("match x { 1: 10; _: 0 }")))
+print str(plain(tree("enum Direction {\n\tcase north\n\tcase south\n}")))

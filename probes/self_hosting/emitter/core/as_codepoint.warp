@@ -1,0 +1,4 @@
+// `n as codepoint`: a type word's other names are its kind's, an int as a codepoint its character, as parser.warp's
+// code_escape reads `\x41`
+def code_escape(code) { [code as codepoint, 4] }
+[code_escape(65), "7" as integer, 3 as string]

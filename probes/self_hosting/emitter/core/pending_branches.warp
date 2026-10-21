@@ -1,0 +1,4 @@
+// scope.warp's parameters_of gives parameters_in (a cycle) or bound_names: an `if` whose sides both wait on calls
+// still compiling in a first reading is no int, its other readings decide (key_meanings passes it on as a list)
+use "../../../../lib/compiler/scope.warp"
+[key_meanings(symbol("a"), "=>", symbol("b")), key_meanings(symbol("x"), "=", 1)]

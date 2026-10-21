@@ -1,0 +1,8 @@
+k = text
+print k
+print [int, float]
+print [int, text] contains k
+print [int, text] contains text
+xs = [int, text]
+print xs#2 == k
+print "${float}"

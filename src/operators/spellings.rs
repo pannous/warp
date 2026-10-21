@@ -75,7 +75,7 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 121] = [
 	("is at least", Op::Ge),
 	("==", Op::Eq),
 	("equals", Op::Eq),
-	("is", Op::Eq), // wiki/equality.md: `is` compares by value like ==
+	("is", Op::Is), // wiki/equality.md: `is` compares by value like ==, and only `is` tests a type
 	("!=", Op::Ne),
 	// identity (P208): `same` is the word, `===` its alias; no `identical` (user)
 	("===", Op::Identical),
@@ -283,6 +283,7 @@ impl Op {
 			Op::Le => "<=",
 			Op::Ge => ">=",
 			Op::Eq => "==",
+			Op::Is => "is",
 			Op::Ne => "!=",
 			Op::Identical => "===",
 			Op::NotIdentical => "!==",

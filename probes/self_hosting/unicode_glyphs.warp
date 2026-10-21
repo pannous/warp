@@ -1,0 +1,21 @@
+// parser.warp consumes every Unicode character by its class (card unicode-glyphs); from scripts/:
+//   warp lib_bench_parse.warp ../probes/self_hosting/unicode_glyphs.warp   prints "…unicode_glyphs.warp	parsed"
+// letters and marks in names
+größe = 3; παράδειγμα = größe + 1; naïve = "café"; 名前 = "x"; ŝ̂ = 2
+// built-in glyph operators and aliases
+a = 2 × 3 ⋅ 4 ÷ 2; b = 6 ≤ 7 and 7 ≥ 6 and 1 ≠ 2 and 1 ≈ 1.0; c = ¬ no
+d = 2 · 3; e = yes ∧ no; f = 2 ∈ [1, 2]; g = [1, 2] ∋ 1; h = 1 … 3
+// prefix glyphs and constants
+r = √16 + ∛27 + ‖-3‖; t = π / 2 + τ; big = ∞; nothing = ø
+// suffixes: superscripts and degrees
+s = 3² + 2³; warm = 20°C; angle = 90°
+// declared and arrow operators
+infix operator ⊕(a: int, b: int) := a * 10 + b
+prefix operator ∆(x: int) := x - 1
+four_two = 4 ⊕ 2; down = 8↓2; up = 2↑3; less = ∆ 5
+// free symbols: values and undeclared infix glyphs
+mark = ↯; shapes = [■ ◆ ▲ ●]; keys = ⌘; arrows = [⇒ ⟶ ⤴ ⬆]
+same = 1 ⇔ 1; maps = x ↦ x
+// other symbols and punctuation as values
+misc = [§ ¶ † ‡ ※ ⁂ ♠ ♣ ♥ ♦ ★ ☆ ✓ ✗ ‰ ¢ € £ ¥ © ® ™]
+quoted = ["«a»", "„b“", "̅", '̅']

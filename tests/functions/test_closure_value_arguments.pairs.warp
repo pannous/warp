@@ -11,3 +11,8 @@
 # test_a_returned_closure_takes_numbers_and_lists
 'make = () => (t => t * 2); a = make(); a(4)'	8
 'make = () => (t => count t); a = make(); a([1,2,3])'	3
+
+# a_lambda_given_to_a_function_reads_fields_and_gives_bools
+'m(n, p) := p(n); m(symbol("it"), s => s.name)'	'it'
+'m(n, p) := p(n); m(symbol("it"), s => s.name == "it")'	true
+'h(p) := p(3); h(s => s == 3)'	true

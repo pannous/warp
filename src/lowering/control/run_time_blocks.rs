@@ -84,8 +84,8 @@ fn defines_functions(statement: &Node) -> bool {
 /// The names whose kind is known only at run time, so that their `!` decides there (P73): assigned an element of a list
 /// that holds data (`xs = [data a+1, data 2]; y = xs#2`), or what a function of the program gives (`y = g()`, `g()#1`)
 fn data_holders(program: &Node) -> Vec<String> {
-	let mut context = crate::compiler::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, program);
+	// only the names: a whole analysis of the program here took the most of a big program's compile (card analyzer-settle)
+	let context = crate::analyzer::function_definitions(program);
 	let mut lists: Vec<String> = vec![];
 	let mut holders: Vec<String> = vec![];
 	program.visit(&mut |node| {
@@ -119,9 +119,7 @@ fn known_at_run_time(value: &Node, lists: &[String], context: &crate::compiler::
 
 /// The parameters of a definition (only those without a declared type: anything may come in, a block too)
 fn parameters(definition: &Node, untyped_only: bool) -> Vec<String> {
-	let mut context = crate::compiler::context::Context::new();
-	crate::analyzer::extract_user_functions(&mut context, definition);
-	context
+	crate::analyzer::function_definitions(definition)
 		.user_functions
 		.values()
 		.flat_map(|function| function.params.iter())

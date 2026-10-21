@@ -1,0 +1,17 @@
+reached_texts(slices: list, wanted: list): list := {
+	reached = {}
+	while #wanted > 0 {
+		word = wanted#1
+		wanted = wanted[1 ..]
+		for slice in slices {
+			if slice#1 == word and not (slice#2 in reached) {
+				reached[slice#2] = yes
+				wanted += [slice#2]
+			}
+		}
+	}
+	brought = []
+	for slice in slices { if slice#2 in reached { brought += [slice#2] } }
+	brought
+}
+print(reached_texts([["a", "b"], ["b", "c"], ["d", "e"]], ["a"]))

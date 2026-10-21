@@ -1,0 +1,31 @@
+# A parameter after a preposition or `as`, `play(tone, for duration) := …`, is passed by that word as Swift passes its
+# argument labels (card prelude-for-pure; Rust twin src/lowering/definitions/preposition_calls.rs unlabelled_head): the
+# definition takes the parameter alone, `play(tone, duration) := …`. The prelude's `replace(t, old, with new)` has one.
+use "walk.warp"
+
+label_words = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each", "as"]
+
+is_label_word(n: Node): bool := match n {
+	Symbol(name): name in label_words
+	_: no
+}
+
+# `for duration`: duration
+unlabelled(parameter: Node): Node := match parameter {
+	List(words, Bracket.None, Separator.Space): { if #words == 2 and is_label_word(words#1) then words#2 else parameter }
+	_: parameter
+}
+
+# `f(x, for y): T`: `f(x, y): T`
+unlabelled_head(head: Node): Node := match head {
+	Key(inner, Op.Colon, result): Key(unlabelled_head(inner), Op.Colon, result)
+	List(parts, Bracket.Round, separator): List(parts.map(unlabelled), Bracket.Round, separator)
+	_: head
+}
+
+unlabelled_definition(n: Node): Node := match n {
+	Key(head, Op.Define, body): Key(unlabelled_head(head), Op.Define, body)
+	_: n
+}
+
+preposition_heads(program: any): any := bottom_up(program, unlabelled_definition)

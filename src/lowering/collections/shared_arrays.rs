@@ -373,6 +373,26 @@ fn shared_parameters(
 	}
 }
 
+/// `block: floats` given an array of floats: the parameter `block`; one of another item type stays declared, refused
+/// at the call
+fn array_parameter(parameter: Node, kind: Shared) -> Node {
+	match parameter.drop_meta() {
+		Node::Key(name, Op::Colon, annotation) if takes_array(annotation, kind) => name.as_ref().clone(),
+		_ => parameter,
+	}
+}
+
+fn takes_array(annotation: &Node, kind: Shared) -> bool {
+	match crate::analyzer::declared_element_type(annotation) {
+		Some(element) if FLOAT_WORDS.contains(&element) => kind.element == Element::Float,
+		Some(element) => {
+			crate::analyzer::type_word_kind(element) == Some(crate::type_kinds::Kind::Int)
+				&& kind.element == Element::Int
+		}
+		None => annotation.drop_meta().name() == crate::words::LIST_WORD,
+	}
+}
+
 /// A call of a user function: `f(a, b)` or the task start `task·go(f, a, b)`
 fn called_function(node: &Node) -> Option<(String, Vec<Node>)> {
 	let Node::List(items, _, _) = node.drop_meta() else {
@@ -429,7 +449,8 @@ impl Rewrite<'_> {
 					Node::List(items, _, _) => items[0].name(),
 					_ => unreachable!("guarded"),
 				};
-				Node::Key(head, op, Box::new(self.node(*body, Some(&name))))
+				let head = self.with_array_parameters(*head, &name);
+				Node::Key(Box::new(head), op, Box::new(self.node(*body, Some(&name))))
 			}
 			Node::Key(target, op, value) => {
 				let names = self.names(function);
@@ -461,6 +482,30 @@ impl Rewrite<'_> {
 					_ => read,
 				}
 			}
+			other => other,
+		}
+	}
+
+	/// `fill(block: floats)` given a linear or shared array of floats: the parameter is the array (its uses are the
+	/// array's words), so its declared list type, checked against the array's items, is dropped; `[float]`, `list of
+	/// float` and `list` alike
+	fn with_array_parameters(&self, head: Node, function: &str) -> Node {
+		let Some(indexes) = self.shared_parameters.get(function) else {
+			return head;
+		};
+		match head {
+			Node::Key(call, Op::Colon, result) => {
+				Node::Key(Box::new(self.with_array_parameters(*call, function)), Op::Colon, result)
+			}
+			Node::List(items, bracket @ Bracket::Round, separator) => {
+				let parameter =
+					|(index, item): (usize, Node)| match index.checked_sub(1).and_then(|at| indexes.get(&at)) {
+						Some(kind) => array_parameter(item, *kind),
+						None => item,
+					};
+				Node::List(items.into_iter().enumerate().map(parameter).collect(), bracket, separator)
+			}
+			meta @ Node::Meta { .. } => meta.under_meta(|head| self.with_array_parameters(head, function)),
 			other => other,
 		}
 	}

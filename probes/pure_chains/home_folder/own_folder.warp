@@ -1,0 +1,4 @@
+use "helpers/where.warp"
+folder_name(path: text): text := path.split("/").last()
+print(folder_name(module_directory))
+print(helper_folder())

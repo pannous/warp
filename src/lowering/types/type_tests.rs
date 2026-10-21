@@ -27,6 +27,7 @@ pub const NODE_IS_MAP: &str = "node_is_map";
 /// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
+const SHADOWED_TYPE_WORD_TOPIC: &str = "shadowed-type-word";
 /// `String(x)`, `x as String`: the class spelling of text, a cast word only, so `String` stays free as a type value
 const TEXT_CLASS_WORD: &str = "String";
 /// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
@@ -295,6 +296,8 @@ pub(crate) fn program_names(node: &Node) -> Names {
 	let mut variables: HashSet<String> =
 		context.user_functions.keys().filter(|name| !is_builtin_type_word(name)).cloned().collect();
 	collect_outer_assigned_names(node, &mut variables);
+	// a case the program declares is that case, never the type of its name: `Kind.Int`, `Meaning.Function`
+	variables.extend(super::sum_variants::sum_types(node).values().flat_map(|variants| variants.bare_names()));
 	let mut bound_otherwise = crate::program_names::Bindings::of(node).bound();
 	bound_otherwise.retain(|name| !context.user_functions.contains_key(name));
 	let functions_taking_arguments = context
@@ -344,12 +347,13 @@ fn is_type_union(union: &Node) -> bool {
 
 /// The spec of a type phrase (`int`, `a number`, `ints`, `list of int`, `list of list of int`), `None` when the words are no type
 fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
-	let words = match words {
-		[article, rest @ ..] if ARTICLES.contains(article) && !rest.is_empty() => rest,
-		all => all,
+	// `x is a key` tests the type even where a variable is named key
+	let (words, has_article) = match words {
+		[article, rest @ ..] if ARTICLES.contains(article) && !rest.is_empty() => (rest, true),
+		all => (all, false),
 	};
 	let (first, rest) = words.split_first()?;
-	if shadowed.contains(first) {
+	if !has_article && shadowed.contains(first) {
 		return None;
 	}
 	let phrase = words.join(" ");
@@ -383,7 +387,7 @@ fn phrase_words(node: &Node) -> Option<Vec<&str>> {
 }
 
 /// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
-const EQUALITY_OPERAND: &str = "equality operand";
+pub(crate) const EQUALITY_OPERAND: &str = "equality operand";
 
 /// A side of `x == word` or `word != x` as the parser marks it when the word names a type; lowering names it by its
 /// canonical name as type(x) gives it (`type(s) == string` is `type(s) == text`) unless it is a variable
@@ -398,7 +402,7 @@ pub fn equality_operand(subject: &Node, word: Node) -> Node {
 	}
 }
 
-fn marked_operand(word: &str) -> Node {
+pub(crate) fn marked_operand(word: &str) -> Node {
 	marked(Node::Symbol(word.to_string()))
 }
 
@@ -505,6 +509,24 @@ fn is_type_call(subject: Node, spec: String, names: &Names) -> Node {
 	call(IS_TYPE, vec![function_itself(tested, names), Node::Text(spec)])
 }
 
+/// `xs is list of note`: a list each of whose items is a note, an empty list a list of any type. A list held as a Node
+/// keeps no item type, so the items are tested where they are, by the run time (card list-class)
+fn items_tested(subject: Node, spec: String, names: &Names) -> Node {
+	let Some(element) = spec.strip_prefix(crate::analyzer::LIST_OF_PREFIX) else {
+		return is_type_call(subject, spec, names);
+	};
+	let mut bindings = vec![];
+	let list = match subject.drop_meta() {
+		Node::Symbol(_) => subject,
+		_ => super::nodes::bound_once("tested", subject, &mut bindings),
+	};
+	let item = Node::Symbol(format!("item{}{}", crate::analyzer::TEMPORARY_SEPARATOR, super::nodes::fresh_number()));
+	let item_test = key(item.clone(), Op::Arrow, items_tested(item, element.to_string(), names));
+	let every = key(list.clone(), Op::Dot, parens(vec![Node::Symbol(crate::words::ALL_WORD.to_string()), item_test]));
+	let is_list = is_type_call(list, LIST_WORD.to_string(), names);
+	super::nodes::after_bindings(bindings, key(is_list, Op::And, every))
+}
+
 /// `floor` of `floor is function`: a bare name of a function that needs arguments, tested against a type, is the
 /// function itself (card bare-fn-type)
 fn function_itself(operand: Node, names: &Names) -> Node {
@@ -566,9 +588,10 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			Node::List(items.into_iter().map(|item| expand(item, shadowed)).collect(), bracket, separator)
 		}
 		Node::Key(subject, Op::Eq, right) => {
+			warn_shadowed_type_word(&subject, &right, shadowed);
 			match phrase_words(&right).and_then(|words| type_spec(&words, shadowed)) {
 				// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
-				Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec, shadowed),
+				Some(spec) if !is_equality_operand(&right) => items_tested(expand(*subject, shadowed), spec, shadowed),
 				_ => match union_test(&subject, &right, shadowed).or_else(|| is_pattern(&subject, &right, shadowed)) {
 					Some(test) => expand(test, shadowed),
 					None => comparison(*subject, Op::Eq, *right, shadowed),
@@ -582,6 +605,64 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		}
 		other => children_rewritten(other, |child| expand(child, shadowed)),
 	}
+}
+
+/// `an int`, `a pair`
+fn article_of(word: &str) -> &'static str {
+	if word.starts_with(['a', 'e', 'i', 'o', 'u']) {
+		ARTICLES[1]
+	} else {
+		ARTICLES[0]
+	}
+}
+
+/// A used module's `x is pair` tests the type though the program has a variable `pair`: the module cannot see the
+/// program's variables, so its type words become `x is a pair`, which no variable shadows
+pub(crate) fn module_type_words_kept(node: Node, is_program_word: &impl Fn(&str) -> bool) -> Node {
+	match node {
+		Node::Key(subject, Op::Eq, right)
+			if !is_equality_operand(&right)
+				&& right.symbol_name().is_some_and(|word| is_program_word(word) && is_builtin_type_word(word)) =>
+		{
+			let word = right.drop_meta().name();
+			let phrase = Node::List(
+				vec![Node::Symbol(article_of(&word).to_string()), Node::Symbol(word)],
+				Bracket::None,
+				Separator::Space,
+			);
+			key(module_type_words_kept(*subject, is_program_word), Op::Eq, phrase)
+		}
+		other => other.map_children(|child| module_type_words_kept(child, is_program_word)),
+	}
+}
+
+/// `n is key` with a variable named key compares with its value: warn, never silently (card local-named-like-2)
+fn warn_shadowed_type_word(subject: &Node, right: &Node, shadowed: &Names) {
+	let Node::Symbol(word) = right.drop_meta() else {
+		return;
+	};
+	if is_equality_operand(right)
+		|| !shadowed.contains(word)
+		|| type_spec(&[word.as_str()], &Names::default()).is_none()
+	{
+		return;
+	}
+	let tested = crate::normalize::operand_text(subject);
+	let article = article_of(word);
+	let readings = vec![
+		crate::errors::diagnostic::reading("the variable's value", &format!("{tested} == {word}")),
+		crate::errors::diagnostic::reading("the type", &format!("{tested} is {article} {word}")),
+	];
+	let question = crate::errors::diagnostic::Ask::new(
+		SHADOWED_TYPE_WORD_TOPIC,
+		format!("`{word}` is a variable here, so `{tested} is {word}` compares with its value, not the type {word}: rename the variable, or write `{tested} is {article} {word}` for the type"),
+		readings,
+		crate::errors::diagnostic::Fallback::Warning,
+	)
+	.written(&format!("{tested} is {word}"))
+	.at_node(subject);
+	// a warning only: the default reading (the variable) is what the program gets
+	let _ = crate::errors::diagnostic::ask(&question);
 }
 
 /// `v is int or text` parses as `(v is int) or text`: after `is` the union is the type, `or` spells a union in every
@@ -622,5 +703,5 @@ fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let word = right.symbol_name()?;
 	let mut words = vec![word];
 	words.extend(symbol_words(tail)?);
-	Some(is_type_call(subject.as_ref().clone(), type_spec(&words, shadowed)?, shadowed))
+	Some(items_tested(subject.as_ref().clone(), type_spec(&words, shadowed)?, shadowed))
 }

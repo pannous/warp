@@ -1,0 +1,7 @@
+# field defaults in the pure lane (card pure-field-defaults): left-out fields take their defaults
+class point{x:int=0; y:int=3}
+class counter{n=0; step:int=1}
+class opt { a: int; b? }
+c = counter{}
+print point().y + point(5).x + c.step + c.n + opt(4).a
+print point(1)

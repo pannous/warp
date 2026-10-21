@@ -99,7 +99,33 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		// a `list of int`; an element of a `list of list` (`[("a", 2)]`, tuples of mixed items) holds its items as Nodes
 		Node::Key(map, Op::Hash, _) => element_list_type(map, scope),
 		Node::List(items, _, separator) => literal_list_type(items, separator, scope),
+		// `if c then xs else ø`, `c ? xs : ys`: the list either branch gives
+		Node::Key(if_then, Op::Else, else_expr) if let Node::Key(_, Op::Then, then_expr) = if_then.drop_meta() => {
+			choice_list_type(then_expr, else_expr, scope)
+		}
+		Node::Key(_, Op::Question, then_else)
+			if let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() =>
+		{
+			choice_list_type(then_expr, else_expr, scope)
+		}
 		_ => LIST_WORD.to_string(),
+	}
+}
+
+/// The type both branches' lists share, ø, `[]` or an error fitting any; lists of different types hold Nodes
+fn choice_list_type(then_expr: &Node, else_expr: &Node, scope: &Scope) -> String {
+	let given_list = |branch: &Node| {
+		let value = block_result(branch).unwrap_or_else(|| branch.drop_meta().clone());
+		let fits_any = value.is_empty_node()
+			|| raises_error(&value)
+			|| matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.is_empty());
+		(!fits_any).then(|| list_type_name(&value, scope))
+	};
+	let words: Vec<String> = [then_expr, else_expr].into_iter().filter_map(given_list).collect();
+	match words.as_slice() {
+		[] => LIST_WORD.to_string(),
+		[first, rest @ ..] if rest.iter().all(|word| word == first) => first.clone(),
+		_ => NODE_LIST_TYPE.to_string(),
 	}
 }
 

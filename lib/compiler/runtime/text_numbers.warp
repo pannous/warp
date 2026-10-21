@@ -1,0 +1,101 @@
+## texts as numbers at run time (card card-4; Rust's text_as_int and text_as_float in
+## src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in src/wasm_emitter/numbers/casts.rs): a text
+## that spells no number fails with invalid_number
+# 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
+sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == 45 or byte_at(t, 0) == 43) then 1 else 0
+# t starts with -
+is_negative_text(t: text): bool := byte_count(t) > 0 and byte_at(t, 0) == 45
+# the digit a byte spells, -1 for any other byte
+digit_of(b: int): int := if b >= 48 and b <= 57 then b - 48 else -1
+# how many digits stand in t from byte offset start on
+digit_run(t: text, start: int): int := {
+	at = start
+	while at < byte_count(t) and digit_of(byte_at(t, at)) >= 0 { at += 1 }
+	at - start
+}
+# `t as int`: an optional sign and decimal digits, nothing else; 64 bits, where Rust's grows a big int
+text_as_int(t: text): int := {
+	start = sign_length(t)
+	count = digit_run(t, start)
+	if count == 0 or start + count != byte_count(t) { invalid_number() }
+	value = 0
+	for i in start..byte_count(t) { value = value * 10 + digit_of(byte_at(t, i)) }
+	if is_negative_text(t) then -value else value
+}
+# `t as float`: a sign, digits with an optional point among them, an optional exponent (e or E, a sign, digits): the
+# nearest float, correctly rounded also beyond 10^±22, where Rust's multiplies ten by ten
+text_as_float(t: text): float := {
+	start = sign_length(t)
+	whole = digit_run(t, start)
+	at = start + whole
+	fraction = 0
+	if at < byte_count(t) and byte_at(t, at) == 46 {
+		fraction = digit_run(t, at + 1)
+		at += 1 + fraction
+	}
+	if whole + fraction == 0 { invalid_number() }
+	stop = at
+	exponent = 0
+	if at < byte_count(t) and (byte_at(t, at) == 101 or byte_at(t, at) == 69) {
+		exponent = text_as_int(bytes_between(t, at + 1, byte_count(t)))
+		at = byte_count(t)
+	}
+	if at != byte_count(t) { invalid_number() }
+	found = decimal_digits(t, start, stop)
+	magnitude = decimal_float(unboxed_int(found#1), unboxed_int(found#2) + exponent - fraction)
+	if is_negative_text(t) then -magnitude else magnitude
+}
+# [digits, dropped] of the digits between the byte offsets start and stop (a point among them skipped): the first 18
+# significant ones as an int (below 10^18, so below 2^63), the count of those dropped after them
+decimal_digits(t: text, start: int, stop: int): list := {
+	digits = 0
+	count = 0
+	dropped = 0
+	for i in start..stop {
+		d = digit_of(byte_at(t, i))
+		if d >= 0 and count < 18 {
+			digits = digits * 10 + d
+			if digits > 0 { count += 1 }
+		} else if d >= 0 {
+			dropped += 1
+		}
+	}
+	[digits, dropped]
+}
+# digits · 10^shift as the nearest float: digits as the double-double hi + lo (exact), scaled by float_scaled (one
+# exact power of ten up to 10^22: one rounding, as Clinger's fast path; beyond, within 2^-104 before the last
+# rounding). float_scaled's steps overflow near 2^1024, so a result beyond 10^290 is scaled to 10^20 below and
+# multiplied back (a second rounding there), one below 10^-290 to 10^20 above and divided back
+decimal_float(digits: int, shift: int): float := {
+	if digits == 0 { return float(0) }
+	magnitude = byte_count(int_text(digits)) - 1 + shift
+	if magnitude > 308 { return float_of_bits(9218868437227405312) }
+	if magnitude < -325 { return float(0) }
+	hi = float(digits)
+	gap = float(digits - truncated(hi)) * 2
+	back = if magnitude > 290 then 20 else if magnitude < -290 then -20 else 0
+	scaled = unboxed_float(float_scaled(hi, gap, shift - back)#1)
+	if back > 0 { return scaled * power_of_ten(back) }
+	if back < 0 { return scaled / power_of_ten(-back) }
+	scaled
+}
+# 10^n of an n from 0 to 22, exact
+power_of_ten(n: int): float := {
+	power = float(1)
+	left = n
+	while left > 0 {
+		power = power * 10
+		left -= 1
+	}
+	power
+}
+# `t as number`: "1/3" the exact ratio of the ints around the slash, a whole number below 2^63 an int, else a float
+text_as_number(t: text): any := {
+	slash = text_index(t, char_text("/"))
+	if slash >= 0 { return exact_ratio(text_as_int(bytes_between(t, 0, slash)), text_as_int(bytes_between(t, slash + 1, byte_count(t)))) }
+	x = text_as_float(t)
+	# 2^63 (its bits 0x43E0000000000000)
+	limit = float_of_bits(4890909195324358656)
+	if float_floor(x) == x and x < limit and -x < limit { return truncated(x) }
+	x
+}

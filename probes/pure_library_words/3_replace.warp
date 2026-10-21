@@ -1,0 +1,2 @@
+# replace in a text: a-b
+print "a b".replace(" ", "-")

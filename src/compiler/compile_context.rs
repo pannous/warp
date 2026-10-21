@@ -49,6 +49,9 @@ pub struct CompileContext {
 	pub parsed_file: Option<String>,
 	/// the file being compiled; its folder is in scope (D15). None for inline code
 	pub program_file: Option<PathBuf>,
+	/// the folder the program's relative file paths are in: None for the process's working directory (a program run
+	/// beside others in one process, the guide's snippets)
+	pub working_folder: Option<PathBuf>,
 	/// the module files the last program resolved used or included: `warp dev` builds anew when one changes
 	pub module_files: Vec<PathBuf>,
 	/// the names a used module defines: their bodies never see the program's variables
@@ -124,6 +127,7 @@ impl Default for CompileContext {
 			hint_position: HintPosition::default(),
 			parsed_file: None,
 			program_file: None,
+			working_folder: None,
 			module_files: vec![],
 			module_definitions: HashSet::new(),
 			fast_program: false,

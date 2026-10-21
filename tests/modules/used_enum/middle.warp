@@ -1,0 +1,4 @@
+# uses the enum of the file beside it (test_used_enums.rs)
+use "meanings.warp"
+is_function(m: Meaning): bool := m == Meaning.Function
+variable_meaning = Meaning.Variable

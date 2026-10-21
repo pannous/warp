@@ -1,0 +1,17 @@
+// The microseconds parser.warp spends per call on the parts of reading a name (card profile-stage-programs)
+use "../../lib/compiler/parser.warp"
+probe_rounds = 1000
+probe_source = "alpha = beta\n"
+probe_parser = Parser{code: probe_source, n: probe_source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: [], breaks: [], finally_blocks: 0, types: [], bangs: [], type_body: false}
+def timed(label, f) {
+	started = clock()
+	for round in 1 to probe_rounds { f() }
+	print(label + " " + ((clock() - started) * 1000 / probe_rounds) + " µs")
+}
+timed("keyword_form", () => keyword_form("alpha"))
+timed("bang_word_at", () => bang_word_at(probe_parser))
+timed("symbol_end", () => symbol_end(probe_source, 0, probe_source.length))
+timed("names_case", () => names_case(probe_parser, 5))
+timed("exact constants", () => EXACT_CONSTANTS.contains("alpha"))
+timed("is_capitalized", () => is_capitalized("alpha"))
+timed("named", () => { probe_parser.at = 0; named(probe_parser) })

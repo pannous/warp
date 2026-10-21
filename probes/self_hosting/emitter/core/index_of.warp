@@ -1,0 +1,8 @@
+// `xs.index_of(x)`: a list's 1-based position, a text's byte position + 1, 1 for a map's key, 0 when absent, as
+// parser.warp's hex_value reads a digit
+def hex_value(digits) {
+	value = 0
+	for digit in digits { value = value * 16 + "0123456789abcdef".index_of(digit.lower()) - 1 }
+	value
+}
+[hex_value("1B"), [5, 6, 7].index_of(7), "abc".index_of("z"), {a: 1}.index_of("a"), "äbc".index_of("b")]

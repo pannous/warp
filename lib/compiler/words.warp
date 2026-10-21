@@ -8,12 +8,19 @@ type_words = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact
 	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
 	"uint64"]
 any_word = "any"
+# the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }` (Rust twin: words.rs IMPLICIT_PARAMETER)
+implicit_parameter = "it"
+# the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic (Rust twin: errors/run_time.rs RAISE_WORDS)
+raise_words = {raise: 1, throw: 1, fail: 1, panic: 1}
+raise_word = "raise"
 # a collection type's head words, before `of` (`list of int`; Rust twin: type_tests.rs COLLECTION_WORDS) and the
 # foreign spellings of list (warp_parser/mod.rs FOREIGN_LIST_HEADS)
 collection_words = ["list", "map"]
 foreign_list_heads = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"]
 
 is_type_word(word: text): bool := type_words contains word.lower()
+# `Color`, `Ω`: a name whose first character is an upper case letter
+is_capitalized(name: text): bool := name[0].upper() == name[0] and name[0].lower() != name[0]
 # the type words a type test takes besides those (no twin: Rust's BUILTIN_TYPES in src/lowering/types/type_tests.rs)
 test_type_words = ["key", "pair", "operation", "expression", "code", "callable", "invocable", "runnable", "error", "empty",
 	"unit", "nil", "none", "null", "void", "time", "instant", "date", "duration"]
@@ -23,6 +30,8 @@ is_collection_head(word: text): bool := collection_words contains word or foreig
 
 # the words opening a definition, `def f(x) {…}` (Rust twin: operators/mod.rs FUNCTION_KEYWORDS)
 function_keywords = ["fun", "fn", "def", "define", "function", "func"]
+# the word declaring an enum, `enum Coin {Penny, Dime}`
+enum_word = "enum"
 # the words naming a selection of a value's parts, which `in` and `from` select like `of`: `words in t` (Rust twin:
 # of_lookups.rs SELECTOR_WORDS)
 selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "bytes", "letters", "words", "lines",
@@ -30,6 +39,11 @@ selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "b
 # the operators a dotted spelling applies to each element, `xs .* 2` (Rust twin: operators/spellings.rs
 # ELEMENT_WISE_OPERATORS)
 element_wise_operators = ["+", "-", "*", "/", "^", "%"]
+# the operators that change their target, `n = …`, `n += …` (a branch's value assigns through them: parser.warp
+# branch_value; a function changing main's n: main_globals.warp)
+assigning_operators = ["=", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
+# the operators after which `return` names a variable: those and the definitions
+binding_operators = assigning_operators + [":=", ":"]
 
 # the kind a call of a library or runtime word gives (Rust twin: analyzer builtin_word_kind and library_call_kind,
 # checked by tests/parser/test_self_words.rs call_kinds_are_rusts)
@@ -70,3 +84,6 @@ type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
 	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
 	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", real: "empty", exact: "empty"}
+
+# `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
+with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word

@@ -19,8 +19,20 @@ const BOOL_CALLS: [&str; 8] = [
 
 /// `even(n) := n % 2 == 0`: the functions whose body ends in a bool, also through each other (`odd(n) := not even(n)`)
 /// and themselves (`f(n) := if n == 0 then true else f(n - 1)`), for the emission of one program: every function is
-/// taken for one until its body shows otherwise
-pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::compiler::context::UserFunctionDef> + Clone) {
+/// taken for one until its body shows otherwise. A closure call `closure_call_n` gives a bool when every closure of its
+/// arity (`closure_targets`: each target and how many captured values it takes first) does
+pub fn note_bool_functions<'a>(
+	functions: impl Iterator<Item = &'a crate::compiler::context::UserFunctionDef> + Clone,
+	closure_targets: &[(String, usize)],
+) {
+	let parameter_counts: HashMap<&str, usize> =
+		functions.clone().map(|function| (function.name.as_str(), function.params.len())).collect();
+	let gives_bool = |function: &crate::compiler::context::UserFunctionDef| match crate::closures::closure_call_arity(
+		&function.name,
+	) {
+		Some(arity) => closure_targets_give_bool(closure_targets, &parameter_counts, arity),
+		None => gives_bool(function),
+	};
 	crate::compiler::compile_context::change(|context| {
 		context.bool_functions = functions.clone().map(|function| function.name.clone()).collect()
 	});
@@ -37,6 +49,19 @@ pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::compil
 			context.bool_functions.retain(|name| !refuted.contains(name))
 		});
 	}
+}
+
+/// Every closure a call of `arity` values may call gives a bool, and there is one
+fn closure_targets_give_bool(
+	closure_targets: &[(String, usize)],
+	parameter_counts: &HashMap<&str, usize>,
+	arity: usize,
+) -> bool {
+	let mut targets = closure_targets
+		.iter()
+		.filter(|(target, captured)| parameter_counts.get(target.as_str()) == Some(&(captured + arity)))
+		.peekable();
+	targets.peek().is_some() && targets.all(|(target, _)| is_bool_function(target))
 }
 
 /// The body ends in a bool and every `return` in it returns one

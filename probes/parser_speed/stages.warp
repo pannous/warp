@@ -1,0 +1,18 @@
+// The milliseconds of each step of the pure lane's front end on the file args#1 names (card profile-stage-programs):
+// parsing, the uses, each of passes.warp's pure_passes by its index. Run:
+// WARP_LIB=<checkout>/lib warp probes/parser_speed/stages.warp <file>
+// The globals carry a probe_ prefix: a global named like a parameter of a used function (lambdas.warp `lowering`)
+// replaces it there
+use "../../lib/compiler/passes.warp"
+use os
+probe_source = read(args#1)
+probe_started = clock()
+probe_tree = with_uses(plain_node(parsed(probe_source)), ".")
+probe_times = "parse+uses " + (clock() - probe_started)
+for probe_i in 1 to #pure_passes {
+	probe_step = clock()
+	probe_pass = pure_passes#probe_i
+	probe_tree = probe_pass(probe_tree)
+	probe_times += ", " + probe_i + ": " + (clock() - probe_step)
+}
+print(probe_times + "; total " + (clock() - probe_started) + " ms")

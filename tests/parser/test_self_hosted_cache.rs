@@ -3,6 +3,8 @@
 //! its own program
 const CACHE_FOLDER: &str = "self_hosted_stage_cache";
 const CACHE_IN_A_FOLDER: &str = "self_hosted_stage_cache_in_a_folder";
+const CACHE_OF_LIBRARY_COPIES: &str = "self_hosted_stage_cache_of_library_copies";
+const LIBRARY_COPIES: [&str; 2] = ["self_hosted_library_copy_a", "self_hosted_library_copy_b"];
 /// A folder with text.warp and list.warp
 const SHADOWING_FOLDER: &str = "probes/self_hosting/emitter/core";
 const HOST_WORDS_PROGRAM: &str = "probes/self_hosting/emitter/host_words.warp";
@@ -25,6 +27,18 @@ fn run_switched(switch: &str, folder: &str, cache: &std::path::Path, code: &str)
 		.output()
 		.expect("warp runs");
 	(String::from_utf8_lossy(&run.stdout).into_owned(), String::from_utf8_lossy(&run.stderr).into_owned())
+}
+
+fn copy_folder(from: &std::path::Path, to: &std::path::Path) {
+	std::fs::create_dir_all(to).unwrap();
+	for entry in std::fs::read_dir(from).unwrap().flatten() {
+		let target = to.join(entry.file_name());
+		if entry.path().is_dir() {
+			copy_folder(&entry.path(), &target);
+		} else {
+			std::fs::copy(entry.path(), target).unwrap();
+		}
+	}
 }
 
 #[test]
@@ -122,4 +136,34 @@ fn a_zero_switch_is_off() {
 		assert!(value.contains('9'), "{value}");
 		assert!(phases.contains("emit ("), "WARP_SELF_HOSTED={off:?} ran the self-hosted emitter: {phases}");
 	}
+}
+
+/// The kept stage programs are keyed by lib/'s contents, not its place: a worktree with the same lib/ reuses them
+/// instead of compiling every stage again (card stage-key-content)
+#[test]
+fn an_identical_library_elsewhere_reuses_the_kept_stages() {
+	let scratch = std::path::Path::new(env!("CARGO_TARGET_TMPDIR"));
+	let cache = scratch.join(CACHE_OF_LIBRARY_COPIES);
+	let _ = std::fs::remove_dir_all(&cache);
+	let copies = LIBRARY_COPIES.map(|copy| scratch.join(copy));
+	for copy in &copies {
+		let _ = std::fs::remove_dir_all(copy);
+		copy_folder(std::path::Path::new("lib"), copy);
+	}
+	let run_with = |library: &std::path::Path| {
+		let run = crate::common::warp_command()
+			.env("WARP_SELF_HOSTED", "1")
+			.env("WARP_MODULE_CACHE", &cache)
+			.env("WARP_PHASE_TIMES", "1")
+			.env("WARP_LIB", library)
+			.arg("3 + 4")
+			.output()
+			.expect("warp runs");
+		(String::from_utf8_lossy(&run.stdout).into_owned(), String::from_utf8_lossy(&run.stderr).into_owned())
+	};
+	let (first, _) = run_with(&copies[0]);
+	assert!(first.contains('7'), "{first}");
+	let (again, phases) = run_with(&copies[1]);
+	assert!(again.contains('7'), "{again}");
+	assert!(phases.contains("lowering, all (1×)"), "only the program is lowered: {phases}");
 }

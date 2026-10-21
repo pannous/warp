@@ -1,0 +1,27 @@
+// out: {1:2}
+// out: 3
+// out: 5
+// out: a
+// out: yes
+// out: {3:1}
+// out: r
+m = {}
+m[1] = 2
+print m
+m[12] = 3
+print m[12]
+literal = {1: 5}
+print literal[1]
+d = {}
+k = 4
+d[k] = "a"
+print d[k]
+print k in d
+fresh(n) := {
+	out = {}
+	out[n] = 1
+	out
+}
+print fresh(3)
+class Row { name: text }
+print Row("r").name

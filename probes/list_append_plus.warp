@@ -1,0 +1,6 @@
+// cards start, xs-item (decisions list-append-plus, empty-plus-text): + and += append an item, `t = []` starts a list
+xs = [1 2 3]
+print xs + 4
+t = []
+for word in ["a" "b"] { t += word }
+print t

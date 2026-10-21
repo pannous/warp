@@ -1,0 +1,22 @@
+// scripts/lib_bench.sh's parse level: whether parser.warp reads each file the arguments name without an error view, a
+// line each: "<path>\tparsed" or "<path>\tparse error: <message>" (one process for many files: compiling parser.warp
+// takes seconds)
+use "../lib/compiler/parser.warp"
+use os
+
+// the message of the first error view in a view, else ø
+first_error(view: any): any := {
+	if view is list and #view == 2 and view#1 == "error" { return view#2#2 }
+	if view is list {
+		for part in view {
+			found = first_error(part)
+			if found != ø { return found }
+		}
+	}
+	ø
+}
+
+for bench_path in args {
+	bench_error = try first_error(tree(read(bench_path))) catch failure { failure.message }
+	print(bench_path + "\t" + (if bench_error == ø then "parsed" else "parse error: " + bench_error))
+}

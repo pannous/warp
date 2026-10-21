@@ -5,7 +5,7 @@ program, its output, the version and the page address, and becomes a card on the
 
     browser ──POST json──▶ https://pannous.com/warp-bug-report (Ferron location, ~/dev/pannous-lockdown ferron.kdl)
             ──▶ 127.0.0.1:5691, unit warp-bug-report: scripts/bug_report.py serve (DynamicUser, token via LoadCredential)
-            ──▶ /var/lib/warp-bug-report/<id>.json ──▶ at once: issue + board item in Next (express: Now), GitHub token
+            ──▶ /var/lib/warp-bug-report/<id>.json ──▶ at once: issue + board item in Next (express: Now; a comment saying "later": Later), GitHub token
                 /etc/warp/github-token (LoadCredential github; needs Issues + Account→Projects write) ──▶ done/
     fallback, Mac cron (every 2 min): scripts/bug_report.py pull ── ssh list ─▶ todo add (Next; express: --urgent → Now) ─▶ ssh ack
     The card's key comes from the Mac's `todo keys` (urgent-card-watch, every 2 min).

@@ -1,0 +1,4 @@
+# a prelude word and its alias reach the pure lane (card uses-std-modules: the module slicing is shared)
+m = {"a": 1}
+print(keys(m))
+print(first([4, 5]))

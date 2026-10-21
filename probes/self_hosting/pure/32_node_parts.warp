@@ -1,0 +1,5 @@
+// a key's parts on the pure lane as on the usual one (card pure-lane-node): its field of its own name wins over the
+// part reader, an operator no spelling names fails
+k = key(symbol("key"), "=", 3)
+bad = try { key(1, "@@", 2) } else "refused"
+[k.key, key_of(k), k.op, bad]

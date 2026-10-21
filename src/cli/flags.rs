@@ -12,7 +12,6 @@ pub(crate) const FUEL_FLAG: &str = "--fuel";
 pub(crate) const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
 pub(crate) const NO_HINTS_FLAG: &str = "--no-hints";
-pub(crate) const HINTS_VARIABLE: &str = "WARP_HINTS";
 /// `--warnings=<level>`: print diagnostics from that level up (hint, weak, normal, severe); `--no-hints` is weak
 pub(crate) const WARNINGS_FLAG: &str = "--warnings";
 /// `--strict` (normal and severe warnings are errors, as `use strict`), `--strict=<level>` from another level
@@ -60,8 +59,8 @@ pub(crate) fn apply_flags(args: &mut Vec<String>) {
 	}
 
 	let no_hints = args.iter().position(|arg| arg == NO_HINTS_FLAG).map(|flag| args.remove(flag)).is_some();
-	let hints_variable = env::var(HINTS_VARIABLE).ok();
-	let hints_wanted = hints_variable.is_none() || warp::setting(HINTS_VARIABLE).is_some();
+	let hints_variable = env::var(diagnostic::HINTS_VARIABLE).ok();
+	let hints_wanted = hints_variable.is_none() || warp::setting(diagnostic::HINTS_VARIABLE).is_some();
 	let hints_shown = hints_wanted && !no_hints;
 	let fewest_shown = if hints_shown { diagnostic::Level::Hint } else { diagnostic::Level::Weak };
 	let shown = level_flag(args, WARNINGS_FLAG, fewest_shown).unwrap_or(fewest_shown);

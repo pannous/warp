@@ -257,6 +257,8 @@ struct Usages {
 	texted: HashSet<String>,
 	foreign: HashSet<String>,
 	tested: HashSet<String>,
+	/// read as an object: `s.name`, lowered `s#("name"+1)`, of any value with fields (a symbol's name, an event's value)
+	fielded: HashSet<String>,
 	aliases: Vec<(String, String)>,
 }
 
@@ -286,6 +288,11 @@ impl Usages {
 		}
 		if let Some(Node::Symbol(name)) = used_sequence(node).map(Node::drop_meta) {
 			self.indexed.insert(name.clone());
+		}
+		if let Node::Key(object, Op::Hash, index) = node {
+			if let (Node::Symbol(name), true) = (object.drop_meta(), is_field_read(index)) {
+				self.fielded.insert(name.clone());
+			}
 		}
 		if let Some(name) = joined_to_text(node) {
 			self.texted.insert(name.to_string());
@@ -336,7 +343,7 @@ impl Usages {
 	fn used_as(&self, name: &String) -> Option<Kind> {
 		if self.called.contains(name) {
 			Some(Kind::Function)
-		} else if self.celled.contains(name) || self.foreign.contains(name) {
+		} else if self.celled.contains(name) || self.foreign.contains(name) || self.fielded.contains(name) {
 			Some(Kind::Data)
 		} else if self.indexed.contains(name) {
 			// a counted sequence joined to a text is a text; joined alone it may be any value (`"set " + value`)
@@ -425,6 +432,8 @@ fn joined_to(node: &Node, is_joined: fn(&Node) -> bool) -> Option<&str> {
 pub(super) fn used_sequence(node: &Node) -> Option<&Node> {
 	let is_counting_word = |word: &Node| word.symbol_name().is_some_and(is_counting_word);
 	match node {
+		// `s.name`, lowered `s#("name"+1)`, reads a field of an object: no sequence (card rust-analyzer-errors)
+		Node::Key(_, Op::Hash, index) if is_field_read(index) => None,
 		Node::Key(list, Op::Hash, counted) => Some(if list.is_nothing() { counted } else { list }),
 		Node::Key(list, Op::Dot, property) if is_counting_word(property) => Some(list),
 		Node::List(items, _, _) => match items.as_slice() {
@@ -433,6 +442,11 @@ pub(super) fn used_sequence(node: &Node) -> Option<&Node> {
 		},
 		_ => None,
 	}
+}
+
+/// The index of a field read, a constant text key: `"name"+1` of `s.name`
+fn is_field_read(index: &Node) -> bool {
+	crate::warp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_)))
 }
 
 /// A parameter forwarded to another function's parameter takes its kind: `f(grid) { g(grid) }` with g indexing grid

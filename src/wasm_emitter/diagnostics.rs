@@ -48,11 +48,16 @@ impl WasmGcEmitter {
 
 	/// A variable named like a function of the program is the variable: a parameter (`f(inc) := inc(3)`), and inside a
 	/// function its locals too (`angle = 0.5; cos(angle)` beside math's angle), and a loop's variable in main (`[str f for f in xs]`).
-	/// main also holds a local for each `sq := it * 2`, which is the function
+	/// main also holds a local for each `sq := it * 2`, which is the function. A nested function's capture of its
+	/// enclosing body's local is a variable too (`held = …; part = i => held`)
 	pub(super) fn is_variable(&self, name: &str) -> bool {
-		self.scope
-			.lookup(name)
-			.is_some_and(|local| local.is_param || self.compiling.is_some() || self.loop_variables.contains(name))
+		let captured = (self.compiling.as_ref().and_then(|function| self.ctx.captures.get(function)))
+			.is_some_and(|captures| captures.iter().any(|(captured, _)| captured == name));
+		captured
+			|| self
+				.scope
+				.lookup(name)
+				.is_some_and(|local| local.is_param || self.compiling.is_some() || self.loop_variables.contains(name))
 	}
 
 	/// A name that is no variable, global, function or `$n` parameter here

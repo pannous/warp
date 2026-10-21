@@ -1,0 +1,43 @@
+# Texts cut and searched by characters: slices, offsets, starts and ends, find, trim
+# the characters from..to of t, counted from 1, both included: the bytes between their lead bytes
+text_slice(t: text, from: int, to: int): text := {
+	start = character_offset(t, from)
+	bytes_between(t, start, character_offset(t, to + 1))
+}
+# the byte offset of t's index-th character, counted from 1; past the last, the byte count
+character_offset(t: text, index: int): int := {
+	at = 0
+	for counted in 1..<index {
+		if at < byte_count(t) { at += 1 }
+		while at < byte_count(t) and byte_at(t, at) >= 128 and byte_at(t, at) < 192 { at += 1 }
+	}
+	at
+}
+# t starts with the bytes of start
+text_starts_with(t: text, start: text): bool := byte_count(start) <= byte_count(t) and bytes_match_at(t, start, 0)
+# t ends with the bytes of end
+text_ends_with(t: text, end: text): bool := byte_count(end) <= byte_count(t) and bytes_match_at(t, end, byte_count(t) - byte_count(end))
+# part's bytes stand in t from byte offset at on
+bytes_match_at(t: text, part: text, at: int): bool := {
+	for i in 0..byte_count(part) {
+		if byte_at(t, at + i) != byte_at(part, i) { return no }
+	}
+	yes
+}
+# the character position of part's first place in t, counted from 1; 0 when t holds no part
+text_find(t: text, part: text): int := {
+	position = 1
+	for at in 0 to byte_count(t) - byte_count(part) {
+		if bytes_match_at(t, part, at) { return position }
+		if byte_at(t, at) < 128 or byte_at(t, at) >= 192 { position += 1 }
+	}
+	0
+}
+# t without the spaces, tabs and line breaks at its two ends
+text_trim(t: text): text := {
+	start = 0
+	while start < byte_count(t) and is_space_byte(byte_at(t, start)) { start += 1 }
+	stop = byte_count(t)
+	while stop > start and is_space_byte(byte_at(t, stop - 1)) { stop -= 1 }
+	bytes_between(t, start, stop)
+}

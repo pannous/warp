@@ -382,6 +382,15 @@ fn is_switch_word(word: &Node) -> bool {
 	SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch))
 }
 
+/// `match subject {…}`, also as the parser groups a call subject: `(match f(x)) {…}`
+pub(crate) fn is_match_phrase(items: &[Node]) -> bool {
+	items.first().is_some_and(is_switch_word) || is_headed_match(items)
+}
+
+fn is_headed_match(items: &[Node]) -> bool {
+	matches!(items, [head, _] if matches!(head.drop_meta(), Node::List(words, _, _) if words.len() == 2 && is_switch_word(&words[0])))
+}
+
 /// `match alle = f(3) {…}` names its subject (user, card match-binding-arm) but parses as `match (alle = (f(3) {…}))`,
 /// after `r =` as `r = ((match alle) = (f(3) {…}))`: as `match (alle = f(3)) {…}`, the assignment the subject
 fn named_switch_subjects(node: Node) -> Node {
@@ -425,11 +434,9 @@ fn named_subject(item: &Node) -> Option<(Node, Node)> {
 /// The items of a match, `[match, subject, cases]`, `[match, (subject cases)]` or, as a body or an arm parses it,
 /// `[(match subject), cases]`, with `convert` of its cases block; other items as they are
 pub(crate) fn with_match_cases(mut items: Vec<Node>, convert: impl Fn(&Node) -> Node) -> Vec<Node> {
-	if let [head, cases] = items.as_slice() {
-		if matches!(head.drop_meta(), Node::List(words, _, _) if words.len() == 2 && is_switch_word(&words[0])) {
-			items[1] = convert(cases);
-			return items;
-		}
+	if is_headed_match(&items) {
+		items[1] = convert(&items[1]);
+		return items;
 	}
 	if !items.first().is_some_and(is_switch_word) {
 		return items;

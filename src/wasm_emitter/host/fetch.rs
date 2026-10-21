@@ -11,9 +11,11 @@ impl WasmGcEmitter {
 		timeout: Option<std::time::Duration>,
 	) {
 		let url = self.extract_url_string(url_node);
-		// a URL known only at run time (a text variable, a parameter, a concatenation), else the URL as written
-		if self.is_runtime_text(url_node) {
-			self.emit_string_ptr_len(func, url_node);
+		// a URL known only at run time (a text variable, a parameter, a concatenation, a value of run-time kind such as
+		// `server + "/json"` of a parameter given ø somewhere), else the URL as written
+		let run_time_value = crate::analyzer::is_run_time_kind(&self.get_type(url_node)) && !url_node.is_empty_node();
+		if self.is_runtime_text(url_node) || run_time_value {
+			self.emit_run_time_ptr_len(func, url_node);
 		} else {
 			let (url_ptr, url_len) = self.memory_string(&url);
 			Self::emit_list(func, &[I32Const(url_ptr as i32), I32Const(url_len as i32)]);

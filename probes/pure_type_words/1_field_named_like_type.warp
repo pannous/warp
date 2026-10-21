@@ -1,0 +1,7 @@
+# a field named like a type word leaves `x is symbol` a type test: only a variable of that name is compared
+kinds = {symbol: "symbol", bool: "int"}
+is_word(n: any): bool := n is symbol
+print is_word(3)
+print is_word(kinds)
+word = :hello
+print is_word(word)

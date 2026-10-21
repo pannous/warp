@@ -1,0 +1,8 @@
+enum Kind { Empty, Int, Float, Text }
+name(k: Kind): text := match k {
+	Kind.Int: "int"
+	Kind.Float: "float"
+	_: "node"
+}
+print name(Kind.Int)
+print name(Kind.Float)

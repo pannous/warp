@@ -22,6 +22,8 @@ pub mod library;
 pub mod macho;
 #[cfg(feature = "engine")]
 pub mod output;
+#[cfg(feature = "engine")]
+pub mod profile;
 pub mod site_files;
 #[cfg(feature = "engine")]
 pub mod standalone;

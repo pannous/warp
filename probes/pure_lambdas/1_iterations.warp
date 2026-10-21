@@ -1,0 +1,8 @@
+xs = [1, 2, 3]
+print(map(xs, x => x * 10))
+print(xs.map(x => x + 1))
+twice(x) := x * 2
+print(xs.map(twice))
+print(xs.filter(x => x > 1))
+print(xs.any(x => x > 2))
+print(xs.all(x => x > 2))

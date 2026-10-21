@@ -14,7 +14,6 @@ const PRINTED_FENCE: &str = "```printed\n";
 #[cfg(feature = "native")]
 const RESULT_PROMPT: &str = "» "; // the CLI's result line, after what the program printed
 const EXAMPLES_LINE: &str = "Examples: ";
-const WRITE_CALL: &str = "write(\"";
 
 struct Snippet {
 	code: String,
@@ -34,19 +33,24 @@ fn snippets() -> Vec<Snippet> {
 				.strip_prefix('\n')
 				.and_then(|next| next.strip_prefix(PRINTED_FENCE))
 				.map(|block| block.split(FENCE_END).next().unwrap());
-			Snippet { code: in_scratch_directory(code), value: info.strip_prefix(VALUE_MARK), printed }
+			Snippet { code: code.to_string(), value: info.strip_prefix(VALUE_MARK), printed }
 		})
 		.collect()
 }
 
-// A file a snippet writes goes to a scratch directory, not the checkout: every mention of its name (`write("shopping.txt", …)`,
-// `read("shopping.txt")`) becomes the path in that directory
-fn in_scratch_directory(code: &str) -> String {
+// The snippets run with a scratch directory as their working directory: a file a snippet writes (`write "shopping.txt"
+// "milk"`) lands there, and none appears in the checkout
+fn in_scratch_directory<R>(run: impl FnOnce(&std::path::Path) -> R) -> R {
+	let entries = || -> HashSet<_> {
+		std::fs::read_dir(".").into_iter().flatten().flatten().map(|entry| entry.file_name()).collect()
+	};
 	let directory = crate::common::scratch_directory("guide");
 	std::fs::create_dir_all(&directory).unwrap();
-	code.split(WRITE_CALL).skip(1).filter_map(|call| call.split('"').next()).fold(code.to_string(), |code, name| {
-		code.replace(&format!("\"{name}\""), &format!("\"{}\"", directory.join(name).display()))
-	})
+	let before = entries();
+	let result = run(&directory);
+	let left: Vec<_> = entries().difference(&before).cloned().collect();
+	assert!(left.is_empty(), "the guide's snippets left {left:?} in the checkout");
+	result
 }
 
 // `Examples: welcome, "element events"; samples: hello` → tour names and sample names
@@ -63,14 +67,17 @@ fn linked_examples() -> (Vec<String>, Vec<String>) {
 
 #[test]
 fn every_guide_snippet_shows_its_value() {
-	let failures: Vec<String> = snippets()
-		.into_iter()
-		.filter_map(|Snippet { code, value, .. }| {
-			let expected = value?;
-			let shown = evaluate(&code, HashSet::new())["value"].as_str().unwrap_or_default().to_string();
-			(shown != expected).then(|| format!("{code}  shows {shown}, the guide says {expected}"))
-		})
-		.collect();
+	let failures: Vec<String> = in_scratch_directory(|directory| {
+		snippets()
+			.into_iter()
+			.filter_map(|Snippet { code, value, .. }| {
+				let expected = value?;
+				let shown = warp::modules::with_working_folder(directory, || evaluate(&code, HashSet::new()));
+				let shown = shown["value"].as_str().unwrap_or_default().to_string();
+				(shown != expected).then(|| format!("{code}  shows {shown}, the guide says {expected}"))
+			})
+			.collect()
+	});
 	assert!(snippets().len() > 30);
 	assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -78,19 +85,21 @@ fn every_guide_snippet_shows_its_value() {
 #[cfg(feature = "native")] // runs the warp binary
 #[test]
 fn every_guide_snippet_prints_what_the_guide_shows() {
-	let failures: Vec<String> = snippets()
-		.into_iter()
-		.filter_map(|Snippet { code, printed, .. }| {
-			let expected = printed?;
-			let output = crate::common::printed(&code);
-			let shown: String = output
-				.lines()
-				.filter(|line| !line.starts_with(RESULT_PROMPT))
-				.map(|line| format!("{line}\n"))
-				.collect();
-			(shown != expected).then(|| format!("{code}  prints {shown:?}, the guide says {expected:?}"))
-		})
-		.collect();
+	let failures: Vec<String> = in_scratch_directory(|directory| {
+		snippets()
+			.into_iter()
+			.filter_map(|Snippet { code, printed, .. }| {
+				let expected = printed?;
+				let output = crate::common::printed_in(directory, &code);
+				let shown: String = output
+					.lines()
+					.filter(|line| !line.starts_with(RESULT_PROMPT))
+					.map(|line| format!("{line}\n"))
+					.collect();
+				(shown != expected).then(|| format!("{code}  prints {shown:?}, the guide says {expected:?}"))
+			})
+			.collect()
+	});
 	assert!(snippets().iter().filter(|snippet| snippet.printed.is_some()).count() > 5);
 	assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
