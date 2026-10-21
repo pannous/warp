@@ -76,6 +76,7 @@ mod test_list_plus_parts; // card def-ps: `out = out + p` of parts of unknown ki
 mod test_list_retype;
 mod test_list_times_list;
 mod test_list_truthiness;
+mod test_list_write_by_run_time_key; // card self-asserted
 mod test_lists;
 mod test_lists_read_by_turns; // several long lists read by turns: a read cursor each
 mod test_long_list_copies;

@@ -26,7 +26,7 @@ subjects_in(n: Node, enums: any, subjects: any): any := {
 		_: ø
 	}
 	if declared != ø { held_as(subjects, declared#1, declared#2) }
-	if is_group(n) or n is key { for part in parts_of(n) { subjects_in(part, enums, subjects) } }
+	for part in scope_parts(n) { subjects_in(part, enums, subjects) }
 	subjects
 }
 
@@ -50,16 +50,28 @@ assigned_enum(value: Node, enums: any): text := match value {
 # Rust twin: plain_enums.rs assigned_cases
 assigned_in(n: any, enums: any, subjects: any): any := {
 	if is_key(n, Op.Assign) and is_name(key_of(n)) { held_as(subjects, name_of(key_of(n)), assigned_enum(value_of(n), enums)) }
-	if is_group(n) or n is key { for part in parts_of(n) { assigned_in(part, enums, subjects) } }
+	for part in scope_parts(n) { assigned_in(part, enums, subjects) }
 	subjects
 }
 
-# the names holding cases of an enum: typed so, else assigned only its cases
-held_cases(program: any, enums: any): any := {
-	subjects = assigned_in(program, enums, {})
-	typed = subjects_in(program, enums, {})
+# the parts of a node in its scope: those of a function's definition inside it have a scope of their own
+scope_parts(n: Node): list := parts_of(n).filter(part => not is_function_definition(part))
+
+# the names holding cases of an enum in a scope (the program outside its functions, or a function's definition, which
+# sees those of `outer` it does not name itself): typed so, else assigned only its cases. Per scope, as names are: the
+# parser's `bracket = ""` leaves view_of's `bracket`, bound a Bracket case, its spelling
+held_cases(scope: any, enums: any, outer: any): any := {
+	subjects = assigned_in(scope, enums, {})
+	typed = subjects_in(scope, enums, {})
 	for name in typed.keys { subjects[name] = typed[name] }
+	for name in outer.keys { if name not in subjects { subjects[name] = outer[name] } }
 	subjects
+}
+
+# the program's enum forms lowered, each function's by the names of its scope
+scoped_enum_nodes(n: Node, enums: any, subjects: any): Node := {
+	scope = if is_function_definition(n) then held_cases(n, enums, subjects) else subjects
+	enum_node(children(n, part => scoped_enum_nodes(part, enums, scope)), enums, scope)
 }
 
 # the spelled enum whose case a name holds, else ø
@@ -181,6 +193,5 @@ enum_node(n: Node, enums: any, subjects: any): Node := match n {
 plain_enums(program: Node): Node := {
 	enums = enums_in(program, {})
 	if #enums.keys == 0 { return program }
-	subjects = held_cases(program, enums)
-	bottom_up(program, n => enum_node(n, enums, subjects))
+	scoped_enum_nodes(program, enums, held_cases(program, enums, {}))
 }
