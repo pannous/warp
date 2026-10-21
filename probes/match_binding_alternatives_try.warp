@@ -1,0 +1,2 @@
+factor(n) := match n { data($x * 1) | data(1 * $x) => x; _ => 0 }
+print [factor(data(y * 1)), factor(data(1 * y)), factor(data(y * 3))]
