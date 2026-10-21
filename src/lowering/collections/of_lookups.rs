@@ -29,7 +29,7 @@ pub fn lower(node: Node) -> Node {
 	node.visit(&mut |part| has_type_of |= type_of_body(part).is_some());
 	let selector_words = [TEXT_UNIT_WORDS.as_slice(), &MAP_PART_WORDS].concat();
 	let has_selection = node.mentions_any(&selector_words) && node.mentions_any(&SELECTING_PREPOSITIONS);
-	if !has_type_of && !has_selection && !node.mentions_any(&[OF_WORD]) {
+	if !has_type_of && !has_selection && !node.mentions_any(&[OF_WORD]) && !node.mentions_any(&TEXT_UNIT_WORDS) {
 		return node;
 	}
 	let defined = crate::program_names::Bindings::of(&node).bound();
@@ -53,8 +53,20 @@ fn rewrite(node: Node, selectors: &[&str]) -> Node {
 		}
 		// `type of {a:1}`: the map is the declaration head's body
 		other if type_of_body(&other).is_some() => type_of_called(vec![other]).pop().expect("one item"),
-		other => other,
+		other => unit_selected(&other, selectors).unwrap_or(other),
 	}
+}
+
+/// `t as words` is `t.words`, as `words of t` (decision text-unit-plurals); `[97, 98] as chars` casts each item
+fn unit_selected(node: &Node, selectors: &[&str]) -> Option<Node> {
+	let Node::Key(value, Op::As, unit) = node.drop_meta() else {
+		return None;
+	};
+	let word = unit.symbol_name()?;
+	let selects = TEXT_UNIT_WORDS.contains(&word)
+		&& selectors.contains(&word)
+		&& crate::lowering::optional_casts::item_cast_type(unit).is_none();
+	selects.then(|| key(value.as_ref().clone(), Op::Dot, unit.as_ref().clone()).with_meta_of(node))
 }
 
 /// `square of a number = …`, `f x = …`: a definition head; `width of p = 12` without a type word assigns the lookup
