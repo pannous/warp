@@ -591,3 +591,14 @@ fn lib_forms_run_pure() {
 	runs_pure("sum_folds", "xs = [1.5, 2]; [sum(xs), sum([])]", "» [3.5 0]");
 	runs_pure("own_sum", "sum(xs) := 42; sum([1])", "» 42");
 }
+
+/// `rewrite PATTERN => TEMPLATE` in lib/compiler/rewrites.warp (card pure-rewrite): a program's own rules with holes,
+/// rest holes, origins and statement templates, and lib/english.warp's rule for a program mentioning its words
+#[test]
+fn rewrites_run_pure() {
+	runs_pure("rewrite_phrase", "rewrite $n half => $n / 2\nx = 8 half\n[x, 6 half]", "» [4 3]");
+	runs_pure("rewrite_rest", "rewrite total $xs... => sum([$xs...])\ntotal 1 2 3", "» 6");
+	runs_pure("rewrite_origin", "rewrite $c.bump() => $c + 1 where $c = counter()\ncounter() := 10\nn = counter()\nother = 5\n[n.bump(), other]", "» [11 5]");
+	runs_pure("rewrite_statements", "rewrite twice $s => ($s; $s)\nn = 0\ntwice n += 1\nn", "» 2");
+	runs_pure("rewrite_english", "p = {width: 3}\nset width of p to 12\np.width", "» 12");
+}

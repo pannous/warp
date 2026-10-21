@@ -37,6 +37,7 @@ use "coalesce.warp"
 use "kind_changes.warp"
 use "source_checks.warp"
 use "main_globals.warp"
+use "rewrites.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
@@ -54,7 +55,8 @@ lowered_node(n: any): any := {
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
 # prelude (prelude_words.warp)
 lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), folder, prelude))
-with_used(program: Node, folder: text, prelude: text): Node := with_reached(with_used_modules(with_type_module_uses(with_uses(program, folder)), folder), prelude, no)
+# (the rewrite rules first, as Rust's lowering runs them before any pass: a fired module's `use` brings its words)
+with_used(program: Node, folder: text, prelude: text): Node := with_reached(with_used_modules(with_type_module_uses(rewritten_program(with_uses(program, folder))), folder), prelude, no)
 
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))
