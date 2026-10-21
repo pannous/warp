@@ -1,0 +1,14 @@
+#!/usr/bin/env warp
+// `[]` is an empty list and `xs.copy()` a list a change to xs no longer reaches, under `warp pure` too
+// (card pure-error-candidate; samples/functions/sudoku.warp uses both)
+def firsts(xs) {
+	if xs == [] { return [] }
+	return [xs#1]
+}
+print firsts([])
+print firsts([4, 5])
+grid = [1, 2]
+candidate = grid.copy()
+candidate#1 = 9
+print grid
+print candidate
