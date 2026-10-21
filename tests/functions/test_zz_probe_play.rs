@@ -11,7 +11,7 @@ fn probe_lowered_play() {
 		let lines: Vec<&str> = lowered
 			.lines()
 			.filter(|line| {
-				line.contains("play") || line.contains("p·") || line.contains("hum") || line.contains("closure")
+				line.contains("play") || line.contains("hum") || line.contains("pitches_of") || line.contains("is_signal")
 			})
 			.collect();
 		eprintln!("==== {code}\n{}", lines.join("\n"));
