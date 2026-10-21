@@ -2226,7 +2226,7 @@ def named(p: Parser): Node := {
 		p.at = p.at + type_arguments
 		return symbol(type_application_name(word, arguments))
 	}
-	constant =if names_case(p, word.length) then "" else keyword_form(word.lower())
+	constant = if names_case(p, word.length) then "" else keyword_form(word.lower())
 	if constant == "true" { return true }
 	if constant == "false" { return false }
 	if constant == "empty" and not names_key(p) { return ø }
