@@ -13,21 +13,15 @@ use std::collections::{HashMap, HashSet};
 /// The annotations naming the type of types: `t: type`, `t: Type`
 const TYPE_ANNOTATIONS: [&str; 2] = [crate::type_tests::TYPE_WORD, "Type"];
 
+/// `t: type` and a type variable `x: T` of a definition's head are `t: any`, `x: any`, `xs: list of T` is `xs: list`,
+/// `: T` is `: any`; `t: type = v` holds its type as any too
 pub fn lower(node: Node) -> Node {
 	let typed = type_parameter_positions(&node);
-	if typed.is_empty() && !declares_type_variable(&node) {
-		return node;
+	if let Some(error) = misplaced_argument(&node, &typed) {
+		return error;
 	}
-	match misplaced_argument(&node, &typed) {
-		Some(error) => error,
-		None => held_as_any(node),
-	}
-}
-
-/// `x: T`, `xs: list of T`, `xs: [T]`, `: T` of a definition's head is `x: any`, `xs: list`, `: any`
-pub fn lower_type_variables(node: Node) -> Node {
 	let declared = crate::modules::needed_definitions::class_names(&node);
-	general(node, &|annotation| is_type_variable(annotation, &declared))
+	held_as_any(node, &|annotation| is_type_annotation(annotation) || is_type_variable(annotation, &declared))
 }
 
 /// A single capital letter no class or type of the program declares: `T`, `K`, `V`
@@ -37,13 +31,6 @@ fn is_type_variable(annotation: &Node, declared: &HashSet<String>) -> bool {
 		matches!((letters.next(), letters.next()), (Some(letter), None) if letter.is_ascii_uppercase())
 			&& !declared.contains(name)
 	})
-}
-
-fn general(node: Node, is_variable: &dyn Fn(&Node) -> bool) -> Node {
-	if let Some((head, body, rebuild)) = definition_parts(&node) {
-		return rebuild(annotated_any(head, is_variable), general(body, is_variable));
-	}
-	children_rewritten(node, |child| general(child, is_variable))
 }
 
 fn is_type_annotation(node: &Node) -> bool {
@@ -68,6 +55,9 @@ fn type_parameter_positions(node: &Node) -> HashMap<String, Vec<usize>> {
 
 /// `f 3` of `f(t: type)`: the error naming what a type parameter takes
 fn misplaced_argument(node: &Node, typed: &HashMap<String, Vec<usize>>) -> Option<Node> {
+	if typed.is_empty() {
+		return None;
+	}
 	let mut error = None;
 	node.visit(&mut |part| {
 		let Node::List(items, bracket, separator) = part.drop_meta() else { return };
@@ -100,22 +90,17 @@ fn declared_type_variable(node: &Node) -> Option<(&Node, &Node)> {
 	}
 }
 
-fn declares_type_variable(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= declared_type_variable(part).is_some());
-	found
-}
-
-/// `t: type` in a function head and `t: type = v` are `t: any`: the type value passes as the node it is
-fn held_as_any(node: Node) -> Node {
+/// The definitions' heads with each annotation `is_held_as_any` names as any, and `t: type = v` as `t: any = v`: the
+/// type value passes as the node it is
+fn held_as_any(node: Node, is_held_as_any: &dyn Fn(&Node) -> bool) -> Node {
 	if let Some((head, body, rebuild)) = definition_parts(&node) {
-		return rebuild(annotated_any(head, &is_type_annotation), held_as_any(body));
+		return rebuild(annotated_any(head, is_held_as_any), held_as_any(body, is_held_as_any));
 	}
 	if let Some((name, value)) = declared_type_variable(&node) {
 		let any = Node::Symbol(crate::words::ANY_TYPE.to_string());
-		return key(key(name.clone(), Op::Colon, any), Op::Assign, held_as_any(value.clone()));
+		return key(key(name.clone(), Op::Colon, any), Op::Assign, held_as_any(value.clone(), is_held_as_any));
 	}
-	children_rewritten(node, held_as_any)
+	children_rewritten(node, |child| held_as_any(child, is_held_as_any))
 }
 
 fn annotated_any(head: Node, is_held_as_any: &dyn Fn(&Node) -> bool) -> Node {
