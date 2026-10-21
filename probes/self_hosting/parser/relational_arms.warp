@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+// C#-style relational match arms and the pipe |>, read alike by the Rust and the self-hosted parser
+grade(n: int): text := match n {
+	> 90 => "a"
+	>= 50 => "b"
+	_ => "c"
+}
+print grade(95)
+print grade(50)
+print grade(3)
+print [3, 1, 2] |> sorted
