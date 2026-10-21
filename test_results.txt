@@ -1804,6 +1804,7 @@ PASSED:
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
   ✓ functions::test_parameter_overloads::a_class_named_like_a_type_takes_its_variant
   ✓ functions::test_parameter_overloads::a_declared_type_picks_its_variant
+  ✓ functions::test_parameter_overloads::a_function_type_takes_the_variant_of_the_functions_parameters
   ✓ functions::test_parameter_overloads::a_list_of_items_known_at_run_time_goes_by_their_type
   ✓ functions::test_parameter_overloads::a_list_parameter_overloads_a_text_parameter
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
@@ -1958,6 +1959,8 @@ PASSED:
   ✓ functions::test_several_arguments::test_several_arguments_are_one_list
   ✓ functions::test_shadowed_log::a_user_log_of_two_arguments_is_called
   ✓ functions::test_shadowed_log::the_library_log_to_a_base_stays
+  ✓ functions::test_size_count_alias::a_programs_size_function_takes_other_values
+  ✓ functions::test_size_count_alias::size_counts_collections
   ✓ functions::test_soft_keywords::a_hard_keyword_is_never_redefined
   ✓ functions::test_soft_keywords::a_soft_keyword_names_a_local_with_a_note
   ✓ functions::test_soft_keywords::a_soft_keyword_redefined_at_the_top_level_is_an_error
@@ -2144,6 +2147,8 @@ PASSED:
   ✓ lists::test_empty_list_value::a_returned_empty_list_takes_items
   ✓ lists::test_empty_list_value::an_empty_list_is_a_list
   ✓ lists::test_empty_list_value::an_empty_list_prints_as_written
+  ✓ lists::test_empty_results::an_empty_result_is_a_list
+  ✓ lists::test_empty_results::an_empty_result_prints_as_the_empty_list
   ✓ lists::test_empty_start_plus::a_bracketed_item_appended_gets_the_bracket_hint
   ✓ lists::test_empty_start_plus::an_empty_list_start_plus_an_item_is_a_list
   ✓ lists::test_empty_start::an_empty_list_start_appends_each_item
@@ -4207,6 +4212,7 @@ PASSED:
   ✓ programs::test_sound_signal::a_signal_keeps_its_state_between_samples
   ✓ programs::test_sound_signal::a_signal_louder_than_full_scale_is_clipped
   ✓ programs::test_sound_signal::a_signal_parameter_is_the_time_in_seconds_untyped_too
+  ✓ programs::test_sound_signal::play_of_a_function_of_samples_fills_each_block
   ✓ programs::test_sound_signal::play_of_a_function_plays_it_as_a_signal
   ✓ programs::test_sound_spectrum::a_nonzero_visualizer_child_report_names_its_exit_status
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
@@ -5016,6 +5022,7 @@ PASSED:
   ✓ types::test_mixed_results::a_number_or_a_list_is_known_at_run_time
   ✓ types::test_mixed_results::a_number_or_a_text_is_known_at_run_time
   ✓ types::test_multi_word_class::a_class_of_several_words_is_its_kebab_name
+  ✓ types::test_multi_word_class::a_class_of_three_words_is_its_kebab_name
   ✓ types::test_multi_word_class::a_kebab_class_constructs
   ✓ types::test_multi_word_class::a_phrase_slot_matches_the_class_as_a_whole
   ✓ types::test_multi_word_class::the_words_stay_apart_without_the_class
@@ -5073,6 +5080,8 @@ PASSED:
   ✓ types::test_optional_number_fields::an_omitted_optional_number_is_empty
   ✓ types::test_param_named_like_global::a_parameter_named_like_a_list_variable_takes_one_value
   ✓ types::test_param_named_like_global::a_parameter_named_like_an_instance_variable_compares_as_its_own_value
+  ✓ types::test_param_named_like_library_word::a_parameter_named_like_a_counting_word_is_a_list_item
+  ✓ types::test_param_named_like_library_word::a_variable_named_like_a_counting_word_prints_in_a_list
   ✓ types::test_parameter_text::a_typed_parameter_prints_by_its_text_method
   ✓ types::test_parameter_text::a_typed_parameter_types_only_its_own_function
   ✓ types::test_partial_time_comparisons::test_now_against_a_date
@@ -5126,6 +5135,7 @@ PASSED:
   ✓ types::test_records::test_parameter_passed_a_text_by_recursion
   ✓ types::test_records::test_recursive_list_function
   ✓ types::test_records::test_returns
+  ✓ types::test_recursive_fields::a_field_holds_a_class_declared_later
   ✓ types::test_recursive_fields::a_field_of_the_class_itself_holds_an_instance
   ✓ types::test_recursive_fields::gc_struct_and_ref_are_wasm_spellings
   ✓ types::test_recursive_fields::ref_fields_on_their_own_lines
@@ -5323,6 +5333,7 @@ PASSED:
   ✓ types::test_type_of_consistency::test_type_of_a_type_word
   ✓ types::test_type_of_consistency::test_type_of_a_user_function
   ✓ types::test_type_of_consistency::test_type_of_values_and_unknown_names_unchanged
+  ✓ types::test_type_of_empty_block::the_type_of_an_empty_block_is_empty
   ✓ types::test_type_of_lambda_variable::a_variable_holding_a_lambda_answers_the_reflection_words
   ✓ types::test_type_of_lambda_variable::the_type_of_a_variable_holding_a_lambda_is_a_function
   ✓ types::test_type_of_node_values::the_type_of_a_node_held_value_is_read_at_run_time
@@ -6420,4 +6431,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-11 ignored, 6415 passed, 0 failed, 6415 total tested
+12 ignored, 6426 passed, 0 failed, 6426 total tested
