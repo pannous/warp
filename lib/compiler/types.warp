@@ -1,0 +1,10 @@
+# The compiler's domain types, shared by its stages (cards types-front, types-back): what a plain text or int means
+# where the stages hand it on. The node itself is node.warp's Node.
+
+# a word of the program: a variable's, function's, field's or type's name
+type Name = text
+# the kind analyzer.warp infers for a value: a name of Rust's Kind or a finer one ("int", "text", "list", "data",
+# "empty", "rational", "nil"; "" while nothing flowed in)
+type KindName = text
+# a type word, one naming the elements of a list or map as well: `int`, `list of int`, `map of text`
+type TypeWord = text

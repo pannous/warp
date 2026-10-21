@@ -268,6 +268,9 @@ const MODULE_PASSES: &[Pass] = &[
 	// `count(x) := 7`: the program's count·any for the values the library's count is not for (typed_library_words.rs)
 	crate::lowering::typed_library_words::lower,
 	crate::modules::resolve,
+	// again: the functions of a used module that itself uses the file of an alias (`use "types.warp"` in analyzer.warp)
+	// joined in resolve with the alias unresolved
+	crate::lowering::type_aliases::lower,
 	// `play(xs: list of int)`: one parameter `xs:"list of int"` (declaration_forms.rs), the library's heads too, before
 	// any pass reads a head (function_types, shared_arrays)
 	crate::lowering::declaration_forms::lower_list_parameters,

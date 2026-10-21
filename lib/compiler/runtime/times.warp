@@ -1,28 +1,28 @@
 ## times (card time-primitives; Rust twin: src/wasm_emitter/time): a time node of a form (src/time/mod.rs TimeForm:
 ## kinds.warp TimeFormCode) and a position, read by the intrinsics
 ## time_form, time_position, duration_months, duration_days, zone_index, zone_offset and made by time_of(info, position)
-is_time(n: any): bool := not is_null(n) and kind_code(n) == Kind.Time
-is_instant(t: any): bool := time_form(t) == TimeFormCode.Instant
-is_date(t: any): bool := time_form(t) == TimeFormCode.Date
-is_local_time(t: any): bool := time_form(t) == TimeFormCode.Local
-is_duration(t: any): bool := time_form(t) == TimeFormCode.Duration
-is_zoned(t: any): bool := time_form(t) == TimeFormCode.Zoned
-is_time_of_day(t: any): bool := time_form(t) == TimeFormCode.Clock
+is_time(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Time
+is_instant(t: Node): bool := time_form(t) == TimeFormCode.Instant
+is_date(t: Node): bool := time_form(t) == TimeFormCode.Date
+is_local_time(t: Node): bool := time_form(t) == TimeFormCode.Local
+is_duration(t: Node): bool := time_form(t) == TimeFormCode.Duration
+is_zoned(t: Node): bool := time_form(t) == TimeFormCode.Zoned
+is_time_of_day(t: Node): bool := time_form(t) == TimeFormCode.Clock
 # the duration of months, days and nanoseconds: its days kept as 32 unsigned bits above the form, its months above them
-duration_of(months: int, days: int, nanos: int): any := {
+duration_of(months: int, days: int, nanos: int): Node := {
 	unsigned_days = if days < 0 then days + 4294967296 else days
 	time_of(TimeFormCode.Duration + unsigned_days * 8 + months * 34359738368, nanos)
 }
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
-local_offset_at(t: any): int := local_offset(floor_quotient(time_position(t), 1000000))
+local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), 1000000))
 
 ## times (card time-text-warp; src/wasm_emitter/time/times.rs emit_time_text and emit_fraction, calendar.rs): a $Node
 ## of kind 18, its form in the info bits (src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
 ## date, nanoseconds since 1970 for an instant and a local time, since midnight for a time of day
-time_form(n: any): int := int_remainder(info_byte(n), 8)
+time_form(n: Node): int := int_remainder(info_byte(n), 8)
 # RFC 3339 as calendar.rs shows a time, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
 # local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
-time_text(n: any): text := {
+time_text(n: Node): text := {
 	form = time_form(n)
 	if form == TimeFormCode.Duration { return duration_text(n) }
 	if form == TimeFormCode.Zoned { time_form_not_in_warp() }

@@ -1,26 +1,26 @@
 ## The constructors a host word builds the program's values with (Rust twin: src/wasm_emitter/constructors.rs
 ## emit_all_constructors, called by src/host/tasks/values.rs Builders): emitter.warp exports each under Rust's name with
 ## Rust's signature (host_builders), a host word taking or giving nodes then reads and builds them as Rust's modules do
-built_empty(): any := ø
-built_int(n: int): any := held(n)
-built_bool(truth: int): any := held(truth != 0)
-built_float(x: float): any := held(x)
-built_codepoint(code: int): any := held(char_of(code))
+built_empty(): Node := ø
+built_int(n: int): Node := held(n)
+built_bool(truth: int): Node := held(truth != 0)
+built_float(x: float): Node := held(x)
+built_codepoint(code: int): Node := held(char_of(code))
 # the bytes the host left in linear memory, as a text of the program's
 text_from_memory(address: int, length: int): text := {
 	t = new_text(length)
 	for i in 0..<length { set_byte(t, i, memory_byte(address + i)) }
 	t
 }
-built_text(address: int, length: int): any := held(text_from_memory(address, length))
-built_symbol(address: int, length: int): any := symbol_of(text_from_memory(address, length))
+built_text(address: int, length: int): Node := held(text_from_memory(address, length))
+built_symbol(address: int, length: int): Node := symbol_of(text_from_memory(address, length))
 # `operator`: the operator's code (src/operators/codes.rs), above the kind bits as key_node puts it
-built_key(left: any, right: any, operator: int): any := keyed(operator * KindUnit.Info + Kind.Key, left, right)
+built_key(left: Node, right: Node, operator: int): Node := keyed(operator * KindUnit.Info + Kind.Key, left, right)
 # the host builds a list from its last item, a cell at a time: first ahead of the items of rest (ø for none); `info`
 # the list's bracket and separator above the kind bits (src/wasm_emitter/mod.rs list_info)
-built_list(first: any, rest: any, info: int): any := {
+built_list(first: Node, rest: Node, info: int): Node := {
 	items = if is_null(rest) then [] else unboxed_list(rest)
 	list_node(info * KindUnit.Info + Kind.List, list_join([first], items))
 }
 # a parse failure the program's `try` catches: the Error of the host's message
-built_error(message: any): any := error_of(node_text(message))
+built_error(message: Node): Node := error_of(node_text(message))

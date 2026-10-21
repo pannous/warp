@@ -11,7 +11,7 @@ int_gcd(a: int, b: int): int := {
 	a
 }
 # n/d in lowest terms, an int when d divides n; d 0 traps, as Rust's divide by zero fails
-exact_ratio(n: int, d: int): any := {
+exact_ratio(n: int, d: int): Node := {
 	if d == 0 { divide_by_zero() }
 	divisor = int_gcd(n, d)
 	if d < 0 { divisor = -divisor }
@@ -21,21 +21,21 @@ exact_ratio(n: int, d: int): any := {
 	ratio_of(n, d)
 }
 # the numerator and denominator of an Int $Node, an int its own numerator over 1
-exact_numerator(n: any): int := if is_ratio(n) then ratio_numerator(n) else unboxed_int(n)
-exact_denominator(n: any): int := if is_ratio(n) then ratio_denominator(n) else 1
-exact_add(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b) + exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
-exact_sub(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b) - exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
-exact_mul(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_numerator(b), exact_denominator(a) * exact_denominator(b))
-exact_div(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b), exact_denominator(a) * exact_numerator(b))
+exact_numerator(n: Node): int := if is_ratio(n) then ratio_numerator(n) else unboxed_int(n)
+exact_denominator(n: Node): int := if is_ratio(n) then ratio_denominator(n) else 1
+exact_add(a: Node, b: Node): Node := exact_ratio(exact_numerator(a) * exact_denominator(b) + exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
+exact_sub(a: Node, b: Node): Node := exact_ratio(exact_numerator(a) * exact_denominator(b) - exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
+exact_mul(a: Node, b: Node): Node := exact_ratio(exact_numerator(a) * exact_numerator(b), exact_denominator(a) * exact_denominator(b))
+exact_div(a: Node, b: Node): Node := exact_ratio(exact_numerator(a) * exact_denominator(b), exact_denominator(a) * exact_numerator(b))
 # -1, 0 or 1 as a is below, equal to or above b (denominators are positive)
-exact_order(a: any, b: any): int := {
+exact_order(a: Node, b: Node): int := {
 	left = exact_numerator(a) * exact_denominator(b)
 	right = exact_numerator(b) * exact_denominator(a)
 	if left < right then -1 else if left > right then 1 else 0
 }
 # an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
 # any other as n/d
-exact_text(n: any): text := {
+exact_text(n: Node): text := {
 	if not is_ratio(n) { return int_text(unboxed_int(n)) }
 	numerator = ratio_numerator(n)
 	denominator = ratio_denominator(n)
@@ -72,7 +72,7 @@ power(base: int, exponent: int): int := {
 # `x as rational` of a run-time float (decision float-as-rational; Rust twin float_as_exact in
 # src/wasm_emitter/numbers/float_text.rs): the exact value of its shortest digits, 1.4142135623730951 as
 # 14142135623730951/10^16; ∞ and NaN have no fraction
-float_as_exact(x: float): any := {
+float_as_exact(x: float): Node := {
 	# x - x is 0 for every finite x, NaN for ∞ and NaN
 	if x - x != 0 { not_a_finite_number() }
 	if x == 0 { return exact_ratio(0, 1) }
@@ -120,7 +120,7 @@ floor_quotient(a: int, b: int): int := {
 }
 # `base ^ exponent` of exact numbers (src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
 # inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names
-exact_pow(base: any, exponent: any): any := {
+exact_pow(base: Node, exponent: Node): Node := {
 	if is_ratio(exponent) { fail() }
 	times = unboxed_int(exponent)
 	if times < 0 {

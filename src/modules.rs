@@ -271,8 +271,10 @@ pub fn insert_module_classes(program: Node) -> Node {
 			// one declaration per name: each module naming Op brings node.warp's
 			false => {
 				let declared: HashSet<String> = file_classes.iter().filter_map(name_declared_by).collect();
+				// a module's type aliases with its classes: `type Name = text` names text in the program's annotations
 				let new_class = |definition: &Node| {
-					is_class(definition) && name_declared_by(definition).is_none_or(|name| !declared.contains(&name))
+					(is_class(definition) || crate::lowering::type_aliases::is_alias(definition))
+						&& name_declared_by(definition).is_none_or(|name| !declared.contains(&name))
 				};
 				file_classes.extend(definitions.into_iter().filter(new_class))
 			}

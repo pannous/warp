@@ -2238,14 +2238,15 @@ def next_field_follows(p: Parser, at: int): bool {
 }
 
 // After the type word `word`, spaces or tabs from `at`, then the definition `:=` or a declared name `i =`: `int? i = 3`
-// and `as int? := …` are optional types, no ternary
+// and `as int? := …` are optional types, no ternary; `f(): Name? := …` also of a type the program does not declare (a
+// used file's), as a ternary has no empty branch
 // Rust twin: lookahead.rs declaration_follows
 def declaration_follows(p: Parser, word: text, at: int): bool {
 	start = spaces_end(p, at)
 	name_after = name_end(p.code, start, p.n)
 	assigned = if name_after == start then start else spaces_end(p, name_after)
 	assigns = if is_at(p.code, assigned, ':', p.n) then peek(p.code, assigned + 1, p.n) == '=' else is_at(p.code, assigned, '=', p.n) and peek(p.code, assigned + 1, p.n) != '='
-	(is_type_word(word) or p.types.contains(word)) and start > at and assigns
+	start > at and assigns and (name_after == start or is_type_word(word) or p.types.contains(word))
 }
 
 // After the spaces and tabs from `at` on
