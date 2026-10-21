@@ -1003,18 +1003,18 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 }
 # `x == ø`, `x != ø` (a match's `ø:` case): ø and an empty list are nothing, as Rust's equality takes them
 def nothing_test(body: Body, symbol: text, n: any): list {
-	asserted(symbol, runtime_call("is_nothing", [["node", boxed(expression_code(body, n))]]))
+	tested_as(symbol, runtime_call("is_nothing", [["node", boxed(expression_code(body, n))]]))
 }
 # `x === ø`, `x !== ø`: x is ø itself, the empty list not (== compares values, === also the kind, as Rust's)
 def identity_with_nothing(body: Body, symbol: text, n: any): list {
-	asserted(symbol, ["bool", boxed(expression_code(body, n)) + [op.ref_is_null]])
+	tested_as(symbol, ["bool", boxed(expression_code(body, n)) + [op.ref_is_null]])
 }
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
 def equality(body: Body, symbol: text, a: any, b: any): list {
-	asserted(symbol, runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]]))
+	tested_as(symbol, runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]]))
 }
 # the bool test as `==`, `===` ask it, negated for `!=`, `!==`
-def asserted(symbol: text, test: list): list := if symbol.starts_with("!") then ["bool", condition(test) + [op.i32_eqz]] else test
+def tested_as(symbol: text, test: list): list := if symbol.starts_with("!") then ["bool", condition(test) + [op.i32_eqz]] else test
 # an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
 # operators without one take the floats
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod"}
@@ -1087,6 +1087,8 @@ def assignment(body: Body, target: any, value: any): list {
 		# a value known only at run time takes an int k as its item k+1, any other k as the entry named so
 		held = expression_code(body, key_of(target))
 		if held#1 == "node" { return keyed_assignment(body, key_of(target), held, subscript, value) }
+		# a list takes the put in place, its variable keeps the same list (no place to write back: ø)
+		if held#1 == "list" and subscript#1 == "node" { return keyed_assignment(body, ø, ["node", boxed(held)], subscript, value) }
 		if subscript#1 == "node" { return refuse("a write by a key known only at run time, an index or a name") }
 	}
 	if type(target) is key and op_of(target) == "." and value_of(target) is symbol {
