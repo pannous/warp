@@ -1,4 +1,5 @@
 mod test_aliased_changes; // card aliased-list
+mod test_any_plus_list; // card slice-node
 mod test_append_words;
 mod test_auto_linear_floats; // card auto-linear-floats
 mod test_bare_list_assignment;

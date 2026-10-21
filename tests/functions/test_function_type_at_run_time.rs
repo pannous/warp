@@ -19,7 +19,6 @@ fn every_spelling_of_a_function_has_its_signature_as_type() {
 }
 
 #[test]
-#[ignore = "fixnow: fixnow-a_builtin_passed_on_has_its_builtin_type: specialise-library-functions: g(function floor) prints class symbol"]
 fn a_builtin_passed_on_has_its_builtin_type() {
 	assert_eq!(printed("g(h) := type(h); g(function floor)"), "\"builtin: (x:number) -> int\"");
 }

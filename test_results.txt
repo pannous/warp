@@ -1574,6 +1574,7 @@ PASSED:
   ✓ functions::test_functions_passed_by_name::a_function_passed_by_name_is_called_by_name
   ✓ functions::test_functions_passed_by_name::a_library_word_passed_by_name_is_called_by_name
   ✓ functions::test_functions_passed_by_name::an_operator_passed_as_a_function_is_applied
+  ✓ functions::test_functions_passed_by_name::an_original_still_called_stays
   ✓ functions::test_functions_passed_by_name::recursive_passed_on_and_several_functions_by_name
   ✓ functions::test_functions::test_default_params
   ✓ functions::test_functions::test_fibonacci_auto_param
@@ -1849,7 +1850,6 @@ PASSED:
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
   ✓ functions::test_ported_calls::every_ported_call_form_keeps_its_value
   ✓ functions::test_ported_calls::linq_methods_work_with_a_note_naming_warps_word
-  ✓ functions::test_ported_calls::other_languages_list_types_are_lists_with_a_note
   ✓ functions::test_ported_calls::types_built_from_type_parameters_drop_with_them
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
@@ -2044,6 +2044,7 @@ PASSED:
   ✓ functions::test_undefined_calls::test_unresolved_call_is_an_error
   ✓ functions::test_undefined_calls::test_variable_is_not_callable
   ✓ functions::test_untyped_predicate_passed::an_untyped_predicate_passed_as_a_value
+  ✓ functions::test_unused_sibling_caller::an_unused_sibling_caller_changes_nothing
   ✓ functions::test_user_add_and_map::map_and_filter_beside_a_user_add
   ✓ functions::test_user_method_form::a_method_form_call_passes_the_further_arguments
   ✓ functions::test_user_method_form::a_user_function_is_called_in_method_form
@@ -2055,7 +2056,6 @@ PASSED:
   ✓ functions::test_variadic::a_spread_in_a_list_literal_splices_its_items
   ✓ functions::test_variadic::calls_without_parentheses_fill_the_rest_too
   ✓ functions::test_variadic::kotlin_vararg_and_csharp_params
-  ✓ functions::test_variadic::spreading_into_a_function_parameter
   ✓ functions::test_wasm_instruction_bodies::float_instruction_bodies
   ✓ functions::test_wasm_instruction_bodies::int_instruction_bodies
   ✓ functions::test_wasm_instruction_bodies::unknown_instruction_is_an_error
@@ -2070,6 +2070,7 @@ PASSED:
   ✓ lists::test_aliased_changes::a_clear_is_seen_through_an_alias
   ✓ lists::test_aliased_changes::a_pop_at_a_position_is_seen_through_an_alias
   ✓ lists::test_aliased_changes::a_pop_is_seen_through_an_alias
+  ✓ lists::test_any_plus_list::an_any_joined_with_a_list_keeps_its_items_kinds
   ✓ lists::test_append_words::test_every_append_word_appends_a_closure
   ✓ lists::test_append_words::test_every_append_word_appends_a_quantity
   ✓ lists::test_auto_linear_floats::a_float_array_mapped_by_a_kernel_is_linear
@@ -2824,12 +2825,9 @@ PASSED:
   ✓ node::test_normalization::test_length_prefix_under_bracket_style
   ✓ node::test_normalization::test_list_of_lists_has_no_plural_spelling
   ✓ node::test_normalization::test_list_type_hint_is_emitted_once_when_evaluated
-  ✓ node::test_normalization::test_list_type_hint_with_values_and_position
-  ✓ node::test_normalization::test_list_type_style_generic
   ✓ node::test_normalization::test_list_type_style_of
   ✓ node::test_normalization::test_logical_operators
   ✓ node::test_normalization::test_logical_operators_symbol_style
-  ✓ node::test_normalization::test_of_list_type_hints_plural
   ✓ node::test_normalization::test_one_character_strings_have_no_canonical_quote
   ✓ node::test_normalization::test_plural_list_type_is_canonical
   ✓ node::test_normalization::test_power_operator
@@ -3794,7 +3792,6 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
@@ -3841,6 +3838,7 @@ PASSED:
   ✓ parser::test_self_pure::match_values_run_pure
   ✓ parser::test_self_pure::named_arguments_run_pure
   ✓ parser::test_self_pure::negated_operators_run_pure
+  ✓ parser::test_self_pure::number_keys_run_in_the_front_lanes
   ✓ parser::test_self_pure::number_keys_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
   ✓ parser::test_self_pure::parser_words_run_pure
@@ -4336,6 +4334,8 @@ PASSED:
   ✓ scope::test_globals::test_global_reassignment
   ✓ scope::test_globals::test_global_with_expression
   ✓ scope::test_node_widening_in_loops::a_read_before_a_node_widening_in_a_loop_holds_the_node
+  ✓ scope::test_parameter_shadowing::a_loop_variable_is_no_map_another_function_assigned
+  ✓ scope::test_parameter_shadowing::a_parameter_is_no_map_another_function_assigned
   ✓ scope::test_parameter_shadowing::a_parameter_is_not_typed_by_another_functions_real_value
   ✓ scope::test_parameter_shadowing::a_parameter_may_walk_what_another_function_assigned_a_number
   ✓ scope::test_parameter_shadowing::a_signal_and_a_block_play_in_one_program
@@ -4795,8 +4795,10 @@ PASSED:
   ✓ types::test_code_type::a_function_body_tests_as_code
   ✓ types::test_code_type::parsed_code_is_code
   ✓ types::test_codepoint_digit::a_character_of_a_text_casts_to_itself
+  ✓ types::test_codepoint_digit::a_held_or_untyped_character_casts_to_itself
   ✓ types::test_codepoint_digit::a_number_naming_no_code_point_is_an_error
   ✓ types::test_codepoint_digit::a_variable_casts_like_its_literal
+  ✓ types::test_codepoint_digit::an_untyped_bool_is_no_character
   ✓ types::test_collection_declarations::a_collection_word_declares_a_variable
   ✓ types::test_collection_declarations::a_program_naming_the_word_keeps_it
   ✓ types::test_collection_declarations::dict_and_array_say_their_warp_word
@@ -4928,6 +4930,8 @@ PASSED:
   ✓ types::test_field_named_like_builtin::a_texts_length_beside_a_map_with_a_length_key
   ✓ types::test_field_named_like_library_word::a_known_instance_reads_its_field
   ✓ types::test_field_named_like_library_word::a_list_keeps_the_library_word
+  ✓ types::test_fields_of_later_types::a_case_field_of_an_enum_declared_later
+  ✓ types::test_fields_of_later_types::a_field_of_a_class_declared_later
   ✓ types::test_file_declarations::a_braced_empty_class_takes_nothing_in
   ✓ types::test_file_declarations::a_class_body_of_one_typed_method
   ✓ types::test_file_declarations::a_file_class_takes_in_the_definitions_after_it
@@ -5013,6 +5017,7 @@ PASSED:
   ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_appends
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
   ✓ types::test_map_field::a_map_field_holds_its_map
+  ✓ types::test_map_passed_as_any::a_one_entry_map_in_an_any_slot_is_a_map
   ✓ types::test_map_read_size::a_size_entry_of_a_map_read_at_run_time
   ✓ types::test_map_read_size::any_entry_of_shell_info
   ✓ types::test_map_read_size::the_size_entry_of_shell_info
@@ -5370,6 +5375,9 @@ PASSED:
   ✓ types::test_type_parameters::a_type_variable_of_a_generic_signature_takes_any_value
   ✓ types::test_type_parameters::a_value_for_a_type_parameter_is_an_error
   ✓ types::test_type_parameters::a_variable_declared_type_holds_a_type
+  ✓ types::test_type_phrases_after_colon_and_as::a_cast_to_a_type_phrase
+  ✓ types::test_type_phrases_after_colon_and_as::a_declared_result_phrase
+  ✓ types::test_type_phrases_after_colon_and_as::a_declared_variable_phrase
   ✓ types::test_type_static::the_type_of_a_variable_is_its_value_type
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
@@ -6163,6 +6171,7 @@ PASSED:
   ✓ welcoming::test_footguns::test_null_left_early_needs_no_other_check
   ✓ welcoming::test_footguns::test_null_needs_a_check
   ✓ welcoming::test_footguns::test_number_declaration_spellings_agree
+  ✓ welcoming::test_footguns::test_number_of_bytes_in_text
   ✓ welcoming::test_footguns::test_number_of_chars_in_text
   ✓ welcoming::test_footguns::test_number_of_codepoints_in_text
   ✓ welcoming::test_footguns::test_number_of_graphemes_in_text
@@ -6448,9 +6457,12 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ functions::test_function_type_at_run_time::a_builtin_passed_on_has_its_builtin_type
-  ✗ text::test_text_cursor::a_cursor_reads_a_text_by_character_classes
-  ✗ welcoming::test_footguns::test_number_of_bytes_in_text
+  ✗ functions::test_ported_calls::other_languages_list_types_are_lists_with_a_note
+  ✗ functions::test_variadic::spreading_into_a_function_parameter
+  ✗ node::test_normalization::test_list_type_hint_with_values_and_position
+  ✗ node::test_normalization::test_list_type_style_generic
+  ✗ node::test_normalization::test_of_list_type_hints_plural
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-12 ignored, 6445 passed, 3 failed, 6448 total tested
+12 ignored, 6454 passed, 6 failed, 6460 total tested

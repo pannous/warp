@@ -76,6 +76,7 @@ mod test_enums_ported;
 mod test_extension_methods;
 mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
 mod test_field_named_like_library_word; // card field-before-library-word
+mod test_fields_of_later_types; // card node-enum-order
 mod test_file_declarations;
 mod test_filled_map_types; // card number-keyed
 mod test_flags;
@@ -105,6 +106,7 @@ mod test_list_test_of_a_map;
 mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
 mod test_map_field; // card map-field
+mod test_map_passed_as_any; // card map-passed
 mod test_map_read_size; // card map-read
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
@@ -204,6 +206,7 @@ mod test_type_of_lambda_variable; // card type-says-symbol
 mod test_type_of_node_values;
 mod test_type_of_real_variable;
 mod test_type_parameters; // card random-should
+mod test_type_phrases_after_colon_and_as; // card cast-type
 mod test_type_static;
 mod test_type_test_is_only;
 mod test_type_tests;
