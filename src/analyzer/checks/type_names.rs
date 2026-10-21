@@ -248,6 +248,8 @@ pub(super) const ITEM_TYPED_LIST_WORDS: [(&str, &str); 2] = [("split", "text"), 
 pub(in crate::analyzer) const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 pub(in crate::analyzer) const NODE_LIST_TYPE: &str = "list of node";
+/// The element type of a NODE_LIST_TYPE
+const NODE_TYPE_WORD: &str = "node";
 /// Between a variable and the name of a temporary made for it (`xs·range`, `xs·item`, `m·removed`)
 pub const TEMPORARY_SEPARATOR: &str = "·";
 
@@ -306,7 +308,11 @@ pub(in crate::analyzer) fn element_type_word(item: &Node, scope: &Scope) -> Stri
 	if item.is_empty_node() {
 		return crate::type_tests::EMPTY_TYPE.to_string();
 	}
-	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| infer_type(item, scope).to_string())
+	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| match infer_type(item, scope) {
+		// a variable of no kind known while compiling (an untyped parameter) holds a Node, of any type
+		Kind::Empty => NODE_TYPE_WORD.to_string(),
+		kind => kind.to_string(),
+	})
 }
 
 /// The one type word all element words fit: the same word, `rational` for a mix of `int` and `rational` (int is a special
