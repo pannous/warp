@@ -56,6 +56,8 @@ instance_of(n: Node, name: text): bool := {
 # the static names do; an instance names its class, one of the program's `classes`
 node_type_name(n: any, classes: list): any := with_kind(symbol_of(node_type_word(n, classes)), Marked.TypeValue)
 node_type_word(n: any, classes: list): text := {
+	# ø's type is empty, though it passes `is list`
+	if is_null(n) { return "empty" }
 	word = kind_type_word(n)
 	# a one-character text's type is a character (chars-codepoints): what a parameter given "a" holds; `x is char`
 	# tests the kind alone, so node_text's Char arm takes no text
