@@ -530,9 +530,12 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	let mut warnings = crate::compiler::phase_times::timed("lint", || crate::analyzer::lint(&node));
 	warnings.retain(|warning| !warning.file.as_deref().is_some_and(crate::modules::is_std_source));
 	crate::errors::diagnostic::report(&warnings)?;
-	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(crate::lowering::inlining::lower(
-		crate::lowering::for_loop::lifted_walked_literals(crate::lowering::declaration_forms::lower_declarations(
-			crate::lowering::kebab_names::resolve_data_scope(node),
+	// last, on the bodies as emitted: `out = out + x` of a list nothing else holds grows it in place
+	Ok(crate::lowering::self_sums::lower(crate::lowering::declaration_forms::indexed_parameter_copies(
+		crate::lowering::inlining::lower(crate::lowering::for_loop::lifted_walked_literals(
+			crate::lowering::declaration_forms::lower_declarations(crate::lowering::kebab_names::resolve_data_scope(
+				node,
+			)),
 		)),
 	)))
 }

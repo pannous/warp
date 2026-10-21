@@ -19,6 +19,7 @@ pub mod nested_index;
 pub mod number_keys;
 pub mod of_lookups;
 pub mod one_entry_maps;
+pub mod self_sums;
 pub mod shared_arrays;
 pub mod tree_walks;
 pub mod vector_parameters;
