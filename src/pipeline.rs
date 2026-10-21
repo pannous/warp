@@ -745,6 +745,9 @@ pub fn pass_trace(node: Node) -> Vec<String> {
 	let node = crate::lowering::nodes::numbering_fresh_names(|| {
 		phases.enumerate().fold(node, |node, (phase, passes)| {
 			passes.iter().enumerate().fold(node, |node, (index, pass)| {
+				if phase == 5 && index == 8 {
+					shown.push(crate::lowering::broadcasting::prefix_calls_steps(node.clone()));
+				}
 				let node = pass(node);
 				let now = node.serialize();
 				if now != last {

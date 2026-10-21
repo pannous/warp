@@ -1514,3 +1514,18 @@ fn only_operand(body: &Node, name: &str) -> bool {
 		_ => true,
 	}
 }
+
+/// TEMPORARY probe (card rust-lane-loop): lower_prefix_calls' steps on `program`
+pub fn prefix_calls_steps(program: Node) -> String {
+	let program = all_calls(program);
+	let found = program_definitions(&program);
+	let library_calls = LibraryCalls::of(&program, &found);
+	let named_first = library_calls.named.contains("first");
+	let nested = nest_library_calls(program.clone(), &library_calls);
+	format!(
+		"all_calls: {} | named has first: {named_first} | nest_library_calls: {} | lower_prefix_calls: {}",
+		program.serialize(),
+		nested.serialize(),
+		lower_prefix_calls(program.clone()).serialize()
+	)
+}
