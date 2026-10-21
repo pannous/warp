@@ -6,7 +6,8 @@
 //! for: a call's head is the function anyway); a copy's own calls are specialised in turn (`fold(f, xs) := … fold(f,
 //! rest)`), up to a cap. A library word the program doesn't bind itself and an operator are passed so too:
 //! `each(abs, n)` adds `each·abs(n)`, which calls abs as written code does, `fold(+, xs)` `fold·+(xs)`, which adds
-//! (card specialise-library-functions).
+//! (card specialise-library-functions). In a run an original left uncalled is dropped; a module for another host keeps
+//! it exported (decision exports-kept, card specialise-dead-originals).
 
 use super::nodes::{children_rewritten, function_head, key};
 use crate::lowering::function_values::ITERATION_WORDS;
@@ -127,15 +128,12 @@ impl Passed {
 	}
 }
 
-/// `+` given as a function, the parser's operator with nothing on either side (`(+ ø ø)`), or its symbol when a copy
-/// passes it on
+/// `+` given as a function, the parser's operator with nothing on either side (`(+ ø ø)`)
 fn binary_operator(argument: &Node) -> Option<Op> {
-	let op = match argument.drop_meta() {
-		Node::Key(left, op, right) if left.is_nothing() && right.is_nothing() => *op,
-		Node::Symbol(text) => crate::lambdas::operator_of_value(text)?,
-		_ => return None,
+	let Node::Key(left, op, right) = argument.drop_meta() else {
+		return None;
 	};
-	crate::lambdas::operator_value_text(op).map(|_| op)
+	(left.is_nothing() && right.is_nothing() && crate::lambdas::operator_value_text(*op).is_some()).then_some(*op)
 }
 
 /// `abs` given as a function, the parser's bare operator `‖` that ambiguous_forms.rs operator_values made the lambda
@@ -283,11 +281,7 @@ impl Specialiser {
 	fn passed(&self, argument: &Node) -> Option<Passed> {
 		if let Some(op) = binary_operator(argument) {
 			let text = crate::lambdas::operator_value_text(op)?;
-			return Some(Passed {
-				name: text.to_string(),
-				argument: Node::Symbol(text.to_string()),
-				calling: Calling::Operator(op),
-			});
+			return Some(Passed { name: text.to_string(), argument: argument.clone(), calling: Calling::Operator(op) });
 		}
 		let name = argument.symbol_name().or_else(|| operator_word(argument))?;
 		let calling = if self.passable.contains(name) {
@@ -299,7 +293,7 @@ impl Specialiser {
 		} else {
 			return None;
 		};
-		Some(Passed { name: name.to_string(), argument: Node::Symbol(name.to_string()), calling })
+		Some(Passed { name: name.to_string(), argument: argument.clone(), calling })
 	}
 
 	/// The top-level function a copy (of a copy) was made from: its copies follow it in the program
@@ -322,8 +316,20 @@ fn statements_of(node: &Node) -> Vec<&Node> {
 	}
 }
 
-/// Each copy right after the definition of the function it copies
-fn with_copies(node: Node, copies: &[(String, Definition)]) -> Node {
+/// The originals nothing names any more but their own definitions: every call of them was specialised
+fn uncalled_originals(program: &Node, copies: &[(String, Definition)]) -> HashSet<String> {
+	let originals: HashSet<&String> = copies.iter().map(|(original, _)| original).collect();
+	let statements = statements_of(program);
+	let named_elsewhere = |name: &str| {
+		let own = |statement: &&Node| Definition::from(statement).is_some_and(|definition| definition.name == name);
+		statements.iter().filter(|statement| !own(statement)).any(|statement| statement.mentions(name))
+			|| copies.iter().any(|(_, copy)| copy.body.mentions(name))
+	};
+	originals.into_iter().filter(|name| !named_elsewhere(name)).cloned().collect()
+}
+
+/// Each copy right after the definition of the function it copies, which goes when it is `dropped`
+fn with_copies(node: Node, copies: &[(String, Definition)], dropped: &HashSet<String>) -> Node {
 	match node {
 		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline))
 			if bracket != Bracket::Curly =>
@@ -331,7 +337,9 @@ fn with_copies(node: Node, copies: &[(String, Definition)]) -> Node {
 			let mut statements = vec![];
 			for item in items {
 				let defined = Definition::from(&item).map(|definition| definition.name);
-				statements.push(with_copies(item, copies));
+				if !defined.as_ref().is_some_and(|name| dropped.contains(name)) {
+					statements.push(with_copies(item, copies, dropped));
+				}
 				if let Some(name) = defined {
 					let made = copies.iter().filter(|(original, _)| *original == name);
 					statements.extend(made.map(|(_, copy)| copy.node()));
@@ -339,7 +347,7 @@ fn with_copies(node: Node, copies: &[(String, Definition)]) -> Node {
 			}
 			Node::List(statements, bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_copies(*node, copies)), data },
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_copies(*node, copies, dropped)), data },
 		other => other,
 	}
 }
@@ -381,5 +389,9 @@ pub fn lower(program: Node) -> Node {
 		specialiser.copies[done] = (original, Definition { body, ..copy });
 		done += 1;
 	}
-	with_copies(rewritten, &specialiser.copies)
+	let dropped = match crate::pipeline::compile_mode().keeps_exports() {
+		true => HashSet::new(),
+		false => uncalled_originals(&rewritten, &specialiser.copies),
+	};
+	with_copies(rewritten, &specialiser.copies, &dropped)
 }
