@@ -17,7 +17,7 @@ count_type = "int"
 # counts, characters by default (no word), bytes with the adjective `byte`; `offset` is a synonym of index
 counted_types = {"position": ["position", ""], "index": ["index", ""], "offset": ["index", ""], "byte position": ["position", "byte"], "byte index": ["index", "byte"], "byte offset": ["index", "byte"]}
 # what the counting words give
-counting_calls = {"collection_position": ["position", ""], "find": ["position", ""], "byte_index_of": ["index", "byte"], "argmax": ["index", ""], "argmin": ["index", ""]}
+counting_calls = {"index_of": ["position", ""], "collection_position": ["position", ""], "find": ["position", ""], "byte_index_of": ["index", "byte"], "argmax": ["index", ""], "argmin": ["index", ""]}
 
 # find answers in the declared count's unit (decision index-units): the word it is in each unit but characters
 find_word = "find"
