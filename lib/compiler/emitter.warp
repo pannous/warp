@@ -2230,8 +2230,9 @@ def collect_literal_arguments(n: any) {
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
 # the annotations of a parameter held as a node: any value, a node, a function, a type value `int`, a map, a number
-# (an int or a float); an optional `text?` is one too, ø or the value
-node_annotations = ["any", "Node", "function", "type", "map", "number"]
+# (an int or a float), a symbol or a key (node_cases.warp holds a written case `Key` as any); an optional `text?` is
+# one too, ø or the value
+node_annotations = ["any", "Node", "function", "type", "map", "number", "symbol", "Symbol", "key"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(written: text): text := {
@@ -2246,7 +2247,7 @@ annotated_kind(written: text): text := {
 # the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`; any other word itself
 aliased_type(word: text): text := {
 	optional = word.ends_with("?")
-	resolved = if optional then word[0..<(#word - 1)] else word
+	resolved = required_type(word)
 	while resolved in module.aliases { resolved = module.aliases[resolved] }
 	if optional then resolved + "?" else resolved
 }
