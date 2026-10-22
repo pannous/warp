@@ -1,0 +1,4 @@
+# `text[n]` is n empty texts. Expected: 3 yes
+ts = text[3]
+print count ts
+print ts#1 == ""

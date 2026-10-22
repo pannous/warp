@@ -158,7 +158,7 @@ Sugar passes, with the rule each would become:
 | 44 | interpolation | F8 |
 | 42 | type_tests | `rewrite $x is $t => is_type($x, "$t")`: F2 (t a type word no name binds) |
 | 36 | ranges | range value → loop: F3 |
-| 35 | filled_lists | `rewrite $t[$n] => zero_fill($n, zero($t))`: F2 (t a type word) |
+| 35 | filled_lists | done: lib/sugar/lists.warp (card sugar-filled-lists) |
 | 32 | broadcasting | `rewrite $xs .* $y => $xs.map(e => e * $y)`: F3 (hygienic e) |
 | 30 | preposition_heads | `play(tone, for duration)` → drop the preposition per parameter: F4 |
 | 24 | grouped_receivers | `rewrite ($p).$a => $p.$a`: F2 (p bound to a value) |
