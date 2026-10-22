@@ -18,22 +18,37 @@ it comes to Rust's output.
 - Leading flags (`--no-hints`, `--strict[=level]`, `--warnings=…`, `--no-ask`, `--sandbox`, `--fuel n`) go along to
   warp-rust, which takes them wherever they stand. `--self` is the launcher's own and never reaches warp-rust.
 - `warp test [--self] [folder]` already runs every test through `warp pure` (src/compiler/pure_tests.rs), so it passes on.
-- A refusal ("outside the core: …") or any failure of the pure pipeline exits with its status, loudly: nothing reruns
-  unless asked (WARP_FALLBACK below).
-- Inline code on the pure pipeline prints its value as a file run does and exits with an int value as status
-  (`warp '6*7'` prints 42, exits 42); warp-rust's own `warp <code>` prints `» 42` and exits 0.
+- A refusal ("outside the core: …") or any failure of the pure pipeline exits with its own status, loudly: nothing
+  reruns unless asked (WARP_FALLBACK below). A program's exit status passes as it is (`exit(3)`, an Int value of a file).
+- Inline code prints its value and exits 0 (`warp '6*7'` prints 42). warp-rust gives an Int value as the exit status,
+  so the launcher reads inline code's output: a status equal to the Int on its last line (low 8 bits) is the value's and
+  becomes 0; any other status (an error's 1, `exit(3)`) passes. A program that prints that same number last and then
+  exits with it would exit 0 as well.
 - Where lib/ comes from for `compile --wasm` (compiler.warp's fourth argument), as warp-rust finds it: WARP_LIB, else the
-  nearest lib/ holding compiler/ above the source or the current folder, else the lib/ named in compiler.wasm's
-  `warp.build` section if it still exists. The compiler file: `<WARP_LIB>/../data/compiler.wasm` when it exists, else
-  the one beside warp-rust (`compiler-self.wasm` under `--self`).
+  nearest lib/ holding compiler/ above the source or the current folder, else the installed lib/, else the lib/ named in
+  compiler.wasm's `warp.build` section if it still exists. The compiler file: `<WARP_LIB>/../data/compiler.wasm` when
+  it exists, else the installed one (`compiler-self.wasm` for self). Installed: beside warp-rust, else
+  `<prefix>/share/warp` (src/modules/program_file.rs `installed_folder`, card installed-compilers).
+
+## Refusals
+
+warp-rust has no exit status of its own for a refusal. compiler.warp raises `outside the core: …` before the program
+runs (lib/compiler/compiler.warp; the emitter's text, lib/compiler/emitter.warp `outside_the_core`), and warp-rust
+prints that Error as the run's value, `Error("outside the core: …")`, on stdout and exits 1 (standalone.rs `run` →
+src/cli/display.rs `print_and_exit`; the source excerpt goes to stderr). The launcher counts a run as refused when it
+exits 1 and its whole stdout is one line starting `Error("outside the core: `: nothing of the program ran before, so
+a program's own output or failure (any other status, more lines, another Error) never counts. Only under
+WARP_FALLBACK=rust (and for inline code) is stdout read, through `tee`: stdout is then a pipe, not the terminal.
+
 
 ## Environment
 
 | variable | effect |
 |---|---|
 | `WARP_PIPELINE=rust` | every command goes to warp-rust as it is: the old Rust path, environment untouched |
-| `WARP_FALLBACK=rust` | when the pure pipeline fails (refusal, error, nonzero status), the launcher prints `warp: ⚠️  WARP_FALLBACK=rust: THE PURE PIPELINE FAILED (exit n), RUNNING THROUGH RUST INSTEAD` on stderr and runs the whole command through warp-rust. Off by default. A program that printed before failing prints again; a program whose value is a nonzero int counts as failed |
-| `WARP_SELF_HOSTED=1`, or the flag `--self` | compiler-self.wasm (compiler.warp compiled by itself, `warp-rust self`) instead of compiler.wasm. The launcher unsets WARP_SELF_HOSTED=1 before running warp-rust, where the variable means the in-process pure lane (src/compiler/self_hosted.rs: front, emit, pure, pure-only); other values pass on unchanged |
+| `WARP_FALLBACK=rust` | when the pure pipeline refuses the program (Refusals above), the launcher prints `warp: ⚠️  WARP_FALLBACK=rust: THE PURE PIPELINE REFUSED THIS PROGRAM, RUNNING IT THROUGH RUST INSTEAD` on stderr and runs the whole command through warp-rust. Off by default. Any other failure and exit status passes as it is |
+| `WARP_COMPILER=pure\|self` (default pure), or the flag `--self` | `self`: compiler-self.wasm (compiler.warp compiled by itself, `warp-rust self`) instead of compiler.wasm. Another value is an error |
+| `WARP_SELF_HOSTED` | warp-rust's own (src/compiler/self_hosted.rs: front, emit, pure, pure-only), passed through untouched |
 | `WARP_RUST=<binary>` | the Rust binary; else `warp-rust` beside the script (links followed, as Homebrew links bin/warp), else on PATH |
 | WARP_LIB, WARP_HINTS, WARP_NO_WINDOW, WARP_EMIT_REFUSALS, … | warp-rust's, unchanged |
 
@@ -52,7 +67,7 @@ pure_command() {
 ```
 
 The function, defined below it, gets the words after the command. It runs through `pure …` (the arguments of warp-rust
-that run the pure pipeline: failures loud, WARP_FALLBACK honoured) and calls `pass_on` for a form it does not take,
+that run the pure pipeline: failures loud with their own status, a refusal under WARP_FALLBACK=rust passed on) and calls `pass_on` for a form it does not take,
 which hands the whole command to warp-rust. A new kind of command needs one such function; a command that is a warp
 program reuses one. Add an outcome check to tests/launcher/test_launcher.sh. `fix` and `beautify` are being written in
 warp (Warp Code 2) and have no entry yet.
@@ -81,22 +96,19 @@ lanes). Nothing in ~/dev/bin was installed or swapped by this branch.
 - express.sh l.81: `install_compilers.sh /Users/me/dev/bin/warp-rust $PWD` (it copies the binary it is given and runs
   `rebuild`; the launcher there would be copied without its warp-rust).
 - pure_chain_check.sh: `MAIN_WARP=/Users/me/dev/bin/warp-rust` (its `warp pure` passes through either way).
-- warp-debug, warp-runtime, warp-page-runtime keep their names. scripts/llm/llm.py (`WARP`, default
-  /Users/me/dev/bin/warp, `run <file>`) then runs generated programs through the pure pipeline: wanted or not is the
-  user's call (WARP=/Users/me/dev/bin/warp-rust keeps Rust).
+- warp-debug, warp-runtime, warp-page-runtime keep their names. scripts/llm/llm.py runs generated programs with
+  WARP_PIPELINE=rust until the pure pipeline covers enough (card llm-pure).
 
 ## Packaging that must follow later (not changed)
 
-The released packages ship the Rust binary as `warp` with no compiler.wasm and no lib/, so they keep it that way until
-they can carry the pure pipeline:
-- release workflow and archives: build compiler.wasm / compiler-self.wasm (`warp rebuild pure|self`) and ship them, and
-  the lib/ compiler.warp reads at run time (prelude.warp, compiler/runtime.warp …); an installed warp-rust's own lib/ is
-  the build machine's (CARGO_MANIFEST_DIR) unless WARP_LIB names one.
-- packaging/homebrew/Formula/warp.rb: `bin.install` the binary as warp-rust plus packaging/bin/warp, the compilers in
-  bin/ beside warp-rust (or libexec/ with WARP_RUST), lib/ in share/; the `warp eval '6*7'` test passes through as is.
-- packaging/linux/nfpm.yaml (`./warp*` → /usr/bin/): warp-rust, the launcher and the compilers; bash is a dependency.
-- packaging/pypi/build_wheels.py (binaries into `.data/scripts/`): the same files; the launcher finds warp-rust beside
-  itself in the environment's bin/.
+Since card installed-compilers the packages ship compiler.wasm, compiler-self.wasm and lib/ in `<prefix>/share/warp`,
+where both warp-rust and the launcher find them; the Rust binary is still installed as `warp`. Left to do:
+- the release archives: the Rust binary as `warp-rust` plus packaging/bin/warp as `warp`.
+- packaging/homebrew/Formula/warp.rb: `bin.install` warp-rust and the launcher; its test `warp pure '6*7'` passes
+  through as is, `warp eval '6*7'` too.
+- packaging/linux/nfpm.yaml (`./warp*` → /usr/bin/): picks both up by its glob; bash becomes a dependency.
+- packaging/pypi/build_wheels.py (`warp*` binaries into `.data/scripts/`): picks both up by BINARY_PREFIX; the launcher
+  finds warp-rust beside itself in the environment's bin/ (a wheel has no symlinks to follow).
 
 ## Timings (measured 2026-10-22 on the box, debug build bf03df01c, the Mac's compilers of 9fc81b9241; warm, min–median of 5)
 
