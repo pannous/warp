@@ -14,6 +14,8 @@ command = if #args > 0 and is_command(args#1) then args#1 else ""
 
 # lib/: the fourth argument of a compile (`warp pure` gives it), else WARP_LIB, else the folder above this file's
 library_folder = if not command and #args > 3 then args#4 else env("WARP_LIB") ?? folder_of(module_directory)
+# the messages of the diagnostics from that lib/, not from the folder this compiler was built in
+messages_from(library_folder + "/compiler")
 
 # the name the lowered runtime words are kept under
 RUNTIME_WORDS = "compiler.warp's lowered runtime words of " + library_folder

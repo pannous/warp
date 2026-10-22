@@ -1,0 +1,15 @@
+# Methods that change the list they are called on (notes/layers.md, sugar): `xs.push(v)` (also add, append, and insert
+# of one value) appends, `xs += [v]`, which emitter.warp grows in place while the list is unshared; `xs.pop()` is the
+# runtime word list_pop(xs), which shortens xs in place. Rust twin: list_mutations.rs appends
+rewrite $xs.push($v...) => $xs += [$v...]
+rewrite $xs.add($v...) => $xs += [$v...]
+rewrite $xs.append($v...) => $xs += [$v...]
+rewrite $xs.insert($v) => $xs += [$v]
+rewrite $xs.pop() => list_pop($xs)
+
+# `x in xs` (a list's item, a map's key, a text's part) is the runtime word collection_contains(xs, x); `xs contains x`,
+# `xs has x`, `xs includes x` the same written the other way round. Rust twin: library_words.rs membership
+rewrite ($x in $xs) => collection_contains($xs, $x)
+rewrite ($xs contains $x) => collection_contains($xs, $x)
+rewrite ($xs has $x) => collection_contains($xs, $x)
+rewrite ($xs includes $x) => collection_contains($xs, $x)
