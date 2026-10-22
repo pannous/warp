@@ -125,19 +125,24 @@ Read notes/agents/common.md and notes/roles.md.
   the pull and main has superseded it, back it up to data/integrator/<name>.patch, take main's file and pull.
 - Every landing gets a try line: the merge report names each user-visible branch to its owner, who sends
   warp-interviewer the try line; for an owner that has retired, send it yourself.
-- Every push to main (gated, express, warp-only) starts `integrator_tools/refresh_main_binary.sh` in the background
+- Every push to main with Rust (gated, express) starts `integrator_tools/refresh_main_binary.sh` in the background
   (user 2026-10-20: "pre-compile warp-debug whenever you merge into main"; order user 2026-10-21): it builds and
-  installs the quick-release ~/dev/bin/warp first, together with compiler.wasm, `warp pure`'s compiler, which the new
-  binary builds for the main checkout's lib/ (`warp rebuild pure`, decision compiler-build) and checks with one `warp
-  pure samples/hello/hello.warp` (a run without Hello logs a WARNING line in main_binary.log); an identical file stays
-  as it is; ~/dev/bin/warp-debug is built last. The last 10 distinct main builds stay runnable as
+  installs the quick-release ~/dev/bin/warp first, together with its compilers (below); an identical binary stays as
+  it is; ~/dev/bin/warp-debug is built last. The last 10 distinct main builds stay runnable as
   ~/dev/bin/warp-<commit> (links into ~/dev/bin/main-builds/<commit>/, the binary with its compiler.wasm; card
   keep-main-binaries), for bisecting a regression without a build. The main-binary worktree's own data/compiler.wasm
   is rebuilt too (`warp rebuild pure` and `warp rebuild self`), so `warp pure` and `warp self` there never run the
-  previous main's compiler; the main checkout's stale data/compiler-self.wasm is deleted (a stale one printed hello while main
-  refused to compile itself; supervisor 2026-10-21); lib/ changes between refreshes are rebuilt by cron
-  (scripts/refresh_compilers.sh, which waits while a refresh runs). push_tested.sh and
-  express.sh start it; after a warp-only push start it yourself.
+  previous main's compiler. push_tested.sh and express.sh start it.
+- The compilers beside ~/dev/bin/warp (compiler.wasm for `warp pure`, compiler-self.wasm for `warp self`) come only
+  with main's delivery, never because a lib/ changed (user 2026-10-22: "we don't want automatic rebuilds just by
+  changing of lib"): `integrator_tools/install_compilers.sh <warp> <worktree at the pushed tip>` builds both from that
+  worktree's committed lib/ (one snapshot, no user edits; it stops on uncommitted lib/ changes) beside a private copy
+  of the binary, checks hello with each, then moves both into place together. A Rust push runs it from
+  refresh_main_binary.sh (the new binary, the main-binary worktree at origin/main) just before the binary goes in; a
+  warp-only push runs it from express.sh (~/dev/bin/warp, the express worktree at the pushed hash) in the step that
+  pushes and pulls. Never build them from the main checkout: a pull mid-build paired a compiler.wasm of an older
+  lib/ with a newer compiler-self.wasm (2026-10-22 10:12). The installed pair records the worktree's lib/ path; card
+  installed-compilers (warp-wasi-runtime) keeps it from warning against the checkout's lib/.
 - Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
   `integrator_tools/pure_chain_check.sh <worktree>` runs `warp pure samples/hello/hello.warp` with the merged lib
   and stops the push when it no longer prints "Hello 🌍2026" while main does (push_tested.sh and express.sh call it;
