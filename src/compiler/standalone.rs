@@ -219,7 +219,10 @@ fn current_build() -> Vec<String> {
 /// The commit lib/'s git checkout is at, "" outside one (an installed lib/)
 fn library_commit() -> String {
 	let said = std::process::Command::new("git").arg("-C").arg(library()).args(["rev-parse", "HEAD"]).output();
-	said.ok().filter(|said| said.status.success()).map(|said| String::from_utf8_lossy(&said.stdout).trim().to_string()).unwrap_or_default()
+	said.ok()
+		.filter(|said| said.status.success())
+		.map(|said| String::from_utf8_lossy(&said.stdout).trim().to_string())
+		.unwrap_or_default()
 }
 
 /// `warp version`'s line of the compilers in use: `compiler.wasm of <commit>, compiler-self.wasm missing`
