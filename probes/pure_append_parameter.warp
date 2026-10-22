@@ -1,0 +1,11 @@
+# xs.append(y) on a parameter appends in place and the function hands the list back (lib/list.warp extend)
+extend(xs, ys) := { for y in ys { xs.append(y) }; xs }
+print extend([1, 2], [3, 4])
+zs = [5]
+zs.append(6)
+print zs
+ws = [1]
+ws.push(2)
+ws.insert(3)
+ws.add(4)
+print ws

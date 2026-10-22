@@ -25,6 +25,10 @@ operator ⊻ := xor
 operator ± := +-
 prefix operator √ := sqrt
 prefix operator ∛ := cbrt
+// A glyph pair bracketing an expression like parentheses applies the function to it: ⌊3.7⌋ is floor(3.7)
+circumfix operator ‖ ‖ := abs
+circumfix operator ⌊ ⌋ := floor
+circumfix operator ⌈ ⌉ := ceil
 // The arrows of src/operators/spellings.rs's list that spell an operator (card user-listed); the rest stay unread
 operator → := ->
 operator ⟶ := ->
