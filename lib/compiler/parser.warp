@@ -2716,6 +2716,11 @@ def iterable_words(p: Parser): Node := {
 		skip_spaces(p)
 		start = p.at
 		if p.at >= p.n or at_loop_body(p) or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") { break }
+		// a rule's hole after the iterable is the loop's body, `for $i in 1 to $n $body` (card sugar-comprehensions)
+		if is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n)) {
+			p.iterable = false
+			return if words.length == 1 then words#1 else listed("", " ", words)
+		}
 		words += [header_expression(p, 81)]
 		if p.at == start { break }
 	}
