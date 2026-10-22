@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 f(x)
 f(x, y)
 f()
