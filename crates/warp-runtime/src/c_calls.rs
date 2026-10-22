@@ -178,10 +178,12 @@ pub fn library_paths(name: &str) -> Vec<String> {
 	}
 }
 
-/// The `lib<name>.so.<version>` files of the library folders, shortest name first (libz.so.1 before libz.so.1.3.1)
+/// The `lib<name>.so.<version>` and `lib<name>-<version>.so.<n>` files of the library folders, shortest name first (libz.so.1 before libz.so.1.3.1)
 #[cfg(target_os = "linux")]
 fn versioned_sonames(name: &str, extra: &[String]) -> Vec<String> {
 	let prefix = format!("lib{name}.so.");
+	// SDL2's soname: libSDL2-2.0.so.0
+	let dashed = format!("lib{name}-");
 	let folders = extra.iter().map(String::as_str).chain([
 		"/usr/lib/x86_64-linux-gnu",
 		"/usr/lib/aarch64-linux-gnu",
@@ -197,7 +199,7 @@ fn versioned_sonames(name: &str, extra: &[String]) -> Vec<String> {
 			entries
 				.filter_map(Result::ok)
 				.filter_map(|entry| entry.file_name().into_string().ok())
-				.filter(|file| file.starts_with(&prefix))
+				.filter(|file| file.starts_with(&prefix) || (file.starts_with(&dashed) && file.contains(".so.")))
 				.map(move |file| format!("{folder}/{file}"))
 				.collect::<Vec<_>>()
 		})
