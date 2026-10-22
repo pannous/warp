@@ -150,7 +150,8 @@ fn typed_return(type_name: &Node, definition: &Node, optional: &[String]) -> Opt
 	let written = type_name.name();
 	// a list result gives [] for ø, with no warning (user 2026-10-22, card list-result-autocast: "ø can autocast to []")
 	if crate::analyzer::names_list_type(&written) && can_answer_empty(body, optional) {
-		let held = converted(body, &symbol(&format!("{written}?")));
+		// held as any list or ø: `list of int?` names no type
+		let held = converted(body, &symbol(&format!("{}?", crate::words::LIST_WORD)));
 		return Some(key(head.clone(), op, key(parens(vec![held]), Op::Coalesce, Node::empty_list())));
 	}
 	Some(key(head.clone(), op, converted(body, &type_name)))
