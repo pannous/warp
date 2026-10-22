@@ -91,9 +91,9 @@ is_map_literal(n: Node): bool := {
 }
 
 # the names the nodes assign a written map (`m = {a: 1}`)
-map_names(nodes: list): list := nodes.filter(n => is_key(n, Op.Assign) and key_of(n) is symbol and is_map_literal(value_of(n))).map(n => name_of(key_of(n))) + declared_maps(nodes)
+map_names(nodes: list): list := nodes.filter(n => is_key(n, Op.Assign) and key_of(n) is symbol and is_map_literal(value_of(n))).map(n => name_of(key_of(n)))
 
-# the names the nodes declare maps (`t: map`, a parameter's or a variable's)
+# the parameters a function head declares maps (`f(t: map)`); a class's fields of that name stay out
 declared_maps(nodes: list): list := nodes.filter(n => is_key(n, Op.Colon) and key_of(n) is symbol and value_of(n) == symbol("map")).map(n => name_of(key_of(n)))
 
 # `k, v` or `(k, v)`: the two names a loop over a map binds

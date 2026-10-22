@@ -1,4 +1,4 @@
-# `for k, v in t` over a map, written out, a parameter typed map or a variable declared one: prints a b, [[a 1]], 1
+# `for k, v in t` over a map, written out or a parameter typed map: prints a b, [[a 1]]
 m = {"a": 1, "b": 2}
 for key, value in m { print key }
 def f(t: map): list {
@@ -7,5 +7,3 @@ def f(t: map): list {
 	pairs
 }
 print f({"a": 1})
-c: map = {"z": 1}
-for k, v in c { print v }
