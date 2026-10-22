@@ -8,6 +8,8 @@ type_words = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact
 	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
 	"uint64"]
 any_word = "any"
+# the type an optional type word holds when it holds a value, `int` of `int?`
+required_type(word: text): text := if word.ends_with("?") then word[0..<(#word - 1)] else word
 # the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }` (Rust twin: words.rs IMPLICIT_PARAMETER)
 implicit_parameter = "it"
 # the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic (Rust twin: errors/run_time.rs RAISE_WORDS)
