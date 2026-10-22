@@ -184,7 +184,7 @@ fn optional_functions(program: &Node) -> Vec<String> {
 	let mut optional: Vec<String> = vec![];
 	while let Some((name, _, _)) = typed.iter().find(|(name, type_name, body)| {
 		!optional.contains(name)
-			&& (type_name.ends_with('?') || type_name != ANY_TYPE && can_answer_empty(body, &optional))
+			&& (type_name.ends_with('?') || (!holds_empty(type_name) && can_answer_empty(body, &optional)))
 	}) {
 		optional.push(name.clone());
 	}
@@ -218,7 +218,7 @@ fn optional_when_answering_empty(
 	optional: &[String],
 ) -> Result<Node, Node> {
 	let written = type_name.name();
-	if written.ends_with('?') || written == ANY_TYPE || !can_answer_empty(body, optional) {
+	if holds_empty(&written) || !can_answer_empty(body, optional) {
 		return Ok(type_name.drop_meta().clone());
 	}
 	let function = function_name(head);
@@ -232,9 +232,14 @@ fn optional_when_answering_empty(
 	Ok(symbol(&optional))
 }
 
+/// `T?`, `any` and `Node` hold ø already: a result of theirs never warns
+fn holds_empty(type_name: &str) -> bool {
+	type_name.ends_with('?') || type_name == ANY_TYPE || type_name == super::node_cases::NODE_TYPE
+}
+
 /// Whether a body can give back ø: a bare `return`, or ø as its value, returned or last: ø itself, an `if` without
 /// `else`, a loop, a choice with such a branch, a call of a function in `optional`, or a variable assigned such a
-/// value. The definitions and lambdas inside answer for themselves
+/// value other than a call. The definitions and lambdas inside answer for themselves
 fn can_answer_empty(body: &Node, optional: &[String]) -> bool {
 	let scope = EmptyScope { body, optional, looked_up: vec![] };
 	returns_empty(body, &scope) || value_can_be_empty(body, &scope)
@@ -280,7 +285,8 @@ fn returns_empty(node: &Node, scope: &EmptyScope) -> bool {
 		Node::Symbol(word) => word == crate::words::RETURN_WORD,
 		Node::List(items, _, _) if is_return(items) => value_can_be_empty(&items[1], scope),
 		Node::Key(head, Op::Assign | Op::Define, _) if is_call_head(head) => false,
-		Node::Key(_, Op::Arrow, _) => false,
+		// `op.return` names a member, no return
+		Node::Key(_, Op::Arrow | Op::Dot, _) => false,
 		Node::List(items, _, _) => items.iter().any(returns_empty),
 		Node::Key(left, _, right) => returns_empty(left) || returns_empty(right),
 		_ => false,
@@ -305,8 +311,10 @@ fn value_can_be_empty(value: &Node, scope: &EmptyScope) -> bool {
 		Node::Symbol(name) if !scope.looked_up.contains(name) => {
 			let mut values = vec![];
 			assigned_values(scope.body, name, &mut values);
+			// a call's ø kept in a variable is mostly tested before it is given back (`x = f(); if x == ø …; x`): only
+			// the ø a variable is assigned itself counts
 			let looked_up = [scope.looked_up.clone(), vec![name.clone()]].concat();
-			let scope = EmptyScope { looked_up, ..*scope };
+			let scope = EmptyScope { looked_up, optional: &[], ..*scope };
 			values.into_iter().any(|value| value_can_be_empty(value, &scope))
 		}
 		_ if is_call_head(value) => scope.optional.contains(&function_name(value)),

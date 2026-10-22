@@ -15,5 +15,5 @@ def find(x: int): int? { if x > 0 { return x }; ø }
 def first(x: int): int { find(x) }
 print(first(0))
 print(first(3))
-def outer(x: int): int { y = first(x); y }
+def outer(x: int): int { first(x) }
 print(outer(0))

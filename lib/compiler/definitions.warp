@@ -76,7 +76,7 @@ result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 # type_name_matching.rs optional_when_answering_empty)
 optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
 	written = name_of(result_type)
-	if not written or written.ends_with("?") or written == "any" or not can_answer_empty(body, optional_functions) { return result_type }
+	if not written or holds_empty(written) or not can_answer_empty(body, optional_functions) { return result_type }
 	diagnose(call_of("optional_result", [name_of(head#1), written]))
 	symbol(written + "?")
 }
@@ -100,14 +100,15 @@ loop_words = ["for", "each"]
 is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
 
 # a bare `return`, or ø as its value, returned or last: ø itself, an `if` without `else`, a loop, a choice with such a
-# branch, a call of a function in `optional`, or a variable assigned such a value; the definitions and lambdas inside
-# answer for themselves
+# branch, a call of a function in `optional`, or a variable assigned such a value other than a call; the definitions
+# and lambdas inside answer for themselves
 can_answer_empty(body: Node, optional: list): bool := returns_empty(body, body, optional) or value_can_be_empty(body, body, optional, [])
 
 returns_empty(n: Node, body: Node, optional: list): bool := {
 	if is_word(n, "return") { return yes }
 	if is_group(n) and #n == 2 and is_word(n#1, "return") { return value_can_be_empty(n#2, body, optional, []) }
-	if is_key(n, Op.Define) or is_key(n, Op.Arrow) { return no }
+	# `op.return` names a member, no return
+	if is_key(n, Op.Define) or is_key(n, Op.Arrow) or is_key(n, Op.Dot) { return no }
 	parts_of(n).any(part => returns_empty(part, body, optional))
 }
 
@@ -126,8 +127,10 @@ optional_functions_of(program: Node): list := {
 }
 result_can_be_empty(candidate: list, optional: list): bool := {
 	written = candidate#2
-	written.ends_with("?") or (written != "any" and can_answer_empty(candidate#3, optional))
+	written.ends_with("?") or (not holds_empty(written) and can_answer_empty(candidate#3, optional))
 }
+# `T?`, `any` and `Node` hold ø already: a result of theirs never warns
+holds_empty(written: text): bool := written.ends_with("?") or written in ["any", "Node"]
 # each definition with a declared result in n, `def f(x): T {…}` and `f(x): T := e`: its name, its type and its body
 typed_definitions(n: Node): list := {
 	inner = parts_of(n).flat_map(typed_definitions)
@@ -155,7 +158,9 @@ value_can_be_empty(value: Node, body: Node, optional: list, looked_up: list): bo
 		_: {
 			if value == ø or is_loop(value) { return yes }
 			if value is symbol and not (name_of(value) in looked_up) {
-				return assigned_values(body, name_of(value)).any(assigned => value_can_be_empty(assigned, body, optional, looked_up + [name_of(value)]))
+				# a call's ø kept in a variable is mostly tested before it is given back (`x = f(); if x == ø …; x`): only the
+				# ø a variable is assigned itself counts
+				return assigned_values(body, name_of(value)).any(assigned => value_can_be_empty(assigned, body, [], looked_up + [name_of(value)]))
 			}
 			if is_call(value) { return name_of(value#1) in optional }
 			if not is_curly_group(value) or #value == 0 { return no }
