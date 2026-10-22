@@ -5,7 +5,9 @@
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
 # `$f is function`, `$x is literal`, `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
-# program or a typed library word) and `$f takes int` (typed int). A phrase pattern (`$n beat`) matches each run of those
+# program or a typed library word) and `$f takes int` (typed int). A place word among them, `statement`, `condition`
+# (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), lets the rule rewrite code only
+# standing there: `rewrite $s except_if $c => if not $c then $s where statement`. A phrase pattern (`$n beat`) matches each run of those
 # words in a longer phrase (of `x = 2 beats`, which the parser keeps as `(x = 2) beats`, the value), a statement
 # pattern also a block of just that statement, and a template of several statements `($a; $b)` takes the statement's
 # place. Rules go bottom-up, children first, each node rewritten once. A program's own rules apply to it; a standard
@@ -34,6 +36,8 @@ code_properties = ["type", "unbound", "value", "function", "literal"]
 # `where $n < 0`: the comparisons of a number literal
 literal_comparisons = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 and_word = "and"
+# the places a rule may ask for (F1), each written as a bare word among the `where` conditions
+rule_places = ["statement", "condition", "member", "key", "value"]
 takes_word = "takes"
 # `where $f takes value`: any first parameter typed, except these
 yes_no_types = ["bool"]
@@ -41,9 +45,9 @@ value_word = "value"
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
-# a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions,
-# `module` the standard module declaring it, else ""
-class Rule { pattern: any; template: any; hole: any; shape: any; conditions: list; module: text }
+# a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
+# the one of rule_places it rewrites only, else "", `module` the standard module declaring it, else ""
+class Rule { pattern: any; template: any; hole: any; shape: any; conditions: list; place: text; module: text }
 
 # the standard modules whose rules fired during a rewrite
 global fired_modules = []
@@ -147,36 +151,41 @@ rule_of(statement: any, module: text): any := {
 	written = value_of(arrow)
 	where_at = #after
 	for index in 0 ..< #after { if where_at == #after and after[index] == symbol(where_word) { where_at = index } }
-	cut = before_where(written)
+	cut = split_at_where(written)
 	if cut != ø {
-		written = cut
+		written = cut#1
+		after = cut#2 + after
 		where_at = -1
 	}
 	continued = after[0 ..< max(where_at, 0)]
 	template = statements_template(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)))
-	if where_at == #after { return Rule(pattern, template, ø, ø, [], module) }
+	if where_at == #after { return Rule(pattern, template, ø, ø, [], "", module) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
-	if not conditions.all(is_condition) { return ø }
+	places = conditions.filter(is_place_word)
+	conditions = conditions.filter(condition => not is_place_word(condition))
+	if #places > 1 or not conditions.all(is_condition) { return ø }
+	place = if #places == 0 then "" else name_of(places#1)
 	origins = conditions.filter(condition => is_key(condition, Op.Assign))
 	if #origins > 1 { return ø }
-	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, module) }
-	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), module)
+	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module) }
+	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module)
 }
 
-# the template before a `where` its last words swallowed (`$c + $n where`, `$f(2) where`), else ø
-before_where(n: any): any := {
+# [the template before a `where` its last words swallowed, the words after that `where`] (`$c + $n where`, `$s where
+# statement`), else ø
+split_at_where(n: any): any := {
 	if n is key {
-		inner = before_where(value_of(n))
-		return if inner == ø then ø else Key(key_of(n), op_of(n), inner)
+		inner = split_at_where(value_of(n))
+		return if inner == ø then ø else [Key(key_of(n), op_of(n), inner#1), inner#2]
 	}
 	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 0) { return ø }
 	items = items_of(n)
-	kept = items[0 ..< #items - 1]
-	last = items[#items - 1]
-	if last == symbol(where_word) { return if #kept == 1 then kept#1 else rule_phrase(kept) }
-	inner = before_where(last)
-	if inner == ø then ø else rule_phrase(kept + [inner])
+	for index in 0 ..< #items {
+		if items[index] == symbol(where_word) { return [words_phrase(items[0 ..< index]), items[index + 1 ..]] }
+	}
+	inner = split_at_where(items[#items - 1])
+	if inner == ø then ø else [words_phrase(items[0 ..< #items - 1] + [inner#1]), inner#2]
 }
 
 # the words in runs between the word, `$a is type and $n < 0` as [[$a is type], [$n < 0]]
@@ -253,6 +262,8 @@ typed_first_parameters(program: any): any := {
 	}
 	types
 }
+
+is_place_word(condition: any): bool := condition is symbol and name_of(condition) in rule_places
 
 is_negation(condition: any): bool := is_key(condition, Op.Not) and key_of(condition) == ø
 
@@ -383,14 +394,11 @@ is_run_pattern(pattern: any): bool := match pattern {
 }
 
 # the node rewritten by the first rule matching it, a statement sequence's statement sequences spliced in, a phrase's
-# runs rewritten, over its words as written (the parser nests `keep 1 past 3` as `keep 1 (past 3)`)
+# runs rewritten, over its words as written (the parser nests `keep 1 past 3` as `keep 1 (past 3)`); the rules of a
+# place rewrite the node's parts standing there first
 rule_rewritten(n: any, rules: list, origins: list): any := {
 	if is_group(n) and separator_of(n) in statement_separators {
-		statements = []
-		for statement in n {
-			statements += if is_group(statement) and bracket_of(statement) == "" and separator_of(statement) in statement_separators then items_of(statement) else [statement]
-		}
-		n = group_like(n, statements)
+		n = group_like(n, spliced_statements(items_of(n).map(statement => at_place(statement, "statement", rules, origins))))
 	} else if is_group(n) and #n > 0 {
 		phrase = bracket_of(n) == "" and separator_of(n) == " "
 		items = items_of(n)
@@ -398,11 +406,54 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 		if phrase and runs == words_of_all(items) { runs = items }
 		runs = runs.map(as_value)
 		n = if phrase and #runs == 1 then runs#1 else group_like(n, runs)
-	} else if n is key and (is_statements_template(key_of(n)) or is_statements_template(value_of(n))) {
-		n = placed(Key(as_value(key_of(n)), op_of(n), as_value(value_of(n))), n)
+	} else if n is key {
+		n = if key_of(n) == symbol(opaque_word) then with_members(n, rules, origins) else with_placed_parts(n, rules, origins)
 	}
 	for index in 0 ..< #rules {
-		if not is_run_pattern(rules[index].pattern) {
+		if rules[index].place == "" and not is_run_pattern(rules[index].pattern) {
+			result = rule_applied(rules[index], origins[index], n)
+			if result != ø { return result }
+		}
+	}
+	n
+}
+
+# the statements, those a template made of several spliced in
+spliced_statements(statements: list): list := {
+	spliced = []
+	for statement in statements { spliced += if is_group(statement) and bracket_of(statement) == "" and separator_of(statement) in statement_separators then items_of(statement) else [statement] }
+	spliced
+}
+
+# the key with its condition (`if c`, `while c`), its key and value (`k: v`) rewritten by the rules of that place, a
+# template's statements in its parts their blocks
+with_placed_parts(n: any, rules: list, origins: list): any := {
+	left = key_of(n)
+	right = value_of(n)
+	if (is_key(n, Op.If) or is_key(n, Op.While)) and left == ø { right = at_place(right, "condition", rules, origins) }
+	if is_key(n, Op.Colon) {
+		left = at_place(left, "key", rules, origins)
+		right = at_place(right, "value", rules, origins)
+	}
+	if left == key_of(n) and right == value_of(n) and not is_statements_template(left) and not is_statements_template(right) { return n }
+	placed(Key(as_value(left), op_of(n), as_value(right)), n)
+}
+
+# a class with the items of its body rewritten by the rules of the place `member`: the passes see it as the opaque
+# view ["type", name, body]
+with_members(n: any, rules: list, origins: list): any := {
+	view = value_of(n)
+	if not (key_of(n) == symbol(opaque_word) and kind_of(view) == "type") { return n }
+	body = node_of(view#3)
+	if not is_group(body) { return n }
+	members = spliced_statements(items_of(body).map(member => at_place(member, "member", rules, origins)))
+	Key(key_of(n), op_of(n), [view#1, view#2, view_of(group_like(body, members))])
+}
+
+# the code rewritten by the first rule of the place matching it
+at_place(n: any, place: text, rules: list, origins: list): any := {
+	for index in 0 ..< #rules {
+		if rules[index].place == place {
 			result = rule_applied(rules[index], origins[index], n)
 			if result != ø { return result }
 		}
@@ -436,7 +487,7 @@ with_runs(items: list, rules: list, origins: list): list := {
 run_at(items: list, rules: list, origins: list): any := {
 	for index in 0 ..< #rules {
 		rule = rules[index]
-		if is_run_pattern(rule.pattern) and #items >= #rule.pattern {
+		if rule.place == "" and is_run_pattern(rule.pattern) and #items >= #rule.pattern {
 			run = items[0 ..< #rule.pattern]
 			first = run#1
 			target = ø
