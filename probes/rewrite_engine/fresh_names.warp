@@ -1,0 +1,11 @@
+# F3: a template hole the pattern doesn't bind is a fresh name each firing, so `$a` is computed once and nested
+# firings keep their own temporaries
+rewrite $a otherwise $b => ($t = $a; if $t then $t else $b)
+rewrite keep $a past $b => ($t = $a; $b; $t)
+global calls = 0
+next() := { calls += 1; calls * 10 }
+t = 7
+x = next() otherwise 5
+y = 0 otherwise 3
+z = keep 1 past (keep 2 past 3)
+[x, y, z, calls, t]
