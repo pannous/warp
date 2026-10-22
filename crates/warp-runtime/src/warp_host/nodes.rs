@@ -46,10 +46,12 @@ impl Node {
 		Node::List(MAP, entries.into_iter().map(entry).collect())
 	}
 
-	/// A text's, symbol's or error's content, anything else as shown
+	/// A text's, symbol's or error's content, a codepoint's character (a one-letter text such as "." arrives as one),
+	/// anything else as shown
 	pub fn content(&self) -> String {
 		match self {
 			Node::Text(bytes) | Node::Symbol(bytes) | Node::Error(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+			Node::Codepoint(code) => char::from_u32(*code).unwrap_or('\u{fffd}').to_string(),
 			other => other.shown(),
 		}
 	}
