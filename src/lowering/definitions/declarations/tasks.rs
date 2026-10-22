@@ -26,7 +26,7 @@ pub(super) const ANY_WORD: &str = "any";
 pub(super) const RACE_PREFIX: &str = "race·";
 /// how often an `await any` looks at its tasks
 pub(super) const RACE_POLL_MILLISECONDS: i64 = 1;
-pub(super) const SLEEP_WORD: &str = "sleep";
+pub(super) const SLEEP_WORD: &str = crate::host::SLEEP_MS;
 /// `await job within 100 ms or 0` (P154)
 pub(super) const WITHIN_WORD: &str = "within";
 pub(super) const WITHIN_TOPIC: &str = "await-within";
@@ -94,13 +94,14 @@ pub fn lower_tasks(node: Node) -> Node {
 			}
 		}
 	});
-	let words: Vec<&str> = TASK_WORDS.into_iter().filter(|word| !defined.contains(*word)).collect();
+	// `def go(n) {…}`, `fun go(n) {…}` too: every definition form (function_head), still unlowered here
+	node.visit(&mut |part| functions.extend(crate::lowering::function_head(part).map(|head| head.name.to_string())));
+	functions.extend(crate::analyzer::function_definitions(&node).user_functions.into_keys());
+	let words: Vec<&str> =
+		TASK_WORDS.into_iter().filter(|word| !defined.contains(*word) && !functions.contains(*word)).collect();
 	if words.is_empty() {
 		return node;
 	}
-	// `def hi: {…}`, `fun f(x) {…}` too
-	let context = crate::analyzer::function_definitions(&node);
-	functions.extend(context.user_functions.into_keys());
 	// the functions a `go` starts: `once the download finishes` names the task by its function
 	node.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {

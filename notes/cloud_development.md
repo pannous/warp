@@ -58,7 +58,13 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
     scripts/cloud-test.sh --result [same options] [--card <card>] <branch> <tip> [same filters]
 
 - The tip must be pushed (a full commit id from `git rev-parse`). Filters as for tests/queue.sh; `--full` = test.sh's
-  flags. `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
+  flags, run in FULL_SHARDS (5) jobs on as many VMs (card cloud-lane-full: one VM took 1300-3600 s and was killed at
+  the limit). Each shard lists the built tests and takes every 5th test file (`<folder>::<file>::`); `--result` and
+  the collecting wait for all shards and merge them into data/cloud/<run>/: one log (`==== shard` lines between),
+  one summary, red unless every shard is green and Σ passed+failed+ignored equals what a shard lists ("tests
+  counted"), with one line per shard. A test binary killed at the limit prints no panic text of its failed tests:
+  those run once more alone (`cloud-test: RERUN`, counted for their texts only). probes/cloud_full_shards.sh checks
+  the partition and the merge offline. `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
 - How: `claude --cloud` in detached tmux with a two-line prompt; the job's arguments go to the branch
   cloud-jobs/<job>, the session runs `cloud-test.sh --job <job>` (calls wait ≤ 9 min, under the cloud Bash tool's
   10 min) until it prints CLOUD TEST DONE. The detached run checks out the tip, adds the wasm32 targets, builds from
@@ -69,6 +75,14 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
 - A run's signature covers its base, environment settings, cargo arguments, filters, and skips. Concurrent runs of
   one branch and tip therefore keep separate results. To collect a `--no-wait` run later, repeat those same options
   and filters after `--result`; an identical invocation keeps the same id and coalesces while it is pending.
+- Filters: a filter argument with spaces (`"a b c"`, a quoted list in a variable) is split into several filters, with a
+  notice; passed whole, libtest matched it against no test (2026-10-21: five runs of 0 tests whose sessions were
+  dropped as faulty VMs; probes/cloud_test_filters.sh). A run that executes no test is red with a `NO TESTS RAN` line,
+  a filter fault: its session stays in the pool.
+- Compiler build files: a warm VM keeps compiler.wasm / compiler-self.wasm (warp pure / self) in target/ or data/,
+  and a later job's tests ran on them with only a notice. They are dropped before the tests whenever lib/, src/,
+  crates/, build.rs or Cargo.lock differ from the last job's (stamp $HERE_ROOT/compiler-sources; card
+  cloud-stale-compiler; probes/cloud_stale_compilers.sh).
 - Environmental failures: scripts/cloud-test-environmental.txt, one regex per line with its reason; matches are listed
   apart and don't make the verdict red. A second regex after the test's narrows it to the items its panic lists (the
   playground sample slices: only gpu_visualizer_warp is Mac-only; dates failing there is red). Grown only from real runs. `--summarize <log> [list]` re-summarizes a saved log.
@@ -84,7 +98,8 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   credit; whether it takes effect is unverified).
 - A second launch of an identical pending run only waits for its result. A job without a result frees its
   session after 90 min. A run that can't reach its tests pushes a red result naming why; the test run is killed after
-  40 min, or once no test finished for 15 min (STALL_SECONDS). `pkill cargo` leaves the test binary running: the
+  60 min, or once no test finished for 15 min while the tests use no CPU (STALL_SECONDS), 30 min while they compute
+  (BUSY_STALL_SECONDS: the self build behind a narrow `warp self` run finishes no test for up to 15 min). `pkill cargo` leaves the test binary running: the
   watchdog kills timeout's process group.
 - The runtime stub is built before the tests with the run's crate source, as test.sh does (WARP_TEST_STUBS_BUILT=1):
   in vendor mode the source replacement comes only from --config flags, so a test's own `cargo build --offline` met
@@ -104,4 +119,4 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
 - Failures listed in notes/known_failures.md (read in the tested checkout, as the gate reads it at the tested tip) are
   listed apart as "known" and don't make a run red, like the environmental ones.
 - Cost: ~$0.30 per targeted run, ~$0.50 per full run (tokens, not VM time). A targeted run takes 5–6 min, mostly the
-  cold build. A full run is ~25 min and ignores ~150 more tests than the Mac (tests that skip themselves off macOS).
+  cold build. A full run is five shards of ~15 min each and ignores ~150 more tests than the Mac (tests that skip themselves off macOS).

@@ -52,7 +52,7 @@ swizzle_fits(p: Node, letters: text): bool := {
 	yes
 }
 # the place, counted from 1, of the component a letter picks: x 1, y 2, z 3, w 4
-letter_component(b: int): int := if b == 119 then 4 else b - 119
+letter_component(b: int): int := if b == Ascii.LowerW then 4 else b - Ascii.LowerW
 swizzled_one(p: Node, letter: text): Node := unboxed_list(p)#letter_component(byte_at(letter, 0))
 swizzled(p: Node, letters: text): list := {
 	items = unboxed_list(p)

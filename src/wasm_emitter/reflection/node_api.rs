@@ -7,7 +7,10 @@
 
 use crate::node::Node;
 use crate::operators::OP_CODES;
-use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
+use crate::type_kinds::{
+	Kind, EMPTY_LIST_KIND, KIND_BITS, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT, SQUARE_BRACKET_INFO, UNMARKED_KIND,
+};
+use crate::wasm_emitter::constructors::NEW_EMPTY_LIST;
 use crate::wasm_emitter::runtime_dependencies::{any, Dependency};
 use crate::wasm_emitter::text::text_builtins::{ERROR_OF, TEXT_CONCAT, TEXT_OF};
 use crate::wasm_emitter::{WasmGcEmitter, NEW_TEXT_OF};
@@ -111,7 +114,17 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		any(&[NODE_PART], &[NEW_TEXT_OF, "new_empty"]),
 		any(
 			&[NEW_KEY_OF, NEW_BRACKETED, NEW_SEPARATED],
-			&[OPERATOR_CODE, BRACKET_CODE, SEPARATOR_CODE, TEXT_OF, TEXT_CONCAT, ERROR_OF, "new_key", NEW_TEXT_OF],
+			&[
+				OPERATOR_CODE,
+				BRACKET_CODE,
+				SEPARATOR_CODE,
+				TEXT_OF,
+				TEXT_CONCAT,
+				ERROR_OF,
+				"new_key",
+				NEW_TEXT_OF,
+				NEW_EMPTY_LIST,
+			],
 		),
 	]
 }
@@ -242,10 +255,17 @@ impl WasmGcEmitter {
 					let written: Vec<(i64, &str)> =
 						OP_CODES.iter().enumerate().map(|(code, op)| (code as i64, op.as_str())).collect();
 					s.emit_part_text(f, &part_is(OP_PART), &is_kind(kind, Kind::Key), code, &written);
+					// `[]`, ø marked by its square bracket, has that bracket and no separator ("")
+					#[rustfmt::skip]
+					let group = [
+						&is_kind(kind, Kind::List)[..],
+						&[I::LocalGet(kind), I::I64Const(UNMARKED_KIND), I::I64And, I::I64Const(EMPTY_LIST_KIND), I::I64Eq, I::I32Or],
+					]
+					.concat();
 					s.emit_part_text(
 						f,
 						&part_is(BRACKET_PART),
-						&is_kind(kind, Kind::List),
+						&group,
 						code,
 						&BRACKETS.map(|(bracket, info)| (info, bracket)),
 					);
@@ -257,7 +277,7 @@ impl WasmGcEmitter {
 					let separators = super::super::separator_texts();
 					let separators: Vec<(i64, &str)> =
 						separators.iter().map(|(code, text)| (*code, text.as_str())).collect();
-					s.emit_part_text(f, &part_is(SEPARATOR_PART), &is_kind(kind, Kind::List), code, &separators);
+					s.emit_part_text(f, &part_is(SEPARATOR_PART), &group, code, &separators);
 					// a node that is no group has no bracket and no separator: ø, so a walk tests groups without `try`
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
@@ -406,11 +426,21 @@ impl WasmGcEmitter {
 			|s, f| {
 				let (code, rest) = (2, 3);
 				s.emit_code_or_error(f, text, code, coder, prefix);
-				// no items is the empty list ø, whatever its brackets, as `()` parses
+				// no items: ø, as `()` and `{}` parse, but `[]` in square brackets (type_kinds::EMPTY_LIST_KIND); a
+				// separator keeps it as it is
 				Self::emit_list(f, &kind_of(items));
 				Self::emit_is_empty(f);
 				f.instruction(&I::If(BlockType::Empty));
-				s.call(f, "new_empty"); // `[]` included: its square bracket is no part of ø
+				if name == NEW_BRACKETED {
+					Self::emit_list(f, &[I::LocalGet(code), I::I64Const(SQUARE_BRACKET_INFO), I::I64Eq]);
+					f.instruction(&I::If(BlockType::Result(node_ref)));
+					s.call(f, NEW_EMPTY_LIST);
+					f.instruction(&I::Else);
+					s.call(f, "new_empty");
+					f.instruction(&I::End);
+				} else {
+					f.instruction(&I::LocalGet(items));
+				}
 				Self::emit_list(f, &[I::Return, I::End]);
 				Self::emit_list(f, &kind_of(items));
 				Self::emit_kind_test(f, Kind::List as i64, I::I64Ne);

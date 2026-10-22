@@ -1,0 +1,97 @@
+# `reverse xs`, `upper t`, `floor x` (card pure-lane-knows): a library word of one typed value applies to the value after
+# it, as `reverse(xs)` does, wherever it stands; a synonym calls its word (`sorted xs` is sort(xs)). A program binding
+# the word keeps its own. The words and their parameters are the typed lines of lib/prelude.warp and lib/math.warp
+# (`floor(x: number): int from warp`); a word with a default or a rest parameter takes no spaced argument.
+# `print #xs` parses as the subscript `print#xs`: a word taking one value, or a function of the program with
+# parameters, counts the value after it, `print(#xs)` (card print-hash-count).
+# Rust twins: src/lowering/words/library_words.rs word_call (`sin x`), library_signatures.rs typed_first_arity,
+# negated_calls.rs (`print #xs`)
+use "walk.warp"
+use "scope.warp"
+use "builtin_signatures.warp"
+
+# the printing words, which count the value after them as a word of one value does
+printing_words = ["print", "puts"]
+
+# the libraries of the typed lines: warp's runtime, the emitter's expansions, libm
+typed_libraries = ["warp", "emitter", "'m'"]
+math_text = module_source("math")
+
+# word → its typed lines of lib/prelude.warp and lib/math.warp, the first written first
+global typed_word_lines = ø
+word_lines(): any := {
+	if typed_word_lines != ø { return typed_word_lines }
+	typed_word_lines = {}
+	for line in (prelude_text + "\n" + math_text).split("\n") {
+		for library in typed_libraries {
+			typed = typed_line(line, library)
+			if typed != ø {
+				if not typed_word_lines.has(typed.name) { typed_word_lines[typed.name] = [] }
+				typed_word_lines[typed.name] = typed_word_lines[typed.name] + [typed]
+			}
+		}
+	}
+	typed_word_lines
+}
+
+# whether the word's first line takes exactly one value, typed
+takes_one_typed_value(word: text): bool := {
+	lines = word_lines()
+	if not lines.has(word) { return no }
+	parameters = lines[word]#1.signature.parameters
+	#parameters == 1 and parameters#1.type_name != "" and not parameters#1.rest
+}
+
+# `word value` → `word(value)` for a library word of one typed value the program leaves free
+spaced_library_call(n: any, scope: any): any := {
+	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 is symbol) { return n }
+	written = name_of(n#1)
+	word = unaliased(written)
+	if binds(scope, written) or not takes_one_typed_value(word) { return n }
+	call_of(word, [n#2])
+}
+
+# the functions the program defines with parameters: `f(a) := …`, `def f(a) {…}`
+functions_with_parameters(program: any): list := {
+	names = []
+	for n in nodes_in(program) {
+		meanings = meanings_of(n)
+		if #meanings > 1 and meanings#1#2 == Meaning.Function and meanings#2#2 == Meaning.Parameter { names += [meanings#1#1] }
+	}
+	names
+}
+
+# whether `word#x` counts x for the word: a printing word or a library word of one value the program leaves free, or
+# a function of the program with parameters. A type takes no count: `int#101` is the subscript of a typed array; nor
+# does a variable or parameter named like a function: `words = [p]; words#1` beside a function words
+counts_after(word: any, functions: list, scope: any): bool := {
+	if not (word is symbol) { return no }
+	written = name_of(word)
+	if binds_value(scope, written) { return no }
+	if functions contains written { return yes }
+	not binds(scope, written) and (printing_words contains written or takes_one_typed_value(unaliased(written)))
+}
+
+# [the word, the counted value] of `word#x`, or of a member chain on it: `print #s.names` parses as `(print#s).names`
+# and counts the field
+counted_parts(n: any, functions: list, scope: any): any := match n {
+	Key(word, Op.Hash, counted): { if counts_after(word, functions, scope) then [name_of(word), counted] else ø }
+	Key(base, Op.Dot, member): {
+		inner = counted_parts(base, functions, scope)
+		if inner == ø then ø else [inner#1, Key(inner#2, Op.Dot, member)]
+	}
+	_: ø
+}
+
+# `print#xs` → `print(#xs)`, from the top: a member chain on the count is whole before its parts are rewritten
+counted_calls(n: any, functions: list, scope: any): any := {
+	parts = counted_parts(n, functions, scope)
+	if parts != ø { return call_of(parts#1, [Key(ø, Op.Hash, counted_calls(parts#2, functions, scope))]) }
+	children(n, x => counted_calls(x, functions, scope))
+}
+
+library_calls(program: any): any := {
+	scope = scope_of(program)
+	counted = counted_calls(program, functions_with_parameters(program), scope)
+	bottom_up(counted, n => spaced_library_call(n, scope))
+}

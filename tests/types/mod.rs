@@ -66,6 +66,7 @@ mod test_dispatch;
 mod test_duration_comparison; // cards day-day, day-hours
 mod test_duration_unit_variables; // card time-unit
 mod test_duration_units; // card time-module
+mod test_element_field_like_function;
 mod test_element_field_writes;
 mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
@@ -89,6 +90,7 @@ mod test_generic_classes;
 mod test_generic_types;
 mod test_hex_int; // card hex-printing
 mod test_hex_word; // hex x is hex(x), literals are 0x…
+mod test_implicit_self; // card implicit-self
 mod test_index_position; // card index-position
 mod test_instance_arguments;
 mod test_instance_final_bare; // card program-last
@@ -132,6 +134,7 @@ mod test_operation_type; // card parse-type
 mod test_optional_casts;
 mod test_optional_list_items;
 mod test_optional_number_fields;
+mod test_optional_result_body;
 mod test_param_named_like_global; // card param-named-like-global
 mod test_param_named_like_library_word; // card word-param-list
 mod test_parameter_text; // card param-text
@@ -222,6 +225,7 @@ mod test_typed_arrays;
 mod test_typed_builtins; // card typed-builtins
 mod test_typed_list_annotations; // card typed-list-annotations
 mod test_typed_list_elements; // card typed-list-elements
+mod test_typed_param_phrases;
 mod test_types;
 mod test_types_scope;
 mod test_union_returns;
@@ -233,4 +237,4 @@ mod test_user_counting_word; // card user-defined-size
 mod test_value_constructor;
 mod test_variant_equality; // card variant-left
 mod test_variant_payloads;
-mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body`
+mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body` // card element-field-like-function // card pure-typed-params

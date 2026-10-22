@@ -95,6 +95,8 @@ const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
+	// `simplify = rules { data($a * 1) => a }` as its walker (tree_walks.rs) before lower_match_arms reads the walker's arms
+	crate::lowering::tree_walks::lower_rule_sets,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
 	// a bare `return` as the phrase `return ø` (welcome_forms.rs), before any pass reads a return
@@ -152,10 +154,9 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::analyzer::match_exhaustive::check,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::lowering::late_binding::split_global_assignments,
-	// a hosted program without routes: its value the page at /, each function a route (card make-deploy)
-	crate::lowering::serve::with_default_routes,
-	// a run without a server: each `get "/path" {…}` is also the page at its path (cards square-int, recognized-browser)
-	crate::lowering::serve::with_page_routes,
+	// a hosted program without routes: its value the page at /, each function a route (card make-deploy); a run without
+	// a server: each `get "/path" {…}` is also the page at its path (cards square-int, recognized-browser)
+	crate::lowering::serve::with_implied_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
 	crate::lowering::serve::bind_path_parameters,
 	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
@@ -218,10 +219,9 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::modules::insert_module_classes,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
 	crate::lowering::type_aliases::lower,
-	// `f(t: type)` takes the type value itself (type_parameters.rs), before class_methods reads typed parameters
+	// `f(t: type)` takes the type value itself, `id(x: T): T` holds a type variable as any (type_parameters.rs), before
+	// class_methods reads typed parameters
 	crate::lowering::type_parameters::lower,
-	// `id(x: T): T`: a type variable of a generic signature, held as any (type_parameters.rs)
-	crate::lowering::type_parameters::lower_type_variables,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::lowering::traits::lower_trait_parameters,
 	// `stored people: [Person]`: the table's rows, inserts and field changes written through
@@ -268,9 +268,6 @@ const MODULE_PASSES: &[Pass] = &[
 	// `count(x) := 7`: the program's count·any for the values the library's count is not for (typed_library_words.rs)
 	crate::lowering::typed_library_words::lower,
 	crate::modules::resolve,
-	// again: the functions of a used module that itself uses the file of an alias (`use "types.warp"` in analyzer.warp)
-	// joined in resolve with the alias unresolved
-	crate::lowering::type_aliases::lower,
 	// `play(xs: list of int)`: one parameter `xs:"list of int"` (declaration_forms.rs), the library's heads too, before
 	// any pass reads a head (function_types, shared_arrays)
 	crate::lowering::declaration_forms::lower_list_parameters,
@@ -400,8 +397,6 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::variadic::lower_list_spreads,
 	crate::lowering::phrase_words::lower,
 	crate::lowering::library_words::lower,
-	// `count x.bytes` is `byte_size(x)`, after library_words wrote x.bytes as the prelude call
-	crate::lowering::library_words::lower_byte_counts,
 	// `xs[xs.index_of(x)]`: a position meeting brackets, an index meeting `#` (index_positions.rs), once index_of is named
 	crate::lowering::index_positions::lower,
 	// after library_words names `k in d`, d.get(k) …; so after one_entry_maps (which comes before library_words lowers
@@ -414,13 +409,13 @@ const MEANING_PASSES: &[Pass] = &[
 /// A module's source after the passes the program ran before its `use` was resolved (MODULE_SOURCE_PHASES):
 /// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
 /// Not the program's own passes: getters::lower (a getter `answer := 42` is lowered with the program, whose reads of it
-/// become calls), meta_values::with_table (the program's table of its classes and modules), serve::with_default_routes (a module's functions are no routes of a hosted program) and serve::with_page_routes.
+/// become calls), meta_values::with_table (the program's table of its classes and modules) and
+/// serve::with_implied_routes (a module's functions are no routes of a hosted program).
 pub(crate) fn lower_module_source(module: Node) -> Node {
-	let program_only: [Pass; 4] = [
+	let program_only: [Pass; 3] = [
 		crate::lowering::getters::lower,
 		crate::lowering::meta_values::with_table,
-		crate::lowering::serve::with_default_routes,
-		crate::lowering::serve::with_page_routes,
+		crate::lowering::serve::with_implied_routes,
 	];
 	MODULE_SOURCE_PHASES
 		.iter()
