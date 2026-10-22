@@ -667,7 +667,11 @@ def header_expression(p: Parser, min_power: int): Node := {
 def continued(p: Parser, left: Node, min_power: int): Node := {
 	// a prefix `if` inside a tighter operand took its own `then` (owns_branches), so its `else` too
 	took_own_then = false
+	// left is the phrase an implicit application made in the round before
+	applied = false
 	while true {
+		follows_application = applied
+		applied = false
 		if tab_separates(p) { break }
 		skip_spaces(p)
 		c = peek(p.code, p.at, p.n)
@@ -783,13 +787,15 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				if not applies(p, left, min_power) { break }
 				// `s + f 2 each: 3`: the labelled arguments after the argument are the call's too
 				labelled = labelled_argument(p)
-				items = [left, if labelled == ø then argument(p, not applies_otherwise(p, min_power) or ends_with_clause_word(left)) else labelled]
+				given = [if labelled == ø then argument(p, not applies_otherwise(p, min_power) or ends_with_clause_word(left)) else labelled]
 				labelled = labelled_argument(p)
 				while labelled != ø {
-					items = items + [labelled]
+					given = given + [labelled]
 					labelled = labelled_argument(p)
 				}
-				left = listed("", " ", items)
+				// `x = name of q with a`: the next word after an applied phrase joins it, one flat phrase as the statement is
+				left = listed("", " ", (if follows_application then items_of(left) else [left]) + given)
+				applied = true
 				continue
 			}
 			powers = binding_powers(op#2)
