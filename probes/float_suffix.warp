@@ -1,0 +1,16 @@
+#!/usr/bin/env warp
+# `0.1f`, `3d`: a float suffix converts the number to a float, even beside a variable f (card parser-reads-float)
+# want: 0.1, 3.5, 3, 1000, 2, 1.5
+x = 0.1f
+print x
+print 2.5f + 1
+y = 3f
+print y
+print 1e3f
+f = 4
+print 2f
+print 1.5d
+# a number type glued after a colon converts tightly too; want: 0.5, 2, 7
+print 0.5:float
+print 2.5:int
+print 7:exact

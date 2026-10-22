@@ -1,5 +1,6 @@
-//! Math notation: superscript powers `x²`, `xⁿ`, norm bars `‖v‖`
+//! Math notation: superscript powers `x²`, `xⁿ`, circumfix operators `‖v‖`, `⌊x⌋`
 use super::*;
+use crate::operators::{math_circumfixes, CircumfixAlias};
 
 /// Superscript letters and the letters they raise: `2ⁿ` is 2^n
 const SUPERSCRIPT_LETTERS: [(char, char); 25] = [
@@ -48,19 +49,38 @@ pub(crate) fn superscript_digit(ch: char) -> Option<i64> {
 }
 
 impl WarpParser {
-	/// `‖x‖` brackets a whole expression like parentheses: `‖3-5‖*2` → 4
-	pub(super) fn parse_norm_bars(&mut self) -> Node {
+	/// The circumfix operator opening here, the program's own or lib/math.warp's (`circumfix operator ⌊ ⌋ := floor`)
+	fn circumfix_here(&self) -> Option<CircumfixAlias> {
+		self.source_circumfixes.iter().chain(math_circumfixes()).find(|pair| self.at_text(&pair.opening)).cloned()
+	}
+
+	/// The glyph closes a circumfix operator: `⌊x⌋ + 1` ends the bracketed expression there, `⌋` is no free symbol
+	pub(super) fn closes_circumfix(&self, glyph: char) -> bool {
+		let mut spelling = [0; 4];
+		let spelled = &*glyph.encode_utf8(&mut spelling);
+		self.source_circumfixes.iter().chain(math_circumfixes()).any(|pair| pair.closing == spelled)
+	}
+
+	/// `‖x‖`, `⌊x⌋` bracket a whole expression like parentheses and apply their function to it: `‖3-5‖*2` → 4. A prefix
+	/// operator word's target (abs) is that operator, any other a call of the function
+	pub(super) fn try_parse_circumfix(&mut self) -> Option<Node> {
+		let pair = self.circumfix_here()?;
+		self.advance_by(pair.opening.chars().count());
 		let inner = self.parse_expr(0);
 		self.skip_spaces();
-		if self.current_char() != '‖' {
-			return missing_closer(
-				"Missing closing ‖".into(),
-				"‖",
+		if !self.at_text(&pair.closing) {
+			return Some(missing_closer(
+				format!("Missing closing {}", pair.closing),
+				&pair.closing,
 				crate::errors::fixits::end_of_line(&self.input, self.line_nr),
-			);
+			));
 		}
-		self.advance();
-		self.finish_prefix(Op::Abs, inner)
+		self.advance_by(pair.closing.chars().count());
+		let prefix_operator = PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| *word == pair.target);
+		Some(match prefix_operator {
+			Some((_, op)) => self.finish_prefix(op, inner),
+			None => crate::node::call(&pair.target, vec![inner]),
+		})
 	}
 
 	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:

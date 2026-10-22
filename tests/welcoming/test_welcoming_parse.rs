@@ -67,3 +67,10 @@ fn for_destructures_a_tuple_or_comma_names() {
 	is!("x = 0; for (r, c) in [(0, 1), (2, 3)] { x += r*10+c }; x", 24);
 	is!("m = {a: 1, b: 2}; x = 0; for k, v in m { x += v }; x", 3);
 }
+
+// card rust-parser: a bare name as the condition before `elif` is the whole condition
+#[test]
+fn elif_after_a_bare_name_condition() {
+	is!("c = false; d = true; if c { 1 } elif d { 2 } else { 3 }", 2);
+	is!("c = false; d = true; x = 0; if c { x = 1 } elif d { x = 2 } else { x = 3 }; x", 2);
+}

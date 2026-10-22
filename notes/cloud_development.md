@@ -92,7 +92,8 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   credit; whether it takes effect is unverified).
 - A second launch of an identical pending run only waits for its result. A job without a result frees its
   session after 90 min. A run that can't reach its tests pushes a red result naming why; the test run is killed after
-  40 min, or once no test finished for 15 min (STALL_SECONDS). `pkill cargo` leaves the test binary running: the
+  60 min, or once no test finished for 15 min while the tests use no CPU (STALL_SECONDS), 30 min while they compute
+  (BUSY_STALL_SECONDS: the self build behind a narrow `warp self` run finishes no test for up to 15 min). `pkill cargo` leaves the test binary running: the
   watchdog kills timeout's process group.
 - The runtime stub is built before the tests with the run's crate source, as test.sh does (WARP_TEST_STUBS_BUILT=1):
   in vendor mode the source replacement comes only from --config flags, so a test's own `cargo build --offline` met
