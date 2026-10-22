@@ -22,7 +22,7 @@ pub(crate) enum Reduction {
 	Max,
 }
 
-// ⚠ WARP DOES THIS DIFFERENTLY: reductions follow the operator laws (associative, identity), not names → lib/prelude.warp operator_laws
+// ⚠ WARP DOES THIS DIFFERENTLY: a reduction is chosen by its operator's laws (associative, identity), declared as data, not by name → lib/prelude.warp operator_laws
 pub(super) const REDUCTIONS: [Reduction; 3] = [Reduction::Sum, Reduction::Min, Reduction::Max];
 /// The largest f32, where min and max start (WGSL has no infinity literal), by its bits: the decimal 3.4028235e38
 /// rounds above it, which Chrome's WGSL compiler (Tint) refuses

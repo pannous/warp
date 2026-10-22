@@ -27,6 +27,7 @@ const LENGTH: &str = "range_length";
 const LENGTH_TEMPLATE: &str = "(if range_end - range_start > 0 then range_end - range_start else 0)";
 const INDEX_TEMPLATE: &str = "if range_index >= 1 and range_index <= range_length then range_start + range_index - 1 else range_whole#range_index";
 const BOUND_ARITHMETIC: [Op; 5] = [Op::Add, Op::Sub, Op::Mul, Op::Pow, Op::Mod];
+// ⚠ WARP DOES THIS DIFFERENTLY: a range's sum is a rewrite rule written in warp → lib/prelude.warp range_sum
 const SUM_TEMPLATE: &str = "range_length * (2 * range_start + range_length - 1) / 2";
 
 pub fn lower(node: Node) -> Node {
