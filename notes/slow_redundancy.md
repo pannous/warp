@@ -85,3 +85,35 @@ Timed seconds of the ignored tests: 81.5 s plus the three untimed self-hosting r
 | text::test_text_cursor::a_cursor_reads_a_text_by_character_classes | 10.8 | text cursor |
 | web::test_dev_server::a_dev_build_keeps_component_state | 10.6 | dev reload keeps state |
 | programs::test_sound_clock::sounds_queue_on_the_audio_clock | 10.3 | queued seconds add up |
+
+## Second pass: the 24 added later (18 by the batch-8 merge, 6 by warp-cloud-lane in b645ddb221), all kept
+
+Seconds from the newest data/cloud/*/timings.tsv. The `test_self_pure` tests take only 1–14 s each; they are on the list because
+whichever runs first pays the stage compile. Ignoring them would save nothing.
+
+| test | s | capability (why it stays) |
+|---|---|---|
+| parser::test_warp_pure::warp_self_takes_repeated_parameter_names | 1145 (timed out) | `middle(_, value, _)` under `warp self` (bug pin of the self-compiled compiler) |
+| parser::test_warp_pure::warp_self_writes_the_largest_int | 1144 (timed out) | the largest int literal under `warp self` (bug pin) |
+| functions::test_bodiless_runtime_words::each_runtime_part_runs_alone | 262 | each lib/compiler/runtime/ part compiles alone (nothing else checks this; the most expensive test on the list) |
+| parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it | 61.5 | `as rational` of a float inside the warp emitter (narrow twin, as for int powers) |
+| parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts | 44.1 | shortest float digits in runtime.warp (narrow twin) |
+| text::test_text_builders::texts_built_in_turn_grow_linearly | 35.2 | text appends in linear time |
+| ffi::test_cargo_crates::test_cargo_crate_trap_names_rust_functions | 33.2 | crate name section in backtraces |
+| web::test_fix_buttons_apply::the_samples_fix_buttons_find_their_text | 18.9 | the samples' fix buttons apply |
+| functions::test_ported_calls::every_ported_call_form_keeps_its_value | 17.0 | ported call forms |
+| parser::test_self_pure::unicode_glyphs_read_self_hosted | 13.9 | glyph operators and symbols in the front and pure lanes |
+| parser::test_self_pure::op_cases_run_pure | 13.6 | Op/Bracket enum cases |
+| parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core | 12.5 | emitter.warp emits closures, classes, try; `go` falls back to Rust |
+| parser::test_self_pure::lib_forms_read_self_hosted | 11.2 | keyword keys, operator aliases, `&f`, ∛, ° |
+| parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors | 8.9 | Rust's runtime error texts from emitter.warp modules |
+| parser::test_self_pure::lambdas_run_pure | 9.0 | lambdas, closures, function values |
+| parser::test_self_pure::is_tests_types_and_equality_compares_self_hosted | 8.5 | `is` against types and values |
+| parser::test_self_pure::type_values_run_pure | 7.4 | types as values |
+| parser::test_self_pure::number_keys_run_in_the_front_lanes | 6.5 | number keys in the front lanes (also covers the ignored front-end test) |
+| web::test_style_rules::a_selector_with_a_value_is_its_color | 5.7 | style selector shorthand |
+| parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure | 4.3 | `math.sqrt` / `math.abs` members |
+| parser::test_self_hosted_cache::the_warp_emitter_imports_host_words | 3.4 | host word imports |
+| parser::test_self_pure::parser_words_run_pure | 58.9 | 38 parser-rest probes in the pure lane |
+| parser::test_self_pure::an_empty_list_literal_runs_pure | 1.7 | `[]` is a list in the pure lane |
+| parser::test_self_pure::a_match_arm_of_a_constant_runs_pure | 1.0 | a `True:` arm (match_arm_forms covers only case patterns) |
