@@ -8,6 +8,9 @@ Kind = {Empty: 0, Int: 1, Float: 2, Text: 3, Codepoint: 4, Symbol: 5, Key: 6, Bl
 # bracket 0, a list of the square one 1 and of none 5, an instance a Key of no operator, an entry a Key of `:`
 # (Op::Colon 1, src/operators/codes.rs), a type value a Symbol marked TYPE_VALUE_MARK (1 << 54)
 Marked = {Bool: 257, Map: 8, SquareList: 264, UnbracketedList: 1288, Instance: 6, Entry: 262, TypeValue: 18014398509481989}
+# the held kinds `x is type` tells apart beyond the Kind, as bit places past every Kind's: a value's held kind is the
+# bit 1 << place (runtime types.warp held_kind_bit), a type the mask of the held kinds passing it (emitter.warp)
+HeldKind = {Bool: 20, Rational: 21, Map: 22, TypeValue: 23}
 # the units of the parts above the Kind: the info byte (a key's operator, a list's bracket, a time's form, KIND_BITS
 # 8), a list's separator (SEPARATOR_SHIFT 48), the code mark (CODE_MARK, 1 << 56)
 KindUnit = {Info: 256, Separator: 281474976710656, Code: 72057594037927936}

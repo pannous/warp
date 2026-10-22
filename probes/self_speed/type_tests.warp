@@ -1,0 +1,12 @@
+# `x is type` of values known only at run time, each core type against each kind of value
+def kinds(v: any): text { "" + (v is int) + (v is rational) + (v is float) + (v is number) + (v is text) + (v is char) + (v is bool) + (v is list) + (v is map) + (v is key) + (v is symbol) }
+print(kinds(1))
+print(kinds(1/3))
+print(kinds(2.5e0))
+print(kinds("hi"))
+print(kinds('c'))
+print(kinds(yes))
+print(kinds([1]))
+print(kinds({a: 1}))
+print(kinds(ø))
+print(kinds(int))
