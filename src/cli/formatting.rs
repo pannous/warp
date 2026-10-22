@@ -9,16 +9,15 @@
 use std::fs;
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
-use warp::formatting::{format, soft_hints, Change, Formatted, Options};
-use warp::node::Node;
+use warp::formatting::{format, soft_hints, Formatted, Options};
 
 pub(crate) const FORMAT_COMMANDS: [&str; 2] = ["format", "lint"];
 pub(crate) const BEAUTIFY_COMMAND: &str = "beautify";
 /// `warp fix <file>` = beautify (user 2026-10-15)
 pub(crate) const BEAUTIFY_COMMANDS: [&str; 2] = [BEAUTIFY_COMMAND, "fix"];
-/// ⚠ WARP DOES THIS DIFFERENTLY: beautify's rewrites and layout are lib/fix/fix.warp's `fixed(code)`, [text, changes]
-/// with each change "<line> <rule>" (card fix-in-lib); src/formatting's beautify stays for its Rust callers
-const FIX_PIPELINE: &str = "fix/fix.warp";
+/// ⚠ WARP DOES THIS DIFFERENTLY: warp fix and warp beautify are lib/fix/command.warp, run with the command word and its
+/// arguments (card fix-in-lib); src/formatting's beautify stays for its Rust callers
+const FIX_COMMAND_PROGRAM: &str = "fix/command.warp";
 const CHECK_WORD: &str = "check";
 const HASH_COMMENTS_WORD: &str = "hash-comments";
 /// `warp beautify yes <file>`: applied without the preview's question
@@ -182,31 +181,21 @@ fn format_code(
 	0
 }
 
-/// The code as lib/fix/fix.warp fixes it; a change's rule lives as long as the command (leaked, a few per file)
-fn fixed_by_lib(code: &str) -> Result<Formatted, String> {
-	let pipeline = warp::modules::library_folder().join(FIX_PIPELINE);
-	warp::modules::std_adapters::set_program_arguments(vec![code.to_string()]);
-	let fixed = warp::wasm_emitter::eval(&format!("use os\nuse \"{}\"\nfixed(args[0])", pipeline.display()));
-	let text = |node: &Node| match node.drop_meta() {
-		Node::Text(text) => Some(text.clone()),
-		_ => None,
-	};
-	let Node::List(parts, _, _) = fixed.drop_meta() else { return Err(fixed.serialize()) };
-	let (Some(fixed_text), Some(Node::List(changes, _, _))) =
-		(parts.first().and_then(text), parts.get(1).map(Node::drop_meta))
-	else {
-		return Err(fixed.serialize());
-	};
-	let change = |said: String| {
-		let (line, rule) = said.split_once(' ')?;
-		Some(Change { line: line.parse().ok()?, rule: Box::leak(rule.to_string().into_boxed_str()) })
-	};
-	Ok(Formatted { text: fixed_text, changes: changes.iter().filter_map(text).filter_map(change).collect() })
+/// The exit code of lib/fix/command.warp, which ends warp itself with it; reached only when the program fails
+fn lib_fix_command(command: &str, arguments: &[String]) -> i32 {
+	let program = warp::modules::library_folder().join(FIX_COMMAND_PROGRAM);
+	let words = std::iter::once(command.to_string()).chain(arguments.iter().cloned());
+	warp::modules::std_adapters::set_program_arguments(words.collect());
+	println!("warp {command}: {}", warp::wasm_emitter::eval(&program.to_string_lossy()).serialize());
+	1
 }
 
 /// The exit code: 1 when a file does not parse or, with `check`, would change. The option words come first; a file
 /// named like one is written `./check`. Arguments naming no file, that read as code, are formatted as code
 pub(crate) fn format_command(command: &str, arguments: &[String]) -> i32 {
+	if BEAUTIFY_COMMANDS.contains(&command) {
+		return lib_fix_command(command, arguments);
+	}
 	if arguments.iter().any(|argument| HELP_WORDS.contains(&argument.as_str())) {
 		println!("  {FORMAT_USAGE}");
 		return 0;
@@ -217,7 +206,7 @@ pub(crate) fn format_command(command: &str, arguments: &[String]) -> i32 {
 	let beautify = BEAUTIFY_COMMANDS.contains(&command);
 	let yes = option_words.iter().any(|word| word == YES_WORD);
 	let options = Options { hash_comments: beautify || option_words.iter().any(|word| word == HASH_COMMENTS_WORD) };
-	let rewritten = |code: &str| if beautify { fixed_by_lib(code) } else { format(code, options) };
+	let rewritten = |code: &str| if beautify { warp::formatting::beautify(code) } else { format(code, options) };
 	let names_code = !paths.is_empty() && paths.iter().all(|path| !Path::new(path).exists() && !looks_like_path(path));
 	if names_code {
 		return format_code(&paths.join(" "), check, options, rewritten);
