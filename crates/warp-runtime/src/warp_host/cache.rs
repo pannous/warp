@@ -18,43 +18,62 @@ pub fn fingerprint(parts: impl Hash) -> String {
 	format!("{:016x}", hasher.finish())
 }
 
-/// The fingerprint of a folder's files as they are now: their paths, sizes and times of change
+/// The fingerprint of a folder's files: their paths within it and their contents, so a cache made from the same lib/
+/// elsewhere (a shipped cache, `shipped()`) matches; reading lib/ (~1.7 MB) takes a few ms
 pub fn folder_fingerprint(folder: &Path) -> String {
-	fn walk(folder: &Path, found: &mut Vec<(PathBuf, u64, Option<std::time::SystemTime>)>) {
+	fn walk(root: &Path, folder: &Path, found: &mut Vec<(PathBuf, Vec<u8>)>) {
 		let Ok(entries) = std::fs::read_dir(folder) else { return };
 		for entry in entries.flatten() {
-			let Ok(metadata) = entry.metadata() else { continue };
-			if metadata.is_dir() {
-				walk(&entry.path(), found)
-			} else {
-				found.push((entry.path(), metadata.len(), metadata.modified().ok()))
+			let Ok(kind) = entry.file_type() else { continue };
+			let path = entry.path();
+			if kind.is_dir() {
+				walk(root, &path, found)
+			} else if let Ok(bytes) = std::fs::read(&path) {
+				found.push((path.strip_prefix(root).unwrap_or(&path).to_path_buf(), bytes))
 			}
 		}
 	}
 	let mut found = vec![];
-	walk(folder, &mut found);
+	walk(folder, folder, &mut found);
 	found.sort();
 	fingerprint(found)
 }
 
+/// The folders read for a cached file: the cache, then the shipped one, read only: WARP_HOST_SHIPPED_CACHE, else
+/// `<bin>/../share/warp/host-cache` or `<bin>/host-cache` beside warp-host (packaging fills it by one run with
+/// WARP_HOST_CACHE pointing there)
+fn folders() -> Vec<PathBuf> {
+	let beside = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf));
+	let shipped = match std::env::var_os("WARP_HOST_SHIPPED_CACHE") {
+		Some(folder) => vec![PathBuf::from(folder)],
+		None => {
+			beside.map(|bin| vec![bin.join("../share/warp/host-cache"), bin.join("host-cache")]).unwrap_or_default()
+		}
+	};
+	folder().into_iter().chain(shipped).collect()
+}
+
 /// The module of `bytes`, its machine code from the cache when an engine of these settings compiled it before
 pub fn module(engine: &Engine, bytes: &[u8]) -> Result<Module> {
-	let Some(folder) = folder() else { return Module::new(engine, bytes) };
-	let file = folder.join(fingerprint((bytes, engine.precompile_compatibility_hash())) + ".cwasm");
-	// SAFETY: the file is machine code this program serialized for an engine of the same settings, named by both
-	if let Ok(module) = unsafe { Module::deserialize_file(engine, &file) } {
-		return Ok(module);
+	let name = fingerprint((bytes, engine.precompile_compatibility_hash())) + ".cwasm";
+	for folder in folders() {
+		// SAFETY: the file is machine code a warp-host serialized for an engine of the same settings, named by both;
+		// wasmtime checks the version, settings and CPU features again, and a mismatch compiles anew
+		if let Ok(module) = unsafe { Module::deserialize_file(engine, folder.join(&name)) } {
+			return Ok(module);
+		}
 	}
 	let module = Module::new(engine, bytes)?;
-	if let Ok(code) = module.serialize() {
-		write(&file, &code);
+	if let (Some(folder), Ok(code)) = (folder(), module.serialize()) {
+		write(&folder.join(&name), &code);
 	}
 	Ok(module)
 }
 
 /// The value kept under `name` by the program `keeper` names; None without one
 pub fn kept(keeper: &Option<String>, name: &str) -> Option<Node> {
-	let bytes = std::fs::read(kept_file(keeper.as_ref()?, name)?).ok()?;
+	let file = kept_name(keeper.as_ref()?, name);
+	let bytes = folders().into_iter().find_map(|folder| std::fs::read(folder.join(&file)).ok())?;
 	nodes::decode(&mut bytes.as_slice())
 }
 
@@ -68,8 +87,12 @@ pub fn keep(keeper: &Option<String>, name: &str, value: &Node) {
 	}
 }
 
+fn kept_name(keeper: &str, name: &str) -> String {
+	fingerprint((keeper, name)) + ".kept"
+}
+
 fn kept_file(keeper: &str, name: &str) -> Option<PathBuf> {
-	Some(folder()?.join(fingerprint((keeper, name)) + ".kept"))
+	Some(folder()?.join(kept_name(keeper, name)))
 }
 
 /// Written whole or not at all: to a file of its own first, then renamed; a cache that cannot be written is no cache
