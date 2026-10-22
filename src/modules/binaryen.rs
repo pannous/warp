@@ -31,11 +31,18 @@ const SPEED_FLAGS: [&str; 6] = [
 	"-g",
 	"--quiet",
 ];
+/// Set to 0: the self-hosted stages run as compiled, without wasm-opt, for a one-off check (`warp rebuild self` of a
+/// branch): -O3 takes ~15% of a fresh self build's CPU (306 → 260 s, same wall time, on the Mac), in bursts of ~240%
+/// of a core. A WARP_ setting, so the stages kept this way are other modules than the optimized ones (stage_key)
+const OPTIMIZE_SETTING: &str = "WARP_WASM_OPT";
 
-/// The module wasm-opt made faster, for one compiled once and run often (a self-hosted stage); None when wasm-opt is
-/// not on PATH, said once, or when it fails, said loudly
+/// The module wasm-opt made faster, for one compiled once and run often (a self-hosted stage); None with
+/// WARP_WASM_OPT=0, when wasm-opt is not on PATH, said once, or when it fails, said loudly
 pub fn optimized_for_speed(module: &[u8]) -> Option<Vec<u8>> {
 	static NOTED: std::sync::Once = std::sync::Once::new();
+	if std::env::var(OPTIMIZE_SETTING).is_ok_and(|setting| setting == "0") {
+		return None;
+	}
 	if !available(WASM_OPT) {
 		if crate::errors::diagnostic::is_shown(crate::errors::diagnostic::Level::Hint) {
 			NOTED.call_once(|| {

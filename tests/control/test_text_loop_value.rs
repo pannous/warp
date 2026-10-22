@@ -22,6 +22,14 @@ fn a_text_loop_that_never_ran_is_empty() {
 	is!("for c in [] { \"x\" }", Empty);
 }
 
+#[test] // card rust-lane-miscompiles: a body that skipped its last statement on every pass trapped "null reference"
+fn a_text_loop_whose_every_pass_skips_is_empty() {
+	is!("for n in [\"a\"] { if n == \"a\" { continue }; n }", Empty);
+	is!("for n in [\"a\"] { if n == \"a\" { break }; n }", Empty);
+	is!("f() := { for n in [\"a\"] { if n == \"a\" { continue } } }; f(); 1", 1);
+	is!("for n in [\"a\" \"b\"] { if n == \"b\" { continue }; n }", "a");
+}
+
 #[test]
 fn numeric_loops_keep_their_values() {
 	is!("for i in 1..3 { i * 2 }", 4);

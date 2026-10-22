@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# «…» is a text that holds quotes as they are (cards parser-read, self-hosted-parser-2)
+# want: hello, she said "hi", it's, 9, a$b
+print «hello»
+print «she said "hi"»
+print «it's»
+greeting = «good morning»
+print greeting.length + -3
+print «a$b»
