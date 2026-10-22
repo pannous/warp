@@ -3,7 +3,8 @@
 # where the hole binds a variable assigned code of that shape, or a parameter of a function called with one; `$x: text`
 # (also symbol, list, block, int, number) only code of that kind. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$x is literal`, `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
+# `$f is function`, `$x is literal`, `$x is missing` (ø, also an operand not written: `rest...`), `$x is text` (a hole
+# kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word) and `$f takes int` (typed int). A place word among them, `statement`, `condition`
 # (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), lets the rule rewrite code only
@@ -32,7 +33,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal"]
+code_properties = ["type", "unbound", "value", "function", "literal", "missing"]
 # `where $n < 0`: the comparisons of a number literal
 literal_comparisons = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 and_word = "and"
@@ -49,7 +50,7 @@ yes_no_types = ["bool"]
 value_word = "value"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere
-sugar_module_names = ["sugar/fallbacks"]
+sugar_module_names = ["sugar/fallbacks", "sugar/ranges"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
@@ -317,6 +318,7 @@ condition_holds(condition: any, bound: any): bool := {
 has_property(code: any, property: text): bool := {
 	if property in hole_kinds { return is_hole_kind(code, property) }
 	if property == "literal" { return is_number_literal(code) or code is text }
+	if property == "missing" { return code == ø }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "type" { return is_tested_type(word, rule_scope) }
