@@ -50,8 +50,11 @@ fail() from runtime
 output_byte(at: int, byte: int) from runtime
 write_output(count: int): int from runtime
 host_read(count: int): int from runtime
+host_warn(count: int) from runtime
 answered_length(): int from runtime
 memory_byte(address: int): int from runtime
+# values the emitter supplies: the message of the error a try caught (emitter.warp failed_in_name)
+failed_in: text from runtime
 # times and durations, packed in the kind field; time_of(info, position) builds one (emitter.warp time_words, which
 # Rust's lane knows only of a constant info)
 time_of(info: int, position: int): any from runtime

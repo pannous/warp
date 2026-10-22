@@ -33,6 +33,11 @@ stdout = 1
 # a module that reads files imports the host's read(path address, length) → (answer address, length), as Rust's
 # import_manager.rs host_read; the host writes the answer at the exported global text_heap, past the memory's end
 host_read = ["host", "read", [96, 2, 127, 127, 2, 127, 127]]
+# a module that warns imports the host's warn(message address, length), as Rust's import_manager.rs host_warn: the
+# host says "warning: <message>" as it says every runtime warning
+host_warn = ["host", "warn", [96, 2, 127, 127, 0]]
+# the words that warn, `warning "careful"` and its alias warn (lib/prelude.warp), as a line or a call
+warning_words = ["warning", "warn"]
 # a module raising a float to a power imports libm's pow(base, exponent) → f64, as Rust's emit_float_power calls it
 float_pow = ["m", "pow", [96, 2, 124, 124, 1, 124]]
 text_heap_name = "text_heap"
@@ -125,14 +130,6 @@ holds_entry(body: Body, receiver: any, entry: text): bool := {
 	if not (receiver is symbol) { return no }
 	values = assigned_values(body.function.body, name_of(receiver))
 	#values > 0 and values.all(value => is_group(value) and bracket_of(value) == "{" and #value > 0 and value.all(is_map_entry) and value.any(item => entry_name(item) == entry))
-}
-# the values assigned to the name anywhere in n
-assigned_values(n: any, name: text): list := {
-	if type(n) is key and op_of(n) == "=" and key_of(n) == symbol(name) { return [value_of(n)] + assigned_values(value_of(n), name) }
-	if type(n) is key { return assigned_values(key_of(n), name) + assigned_values(value_of(n), name) }
-	values = []
-	if is_group(n) { for item in n { values += assigned_values(item, name) } }
-	values
 }
 entry_name(entry: any): text := if key_of(entry) is symbol then name_of(key_of(entry)) else "" + key_of(entry)
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list (Rust's node_bytes)
@@ -744,6 +741,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 			code += [op.i32_const] + sleb(written_address) + [op.local_get] + length + [op.i32_store, 2, 0]
 			["int", code + [op.local_get] + start + [op.i64_extend_i32_u]]
 		}
+		"host_warn": [no_kind, [op.i32_const] + sleb(output_address) + index_code(values#1) + [op.call] + uleb(import_index(host_warn))]
 		"answered_length": ["int", [op.i32_const] + sleb(written_address) + [op.i32_load, 2, 0, op.i64_extend_i32_s]]
 		"memory_byte": ["int", index_code(values#1) + [op.i32_load8_u, 0, 0, op.i64_extend_i32_u]]
 		# the value written, as `x = v` is v
@@ -759,7 +757,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 # memory_set_byte(address, value)
 program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte"]
 intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
-	output_byte: 2, write_output: 1, host_read: 1, answered_length: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
+	output_byte: 2, write_output: 1, host_read: 1, host_warn: 1, answered_length: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, closure_text: 1}
@@ -768,7 +766,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", list_pop: "list_pop",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
-	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
+	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
 	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", byte_at: "text_byte", float_bits: "bits_of_float"}
@@ -1201,7 +1199,7 @@ def typed_declaration(body: Body, name: text, type_name: text, value: any): list
 	if value#1 != "node" and value#1 != pending { return refuse("a " + value#1 + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
-# `x: int? = v` (walk.warp's `line_of(n): int? := try n.line else ø`): a T or ø, so x holds a node; a value known
+# `x: int? = v` (`line: int? = try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet (Rust's is), a value of another kind is refused; `x: Node? = v` (any node
 # annotation, a class too: an object or ø) holds the node as it is
 def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
@@ -1877,6 +1875,7 @@ def group_expression(body: Body, n: any): list {
 		return call(body, module.runtime[word], items_of(n)[1..])
 	}
 	if is_call_or_line(n) and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
+	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in warning_words { return call(body, module.runtime["warned"], [n#2]) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words {
 		# `count = 0; count(users)`: Rust's "`count` is a variable here"
 		if name_of(n#1) in body.names { return refuse("the variable " + name_of(n#1) + " applied to a value") }
@@ -2476,6 +2475,9 @@ def host_int(value: any): list {
 runtime_global(n: any): any := {
 	if not (type(n) is key and op_of(n) == ":" and key_of(n) == symbol("global")) { return ø }
 	name = name_of(key_of(value_of(n)))
+	# a table the runtime parts use for its numbers (kinds.warp, byte_codes.warp) is folded into the code, no variable
+	# of the runtime: the program keeps its own `Kind` (card constants-exist)
+	if name in constant_tables { return ø }
 	module.globals[name] = [#module.global_order, if value_of(value_of(n)) is number then "int" else "text"]
 	module.runtime_globals += [name]
 	module.global_order += [name]
@@ -2538,6 +2540,7 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	if mentions(program, "read") { module.imports += [host_read] }
+	if warning_words.any(word => mentions(program, word)) { module.imports += [host_warn] }
 	if has_operator(program, Op.Pow) { module.imports += [float_pow] }
 	# imported ahead of the functions, whose indices follow them: every host word the program names
 	for name in module.host.keys {

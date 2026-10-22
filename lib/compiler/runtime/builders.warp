@@ -2,6 +2,7 @@
 ## emit_all_constructors, called by src/host/tasks/values.rs Builders): emitter.warp exports each under Rust's name with
 ## Rust's signature (host_builders), a host word taking or giving nodes then reads and builds them as Rust's modules do
 use "intrinsics.warp"
+use "../kinds.warp"
 use "lists.warp"
 use "nodes.warp"
 use "show.warp"

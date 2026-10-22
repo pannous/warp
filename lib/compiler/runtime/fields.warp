@@ -1,9 +1,11 @@
 # What `m.name` reads beyond a map's entries: positions, entries, list parts, swizzles
 use "intrinsics.warp"
+use "../kinds.warp"
 use "maps.warp"
 use "nodes.warp"
 use "text.warp"
 use "types.warp"
+use "../byte_codes.warp"
 # whether `m.name` reads a field: m a map or an instance with an entry so named, an entry's key, value or name, a
 # symbol's name
 has_field(m: Node, name: text): bool := {
@@ -19,6 +21,10 @@ has_field(m: Node, name: text): bool := {
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
 # node_api.rs POSITIONED); any other node without a field of that name has no field line
 positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
+# `line_of(n)`, `column_of(n)`: where n was written, ø for a node without a position, which a field never shadows
+# (`.line` of the code `line = 1` is 1; card node-part-clash, Rust's node_api.rs PART_READERS)
+node_line(n: Node): Node := if is_meta(n) then meta_line(n) else ø
+node_column(n: Node): Node := if is_meta(n) then meta_column(n) else ø
 # `e.message` of an Error e
 is_error_message(m: Node, name: text): bool := node_is_error(m) and text_order(name, "message") == 0
 is_position_part(m: Node, name: text): bool := {

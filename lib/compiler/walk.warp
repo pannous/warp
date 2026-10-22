@@ -21,6 +21,17 @@ is_key(n: Node, op: Op): bool := match n {
 	Key(_, written, _): written == op
 	_: no
 }
+# every value `name = v` or `name: T = v` assigns in n, outside the definitions and lambdas inside
+assigned_values(n: Node, name: text): list := {
+	if is_key(n, Op.Define) or is_key(n, Op.Arrow) { return [] }
+	inner = parts_of(n).flat_map(part => assigned_values(part, name))
+	if is_key(n, Op.Assign) and assigned_variable(key_of(n)) == symbol(name) { return [value_of(n)] + inner }
+	inner
+}
+assigned_variable(target: Node): Node := match target {
+	Key(variable, Op.Colon, _): variable
+	_: target
+}
 
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
@@ -218,11 +229,8 @@ items_of(n: Node): list := {
 # message, preferred)` says it at n's position and gives n; pass_differential's call is `reported(view)`, the view
 # with the reports said meanwhile, [line, column, message, preferred] each
 global said = []
-# where n was written, ø for a node without a position (one a pass made); a block's own entry `line = line + 1` is
-# no position
-line_of(n: Node): int? := position_number(try n.line else ø)
-column_of(n: Node): int? := position_number(try n.column else ø)
-position_number(read: any): int? := if read is int then read else ø
+# whether n has where it was written (`line_of(n)`, `column_of(n)`): a node a pass made has none, and the statement
+# `line = 1` answers `.line` with its value, not a position
 is_positioned(n: Node): bool := line_of(n) != ø
 report(n: T, message: text, preferred: any): T := {
 	said += [[line_of(n), column_of(n), message, preferred]]
