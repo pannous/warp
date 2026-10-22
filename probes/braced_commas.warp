@@ -1,6 +1,8 @@
 #!/usr/bin/env warp
 # commas inside braces under `warp self` (card match-bool-arm): each line once failed with "index out of range"
 # expected: 2, other, 1, then "1 2" from the print phrase in braces
+# warp self 2026-10-22: the map and the match pass; d.a fails "no field a" without commas too (card pure-lane-data),
+# print 1, 2 has several arguments, outside the pure core (card pure-lane-print-7)
 m = {a: 1, b: 2}
 print m.b
 x = 2
