@@ -5,24 +5,38 @@ use crate::nodes::{self, Builders, Node};
 use crate::{cache, Host};
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
+use warp_runtime::gc_values::{parts_of, TEXT_HEAP};
 use warp_runtime::host_words::HOST_LIBRARY;
-use warp_runtime::gc_values::TEXT_HEAP;
 use wasmtime::{AnyRef, Caller, Extern, Linker, Result, Rooted};
 
 type Ref = Option<Rooted<AnyRef>>;
 
 pub fn link(linker: &mut Linker<Host>) -> Result<()> {
-	linker.func_wrap(HOST_LIBRARY, "std_io", |mut caller: Caller<'_, Host>, module: Ref, member: Ref, arguments: Ref| {
-		let builders = Builders::of(|name| caller.get_export(name))
-			.ok_or_else(|| wasmtime::Error::msg("std_io of a program without its node constructors"))?;
-		let mut store = caller.as_context_mut();
-		let mut read = |node: Ref| nodes::read(&wasmtime::Val::AnyRef(node), &mut store, Some(builders.memory()));
-		let (module, member) = (read(module)?.content(), read(member)?.content());
-		let arguments = read(arguments)?.items();
-		let answer = std_io(&module, &member, arguments, store.data_mut())
-			.unwrap_or_else(|problem| Node::Error(format!("{module}.{member}: {problem}").into_bytes()));
-		Ok(builders.build(&answer, &mut store)?.unwrap_anyref().copied())
-	})?;
+	linker.func_wrap(
+		HOST_LIBRARY,
+		"std_io",
+		|mut caller: Caller<'_, Host>, module: Ref, member: Ref, arguments: Ref| {
+			let builders = Builders::of(|name| caller.get_export(name))
+				.ok_or_else(|| wasmtime::Error::msg("std_io of a program without its node constructors"))?;
+			let mut store = caller.as_context_mut();
+			let mut read = |node: Ref| nodes::read(&wasmtime::Val::AnyRef(node), &mut store, Some(builders.memory()));
+			let (module, member) = (read(module)?.content(), read(member)?.content());
+			let raw = arguments;
+			let arguments = read(arguments)?.items();
+			// keep gives the value it keeps: the program's own, kept or not
+			let given = if (module.as_str(), member.as_str()) == ("os", "keep") {
+				parts_of(&wasmtime::Val::AnyRef(raw), &mut store)?.get(1).copied()
+			} else {
+				None
+			};
+			let answer = std_io(&module, &member, arguments, store.data_mut())
+				.unwrap_or_else(|problem| Node::Error(format!("{module}.{member}: {problem}").into_bytes()));
+			match given {
+				Some(value) => Ok(value.unwrap_anyref().copied()),
+				None => Ok(builders.build(&answer, &mut store)?.unwrap_anyref().copied()),
+			}
+		},
+	)?;
 	link_memory_words(linker)
 }
 
@@ -30,14 +44,20 @@ pub fn link(linker: &mut Linker<Host>) -> Result<()> {
 /// the answer out, (ptr, -len) of a failure's reason
 fn link_memory_words(linker: &mut Linker<Host>) -> Result<()> {
 	linker.func_wrap(HOST_LIBRARY, "read", |mut caller: Caller<'_, Host>, pointer: i32, length: i32| {
-		answered(&mut caller, pointer, length, |path| std::fs::read(path).map_err(|problem| format!("read {path} failed: {problem}")))
+		answered(&mut caller, pointer, length, |path| {
+			std::fs::read(path).map_err(|problem| format!("read {path} failed: {problem}"))
+		})
 	})?;
 	linker.func_wrap(HOST_LIBRARY, "fetch", |mut caller: Caller<'_, Host>, pointer: i32, length: i32| {
 		answered(&mut caller, pointer, length, |url| fetched(url, 30_000))
 	})?;
-	linker.func_wrap(HOST_LIBRARY, "fetch_within", |mut caller: Caller<'_, Host>, pointer: i32, length: i32, within: i64| {
-		answered(&mut caller, pointer, length, |url| fetched(url, within))
-	})?;
+	linker.func_wrap(
+		HOST_LIBRARY,
+		"fetch_within",
+		|mut caller: Caller<'_, Host>, pointer: i32, length: i32, within: i64| {
+			answered(&mut caller, pointer, length, |url| fetched(url, within))
+		},
+	)?;
 	linker.func_wrap(HOST_LIBRARY, "warn", |mut caller: Caller<'_, Host>, pointer: i32, length: i32| {
 		if let Some(memory) = caller.get_export("memory").and_then(Extern::into_memory) {
 			let mut message = vec![0; length as u32 as usize];
@@ -59,7 +79,12 @@ fn fetched(url: &str, within_ms: i64) -> Result<Vec<u8>, String> {
 	}
 }
 
-fn answered(caller: &mut Caller<'_, Host>, pointer: i32, length: i32, answer: impl FnOnce(&str) -> Result<Vec<u8>, String>) -> (i32, i32) {
+fn answered(
+	caller: &mut Caller<'_, Host>,
+	pointer: i32,
+	length: i32,
+	answer: impl FnOnce(&str) -> Result<Vec<u8>, String>,
+) -> (i32, i32) {
 	let Some(memory) = caller.get_export("memory").and_then(Extern::into_memory) else { return (0, 0) };
 	let heap = caller.get_export(TEXT_HEAP).and_then(Extern::into_global);
 	let mut asked = vec![0; length as u32 as usize];
@@ -96,10 +121,29 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 		("os", "command", [line]) => printed(&["sh".into(), "-c".into(), text(line)]),
 		("os", "exec", [command]) => printed(&command.clone().items().iter().map(text).collect::<Vec<_>>()),
 		("os", "run", [command]) => ran(&command.clone().items().iter().map(text).collect::<Vec<_>>()),
-		("file", "read", [path]) => std::fs::read(text(path)).map(Node::Text).map_err(|problem| text(path) + ": " + &said(problem)),
+		("file", "read", [path]) => {
+			std::fs::read(text(path)).map(Node::Text).map_err(|problem| text(path) + ": " + &said(problem))
+		}
 		("file", "exists", [path]) => Ok(Node::Bool(std::path::Path::new(&text(path)).exists())),
 		("file", "write", [path, content]) => {
 			std::fs::write(text(path), text(content)).map_err(said)?;
+			Ok(content.clone())
+		}
+		("file", "write_bytes", [path, bytes]) => {
+			let bytes = bytes.clone().items().into_iter().map(|byte| match byte {
+				Node::Int(byte) => u8::try_from(byte).map_err(|_| format!("{byte} is no byte (0 to 255)")),
+				other => Err(format!("{} is no byte (0 to 255)", other.shown())),
+			});
+			std::fs::write(text(path), bytes.collect::<Result<Vec<u8>, String>>()?).map_err(said)?;
+			Ok(Node::Empty)
+		}
+		("file", "read_bytes", [path]) => {
+			let bytes = std::fs::read(text(path)).map_err(said)?;
+			Ok(Node::List(nodes::SQUARE_LIST, bytes.into_iter().map(|byte| Node::Int(byte.into())).collect()))
+		}
+		("file", "append", [path, content]) => {
+			let mut file = std::fs::OpenOptions::new().append(true).create(true).open(text(path)).map_err(said)?;
+			file.write_all(text(content).as_bytes()).map_err(said)?;
 			Ok(content.clone())
 		}
 		_ => Err(format!("warp-host has no {module}.{member} of {} arguments", arguments.len())),
@@ -139,7 +183,11 @@ fn ran(command: &[String]) -> Result<Node, String> {
 
 fn output_of(command: &[String]) -> Result<std::process::Output, String> {
 	let (program, arguments) = command.split_first().ok_or("needs a command")?;
-	Command::new(program).args(arguments).stdin(Stdio::null()).output().map_err(|problem| format!("cannot run {program}: {problem}"))
+	Command::new(program)
+		.args(arguments)
+		.stdin(Stdio::null())
+		.output()
+		.map_err(|problem| format!("cannot run {program}: {problem}"))
 }
 
 fn trimmed(bytes: &[u8]) -> String {

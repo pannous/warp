@@ -57,9 +57,12 @@ fn command(given: Vec<String>) -> i32 {
 	// options before the file: --compiler, and the launcher's (--no-hints, --fuel n …), which warp-host ignores
 	let (mut full, mut args, mut given) = (false, Vec::<String>::new(), given.into_iter());
 	while let Some(word) = given.next() {
-		let before_file = args.is_empty() || matches!(args.as_slice(), [command] if command == "run" || command == "compile");
+		let before_file =
+			args.is_empty() || matches!(args.as_slice(), [command] if command == "run" || command == "compile");
 		match word.as_str() {
-			"--compiler" | "--fuel" if before_file => full |= word == "--compiler" && given.next().as_deref() == Some("full"),
+			"--compiler" | "--fuel" if before_file => {
+				full |= word == "--compiler" && given.next().as_deref() == Some("full")
+			}
 			option if before_file && option.starts_with("--") => {}
 			_ => args.push(word),
 		}
@@ -71,7 +74,9 @@ fn command(given: Vec<String>) -> i32 {
 	let compiler = if full { "compiler.wasm" } else { "compiler-self.wasm" };
 	match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
 		["run", source, ..] => run_source(&engine, compiler, source, &args[2..]),
-		["compile", source] => compile_file(&engine, compiler, Path::new(source), &Path::new(source).with_extension("wasm")),
+		["compile", source] => {
+			compile_file(&engine, compiler, Path::new(source), &Path::new(source).with_extension("wasm"))
+		}
 		["compile", source, wasm] => compile_file(&engine, compiler, Path::new(source), Path::new(wasm)),
 		[file, ..] if file.ends_with(".wasm") => match std::fs::read(file) {
 			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None)),
@@ -128,7 +133,8 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 	let source = absolute(source);
 	let folder = folder.or_else(|| source.parent().map(Path::to_path_buf)).unwrap_or_default();
 	let lib = library_for(&source).ok_or("no lib/ with compiler/ found: WARP_LIB names one")?;
-	let compiler = compiler_file(&lib, compiler).ok_or(format!("no {compiler} beside warp-host nor in {}/../data", lib.display()))?;
+	let compiler = compiler_file(&lib, compiler)
+		.ok_or(format!("no {compiler} beside warp-host nor in {}/../data", lib.display()))?;
 	let bytes = std::fs::read(&compiler).map_err(|problem| format!("{}: {problem}", compiler.display()))?;
 	let keeper = cache::fingerprint((&bytes, cache::folder_fingerprint(&lib)));
 	let argv = [compiler.as_path(), &source, &absolute(wasm), &folder, &lib].map(|path| path.display().to_string());
@@ -146,9 +152,11 @@ fn library_for(source: &Path) -> Option<PathBuf> {
 	if let Some(lib) = std::env::var_os("WARP_LIB") {
 		return Some(PathBuf::from(lib));
 	}
-	let above = |start: PathBuf| start.ancestors().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
+	let above =
+		|start: PathBuf| start.ancestors().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
 	let current = std::env::current_dir().ok();
-	let installed = installed_folders().into_iter().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
+	let installed =
+		installed_folders().into_iter().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
 	source.parent().map(Path::to_path_buf).and_then(above).or_else(|| current.and_then(above)).or(installed)
 }
 
@@ -171,7 +179,13 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<Str
 		wasi.inherit_stdio().inherit_env().args(&args);
 		wasi.preopened_dir("/", "/", FsPerms::ReadWrite)?;
 		wasi.preopened_dir(".", ".", FsPerms::ReadWrite)?;
-		let host = Host { wasi: wasi.build_p1(), c: CHandles::default(), scratch: None, args: args.clone(), keeper: keeper.clone() };
+		let host = Host {
+			wasi: wasi.build_p1(),
+			c: CHandles::default(),
+			scratch: None,
+			args: args.clone(),
+			keeper: keeper.clone(),
+		};
 		let mut linker = Linker::new(engine);
 		wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host: &mut Host| &mut host.wasi)?;
 		warp_runtime::host_words::link_host_words(&mut linker)?;
@@ -189,7 +203,8 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<Str
 		let outcome = main
 			.call(&mut store, &[], &mut results)
 			.and_then(|()| system_signals::stay_while_listening(&mut store, &instance));
-		let outcome = system_signals::with_exit_handler(outcome, &mut store, |store, name| instance.get_func(store, name));
+		let outcome =
+			system_signals::with_exit_handler(outcome, &mut store, |store, name| instance.get_func(store, name));
 		Ok(match outcome {
 			Ok(Some(())) => match results.first() {
 				Some(result) => {
@@ -213,12 +228,19 @@ use wasmtime::AsContextMut;
 /// A failed run's message: a runtime error fails inside a function of its name (index_out_of_range, …), the global
 /// trap_detail holding the value it names; a raise's message is that value (lib/compiler/runtime/errors.warp)
 fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance) -> String {
+	// WARP_HOST_DEBUG=1: the failure with its wasm backtrace too
+	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
+		eprintln!("{error:?}");
+	}
 	let detail = instance.get_global(&mut *store, "trap_detail").map(|global| global.get(&mut *store));
 	let memory = instance.get_memory(&mut *store, "memory");
 	let detail = detail.filter(|value| !matches!(value, Val::AnyRef(None)));
 	let detail = detail.and_then(|value| nodes::read(&value, &mut store.as_context_mut(), memory).ok());
 	let frame = error.downcast_ref::<wasmtime::WasmBacktrace>().and_then(|trace| {
-		trace.frames().iter().find_map(|frame| frame.func_name().map(|name| name.split('·').next().unwrap_or(name).replace('_', " ")))
+		trace
+			.frames()
+			.iter()
+			.find_map(|frame| frame.func_name().map(|name| name.split('·').next().unwrap_or(name).replace('_', " ")))
 	});
 	match (frame.as_deref(), detail) {
 		(Some("returned error") | None, Some(detail)) => detail.content(),

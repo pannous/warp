@@ -74,7 +74,9 @@ impl Node {
 			Node::Text(bytes) => quoted(bytes),
 			Node::Symbol(bytes) => String::from_utf8_lossy(bytes).into_owned(),
 			Node::Error(bytes) => format!("Error({})", quoted(bytes)),
-			Node::Key(kind, key, value) if kind >> KIND_BITS & 0xFF == 1 => format!("{}: {}", key.shown(), value.shown()),
+			Node::Key(kind, key, value) if kind >> KIND_BITS & 0xFF == 1 => {
+				format!("{}: {}", key.shown(), value.shown())
+			}
 			Node::Key(_, key, value) => format!("{}={}", key.shown(), value.shown()),
 			Node::List(kind, items) => {
 				let (open, close) = BRACKETS.get((kind >> KIND_BITS & 0xFF) as usize).copied().unwrap_or(("", ""));
@@ -111,14 +113,23 @@ pub fn read(node: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<Me
 	let info = kind >> KIND_BITS & 0xFF;
 	Ok(match (kind & KIND_MASK) as u8 {
 		EMPTY => Node::Empty,
-		INT => match boxed(&data, store) {
-			Some(Val::I64(n)) if info == BOOL_INFO => Node::Bool(n != 0),
-			Some(Val::I64(n)) => Node::Int(n),
-			_ => Node::Other(kind),
+		INT => match data
+			.anyref()
+			.flatten()
+			.and_then(|small| small.as_i31(&*store).ok().flatten())
+			.map(|small| small.get_i32())
+		{
+			Some(n) if info == BOOL_INFO => Node::Bool(n != 0),
+			Some(n) => Node::Int(i64::from(n)),
+			None => match boxed(&data, store) {
+				Some(Val::I64(n)) if info == BOOL_INFO => Node::Bool(n != 0),
+				Some(Val::I64(n)) => Node::Int(n),
+				_ => Node::Other(kind),
+			},
 		},
 		FLOAT => boxed(&data, store).and_then(|x| x.f64()).map_or(Node::Other(kind), Node::Float),
 		CODEPOINT => {
-			let code = data.unwrap_anyref().and_then(|code| code.unwrap_i31(&*store).ok());
+			let code = data.unwrap_anyref().and_then(|code| code.as_i31(&*store).ok().flatten());
 			code.map_or(Node::Other(kind), |code| Node::Codepoint(code.get_u32()))
 		}
 		TEXT => Node::Text(text_of(data, value, store, memory)?),
@@ -167,8 +178,17 @@ pub struct Builders {
 }
 
 const CONSTRUCTORS: [&str; 11] = [
-	"new_empty", "new_int", "new_bool", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list",
-	"new_type", "error_of",
+	"new_empty",
+	"new_int",
+	"new_bool",
+	"new_float",
+	"new_codepoint",
+	"new_text",
+	"new_symbol",
+	"new_key",
+	"new_list",
+	"new_type",
+	"error_of",
 ];
 
 impl Builders {
@@ -231,7 +251,12 @@ impl Builders {
 
 /// Bytes put into the program's memory for it to copy out at once, their address: at its text heap when it has one
 /// (compiler.wasm), else in pages past its own, the same pages again while the memory stays that size
-pub fn placed(memory: Memory, heap: Option<Global>, bytes: &[u8], store: &mut StoreContextMut<'_, Host>) -> Result<u32> {
+pub fn placed(
+	memory: Memory,
+	heap: Option<Global>,
+	bytes: &[u8],
+	store: &mut StoreContextMut<'_, Host>,
+) -> Result<u32> {
 	if let Some(heap) = heap {
 		return Ok(write_to_heap(&memory, heap, store, bytes)?.0);
 	}

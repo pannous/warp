@@ -61,7 +61,9 @@ pub fn kept(keeper: &Option<String>, name: &str) -> Option<Node> {
 /// Keep `value` for the next run; a value warp-host cannot keep (a function…) is computed again then
 pub fn keep(keeper: &Option<String>, name: &str, value: &Node) {
 	let mut bytes = vec![];
-	if let (Some(file), Some(())) = (keeper.as_ref().and_then(|keeper| kept_file(keeper, name)), nodes::encode(value, &mut bytes)) {
+	if let (Some(file), Some(())) =
+		(keeper.as_ref().and_then(|keeper| kept_file(keeper, name)), nodes::encode(value, &mut bytes))
+	{
 		write(&file, &bytes);
 	}
 }
