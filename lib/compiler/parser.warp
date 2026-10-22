@@ -3358,7 +3358,8 @@ def named(p: Parser): Node := {
 	}
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
-	arguments = typed_parameters(items_until(p, ')', "("))
+	written = items_until(p, ')', "(")
+	arguments = typed_parameters(written)
 	skip_spaces(p)
 	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
@@ -3366,7 +3367,16 @@ def named(p: Parser): Node := {
 		// the head is the call f(x, y)
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
-	listed("(", "", [name] + spread(arguments))
+	listed("(", "", [name] + (if word == PRINT_WORD then print_arguments(written) else spread(arguments)))
+}
+
+// `print(a b)`, `print(match n {…})`: words set apart by blanks are the one value printed; `print(a, b)` prints each
+// Rust twin: commands.rs print_arguments
+PRINT_WORD = "print"
+def print_arguments(arguments: Node): list {
+	parts = group_parts(arguments)
+	if parts != ø and parts#2 == " " and #parts#3 > 1 { return [arguments] }
+	spread(arguments)
 }
 
 // The type names that take type arguments in angle brackets besides the plural and capitalized ones
