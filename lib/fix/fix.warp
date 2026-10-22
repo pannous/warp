@@ -1,0 +1,48 @@
+# warp fix and warp beautify (card fix-in-lib): the code with its hints' replacements (rewrites.warp), then laid out
+# (layout.warp), read as text only, without the parser or the compiler. The command line around it (files, the diff,
+# "apply? y/n", check and yes) is src/cli/formatting.rs's.
+use "scan.warp"
+use "layout.warp"
+use "rewrites.warp"
+
+final_newline_rule = "final newline"
+
+# the code fixed and what changed: [text, changes], each change "<line> <rule>", the line in the code as given
+fixed(code: text): list := {
+	lines = code.split("\n")
+	if code.ends_with("\n") { lines = lines[0 ..< #lines - 1] }
+	numbers = []
+	for k in 0 ..< #lines { numbers += [k + 1] }
+	changes = []
+	hints = hints_of(scanned(lines))
+	for hint in hints { changes += ["" + hint.line_number + " " + hint.rule] }
+	lines = with_hints_applied(lines, hints)
+	for rule in layout_rules {
+		scans = scanned(lines)
+		if rule == "blank lines" {
+			deleted = deleted_blank_lines(scans)
+			kept = []
+			kept_numbers = []
+			for k in 0 ..< #lines {
+				if deleted[k] {
+					changes += ["" + numbers[k] + " " + rule]
+				} else {
+					kept += [lines[k]]
+					kept_numbers += [numbers[k]]
+				}
+			}
+			lines = kept
+			numbers = kept_numbers
+		} else {
+			edited = scans.map(line => laid_out(rule, line))
+			for k in 0 ..< #lines {
+				if edited[k] != lines[k] { changes += ["" + numbers[k] + " " + rule] }
+			}
+			lines = edited
+		}
+	}
+	if code != "" and not code.ends_with("\n") { changes += ["" + #code.split("\n") + " " + final_newline_rule] }
+	text = ""
+	for line in lines { text += line + "\n" }
+	[text, changes]
+}

@@ -1,0 +1,144 @@
+# The rewrites of warp fix: hints, each naming what is written at a place and the warp spelling meant there, which the
+# fix applies. They read the text only (as src/formatting/synonyms.rs's I-meant rewrites, without the compiler).
+use "scan.warp"
+
+# what is written at a line's column (from 0), the text meant instead, and the rule that says so; the finders below give
+# a Hint or ø, their `: Hint?` unwritten while the Rust lane misreads `f(line: Scanned): Hint?` (line read as a key)
+class Hint { line_number: int; column: int; written: text; replacement: text; rule: text }
+
+# `ys = float[2]` → `ys = 2 floats`: the element type of a list of n zeros, of these types (`ys = 2 floats` runs by
+# lib/prelude.warp's rewrite)
+counted_types = ["int", "float"]
+# `auto x = 3` (C++) → `var x = 3`
+foreign_words = [["auto", "var"]]
+# `7 div 2` (Pascal) → `7 /! 2`: floor division is `/!` (decision floor-division)
+floor_division = "/!"
+floor_division_words = ["div"]
+
+# every hint of the scanned lines, in the order of the source
+hints_of(lines: list): list := {
+	hints = []
+	for k in 0 ..< #lines {
+		hints += hints_of_line(lines[k], k + 1)
+	}
+	hints
+}
+
+hints_of_line(line: Scanned, number: int): list := {
+	cs = chars(line.text)
+	hints = []
+	depth = 0
+	i = 0
+	while i < #cs {
+		c = at(cs, i)
+		if is_code(line, i) and c == "(" { depth += 1 }
+		if is_code(line, i) and c == ")" { depth -= 1 }
+		if is_code(line, i) and is_word_character(c) and not is_word_character(at(cs, i - 1)) {
+			word = word_at(cs, i)
+			hint = word_hint(line, cs, i, word, number, depth)
+			if hint != ø { hints += [hint] }
+			i += #word
+		} else {
+			if i == line.comment {
+				hint = floor_division_hint(cs, i, number)
+				if hint != ø { hints += [hint] }
+			}
+			i += 1
+		}
+	}
+	hints
+}
+
+# the word starting at index i
+word_at(cs: list, i: int): text := {
+	n = 0
+	while is_word_character(at(cs, i + n)) { n += 1 }
+	piece(cs, i, n)
+}
+
+# the hint on a word: a counted type, another language's word, a floor division word; ø when none
+word_hint(line: Scanned, cs: list, i: int, word: text, number: int, depth: int) := {
+	if word in counted_types and depth == 0 { return counted_type_hint(line, cs, i, word, number) }
+	for pair in foreign_words {
+		if word == pair[0] and starts_statement(cs, i) and is_word_character(character_after_blanks(cs, i + #word)) and is_blank_character(at(cs, i + #word)) {
+			return Hint(number, i, word, pair[1], word + " is " + pair[1])
+		}
+	}
+	if word in floor_division_words and is_blank_character(at(cs, i - 1)) and is_blank_character(at(cs, i + #word)) {
+		before = character_before_blanks(cs, i)
+		after = character_after_blanks(cs, i + #word)
+		if is_word_character(before) or before == ")" {
+			if is_word_character(after) or after == "(" { return Hint(number, i, word, floor_division, "floor division " + floor_division) }
+		}
+	}
+	ø
+}
+
+# `float[2]` declared or assigned (`ys : float[2]`, `ys = float[2]`) is `2 floats`; `xs[2]`, `text[2]`, `int[]`, a
+# count that is no number, and a parameter's type stay
+counted_type_hint(line: Scanned, cs: list, i: int, word: text, number: int) := {
+	if at(cs, i - 1) == "." { return ø }
+	open = i + #word
+	if at(cs, open) != "[" { return ø }
+	n = 0
+	while is_digit_character(at(cs, open + 1 + n)) { n += 1 }
+	if n == 0 or at(cs, open + 1 + n) != "]" { return ø }
+	end = open + 2 + n
+	if at(cs, end) == "[" or at(cs, end) == "(" or is_word_character(at(cs, end)) { return ø }
+	sign = i - 1 - blanks_before(cs, i)
+	if not (at(cs, sign) in [":", "="]) or at(cs, sign - 1) in [":", "=", "!", "<", ">"] { return ø }
+	count = piece(cs, open + 1, n)
+	Hint(number, i, piece(cs, i, end - i), count + " " + word + "s", word + "[n] is n " + word + "s")
+}
+
+# the number of blanks right before index i
+blanks_before(cs: list, i: int): int := {
+	n = 0
+	while is_blank_character(at(cs, i - 1 - n)) { n += 1 }
+	n
+}
+
+character_before_blanks(cs: list, i: int): text := at(cs, i - 1 - blanks_before(cs, i))
+
+character_after_blanks(cs: list, i: int): text := {
+	k = i
+	while is_blank_character(at(cs, k)) { k += 1 }
+	at(cs, k)
+}
+
+# the word at index i starts a statement: at the line's start or after `;` or `{`
+starts_statement(cs: list, i: int): bool := {
+	before = character_before_blanks(cs, i)
+	before == "" or before == ";" or before == "{"
+}
+
+# `7//2` and `x //= 3` meant as floor division (decision floor-division): `//` glued between operands, or before `=`
+# after an operand, is `/!`; `x = 7 // note` stays a comment
+floor_division_hint(cs: list, i: int, number: int) := {
+	if piece(cs, i, 2) != "//" { return ø }
+	before = at(cs, i - 1)
+	after = at(cs, i + 2)
+	operand_before = is_word_character(before) or before == ")"
+	if operand_before and (is_word_character(after) or after == "(") {
+		return Hint(number, i, "//", floor_division, "floor division " + floor_division)
+	}
+	operand_before_blanks = is_word_character(character_before_blanks(cs, i)) or character_before_blanks(cs, i) == ")"
+	if after == "=" and operand_before_blanks { return Hint(number, i, "//", floor_division, "floor division " + floor_division) }
+	ø
+}
+
+# the lines with every hint's replacement, the last of a line first so the earlier columns stay
+with_hints_applied(texts: list, hints: list): list := {
+	result = []
+	for k in 0 ..< #texts {
+		cs = chars(texts[k])
+		line_hints = hints.filter(hint => hint.line_number == k + 1)
+		text = texts[k]
+		for h in reverse(line_hints) {
+			cs = chars(text)
+			text = piece(cs, 0, h.column) + h.replacement + piece(cs, h.column + #h.written, #cs - h.column - #h.written)
+		}
+		result += [text]
+	}
+	result
+}

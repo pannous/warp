@@ -1,0 +1,216 @@
+# The layout rules of warp fix (as src/formatting/rules.rs lays out code): each takes the scanned lines and gives every
+# line's new text. They read the text only, never the parse tree, so they change only what reads the same.
+use "scan.warp"
+
+# the rules in the order they apply, each named as warp fix's check lists it
+layout_rules = ["# comment", "trailing whitespace", "blank lines", "spaces", "space after a comma or semicolon", "space after a key's colon", "spaces around an operator"]
+
+# the binary operators written with a blank on each side, longest first; `<` and `>` stay as written (tags, generics),
+# `/` too (units like km/h), and `-` only after a number or a closing bracket (`full-name` is a name, `f it-1` reads
+# f(it - 1))
+spaced_operators = ["/!=", ":=", "==", "!=", "<=", ">=", "+=", "-=", "*=", "/!", "&&", "||", "=>", "=", "+", "-", "*"]
+# an operator glued to one of these is part of another (`===`, `x=-1`, `..`), left alone
+operator_characters = chars("=+-*/<>!&|%^~?:.")
+# what ends an operand before a binary operator and what starts one after it
+operand_ends = chars("_)]}\"'`ø")
+operand_starts = chars("_([{\"'`#.$ø-!√")
+closing_brackets = [")", "]"]
+
+# the line's new text by the rule
+laid_out(rule: text, line: Scanned): text := {
+	if rule == "# comment" { return hash_comment(line) }
+	if rule == "trailing whitespace" { return without_trailing_blanks(line) }
+	if rule == "spaces" { return single_spaces(line) }
+	if rule == "space after a comma or semicolon" { return separator_spacing(line) }
+	if rule == "space after a key's colon" { return colon_spacing(line) }
+	if rule == "spaces around an operator" { return operator_spacing(line) }
+	line.text
+}
+
+# `// text` → `# text`, `/// doc` → `## doc`; `//!` stays
+hash_comment(line: Scanned): text := {
+	if line.comment < 0 { return line.text }
+	cs = chars(line.text)
+	code = piece(cs, 0, line.comment)
+	comment = piece(cs, line.comment, #cs - line.comment)
+	mark = ""
+	rest = ""
+	if comment.starts_with("///") {
+		mark = "##"
+		rest = comment[3 ..]
+	} else if comment.starts_with("//") and not comment.starts_with("//!") {
+		mark = "#"
+		rest = comment[2 ..]
+	} else {
+		return line.text
+	}
+	space = if rest == "" or rest.starts_with(" ") or rest.starts_with("\t") then "" else " "
+	code + mark + space + rest
+}
+
+# the blanks at the line's end go, unless a text or a block comment owns them
+without_trailing_blanks(line: Scanned): text := {
+	if line.ends_inside != in_code { return line.text }
+	cs = chars(line.text)
+	end = #cs
+	while end > 0 and is_blank_character(at(cs, end - 1)) { end -= 1 }
+	piece(cs, 0, end)
+}
+
+# at most one blank line in a row, none at the start or the end: whether each line goes
+deleted_blank_lines(lines: list): list := {
+	blank = lines.map(line => line.text.trim() == "" and line.starts_inside == in_code)
+	last_content = -1
+	for k in 0 ..< #lines { if not blank[k] { last_content = k } }
+	deleted = []
+	for k in 0 ..< #lines {
+		deleted += [blank[k] and (k == 0 or blank[k - 1] or k > last_content)]
+	}
+	deleted
+}
+
+# the blanks a line starts with, its indentation: none when it starts inside a text or a comment
+indentation_length(line: Scanned): int := {
+	if line.starts_inside != in_code { return 0 }
+	cs = chars(line.text)
+	n = 0
+	while n < #cs and is_blank_character(at(cs, n)) { n += 1 }
+	n
+}
+
+# runs of blanks become one; none just inside `(…)` and `[…]`, before a comma or a semicolon or at the end; the blanks
+# before a trailing comment stay
+single_spaces(line: Scanned): text := {
+	cs = chars(line.text)
+	start = indentation_length(line)
+	written = piece(cs, 0, start)
+	i = start
+	while i < #cs {
+		c = at(cs, i)
+		if is_code(line, i) and is_blank_character(c) {
+			run = 0
+			while is_code(line, i + run) and is_blank_character(at(cs, i + run)) { run += 1 }
+			next = at(cs, i + run)
+			if line.comment == i + run {
+				written += piece(cs, i, run)
+			} else if next == "" or (is_code(line, i + run) and next in [")", "]", ",", ";"]) {
+				written += ""
+			} else if not (written.ends_with("(") or written.ends_with("[")) {
+				written += " "
+			}
+			i += run
+		} else {
+			written += c
+			i += 1
+		}
+	}
+	written
+}
+
+# `a,b` → `a, b`, `a=1;b=2` → `a=1; b=2`
+separator_spacing(line: Scanned): text := {
+	cs = chars(line.text)
+	written = ""
+	for i in 0 ..< #cs {
+		c = at(cs, i)
+		next = at(cs, i + 1)
+		written += c
+		if is_code(line, i) and (c == "," or c == ";") and next != "" and not is_blank_character(next) and not (next in [")", "]", "}", ",", ";"]) {
+			written += " "
+		}
+	}
+	written
+}
+
+# `name:value` → `name: value`, a parameter's type too; `::`, `:=`, `://`, a colon before a closer or the end, and one
+# between digits (`12:30`, `xs[1:3]`) stay
+colon_spacing(line: Scanned): text := {
+	cs = chars(line.text)
+	written = ""
+	for i in 0 ..< #cs {
+		c = at(cs, i)
+		before = at(cs, i - 1)
+		next = at(cs, i + 1)
+		written += c
+		glued_key = before != "" and not is_blank_character(before) and before != ":"
+		spaced_value = next != "" and not is_blank_character(next) and not (next in [":", "=", "/", ")", "]", "}"])
+		between_digits = is_digit_character(before) and is_digit_character(next)
+		if is_code(line, i) and c == ":" and glued_key and spaced_value and not between_digits { written += " " }
+	}
+	written
+}
+
+is_operand_end(c: text): bool := c != "" and (is_alphanumeric(c[0]) or c in operand_ends)
+is_operand_start(c: text): bool := c != "" and (is_alphanumeric(c[0]) or c in operand_starts)
+
+# the nearest character before index i that is no blank, "" when none
+character_before(cs: list, i: int): text := {
+	k = i - 1
+	while k >= 0 and is_blank_character(at(cs, k)) { k -= 1 }
+	at(cs, k)
+}
+
+# the nearest character from index i on that is no blank
+character_from(cs: list, i: int): text := {
+	k = i
+	while k < #cs and is_blank_character(at(cs, k)) { k += 1 }
+	at(cs, k)
+}
+
+# the spaced operator at index i, between two operands and glued to no other operator character; "" when none
+operator_at(line: Scanned, cs: list, i: int): text := {
+	if not is_code(line, i) { return "" }
+	for operator in spaced_operators {
+		n = #operator
+		if piece(cs, i, n) == operator and is_code(line, i + n - 1) {
+			if at(cs, i - 1) in operator_characters or at(cs, i + n) in operator_characters { return "" }
+			before = character_before(cs, i)
+			next = character_from(cs, i + n)
+			if not (is_operand_end(before) and is_operand_start(next)) { return "" }
+			if operator == "-" or operator == "+" {
+				# a sign, not a difference: `a -1`, `1e-5`, `1e+5`, `x-1` (a name's hyphen or f it-1)
+				blank_before = is_blank_character(at(cs, i - 1))
+				blank_after = is_blank_character(at(cs, i + 1))
+				if blank_before and not blank_after { return "" }
+				exponent = (before == "e" or before == "E") and is_digit_character(at(cs, i - 2))
+				if exponent { return "" }
+				if operator == "-" and not (is_digit_character(before) or before in closing_brackets) { return "" }
+			}
+			return operator
+		}
+	}
+	""
+}
+
+# `<div id=x>`: a line with a tag keeps its operators as written
+has_tag(line: Scanned): bool := {
+	cs = chars(line.text)
+	for i in 0 ..< #cs {
+		next = at(cs, i + 1)
+		if is_code(line, i) and at(cs, i) == "<" and next != "" and (is_alpha(next[0]) or next == "/") { return yes }
+	}
+	no
+}
+
+# `x=1+2` → `x = 1 + 2`
+operator_spacing(line: Scanned): text := {
+	if has_tag(line) { return line.text }
+	cs = chars(line.text)
+	written = ""
+	i = 0
+	while i < #cs {
+		operator = operator_at(line, cs, i)
+		if operator == "" {
+			written += at(cs, i)
+			i += 1
+		} else {
+			kept = chars(written)
+			end = #kept
+			while end > 0 and is_blank_character(at(kept, end - 1)) { end -= 1 }
+			written = piece(kept, 0, end) + " " + operator + " "
+			i += #operator
+			while is_blank_character(at(cs, i)) and is_code(line, i) { i += 1 }
+		}
+	}
+	written
+}

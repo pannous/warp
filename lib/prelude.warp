@@ -167,6 +167,9 @@ sum(xs) := fold(xs, 0, +)
 // a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small
 rewrite sum($first to $last) => range_sum($first, $last)
 rewrite sum($first .. $end) => range_sum($first, $end - 1)
+// `ys = 2 floats`: a list of 2 floats, as `ys = float[2]` (warp fix writes the count first, card fix-in-lib)
+rewrite $n floats => float[$n]
+rewrite $n ints => int[$n]
 range_sum(first, last) := {
 	n = last - first + 1
 	if n <= 0 then 0 else if n % 2 == 0 then (n /! 2) * (first + last) else n * ((first + last) /! 2)
