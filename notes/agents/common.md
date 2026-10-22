@@ -191,8 +191,10 @@ After a context swap, this file and your role file win over anything a handover 
   queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
   replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
   emitter.warp refuses there is fixed or carded, never left for main to find.
-  Fleet-wide at most 2 self builds run at once (self-check.sh's slots on /Volumes/Build/self-check, Grok Supervisor
-  2026-10-22, load 522): every `warp rebuild self`, the Integrator's gate included, goes through it. The tree it checks
+  Fleet-wide at most 2 heavy warp runs at once (user 2026-10-22, load 522): every self build, `warp rebuild`, `warp
+  pure` of a compiler file and every test sweep (is_tests, is_pairs, probe series) runs inside `scripts/slot.sh <cmd>`
+  (slots on /Volumes/Build/self-check; self-check.sh takes one itself; the Integrator's gate included). A sweep runs
+  its programs serially inside one slot, never N parallel warps. The tree it checks
   is a cowtree worktree under /Volumes/Worktrees or a throwaway lib/ copy under /Volumes/Junk, never inside the main
   checkout (scratch/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
   cold module caches) go to Grok Warp Code 3's Linux box.

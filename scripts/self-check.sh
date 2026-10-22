@@ -2,36 +2,20 @@
 # The warp-only acceptance check (decision warp-only-acceptance): the Rust-compiled compiler.warp compiles itself and
 # that self build runs hello world. Few checks at a time on the Mac: each self build runs wasm-opt -O3 on ~2.5 cores,
 # and eight at once pushed the load past 60 (supervisor 2026-10-21); one at a time queued checks for 45 min at load 9,
-# so check_slots run at once and a further check waits for a free slot.
+# so the check runs in one of scripts/slot.sh's fleet-wide slots.
 # usage: scripts/self-check.sh [<worktree>, default the current checkout]   (exit 0 = Hello printed)
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
 main_warp=/Users/me/dev/bin/warp
 main_checkout=/Users/me/dev/angles/warp
-locks=/Volumes/Build/self-check/slot  # slots and binary copies off the Data volume (fseventsd load, Grok Supervisor 2026-10-22)
-check_slots=2
 expected="Hello"
 
-# a slot is a directory holding its check's pid; a slot whose check died is freed
-take_slot() {
-  local slot
-  mkdir -p ${locks:h}
-  while true; do
-    for slot in {1..$check_slots}; do
-      if mkdir $locks.$slot.lock 2>/dev/null; then echo $$ > $locks.$slot.lock/pid; lock=$locks.$slot.lock; return; fi
-      holder=$(cat $locks.$slot.lock/pid 2>/dev/null)
-      [[ -n $holder ]] && ! kill -0 $holder 2>/dev/null && rm -rf $locks.$slot.lock
-    done
-    sleep 5
-  done
-}
 # trees to check live on /Volumes/Worktrees (cowtree) or, for throwaway lib/ copies, /Volumes/Junk: a copy under the
 # main checkout loads fseventsd for every session watching it
 if [[ $worktree == $main_checkout/* ]]; then
   print -u2 "self-check: $worktree is inside the main checkout; check a worktree under /Volumes/Worktrees or a copy under /Volumes/Junk"
   exit 2
 fi
-take_slot
-trap "rm -rf $lock" EXIT
+[[ -n $WARP_SLOT ]] || exec $main_checkout/scripts/slot.sh ${0:a} $worktree
 
 cd $worktree || exit 1
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
@@ -47,7 +31,7 @@ check_lane() {
 # main's binary is refreshed after each pushed batch: a compiler.wasm built by the old binary and a self build by the
 # new one make a self compiler that traps on every program (card self-trap-function-param). The check runs its own copy
 # of the binary, taken once, so a refresh never overlaps it (retrying instead kept checks queued for hours, 2026-10-22)
-warp=$lock/warp
+warp=$WARP_SLOT/warp
 cp $main_warp $warp || exit 1
 check_lane pure && check_lane self
 passed=$?
