@@ -65,3 +65,11 @@ fn test_ruby_loops_in_def() {
 	is!("def f\n  k = 0\n  loop do\n    k += 1\n    break if k > 2\n  end\n  k\nend\nf()", 3);
 	is!("k = 0\nloop do\n  k += 1\n  break if k > 2\nend\nk", 3);
 }
+
+// Ruby's block parameters on their own line (card ruby-block-parameters): the rest of the block is the body
+#[test]
+fn test_ruby_block_parameters_on_their_own_line() {
+	is!("def apply(n)\n  yield n\nend\napply(3) do |x|\n  y = x * 2\n  y + 1\nend", 7);
+	is!("xs = [1, 2]\nys = xs.map { |x|\n  x + 1\n}\nys.sum", 5);
+	is!("def pair\n  yield 3, 4\nend\npair do |a, b|\n  a * b\nend", 12);
+}
