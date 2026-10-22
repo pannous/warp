@@ -90,3 +90,7 @@ parser::test_self_pure::assigned_it_blocks_run_pure
 parser::test_self_pure::bang_words_and_tab_columns_run_pure
 parser::test_self_pure::block_definitions_hold_their_value_pure
 parser::test_self_pure::curly_lists_are_values_self_hosted
+parser::test_self_pure::compile_takes_the_pure_lane
+parser::test_self_pure::comprehensions_run_pure
+parser::test_self_pure::defaults_run_pure
+parser::test_self_pure::digit_casts_run_pure

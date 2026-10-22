@@ -77,11 +77,14 @@ jobs:
     # the warp-written compiler as wasm, the bootstrap seed shipped with every release (user 2026-10-22):
     # compiler.wasm (`warp pure`'s, compiled by the Rust pipeline) and compiler-self.wasm (`warp self`'s, compiled by
     # itself), both from the tag's lib/ by the tag's linux binary
+    # also on a repackage run: it only reads the release's linux tarball
     needs: binaries
-    if: ${{ !inputs.repackage }}
+    if: ${{ !cancelled() && contains(fromJSON('["success", "skipped"]'), needs.binaries.result) }}
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
+      # the first `warp self` after a build computes the compiler's kept values: more than the 60 s default on a runner
+      WARP_TIME_LIMIT: 900
       WARP_NO_WINDOW: 1
       WARP_HINTS: 0
     steps:
@@ -95,7 +98,9 @@ jobs:
         export WARP_LIB=$PWD/lib
         "$RUNNER_TEMP/bin/warp" rebuild pure
         "$RUNNER_TEMP/bin/warp" rebuild self
-        "$RUNNER_TEMP/bin/warp" self samples/hello/hello.warp | grep -q Hello
+        said=$("$RUNNER_TEMP/bin/warp" self samples/hello/hello.warp 2>&1) || true
+        echo "$said"
+        [[ $said == *Hello* ]]
     - name: upload
       run: gh release upload "$TAG" "$RUNNER_TEMP/bin/compiler.wasm" "$RUNNER_TEMP/bin/compiler-self.wasm" --clobber
 
