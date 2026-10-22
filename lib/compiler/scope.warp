@@ -177,6 +177,10 @@ binds_as(scope: any, name: text, meaning: Meaning): bool := scope.has(name) and 
 # of that name is no value there)
 value_meanings = [Meaning.Variable, Meaning.Parameter, Meaning.Loop]
 binds_value(scope: any, name: text): bool := value_meanings.any(meaning => binds_as(scope, name, meaning))
+# a type word no value in reach is named, or a type the program declares (`enum Coin {…}`, `class P {…}`): what
+# `where $t is type` asks of a rewrite rule (rewrites.warp)
+is_tested_type(word: text, scope: any): bool :=
+	not binds_value(scope, word) and (is_tested_type_word(word) or binds_as(scope, word, Meaning.Type))
 
 # Keyword-triggered local rewrites (decision pass-triggers; Rust twin: src/lowering/words/keyword_rewrites.rs): each
 # entry [accepts, rewritten] of a table rewrites a node one of whose own words (has_own_word) it accepts,

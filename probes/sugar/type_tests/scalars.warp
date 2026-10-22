@@ -1,0 +1,7 @@
+# a type word after `is` tests the value's type. Expected: no yes yes yes no yes
+print 3.5 is int
+print 3.5 is rational
+print 3.5 is number
+print "abc" is text
+print "abc" is int
+print 3 is int

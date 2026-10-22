@@ -33,7 +33,7 @@ other compiler files (2448 of their 10841 lines) are sugar passes. Sugar in all:
 | 13 | `match subject { pattern => value … }` | user decision; its lowering (node_matches, node_cases) is emitter work, never sugar |
 
 Not kernel (evidence: a pass already lowers them away before the emitter): `for` (for_loops.warp → while), `enum` (plain_enums.warp → class with variants), `unless`/`until`, `?:`, `??`,
-`x is T` (type_tests.warp → is_type call), `as` (conversion calls), comprehensions, ranges, `n times`. Operators are
+`x is T` (lib/sugar/types.warp → is_type call), `as` (conversion calls), comprehensions, ranges, `n times`. Operators are
 notation; their meaning is a call (arithmetic ones are emitter intrinsics, as any builtin).
 
 Open within the decision: `global` could be an attribute instead (`@global`); `try` could be an effect handler
@@ -156,7 +156,7 @@ Sugar passes, with the rule each would become:
 | 64 | multiple_assignments | `a, b = b, a + b`: F3 + F4 |
 | 61 | list_methods | `rewrite $xs.push($v) => $xs += [$v]` (add, append alike): works today |
 | 44 | interpolation | F8 |
-| 42 | type_tests | `rewrite $x is $t => is_type($x, "$t")`: F2 (t a type word no name binds) |
+| 42 | type_tests | done: lib/sugar/types.warp (card sugar-type-tests) |
 | 36 | ranges | range value → loop: F3 |
 | 35 | filled_lists | `rewrite $t[$n] => zero_fill($n, zero($t))`: F2 (t a type word) |
 | 32 | broadcasting | `rewrite $xs .* $y => $xs.map(e => e * $y)`: F3 (hygienic e) |

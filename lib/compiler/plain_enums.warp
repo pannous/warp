@@ -157,17 +157,17 @@ case_conversion(value: Node, target: Node, n: Node, enums: any, subjects: any): 
 	case_number(value, enums[enum_name], count_types[target_name], enums)
 }
 
-# `c is Coin`, type_tests.warp's is_type(c, "Coin"): c is one of Coin's cases, as Rust's sum type test
+# `c is Coin`, lib/sugar/types.warp's is_type(c, Coin): c is one of Coin's cases, as Rust's sum type test
 case_test(value: Node, cases: list): Node := {
 	tested = Key(value, Op.Eq, symbol(cases#1))
 	for case in cases[1..] { tested = Key(tested, Op.Or, Key(value, Op.Eq, symbol(case))) }
 	tested
 }
 
-# is_type(value, "Coin") of a declared enum: the test of its cases, else as it is
+# is_type(value, Coin) of a declared enum: the test of its cases, else as it is
 enum_type_test(items: list, n: Node, enums: any): Node := {
 	if #items != 3 or items#1 != symbol("is_type") { return n }
-	enum_name = "" + items#3
+	enum_name = if items#3 is symbol then name_of(items#3) else "" + items#3
 	if enum_name in enums then case_test(items#2, enums[enum_name]) else n
 }
 

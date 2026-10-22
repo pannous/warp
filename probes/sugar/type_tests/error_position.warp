@@ -1,0 +1,3 @@
+# an error inside a type test points at what the user wrote. Expected: the unknown name zed at 3:7
+x = 3
+print zed is int

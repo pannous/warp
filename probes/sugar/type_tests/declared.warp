@@ -1,0 +1,8 @@
+# a type the program declares, a class and an enum. Expected: yes no yes
+class Point { x: int; y: int }
+enum Coin { Penny, Dime }
+p = Point{x: 1, y: 2}
+print p is Point
+print 3 is Point
+c = Coin.Dime
+print c is Coin

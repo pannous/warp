@@ -1,0 +1,4 @@
+# `type(x) is int` tests x. Expected: yes no
+x = 5
+print type(x) is int
+print type(x) is text

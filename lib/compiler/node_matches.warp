@@ -235,7 +235,7 @@ without_named_patterns(program: Node): Node := {
 
 # a pattern's name where a pattern, a test or a type goes
 with_named_patterns(n: Node, patterns: map): Node := match n {
-	# `n is Definition`, an equality by now (type_tests.warp: no type of that name): a pattern's name is no value
+	# `n is Definition`, an equality by now (lib/sugar/types.warp: no type of that name): a pattern's name is no value
 	Key(subject, Op.Eq, Symbol(name)): if name in patterns then pattern_test(subject, patterns[name]) else n
 	Key(subject, Op.Colon, Symbol(name)): if name in patterns then Key(subject, Op.Colon, symbol(any_word)) else n
 	List(arms, Bracket.Curly, separator): group_like(n, arms.map(arm => named_arm(arm, patterns)))

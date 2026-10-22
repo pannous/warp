@@ -1,0 +1,4 @@
+# a field named like a type word leaves the type test. Expected: yes
+kinds = {symbol: 1}
+is_word(n) := n is symbol
+print is_word(:hello)
