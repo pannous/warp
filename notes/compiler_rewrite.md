@@ -45,7 +45,7 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
 - **Honest count:** the sugar passes are all still there and parser.warp is about its old size (4272 lines); about
   1–3 % of the ~3900 sugar lines have moved. The engine was the first half of the work; the moving starts now.
 
-## Next
+## Next (user 2026-10-22 late: finish it fast, decision finish-migration)
 
 1. **F5 name building, high priority** (user 2026-10-22 evening, card rewrite-templates, decision name-glue):
    `square·$a` → square_a_number, `$i·end`; unblocks for_loops, English `To …:` definitions, accessors per field.
