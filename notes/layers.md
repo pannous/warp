@@ -120,7 +120,7 @@ Sugar (1417), each with the rule it would become:
 | 28 | `/!`, `div`, `÷`, `/!=` | already a math.warp alias (`operator ÷ := /!`): the parser branch duplicates it; `operator div := /!` |
 | 23 | emit words `emit stop{…}` (send, fire, trigger, signal, ask) | `rewrite emit $e... => emit($e...)`, aliases for the others |
 | 22 | test words `x empty`, `x is missing`, `x failed` | `rewrite $x is empty => count($x) == 0` phrase rule, works today |
-| 21 | `n times {…}` | no rewrite: a plain library function `infix times(n: number, b: block)` (user 2026-10-22, decision language-layers) |
+| 21 | `n times {…}` | done: `rewrite $n times $body => for $i in 1 to $n $body where $body is block` (lib/sugar/loops.warp); later the prelude function `infix times(n: number, b: block)` (user 2026-10-22, card times-prelude) |
 | 15 | `a ?: b` | `rewrite $a ?: $b => if $a then $a else $b`: needs F3 (a once) |
 | 14 | `function f` reference | `rewrite function $f => &$f` |
 | 12 | `if no xs` | `rewrite no $x => not $x`: needs F1 (condition position) |
@@ -181,8 +181,10 @@ Sugar passes, with the rule each would become:
    rest is not "works today": test words, emit words, unit phrases and `n times` are parser grouping (notation, item
    6); number_words needs F1 (keys and members); parse_words' eval needs scoped shadowing; `def`/`fun` is ~10 of
    definitions' 186 lines; of_lookups and number_words are twinned stages that Rust drives in the
-   WARP_SELF_HOSTED=1 lane, where lib/sugar rules don't run. `n times {…}` becomes a plain prelude function
-   `infix times(n: number, b: block)` (user), then the parser's times branch goes.
+   WARP_SELF_HOSTED=1 lane, where lib/sugar rules don't run. `n times {…}` (and `once`, `twice`, `thrice`) is
+   the rule of lib/sugar/loops.warp, onto the for loop (interviewer 2026-10-22, decision language-layers); the parser
+   keeps the grouping. The user's prelude function `infix times(n: number, b: block)` replaces the rule once the pure
+   lane has block parameters and shared captures (card times-prelude).
 3. **F3 fresh names + evaluate once** (one engine feature, then ~550 lines): coalesce, `?:`, comprehensions, ranges,
    for_loops, min_max, multiple_assignments, broadcasting. Largest gain per engine line.
 4. **F2 where-predicates** (~450 lines): type_tests, filled_lists, grouped_receivers, library_calls,

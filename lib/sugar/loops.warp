@@ -1,0 +1,7 @@
+# Counted loops (notes/layers.md, sugar): `n times {…}` (also `n times: …`, which the parser reads as its block) runs
+# the block n times; `n times [x]` and `n times "ab"` repeat a list or a text (emitter.warp). Rust twin:
+# times_phrases.rs
+rewrite $n times $body => for $i in 1 to $n $body where $body is block
+rewrite (once $body) => (1 times $body) where $body is block
+rewrite (twice $body) => (2 times $body) where $body is block
+rewrite (thrice $body) => (3 times $body) where $body is block
