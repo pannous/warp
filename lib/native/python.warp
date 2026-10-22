@@ -23,6 +23,7 @@ PyObject_Call(callable: handle, arguments: handle, keywords: handle): handle fro
 PyObject_Str(target: handle): handle from 'python'
 PyObject_Type(target: handle): handle from 'python'
 PyObject_IsTrue(target: handle): i32 from 'python'
+PyObject_IsInstance(target: handle, kind: handle): i32 from 'python'
 PyObject_Size(target: handle): i64 from 'python'
 PySequence_GetItem(sequence: handle, index: i64): handle from 'python'
 PyTuple_New(size: i64): handle from 'python'
@@ -43,20 +44,36 @@ PyErr_Occurred(): handle from 'python'
 PyErr_GetRaisedException(): handle from 'python'
 Py_IncRef(target: handle): void from 'python'
 Py_DecRef(target: handle): void from 'python'
+// libc's dlopen, found through libpython's own dependencies
+dlopen(file: text, flags: i32): handle from 'python'
 
 // Py_GetConstant's None
 PY_CONSTANT_NONE = 0
+// dlopen's RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD (Linux): the loaded library's symbols made global
+RTLD_GLOBAL_AGAIN = 262
 
 // starts the interpreter once, without its signal handlers; its print lines reach the output as they are printed
 python_start() := {
 	if Py_IsInitialized() == 0 {
 		Py_InitializeEx(0)
 		sys = PyImport_ImportModule("sys")
+		python_share_symbols(sys)
 		out = PyObject_GetAttrString(sys, "stdout")
 		python_call_handle(out, "reconfigure", [], {line_buffering: yes})
 		Py_DecRef(out)
 		Py_DecRef(sys)
 	}
+	yes
+}
+
+// the extension modules of lib-dynload (_contextvars, _decimal, numpy's) find the C API among the process's global
+// symbols, but warp-host loads libpython with its symbols local: loaded again by its soname, they become global
+python_share_symbols(sys: int) := {
+	said = PyObject_GetAttrString(sys, "version")
+	numbers = PyUnicode_AsUTF8(said).split(" ")#1.split(".")
+	Py_DecRef(said)
+	soname = "libpython" + numbers#1 + "." + numbers#2 + ".so.1.0"
+	if dlopen(soname, RTLD_GLOBAL_AGAIN) == 0 { dlopen("libpython" + numbers#1 + "." + numbers#2 + ".so", RTLD_GLOBAL_AGAIN) }
 	yes
 }
 
@@ -168,8 +185,22 @@ python_value(target: int): any := {
 		Py_DecRef(pairs)
 		return found
 	}
+	// a subclass of float, int or str (numpy.float64, an IntEnum) as its value
+	if python_instance(target, "float") { return PyFloat_AsDouble(target) }
+	if python_instance(target, "int") { return PyLong_AsLongLong(target) }
+	if python_instance(target, "str") { return PyUnicode_AsUTF8(target) }
 	Py_IncRef(target)
 	{python: target, type: kind}
+}
+
+// whether the target is an instance of the builtin type `name`
+python_instance(target: int, name: text): bool := {
+	builtins = python_checked(PyImport_ImportModule("builtins"))
+	kind = python_checked(PyObject_GetAttrString(builtins, name))
+	found = PyObject_IsInstance(target, kind)
+	Py_DecRef(kind)
+	Py_DecRef(builtins)
+	found == 1
 }
 
 // the warp value of a new Python object, which is released; an Error for NULL
@@ -268,4 +299,15 @@ python_exec(code: text): any := {
 python_release(reference: any) := {
 	if python_is_reference(reference) { Py_DecRef(reference.get("python")) }
 	ø
+}
+
+// the target's str(): python_text(python_call(fractions, "Fraction", [3, 4])) is "3/4"
+python_text(target: any): text := {
+	python_start()
+	held = python_target(target)
+	said = python_checked(PyObject_Str(held#1))
+	if held#2 { Py_DecRef(held#1) }
+	found = PyUnicode_AsUTF8(said)
+	Py_DecRef(said)
+	found
 }
