@@ -64,7 +64,10 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   one summary, red unless every shard is green and Σ passed+failed+ignored equals what a shard lists ("tests
   counted"), with one line per shard. A test binary killed at the limit prints no panic text of its failed tests:
   those run once more alone (`cloud-test: RERUN`, counted for their texts only). probes/cloud_full_shards.sh checks
-  the partition and the merge offline. `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
+  the partition and the merge offline. The slow test files (a test over 60 s in the newest merged full run, sent as
+  the job's file `slow`) are dealt first, one per shard. Measured 2026-10-22: shards take build 370-480 s plus tests
+  270-330 s, except the shard holding parser::test_warp_pure (~1260 s of tests: its compiler builds), so a full run is
+  ~28 min when 5 slots are free; under 15 min would need test_warp_pure's builds faster or its tests spread too. `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
 - How: `claude --cloud` in detached tmux with a two-line prompt; the job's arguments go to the branch
   cloud-jobs/<job>, the session runs `cloud-test.sh --job <job>` (calls wait ≤ 9 min, under the cloud Bash tool's
   10 min) until it prints CLOUD TEST DONE. The detached run checks out the tip, adds the wasm32 targets, builds from
@@ -119,4 +122,4 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
 - Failures listed in notes/known_failures.md (read in the tested checkout, as the gate reads it at the tested tip) are
   listed apart as "known" and don't make a run red, like the environmental ones.
 - Cost: ~$0.30 per targeted run, ~$0.50 per full run (tokens, not VM time). A targeted run takes 5–6 min, mostly the
-  cold build. A full run is five shards of ~15 min each and ignores ~150 more tests than the Mac (tests that skip themselves off macOS).
+  cold build. A full run is five shards, ~28 min (above), and ignores ~150 more tests than the Mac (tests that skip themselves off macOS).
