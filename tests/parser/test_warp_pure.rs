@@ -53,9 +53,8 @@ fn warp_self_runs_loops_and_texts() {
 /// A program outside the emitter's core fails under `warp self` with the refusal, not a bare trap (card
 /// compiler-refusal-loud)
 #[test]
-#[ignore = "fixnow: fixnow-warp_self_names_the_refusal: warp self now runs `abs -3` (prints 3): pick a program the self lane still refuses"]
 fn warp_self_names_the_refusal() {
-	let printed = said_by("self", "refused", "abs -3\n");
+	let printed = said_by("self", "refused", "nosuchword 3\n");
 	assert!(printed.contains("outside the core: "), "{printed}");
 }
 
@@ -94,8 +93,8 @@ fn pure_said(name: &str, code: &str) -> String {
 #[test]
 #[ignore = "slow: compiles all of compiler.warp, as warp_pure_runs_hello_world; run with --ignored"]
 fn warp_pure_says_what_it_refuses() {
-	let said = pure_said("refused", "abs -3\n");
-	assert!(said.contains("outside the core: the operator ‖ with nothing before it"), "{said}");
+	let said = pure_said("refused", "nosuchword 3\n");
+	assert!(said.contains("outside the core: the unknown name nosuchword"), "{said}");
 }
 
 /// A library word compiles through the pure lane (card pure-not-a-list)

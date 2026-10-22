@@ -210,6 +210,7 @@ PASSED:
   ✓ control::test_error_values::printing_an_error_prints_its_message
   ✓ control::test_error_words::a_program_may_define_the_words
   ✓ control::test_error_words::fail_and_panic_raise
+  ✓ control::test_error_words::warn_warns_and_continues
   ✓ control::test_event_footguns::a_change_through_a_list_method_runs_the_listeners
   ✓ control::test_event_footguns::a_derived_value_in_a_method_argument_is_its_value
   ✓ control::test_event_footguns::a_global_declared_after_a_first_write_is_one_variable
@@ -522,6 +523,7 @@ PASSED:
   ✓ control::test_named_broadcast::send_to_is_broadcast_on
   ✓ control::test_named_patterns::a_literal_list_stays_a_value
   ✓ control::test_named_patterns::a_named_pattern_binds_its_names
+  ✓ control::test_named_patterns::a_named_pattern_of_a_node_case
   ✓ control::test_named_patterns::a_pattern_assigned_without_the_keyword_is_an_error
   ✓ control::test_named_patterns::a_pattern_without_open_parts_binds
   ✓ control::test_named_patterns::an_arm_matches_a_named_pattern
@@ -960,6 +962,7 @@ PASSED:
   ✓ control::test_try_host_failure::try_catches_an_adapter_failure
   ✓ control::test_try_index_and_float::a_float_value_passes_through_try_and_if
   ✓ control::test_try_index_and_float::indexing_what_may_be_no_list_falls_back
+  ✓ control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches
   ✓ control::test_try_list_index::a_non_int_element_is_caught
   ✓ control::test_try_list_index::indexing_empty_is_out_of_range
   ✓ control::test_try_named_traps::a_missing_field_is_caught
@@ -2643,7 +2646,6 @@ PASSED:
   ✓ modules::test_std_docs_comment_association::a_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::the_comment_block_directly_above_is_the_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::words_use_the_comment_line_directly_above_their_definition
-  ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
   ✓ modules::test_std_extrema::an_empty_list_has_no_extremum
   ✓ modules::test_std_extrema::extrema_of_one_list_of_candidates
@@ -3718,6 +3720,7 @@ PASSED:
   ✓ parser::test_inline_comments::test_hash_comment_after_a_statement_keeps_the_newline_separator
   ✓ parser::test_inline_comments::test_hash_comment_ends_the_expression_not_the_program
   ✓ parser::test_inline_comments::test_hash_without_space_is_still_the_index_operator
+  ✓ parser::test_installed_compilers::a_missing_compiler_is_an_error_naming_rebuild
   ✓ parser::test_juxtaposition::test_data_mode_never_multiplies
   ✓ parser::test_juxtaposition::test_julia_grouping_division
   ✓ parser::test_juxtaposition::test_number_times_parenthesis
@@ -3768,8 +3771,6 @@ PASSED:
   ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
   ✓ parser::test_parameter_scope::a_definitions_parameter_scope_ends_with_it
   ✓ parser::test_parameter_scope::a_parameter_divides_only_inside_its_definition
-  ✓ parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
-  ✓ parser::test_parse_long_definitions::many_definitions_parse_in_linear_time
   ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
   ✓ parser::test_parser_sugar::block_comment_with_hash_is_ignored
@@ -3831,10 +3832,6 @@ PASSED:
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
-  ✓ parser::test_self_pure::for_loops_run_pure
-  ✓ parser::test_self_pure::global_type_words_read_self_hosted
-  ✓ parser::test_self_pure::host_words_on_nodes_run_pure
-  ✓ parser::test_self_pure::kind_changes_fail_pure
   ✓ parser::test_self_pure::lib_forms_run_pure
   ✓ parser::test_self_pure::long_float_literals_read_pure
   ✓ parser::test_self_pure::match_values_run_pure
@@ -3904,6 +3901,7 @@ PASSED:
   ✓ parser::test_warp_format::test_nested_structures
   ✓ parser::test_warp_format::test_warp_roundtrip
   ✓ parser::test_warp_format::test_warp_to_json
+  ✓ parser::test_warp_pure::warp_self_names_the_refusal
   ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
   ✓ parser::test_wisp_malformed::malformed_wisp_is_an_error_not_a_repaired_value
   ✓ parser::test_wisp_malformed::malformed_wisp_never_panics
@@ -4244,7 +4242,6 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
-  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -5721,6 +5718,7 @@ PASSED:
   ✓ web::test_element_events::the_page_shows_the_markup_after_a_handler
   ✓ web::test_element_handler_quiet::an_element_s_handler_draws_no_native_warning
   ✓ web::test_expert_guide::every_expert_snippet_prints_what_the_guide_shows
+  ✓ web::test_expert_guide::every_expert_snippet_shows_its_value
   ✓ web::test_expert_guide::the_expert_guide_has_the_beginner_chapters
   ✓ web::test_field_events::a_committed_value_reaches_on_change
   ✓ web::test_field_events::a_field_event_is_no_markup_mistake
@@ -5921,7 +5919,6 @@ PASSED:
   ✓ web::test_status_reason::a_status_line_names_the_real_reason
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
   ✓ web::test_style_rules::hex_colors_in_a_style_sheet
-  ✓ web::test_style_rules::lengths_keep_their_units
   ✓ web::test_style_rules::percentages_and_comma_rules_on_one_line
   ✓ web::test_style_rules::root_and_element_rules_in_a_style_sheet
   ✓ web::test_style_rules::selectors_need_no_quotes
@@ -5963,6 +5960,7 @@ PASSED:
   ✓ web::test_warp_serve::a_server_is_known_without_running_it
   ✓ web::test_web_apis::notify_is_a_host_word
   ✓ web::test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
+  ✓ web::test_web_playground::a_trap_in_the_page_names_the_runtime_error
   ✓ web::test_web_playground::a_tree_from_the_page_reads_like_from_gc_object
   ✓ web::test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
   ✓ web::test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
@@ -6363,6 +6361,7 @@ PASSED:
   ✓ welcoming::test_warning_levels::levels_are_ordered_and_named
   ✓ welcoming::test_warning_levels::no_hints_hides_only_the_hints
   ✓ welcoming::test_warning_levels::strict_fails_from_normal_and_the_rust_error_mode_on_every_warning
+  ✓ welcoming::test_warning_levels::the_cli_labels_levels_and_shows_from_its_threshold
   ✓ welcoming::test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
   ✓ welcoming::test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
   ✓ welcoming::test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
@@ -6467,4 +6466,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6462 passed, 0 failed, 6462 total tested
+13 ignored, 6461 passed, 0 failed, 6461 total tested

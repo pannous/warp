@@ -127,3 +127,7 @@ parser::test_self_pure::spaced_library_words_run_pure
 parser::test_warp_pure::warp_self_names_the_refusal
 web::test_styles::an_inline_style_is_a_block_of_properties
 web::test_web::test_fetch
+parser::test_self_pure::negated_operators_run_pure
+parser::test_self_pure::number_keys_run_pure
+parser::test_self_pure::optional_and_float_fields_run_self_hosted
+parser::test_self_pure::phrases_out_of_the_core
