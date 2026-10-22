@@ -264,7 +264,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - #9 `list of int`; plural type words (`numbers`) are lists; `list<int>` reads too; `x : 100 int` and `pixel:int[100]` declare typed arrays.
 - `type(ø)` prints "empty". static-int: a constant call misfitting its declared int result is refused at compile time.
 - D5 any noun can name a type/parameter (notes/matching.md).
-- index-position: `index` (from 0, `xs[i]`) and `position` (from 1, `xs#p`) are int types; index_of, argmax, argmin, insert use them by declared type; position ± int stays a position, position − position is a count, position + position an error; a missing element is an error, never -1 (notes/index_position.md).
+- index-position: `index` (from 0, `xs[i]`) and `position` (from 1, `xs#p`) are int types; index_of, argmax, argmin, insert use them by declared type; position ± int stays a position, position − position is a count, position + position an error; a missing element is an error, never -1 (notes/index_position.md). byte-index-of (user 2026-10-22, "index_of rename to byte_index_of"): a text's byte offset is `byte_index_of`; `index_of` on a text counts characters (graphemes), like indexing and slicing (card index-of-bytes).
 - schema-as: `x as Config` converts field by field or errs naming the field; `x is Config` stays strict.
 - D10/P17 dispatch on return type (`render "hello" as pdf`); ambiguous → got-it warning (notes/dispatch.md).
 - function-type: `type(gcd)` prints `function: (a, b) -> int`. parse-type / body-code: quoted program parts (`parse("1+1")`, `f.body`) have type `code`, print their source, keep `.op`.
