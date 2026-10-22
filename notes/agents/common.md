@@ -34,9 +34,14 @@ After a context swap, this file and your role file win over anything a handover 
   `// ⚠ WARP DOES THIS DIFFERENTLY: <what> → <lib file>` above the hack (comment-only, so the marks need no cloud
   run). Rust edits only to keep the bootstrap building (the Rust-compiled compiler.warp) or to fix a crash; Rust
   branches already Ready still land. A card that would need Rust work is redone as warp work.
+  Exception (user 2026-10-22): `warp fix` (src/cli/formatting.rs, src/formatting/) may still change in Rust.
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
+- New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
+  declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
+  when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
+  user's (match included); never plan a kernel form as sugar.
 - Rare edge cases go to Later: a corner real programs rarely hit (exotic literals like ∞/NaN, wording nits on code
   nobody writes, odd pairs of rarely combined features) is filed with `todo add Later "…"`, never Next/Soon.
 - Emptiness is tested loosely (user, decision empty-is-not-missing): in all warp code (lib, tests, samples) write
@@ -80,6 +85,16 @@ After a context swap, this file and your role file win over anything a handover 
   never notify it.
 
 ## Where to work
+- Beautiful types (decision beautiful-types): every lib/ declaration a migration or cleanup branch touches leaves it
+  fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
+  adds the shallow subclasses; don't invent parallel ones in your branch.
+- The sugar migration (user 2026-10-22, notes/layers.md) keeps one line of history: warp-layers alone removes sugar
+  from lib/compiler/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
+  origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
+  express the same day. Other branches touching parser.warp or a pass on the migration list stay small and land
+  express; one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
+  lambdas.warp's fusion) are warp-folds' until its cards land; migration 3 skips them. Aliases are warp-signatures'
+  lib/aliases.warp.
 - Small changes on main: only what nothing compiles (notes, docs, wiki, probes, scripts, samples, playground text)
   goes straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or branch: commit your own
   paths by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push; never leave unpushed commits on
@@ -159,11 +174,15 @@ After a context swap, this file and your role file win over anything a handover 
   Cargo.*, build.rs) need no cloud run at all: the branch is accepted when the Rust-compiled compiler.warp compiles
   itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's binary; it
   queues behind a running check, one at a time on the Mac: never run `warp rebuild self` in parallel). Mark it
-  `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. Warp
+  `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. While
+  main's own self build is red (its owner fixes it), a branch passes when its pure lane is green and its self check
+  fails no worse than main's (the same error): a red main never blocks the queue (supervisor 2026-10-22). Warp
   branches have priority over Rust-change branches (user 2026-10-21): they land before any Rust batch, and work in
   .warp is preferred whenever a task can be done there.
   A change to lib/compiler/ (types or annotations included) also checks the self build before Ready:
-  `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp`; a form
+  `scripts/self-check.sh <worktree>` (it rebuilds both compilers in a queue slot; a bare `warp rebuild self` skips the
+  queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
+  replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
   emitter.warp refuses there is fixed or carded, never left for main to find.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
@@ -183,9 +202,13 @@ After a context swap, this file and your role file win over anything a handover 
   warnings still show: card cli-show). Then the targeted tests in the cloud lane.
 - `warp pure` / `warp self` run compiler.warp's build files compiler.wasm / compiler-self.wasm (decision
   compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
-  (`WARP_LIB=<worktree>/lib`). They are built when missing and otherwise only by `warp rebuild [pure|self]`: after
-  editing lib/, run `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure` before judging `warp pure` (a stale
-  one only prints a one-line notice).
+  (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never rebuild a stale one (user 2026-10-22), they only print
+  a one-line notice. Nothing rebuilds a compiler because lib/ changed (user 2026-10-22: "we don't want automatic
+  rebuilds just by changing of lib"): no cron, no git hook, no watcher. The pair beside the binary is main's
+  delivered compiler: the Integrator's push builds both from the pushed tip's committed lib/ and installs them
+  together (notes/agents/integrator.md). A worktree's
+  pair is yours: after editing lib/, run `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure` before
+  judging `warp pure`.
 - GitHub's API quota (5000 requests/h) is shared by every session: `gh run watch --interval 60` or more, never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points, `todo list Now` as much, commands naming a card
   by its key ~1. Never `gh project item-list` (200-530 points, trips GitHub's secondary limit; gh refuses it): read

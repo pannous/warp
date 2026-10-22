@@ -77,3 +77,11 @@ fn part_readers_never_clash_with_fields() {
 	is!("separator_of(parse(\"[a, b]\"))", ",");
 	is!("key_of(x) := x * 2; key_of(21)", 42);
 }
+
+/// `line_of(n)`, `column_of(n)`: where n was written, ø for a node without a position, even where a field of that name
+/// wins (`.line` of the code `line = 1` is 1; the pure parser read that statement as written at line 1, column ø)
+#[test]
+fn position_readers_never_clash_with_fields() {
+	is!("p = positioned(symbol(\"a\"), 2, 5); [line_of(p), column_of(p)]", warp::parse("[2 5]"));
+	is!("k = key(symbol(\"line\"), \"=\", 3); [k.line, line_of(k), column_of(k)]", warp::parse("[3 ø ø]"));
+}

@@ -31,7 +31,8 @@ const BRACKET_PART: i32 = 4;
 const SEPARATOR_PART: i32 = 5;
 /// The parts only a $MetaNode has: its line, its column and its comment (fields 3, 4 and 5)
 const LINE_PART: i32 = 6;
-const META_FIELDS: [(i32, u32); 3] = [(LINE_PART, 3), (LINE_PART + 1, 4), (LINE_PART + 2, 5)];
+const COLUMN_PART: i32 = LINE_PART + 1;
+const META_FIELDS: [(i32, u32); 3] = [(LINE_PART, 3), (COLUMN_PART, 4), (COLUMN_PART + 1, 5)];
 /// node_at(node, line, column, comment) -> the node with its source position and comment (or null), a $MetaNode
 pub const NODE_AT: &str = "node_at";
 /// operator_code(text) -> i64: the code of the operator written so (operators::OP_CODES), -1 for none
@@ -46,21 +47,23 @@ const NEW_SEPARATED: &str = "new_separated";
 const KEY: &str = "key";
 const BRACKETED: &str = "bracketed";
 const SEPARATED: &str = "separated";
-/// `key_of(n)`, `value_of(n)`, …: the node part itself, which a field of that name never shadows (card
-/// node-part-clash: `.key` of the code `key = 3` is 3), ø for a part the node has not
-const PART_READERS: [(&str, i32); 6] = [
+/// `key_of(n)`, `value_of(n)`, `line_of(n)`, …: the node part itself, which a field of that name never shadows (card
+/// node-part-clash: `.key` of the code `key = 3` is 3, `.line` of the code `line = 1` is 1), ø for a part the node has not
+const PART_READERS: [(&str, i32); 8] = [
 	("key_of", KEY_PART),
 	("value_of", VALUE_PART),
 	("op_of", OP_PART),
 	("name_of", NAME_PART),
 	("bracket_of", BRACKET_PART),
 	("separator_of", SEPARATOR_PART),
+	("line_of", LINE_PART),
+	("column_of", COLUMN_PART),
 ];
 /// `positioned(node, line, column)`: the node at that source position, as `n.line` and `n.column` read it (card
 /// carries-line: a pass written in warp reports where Rust's does)
 pub const POSITIONED: &str = "positioned";
 /// name, number of arguments, result kind (a part read or a positioned node is a Node of any kind)
-pub const NODE_BUILTINS: [(&str, usize, Kind); 11] = [
+pub const NODE_BUILTINS: [(&str, usize, Kind); 13] = [
 	(SYMBOL_WORD, 1, Kind::Symbol),
 	(KEY, 3, Kind::Key),
 	(BRACKETED, 2, Kind::List),
@@ -71,6 +74,8 @@ pub const NODE_BUILTINS: [(&str, usize, Kind); 11] = [
 	(PART_READERS[3].0, 1, Kind::Empty),
 	(PART_READERS[4].0, 1, Kind::Empty),
 	(PART_READERS[5].0, 1, Kind::Empty),
+	(PART_READERS[6].0, 1, Kind::Empty),
+	(PART_READERS[7].0, 1, Kind::Empty),
 	(POSITIONED, 3, Kind::Empty),
 ];
 /// The opening brackets by their bracket info in a list's kind field (Curly 0, Square 1, Round 2, Less 3, None 5)

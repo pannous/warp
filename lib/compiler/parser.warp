@@ -44,25 +44,27 @@ def expanded_entities(source: text): text {
 	if not source.contains(ENTITY_MARK) { return source }
 	points = code_points(source)
 	n = points.length
+	// the pieces between entities are copied whole: one append per character made the run quadratic (card
+	// pure-compile-speed: 69% of a pure-lane compile of uses.warp)
 	parts = []
+	copied = 0
 	at = 0
 	while at < n {
 		skipped = span_end(points, at, n)
 		if skipped > at {
-			parts += points[at .. skipped]
 			at = skipped
 			continue
 		}
 		name = entity_name_at(points, at, n)
 		if name == "" {
-			parts += [points[at]]
 			at = at + 1
 		} else {
-			parts += [entities()[name]]
+			parts += [text_between(points, copied, at), entities()[name]]
 			at = at + 2 + name.length
+			copied = at
 		}
 	}
-	join(parts, "")
+	join(parts + [text_between(points, copied, n)], "")
 }
 // The known entity name written at `at` (`\:name`), else "": its run of ASCII letters, or a longer known name with
 // hyphenated parts (`\:fracture-A`)
@@ -360,17 +362,19 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 	outer_branch = p.in_branch
 	outer_grouped = p.grouped
 	outer_end = p.stops_at_end
-	p.in_branch = closer == THEN_CLOSER
-	p.stops_at_end = closer == END_CLOSER or closer == THEN_CLOSER
-	p.grouped = p.grouped or closer != ' '
+	rest = closer == REST_CLOSER
+	// the rest of the enclosing group or block stops where that one stops
+	p.in_branch = if rest then outer_branch else closer == THEN_CLOSER
+	p.stops_at_end = if rest then outer_end else closer == END_CLOSER or closer == THEN_CLOSER
+	p.grouped = p.grouped or (closer != ' ' and not rest)
 	while true {
 		skip_blanks(p)
-		if closes_block(p, closer) {
-			if keyword_at(p, "end") { p.at = p.at + 3 }
+		if closes_block(p) {
+			if keyword_at(p, "end") and not rest { p.at = p.at + 3 }
 			break
 		}
 		if p.at >= p.n {
-			if closer != ' ' { raise "`" + closer + "` is missing: the group opened at " + line_and_column(p.code, opener) + " runs to the end of the input" }
+			if closer != ' ' and not rest { raise "`" + closer + "` is missing: the group opened at " + line_and_column(p.code, opener) + " runs to the end of the input" }
 			break
 		}
 		c = p.code[p.at]
@@ -379,7 +383,7 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 			break
 		}
 		stray = c == ')' or c == ']' or c == '}'
-		if stray and closer != ' ' { raise "`" + c + "` closes the group opened at " + line_and_column(p.code, opener) + ", which needs `" + closer + "`" }
+		if stray and closer != ' ' and not rest { raise "`" + c + "` closes the group opened at " + line_and_column(p.code, opener) + ", which needs `" + closer + "`" }
 		// the lines indented inside a group end at its closer: `{ for x in xs:⏎    a }`
 		if stray and p.grouped { break }
 		if stray { raise "`" + c + "` closes no group" }
@@ -397,6 +401,11 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 		dedent = bracket == "" and newline and line_indent(p) < p.indent
 		after = if dedent then "" else separator(p, closer, newline)
 		if tabbed and after == " " { after = "\t" }
+		// `ys = xs.map { |x| x+1 }`: the block belongs to the method call, not to the statement
+		if found and found#(found.length)#2 == " " and assigned_method_call(found#(found.length)#1) and is_list_of(item, "{") {
+			item = with_trailing_block(found#(found.length)#1, item)
+			found = found[0 .. found.length - 1]
+		}
 		found += [[statement, after] for statement in statements_of(item)]
 		if dedent { break }
 		if p.at == before { p.at = p.at + 1 }
@@ -405,6 +414,25 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 	p.grouped = outer_grouped
 	p.stops_at_end = outer_end
 	grouped(found, bracket)
+}
+
+// `ys = xs.map`, `f(xs) := xs.map`: an assignment of a method, which a block after it is given to
+// Rust twin: functions.rs assigned_method_call
+def assigned_method_call(n: Node): bool := match n {
+	Key(target, op, value): ["=", ":=", "->"].contains(op as text) and (names_method(value) or assigned_method_call(value))
+	_: false
+}
+
+def names_method(n: Node): bool := match n {
+	Key(receiver, Op.Dot, method): method is symbol
+	_: false
+}
+
+// The assignment with `block` given to the method call it assigns: `ys = (xs.map {…})`
+// Rust twin: blocks.rs with_trailing_block
+def with_trailing_block(assignment: Node, block: Node): Node := match assignment {
+	Key(target, op, value): Key(target, op, if assigned_method_call(value) then with_trailing_block(value, block) else listed("", " ", [value, block]))
+	_: assignment
 }
 
 // `match f(x) {…}`: the subject after a clause word ends before the block, no call `f(x) {…}` takes it
@@ -513,7 +541,7 @@ def colon_body(p: Parser, width: int): Node := {
 // The separator after an item, consumed: "," ";" a newline, a blank, or "" before the closer
 // Rust twin: lists.rs parse_separator
 def separator(p: Parser, closer: text, newline: bool): text {
-	if p.at >= p.n or p.code[p.at] == closer or closes_block(p, closer) { return "" }
+	if p.at >= p.n or p.code[p.at] == closer or closes_block(p) { return "" }
 	c = p.code[p.at]
 	if c == ',' {
 		p.at = p.at + 1
@@ -970,10 +998,12 @@ def end_block(p: Parser, stops_at_else: bool): Node := items_until(p, if stops_a
 // The closers of items_until for a Ruby block: its `end`, and for a `then` block also its `else` (kept for the branch)
 END_CLOSER = "end"
 THEN_CLOSER = "end else"
+// The closer of the rest of the enclosing group or block, left for it: the body below `do |item|`
+REST_CLOSER = "rest"
 
 // Whether the parser stands at the word closing the Ruby block `closer`
 // Rust twin: blocks.rs at_block_close
-def closes_block(p: Parser, closer: text): bool := p.stops_at_end and (keyword_at(p, "end") or (closer == THEN_CLOSER and keyword_at(p, "else")))
+def closes_block(p: Parser): bool := p.stops_at_end and (keyword_at(p, "end") or (p.in_branch and keyword_at(p, "else")))
 
 // The control words that guard or loop the statement before them: `a = 2 if c`, `a = 2 unless c`, `x++ while c`,
 // `x++ until c`
@@ -2059,6 +2089,9 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 	if c == '|' {
 		parameters = pipe_parameters(p)
 		// the body binds as after `=>`: it takes an assignment, `|x| total += x`
+		// `do |item|⏎  print item⏎end`: the rest of the block is the body
+		body_below = parameters != ø and is_at(p.code, p.at, '\n', p.n)
+		if body_below { return keyed("->", parameters, single_statement_or_block(items_until(p, REST_CLOSER, "{"))) }
 		if parameters != ø { return keyed("->", parameters, expression(p, binding_powers("=>")#2)) }
 	}
 	// `&lerp`: a reference to the function, an `&` glued to the word after it and not to one before it (`a &b`)
@@ -2143,16 +2176,24 @@ def starred_name(p: Parser): Node := {
 }
 
 // `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, the parser
-// placed on the body after them; ø (nothing consumed) when no names between bars and a body follow
+// placed on the body after them (in a block also on the lines below); ø (nothing consumed) when no names between bars and a body follow
 // Rust twin: pipes.rs pipe_parameters
 def pipe_parameters(p: Parser): Node := {
 	close = p.at + 1
 	while close < p.n and (" ,".contains(p.code[close]) or is_name_char(p.code[close])) { close = close + 1 }
 	names = p.code[p.at + 1 .. close].split(' ').join(",").split(',').filter(name => name)
 	body = spaces_end(p, close + 1)
-	if peek(p.code, close, p.n) != '|' or names is empty or not is_name_start(names#1#1) or body >= p.n or "\n;,)]}".contains(p.code[body]) { return ø }
+	// Ruby's `do |item|⏎ … end`, `{ |x|⏎ … }`: inside a block the body may start on the next line
+	body_below = is_at(p.code, body, '\n', p.n) and (p.grouped or p.stops_at_end)
+	if peek(p.code, close, p.n) != '|' or names is empty or not is_name_start(names#1#1) or body >= p.n or ("\n;,)]}".contains(p.code[body]) and not body_below) { return ø }
 	p.at = body
 	if names.length == 1 then symbol(names#1) else listed("(", ",", names.map(name => symbol(name)))
+}
+
+// A block of one statement as that statement
+def single_statement_or_block(block: Node): Node := {
+	parts = group_parts(block)
+	if parts != ø and parts#3.length == 1 then parts#3#1 else block
 }
 
 // `:post` (wiki/symbol.md): the symbol itself, written as the call symbol("post"), never evaluated
