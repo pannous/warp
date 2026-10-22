@@ -1914,6 +1914,7 @@ PASSED:
   ✓ functions::test_python_ruby_definitions::test_python_keyword_parameter
   ✓ functions::test_python_ruby_definitions::test_python_rest_parameter_with_colon_body
   ✓ functions::test_python_ruby_definitions::test_python_spread_object
+  ✓ functions::test_python_ruby_definitions::test_ruby_block_parameters_on_their_own_line
   ✓ functions::test_python_ruby_definitions::test_ruby_def_end
   ✓ functions::test_python_ruby_definitions::test_ruby_loops_in_def
   ✓ functions::test_python_ruby_definitions::test_ruby_yield_calls_the_block
@@ -3837,10 +3838,6 @@ PASSED:
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
-  ✓ parser::test_self_pure::compile_takes_the_pure_lane
-  ✓ parser::test_self_pure::comprehensions_run_pure
-  ✓ parser::test_self_pure::defaults_run_pure
-  ✓ parser::test_self_pure::digit_casts_run_pure
   ✓ parser::test_self_pure::durations_read_self_hosted
   ✓ parser::test_self_pure::enum_cases_run_pure
   ✓ parser::test_self_pure::enum_conversions_and_default_arms_run_pure
@@ -6481,15 +6478,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ control::test_error_words::warn_warns_and_continues
-  ✗ control::test_multiline_errors::a_raised_text_keeps_its_lines
-  ✗ control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches
-  ✗ web::test_expert_guide::every_expert_snippet_shows_its_value
-  ✗ web::test_web_playground::a_trap_in_the_page_names_the_runtime_error
-  ✗ welcoming::test_warning_levels::the_cli_labels_levels_and_shows_from_its_threshold
-  ✗ welcoming::test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
-  ✗ welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors
-  ✗ welcoming::test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
 
 SUMMARY:
-13 ignored, 6478 passed, 9 failed, 6487 total tested
+13 ignored, 6475 passed, 0 failed, 6475 total tested
