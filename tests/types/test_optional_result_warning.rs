@@ -38,3 +38,13 @@ fn a_result_that_cannot_be_empty_or_is_declared_optional_stays_quiet() {
 	assert_eq!(value, Node::Empty);
 	assert!(warnings.is_empty(), "{warnings:?}");
 }
+
+/// A list result autocasts ø to [] without a warning (user 2026-10-22, card list-result-autocast); other types still warn
+#[test]
+fn a_list_result_of_empty_is_the_empty_list() {
+	let (value, warnings) = crate::common::warnings_of("def found(x: int): ints { if x > 0 { [x] } }; found(-1)");
+	assert_eq!(value, Node::empty_list());
+	assert!(warnings.is_empty(), "{warnings:?}");
+	is!("def found(x: int): list of int { if x > 0 { [x] } }; found(3)", warp::ints(vec![3]));
+	warns_with("def half(x: int): int { if x < 0 { return ø }; x / 2 }; half(-1)", Node::Empty, CAN_ANSWER_EMPTY);
+}
