@@ -1229,8 +1229,10 @@ def declaration(body: Body, name: text, written_type: text, value: any): list {
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
-	if type_name not in declared_kinds { return refuse("a variable declared " + type_name) }
-	body.declared[name] = declared_kinds[type_name]
+	# `xs: ints = v`, `xs: list of text = v`: a list as `list` declares it
+	kind_word = if is_list_type(type_name) then "list" else type_name
+	if kind_word not in declared_kinds { return refuse("a variable declared " + type_name) }
+	body.declared[name] = declared_kinds[kind_word]
 	assignment(body, symbol(name), value)
 }
 # `x: T = v` of a class or enum T the program declares: x holds an object (an instance, also of a class that fits by
