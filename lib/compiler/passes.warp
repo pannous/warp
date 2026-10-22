@@ -47,7 +47,7 @@ passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_w
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, prefix_comparisons] + passes + [bare_returns, filled_lists, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, min_max, coalesce, lambdas, for_loops, ranges, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, prefix_comparisons] + passes + [bare_returns, filled_lists, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, min_max, coalesce, lambdas, for_loops, ranges, sugar, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
@@ -59,8 +59,20 @@ lowered_node(n: any): any := {
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
 # prelude (prelude_words.warp)
 lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), folder, prelude))
-# (the rewrite rules first, as Rust's lowering runs them before any pass: a fired module's `use` brings its words)
-with_used(program: Node, folder: text, prelude: text): Node := with_reached(with_used_modules(with_type_module_uses(rewritten_program(with_uses(program, folder))), folder), prelude, no)
+# the sugar rules the program at hand keeps (with_used)
+global kept_sugar: list = []
+# (the rewrite rules first, as Rust's lowering runs them before any pass: a fired module's `use` brings its words;
+# after interpolation, so that a rule sees the code in a text's holes, `"$(2 in xs)"`). The sugar rules the program
+# keeps are chosen here, by its own bindings, before the definitions it reaches join it.
+with_used(program: Node, folder: text, prelude: text): Node := {
+	own = interpolation(with_uses(program, folder))
+	kept_sugar = sugar_rules(own)
+	with_reached(with_used_modules(with_type_module_uses(rewritten_program(own)), folder), prelude, no)
+}
+
+# the sugar rules (lib/sugar/) over the program and the definitions it reached, where list_methods ran: after the
+# passes that read the written forms (data_items `xs.add(x)`, of_lookups `keys in m`)
+sugar(program: Node): Node := sugared(program, kept_sugar)
 
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))
