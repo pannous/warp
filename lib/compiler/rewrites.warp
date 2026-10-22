@@ -147,12 +147,15 @@ scoped_sugar(n: Node, rules: list, outer: any): Node := {
 	if is_function_definition(n) {
 		rule_scope = scope_with(outer, nodes_in(n))
 		in_reach = rules_in_reach(rules, rule_scope)
-		return bottom_up(n, part => sugar_rewritten(part, in_reach))
+		return bottom_up(n, part => sugared_node(part, in_reach))
 	}
 	walked = children(n, part => scoped_sugar(part, rules, outer))
 	rule_scope = outer
-	sugar_rewritten(walked, rules)
+	sugared_node(walked, rules)
 }
+
+# the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
+sugared_node(n: any, rules: list): any := sugar_rewritten(with_changed_members(n, member => bottom_up(member, part => sugared_node(part, rules))), rules)
 
 # the node rewritten by the first sugar rule matching it, its result rewritten again (F7); a node no rule matches stays
 # as the passes left it
@@ -560,14 +563,17 @@ with_placed_parts(n: any, rules: list, origins: list): any := {
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
 }
 
-# a class with the items of its body rewritten by the rules of the place `member`: the passes see it as the opaque
-# view ["type", name, body]
-with_members(n: any, rules: list, origins: list): any := {
+# a class with the items of its body rewritten by the rules of the place `member`
+with_members(n: any, rules: list, origins: list): any := with_changed_members(n, member => at_place(member, "member", rules, origins))
+
+# a class with each item of its body changed: the passes see it as the opaque view ["type", name, body]
+with_changed_members(n: any, changed: function): any := {
+	if not (n is key and key_of(n) == symbol(opaque_word)) { return n }
 	view = value_of(n)
-	if not (key_of(n) == symbol(opaque_word) and kind_of(view) == "type") { return n }
+	if kind_of(view) != "type" { return n }
 	body = node_of(view#3)
 	if not is_group(body) { return n }
-	members = spliced_statements(items_of(body).map(member => at_place(member, "member", rules, origins)))
+	members = spliced_statements(items_of(body).map(changed))
 	Key(key_of(n), op_of(n), [view#1, view#2, view_of(group_like(body, members))])
 }
 

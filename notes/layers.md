@@ -125,6 +125,43 @@ Sugar (1417), each with the rule it would become:
 | 14 | `function f` reference | `rewrite function $f => &$f` |
 | 12 | `if no xs` | `rewrite no $x => not $x`: needs F1 (condition position) |
 
+### What became of the 1417 sugar lines (warp-layers, 2026-10-22 evening)
+parser.warp was 4272 lines at the survey (861faecfe6) and is 4346 now. Lines that left: sugar-migration-2's ~54
+(list methods, `/!`/`div` as table rows), elvis() ~12. Lines that came in: the alias reader (+104, operator and
+circumfix declarations, which replace branches the next migrations would have needed) and small notation tables.
+Most of the 1417 counted lines turned out to be notation once read closely: the parser has to find a form's words
+and its extent whether or not a rule then gives its meaning, and that finding is the bulk of each row. Only the part
+that gives the meaning can move, and it is small. Rule work done meanwhile mostly moved meaning out of *passes*
+(lib/sugar/loops.warp: `n times`, once/twice/thrice, C-style for, `for xs`; fallbacks.warp: `??`, `?:`), not out of
+the parser.
+
+| lines | form | stays because | movable part |
+|------:|------|---------------|--------------|
+| 236 | for heads: C-style, `for each`, named loops, `for x in xs:`, loop variables | notation: the parser only groups `for … in … body`; the lowering was always for_loops.warp's | 0 in the parser; for_loops.warp's lowering needs F5 (the `loop·step:` mark, `x·items` names) |
+| 187 | English definitions `To square a number: …`, phrase slots | engine gap: slots are read at parse time (phrase_slots), F5 phrase names | ~150 once F5 lands, as a pass in warp (sugar by meaning, pass by mechanism) |
+| 153 | `&x`, `&mut x`, `*r`, `\|x\| body`, `> 100 =>`, rest/spread `*xs` | notation: deciding when `*`/`&` is a prefix and not an operator, a spread, a rest is lexical context; dropping the prefix is one line | ~5 (the drop), at a hybrid-lane cost |
+| 110 | duration literals `3 days`, `1 month 2 days` | notation: a literal, its calendar length folded at parse time into Rust's data view, like `10:30` | 0 (a `days(n)` family in the prelude would be a change of meaning, not a move) |
+| 103 | `do … end`, `then … end`, `fi` | notation: grouping, already tables (END_BLOCK_WORDS, INDENTED_BLOCK_ENDS) | 0 (a circumfix declaration would move the table, not delete code; skipped, supervisor) |
+| 99 | `shader {…}`, `wgsl {…}` | notation: raw text, a table (SHADER_WORDS) | 0 |
+| 98 | `unsigned int`, multi-word type names | notation: lexical, a table (COMPOUND_TYPES) | 0 |
+| 134 | enums with values, Swift `case` rows | engine gap: F4 for the values (per-item templates with an index) | ~100 with F4 + a rule; the grouping stays |
+| 68 | subscripts, slices, negative bounds, `x.sort!` | hybrid lane: raw subscripts before the Rust passes break most indexing tests (supervisor, (a)) | ~40 (sugar.warp subscript, forced) once the hybrid lane retires |
+| 58 | trailing guards | notation: finding the guard and its condition; meaning is guarded_statement's 4 lines | 4, at the hybrid cost of every guard test |
+| 36 | `is not`, `isn't`, `not in`, `nand` | already a table (NEGATED_SPELLINGS) | 0 |
+| 28 | `/!`, `div`, `÷` | done (sugar-migration-2) | done |
+| 23 | emit words | notation: grouping the event words; meaning is the kernel `emit` | 0 |
+| 22 | test words `x is empty`, `x failed` | notation for the finding; tested() is 4 lines | 4, at a hybrid cost |
+| 21 | `n times` | notation: grouping (repeated()); meaning is now a rule (loops.warp) | done |
+| 15 | `a ?: b` | a name's ternary stays (Rust's optional-field readers, hybrid lane) | done for other values; the name's 1 line with hybrid retirement |
+| 14 | `function f` | notation: a mark the closure pass reads | 0 |
+| 12 | `if no xs` | notation: `no` as `not`'s alias in a condition, already the `not` branch | 0 |
+
+Real movable remainder: about 10 lines today. About 50 more once the WARP_SELF_HOSTED=1 hybrid lane retires (card
+hybrid-lane retirement: subscripts, test words, trailing guards, the name `?:`, the prefix drop). About 250 more
+with F4 and F5 (enum values, English definitions), and those move into warp passes rather than one-line rules. The
+parser's size is mostly notation, which is the layer it is meant to hold; shrinking it further is a notation design
+question (tables and declarations instead of branches), not a sugar one.
+
 ## The other lib/compiler/*.warp files (62 files, 10841 lines)
 
 Machinery, no layer: emitter 2651, analyzer 991, lexer 461 (notation), rewrites 371 (the sugar engine), walk 367,
