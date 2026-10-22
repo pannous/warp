@@ -263,7 +263,8 @@ round_code(word: text, function: Node): any := {
 	operator = operator_function(function)
 	if operator != ø and iteration_extras[word] == 1 { return values => operated(operator, values) }
 	# a name: a variable's function value, a function of the program or a library word, `xs.map(len)`
-	if function is symbol then values => call_node(function, values) else ø
+	if not (function is symbol) { return ø }
+	values => call_node(function, values)
 }
 
 # a lambda as the closure of a top-level function taking its captured variables first
