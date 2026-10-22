@@ -30,7 +30,8 @@ compared_call(n: Node, functions: list): any := {
 prefix_comparisons(program: Node): Node := {
 	if not is_group(program) { return program }
 	functions = items_of(program).map(x => value_first_function(x)).filter(name => name != ø)
-	bottom_up(prefix_calls(program, value_takers(program)), n => compared_call(n, functions))
+	takers = value_takers(program)
+	bottom_up(prefix_calls(program, takers, count_takers(program, takers)), n => compared_call(n, functions))
 }
 
 # `print #xs`, `print -1`, `f -x` parse as `print # xs`, `print - 1`, `f - x`: a word that takes a value calls it with
@@ -43,8 +44,17 @@ prefix_call_operators = [Op.Sub, Op.Hash]
 # `f = x => …`), a builtin of one value; not a name it binds as a value
 value_takers(program: Node): list := {
 	scope = scope_of(program)
-	defined = nodes_in(program).map(n => value_function(n)).filter(name => name != ø)
-	(print_words + defined + one_value_builtins).filter(name => not binds_value(scope, name))
+	(print_words + defined_functions(program) + one_value_builtins).filter(name => not binds_value(scope, name))
+}
+
+# the program's functions that take a value
+defined_functions(program: Node): list := nodes_in(program).map(n => value_function(n)).filter(name => name != ø)
+
+# the value takers that take a count, `print #xs`: a type word converts a negative, `int -3`, but takes no count, as
+# `float[2]` is the subscript `float#3` of a typed array (filled_lists.warp), unless the program defines it as a function
+count_takers(program: Node, takers: list): list := {
+	defined = defined_functions(program)
+	takers.filter(name => not is_type_word(name) or defined contains name)
 }
 
 value_function(n: Node): any := match n {
@@ -61,14 +71,16 @@ one_value_builtins = one_value_builtin_names + alias_pairs.filter(pair => pair#2
 
 takes_value(word: Node, takers: list): bool := word is symbol and name_of(word) in takers
 
-prefix_calls(n: Node, takers: list): Node := {
-	member = counted_member(n, takers)
-	if member != ø { return prefix_calls(member, takers) }
+# `counters`: the takers of a count (count_takers)
+prefix_calls(n: Node, takers: list, counters: list): Node := {
+	member = counted_member(n, counters)
+	if member != ø { return prefix_calls(member, takers, counters) }
 	match n {
 		Key(word, op, argument): {
-			if op in prefix_call_operators and takes_value(word, takers) then call_of(name_of(word), [prefixed_by(op, prefix_calls(argument, takers))]) else children(n, x => prefix_calls(x, takers))
+			callers = if op == Op.Hash then counters else takers
+			if op in prefix_call_operators and takes_value(word, callers) then call_of(name_of(word), [prefixed_by(op, prefix_calls(argument, takers, counters))]) else children(n, x => prefix_calls(x, takers, counters))
 		}
-		_: children(n, x => prefix_calls(x, takers))
+		_: children(n, x => prefix_calls(x, takers, counters))
 	}
 }
 
