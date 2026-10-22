@@ -366,8 +366,9 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 	outer_grouped = p.grouped
 	outer_end = p.stops_at_end
 	rest = closer == REST_CLOSER
-	p.in_branch = closer == THEN_CLOSER or (rest and outer_branch)
-	p.stops_at_end = closer == END_CLOSER or closer == THEN_CLOSER or (rest and outer_end)
+	// the rest of the enclosing group or block stops where that one stops
+	p.in_branch = if rest then outer_branch else closer == THEN_CLOSER
+	p.stops_at_end = if rest then outer_end else closer == END_CLOSER or closer == THEN_CLOSER
 	p.grouped = p.grouped or (closer != ' ' and not rest)
 	while true {
 		skip_blanks(p)
