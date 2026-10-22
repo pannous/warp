@@ -85,6 +85,13 @@ After a context swap, this file and your role file win over anything a handover 
   never notify it.
 
 ## Where to work
+- The sugar migration (user 2026-10-22, notes/layers.md) keeps one line of history: warp-layers alone removes sugar
+  from lib/compiler/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
+  origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
+  express the same day. Other branches touching parser.warp or a pass on the migration list stay small and land
+  express; one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
+  lambdas.warp's fusion) are warp-folds' until its cards land; migration 3 skips them. Aliases are warp-signatures'
+  lib/aliases.warp.
 - Small changes on main: only what nothing compiles (notes, docs, wiki, probes, scripts, samples, playground text)
   goes straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or branch: commit your own
   paths by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push; never leave unpushed commits on
