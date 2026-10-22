@@ -782,8 +782,16 @@ core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "in
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
+# the kinds of a value known only at run time each type passes, as Rust's BUILTIN_TYPES masks take them: an int is a
+# rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
+# types.warp node_is_type, held_kind_bit)
+passing_kinds = {int: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Float], float: [Kind.Float],
+	number: [Kind.Int, HeldBit.Rational, Kind.Float], text: [Kind.Text, Kind.Codepoint], char: [Kind.Codepoint],
+	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
+	error: [Kind.Error], code: []}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
 	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: [], code: []}
+kind_bit(kind: int): int := 1 << kind
 def type_test_code(body: Body, subject: any, spec: text): list {
 	if spec in module.sum_types { return refuse("a test of the type " + spec + ", which has cases or subclasses") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
@@ -793,40 +801,32 @@ def type_test_code(body: Body, subject: any, spec: text): list {
 	if value#1 == "node" { return node_type_test(body, value, type) }
 	["bool", [op.i32_const, if value#1 in covered_kinds[type] then 1 else 0]]
 }
-# the held kinds (runtime types.warp held_kind_bit) passing each core type, as runtime node_is_type's types_passed_by
-passing_kinds = {int: [Kind.Int], rational: [Kind.Int, Kind.Float, HeldKind.Rational], float: [Kind.Float],
-	number: [Kind.Int, Kind.Float, HeldKind.Rational], text: [Kind.Text, Kind.Codepoint], char: [Kind.Codepoint],
-	bool: [HeldKind.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldKind.Map],
-	error: [Kind.Error]}
-held_mask(places: any): int := {
-	mask = 0
-	for place in places { mask = mask | (1 << place) }
-	mask
-}
-# `x is type` of a value known only at run time: its held kind bit against the type's mask, as Rust's kind masks; a
-# type value (`int is number`) and `is code` ask node_is_type
+# `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline, as
+# Rust's kind masks; a type value (`int is number`) and `is code` ask runtime node_is_type
 def node_type_test(body: Body, value: any, type: text): list {
-	if type not in passing_kinds { return runtime_call("node_is_type", [value, text_value(type)]) }
+	kinds = 0
+	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }
+	if kinds == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
 	held = [op.local_get] + uleb(fresh_local(body, "node"))
 	bits = [op.local_get] + uleb(fresh_local(body, "int"))
-	read = value#2 + [op.local_set] + held[1..] + held_kind_bit(body, held) + [op.local_tee] + bits[1..]
-	type_value = read + [op.i64_const] + sleb(1 << HeldKind.TypeValue) + [op.i64_and, op.i64_eqz, op.i32_eqz]
-	passes = ["bool", bits + [op.i64_const] + sleb(held_mask(passing_kinds[type])) + [op.i64_and, op.i64_eqz, op.i32_eqz]]
-	["bool", type_value + if_else_code("bool", runtime_call("node_is_type", [["node", held], text_value(type)]), passes)]
+	read = value#2 + [op.local_set] + held[1..] + held_kind_bit_code(body, held) + [op.local_tee] + bits[1..]
+	type_value = read + [op.i64_const] + sleb(kind_bit(HeldBit.TypeValue)) + [op.i64_and, op.i64_eqz, op.i32_eqz]
+	passes = ["bool", bits + [op.i64_const] + sleb(kinds) + [op.i64_and, op.i64_eqz, op.i32_eqz]]
+	["bool", type_value + if_else_code("bool", runtime_call("node_is_type", [["node", held], text_value(type), number_value(kinds)]), passes)]
 }
-# the held kind of the node `held` reads as one bit: 1 << its Kind, a yes/no, type value, map or exact rational the bit
-# of its HeldKind place, ø a list; no call, each mark picked by a select
-def held_kind_bit(body: Body, held: list): list {
+# the held kind of the node `held` as one bit, as runtime held_kind_bit places it: 1 << its Kind, a yes/no, type value,
+# map or exact rational the bit of its HeldBit place, ø a list; no call, each mark picked by a select
+def held_kind_bit_code(body: Body, held: list): list {
 	field = [op.local_get] + uleb(fresh_local(body, "int"))
 	kind = field + [op.i64_const] + sleb(kind_mask) + [op.i64_and]
 	is_field = marked => field + [op.i64_const] + sleb(marked) + [op.i64_eq]
 	ratio = kind + [op.i64_const] + sleb(Kind.Int) + [op.i64_eq] + ratio_test(held) + [op.i32_and]
 	marked = as_node(held) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.local_set] + field[1..] + [op.i64_const, 1] + kind + [shift_ops.i64_shl]
-	marked += unless_held(HeldKind.Bool, is_field(Marked.Bool)) + unless_held(HeldKind.TypeValue, is_field(Marked.TypeValue))
-	marked += unless_held(HeldKind.Map, is_field(Marked.Map)) + unless_held(HeldKind.Rational, ratio)
+	marked += unless_held(HeldBit.Bool, is_field(Marked.Bool)) + unless_held(HeldBit.TypeValue, is_field(Marked.TypeValue))
+	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio)
 	held + [op.ref_is_null, op.if] + value_type("int") + held_bit(Kind.List) + [op.else] + marked + [op.end]
 }
-def held_bit(place: int): list { [op.i64_const] + sleb(1 << place) }
+def held_bit(place: int): list { [op.i64_const] + sleb(kind_bit(place)) }
 # the bit on the stack, or the place's bit when the test holds
 def unless_held(place: int, test: list): list { held_bit(place) + test + [op.i32_eqz, op.select] }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
@@ -1967,7 +1967,7 @@ def data_item(body: Body, mark: text, item: any): list {
 	runtime_call(data_item_checks[mark], [value])
 }
 # the tables a runtime word reads a number of by name, `Kind.List` (kinds.warp), folded into the code
-constant_tables = {Kind: Kind, Marked: Marked, HeldKind: HeldKind, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode, TimeInfoUnit: TimeInfoUnit, Ascii: Ascii, Utf8: Utf8, Unicode: Unicode}
+constant_tables = {Kind: Kind, HeldBit: HeldBit, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode, TimeInfoUnit: TimeInfoUnit, Ascii: Ascii, Utf8: Utf8, Unicode: Unicode}
 # the number `Kind.List` names in its table, else ø
 table_number(table: any, case: any): any := {
 	if not (table is symbol and name_of(table) in constant_tables) { return ø }
