@@ -83,10 +83,19 @@ filled(message: text, bound: any): text := {
 }
 shown(part: any): text := if part is symbol then name_of(part) else if part is text then part else "${part}"
 
-# the first error diagnosed, as Rust's Diagnostic says it: the message, then `; fix: ` and the fix when it names one;
-# ø when none is an error
-first_error(): text? := {
-	failing = diagnosed.find(said => said#1 == "error")
+# what was diagnosed after the first `known` facts: a compile's own, past those of the runtime words lowered before it
+diagnosed_since(known: int): list := diagnosed[known ..]
+
+# the first error among the diagnosed, as Rust's Diagnostic says it; ø when none is an error
+first_error(found: list): text? := {
+	failing = found.find(said => said#1 == "error")
 	if not failing { return ø }
-	if failing#3 then failing#2 + "; fix: " + failing#3 else failing#2
+	said_text(failing)
 }
+
+# the warnings among the diagnosed, each as Rust's Diagnostic says it
+warnings_said(found: list): list := found.filter(said => said#1 == "warning").map(said_text)
+
+# a diagnosed [level, message, fix, …] as Rust's Diagnostic says it: the message, then `; fix: ` and the fix when it
+# names one
+said_text(said: list): text := if said#3 then said#2 + "; fix: " + said#3 else said#2
