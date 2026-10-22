@@ -184,8 +184,8 @@ After a context swap, this file and your role file win over anything a handover 
   warnings still show: card cli-show). Then the targeted tests in the cloud lane.
 - `warp pure` / `warp self` run compiler.warp's build files compiler.wasm / compiler-self.wasm (decision
   compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
-  (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never rebuild a stale one (user 2026-10-22), they only print
-  a one-line notice. Nothing rebuilds a compiler because lib/ changed (user 2026-10-22: "we don't want automatic
+  (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never build one (user 2026-10-22): a missing one is an error
+  naming `warp rebuild`; a worktree's stale one in data/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user 2026-10-22: "we don't want automatic
   rebuilds just by changing of lib"): no cron, no git hook, no watcher. The pair beside the binary is main's
   delivered compiler: the Integrator's push builds both from the pushed tip's committed lib/ and installs them
   together (notes/agents/integrator.md). A worktree's

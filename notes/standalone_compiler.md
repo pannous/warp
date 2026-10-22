@@ -79,11 +79,13 @@ pass with it (the count self vs Rust-compiled goes to the supervisor first: `scr
 warp-self` runs every test pair both ways, ~35 min a lane, and ends with the parity line; decision
 self-compiled-parity: self may pass 5 % fewer, reported, no gate yet). It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
-Build files (decision compiler-build, card compiler-wasm): compiler.wasm and compiler-self.wasm lie next to the binary
-for the lib/ they record (custom section `warp.build`: lib/'s path, its fingerprint, the binary's WARP_SOURCE from
-build.rs); a run with any other lib/ (WARP_LIB, a worktree) uses <lib>/../data/. A missing file is built at its first
-run; an existing one only by `warp rebuild [pure|self]`, never because lib/ changed: a run on one built from another
-lib/ or warp build prints one line naming `warp rebuild`. main's binary refresh runs `warp rebuild pure` with the new
+Build files (decision compiler-build, cards compiler-wasm, installed-compilers): compiler.wasm and compiler-self.wasm
+next to the binary are the delivered pair (a release's, or main's from the Integrator), used as they are: never
+compared with the checkout's lib/, no notice (custom section `warp.build`: lib/'s path, its fingerprint, the binary's
+WARP_SOURCE from build.rs, then the commit of lib/'s checkout, the stamp `warp version` shows). Only a lib/ named by
+WARP_LIB that the pair is not for (a worktree) uses <lib>/../data/, where a run on one built from another lib/ or warp
+build prints one line naming `warp rebuild`. Only `warp rebuild [pure|self]` builds one; a missing one is an error
+naming it (user 2026-10-22: no rebuild on demand anywhere). main's binary refresh runs `warp rebuild pure` with the new
 binary before installing it next to ~/dev/bin/warp. probes/speed/compiler_build.sh checks the whole cycle.
 Cold start (card pure-cold-start, empty module cache): the pure lane's try at compiler.warp (passes stage compiled ~44
 s, analysis ~6 s, emit ~21 s, then their runs) and Rust's compile of it (~90 s) ran one after the other: 166 s. Now
