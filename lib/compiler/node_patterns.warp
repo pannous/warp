@@ -1,0 +1,11 @@
+# The shapes of node the compiler names (decision node-refinements): each a named pattern of a case of node.warp, so
+# `d: Definition` holds one, `n is Definition` tests it and the arm `Definition: …` takes it apart into its names.
+# A shape gets a name once several functions take it; the cases themselves (Key, List, Symbol …) are types already.
+pattern Assignment = Key(target, Op.Assign, value)
+pattern Pair = Key(key, Op.Colon, value)
+pattern Definition = Key(head, Op.Define, body)
+pattern Member = Key(owner, Op.Dot, field)
+pattern Lambda = Key(parameters, Op.Arrow, body)
+pattern Call = List(parts, Bracket.Round, Separator.None)
+pattern Phrase = List(words, Bracket.None, Separator.Space)
+pattern Block = List(statements, Bracket.Curly, separator)
