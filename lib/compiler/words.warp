@@ -8,6 +8,8 @@ type_words = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact
 	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
 	"uint64"]
 any_word = "any"
+# the type an optional type word holds when it holds a value, `int` of `int?`
+required_type(word: text): text := if word.ends_with("?") then word[0..<(#word - 1)] else word
 # the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }` (Rust twin: words.rs IMPLICIT_PARAMETER)
 implicit_parameter = "it"
 # the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic (Rust twin: errors/run_time.rs RAISE_WORDS)
@@ -69,7 +71,7 @@ call_kinds = {"string": "text", "count": "int", "is_type": "int", "collection_co
 	"chr": "codepoint", "value_of": "empty", "op_of": "empty", "len": "int", "upper": "text", "trim": "text",
 	"type": "symbol", "reverse": "list", "lower": "text", "read": "text", "switch_no_case": "int",
 	"response_header": "empty", "random_below": "int", "exp": "float", "DrawCircle": "int", "exit": "empty",
-	"warning": "text", "key_held": "int", "chars": "list", "bracket_of": "empty", "atan2": "float",
+	"warning": "text", "key_held": "int", "chars": "list", "bracket_of": "empty", "line_of": "empty", "column_of": "empty", "atan2": "float",
 	"signal_listeners": "empty", "DrawText": "int", "task_status": "int", "parse_code": "empty",
 	"empty_extremum": "int", "name_of": "empty", "InitWindow": "int", "map_of_entry": "empty", "serve_routes": "empty",
 	"gpu_render": "empty", "caught_error": "error", "memo_known": "int", "memo_value": "int", "memo_store": "int",

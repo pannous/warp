@@ -164,6 +164,9 @@ group_like(n: Node, items: list): Node := match n {
 # the call `name(arguments…)`
 # the symbol `word`
 is_word(n: Node, word: text): bool := n == symbol(word)
+# `pattern Definition = Key(head, Op.Define, body)`, a named pattern (node_matches.warp; Rust twin: named_patterns.rs
+# pattern_definition)
+is_pattern_definition(n: Node): bool := is_group(n) and #n == 2 and is_word(n#1, "pattern") and is_key(n#2, Op.Assign)
 call_of(name: text, arguments: list): Node := bracketed([symbol(name)] + arguments, "(")
 
 # the numbers of the names the passes make, counted across all of them as Rust's nodes.rs fresh_number counts
@@ -229,11 +232,8 @@ items_of(n: Node): list := {
 # message, preferred)` says it at n's position and gives n; pass_differential's call is `reported(view)`, the view
 # with the reports said meanwhile, [line, column, message, preferred] each
 global said = []
-# where n was written, ø for a node without a position (one a pass made); a block's own entry `line = line + 1` is
-# no position
-line_of(n: Node): int? := position_number(try n.line else ø)
-column_of(n: Node): int? := position_number(try n.column else ø)
-position_number(read: any): int? := if read is int then read else ø
+# whether n has where it was written (`line_of(n)`, `column_of(n)`): a node a pass made has none, and the statement
+# `line = 1` answers `.line` with its value, not a position
 is_positioned(n: Node): bool := line_of(n) != ø
 report(n: T, message: text, preferred: any): T := {
 	said += [[line_of(n), column_of(n), message, preferred]]

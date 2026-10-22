@@ -37,3 +37,16 @@ match [3, 4] { Point => x + y }' 7
 is! 'to pattern text: count(text)
 pattern Pair = [_, _]
 pattern("abc") + count([[1, 2], [3]] where it is Pair)' 4
+
+# a_named_pattern_of_a_node_case
+is! 'pattern Definition = Key(head, Op.Define, body)
+parse("g := 1") is Definition' true
+is! 'pattern Definition = Key(head, Op.Define, body)
+parse("a + 1") is Definition' false
+is! 'pattern Definition = Key(head, Op.Define, body)
+match parse("g := 1") { Definition: body; _: 0 }' 1
+is! 'pattern Definition = Key(head, Op.Define, body)
+body_of(d: Definition): Node := value_of(d)
+body_of(parse("g := 2"))' 2
+is! 'use "tests/modules/used_patterns.warp"
+parse("f(x) := x") is Definition' true

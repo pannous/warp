@@ -66,7 +66,9 @@ impl WarpParser {
 	/// `x is empty` holds for ø, "", [] and {} alike (wiki/null.md: empty checks missing or empty): `count(x) == 0`, as a
 	/// number or a bool counts one.
 	pub(crate) fn try_parse_test_word(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		if self.options.data_mode || min_bp > Op::Not.binding_power().1 || lhs.is_empty_node() {
+		// an empty left side is no subject, a written `[]` is (card literal-empty-test)
+		let no_subject = lhs.is_empty_node() && !lhs.is_empty_list_literal();
+		if self.options.data_mode || min_bp > Op::Not.binding_power().1 || no_subject {
 			return None;
 		}
 		let is_length = "is".len();

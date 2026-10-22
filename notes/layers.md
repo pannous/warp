@@ -14,7 +14,7 @@ The user asked whether to separate the core parser from the core language and th
 Measured: parser.warp is today ~50 % notation (2102 lines), ~16 % kernel (686), ~34 % sugar (1417); 26 of the 62
 other compiler files (2448 of their 10841 lines) are sugar passes. Sugar in all: ~3900 lines.
 
-## The kernel (USER DECISION: proposed, as small as found possible)
+## The kernel (user decision 2026-10-22: this list plus `match`, "match stays in the kernel 100%")
 
 | # | form | why it can't be a rewrite |
 |---|------|---------------------------|
@@ -30,9 +30,9 @@ other compiler files (2448 of their 10841 lines) are sugar passes. Sugar in all:
 | 10 | `global` | scope, not a value |
 | 11 | `data x`: quote | stops evaluation; the code-as-data door |
 | 12 | `rewrite p => t`, `operator …` declarations | the meta forms that build layer 3 and extend layer 1 |
+| 13 | `match subject { pattern => value … }` | user decision; its lowering (node_matches, node_cases) is emitter work, never sugar |
 
-Not kernel (evidence: a pass already lowers them away before the emitter): `for` (for_loops.warp → while), `match`
-(node_matches.warp → if chains), `enum` (plain_enums.warp → class with variants), `unless`/`until`, `?:`, `??`,
+Not kernel (evidence: a pass already lowers them away before the emitter): `for` (for_loops.warp → while), `enum` (plain_enums.warp → class with variants), `unless`/`until`, `?:`, `??`,
 `x is T` (type_tests.warp → is_type call), `as` (conversion calls), comprehensions, ranges, `n times`. Operators are
 notation; their meaning is a call (arithmetic ones are emitter intrinsics, as any builtin).
 
@@ -115,7 +115,7 @@ Sugar (1417), each with the rule it would become:
 | 28 | `/!`, `div`, `÷`, `/!=` | already a math.warp alias (`operator ÷ := /!`): the parser branch duplicates it; `operator div := /!` |
 | 23 | emit words `emit stop{…}` (send, fire, trigger, signal, ask) | `rewrite emit $e... => emit($e...)`, aliases for the others |
 | 22 | test words `x empty`, `x is missing`, `x failed` | `rewrite $x is empty => count($x) == 0` phrase rule, works today |
-| 21 | `n times {…}` | `rewrite $n times $body => repeat($n, $body)`: library word (sugar.warp already says so) |
+| 21 | `n times {…}` | no rewrite: a plain library function `infix times(n: number, b: block)` (user 2026-10-22, decision language-layers) |
 | 15 | `a ?: b` | `rewrite $a ?: $b => if $a then $a else $b`: needs F3 (a once) |
 | 14 | `function f` reference | `rewrite function $f => &$f` |
 | 12 | `if no xs` | `rewrite no $x => not $x`: needs F1 (condition position) |
@@ -128,14 +128,13 @@ prelude_words 251, scope 215, uses 193 (kernel `use`), serializer 138, builtin_s
 types 10, byte_codes 9. Checks, no layer: kind_changes 187, source_checks 140, main_globals 94, lints 69.
 time_arithmetic 158 and injection 217 are library (runtime words, typed templates), not syntax.
 
-Kernel passes (analysis a rewrite can't carry): lambdas 283 (closures), arity_overloads 388 (overloads by count),
+Kernel passes (analysis a rewrite can't carry): node_matches 214 and node_cases 178 (match, kernel by decision), lambdas 283 (closures), arity_overloads 388 (overloads by count),
 number_keys 152 and data_items 150 (map key typing, writes through references), tries 91 (try lowering),
 enum_declarations 63 (reads declared types).
 
 Sugar passes, with the rule each would become:
 | lines | file | rule, or the missing feature |
 |------:|------|------|
-| 214+178 | node_matches, node_cases | match → if chain: F3 (subject once) + F4 (each arm); stays a pass longest |
 | 197 | plain_enums | `Color.Red` → the case: F2 (declared enum cases) |
 | 186 | definitions | `rewrite def $d => $d`, `rewrite $f($p...) = $b => $f($p...) := $b`: works today, minus `xs(1) = …` (F2) |
 | 163 | of_lookups | `rewrite $a of $b => $b.$a`: phrase rule works today; type phrases `list of int` need F2 |
@@ -144,7 +143,7 @@ Sugar passes, with the rule each would become:
 | 121 | foreign_forms | `rewrite public $d... => $d...`, `rewrite new $c => $c`: F1 (statement head); `attr_accessor` F1 (class body) |
 | 116 | min_max | `max(a, b)` → library function; the comparison form needs F3 |
 | 97 | library_calls | `rewrite reverse $x => reverse($x)` per typed prelude word: F2 (typed signature), unbound already handled |
-| 91 | clauses | `fib(0) := 0; fib(1) := 1` → one match: F6 |
+| 91 | clauses | `fib(0) := 0; fib(1) := 1` → one kernel match: F6 |
 | 88 | comprehensions | `rewrite [$e for $x in $xs] => (r = []; for $x in $xs { r += [$e] }; r)`: F3 |
 | 86 | prefix_comparisons | `sq 2 == 4` → `sq(2) == 4`: F2 (parameter typed as a value) |
 | 65 | number_words | `rewrite one => 1` per word, works today (module rules skip bound words); keys/members stay: F1 |
@@ -178,7 +177,7 @@ Sugar passes, with the rule each would become:
 5. **F1 positions** (~250 lines): trailing guards, `if no xs`, foreign modifiers, C-style for heads.
 6. **Notation generalizations** replacing parser branches (~300 lines): word brackets (`do … end`, `fi`), raw-text
    block words (shader, wgsl), compound names. Each is one table, never a keyword branch.
-7. **F4–F7, last**: clauses, preposition heads, English `To …:` definitions, match lowering (~700 lines). These may stay
+7. **F4–F7, last**: clauses, preposition heads, English `To …:` definitions (~310 lines). These may stay
    passes written in warp; they are sugar by meaning, passes by mechanism.
 
 Rule of thumb for new syntax from now on: a table row or a declaration (notation), else a `rewrite` line in

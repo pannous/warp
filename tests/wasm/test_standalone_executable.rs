@@ -185,7 +185,6 @@ fn test_warp_run_leaves_no_executable() {
 
 /// card cli-running: running a file also compiles it for the executable; that second compile says nothing again
 #[test]
-#[ignore = "fixnow: fixnow-test-running-a-file-shows-its-hints-once: the hint is shown twice (left 2, right 1) since front-end-warnings"]
 fn test_running_a_file_shows_its_hints_once() {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_hinted.warp");
 	std::fs::write(&source_path, "x = 3\nx > 2 ? 1 : 0").unwrap();
@@ -198,7 +197,7 @@ fn test_running_a_file_shows_its_hints_once() {
 		.output()
 		.unwrap();
 	let stderr = text(&run.stderr);
-	assert_eq!(stderr.matches("hint").count(), 1, "{stderr}");
+	assert_eq!(stderr.lines().filter(|line| line.starts_with("hint ")).count(), 1, "{stderr}");
 	assert!(executable.exists(), "{stderr}");
 }
 

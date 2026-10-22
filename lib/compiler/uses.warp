@@ -158,8 +158,8 @@ path_in(folder: text, name: text): text := if name.starts_with("/") then name el
 file_text(path: text): any := try read(path) else ø
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
-# `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program); not its
-# main-level statements
+# `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program), a named
+# pattern; not its main-level statements
 is_declaration(statement: Node): bool := match statement {
 	Key(left, op, right): {
 		if left == symbol(opaque_word) { return kind_of(right) == "type" }
@@ -167,7 +167,7 @@ is_declaration(statement: Node): bool := match statement {
 		# `def f(x): list {…}`: the key of the head and its result type
 		op == Op.Colon and (is_keyword_group(left) or is_declaration_keyword(left))
 	}
-	_: declared_enum(statement) != ø or is_keyword_group(statement)
+	_: declared_enum(statement) != ø or is_keyword_group(statement) or is_pattern_definition(statement)
 }
 assigns_or_defines(op: Op): bool := op == Op.Assign or op == Op.Define
 is_declaration_keyword(n: any): bool := n is symbol and name_of(n) in declaration_keywords
@@ -183,7 +183,7 @@ declared_name(statement: Node): any := match statement {
 		if is_keyword_group(left) { return leftmost_name(left#2) }
 		if is_declaration_keyword(left) then declared_name(right) else ø
 	}
-	_: if is_keyword_group(statement) then leftmost_name(statement#2) else ø
+	_: if is_keyword_group(statement) or is_pattern_definition(statement) then leftmost_name(statement#2) else ø
 }
 leftmost_name(n: Node): any := {
 	if n is symbol { return name_of(n) }
