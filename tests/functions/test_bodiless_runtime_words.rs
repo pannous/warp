@@ -5,6 +5,7 @@ use crate::common::fails_with;
 use crate::is;
 
 /// The status of a Rust panic
+#[cfg(feature = "native")]
 const PANIC_STATUS: i32 = 101;
 
 #[test]
