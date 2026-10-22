@@ -128,3 +128,24 @@ quadruple 3   # 12
 ```
 
 A result rewritten 64 times in a row (`rewrite_depth_limit`) is the rules' loop: an error, not a hang.
+
+## Enum cases (F9)
+Three more `where` conditions ask about the enums the program declares (`enum Coin { Penny, Dime }`, Swift's
+`{ case north, south }`), read before plain_enums.warp lowers the declarations:
+
+| condition | holds when the hole bound |
+|---|---|
+| `$e is enum` | a name of a declared enum, or that name as a text (`is_type(c, "Coin")`) |
+| `$c is case of $e` | a case of the enum `$e` bound; with `$e` unbound, a case of the one enum declaring it, `$e` then bound to that enum |
+| `$c is case` | a case of the one enum declaring it |
+
+In a template, `cases of $e` stands among a list's or a call's items for the cases of the enum `$e` names, each a
+symbol placed where the rewritten code was written:
+
+```warp
+rewrite $e.$c => $c where $c is case of $e
+rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is enum
+```
+
+The rules of lib/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
+`cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.

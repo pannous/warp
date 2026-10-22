@@ -1,0 +1,8 @@
+# Enum cases (notes/layers.md, sugar): `Color.Red`, Rust's `Color::Red` are the case Red the enum Color declares, Swift's
+# arm `case .red:` the case red of the one enum declaring it
+rewrite $e.$c => $c where $c is case of $e
+rewrite $e::$c => $c where $c is case of $e
+rewrite case.$c => $c where $c is case
+
+# `c is Coin` (lib/sugar/types.warp's is_type(c, "Coin")) of an enum: c is one of its cases
+rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is enum
