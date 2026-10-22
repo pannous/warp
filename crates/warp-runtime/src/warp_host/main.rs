@@ -3,8 +3,9 @@
 //! and what wasm cannot do itself: shell commands (os.command, os.exec, os.run), C calls, the host words.
 //!   warp-host [--compiler self|full] run <file.warp | code> [args…]   compile and run; the run's value printed
 //!   warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
-//!   warp-host <file.wasm> [args…]
+//!   warp-host <file.wasm | file.wat> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
 mod cache;
+mod ffi;
 mod nodes;
 mod words;
 
@@ -21,7 +22,7 @@ const WASM_STACK: usize = 240 << 20;
 const THREAD_STACK: usize = WASM_STACK + (16 << 20);
 const USAGE: &str = "usage: warp-host [--compiler self|full] run <file.warp | code> [args…]
        warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
-       warp-host <file.wasm> [args…]";
+       warp-host <file.wasm | file.wat> [args…]";
 
 /// A run's state: WASI's, the C handles of its C calls, and what std_io needs
 pub struct Host {
@@ -78,10 +79,16 @@ fn command(given: Vec<String>) -> i32 {
 			compile_file(&engine, compiler, Path::new(source), &Path::new(source).with_extension("wasm"))
 		}
 		["compile", source, wasm] => compile_file(&engine, compiler, Path::new(source), Path::new(wasm)),
-		[file, ..] if file.ends_with(".wasm") => match std::fs::read(file) {
-			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None)),
-			Err(problem) => failed(&format!("{file}: {problem}")),
-		},
+		[file, ..] if file.ends_with(".wasm") || file.ends_with(".wat") => {
+			let bytes = std::fs::read(file).map_err(|problem| problem.to_string());
+			let bytes = bytes.and_then(|bytes| {
+				wat::parse_bytes(&bytes).map(|bytes| bytes.to_vec()).map_err(|problem| problem.to_string())
+			});
+			match bytes {
+				Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None)),
+				Err(problem) => failed(&format!("{file}: {problem}")),
+			}
+		}
 		[source, ..] if source.ends_with(".warp") => run_source(&engine, compiler, source, &args[1..]),
 		_ => {
 			eprintln!("{USAGE}");
@@ -192,8 +199,9 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<Str
 		warp_runtime::libm::link_libm(&mut linker)?;
 		warp_runtime::c_calls::link_libc_functions(&mut linker)?;
 		words::link(&mut linker)?;
-		linker.define_unknown_imports_as_traps(&module)?;
 		let mut store = Store::new(engine, host);
+		ffi::link_c_imports(&mut linker, &mut store, &module, bytes)?;
+		linker.define_unknown_imports_as_traps(&module)?;
 		warp_runtime::engine::cap_memory(&mut store);
 		let instance = linker.instantiate(&mut store, &module)?;
 		let main = warp_runtime::standalone::ENTRY_POINTS.iter().find_map(|name| instance.get_func(&mut store, name));
