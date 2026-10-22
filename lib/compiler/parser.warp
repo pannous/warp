@@ -1943,7 +1943,7 @@ def circumfix_at(p: Parser): list {
 	[]
 }
 // The glyph opens or closes a circumfix operator: `⌋` is no free symbol
-// Rust twin: math_notation.rs closes_circumfix, operators.rs is_free_symbol
+// Rust twin: math_notation.rs is_circumfix_glyph
 def is_circumfix_glyph(p: Parser, glyph: text): bool {
 	for pair in p.circumfixes { if pair#1 == glyph or pair#2 == glyph { return true } }
 	false
