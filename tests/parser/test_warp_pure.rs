@@ -4,27 +4,29 @@ const HELLO: &str = "print(\"hello world\")\n";
 /// Time for building compiler-self.wasm: ~60 s on the Mac, more on a cloud VM, past one turn's 60 s default
 const SELF_BUILD_TIME_LIMIT_SECONDS: &str = "900";
 
-/// `warp <command>` (pure or self), ready for a program. `warp self` gets its compiler built anew once per test run:
-/// a warm cloud VM keeps compiler-self.wasm of an earlier job's lib/ in target/tmp (card cloud-lane-warm), and building
-/// it inside the first program's run took more than that run's 60 s (card self-build-time-limit). compiler.wasm of
-/// `warp pure` is not rebuilt: that takes ~540 s (warp_pure_runs_hello_world)
-fn lane(command: &str) -> std::process::Command {
-	static SELF_BUILT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
-	if command == "self" {
-		SELF_BUILT.get_or_init(build_self_compiler);
-	}
+/// `warp <command>` (pure or self), ready for a program; no run builds a missing compiler (card installed-compilers).
+/// `warp self` gets its compiler built anew once per test run: a warm cloud VM keeps compiler-self.wasm of an earlier
+/// job's lib/ in target/tmp (card cloud-lane-warm), and building it inside the first program's run took more than that
+/// run's 60 s (card self-build-time-limit). compiler.wasm of `warp pure` is built only when missing next to the test's
+/// binary: that takes ~540 s (warp_pure_runs_hello_world)
+pub(crate) fn lane(command: &str) -> std::process::Command {
+	static BUILT: [std::sync::OnceLock<()>; 2] = [std::sync::OnceLock::new(), std::sync::OnceLock::new()];
 	let mut lane = crate::common::warp_command();
+	let delivered = std::path::Path::new(lane.get_program()).with_file_name("compiler.wasm");
+	if command == "self" || !delivered.exists() {
+		BUILT[(command == "self") as usize].get_or_init(|| build_compiler(command));
+	}
 	lane.args(["--no-ask", command]).env("WARP_NO_WINDOW", "1").env("WARP_HINTS", "0");
 	lane
 }
 
-fn build_self_compiler() {
+fn build_compiler(command: &str) {
 	let built = crate::common::warp_command()
-		.args(["rebuild", "self"])
+		.args(["rebuild", command])
 		.env("WARP_TIME_LIMIT", SELF_BUILD_TIME_LIMIT_SECONDS)
 		.output()
 		.expect("warp runs");
-	assert!(built.status.success(), "warp rebuild self: {}", String::from_utf8_lossy(&built.stderr));
+	assert!(built.status.success(), "warp rebuild {command}: {}", String::from_utf8_lossy(&built.stderr));
 }
 
 #[test]
@@ -105,6 +107,7 @@ fn warp_pure_runs_a_library_word() {
 
 /// `warp self <file>`: compiler.warp compiled by itself (the pure lane) compiles the program (card self-hello)
 #[test]
+#[ignore = "redundant: covered by parser::test_warp_pure::warp_self_runs_loops_and_texts"]
 fn warp_self_runs_hello_world() {
 	let folder = crate::common::scratch_directory("warp_self");
 	std::fs::create_dir_all(&folder).unwrap();

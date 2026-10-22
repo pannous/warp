@@ -86,8 +86,8 @@ fn test_law_lean_export_modulo_is_euclidean() {
 	assert!(source.contains("(Int.tmod x (3 : Int))"), "{source}");
 }
 
-#[cfg_attr(not(feature = "native"), ignore = "browser: needs the lean prover")]
 #[test]
+#[ignore = "redundant: covered by numbers::test_law::test_law_overflow_promotion_proved_by_lean"]
 fn test_law_proved_by_lean() {
 	crate::requires!(crate::common::LEAN);
 	let reports = verify(&format!("{SQUARE}\nadd(a,b) := a+b\nlaw add(a,b) == add(b,a)"));

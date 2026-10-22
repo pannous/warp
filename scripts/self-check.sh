@@ -31,7 +31,8 @@ export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
 # both compilers of the branch's lib/: compiler.wasm (`warp pure`, built by Rust) and compiler-self.wasm (`warp self`,
 # built by itself); a lib/ that passed self alone broke main's `warp rebuild pure` twice on 2026-10-22
 check_lane() {
-  $warp rebuild $1 >/dev/null 2>&1 || { verdict="SELF CHECK RED: warp rebuild $1 failed in $worktree"; return 1; }
+  local built
+  built=$($warp rebuild $1 2>&1) || { verdict="SELF CHECK RED: warp rebuild $1 failed in $worktree: $(print -r -- $built | grep -v '^warning\|^ *[0-9]* |\|^ *|' | tail -3)"; return 1; }
   said=$($warp $1 samples/hello/hello.warp 2>&1 | tail -1)
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp $1 hello said: $said"; return 1; }
   verdict="SELF CHECK ok: $said"

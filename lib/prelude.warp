@@ -100,6 +100,8 @@ op_of(n): any from emitter
 name_of(n): any from emitter
 bracket_of(n): any from emitter
 separator_of(n): any from emitter
+line_of(n): any from emitter
+column_of(n): any from emitter
 bracketed(n, bracket): list from emitter
 separated(n, separator): list from emitter
 string(x): text from emitter

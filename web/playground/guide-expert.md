@@ -171,7 +171,7 @@ class Person{name: text; age: int}; stored people: [Person]; people.add(Person("
 
 Errors are values; `raise` makes one; ambiguous lines are questions, not guesses.
 
-```warp => Error("divide by zero")
+```warp => Error("divide by zero at 1:1")
 1 / 0
 ```
 

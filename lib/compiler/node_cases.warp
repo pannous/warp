@@ -10,9 +10,14 @@ use "scope.warp"
 use "enum_declarations.warp"
 use "node_matches.warp"
 use "definitions.warp"
+use "words.warp"
 
 node_type = "Node"
 spelled_enums = ["Op", "Bracket", "Separator"]
+# a node of that case where its name is written as a type, `left: Key`, `items: List?` (decision node-refinements),
+# held as any node, the case not checked yet; Symbol, Text, Number, Char and Error are type words already (Rust twin:
+# node_cases.rs NODE_CASE_TYPES)
+node_case_types = ["Key", "List", "Meta"]
 # `Node.True` and the cases without values
 valued_cases = {"True": yes, "False": no, "Empty": ø}
 # the parameter of the spelling functions
@@ -97,13 +102,16 @@ spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: any): Nod
 	Key(spelled_text(enum_name, left, declared), op, spelled_text(enum_name, right, declared))
 }
 
-# the annotations that hold any value, unless the program declares that type itself: Node; Op, Bracket and Separator,
+# the annotations that hold any value, unless the program declares that type itself: Node and its cases (also
+# optional, `Key?`); Op, Bracket and Separator,
 # whose cases a text stands for; a type variable `T` of a generic signature (Rust twin: type_parameters.rs
 # lower_type_variables)
 holds_any(type: Node, declared: any): bool := match type {
-	Symbol(name): name not in declared and (name == node_type or name in spelled_enums or (#name == 1 and is_capitalized(name)))
+	Symbol(name): name not in declared and (holds_node(required_type(name)) or name in spelled_enums or (#name == 1 and is_capitalized(name)))
 	_: no
 }
+
+holds_node(name: text): bool := name == node_type or name in node_case_types
 
 is_spelled_type(type: Node, declared: any): bool := type is symbol and name_of(type) in spelled_enums and name_of(type) not in declared
 

@@ -35,3 +35,11 @@ fn any_entry_of_shell_info() {
 	std::fs::write(&file, "hello\n").expect("a file");
 	is!(&format!("use shell\ni = info \"{}\"\ni.kind", file.display()), "file");
 }
+
+/// card rust-length-as-text: a map with a length entry elsewhere in the program leaves a list of texts its count, as
+/// the run-time branch `parts["length"]` of a list holds no text
+#[test]
+fn the_count_of_texts_beside_a_length_entry() {
+	is!("m = {length: 1}\nparts = \"a/b/c\".split(\"/\")\nparts.length - 1", 2);
+	is!("m = {length: 1}\nf(path: text): text := { parts = path.split(\"/\"); parts[0 ..< parts.length - 1].join(\"/\") }\nf(\"a/b/c\")", "a/b");
+}
