@@ -5,7 +5,7 @@
 //! reads (its bindings) is computed once, before the walk, and handed in; a rewrite that needs another place in the
 //! order stays a pass. Twin: lib/compiler/scope.warp keyword_rewrites.
 
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::program_names::Bindings;
 
 /// A rewrite of one node whose own words hold one `triggered_by` accepts
@@ -74,10 +74,14 @@ fn has_own_word(node: &Node, triggered_by: fn(&str) -> bool) -> bool {
 	}
 }
 
-/// An item's words: the word itself, a declaration head's name
+/// An item's words: the word itself, a declaration head's name, the words of a phrase the parser grouped inside the
+/// phrase (`x = sum of xs` arrives as `sum (of xs)`, nodes.rs phrase_words)
 fn is_word_of_item(item: &Node, triggered_by: fn(&str) -> bool) -> bool {
 	match item.drop_meta() {
 		Node::Type { name, .. } => is_word(name, triggered_by),
+		Node::List(words, Bracket::None, Separator::Space) => {
+			words.iter().any(|word| is_word_of_item(word, triggered_by))
+		}
 		word => is_word(word, triggered_by),
 	}
 }
