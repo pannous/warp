@@ -118,8 +118,11 @@ async function warpGuide(env) {
 	return guide.text;
 }
 
-// the same as web/playground/assistant.js systemPrompt, which builds it for a pasted key
+// the same as web/playground/assistant.js systemPrompt, which builds it for a pasted key: the intro, guide and task
+// prompt are a cached prefix (the same bytes call after call), the program (chat) follows it uncached
 async function systemPrompt(task, program, env) {
 	const { intro, tasks } = ASSISTANT;
-	return [intro, await warpGuide(env), tasks[task].prompt, tasks[task].program ? program : ""].filter(Boolean).join("\n\n");
+	const fixed = [intro, await warpGuide(env), tasks[task].prompt].filter(Boolean).join("\n\n");
+	const shown = tasks[task].program && program ? [{ type: "text", text: program }] : [];
+	return [{ type: "text", text: fixed, cache_control: { type: "ephemeral" } }, ...shown];
 }

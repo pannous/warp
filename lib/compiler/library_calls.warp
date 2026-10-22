@@ -10,9 +10,6 @@ use "walk.warp"
 use "scope.warp"
 use "builtin_signatures.warp"
 
-# the printing words, which count the value after them as a word of one value does
-printing_words = ["print", "puts"]
-
 # the libraries of the typed lines: warp's runtime, the emitter's expansions, libm
 typed_libraries = ["warp", "emitter", "'m'"]
 math_text = module_source("math")
@@ -69,7 +66,7 @@ counts_after(word: any, functions: list, scope: any): bool := {
 	written = name_of(word)
 	if binds_value(scope, written) { return no }
 	if functions contains written { return yes }
-	not binds(scope, written) and (printing_words contains written or takes_one_typed_value(unaliased(written)))
+	not binds(scope, written) and (value_taking_words contains written or takes_one_typed_value(unaliased(written)))
 }
 
 # [the word, the counted value] of `word#x`, or of a member chain on it: `print #s.names` parses as `(print#s).names`

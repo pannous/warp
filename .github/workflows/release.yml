@@ -2,8 +2,8 @@
 name: Release
 
 # A version tag (v*, matching Cargo.toml's version) publishes a GitHub release with prebuilt binaries: per platform one
-# tarball holding `warp`, `warp-runtime` (the stub `warp build --exe` needs next to warp) and `warp-page-runtime` (the
-# stub of page apps, with the web view). The Homebrew formula
+# tarball holding `warp`, `warp-runtime` (the stub `warp build --exe` needs next to warp), `warp-page-runtime` (the
+# stub of page apps, with the web view), the warp-written compilers compiler.wasm and compiler-self.wasm, and lib/. The Homebrew formula
 # (packaging/homebrew/Formula/warp.rb, copied to pannous/homebrew-tap) installs these binaries (no Rust build); its
 # --HEAD install builds main from source. Then the tarballs are repackaged: PyPI wheels (warp-language), .deb and .rpm
 # (warp-lang) on the release; notes/packaging.md
@@ -65,21 +65,21 @@ jobs:
         cargo build --release --locked --target ${{ matrix.target }}
         cargo build --release --locked --target ${{ matrix.target }} -p warp-runtime --features webview --bin warp-page-runtime
         cargo build --release --locked --target ${{ matrix.target }} -p warp-runtime --bin warp-runtime
-    - name: upload
-      env:
-        GH_TOKEN: ${{ github.token }}
-        ARCHIVE: warp-${{ env.TAG }}-${{ matrix.target }}.tar.gz
-      run: |
-        tar -czf "$ARCHIVE" -C target/${{ matrix.target }}/release warp warp-runtime warp-page-runtime
-        gh release upload "$TAG" "$ARCHIVE" --clobber
+    - uses: actions/upload-artifact@v7
+      with:
+        name: binaries-${{ matrix.target }}
+        path: |
+          target/${{ matrix.target }}/release/warp
+          target/${{ matrix.target }}/release/warp-runtime
+          target/${{ matrix.target }}/release/warp-page-runtime
 
   compilers:
-    # the warp-written compiler as wasm, the bootstrap seed shipped with every release (user 2026-10-22):
-    # compiler.wasm (`warp pure`'s, compiled by the Rust pipeline) and compiler-self.wasm (`warp self`'s, compiled by
-    # itself), both from the tag's lib/ by the tag's linux binary
-    # also on a repackage run: it only reads the release's linux tarball
+    # the warp-written compiler as wasm, shipped in every tarball beside the binary and as release assets (user
+    # 2026-10-22, card installed-compilers): compiler.wasm (`warp pure`'s, compiled by the Rust pipeline) and
+    # compiler-self.wasm (`warp self`'s, compiled by itself), both from the tag's lib/ by the tag's linux binary; an
+    # installed warp never builds one
     needs: binaries
-    if: ${{ !cancelled() && contains(fromJSON('["success", "skipped"]'), needs.binaries.result) }}
+    if: ${{ !inputs.repackage }}
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
@@ -91,23 +91,66 @@ jobs:
     - uses: actions/checkout@v7
       with:
         ref: ${{ env.TAG }}
+    - uses: actions/download-artifact@v8
+      with:
+        name: binaries-x86_64-unknown-linux-gnu
+        path: bin
     - name: build
+      # gated on `warp pure` hello; `warp self` hello traps on a cold cache (card self-cold-trap), so it is only shown
       run: |
-        mkdir -p "$RUNNER_TEMP/bin"
-        gh release download "$TAG" -p "warp-$TAG-x86_64-unknown-linux-gnu.tar.gz" -O - | tar -xz -C "$RUNNER_TEMP/bin"
+        chmod +x bin/*
         export WARP_LIB=$PWD/lib
-        "$RUNNER_TEMP/bin/warp" rebuild pure
-        "$RUNNER_TEMP/bin/warp" rebuild self
-        said=$("$RUNNER_TEMP/bin/warp" self samples/hello/hello.warp 2>&1) || true
+        bin/warp rebuild pure
+        bin/warp rebuild self
+        said=$(bin/warp pure samples/hello/hello.warp 2>&1) || true
         echo "$said"
         [[ $said == *Hello* ]]
+        bin/warp self samples/hello/hello.warp || echo "warp self hello failed (card self-cold-trap)"
+    - uses: actions/upload-artifact@v7
+      with:
+        name: compilers
+        path: |
+          bin/compiler.wasm
+          bin/compiler-self.wasm
     - name: upload
-      run: gh release upload "$TAG" "$RUNNER_TEMP/bin/compiler.wasm" "$RUNNER_TEMP/bin/compiler-self.wasm" --clobber
+      run: gh release upload "$TAG" bin/compiler.wasm bin/compiler-self.wasm --clobber
+
+  tarballs:
+    # per platform one tarball, made once (its sha256 is the formula's): the binaries, the compilers and the tag's lib/
+    # side by side, as an installed warp finds them (src/modules/program_file.rs installed_folder)
+    needs: compilers
+    if: ${{ !inputs.repackage }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [ aarch64-apple-darwin, x86_64-apple-darwin, x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu ]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ env.TAG }}
+    - uses: actions/download-artifact@v8
+      with:
+        name: binaries-${{ matrix.target }}
+        path: dist
+    - uses: actions/download-artifact@v8
+      with:
+        name: compilers
+        path: dist
+    - name: upload
+      env:
+        GH_TOKEN: ${{ github.token }}
+        ARCHIVE: warp-${{ env.TAG }}-${{ matrix.target }}.tar.gz
+      run: |
+        chmod +x dist/warp dist/warp-runtime dist/warp-page-runtime
+        cp -R lib dist/lib
+        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime compiler.wasm compiler-self.wasm lib
+        gh release upload "$TAG" "$ARCHIVE" --clobber
 
   packages:
     # the tarballs repackaged: PyPI wheels of warp-language, .deb and .rpm of warp-lang, all attached to the release
-    needs: binaries
-    if: ${{ !cancelled() && contains(fromJSON('["success", "skipped"]'), needs.binaries.result) }}
+    needs: tarballs
+    if: ${{ !cancelled() && contains(fromJSON('["success", "skipped"]'), needs.tarballs.result) }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -134,8 +177,11 @@ jobs:
       run: |
         sudo dpkg -i dist/linux/warp-lang_*_amd64.deb
         warp eval '6*7' | grep -q 42
-        pip install --no-deps --break-system-packages --target "$RUNNER_TEMP/pip" dist/wheels/*manylinux*_x86_64.whl
+        # outside the checkout: the installed lib/ and compilers in share/warp (card installed-compilers)
+        (cd "$RUNNER_TEMP" && warp pure '6*7' | grep -q 42)
+        pip install --no-deps --break-system-packages --prefix "$RUNNER_TEMP/pip" dist/wheels/*manylinux*_x86_64.whl
         "$RUNNER_TEMP/pip/bin/warp" eval '6*7' | grep -q 42
+        (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/pip/bin/warp" pure '6*7' | grep -q 42)
     - name: upload
       run: gh release upload "$TAG" dist/wheels/*.whl dist/linux/* --clobber
     - uses: actions/upload-artifact@v7

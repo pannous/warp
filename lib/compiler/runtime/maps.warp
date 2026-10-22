@@ -75,12 +75,12 @@ collection_contains(c: Node, x: Node): bool := {
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
 	no
 }
-# `c.index_of(x)`: a list's 1-based position of its first item equal to x, a text's of the byte part x starts at, 1 for
+# `c.index_of(x)`: a list's 1-based position of its first item equal to x, a text's character position, 1 for
 # a map's entry named x; 0 when absent (Rust's collection_position, src/lowering/words/library_words.rs)
 collection_position(c: Node, x: Node): int := {
 	if is_null(c) { return 0 }
 	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return if map_index(c, name_text(x)) > 0 then 1 else 0 }
-	if kind_code(c) == Kind.Text { return text_index(unboxed_text(c), node_text(x)) + 1 }
+	if kind_code(c) == Kind.Text { return text_find(unboxed_text(c), node_text(x)) }
 	position = 0
 	for item in unboxed_list(c) {
 		position += 1

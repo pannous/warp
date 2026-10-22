@@ -216,3 +216,11 @@
 - Reuse the prelude alias mechanism and the existing `count` implementation; do not add another counting path.
 - Preserve program-defined `size` functions and object fields/methods where normal dispatch gives them precedence.
 - Add focused outcome coverage, then run the targeted test, formatting, style, clippy, and wasm32 checks.
+
+# Unicode text position cleanup
+
+- Reproduce `index_of` returning a UTF-8 byte position for non-ASCII text in a focused self-hosted outcome test.
+- Make the warp runtime report the same 1-based grapheme position used by text indexing, slicing, and counting.
+- Reuse the existing grapheme iterator and substring matcher; keep list and map positions, missing matches, and empty needles unchanged.
+- Mark the frozen Rust-runtime byte-position twin explicitly instead of extending its legacy implementation.
+- Run the focused test before and after, then formatting, style, clippy, wasm32 checking, and Playground CI.

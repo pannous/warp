@@ -48,6 +48,9 @@ const LIBRARY_MARK: &str = "{lib}";
 const RUNTIME_WORDS: &str = "runtime.warp";
 /// The module the host words are imported from
 const HOST_MODULE: &str = "host";
+/// The file of the table of words a module may import (the host's and WASI's), and the variable it assigns
+const HOST_WORDS_FILE: &str = "host_words.warp";
+const HOST_WORDS_NAME: &str = "host_words";
 /// The levels of lib/compiler/diagnostics.warp's message files beside a warning: errors.data, hints.data
 const ERROR_LEVEL: &str = "error";
 const HINT_LEVEL: &str = "hint";
@@ -384,21 +387,37 @@ fn module_of(answer: &str) -> Result<Vec<u8>, String> {
 	}
 }
 
-/// The words a module imports from the host (src/host.rs), as JSON: {name: [[parameter kind…], [result kind…]]}, a kind
-/// as emitter.warp names it (an anyref is a "node")
+/// The words a module may import, as JSON: the table lib/compiler/host_words.warp assigns to HOST_WORDS_NAME, {name:
+/// [[parameter kind…], [result kind…], module when not the host's]}, the one compiler.warp reads too
 fn host_words() -> Result<String, Node> {
-	use wasm_encoder::ValType;
-	let kind = |value_type: &ValType| match value_type {
-		ValType::I64 => "int",
-		ValType::F64 => "float",
-		ValType::I32 => "i32",
-		_ => "node",
-	};
-	let kinds = |types: &[ValType]| types.iter().map(kind).collect::<Vec<_>>();
-	let words = crate::host::HOST_WORD_SIGNATURES
-		.iter()
-		.map(|(name, parameters, results)| (name.to_string(), serde_json::json!([kinds(parameters), kinds(results)])));
-	Ok(serde_json::Value::Object(words.collect()).to_string())
+	let file = compiler_folder().join(HOST_WORDS_FILE);
+	let source = std::fs::read_to_string(&file)
+		.map_err(|reason| crate::node::error(&format!("the host words {}: {reason}", file.display())))?;
+	let program = crate::warp_parser::parse(&source);
+	// a file of one statement parses as that statement, not as a list of it
+	let program = program.drop_meta();
+	let statements = if let Node::List(items, _, _) = program { items.clone() } else { vec![program.clone()] };
+	let table = statements.iter().find_map(|statement| match statement.drop_meta() {
+		Node::Key(name, crate::operators::Op::Assign, table) if name.drop_meta().name() == HOST_WORDS_NAME => {
+			Some(table.as_ref().clone())
+		}
+		_ => None,
+	});
+	let table = table.ok_or_else(|| crate::node::error(&format!("{} assigns no {HOST_WORDS_NAME}", file.display())))?;
+	without_meta(&table).to_json_compact().map_err(|reason| crate::node::error(&reason.to_string()))
+}
+
+/// The node without its comments and positions, at every depth: plain data
+fn without_meta(node: &Node) -> Node {
+	match node.drop_meta() {
+		Node::List(items, bracket, separator) => {
+			Node::List(items.iter().map(without_meta).collect(), bracket.clone(), separator.clone())
+		}
+		Node::Key(left, op, right) => {
+			Node::Key(Box::new(without_meta(left)), op.clone(), Box::new(without_meta(right)))
+		}
+		plain => plain.clone(),
+	}
 }
 
 /// The prelude's source, whose definitions a pure program reaches (lib/compiler/prelude_words.warp)

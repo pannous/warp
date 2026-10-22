@@ -21,3 +21,9 @@ contents:
     dst: /usr/bin/
     file_info:
       mode: 0755
+  # the warp-written compilers and lib/, where warp in /usr/bin finds them (card installed-compilers)
+  - src: ./compiler*.wasm
+    dst: /usr/share/warp/
+  - src: ./lib
+    dst: /usr/share/warp/lib
+    type: tree

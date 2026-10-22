@@ -19,7 +19,7 @@ node_is_type(n: Node, type: text, kinds: int): bool := {
 	if names_a_type(n) { return names_one_of(unboxed_text(n), covered_type_words(type)) }
 	# `code` is no kind: parsed code is code and what it holds, `parse("a") is symbol` too, as in Rust
 	if kinds == 0 { return not is_null(n) and code_bit(n) == 1 }
-	int_and(int_shifted_right(kinds, held_kind_bit(n)), 1) == 1
+	bits_and(shifted_right(kinds, held_kind_bit(n)), 1) == 1
 }
 # the bit of x's kind in the kinds of a type test: its Kind, a yes/no, a ratio and a map apart (HeldBit), ø the empty
 # list, as held_kind_word names them

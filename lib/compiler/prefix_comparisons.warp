@@ -37,14 +37,13 @@ prefix_comparisons(program: Node): Node := {
 # `print #xs`, `print -1`, `f -x` parse as `print # xs`, `print - 1`, `f - x`: a word that takes a value calls it with
 # the count or the negative, `print(#xs)`, `f(-x)` (card pure-lane-print; Rust twin: lowering/words/negated_calls.rs).
 # A name the program binds as a value subtracts or indexes: `size -1` of a variable size, `xs #1`.
-print_words = ["print", "puts"]
 prefix_call_operators = [Op.Sub, Op.Hash]
 
 # the words of the program that take a value: print, its functions with a parameter (`f(x) := …`, `f := { it * 2 }`,
 # `f = x => …`), a builtin of one value; not a name it binds as a value
 value_takers(program: Node): list := {
 	scope = scope_of(program)
-	(print_words + value_taking_functions(program) + one_value_builtins).filter(name => not binds_value(scope, name))
+	(value_taking_functions(program) + value_taking_words).filter(name => not binds_value(scope, name))
 }
 
 # the program's functions that take a value
@@ -66,8 +65,6 @@ value_function(n: Node): any := match n {
 	_: ø
 }
 
-one_value_builtin_names = typed_lines.filter(line => arity(line.signature) == [1, 1]).map(line => line.name)
-one_value_builtins = one_value_builtin_names + alias_pairs.filter(pair => pair#2 in one_value_builtin_names).map(pair => pair#1)
 
 takes_value(word: Node, takers: list): bool := word is symbol and name_of(word) in takers
 
