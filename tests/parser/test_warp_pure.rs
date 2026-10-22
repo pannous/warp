@@ -51,9 +51,8 @@ fn warp_self_runs_loops_and_texts() {
 /// A program outside the emitter's core fails under `warp self` with the refusal, not a bare trap (card
 /// compiler-refusal-loud)
 #[test]
-#[ignore = "fixnow: fixnow-warp_self_names_the_refusal: warp self now runs `abs -3` (prints 3): pick a program the self lane still refuses"]
 fn warp_self_names_the_refusal() {
-	let printed = said_by("self", "refused", "abs -3\n");
+	let printed = said_by("self", "refused", "nosuchword 3\n");
 	assert!(printed.contains("outside the core: "), "{printed}");
 }
 
