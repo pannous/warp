@@ -6,9 +6,6 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
 
-## To present
-- keys-of-empty (Interviewer's decision): `m = {}; print m.keys` prints [] (not ø); both lanes printed ø.
-
 ## Parked
 - graphics-plain (warp-markup, parked): display alias table with notes (stays in Rust); bare width/height as canvas sides with did-you-mean (stays).
 - maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.
