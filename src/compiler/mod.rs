@@ -12,6 +12,8 @@ pub mod local;
 pub mod meta;
 pub mod node_views;
 pub mod phase_times;
+#[cfg(feature = "native")]
+pub mod pure_tests;
 pub mod run_time_blocks;
 pub mod self_hosted;
 #[cfg(feature = "native")]

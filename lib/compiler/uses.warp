@@ -6,6 +6,7 @@ use os
 use "walk.warp"
 use "parser.warp"
 use "enum_declarations.warp"
+use "signatures.warp"
 
 import_keywords = ["use", "require", "import", "include"]
 # (function_keywords: words.warp's)
@@ -21,16 +22,42 @@ module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
 # `module_source("prelude")` the text of that standard module
-with_uses(program: Node, folder: text): Node := bottom_up(used_in(with_module_directory(program, folder), folder), module_text)
+with_uses(program: Node, folder: text): Node := bottom_up(used_in(with_own_aliases(with_module_directory(program, folder)), folder), module_text)
 # `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in (Rust's
 # loader.rs with_module_directory)
 with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
 used_in(program: Node, folder: text): any := {
 	statements = statements_in(program)
-	brought = declarations_used(statements, folder, [])
+	brought = declarations_used(statements, folder, [], {})
 	if #brought#1 == 0 { return program }
 	kept = statements.filter(s => file_used(s, folder) == ø)
 	separated(bracketed(brought#1 + kept, ""), ";")
+}
+
+# `alias deque = Deque` (wiki/alias.md): the program's alias lines taken out, each alias naming its word wherever the
+# program declares nothing of that name, as Rust's modules.rs with_own_aliases
+alias_keyword = "alias"
+with_own_aliases(program: Node): Node := {
+	statements = statements_in(program)
+	aliases = statements.map(word_alias).filter(pair => pair != ø)
+	if #aliases == 0 { return program }
+	own = statements.map(declared_name)
+	renamed = aliases.filter(pair => pair#1 not in own)
+	kept = statements.filter(s => word_alias(s) == ø)
+	bottom_up(separated(bracketed(kept, ""), ";"), n => aliased(n, renamed))
+}
+# [alias, word] of an alias line, ø for another statement (Rust twin: src/modules/declarations.rs word_alias)
+word_alias(statement: Node): any := {
+	if not (is_group(statement) and #statement == 2 and statement#1 == symbol(alias_keyword)) { return ø }
+	match statement#2 {
+		Key(alias, op, word): if op == Op.Assign and alias is symbol and word is symbol then [name_of(alias), name_of(word)] else ø
+		_: ø
+	}
+}
+aliased(n: any, aliases: list): any := {
+	if not (n is symbol) { return n }
+	for pair in aliases { if name_of(n) == pair#1 { return symbol(pair#2) } }
+	n
 }
 
 # `module_source("prelude")`: lib/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
@@ -41,20 +68,73 @@ module_text(n: Node): any := {
 	if source == ø then n else source
 }
 
-# [the declarations, the files read]: those of each file the statements use, not yet among `seen`
-declarations_used(statements: any, folder: text, seen: any): list := {
+# [the declarations, the files read]: those of each file the statements use, not yet among `seen`; each file's own
+# declarations claim their signatures in `claimed` (claim_signatures)
+declarations_used(statements: any, folder: text, seen: any, claimed: any): list := {
 	declarations = []
 	for statement in statements {
 		file = file_used(statement, folder)
 		if file != ø and file not in seen {
 			seen += [file]
 			used = statements_in(with_module_directory(plain_node(parsed(file_text(file))), folder_of(file)))
-			inner = declarations_used(used, folder_of(file), seen)
+			inner = declarations_used(used, folder_of(file), seen, claimed)
 			seen = inner#2
-			declarations += inner#1 + used.filter(s => (is_declaration(s) or use_target(s) is symbol) and file_used(s, folder_of(file)) == ø)
+			own = used.filter(s => (is_declaration(s) or use_target(s) is symbol) and file_used(s, folder_of(file)) == ø)
+			claim_signatures(own, file.replace(folder + "/", ""), claimed)
+			declarations += inner#1 + own
 		}
 	}
 	[declarations, seen]
+}
+
+# A used file's declarations claim their signatures: another file declaring one already, differently, is the error
+# naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in
+# both is one
+# Rust twin: src/modules/loader.rs claim_signatures
+claim_signatures(declarations: any, file: text, claimed: any) := {
+	for declaration in declarations {
+		signature = declared_signature(declaration)
+		if signature == ø { continue }
+		if signature not in claimed {
+			claimed[signature] = [file, declaration]
+			continue
+		}
+		earlier = claimed[signature]
+		# written out only on a clash: serializing every declaration of the compiler's files took the self build minutes
+		if earlier#1 != file and "${earlier#2}" != "${declaration}" {
+			raise signature + " is declared in both " + earlier#1 + " and " + file + ": rename one, or keep one of them"
+		}
+	}
+}
+
+# `f(x: int, y)` → "f(int, any)", the name and parameter types a declaration claims; a value's name alone, ø for
+# another statement
+# Rust twin: src/modules/declarations.rs declared_signature, parameter_type
+declared_signature(statement: Node): any := {
+	name = declared_name(statement)
+	if name == ø { return ø }
+	head = declared_head(statement)
+	if head == ø { return name }
+	name + "(" + items_of(head)[1..].map(parameter_type).join(", ") + ")"
+}
+parameter_type(parameter: Node): text := match parameter {
+	Key(typed, op, kind): if op == Op.Colon then type_text(kind) else if op == Op.Assign then parameter_type(typed) else "any"
+	_: "any"
+}
+# the head `(f x y)` of a function declaration, as declared_name finds its name; ø for a value
+declared_head(statement: Node): any := match statement {
+	Key(left, op, right): {
+		if assigns_or_defines(op) { return call_head(left) }
+		if op != Op.Colon { return ø }
+		if is_keyword_group(left) then call_head(left#2) else ø
+	}
+	_: if is_keyword_group(statement) then call_head(statement#2) else ø
+}
+# `(f x)`, also typed `f(x): int` or before its block, `(f x) {…}`
+call_head(n: Node): any := {
+	if n is key { return call_head(key_of(n)) }
+	if not (is_group(n) and #n > 0) { return ø }
+	if n#1 is symbol then (if bracket_of(n) == "(" then n else ø) else call_head(n#1)
 }
 
 # lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one)
@@ -75,10 +155,6 @@ file_used(statement: Node, folder: text): any := {
 	if file_text(path) == ø then ø else path
 }
 path_in(folder: text, name: text): text := if name.starts_with("/") then name else folder + "/" + name
-folder_of(path: text): text := {
-	parts = split(path, "/")
-	parts[0..<(#parts - 1)].join("/")
-}
 file_text(path: text): any := try read(path) else ø
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,

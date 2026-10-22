@@ -1,0 +1,24 @@
+// reduced from uses.warp declarations_used + claim_signatures (card module-name-clash / rust-lane-miscompiles)
+claim(names: any, file: text, claimed: any) := {
+	for name in names {
+		if name not in claimed {
+			claimed[name] = [file, "w"]
+			continue
+		}
+		earlier = claimed[name]
+		if earlier#1 != file { raise name + " is declared in both " + earlier#1 + " and " + file }
+	}
+}
+gather(files: any, seen: any, claimed: any): list := {
+	found = []
+	for file in files {
+		if file not in seen {
+			seen += [file]
+			claim([file + "_f"], file, claimed)
+			found += [file]
+		}
+	}
+	[found, seen]
+}
+print(gather(["a", "b"], [], {})#1)
+print(gather([], [], {})#1)

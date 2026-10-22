@@ -125,3 +125,18 @@ fn warp_pure_and_self_run_inline_code() {
 		assert!(said.lines().any(|line| line.trim_start_matches("» ") == "42"), "{command}: {said}");
 	}
 }
+
+/// Two used files declaring one function differently are an error naming both under `warp self`, as in the Rust lane
+/// (card module-name-clash: uses.warp silently kept one, printing "aa")
+#[test]
+fn warp_self_refuses_a_function_declared_in_two_used_files() {
+	let folder = crate::common::scratch_directory("warp_self");
+	std::fs::create_dir_all(&folder).unwrap();
+	for side in ["a", "b"] {
+		let file = format!("named(x) := \"{side}\"\nuse_{side}(x) := named(x)\n");
+		std::fs::write(folder.join(format!("clash_{side}.warp")), file).unwrap();
+	}
+	let code = "use \"clash_a.warp\"\nuse \"clash_b.warp\"\nprint(use_a(1) + use_b(1))\n";
+	let printed = said_by("self", "clash", code);
+	assert!(printed.contains("is declared in both") && printed.contains("clash_b.warp"), "{printed}");
+}

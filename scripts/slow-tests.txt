@@ -1,0 +1,26 @@
+# Tests the gate's --full runs leave out (scripts/cloud-test.sh; user 2026-10-22: "disable all the slow tests for now"):
+# exact names, one per line. `scripts/cloud-test.sh --slow <branch> <tip>` runs only these, a few times a day; a
+# failure there becomes a card, not a bounce. A --full run appends every test that took 60 s or more.
+parser::test_self_analyzer::matching_sources_keep_matching
+parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
+parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
+parser::test_self_floor_division::self_hosted_floor_division_prints_as_rust_prints_it
+parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
+parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values
+parser::test_self_hosted_cache::an_identical_library_elsewhere_reuses_the_kept_stages
+parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
+parser::test_self_hosted_cache::the_stage_program_is_compiled_once
+parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
+parser::test_self_pure::a_call_with_comma_arguments_parses_pure
+parser::test_self_pure::a_failing_stage_names_its_file
+parser::test_self_pure::a_lexer_over_short_words_takes_linear_time_pure
+parser::test_self_pure::a_map_member_beside_its_entry_runs_pure
+parser::test_self_sort::sort_runs_as_rust_sorts
+parser::test_warp_pure::warp_pure_and_self_run_inline_code
+parser::test_warp_pure::warp_pure_runs_a_library_word
+parser::test_warp_pure::warp_self_refuses_a_function_declared_in_two_used_files
+parser::test_warp_pure::warp_self_runs_hello_world
+parser::test_warp_pure::warp_self_runs_loops_and_texts
+ffi::test_run_wasm_library::run_wasm_of_no_module_fails_loudly
+ffi::test_run_wasm_library::run_wasm_runs_a_module_given_as_bytes

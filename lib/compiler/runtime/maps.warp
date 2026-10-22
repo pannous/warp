@@ -26,7 +26,8 @@ has_fields(m: Node): bool := not is_null(m) and not is_null(fields_of(m)) and ki
 map_get(m: Node, name: text): Node := {
 	if is_position_part(m, name) { return position_part(m, name) }
 	if is_list_part(m, name) { return list_part(m, name) }
-	if kind_code(m) == Kind.Symbol { return node_text(m) }
+	# a symbol's name, a type value's too: `type(3).name` is int, as written without its `class ` (Rust: TYPE_VALUE_PREFIX)
+	if kind_code(m) == Kind.Symbol { return unboxed_text(m) }
 	if is_error_message(m, name) { return unboxed_text(m) }
 	# a field of that name wins over the part reader: `.key` of the code `key = 3` is 3 (card node-part-clash)
 	if is_entry(m) and text_order(key_name(m), name) == 0 { return key_value(m) }
@@ -84,6 +85,19 @@ collection_position(c: Node, x: Node): int := {
 		if node_equal(item, x) { return position }
 	}
 	0
+}
+# `c.remove(key)` gives this: of a map the key's value (ø when absent), of a list the list itself, which map_without
+# then changes (Rust twin: fields_and_keys.rs removed_value)
+removed_value(c: Node, key: Node): Node := if marked_kind(c) == Marked.Map then map_get_or(c, key) else c
+# `c.remove(key)` stores this in c: a map without the key's entry, a list without its first item equal to key, in place
+# so every holder sees it (Rust twin: fields_and_keys.rs map_without)
+map_without(c: Node, key: Node): Node := {
+	at = if marked_kind(c) == Marked.Map then map_index(c, name_text(key)) else collection_position(c, key)
+	if at == 0 { return c }
+	items = unboxed_list(fields_of(c))
+	copy_items(items, at - 1, items, at, #items - at)
+	set_count(items, #items - 1)
+	c
 }
 # `x[key]` of a value known only at run time: a list's item at an int key (counted from 0), else the map's entry
 node_get(n: Node, key: Node): Node := {
