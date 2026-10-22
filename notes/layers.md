@@ -46,7 +46,7 @@ inside a longer phrase), statement templates `($a; $b)`, origin conditions `wher
 skip words the program binds, bottom-up, each node once.
 
 Features named by the sugar below (2026-10-22: F1–F4, F6, F7 built, spec and examples in notes/rewrites.md;
-F5 and F8 open, no card: whoever needs one builds it in lib/compiler/rewrites.warp):
+F5 unparked with high priority by the user 2026-10-22 evening, card rewrite-templates in Now; F8 open, no card):
 - **F1 positions/context** (built): match only as a statement head, in a condition, in a class body, as a key or a value.
 - **F2 where-predicates** (built) beyond `= shape`: "$t is a type word", "$x unbound", "$n < 0 literal", "f's first
   parameter is typed".
@@ -54,8 +54,9 @@ F5 and F8 open, no card: whoever needs one builds it in lib/compiler/rewrites.wa
   `a ?: b` computes a once.
 - **F4 per-item templates**: apply a sub-template to each item a rest hole bound (`$xs...` mapped). Built as `T for $x in $xs...`; zip over two rest holes
   (`for ($a, $b) in …`, multiple_assignments) is not.
-- **F5 name building** (open, parked by the user: name glue undecided, leaning `·`, fallback
-  `name("square_$a")`, notes/open_decisions.md name-glue): glue a hole into a name (`$i·end`, a phrase-named function `square_a_number`).
+- **F5 name building** (unparked, high priority, user 2026-10-22; card rewrite-templates; decision name-glue): `·`
+  glues a hole or symbol into a name inside templates and quoted code (`$i·end`, `square·$a` → square_a_number);
+  numbers beside `·` multiply, plain `x·y` between values stays multiplication.
 - **F6 several statements** (built, `rewrite ($a; $b) => …`): match a run of statements (`fib(0) := 0; fib(1) := 1` → one definition).
 - **F7 re-rewrite** (built, loop limit 64): a result rewritten again until fixpoint (`a of b of c`, for variants onto the one for).
 - **F8 text holes** (open, not started; idea: a text pattern `"…$x…"` binding holes from its
