@@ -31,6 +31,18 @@ fn text_byte_index_of_counts_bytes_from_zero() {
 }
 
 #[test]
+fn text_find_answers_by_the_declared_count() {
+	prints(r#"t = "a👍🏽b"; position p = t.find("b"); i: index = t.find("b"); [p, i]"#, "[3 2]");
+}
+
+/// decision index-units: a declared index or position holds a value counted its way (lib/compiler/index_positions.warp)
+#[test]
+fn a_declared_index_or_position_holds_its_count() {
+	let program = format!("{}/probes/index_of_bytes/declared_counts.warp", env!("CARGO_MANIFEST_DIR"));
+	prints(&program, "[1 2 3 2 1]");
+}
+
+#[test]
 fn a_missing_text_part_is_an_error() {
 	let output = pure_output(r#""abc".find("z")"#);
 	assert!(output.contains(r#""z" is not in"#), "{output}");

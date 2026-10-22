@@ -35,3 +35,12 @@ Rules:
 
 Code: src/lowering/collections/index_positions.rs (`mark_declarations` runs before the declaration passes; `lower` runs after
 library_words names index_of `collection_position`). Tests: tests/types/test_index_position.rs.
+
+## Texts and declared counts (decision index-units, card index-of-bytes)
+
+A text names the unit it counts: `t.find(part)` is a position in characters (graphemes, from 1, like `t#p`),
+`t.byte_index_of(part)` a byte offset (an index from 0); a missing part is an error. A bare `t.index_of(part)` counts
+as find does and warns. A declared index or position holds its value counted its way: `i: index = t.find("b")` is one
+less than `position p = t.find("b")`, `position top = argmax(xs)` one more than the index (the pure lane,
+lib/compiler/index_positions.warp; Rust keeps the number as given). Still Rust only: a position meeting `[ ]`, an index
+meeting `#`, `insert(at:)`, the error on adding two of them.
