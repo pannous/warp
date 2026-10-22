@@ -13,7 +13,6 @@ use "clauses.warp"
 use "phrase_blocks.warp"
 use "comprehensions.warp"
 use "for_loops.warp"
-use "ranges.warp"
 use "list_methods.warp"
 use "node_matches.warp"
 use "node_cases.warp"
@@ -46,7 +45,7 @@ passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_w
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [bare_returns, first_sugar, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, min_max, sugar, lambdas, for_loops, ranges, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [bare_returns, first_sugar, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, min_max, lambdas, for_loops, sugar, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
@@ -76,7 +75,7 @@ with_used(program: Node, folder: text, prelude: text): Node := {
 # the sugar rules (lib/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
 # that would read its forms as something else (rewrites.warp first_sugar_module_names), the others where the passes
 # before them have made their forms (definitions' `?? []` of a list result) and read the written ones (data_items
-# `xs.add(x)`, of_lookups `keys in m`)
+# `xs.add(x)`, of_lookups `keys in m`, for_loops' counting loops over a range)
 first_sugar(program: Node): Node := sugared(program, kept_first_sugar)
 sugar(program: Node): Node := sugared(program, kept_sugar)
 
