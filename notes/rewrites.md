@@ -60,3 +60,34 @@ rewrite field $n => $n: int where member
 The engine applies a place's rules to a node's parts standing there, right after their own rules ran (children
 first, as everywhere); a rule without a place word rewrites anywhere. Phrase runs (`$n half`) stay for rules without a
 place.
+
+## For each item (F4)
+`T for $x in $xs...` in a template splices T once for each item a rest hole bound, `$x` bound to that item (fresh
+names are fresh for each). It works in a list, a map and a run of statements:
+
+```warp
+rewrite squares $xs... => [$x * $x for $x in $xs...]
+rewrite bump_all $vs... => ($v += 1 for $v in $vs...)
+rewrite flags $ns... => {($n: yes) for $n in $ns...}
+```
+
+Zip over two rest holes (`$a = $b for ($a, $b) in …`) isn't built yet.
+
+## Runs of statements (F6)
+A pattern of several statements `($a; $b)` matches a run of them standing one after the other in a block, holes
+binding across the run; the run is replaced by the template's statements:
+
+```warp
+rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
+```
+
+## Results rewritten again (F7)
+A rule's result is rewritten again by the rules, its parts first, until none fires, so rules build on rules:
+
+```warp
+rewrite double $x => $x * 2
+rewrite quadruple $x => double (double $x)
+quadruple 3   # 12
+```
+
+A result rewritten 64 times in a row (`rewrite_depth_limit`) is the rules' loop: an error, not a hang.
