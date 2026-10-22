@@ -6,6 +6,7 @@
 use "words.warp"
 use "walk.warp"
 use "signatures.warp"
+use "host_words.warp"
 
 # a builtin word as a typed line of lib/prelude.warp declares it
 class Builtin { name: text; signature: Signature }
@@ -34,19 +35,56 @@ typed_line(line: text, library: text): any := {
 	suffix = " from " + library
 	if not line.ends_with(suffix) { return ø }
 	signature = line.remove_suffix(suffix)
-	open = signature.index_of("(")
-	close = #signature - signature.reverse().index_of(")") + 1
-	if open == 0 or close <= open { return ø }
-	written = signature[open : close - 1].trim()
+	# split, not index_of: it counts bytes where slices count characters (a name with `·`)
+	head = signature.split("(")
+	if #head < 2 { return ø }
+	tail = head[1..].join("(").split(")")
+	if #tail < 2 { return ø }
+	written = tail[0 ..< #tail - 1].join(")").trim()
 	parameters = if written == "" then [] else written.split(",").map(part => written_parameter(part))
-	result = signature[close :].trim().remove_prefix(":").trim()
-	Builtin(name: signature[0 : open - 1], signature: Signature(parameters: parameters, result: result))
+	result = tail#(#tail).trim().remove_prefix(":").trim()
+	Builtin(name: head#1, signature: Signature(parameters: parameters, result: result))
 }
 
 library_lines(library: text): list := prelude_text.split("\n").map(line => typed_line(line, library)).filter(line => line != ø)
 
 runtime_lines = library_lines(runtime_library)
-emitter_lines = library_lines(emitter_library)
+# the words only the compiler's passes write, which no program calls (closures, cells and signals, memos, linear
+# arrays, the switch and extremum errors, times, Uniscript; `ran·without·error`, a name the prelude's parser would read
+# as a product), declared as the prelude declares the words programs call
+compiler_lines = [
+	"ran·without·error(statement): bool from emitter",
+	"positioned(n, line, column): any from emitter",
+	"closure_new(values...): function from emitter",
+	"cell_get(cell): any from emitter",
+	"cell_set(cell, value): any from emitter",
+	"signal_new(value): signal from emitter",
+	"signal_listeners(signal): any from emitter",
+	"signal_listeners_set(signal, listeners): any from emitter",
+	"memo_known(values...): int from emitter",
+	"memo_value(values...): int from emitter",
+	"memo_store(values...): int from emitter",
+	"linear_new(values...): int from emitter",
+	"linear_count(values...): int from emitter",
+	"linear_getf(values...): float from emitter",
+	"linear_setf(values...): float from emitter",
+	"linear_dotf(values...): float from emitter",
+	"switch_no_case(values...): int from emitter",
+	"empty_extremum(word): int from emitter",
+	"instant_at(values...): time from emitter",
+	"time_of(info, position): time from emitter",
+	"floor_quotient(a, b): int from emitter",
+	"zero_fill(count, filler): list from emitter",
+	"instance_of(x, class_name): bool from emitter",
+	"caught_error(finished, value): error from emitter",
+	"byte_at(t, offset): int from emitter",
+	"uniscript_error(values...): int from emitter",
+	"uniscript_warnings(values...): int from emitter",
+	"uniscript_to_unicode(values...): int from emitter",
+	"uniscript_to_uniscript(values...): int from emitter",
+	"uniscript_explicit(values...): int from emitter"
+].map(line => typed_line(line, emitter_library))
+emitter_lines = library_lines(emitter_library) + compiler_lines
 typed_lines = runtime_lines + emitter_lines
 
 # `alias size = count` → ["size", "count"]
@@ -111,3 +149,53 @@ overload_kind(word: text, first: text): any := {
 
 # the kind a value of a built-in type word is held as: `int` int, `text` text; ø for a list, a map or no type
 type_word_kind(word: text): any := type_kinds.get(word)
+
+# libm's functions as lib/math.warp's foreign lines declare them, `floor(x: float): float from 'm'`: what a call of
+# floor compiles to, so its result is the call's
+foreign_math_lines = module_source("math").split("\n").map(line => typed_line(line, "'m'")).filter(line => line != ø)
+
+# the kind a declared result is held as: `nothing` and `any` a node of run-time kind, a yes/no an int, a type of
+# values its kind, any other type (`time`, `signal`) an object; ø for `number`, decided where the value is made
+declared_result_kind(result: text): any := {
+	if result == "" or result == "nothing" or result == "any" { return "empty" }
+	if result == "number" { return ø }
+	if result == "bool" { return "int" }
+	if result == "symbol" or result == "error" { return result }
+	if result == "text" { return "text" }
+	if result.starts_with("list") { return "list" }
+	type_word_kind(result) ?? "data"
+}
+
+# the builtins taking one value, `upper(t)`, or only a rest of values, `print(values...)`, and their other spellings:
+# `print #xs` counts, `print -1` negates the value after them
+takes_one_value(signature: Signature): bool := arity(signature) == [1, 1] or (#signature.parameters == 1 and signature.parameters#1.rest)
+value_taking_names = typed_lines.filter(line => takes_one_value(line.signature)).map(line => line.name)
+value_taking_words = value_taking_names + alias_pairs.filter(pair => pair#2 in value_taking_names).map(pair => pair#1)
+
+# a builtin all of whose lines give nothing, `print(values...): nothing`
+gives_nothing(word: text): bool := {
+	lines = lines_of(typed_lines, unaliased(word))
+	#lines > 0 and lines.all(line => line.signature.result == "nothing")
+}
+
+# a member of every map, `m.keys`, `m.get(k)`: a builtin whose line takes a map first
+takes_map_first(word: text): bool := lines_of(typed_lines, unaliased(word)).any(line => #line.signature.parameters > 0 and line.signature.parameters#1.type_name == "map")
+
+# a word the prelude, libm or the host declares
+is_declared_word(word: text): bool := #lines_of(typed_lines + foreign_math_lines, unaliased(word)) > 0 or host_words.has(word)
+
+# a host word's result kinds as host_words.warp declares them: one int or float, else a node or none
+host_result_kind(results: list): text := if #results == 1 and results#1 != "node" then type_word_kind(results#1) ?? "int" else "empty"
+
+# the kind a call of `arguments` values to a declared word gives, by the one result all its fitting lines declare: a
+# prelude typed line, a libm foreign line, a host word; ø when its lines differ by the argument (`reverse` of a text
+# or list, `same as object`) or nothing declares it
+declared_call_kind(word: text, arguments: int): any := {
+	fitting = lines_of(typed_lines + foreign_math_lines, unaliased(word)).filter(line => takes(line.signature, arguments))
+	if #fitting > 0 {
+		results = fitting.map(line => line.signature.result)
+		if results.any(result => result != results#1) or argument_result(word) != ø { return ø }
+		return declared_result_kind(results#1)
+	}
+	if host_words.has(word) { host_result_kind(host_words[word]#2) } else { ø }
+}

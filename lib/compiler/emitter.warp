@@ -120,11 +120,9 @@ member_word(name: text): any := {
 	word = library_words.get(unaliased(name)) ?? ""
 	if word in module.runtime and #module.runtime[word].signature.parameters == 1 then word else ø
 }
-# a map's own members (src/lowering/data/members.rs MAP_MEMBERS)
-map_members = ["keys", "values", "get", "count", "contains", "remove", "copy", "string"]
 # whether `x.name` is the word's call even when x has an entry of that name, as Rust's reads_entry_first: a map's own
 # member (`found.keys` of a map holding the entry "keys") or a word of a known result, which the code after it reads
-keeps_word(name: text, word: text): bool := name in map_members or module.runtime[word].signature.result not in ["", "any"]
+keeps_word(name: text, word: text): bool := takes_map_first(name) or module.runtime[word].signature.result not in ["", "any"]
 # whether the variable only ever holds map literals with that entry in the function: `n = {keys: 5}; n.keys` is its
 # own member 5, known as it compiles (Rust's OwnMember of a variable only holding object literals)
 holds_entry(body: Body, receiver: any, entry: text): bool := {
