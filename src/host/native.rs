@@ -988,7 +988,10 @@ fn wasi_context() -> wasmtime_wasi::p1::WasiP1Ctx {
 	context.arg(WASI_PROGRAM_NAME).args(&crate::modules::std_adapters::program_arguments());
 	let working_folder = crate::modules::working_folder().unwrap_or_else(|| PathBuf::from("."));
 	let preopens = match crate::host::sandbox::is_sandboxed() {
-		true => [(PathBuf::from("/"), "/", ReadOnly), (crate::host::sandbox::state_folder().map(PathBuf::from).unwrap_or(working_folder), ".", ReadWrite)],
+		true => [
+			(PathBuf::from("/"), "/", ReadOnly),
+			(crate::host::sandbox::state_folder().map(PathBuf::from).unwrap_or(working_folder), ".", ReadWrite),
+		],
 		false => [(PathBuf::from("/"), "/", ReadWrite), (working_folder, ".", ReadWrite)],
 	};
 	for (folder, name, permissions) in preopens {
