@@ -345,7 +345,7 @@ run_tests_here() {
 		[ $build_status -ne 0 ] && echo "build: $([ -n "$build_environment" ] && echo ENVIRONMENTAL || echo FAILED) (log.txt.gz)"
 		grep -v '^verdict: ' "$HERE_WORK/summary.txt"
 		echo "wall: build ${build_seconds} s, tests ${test_seconds} s, total $((SECONDS - started)) s"
-		[ -s "$HERE_WORK/finish-times.txt" ] && echo "last to finish: $(sort -rn "$HERE_WORK/finish-times.txt" | head -$LAST_FINISHES_SHOWN | awk '{ printf "%s%s at %s s", NR > 1 ? ", " : "", $2, $1 }')"
+		[ -s "$HERE_WORK/finish-times.txt" ] && echo "last to finish: $(sort -rn "$HERE_WORK/finish-times.txt" | head -$LAST_FINISHES_SHOWN | awk '{ printf "%s%s at %s s", (NR > 1 ? ", " : ""), $2, $1 }')"
 		echo "machine: $(nproc 2>/dev/null) cores, $(free -g 2>/dev/null | awk '/^Mem:/ { print $2 " GB" }'), $(rustc --version)"
 		echo "warm VM: $warm (the checkout and build output of an earlier job)"
 		echo "disk: $disk"

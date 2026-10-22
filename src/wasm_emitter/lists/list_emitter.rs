@@ -1077,7 +1077,15 @@ impl WasmGcEmitter {
 			items.iter().filter(|item| !matches!(item.drop_meta(), Node::Type { .. })).cloned().collect();
 		match rest.as_slice() {
 			[] => self.emit_call(func, "new_empty"),
-			[only] => self.emit_node_instructions(func, only),
+			[only] => {
+				// the one statement next to a class (`class Point {…}` then `Point{…}.x`): its runtime error names its
+				// own position, as a statement of a sequence does (card error-field)
+				if let Some(position) = crate::errors::diagnostic::line_info(only) {
+					self.statement_position = Some(position);
+					self.emit_trap_position(func);
+				}
+				self.emit_node_instructions(func, only)
+			}
 			_ => self.emit_list_node(func, &rest, bracket, separator),
 		}
 	}
