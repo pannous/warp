@@ -26,7 +26,7 @@ print "pulled in 2 s: " + str(rope / 2s)
 # one function serves a quantity and a plain number alike
 twice(x) := x * 2
 print "twice: \(twice(rope))"
-# print "twice: \(twice(rope)) and \(twice(3))" // TODO Error("not a Quantity") at area.low: a function called with a ± quantity and a plain number
+# print "twice: \(twice(rope)) and \(twice(3))" // TODO card pure-self: unit literals and ± in the pure/self lanes
 # print "twice: \{twice(rope)} and \(twice(3))"
 
 print "area about " + str(area.value)
