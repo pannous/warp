@@ -88,7 +88,15 @@ impl WarpParser {
 			operator
 		} else if let Some(parameters) = self.pipe_parameters() {
 			self.bind_parameters(&parameters, true);
-			let body = self.parse_expr(Op::FatArrow.binding_power().1);
+			// `do |item|⏎  print item⏎end`: the rest of the block is the body, a block of several statements
+			let body = if self.current_char() == '\n' {
+				match self.parse_list_with_separators(None, Bracket::None) {
+					statements @ Node::List(_, Bracket::None, _) => super::blocks::curly_block(statements),
+					statement => statement,
+				}
+			} else {
+				self.parse_expr(Op::FatArrow.binding_power().1)
+			};
 			Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 		} else {
 			self.parse_atom()

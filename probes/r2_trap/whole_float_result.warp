@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# A float product reaching a parameter first called with ints widens it instead of trapping (card r2-emitter-trap,
+# probes/samples/r2.warp under warp pure): prints 4
+type Vec3 { x: float, y: float, z: float }
+def vec(x, y, z) := Vec3 { x: x, y: y, z: z }
+def mul(v, s) := vec(v.x * s, v.y * s, v.z * s)
+def l() := 2.0
+v = vec(0, 0, 2)
+mul(v, l()).z

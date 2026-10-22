@@ -113,7 +113,8 @@ fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledMo
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
-	let said = crate::pipeline::run_module(compiler);
+	let owner = crate::extensions::sha256_hex(&compiler.bytes);
+	let said = crate::modules::std_adapters::kept_by(owner, || crate::pipeline::run_module(compiler));
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
@@ -218,7 +219,10 @@ fn current_build() -> Vec<String> {
 /// The commit lib/'s git checkout is at, "" outside one (an installed lib/)
 fn library_commit() -> String {
 	let said = std::process::Command::new("git").arg("-C").arg(library()).args(["rev-parse", "HEAD"]).output();
-	said.ok().filter(|said| said.status.success()).map(|said| String::from_utf8_lossy(&said.stdout).trim().to_string()).unwrap_or_default()
+	said.ok()
+		.filter(|said| said.status.success())
+		.map(|said| String::from_utf8_lossy(&said.stdout).trim().to_string())
+		.unwrap_or_default()
 }
 
 /// `warp version`'s line of the compilers in use: `compiler.wasm of <commit>, compiler-self.wasm missing`

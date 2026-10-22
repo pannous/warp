@@ -415,7 +415,9 @@ def number_value(n: any): list {
 exact_decimal_digits = 15
 exact_decimal(n: float): any := {
 	shown = "" + n
-	if shown.contains("e") or not shown.contains(".") { return ø }
+	if shown.contains("e") { return ø }
+	# a whole decimal shows no point (2.0 as 2): the int it is (decision int-list)
+	if not shown.contains(".") { shown += ".0" }
 	negative = shown.starts_with("-")
 	unsigned = if negative then shown[1..] else shown
 	parts = unsigned.split(".")
@@ -764,15 +766,25 @@ core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "in
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
+# the kinds of a value known only at run time each type passes, as Rust's BUILTIN_TYPES masks take them: an int is a
+# rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
+# types.warp node_is_type, held_kind_bit)
+passing_kinds = {int: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Float], float: [Kind.Float],
+	number: [Kind.Int, HeldBit.Rational, Kind.Float], text: [Kind.Text, Kind.Codepoint], char: [Kind.Codepoint],
+	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
+	error: [Kind.Error], code: []}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
 	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: [], code: []}
+kind_bit(kind: int): int := 1 << kind
 def type_test_code(body: Body, subject: any, spec: text): list {
 	if spec in module.sum_types { return refuse("a test of the type " + spec + ", which has cases or subclasses") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
 	value = expression_code(body, subject)
-	if value#1 == "node" { return runtime_call("node_is_type", [value, text_value(type)]) }
+	kinds = 0
+	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }
+	if value#1 == "node" { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
 	["bool", [op.i32_const, if value#1 in covered_kinds[type] then 1 else 0]]
 }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
@@ -1366,8 +1378,13 @@ def call_values(f: Function, values: any): list {
 # a value a compiled function's unannotated parameter cannot take, `last(t)` after `last(xs)`: the module is compiled
 # again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module)
 def passed(f: Function, i: int, value: any): list {
-	try { converted(value, f.kinds[i]) } catch refusal {
-		slot = parameter_key(f.name, i)
+	slot = parameter_key(f.name, i)
+	try {
+		# a node may hold any kind (`v.x * s` of a float s): read as an unannotated parameter's int it would trap, so the
+		# parameter widens, as widen_parameter does for a call still compiling
+		if value#1 == "node" and f.kinds[i] != "node" and slot in module.unannotated { refuse("a node where a " + f.kinds[i] + " is needed") }
+		converted(value, f.kinds[i])
+	} catch refusal {
 		joint = parameter_joint(f.kinds[i], value#1)
 		if slot not in module.unannotated or not (joint in type_bytes or joint in references) or module.later_kinds.get(slot) == joint { throw refusal }
 		module.later_kinds[slot] = joint
@@ -1913,7 +1930,7 @@ def data_item(body: Body, mark: text, item: any): list {
 	runtime_call(data_item_checks[mark], [value])
 }
 # the tables a runtime word reads a number of by name, `Kind.List` (kinds.warp), folded into the code
-constant_tables = {Kind: Kind, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode, TimeInfoUnit: TimeInfoUnit, Ascii: Ascii, Utf8: Utf8, Unicode: Unicode}
+constant_tables = {Kind: Kind, HeldBit: HeldBit, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode, TimeInfoUnit: TimeInfoUnit, Ascii: Ascii, Utf8: Utf8, Unicode: Unicode}
 # the number `Kind.List` names in its table, else ø
 table_number(table: any, case: any): any := {
 	if not (table is symbol and name_of(table) in constant_tables) { return ø }
@@ -2198,6 +2215,7 @@ literal_kind(n: any): any := {
 	if n is bool { return "bool" }
 	if n is text { return if #n == 1 then "char" else "text" }
 	if n is int { return "int" }
+	if n is float { return "float" }
 	ø
 }
 def collect_literal_arguments(n: any) {
@@ -2215,8 +2233,9 @@ def collect_literal_arguments(n: any) {
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
 # the annotations of a parameter held as a node: any value, a node, a function, a type value `int`, a map, a number
-# (an int or a float); an optional `text?` is one too, ø or the value
-node_annotations = ["any", "Node", "function", "type", "map", "number"]
+# (an int or a float), a symbol or a key (node_cases.warp holds a written case `Key` as any); an optional `text?` is
+# one too, ø or the value
+node_annotations = ["any", "Node", "function", "type", "map", "number", "symbol", "Symbol", "key"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(written: text): text := {

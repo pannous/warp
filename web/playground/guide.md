@@ -602,13 +602,13 @@ Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser,
 
 Things go wrong sometimes. In warp an error is a value that says what happened.
 
-```warp => Error("divide by zero")
+```warp => Error("divide by zero at 1:1")
 1 / 0
 ```
 
 `raise` makes your own error.
 
-```warp => Error("boom")
+```warp => Error("boom at 1:7")
 raise "boom"
 ```
 
