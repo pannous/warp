@@ -1,0 +1,15 @@
+# The rewrite engine's compiler marks (F10, lib/compiler/rewrites.warp, notes/rewrites.md): no Rust twin
+
+# a_marked_step_still_runs_after_continue
+is! 'rewrite count $i below $n {$body...} => ($i = 0; while $i < $n { $body...; loop·step: $i += 1 })
+s = 0
+count k below 4 {
+	if k == 2 { continue }
+	s += k
+}
+s' 4
+
+# other_glued_words_still_build_a_name
+is! 'rewrite step_name => loop·steps
+loop_steps = 7
+step_name' 7

@@ -7,12 +7,12 @@
 #   variable holds one (a character held by a text variable is a text): `for int·typed in xs { if is_type(int·typed,
 #   "int") { int = int·typed; body } }` (Rust twin: for_loop/headers.rs type_test)
 use "walk.warp"
-use "words.warp"
 use "phrase_blocks.warp"
+use "words.warp"
 use "scope.warp"
 
-for_word = "for"
-in_word = "in"
+loop_word = "for"
+loop_in_word = "in"
 map_keys_word = "map_keys"
 # the type words whose loop over a text walks a unit instead of filtering (Rust: for_loop/headers.rs bytes_of)
 unit_type_words = ["byte", "codepoint"]
@@ -39,24 +39,24 @@ is_name_pair(n: Node): bool := is_group(n) and #n == 2 and is_name(n#1) and is_n
 filters_by_type(variable: Node): bool := variable is symbol and is_type_word(name_of(variable)) and name_of(variable) not in unit_type_words
 
 # the statements of a `{…}` body, a bare body as it is
-loop_body(body: Node): list := match body {
+loop_statements(body: Node): list := match body {
 	List(items, Bracket.Curly, separator): items
 	_: [body]
 }
 
-loop_head(variable: Node, iterable: Node, body: Node): Node := List([symbol(for_word), variable, symbol(in_word), iterable, body], Bracket.None, Separator.Space)
+loop_head(variable: Node, iterable: Node, body: Node): Node := List([symbol(loop_word), variable, symbol(loop_in_word), iterable, body], Bracket.None, Separator.Space)
 
 # `for int·typed in xs { if is_type(int·typed, "int") { int = int·typed; body } }`
 type_filtered(variable: Node, iterable: Node, body: Node): Node := {
 	item = symbol(name_of(variable) + "·typed")
 	test = call_of("is_type", [item, name_of(variable)])
-	kept = List([Key(variable, Op.Assign, item)] + loop_body(body), Bracket.Curly, Separator.Semicolon)
+	kept = List([Key(variable, Op.Assign, item)] + loop_statements(body), Bracket.Curly, Separator.Semicolon)
 	loop_head(item, iterable, List([Key(Key(ø, Op.If, test), Op.Then, kept)], Bracket.Curly, Separator.Semicolon))
 }
 
 loop_heads_of(n: Node, maps: list): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
-		if #parts == 5 and parts#1 == symbol(for_word) and parts#3 == symbol(in_word) {
+		if #parts == 5 and parts#1 == symbol(loop_word) and parts#3 == symbol(loop_in_word) {
 			variable = parts#2
 			iterable = parts#4
 			is_map = is_map_literal(iterable) or (iterable is symbol and name_of(iterable) in maps)
