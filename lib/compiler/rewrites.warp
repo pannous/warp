@@ -111,8 +111,17 @@ unbound_rules(module_rules: list, program: Node): list := {
 }
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (a program's own `push`
-# keeps its own), before the definitions it reaches from the prelude and the modules join it
-sugar_rules(program: Node, modules: list): list := unbound_rules(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+# keeps its own), before the definitions it reaches from the prelude and the modules join it: none of a rule's words
+# a function of the program or a value outside every function's body; a function's own values leave out the rules
+# inside it only (scoped_sugar)
+sugar_rules(program: Node, modules: list): list := {
+	scope = scope_of(program)
+	rules = modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", ""))
+	rules_in_reach(rules, scope_with({}, outer_nodes_in(program))).filter(rule => not literal_words(rule.pattern).any(word => binds_as(scope, word, Meaning.Function)))
+}
+
+# the rules none of whose words the scope binds as a value: where a name holds a value, its word keeps that meaning
+rules_in_reach(rules: list, scope: any): list := rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(scope, word)))
 
 # the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too
 sugared(program: Node, rules: list): Node := {
@@ -121,13 +130,14 @@ sugared(program: Node, rules: list): Node := {
 	scoped_sugar(program, rules, scope_with({}, outer_nodes_in(program)))
 }
 
-# the node with the sugar rules applied, their conditions asking the names in reach: a function's definition sees the
-# names outside every function's body and its own, parameters and locals (`x is key` in one function stays a type
-# test beside a local `key` of another)
+# the node with the sugar rules applied, their words and conditions asking the names in reach: a function's
+# definition sees the names outside every function's body and its own, parameters and locals (`x is key` in one
+# function stays a type test beside a local `key` of another; a parameter `type` leaves out `type($x) is $t` there)
 scoped_sugar(n: Node, rules: list, outer: any): Node := {
 	if is_function_definition(n) {
 		rule_scope = scope_with(outer, nodes_in(n))
-		return bottom_up(n, part => sugar_rewritten(part, rules))
+		in_reach = rules_in_reach(rules, rule_scope)
+		return bottom_up(n, part => sugar_rewritten(part, in_reach))
 	}
 	walked = children(n, part => scoped_sugar(part, rules, outer))
 	rule_scope = outer
