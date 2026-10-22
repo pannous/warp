@@ -29,8 +29,7 @@ pub fn positioned_view(node: &Node) -> Node {
 /// the returned nodes: `node_of_handled_view` puts the node back where a warp stage left the handle
 pub fn handled_plain_view(node: &Node) -> (Node, Vec<Node>) {
 	// positions too: a warp pass keeps them on the nodes it leaves alone (walk.warp stage_view, card front-end-warnings)
-	let viewer =
-		Viewer { handles: Some(std::cell::RefCell::new(vec![])), marks: true, positions: true.into() };
+	let viewer = Viewer { handles: Some(std::cell::RefCell::new(vec![])), marks: true, positions: true.into() };
 	// the attribute layers stay: the Rust passes after the warp stage read them (the mark of `x!`, `extends`)
 	let view = without_layers(viewer.view(node), &["literal"]);
 	(view, viewer.handles.map(std::cell::RefCell::into_inner).unwrap_or_default())

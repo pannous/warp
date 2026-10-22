@@ -155,7 +155,9 @@ pub fn shown_excerpt(file: Option<&str>, line: usize, column: usize) -> Option<S
 	let program = shown_program();
 	let program = program.as_ref()?;
 	match file {
-		Some(file) if program.file.as_deref() != Some(file) => excerpt(&std::fs::read_to_string(file).ok()?, line, column),
+		Some(file) if program.file.as_deref() != Some(file) => {
+			excerpt(&std::fs::read_to_string(file).ok()?, line, column)
+		}
 		_ => excerpt(&program.source, line, column),
 	}
 }
