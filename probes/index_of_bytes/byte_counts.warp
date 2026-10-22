@@ -1,0 +1,6 @@
+# decision index-units: a count's base (index from 0, position from 1) and unit (characters, or bytes with `byte`)
+xs = [10 20 30]
+b: byte index = 9
+byte position c = b
+i: index = xs.index_of(20)
+[b, c, i]

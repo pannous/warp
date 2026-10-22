@@ -297,9 +297,10 @@ def multi_word_types(source: text): list {
 }
 
 // Words naming one built-in type: warp's `x: fast int` is i64, `fast float` f64; C's names of several words the fixed
-// width they mean there, `unsigned int` uint32 (the Rust lane notes warp's word). The longest first.
+// width they mean there, `unsigned int` uint32 (the Rust lane notes warp's word); `byte index`, `byte position` the
+// count types of bytes (decision index-units, index_positions.warp). The longest first.
 // Rust twin: types/expressions.rs COMPOUND_TYPES
-COMPOUND_TYPES = [[["unsigned", "long", "long"], "uint64"], [["long", "long", "int"], "int64"], [["unsigned", "long"], "uint64"], [["long", "long"], "int64"], [["long", "int"], "int64"], [["unsigned", "int"], "uint32"], [["signed", "int"], "int32"], [["unsigned", "short"], "uint16"], [["short", "int"], "int16"], [["unsigned", "char"], "byte"], [["signed", "char"], "int8"], [["fast", "int"], "i64"], [["fast", "float"], "f64"]]
+COMPOUND_TYPES = [[["unsigned", "long", "long"], "uint64"], [["long", "long", "int"], "int64"], [["unsigned", "long"], "uint64"], [["long", "long"], "int64"], [["long", "int"], "int64"], [["unsigned", "int"], "uint32"], [["signed", "int"], "int32"], [["unsigned", "short"], "uint16"], [["short", "int"], "int16"], [["unsigned", "char"], "byte"], [["signed", "char"], "int8"], [["fast", "int"], "i64"], [["fast", "float"], "f64"], [["byte", "index"], "byte index"], [["byte", "position"], "byte position"]]
 
 // `full name` of a declared `class full name {…}` is the one name `full-name`, `unsigned int` uint32, any other word
 // itself: [the name, the end of its words] for the word ending at `end`
