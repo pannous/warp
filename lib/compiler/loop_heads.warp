@@ -1,0 +1,80 @@
+# The `for` heads whose meaning needs what the program knows, made plain for lib/sugar/iteration.warp's rules, which
+# lower every `for` onto `while` (Rust twin: src/lowering/control/for_loop.rs):
+# `for k in m`, `for k, v in m` over a map walk its keys, as in Python: `for k in map_keys(m)`, `for (k, v) in
+#   map_keys(m)` (Rust twin: library_words.rs for_over_map); a map is written out, or a name its function or the
+#   program around assigns one, or a parameter declared `map`
+# `for int in xs body` (a type word as the variable) visits only the items of that type, tested as read, before the
+#   variable holds one (a character held by a text variable is a text): `for int·typed in xs { if is_type(int·typed,
+#   "int") { int = int·typed; body } }` (Rust twin: for_loop/headers.rs type_test)
+use "walk.warp"
+use "words.warp"
+use "phrase_blocks.warp"
+use "scope.warp"
+
+for_word = "for"
+in_word = "in"
+map_keys_word = "map_keys"
+# the type words whose loop over a text walks a unit instead of filtering (Rust: for_loop/headers.rs bytes_of)
+unit_type_words = ["byte", "codepoint"]
+
+# `a: 1`; not the opaque view parser.warp writes an empty group `{}` as (shapes.warp listed), also a colon key
+is_entry(n: Node): bool := is_key(n, Op.Colon) and key_of(n) != symbol(opaque_word)
+
+# `{a: 1, b: 2}` or `a: 1`: a map written out (Rust twin: objects.rs written_object)
+is_map_literal(n: Node): bool := {
+	if is_entry(n) { return yes }
+	is_group(n) and bracket_of(n) == "{" and #n > 0 and #items_of(n).filter(is_entry) == #n
+}
+
+# the names the nodes assign a written map (`m = {a: 1}`)
+map_names(nodes: list): list := nodes.filter(n => is_key(n, Op.Assign) and key_of(n) is symbol and is_map_literal(value_of(n))).map(n => name_of(key_of(n)))
+
+# the parameters a function head declares maps (`f(t: map)`); a class's fields of that name stay out
+declared_maps(nodes: list): list := nodes.filter(n => is_key(n, Op.Colon) and key_of(n) is symbol and value_of(n) == symbol("map")).map(n => name_of(key_of(n)))
+
+# `k, v` or `(k, v)`: the two names a loop over a map binds
+is_name_pair(n: Node): bool := is_group(n) and #n == 2 and is_name(n#1) and is_name(n#2)
+
+# `for int in xs body`: a type word as the loop variable, not one of a text's units
+filters_by_type(variable: Node): bool := variable is symbol and is_type_word(name_of(variable)) and name_of(variable) not in unit_type_words
+
+# the statements of a `{…}` body, a bare body as it is
+loop_body(body: Node): list := match body {
+	List(items, Bracket.Curly, separator): items
+	_: [body]
+}
+
+loop_head(variable: Node, iterable: Node, body: Node): Node := List([symbol(for_word), variable, symbol(in_word), iterable, body], Bracket.None, Separator.Space)
+
+# `for int·typed in xs { if is_type(int·typed, "int") { int = int·typed; body } }`
+type_filtered(variable: Node, iterable: Node, body: Node): Node := {
+	item = symbol(name_of(variable) + "·typed")
+	test = call_of("is_type", [item, name_of(variable)])
+	kept = List([Key(variable, Op.Assign, item)] + loop_body(body), Bracket.Curly, Separator.Semicolon)
+	loop_head(item, iterable, List([Key(Key(ø, Op.If, test), Op.Then, kept)], Bracket.Curly, Separator.Semicolon))
+}
+
+loop_heads_of(n: Node, maps: list): Node := match n {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts == 5 and parts#1 == symbol(for_word) and parts#3 == symbol(in_word) {
+			variable = parts#2
+			iterable = parts#4
+			is_map = is_map_literal(iterable) or (iterable is symbol and name_of(iterable) in maps)
+			keys = call_of(map_keys_word, [iterable])
+			if is_map and is_name(variable) { return loop_head(variable, keys, parts#5) }
+			if is_map and is_name_pair(variable) { return loop_head(List(items_of(variable), Bracket.Round, Separator.Comma), keys, parts#5) }
+			if filters_by_type(variable) { return type_filtered(variable, iterable, parts#5) }
+		}
+		n
+	}
+	_: n
+}
+
+# a loop sees the maps of its own function and of the functions and program around it, as Rust's Names::within: a
+# list `found` stays a list beside another function's map `found`, a nested function's maps stay its own
+scoped_loop_heads(n: Node, outer: list): Node := {
+	maps = if is_function_definition(n) then outer + declared_maps(nodes_in(key_of(n))) + map_names(outer_nodes_in(value_of(n))) else outer
+	loop_heads_of(children(n, x => scoped_loop_heads(x, maps)), maps)
+}
+
+loop_heads(program: Node): Node := scoped_loop_heads(program, map_names(outer_nodes_in(program)))

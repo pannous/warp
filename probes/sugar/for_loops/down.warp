@@ -1,0 +1,6 @@
+# `down to` and `reverse(a to b)` count down. Expected: 321 321
+s = 0
+for i in 3 down to 1 { s = s * 10 + i }
+t = 0
+for i in reverse(1 to 3) { t = t * 10 + i }
+print "$(s) $(t)"

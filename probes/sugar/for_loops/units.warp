@@ -1,0 +1,6 @@
+# `byte` walks a text's bytes, `word` its words. Expected: 3 hi,you,
+n = 0
+for byte in "abc" { n += 1 }
+s = ""
+for word in "hi  you" { s += word + "," }
+print "$(n) $(s)"

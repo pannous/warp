@@ -18,7 +18,7 @@
 # module along with `use` (lib/channels.warp, lib/english.warp). A template's hole the pattern doesn't bind is a fresh
 # name each firing (`$t` → `t·3`, a compiler temporary no program can write), so `rewrite $a ?: $b => ($t = $a; if $t
 # then $t else $b)` computes a once; a pattern of statements `($a; $b)` matches a run of them in a block; a rule's result is rewritten again until no rule fires; `T for $x in $xs...` splices T once for each item of a rest hole; a template of statements in a value's place is that value's block; `·` glues
-# words and holes into a name (`square·$a`, `$i·end`, F5). What the
+# words and holes into a name (`square·$a`, `$i·end`, F5), or spells a compiler mark (`loop·step`, F10). What the
 # template adds sits where the rewritten code was written, so errors point at the user's code (notes/rewrites.md).
 # Rust twin: src/modules/rewrites.rs lower
 use "walk.warp"
@@ -50,6 +50,9 @@ rewrite_depth_limit = 64
 glue_mark = "·"
 glue_marker = "glue·name"
 name_joint = "_"
+# the compiler's own names a template writes with `·` (F10), which no program can write and the passes after the rules
+# read: `loop·step: $i++` marks a loop's step, which a `continue` still runs (emitter/control_flow.warp)
+compiler_marks = ["loop·step"]
 # `T for $x in $xs...` in a template: T once for each item of the rest hole (F4)
 each_word = "for"
 each_in_word = "in"
@@ -61,11 +64,13 @@ yes_no_types = ["bool"]
 value_word = "value"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
-# Two steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
-# something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int; for_loops counts the loop
-# `n times` becomes), the other after those making or reading the forms its rules take (for_loops' counting loops over
-# a range)
+# Three steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
+# something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the iteration sugar where
+# the passes before it have made the `for` loops (the loop `n times` becomes, comprehensions' loops, loop_heads.warp's
+# walks of a map's keys) and the range in a loop's head is not yet a list, the other after those making or reading
+# the forms its rules take
 first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/loops"]
+iteration_sugar_module_names = ["sugar/iteration"]
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/ranges", "sugar/enums"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
@@ -738,7 +743,7 @@ rule_spliced(template: any, bound: any, at: any): any := {
 		if not bound.has(hole) { bound[hole] = placed(fresh_name(hole), at) }
 		return bound[hole]
 	}
-	if is_glue(template) { return placed(glued_name(items_of(template)[1 ..].map(part => rule_spliced(part, bound, at))), at) }
+	if is_glue(template) { return placed(marked_or_glued(items_of(template)[1 ..], bound, at), at) }
 	if template is key { return placed(Key(rule_spliced(key_of(template), bound, at), op_of(template), rule_spliced(value_of(template), bound, at)), at) }
 	if not is_group(template) { return placed(template, at) }
 	parts = items_of(template)
@@ -828,6 +833,12 @@ first_leaf(n: any): any := {
 		}
 	}
 	ø
+}
+
+# the compiler mark the glued words spell (F10), else the name their spliced parts glue into
+marked_or_glued(parts: list, bound: any, at: any): any := {
+	mark = parts.map(part => if part is symbol then name_of(part) else "").join(glue_mark)
+	if mark in compiler_marks then symbol(mark) else glued_name(parts.map(part => rule_spliced(part, bound, at)))
 }
 
 # the name the spliced parts glue into, their words joined by name_joint (`square`, `a number` → square_a_number); a

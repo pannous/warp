@@ -1,0 +1,4 @@
+# a loop whose variable is no name stays as written and is refused. Expected: an error naming the loop, not a crash
+s = 0
+for (1 + 2) in [1, 2] { s += 1 }
+print s
