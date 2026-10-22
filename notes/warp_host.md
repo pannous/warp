@@ -5,9 +5,23 @@ small: it compiles a program with the warp compiler written in warp, then runs t
 It is no warp-rust: there is no interpreter or Rust compiler in it, and it doesn't aim for parity. Only green tests
 count.
 
-    warp-host [--compiler self|full] run <file.warp | code> [args…]   compile and run; the run's value printed
+    warp-host [--compiler self|full] [run] <file.warp | code> [args…]   compile and run; the run's value printed
     warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
     warp-host <file.wasm | file.wat> [args…]
+    warp-host help | --help | -h                                         the usage, status 0
+
+- No command means run, as with warp: the first word after the flags decides.
+  - `run`, `compile`, `help`: that command.
+  - A name ending in .wasm or .wat, or a file starting with wasm's magic bytes `\0asm`: the module runs.
+  - Anything else is `run`: `warp-host f.warp a b` is `warp-host run f.warp a b`, `warp-host '6*7'` is `run '6*7'`.
+- File or code, as warp decides (src/main.rs program_file, src/cli/formatting.rs has_warp_extension):
+  - A name with a .warp or .wasp extension is a file. When it's missing, that's the error
+    `warp-host: could not read file x.warp` with status 1; it never compiles as code.
+  - Any other existing file (an extensionless `#!` script) is a file too.
+  - Else the word is code, a program of the current folder.
+- Unlike warp, which joins all its words into the code (`warp 6 '*' 7`), warp-host's code is the first word only. The
+  words after it are the program's arguments (`use os; args`), as after a file.
+- The launcher packaging/bin/warp still passes `run` explicitly; both forms are the same run.
 
 - Source: crates/warp-runtime/src/warp_host/
   - main.rs: commands, finding lib/ and the compiler, running a module

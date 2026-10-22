@@ -87,6 +87,18 @@ expect "the arguments after the file" 0 "\"b c\"" -- "$host" run arguments.warp 
 expect "exit(5) exits 5" 5 -- "$host" run exits.warp
 expect "compile writes the module" 0 -- "$host" compile hello.warp hello.wasm
 expect "the module runs" 0 "$HELLO" -- "$host" hello.wasm
+# no command means run (as warp): a file, code, their arguments; a module by its name or its magic bytes
+expect "no command: a .warp file runs" 0 "$HELLO" -- "$host" hello.warp
+expect "no command: inline code, its value its status" 42 "42" -- "$host" '6*7'
+expect "no command: inline code gets the words after it" 0 "['a' \"b c\"]" -- "$host" $'use os\nprint args' a "b c"
+expect "no command: the arguments after the file" 0 "\"b c\"" -- "$host" arguments.warp a "b c"
+expect "no command: --compiler full before code" 42 "42" -- "$host" --compiler full '6*7'
+expect "no command: a .wasm file still runs as a module" 0 "$HELLO" -- "$host" hello.wasm
+expect "no command: a module without .wasm runs by its magic bytes" 0 "$HELLO" \
+	-- bash -c 'cp hello.wasm hello-module && "$0" hello-module' "$host"
+expect "a missing .warp file is an error, not code" 1 "could not read file nosuch.warp" -- "$host" nosuch.warp
+expect "run of a missing .warp file is that error too" 1 "could not read file nosuch.warp" -- "$host" run nosuch.warp
+expect "--help: usage, status 0" 0 "usage: warp-host" "no command means run" -- "$host" --help
 expect "--compiler full: compiler.wasm" 0 "$HELLO" -- "$host" --compiler full run hello.warp
 expect "no program: usage" 2 "usage: warp-host" -- "$host"
 expect "the launcher runs a program by warp-host beside it" 0 "$HELLO" ! "ran by" -- launcher hello.warp

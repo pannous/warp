@@ -1,9 +1,10 @@
 //! warp-host: the small native host of pure warp programs (notes/warp_host.md). It compiles a program with the warp
 //! compiler written in warp (compiler-self.wasm, or compiler.wasm with `--compiler full`) and runs the module with WASI
 //! and what wasm cannot do itself: shell commands (os.command, os.exec, os.run), C calls, the host words.
-//!   warp-host [--compiler self|full] run <file.warp | code> [args…]   compile and run; the run's value printed
+//!   warp-host [--compiler self|full] [run] <file.warp | code> [args…]   compile and run; the run's value printed
 //!   warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
 //!   warp-host <file.wasm | file.wat> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
+//! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`
 mod cache;
 mod ffi;
 mod nodes;
@@ -20,9 +21,14 @@ use wasmtime_wasi::{FsPerms, WasiCtxBuilder};
 /// The stack wasm runs on: the compiler recurses deeply (warp's self-hosted stage workers take 64 MB)
 const WASM_STACK: usize = 240 << 20;
 const THREAD_STACK: usize = WASM_STACK + (16 << 20);
-const USAGE: &str = "usage: warp-host [--compiler self|full] run <file.warp | code> [args…]
+const USAGE: &str = "usage: warp-host [--compiler self|full] [run] <file.warp | code> [args…]
        warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
-       warp-host <file.wasm | file.wat> [args…]";
+       warp-host <file.wasm | file.wat> [args…]
+no command means run: warp-host f.warp, warp-host '6*7'";
+/// The words warp-host takes as commands; any other first word is a program (`run` implied), as with warp
+const COMMANDS: [&str; 3] = ["run", "compile", "help"];
+/// The extensions of warp source, as warp's (src/cli/formatting.rs WARP_EXTENSIONS)
+const WARP_EXTENSIONS: [&str; 2] = ["warp", "wasp"];
 
 /// A run's state: WASI's, the C handles of its C calls, and what std_io needs
 pub struct Host {
@@ -66,6 +72,7 @@ fn command(given: Vec<String>) -> i32 {
 		let before_file =
 			args.is_empty() || matches!(args.as_slice(), [command] if command == "run" || command == "compile");
 		match word.as_str() {
+			"--help" | "-h" if before_file => args.push("help".into()),
 			"--compiler" | "--fuel" if before_file => {
 				full |= word == "--compiler" && given.next().as_deref() == Some("full")
 			}
@@ -85,16 +92,31 @@ fn command(given: Vec<String>) -> i32 {
 			compile_file(&engine, compiler, Path::new(source), &Path::new(source).with_extension("wasm"))
 		}
 		["compile", source, wasm] => compile_file(&engine, compiler, Path::new(source), Path::new(wasm)),
-		[file, ..] if file.ends_with(".wasm") || file.ends_with(".wat") => match module_bytes(file) {
+		["help", ..] => {
+			println!("{USAGE}");
+			0
+		}
+		[file, ..] if is_module(file) => match module_bytes(file) {
 			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None, false)),
 			Err(problem) => failed(&format!("{file}: {problem}")),
 		},
-		[source, ..] if source.ends_with(".warp") => run_source(&engine, compiler, source, &args[1..]),
+		// no command: run, as `warp f.warp` and `warp '6*7'` run
+		[source, ..] if !COMMANDS.contains(source) => run_source(&engine, compiler, source, &args[1..]),
 		_ => {
 			eprintln!("{USAGE}");
 			2
 		}
 	}
+}
+
+/// A module to run: a .wasm or .wat file by its name, else a file starting with wasm's magic bytes (`\0asm`)
+fn is_module(file: &str) -> bool {
+	use std::io::Read;
+	let mut magic = [0u8; 4];
+	let starts_as_wasm = Path::new(file).is_file()
+		&& std::fs::File::open(file).and_then(|mut opened| opened.read_exact(&mut magic)).is_ok()
+		&& &magic == b"\0asm";
+	file.ends_with(".wasm") || file.ends_with(".wat") || starts_as_wasm
 }
 
 /// A module file's bytes; WAT text only in a build with the feature wat
@@ -116,8 +138,15 @@ fn engine() -> wasmtime::Result<Engine> {
 	Engine::new(&config)
 }
 
-/// `run f.warp`, `run <code>` (a program of the current folder): compiled to a module of its own, then run
+/// `run f.warp`, `run <code>` (a program of the current folder): compiled to a module of its own, then run. As warp
+/// decides: a name with a warp extension is a file, and a missing one an error, not code; any other existing file (a
+/// `#!` script) is a file too, else the word is code
 fn run_source(engine: &Engine, compiler: &str, source: &str, args: &[String]) -> i32 {
+	let named_warp =
+		Path::new(source).extension().is_some_and(|extension| WARP_EXTENSIONS.iter().any(|warp| extension == *warp));
+	if named_warp && !Path::new(source).is_file() {
+		return failed(&format!("could not read file {source}"));
+	}
 	let scratch = std::env::temp_dir().join(format!("warp-host-{}", std::process::id()));
 	let code = scratch.with_extension("warp");
 	let (file, folder) = if Path::new(source).is_file() {
