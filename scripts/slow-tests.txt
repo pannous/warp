@@ -110,3 +110,10 @@ parser::test_self_pure::extrema_run_pure
 parser::test_self_pure::field_defaults_run_pure
 parser::test_self_pure::field_slices_run_pure
 parser::test_self_pure::for_each_loops_run_pure
+parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
+parser::test_parse_long_definitions::many_definitions_parse_in_linear_time
+parser::test_self_pure::for_loops_run_pure
+parser::test_self_pure::global_type_words_read_self_hosted
+parser::test_self_pure::host_words_on_nodes_run_pure
+parser::test_self_pure::kind_changes_fail_pure
+web::test_style_rules::lengths_keep_their_units
