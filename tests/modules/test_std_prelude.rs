@@ -38,7 +38,6 @@ fn a_prelude_word_keeps_its_types() {
 }
 
 #[test]
-#[ignore = "fixnow: modules-2: dir(prelude)#1 is \"find\" since index-of-bytes put find first"]
 fn dir_lists_the_prelude() {
 	is!("dir(prelude)#1", "first");
 }
