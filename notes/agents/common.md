@@ -85,6 +85,16 @@ After a context swap, this file and your role file win over anything a handover 
   never notify it.
 
 ## Where to work
+- Beautiful types (decision beautiful-types): every lib/ declaration a migration or cleanup branch touches leaves it
+  fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
+  adds the shallow subclasses; don't invent parallel ones in your branch.
+- The sugar migration (user 2026-10-22, notes/layers.md) keeps one line of history: warp-layers alone removes sugar
+  from lib/compiler/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
+  origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
+  express the same day. Other branches touching parser.warp or a pass on the migration list stay small and land
+  express; one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
+  lambdas.warp's fusion) are warp-folds' until its cards land; migration 3 skips them. Aliases are warp-signatures'
+  lib/aliases.warp.
 - Small changes on main: only what nothing compiles (notes, docs, wiki, probes, scripts, samples, playground text)
   goes straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or branch: commit your own
   paths by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push; never leave unpushed commits on
@@ -168,7 +178,9 @@ After a context swap, this file and your role file win over anything a handover 
   branches have priority over Rust-change branches (user 2026-10-21): they land before any Rust batch, and work in
   .warp is preferred whenever a task can be done there.
   A change to lib/compiler/ (types or annotations included) also checks the self build before Ready:
-  `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp`; a form
+  `scripts/self-check.sh <worktree>` (it rebuilds both compilers in a queue slot; a bare `warp rebuild self` skips the
+  queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
+  replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
   emitter.warp refuses there is fixed or carded, never left for main to find.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
