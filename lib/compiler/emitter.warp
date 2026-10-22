@@ -18,14 +18,17 @@ use math
 use os
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
-type_bytes = {int: 126, float: 124, bool: 127, char: 127}
+type_bytes = {int: 126, float: 124, bool: 127, char: 127, i32: 127}
 section_ids = {custom: 0, type: 1, import: 2, function: 3, memory: 5, globals: 6, export: 7, code: 10, data: 11, data_count: 12, tag: 13}
 function_type_byte = 96
 export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
-# the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names
-exported_globals = ["trap_detail", "text_heap"]
+# the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names,
+# the position of the statement it happened in
+exported_globals = ["trap_detail", "text_heap", "trap_position"]
+# trap_position holds line << column_bits | column (src/wasm_emitter/control/traps.rs encoded_position)
+column_bits = 12
 import_function_byte = 0
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
 fd_write = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
@@ -227,11 +230,10 @@ refuse(why: text): any := {
 # the file the program comes from, which a refusal names
 def emitting_file(file: text) { module.program_file = file }
 
-# a node of the program (no runtime word's) with a position: the place a later refusal names
+# a node of the program (no runtime word's) written somewhere: the place a later refusal names
 def note_emitting(body: Body, n: any) {
-	if body.intrinsics or not is_positioned(n) { return }
-	file = if module.program_file == "" then "" else module.program_file + ":"
-	module.emitting_at = " at " + file + line_of(n) + ":" + column_of(n)
+	at = if body.intrinsics then ø else written_at(n)
+	if at { module.emitting_at = place_text(at, module.program_file) }
 }
 
 # a refused form as the program writes it, in a few words: `… := …`, the call `memo_known(…)`, a name
@@ -1658,6 +1660,14 @@ def field_or_word(body: Body, value: any, name: text, word: any): list {
 	read = boxed(runtime_call("map_get", [receiver, text_value_of(name)]))
 	["node", value#2 + [op.local_set] + held + has_it + [op.if] + value_type("node") + read + [op.else] + boxed(word(receiver)) + [op.end]]
 }
+# the program's statement n about to run, its position in trap_position: a runtime error names it, as Rust's
+# (emit_trap_position); a runtime word's statements leave it
+def position_code(body: Body, n: any): list {
+	at = if body.intrinsics then ø else written_at(n)
+	if not at { return [] }
+	column = min(at#2, (1 << column_bits) - 1)
+	[op.i32_const] + sleb((at#1 << column_bits) + column) + [op.global_set] + uleb(declared_global("trap_position", "i32")#1)
+}
 def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
 
 # `xs += e`: e's items appended to the list xs holds, in place, so every alias sees them; ø when xs holds no list
@@ -1686,6 +1696,7 @@ def statement(body: Body, n: any): list {
 	for name in body.unshared { if appends_only(n, name) { kept += [name] } }
 	body.unshared = kept
 	value = expression_code(body, n)
+	value = [value#1, position_code(body, n) + value#2]
 	after = []
 	for name in body.unshared { if name in kept { after += [name] } }
 	made = fresh_list_name(n)
@@ -2310,6 +2321,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 body_code(f: Function) := {
 	scope = new_body(f)
 	value = expression_code(scope, statements_block(f.body))
+	value = [value#1, position_code(scope, f.body) + value#2]
 	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.signature.parameters)..]
 	f.local_names = scope.order
