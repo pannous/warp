@@ -189,7 +189,15 @@ Sugar passes, with the rule each would become:
    for_loops, min_max, multiple_assignments, broadcasting. Largest gain per engine line.
 4. **F2 where-predicates** (~450 lines): type_tests, filled_lists, grouped_receivers, library_calls,
    prefix_comparisons, plain_enums, subscripts with negative bounds, Java `int[]`.
+   Status (warp-layers, 2026-10-22): subscripts, slices and negative bounds stay parse-time (sugar.warp subscript())
+   until the WARP_SELF_HOSTED=1 hybrid lane retires: raw subscripts before the Rust passes would cost that lane most
+   indexing tests (supervisor). Java `int[]` stays notation: a type spelling parse-time typed_parameter reads
+   (`int[] xs`, `params int[] xs`), which a sugar rule would reach too late.
 5. **F1 positions** (~250 lines): trailing guards, `if no xs`, foreign modifiers, C-style for heads.
+   Status (warp-layers, 2026-10-22): the C-style head is a lib/sugar/loops.warp rule onto while (the parser only groups
+   it). Trailing guards and `if no xs` stay: the parser must find the guard word and the condition context anyway
+   (grouping), what is left is guarded_statement's four lines onto the kernel if/while and `no` as `not`'s alias in a
+   condition, while moving them costs the hybrid lane all their tests.
 6. **Notation generalizations** replacing parser branches (~300 lines): word brackets (`do … end`, `fi`), raw-text
    block words (shader, wgsl), compound names. Each is one table, never a keyword branch.
 7. **F4–F7, last**: clauses, preposition heads, English `To …:` definitions (~310 lines). These may stay
