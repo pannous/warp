@@ -169,6 +169,7 @@ pub fn library_paths(name: &str) -> Vec<String> {
 			format!("lib{name}.so.6"),
 		]);
 		paths.extend(versioned_sonames(name, &extra));
+		paths.extend(version_named_sonames(name, &extra));
 		paths
 	}
 	#[cfg(not(any(target_os = "macos", target_os = "linux")))]
@@ -204,6 +205,43 @@ fn versioned_sonames(name: &str, extra: &[String]) -> Vec<String> {
 		.collect();
 	found.sort_by_key(String::len);
 	found
+}
+
+/// A library named without the version its file name carries: `python` or `python3` finds libpython3.13.so.1,
+/// `lua` liblua5.4.so.0. The files `lib<name><version>.so…` of the library folders, the highest version first
+#[cfg(target_os = "linux")]
+fn version_named_sonames(name: &str, extra: &[String]) -> Vec<String> {
+	let prefix = format!("lib{name}");
+	let folders = extra.iter().map(String::as_str).chain([
+		"/usr/lib/x86_64-linux-gnu",
+		"/usr/lib/aarch64-linux-gnu",
+		"/lib/x86_64-linux-gnu",
+		"/lib/aarch64-linux-gnu",
+		"/usr/lib64",
+		"/usr/lib",
+		"/usr/local/lib",
+	]);
+	// the version between the name and `.so`: "3.13" of libpython3.13.so.1, as numbers
+	let version_of = |file: &str| -> Option<Vec<u32>> {
+		let version = file.strip_prefix(&prefix)?.split(".so").next()?.trim_start_matches(['.', '-']);
+		let numbers: Option<Vec<u32>> = version.split('.').map(|part| part.parse().ok()).collect();
+		numbers.filter(|numbers| !numbers.is_empty())
+	};
+	let mut found: Vec<(Vec<u32>, String)> = folders
+		.filter_map(|folder| std::fs::read_dir(folder).ok().map(|entries| (folder.to_string(), entries)))
+		.flat_map(|(folder, entries)| {
+			entries
+				.filter_map(Result::ok)
+				.filter_map(|entry| entry.file_name().into_string().ok())
+				.filter(|file| file.contains(".so"))
+				.filter_map(|file| version_of(&file).map(|version| (version, format!("{folder}/{file}"))))
+				.collect::<Vec<_>>()
+		})
+		.collect();
+	found.sort_by(|(first, first_path), (second, second_path)| {
+		second.cmp(first).then(first_path.len().cmp(&second_path.len()))
+	});
+	found.into_iter().map(|(_, path)| path).collect()
 }
 
 /// The address of `function` in its loaded library
