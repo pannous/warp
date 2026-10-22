@@ -197,4 +197,116 @@ expect "run_wasm: a trap is an Error" 0 "caught os.run_wasm: wasm trap: wasm \`u
 expect "run_wasm: the module prints to the same stdout" 0 "printed by the module" "then 7" -- "$host" run run_printing.warp
 expect "run_wasm(compile_wasm(\"6*7\")) evaluates code" 0 "42" -- "$host" run run_compiled.warp
 
+# use wasm (card warp-host-wasm-load): other modules and components loaded into the program and called; imports naming
+# a .wasm file linked to that module. Components are assembled from WAT by the checkout's wat2wasm (the wat crate)
+wat calc '(module (global $count (mut i32) (i32.const 0))
+	(func (export "twice") (param i64) (result i64) (i64.mul (local.get 0) (i64.const 2)))
+	(func (export "half") (param f64) (result f64) (f64.div (local.get 0) (f64.const 2)))
+	(func (export "add32") (param i32 i32) (result i32) (i32.add (local.get 0) (local.get 1)))
+	(func (export "divmod") (param i64 i64) (result i64 i64)
+		(i64.div_s (local.get 0) (local.get 1)) (i64.rem_s (local.get 0) (local.get 1)))
+	(func (export "tick") (result i32) (global.set $count (i32.add (global.get $count) (i32.const 1))) (global.get $count))
+	(func (export "boom") unreachable))'
+mkdir -p "$stage/deps"
+wat deps/counter '(module (global $n (mut i64) (i64.const 0)) (func (export "count_up") (param i64) (result i64)
+	(global.set $n (i64.add (global.get $n) (local.get 0))) (global.get $n)))'
+wat deps/doubler '(module (import "deps/counter.wasm" "count_up" (func $count_up (param i64) (result i64)))
+	(func (export "twice") (param i64) (result i64) (i64.mul (local.get 0) (i64.const 2)))
+	(func (export "count_twice") (param i64) (result i64) (drop (call $count_up (local.get 0))) (call $count_up (local.get 0))))'
+wat importer '(module (import "deps/doubler.wasm" "twice" (func $twice (param i64) (result i64)))
+	(import "deps/doubler.wasm" "count_twice" (func $count_twice (param i64) (result i64)))
+	(import "deps/counter.wasm" "count_up" (func $count_up (param i64) (result i64)))
+	(func (export "main") (result i64) (drop (call $count_twice (i64.const 5)))
+		(i64.add (call $twice (i64.const 21)) (call $count_up (i64.const 0)))))'
+wat bare '(module (import "calc" "add32" (func $add (param i32 i32) (result i32)))
+	(func (export "main") (result i32) (call $add (i32.const 40) (i32.const 2))))'
+wat missing_module '(module (import "nosuch.wasm" "f" (func $f (result i32))) (func (export "main") (result i32) (call $f)))'
+wat cycle_a '(module (import "cycle_b.wasm" "g" (func (result i32))) (func (export "f") (result i32) (i32.const 1)))'
+wat cycle_b '(module (import "cycle_a.wasm" "f" (func (result i32))) (func (export "g") (result i32) (i32.const 2)))'
+# a component: add(s32, s32), manhattan(record point), shout(string) -> string, sum(list<s64>)
+wat shouter '(component
+	(core module $m (memory (export "memory") 1) (global $next (mut i32) (i32.const 1024))
+		(func (export "realloc") (param i32 i32 i32 i32) (result i32) (local $at i32)
+			(local.set $at (i32.and (i32.add (global.get $next) (i32.sub (local.get 2) (i32.const 1)))
+				(i32.sub (i32.const 0) (local.get 2))))
+			(global.set $next (i32.add (local.get $at) (local.get 3))) (local.get $at))
+		(func (export "add") (param i32 i32) (result i32) (i32.add (local.get 0) (local.get 1)))
+		(func (export "manhattan") (param i32 i32) (result i32)
+			(i32.add (select (local.get 0) (i32.sub (i32.const 0) (local.get 0)) (i32.ge_s (local.get 0) (i32.const 0)))
+				(select (local.get 1) (i32.sub (i32.const 0) (local.get 1)) (i32.ge_s (local.get 1) (i32.const 0)))))
+		(func (export "shout") (param $p i32) (param $n i32) (result i32) (local $i i32) (local $out i32) (local $c i32)
+			(local $ret i32) (local.set $out (global.get $next))
+			(global.set $next (i32.add (global.get $next) (i32.add (local.get $n) (i32.const 8))))
+			(block $done (loop $each (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+				(local.set $c (i32.load8_u (i32.add (local.get $p) (local.get $i))))
+				(if (i32.and (i32.ge_u (local.get $c) (i32.const 97)) (i32.le_u (local.get $c) (i32.const 122)))
+					(then (local.set $c (i32.sub (local.get $c) (i32.const 32)))))
+				(i32.store8 (i32.add (local.get $out) (local.get $i)) (local.get $c))
+				(local.set $i (i32.add (local.get $i) (i32.const 1))) (br $each)))
+			(local.set $ret (i32.and (i32.add (i32.add (local.get $out) (local.get $n)) (i32.const 3)) (i32.const -4)))
+			(i32.store (local.get $ret) (local.get $out)) (i32.store offset=4 (local.get $ret) (local.get $n)) (local.get $ret))
+		(func (export "sum") (param $p i32) (param $n i32) (result i64) (local $i i32) (local $s i64)
+			(block $done (loop $each (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+				(local.set $s (i64.add (local.get $s) (i64.load (i32.add (local.get $p) (i32.shl (local.get $i) (i32.const 3))))))
+				(local.set $i (i32.add (local.get $i) (i32.const 1))) (br $each)))
+			(local.get $s)))
+	(core instance $i (instantiate $m))
+	(type $point (record (field "x" s32) (field "y" s32)))
+	(export $point_type "point" (type $point))
+	(func (export "add") (param "a" s32) (param "b" s32) (result s32) (canon lift (core func $i "add")))
+	(func (export "manhattan") (param "p" $point_type) (result s32) (canon lift (core func $i "manhattan")))
+	(func (export "shout") (param "text" string) (result string) (canon lift (core func $i "shout")
+		(memory (core memory $i "memory")) (realloc (core func $i "realloc")) string-encoding=utf8))
+	(func (export "sum") (param "xs" (list s64)) (result s64) (canon lift (core func $i "sum")
+		(memory (core memory $i "memory")) (realloc (core func $i "realloc")))))'
+cp "$checkout/tests/fixtures/components/rust_demo.wasm" "$stage/" || echo "✗ no tests/fixtures/components/rust_demo.wasm"
+program wasm_calls 'use wasm' 'm = load_wasm("calc.wasm")' 'print "twice " + wasm_call(m, "twice", [21])' \
+	'print "half " + wasm_call(m, "half", [5.0])' 'print "add32 " + wasm_call("calc.wasm", "add32", [2, 3])' \
+	'print "divmod " + wasm_call(m, "divmod", [17, 5])'
+program wasm_handle 'use wasm' 'print load_wasm("calc.wasm")'
+program wasm_state 'use wasm' 'm = load_wasm("calc.wasm")' 'wasm_call(m, "tick", [])' 'print wasm_call("calc.wasm", "tick", [])'
+program wasm_exports 'use wasm' 'print wasm_exports(load_wasm("calc.wasm"))'
+program wasm_trap 'use wasm' 'try wasm_call("calc.wasm", "boom", []) catch e { print "caught " + e }'
+program wasm_no_function 'use wasm' 'print wasm_call("calc.wasm", "nope", [])'
+program wasm_no_file 'use wasm' 'print load_wasm("nosuch.wasm")'
+program wasm_warp_value 'use os' 'use wasm' 'm = load_wasm(compile_wasm("[1, 2, \"three\", {a: 4}]"))' \
+	'x = wasm_call(m, "main", [])' 'print x' 'print x#3'
+program component_calls 'use wasm' 'c = load_wasm("shouter.wasm")' 'print "add " + wasm_call(c, "add", [40, 2])' \
+	'print "manhattan " + wasm_call(c, "manhattan", [{x: 3, y: -4}])' 'print wasm_call(c, "shout", ["hello wasm"])' \
+	'print "sum " + wasm_call(c, "sum", [[1, 2, 3, 4]])'
+program component_exports 'use wasm' 'print wasm_exports(load_wasm("shouter.wasm"))'
+program component_wrong 'use wasm' 'print wasm_call("shouter.wasm", "add", [3000000000, 1])' \
+	'print wasm_call("shouter.wasm", "add", [1])'
+program component_rust 'use wasm' 'c = load_wasm("rust_demo.wasm")' 'print "fib " + wasm_call(c, "fib", [10])' \
+	'print wasm_call(c, "words", ["hello big world"])' 'print wasm_call(c, "stats_of", ["hello big world"])' \
+	'print "sides " + wasm_call(c, "sides", ["square"])' 'print "sqrt " + wasm_call(c, "text_tools.checked_sqrt", [16.0])' \
+	'try wasm_call(c, "checked_sqrt", [-1.0]) catch e { print "caught " + e }'
+expect "wasm: load_wasm and wasm_call by the export's types" 0 "twice 42" "half 2.5" "add32 5" "divmod [3 2]" \
+	-- "$host" run wasm_calls.warp
+expect "wasm: a module's handle" 0 '{wasm:1 path:"calc.wasm" kind:"module"}' -- "$host" run wasm_handle.warp
+expect "wasm: a path is loaded once per run, its state lasts" 0 "2" -- "$host" run wasm_state.warp
+expect "wasm: wasm_exports gives names and types" 0 'twice:"func(i64) -> i64"' 'divmod:"func(i64, i64) -> (i64, i64)"' \
+	-- "$host" run wasm_exports.warp
+expect "wasm: a trap is a catchable Error" 0 "caught wasm.call: calc.wasm's boom failed: wasm trap: wasm \`unreachable\`" \
+	-- "$host" run wasm_trap.warp
+expect "wasm: a missing function names those there are" 0 "calc.wasm has no function nope (it has twice, half" \
+	-- "$host" run wasm_no_function.warp
+expect "wasm: a missing file is an Error" 0 "wasm.load: no module nosuch.wasm" -- "$host" run wasm_no_file.warp
+expect "wasm: a warp module's value crosses into the program" 0 '[1 2 "three" {a:4}]' "three" \
+	-- "$host" run wasm_warp_value.warp
+expect "wasm imports: a module's imports naming .wasm files, one instance each" 52 "52" -- "$host" importer.wasm
+expect "wasm imports: a bare name with name.wasm beside" 42 "42" -- "$host" bare.wasm
+expect "wasm imports: a missing module is a clear error" 1 "the import module nosuch.wasm: no module nosuch.wasm" \
+	-- "$host" missing_module.wasm
+expect "wasm imports: a cycle is a clear error" 1 "the modules import each other in a cycle: cycle_b.wasm → cycle_a.wasm → cycle_b.wasm" \
+	-- "$host" cycle_a.wasm
+expect "component: scalars, a record, a string and a list by WIT types" 0 "add 42" "manhattan 7" "HELLO WASM" "sum 10" \
+	-- "$host" run component_calls.warp
+expect "component: wasm_exports gives WIT types" 0 'manhattan:"func(p: record { x: s32, y: s32 }) -> s32"' \
+	'shout:"func(text: string) -> string"' -- "$host" run component_exports.warp
+expect "component: a wrong argument is an Error naming the parameter" 0 "add(a): 3000000000 does not fit a s32" \
+	"add takes 2 arguments, got 1" -- "$host" run component_wrong.warp
+expect "component: rust_demo's lists, records, enums and results" 0 "fib 55" '["hello" "big" "world"]' \
+	"{words:3 letters:13}" "sides 4" "sqrt 4" "caught wasm.call: no real square root of -1" -- "$host" run component_rust.warp
+
 if [ "$failed" = 0 ]; then echo "✓ $run tests passed"; else echo "✗ $failed of $run tests failed"; exit 1; fi

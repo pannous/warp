@@ -96,6 +96,65 @@ count.
   - `run_wasm(compile_wasm("6*7"))`: ~0.85 s in all, of which compile_wasm is the bulk, as `warp-host run '6*7'`
     (0.12 s) plus `use os`
 
+## use wasm: other modules and components (card warp-host-wasm-load)
+
+`use wasm` (lib/wasm.warp), served by std_io module `wasm` (warp_host/wasm_modules.rs, components.rs):
+
+    m = load_wasm("calc.wasm")          // a handle {wasm:1 path:"calc.wasm" kind:"module"}
+    wasm_call(m, "twice", [21])         // 42; m may be the path too: wasm_call("calc.wasm", "twice", [21])
+    wasm_exports(m)                     // {twice:"func(i64) -> i64" divmod:"func(i64, i64) -> (i64, i64)" …}
+    c = load_wasm("rust_demo.wasm")     // a component, told by its header
+    wasm_call(c, "stats_of", ["hello big world"])   // {words:3 letters:13}
+
+- What load_wasm takes:
+  - A path, loaded once per run: the same file is the same instance, so its globals and memory last the run.
+  - Bytes (read_bytes, compile_wasm): a fresh instance each time.
+  - A handle.
+- Core modules:
+  - Instantiated in the program's own store with the same engine and imports as a program: WASI, host words, std_io,
+    C, other modules.
+  - Values go by the export's own types:
+    - Int/Bool to i32/i64 (an i32 takes the signed and unsigned range), Float/Int to f32/f64.
+    - Results come back as Int or Float, several as a list, none as ø.
+    - A reference result that is a warp node is read out of the callee's store with its own memory (a warp module's
+      texts may live in its linear memory), so `wasm_call(load_wasm(compile_wasm("[1, 2]")), "main", [])` gives the
+      list.
+    - A reference argument is the program's own ref, passed as it is (copied through the callee's constructors when
+      it exports them).
+- Failures are Errors, catchable with try: a trap (`wasm.call: calc.wasm's boom failed: wasm trap: …`), a missing
+  function (it names those there are), a wrong argument count or type.
+- Imports: an import whose module names a .wasm or .wat file, `(import "deps/lib.wasm" "f" …)`, or a bare name with
+  name.wasm/name.wat in reach (before C libraries), is linked to that module's exports.
+  - The module is instantiated in the same store, once per run, whoever imports it. Its own imports are linked the
+    same way.
+  - Paths are relative to the working folder, then to the importing module's folder: the old pipeline's convention
+    (notes/wasm_modules.md), so `import x.wasm` programs warp-rust emits run here too.
+  - A missing module or an import cycle fails the run before it starts:
+    `the import module nosuch.wasm: no module nosuch.wasm (looked in the working folder)`,
+    `the modules import each other in a cycle: cycle_b.wasm → cycle_a.wasm → cycle_b.wasm`.
+- Components: an engine of their own with the component model on (programs' engines are core-only), a store each,
+  kept for the run.
+  - Values go by the WIT types, through wasmtime's canonical ABI:
+    - bool, s8 to u64 (range-checked), f32/f64, char (codepoint), string
+    - list and tuple (a list), record (a map `{x: 3, y: -4}`), option (ø or the value)
+    - enum (its name), variant (its name or {case: value}), flags (a list of names)
+    - result: the ok value; the err is an Error
+  - Names: `stats_of` finds `stats-of`, and `checked_sqrt` or `text_tools.checked_sqrt` finds a function of an
+    exported interface.
+  - Not yet: resources (handles), and WASI p2. A component's imports trap when called; rust_demo.wasm, built for
+    wasm32-wasip2, still runs its pure functions.
+- Size: wasmtime's component-model feature was already compiled in (feature compiler), but nothing used its runtime.
+  Measured on the box with profile host:
+  - before this card: 6,510,696 B
+  - with core modules and imports: 6,674,280 B (+164 KB)
+  - with components: 7,351,304 B (+677 KB more, +841 KB in all, +12.9 %)
+- Compiler side, not done here:
+  - `m.f(x)` for a handle (a sugar or lowering to wasm_call)
+  - `import x.wasm` with its exports' types read at compile time
+  - Foreign lines `twice(x: i64): i64 from 'calc.wasm'`, which the pure-c-imports emitter turns into the import this
+    host already links.
+  - A compiled warp module exports only main, so functions of other warp modules can't be called yet.
+
 ## C calls (M2)
 
 An import whose module isn't `host` or WASI is a C function: `name` from the library `module`.
