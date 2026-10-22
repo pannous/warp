@@ -6,6 +6,7 @@ use "walk.warp"
 use "words.warp"
 use "phrase_blocks.warp"
 use "diagnostics.warp"
+use "class_methods.warp"
 
 is_keyword(n: Node): bool := match n {
 	Symbol(name): name in function_keywords
@@ -184,7 +185,8 @@ is_call(n: Node): bool := match n {
 	_: no
 }
 
+# (a class's methods first become functions of the program: class_methods.warp)
 definitions(program: Node): Node := {
 	optional_functions = optional_functions_of(program)
-	bottom_up(program, definition)
+	bottom_up(methods_lifted(program), definition)
 }
