@@ -25,3 +25,11 @@ fn stopping_a_finished_task_warns_and_changes_nothing() {
 	is!("job = go 3; stop job; job", 3);
 	is!("job = go 3; job.stop(); job", 3);
 }
+
+// card function-named: any definition form keeps the program's own go and await
+#[test]
+fn a_program_may_define_its_own_go_with_def() {
+	is!("def go(n: int): int { n + 1 }; go(2)", 3);
+	is!("fun go(n) { n + 1 }; go(2)", 3);
+	is!("def await(n: int): int { n * 2 }; await(4)", 8);
+}

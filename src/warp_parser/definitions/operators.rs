@@ -26,6 +26,7 @@ pub(crate) fn is_free_symbol(c: char) -> bool {
 		&& !crate::extensions::strings::starts_an_emoji(c)
 		&& crate::operators::spelled_operator(spelled).is_none()
 		&& !crate::operators::math_aliases().iter().any(|alias| alias.spelling == spelled)
+		&& !crate::operators::math_circumfixes().iter().any(|pair| pair.opening == spelled || pair.closing == spelled)
 }
 
 /// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit.
@@ -312,7 +313,11 @@ impl WarpParser {
 	/// (reviewer) only with an operand after it on its line: `[↯ ↯]` and `print ↯` read the glyph as a value
 	pub(crate) fn try_parse_free_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let glyph = self.current_char();
-		if !is_free_symbol(glyph) || !self.operand_follows(1) || self.free_symbol_follows(1) {
+		if !is_free_symbol(glyph)
+			|| self.closes_circumfix(glyph)
+			|| !self.operand_follows(1)
+			|| self.free_symbol_follows(1)
+		{
 			return None;
 		}
 		let (line, column) = self.get_position();
@@ -394,7 +399,9 @@ impl WarpParser {
 	/// `operator ⊕ has precedence above +` is not supported.
 	pub(crate) fn try_parse_operator_declaration(&mut self, word: &str) -> Option<Node> {
 		// the keyword first: reading the rest of the line for every word was quadratic on a long line (card big-literals)
-		let is_keyword = word == OPERATOR_WORD || OPERATOR_KINDS.iter().any(|(keyword, _)| *keyword == word);
+		let is_keyword = word == OPERATOR_WORD
+			|| word == crate::operators::CIRCUMFIX_WORD
+			|| OPERATOR_KINDS.iter().any(|(keyword, _)| *keyword == word);
 		if !is_keyword || self.options != ParserOptions::default() {
 			return None;
 		}
@@ -415,9 +422,10 @@ impl WarpParser {
 				Err(message) => error(&message),
 			});
 		}
-		// `operator × := *`: the pre-scan made it an alias (source_aliases), nothing is left to define
+		// `operator × := *`, `circumfix operator ⟦ ⟧ := round`: the pre-scan made it an alias (source_aliases,
+		// source_circumfixes), nothing is left to define
 		let statement = code_only(&format!("{word} {rest}"));
-		if crate::operators::alias_line(&statement).is_some() {
+		if crate::operators::declares_alias(&statement) {
 			while !matches!(self.current_char(), '\n' | ';' | '\0') {
 				self.advance();
 			}
