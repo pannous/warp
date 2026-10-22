@@ -531,8 +531,9 @@ with_members(n: any, rules: list, origins: list): any := with_changed_members(n,
 
 # a class with each item of its body changed: the passes see it as the opaque view ["type", name, body]
 with_changed_members(n: any, changed: function): any := {
+	if not (n is key and key_of(n) == symbol(opaque_word)) { return n }
 	view = value_of(n)
-	if not (key_of(n) == symbol(opaque_word) and kind_of(view) == "type") { return n }
+	if kind_of(view) != "type" { return n }
 	body = node_of(view#3)
 	if not is_group(body) { return n }
 	members = spliced_statements(items_of(body).map(changed))
