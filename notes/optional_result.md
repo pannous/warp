@@ -16,10 +16,14 @@ so the ø reaches the caller unchanged, in every lane:
   (`x = f(); if x == ø …; x`), and without narrowing the rule would warn there falsely.
 - `T?`, `any` and `Node` hold ø already; `op.return` (a member) is no return.
 
+A list result is the exception (user 2026-10-22, "ø can autocast to []", card list-result-autocast): a function
+declared `: list` (`ints`, `list of T`) that can answer ø gives [] instead, with no warning
+(`(body as list?) ?? []` in Rust, `body ?? []` in definitions.warp result_held).
+
 An optional result of an `if` without `else` or of a loop is ø when nothing gave a value, not the kind's zero.
 `any` results never warn.
 
 Where: Rust `src/lowering/types/type_name_matching.rs` (optional_when_answering_empty, can_answer_empty, as_type);
 warp `lib/compiler/definitions.warp` (result_held), warning row `optional_result` in `lib/compiler/warnings.data`.
-emitter.warp holds a variable declared `Node?` or `Class?` as the node it is.
+emitter.warp holds a variable declared `Node?` or `Class?` as the node it is, one declared `ints` or `list of T` as a list.
 

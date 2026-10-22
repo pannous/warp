@@ -5,7 +5,7 @@
 use super::nodes::{assign, block, call, is_call_head, key, spaced_statement};
 use super::nodes::{is_return, typed};
 use crate::analyzer::type_word_kind;
-use crate::node::{parens, symbol, Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Separator, parens, symbol};
 use crate::operators::Op;
 use crate::words::{ANY_TYPE, ERROR_WORD, IMPLICIT_PARAMETER};
 
@@ -147,6 +147,13 @@ fn typed_return(type_name: &Node, definition: &Node, optional: &[String]) -> Opt
 		Ok(type_name) => type_name,
 		Err(warning_failed) => return Some(warning_failed),
 	};
+	let written = type_name.name();
+	// a list result gives [] for ø, with no warning (user 2026-10-22, card list-result-autocast: "ø can autocast to []")
+	if crate::analyzer::names_list_type(&written) && can_answer_empty(body, optional) {
+		// held as any list or ø: `list of int?` names no type
+		let held = converted(body, &symbol(&format!("{}?", crate::words::LIST_WORD)));
+		return Some(key(head.clone(), op, key(parens(vec![held]), Op::Coalesce, Node::empty_list())));
+	}
 	Some(key(head.clone(), op, converted(body, &type_name)))
 }
 
@@ -221,7 +228,7 @@ fn optional_when_answering_empty(
 	optional: &[String],
 ) -> Result<Node, Node> {
 	let written = type_name.name();
-	if holds_empty(&written) || !can_answer_empty(body, optional) {
+	if holds_empty(&written) || crate::analyzer::names_list_type(&written) || !can_answer_empty(body, optional) {
 		return Ok(type_name.drop_meta().clone());
 	}
 	let function = function_name(head);
