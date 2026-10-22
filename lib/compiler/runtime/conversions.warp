@@ -56,8 +56,10 @@ text_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Text and kind_code(n) != Kind.Codepoint) { returned_error("not a text") }
 	n
 }
+# a yes/no, or 0 or 1, which a bool holds as no and yes (Rust: `f(): bool := x == 1 and 0` gives no)
+holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
 bool_checked(n: Node): Node := {
-	if is_null(n) or not (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1)) { returned_error("not a bool") }
+	if not holds_bool(n) { returned_error("not a bool") }
 	n
 }
 float_checked(n: Node): Node := {
@@ -80,7 +82,7 @@ text_of_node(n: Node): text := {
 	""
 }
 bool_of_node(n: Node): bool := {
-	if is_null(n) or marked_kind(n) != Marked.Bool { fail() }
+	if not holds_bool(n) { fail() }
 	unboxed_int(n) != 0
 }
 char_of_node(n: Node): char := {

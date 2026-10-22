@@ -6,7 +6,8 @@
 # usage: scripts/self-check.sh [<worktree>, default the current checkout]   (exit 0 = Hello printed)
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
 main_warp=/Users/me/dev/bin/warp
-locks=/Users/me/dev/angles/warp/scratch/self-check
+main_checkout=/Users/me/dev/angles/warp
+locks=/Volumes/Build/self-check/slot  # slots and binary copies off the Data volume (fseventsd load, Grok Supervisor 2026-10-22)
 check_slots=2
 expected="Hello"
 
@@ -23,6 +24,12 @@ take_slot() {
     sleep 5
   done
 }
+# trees to check live on /Volumes/Worktrees (cowtree) or, for throwaway lib/ copies, /Volumes/Junk: a copy under the
+# main checkout loads fseventsd for every session watching it
+if [[ $worktree == $main_checkout/* ]]; then
+  print -u2 "self-check: $worktree is inside the main checkout; check a worktree under /Volumes/Worktrees or a copy under /Volumes/Junk"
+  exit 2
+fi
 take_slot
 trap "rm -rf $lock" EXIT
 
