@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Rust crates called from warp programs through warp-host's plain C FFI (card ffi-rust-crate-adapter,
-# notes/crate_adapter.md): scripts/warp-crate builds lib/crates/{regex,sha2,crc32fast}.warp into cdylib shims
+# notes/crate_adapter.md): scripts/warp-crate builds lib/crates/{regex,sha2,crc32fast}.warp, and semver's
+# lines drafted by `warp-crate scan`, into cdylib shims
 # (cached in ~/.cache/warp/crates, or WARP_CRATES_CACHE), and programs `use rs_regex` etc. Nothing of a crate is in
 # warp-host. Run it through the queue: tests/queue.sh tests/host/test_crates.sh
 # Needs cargo (the first build fetches and compiles the crates, ~1 min each), and a warp-host and compiler that compile
@@ -60,9 +61,17 @@ if [ $status = 0 ]; then echo "✓ warp-crate builds the regex, sha2 and crc32fa
 	failed=$((failed + 1))
 	echo "✗ warp-crate build: exit $status"
 	echo "$built" | sed 's/^/    /'
-	echo "crates: $((run - failed)) passed / $run"
+	expect "semver by scanned lines: a version requirement matches, a bad version's error" 0 "in range" "out of range" \
+	"unexpected character 'x' while parsing major version number" -- runs semver.warp
+
+echo "crates: $((run - failed)) passed / $run"
 	exit 1
 fi
+# semver's lines drafted by rustdoc JSON alone (warp-crate scan), built as they come
+"$crate_tool" scan semver@1 2>/dev/null | grep -v '^// skipped' >"$stage/semver.warp"
+expect "warp-crate scan drafts semver's lines from rustdoc JSON" 0 "versionreq_matches(versionreq: handle, version: handle(semver::Version)): bool" \
+	"version_free(version: handle(semver::Version)): void from 'rs_semver' = drop" -- cat "$stage/semver.warp"
+expect "the scanned manifest builds unedited" 0 "librs_semver" -- "$crate_tool" build "$stage/semver.warp"
 shims=$(dirname "$(echo "$built" | grep '/lib/librs_regex' | head -1)")
 natives=$(dirname "$(echo "$built" | grep '/native/rs_regex.warp' | head -1)")
 expect "a second build is the cache's" 0 "librs_sha2" ! "building" -- "$crate_tool" build "$checkout/lib/crates/sha2.warp"
@@ -94,6 +103,10 @@ program regex_words 'use rs_regex' 'print(if is_match("hello world", "w.r") then
 program regex_all 'use rs_regex' 'found = find_all("a1 b22 c333 d4444", "[0-9]{2,}")' 'print #found' 'print found#3'
 program regex_handle 'use rs_regex' 're = regex_new("b+")' 'print regex_find_start(re, "aabbb")' \
 	'print regex_find_start(re, "xyz")' 'print regex_as_str(re)' 'regex_free(re)'
+program semver 'use rs_semver' 'req = versionreq_parse(">=1.2, <2")' \
+	'print(if versionreq_matches(req, version_parse("1.4.0")) then "in range" else "out")' \
+	'print(if versionreq_matches(req, version_parse("2.0.1")) then "in range" else "out of range")' \
+	'print version_parse("x.y")' 'print rs_semver_last_error()'
 program regex_bad 'use rs_regex' 'is_match("x", "(")'
 program regex_last_error 'use rs_regex' 're = regex_new("(")' 'print re' 'print rs_regex_last_error()'
 
@@ -106,6 +119,9 @@ expect "regex find_all: a list back through a list handle" 0 "3" "4444" -- runs 
 expect "a regex handle: find_start, -1 for none, as_str, free" 0 "2" "-1" "b+" -- runs regex_handle.warp
 expect "an invalid pattern raises the crate's error" 1 "regex parse error" -- runs regex_bad.warp
 expect "a failed handle result is 0 and last_error says why" 0 "0" "unclosed group" -- runs regex_last_error.warp
+
+expect "semver by scanned lines: a version requirement matches, a bad version's error" 0 "in range" "out of range" \
+	"unexpected character 'x' while parsing major version number" -- runs semver.warp
 
 echo "crates: $((run - failed)) passed / $run"
 [ "$failed" = 0 ]

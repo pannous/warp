@@ -296,6 +296,10 @@ PRIMITIVES = {"i8": "i32", "i16": "i32", "i32": "i32", "u8": "i32", "u16": "i32"
 	"isize": "i64", "usize": "i64", "f32": "f32", "f64": "f64", "bool": "bool", "char": "i32"}
 
 
+# words warp reads as its own, renamed when rustdoc gives them as parameter names
+WARP_WORDS = {"match", "if", "then", "else", "while", "for", "in", "is", "as", "not", "and", "or", "use", "import", "return", "it"}
+
+
 def scan(spec):
 	crate, _, version = spec.partition("@")
 	work = CACHE / "scan" / f"{crate}-{version or 'any'}"
@@ -309,6 +313,7 @@ def scan(spec):
 		fail(f"rustdoc could not describe {spec}")
 	doc = json.loads((TARGET_DIR / "doc" / f"{crate.replace('-', '_')}.json").read_text())
 	index, library = doc["index"], "rs_" + crate.replace("-", "_")
+	prefix = crate.replace("-", "_")
 	print(f'crate: "{crate}@{version or "*"}"')
 
 	def mapped(ty, owner, is_result):
@@ -324,6 +329,9 @@ def scan(spec):
 				return "bytes"
 			if inner == {"generic": "Self"} and not is_result:
 				return "handle"
+			named = inner.get("resolved_path") if isinstance(inner, dict) else None
+			if named and not is_result and not named.get("args", {}) and (named.get("path") or "")[:1].isupper():
+				return f"handle({prefix}::{named['path'].split('::')[-1]})"
 			return None
 		if ty == {"generic": "Self"}:
 			return f"handle({owner})" if is_result else None
@@ -348,31 +356,51 @@ def scan(spec):
 			mapped_type = mapped(ptype, owner, False)
 			if mapped_type is None or (function.get("generics", {}).get("params") and mapped_type != "handle"):
 				cross = mapped_type is not None and cross
-			params.append(f"{'re' if pname == 'self' else pname}: {mapped_type or '?'}")
+			own = (owner or "it").split("::")[-1].lower()
+			pname = pname + "_" if pname in WARP_WORDS else pname
+			params.append(f"{own if pname == 'self' else pname}: {mapped_type or '?'}")
 			cross = cross and mapped_type is not None
 		output = sig.get("output")
 		result = "void" if output is None else mapped(output, owner, True)
 		text = f"{name}({', '.join(params)}): {result or '?'} from '{library}' = {rust_path}"
 		print(text if cross and result else f"// skipped: {text}")
 
-	root = index[str(doc["root"])]
-	for item_id in root["inner"]["module"]["items"]:
-		item = index.get(str(item_id))
-		if not item or item.get("visibility") != "public":
-			continue
+	def public_items(module_id, seen):
+		"""(name, item) of a module's public items, through `pub use` re-exports and globs"""
+		if module_id in seen:
+			return
+		seen.add(module_id)
+		for item_id in index[str(module_id)]["inner"]["module"]["items"]:
+			item = index.get(str(item_id))
+			if not item or item.get("visibility") != "public":
+				continue
+			used = item["inner"].get("use")
+			if used:
+				target = index.get(str(used.get("id")))
+				if target is None:
+					continue
+				if used.get("is_glob") and "module" in target["inner"]:
+					yield from public_items(used["id"], seen)
+				elif not used.get("is_glob"):
+					yield used["name"], target
+			else:
+				yield item["name"], item
+
+	for name, item in public_items(doc["root"], set()):
 		inner = item["inner"]
 		if "function" in inner:
-			line(item["name"], inner["function"], f"{crate.replace('-', '_')}::{item['name']}", None)
-		if "struct" in inner:
-			owner = f"{crate.replace('-', '_')}::{item['name']}"
+			line(name, inner["function"], f"{prefix}::{name}", None)
+		if "struct" in inner and not inner["struct"].get("generics", {}).get("params"):
+			owner = f"{prefix}::{name}"
+			print(f"{name.lower()}_free({name.lower()}: handle({owner})): void from '{library}' = drop")
 			for impl_id in inner["struct"].get("impls", []):
 				impl = index.get(str(impl_id), {}).get("inner", {}).get("impl", {})
-				if impl.get("trait") is not None or impl.get("synthetic") or impl.get("blanket_impl"):
+				if impl.get("trait") is not None or impl.get("is_synthetic") or impl.get("synthetic") or impl.get("blanket_impl"):
 					continue
 				for method_id in impl.get("items", []):
 					method = index.get(str(method_id))
 					if method and method.get("visibility") == "public" and "function" in method["inner"]:
-						line(f"{item['name'].lower()}_{method['name']}", method["inner"]["function"], f"{owner}::{method['name']}", owner)
+						line(f"{name.lower()}_{method['name']}", method["inner"]["function"], f"{owner}::{method['name']}", owner)
 
 
 def main(argv):
