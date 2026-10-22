@@ -7,7 +7,7 @@ const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
 // a program with a `try` exports it: the runtime error that raises the Error left in trap_detail (runtime_errors.rs)
 const RETURNED_ERROR_EXPORT = "returned_error";
-// the position of the statement a trapped run was in, line << 32 | column (src/wasm_emitter/globals.rs emit_trap_position)
+// the position of the statement a trapped run was in, line << 12 | column (src/wasm_emitter/globals.rs emit_trap_position)
 const TRAP_POSITION_EXPORT = "trap_position";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
 const PAGE_ROUTES_EXPORT = "page·routes";

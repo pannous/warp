@@ -38,7 +38,6 @@ fn the_expert_guide_has_the_beginner_chapters() {
 }
 
 #[test]
-#[ignore = "fixnow: fixnow-error-field-positions: 1 ÷ 0 shows divide by zero at 1:1, the guide says divide by zero (error-field 58871c69b4)"]
 fn every_expert_snippet_shows_its_value() {
 	let failures: Vec<String> = snippets()
 		.into_iter()

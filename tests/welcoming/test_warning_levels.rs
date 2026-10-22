@@ -50,7 +50,6 @@ fn cli(args: &[&str]) -> String {
 
 #[test]
 #[cfg(feature = "native")]
-#[ignore = "fixnow: fixnow-error-field-positions: warnings now carry at line:column (error-field 58871c69b4)"]
 fn the_cli_labels_levels_and_shows_from_its_threshold() {
 	assert!(cli(&[SEVERE_WARNING]).contains("warning (severe):"));
 	assert!(cli(&[NORMAL_WARNING]).contains("warning: careful"));
@@ -58,7 +57,7 @@ fn the_cli_labels_levels_and_shows_from_its_threshold() {
 	assert!(cli(&["--warnings=severe", SEVERE_WARNING]).contains("warning (severe):"));
 	assert!(cli(&["--no-hints", WEAK_WARNING]).contains("warning (weak):"));
 	assert!(cli(&["--strict=severe", NORMAL_WARNING]).contains("warning: careful"));
-	assert!(cli(&["--strict", NORMAL_WARNING]).contains("Error(\"careful\")"));
+	assert!(cli(&["--strict", NORMAL_WARNING]).contains("Error(\"careful at 1:1\")"));
 }
 
 #[test]

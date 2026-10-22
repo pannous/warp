@@ -18,9 +18,8 @@ fn a_float_value_passes_through_try_and_if() {
 }
 
 #[test]
-#[ignore = "fixnow: fixnow-error-field-positions: the error now ends at 1:1 (error-field 58871c69b4)"]
 fn modulo_by_zero_is_a_named_error_try_catches() {
 	is!("f(n) := 10 % n; try f(0) else 7", 7);
 	is!("f(n) := 10 % n; f(3)", 1);
-	is!("10 % 0", warp::error("divide by zero"));
+	is!("10 % 0", warp::error("divide by zero at 1:1"));
 }
