@@ -9,3 +9,6 @@
 # for_destructures_a_tuple_or_comma_names
 'x = 0; for (r, c) in [(0, 1), (2, 3)] { x += r*10+c }; x'	24
 'm = {a: 1, b: 2}; x = 0; for k, v in m { x += v }; x'	3
+
+# elif_after_a_bare_name_condition
+'c = false; d = true; if c { 1 } elif d { 2 } else { 3 }'	2

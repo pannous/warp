@@ -22,6 +22,8 @@ node_slice(x: Node, start: Node, to: Node = ø): Node := {
 	if kind_code(x) == Kind.List { return items_slice(unboxed_list(x), from, stop) }
 	not_a_list()
 }
+# `xs.copy()`: a list of the same items that a change to xs no longer reaches (a text, which nothing changes, as it is)
+node_copy(x: Node): Node := node_slice(x, ø)
 character_slice(t: text, from: int, to: int): text := {
 	start = character_start(t, from + 1)
 	stop = character_start(t, to + 1)
