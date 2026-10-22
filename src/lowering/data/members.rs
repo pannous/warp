@@ -10,6 +10,7 @@ use crate::operators::Op;
 use crate::type_kinds::Kind;
 use crate::words::MAP_WORD;
 
+// ⚠ WARP DOES THIS DIFFERENTLY: sum is a prelude function, `xs.sum` its method form like any function's → lib/prelude.warp
 /// The builtin methods of a list, text, map and number, as they are written after a dot, the most used first; each
 /// works in the dot form (tests/control/test_member_completion.rs every_offered_builtin_is_a_method_of_its_type)
 pub const LIST_MEMBERS: [&str; 27] = [
