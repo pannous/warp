@@ -31,6 +31,11 @@
 # CLOUD_TEST_MODEL=<model>: the session's model (default haiku: it only repeats one command); a reused session gets it as
 # `/model` before each job (`--model` on a follow-up message doesn't switch it). Fast mode applies to new sessions only.
 set -uo pipefail
+CLOUD_PAUSED=$HOME/.config/warp/cloud-paused   # on the Mac only: while it exists no job starts (user 2026-10-22)
+if [ -f "$CLOUD_PAUSED" ]; then
+	echo "cloud-test: the cloud lane is paused ($CLOUD_PAUSED: $(cat "$CLOUD_PAUSED")); remove the file to resume" >&2
+	exit 3
+fi
 MODEL=${CLOUD_TEST_MODEL:-haiku}
 THIS_SCRIPT=$0                 # sent along with each job
 SLOW_TESTS=""                  # sent along with each --full shard's job: the tests it leaves out (SLOW_TESTS_LIST)
