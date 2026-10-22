@@ -101,10 +101,6 @@ file_used(statement: Node, folder: text): any := {
 	if file_text(path) == ø then ø else path
 }
 path_in(folder: text, name: text): text := if name.starts_with("/") then name else folder + "/" + name
-folder_of(path: text): text := {
-	parts = split(path, "/")
-	parts[0..<(#parts - 1)].join("/")
-}
 file_text(path: text): any := try read(path) else ø
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,

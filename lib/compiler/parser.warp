@@ -1371,6 +1371,11 @@ def library_glyph_operators(): list {
 // The words of a statement that uses a module: `use regex`, `require regex`, `import regex`
 // Rust twin: use_statements.rs USE_KEYWORDS
 USE_KEYWORDS = ["use", "require", "import"]
+// The folder holding the file of a path: lib/compiler of lib/compiler/parser.warp
+def folder_of(path: text): text {
+	parts = path.split("/")
+	parts[0 ..< parts.length - 1].join("/")
+}
 // The sources of the standard modules a source uses by name, read from lib/ beside this compiler (module_source takes
 // a name written out only)
 // Rust twin: declaration_scan.rs used_std_modules
