@@ -104,7 +104,8 @@ fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledMo
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
-	let said = crate::pipeline::run_module(compiler);
+	let owner = crate::extensions::sha256_hex(&compiler.bytes);
+	let said = crate::modules::std_adapters::kept_by(owner, || crate::pipeline::run_module(compiler));
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
