@@ -1,0 +1,4 @@
+# `a ?? b`: b where a is missing, else a (0 stays). Expected: 5 0
+x = ø
+y = 0
+print "$(x ?? 5) $(y ?? 5)"

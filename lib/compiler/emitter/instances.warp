@@ -54,7 +54,9 @@ def instance_of_fields(body: Body, class_name: text, field_names: any, field_val
 	codes = []
 	for i in 0..<#field_names {
 		if field_names[i] not in declared { return refuse("a field " + class_name + " does not declare") }
-		field_type = declared[field_names[i]]
+		written_type = declared[field_names[i]]
+		# an optional field `b: text?` takes ø as it is, any other value as its base type
+		field_type = if field_values[i] == ø and written_type != base_type(written_type) then ø else base_type(written_type)
 		value = texted(field_type, expression_code(body, field_values[i]))
 		if not checked_at_run_time(field_type, value#1) and not admits(field_type, value#1) { return refuse("a " + value#1 + " for a typed field of " + class_name) }
 		codes += [keyed_code(name_node(symbol(field_names[i])), boxed(field_value(field_type, value)))]
@@ -124,14 +126,36 @@ record_type(name: any, body: any): any := {
 		for variant in name#3[3..] { module.variants[variant#2] = yes }
 		if #name#3 > 3 { module.sum_types[declared_type_name(name)] = yes }
 	}
-	if name#2 in base_class_layers and kind_of(name#3) == "symbol" { module.sum_types[name#3#2] = yes }
+	if name#2 in base_class_layers and kind_of(name#3) == "symbol" {
+		module.sum_types[name#3#2] = yes
+		if kind_of(name#4) == "symbol" { module.parents[name#4#2] = name#3#2 }
+	}
 	record_type(name#4, body)
+}
+# `class Dog extends Animal {…}`: Dog's fields and defaults are Animal's first, then its own; a chain of parents in any
+# order of declaration (merging twice changes nothing)
+inherit_fields(child: text): any := {
+	if child not in module.parents { return module.classes[child] }
+	parent = module.parents[child]
+	if parent not in module.classes { return refuse("a class extending " + parent + ", a class not declared here") }
+	module.classes[child] = entries_of_both(inherit_fields(parent), module.classes[child])
+	module.class_defaults[child] = entries_of_both(module.class_defaults[parent], module.class_defaults[child])
+	if parent in module.member_classes { module.member_classes[child] = yes }
+	module.classes[child]
+}
+# the entries of inherited, then those of own, which win (no local is named like a map word: `entries` broke a map
+# program in the pure lane)
+entries_of_both(inherited: any, own: any): any := {
+	both = {}
+	for name in inherited.keys { both[name] = inherited[name] }
+	for name in own.keys { both[name] = own[name] }
+	both
 }
 # the kind a field typed `type` holds: a type word's of the core, a node of any value (a map, a node, a function), a
 # list of a plural type word (`texts`), each through a type alias; ø untyped, "instance" of a class
 def field_kind(type: any): any {
 	if type == ø { return ø }
-	word = aliased_type(type)
+	word = aliased_type(base_type(type))
 	if word in module.classes { return "instance" }
 	if word in node_annotations { return "node" }
 	if word in core_type_words { return core_type_words[word] }
@@ -167,12 +191,18 @@ declared_field(field: any): any := {
 	if kind in field_name_kinds and field#2.ends_with("?") { return [without_optional_mark(field#2), ø, [ø]] }
 	if kind in field_name_kinds { return [field#2, ø, ø] }
 	if kind != "key" { return ø }
-	if field#2 == ":" and kind_of(field#3) in field_name_kinds { return [field#3#2, type_name_of(field#4), ø] }
+	if field#2 == ":" and kind_of(field#3) in field_name_kinds {
+		type_name = type_name_of(field#4)
+		# `b: text?`, optional: ø by default
+		return [field#3#2, type_name, if type_name == base_type(type_name) then ø else [ø]]
+	}
 	if field#2 != "=" { return ø }
 	named = declared_field(field#3)
 	if named == ø { return ø }
 	[named#1, named#2, [field#4]]
 }
+# an optional type's base, `text?` → text; any other type as it is
+base_type(type: any): any := if type is text and #type > 1 and type.ends_with("?") then type[0..<(#type - 1)] else type
 # a field's declared type as a name: `int` read as a type or as a symbol, else "?"
 type_name_of(type: any): text := {
 	if kind_of(type) == "symbol" { return type#2 }

@@ -135,6 +135,11 @@ After a context swap, this file and your role file win over anything a handover 
   `&&`-chained commit silently doesn't happen. Check `git show --stat HEAD` after committing.
 
 ## Testing
+- PAUSED (user 2026-10-22 21:58: "stop all the Cloud pipelines and stop respawning scripts"): no cloud runs
+  (scripts/cloud-test.sh refuses while ~/.config/warp/cloud-paused exists), GitHub workflows disabled, the context-swap
+  hook swaps nobody (~/.claude/swap/swap_tokens = 1e9), crons urgent-card-watch, codex_worker.sh and nightly.sh
+  commented out (#PAUSED-by-user). Until the user lifts it, only warp-only branches land (self-check), Rust branches
+  wait.
 - Rust tests run in the cloud (user 2026-10-20: "From now on, run the Rust test suite completely in the cloud"):
   commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs (a hook blocks them), except tests
   needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1

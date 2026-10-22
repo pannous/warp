@@ -32,6 +32,10 @@ Read notes/agents/common.md and notes/roles.md.
   a branch: the warp compiler captures the spirit of the wiki, not an exact copy of Rust (decisions
   self-hosting-minimal). A twin difference goes through with --flaky "<test> (twin difference accepted, owner records
   the drop)" and the owner records the dropped form or loosens the comparison afterwards.
+- Sugar leaving the hybrid lane (decision sugar-hybrid-lane): a branch moving a sugar form from parser.warp into
+  lib/sugar names the form and the WARP_SELF_HOSTED=1 tests it costs; exactly those go through with --flaky "<test>
+  (sugar-hybrid-lane: <form> lives in lib/sugar)", provided `warp pure`/`warp self` stay green for them. Any other
+  =1 failure bounces as usual.
 - Rust cleanup phase (notes/rust_cleanup.md, user 2026-10-17): a self-hosting worker's cleanup branch may break up
   to 10% of the tests when they are edge cases. It lists them in notes/known_failures.md (test, card, reason);
   push_tested.sh accepts listed failures at the tested tip. Hold the branch when a listed test looks like core

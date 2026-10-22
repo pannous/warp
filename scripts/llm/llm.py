@@ -181,7 +181,8 @@ def run_warp(code):
     try:
         done = subprocess.run([WARP, *WARP_FLAGS, "run", path], capture_output=True, text=True, errors="replace", cwd=SCRATCH,
                               stdin=subprocess.DEVNULL, timeout=RUN_TIMEOUT_SECONDS,
-                              env=dict(os.environ, WARP_NO_WINDOW="1"))
+                              # Rust until the pure pipeline covers enough (board card llm-pure)
+                              env=dict(os.environ, WARP_NO_WINDOW="1", WARP_PIPELINE="rust"))
         output = (done.stdout + done.stderr).strip()
     except subprocess.TimeoutExpired:
         output = f"TIMEOUT after {RUN_TIMEOUT_SECONDS} s"

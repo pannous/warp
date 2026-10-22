@@ -1,5 +1,5 @@
-// The sugar of parser.warp (card parser-desugar-pass, notes/self_hosting.md "Parser restructuring"): the written forms
-// `xs[i]`, `a /! b`, `a div b` become the tree the passes read as the parser builds them (subscript, quotient_call),
+// The sugar of parser.warp (card parser-desugar-pass, notes/self_hosting.md "Parser restructuring"): the written form
+// `xs[i]` becomes the tree the passes read as the parser builds it (subscript),
 // a class body's fields get their types (card parser-typed-fields). The count words `twice {…}` are library words, no
 // sugar (user 2026-10-20, card phrases-out-of-core).
 use "shapes.warp"
@@ -21,8 +21,6 @@ parameter_names(target: Node): list := {
 	names
 }
 
-// `a /! b` and `a div b` are the call `floor_quotient(a, b)`
-quotient_call(left: Node, right: Node): Node := listed("(", "", [symbol("floor_quotient"), left, right])
 
 // `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
 // Rust twin: warp_parser subscript

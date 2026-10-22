@@ -206,7 +206,10 @@ fn formatted_after(
 			code.lines().enumerate().map(|(index, text)| Line { number: index + 1, text: text.to_string() }).collect();
 		for rule in RULES.iter().filter(|rule| options.hash_comments || !rule.hash_comments_only) {
 			let texts: Vec<String> = lines.iter().map(|line| line.text.clone()).collect();
-			let candidates = (rule.edits)(&texts, &lines::scan(&texts));
+			let scans = lines::scan(&texts);
+			let in_data = lines::in_data_blocks(&texts, &scans);
+			let candidates: Vec<Edit> =
+				(rule.edits)(&texts, &scans).into_iter().filter(|(index, _)| !in_data[*index]).collect();
 			let kept = keeping_the_meaning(&lines, Vec::new(), &candidates, &keeps);
 			let mut numbers: Vec<usize> = kept.iter().map(|(index, _)| lines[*index].number).collect();
 			numbers.sort();
