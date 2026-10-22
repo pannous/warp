@@ -34,6 +34,7 @@ After a context swap, this file and your role file win over anything a handover 
   `// ⚠ WARP DOES THIS DIFFERENTLY: <what> → <lib file>` above the hack (comment-only, so the marks need no cloud
   run). Rust edits only to keep the bootstrap building (the Rust-compiled compiler.warp) or to fix a crash; Rust
   branches already Ready still land. A card that would need Rust work is redone as warp work.
+  Exception (user 2026-10-22): `warp fix` (src/cli/formatting.rs, src/formatting/) may still change in Rust.
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
