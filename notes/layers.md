@@ -59,8 +59,8 @@ F5 unparked with high priority by the user 2026-10-22 evening, card rewrite-temp
   numbers beside `·` multiply, plain `x·y` between values stays multiplication.
 - **F6 several statements** (built, `rewrite ($a; $b) => …`): match a run of statements (`fib(0) := 0; fib(1) := 1` → one definition).
 - **F7 re-rewrite** (built, loop limit 64): a result rewritten again until fixpoint (`a of b of c`, for variants onto the one for).
-- **F8 text holes** (open, not started; idea: a text pattern `"…$x…"` binding holes from its
-  interpolation parts, the template's text holes spliced the same way): rules over a template's holes (interpolation, `sql "…$x"`); stays a pass otherwise.
+- **F8 text holes** (template half built, card sugar-type-tests: a hole in a template's text is the word it bound,
+  `is_type($x, "$t")`; open: a text pattern `"…$x…"` binding holes from its interpolation parts): rules over a template's holes (interpolation, `sql "…$x"`); stays a pass otherwise.
 
 ## lib/compiler/parser.warp by form (4237 lines)
 

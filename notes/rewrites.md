@@ -40,6 +40,20 @@ rewrite speed_unit => km·per·hour                # km_per_hour
 - Open: generated names don't name their rule in help and errors yet; a built name clashing with the program's own
   isn't refused yet; glue in quoted code (`data(…)`) outside rules.
 
+## Text holes in templates (F8, the template half)
+A hole written inside a template's text is the word it bound, so a word reaches the program as text and no later pass
+reads it as a name (lambdas.warp makes a word naming a function of the program its closure):
+
+```warp
+rewrite $x is $t => is_type($x, "$t") where $t is type   # n is symbol → is_type(n, "symbol"), also where symbol(…) is a function
+rewrite named $x => "<$x>"                                 # named twice → "<twice>"
+```
+
+- `$name` in a text is a hole when the pattern bound that hole; any other `$` stays as written (a bare `$name` is no
+  interpolation in warp texts, so the rule's text keeps it).
+- A hole that bound other code than a word is an error. Open: the pattern half (`"…$x…"` patterns binding holes from
+  an interpolation's parts).
+
 ## Positions
 Everything the template adds (its words, keys and groups, the fresh names) is placed where the rewritten code was
 written; the holes keep the positions of the code they bound. An error inside a rewrite points at the user's line,

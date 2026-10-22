@@ -161,3 +161,9 @@ is! 'rewrite mul $a $b => $a * $b
 x = 3
 y = 4
 [mul x y, x·y]' [12, 12]
+
+# a_hole_in_a_templates_text_is_the_word_it_bound
+is! 'rewrite named $x => "<$x>"
+twice(n) := 2 * n
+y = 3
+[named y, named twice, named zed]' ["<y>", "<twice>", "<zed>"]

@@ -15,7 +15,8 @@
 # module along with `use` (lib/channels.warp, lib/english.warp). A template's hole the pattern doesn't bind is a fresh
 # name each firing (`$t` → `t·3`, a compiler temporary no program can write), so `rewrite $a ?: $b => ($t = $a; if $t
 # then $t else $b)` computes a once; a pattern of statements `($a; $b)` matches a run of them in a block; a rule's result is rewritten again until no rule fires; `T for $x in $xs...` splices T once for each item of a rest hole; a template of statements in a value's place is that value's block; `·` glues
-# words and holes into a name (`square·$a`, `$i·end`, F5). What the
+# words and holes into a name (`square·$a`, `$i·end`, F5); a hole written in a template's text is the word it bound
+# (`"$t"`, F8's template half). What the
 # template adds sits where the rewritten code was written, so errors point at the user's code (notes/rewrites.md).
 # Rust twin: src/modules/rewrites.rs lower
 use "walk.warp"
@@ -704,6 +705,7 @@ rule_spliced(template: any, bound: any, at: any): any := {
 	}
 	if is_glue(template) { return placed(glued_name(items_of(template)[1 ..].map(part => rule_spliced(part, bound, at))), at) }
 	if template is key { return placed(Key(rule_spliced(key_of(template), bound, at), op_of(template), rule_spliced(value_of(template), bound, at)), at) }
+	if template is text { return placed(text_spliced(template, bound), at) }
 	if not is_group(template) { return placed(template, at) }
 	parts = items_of(template)
 	items = []
@@ -722,6 +724,30 @@ rule_spliced(template: any, bound: any, at: any): any := {
 		}
 	}
 	placed(group_like(template, items), at)
+}
+
+# `"$t"` in a template (F8, its template half): each hole written in the text the word it bound, so a word reaches
+# the program as text and no pass reads it as a name (`is_type($x, "$t")` of `n is symbol` → is_type(n, "symbol")); a
+# `$` before no hole the pattern bound stays as written
+text_spliced(written: text, bound: any): any := {
+	if not written.contains(rule_hole_mark) { return written }
+	spliced = ""
+	from = 0
+	at = 0
+	while at < #written {
+		end = at + 1
+		if written[at] == rule_hole_mark {
+			while end < #written and (is_alphanumeric(written[end]) or written[end] == '_') { end += 1 }
+		}
+		hole = written[at ..< end]
+		if end > at + 1 and bound.has(hole) {
+			if not (bound[hole] is symbol) { return error_node("a hole in a template's text takes a word, and it bound other code") }
+			spliced += written[from ..< at] + name_of(bound[hole])
+			from = end
+		}
+		at = end
+	}
+	spliced + written[from ..]
 }
 
 # the template with each `·` written between words and holes a name to build (F5, decision name-glue): `square·$a`,
