@@ -1,0 +1,8 @@
+#!/usr/bin/env warp
+# `items: list of text` is one field of the type `list of text` (card parser-front); want ['a' 'b'], [[1 2]]
+class bag { items: list of text }
+b = bag(["a", "b"])
+print b.items
+class grid { rows: list of list of int }
+g = grid([[1, 2]])
+print g.rows

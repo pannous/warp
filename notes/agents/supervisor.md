@@ -71,8 +71,9 @@ notes/agents/common.md.
 - Merges normally go to the Integrator and language questions to the Interviewer; when progress needs it (the
   Integrator down or stuck, an obvious express fix), merge or run a check yourself (rule above). Relay user decisions
   you hear directly to the Interviewer so it records them verbatim.
-- Report to the user at the end of each answer: what merged (suite count), what runs, what needs them. Delete merged
-  or stale things without asking; hand the user a one-line `!` command when a hook blocks it.
+- Report to the user at the end of each answer: what merged (suite count), what runs. Anything needed from the user
+  (a `!` command a hook blocks, a confirmation) goes to warp-interviewer once and only once, never into the replies
+  (user 2026-10-22: "stop fucking repeating what still needs me"). Delete merged or stale things without asking.
 - Cloud: `claude --cloud "<task>"` sessions (run inside tmux: --cloud needs a TTY) spend the user's Cloud session
   credit, not plan limits (notes/cloud_development.md); use them for self-contained tasks when the Mac is loaded or
   when the user asks for cloud sessions (then never local ones). Follow-ups only via `claude -p "msg" --cloud <id>`
