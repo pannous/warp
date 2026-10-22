@@ -61,7 +61,7 @@ fn a_declared_index_or_position_holds_its_count() {
 #[test]
 fn a_missing_text_part_is_an_error() {
 	let output = pure_output(r#""abc".find("z")"#);
-	assert!(output.contains(r#""z" is not in"#), "{output}");
+	assert!(output.contains("ValueError") && output.contains("is not in"), "{output}");
 }
 
 #[test]
