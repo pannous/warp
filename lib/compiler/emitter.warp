@@ -217,12 +217,24 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widenings: int = 0 }
+# program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
+# the program's latest written node being emitted, the place a refusal names (card error-names)
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widenings: int = 0; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
 refuse(why: text): any := {
-	throw outside_the_core + why
+	throw outside_the_core + why + module.emitting_at
+}
+
+# the file the program comes from, which a refusal names
+def emitting_file(file: text) { module.program_file = file }
+
+# a node of the program (no runtime word's) with a position: the place a later refusal names
+def note_emitting(body: Body, n: any) {
+	if body.intrinsics or not is_positioned(n) { return }
+	file = if module.program_file == "" then "" else module.program_file + ":"
+	module.emitting_at = " at " + file + line_of(n) + ":" + column_of(n)
 }
 
 # a refused form as the program writes it, in a few words: `… := …`, the call `memo_known(…)`, a name
@@ -1699,6 +1711,7 @@ appends_only(n: any, name: text): bool := {
 }
 
 def expression_code(body: Body, n: any): list {
+	note_emitting(body, n)
 	if n is bool { return ["bool", [op.i32_const, if n then 1 else 0]] }
 	if n is number { return number_value(n) }
 	if n is text { return text_value(n) }
@@ -2490,6 +2503,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 }
 module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	module.kinds = kinds
+	module.emitting_at = ""
 	module.functions = {}
 	module.order = []
 	module.runtime = {}
