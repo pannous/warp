@@ -199,17 +199,19 @@ rewritten_by(n: Node, table: list): Node := {
 }
 # TODO a function value in a local, `rewrite = entry#2; rewrite(n)`, once it is called (card function-value-read)
 rewritten_if(n: Node, accepts: function, rewritten: function): Node := if has_own_word(n, accepts) then rewritten(n) else n
+has_own_word(n: Node, accepts: function): bool := own_words(n).any(word => accepts(word))
 # a node's own words: its items' words, a key's operator, a declaration head's name (`type of`)
-has_own_word(n: Node, accepts: function): bool := match n {
-	List(parts, _, _): parts.any(part => is_word_of_item(part, accepts))
-	Key(left, op, right): { if left == symbol(opaque_word) then is_declaration_word(right, accepts) else accepts(symbol(op as text)) }
-	_: no
+own_words(n: Node): list := candidate_words(n).filter(word => word is not ø)
+candidate_words(n: Node): list := match n {
+	List(parts, _, _): parts.map(item_word)
+	Key(left, op, right): [if left == symbol(opaque_word) then type_view_name(right) else symbol(op as text)]
+	_: []
 }
-# an item's words: the word itself, a declaration head's name
-is_word_of_item(part: Node, accepts: function): bool := match part {
-	Symbol(name): accepts(part)
-	Key(left, op, right): left == symbol(opaque_word) and is_declaration_word(right, accepts)
-	_: no
+# an item's word: the word itself, a declaration head's name, else ø
+item_word(part: Node): any := match part {
+	Symbol(name): part
+	Key(left, op, right): { if left == symbol(opaque_word) then type_view_name(right) else ø }
+	_: ø
 }
-# the opaque view of a type whose name is a word accepts takes
-is_declaration_word(view: any, accepts: function): bool := kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" and accepts(node_of(view#2))
+# the name of the opaque view of a type, else ø
+type_view_name(view: any): any := if kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" then node_of(view#2) else ø
