@@ -1,6 +1,7 @@
 # Texts cut and searched by characters: slices, offsets, starts and ends, find, trim
 use "intrinsics.warp"
 use "library_words.warp"
+use "characters.warp"
 # the characters from..to of t, counted from 1, both included: the bytes between their lead bytes
 text_slice(t: text, from: int, to: int): text := {
 	start = character_offset(t, from)

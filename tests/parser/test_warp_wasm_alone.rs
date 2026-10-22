@@ -1,6 +1,6 @@
-//! `wasmtime compiler-self.wasm hello.warp hello.wasm <folder> <lib>`: the self-compiled warp compiler runs under plain
-//! wasmtime with WASI preview 1 alone, no warp host, and the module it writes runs there too (card standalone,
-//! decision wasm-standalone)
+//! `wasmtime run --default-values-unknown-imports compiler-self.wasm hello.warp hello.wasm <folder> <lib>`: the
+//! self-compiled warp compiler runs under plain wasmtime with WASI preview 1, no warp host, and the module it writes
+//! runs there too (card standalone, decision wasm-standalone)
 use std::path::{Path, PathBuf};
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
@@ -15,7 +15,8 @@ struct WasiRun {
 	stderr: String,
 }
 
-/// The command module's `_start` under wasmtime with WASI p1 only: these arguments, `/` and `folder` (as `.`) preopened
+/// The command module's `_start` under wasmtime with WASI p1 and no warp host: these arguments, `/` and `folder` (as
+/// `.`) preopened
 fn run_wasi(module: &Path, arguments: &[&str], folder: &Path) -> WasiRun {
 	let mut config = Config::new();
 	config.wasm_gc(true).wasm_function_references(true).wasm_exceptions(true);
@@ -29,6 +30,9 @@ fn run_wasi(module: &Path, arguments: &[&str], folder: &Path) -> WasiRun {
 	let mut store = Store::new(&engine, context.build_p1());
 	let mut linker: Linker<p1::WasiP1Ctx> = Linker::new(&engine);
 	p1::add_to_linker_sync(&mut linker, |context| context).unwrap();
+	// the host words it may import (kept, keep, local_offset) answer with defaults, as `wasmtime run
+	// --default-values-unknown-imports` does: nothing kept, every run cold (notes/standalone.md)
+	linker.define_unknown_imports_as_default_values(&mut store, &module).unwrap();
 	let instance = linker.instantiate(&mut store, &module).unwrap_or_else(|failure| panic!("instantiate: {failure:?}"));
 	let start = instance.get_typed_func::<(), ()>(&mut store, "_start").unwrap();
 	let status = match start.call(&mut store, ()) {

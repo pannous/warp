@@ -36,6 +36,7 @@ wasi_follow_links(): int := 1
 wasi_create_new(): int := 9
 wasi_file_rights(): int := 70
 wasi_stdin(): int := 0
+wasi_stderr(): int := 2
 wasi_first_preopen(): int := 3
 wasi_no_entry(): int := 44
 
@@ -156,15 +157,24 @@ std_os_input(prompt: Node): Node := {
 		line = line + scratch_text(scratch_bytes(), 1)
 	}
 }
-# `use os; kept(name) ?? keep(name, value)`: nothing is kept across runs without the host's module cache
-std_os_kept(name: Node): Node := ø
-std_os_keep(name: Node, value: Node): Node := value
 
 # the first count scratch bytes, written to the open file
 written_bytes(fd: int, count: int) := {
 	store_scratch_word(scratch_iovec(), output_address() + scratch_bytes())
 	store_scratch_word(scratch_iovec() + 4, count)
 	fd_write(fd, output_address() + scratch_iovec(), 1, output_address() + scratch_count())
+}
+# `warn "careful"`: "warning: careful" on stderr, a chunk at a time, as the Rust lane says a runtime warning
+warned(message: Node): Node := {
+	t = "warning: " + text_of_textual(message) + "\n"
+	start = 0
+	while start < byte_count(t) {
+		stop = if start + wasi_chunk() < byte_count(t) then start + wasi_chunk() else byte_count(t)
+		for i in start..<stop { output_byte(scratch_bytes() + i - start, byte_at(t, i)) }
+		written_bytes(wasi_stderr(), stop - start)
+		start = stop
+	}
+	ø
 }
 # `use file; write_bytes(path, bytes)`: the file made anew of the bytes (ints 0 to 255); ø, or the Error of why not
 std_file_write_bytes(path: Node, bytes: Node): Node := {

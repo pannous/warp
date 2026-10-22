@@ -25,6 +25,8 @@ mod test_guard_comment; // card else-comment-swallows
 mod test_home_paths; // card unix-words
 mod test_if_condition_words; // card parser-if-stops
 mod test_inline_comments;
+#[cfg(feature = "native")]
+mod test_installed_compilers; // card installed-compilers
 mod test_juxtaposition;
 mod test_meta;
 mod test_meta_attributes;

@@ -11,7 +11,7 @@ wasm-standalone; design: notes/standalone_compiler.md).
 /Users/me/dev/bin/warp rebuild self
 
 # 2. compile: <source> <output> <folder of the source's uses> <lib folder>
-wasmtime run -W gc=y,function-references=y,exceptions=y --dir / --dir .::. \
+wasmtime run -W gc=y,function-references=y,exceptions=y,unknown-imports-default=y --dir / --dir .::. \
   /Users/me/dev/bin/compiler-self.wasm hello.warp hello.wasm . /Users/me/dev/angles/warp/lib
 
 # 3. run what it wrote
@@ -19,11 +19,15 @@ wasmtime run -W gc=y,function-references=y,exceptions=y hello.wasm
 ```
 
 - `--dir /` lets it read lib/ and the source by absolute path, `--dir .::.` gives it the working folder.
+- `unknown-imports-default=y` answers the few host words it may import with defaults: `kept`/`keep` (the native
+  warp's module cache) keep nothing, so under plain wasmtime every run is cold: it lowers runtime.warp anew each time
+  (seconds to a minute), where `warp self` reuses the kept words; `local_offset` is 0 (UTC).
 - The GC, function-references and exceptions proposals are needed for both modules.
 - The modules import only the WASI calls they reach (args, environ, path_open, fd_read, fd_write, fd_close …);
   `print`, files, `use os` (args, env) all run over WASI. Float `^` is musl's pow ported to warp
   (lib/compiler/runtime/pow.warp), so no libm import either.
 - Under plain WASI there is no network (`read` of a URL fails loudly) and no module cache (`kept` is always ø).
+  A WASI file cache would make it warm (card wasi-module, Later).
 
 ## Commands
 
