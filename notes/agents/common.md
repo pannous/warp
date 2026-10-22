@@ -176,7 +176,8 @@ After a context swap, this file and your role file win over anything a handover 
   .warp is preferred whenever a task can be done there.
   A change to lib/compiler/ (types or annotations included) also checks the self build before Ready:
   `scripts/self-check.sh <worktree>` (it rebuilds both compilers in a queue slot; a bare `warp rebuild self` skips the
-  queue: three at once pushed the load to 288, supervisor 2026-10-22); a form
+  queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
+  replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
   emitter.warp refuses there is fixed or carded, never left for main to find.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
