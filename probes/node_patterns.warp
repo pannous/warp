@@ -1,0 +1,17 @@
+# The compiler's named node shapes (decision node-refinements, lib/compiler/node_patterns.warp)
+use "../lib/compiler/node_patterns.warp"
+shape(n: Node): text := match n {
+	Definition: "definition of " + head
+	Assignment: "assignment to " + target
+	Pair: "pair " + key
+	Member: "member " + field
+	Lambda: "lambda"
+	Call: "call"
+	Phrase: "phrase"
+	Block: "block"
+	_: "other"
+}
+body_of(d: Definition): Node := value_of(d)
+for code in ["f := 1", "x = 2", "a: 3", "p.x", "x => x", "f(1)", "a b", "{a; b}", "7"] { print shape(parse(code)) }
+print parse("g := 1") is Definition
+print body_of(parse("g := 5"))
