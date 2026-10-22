@@ -1,0 +1,10 @@
+// sum is the prelude's fold (card sum-plain-fold): the builtin, a range's closed form, operators as fold functions
+print sum([1, 2, 3])
+print sum(1 to 3000000000)
+print sum(3 .. 7)
+print fold([2, 3, 4], 1, *)
+print mean([1, 2, 3])
+xs = [1, 2, 3]
+print sum(xs .* 2)
+print sum([1.5, 2.5])
+print sum(xs.map(x => x * x))

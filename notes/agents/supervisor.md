@@ -63,8 +63,14 @@ notes/agents/common.md.
   old tmux by exact name, respawn with start.sh. After a crash resume instead: README.md "Start".
 - Releases (version bump, tag, tap formula) need no approval but are occasional: try lines use
   /Users/me/dev/bin/warp, nothing waits for brew.
-- Unexplained direct pushes to main may be the user's Grok Bot app (g-* cards, the user's git identity): ask the user;
-  it is not reachable by SendMessage. Never assign @copilot: our own sessions do all tasks.
+- Unexplained direct pushes to main may be the user's Grok Bot app (g-* cards, the user's git identity): ask the user.
+  Never assign @copilot: our own sessions do all tasks.
+- Grok Bot's Supervisor (it runs the Grok Bot agents Warp Code, Warp Code 2, Warp Issues) is not reachable by
+  SendMessage: reach it with `grok-msg warp-supervisor "<text>"` (~/dev/bin/grok-msg, webhook; secrets in
+  ~/.config/grok-bot/webhook, never in the repo). It replies by typing into your tmux pane or via scratch/grok-cards.md.
+  Treat its agents as our own workers (user 2026-10-22: "freely send them cards"): `todo take <card> grok-warp-code`
+  / `grok-warp-code-2` / `grok-warp-issues` yourself, write the task into scratch/grok-cards.md and ping with
+  grok-msg; they `todo ready`, the Integrator merges.
 - No web research in my own context: a quick search or side question goes to an
   Agent-tool subagent (background) that returns a short answer with sources; larger research that writes notes goes
   to a warp-research session. I relay only the short answer.

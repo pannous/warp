@@ -5,7 +5,7 @@
 # so check_slots run at once and a further check waits for a free slot.
 # usage: scripts/self-check.sh [<worktree>, default the current checkout]   (exit 0 = Hello printed)
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
-warp=/Users/me/dev/bin/warp
+main_warp=/Users/me/dev/bin/warp
 locks=/Users/me/dev/angles/warp/scratch/self-check
 check_slots=2
 expected="Hello"
@@ -38,16 +38,11 @@ check_lane() {
   verdict="SELF CHECK ok: $said"
 }
 # main's binary is refreshed after each pushed batch: a compiler.wasm built by the old binary and a self build by the
-# new one make a self compiler that traps on every program (card self-trap-function-param), so a check the swap
-# overlapped is no verdict and runs again
-max_attempts=3
-binary_stamp() { stat -f %m $warp }
-for attempt in {1..$max_attempts}; do
-  stamp=$(binary_stamp)
-  check_lane pure && check_lane self
-  passed=$?
-  [[ $(binary_stamp) == $stamp ]] && { echo $verdict; exit $passed; }
-  echo "SELF CHECK: $warp was replaced during the check (attempt $attempt of $max_attempts), checking again" >&2
-done
-echo "SELF CHECK RED: $warp was replaced during every attempt; last verdict: $verdict"
-exit 1
+# new one make a self compiler that traps on every program (card self-trap-function-param). The check runs its own copy
+# of the binary, taken once, so a refresh never overlaps it (retrying instead kept checks queued for hours, 2026-10-22)
+warp=$lock/warp
+cp $main_warp $warp || exit 1
+check_lane pure && check_lane self
+passed=$?
+echo $verdict
+exit $passed
