@@ -1,0 +1,4 @@
+# a typed block that can answer ø warns and holds an int?
+def pos(x: int): int { if x > 0 then x }
+print pos(-1)
+pos(2)

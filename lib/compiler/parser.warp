@@ -2986,7 +2986,8 @@ def bare_atom(p: Parser): Node := {
 		end = symbol_end(p.code, p.at + 1, p.n)
 		hole = symbol(p.code[p.at .. end])
 		p.at = end
-		return hole
+		// `$f(x)`, `$f(x) {…}`: a hole applied reads as the name it stands for applied
+		return name_or_call(p, hole, "")
 	}
 	if EXACT_CONSTANTS.contains("$(c)") {
 		p.at = p.at + 1
@@ -3529,6 +3530,11 @@ def named(p: Parser): Node := {
 		// `Point{x: 1}` of a declared type constructs a point, any other `name{…}` stays the tagged block (D4)
 		return Key(name, if declared then Op.None else Op.Colon, braced_items(p))
 	}
+	name_or_call(p, name, word)
+}
+// the name, or its call `name(x, y)` when a round group follows it, with the block side by side after it
+// (`f(x) {…}`); the arguments of `print(…)` as print reads them
+def name_or_call(p: Parser, name: Node, word: text): Node := {
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
 	written = items_until(p, ')', "(")

@@ -1,0 +1,3 @@
+# `def f(x): T := e`: a typed result with :=
+def next(x: int): int := x + 1
+next(41)

@@ -1,0 +1,4 @@
+# `def f() := e` and `fun g() { … }` without parameters
+def seven() := 7
+fun eight() { 8 }
+seven() + eight()

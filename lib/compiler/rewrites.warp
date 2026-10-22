@@ -50,6 +50,9 @@ value_word = "value"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic"]
+# the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
+# before definitions.warp (sugar/functions)
+early_sugar_module_names = ["sugar/functions"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
@@ -110,7 +113,11 @@ unbound_rules(module_rules: list, program: Node): list := {
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (a program's own `push`
 # keeps its own), before the definitions it reaches from the prelude and the modules join it
-sugar_rules(program: Node): list := unbound_rules(sugar_module_names.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+sugar_rules(program: Node): list := sugar_rules_of(sugar_module_names, program)
+sugar_rules_of(modules: list, program: Node): list := unbound_rules(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+
+# the program with the rules of the early sugar modules applied, before the passes
+early_sugared(program: Node): Node := sugared(program, sugar_rules_of(early_sugar_module_names, program))
 
 # the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too
 sugared(program: Node, rules: list): Node := {
@@ -357,7 +364,8 @@ literal_compared(a: number, comparison: any, b: number): bool := {
 }
 
 # `($a; $b)`: statements that take the rewritten statement's place, also `($v += 1 for $v in $vs...)`, one for each
-# item
+# item; parentheses around one template only group it, so that an operator binding looser than `=>` stays in it
+# (`=> ($h := $b)`)
 statements_template(template: any): any := {
 	if is_group(template) and bracket_of(template) == "(" and separator_of(template) in statement_separators {
 		return separated(bracketed(items_of(template), ""), separator_of(template))
@@ -365,6 +373,7 @@ statements_template(template: any): any := {
 	if is_group(template) and bracket_of(template) == "(" and (is_each(template) or (#template == 1 and is_each(template#1))) {
 		return separated(bracketed([if #template == 1 then template#1 else rule_phrase(items_of(template))], ""), ";")
 	}
+	if is_parenthesized(template) { return template#1 }
 	template
 }
 
@@ -686,8 +695,11 @@ rule_spliced(template: any, bound: any, at: any): any := {
 			index += 1
 		}
 	}
-	placed(group_like(template, items), at)
+	placed(if is_block_of_rest(template) and #items > 1 then List(items, Bracket.Curly, Separator.Semicolon) else group_like(template, items), at)
 }
+
+# `{$b...}`: a block of a rest hole, whose statements a template gives back as statements
+is_block_of_rest(n: any): bool := is_curly_group(n) and #n == 1 and rest_hole_name(n#1) != ø
 
 # `T for $x in $xs...`: T spliced once for each item the rest hole bound, $x bound to that item (and fresh names
 # fresh for each), else ø

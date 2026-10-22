@@ -1,0 +1,4 @@
+# `define` and `func` are function keywords too
+define twice(x) := x * 2
+func thrice(x) { x * 3 }
+twice(3) + thrice(0)

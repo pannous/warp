@@ -91,3 +91,20 @@ quadruple 3   # 12
 ```
 
 A result rewritten 64 times in a row (`rewrite_depth_limit`) is the rules' loop: an error, not a hang.
+
+## Function keywords: early sugar, applied holes, parenthesized templates (card sugar-definitions)
+lib/sugar/functions.warp takes the function keywords (`def`, `fun`, `fn`, `define`, `function`, `func`) away before
+any pass runs: it is an early sugar module (`early_sugar_module_names`), whose rules rewrite the program right after
+interpolation, before definitions.warp and the passes that read definitions. Three notations make its rules readable:
+
+- a hole applied reads as the name it stands for applied (parser.warp): `$h($p...)` is a call, `$h($p...) {$b...}` a
+  call with its block side by side, and `$h($p...): $t {…}` a typed head, so a pattern has the shape of the code;
+- parentheses around one template only group it, as around one pattern: `=> ($h($p...) := {$b...})` keeps the
+  `:=`, which binds looser than `=>`, in the template;
+- a block of a rest hole, `{$b...}`, gives the statements it bound back as statements.
+
+```warp
+rewrite (def $h($p...): $t {$b...}) => ($h($p...): $t := {$b...})
+rewrite def $h($p...) {$b...} => ($h($p...) := {$b...})
+rewrite (def $d) => $d
+```

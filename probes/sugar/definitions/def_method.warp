@@ -1,0 +1,4 @@
+# `def` before a method of a class
+class Box { side: int; def area() { side * side } }
+b = Box(3)
+b.area()
