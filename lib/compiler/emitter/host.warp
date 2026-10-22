@@ -1,0 +1,95 @@
+# Host words (emitter.warp's part): the imports of the "host" module, the builders a host word makes nodes with,
+# exported functions, runtime globals
+host_module = "host"
+def host_import(name: text): list {
+	signature = module.host[name]
+	[if #signature > 2 then signature#3 else host_module, name, [function_type_byte] + vector(signature#1.map(host_type)) + vector(signature#2.map(host_type))]
+}
+def host_type(kind: text): list { if kind == "i32" then [type_bytes.char] else value_type(kind) }
+
+# `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
+# giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
+def host_call(body: Body, name: text, arguments: any): list {
+	signature = module.host[name]
+	if "node" in signature#1 or "node" in signature#2 { exported_builders() }
+	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
+	code = []
+	for i in 0..<#arguments { code += host_argument(expression_code(body, arguments[i]), signature#1[i]) }
+	code += [op.call] + uleb(import_index(host_import(name)))
+	if #signature#2 == 0 { return [no_kind, code] }
+	result = signature#2#1
+	if result == "i32" { return ["int", code + [op.i64_extend_i32_s]] }
+	[result, code]
+}
+# the constructors a host word builds nodes with, as Rust's module exports them (src/host/tasks/values.rs
+# CONSTRUCTORS): [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
+host_builders = [["new_empty", [], "built_empty"], ["new_int", ["int"], "built_int"], ["new_bool", ["int"], "built_bool"],
+	["new_float", ["float"], "built_float"], ["new_codepoint", ["char"], "built_codepoint"], ["new_text", ["char", "char"], "built_text"],
+	["new_symbol", ["char", "char"], "built_symbol"], ["new_key", ["node", "node", "int"], "built_key"],
+	["new_list", ["node", "node", "int"], "built_list"], ["new_type", ["node", "node"], "built_type"], ["error_of", ["node"], "built_error"]]
+# made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
+# the trap detail the host left (src/host/native.rs raised)
+def exported_builders(): any {
+	if #module.builders > 0 { return ø }
+	for builder in host_builders {
+		parameters = builder#2
+		values = range_list(#parameters).map(i => if parameters[i] == "char" then ["int", [op.local_get] + uleb(i) + [op.i64_extend_i32_u]] else [parameters[i], [op.local_get] + uleb(i)])
+		f = exported_function(builder#1, parameters, "node")
+		f.code = runtime_call(builder#3, values)#2
+	}
+	f = exported_function("returned_error", [], no_kind)
+	f.code = error_throw("returned_error") + [op.unreachable]
+}
+# f at the module's next function index (results `any`: a declared Function result fails, card class-result-type)
+placed(f: Function): any := {
+	f.index = #module.imports + #module.order
+	module.order += [f]
+	f
+}
+# a function made by the emitter (no source), at the next index, its code written by the caller
+added_function(name: text, kinds: list, result: text, local_names: list): any := {
+	f = placed(bare_function(name))
+	f.kinds = kinds
+	f.result = result
+	f.locals = []
+	f.local_names = local_names
+	f
+}
+# a function the host calls by its name, its code written by the caller
+exported_function(name: text, kinds: list, result: text): any := {
+	f = added_function(name, kinds, result, range_list(#kinds).map(i => "argument" + (i + 1)))
+	f.is_runtime = yes
+	module.builders += [f]
+	f
+}
+def host_argument(value: any, kind: text): list {
+	if kind == "i32" { return host_int(value) + [op.i32_wrap_i64] }
+	if kind == "int" { return host_int(value) }
+	converted(value, kind)
+}
+# `x!`, Rust's unwrap: a number or text is itself; a node may be data Rust runs as code (blocks.rs), which the core
+# can't yet
+def unwrapped(value: list): list {
+	if value#1 == "node" { return refuse("running a node as code (`x!`)") }
+	value
+}
+
+# a number a host word takes as an int: a fraction or a float rounded to the nearest, as Rust passes `sleep(1/60*1000)`
+def host_int(value: any): list {
+	if value#1 == "node" or value#1 == "float" { return runtime_call("rounded", [["float", converted(value, "float")]])#2 }
+	converted(value, "int")
+}
+
+# `global name = 0`, `= ""` or `= []` at the top of runtime.warp: a module variable of that kind its words share, from
+# the kind's zero (ø for a text, an empty list)
+runtime_global(n: any): any := {
+	if not (type(n) is key and op_of(n) == ":" and key_of(n) == symbol("global")) { return ø }
+	name = name_of(key_of(value_of(n)))
+	# a table the runtime parts use for its numbers (kinds.warp, byte_codes.warp) is folded into the code, no variable
+	# of the runtime: the program keeps its own `Kind` (card constants-exist)
+	if name in constant_tables { return ø }
+	value = value_of(value_of(n))
+	module.globals[name] = [#module.global_order, if value is number then "int" else if type(value) is list then "list" else "text"]
+	module.runtime_globals += [name]
+	module.global_order += [name]
+}
