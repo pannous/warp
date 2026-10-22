@@ -30,7 +30,7 @@ import_function_byte = 0
 # the export WASI hosts run a module by (Rust's wasi_emitter.rs WASI_START)
 wasi_start = "_start"
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
-fd_write = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
+fd_write_import = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
 stdout = 1
 text_heap_name = "text_heap"
 # its linear memory, one page: fd_write's iovec {address, count} at 0, the count it wrote at 8, the bytes it writes from
@@ -795,7 +795,7 @@ def write_output(count: any): list {
 	iovec = [op.i32_const] + sleb(iovec_address) + [op.i32_const] + sleb(output_address) + word
 	iovec += [op.i32_const] + sleb(iovec_address + 4) + count + word
 	arguments = [op.i32_const] + sleb(stdout) + [op.i32_const] + sleb(iovec_address) + [op.i32_const, 1, op.i32_const] + sleb(written_address)
-	iovec + arguments + [op.call] + uleb(import_index(fd_write)) + [op.i64_extend_i32_u]
+	iovec + arguments + [op.call] + uleb(import_index(fd_write_import)) + [op.i64_extend_i32_u]
 }
 import_index(entry: any): int := {
 	index = -1
@@ -2594,7 +2594,7 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	collect_types(program)
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	reached = reached_words(program)
-	module.imports = if "print" in reached then [fd_write] else []
+	module.imports = if "print" in reached then [fd_write_import] else []
 	# imported ahead of the functions, whose indices follow them: every host or WASI word the program reaches
 	for name in module.host.keys {
 		if (name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
