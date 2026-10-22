@@ -1,0 +1,5 @@
+# decision index-units: offset is a synonym of index
+xs = [10 20 30]
+o: offset = xs.index_of(20)
+byte offset b = 4
+[o, b]
