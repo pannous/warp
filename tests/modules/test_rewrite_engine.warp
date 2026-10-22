@@ -1,0 +1,120 @@
+# The rewrite engine's features (lib/compiler/rewrites.warp, notes/rewrites.md), written in warp: no Rust twin
+
+# fresh_names_compute_an_operand_once
+is! 'rewrite $a otherwise $b => ($t = $a; if $t then $t else $b)
+global calls = 0
+next() := { calls += 1; calls * 10 }
+[next() otherwise 5, 0 otherwise 3, calls]' [10, 3, 1]
+
+# a_rule_of_one_word_takes_its_place
+is! 'rewrite big => 100
+m = {k: big}
+m.k' 100
+
+# nested_firings_keep_their_own_fresh_names
+is! 'rewrite keep $a past $b => ($t = $a; $b; $t)
+keep 1 past (keep 2 past 3)' 1
+
+# fresh_names_stay_apart_from_the_programs_names
+is! 'rewrite keep $a past $b => ($t = $a; $b; $t)
+t = 7
+z = keep 1 past 3
+[z, t]' [1, 7]
+
+# where_a_type_word
+is! 'rewrite size $t => 1 where $t is type
+rewrite size $t => 2 where $t is not type
+x = 5
+[size int, size x]' [1, 2]
+
+# where_unbound
+is! 'rewrite mark $x => "free" where $x is unbound
+rewrite mark $x => "taken" where $x is value
+y = 3
+[mark y, mark zed]' ["taken", "free"]
+
+# where_a_literal_compared
+is! 'rewrite pick $n => "negative" where $n < 0
+rewrite pick $n => "big" where $n >= 10 and $n is int
+rewrite pick $n => "other"
+[pick (-2), pick 12, pick 3]' ["negative", "big", "other"]
+
+# where_a_function
+is! 'rewrite call $f => $f(2) where $f is function
+twice(n) := n * 2
+call twice' 4
+
+# origin_and_conditions_together
+is! 'rewrite $c.bump($n) => $c + $n where $c = counter() and $n > 0
+counter() := 10
+n = counter()
+n.bump(5)' 15
+
+# where_a_typed_first_parameter
+is! 'rewrite apply $f to $x => $f($x) where $f takes value
+rewrite apply $f to $x => "untyped" where not $f takes value
+sq(n: int) := n * n
+any_of(n) := n
+[apply sq to 3, apply any_of to 3, apply floor to 2.5]' [9, "untyped", 2]
+
+# a_rule_of_a_statement
+is! 'rewrite $s except_if $c => if not $c then $s where statement
+n = 0
+n += 1 except_if yes
+n += 2 except_if no
+n' 2
+
+# a_rule_of_a_condition
+is! 'rewrite lacking $x => count($x) == 0 where condition
+xs = []
+if lacking xs then "none" else "some"' "none"
+
+# a_rule_of_a_value_leaves_the_key
+is! 'rewrite big => 100 where value
+m = {big: big}
+m.big' 100
+
+# a_rule_of_a_key
+is! 'rewrite who => name where key
+p = {who: "Al"}
+p.name' "Al"
+
+# a_rule_of_a_class_member
+is! 'rewrite field $n => $n: int where member
+class P { field a; field b }
+P(1, 2).b' 2
+
+# a_template_for_each_item_of_a_rest_hole
+is! 'rewrite squares $xs... => [$x * $x for $x in $xs...]
+squares 1 2 3' [1, 4, 9]
+
+# statements_for_each_item
+is! 'rewrite bump_all $vs... => ($v += 1 for $v in $vs...)
+a = 1
+b = 5
+bump_all a b
+[a, b]' [2, 6]
+
+# keys_for_each_item
+is! 'rewrite flags $ns... => {($n: yes) for $n in $ns...}
+m = flags red green
+m.green' yes
+
+
+# a_rule_of_several_statements
+is! 'rewrite (log_start; log_end) => count += 10
+global count = 0
+log_start
+log_end
+count' 10
+
+# statements_holes_bind_across_the_run
+is! 'rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
+p = 4
+q = p
+[p, q]' [4, 5]
+
+# a_result_is_rewritten_again
+is! 'rewrite double $x => $x * 2
+rewrite quadruple $x => double (double $x)
+quadruple 3' 12

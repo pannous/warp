@@ -19,7 +19,7 @@ Read notes/agents/common.md and notes/roles.md.
   and tell the Supervisor about lost-looking work.
 - Batches of at most ~8 Ready cards. Express cards (and crash fixes) skip the gate:
   `integrator_tools/express.sh [<card>…]` pushes them untested at once (merge, cargo fmt committed, push, close,
-  Playground deploy with skip_checks; ~15 s; supervisor 2026-10-20: main stays formatted between batches), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
+  no Playground deploy while it is paused; ~15 s; supervisor 2026-10-20: main stays formatted between batches), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
 - Warp-only branches land at once, before any Rust batch (user 2026-10-21): a branch that changes no Rust (nothing in
   src/, crates/, tests/**/*.rs, Cargo.*, build.rs) needs no cloud run and no batch, only the self check on the merged
@@ -56,6 +56,12 @@ Read notes/agents/common.md and notes/roles.md.
   (re-adds moved code, reverts decisions): commit the rest, make the cheapest working fix and mention it once.
 - Build tweak (version "<v>-integrate"), `cd "$W" && ./test.sh > ../integrate_test.log 2>&1` (cargo builds the cwd's checkout, so cd first) (it queues
   itself with priority), restore Cargo.toml/Cargo.lock/test_results.txt.
+- PLAYGROUND PAUSED (user 2026-10-22, until the warp compiler is ready to replace it; supervisor a83a023365): no
+  Playground deploys (`gh workflow run Playground`/pages.yml, skip_checks), no browser suite, no tours (tour_at.sh), no
+  runner checks of web branches, no playground native tests (test_web_playground test_served test_playground; prefixes
+  in scripts/paused-tests.txt are left out of cloud --full). The bullets below on the browser suite, tours, the
+  Playground workflow and the bundle budget rest until the user lifts the pause. Web-only branches land after
+  `node --check` of their JS.
 - Browser suite and tour: `web/playground/build.sh optimized` FIRST (worker.js loads served-files.js, which build.sh
   writes; without it every browser test fails with an importScripts NetworkError), then `cargo browser-test`, then
   `build.sh components` and `python3 web/playground/test_in_browser.py --examples` (and `--firefox`).
@@ -127,21 +133,24 @@ Read notes/agents/common.md and notes/roles.md.
   warp-interviewer the try line; for an owner that has retired, send it yourself.
 - Every push to main with Rust (gated, express) starts `integrator_tools/refresh_main_binary.sh` in the background
   (user 2026-10-20: "pre-compile warp-debug whenever you merge into main"; order user 2026-10-21): it builds and
-  installs the quick-release ~/dev/bin/warp first, together with compiler.wasm, `warp pure`'s compiler, which the new
-  binary builds for the main checkout's lib/ (`warp rebuild pure`, decision compiler-build) and checks with one `warp
-  pure samples/hello/hello.warp` (a run without Hello logs a WARNING line in main_binary.log); an identical file stays
-  as it is; ~/dev/bin/warp-debug is built last. The last 10 distinct main builds stay runnable as
+  installs the quick-release ~/dev/bin/warp first, together with its compilers (below); an identical binary stays as
+  it is; ~/dev/bin/warp-debug is built last. The last 10 distinct main builds stay runnable as
   ~/dev/bin/warp-<commit> (links into ~/dev/bin/main-builds/<commit>/, the binary with its compiler.wasm; card
   keep-main-binaries), for bisecting a regression without a build. The main-binary worktree's own data/compiler.wasm
   is rebuilt too (`warp rebuild pure` and `warp rebuild self`), so `warp pure` and `warp self` there never run the
-  previous main's compiler; the main checkout's stale data/compiler-self.wasm is deleted (a stale one printed hello while main
-  refused to compile itself; supervisor 2026-10-21). push_tested.sh and express.sh start it.
-  A warp-only push (Rust unchanged, express.sh --warp-only) instead rebuilds compiler.wasm and compiler-self.wasm
-  beside ~/dev/bin/warp from the pulled main checkout's lib/ in the same step that pushes and pulls
-  (`scripts/self-check.sh /Users/me/dev/angles/warp`, express.sh's COMPILERS line; each file moves into place
-  atomically), so `warp pure`/`warp self` match main the moment it lands (user 2026-10-22: the WASM compilers come with
-  every update of main, no cron). The self check's worktree build is not copied: it records its own lib/ path and
-  would warn on every run.
+  previous main's compiler. push_tested.sh and express.sh start it.
+- The compilers beside ~/dev/bin/warp (compiler.wasm for `warp pure`, compiler-self.wasm for `warp self`) come only
+  with main's delivery, never because a lib/ changed (user 2026-10-22: "we don't want automatic rebuilds just by
+  changing of lib"): `integrator_tools/install_compilers.sh <warp> <worktree at the pushed tip>` builds both from that
+  worktree's committed lib/ (one snapshot, no user edits; it stops on uncommitted lib/ changes) beside a private copy
+  of the binary, checks hello with each, then moves both into place together. A Rust push runs it from
+  refresh_main_binary.sh (the new binary, the main-binary worktree at origin/main) just before the binary goes in; a
+  warp-only push runs it from express.sh (~/dev/bin/warp, the express worktree at the pushed hash) in the step that
+  pushes and pulls. Never build them from the main checkout: a pull mid-build paired a compiler.wasm of an older
+  lib/ with a newer compiler-self.wasm (2026-10-22 10:12). The installed pair records the worktree's lib/ path; card
+  installed-compilers (warp-wasi-runtime) keeps it from warning against the checkout's lib/. Every self build of the
+  integrator's tools (install_compilers.sh, pure_chain_check.sh) takes one of scripts/self-check.sh's slots through
+  integrator_tools/self_slot.zsh (fleet-wide cap of 2, supervisor 2026-10-22); staging stays outside the main checkout.
 - Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
   `integrator_tools/pure_chain_check.sh <worktree>` runs `warp pure samples/hello/hello.warp` with the merged lib
   and stops the push when it no longer prints "Hello 🌍2026" while main does (push_tested.sh and express.sh call it;

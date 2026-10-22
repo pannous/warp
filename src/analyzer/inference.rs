@@ -322,11 +322,12 @@ fn subscript_kind(indexed: &Node, index: &Node, scope: &Scope) -> Kind {
 			return Kind::List;
 		}
 	}
-	// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node; so is a
-	// member a text cannot have (`line["length"]`, the run-time branch of `line.length` beside a map with that key)
+	// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node; only a
+	// `map of X` holds its entries by name: in any other value the name is a member it cannot have (`line["length"]`,
+	// `parts["length"]` of a list of texts: the run-time branch of `parts.length` beside a map with that key)
 	let by_name =
 		key.is_some_and(|key| key.is_text_literal() || matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
-	if by_name && infer_type(indexed, scope) == Kind::Text {
+	if by_name && !list_type_name(indexed, scope).starts_with(MAP_TYPE_PREFIX) {
 		return Kind::Empty;
 	}
 	element_kind(indexed, scope).unwrap_or(if by_name { Kind::Empty } else { Kind::Int })
@@ -481,6 +482,7 @@ fn special_form_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 	if crate::time::TIME_CALLS.contains(&name) {
 		return Some(Kind::Data);
 	}
+	// ⚠ WARP DOES THIS DIFFERENTLY: sum's type is its fold's, no list_sum case → lib/prelude.warp
 	if name == crate::library_words::LIST_SUM && items.len() == 3 {
 		return Some(infer_type(&items[2], scope)); // the loop it dispatches around
 	}

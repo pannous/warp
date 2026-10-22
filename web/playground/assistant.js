@@ -51,10 +51,13 @@ const assistantSettings = () => settings ??= fetch(ASSISTANT_SETTINGS).then(answ
 const guideText = file => fetch(file).then(answer => answer.ok ? answer.text() : "", () => "");
 const warpGuide = () => languageGuide ??= assistantSettings().then(({ guides }) => Promise.all(guides.map(guideText))).then(texts => texts.filter(Boolean).join("\n\n"));
 
-// the same as web/assistant/assistant.mjs systemPrompt, which builds it for the proxy
+// the same as web/assistant/assistant.mjs systemPrompt, which builds it for the proxy: the intro, guide and task prompt
+// are a cached prefix (the same bytes call after call), the program (chat) follows it uncached
 async function systemPrompt(task, program) {
 	const { intro, tasks } = await assistantSettings();
-	return [intro, await warpGuide(), tasks[task].prompt, tasks[task].program ? program : ""].filter(Boolean).join("\n\n");
+	const fixed = [intro, await warpGuide(), tasks[task].prompt].filter(Boolean).join("\n\n");
+	const shown = tasks[task].program && program ? [{ type: "text", text: program }] : [];
+	return [{ type: "text", text: fixed, cache_control: { type: "ephemeral" } }, ...shown];
 }
 
 // the answer's JSON; a failed request is the API's (or the proxy's) own reason

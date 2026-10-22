@@ -1,0 +1,35 @@
+# The bytes of a wasm module (emitter.warp's part): LEB128 numbers, little-endian ints, vectors, names, sections
+## bytes
+def uleb(n: int): list {
+	out = []
+	while n >= 128 {
+		out += [bit_or(bit_and(n, 127), 128)]
+		n = n >> 7
+	}
+	out + [n]
+}
+def sleb(n: int): list {
+	out = []
+	more = yes
+	while more {
+		b = bit_and(n, 127)
+		n = n >> 7
+		if (n == 0 and bit_and(b, 64) == 0) or (n == -1 and bit_and(b, 64) != 0) { more = no } else { b = bit_or(b, 128) }
+		out += [b]
+	}
+	out
+}
+# the 8 little-endian bytes of an int's low 64 bits
+def le64(n: int): list {
+	out = []
+	for i in 0..8 { out += [bit_and(n >> (8 * i), 255)] }
+	out
+}
+def concatenated(parts: any): list {
+	out = []
+	for part in parts { out += part }
+	out
+}
+def vector(parts: any): list { uleb(#parts) + concatenated(parts) }
+def name_bytes(name: text): list { vector(name.bytes.map(b => [b])) }
+def section(id: int, content: any): list { [id] + uleb(#content) + content }

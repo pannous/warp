@@ -251,20 +251,43 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	}
 }
 
-/// The value kept under `name` (os.keep) while warp and its lib/ stay as they are: a value the program computes the same
-/// way at every run, such as compiler.warp's lowered runtime words (card pure-warm-start)
+/// The value kept under `name` (os.keep) while warp and its lib/ stay as they are: a value a program computes the same
+/// way at every run, read by the next run of any program (card pure-warm-start); a compiler module's own (kept_by)
 #[cfg(feature = "native")]
 fn kept_value(name: &str) -> Option<Node> {
-	let key = crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {name}"))?;
+	let key = kept_key(name)?;
 	postcard::from_bytes(&crate::run::module_cache::kept_bytes(&key, KEPT_VALUE)?).ok()
 }
 
 #[cfg(feature = "native")]
 fn keep_value(name: &str, value: &Node) {
-	let key = crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {name}"));
-	if let (Some(key), Ok(bytes)) = (key, postcard::to_allocvec(value)) {
+	if let (Some(key), Ok(bytes)) = (kept_key(name), postcard::to_allocvec(value)) {
 		crate::run::module_cache::keep_bytes(&key, KEPT_VALUE, &bytes);
 	}
+}
+
+/// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs
+#[cfg(feature = "native")]
+fn kept_key(name: &str) -> Option<String> {
+	let compiler = KEEPING_COMPILER.with(|compiler| compiler.borrow().clone());
+	crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {compiler} {name}"))
+}
+
+#[cfg(feature = "native")]
+thread_local! {
+	/// The SHA-256 of the compiler module running (compiler.wasm, compiler-self.wasm), empty for any other program
+	static KEEPING_COMPILER: std::cell::RefCell<String> = Default::default();
+}
+
+/// `run` of the compiler module whose SHA-256 is `owner`, keeping values of its own: compiler.wasm and
+/// compiler-self.wasm, or a compiler.wasm built from an older lib/, compute compiler.warp's lowered runtime words
+/// differently, and one read another's ('key not found'; card pure-self-stale-cache)
+#[cfg(feature = "native")]
+pub fn kept_by<R>(owner: String, run: impl FnOnce() -> R) -> R {
+	let before = KEEPING_COMPILER.with(|compiler| compiler.replace(owner));
+	let result = run();
+	KEEPING_COMPILER.with(|compiler| compiler.replace(before));
+	result
 }
 
 /// The browser keeps no values across runs: each run computes them

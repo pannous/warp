@@ -61,6 +61,8 @@ const ITERATIONS: [Iteration; 9] = [
 	Iteration { word: "filter", extra_arguments: 0, function_arguments: 1, template: "(out=[]; for item in loop_list { if loop_call { out = out + [item] } }; out)" },
 	Iteration { word: EACH_WORD, extra_arguments: 0, function_arguments: 1, template: "(value=ø; for item in loop_list { value = loop_call }; value)" },
 	Iteration { word: "fold", extra_arguments: 1, function_arguments: 2, template: "(acc=loop_start; for item in loop_list { acc = loop_call }; acc)" },
+	// ⚠ WARP DOES THIS DIFFERENTLY: `find(t, part)` of a text part is its position (characters from 1), not an iteration
+	// → lib/prelude.warp find, lib/compiler/index_positions.warp
 	Iteration { word: "find", extra_arguments: 0, function_arguments: 1, template: "(found=ø; searching=1; for item in loop_list { if searching and loop_call { found = item; searching = 0 } }; found)" },
 	Iteration { word: "any", extra_arguments: 0, function_arguments: 1, template: "(hit=false; for item in loop_list { if loop_call { hit = true } }; hit)" },
 	Iteration { word: "all", extra_arguments: 0, function_arguments: 1, template: "(held=true; for item in loop_list { if not loop_call { held = false } }; held)" },
@@ -168,6 +170,7 @@ const OPERATOR_VALUES: [(Op, &str); 13] = [
 ];
 const OPERATOR_PARAMETERS: [&str; 2] = ["operator_left", "operator_right"];
 /// The value of an operator applied to nothing: the start of a fold that leaves the list empty
+// ⚠ WARP DOES THIS DIFFERENTLY: operator identities are warp data, laws declared once → lib/prelude.warp operator_laws
 const OPERATOR_IDENTITIES: [(&str, i64); 2] = [("+", 0), ("*", 1)];
 
 /// `+` of Add, for the operators that stand alone as a value

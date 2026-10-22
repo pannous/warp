@@ -40,3 +40,6 @@
 'key_of(parse("y"))'	ø
 'separator_of(parse("[a, b]"))'	','
 'key_of(x) := x * 2; key_of(21)'	42
+
+# position_readers_never_clash_with_fields
+'p = positioned(symbol("a"), 2, 5); [line_of(p), column_of(p)]'	[2 5]

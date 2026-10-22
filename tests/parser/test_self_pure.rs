@@ -231,7 +231,6 @@ fn number_keys_run_pure() {
 /// The front lanes key such a map too: parser.warp's `m[1]` keeps its written number, and `{}` stays the empty map,
 /// across the bridge to the Rust passes (card self-hosted-map-null)
 #[test]
-#[ignore = "fixnow: fixnow-number-keys-run-in-the-front-lanes: no node has the view [\"attribute\" \"written_index\" [\"at\" 1 11 1] 2] (front-end-warnings positions)"]
 fn number_keys_run_in_the_front_lanes() {
 	for lane in ["front", "1"] {
 		for (name, code, value) in [
@@ -705,7 +704,6 @@ fn op_cases_run_pure() {
 /// A name holds an enum case in the function that binds it: parser.warp's own `bracket = ""` leaves view_of's matched
 /// `bracket` a Bracket case, so the pure-compiled parser reads a call with comma arguments (card self-hello)
 #[test]
-#[ignore = "fixnow: fixnow-a-call-with-comma-arguments-parses-pure: no node has the view [\"at\" 1 ø …] (front-end-warnings positions)"]
 fn a_call_with_comma_arguments_parses_pure() {
 	let probe = format!("{}/probes/spelled_case_per_function.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("spelled_case_per_function", &probe, "[\"list\" '(' \"\" [\"symbol\" 'f'] [\"symbol\" 'a'] 2]\n2");

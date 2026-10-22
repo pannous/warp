@@ -27,6 +27,8 @@ const SHOWN_COMMIT_LENGTH: usize = 10;
 const OTHER_LIBRARY_FOLDER: &str = "data";
 /// Names a lib/ of its own (a worktree's): only then can the compilers be other than those next to the binary
 const LIBRARY_VARIABLE: &str = "WARP_LIB";
+/// What a new build compiles once to compute its kept values
+const WARMING_PROGRAM: &str = "0";
 /// Set to 1: the warnings and hints of compiling compiler.warp itself are shown
 const COMPILER_WARNINGS: &str = "WARP_COMPILER_WARNINGS";
 
@@ -64,13 +66,16 @@ pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
 
 /// The value of `code` (`warp pure "x=√72.;x^2"`, a test case), compiled as a program file of `folder` would be
 pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
+	ran(compiled_code(code, folder, by), Vec::new())
+}
+
+/// The module compiler.warp makes of `code`, compiled as a program file of `folder` would be
+fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let file = std::env::temp_dir().join(format!("warp-inline-{}.warp", std::process::id()));
-	if let Err(failure) = std::fs::write(&file, format!("{code}\n")) {
-		return error(&format!("{}: {failure}", file.display()));
-	}
+	std::fs::write(&file, format!("{code}\n")).map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let module = compiled_in(&file, folder, by).map_err(|failure| inline_positions(&failure, &file));
 	let _ = std::fs::remove_file(&file);
-	ran(module, Vec::new())
+	module
 }
 
 /// `warp pure <command> …` (card wasm-commands): compiler.warp's own command (lib/compiler/commands.warp), the command
@@ -132,7 +137,8 @@ fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledMo
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
-	let said = crate::pipeline::run_module(compiler);
+	let owner = crate::extensions::sha256_hex(&compiler.bytes);
+	let said = crate::modules::std_adapters::kept_by(owner, || crate::pipeline::run_module(compiler));
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
@@ -203,7 +209,15 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	);
 	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| write_new(path, &bytes));
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
+	warm(by)?;
 	Ok(module)
+}
+
+/// The new build run once on a small program: the values compiler.warp keeps for every run (`kept(…) ?? keep(…)`, its
+/// lowered runtime words: ~50 s on the Mac) are computed by the build, not by the first program's run within its time
+/// limit (card cloud-lane-narrow: the first `warp self` after `warp rebuild self` ran out of time on a cloud VM)
+fn warm(by: Compiler) -> Result<(), Node> {
+	compiled_code(WARMING_PROGRAM, library(), by).map(|_| ())
 }
 
 /// A new file moved into place: writing over a module another warp run reads would hand it half a module
@@ -229,7 +243,10 @@ fn current_build() -> Vec<String> {
 /// The commit lib/'s git checkout is at, "" outside one (an installed lib/)
 fn library_commit() -> String {
 	let said = std::process::Command::new("git").arg("-C").arg(library()).args(["rev-parse", "HEAD"]).output();
-	said.ok().filter(|said| said.status.success()).map(|said| String::from_utf8_lossy(&said.stdout).trim().to_string()).unwrap_or_default()
+	said.ok()
+		.filter(|said| said.status.success())
+		.map(|said| String::from_utf8_lossy(&said.stdout).trim().to_string())
+		.unwrap_or_default()
 }
 
 /// `warp version`'s line of the compilers in use: `compiler.wasm of <commit>, compiler-self.wasm missing`

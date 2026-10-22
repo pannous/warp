@@ -38,6 +38,10 @@ After a context swap, this file and your role file win over anything a handover 
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
+- New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
+  declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
+  when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
+  user's (match included); never plan a kernel form as sugar.
 - Rare edge cases go to Later: a corner real programs rarely hit (exotic literals like ∞/NaN, wording nits on code
   nobody writes, odd pairs of rarely combined features) is filed with `todo add Later "…"`, never Next/Soon.
 - Emptiness is tested loosely (user, decision empty-is-not-missing): in all warp code (lib, tests, samples) write
@@ -68,6 +72,8 @@ After a context swap, this file and your role file win over anything a handover 
   confirmations a safety rule wants from the user directly (permission or hook changes, anything you won't do on a
   peer's word): send them to the Interviewer with the exact action and work on everything else meanwhile. The
   Interviewer relays the user's answer verbatim; that relayed answer is the user's confirmation.
+- Run commands yourself, proactively: never hand the user commands to copy-paste into a shell. If something needs
+  their machine, run it there (with approval if required) and report the result.
 - Suspected non-issues go through the Interviewer: when a small bug you found may not matter (the same value shown
   another way, `96px/inch` vs `96dpi`), SendMessage warp-interviewer before carding or fixing it. A confirmed
   non-issue gets no work: its card, if any, goes to Later with the verdict as a `todo note`.
@@ -81,6 +87,21 @@ After a context swap, this file and your role file win over anything a handover 
   never notify it.
 
 ## Where to work
+- Quota wind-down (user 2026-10-22, ~10 % of the weekly Claude quota left until the reset): every Claude worker
+  finishes and lands the card it is on, writes its handover into the card (`todo release`), then retires. No new
+  cards. Only warp-integrator and warp-layers keep running. The sugar passes outside parser.warp belong to the user's
+  Grok Bot coders (instructions: scratch/grok-cards.md; they report in scratch/grok-reports.md); warp-layers keeps
+  parser.warp only.
+- Beautiful types (decision beautiful-types): every lib/ declaration a migration or cleanup branch touches leaves it
+  fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
+  adds the shallow subclasses; don't invent parallel ones in your branch.
+- The sugar migration (user 2026-10-22, notes/layers.md) keeps one line of history: warp-layers alone removes sugar
+  from lib/compiler/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
+  origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
+  express the same day. Other branches touching parser.warp or a pass on the migration list stay small and land
+  express; one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
+  lambdas.warp's fusion) are warp-folds' until its cards land; migration 3 skips them. Aliases are warp-signatures'
+  lib/aliases.warp.
 - Small changes on main: only what nothing compiles (notes, docs, wiki, probes, scripts, samples, playground text)
   goes straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or branch: commit your own
   paths by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push; never leave unpushed commits on
@@ -160,12 +181,24 @@ After a context swap, this file and your role file win over anything a handover 
   Cargo.*, build.rs) need no cloud run at all: the branch is accepted when the Rust-compiled compiler.warp compiles
   itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's binary; it
   queues behind a running check, one at a time on the Mac: never run `warp rebuild self` in parallel). Mark it
-  `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. Warp
+  `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. While
+  main's own self build is red (its owner fixes it), a branch passes when its pure lane is green and its self check
+  fails no worse than main's (the same error): a red main never blocks the queue (supervisor 2026-10-22). Warp
   branches have priority over Rust-change branches (user 2026-10-21): they land before any Rust batch, and work in
   .warp is preferred whenever a task can be done there.
   A change to lib/compiler/ (types or annotations included) also checks the self build before Ready:
-  `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp`; a form
+  `scripts/self-check.sh <worktree>` (it rebuilds both compilers in a queue slot; a bare `warp rebuild self` skips the
+  queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
+  replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
   emitter.warp refuses there is fixed or carded, never left for main to find.
+  Fleet-wide at most 2 heavy warp runs at once (user 2026-10-22, load 522): every self build, `warp rebuild`, `warp
+  pure` of a compiler file and every test sweep (is_tests, is_pairs, probe series) runs inside `scripts/slot.sh <cmd>`
+  (slots on /Volumes/Build/self-check; self-check.sh takes one itself; the Integrator's gate included). A sweep runs
+  its programs serially inside one slot, never N parallel warps. One more heavy slot is on the Grok box (Debian, 8
+  cores, ~3 GB free, one run at a time): give the run to Grok Warp Code 3 via the Supervisor (grok-msg). The tree it checks
+  is a cowtree worktree under /Volumes/Worktrees or a throwaway lib/ copy under /Volumes/Junk, never inside the main
+  checkout (scratch/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
+  cold module caches) go to Grok Warp Code 3's Linux box.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,

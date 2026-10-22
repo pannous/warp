@@ -115,9 +115,13 @@ pub fn library_folder() -> PathBuf {
 		.flat_map(|start| start.ancestors().map(|folder| folder.join(STD_FOLDER)).collect::<Vec<_>>())
 		.find(|library| library.join(COMPILER_FOLDER).is_dir());
 	let installed_library = || {
-		installed_folder().map(|folder| folder.join(STD_FOLDER)).filter(|library| library.join(COMPILER_FOLDER).is_dir())
+		installed_folder()
+			.map(|folder| folder.join(STD_FOLDER))
+			.filter(|library| library.join(COMPILER_FOLDER).is_dir())
 	};
-	checkout_library.or_else(installed_library).unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER))
+	checkout_library
+		.or_else(installed_library)
+		.unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER))
 }
 
 pub(crate) fn folder_of(file: &Path) -> PathBuf {
