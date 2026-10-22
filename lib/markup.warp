@@ -84,7 +84,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	if contains(html_void_elements, tag) { return "<" + tag + attributes + ">" }
 	if tag == "style" { children = trim(children) }
 	// the page's facts lead its head, which they make when it has none (card html-meta)
-	if facts != "" { children = if contains(children, "<head>") then replace(children, "<head>", "<head>" + facts) else "<head>" + facts + "</head>" + children }
+	if facts { children = if contains(children, "<head>") then replace(children, "<head>", "<head>" + facts) else "<head>" + facts + "</head>" + children }
 	// `</script>` inside a script would end it
 	if contains(html_raw_text_elements, tag) { children = replace(children, "</", "<\\/") }
 	"<" + tag + attributes + ">" + children + "</" + tag + ">"
@@ -344,7 +344,7 @@ style_entries(items: any, separator: any, leading: any) := {
 	for item in items {
 		for part in style_unchained(item) {
 			let joiner = if count(entries) == 0 and leading != ø then leading else list_joiner
-			if not (part is pair) and str(part.bracket) == "" { entries = entries + style_entries(part, part.separator, joiner) }
+			if not (part is pair) and str(part.bracket) is empty { entries = entries + style_entries(part, part.separator, joiner) }
 			else { entries.add([part, joiner]) }
 		}
 	}
@@ -368,8 +368,8 @@ style_unchained(node: any) := {
 // `ul li`, `h1, h2`: the selector words waiting for their block, joined with the last one
 style_joined(pending: any, last: any, last_joiner: any) := {
 	var text = ""
-	for selector in pending { text = text + (if text == "" then "" else selector#2) + selector#1 }
-	text + (if text == "" then "" else last_joiner) + last
+	for selector in pending { text = text + (if text is empty then "" else selector#2) + selector#1 }
+	text + (if text is empty then "" else last_joiner) + last
 }
 
 style_rule(selector: any, body: any) := key(selector, ":", style_body(body))
@@ -481,7 +481,7 @@ css_parts(spec: any) := {
 
 // a spec's items, its lines of words one by one
 css_items(spec: any) := {
-	if spec is pair or str(spec.bracket) != "" { return [spec] }
+	if spec is pair or str(spec.bracket) { return [spec] }
 	var items = []
 	for item in spec { items = items + css_items(item) }
 	items

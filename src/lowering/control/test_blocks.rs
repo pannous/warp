@@ -115,13 +115,46 @@ fn pair_parts(pair: &Node) -> Option<(String, Node)> {
 	let Node::List(items, Bracket::None, Separator::Tab) = pair.drop_meta() else {
 		return None; // a text alone is a program, no pair
 	};
-	let (code, expected) = match items.as_slice() {
-		[code, expected] | [code, expected, _] => (code, expected.clone()),
-		_ => return None,
-	};
+	match items.as_slice() {
+		[code, expected] | [code, expected, _] => Some((code_text(code)?, expected.clone())),
+		_ => None,
+	}
+}
+
+fn code_text(code: &Node) -> Option<String> {
 	match code.drop_meta() {
-		Node::Text(code) => Some((code.clone(), expected)),
-		Node::Char(code) => Some((code.to_string(), expected)),
+		Node::Text(code) => Some(code.clone()),
+		Node::Char(code) => Some(code.to_string()),
+		_ => None,
+	}
+}
+
+/// The tests of a test file as (statement, code, expected): its pairs (`'1+1'⇥2`), or its top-level `is! '1+1' 2`
+pub fn test_cases(program: &Node) -> Vec<(Node, String, Node)> {
+	program
+		.body_statements()
+		.into_iter()
+		.filter_map(|statement| {
+			let (code, expected) = pair_parts(&statement).or_else(|| check_parts(&statement))?;
+			Some((statement, code, expected))
+		})
+		.collect()
+}
+
+/// `is! '3+3' 6` or `is!('3+3', 6)`: its code and expected value
+fn check_parts(statement: &Node) -> Option<(String, Node)> {
+	if !is_check(statement) {
+		return None;
+	}
+	let Node::List(items, ..) = statement.drop_meta() else {
+		return None;
+	};
+	let arguments = match &items[1..] {
+		[Node::List(arguments, Bracket::Round, _)] => arguments.as_slice(),
+		arguments => arguments,
+	};
+	match arguments {
+		[code, expected] => Some((code_text(code)?, expected.clone())),
 		_ => None,
 	}
 }

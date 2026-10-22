@@ -218,6 +218,7 @@ mod test_type_test_is_only;
 mod test_type_tests;
 mod test_type_tests_anywhere;
 mod test_type_upgrading;
+mod test_type_value_name; // card pure-lane-holds
 mod test_type_values; // card type-values
 mod test_type_word_scopes;
 mod test_type_word_user_function;
