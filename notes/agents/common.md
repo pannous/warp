@@ -38,6 +38,10 @@ After a context swap, this file and your role file win over anything a handover 
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
+- New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
+  declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
+  when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
+  user's (match included); never plan a kernel form as sugar.
 - Rare edge cases go to Later: a corner real programs rarely hit (exotic literals like ∞/NaN, wording nits on code
   nobody writes, odd pairs of rarely combined features) is filed with `todo add Later "…"`, never Next/Soon.
 - Emptiness is tested loosely (user, decision empty-is-not-missing): in all warp code (lib, tests, samples) write
