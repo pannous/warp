@@ -11,7 +11,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
 - GitHub release per tag v<Cargo version>: .github/workflows/release.yml attaches
   warp-<tag>-<target>.tar.gz (warp + warp-runtime) for aarch64/x86_64-apple-darwin (Intel cross-built on the arm
   runner), x86_64/aarch64-unknown-linux-gnu.
-- PyPI, .deb/.rpm, AUR (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). All three repackage the release tarballs, jobs `packages`, `pypi`, `aur`
+- PyPI, .deb/.rpm (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). Both repackage the release tarballs, jobs `packages`, `pypi`
   of release.yml after `binaries`; `gh workflow run release.yml -f tag=v<version> -f repackage=true` reruns only them
   from the existing tarballs (their sha256 stay, so the formula stays valid). Each one ships warp-runtime next to warp.
   - PyPI `pip install warp-language` (warp-lang is NVIDIA's Warp on PyPI):
