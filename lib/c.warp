@@ -2,6 +2,7 @@
 // own shape, `name(parameter: type…): result from 'library'` as lib/math.warp writes them. The pure emitter makes each a
 // wasm import of the module 'library' and describes it in the warp.c_functions section (card pure-c-imports); warp-host
 // loads the library (c: the process, m: libm, sqlite3: libsqlite3.so.0 or libsqlite3.dylib) and calls the function.
+// `import strlen from "c"` takes one line of here, `use c` all of them (lib/compiler/c_imports.warp).
 // The types are those of a warp.c_functions line (crates/warp-runtime/src/c_signatures.rs):
 //   i32 i64 f32 f64   a number of that width
 //   text              a warp text, the host's NUL-terminated copy (a `const char *`); as a result, a `char *` read back
@@ -20,13 +21,29 @@ sqrt(x: f64): f64 from 'm'
 pow(x: f64, y: f64): f64 from 'm'
 hypot(x: f64, y: f64): f64 from 'm'
 
-// sqlite3: `db = sqlite3_open(":memory:")`, `stmt = sqlite3_prepare_v2(db, "select 1+2", -1)`, `sqlite3_step(stmt)`,
-// `sqlite3_column_int(stmt, 0)` gives 3
-sqlite3_open(filename: text, db: out): handle from 'sqlite3'
-sqlite3_prepare_v2(db: handle, sql: text, length: i32, statement: out, tail: out): handle from 'sqlite3'
-sqlite3_step(statement: handle): i32 from 'sqlite3'
-sqlite3_column_int(statement: handle, column: i32): i32 from 'sqlite3'
-sqlite3_column_text(statement: handle, column: i32): text from 'sqlite3'
-sqlite3_errmsg(db: handle): text from 'sqlite3'
-sqlite3_finalize(statement: handle): i32 from 'sqlite3'
-sqlite3_close(db: handle): i32 from 'sqlite3'
+// libc, more
+atol(s: text): i64 from 'c'
+atof(s: text): f64 from 'c'
+strcmp(a: text, b: text): i32 from 'c'
+strncmp(a: text, b: text, n: i64): i32 from 'c'
+toupper(c: i32): i32 from 'c'
+tolower(c: i32): i32 from 'c'
+isdigit(c: i32): i32 from 'c'
+isalpha(c: i32): i32 from 'c'
+isspace(c: i32): i32 from 'c'
+rand(): i32 from 'c'
+srand(seed: i32): void from 'c'
+labs(x: i64): i64 from 'c'
+getpid(): i32 from 'c'
+fopen(path: text, mode: text): handle from 'c'
+fclose(file: handle): i32 from 'c'
+fputs(s: text, file: handle): i32 from 'c'
+fflush(file: handle): i32 from 'c'
+puts(s: text): i32 from 'c'
+system(command: text): i32 from 'c'
+setenv(name: text, value: text, overwrite: i32): i32 from 'c'
+unsetenv(name: text): i32 from 'c'
+strerror(code: i32): text from 'c'
+strstr(haystack: text, needle: text): handle from 'c'
+
+// SQLite's functions are in lib/native/sqlite3.warp (`use sqlite3`), other libraries' in lib/native/<library>.warp
