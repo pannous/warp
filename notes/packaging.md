@@ -11,7 +11,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
 - GitHub release per tag v<Cargo version>: .github/workflows/release.yml attaches
   warp-<tag>-<target>.tar.gz (warp + warp-runtime) for aarch64/x86_64-apple-darwin (Intel cross-built on the arm
   runner), x86_64/aarch64-unknown-linux-gnu.
-- PyPI, .deb/.rpm, AUR (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). All three repackage the release tarballs, jobs `packages`, `pypi`, `aur`
+- PyPI, .deb/.rpm (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). Both repackage the release tarballs, jobs `packages`, `pypi`
   of release.yml after `binaries`; `gh workflow run release.yml -f tag=v<version> -f repackage=true` reruns only them
   from the existing tarballs (their sha256 stay, so the formula stays valid). Each one ships warp-runtime next to warp.
   - PyPI `pip install warp-language` (warp-lang is NVIDIA's Warp on PyPI):
@@ -22,18 +22,12 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
   - `.deb`/`.rpm` warp-lang, from packaging/linux/nfpm.yaml (nfpm 2.47 in CI, `brew install nfpm` locally; run in the
     unpacked tarball, nfpm doesn't expand env vars in `src`): /usr/bin/warp, warp-runtime, warp-page-runtime, attached
     to the release as warp-lang_<v>_amd64.deb / warp-lang-<v>-1.x86_64.rpm (and arm64/aarch64).
-  - AUR warp-lang-bin: packaging/aur/PKGBUILD (source of truth), `packaging/aur/update_aur.sh <version> [--push]`
-    writes pkgver, sha256sums and .SRCINFO (no makepkg needed; the aur job diffs it against `makepkg --printsrcinfo`,
-    builds, installs and runs it in archlinux:base-devel) and pushes when the variable AUR_PUBLISH=true and the secret AUR_SSH_KEY is set.
+  - No AUR (user 2026-10-22, decision no-aur): Arch users take the GitHub release's linux tarball.
   - Linux needs glibc >= 2.39 (Ubuntu 24.04, Debian 13, Fedora 40; not Ubuntu 22.04 or RHEL 9): the binaries are
     built on ubuntu-24.04 runners (card linux-glibc-floor).
   - One-time setup (user): PyPI account → pypi.org/manage/account/publishing "Add a new pending publisher": project
     warp-language, owner pannous, repository warp, workflow release.yml, environment pypi; then
-    `gh variable set PYPI_PUBLISH -R pannous/warp -b true`. AUR: account on aur.archlinux.org with an ssh public key
-    (`ssh-keygen -t ed25519 -f ~/.ssh/aur -N ''`, paste ~/.ssh/aur.pub in My Account), then
-    `gh secret set AUR_SSH_KEY -R pannous/warp < ~/.ssh/aur` (set; aur.archlinux.org has registration paused, card
-    register-lang), then `gh variable set AUR_PUBLISH -R pannous/warp -b true`. PyPI is live since v1.3.0. Once the AUR is too, the README's Install gets
-    `yay -S warp-lang-bin` (the .deb/.rpm line is there).
+    `gh variable set PYPI_PUBLISH -R pannous/warp -b true`. PyPI is live since v1.3.0.
 - `cargo install --locked --git https://github.com/pannous/warp warp warp-runtime`.
 - crates.io: `cargo install --locked warp-lang warp-runtime` (live since v1.3.0). Packages `warp-lang`
   (AGPL-3.0-or-later; `warp` is the web framework there; the library is still `warp`, the binary `warp`) and
@@ -58,6 +52,5 @@ formula and release build set CARGO_NET_OFFLINE=false.
 4. Test: `HOMEBREW_NO_AUTO_UPDATE=1 brew reinstall pannous/tap/warp && brew test pannous/tap/warp && brew style pannous/tap/warp`,
    then `brew unlink warp`: a linked brew warp comes first on the user's PATH and shadows ~/dev/bin/warp (2026-10-22).
 5. crates.io: `CARGO_NET_OFFLINE=false cargo publish --workspace` (outside the cloud lane; token in ~/.cargo/credentials.toml).
-6. PyPI, deb/rpm and AUR need nothing: the tag's Release run publishes them. Commit the PKGBUILD and .SRCINFO
-   `packaging/aur/update_aur.sh <version>` writes, like the formula.
+6. PyPI and deb/rpm need nothing: the tag's Release run publishes them.
 - Rust CI runs its tests on the tag (pushes to main skip them); the release binaries do not depend on it.

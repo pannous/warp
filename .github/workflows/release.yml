@@ -6,7 +6,7 @@ name: Release
 # stub of page apps, with the web view). The Homebrew formula
 # (packaging/homebrew/Formula/warp.rb, copied to pannous/homebrew-tap) installs these binaries (no Rust build); its
 # --HEAD install builds main from source. Then the tarballs are repackaged: PyPI wheels (warp-language), .deb and .rpm
-# (warp-lang) on the release, the AUR's warp-lang-bin; notes/packaging.md
+# (warp-lang) on the release; notes/packaging.md
 on:
   push:
     tags: [ "v*" ]
@@ -162,42 +162,3 @@ jobs:
       with:
         packages-dir: dist/wheels
         skip-existing: true
-
-  aur:
-    # warp-lang-bin: PKGBUILD and .SRCINFO for this tag, checked by makepkg (built, installed, run), pushed to the AUR
-    # when the repository variable AUR_PUBLISH=true and the secret AUR_SSH_KEY holds the key registered there
-    # (notes/packaging.md)
-    needs: binaries
-    if: ${{ !cancelled() && contains(fromJSON('["success", "skipped"]'), needs.binaries.result) }}
-    runs-on: ubuntu-latest
-    container: archlinux:base-devel
-    env:
-      GH_TOKEN: ${{ github.token }}
-      AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
-    steps:
-    - run: pacman -Syu --noconfirm --needed git github-cli openssh
-    - uses: actions/checkout@v7
-    - name: PKGBUILD and .SRCINFO
-      run: |
-        git config --global --add safe.directory "$GITHUB_WORKSPACE"
-        packaging/aur/update_aur.sh "${TAG#v}"
-    - name: makepkg
-      # makepkg refuses root
-      run: |
-        useradd -m builder
-        cp -r packaging/aur /home/builder/aur
-        chown -R builder /home/builder/aur
-        su builder -c 'cd ~/aur && makepkg --printsrcinfo | diff - .SRCINFO && makepkg --noconfirm'
-        pacman -U --noconfirm /home/builder/aur/warp-lang-bin-*.pkg.tar.zst
-        warp eval '6*7' | grep -q 42
-    - name: push to the AUR
-      if: vars.AUR_PUBLISH == 'true' && env.AUR_SSH_KEY != ''
-      run: |
-        # in the container $HOME (/github/home) is not the home ssh reads (/root), so the key and host are named here
-        echo "$AUR_SSH_KEY" > "$RUNNER_TEMP/aur"
-        chmod 600 "$RUNNER_TEMP/aur"
-        ssh-keyscan aur.archlinux.org > "$RUNNER_TEMP/known_hosts"
-        export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/aur -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts -o IdentitiesOnly=yes"
-        git config --global user.name pannous
-        git config --global user.email info@pannous.com
-        packaging/aur/update_aur.sh "${TAG#v}" --push
