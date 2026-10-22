@@ -175,11 +175,22 @@ operator_at(line: Scanned, cs: list, i: int): text := {
 				exponent = (before == "e" or before == "E") and is_digit_character(at(cs, i - 2))
 				if exponent { return "" }
 				if operator == "-" and not (is_digit_character(before) or before in closing_brackets) { return "" }
+				if operator == "-" and in_a_date(cs, i) { return "" }
 			}
 			return operator
 		}
 	}
 	""
+}
+
+# the `-` at index i is one of a date's, `2024-02-29`: four digits before and two after it, or two before it that a
+# `-` precedes
+in_a_date(cs: list, i: int): bool := {
+	before = 0
+	while is_digit_character(at(cs, i - 1 - before)) { before += 1 }
+	after = 0
+	while is_digit_character(at(cs, i + 1 + after)) { after += 1 }
+	(before == 4 and after == 2) or (before == 2 and after == 2 and at(cs, i - 3) == "-")
 }
 
 # `<div id=x>`: a line with a tag keeps its operators as written
