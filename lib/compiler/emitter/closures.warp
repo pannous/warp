@@ -1,0 +1,93 @@
+# Closures (emitter.warp's part): closure values, their calls through dispatchers, the text a closure shows
+## closures (Rust's lowering: src/lowering/definitions/closures.rs)
+# `closure_new(target, captured…)`: a Function $Node holding the list [the target's number, the captured values…], its
+# value the target's name, as Rust's reads back; module.closures holds [target name, captured count] by number.
+# `closure_call_<n>(f, a…)`: a function made once per arity n, its code written last (dispatcher_code), that calls the
+# target f's number names; `<target>·captured·<i>(f)`: f's i-th captured value
+closure_call_prefix = "closure_call_"
+captured_marker = "·captured·"
+# what joins the parts of a lifted name: a method's witness `len·Point`, a nested `outer·inner`
+name_joiner = "·"
+# `closure_text(f)`: the text of a closure, its lambda as written (`x => x*2`) or its target's name, a function made
+# once, its code written last (closure_text_code), as Rust's function_text table
+closure_text_name = "closure_text"
+# the targets Rust's lowering lifts from a lambda (src/lowering/definitions/closures.rs is_lambda_function)
+lambda_prefixes = ["closure_lambda_", "lambda_value_"]
+# the operators a closure takes part in (node_equal compares closures)
+closure_comparisons = ["==", "!="]
+is_closure_value(n: any) := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol("closure_new")
+def closure_value(body: Body, target: any, captured: any): list {
+	if not (target is symbol and name_of(target) in module.functions) { return refuse("a closure of " + form_of(target)) }
+	number = closure_number(name_of(target), #captured)
+	items = [boxed(number_value(number))] + captured.map(c => boxed(expression_code(body, c)))
+	["node", key_code(Kind.Function, vector_code(items), name_node(target))]
+}
+closure_number(name: text, captured: int): int := {
+	for i in 0..<#module.closures { if module.closures[i]#1 == name { return i } }
+	module.closures += [[name, captured]]
+	#module.closures - 1
+}
+# the item i of a closure's list: 0 its number, then its captured values
+def closure_item(closure: any, i: int): list { ["node", payload(closure, gc.list) + gc_code(gc_ops.struct_get, [gc.list, 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc.items])] }
+captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
+def closure_call(body: Body, arity: int, arguments: any): list {
+	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
+	call_values(dispatcher(arity), arguments.map(a => expression_code(body, a)))
+}
+dispatcher(arity: int): any := {
+	made_late(closure_call_prefix + arity, "node", ["closure"] + range_list(arity).map(i => "argument" + (i + 1)))
+}
+# a function over closures whose code is written once the program's closures are known, made at its first call
+made_late(name: text, result: text, parameters: list): any := {
+	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
+	for known in module.dispatchers { if known.name == name { return known } }
+	f = added_function(name, parameters.map(p => "node"), result, parameters)
+	f.code = [op.unreachable]
+	module.dispatchers += [f]
+	f
+}
+# for each closure: if the closure's number is its own, the text it shows; another value shows "function"
+closure_text_code(f: Function): any := {
+	number = unboxed(closure_item([op.local_get, 0], 0)#2, gc.int_box)
+	f.code = text_bytes("function")
+	for k in 0..<#module.closures {
+		shown = text_bytes(closure_shown(module.closures[k]#1, module.closures[k]#2))
+		f.code = number + [op.i64_const] + sleb(k) + [op.i64_eq, op.if, no_value] + shown + [op.return, op.end] + f.code
+	}
+}
+# a lifted lambda as written, its parameters but the captured ones (`x => x*2`); another target by its name
+closure_shown(name: text, captured: int): text := {
+	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return function_name(name) }
+	f = module.functions[name]
+	names = taken_names(f.signature)[captured..]
+	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + str(f.body)
+}
+# the name a function value shows, as Rust's (closures.rs function_name): `len` of a class's method that became the
+# witness `len·Point`, the last part of a nested `outer·inner`
+function_name(target: text): text := {
+	parts = target.split(name_joiner)
+	if #parts == 1 { return target }
+	last = parts.last
+	if last in module.classes then parts[0..<(#parts - 1)].join(name_joiner) else last
+}
+# a value called that is no closure fails in not_a_function; for each closure of f's arity: if the closure's number is
+# its own, the target's call on the captured values and the arguments; a closure of another arity fails in
+# wrong_number_of_arguments (the runtime errors of Rust's src/wasm_emitter/functions/closures.rs)
+dispatcher_code(f: Function): any := {
+	arity = #f.kinds - 1
+	closure = [op.local_get, 0]
+	number = unboxed(closure_item(closure, 0)#2, gc.int_box)
+	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
+	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
+	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
+	for k in 0..<#module.closures {
+		target = module.functions[module.closures[k]#1]
+		captured = module.closures[k]#2
+		if #target.signature.parameters - captured == arity {
+			values = range_list(captured).map(i => closure_item(closure, i + 1)) + range_list(arity).map(j => ["node", [op.local_get] + uleb(j + 1)])
+			called = boxed(call_values(target, values))
+			code += number + [op.i64_const] + sleb(k) + [op.i64_eq, op.if, no_value] + called + [op.return, op.end]
+		}
+	}
+	f.code = code + dropped(runtime_call("wrong_number_of_arguments", [])) + [op.unreachable]
+}

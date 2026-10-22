@@ -6,11 +6,14 @@
 #   Rust          the file compiles in the Rust lane (its module runs); one that doesn't (a runtime part, a file
 #                 missing a `use`) is no pure-lane gap and is counted apart
 #   lib/compiler/runtime/ (emitter.warp's runtime parts) is counted apart from the headline
-# usage: scripts/lib_bench.sh [warp binary, default main's shared /Users/me/dev/bin/warp] [path regex]
+# usage: scripts/lib_bench.sh [warp binary, default main's shared Rust binary /Users/me/dev/bin/warp-rust] [path regex]
 #   → data/lib_bench/<commit>.txt (<commit>-partial.txt with a regex): a line per file "<file>  parse: <verdict>  pure: <verdict>" (each the first error), the
 #     summary "parsed X/N, pure-compiled Y/N" and the first errors ranked
 set -u
-warp=${1:-/Users/me/dev/bin/warp}
+# the Rust binary: the launcher warp would run lib_bench_parse.warp through the pure pipeline (notes/pure_wrapper.md)
+main_warp=/Users/me/dev/bin/warp-rust
+[[ -x $main_warp ]] || main_warp=/Users/me/dev/bin/warp
+warp=${1:-$main_warp}
 filter=${2:-}
 root=$(cd "$(dirname "$0")/.." && pwd)
 commit=$(git -C "$root" rev-parse --short=10 HEAD)
