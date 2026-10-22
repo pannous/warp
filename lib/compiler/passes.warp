@@ -32,7 +32,6 @@ use "lambdas.warp"
 use "min_max.warp"
 use "index_positions.warp"
 use "arity_overloads.warp"
-use "coalesce.warp"
 use "kind_changes.warp"
 use "source_checks.warp"
 use "main_globals.warp"
@@ -48,7 +47,7 @@ passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_w
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, prefix_comparisons] + passes + [bare_returns, filled_lists, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, min_max, coalesce, lambdas, for_loops, ranges, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, prefix_comparisons] + passes + [bare_returns, filled_lists, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, min_max, sugar, lambdas, for_loops, ranges, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
@@ -64,6 +63,10 @@ lowered_program(source: text, folder: text, prelude: text): Node := lowered_node
 # declared counts before the prelude is reached, so the words index_positions answers with, `byte_index_of` for a
 # `byte index b = t.find(part)`, bring their definitions)
 with_used(program: Node, folder: text, prelude: text): Node := with_reached(with_used_modules(with_type_module_uses(index_positions(rewritten_program(with_uses(program, folder)))), folder), prelude, no)
+
+# the sugar rules (lib/sugar/) over the program and the definitions it reached, where the passes before them have
+# made their forms (definitions' `?? []` of a list result)
+sugar(program: Node): Node := sugared(program)
 
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))

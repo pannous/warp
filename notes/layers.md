@@ -163,7 +163,7 @@ Sugar passes, with the rule each would become:
 | 30 | preposition_heads | `play(tone, for duration)` → drop the preposition per parameter: F4 |
 | 24 | grouped_receivers | `rewrite ($p).$a => $p.$a`: F2 (p bound to a value) |
 | 18 | phrase_blocks | not sugar: `{print "big"}` as one statement is the notation's grouping; belongs in the reader |
-| 15 | coalesce | `rewrite $a ?? $b => if $a == ø then $b else $a`: F3 |
+| 15 | coalesce | done: lib/sugar/fallbacks.warp (card sugar-coalesce) |
 | 140 | sugar.warp | `rewrite $xs[$i] => $xs#($i + 1)`: works for plain indexes; negative and slice bounds need F2; typed class fields are kernel (types) |
 
 ## Migration order, by gain

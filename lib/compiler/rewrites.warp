@@ -47,6 +47,9 @@ takes_word = "takes"
 # `where $f takes value`: any first parameter typed, except these
 yes_no_types = ["bool"]
 value_word = "value"
+# the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
+# program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere
+sugar_module_names = ["sugar/fallbacks"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
@@ -82,10 +85,7 @@ rewritten_program(program: any): any := {
 			module_rules += module_rules_of(source, module).filter(rule => mentioned.has(needed_word(rule)))
 		}
 	}
-	if #module_rules > 0 {
-		scope = scope_of(program)
-		rules += module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(scope, word) or binds_as(scope, word, Meaning.Function)))
-	}
+	rules += unbound_rules(module_rules, program)
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
@@ -98,6 +98,32 @@ rewritten_program(program: any): any := {
 		if statement not in uses { uses += [statement] }
 	}
 	if #uses == 0 then program else separated(bracketed(uses + statements_in(program), ""), ";")
+}
+
+# the module rules none of whose words the program binds itself: a program's own word keeps its meaning
+unbound_rules(module_rules: list, program: Node): list := {
+	if #module_rules == 0 { return [] }
+	scope = scope_of(program)
+	module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(scope, word) or binds_as(scope, word, Meaning.Function)))
+}
+
+# the program with the rules of the sugar modules applied everywhere, those whose words it binds itself left out
+sugared(program: Node): Node := {
+	rules = unbound_rules(sugar_module_names.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+	if #rules == 0 { return program }
+	rule_scope = scope_of(program)
+	first_parameter_types = typed_first_parameters(program)
+	bottom_up(program, n => sugar_rewritten(n, rules))
+}
+
+# the node rewritten by the first sugar rule matching it, its result rewritten again (F7); a node no rule matches stays
+# as the passes left it
+sugar_rewritten(n: any, rules: list): any := {
+	for rule in rules {
+		result = rule_applied(rule, {}, n)
+		if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+	}
+	n
 }
 
 word_set(words: list): any := {
