@@ -1,0 +1,5 @@
+# Type tests (notes/layers.md, sugar): `x is int` tests x's type where the word names a type no value in reach is
+# named, or one the program declares (`class P`, `enum Coin`); `type(x) is int` tests x. Any other `x is v` compares.
+rewrite type($x) is $t => is_type($x, $t) where $t is type
+rewrite $x is $t => is_type($x, $t) where $t is type
+rewrite $x is $v => $x == $v

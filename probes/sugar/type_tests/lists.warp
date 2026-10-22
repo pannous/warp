@@ -1,0 +1,4 @@
+# list types (the pure lane refuses `of`: the unknown name of at 3:21). Expected: yes yes no
+print [1 2] is list
+print [1 2] is list of int
+print [1 2] is list of text

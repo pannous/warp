@@ -30,7 +30,7 @@ After `where`, conditions joined by `and` ask about what the holes bound:
 | condition | holds when the hole bound |
 |---|---|
 | `$c = channel()` | a variable assigned code of that shape (the origin; one per rule) |
-| `$t is type` | a type word no value of the program is named, or a type it declares |
+| `$t is type` | a type word no value in reach is named (a function sees its own names and those outside every function), or a type the program declares |
 | `$x is unbound` | a word the program binds nothing to |
 | `$x is value`, `$f is function` | a word the program binds as a value, as a function |
 | `$x is literal` | a number or text written as such |

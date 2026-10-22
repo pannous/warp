@@ -1,0 +1,9 @@
+# a value on the right compares, also a type word the program binds as a value. Expected: yes no yes yes
+x = 3
+y = 3
+z = 4
+print x is y
+print x is z
+print 3 is 3
+int = 3
+print 3 is int

@@ -1,0 +1,5 @@
+# `is a`, `is an`: the article is optional (the pure lane refuses `a`: the unknown name a at 3:12). Expected: yes yes no
+x = 9
+print x is a number
+print x is an int
+print x is a text
