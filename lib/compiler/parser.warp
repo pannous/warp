@@ -1005,8 +1005,8 @@ def condition_has_branch(p: Parser, at: int): bool {
 	for i in at ..< p.n {
 		c = p.code[i]
 		if open_quote != ' ' {
-			if c == open_quote { open_quote = ' ' }
-		} else if c == '"' or c == '\'' {
+			if c == closing_of(open_quote) { open_quote = ' ' }
+		} else if opens_text(c) {
 			open_quote = c
 		} else if c == '{' and depth == 0 {
 			// a comparison, not is_blank: a `: bool` call is an Int to the analyzer (card bool-call-int)
@@ -1067,7 +1067,7 @@ def owns_branches(left: Node, op: text, took_own_then: bool): bool := match left
 def times_binds(p: Parser, min_power: int): bool {
 	at = blank_end(p, p.at + 5)
 	c = peek(p.code, at, p.n)
-	value_follows = is_digit(c) or c == '"' or c == '\'' or is_name_start(c)
+	value_follows = is_digit(c) or opens_text(c) or is_name_start(c)
 	min_power <= TIMES_POWER or c == '[' or (value_follows and min_power <= 150)
 }
 
@@ -1243,7 +1243,7 @@ def applies_otherwise(p: Parser, min_power: int): bool := min_power <= 60 or min
 
 def unnamed_at(p: Parser): bool {
 	c = peek(p.code, p.at, p.n)
-	is_digit(c) or c == '"' or c == '\'' or c == '(' or c == '[' or c == '{' or c == '-'
+	is_digit(c) or opens_text(c) or c == '(' or c == '[' or c == '{' or c == '-'
 }
 
 // The argument of a braceless call; `while i < count t {…}`: a block after an operand's argument is the body
@@ -2461,7 +2461,7 @@ def at_c_style_for_head(p: Parser): bool {
 	depth = 0
 	while at < p.n {
 		c = p.code[at]
-		skipped = if c == '"' or c == '\'' then text_end(p.code, at + 1, c, p.n) else comment_end(p.code, at, p.n)
+		skipped = if opens_text(c) then text_end(p.code, at + 1, closing_of(c), p.n) else comment_end(p.code, at, p.n)
 		if skipped > at {
 			at = skipped
 		} else if "([{".contains(c) {
@@ -2638,7 +2638,7 @@ def starts_atom(p: Parser): bool := starts_atom_at(p, p.at)
 
 def starts_atom_at(p: Parser, at: int): bool {
 	c = peek(p.code, at, p.n)
-	is_name_start(c) or is_digit(c) or c == '"' or c == '\'' or c == '(' or c == '[' or c == '{' or (c == '@' and is_name_start(peek(p.code, at + 1, p.n))) or starts_path_at(p, at)
+	is_name_start(c) or is_digit(c) or opens_text(c) or c == '(' or c == '[' or c == '{' or (c == '@' and is_name_start(peek(p.code, at + 1, p.n))) or starts_path_at(p, at)
 }
 
 // `x`, `k, v` or `(k, v)`: the names a loop gives each item, else ø
@@ -2704,7 +2704,7 @@ def atom(p: Parser): Node := {
 		return with_glued_factor(p, int(written))
 	}
 	if VULGAR_FRACTIONS.contains(c) { return vulgar_fraction(p, c) }
-	if c == '"' or c == '\'' { return quoted(p) }
+	if opens_text(c) { return quoted(p) }
 	// `.5` is 0.5
 	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return float("0" + decimal_number(p)) }
 	// a loop where an atom stands: the body of a comprehension's clause, `[a + b for a in xs for b in ys]`
@@ -2784,7 +2784,7 @@ def atom(p: Parser): Node := {
 		return ø
 	}
 	// `"̅"`: a quote carrying combining marks is one grapheme of the code; the marks open the text (card parser-graphemes)
-	if "\"'".contains(code_points("" + c)#1) { return quoted(p) }
+	if opens_text(code_points("" + c)#1) { return quoted(p) }
 	// every other character is read: a free symbol names itself, `x = ↯`, `⌘`; any other one is its character, `★`
 	// (card unicode-glyphs)
 	// Rust twin: atoms.rs parse_atom (is_free_symbol, parse_emoji; the Rust lane still errors on other characters)
@@ -2866,7 +2866,7 @@ def path_literal(p: Parser): text {
 	path
 }
 
-def is_operand_end(c: text): bool := is_name_char(c) or c == ')' or c == ']' or c == '}' or c == '"' or c == '\''
+def is_operand_end(c: text): bool := is_name_char(c) or c == ')' or c == ']' or c == '}' or c == '"' or c == '\'' or c == '»'
 def ends_path(c: text): bool := is_blank(c) or c == ']' or c == ')' or c == '}' or c == ',' or c == ';'
 def starts_path_name(c: text): bool := is_name_start(c) or c == '.'
 
@@ -3995,14 +3995,18 @@ def digits_read(p: Parser): text {
 	written
 }
 
-// A text in quotes, its backslash escapes read; one character is a codepoint
+// A quote opening a text: `"…"`, `'…'`, `«…»` (lexer.warp closing_of closes each)
+def opens_text(c: text): bool := c == '"' or c == '\'' or c == '«'
+
+// A text in quotes, its backslash escapes read; one character is a codepoint. `«…»` holds quotes as they are:
+// `«she said "hi"»`
 // Rust twin: literals.rs read_text
 def quoted(p: Parser): Node := {
 	opening = code_points("" + p.code[p.at])
 	quote = opening#1
 	marks = ""
 	for mark in opening[1 .. opening.length] { marks = marks + mark }
-	end = text_end(p.code, p.at + 1, quote, p.n)
+	end = text_end(p.code, p.at + 1, closing_of(quote), p.n)
 	written = marks + p.code[p.at + 1 .. end - 1]
 	p.at = end
 	holed = if quote == '"' then template(written) else ø
