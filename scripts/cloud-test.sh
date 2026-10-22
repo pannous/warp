@@ -10,6 +10,8 @@
 #       filters as for tests/queue.sh (`-- x y` or plain `x y`; `--test tests -- x` passes target flags to cargo);
 #       --full: the whole suite as test.sh runs it (--all-features, warp-lang at opt-level 2), sharded: FULL_SHARDS
 #       jobs on as many VMs, each every FULL_SHARDS-th test file, merged into one result
+#       --warp-test [folder…]: no cargo test: the release binary builds compiler.wasm and runs `warp test [folder…]`,
+#       every pairs and is! line under the folders (default tests/) through `warp pure` (card warp-test-runner)
 #       waits for the result (run it in the background), prints it, keeps it in data/cloud/<run>/ and, with --card,
 #       adds it to the card (`todo note`); --no-wait only launches: fetch later with --result;
 #       --on-main tests the tip merged into the current origin/main, as the Integrator's gate will (--on <base>: into
@@ -60,6 +62,8 @@ WATCH_SECONDS=30               # how often the stall watchdog counts finished te
 PURE_HELLO_TEST=parser::test_warp_pure::warp_pure_runs_hello_world
 OPTIMIZED_TEST_PROFILE=(--config profile.test.package.warp-lang.opt-level=2)
 PURE_HELLO_ARGS=("${OPTIMIZED_TEST_PROFILE[@]}" -- "$PURE_HELLO_TEST" --ignored --exact)
+WARP_TEST_PRESET=--warp-test   # in place of the filters: the release binary's `warp test [folder…]`, no cargo test
+SHOWN_WARP_TEST_FAILURES=40    # ✗ lines of a --warp-test run in the result
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
 HERE_ROOT=${TMPDIR:-/tmp}/cloud-test # in the VM: tree/ (the checkout, kept for the next job), jobs/<job>/
 FULL_FLAGS=(--all-features "${OPTIMIZED_TEST_PROFILE[@]}")
@@ -231,10 +235,12 @@ run_tests_here() {
 			"$checkout/vendor" > "$vendor_config"
 		source_flags=(--offline)
 	fi
-	local test_args=() filters=() past_separator="" flag_value_next="" shard=""
+	local test_args=() filters=() past_separator="" flag_value_next="" shard="" warp_test="" warp_test_folders=()
 	if [ "${1:-}" = "--full" ]; then
 		test_args=("${FULL_FLAGS[@]}")
 		[ "${2:-}" = "$SHARD_FLAG" ] && shard=$3
+	elif [ "${1:-}" = "$WARP_TEST_PRESET" ]; then
+		warp_test=1 warp_test_folders=("${@:2}")
 	else
 		for argument in "$@"; do
 			if [ "$argument" = "--" ]; then past_separator=1
@@ -250,17 +256,25 @@ run_tests_here() {
 	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never WARP_COMMIT=${tip:0:9}
 	local build_start=$SECONDS disk
 	disk=$(make_room)
-	cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
+	# --warp-test needs the warp binary alone, as installed: release
+	build_step() {
+		if [ -n "$warp_test" ]; then
+			cargo build "${source_flags[@]}" --release --bin warp
+		else
+			cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run
+		fi > "$HERE_WORK/log.txt" 2>&1
+	}
+	build_step
 	local build_status=$?
 	if [ $build_status -ne 0 ] && grep -q 'No space left on device' "$HERE_WORK/log.txt"; then
 		rm -rf target
 		disk="$disk; out of space during the build: target/ dropped, built again with $(free_gb) GB free"
-		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
+		build_step
 		build_status=$?
 	fi
 	# a warm VM's build once held fewer tests than the tip (front-end-warnings-257e97ec: build 0 s, 6675 of 6755 tests,
 	# the first filters matched nothing): a filter no built test matches forces a build anew, then is named in the log
-	if [ $build_status -eq 0 ] && [ ${#filters[@]} -gt 0 ] && [ -n "$(unmatched_filters "${filters[@]}")" ]; then
+	if [ $build_status -eq 0 ] && [ -z "$warp_test" ] && [ ${#filters[@]} -gt 0 ] && [ -n "$(unmatched_filters "${filters[@]}")" ]; then
 		echo "cloud-test: filters matching no built test: $(unmatched_filters "${filters[@]}"): building anew" >> "$HERE_WORK/log.txt"
 		find src tests crates -name '*.rs' -exec touch {} +
 		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run >> "$HERE_WORK/log.txt" 2>&1
@@ -279,7 +293,7 @@ run_tests_here() {
 	# the runtime stub the executable tests copy, built with the run's crate source as test.sh does: a test's own
 	# `cargo build --offline` found no miniz_oxide in the VM's registry cache (card cloud-stub-offline); the page stub is
 	# macOS-only
-	if [ $build_status -eq 0 ]; then
+	if [ $build_status -eq 0 ] && [ -z "$warp_test" ]; then
 		if cargo build "${source_flags[@]}" --quiet -p warp-runtime --bin warp-runtime >> "$HERE_WORK/log.txt" 2>&1; then
 			export WARP_TEST_STUBS_BUILT=1
 		else
@@ -296,14 +310,22 @@ run_tests_here() {
 	drop_stale_compilers >> "$HERE_WORK/log.txt"
 	local test_start=$SECONDS
 	# the settings reach the tests alone: the build stays the same for every setting, so a warm VM builds a tip once
-	[ $build_status -eq 0 ] && printf 'cloud-test: in %s at %s: cargo test %s -- %s\n' "$PWD" "$(git rev-parse --short HEAD)" "${test_args[*]}" "${filters[*]}" >> "$HERE_WORK/log.txt"
-	[ $build_status -eq 0 ] && run_watched "$HERE_WORK/log.txt" \
-		env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
-	[ $build_status -eq 0 ] && rerun_killed_failures "$HERE_WORK/log.txt" \
-		env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast
+	if [ $build_status -eq 0 ] && [ -n "$warp_test" ]; then
+		run_warp_test "$HERE_WORK/log.txt" "$(cargo_target_dir)/release/warp" ${warp_test_folders[@]+"${warp_test_folders[@]}"}
+	elif [ $build_status -eq 0 ]; then
+		printf 'cloud-test: in %s at %s: cargo test %s -- %s\n' "$PWD" "$(git rev-parse --short HEAD)" "${test_args[*]}" "${filters[*]}" >> "$HERE_WORK/log.txt"
+		run_watched "$HERE_WORK/log.txt" \
+			env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
+		rerun_killed_failures "$HERE_WORK/log.txt" \
+			env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast
+	fi
 	test_seconds=$((SECONDS - test_start))
 	[ -n "$refusals" ] && [ -f "$refusals" ] && cat "$refusals" >> "$HERE_WORK/log.txt"
-	write_summary "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" "$build_environment" > "$HERE_WORK/summary.txt"
+	if [ -n "$warp_test" ] && [ -z "$build_environment" ]; then
+		warp_test_summary "$HERE_WORK/log.txt" > "$HERE_WORK/summary.txt"
+	else
+		write_summary "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" "$build_environment" > "$HERE_WORK/summary.txt"
+	fi
 	{
 		echo "run: $name"
 		echo "branch: $branch"
@@ -352,6 +374,37 @@ run_watched() {
 	done
 	wait $runner
 	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$log"
+}
+
+cargo_target_dir() {
+	cargo metadata --format-version 1 --no-deps 2>/dev/null | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p'
+}
+
+# --warp-test: compiler.wasm built by the new binary, then `warp test [folder…]` (src/compiler/pure_tests.rs): every
+# pairs line and is! line through `warp pure`, each in a child with its own time limit, so no stall watchdog
+run_warp_test() {
+	local log=$1 warp=$2; shift 2
+	export WARP_LIB=$PWD/lib WARP_HINTS=0
+	"$warp" rebuild pure >> "$log" 2>&1
+	timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS env ${settings[@]+"${settings[@]}"} "$warp" test "$@" >> "$log" 2>&1
+	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$log"
+}
+
+# The verdict of a --warp-test log from its last line, `✓ n tests passed in f files` or `m of n failed in f files`,
+# and its first ✗ lines
+warp_test_summary() {
+	local log=$1 total run=0 failed=0 failures
+	total=$(grep -E '^(✓ [0-9]+ tests? passed|[0-9]+ of [0-9]+ failed) in ' "$log" | tail -1)
+	if [[ "$total" =~ ^✓\ ([0-9]+) ]]; then run=${BASH_REMATCH[1]}
+	elif [[ "$total" =~ ^([0-9]+)\ of\ ([0-9]+) ]]; then failed=${BASH_REMATCH[1]} run=${BASH_REMATCH[2]}
+	fi
+	echo "verdict: $([ -n "$total" ] && [ "$failed" -eq 0 ] && echo green || echo red)"
+	echo "passed: $((run - failed)), failed: $failed (warp test: ${total:-no total line, it did not finish})"
+	failures=$(grep -c '^✗ ' "$log")
+	if [ "$failures" -gt 0 ]; then
+		echo "failures (the first $SHOWN_WARP_TEST_FAILURES of $failures, all in log.txt.gz):"
+		grep '^✗ ' "$log" | head -$SHOWN_WARP_TEST_FAILURES | sed 's/^/  /'
+	fi
 }
 
 # Counts, failing tests with the first line of their panic, environmental and known ones (notes/known_failures.md,
@@ -781,7 +834,7 @@ main() {
 			*) break ;;
 		esac
 	done
-	[ $# -ge 2 ] || { sed -n '2,18p' "$0"; exit 2; }
+	[ $# -ge 2 ] || { sed -n '2,20p' "$0"; exit 2; }
 	if [ -n "$pure_hello" ]; then
 		[ $# -eq 2 ] || fail "--pure-hello is a complete test preset and does not take filters"
 		set -- "$1" "$2" "${PURE_HELLO_ARGS[@]}"

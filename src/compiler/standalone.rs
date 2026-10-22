@@ -50,14 +50,13 @@ pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiled(program, by), arguments)
 }
 
-/// The value of inline code, `warp pure "x=√72.;x^2"`, compiled as a program file of the current folder would be
-pub fn run_code(code: &str, by: Compiler) -> Node {
+/// The value of `code` (`warp pure "x=√72.;x^2"`, a test case), compiled as a program file of `folder` would be
+pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 	let file = std::env::temp_dir().join(format!("warp-inline-{}.warp", std::process::id()));
-	if let Err(failure) = std::fs::write(&file, code) {
+	if let Err(failure) = std::fs::write(&file, format!("{code}\n")) {
 		return error(&format!("{}: {failure}", file.display()));
 	}
-	let folder = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
-	let module = compiled_in(&file, &folder, by);
+	let module = compiled_in(&file, folder, by);
 	let _ = std::fs::remove_file(&file);
 	ran(module, Vec::new())
 }
@@ -104,6 +103,11 @@ pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	let path = build_path(by);
 	build(by, &path)?;
 	Ok(path)
+}
+
+/// The compiler's build file there, built first when missing: before many runs start at once, so none waits on a build
+pub fn prepare(by: Compiler) -> Result<(), Node> {
+	compiler(by).map(|_| ())
 }
 
 /// compiler.warp's module from its build file, built first when missing; one line when it was built from another lib/
