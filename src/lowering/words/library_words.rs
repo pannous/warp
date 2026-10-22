@@ -147,6 +147,7 @@ pub fn shallow_flag(argument: &Node) -> Node {
 	}
 }
 
+// ⚠ WARP DOES THIS DIFFERENTLY: sum is a plain fold, `sum(xs) := fold(xs, 0, +)`, no expanded template → lib/prelude.warp
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `hidden_value` a
 /// temporary that holds it once (each `hidden_x` becomes the temporary `word·x·3`), `word_argument_2` … the arguments after the receiver. The words written in warp
 /// (first, last, as_list, round_to, replace, is_digit …) are lib/prelude.warp's. These two stay: sum's list_sum is the
@@ -1395,6 +1396,7 @@ impl Lowering {
 	}
 }
 
+// ⚠ WARP DOES THIS DIFFERENTLY: no list_sum hook by name: sum is one fold loop like any other → lib/compiler/lambdas.warp
 /// `(tmp = xs; loop)` → `(tmp = xs; list_sum(tmp, loop))`
 fn dispatched_sum(expanded: Node) -> Node {
 	let Node::List(mut items, bracket, separator) = expanded.drop_meta().clone() else {

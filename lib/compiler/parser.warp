@@ -2449,13 +2449,6 @@ def in_slot(words: list, at: int): bool := at <= #words and not phrase_prepositi
 // A type word, its plural (`numbers`) or a type the source declares
 // Rust twin: analyzer type_word_kind, plural_element_type
 def known_type(word: text, types: list): bool := is_type_word(word) or plural_type_word(word) or types.contains(word)
-// `ints`, `matches`: the plural of a type word (ends_with gives an int, so it only steers here)
-def plural_type_word(word: text): bool {
-	if not word.ends_with("s") { return false }
-	if is_type_word(word[0..<(#word - 1)]) { return true }
-	if word.ends_with("es") { return is_type_word(word[0..<(#word - 2)]) }
-	false
-}
 
 // The name a slot gives its parameter: `a`, `number` of `number: number`, `b` of `to b`
 def slot_name(parameter: Node): text := match parameter {

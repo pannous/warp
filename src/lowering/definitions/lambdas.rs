@@ -168,6 +168,7 @@ const OPERATOR_VALUES: [(Op, &str); 13] = [
 ];
 const OPERATOR_PARAMETERS: [&str; 2] = ["operator_left", "operator_right"];
 /// The value of an operator applied to nothing: the start of a fold that leaves the list empty
+// ⚠ WARP DOES THIS DIFFERENTLY: operator identities are warp data, laws declared once → lib/prelude.warp operator_laws
 const OPERATOR_IDENTITIES: [(&str, i64); 2] = [("+", 0), ("*", 1)];
 
 /// `+` of Add, for the operators that stand alone as a value
