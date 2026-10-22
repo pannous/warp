@@ -2096,6 +2096,8 @@ def logical_code(body: Body, symbol: text, a: list, b: list): list {
 		return ["bool", a + [op.if, type_bytes.bool, op.i64_const, 1, op.i64_eqz, op.i32_eqz, op.else] + b + [op.end]]
 	}
 	kind = if a#1 == "bool" then b#1 else if b#1 == "bool" then a#1 else joint_kind(a#1, b#1)
+	# a list or text, `at < n and fields`, `e or "a"`: either value boxed, as a value known only at run time is
+	if kind == "list" or kind in characters { kind = "node" }
 	# on a float Rust fails: "is a float where an exact Int is expected"; boxed values count by their truth
 	if (kind != "int" and kind != "node") or a#1 == "float" or b#1 == "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	held = [a#1, [op.local_get] + uleb(fresh_local(body, a#1))]
@@ -2229,6 +2231,8 @@ annotated_kind(written: text): text := {
 	if word in node_annotations or word in module.classes or word.ends_with("?") { return "node" }
 	# Rust twin: type_names.rs plural_element_type
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return "list" }
+	# `list of text`, `map of int`: the collection the phrase starts with (parser.warp with_type_phrases)
+	if word.contains(" of ") { return annotated_kind(word.split(" of ")#1) }
 	word
 }
 # the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`; any other word itself
@@ -2404,7 +2408,7 @@ def host_call(body: Body, name: text, arguments: any): list {
 host_builders = [["new_empty", [], "built_empty"], ["new_int", ["int"], "built_int"], ["new_bool", ["int"], "built_bool"],
 	["new_float", ["float"], "built_float"], ["new_codepoint", ["char"], "built_codepoint"], ["new_text", ["char", "char"], "built_text"],
 	["new_symbol", ["char", "char"], "built_symbol"], ["new_key", ["node", "node", "int"], "built_key"],
-	["new_list", ["node", "node", "int"], "built_list"], ["error_of", ["node"], "built_error"]]
+	["new_list", ["node", "node", "int"], "built_list"], ["new_type", ["node", "node"], "built_type"], ["error_of", ["node"], "built_error"]]
 # made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
 # the trap detail the host left (src/host/native.rs raised)
 def exported_builders(): any {
