@@ -49,7 +49,7 @@ def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else
 def unmatched(c: any, a: any, numeric: bool): list {
 	if a#1 == no_kind { return [no_kind, c + [op.if, no_value] + a#2 + [op.end]] }
 	if a#1 == "int" or a#1 == pending { return ["int", c + [op.if] + value_type("int") + converted(a, "int") + [op.else, op.i64_const, 0, op.end]] }
-	otherwise = if numeric or a#1 == "float" or a#1 == "bool" then boxed(number_value(0)) else [ref_null, gc.node]
+	otherwise = if numeric or a#1 == "float" or a#1 == "bool" then boxed(number_value(0)) else [ref_null, gc_type(gc.node)]
 	["node", c + [op.if] + value_type("node") + boxed(a) + [op.else] + otherwise + [op.end]]
 }
 # `while c do body`: block { loop { exit unless c; block { body }; step; again } }; a `break` in body branches to the

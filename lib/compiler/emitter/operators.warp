@@ -61,7 +61,7 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	if symbol in bit_operators { return operation_code(body, symbol, ["int", converted(["node", a], "int")], ["int", converted(["node", b], "int")]) }
 	left = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	right = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
-	ints = operation_code(body, symbol, ["int", unboxed(left#2, gc.int_box)], ["int", unboxed(right#2, gc.int_box)])
+	ints = operation_code(body, symbol, ["int", unboxed(left#2, gc_type(gc.int_box))], ["int", unboxed(right#2, gc_type(gc.int_box))])
 	floats = operation_code(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
 	kind = if ints#1 == "bool" then "bool" else "node"
 	exact = exact_operation(body, symbol, left, right, floats)
