@@ -155,13 +155,19 @@ fn is_serving_statement(statement: &Node) -> bool {
 		|| !top_level_routes(statement).is_empty()
 }
 
+/// The routes a program has without a server of its own: hosted, those of its value and functions
+/// (with_default_routes); run, the page of each `get` (with_page_routes)
+pub fn with_implied_routes(program: Node) -> Node {
+	match crate::pipeline::compile_mode().for_hosting {
+		true => with_default_routes(program),
+		false => with_page_routes(program),
+	}
+}
+
 /// A hosted program without routes (`warp deploy`, card make-deploy) answers anyway: its value is the page at /, and
 /// each function the route calling it, `square(n) := n*n` answering /square/3 with 9 (an untyped path parameter is a
 /// number when it is digits, lib/router.warp). A program of functions only lists their routes at /
-pub fn with_default_routes(program: Node) -> Node {
-	if !crate::pipeline::compile_mode().for_hosting {
-		return program;
-	}
+fn with_default_routes(program: Node) -> Node {
 	let (mut statements, separator) = match program.drop_meta() {
 		Node::List(statements, Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => {
 			(statements.clone(), separator.clone())
@@ -205,10 +211,10 @@ pub fn with_default_routes(program: Node) -> Node {
 /// {…}` is also the page at its path, `route "/path" {…}` (cards square-int, recognized-browser: `get "/" {"ok"}` shows
 /// "ok", the address bar's /square/9 shows `get "/square/:n:int" { n*n }`'s 81). A block reading the request has no
 /// page: there is no request; its `status`/`header` lines answer nothing there (host.js response_header)
-pub fn with_page_routes(program: Node) -> Node {
+fn with_page_routes(program: Node) -> Node {
 	let mode = crate::pipeline::compile_mode();
 	let serving = crate::compiler::compile_context::read(|context| context.serving_port).is_some();
-	if serving || mode.for_a_page || mode.for_wagi || mode.for_hosting {
+	if serving || mode.for_a_page || mode.for_wagi {
 		return program;
 	}
 	let (statements, separator) = match program.drop_meta() {

@@ -31,9 +31,7 @@ impl Optionals {
 			}
 		}
 		if let Node::Key(value, Op::As, target) = node.drop_meta() {
-			// `text as bytes` is the text's UTF-8 bytes, no cast of each item
-			let element = crate::analyzer::declared_element_type(target).filter(|_| !target.is_symbol(BYTE_LIST));
-			if let Some(element) = element {
+			if let Some(element) = item_cast_type(target) {
 				return items_cast(self.rewrite(value.as_ref().clone()), element);
 			}
 			if let Node::Symbol(target) = target.drop_meta() {
@@ -57,6 +55,12 @@ impl Optionals {
 		let assignment = assign(held.clone(), value);
 		Node::List(vec![assignment, cast(held)], Bracket::Round, Separator::Semicolon)
 	}
+}
+
+/// The type a cast to a list type casts each item to: `ints`, `[text]`; `text as bytes` is the text's UTF-8 bytes
+/// (of_lookups::unit_selected), no cast of each item
+pub(crate) fn item_cast_type(target: &Node) -> Option<&str> {
+	crate::analyzer::declared_element_type(target).filter(|_| !target.is_symbol(BYTE_LIST))
 }
 
 /// `xs as texts`, `xs as [text]`: the list with each item cast to the element type, `(xs as list).map(item => item as text)`

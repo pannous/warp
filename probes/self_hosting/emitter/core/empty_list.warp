@@ -1,0 +1,12 @@
+// `[]` is the empty list, not ø itself, in every lane (card self-hosted-runtime): it prints [], is a list, equals ø
+// but is not ø (`===` also compares the kind), and grows by += and + as any list does
+xs = []
+print xs
+print type(xs)
+print(xs == ø)
+print(xs === ø)
+xs += 3
+print xs
+print([] + "a")
+print([1] + 2)
+print([1, 2].filter(x => x > 5))

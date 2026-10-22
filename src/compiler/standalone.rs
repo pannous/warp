@@ -47,43 +47,39 @@ impl Compiler {
 
 /// The program's value, run from the module compiler.warp made of it, with these arguments (`use os; args`)
 pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
-	match compiled(program, by) {
-		Ok(module) => run_with(module, arguments),
-		Err(failure) => failure,
-	}
+	ran(compiled(program, by), arguments)
 }
 
-/// As `run`, with `use` reading from `folder` instead of the program's own: a test case of tests/x/test_y.warp written
-/// to a file elsewhere
-pub fn run_in(program: &Path, folder: &Path, by: Compiler) -> Node {
-	match compiled_in(program, folder, by) {
-		Ok(module) => run_with(module, vec![]),
-		Err(failure) => failure,
-	}
-}
-
-/// The value of `code` (`warp pure "2+3*4"`, a test case), written to a file of its own and run as `run_in` runs it
+/// The value of `code` (`warp pure "x=√72.;x^2"`, a test case), compiled as a program file of `folder` would be
 pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
-	let program = std::env::temp_dir().join(format!("warp-code-{}.warp", std::process::id()));
-	if let Err(failure) = std::fs::write(&program, format!("{code}\n")) {
-		return error(&format!("{}: {failure}", program.display()));
+	let file = std::env::temp_dir().join(format!("warp-inline-{}.warp", std::process::id()));
+	if let Err(failure) = std::fs::write(&file, format!("{code}\n")) {
+		return error(&format!("{}: {failure}", file.display()));
 	}
-	let value = run_in(&program, folder, by);
-	let _ = std::fs::remove_file(&program);
-	value
+	let module = compiled_in(&file, folder, by);
+	let _ = std::fs::remove_file(&file);
+	ran(module, Vec::new())
 }
 
-fn run_with(module: CompiledModule, arguments: Vec<String>) -> Node {
-	crate::modules::std_adapters::set_program_arguments(arguments);
-	crate::pipeline::run_module(module)
+/// The value of the compiled module run with these arguments, or why it was not compiled
+fn ran(module: Result<CompiledModule, Node>, arguments: Vec<String>) -> Node {
+	match module {
+		Ok(module) => {
+			crate::modules::std_adapters::set_program_arguments(arguments);
+			crate::pipeline::run_module(module)
+		}
+		Err(failure) => failure,
+	}
 }
 
-/// The module compiler.warp makes of the program file: `compiler.warp <source> <wasm> <folder> <lib>`
+/// The module compiler.warp makes of the program file, its folder in scope
 pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let program = program.canonicalize().map_err(|failure| error(&format!("{}: {failure}", program.display())))?;
-	compiled_in(&program, program.parent().unwrap_or(Path::new("/")), by)
+	let folder = program.parent().unwrap_or(Path::new("/")).to_path_buf();
+	compiled_in(&program, &folder, by)
 }
 
+/// The module compiler.warp makes of the program file with `folder` in scope: `compiler.warp <source> <wasm> <folder> <lib>`
 fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);

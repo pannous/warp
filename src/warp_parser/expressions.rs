@@ -45,6 +45,8 @@ impl WarpParser {
 			emitted
 		} else if let Some(head) = self.try_parse_operator_method_head() {
 			head
+		} else if let Some(bracketed) = self.try_parse_circumfix() {
+			bracketed
 		} else if let Some((op, chars)) = self.peek_prefix_operator().filter(|_| !self.at_member_name(0)) {
 			let (prefix_line, prefix_column) = self.get_position();
 			// `-7 abs`, `f = abs`, `x abs + 1`: an operator word without its operand is the operator itself, which
@@ -73,8 +75,6 @@ impl WarpParser {
 					node: Box::new(applied),
 					data: Box::new(Node::key(crate::words::OPERATOR_WORD_MARK, Node::True)),
 				}
-			} else if chars == 1 && op == Op::Abs {
-				self.parse_norm_bars()
 			} else {
 				let rhs = self.parse_prefix_operand(op);
 				if op == Op::Hash {
@@ -445,14 +445,19 @@ impl WarpParser {
 			Op::Hash => self.parse_expr(left_bp - 1),
 			Op::Add => self.parse_expr(Op::Neg.binding_power().1), // `+2^2` like `-2^2`
 			// `-floor 2.5` negates the call `floor 2.5`, as `1 + floor 2.5` adds it (card leading-minus); a variable takes
-			// no argument, and in `[-x 1]` the space starts the next item
+			// no argument, in `[-x 1]` the space starts the next item, and an operator word is no argument, as after
+			// any operand: `if c then -b else b`, `-g or 2`
 			Op::Neg => {
 				let operand = self.parse_expr(right_bp);
 				let summand_bp = Op::Add.binding_power().1;
+				let at_operator_word = self.current_char().is_alphabetic() && self.peek_operator().is_some();
 				match operand.drop_meta() {
-					Node::Symbol(name) if !self.context.in_spaced_list && !self.variables.contains(name) => self
-						.try_parse_implicit_application(&operand, summand_bp, ARGUMENT_BP, summand_bp)
-						.unwrap_or(operand),
+					Node::Symbol(name)
+						if !self.context.in_spaced_list && !self.variables.contains(name) && !at_operator_word =>
+					{
+						self.try_parse_implicit_application(&operand, summand_bp, ARGUMENT_BP, summand_bp)
+							.unwrap_or(operand)
+					}
 					_ => operand,
 				}
 			}

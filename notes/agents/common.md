@@ -147,6 +147,16 @@ After a context swap, this file and your role file win over anything a handover 
   notes/cloud_development.md). A green cloud run counts as the targeted run. A Rust change to the parser, lowering,
   analyzer, emitter, compiler runner, or pipeline also runs `scripts/cloud-test.sh --pure-hello <branch> <tip>`: the
   preset gives the ignored end-to-end `warp pure hello` test its required test opt-level 2 and exact runner flags.
+  Warp-only branches (user 2026-10-21, decision warp-only-acceptance: nothing in src/, crates/, tests/**/*.rs,
+  Cargo.*, build.rs) need no cloud run at all: the branch is accepted when the Rust-compiled compiler.warp compiles
+  itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's binary; it
+  queues behind a running check, one at a time on the Mac: never run `warp rebuild self` in parallel). Mark it
+  `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. Warp
+  branches have priority over Rust-change branches (user 2026-10-21): they land before any Rust batch, and work in
+  .warp is preferred whenever a task can be done there.
+  A change to lib/compiler/ (types or annotations included) also checks the self build before Ready:
+  `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp`; a form
+  emitter.warp refuses there is fixed or carded, never left for main to find.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,

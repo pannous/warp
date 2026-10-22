@@ -1,0 +1,4 @@
+// card front-prints: compiling this prints no "`Round` names nothing" warning (the folding probe compiles quietly)
+enum Shape { Round, Square }
+shape_of(n: int): Shape := if n > 0 then Shape.Round else Shape.Square
+print shape_of(1)

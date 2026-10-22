@@ -340,7 +340,6 @@ impl WarpParser {
 			dash if glyph_operator(dash) == Some(Op::Sub) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
-			'‖' => Some((Op::Abs, 1)),
 			'#' => self.css_color_length().is_none().then_some((Op::Hash, 1)), // prefix # means count/length
 			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
 			// subject; a glued `<tag` stays a bracket
@@ -400,7 +399,8 @@ impl WarpParser {
 	}
 
 	/// After a type word, blanks and then the definition `:=` or a declared name `i =` after `width` characters:
-	/// `int? i = 3` and `as int? := …` are optional types, no ternary
+	/// `int? i = 3` and `as int? := …` are optional types, no ternary; `f(): Name? := …` also of a type the program
+	/// does not declare (a used file's), as a ternary has no empty branch
 	pub(super) fn declaration_follows(&self, type_word: &str, width: usize) -> bool {
 		let is_type =
 			crate::type_tests::builtin_type_name(type_word).is_some() || self.declared_types.contains(type_word);
@@ -413,7 +413,20 @@ impl WarpParser {
 			'=' => self.peek_char(at + 1) != '=',
 			_ => false,
 		};
-		is_type && blanks > 0 && if name == 0 { assigns(start) } else { assigns(after_name) }
+		blanks > 0 && if name == 0 { assigns(start) } else { is_type && assigns(after_name) }
+	}
+
+	/// `def f(x: int): list? {…}`: the word before the `?` here follows a signature's `):` and blanks and a `{` follow
+	/// after `width` characters, so it is an optional result type before the body, no ternary (decision optional-result)
+	pub(super) fn result_body_follows(&self, width: usize) -> bool {
+		let blanks = self.blanks_at(width);
+		let before = &self.chars[..self.pos];
+		let word_start = before.iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
+		let mut written = before[..word_start].iter().rev().filter(|ch| !ch.is_whitespace());
+		blanks > 0
+			&& self.peek_char(width + blanks) == '{'
+			&& written.next() == Some(&':')
+			&& written.next() == Some(&')')
 	}
 
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on

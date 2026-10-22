@@ -399,18 +399,15 @@ fn run_command(args: &[String], given: &[String]) {
 		std::process::exit(if failed > 0 { 1 } else { 0 });
 	} else if args[1] == REBUILD_COMMAND {
 		rebuild_compilers(args.get(2).map(String::as_str));
-	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str())
-		&& args.get(2).is_some_and(|path| has_warp_extension(path))
-	{
-		use warp::compiler::standalone::{run, Compiler};
-		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
-		print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
 	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
-		// `warp pure "2+3*4"`: the words after the command are the code, its `use` reading from the current folder
-		use warp::compiler::standalone::{run_code, Compiler};
+		use warp::compiler::standalone::{run, run_code, Compiler};
 		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
-		let folder = env::current_dir().unwrap_or_default();
-		print_and_exit(run_code(&args[2..].join(" "), &folder, by));
+		// `warp pure <file.warp> [arguments…]`, or inline code as plain `warp <code>` takes it, `use` reading from the
+		// current folder
+		if has_warp_extension(&args[2]) {
+			print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
+		}
+		print_and_exit(run_code(&args[2..].join(" "), &env::current_dir().unwrap_or_default(), by));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments([program_arguments, given].concat());

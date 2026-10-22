@@ -1,0 +1,8 @@
+# `[]` written in code is a list of no items, not ø (decision empty-is-not-missing): it prints [] in every lane, a
+# function giving it gives a list (card pure-lane-literal)
+x = [1]
+x = []
+print x
+f(n: text): list := if n == "a" then [1] else []
+print f("b")
+f("b") + x

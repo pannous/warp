@@ -21,17 +21,20 @@ prelude_source = read(library_folder + "/prelude.warp")
 # across runs and lowered once (card pure-warm-start)
 runtime_words = kept(RUNTIME_WORDS) ?? keep(RUNTIME_WORDS, lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source))
 
-# the wasm module of the source, as bytes; a form beyond the emitter's core gives its refusal, "outside the core: …"
+# the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core
 compile(source: text, folder: text): any := {
 	program = lowered_program(source, folder, prelude_source)
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules? 
-	typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program))
+	made = typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program))
+	# a form beyond the emitter's core gives the refusal's text, the compile's error
+	if made is text { throw made }
+	made
 }
 
 # warp compiler.warp <source file> <wasm file> [<folder of the source's uses> [<lib folder>]]
 source_file = args#1
 folder = if #args > 2 then args#3 else folder_of(source_file)
-module = compile(read(source_file), folder)
-# a refused program is the compile's error: no module is written
-if module is text { raise module }
-write_bytes(args#2, module)
+compiled = compile(read(source_file), folder)
+# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
+if compiled is text { raise compiled }
+write_bytes(args#2, compiled)
