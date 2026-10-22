@@ -58,7 +58,7 @@ value_word = "value"
 # Two steps of the passes apply them (passes.warp): the first sugar before the passes reading the kernel forms its
 # rules make (`is_type`), the other after those making or reading the forms its rules take
 first_sugar_module_names = ["sugar/types"]
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
