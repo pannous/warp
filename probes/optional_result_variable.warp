@@ -1,5 +1,7 @@
 #!/usr/bin/env warp
-# a `: list` result held in a variable that can be ø warns and gives ø (card pure-lane-declared)
+# a `: list` result held in a variable that can be ø gives [] silently (decision optional-result, list part reversed);
+# an `: int` result that can be ø, held or from a call, warns "can answer ø; declare `: int?`" and gives ø
+# expected: [] [2] ø 2 ø 3 ø, warnings for g, first and outer (cards pure-lane-declared, optional-result-flow)
 def f(x: int): list {
 	found = ø
 	if x > 0 { found = [x] }
