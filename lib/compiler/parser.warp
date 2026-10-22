@@ -2524,6 +2524,12 @@ def loop_variable(p: Parser): Node := {
 	listed(bracket, ",", names)
 }
 
+FLOAT_SUFFIXES = "fFdD"
+// the type words naming a kind of number, `number` itself not (Rust twin: type_tests.rs is_number_type_word)
+NUMBER_TYPE_WORDS = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32", "float32", "float64", "fast"]
+// the number a literal was written as: a float with a point or an exponent, else an int
+def written_number(written: text): Node := if written.contains(".") or written.contains("e") then float(written) else int(written)
+
 // A number, text, name or bracketed group
 // Rust twin: atoms.rs parse_atom, literals.rs read_number_value
 def atom(p: Parser): Node := {
@@ -2546,6 +2552,18 @@ def atom(p: Parser): Node := {
 		}
 		number_start = p.at
 		written = decimal_number(p)
+		// `0.1f`, `3d`: the float suffix of C, Java and C#, a tight conversion (C's `0.1l` is the litre instead)
+		// Rust twin: numbers.rs literal_type_suffix
+		if FLOAT_SUFFIXES.contains(peek(p.code, p.at, p.n)) and not is_name_char(peek(p.code, p.at + 1, p.n)) {
+			p.at = p.at + 1
+			return Key(written_number(written), Op.As, symbol("float"))
+		}
+		// `0.5:float`, `2.5:int`: a number type glued after a colon binds tightly, unlike the loose `as`
+		glued_type = if peek(p.code, p.at, p.n) == ':' then p.code[p.at + 1 .. name_end(p.code, p.at + 1, p.n)] else ""
+		if NUMBER_TYPE_WORDS.contains(glued_type) {
+			p.at = p.at + 1 + glued_type.length
+			return Key(written_number(written), Op.As, symbol(glued_type))
+		}
 		// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
 		// i64 a float (card int-beyond)
 		// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals; Rust twin:
