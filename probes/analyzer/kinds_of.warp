@@ -1,0 +1,9 @@
+# analyzer.warp's kinds of a program after the lowering passes, beside the lowered program:
+# WARP_LIB=<checkout>/lib warp probes/analyzer/kinds_of.warp <program.warp>
+use "../../lib/compiler/passes.warp"
+use "../../lib/compiler/analyzer.warp"
+use file
+program = checked_program(read(args#1), folder_of(args#1), read(env("WARP_LIB") + "/prelude.warp"))
+print(program)
+print(inferred_kinds(program).join("\n"))
+0
