@@ -1,0 +1,143 @@
+# Instance methods (card pure-class-methods): a class's methods `speak() := "I am " + name`, called on an instance as
+# `a.speak()` (the call speak(a)), become top-level functions of the instance, `speak(self) := { name = self.name;
+# "I am " + name }`: its fields read bare or as `self.name`, a sibling method `double()` called on it. Only methods that
+# read their instance are lifted, each named by one class alone; a class keeping a property method (`area := …`), a
+# keyword member (`def f() {…}`), a method changing its instance or one named as another's or as a function stays as
+# written, which the emitter refuses as a class with methods.
+use "walk.warp"
+
+self_word = "self"
+# the words that change a list or a map they are called on
+changing_words = ["add", "push", "append", "insert", "pop", "remove", "clear", "put", "set", "extend", "sort", "reverse"]
+assigning_ops = ["=", "+=", "-=", "*=", "/=", "%=", "++", "--"]
+
+# the view of a class declaration, ["type", name, body], of a statement, else ø
+class_view(statement: Node): any := match statement {
+	Key(left, op, right): { if left == symbol(opaque_word) and right is list and kind_of(right) == "type" and right#3 is list and right#3#1 == "list" then right else ø }
+	_: ø
+}
+
+# a member `m(params) := body`: its name, else ""
+method_name(member: any): text := {
+	if not (member is list and member#1 == "key" and member#2 == ":=") { return "" }
+	head = member#3
+	if not (head is list and head#1 == "list" and head#2 == "(" and #head >= 4 and head#4 is list and head#4#1 == "symbol") { return "" }
+	head#4#2
+}
+
+# the name of a field member: `name`, `age: int`, `age: int = 3`, else ""
+field_name(member: any): text := {
+	if not (member is list) { return "" }
+	if member#1 == "symbol" { return member#2 }
+	if member#1 == "key" and (member#2 == ":" or member#2 == "=") { return field_name(member#3) }
+	""
+}
+
+# a member neither a field nor a method: a property method, a keyword member, an initializer
+is_other_member(member: any): bool := method_name(member) == "" and field_name(member) == ""
+
+# whether a view uses the symbol
+view_mentions(view: any, name: text): bool := {
+	if not (view is list) { return no }
+	if #view == 2 and view#1 == "symbol" { return view#2 == name }
+	for part in view { if view_mentions(part, name) { return yes } }
+	no
+}
+
+# the field a target names, `x` or `self.x`, else ""
+target_field(target: any, fields: list): text := {
+	if not (target is list) { return "" }
+	if target#1 == "symbol" and target#2 in fields { return target#2 }
+	if target#1 == "key" and target#2 == "." and target#3 == ["symbol", self_word] and target#4 is list and target#4#1 == "symbol" { return target#4#2 }
+	if target#1 == "key" and (target#2 == "#" or target#2 == ".") { return target_field(target#3, fields) }
+	if target#1 == "list" and target#2 == "[" and #target >= 4 { return target_field(target#4, fields) }
+	""
+}
+
+# whether a method's body changes its instance: assigns a field, or calls a changing word on one
+changes_fields(view: any, fields: list): bool := {
+	if not (view is list) { return no }
+	if view#1 == "key" and view#2 in assigning_ops and target_field(view#3, fields) != "" { return yes }
+	if view#1 == "key" and view#2 == "." and target_field(view#3, fields) != "" and view#4 is list and view#4#1 == "list" and #view#4 >= 4 and view#4#4 is list and view#4#4#1 == "symbol" and view#4#4#2 in changing_words { return yes }
+	if view#1 == "list" and view#2 == "(" and #view >= 5 and view#4 is list and view#4#1 == "symbol" and view#4#2 in changing_words and target_field(view#5, fields) != "" { return yes }
+	for part in view { if changes_fields(part, fields) { return yes } }
+	no
+}
+
+# the body with each call of a sibling method `double()` called on the instance, `double(self)`
+on_self(view: any, siblings: list): any := {
+	if not (view is list) { return view }
+	if #view == 2 and (view#1 == "symbol" or view#1 == "text") { return view }
+	parts = view.map(part => on_self(part, siblings))
+	if parts#1 == "list" and parts#2 == "(" and #parts >= 4 and parts#4 is list and parts#4#1 == "symbol" and parts#4#2 in siblings {
+		return parts[0..<4] + [["symbol", self_word]] + parts[4..]
+	}
+	parts
+}
+
+# `m(self, params) := { f = self.f …; body }` of a method `m(params) := body`
+lifted_method(member: any, fields: list, siblings: list): any := {
+	head = member#3
+	parameters = head[4..]
+	body = on_self(member#4, siblings)
+	bound = fields.filter(field => view_mentions(body, field) and not view_mentions(parameters, field))
+	bindings = bound.map(field => ["key", "=", ["symbol", field], ["key", ".", ["symbol", self_word], ["symbol", field]]])
+	statements = if body is list and body#1 == "list" and body#2 == "{" then body[3..] else [body]
+	block = ["list", "{", ";"] + bindings + statements
+	["key", ":=", ["list", "(", "", head#4, ["symbol", self_word]] + parameters, block]
+}
+
+# the names the program's statements define as functions
+program_functions(statements: list): list := {
+	names = []
+	for statement in statements {
+		name = method_name(view_of(statement))
+		if name != "" { names += [name] }
+	}
+	names
+}
+
+# whether a class's methods may be lifted: each named by it alone, none changing it, no other members
+liftable(view: any, members: list, taken: any, functions: list): bool := {
+	fields = members.map(field_name).filter(name => name != "")
+	methods = members.map(method_name).filter(name => name != "")
+	if #methods == 0 or members.any(is_other_member) { return no }
+	for name in methods {
+		if taken[name] != 1 or name in functions or name in fields or name == "init" { return no }
+	}
+	not members.any(member => method_name(member) != "" and changes_fields(member#4, fields))
+}
+
+class_methods(program: Node): Node := {
+	statements = statements_in(program)
+	classes = statements.map(class_view).filter(view => view != ø)
+	if #classes == 0 { return program }
+	taken = {}
+	for view in classes {
+		for member in view#3[3..] {
+			name = if method_name(member) != "" then method_name(member) else field_name(member)
+			if name != "" { taken[name] = if name in taken then taken[name] + 1 else 1 }
+		}
+	}
+	functions = program_functions(statements)
+	parts = []
+	changed = no
+	for statement in statements {
+		view = class_view(statement)
+		members = if view == ø then [] else view#3[3..]
+		if view == ø or not liftable(view, members, taken, functions) {
+			parts += [statement]
+		} else {
+			changed = yes
+			fields = members.map(field_name).filter(name => name != "")
+			siblings = members.map(method_name).filter(name => name != "")
+			kept = members.filter(member => method_name(member) == "")
+			parts += [node_of(["type", view#2, view#3[0..<3] + kept])]
+			for member in members {
+				if method_name(member) != "" { parts += [node_of(lifted_method(member, fields, siblings))] }
+			}
+		}
+	}
+	if not changed { return program }
+	separated(bracketed(parts, ""), ";")
+}
