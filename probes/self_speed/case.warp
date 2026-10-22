@@ -1,0 +1,3 @@
+print("Straße ÉCOLE πσ".upper())
+print("Straße ÉCOLE ΠΣ".lower())
+print("ok".upper())
