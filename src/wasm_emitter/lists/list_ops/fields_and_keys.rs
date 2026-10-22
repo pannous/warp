@@ -905,6 +905,7 @@ impl WasmGcEmitter {
 				s.call(f, MAP_COLUMN);
 			});
 		}
+		// ⚠ WARP DOES THIS DIFFERENTLY: text index_of counts graphemes → lib/compiler/runtime/text_words.warp
 		// collection_contains(xs, x) (`x in xs`, `xs.has(x)`): yes when a map has the key x or a list the element x, else
 		// no (decision in-bool); collection_position(xs, x) (`xs.index_of(x)`): the 1-based position of x in a list, 1/0
 		// for a map key
