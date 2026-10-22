@@ -215,7 +215,6 @@ PASSED:
   ✓ control::test_error_values::printing_an_error_prints_its_message
   ✓ control::test_error_words::a_program_may_define_the_words
   ✓ control::test_error_words::fail_and_panic_raise
-  ✓ control::test_error_words::warn_warns_and_continues
   ✓ control::test_event_footguns::a_change_through_a_list_method_runs_the_listeners
   ✓ control::test_event_footguns::a_derived_value_in_a_method_argument_is_its_value
   ✓ control::test_event_footguns::a_global_declared_after_a_first_write_is_one_variable
@@ -519,7 +518,6 @@ PASSED:
   ✓ control::test_method_let_shadows_field::a_bare_field_write_changes_the_field
   ✓ control::test_method_let_shadows_field::a_let_local_hides_the_field
   ✓ control::test_method_let_shadows_field::a_let_local_starts_after_its_value
-  ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
   ✓ control::test_named_broadcast::a_named_event_reaches_another_program
   ✓ control::test_named_broadcast::a_program_hears_its_own_named_event
@@ -967,7 +965,6 @@ PASSED:
   ✓ control::test_try_host_failure::try_catches_an_adapter_failure
   ✓ control::test_try_index_and_float::a_float_value_passes_through_try_and_if
   ✓ control::test_try_index_and_float::indexing_what_may_be_no_list_falls_back
-  ✓ control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches
   ✓ control::test_try_list_index::a_non_int_element_is_caught
   ✓ control::test_try_list_index::indexing_empty_is_out_of_range
   ✓ control::test_try_named_traps::a_missing_field_is_caught
@@ -1062,7 +1059,6 @@ PASSED:
   ✓ ffi::test_builtin_lines::a_builtin_line_declares_and_imports_nothing
   ✓ ffi::test_builtin_lines::a_builtin_words_signature_is_its_line
   ✓ ffi::test_builtin_lines::a_programs_builtin_line_must_be_warps
-  ✓ ffi::test_cargo_crates::test_cargo_crate_trap_names_rust_functions
   ✓ ffi::test_component_drop::a_dropped_handle_is_refused
   ✓ ffi::test_component_drop::dropping_a_handle_runs_the_destructor
   ✓ ffi::test_component_exports_anywhere::a_components_exports_in_every_host
@@ -2654,7 +2650,6 @@ PASSED:
   ✓ modules::test_std_docs_comment_association::a_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::the_comment_block_directly_above_is_the_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::words_use_the_comment_line_directly_above_their_definition
-  ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
   ✓ modules::test_std_extrema::an_empty_list_has_no_extremum
   ✓ modules::test_std_extrema::extrema_of_one_list_of_candidates
@@ -2906,6 +2901,7 @@ PASSED:
   ✓ node::test_parsed_node_walks::parsed_braces_are_lists
   ✓ node::test_parsed_node_walks::parsed_type_declarations_are_nodes
   ✓ node::test_parsed_node_walks::part_readers_never_clash_with_fields
+  ✓ node::test_parsed_node_walks::position_readers_never_clash_with_fields
   ✓ node::test_parsed_node_walks::quoted_definitions_define_nothing
   ✓ node::test_quote_as_written::quoted_code_is_the_code_parse_gives
   ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
@@ -3841,13 +3837,8 @@ PASSED:
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
-  ✓ parser::test_self_pure::arm_inline_if_reads_self_hosted
-  ✓ parser::test_self_pure::assigned_it_blocks_run_pure
-  ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
-  ✓ parser::test_self_pure::block_definitions_hold_their_value_pure
   ✓ parser::test_self_pure::compile_takes_the_pure_lane
   ✓ parser::test_self_pure::comprehensions_run_pure
-  ✓ parser::test_self_pure::curly_lists_are_values_self_hosted
   ✓ parser::test_self_pure::defaults_run_pure
   ✓ parser::test_self_pure::digit_casts_run_pure
   ✓ parser::test_self_pure::durations_read_self_hosted
@@ -3861,16 +3852,13 @@ PASSED:
   ✓ parser::test_self_pure::for_loops_run_pure
   ✓ parser::test_self_pure::global_type_words_read_self_hosted
   ✓ parser::test_self_pure::host_words_on_nodes_run_pure
-  ✓ parser::test_self_pure::is_tests_types_and_equality_compares_self_hosted
   ✓ parser::test_self_pure::kind_changes_fail_pure
-  ✓ parser::test_self_pure::lambdas_run_pure
   ✓ parser::test_self_pure::lib_forms_run_pure
   ✓ parser::test_self_pure::long_float_literals_read_pure
   ✓ parser::test_self_pure::match_values_run_pure
   ✓ parser::test_self_pure::named_arguments_run_pure
   ✓ parser::test_self_pure::negated_operators_run_pure
   ✓ parser::test_self_pure::number_keys_run_pure
-  ✓ parser::test_self_pure::op_cases_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
   ✓ parser::test_self_pure::phrases_out_of_the_core
   ✓ parser::test_self_pure::program_names_run_pure
@@ -3882,7 +3870,6 @@ PASSED:
   ✓ parser::test_self_pure::std_modules_run_pure
   ✓ parser::test_self_pure::text_escapes_read_pure
   ✓ parser::test_self_pure::the_core_runs_pure
-  ✓ parser::test_self_pure::type_values_run_pure
   ✓ parser::test_self_pure::type_words_named_by_fields_run_pure
   ✓ parser::test_self_pure::used_files_run_pure
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
@@ -5062,6 +5049,7 @@ PASSED:
   ✓ types::test_map_passed_as_any::a_one_entry_map_in_an_any_slot_is_a_map
   ✓ types::test_map_read_size::a_size_entry_of_a_map_read_at_run_time
   ✓ types::test_map_read_size::any_entry_of_shell_info
+  ✓ types::test_map_read_size::the_count_of_texts_beside_a_length_entry
   ✓ types::test_map_read_size::the_size_entry_of_shell_info
   ✓ types::test_map_runtime_kind::a_map_parameter_is_a_map
   ✓ types::test_map_runtime_kind::map_is_a_type_word
@@ -5198,6 +5186,7 @@ PASSED:
   ✓ types::test_records_classes::a_class_declares_a_nested_block_of_fields
   ✓ types::test_records_classes::a_class_has_untyped_fields
   ✓ types::test_records_classes::a_constructor_takes_named_arguments_as_functions_do
+  ✓ types::test_records_classes::a_missing_field_next_to_a_class_names_its_position
   ✓ types::test_records_classes::a_missing_required_field_is_an_error
   ✓ types::test_records_classes::a_record_is_a_struct
   ✓ types::test_records_classes::an_enum_names_its_cases_by_index
@@ -5591,6 +5580,7 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_plain_run_leaves_no_executable_by_default
   ✓ wasm::test_standalone_executable::test_plain_run_with_warp_executable_leaves_it
   ✓ wasm::test_standalone_executable::test_running_a_file_leaves_its_executable
+  ✓ wasm::test_standalone_executable::test_running_a_file_shows_its_hints_once
   ✓ wasm::test_standalone_executable::test_running_without_a_stub_leaves_no_executable
   ✓ wasm::test_standalone_executable::test_warp_run_leaves_no_executable
   ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
@@ -5747,7 +5737,6 @@ PASSED:
   ✓ web::test_element_events::the_page_shows_the_markup_after_a_handler
   ✓ web::test_element_handler_quiet::an_element_s_handler_draws_no_native_warning
   ✓ web::test_expert_guide::every_expert_snippet_prints_what_the_guide_shows
-  ✓ web::test_expert_guide::every_expert_snippet_shows_its_value
   ✓ web::test_expert_guide::the_expert_guide_has_the_beginner_chapters
   ✓ web::test_field_events::a_committed_value_reaches_on_change
   ✓ web::test_field_events::a_field_event_is_no_markup_mistake
@@ -5990,7 +5979,6 @@ PASSED:
   ✓ web::test_warp_serve::a_server_is_known_without_running_it
   ✓ web::test_web_apis::notify_is_a_host_word
   ✓ web::test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
-  ✓ web::test_web_playground::a_trap_in_the_page_names_the_runtime_error
   ✓ web::test_web_playground::a_tree_from_the_page_reads_like_from_gc_object
   ✓ web::test_web_playground::an_acknowledged_warning_is_silent_and_the_value_stays
   ✓ web::test_web_playground::an_ambiguity_is_a_warning_the_page_can_acknowledge
@@ -6391,12 +6379,8 @@ PASSED:
   ✓ welcoming::test_warning_levels::levels_are_ordered_and_named
   ✓ welcoming::test_warning_levels::no_hints_hides_only_the_hints
   ✓ welcoming::test_warning_levels::strict_fails_from_normal_and_the_rust_error_mode_on_every_warning
-  ✓ welcoming::test_warning_levels::the_cli_labels_levels_and_shows_from_its_threshold
   ✓ welcoming::test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
-  ✓ welcoming::test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
-  ✓ welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors
   ✓ welcoming::test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
-  ✓ welcoming::test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
   ✓ welcoming::test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
   ✓ welcoming::test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
   ✓ welcoming::test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way
@@ -6497,6 +6481,15 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ control::test_error_words::warn_warns_and_continues
+  ✗ control::test_multiline_errors::a_raised_text_keeps_its_lines
+  ✗ control::test_try_index_and_float::modulo_by_zero_is_a_named_error_try_catches
+  ✗ web::test_expert_guide::every_expert_snippet_shows_its_value
+  ✗ web::test_web_playground::a_trap_in_the_page_names_the_runtime_error
+  ✗ welcoming::test_warning_levels::the_cli_labels_levels_and_shows_from_its_threshold
+  ✗ welcoming::test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
+  ✗ welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors
+  ✗ welcoming::test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
 
 SUMMARY:
-13 ignored, 6494 passed, 0 failed, 6494 total tested
+13 ignored, 6478 passed, 9 failed, 6487 total tested
