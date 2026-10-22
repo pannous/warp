@@ -46,7 +46,7 @@ const EMIT_PROGRAM: &str = concat!(
 const LIBRARY_MARK: &str = "{lib}";
 /// The runtime words emitter.warp compiles into a module, lowered like a program, in the compiler's folder
 const RUNTIME_WORDS: &str = "runtime.warp";
-/// The extended runtime words, which the core (runtime.warp and its parts) never uses: lib/compiler/runtime/extended/
+/// The extended runtime words, which the core (runtime.warp and its parts) never uses: lib/compiler/runtime_extended/
 /// named by this file's `use` lines, joined after the core's (decision runtime-split; compiler.warp RUNTIME_ROOTS)
 const EXTENDED_RUNTIME_WORDS: &str = "runtime_extended.warp";
 /// The module the host words are imported from
