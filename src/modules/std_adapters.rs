@@ -251,20 +251,42 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	}
 }
 
-/// The value kept under `name` (os.keep) while warp and its lib/ stay as they are: a value the program computes the same
-/// way at every run, such as compiler.warp's lowered runtime words (card pure-warm-start)
+/// The value kept under `name` (os.keep) while warp, its lib/ and the program stay as they are: a value it computes
+/// the same way at every run, such as compiler.warp's lowered runtime words (card pure-warm-start)
 #[cfg(feature = "native")]
 fn kept_value(name: &str) -> Option<Node> {
-	let key = crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {name}"))?;
+	let key = kept_key(name)?;
 	postcard::from_bytes(&crate::run::module_cache::kept_bytes(&key, KEPT_VALUE)?).ok()
 }
 
 #[cfg(feature = "native")]
 fn keep_value(name: &str, value: &Node) {
-	let key = crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {name}"));
-	if let (Some(key), Ok(bytes)) = (key, postcard::to_allocvec(value)) {
+	if let (Some(key), Ok(bytes)) = (kept_key(name), postcard::to_allocvec(value)) {
 		crate::run::module_cache::keep_bytes(&key, KEPT_VALUE, &bytes);
 	}
+}
+
+/// The cache key of the value kept under `name` by the running program: another program, such as compiler.warp built
+/// from an older lib/, never reads it (card pure-self-stale-cache)
+#[cfg(feature = "native")]
+fn kept_key(name: &str) -> Option<String> {
+	let program = RUNNING_PROGRAM.with(|program| program.borrow().clone());
+	crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {program} {name}"))
+}
+
+#[cfg(feature = "native")]
+thread_local! {
+	/// The SHA-256 of the running program's module, the owner of the values it keeps
+	static RUNNING_PROGRAM: std::cell::RefCell<String> = Default::default();
+}
+
+/// `run` with the module `bytes` as the running program, the one before it again afterwards
+#[cfg(feature = "native")]
+pub fn running_program<R>(bytes: &[u8], run: impl FnOnce() -> R) -> R {
+	let before = RUNNING_PROGRAM.with(|running| running.replace(crate::extensions::sha256_hex(bytes)));
+	let result = run();
+	RUNNING_PROGRAM.with(|running| running.replace(before));
+	result
 }
 
 /// The browser keeps no values across runs: each run computes them

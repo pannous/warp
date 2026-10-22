@@ -20,6 +20,7 @@ mod test_function_cache; // card prelude-word
 mod test_gpu_draw; // card gpu-draw
 mod test_hints_toggle; // card hints-toggle
 mod test_json_parser_fixes;
+mod test_kept_values; // card pure-self-stale-cache
 mod test_live_redefine; // card live-redefine
 mod test_midi;
 mod test_mouse_wheel; // card shader-wheel
