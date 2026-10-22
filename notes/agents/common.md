@@ -147,6 +147,7 @@ After a context swap, this file and your role file win over anything a handover 
   notes/cloud_development.md). A green cloud run counts as the targeted run. A Rust change to the parser, lowering,
   analyzer, emitter, compiler runner, or pipeline also runs `scripts/cloud-test.sh --pure-hello <branch> <tip>`: the
   preset gives the ignored end-to-end `warp pure hello` test its required test opt-level 2 and exact runner flags.
+  The `warp self` tests (warp_self_*) run with `--optimized`, the gate's opt-level 2: in a debug build they time out.
   Warp-only branches (user 2026-10-21, decision warp-only-acceptance: nothing in src/, crates/, tests/**/*.rs,
   Cargo.*, build.rs) need no cloud run at all: the branch is accepted when the Rust-compiled compiler.warp compiles
   itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's binary; it
