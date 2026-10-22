@@ -190,7 +190,7 @@ Sugar passes, with the rule each would become:
 | 86 | prefix_comparisons | `sq 2 == 4` → `sq(2) == 4`: F2 (parameter typed as a value) |
 | 65 | number_words | `rewrite one => 1` per word, works today (module rules skip bound words); keys/members stay: F1 |
 | 65 | parse_words | `rewrite eval($t) => interpret(parse($t))` works today; folding a constant text is a pass |
-| 64 | multiple_assignments | `a, b = b, a + b`: F3 + F4 |
+| 64 | multiple_assignments | stays a pass (supervisor, 2026-10-22): as rules it needs zip over two rest holes, an index binding (`x, y = [1, 2]`), two rest holes in one pattern (the matcher has one, rewrites.warp rest_at) and conditions over a rest hole (all names, equal counts), ~60–100 engine lines for a 64-line pass. Built once a second pass needs them (comprehensions' zip, F4 enum values) |
 | 61 | list_methods | `rewrite $xs.push($v) => $xs += [$v]` (add, append alike): works today |
 | 44 | interpolation | F8 |
 | 42 | type_tests | `rewrite $x is $t => is_type($x, "$t")`: F2 (t a type word no name binds) |
