@@ -1,0 +1,5 @@
+# sugar-plain-enums probe; expected: an error pointing at line 4 (the case written in arithmetic)
+enum Coin { Penny, Dime }
+print 1
+x = Coin.Dime - 3
+print x

@@ -1,3 +1,4 @@
+# sugar-plain-enums probe; expected: 2 / 3 / Dime / Nickel / Penny
 enum Coin { Penny, Nickel, Dime }
 print Coin.Dime as int
 print Coin.Dime as position

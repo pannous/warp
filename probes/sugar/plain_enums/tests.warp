@@ -1,3 +1,4 @@
+# sugar-plain-enums probe; expected: yes / no
 enum Coin { Penny, Dime }
 coins = [Penny, Dime]
 print coins.all(c => c is Coin)

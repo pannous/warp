@@ -1,3 +1,4 @@
+# sugar-plain-enums probe; expected: [3 0 0] / ["enum" "other"] / ["one" "none"]
 enum Coin { Penny, Nickel, Dime }
 enum Metal { Gold, Penny }
 rewrite size_of $c => #[cases of $e] where $c is case of $e
