@@ -30,7 +30,7 @@ count.
   - host.std_io; for compiler.wasm also host.read, fetch and fetch_within (by curl), and warn
   - any other import traps when called
 - std_io:
-  - os: env, args, cwd, input, stdin, kept, keep, command, exec, run
+  - os: env, args, cwd, input, stdin, kept, keep, command, exec, run, run_wasm, compile_wasm
   - file: read, write, append, exists, read_bytes, write_bytes
   - A failure answers the program an Error with the same text as warp-rust's std_adapters.rs, e.g. `os.command: sh -c
     exit 3 failed (exit status: 3): …`.
@@ -46,13 +46,41 @@ count.
   never written: WARP_HOST_SHIPPED_CACHE, else `<bin>/../share/warp/host-cache` or `<bin>/host-cache`:
   - A compiler module's machine code (`<hash>.cwasm`, ~18 MB for compiler-self, keyed by its bytes and the engine's
     compatibility hash).
-  - Kept values (`<hash>.kept`, keyed by the compiler's bytes, lib/'s files (paths within lib/ and contents, so the key
-    is the same on every machine) and the name). compiler.warp's lowered runtime words are ~380 KB.
+  - Kept values (`<hash>.kept`, keyed by the compiler's bytes, lib/'s files (paths within lib/ and contents) and the
+    name with lib/'s path taken out (compiler.warp names them "… runtime words of <lib>"), so the key is the same on
+    every install). compiler.warp's lowered runtime words are ~380 KB.
+  - The machine code of modules run by run_wasm, keyed by their bytes, and kept in memory for the rest of the run too.
+  - WARP_HOST_DEBUG=1 prints the compiler, lib/ and kept-values key of a compile.
   - Values with a big integer, a ratio or a function aren't kept. compiler.wasm's runtime words hold such an Int, so
     `--compiler full` lowers them on every run (~8 s).
 - Texts reach the program through its own `new_text(ptr, len)`, which copies them out of linear memory. compiler-self
   exports no text_heap, so the host writes into pages past the program's memory and reuses them while the memory size
   stays the same.
+
+## run_wasm (card warp-host-run-wasm)
+
+`use os` (lib/os.warp):
+- `run_wasm(bytes)`: a module's bytes run inside the program's warp-host, its main's value (else _start's; ø).
+  - bytes: a list of bytes (read_bytes, compile_wasm) or a text holding them (read).
+  - The same engine, and the same imports as a top-level module: WASI with the same stdout, std_io, C calls. A store
+    and instance of its own, on a thread of its own with the full wasm stack. The args are the program's.
+  - Machine code from the cache, keyed by the bytes: a second run is warm (in memory, else the .cwasm).
+  - A trap is an Error, `os.run_wasm: wasm trap: wasm `unreachable` instruction executed`, catchable with try. A
+    nonzero exit is an Error too, `the module exited with status 3`; exit 0 gives ø.
+  - The value is copied out of the module's store (nodes.rs); a function or big integer comes back as warp-host's
+    Other, as with any run.
+- `compile_wasm(code)`: the code, a program of the current folder, compiled in-process by warp-host's compiler
+  (compiler-self, or compiler.wasm with `--compiler full`); its bytes, or the refusal as an Error.
+  - `run_wasm(compile_wasm("6*7"))` gives 42: an eval.
+- Both go through std_io like os.run, so compiler-self's output calls them without an emitter change. The old
+  `host.run(ptr, len) -> i64` of warp-rust (src/host/native.rs) passes bytes in linear memory and gives only an i64;
+  pure modules have no such call, and std_io's node in, node out fits better. warp-rust has no os.run_wasm yet.
+- Timings (box, warm, profile host; the program `use os`+`use file` itself takes ~0.85 s to compile and run):
+  - in-process: 200 run_wasm of a module giving 42 add ~0.05 s, ~0.25 ms each
+  - the shell route, write_bytes then `run([warp-host, "t.wasm"])`: 200 add ~0.7 s, ~3.5 ms each
+  - a module never run before: its compile adds a few ms (one .cwasm written)
+  - `run_wasm(compile_wasm("6*7"))`: ~0.85 s in all, of which compile_wasm is the bulk, as `warp-host run '6*7'`
+    (0.12 s) plus `use os`
 
 ## C calls (M2)
 
@@ -163,8 +191,14 @@ hello.wasm, warm, 2–3 runs. Host suite 29/29 and launcher suite 22/22 pass wit
 
 - Cold start: 23 s of the ~26 s is compiler-self computing its kept values (the lowered runtime words), ~2–4 s is
   Cranelift compiling compiler-self. A shipped `.kept` removes the first, so a fresh install's first run takes ~4 s;
-  shipping the machine code too makes it warm but adds 18 MB per target, against the goal. Packaging can fill the
-  shipped cache by one `WARP_HOST_CACHE=<prefix>/share/warp/host-cache warp-host run hello.warp` (not wired yet).
+  shipping the machine code too makes it warm but adds 18 MB per target, against the goal (Supervisor: ship the
+  .kept only).
+- Packaging (card warp-host-run-wasm): packaging/host_cache.sh <dir> fills <dir>/host-cache with the .kept files of
+  one hello run in a tarball's layout (warp-host, compiler-self.wasm, lib/). release.yml builds warp-host
+  (`--profile host`) for each target, makes host-cache once in the compilers job and puts warp-host and host-cache in
+  every tarball. deb/rpm install it in /usr/share/warp/host-cache, the wheel in <env>/share/warp/host-cache, the
+  formula in pkgshare. Checked on the box with a staged tarball: nfpm's .deb, unpacked, with a fresh HOME runs hello
+  in 3.7 s the first time (26.8 s without host-cache), then 0.14 s; the wheel holds share/warp/host-cache.
 - Chosen default: profile host (opt-level "z", wasmtime's runtime at 3), parallel compilation, no wat. It is the
   smallest with warm times within noise of opt-level 3 (the programs' machine code is Cranelift's either way, so the
   opt-level only slows the host and Cranelift itself). `--release` still builds the 11.5 MB fast one.
