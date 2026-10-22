@@ -105,7 +105,12 @@ unbound_rules(module_rules: list, program: Node): list := {
 sugar_rules(program: Node): list := unbound_rules(sugar_module_names.map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")).flatten(), program)
 
 # the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too
-sugared(program: Node, rules: list): Node := if #rules == 0 then program else bottom_up(program, n => rule_rewritten(n, rules, rules.map(rule => {})))
+sugared(program: Node, rules: list): Node := {
+	if #rules == 0 { return program }
+	rule_scope = scope_of(program)
+	first_parameter_types = typed_first_parameters(program)
+	bottom_up(program, n => rule_rewritten(n, rules, rules.map(rule => {})))
+}
 
 word_set(words: list): any := {
 	set = {}
