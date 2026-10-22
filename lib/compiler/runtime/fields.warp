@@ -19,6 +19,10 @@ has_field(m: Node, name: text): bool := {
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
 # node_api.rs POSITIONED); any other node without a field of that name has no field line
 positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
+# `line_of(n)`, `column_of(n)`: where n was written, ø for a node without a position, which a field never shadows
+# (`.line` of the code `line = 1` is 1; card node-part-clash, Rust's node_api.rs PART_READERS)
+node_line(n: Node): Node := if is_meta(n) then meta_line(n) else ø
+node_column(n: Node): Node := if is_meta(n) then meta_column(n) else ø
 # `e.message` of an Error e
 is_error_message(m: Node, name: text): bool := node_is_error(m) and text_order(name, "message") == 0
 is_position_part(m: Node, name: text): bool := {
