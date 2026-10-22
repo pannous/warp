@@ -10,6 +10,9 @@ cargo() { sed 's/$/: test/' "$names"; }   # `cargo test … -- --list`
 source_flags=(--offline) test_args=("${FULL_FLAGS[@]}")
 work=$root/scratch/full-shards
 mkdir -p "$work"
+HERE_WORK=$work
+slow_files > "$HERE_WORK/slow"   # from the newest merged --full run in data/cloud/
+echo "slow files: $(tr '\n' ' ' < "$HERE_WORK/slow")"
 
 for shard in $(seq 1 $FULL_SHARDS); do shard_filters "$shard/$FULL_SHARDS" > "$work/filters-$shard"; done
 # each test matched by the filters of exactly one shard (libtest: a filter matches when the name contains it)

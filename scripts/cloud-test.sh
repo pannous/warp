@@ -28,6 +28,7 @@
 set -uo pipefail
 MODEL=${CLOUD_TEST_MODEL:-haiku}
 THIS_SCRIPT=$0                 # sent along with each job
+SLOW_FILES=""                  # sent along with each --full shard's job (slow_files)
 
 REPO=pannous/warp
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
@@ -141,10 +142,17 @@ unmatched_filters() {
 	done
 }
 
-# The filters of shard <i>/<n>: every n-th test file (<folder>::<file>::) of the built tests, sorted
+# The test file of each test name on stdin: <folder>::<file>::
+test_files() { awk -F'::' '{ print (NF < 3 ? $0 : $1 "::" $2 "::") }' | sort -u; }
+
+# The filters of shard <i>/<n>: every n-th test file of the built tests, the slow ones (the job's file `slow`) dealt
+# first so that they spread over the shards (all four self-hosted files once fell to one shard: 1351 s of tests, the
+# others 300 s), then the rest in sorted order
 shard_filters() {
-	cargo test "${source_flags[@]}" "${test_args[@]}" -- --list 2>/dev/null | sed -n 's/: test$//p' |
-		awk -F'::' '{ print (NF < 3 ? $0 : $1 "::" $2 "::") }' | sort -u |
+	local files
+	[ -f "$HERE_WORK/slow" ] || : > "$HERE_WORK/slow"   # missing, grep -v printed no file at all: no filter runs every test
+	files=$(cargo test "${source_flags[@]}" "${test_args[@]}" -- --list 2>/dev/null | sed -n 's/: test$//p' | test_files)
+	{ grep -Fxf "$HERE_WORK/slow" <<< "$files"; grep -vFxf "$HERE_WORK/slow" <<< "$files"; } |
 		awk -v shard="${1%/*}" -v shards="${1#*/}" '(NR - 1) % shards == shard - 1'
 }
 
@@ -456,6 +464,7 @@ run_job() {
 		mkdir -p "${arguments%/*}"
 		git fetch -q origin "+refs/heads/$JOBS_PREFIX/$job:refs/$JOBS_PREFIX/$job" && git show "refs/$JOBS_PREFIX/$job:arguments" > "$arguments" ||
 			{ echo "CLOUD TEST DONE: red, no job $JOBS_PREFIX/$job on origin"; return 1; }
+		git show "refs/$JOBS_PREFIX/$job:slow" > "${arguments%/*}/slow" 2>/dev/null
 	fi
 	local job_arguments=()
 	mapfile -t job_arguments < "$arguments"
@@ -474,10 +483,12 @@ cloud_prompt() {
 # The job's arguments, one per line, and this script as the one commit of cloud-jobs/<job>: the cloud runs the very
 # version that launched the job, never a newer or older origin/main
 push_job() {
-	local job=$1 arguments script tree commit output; shift
+	local job=$1 arguments script slow tree commit output; shift
 	arguments=$(printf '%s\n' "$@" | git -C "$MAIN_CHECKOUT" hash-object -w --stdin)
+	slow=$(printf '%s' "$SLOW_FILES" | git -C "$MAIN_CHECKOUT" hash-object -w --stdin)
 	script=$(git -C "$MAIN_CHECKOUT" hash-object -w --stdin < "$THIS_SCRIPT")
-	tree=$(printf '100644 blob %s\targuments\n100644 blob %s\tcloud-test.sh\n' "$arguments" "$script" | git -C "$MAIN_CHECKOUT" mktree)
+	tree=$(printf '100644 blob %s\targuments\n100644 blob %s\tcloud-test.sh\n100644 blob %s\tslow\n' "$arguments" "$script" "$slow" |
+		git -C "$MAIN_CHECKOUT" mktree)
 	commit=$(git -C "$MAIN_CHECKOUT" commit-tree "$tree" -m "cloud test job $job")
 	output=$(git -C "$MAIN_CHECKOUT" push -q origin "$commit:refs/heads/$JOBS_PREFIX/$job" 2>&1) ||
 		fail "push of $JOBS_PREFIX/$job failed: $output"   # quiet otherwise: GitHub offers a pull request for every new branch
@@ -724,6 +735,14 @@ merge_shards() {
 	gzip -f "$folder/log.txt"
 }
 
+# The test files with a test that ran over 60 s in the newest merged --full run (the shards deal them first)
+slow_files() {
+	local newest
+	newest=$(ls -t "$MAIN_CHECKOUT"/data/cloud/*/result.md 2>/dev/null | xargs grep -l '^tests: --full (' 2>/dev/null | head -1)
+	[ -n "$newest" ] || return 0
+	gzip -dc "${newest%/*}/log.txt.gz" | sed -n 's/^test \([^ ]*\) has been running for over.*/\1/p' | test_files
+}
+
 collect_full() {
 	local branch=$1 tip=$2 card=$3 shard name shard_names=() shard_folders=()
 	shift 3
@@ -774,6 +793,7 @@ main() {
 	if [ $# -eq 3 ] && [ "$3" = --full ]; then
 		local shard
 		if [ -z "$result_only" ]; then
+			SLOW_FILES=$(slow_files)
 			for shard in $(seq 1 $FULL_SHARDS); do launch "$1" "$2" --full $SHARD_FLAG "$shard/$FULL_SHARDS" || exit; done
 		fi
 		[ -n "$wait$result_only" ] && collect_full "$1" "$2" "$card"
