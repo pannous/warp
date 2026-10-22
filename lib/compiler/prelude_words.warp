@@ -7,6 +7,7 @@
 use "parser.warp"
 use "walk.warp"
 use "uses.warp"
+use "builtin_signatures.warp"
 
 # [name, text] of each function definition in source: a line starting with a name and its parameters, with the
 # indented or closing lines below it
@@ -188,7 +189,7 @@ with_type_module_uses(program: Node): Node := {
 	providers = type_module_providers()
 	wanted = {}
 	for word in called_words(program) {
-		if word in providers and word not in own and word not in call_kinds { wanted[providers[word]] = yes }
+		if word in providers and word not in own and not is_declared_word(word) { wanted[providers[word]] = yes }
 	}
 	# in the order of type_modules, Rust's sorted one
 	modules = type_modules.filter(module => module in wanted and module not in used)
