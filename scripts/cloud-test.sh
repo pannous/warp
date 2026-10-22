@@ -10,7 +10,7 @@
 #       filters as for tests/queue.sh (`-- x y` or plain `x y`; `--test tests -- x` passes target flags to cargo);
 #       --full: the whole suite as test.sh runs it (--all-features, warp-lang at opt-level 2), sharded: FULL_SHARDS
 #       jobs on as many VMs, each every FULL_SHARDS-th test file, merged into one result; without the slow tests of
-#       scripts/slow-tests.txt, to which it adds each test that took 60 s or more
+#       scripts/slow-tests.txt, to which it adds each test that took 10 s or more
 #       --slow: only the tests of scripts/slow-tests.txt, with the --full flags (a few times a day, not per batch)
 #       every run keeps each test's seconds in data/cloud/<run>/timings.tsv, slowest first
 #       --warp-test [folder…]: no cargo test: the release binary builds compiler.wasm and runs `warp test [folder…]`,
@@ -76,7 +76,7 @@ SHARD_HEADER="==== shard "     # a merged log's line before each shard's log
 RERUN_MARK="cloud-test: RERUN" # a killed run's failed tests run once more for their panic texts: lines after it count no test
 RERUN_SECONDS=600
 SLOW_TESTS_LIST=scripts/slow-tests.txt   # the tests --full leaves out and --slow runs (user 2026-10-22), in the main checkout
-SLOW_SECONDS=60                # a --full run appends each test that took this long to SLOW_TESTS_LIST
+SLOW_SECONDS=10                # a --full run appends each test that took this long to SLOW_TESTS_LIST
 SLOW_LEFT_OUT="slow tests left out (--slow runs them)"   # a shard's log line: the merge expects that many fewer tests
 TIMINGS=timings.tsv            # data/cloud/<run>/: each test's seconds and name, slowest first (libtest's --report-time)
 # --report-time is unstable: libtest takes it with RUSTC_BOOTSTRAP=1 at run time, set by a runner so the build stays the same

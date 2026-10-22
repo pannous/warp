@@ -26,7 +26,7 @@ Read notes/agents/common.md and notes/roles.md.
   tip: `WARP_LIB=<tip>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp` prints
   Hello → push (`integrator_tools/express.sh --warp-only` lands the Ready ones: together, one by one when the check is red).
 - Slow lane (decision slow-lane, user 2026-10-22): the gate's `--full` leaves out scripts/slow-tests.txt (tests over
-  60 s; each --full run adds new ones itself). Run `scripts/cloud-test.sh --slow main <origin/main tip>` a few times a
+  10 s; each --full run adds new ones itself). Run `scripts/cloud-test.sh --slow main <origin/main tip>` a few times a
   day, not per batch; a slow failure becomes a card for the test's owner (`todo add`), never a bounce.
 - Self-hosting twins (tests/common/twins.rs: test_self_parser, test_self_pipeline, test_self_analyzer …) never bounce
   a branch: the warp compiler captures the spirit of the wiki, not an exact copy of Rust (decisions
