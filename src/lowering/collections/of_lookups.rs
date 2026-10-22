@@ -9,10 +9,12 @@
 //! `length of characters in text` is `text.characters.length`; otherwise `x in xs` stays the membership test.
 //! Dropped (decision sugar-triage): the walk `print words in t` and the unit count `byte count of t`.
 
-use super::nodes::{call, children_rewritten, key, spaced_statement};
+use super::nodes::{call, key, spaced_statement};
 use crate::lowering::comprehensions::{WHERE_KEYWORD, WITHOUT_WORD, WITH_WORD};
+use crate::lowering::keyword_rewrites::KeywordRewrite;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::program_names::Bindings;
 use crate::words::{FROM_WORD, IN_WORD, OF_WORD};
 
 /// The plural unit words of a text, each naming the list of its parts: `t.words`, `t as words` (decision
@@ -24,21 +26,21 @@ pub const TEXT_UNIT_WORDS: [&str; 9] =
 const MAP_PART_WORDS: [&str; 2] = ["keys", "values"];
 const SELECTING_PREPOSITIONS: [&str; 2] = [IN_WORD, FROM_WORD];
 
-pub fn lower(node: Node) -> Node {
-	let mut has_type_of = false;
-	node.visit(&mut |part| has_type_of |= type_of_body(part).is_some());
-	let selector_words = [TEXT_UNIT_WORDS.as_slice(), &MAP_PART_WORDS].concat();
-	let has_selection = node.mentions_any(&selector_words) && node.mentions_any(&SELECTING_PREPOSITIONS);
-	if !has_type_of && !has_selection && !node.mentions_any(&[OF_WORD]) && !node.mentions_any(&TEXT_UNIT_WORDS) {
-		return node;
-	}
-	let defined = crate::program_names::Bindings::of(&node).bound();
-	let selectors: Vec<&str> = selector_words.into_iter().filter(|word| !defined.contains(*word)).collect();
-	rewrite(node, &selectors)
+/// The keyword rewrite of a phrase with `of` (or `in`, `from` after a selector word) and of `t as words`, an entry of
+/// src/pipeline.rs SUGAR_PHRASES; `type of x` triggers it by the declaration head's name `of`
+pub const LOOKUPS: KeywordRewrite = KeywordRewrite {
+	triggered_by: |word| word == OF_WORD || word == Op::As.as_str() || SELECTING_PREPOSITIONS.contains(&word),
+	rewrite: |node, facts| looked_up_phrase(node, &free_selectors(facts.bindings())),
+	reads_bindings: true,
+};
+
+/// The selector words the program does not bind
+fn free_selectors(bindings: &Bindings) -> Vec<&'static str> {
+	TEXT_UNIT_WORDS.into_iter().chain(MAP_PART_WORDS).filter(|word| !bindings.binds(word)).collect()
 }
 
-fn rewrite(node: Node, selectors: &[&str]) -> Node {
-	match children_rewritten(as_one_phrase(node), |child| rewrite(child, selectors)) {
+fn looked_up_phrase(node: Node, selectors: &[&str]) -> Node {
+	match as_one_phrase(node) {
 		// a phrase, a call's arguments `str(name of people)`, a block of one statement `{remove b from listeners of t}`
 		Node::List(
 			items,

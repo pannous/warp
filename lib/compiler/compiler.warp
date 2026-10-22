@@ -37,6 +37,7 @@ compile(source: text, folder: text): any := {
 # warp compiler.warp <source file> <wasm file> [<folder of the source's uses> [<lib folder>]]
 source_file = args#1
 folder = if #args > 2 then args#3 else folder_of(source_file)
+emitting_file(source_file)
 compiled = compile(read(source_file), folder)
 # a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
 if compiled is text { raise compiled }

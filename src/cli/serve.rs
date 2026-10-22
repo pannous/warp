@@ -35,7 +35,7 @@ pub(crate) fn serve_file(path: &str, port: u16, reason: &str, open: bool) -> ! {
 	if !warp::serve::serves_itself(&code) {
 		println!("serving http://localhost:{port} ({reason}`warp run {path}` runs it once without serving)");
 	}
-	diagnostic::show_lines_of(&code);
+	diagnostic::show_lines_of(&code, Some(path));
 	if open && opens_browser() {
 		warp::web::web_server::when_listening(|address| {
 			warp::web::dev_server::open_in_browser(address);
