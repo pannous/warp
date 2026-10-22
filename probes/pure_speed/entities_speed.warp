@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+// card pure-compile-speed: expanded_entities over parser.warp's own source (69% of a pure-lane compile of uses.warp)
+use "../../lib/compiler/parser.warp"
+source = read(module_directory + "/../../lib/compiler/parser.warp")
+expanded = expanded_entities(source)
+print expanded.length
