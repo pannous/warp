@@ -52,3 +52,15 @@ fn the_word_pattern_stays_a_call_outside_a_definition() {
 		4
 	);
 }
+
+/// A refinement of a node case (decision node-refinements): a named pattern of a case is a test, an arm binding its
+/// names, a parameter type, and a used file brings it
+#[test]
+fn a_named_pattern_of_a_node_case() {
+	let definition = "pattern Definition = Key(head, Op.Define, body)\n";
+	is!(&format!("{definition}parse(\"g := 1\") is Definition"), true);
+	is!(&format!("{definition}parse(\"a + 1\") is Definition"), false);
+	is!(&format!("{definition}match parse(\"g := 1\") {{ Definition: body; _: 0 }}"), 1);
+	is!(&format!("{definition}body_of(d: Definition): Node := value_of(d)\nbody_of(parse(\"g := 2\"))"), 2);
+	is!("use \"tests/modules/used_patterns.warp\"\nparse(\"f(x) := x\") is Definition", true);
+}

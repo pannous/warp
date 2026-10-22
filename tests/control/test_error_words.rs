@@ -12,12 +12,11 @@ fn fail_and_panic_raise() {
 }
 
 #[test]
-#[ignore = "fixnow: fixnow-error-field-positions: warning now says careful at 1:13 (error-field 58871c69b4)"]
 fn warn_warns_and_continues() {
 	is!("warn \"careful\"; 1", 1);
 	is!("\"a\" + warn(\"careful\") + \"b\"", "ab");
 	// strict mode makes a warning the error it is
-	is!("use strict; warn \"careful\"", warp::error("careful"));
+	is!("use strict; warn \"careful\"", warp::error("careful at 1:13"));
 }
 
 #[test]

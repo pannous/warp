@@ -630,7 +630,7 @@ def comma_list(bracket: text, nodes: list): Node := {
 }
 
 // The parts of an unbracketed phrase `print a`
-def prints(phrase: list): bool := phrase != ø and phrase#1 == "" and phrase#2 == " " and #phrase#3 > 0 and phrase#3#1 == PRINT
+def prints(phrase: list): bool := #phrase > 0 and phrase#1 == "" and phrase#2 == " " and #phrase#3 > 0 and phrase#3#1 == PRINT
 
 // Spaces, tabs, newlines and comments skipped; whether a newline was among them
 // Rust twin: scanning.rs skip_whitespace_and_comments
