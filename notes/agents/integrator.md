@@ -142,7 +142,9 @@ Read notes/agents/common.md and notes/roles.md.
   warp-only push runs it from express.sh (~/dev/bin/warp, the express worktree at the pushed hash) in the step that
   pushes and pulls. Never build them from the main checkout: a pull mid-build paired a compiler.wasm of an older
   lib/ with a newer compiler-self.wasm (2026-10-22 10:12). The installed pair records the worktree's lib/ path; card
-  installed-compilers (warp-wasi-runtime) keeps it from warning against the checkout's lib/.
+  installed-compilers (warp-wasi-runtime) keeps it from warning against the checkout's lib/. Every self build of the
+  integrator's tools (install_compilers.sh, pure_chain_check.sh) takes one of scripts/self-check.sh's slots through
+  integrator_tools/self_slot.zsh (fleet-wide cap of 2, supervisor 2026-10-22); staging stays outside the main checkout.
 - Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
   `integrator_tools/pure_chain_check.sh <worktree>` runs `warp pure samples/hello/hello.warp` with the merged lib
   and stops the push when it no longer prints "Hello 🌍2026" while main does (push_tested.sh and express.sh call it;
