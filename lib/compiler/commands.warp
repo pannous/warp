@@ -7,6 +7,7 @@ use file
 
 REPL_PROMPT = "warp> "
 NATIVE = "the native warp"
+HELP_COLUMN = 38
 
 # each command and what it does, in `warp help`'s order
 command_help = [
@@ -35,9 +36,11 @@ source_of(target: text): text := try read(target) else target
 
 show_help() := {
 	print "warp, the compiler written in warp (lib/compiler/compiler.warp), its commands:"
-	for entry in command_help { print "  warp " + entry#1 + "    " + entry#2 }
+	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
 	print "  need the native warp: " + (running_commands + native_commands).join(" ")
 }
+
+padded(words: text, width: int): text := if #words < width then words + " " * (width - #words) else words + " "
 
 # the version of the lib/ beside the compiler: its checkout's Cargo.toml
 version_text(library: text): text := {
@@ -46,6 +49,21 @@ version_text(library: text): text := {
 		if line.starts_with("version") { return "🌀 Warp " + line.split("\"")#2 + " (compiler.warp of " + library + ")" }
 	}
 	"🌀 Warp (compiler.warp of " + library + ", no Cargo.toml beside it)"
+}
+
+# the parsed program as `warp parse` shows it, each operation a prefix group: 1+2*x as (+ 1 (* 2 x)) (Rust twin:
+# src/cli/display.rs structure)
+structure(n: Node): text := match n {
+	Key(left, op, right): "(" + (op as text) + " " + structure(left) + " " + structure(right) + ")"
+	List(items, bracket, separator): grouped_structure(items.map(structure), bracket as text, separator as text)
+	_: "${n}"
+}
+# the items' texts in their brackets, between them the separator ("⏎" for a line break)
+grouped_structure(items: list, bracket: text, separator: text): text := {
+	joiner = if separator == "\n" then "⏎ " else if separator == "" or separator == " " then " " else separator + " "
+	if #bracket == 2 { return bracket#1 + items.join(joiner) + bracket#2 }
+	closing = {"{": "}", "[": "]", "(": ")", "<": ">", "": ""}
+	bracket + items.join(joiner) + closing[bracket]
 }
 
 refuse_running(command: text) := {

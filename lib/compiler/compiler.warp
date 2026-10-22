@@ -80,13 +80,17 @@ repl() := {
 }
 
 source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
+show_version() := print version_text(library_folder)
+show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
+show_data() := print plain_node(parsed(source_or_code(1)))
+show_lowered() := print lowered_program(source_or_code(1), ".", prelude_source)
 match command {
 	"": compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
 	"help": show_help()
-	"version": print version_text(library_folder)
-	"parse": print plain_node(parsed(source_or_code(1)))
-	"data": print plain_node(parsed(source_or_code(1)))
-	"lower": print lowered_program(source_or_code(1), ".", prelude_source)
+	"version": show_version()
+	"parse": show_parsed()
+	"data": show_data()
+	"lower": show_lowered()
 	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
 	"build": compile_file(args#2, args#2 + ".wasm", folder_of(args#2))
 	"repl": repl()
