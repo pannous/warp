@@ -13,19 +13,12 @@ grouped_name(n: Node): any := match n {
 # a name the program binds to a value, never to a function
 is_variable(scope: any, name: text): bool := (binds_as(scope, name, Meaning.Variable) or binds_as(scope, name, Meaning.Loop)) and not binds_as(scope, name, Meaning.Function)
 
-# `(p).a` as `p.a` when p is a variable
-ungrouped(n: Node, scope: any): Node := match n {
+# `(p).a` as `p.a` when p is a variable: the keyword rewrite of a dot, an entry of passes.warp sugar_phrases_table
+is_dot(word: Node): bool := word == symbol(".")
+ungrouped(n: Node): Node := match n {
 	Key(receiver, Op.Dot, member): {
 		name = grouped_name(receiver)
-		if name != ø and is_variable(scope, name_of(name)) then Key(name, Op.Dot, member) else n
+		if name != ø and is_variable(rewritten_bindings(), name_of(name)) then Key(name, Op.Dot, member) else n
 	}
 	_: n
-}
-
-grouped_receivers(program: Node): Node := {
-	if not view_has(view_of(program), part => kind_of(part) == "key" and part#2 == "." and grouped_name(node_of(part#3)) != ø) {
-		return program
-	}
-	scope = scope_of(program)
-	bottom_up(program, part => ungrouped(part, scope))
 }

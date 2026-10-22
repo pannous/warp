@@ -169,9 +169,9 @@ quantity(t: text) := {
 	var amount_text = ""
 	var u = ""
 	for c in t.trim() {
-		if u == "" and "0123456789.+-".contains(c) { amount_text = amount_text + c } else if c != " " { u = u + c }
+		if u is empty and "0123456789.+-".contains(c) { amount_text = amount_text + c } else if c != " " { u = u + c }
 	}
-	if amount_text == "" or u == "" { raise "not a quantity: " + t }
+	if amount_text is empty or u is empty { raise "not a quantity: " + t }
 	quantity(exact_decimal(amount_text), u)
 }
 

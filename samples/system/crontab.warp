@@ -3,7 +3,7 @@
 # A job is its schedule (five fields, or one like @reboot) and the command after it; comments and settings (PATH=…) are no jobs.
 # The schedule reads as words (every 10 minutes, daily at 06:35), the log file the output goes to gets a column of its own.
 fields(line) := split(line, " ")
-is_job(line) := line != "" and not line.starts_with("#") and not fields(line)#1.contains("=")
+is_job(line) := line and not line.starts_with("#") and not fields(line)#1.contains("=")
 schedule_size(job) := if job.starts_with("@") then 1 else 5
 schedule(job) := fields(job)[0..schedule_size(job)]
 run(job) := join(fields(job)[schedule_size(job)..], " ")

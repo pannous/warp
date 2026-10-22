@@ -1,0 +1,3 @@
+use "ta.warp"
+use "tb.warp"
+print(named(1))

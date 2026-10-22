@@ -31,10 +31,22 @@ export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
 # both compilers of the branch's lib/: compiler.wasm (`warp pure`, built by Rust) and compiler-self.wasm (`warp self`,
 # built by itself); a lib/ that passed self alone broke main's `warp rebuild pure` twice on 2026-10-22
 check_lane() {
-  $warp rebuild $1 >/dev/null 2>&1 || { echo "SELF CHECK RED: warp rebuild $1 failed in $worktree"; exit 1; }
+  $warp rebuild $1 >/dev/null 2>&1 || { verdict="SELF CHECK RED: warp rebuild $1 failed in $worktree"; return 1; }
   said=$($warp $1 samples/hello/hello.warp 2>&1 | tail -1)
-  [[ $said == *$expected* ]] || { echo "SELF CHECK RED: warp $1 hello said: $said"; exit 1; }
+  [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp $1 hello said: $said"; return 1; }
+  verdict="SELF CHECK ok: $said"
 }
-check_lane pure
-check_lane self
-echo "SELF CHECK ok: $said"
+# main's binary is refreshed after each pushed batch: a compiler.wasm built by the old binary and a self build by the
+# new one make a self compiler that traps on every program (card self-trap-function-param), so a check the swap
+# overlapped is no verdict and runs again
+max_attempts=3
+binary_stamp() { stat -f %m $warp }
+for attempt in {1..$max_attempts}; do
+  stamp=$(binary_stamp)
+  check_lane pure && check_lane self
+  passed=$?
+  [[ $(binary_stamp) == $stamp ]] && { echo $verdict; exit $passed; }
+  echo "SELF CHECK: $warp was replaced during the check (attempt $attempt of $max_attempts), checking again" >&2
+done
+echo "SELF CHECK RED: $warp was replaced during every attempt; last verdict: $verdict"
+exit 1

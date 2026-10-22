@@ -1,0 +1,3 @@
+use "c.warp"
+named(x) := "d"
+use_d(x) := named(x)

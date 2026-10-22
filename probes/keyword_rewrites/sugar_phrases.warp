@@ -1,0 +1,8 @@
+# `n times x` (Rust, a walk of its own) and `xs .* 2` (a keyword rewrite of the sugar_phrases walk), nested too
+xs = [1, 2, 3]
+print xs .* 2
+print 3 times "ab"
+count = 0
+2 times { count += 1; 2 times { count += 10 } }
+print count
+print 2 times [0]

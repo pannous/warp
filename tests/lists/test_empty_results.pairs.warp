@@ -3,4 +3,4 @@
 # an_empty_result_is_a_list
 'xs = [1, 2]; type(xs[0..<0])'	'list'
 'xs = [1]; xs.pop(); type(xs)'	'list'
-'xs = [1, 2]; xs[0..<0] == ø'	true
+'xs = [1, 2]; xs[0..<0] == ø'	false

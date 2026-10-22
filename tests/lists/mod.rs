@@ -23,6 +23,7 @@ mod test_dynamic_range;
 mod test_element_wise_lists;
 mod test_element_wise_scalar;
 mod test_element_wise_vectors;
+mod test_empty_is_absence; // card empty-is-absence (decision empty-is-not-missing)
 mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed

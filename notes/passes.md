@@ -109,3 +109,13 @@ ordering constraints, not speed.
 - serve: `with_default_routes` (hosted) and `with_page_routes` (run) were two passes, each a no-op in the other's mode;
   one `with_implied_routes` picks by the compile mode.
 - library_words: `lower_byte_counts` is the last step of `library_words::lower`, which wrote what it reads.
+
+## Keyword-rewrite table: measured, parked (user 2026-10-22)
+Merging local sugar passes into one walk (src/lowering/words/keyword_rewrites.rs, SUGAR_PHRASES) saves next to
+nothing: in a 52 s cold compile of passes.warp and its uses (WARP_PHASE_TIMES, empty WARP_MODULE_CACHE, main's build)
+the four passes it replaced took 59 ms together (of_lookups 45.5, grouped_receivers 5, element-wise 4.7, arrow
+results 4), about 0.1 %; a front-lane twin stage costs a few ms. The time is in resolve uses (8 s), the meaning passes
+(9.5 s), emit (6.4 s) and diagnose (4 s). The table gives one shape, not speed, and its trigger rule ("own words")
+grows with each entry (nested phrases had to join for `sum (of xs)`, card fixnow-of-phrase-as-a-value). Parked:
+card arrow-result-entry (branch arrow-result-entry); per-statement passes: card apply-lowering. Speed work belongs to
+the phases above.
