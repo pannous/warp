@@ -133,26 +133,77 @@ pub fn get_or_load_library(name: &str) -> Option<Arc<Library>> {
 	Some(library)
 }
 
-/// Where the library `name` may be
+/// Where the library `name` may be: a path as it is; else the usual folders and names of this system, the folders of
+/// WARP_LIBRARY_PATH (`:`-separated) first; on Linux also a versioned soname found in the library folders
+/// (libz.so.1, libcurl.so.4), on macOS a framework (`Cocoa`)
 pub fn library_paths(name: &str) -> Vec<String> {
+	if name.contains('/') {
+		return vec![name.to_string()];
+	}
+	let extra: Vec<String> = std::env::var("WARP_LIBRARY_PATH")
+		.map(|folders| folders.split(':').filter(|folder| !folder.is_empty()).map(str::to_string).collect())
+		.unwrap_or_default();
 	#[cfg(target_os = "macos")]
-	return vec![
-		format!("/opt/homebrew/lib/lib{name}.dylib"),
-		format!("/usr/local/lib/lib{name}.dylib"),
-		format!("lib{name}.dylib"),
-	];
+	{
+		let mut paths: Vec<String> = extra.iter().map(|folder| format!("{folder}/lib{name}.dylib")).collect();
+		paths.extend([
+			format!("/opt/homebrew/lib/lib{name}.dylib"),
+			format!("/usr/local/lib/lib{name}.dylib"),
+			format!("lib{name}.dylib"),
+			format!("/opt/homebrew/opt/{name}/lib/lib{name}.dylib"),
+			format!("/Library/Frameworks/{name}.framework/{name}"),
+			format!("/System/Library/Frameworks/{name}.framework/{name}"),
+		]);
+		paths
+	}
 	#[cfg(target_os = "linux")]
-	return vec![
-		format!("/usr/lib/lib{name}.so"),
-		format!("/usr/local/lib/lib{name}.so"),
-		format!("lib{name}.so"),
-		// a library without its development package: libsqlite3.so.0
-		format!("lib{name}.so.0"),
-		// glibc's libm.so and libc.so are linker scripts dlopen refuses: the libraries go by their soname
-		format!("lib{name}.so.6"),
-	];
+	{
+		let mut paths: Vec<String> = extra.iter().map(|folder| format!("{folder}/lib{name}.so")).collect();
+		paths.extend([
+			format!("/usr/lib/lib{name}.so"),
+			format!("/usr/local/lib/lib{name}.so"),
+			format!("lib{name}.so"),
+			// a library without its development package: libsqlite3.so.0
+			format!("lib{name}.so.0"),
+			// glibc's libm.so and libc.so are linker scripts dlopen refuses: the libraries go by their soname
+			format!("lib{name}.so.6"),
+		]);
+		paths.extend(versioned_sonames(name, &extra));
+		paths
+	}
 	#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-	return vec![format!("{name}.dll")];
+	{
+		let _ = extra;
+		vec![format!("{name}.dll")]
+	}
+}
+
+/// The `lib<name>.so.<version>` files of the library folders, shortest name first (libz.so.1 before libz.so.1.3.1)
+#[cfg(target_os = "linux")]
+fn versioned_sonames(name: &str, extra: &[String]) -> Vec<String> {
+	let prefix = format!("lib{name}.so.");
+	let folders = extra.iter().map(String::as_str).chain([
+		"/usr/lib/x86_64-linux-gnu",
+		"/usr/lib/aarch64-linux-gnu",
+		"/lib/x86_64-linux-gnu",
+		"/lib/aarch64-linux-gnu",
+		"/usr/lib64",
+		"/usr/lib",
+		"/usr/local/lib",
+	]);
+	let mut found: Vec<String> = folders
+		.filter_map(|folder| std::fs::read_dir(folder).ok().map(|entries| (folder.to_string(), entries)))
+		.flat_map(|(folder, entries)| {
+			entries
+				.filter_map(Result::ok)
+				.filter_map(|entry| entry.file_name().into_string().ok())
+				.filter(|file| file.starts_with(&prefix))
+				.map(move |file| format!("{folder}/{file}"))
+				.collect::<Vec<_>>()
+		})
+		.collect();
+	found.sort_by_key(String::len);
+	found
 }
 
 /// The address of `function` in its loaded library
