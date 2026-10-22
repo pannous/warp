@@ -85,3 +85,8 @@ parser::test_self_pure::op_cases_run_pure
 parser::test_self_pure::lambdas_run_pure
 parser::test_self_pure::number_keys_run_in_the_front_lanes
 parser::test_self_pure::type_values_run_pure
+parser::test_self_pure::arm_inline_if_reads_self_hosted
+parser::test_self_pure::assigned_it_blocks_run_pure
+parser::test_self_pure::bang_words_and_tab_columns_run_pure
+parser::test_self_pure::block_definitions_hold_their_value_pure
+parser::test_self_pure::curly_lists_are_values_self_hosted
