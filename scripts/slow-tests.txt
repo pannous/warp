@@ -94,3 +94,14 @@ parser::test_self_pure::compile_takes_the_pure_lane
 parser::test_self_pure::comprehensions_run_pure
 parser::test_self_pure::defaults_run_pure
 parser::test_self_pure::digit_casts_run_pure
+control::test_after::a_cancelled_after_gives_the_fallback
+control::test_after::after_needs_a_shared_condition
+control::test_after::after_waits_for_its_condition
+control::test_await_any_values::await_any_of_computed_values_answers
+modules::test_package_hints::a_package_s_style_gets_no_hints_the_program_s_does
+modules::test_package_tools::a_package_tool_lives_in_the_package_build_directory
+modules::test_package_tools::a_package_tool_runs_in_the_package_directory
+parser::test_self_pure::durations_read_self_hosted
+parser::test_self_pure::enum_cases_run_pure
+parser::test_self_pure::enum_conversions_and_default_arms_run_pure
+parser::test_self_pure::enums_of_used_files_and_type_variables_run_pure
