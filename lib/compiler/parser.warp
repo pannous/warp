@@ -305,10 +305,9 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 		after = if dedent then "" else separator(p, closer, newline)
 		if tabbed and after == " " { after = "\t" }
 		// `ys = xs.map { |x| x+1 }`: the block belongs to the method call, not to the statement
-		last = if found.length > 0 then found#(found.length) else ø
-		if last != ø and last#2 == " " and assigned_method_call(last#1) and is_list_of(item, "{") {
+		if found and found#(found.length)#2 == " " and assigned_method_call(found#(found.length)#1) and is_list_of(item, "{") {
+			item = with_trailing_block(found#(found.length)#1, item)
 			found = found[0 .. found.length - 1]
-			item = with_trailing_block(last#1, item)
 		}
 		found += [[statement, after] for statement in statements_of(item)]
 		if dedent { break }
