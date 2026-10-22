@@ -1,0 +1,382 @@
+#!/usr/bin/env python3
+"""warp-crate: any Rust crate as a C library warp-host's FFI loads (card ffi-rust-crate-adapter, notes/crate_adapter.md).
+
+A crate manifest (lib/crates/<name>.warp) is a lib/native file whose foreign lines also say which Rust item answers:
+
+    crate: "regex@1"
+    regex_new(pattern: text): handle(regex::Regex) from 'rs_regex' = regex::Regex::new
+    regex_is_match(re: handle, haystack: text): bool from 'rs_regex' = regex::Regex::is_match
+
+warp-crate generates a cdylib wrapping each item in an `extern "C"` function of the foreign line's name, builds it with
+cargo, caches it under ~/.cache/warp/crates (by crate, manifest, toolchain and target) and writes
+  lib/lib<library>.so      the C library warp-host dlopens (WARP_LIBRARY_PATH, LD_LIBRARY_PATH or DYLD_LIBRARY_PATH)
+  native/<library>.warp    the manifest without its `= rust` parts: plain foreign lines and warp words (`use <library>`)
+Nothing in warp-host knows a crate. Commands:
+  warp-crate build <manifest.warp>...   generate, build (cached) and install; prints the library and native file
+  warp-crate source <manifest.warp>     print the generated Rust
+  warp-crate scan <crate@version>       draft manifest lines for the crate's public functions and methods (rustdoc JSON)
+  warp-crate dirs                       print the cache, library and native folders
+"""
+import hashlib, json, os, re, shutil, subprocess, sys
+from pathlib import Path
+
+GENERATOR_VERSION = "1"
+HERE = Path(__file__).resolve().parent
+RUNTIME = HERE / "crate_adapter" / "runtime.rs"
+CACHE = Path(os.environ.get("WARP_CRATES_CACHE", Path.home() / ".cache" / "warp" / "crates"))
+LIB_DIR, NATIVE_DIR, TARGET_DIR = CACHE / "lib", CACHE / "native", CACHE / "target"
+DYLIB = ("lib", ".dylib") if sys.platform == "darwin" else ("lib", ".so")
+
+# a manifest type → [the foreign line's type, the C parameter type, the C result type]
+NUMBERS = {"i32": "i32", "int": "i32", "i64": "i64", "long": "i64", "f64": "f64", "float": "f64", "f32": "f32"}
+FOREIGN = re.compile(r"^\s*(?P<name>\w+)\s*\((?P<params>[^)]*)\)\s*:\s*(?P<result>[\w:()]+)\s+from\s+'(?P<library>\w+)'\s*=\s*(?P<rust>\S.*?)\s*$")
+SETTING = re.compile(r'^\s*(crate|library|features|default_features|uses)\s*:\s*(.*?)\s*$')
+HANDLE = re.compile(r"^handle(?:\((?P<rust>[\w:<>, ]+)\))?$")
+STEP = re.compile(r"(\?\.|\*\.|\.)(\w+)")
+
+
+def fail(message):
+	sys.exit(f"warp-crate: {message}")
+
+
+class Function:
+	def __init__(self, line_number, name, params, result, library, rust):
+		self.line_number, self.name, self.library = line_number, name, library
+		self.params = []  # [(name, type)]
+		for written in [p for p in params.split(",") if p.strip()]:
+			if ":" not in written:
+				fail(f"line {line_number}: the parameter {written.strip()!r} of {name} has no type")
+			pname, ptype = (part.strip() for part in written.split(":", 1))
+			self.params.append((pname, ptype))
+		self.result = result
+		self.rust = rust.strip()
+
+	def foreign_type(self, written):
+		if written in NUMBERS:
+			return NUMBERS[written]
+		if written in ("bool", "text", "void"):
+			return written
+		if written in ("bytes", "hex", "string"):
+			return "text"
+		if written == "list" or HANDLE.match(written):
+			return "handle"
+		fail(f"line {self.line_number}: {self.name}: the type {written!r} is not one warp-crate crosses "
+			"(i32 i64 f32 f64 bool text bytes hex list handle handle(rust::Type) void)")
+
+	def foreign_line(self):
+		params = ", ".join(f"{n}: {self.foreign_type(t)}" for n, t in self.params)
+		return f"{self.name}({params}): {self.foreign_type(self.result)} from '{self.library}'"
+
+	def owner(self):
+		"""`regex::Regex` of the path `regex::Regex::is_match`, when that names a type's method"""
+		path = re.split(r"(?=\?\.|\*\.|\.\w)", self.rust, maxsplit=1)[0]
+		segments = path.split("::")
+		return "::".join(segments[:-1]) if len(segments) > 1 and segments[-2][:1].isupper() else None
+
+	def handle_type(self, index, written):
+		found = HANDLE.match(written)
+		if found and found.group("rust"):
+			return found.group("rust")
+		if index == 0 and self.owner():
+			return self.owner()
+		fail(f"line {self.line_number}: {self.name}: say the Rust type of the handle {written!r}: handle(crate::Type)")
+
+	def rust_source(self):
+		c_params, lets, args = [], [], []
+		for index, (pname, ptype) in enumerate(self.params):
+			var = f"p_{pname}"
+			if ptype in NUMBERS:
+				c_params.append(f"{var}: {NUMBERS[ptype]}")
+				args.append(f"{var} as _")
+			elif ptype == "bool":
+				c_params.append(f"{var}: i32")
+				args.append(f"{var} != 0")
+			elif ptype in ("text", "string"):
+				c_params.append(f"{var}: *const c_char")
+				args.append(f"text_in({var})" + (".to_string()" if ptype == "string" else ""))
+			elif ptype == "bytes":
+				c_params.append(f"{var}: *const c_char")
+				args.append(f"bytes_in({var})")
+			elif HANDLE.match(ptype):
+				rust_type = self.handle_type(index, ptype)
+				c_params.append(f"{var}: *mut {rust_type}")
+				if self.rust == "drop":
+					args.append(var)
+				else:
+					lets.append(f"let {var} = handle_in({var}, {json.dumps(self.name)})?;")
+					args.append(var)
+			else:
+				fail(f"line {self.line_number}: {self.name}: a parameter of type {ptype!r} is not crossed")
+		result = self.result
+		if self.rust == "drop":
+			if len(self.params) != 1 or not HANDLE.match(self.params[0][1]):
+				fail(f"line {self.line_number}: {self.name}: `= drop` takes one handle")
+			body = f"if !p_{self.params[0][0]}.is_null() {{ drop(Box::from_raw(p_{self.params[0][0]})) }}; Some(())"
+			c_result = "()"
+		else:
+			path, *_ = re.split(r"(?=\?\.|\*\.|\.\w)", self.rust, maxsplit=1)
+			expression = f"{path}({', '.join(args)})"
+			for kind, method in STEP.findall(self.rust[len(path):]):
+				expression += {"?.": f".map(|v| v.{method}())", "*.": f".into_iter().map(|v| v.{method}())", ".": f".{method}()"}[kind]
+			if result in NUMBERS or result == "bool":
+				c_result = NUMBERS.get(result, "bool")
+				body = f"Some(<_ as Out<{c_result}>>::out({expression}))"
+			elif result in ("text", "string"):
+				c_result = "*const c_char"
+				body = f"Some(<_ as Out<*const c_char>>::out({expression}))"
+			elif result == "hex":
+				c_result = "*const c_char"
+				body = f"Some(hex_out({expression}))"
+			elif result == "list":
+				c_result = "*mut TextList"
+				body = f"Some(list_out({expression}))"
+			elif HANDLE.match(result):
+				rust_type = HANDLE.match(result).group("rust") or self.owner()
+				if not rust_type:
+					fail(f"line {self.line_number}: {self.name}: say the Rust type of the handle result: handle(crate::Type)")
+				c_result = f"*mut {rust_type}"
+				body = f"Some(<_ as HandleOut<{rust_type}>>::handle_out({expression}))"
+			elif result == "void":
+				c_result = "()"
+				body = f"Some(<_ as Out<()>>::out({expression}))"
+			else:
+				fail(f"line {self.line_number}: {self.name}: a result of type {result!r} is not crossed")
+		returns = "" if c_result == "()" else f" -> {c_result}"
+		lines = [f"/// {self.foreign_line()} = {self.rust}", "#[no_mangle]",
+			f"pub unsafe extern \"C\" fn {self.name}({', '.join(c_params)}){returns} {{",
+			f"\tguarded(|| {{"] + [f"\t\t{line}" for line in lets] + [f"\t\t{body}", "\t})", "}"]
+		return "\n".join(lines)
+
+
+class Manifest:
+	def __init__(self, path):
+		self.path = Path(path)
+		self.text = self.path.read_text()
+		self.settings = {"features": "", "default_features": "yes", "uses": ""}
+		self.functions, self.native_lines = [], []
+		for number, line in enumerate(self.text.splitlines(), 1):
+			setting, foreign = SETTING.match(line), FOREIGN.match(line)
+			if setting:
+				self.settings[setting.group(1)] = setting.group(2).strip().strip('"').strip("'")
+				self.native_lines.append(f"// {line.strip()}")
+			elif foreign:
+				function = Function(number, **foreign.groupdict())
+				self.functions.append(function)
+				self.native_lines.append(function.foreign_line())
+			else:
+				self.native_lines.append(line)
+		if "crate" not in self.settings:
+			fail(f"{path}: no `crate: \"name@version\"` line")
+		self.crate, _, self.version = self.settings["crate"].partition("@")
+		self.version = self.version or "*"
+		self.library = self.settings.get("library") or "rs_" + self.crate.replace("-", "_")
+		for function in self.functions:
+			if function.library != self.library:
+				fail(f"line {function.line_number}: {function.name} is from '{function.library}', the manifest's library is '{self.library}'")
+		self.native_lines += self.helper_lines()
+
+	def helper_lines(self):
+		lib = self.library
+		return ["", f"// generated by scripts/warp-crate for every crate library: the last failure, lists of texts",
+			f"{lib}_last_error(): text from '{lib}'", f"{lib}_list_count(list: handle): i64 from '{lib}'",
+			f"{lib}_list_text(list: handle, index: i64): text from '{lib}'", f"{lib}_list_free(list: handle): void from '{lib}'"]
+
+	def rust_source(self):
+		lib = self.library
+		uses = [u.strip() for u in self.settings["uses"].split(",") if u.strip()]
+		parts = [f"// Generated by scripts/warp-crate from {self.path.name} ({self.crate} {self.version}); do not edit.",
+			RUNTIME.read_text()] + [f"#[allow(unused_imports)]\nuse {u};" for u in uses]
+		parts += [function.rust_source() for function in self.functions]
+		parts.append(f"""#[no_mangle]
+pub unsafe extern "C" fn {lib}_last_error() -> *const c_char {{
+	last_error()
+}}
+#[no_mangle]
+pub unsafe extern "C" fn {lib}_list_count(list: *mut TextList) -> i64 {{
+	list.as_ref().map_or(-1, |list| list.0.len() as i64)
+}}
+#[no_mangle]
+pub unsafe extern "C" fn {lib}_list_text(list: *mut TextList, index: i64) -> *const c_char {{
+	match list.as_ref().and_then(|list| usize::try_from(index).ok().and_then(|i| list.0.get(i))) {{
+		Some(text) => keep_text(text),
+		None => std::ptr::null(),
+	}}
+}}
+#[no_mangle]
+pub unsafe extern "C" fn {lib}_list_free(list: *mut TextList) {{
+	if !list.is_null() {{
+		drop(Box::from_raw(list))
+	}}
+}}""")
+		return "\n\n".join(parts) + "\n"
+
+	def cargo_toml(self):
+		features = [f.strip() for f in self.settings["features"].split(",") if f.strip()]
+		dependency = {"version": self.version}
+		if features:
+			dependency["features"] = features
+		if self.settings["default_features"] in ("no", "false"):
+			dependency["default-features"] = False
+		inline = ", ".join(f"{k} = {json.dumps(v).lower() if isinstance(v, bool) else json.dumps(v)}" for k, v in dependency.items())
+		return f"""[package]
+name = "{self.library}"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "{self.library}"
+path = "lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+{self.crate} = {{ {inline} }}
+
+[profile.release]
+opt-level = 3
+panic = "unwind"
+strip = true
+
+[workspace]
+"""
+
+
+def toolchain():
+	return subprocess.run(["rustc", "-vV"], capture_output=True, text=True, check=True).stdout
+
+
+def build(manifest):
+	source, cargo = manifest.rust_source(), manifest.cargo_toml()
+	key = hashlib.sha256("\0".join([GENERATOR_VERSION, source, cargo, toolchain()]).encode()).hexdigest()[:16]
+	entry = CACHE / manifest.library / f"{manifest.crate}-{manifest.version.replace('*', 'any')}-{key}"
+	library_file = DYLIB[0] + manifest.library + DYLIB[1]
+	built = entry / library_file
+	if not built.exists():
+		entry.mkdir(parents=True, exist_ok=True)
+		(entry / "lib.rs").write_text(source)
+		(entry / "Cargo.toml").write_text(cargo)
+		env = dict(os.environ, CARGO_TARGET_DIR=str(TARGET_DIR), CARGO_NET_OFFLINE=os.environ.get("CARGO_NET_OFFLINE", "false"))
+		print(f"warp-crate: building {manifest.crate} {manifest.version} as {manifest.library} ({entry})", file=sys.stderr)
+		done = subprocess.run(["cargo", "build", "--release", "--quiet", "--manifest-path", str(entry / "Cargo.toml")], env=env)
+		if done.returncode != 0:
+			fail(f"cargo could not build {manifest.library} from {manifest.path} (its source: {entry / 'lib.rs'})")
+		shutil.copy2(TARGET_DIR / "release" / library_file, built)
+		locked = (entry / "Cargo.lock").read_text() if (entry / "Cargo.lock").exists() else ""
+		resolved = re.search(rf'name = "{re.escape(manifest.crate)}"\nversion = "([^"]+)"', locked)
+		(entry / "resolved").write_text((resolved.group(1) if resolved else "?") + "\n")
+	LIB_DIR.mkdir(parents=True, exist_ok=True)
+	NATIVE_DIR.mkdir(parents=True, exist_ok=True)
+	installed = LIB_DIR / library_file
+	temporary = installed.with_suffix(".tmp")
+	shutil.copy2(built, temporary)
+	os.replace(temporary, installed)  # a running warp-host keeps its mapped copy
+	native = NATIVE_DIR / f"{manifest.library}.warp"
+	header = f"// Generated by scripts/warp-crate from {manifest.path.name}: {manifest.crate} {(entry / 'resolved').read_text().strip()} as lib{manifest.library}\n"
+	native.write_text(header + "\n".join(manifest.native_lines).rstrip() + "\n")
+	print(f"{installed}\n{native}")
+
+
+# ---------- scan: draft manifest lines from rustdoc JSON ----------
+PRIMITIVES = {"i8": "i32", "i16": "i32", "i32": "i32", "u8": "i32", "u16": "i32", "u32": "i64", "i64": "i64", "u64": "i64",
+	"isize": "i64", "usize": "i64", "f32": "f32", "f64": "f64", "bool": "bool", "char": "i32"}
+
+
+def scan(spec):
+	crate, _, version = spec.partition("@")
+	work = CACHE / "scan" / f"{crate}-{version or 'any'}"
+	work.mkdir(parents=True, exist_ok=True)
+	(work / "Cargo.toml").write_text(f'[package]\nname = "scan"\nversion = "0.0.0"\nedition = "2021"\n[lib]\npath = "lib.rs"\n[dependencies]\n{crate} = "{version or "*"}"\n[workspace]\n')
+	(work / "lib.rs").write_text("")
+	env = dict(os.environ, CARGO_TARGET_DIR=str(TARGET_DIR), RUSTC_BOOTSTRAP="1", CARGO_NET_OFFLINE=os.environ.get("CARGO_NET_OFFLINE", "false"))
+	done = subprocess.run(["cargo", "rustdoc", "--quiet", "-p", crate, "--lib", "--manifest-path", str(work / "Cargo.toml"),
+		"--", "-Z", "unstable-options", "--output-format", "json"], env=env)
+	if done.returncode != 0:
+		fail(f"rustdoc could not describe {spec}")
+	doc = json.loads((TARGET_DIR / "doc" / f"{crate.replace('-', '_')}.json").read_text())
+	index, library = doc["index"], "rs_" + crate.replace("-", "_")
+	print(f'crate: "{crate}@{version or "*"}"')
+
+	def mapped(ty, owner, is_result):
+		if not isinstance(ty, dict):
+			return None
+		if "primitive" in ty:
+			return PRIMITIVES.get(ty["primitive"])
+		if "borrowed_ref" in ty:
+			inner = ty["borrowed_ref"]["type"]
+			if inner == {"primitive": "str"}:
+				return "text"
+			if "slice" in inner and inner["slice"] == {"primitive": "u8"}:
+				return "bytes"
+			if inner == {"generic": "Self"} and not is_result:
+				return "handle"
+			return None
+		if ty == {"generic": "Self"}:
+			return f"handle({owner})" if is_result else None
+		path = ty.get("resolved_path")
+		if path:
+			name = path.get("path") or path.get("name", "")
+			last = name.split("::")[-1]
+			args = ((path.get("args") or {}).get("angle_bracketed") or {}).get("args", [])
+			first = args[0].get("type") if args and isinstance(args[0], dict) else None
+			if last == "String":
+				return "text"
+			if last in ("Option", "Result") and first is not None:
+				return mapped(first, owner, is_result) if is_result else None
+			if is_result and owner and last == owner.split("::")[-1]:
+				return f"handle({owner})"
+		return None
+
+	def line(name, function, rust_path, owner):
+		sig = function["sig"] if "sig" in function else function["decl"]
+		params, cross = [], True
+		for pname, ptype in sig["inputs"]:
+			mapped_type = mapped(ptype, owner, False)
+			if mapped_type is None or (function.get("generics", {}).get("params") and mapped_type != "handle"):
+				cross = mapped_type is not None and cross
+			params.append(f"{'re' if pname == 'self' else pname}: {mapped_type or '?'}")
+			cross = cross and mapped_type is not None
+		output = sig.get("output")
+		result = "void" if output is None else mapped(output, owner, True)
+		text = f"{name}({', '.join(params)}): {result or '?'} from '{library}' = {rust_path}"
+		print(text if cross and result else f"// skipped: {text}")
+
+	root = index[str(doc["root"])]
+	for item_id in root["inner"]["module"]["items"]:
+		item = index.get(str(item_id))
+		if not item or item.get("visibility") != "public":
+			continue
+		inner = item["inner"]
+		if "function" in inner:
+			line(item["name"], inner["function"], f"{crate.replace('-', '_')}::{item['name']}", None)
+		if "struct" in inner:
+			owner = f"{crate.replace('-', '_')}::{item['name']}"
+			for impl_id in inner["struct"].get("impls", []):
+				impl = index.get(str(impl_id), {}).get("inner", {}).get("impl", {})
+				if impl.get("trait") is not None or impl.get("synthetic") or impl.get("blanket_impl"):
+					continue
+				for method_id in impl.get("items", []):
+					method = index.get(str(method_id))
+					if method and method.get("visibility") == "public" and "function" in method["inner"]:
+						line(f"{item['name'].lower()}_{method['name']}", method["inner"]["function"], f"{owner}::{method['name']}", owner)
+
+
+def main(argv):
+	if len(argv) < 2 or argv[1] in ("-h", "--help", "help"):
+		print(__doc__)
+		return
+	command, rest = argv[1], argv[2:]
+	if command == "build" and rest:
+		for path in rest:
+			build(Manifest(path))
+	elif command == "source" and len(rest) == 1:
+		sys.stdout.write(Manifest(rest[0]).rust_source())
+	elif command == "scan" and len(rest) == 1:
+		scan(rest[0])
+	elif command == "dirs":
+		print(f"cache {CACHE}\nlib {LIB_DIR}\nnative {NATIVE_DIR}")
+	else:
+		fail(f"unknown command {' '.join(argv[1:])!r}; see warp-crate --help")
+
+
+if __name__ == "__main__":
+	main(sys.argv)
