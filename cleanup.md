@@ -1,5 +1,12 @@
 # Pure hello cloud check
 
+# Empty-map JSON cleanup
+
+- Reproduce `to_json({a: {}})` through the existing standard-library JSON outcome test before changing production code.
+- Preserve the empty map's kind through the existing lowering and adapter path instead of special-casing JSON text.
+- Reuse the general map representation so nested and top-level empty maps serialize as `{}` in native and browser hosts.
+- Run the focused standard-library JSON filter before and after, then formatting, style, clippy, wasm32, and Playground checks.
+
 - Reuse `scripts/cloud-test.sh`; do not add a second cloud runner.
 - Add one named preset for the existing ignored end-to-end `warp pure hello` outcome test.
 - Document the preset in the worker procedure so compiler and pipeline Rust changes run it.
