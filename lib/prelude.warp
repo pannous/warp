@@ -116,6 +116,11 @@ alias includes = collection_contains
 alias get = map_get_or
 // P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 alias index_of = collection_position
+// decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
+// (characters from 1, like t#p), `"a👍🏽b".byte_index_of "b"` the offset 9 (bytes from 0); a missing part is an error
+find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
+byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
+present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
 // card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:
 // `t.graphemes`, `t.codepoints` are the lists
 alias characters = chars
@@ -171,7 +176,7 @@ range_sum(first, last) := {
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
-bytes(t: text) := (0..byte_size(t)).map(offset => byte_at(t, offset))
+bytes(t: text) := (0..byte_size(t)).map(at => byte_at(t, at))
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
@@ -391,8 +396,8 @@ display.size := [display_width, display_height] px
 display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
 // The fields of a time at run time (card time-fields-warp, notes/dates_at_run_time.md), called late by the emitter's
 // time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its wall
-// clock position, its zone offset in seconds east of UTC and the index of the field in times.rs TIME_FIELDS
-time_field_of(form: int, wall: int, offset: int, field: int): int := {
+// clock position, its zone's seconds east of UTC (not `offset`: the index type's synonym) and the index of the field in times.rs TIME_FIELDS
+time_field_of(form: int, wall: int, zone_seconds: int, field: int): int := {
 	days = time_days(form, wall)
 	nanos = time_nanos(form, wall)
 	match field {
@@ -406,7 +411,7 @@ time_field_of(form: int, wall: int, offset: int, field: int): int := {
 		6 => nanos /! 60000000000 % 60
 		7 => nanos /! 1000000000 % 60
 		8 => days * 86400 + nanos /! 1000000000
-		9 => offset
+		9 => zone_seconds
 		// the time of day in whole seconds, as calendar::Time::part: 22:27:46
 		10 => nanos /! 1000000000 * 1000000000
 		_ => days
