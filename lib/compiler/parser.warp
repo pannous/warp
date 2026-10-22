@@ -934,8 +934,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
 			} else if op#2 == "|>" {
 				left = piped(left, expression(p, powers#2))
-			} else if (op#2 == ".." or op#2 == "to") and starts_at(p.code, "=>", p.at) {
-				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`: a range without end
+			} else if (op#2 == ".." or op#2 == "to") and (starts_at(p.code, "=>", p.at) or (left is symbol and name_of(left).starts_with("$") and keyword_at(p, "for"))) {
+				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`: a range without end; also a rule's rest
+				// hole before a comprehension's clause, `[$e... for $x in $xs]` (card sugar-comprehensions)
 				left = keyed(op#2, left, ø)
 			} else {
 				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else expression(p, powers#2)
@@ -2846,8 +2847,11 @@ def loop_variable(p: Parser): Node := {
 	names = []
 	while true {
 		skip_spaces(p)
-		if not is_name_start(peek(p.code, p.at, p.n)) { return ø }
-		end = name_end(p.code, p.at, p.n)
+		// `$x`, a rule's name hole: `rewrite [$e for $x in $xs] => …` (card sugar-comprehensions, #3004)
+		holed = is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n))
+		start = if holed then p.at + 1 else p.at
+		if not is_name_start(peek(p.code, start, p.n)) { return ø }
+		end = if holed then symbol_end(p.code, start, p.n) else name_end(p.code, start, p.n)
 		names = names + [symbol(p.code[p.at .. end])]
 		p.at = end
 		skip_spaces(p)
@@ -2983,9 +2987,15 @@ def bare_atom(p: Parser): Node := {
 	if starred != ø { return starred }
 	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
 	if c == '$' and (is_name_start(peek(p.code, p.at + 1, p.n)) or is_digit(peek(p.code, p.at + 1, p.n))) {
+		named_hole = is_name_start(peek(p.code, p.at + 1, p.n))
 		end = symbol_end(p.code, p.at + 1, p.n)
 		hole = symbol(p.code[p.at .. end])
 		p.at = end
+		// `$f(…)`, a rule's call of a hole: the call, as `f(…)` reads (card sugar-comprehensions)
+		if named_hole and is_at(p.code, p.at, '(', p.n) {
+			p.at = p.at + 1
+			return listed("(", "", [hole] + spread(typed_parameters(items_until(p, ')', "("))))
+		}
 		return hole
 	}
 	if EXACT_CONSTANTS.contains("$(c)") {
