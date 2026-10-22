@@ -10,6 +10,7 @@ use "lints.warp"
 # words whose result is a changed copy of their argument: dropping it changes nothing (Rust COPY_WORDS)
 copy_words = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"]
 sleep_word = "sleep"
+index_of_word = "index_of"
 error_word = "error"
 fail_word = "fail"
 
@@ -20,6 +21,7 @@ source_checks(program: any, prelude: text): any := {
 		located_error(n)
 		spelled_number_join(n)
 		bare_sleep(n)
+		text_index_of(n, program)
 		assigned_mutation(n, aliases)
 		lints_of(without_mark(n))
 		if is_group(n) and separator_of(n) in statement_separators {
@@ -78,6 +80,28 @@ is_numeral(t: text): bool := {
 bare_sleep(n: any): any := {
 	if is_group(n) and #n == 2 and n#1 == symbol(sleep_word) and n#2 is number { diagnose(call_of("bare_sleep", ["${n#2}"])) }
 	ø
+}
+
+# --- a text's index_of names no unit (decision byte-index-of): it counts characters from 1, as find does ---
+
+text_index_of(n: any, program: any): any := {
+	receiver = index_of_receiver(without_mark(n))
+	if receiver != ø and is_evident_text(receiver, program) { diagnose(call_of("text_index_of", [])) }
+	ø
+}
+# t of `t.index_of(x)`, `t.index_of x` and `index_of(t, x)`, else ø
+index_of_receiver(n: any): any := {
+	if is_operator(n, ".") and is_index_of_call(value_of(n), 1) { return key_of(n) }
+	if is_index_of_call(n, 2) { return n#2 }
+	ø
+}
+is_index_of_call(n: any, receiver_place: int): bool := is_group(n) and #n > receiver_place and n#1 == symbol(index_of_word)
+# a text written as one, or a name the program assigns only such texts
+is_evident_text(n: any, program: any): bool := {
+	if n is text { return yes }
+	if not (n is symbol) { return no }
+	given = assigned_values(program, name_of(n))
+	#given > 0 and given.all(value => value is text)
 }
 
 # --- values a statement drops (wiki/mutable.md) ---

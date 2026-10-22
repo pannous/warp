@@ -1,0 +1,9 @@
+# float ^ float through runtime/pow.warp (musl's pow, tables read as hex in place): the pure lane prints what Rust's does
+print 1.5 ^ 2.5
+print 10.0 ^ -3.7
+print 0.5 ^ 1073.5
+print 2.0 ^ 1023.9
+print 7.1 ^ 0.0
+print 0.0 ^ 3.0
+print 3.3 ^ 123.456
+print 0.999 ^ 999999.5

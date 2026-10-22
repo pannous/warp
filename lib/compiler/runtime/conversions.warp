@@ -56,12 +56,12 @@ text_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Text and kind_code(n) != Kind.Codepoint) { returned_error("not a text") }
 	n
 }
+# a yes/no, or 0 or 1, which a bool holds as no and yes (Rust: `f(): bool := x == 1 and 0` gives no)
+holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
 bool_checked(n: Node): Node := {
-	if not is_bool_value(n) { returned_error("not a bool") }
+	if not holds_bool(n) { returned_error("not a bool") }
 	n
 }
-# a yes/no, or 0 or 1: what a bool admits (`a and b` gives 0 when a is no beside a value known only at run time)
-is_bool_value(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
 float_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Int and kind_code(n) != Kind.Float) { returned_error("not a float") }
 	n
@@ -75,7 +75,6 @@ object_checked(value: Node, message: text): Node := {
 }
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
 # empty one) where a list is needed, a boxed character where one is needed; any other value traps, as Rust fails on it
-# (a yes/no takes the 0 or 1 bool_checked admits too)
 text_of_node(n: Node): text := {
 	if not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Symbol) { return unboxed_text(n) }
 	if not is_null(n) and kind_code(n) == Kind.Codepoint { return char_text(unboxed_char(n)) }
@@ -83,7 +82,7 @@ text_of_node(n: Node): text := {
 	""
 }
 bool_of_node(n: Node): bool := {
-	if not is_bool_value(n) { fail() }
+	if not holds_bool(n) { fail() }
 	unboxed_int(n) != 0
 }
 char_of_node(n: Node): char := {

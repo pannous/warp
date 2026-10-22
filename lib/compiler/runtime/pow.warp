@@ -1,0 +1,230 @@
+# `base ^ exponent` of floats: musl's pow (src/math/pow.c, Copyright (c) 2018, Arm Limited, MIT), ported faithfully
+# without fma (wasm has none), its tables in pow_tables.warp: the same algorithm and every special case, so it gives
+# bit for bit the result of musl and glibc built without fma; worst-case error 0.54 ULP. Ints stand for C's uint64_t:
+# an unsigned comparison is unsigned_below, a right shift shifted_right. Names follow musl's.
+use "intrinsics.warp"
+use "instructions.warp"
+use "pow_tables.warp"
+use "../byte_codes.warp"
+# the table's int at index: its 16 hex digits, read in place
+pow_log_entry(index: int): int := hex_entry(pow_log_table_text(), index)
+pow_exp_entry(index: int): int := hex_entry(pow_exp_table_text(), index)
+# 16 hex digits and a space
+hex_entry_width(): int := 17
+hex_entry(table: text, index: int): int := {
+	bits = 0
+	for at in index * hex_entry_width() ..< index * hex_entry_width() + 16 { bits = bits_or(shifted_left(bits, 4), hex_digit(byte_at(table, at))) }
+	bits
+}
+hex_digit(b: int): int := if b <= Ascii.Nine then b - Ascii.Zero else b - Ascii.LowerA + 10
+# a < b of the ints read as unsigned 64-bit numbers
+unsigned_below(a: int, b: int): bool := (a + least_float_sign()) < (b + least_float_sign())
+least_float_sign(): int := shifted_left(1, 63)
+# the sign and exponent bits of a float, top12 in musl
+top12(x: float): int := shifted_right(bits_of_float(x), 52)
+# a float of that power of two
+two_to(power: int): float := float_of_bits(shifted_left(power + 1023, 52))
+infinity_bits(): int := shifted_left(2047, 52)
+one_bits(): int := shifted_left(1023, 52)
+pow_ln2_high(): float := float_of_bits(4604418534313441280)
+pow_ln2_low(): float := float_of_bits(4408728642709317424)
+# the log polynomial A, A[0] = -0.5 first
+pow_log_poly(index: int): float := {
+	coefficients = [-4620693217682128896, -4619192017806338720, 4602678819172646918, 4605380978944857422,
+		-4619192017809202054, -4615546010305280535, 4607182605818150851]
+	float_of_bits(coefficients#(index + 1))
+}
+# the exp polynomial's coefficients C2…C5
+pow_exp_poly(index: int): float := {
+	coefficients = [4602678819172646333, 4595172819793695804, 4586165622581701521, 4575957462836105239]
+	float_of_bits(coefficients#(index - 1))
+}
+# [y, tail] with y + tail = log(x): y the rounded log, tail about 15 bits more; ix the bits of x, a subnormal one
+# normalized using the sign bit for the exponent
+pow_log_inline(ix: int): list := {
+	# x = 2^k z, z in [OFF, 2·OFF) exact; the range has 128 subintervals, c near the center of z's
+	tmp = ix - 4604531861337669632
+	i = bits_and(shifted_right(tmp, 45), 127)
+	k = shifted_right_signed(tmp, 52)
+	iz = ix - bits_and(tmp, shifted_left(4095, 52))
+	z = float_of_bits(iz)
+	kd = float(k)
+	# log(x) = k·Ln2 + log(c) + log1p(z/c - 1)
+	invc = float_of_bits(pow_log_entry(3 * i))
+	logc = float_of_bits(pow_log_entry(3 * i + 1))
+	logctail = float_of_bits(pow_log_entry(3 * i + 2))
+	# z split so that rhi, rlo and rhi·rhi are exact and |rlo| <= |r|
+	zhi = float_of_bits(bits_and(iz + shifted_left(1, 31), shifted_left(-1, 32)))
+	zlo = z - zhi
+	rhi = zhi * invc - 1.0
+	rlo = zlo * invc
+	r = rhi + rlo
+	# k·Ln2 + log(c) + r
+	t1 = kd * pow_ln2_high() + logc
+	t2 = t1 + r
+	lo1 = kd * pow_ln2_low() + logctail
+	lo2 = t1 - t2 + r
+	ar = pow_log_poly(0) * r
+	ar2 = r * ar
+	ar3 = r * ar2
+	# k·Ln2 + log(c) + r + A[0]·r·r
+	arhi = pow_log_poly(0) * rhi
+	arhi2 = rhi * arhi
+	hi = t2 + arhi2
+	lo3 = rlo * (ar + arhi)
+	lo4 = t2 - hi + arhi2
+	# p = log1p(r) - r - A[0]·r·r
+	inner = pow_log_poly(5) + r * pow_log_poly(6)
+	middle = pow_log_poly(3) + r * pow_log_poly(4) + ar2 * inner
+	p = ar3 * (pow_log_poly(1) + r * pow_log_poly(2) + ar2 * middle)
+	lo = lo1 + lo2 + lo3 + lo4 + p
+	y = hi + lo
+	[y, hi - y + lo]
+}
+# scale·(1 + tmp) without intermediate rounding where it may overflow or underflow: sbits the bits of scale, whose
+# computed exponent may have overflown into the sign bit; ki the k of the argument reduction, its low 32 bits'
+# sign that of k (positive: the result may overflow, negative: underflow)
+pow_special_case(tmp: float, sbits: int, ki: int): float := {
+	if bits_and(ki, 2147483648) == 0 {
+		# k > 0: the exponent of scale might have overflown by <= 460
+		scale = float_of_bits(sbits - shifted_left(1009, 52))
+		return two_to(1009) * (scale + scale * tmp)
+	}
+	# k < 0: care in the subnormal range; sbits is the signed scale
+	sbits = sbits + shifted_left(1022, 52)
+	scale = float_of_bits(sbits)
+	y = scale + scale * tmp
+	if float_abs(y) < 1.0 {
+		# y rounded to the right precision before it's scaled into the subnormal range, against double rounding
+		one = 1.0
+		if y < 0.0 { one = 0.0 - 1.0 }
+		lo = scale - y + scale * tmp
+		hi = one + y
+		lo = one - hi + y + lo
+		y = hi + lo - one
+		# the sign of 0
+		if y == 0.0 { y = float_of_bits(bits_and(sbits, least_float_sign())) }
+	}
+	two_to(-1022) * y
+}
+# ±∞ (overflow) and ±0 (underflow), negative when sign_bias is set
+pow_overflow(sign_bias: int): float := {
+	huge = two_to(769)
+	if sign_bias != 0 { huge = 0.0 - huge }
+	huge * two_to(769)
+}
+pow_underflow(sign_bias: int): float := {
+	tiny = two_to(-767)
+	if sign_bias != 0 { tiny = 0.0 - tiny }
+	tiny * two_to(-767)
+}
+# sign·exp(x + xtail), |xtail| < 2^-8/128 and |xtail| <= |x|; sign_bias (SIGN_BIAS or 0) makes the sign -1 or 1
+pow_exp_inline(x: float, xtail: float, sign_bias: int): float := {
+	abstop = bits_and(top12(x), 2047)
+	# top12(0x1p-54) is 969, top12(512.0) 1032, top12(1024.0) 1033
+	if unsigned_below(62, bits_and(abstop - 969, 4294967295)) {
+		if abstop < 969 {
+			# tiny x, without a spurious underflow; 0 is a common input
+			one = 1.0 + x
+			return if sign_bias != 0 then 0.0 - one else one
+		}
+		if abstop >= 1033 {
+			# ∞ and NaN are handled already
+			return if bits_of_float(x) < 0 then pow_underflow(sign_bias) else pow_overflow(sign_bias)
+		}
+		# large x is special-cased below
+		abstop = 0
+	}
+	# exp(x) = 2^(k/128)·exp(r), exp(r) in [2^(-1/256), 2^(1/256)]; x = ln2/128·k + r, int k, r in [-ln2/256, ln2/256]
+	shift = float_of_bits(4843621399236968448)
+	z = float_of_bits(4640701337412797182) * x
+	# z - kd is in [-1, 1] in the non-nearest rounding modes
+	kd = z + shift
+	ki = bits_of_float(kd)
+	kd = kd - shift
+	r = x + kd * float_of_bits(-4650478699932942336) + kd * float_of_bits(-4824208856859133126)
+	# 2^-200 < |xtail| < 2^-8/128
+	r = r + xtail
+	# 2^(k/128) ~= scale·(1 + tail)
+	idx = 2 * bits_and(ki, 127)
+	top = shifted_left(ki + sign_bias, 45)
+	tail = float_of_bits(pow_exp_entry(idx))
+	# a valid scale only for -1023·128 < k < 1024·128
+	sbits = pow_exp_entry(idx + 1) + top
+	# exp(x) = 2^(k/128)·exp(r) ~= scale + scale·(tail + exp(r) - 1)
+	r2 = r * r
+	tmp = tail + r + r2 * (pow_exp_poly(2) + r * pow_exp_poly(3)) + r2 * r2 * (pow_exp_poly(4) + r * pow_exp_poly(5))
+	if abstop == 0 { return pow_special_case(tmp, sbits, ki) }
+	scale = float_of_bits(sbits)
+	scale + scale * tmp
+}
+# 0 when the bits iy of a nonzero finite float are no int, 1 for an odd int, 2 for an even one
+pow_check_int(iy: int): int := {
+	e = bits_and(shifted_right(iy, 52), 2047)
+	if e < 1023 { return 0 }
+	if e > 1023 + 52 { return 2 }
+	if bits_and(iy, shifted_left(1, 1023 + 52 - e) - 1) != 0 { return 0 }
+	if bits_and(iy, shifted_left(1, 1023 + 52 - e)) != 0 { return 1 }
+	2
+}
+# whether i are the bits of 0, ∞ or NaN
+zero_inf_nan(i: int): bool := not unsigned_below(2 * i - 1, 2 * infinity_bits() - 1)
+float_pow(x: float, y: float): float := {
+	sign_bias = 0
+	ix = bits_of_float(x)
+	iy = bits_of_float(y)
+	topx = top12(x)
+	topy = top12(y)
+	# x < 0x1p-126, ∞ or NaN, or |y| < 0x1p-65, |y| >= 0x1p63 or NaN: if |y| > 1075·ln2·2^53 the power is ∞ or 0, if
+	# |y| < 2^-54/1075 it is ±1
+	if topx == 0 or topx >= 2047 or not unsigned_below(bits_and(topy, 2047) - 958, 128) {
+		if zero_inf_nan(iy) {
+			if 2 * iy == 0 { return 1.0 }
+			if ix == one_bits() { return 1.0 }
+			if unsigned_below(2 * infinity_bits(), 2 * ix) or unsigned_below(2 * infinity_bits(), 2 * iy) { return x + y }
+			if 2 * ix == 2 * one_bits() { return 1.0 }
+			# |x| < 1 and y = ∞, or |x| > 1 and y = -∞
+			if unsigned_below(2 * ix, 2 * one_bits()) == (iy >= 0) { return 0.0 }
+			return y * y
+		}
+		if zero_inf_nan(ix) {
+			x2 = x * x
+			if ix < 0 and pow_check_int(iy) == 1 { x2 = 0.0 - x2 }
+			return if iy < 0 then 1.0 / x2 else x2
+		}
+		# x and y nonzero and finite
+		if ix < 0 {
+			yint = pow_check_int(iy)
+			# a negative base to a fraction: NaN
+			if yint == 0 { return (x - x) / (x - x) }
+			if yint == 1 { sign_bias = shifted_left(2048, 7) }
+			ix = bits_and(ix, least_float_sign() - 1)
+			topx = bits_and(topx, 2047)
+		}
+		if not unsigned_below(bits_and(topy, 2047) - 958, 128) {
+			# sign_bias is 0 here: y is not odd
+			if ix == one_bits() { return 1.0 }
+			if bits_and(topy, 2047) < 958 {
+				# |y| < 2^-65: x^y ~= 1 + y·log(x)
+				return if unsigned_below(one_bits(), ix) then 1.0 + y else 1.0 - y
+			}
+			return if unsigned_below(one_bits(), ix) == (topy < 2048) then pow_overflow(0) else pow_underflow(0)
+		}
+		if topx == 0 {
+			# a subnormal x normalized, its exponent negative
+			ix = bits_and(bits_of_float(x * two_to(52)), least_float_sign() - 1)
+			ix = ix - shifted_left(52, 52)
+		}
+	}
+	logged = pow_log_inline(ix)
+	hi = unboxed_float(logged#1)
+	lo = unboxed_float(logged#2)
+	yhi = float_of_bits(bits_and(iy, shifted_left(-1, 27)))
+	ylo = y - yhi
+	lhi = float_of_bits(bits_and(bits_of_float(hi), shifted_left(-1, 27)))
+	llo = hi - lhi + lo
+	ehi = yhi * lhi
+	# |elo| < |ehi|·2^-25
+	elo = ylo * lhi + y * llo
+	pow_exp_inline(ehi, elo, sign_bias)
+}
