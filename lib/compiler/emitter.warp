@@ -782,9 +782,9 @@ def orders_instances(): bool { module.functions.keys.any(name => name == "compar
 core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error"}
+	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
-	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: []}
+	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: [], code: []}
 def type_test_code(body: Body, subject: any, spec: text): list {
 	if spec in module.sum_types { return refuse("a test of the type " + spec + ", which has cases or subclasses") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
@@ -1759,8 +1759,6 @@ reads_position(n: any): bool := {
 def quoted_code(body: Body, e: any): list {
 	if module.reads_positions { return refuse("quoted code whose position or comment is read") }
 	if e is symbol { return node(Kind.Symbol, text_bytes(name_of(e))) }
-	# `data (a + 1)`: parentheses around one item only group it
-	if is_group(e) and bracket_of(e) == "(" and #e == 1 { return quoted_code(body, e#1) }
 	if type(e) is key {
 		parts = [["node", quoted_code(body, key_of(e))], text_value(op_of(e)), ["node", quoted_code(body, value_of(e))]]
 		return runtime_call("key_node", parts)#2
