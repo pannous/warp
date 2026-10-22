@@ -1488,8 +1488,8 @@ def used_module_sources(source: text): list {
 	for statement in code_statements(source) {
 		words = blank_words(statement)
 		if words.length == 2 and USE_KEYWORDS.contains(words#1) {
-			module = try read(folder_of(module_directory) + "/" + words#2 + ".warp") else ""
-			if module { sources += [module] }
+			module_source = try read(folder_of(module_directory) + "/" + words#2 + ".warp") else ""
+			if module_source { sources += [module_source] }
 		}
 	}
 	sources
@@ -1550,7 +1550,7 @@ def is_at_name_char(p: Parser, at: int): bool := at < p.n and is_name_char(p.cod
 // `print matches("abd", "a.c$")`: a word operator glued to `(both, operands)` is its call, as `f(x, y)` is; a right
 // operand never holds a comma, so `"abc" matches("a.c")` stays infix
 // Rust twin: operators.rs parse_user_infix is_glued_call, holds_top_level_comma
-def is_glued_call(p: Parser, glyph: text): bool := is_name_start(glyph[0]) and holds_top_level_comma(p.code, p.at + glyph.length, p.n)
+def is_glued_call(p: Parser, glyph: text): bool := is_name_start(glyph#1) and holds_top_level_comma(p.code, p.at + glyph.length, p.n)
 // whether the balanced `(…)` at `at` separates items by a comma of its own; brackets and commas inside a text or a
 // nested group are none of its own
 def holds_top_level_comma(code: text, at: int, n: int): bool {

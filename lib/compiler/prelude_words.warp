@@ -119,7 +119,7 @@ module_aliases(source: text): any := {
 with_call_forms(aliases: any, names: list): any := {
 	for name in names {
 		word = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else ""
-		if word != "" and is_name_start(word[0]) and word not in names { aliases[word] = name }
+		if word != "" and is_name_start(word#1) and word not in names { aliases[word] = name }
 	}
 	aliases
 }
@@ -236,10 +236,10 @@ with_used_modules(program: Node, folder: text): Node := {
 used_module_sources(statements: any, folder: text, seen: any): list := {
 	sources = []
 	for statement in statements {
-		module = use_target(statement)
-		if module is symbol and file_used(statement, folder) == ø and name_of(module) not in seen {
-			seen += [name_of(module)]
-			source = file_text(std_module_path(name_of(module)))
+		used = use_target(statement)
+		if used is symbol and file_used(statement, folder) == ø and name_of(used) not in seen {
+			seen += [name_of(used)]
+			source = file_text(std_module_path(name_of(used)))
 			if source != ø {
 				inner = used_module_sources(statements_in(plain_node(parsed(source))), folder, seen)
 				sources += inner#1 + [source]
