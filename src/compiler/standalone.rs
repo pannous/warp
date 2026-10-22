@@ -164,7 +164,7 @@ fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
 		let rebuild = format!("warp {REBUILD_WORD} {}", by.command());
 		return Err(error(&format!("no {} at {}: `{rebuild}` builds it", by.file_name(), path.display())));
 	};
-	if !is_delivered(&path) && built_from(&bytes)[..BUILD_PARTS_JUDGED] != judged_build().as_slice() {
+	if !is_delivered(&path) && built_from(&bytes)[..BUILD_PARTS_JUDGED] != judged_build()[..] {
 		eprintln!("{} was built from another lib/ or warp build: `warp rebuild` builds it anew", path.display());
 	}
 	Ok(module_of_bytes(bytes))
