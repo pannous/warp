@@ -18,9 +18,14 @@ echo $$ > $lock/pid
 trap "rm -rf $lock" EXIT
 
 cd $worktree || exit 1
-# WARP_WASM_OPT=0: the stages of a one-off build skip wasm-opt -O3, ~15% of its CPU (card self-check)
-export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib WARP_WASM_OPT=0
-$warp rebuild self >/dev/null 2>&1 || { echo "SELF CHECK RED: warp rebuild self failed in $worktree"; exit 1; }
-said=$($warp self samples/hello/hello.warp 2>&1 | tail -1)
-[[ $said == *$expected* ]] || { echo "SELF CHECK RED: warp self hello said: $said"; exit 1; }
+export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
+# both compilers of the branch's lib/: compiler.wasm (`warp pure`, built by Rust) and compiler-self.wasm (`warp self`,
+# built by itself); a lib/ that passed self alone broke main's `warp rebuild pure` twice on 2026-10-22
+check_lane() {
+  $warp rebuild $1 >/dev/null 2>&1 || { echo "SELF CHECK RED: warp rebuild $1 failed in $worktree"; exit 1; }
+  said=$($warp $1 samples/hello/hello.warp 2>&1 | tail -1)
+  [[ $said == *$expected* ]] || { echo "SELF CHECK RED: warp $1 hello said: $said"; exit 1; }
+}
+check_lane pure
+check_lane self
 echo "SELF CHECK ok: $said"
