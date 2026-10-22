@@ -203,8 +203,101 @@ def math_circumfix_aliases(): list {
 // The canonical names of the alias targets parser.warp's operator lists spell otherwise
 // Rust twin: spellings.rs OPERATOR_SPELLINGS ("approximately", "+-", "<-")
 ALIAS_TARGET_NAMES = {"approximately": "≈", "+-": "±", "<-": "="}
+
+// The parser's spellings: its own operators and keyword forms, with lib/aliases.warp's (card alias-mechanism,
+// notes/aliases.md: one entry per canonical word, `add { operator: "+", aliases: [plus] }`), made the first time a
+// parse asks; reading the file sees the parser's own spellings only
+ALIASES_FILE = "aliases.warp"
+// operator symbols and words: [spelling, operator] pairs, the symbols longest first; forms: keyword_form's; canonical:
+// each alias with its entry's word (`plus` → add); infix words: the table's (`mod`, `upto`)
+class Spellings { operator_symbols: list; operator_words: list; forms: map; canonical: map; infix_words: list }
+global spelling_tables = ø
+def alias_spellings(): Spellings := {
+	if spelling_tables == ø {
+		spelling_tables = own_spellings()
+		spelling_tables = aliased_spellings()
+	}
+	spelling_tables
+}
+def own_spellings(): Spellings := {
+	symbols = pairs_of(SYMBOL_OPERATORS)
+	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: []}
+}
+def aliased_spellings(): Spellings := {
+	path = folder_of(module_directory) + "/" + ALIASES_FILE
+	source = try read(path) else ""
+	if source == "" { fail "the alias table ${path} is missing: the parser reads its operator spellings there" }
+	tables = own_spellings()
+	for row in items_of(written_tree(source)) { add_alias_entry(tables, spelling_text(row#1), row#2) }
+	tables.operator_symbols = longest_first(tables.operator_symbols)
+	tables
+}
+// The spellings an entry gives: a symbol alias spells the entry's operator (its `operator`, else the entry itself), a
+// word alias its word (also infix with `infix: yes`, also a keyword form when the word is one)
+def add_alias_entry(tables: Spellings, word: text, fields: Node) {
+	target = alias_field(fields, "operator") ?? word
+	written_infix = alias_field(fields, "infix") == "yes"
+	if written_infix { add_infix_word(tables, word, target) }
+	for spelling in alias_field(fields, "aliases") ?? [] {
+		tables.canonical[spelling] = word
+		if not is_name_start(spelling#1) { tables.operator_symbols += [[spelling, target]] }
+		else if written_infix { add_infix_word(tables, spelling, target) }
+		if word in tables.forms { tables.forms[spelling] = tables.forms[word] }
+	}
+}
+def add_infix_word(tables: Spellings, word: text, target: text) {
+	tables.operator_words += [[word, target]]
+	tables.infix_words += [word]
+}
+// An entry's field as written, `operator: "+"` gives "+", `aliases: [plus]` ["plus"], else ø
+def alias_field(fields: Node, name: text): any {
+	for field in items_of(fields) { if name_of(key_of(field)) == name { return spelling_text(value_of(field)) } }
+	ø
+}
+// A spelling as text, each of a list's
+def spelling_text(n: Node): any := match n {
+	Char(c): "${c}"
+	Text(t): t
+	Symbol(name): name
+	True: "yes"
+	List(items, bracket, separator): items.map(item => spelling_text(item))
+	_: "${n}"
+}
+def symbol_operators(): list := alias_spellings().operator_symbols
+def word_operators(): list := alias_spellings().operator_words
+def keyword_forms(): map := alias_spellings().forms
+// The canonical word an alias spells (`plus` gives add), else ø
+def canonical_word(spelling: text): any := alias_spellings().canonical.get(spelling)
+// The operator a symbol or word spells (`≤` gives <=, `mod` %), else ø
+def symbol_operator(written: any): any := spelled_by(symbol_operators(), written)
+def word_operator(written: any): any := spelled_by(word_operators(), written)
+def spelled_by(pairs: list, written: any): any {
+	for pair in pairs { if pair#1 == written { return pair#2 } }
+	ø
+}
+def pairs_of(table: map): list {
+	pairs = []
+	for key, value in table { pairs += [[key, value]] }
+	pairs
+}
+def copied(table: map): map {
+	copy = {}
+	for key, value in table { copy[key] = value }
+	copy
+}
+// [spelling, …] pairs ordered longest first, so the first spelling written at a position is the longest
+def longest_first(pairs: list): list {
+	width = 0
+	for pair in pairs { if pair#1.length > width { width = pair#1.length } }
+	ordered = []
+	while width > 0 {
+		ordered += pairs.filter(pair => pair#1.length == width)
+		width -= 1
+	}
+	ordered
+}
 // The canonical name of the operator an alias spells, else ""
-def canonical_operator(target: text): text := SYMBOL_OPERATORS.get(target) ?? WORD_OPERATORS.get(target) ?? ALIAS_TARGET_NAMES.get(target) ?? ""
+def canonical_operator(target: text): text := symbol_operator(target) ?? word_operator(target) ?? ALIAS_TARGET_NAMES.get(target) ?? ""
 // The alias written at the parser's position as [spelling, target], a word one as a whole word, the longest, else []
 def alias_at(p: Parser): list := longest_spelled_at(p, p.aliases) ?? []
 // Of `candidates`, each spelled by its first item, the one written at the parser's position with the longest spelling,
@@ -223,12 +316,12 @@ def longest_spelled_at(p: Parser, candidates: list): any {
 def aliased_operator_at(p: Parser): list {
 	alias = alias_at(p)
 	canonical = if alias.length == 0 then "" else canonical_operator(alias#2)
-	if canonical == "" or (is_name_start(alias#1#1) and spells_tag(p, alias#1, canonical)) then [] else [alias#1, canonical]
+	if canonical == "" or (is_name_start(alias#1#1) and opens_block(p, alias#1.length)) then [] else [alias#1, canonical]
 }
 // A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `sqrt`)
 // Rust twin: spellings.rs table_operator, PREFIX_OPERATOR_WORDS
 def is_operator_spelling(word: text): bool {
-	if not is_name_start(word#1) or word in WORD_OPERATORS { return true }
+	if not is_name_start(word#1) or word_operator(word) != ø { return true }
 	form = keyword_form(word)
 	PREFIX_OPERATORS.contains(form) or form == "contains" or word == "in" or word == "approximately"
 }
@@ -338,19 +431,17 @@ def words_ahead_end(p: Parser, words: list, first_end: int): int {
 }
 
 // The keyword forms: each word with a form of its own and the form's shape; a prefix word's shape is the operator it
-// spells (`sqrt x` is `√x`), a constant word's the constant (any case: `True`, `NULL`)
+// spells (`sqrt x` is `√x`), a constant word's the constant (any case: `True`, `NULL`); their aliases come from
+// lib/aliases.warp (spellings)
 // Rust twin: atoms.rs keyword_form, expressions.rs parse_expr, if_else.rs, conditions.rs, warp_parser check_constants
 KEYWORD_FORMS = {"return": "return", "if": "condition", "while": "condition", "unless": "condition", "until": "condition", "for": "loop", "loop": "endless",
 	"class": "type", "struct": "type", "type": "type", "global": "global", "export": "global", "not": "not",
-	"sqrt": "√", "cbrt": "∛", "abs": "‖", "elif": "else if", "elsif": "else if", "elseif": "else if",
-	"where": "clause", "match": "clause", "switch": "clause", "contains": "contains", "has": "contains",
-	"includes": "contains", "function": "reference", "func": "reference", "true": "true", "yes": "true",
-	"false": "false", "no": "false", "null": "empty", "nul": "empty", "none": "empty", "nil": "empty", "nill": "empty",
-	"nix": "empty", "nada": "empty", "nothing": "empty", "empty": "empty", "void": "empty"}
+	"sqrt": "√", "cbrt": "∛", "abs": "‖", "else if": "else if", "where": "clause", "match": "clause", "switch": "clause",
+	"contains": "contains", "function": "reference", "func": "reference", "yes": "true", "no": "false", "ø": "empty", "empty": "empty"}
 PREFIX_OPERATORS = ["√", "∛", "‖"]
 
 // The shape of the keyword form `word` opens, else ""
-def keyword_form(word: text): text := if word in KEYWORD_FORMS then KEYWORD_FORMS[word] else ""
+def keyword_form(word: text): text := if word in keyword_forms() then keyword_forms()[word] else ""
 
 // The name at the parser's position, "" before anything else
 def word_at(p: Parser): text := p.code[p.at .. name_end(p.code, p.at, p.n)]
@@ -1111,6 +1202,8 @@ def word_before(p: Parser): text {
 	p.code[start .. end]
 }
 
+// An infix word of lib/aliases.warp before a block names it: `div {…}` is the html tag, `7 div 2` divides
+def names_block(p: Parser, word: text): bool := alias_spellings().infix_words.contains(word) and opens_block(p, word.length)
 // A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag
 def opens_block(p: Parser, width: int): bool {
 	is_at(p.code, blank_end(p, p.at + width), '{', p.n)
@@ -1207,7 +1300,7 @@ def test_word_at(p: Parser, min_power: int): list {
 	after = blank_end(p, end)
 	next = peek(p.code, after, p.n)
 	following = p.code[after .. name_end(p.code, after, p.n)]
-	ends = not operand_follows_at(p, end) or next == '{' or next == ':' or WORD_OPERATORS.any(op => op#1 == following)
+	ends = not operand_follows_at(p, end) or next == '{' or next == ':' or word_operators().any(op => op#1 == following)
 	if ends then [end, word, after_is] else []
 }
 // `x failed` is `is_error(x)`, `x is empty` `count(x) == 0` (ø, "", [] and {} alike), the other words `not x`
@@ -1328,17 +1421,15 @@ def is_method(node: Node): bool {
 // The left power of `#`, which a glued `[` indexes with
 INDEX_POWER = 170
 
-// The operators written with symbols, longest first, each with its canonical name
+// The operators written with symbols, longest first, each with its canonical name; alias_spellings() adds their other
+// spellings (lib/aliases.warp)
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = {"...": "to", "..=": "to", "===": "===", "!==": "!==", "..<": "..", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "**=": "^=", "÷=": "/!=", "/!=": "/!=", "/!": "/!", "??": "??", ":=": ":=", "~~": "~", "::": "::", "->": "->", "=>": "->", "|>": "|>", "**": "^", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "!": "not", "¬": "not", "..": "..", "&&": "and", "||": "or", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "*": "*", "×": "*", "⋅": "*", "/": "/", "÷": "/!", "%": "%", "^": "^", "<": "<", ">": ">", "≤": "<=", "≥": ">=", "≠": "!=", "≈": "≈", "~": "~", "&": "and", "|": "or", "#": "#", "?": "?", "…": "to", "↑": "↑", "↓": "↓"}
+SYMBOL_OPERATORS = {"===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // `xs .* 2` maps `*` over the elements: the phrase [xs .* 2], binding as `*` does (Rust twin: spellings.rs
 // element_wise_word)
 ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
-// The operators written as words, each with its canonical name
-WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "mod": "%", "modulo": "%", "rem": "rem", "upto": "..", "div": "/!"}
-// A word spelling another operator with a block after it stays a name: `div {…}` is the html tag, `7 div 2` the floor
-// division; the base words (then, else, do) take blocks
-def spells_tag(p: Parser, written: text, canonical: text): bool := written != canonical and opens_block(p, written.length)
+// The operators written as words, each with its canonical name; alias_spellings() adds the infix words of lib/aliases.warp
+WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "rem": "rem"}
 // The words that are operators in a loop's iterable alone: Kotlin's `for i in 0 until n` (elsewhere `until` guards)
 // Rust twin: lookahead.rs operator_in_context (in_for_header)
 ITERABLE_WORD_OPERATORS = [["until", ".."]]
@@ -1354,19 +1445,32 @@ def operator_at(p: Parser): list {
 	c = peek(p.code, p.at, p.n)
 	if is_name_start(c) {
 		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
-		for written, canonical in WORD_OPERATORS {
-			if written#1 == c and keyword_at(p, written) and not (p.in_branch and written == "else") and not spells_tag(p, written, canonical) { return [written, canonical] }
-		}
+		word = word_operator_at(p, c)
+		if word.length > 0 { return word }
 		if p.iterable and iterable_operator_at(p).length > 0 { return iterable_operator_at(p) }
 		return aliased_operator_at(p)
 	}
 	if starts_at(p.code, "?:", p.at) or starts_at(p.code, "//", p.at) { return [] }
 	// `x = 1  # one` is a comment, `xs #1` the index operator (card parser-parses)
 	if c == '#' and skipped_end(p.code, p.at, p.n) > p.at { return [] }
-	for written, canonical in SYMBOL_OPERATORS {
-		if written#1 == c and starts_at(p.code, written, p.at) and (written != ">>" or operand_follows(p, 2)) { return [written, canonical] }
+	spelled_symbol = symbol_operator_at(p, c)
+	if spelled_symbol.length > 0 then spelled_symbol else aliased_operator_at(p)
+}
+// The operator word at the parser's position as [written, canonical], else []
+def word_operator_at(p: Parser, c: any): list {
+	for pair in word_operators() {
+		written = pair#1
+		if written#1 == c and keyword_at(p, written) and not (p.in_branch and written == "else") and not names_block(p, written) { return pair }
 	}
-	aliased_operator_at(p)
+	[]
+}
+// The operator symbol at the parser's position as [written, canonical], the longest, else []
+def symbol_operator_at(p: Parser, c: any): list {
+	for pair in symbol_operators() {
+		written = pair#1
+		if written#1 == c and starts_at(p.code, written, p.at) and (written != ">>" or operand_follows(p, 2)) { return pair }
+	}
+	[]
 }
 
 // An operand follows `width` characters on, after any blanks: `n >> 7` shifts, `list<list<int>>` closes two generics
@@ -1922,7 +2026,7 @@ def no_asks_emptiness(p: Parser, word: text): bool {
 	after = blank_end(p, p.at + 2)
 	if "{:".contains(peek(p.code, after, p.n)) { return false }
 	follower = p.code[after .. name_end(p.code, after, p.n)]
-	not WORD_OPERATORS.any(pair => pair#1 == follower)
+	not word_operators().any(pair => pair#1 == follower)
 }
 
 // `1 + emit ask`, `emit stop the machine{reason: "x"}`: the emit word and the words of its event are one phrase, each
@@ -1978,7 +2082,7 @@ def expression_ends(p: Parser): bool {
 	at > p.at and "+-*/<".contains(c) and is_blank(peek(p.code, at + 1, p.n))
 }
 
-// The dashes 0x2010..0x2015 and the minus sign: each means `-` (infix ones: SYMBOL_OPERATORS, the minus sign
+// The dashes 0x2010..0x2015 and the minus sign: each means `-` (infix ones: lib/aliases.warp, the minus sign
 // lib/math.warp's alias line)
 // Rust twin: operators/spellings.rs OPERATOR_SPELLINGS
 DASH_GLYPHS = "‐‑‒–—―−"
@@ -2952,7 +3056,7 @@ FREE_SYMBOL_BLOCKS = [['←', '⏿'], ['■', '◿'], ['➔', '➿'], ['⟀', '�
 // Rust twin: operators.rs is_free_symbol
 def is_free_symbol(p: Parser, c: text): bool {
 	glyph = "$(c)"
-	if glyph.length != 1 or PREFIX_OPERATORS.contains(glyph) or is_circumfix_glyph(p, glyph) or glyph in SYMBOL_OPERATORS { return false }
+	if glyph.length != 1 or PREFIX_OPERATORS.contains(glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø { return false }
 	FREE_SYMBOL_BLOCKS.any(block => c >= block#1 and c <= block#2) and not p.aliases.any(alias => alias#1 == glyph)
 }
 // `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;
