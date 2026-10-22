@@ -44,19 +44,10 @@ fn run_wasi(module: &Path, arguments: &[&str], folder: &Path) -> WasiRun {
 	WasiRun { status, stdout: text(&stdout), stderr: text(&stderr) }
 }
 
-/// `warp rebuild self` for this checkout's lib/: the path of compiler-self.wasm
-fn self_compiled_compiler(library: &Path) -> PathBuf {
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "rebuild", "self"])
-		.env("WARP_LIB", library)
-		.env("WARP_TIME_LIMIT", super::test_warp_pure::SELF_BUILD_TIME_LIMIT_SECONDS)
-		.env("WARP_NO_WINDOW", "1")
-		.env("WARP_HINTS", "0")
-		.output()
-		.expect("warp runs");
-	let printed = String::from_utf8_lossy(&run.stdout);
-	let built = printed.lines().find_map(|line| line.strip_prefix("built "));
-	PathBuf::from(built.unwrap_or_else(|| panic!("{printed}\n{}", String::from_utf8_lossy(&run.stderr))))
+/// compiler-self.wasm next to the test's warp, built anew once per test run by the self lane (test_warp_pure lane)
+fn self_compiled_compiler() -> PathBuf {
+	super::test_warp_pure::lane("self");
+	Path::new(crate::common::warp_command().get_program()).with_file_name("compiler-self.wasm")
 }
 
 #[test]
@@ -69,7 +60,7 @@ fn compiler_wasm_runs_under_plain_wasmtime() {
 	std::fs::write(&program, HELLO).unwrap();
 	let _ = std::fs::remove_file(&output);
 	let library = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib");
-	let compiler = self_compiled_compiler(&library);
+	let compiler = self_compiled_compiler();
 	let paths = [&compiler, &program, &output, &folder, &library].map(|path| path.display().to_string());
 	let compiled = run_wasi(&compiler, &paths.each_ref().map(String::as_str), &folder);
 	assert!(output.exists(), "status {}\n{}\n{}", compiled.status, compiled.stdout, compiled.stderr);
