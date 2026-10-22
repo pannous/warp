@@ -1,8 +1,10 @@
 #!/bin/zsh
-# warp fix and warp beautify run lib/fix/fix.warp (card fix-in-lib): a file fixed in place, previewed without `yes`,
+# warp fix and warp beautify run lib/fix/command.warp (card fix-in-lib): a file fixed in place, previewed without `yes`,
 # inline code printed. usage: probes/fix/cli.sh [warp command]   (prints ok or the failing step, exit 1); the command
-# is `warp` (its fix and beautify run lib/fix/command.warp) or the entry itself: "warp-rust run lib/fix/command.warp --"
-warp=(${=1:-warp})
+# defaults to the entry itself, "warp run lib/fix/command.warp --"; the launcher (packaging/bin/warp) routes
+# `warp fix` and `warp beautify` there, so "warp" works once it is installed
+cd ${0:A:h}/../..
+warp=(${=1:-warp run lib/fix/command.warp --})
 folder=$(mktemp -d)
 file=$folder/a.warp
 fail() { print -r -- "✗ $1"; exit 1 }

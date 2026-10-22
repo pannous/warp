@@ -13,11 +13,8 @@ use warp::formatting::{format, soft_hints, Formatted, Options};
 
 pub(crate) const FORMAT_COMMANDS: [&str; 2] = ["format", "lint"];
 pub(crate) const BEAUTIFY_COMMAND: &str = "beautify";
-/// `warp fix <file>` = beautify (user 2026-10-15)
+/// `warp fix <file>` = beautify for now (user 2026-10-15; the agent fixing the rest: card warp-fix)
 pub(crate) const BEAUTIFY_COMMANDS: [&str; 2] = [BEAUTIFY_COMMAND, "fix"];
-/// ⚠ WARP DOES THIS DIFFERENTLY: warp fix and warp beautify are lib/fix/command.warp, run with the command word and its
-/// arguments (card fix-in-lib); src/formatting's beautify stays for its Rust callers
-const FIX_COMMAND_PROGRAM: &str = "fix/command.warp";
 const CHECK_WORD: &str = "check";
 const HASH_COMMENTS_WORD: &str = "hash-comments";
 /// `warp beautify yes <file>`: applied without the preview's question
@@ -181,21 +178,9 @@ fn format_code(
 	0
 }
 
-/// The exit code of lib/fix/command.warp, which ends warp itself with it; reached only when the program fails
-fn lib_fix_command(command: &str, arguments: &[String]) -> i32 {
-	let program = warp::modules::library_folder().join(FIX_COMMAND_PROGRAM);
-	let words = std::iter::once(command.to_string()).chain(arguments.iter().cloned());
-	warp::modules::std_adapters::set_program_arguments(words.collect());
-	println!("warp {command}: {}", warp::wasm_emitter::eval(&program.to_string_lossy()).serialize());
-	1
-}
-
 /// The exit code: 1 when a file does not parse or, with `check`, would change. The option words come first; a file
 /// named like one is written `./check`. Arguments naming no file, that read as code, are formatted as code
 pub(crate) fn format_command(command: &str, arguments: &[String]) -> i32 {
-	if BEAUTIFY_COMMANDS.contains(&command) {
-		return lib_fix_command(command, arguments);
-	}
 	if arguments.iter().any(|argument| HELP_WORDS.contains(&argument.as_str())) {
 		println!("  {FORMAT_USAGE}");
 		return 0;
