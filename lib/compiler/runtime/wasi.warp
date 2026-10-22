@@ -140,9 +140,6 @@ std_os_env(name: Node): Node := {
 	}
 	ø
 }
-# `use os; kept(name) ?? keep(name, value)`: nothing is kept across runs without the host's module cache
-std_os_kept(name: Node): Node := ø
-std_os_keep(name: Node, value: Node): Node := value
 
 # the first count scratch bytes, written to the open file
 written_bytes(fd: int, count: int) := {
