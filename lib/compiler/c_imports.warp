@@ -7,12 +7,17 @@
 #   import (sin, floor, fabs) from 'm'     several
 #   use sqlite3                            every function those lines give the library
 #   fmin(2, 3)                             libm's functions warp has no word of its own for need no import
-# The types of a foreign line: i32 (also int, bool, char), i64 (long, size_t), f64 (float, double), text (a
-# NUL-terminated copy; f32 a C float; a result is a `char *` read back), handle (a C pointer held as an id), out (an out-pointer the
-# call fills: no argument, the first one's pointer is the result), void.
+# The types of a foreign line:
+#   i32 (also int, char), i64 (long, size_t), f64 (float, double), f32 (a C float), bool (a C bool, its low byte)
+#   text     a NUL-terminated copy of a warp text; a result is a `char *` read back as a text, NULL ø
+#   handle   a C pointer the program holds as an id
+#   out      an out-pointer the call fills: no argument; the first one's pointer is the result of a handle result
+#   void     no result
 
 # the names the libraries go by in a program: `use libm` is `use m`
 c_library_aliases = {libc: "c", libm: "m", zlib: "z", SDL2: "SDL2", sdl: "SDL2", sdl2: "SDL2"}
+# libc and libm, which a program may name for each other
+c_and_m = ["c", "m"]
 # the libraries of typed lines that are not C's
 not_c_libraries = ["warp", "emitter", "runtime"]
 # the files whose foreign lines say what a library's functions take and give
@@ -20,12 +25,12 @@ c_catalog_files = ["c.warp", "math.warp"]
 c_foreign_mark = " from "
 c_quotes = ["'", "\""]
 # a type word of a foreign line → the type it crosses as
-c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "i32", char: "i32", i64: "i64", int64: "i64", long: "i64", size_t: "i64",
+c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "bool", char: "i32", i64: "i64", int64: "i64", long: "i64", size_t: "i64",
 	f64: "f64", float: "f64", double: "f64", number: "f64", f32: "f32", float32: "f32", text: "text", string: "text", handle: "handle", pointer: "handle",
 	out: "out", void: "void", nothing: "void"}
 # the kind the emitter passes a type as (host_words.warp's), and the c_signatures.rs name of the parameter
-c_parameter_kinds = {i32: "i32", i64: "int", f64: "float", f32: "f32", text: "node", handle: "i32"}
-c_parameter_names = {i32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", handle: "handle", out: "out"}
+c_parameter_kinds = {bool: "i32", i32: "i32", i64: "int", f64: "float", f32: "f32", text: "node", handle: "i32"}
+c_parameter_names = {bool: "i32", i32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", handle: "handle", out: "out"}
 
 # a library as written, `'m'`, `"c"`, `sqlite3`, `libm` → its name; ø for none or a library of warp's
 c_library_of(written: text, quoted: bool): any := {
@@ -154,6 +159,8 @@ c_functions_of(source: text, library_folder: text): list := {
 			for name in imported#2 {
 				if not functions.has(name) {
 					found = catalog.filter(d => d#1 == name and d#2 == imported#1)
+					# libc and libm are one library on macOS: `import sqrtf from "c"` takes libm's line
+					if #found == 0 and imported#1 in c_and_m { found = catalog.filter(d => d#1 == name and d#2 in c_and_m) }
 					if #found > 0 { functions[name] = found#1 } else { missing += [name + " from '" + imported#1 + "'"] }
 				}
 			}
