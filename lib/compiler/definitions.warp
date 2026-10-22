@@ -66,17 +66,19 @@ result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 		result = symbol("the result")
 		held = optional_when_answering_empty(head, body, result_type)
 		if name_of(held).ends_with("?") { body = with_empty_otherwise(body) }
+		if is_list_type(name_of(held)) and can_answer_empty(body, optional_functions) { body = Key(with_empty_otherwise(body), Op.Coalesce, List([], Bracket.Square, Separator.Comma)) }
 		Key(head, Op.Define, List([Key(Key(result, Op.Colon, held), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
 	}
 	_: n
 }
 
-# A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
-# the `?` as its fix and holds its result as a `list?`, so the ø reaches the caller unchanged (Rust twin:
-# type_name_matching.rs optional_when_answering_empty)
+# A function that can answer ø declares `T?` (decision optional-result): `def f(x): int { … return ø … }` warns with
+# the `?` as its fix and holds its result as an `int?`, so the ø reaches the caller unchanged (Rust twin:
+# type_name_matching.rs optional_when_answering_empty). A list result gives [] for ø instead, with no warning (user
+# 2026-10-22, card list-result-autocast: "ø can autocast to []")
 optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
 	written = name_of(result_type)
-	if not written or holds_empty(written) or not can_answer_empty(body, optional_functions) { return result_type }
+	if not written or holds_empty(written) or is_list_type(written) or not can_answer_empty(body, optional_functions) { return result_type }
 	diagnose(call_of("optional_result", [name_of(head#1), written]))
 	symbol(written + "?")
 }

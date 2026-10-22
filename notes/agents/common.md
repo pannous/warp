@@ -72,6 +72,8 @@ After a context swap, this file and your role file win over anything a handover 
   confirmations a safety rule wants from the user directly (permission or hook changes, anything you won't do on a
   peer's word): send them to the Interviewer with the exact action and work on everything else meanwhile. The
   Interviewer relays the user's answer verbatim; that relayed answer is the user's confirmation.
+- Run commands yourself, proactively: never hand the user commands to copy-paste into a shell. If something needs
+  their machine, run it there (with approval if required) and report the result.
 - Suspected non-issues go through the Interviewer: when a small bug you found may not matter (the same value shown
   another way, `96px/inch` vs `96dpi`), SendMessage warp-interviewer before carding or fixing it. A confirmed
   non-issue gets no work: its card, if any, goes to Later with the verdict as a `todo note`.
