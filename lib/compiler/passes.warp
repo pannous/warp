@@ -60,14 +60,16 @@ with_used(program: Node, folder: text, prelude: text): Node := with_reached(with
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))
 
-# [the view of the source as the passes leave it, what its checks diagnosed: [level, message, fix] each] (card
-# pure-diagnostics): the checks of the program as written, then those of the lowered program, as Rust runs them
-checked(source: text, folder: text, prelude: text): list := {
+# the program as the passes leave it, its checks run (card pure-diagnostics): those of the program as written, then
+# those of the lowered program, as Rust runs them; what they find goes to `diagnosed` (diagnostics.warp)
+checked_program(source: text, folder: text, prelude: text): Node := {
 	program = plain_node(source_checks(parsed(source), prelude))
 	own_names = statements_in(program).map(declared_name)
-	lowered_checked = main_globals(kind_changes(lowered_node(with_used(program, folder, prelude))), own_names)
-	[view_of(lowered_checked), diagnosed]
+	main_globals(kind_changes(lowered_node(with_used(program, folder, prelude))), own_names)
 }
+
+# [the view of the checked program, what its checks diagnosed: [level, message, fix] each]
+checked(source: text, folder: text, prelude: text): list := [view_of(checked_program(source, folder, prelude)), diagnosed]
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
 # parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them and the
