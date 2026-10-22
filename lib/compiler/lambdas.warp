@@ -52,10 +52,10 @@ lambda_of(n: Node): Node := match n {
 	_: n
 }
 
-# `x`, `(a, b)`, `x: int` of a lambda's head: its parameters as written
+# `x`, `(a, b)`, `x: int` of a lambda's head: its parameters as written; `()`, which reaches the passes as ø, none
 written_parameters(signature: Node): list := match signature {
 	List(names, Bracket.Round, separator): items_of(signature)
-	_: [signature]
+	_: if signature == ø then [] else [signature]
 }
 
 arrow_parameters(n: Node): Node := match lambda_of(n) {

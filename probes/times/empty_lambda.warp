@@ -1,0 +1,5 @@
+# a lambda of no parameters: prints 7 7
+f = () => 7
+print f()
+call(g: function) := g()
+print call(() => 7)

@@ -116,11 +116,6 @@ alias includes = collection_contains
 alias get = map_get_or
 // P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 alias index_of = collection_position
-// decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
-// (characters from 1, like t#p), `"a👍🏽b".byte_index_of "b"` the offset 9 (bytes from 0); a missing part is an error
-find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
-byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
-present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
 // card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:
 // `t.graphemes`, `t.codepoints` are the lists
 alias characters = chars
@@ -149,6 +144,11 @@ alias is_whitespace = is_space
 alias isspace = is_space
 first(xs) := xs#1
 last(xs) := xs#(count(xs))
+// decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
+// (characters from 1, like t#p), `"a👍🏽b".byte_index_of "b"` the offset 9 (bytes from 0); a missing part is an error
+find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
+byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
+present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
 // Python's `list(x)`: the list itself, a text's characters
 as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part

@@ -93,6 +93,9 @@ is_map_literal(n: Node): bool := {
 # the names the nodes assign a written map (`m = {a: 1}`)
 map_names(nodes: list): list := nodes.filter(n => is_key(n, Op.Assign) and key_of(n) is symbol and is_map_literal(value_of(n))).map(n => name_of(key_of(n)))
 
+# the parameters a function head declares maps (`f(t: map)`); a class's fields of that name stay out
+declared_maps(nodes: list): list := nodes.filter(n => is_key(n, Op.Colon) and key_of(n) is symbol and value_of(n) == symbol("map")).map(n => name_of(key_of(n)))
+
 # `k, v` or `(k, v)`: the two names a loop over a map binds
 is_name_pair(n: Node): bool := is_group(n) and #n == 2 and is_name(n#1) and is_name(n#2)
 
@@ -130,7 +133,7 @@ lowered_for(n: Node, maps: list): Node := match n {
 # a loop sees the maps of its own function and of the functions and program around it, as Rust's Names::within: a
 # list `found` stays a list beside another function's map `found`, a nested function's maps stay its own
 scoped_for_loops(n: Node, outer: list): Node := {
-	maps = if is_function_definition(n) then outer + map_names(outer_nodes_in(value_of(n))) else outer
+	maps = if is_function_definition(n) then outer + declared_maps(nodes_in(key_of(n))) + map_names(outer_nodes_in(value_of(n))) else outer
 	lowered_for(children(n, x => scoped_for_loops(x, maps)), maps)
 }
 
