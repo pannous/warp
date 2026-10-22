@@ -32,8 +32,10 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
   to a fixpoint: all on main, with tests (tests/modules/test_rewrite_engine.warp).
 - **Kernel decided** by the user (with `match`); `n times` decided as the library function
   `infix times(n: number, b: block)`, no rewrite.
-- **First sugar modules:** lib/sugar/arithmetic.warp (floor division `/!`, `/!=`, `div` alias) and
-  lib/sugar/methods.warp (list mutation methods, membership): branch layers (sugar-migration-2), landing now.
+- **First pass gone:** coalesce (`a ?? b`) is a rule now, its pass file deleted (sugar-coalesce, Grok Warp Code).
+- **First parser sugar modules:** lib/sugar/arithmetic.warp (floor division `/!`, `/!=`, `div` alias) and
+  lib/sugar/methods.warp (list mutation methods, membership): branch layers (sugar-migration-2), held: its self build
+  refuses "an assignment to a type" (suspect the `$xs.add(…)` rule on lib/collections.warp), warp-layers fixing.
 - **Not rule-ready yet** (found by warp-layers): of_lookups and number_words (twin stages Rust drives), parse_words'
   eval (needs scoped shadowing), test/emit/unit phrases and `n times` (parser grouping).
 - **Around it:** emitter.warp split into 14 files under lib/compiler/emitter/ (bb97b383e7); node patterns and
