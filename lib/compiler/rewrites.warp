@@ -3,12 +3,14 @@
 # where the hole binds a variable assigned code of that shape, or a parameter of a function called with one; `$x: text`
 # (also symbol, list, block, int, number) only code of that kind. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$x is literal`, `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
+# `$f is function`, `$x is literal`, `$w is label` (a word labelling a parameter, `with new`), `$x is text` (a hole
+# kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word) and `$f takes int` (typed int); `$e is enum` (a name or text of an enum the program
 # declares), `$c is case` (a case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound,
 # the condition binds it to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
-# (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), lets the rule rewrite code only
+# (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), `parameter` (of a definition's head,
+# F10), lets the rule rewrite code only
 # standing there: `rewrite $s except_if $c => if not $c then $s where statement`. A phrase pattern (`$n beat`) matches each run of those
 # words in a longer phrase (of `x = 2 beats`, which the parser keeps as `(x = 2) beats`, the value), a statement
 # pattern also a block of just that statement, and a template of several statements `($a; $b)` takes the statement's
@@ -26,6 +28,7 @@ use "uses.warp"
 use "prelude_words.warp"
 use "type_tests.warp"
 use "enum_declarations.warp"
+use "words.warp"
 
 rewrite_word = "rewrite"
 rewrite_line_start = "rewrite "
@@ -36,7 +39,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "label"]
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
 cases_words = ["cases", "of"]
 # `where $n < 0`: the comparisons of a number literal
@@ -53,14 +56,14 @@ name_joint = "_"
 each_word = "for"
 each_in_word = "in"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions
-rule_places = ["statement", "condition", "member", "key", "value"]
+rule_places = ["statement", "condition", "member", "key", "value", "parameter"]
 takes_word = "takes"
 # `where $f takes value`: any first parameter typed, except these
 yes_no_types = ["bool"]
 value_word = "value"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/parameters"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
@@ -135,16 +138,41 @@ enums_declared(program: Node): Node := {
 	program
 }
 
-# the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too
+# the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too;
+# the rules of a place apply only there
 sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
-	bottom_up(program, n => sugared_node(n, rules))
+	placed_rules = rules.filter(rule => rule.place != "")
+	plain_rules = rules.filter(rule => rule.place == "")
+	bottom_up(program, n => sugared_node(n, plain_rules, placed_rules))
 }
 
-# the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
-sugared_node(n: any, rules: list): any := sugar_rewritten(with_changed_members(n, member => bottom_up(member, part => sugared_node(part, rules))), rules)
+# the node with the sugar rules applied, a class's body too (the walk passes over its opaque view), a definition's
+# parameters by the rules of the place `parameter`
+sugared_node(n: any, rules: list, placed_rules: list): any := {
+	n = with_changed_members(n, member => bottom_up(member, part => sugared_node(part, rules, placed_rules)))
+	if is_key(n, Op.Define) and #placed_rules > 0 { n = with_parameters_sugared(n, rules, placed_rules) }
+	sugar_rewritten(n, rules)
+}
+
+# `f(a, with b) := …` with its parameters rewritten by the sugar rules of the place `parameter` (F10)
+with_parameters_sugared(n: any, rules: list, placed_rules: list): any := {
+	head = head_with_parameters(key_of(n), parameter => sugar_placed(parameter, "parameter", rules, placed_rules))
+	if head == key_of(n) then n else placed(Key(head, Op.Define, value_of(n)), n)
+}
+
+# the code rewritten by the first sugar rule of the place matching it, its result rewritten again (F7)
+sugar_placed(n: any, place: text, rules: list, placed_rules: list): any := {
+	for rule in placed_rules {
+		if rule.place == place {
+			result = rule_applied(rule, {}, n)
+			if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+		}
+	}
+	n
+}
 
 # the node rewritten by the first sugar rule matching it, its result rewritten again (F7); a node no rule matches stays
 # as the passes left it
@@ -382,6 +410,7 @@ has_property(code: any, property: text): bool := {
 	if property == "enum" { return named_enum(code) != "" }
 	if not (code is symbol) { return no }
 	word = name_of(code)
+	if property == "label" { return word in label_words }
 	if property == "type" { return is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }
 	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) }
@@ -579,8 +608,16 @@ with_placed_parts(n: any, rules: list, origins: list): any := {
 		left = at_place(left, "key", rules, origins)
 		right = at_place(right, "value", rules, origins)
 	}
+	if is_key(n, Op.Define) and rules.any(rule => rule.place == "parameter") { left = head_with_parameters(left, parameter => at_place(parameter, "parameter", rules, origins)) }
 	if left == key_of(n) and right == value_of(n) and not is_statements_template(left) and not is_statements_template(right) { return n }
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
+}
+
+# the head of `f(a, b) := …` (also `f(a): T`) with each parameter changed, its name kept (F10)
+head_with_parameters(head: any, changed: function): any := {
+	if is_key(head, Op.Colon) { return placed(Key(head_with_parameters(key_of(head), changed), Op.Colon, value_of(head)), head) }
+	if not (is_round(head) and #head > 1 and head#1 is symbol) { return head }
+	placed(group_like(head, [head#1] + items_of(head)[1 ..].map(changed)), head)
 }
 
 # a class with the items of its body rewritten by the rules of the place `member`

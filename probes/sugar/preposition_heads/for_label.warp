@@ -1,0 +1,4 @@
+// out: 7
+// `for` labels a parameter of a definition, never a loop
+beep(tone: int, for duration: int) := tone + duration
+print beep(3, 4)

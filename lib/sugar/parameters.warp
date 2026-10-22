@@ -1,0 +1,5 @@
+# Labelled parameters (notes/layers.md, sugar): a parameter after a preposition or `as`, `play(tone, for duration) :=
+# …`, is passed by that word as Swift passes its argument labels, so the definition takes the parameter alone,
+# `play(tone, duration) := …`. The prelude's `replace(t, old, with new)` has one. Rust twin:
+# src/lowering/definitions/preposition_calls.rs unlabelled_head
+rewrite $word $p => $p where parameter and $word is label
