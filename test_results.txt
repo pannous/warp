@@ -2,9 +2,6 @@
 
 PASSED:
   ✓ compiler::function::tests::test_function_registry
-  ✓ control::test_after::a_cancelled_after_gives_the_fallback
-  ✓ control::test_after::after_needs_a_shared_condition
-  ✓ control::test_after::after_waits_for_its_condition
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
   ✓ control::test_async_ports::a_text_task_within_a_deadline_gives_the_fallback
   ✓ control::test_async_ports::await_all_of_started_tasks_gives_their_results
@@ -14,8 +11,6 @@ PASSED:
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
   ✓ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
-  ✓ control::test_await_any_values::await_any_of_computed_values_answers
-  ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
   ✓ control::test_bang_words::a_defined_bang_name_is_one_word
   ✓ control::test_bang_words::is_bang_compares_the_value_of_code
@@ -2586,7 +2581,6 @@ PASSED:
   ✓ modules::test_package_forms::every_registry_entry_resolves
   ✓ modules::test_package_forms::unquoted_repository_names_with_dashes_and_dots_resolve
   ✓ modules::test_package_forms::version_latest_follows_the_default_branch
-  ✓ modules::test_package_hints::a_package_s_style_gets_no_hints_the_program_s_does
   ✓ modules::test_package_pin::a_changed_clone_stands_in_for_the_pin
   ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
   ✓ modules::test_package_pin::a_pinned_package_links_its_cached_version
@@ -2600,8 +2594,6 @@ PASSED:
   ✓ modules::test_package_shadow::a_file_named_like_a_package_shadows_it_loudly
   ✓ modules::test_package_shadow::a_required_version_names_the_shadowing_file_too
   ✓ modules::test_package_tools::a_package_source_is_outside_the_warp_workspace
-  ✓ modules::test_package_tools::a_package_tool_lives_in_the_package_build_directory
-  ✓ modules::test_package_tools::a_package_tool_runs_in_the_package_directory
   ✓ modules::test_package_tools::a_package_without_a_tool_says_so
   ✓ modules::test_packages::a_package_is_fetched_once_into_packages
   ✓ modules::test_packages::module_directory_is_where_the_module_lives
@@ -2651,6 +2643,7 @@ PASSED:
   ✓ modules::test_std_docs_comment_association::a_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::the_comment_block_directly_above_is_the_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::words_use_the_comment_line_directly_above_their_definition
+  ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
   ✓ modules::test_std_extrema::an_empty_list_has_no_extremum
   ✓ modules::test_std_extrema::extrema_of_one_list_of_candidates
@@ -3838,14 +3831,6 @@ PASSED:
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
-  ✓ parser::test_self_pure::durations_read_self_hosted
-  ✓ parser::test_self_pure::enum_cases_run_pure
-  ✓ parser::test_self_pure::enum_conversions_and_default_arms_run_pure
-  ✓ parser::test_self_pure::enums_of_used_files_and_type_variables_run_pure
-  ✓ parser::test_self_pure::extrema_run_pure
-  ✓ parser::test_self_pure::field_defaults_run_pure
-  ✓ parser::test_self_pure::field_slices_run_pure
-  ✓ parser::test_self_pure::for_each_loops_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
   ✓ parser::test_self_pure::global_type_words_read_self_hosted
   ✓ parser::test_self_pure::host_words_on_nodes_run_pure
@@ -4259,6 +4244,7 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
+  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -5136,6 +5122,7 @@ PASSED:
   ✓ types::test_optional_result_warning::a_result_that_cannot_be_empty_or_is_declared_optional_stays_quiet
   ✓ types::test_optional_result_warning::a_returned_empty_warns_and_reaches_the_caller
   ✓ types::test_optional_result_warning::an_if_without_else_or_a_loop_last_can_answer_empty
+  ✓ types::test_optional_result_warning::warp_fix_declares_the_result_optional
   ✓ types::test_param_named_like_global::a_parameter_named_like_a_list_variable_takes_one_value
   ✓ types::test_param_named_like_global::a_parameter_named_like_an_instance_variable_compares_as_its_own_value
   ✓ types::test_param_named_like_library_word::a_parameter_named_like_a_counting_word_is_a_list_item
@@ -6480,4 +6467,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6475 passed, 0 failed, 6475 total tested
+13 ignored, 6462 passed, 0 failed, 6462 total tested
