@@ -73,6 +73,10 @@ const LOWER_JSON_COMMAND: &str = "lower --json";
 const PURE_COMMAND: &str = "pure";
 /// `warp self <file> [arguments…]`: as `warp pure`, with compiler.warp compiled by itself (the pure lane)
 const SELF_COMMAND: &str = "self";
+/// `warp pure repl`: the console with each line compiled by compiler.warp (card wasm-commands)
+const REPL_COMMAND: &str = "repl";
+/// `warp pure run <file|code>`, `warp pure eval <code>`: the same as without the word, the program run here
+const PURE_RUNNING_WORDS: [&str; 2] = ["run", "eval"];
 /// `warp rebuild [pure|self]`: compiler.wasm and compiler-self.wasm, the compilers of `warp pure` and `warp self`, built
 /// anew from lib/ (decision compiler-build; src/compiler/standalone.rs)
 const REBUILD_COMMAND: &str = "rebuild";
@@ -402,13 +406,24 @@ fn run_command(args: &[String], given: &[String]) {
 	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
 		use warp::compiler::standalone::{run, run_code, Compiler};
 		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
+		// `warp pure <command> …`: the command of compiler.warp itself, written in warp (card wasm-commands); the REPL's
+		// lines run here, which plain WASI cannot
+		let word = args[2].as_str();
+		let running = PURE_RUNNING_WORDS.contains(&word) && args.len() > 3;
+		let program = if running { &args[3..] } else { &args[2..] };
+		if !running && COMMAND_WORDS.contains(&word) && !file_exists(word) {
+			if word == REPL_COMMAND {
+				return pure_console(by);
+			}
+			print_and_exit(warp::compiler::standalone::command(program.to_vec(), by));
+		}
 		// `warp pure <file.warp> [arguments…]`, or inline code as plain `warp <code>` takes it, `use` reading from the
 		// current folder
-		if has_warp_extension(&args[2]) {
-			diagnostic::show_lines_of(&source_of(&args[2]), Some(&args[2]));
-			print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
+		if has_warp_extension(&program[0]) {
+			diagnostic::show_lines_of(&source_of(&program[0]), Some(&program[0]));
+			print_and_exit(run(std::path::Path::new(&program[0]), program[1..].to_vec(), by));
 		}
-		let code = args[2..].join(" ");
+		let code = program.join(" ");
 		diagnostic::show_lines_of(&code, None);
 		print_and_exit(run_code(&code, &env::current_dir().unwrap_or_default(), by));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
