@@ -421,7 +421,9 @@ def number_value(n: any): list {
 exact_decimal_digits = 15
 exact_decimal(n: float): any := {
 	shown = "" + n
-	if shown.contains("e") or not shown.contains(".") { return ø }
+	if shown.contains("e") { return ø }
+	# a whole decimal shows no point (2.0 as 2): the int it is (decision int-list)
+	if not shown.contains(".") { shown += ".0" }
 	negative = shown.starts_with("-")
 	unsigned = if negative then shown[1..] else shown
 	parts = unsigned.split(".")
@@ -1393,8 +1395,13 @@ def call_values(f: Function, values: any): list {
 # a value a compiled function's unannotated parameter cannot take, `last(t)` after `last(xs)`: the module is compiled
 # again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module)
 def passed(f: Function, i: int, value: any): list {
-	try { converted(value, f.kinds[i]) } catch refusal {
-		slot = parameter_key(f.name, i)
+	slot = parameter_key(f.name, i)
+	try {
+		# a node may hold any kind (`v.x * s` of a float s): read as an unannotated parameter's int it would trap, so the
+		# parameter widens, as widen_parameter does for a call still compiling
+		if value#1 == "node" and f.kinds[i] != "node" and slot in module.unannotated { refuse("a node where a " + f.kinds[i] + " is needed") }
+		converted(value, f.kinds[i])
+	} catch refusal {
 		joint = parameter_joint(f.kinds[i], value#1)
 		if slot not in module.unannotated or not (joint in type_bytes or joint in references) or module.later_kinds.get(slot) == joint { throw refusal }
 		module.later_kinds[slot] = joint
@@ -2223,6 +2230,7 @@ literal_kind(n: any): any := {
 	if n is bool { return "bool" }
 	if n is text { return if #n == 1 then "char" else "text" }
 	if n is int { return "int" }
+	if n is float { return "float" }
 	ø
 }
 def collect_literal_arguments(n: any) {
