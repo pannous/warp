@@ -175,7 +175,8 @@ After a context swap, this file and your role file win over anything a handover 
   branches have priority over Rust-change branches (user 2026-10-21): they land before any Rust batch, and work in
   .warp is preferred whenever a task can be done there.
   A change to lib/compiler/ (types or annotations included) also checks the self build before Ready:
-  `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp`; a form
+  `scripts/self-check.sh <worktree>` (it rebuilds both compilers in a queue slot; a bare `warp rebuild self` skips the
+  queue: three at once pushed the load to 288, supervisor 2026-10-22); a form
   emitter.warp refuses there is fixed or carded, never left for main to find.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
