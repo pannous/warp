@@ -54,11 +54,15 @@ impl WarpParser {
 		self.source_circumfixes.iter().chain(math_circumfixes()).find(|pair| self.at_text(&pair.opening)).cloned()
 	}
 
-	/// The glyph closes a circumfix operator: `⌊x⌋ + 1` ends the bracketed expression there, `⌋` is no free symbol
-	pub(super) fn closes_circumfix(&self, glyph: char) -> bool {
+	/// The glyph opens or closes a circumfix operator, no free infix: `⌊x⌋ + 1` ends the bracketed expression at `⌋`,
+	/// `f ⟦x⟧` passes ⟦x⟧ to f
+	pub(super) fn is_circumfix_glyph(&self, glyph: char) -> bool {
 		let mut spelling = [0; 4];
 		let spelled = &*glyph.encode_utf8(&mut spelling);
-		self.source_circumfixes.iter().chain(math_circumfixes()).any(|pair| pair.closing == spelled)
+		self.source_circumfixes
+			.iter()
+			.chain(math_circumfixes())
+			.any(|pair| pair.opening == spelled || pair.closing == spelled)
 	}
 
 	/// `‖x‖`, `⌊x⌋` bracket a whole expression like parentheses and apply their function to it: `‖3-5‖*2` → 4. A prefix
