@@ -15,6 +15,13 @@ name = "warp-runtime"
 path = "src/main.rs"
 required-features = ["engine"]
 
+# the small native host of pure programs (notes/warp_host.md): compiles with compiler-self.wasm and runs the module
+# with WASI, shell commands and C calls; built on its own: `cargo build --release -p warp-runtime --features host --bin warp-host`
+[[bin]]
+name = "warp-host"
+path = "src/warp_host/main.rs"
+required-features = ["host"]
+
 # the stub of page apps (card build-links): the same runtime with the web view, built on its own
 # (`cargo build --release -p warp-runtime --features webview --bin warp-page-runtime`) so plain executables stay small
 [[bin]]
@@ -35,6 +42,8 @@ webview = ["dep:wry", "dep:winit", "dep:objc2"]
 # the C library libwarp_runtime (library.rs, include/warp_runtime.h): run_wasm compiles the module it is given, so it
 # carries Cranelift; built on its own: `cargo rustc --release -p warp-runtime --lib --crate-type cdylib --features library`
 library = ["compiler"]
+# warp-host: a compiler for the modules it is given, and WASI preview 1
+host = ["compiler", "dep:wasmtime-wasi"]
 # WARP_PROFILE=<file> (profile.rs): wasmtime's GuestProfiler writing Firefox Profiler JSON; warp has it, the stubs don't
 profiling = ["engine", "wasmtime/profiling"]
 
@@ -42,6 +51,7 @@ profiling = ["engine", "wasmtime/profiling"]
 libloading = { version = "0.9", optional = true } # C functions a program calls (c_calls.rs)
 miniz_oxide = { version = "0.9", optional = true } # the carried machine code is deflated (standalone.rs)
 serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"], optional = true } # foreign calls speak JSON lines (foreign.rs)
+wasmtime-wasi = { version = "49.0.1", optional = true, default-features = false, features = ["p1"] } # warp-host's WASI
 wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "call-hook", "gc", "gc-copying", "runtime", "std"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]

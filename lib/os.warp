@@ -10,6 +10,9 @@ keep(name: any, value: any) := std_io("os", "keep", [name, value])
 // `exec sh "crontab -l"`: the command (a sh template, its argument vector) run without a shell, what it printed; natively
 // only, the browser runs no processes
 exec(command: any) := std_io("os", "exec", [command])
+// `run(["sh" "-c" "make"])`: the command run without a shell, its {status, out, err} (trailing newlines dropped); a
+// failing command is no error, its status says so. warp-host runs it (notes/warp_host.md), warp-rust not yet
+run(command: any) := std_io("os", "run", [command])
 // The scripting words (decision use-script, all of them in `use script`):
 
 // the command line arguments, as args gives them
