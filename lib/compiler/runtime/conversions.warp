@@ -7,6 +7,7 @@ use "instructions.warp"
 use "lists.warp"
 use "text_numbers.warp"
 use "types.warp"
+use "../byte_codes.warp"
 # a boxed int (kind code 1), exact rational or float as a float
 float_of_node(n: Node): float := {
 	if kind_code(n) != Kind.Int { return unboxed_float(n) }

@@ -8,6 +8,7 @@ use "nodes.warp"
 use "text.warp"
 use "times.warp"
 use "types.warp"
+use "../byte_codes.warp"
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
 # a type value `int` prints `class int`; ahead of the match, as `Symbol(_)` tests it as the type it names. Only the
 # empty value prints ø: a `ø:` case would take an empty list too, which prints [] (it equals ø, as in Rust)

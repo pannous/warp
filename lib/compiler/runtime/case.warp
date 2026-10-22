@@ -6,6 +6,7 @@ use "conversions.warp"
 use "instructions.warp"
 use "library_words.warp"
 use "text_numbers.warp"
+use "../byte_codes.warp"
 # `t.lower()`, `t.upper()`: an ASCII text with its letters first…last moved by shift, any other mapped code point by
 # code point through the case table (lib/case_tables.warp, the twin of src/wasm_emitter/text/text_unicode.rs)
 text_lower(t: text): text := if is_ascii(t) then ascii_case(t, Ascii.UpperA, Ascii.UpperZ, Ascii.CaseShift) else table_case(t, lower_case_text())
