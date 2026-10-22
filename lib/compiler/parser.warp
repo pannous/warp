@@ -1810,6 +1810,10 @@ def prefixed(p: Parser): Node := {
 	if event != ø { return event }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else ø
 	if declared != ø { return declared }
+	if word == DATA_WORD and peek(p.code, p.at + word.length, p.n) == ' ' {
+		literal = data_literal(p)
+		if literal != ø { return literal }
+	}
 	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
 	if form == "not" {
 		p.at = p.at + 3
@@ -1817,6 +1821,26 @@ def prefixed(p: Parser): Node := {
 		return Key(ø, Op.Not, expression(p, 105))
 	}
 	atom(p)
+}
+
+// `x = data a and b` is the data `a and b`, also as an operand (`string(data a and b)`); parentheses around all of it
+// only group it (`data (a and b)`); ø for `data = …`, `data.x`, glued `data(x)` and `data class`, where data stays a word
+// Rust twin: literals/data.rs try_parse_data
+DATA_WORD = "data"
+def data_literal(p: Parser): Node := {
+	before = p.at
+	p.at = p.at + DATA_WORD.length
+	skip_spaces(p)
+	if "}]);,\n\r".contains(peek(p.code, p.at, p.n)) or operator_at(p).length > 0 or word_at(p) == "class" {
+		p.at = before
+		return ø
+	}
+	read = expression(p, binding_powers("=")#2)
+	written = match read {
+		List(parts, Bracket.Round, separator): { if #parts == 1 then parts#1 else read }
+		_: read
+	}
+	listed("", " ", [symbol(DATA_WORD), written])
 }
 
 // `1 + emit ask`, `emit stop the machine{reason: "x"}`: the emit word and the words of its event are one phrase, each
