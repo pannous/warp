@@ -334,8 +334,10 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 			Node::Meta { node: Box::new(node(3)?), data: Box::new(Node::key(mark, node(2)?)) }
 		}
 		// `d[1]` read by parser.warp: the shifted index `d#2` keeps the number written, as the Rust parser marks it
-		"attribute" if text(1).ok().as_deref() == Some(WRITTEN_INDEX_MARK) => match node(2)? {
-			Node::Number(written) => Node::meta(node(3)?, Node::data(crate::warp_parser::WrittenIndex(written))),
+		"attribute" if text(1).ok().as_deref() == Some(WRITTEN_INDEX_MARK) => match node(2)?.drop_meta() {
+			Node::Number(written) => {
+				Node::meta(node(3)?, Node::data(crate::warp_parser::WrittenIndex(written.clone())))
+			}
 			_ => return Err(unreadable()),
 		},
 		"attribute" => node(3)?.with_attribute(&text(1)?, node(2)?),
