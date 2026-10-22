@@ -82,6 +82,7 @@ const CONVERSION_METHOD: &str = "to";
 /// lib/units.warp's check that two quantities measure the same, and a quantity's amount in base units
 const SAME_QUANTITY: &str = "same_quantity";
 const QUANTITY_AMOUNT: &str = "amount";
+// ⚠ WARP DOES THIS DIFFERENTLY: sum is the prelude's fold over any values, no per-type sum case → lib/prelude.warp
 /// The sum of a list of run-time quantities folds their `plus` (quantities_reduced)
 const REDUCE_WORD: &str = "reduce";
 const REDUCED_NAMES: [&str; 2] = ["quantity·sum", "quantity·item"];

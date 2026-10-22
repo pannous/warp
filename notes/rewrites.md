@@ -41,3 +41,22 @@ After `where`, conditions joined by `and` ask about what the holes bound:
 `not` negates any of them except the origin (`where not $f takes value`; `$t is not type` reads the same). Rules try
 in order, so a later rule without conditions is the fallback. The `where` may stand after a template the parser
 continued into it (`=> $c + $n where …`).
+
+## Places (F1)
+A place word among the `where` conditions lets a rule rewrite code only standing there:
+
+| word | where |
+|---|---|
+| `statement` | a statement of a block or the program |
+| `condition` | the condition of an `if` or `while` |
+| `member` | an item of a class body |
+| `key`, `value` | the key or the value of `k: v` |
+
+```warp
+rewrite $s except_if $c => if not $c then $s where statement
+rewrite field $n => $n: int where member
+```
+
+The engine applies a place's rules to a node's parts standing there, right after their own rules ran (children
+first, as everywhere); a rule without a place word rewrites anywhere. Phrase runs (`$n half`) stay for rules without a
+place.

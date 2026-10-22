@@ -39,7 +39,6 @@ kind_mark(x: any): int from warp
 count(xs: list): int from emitter
 count(t: text): int from emitter
 count(m: map): int from emitter
-sum(xs: list): element of xs from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
@@ -154,6 +153,19 @@ first_items(xs, n) := xs[0: min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
 // x rounded to that many digits after the point
 round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
+// The laws of the operators a fold combines with (card sum-plain-fold): each one is associative, so the compiler may
+// regroup, fuse and split any fold of it, whatever the word calling it is named, and the identity starts the fold
+operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
+// the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
+// own sum: src/lowering/words/library_words.rs)
+sum(xs) := fold(xs, 0, +)
+// a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small
+rewrite sum($first to $last) => range_sum($first, $last)
+rewrite sum($first .. $end) => range_sum($first, $end - 1)
+range_sum(first, last) := {
+	n = last - first + 1
+	if n <= 0 then 0 else if n % 2 == 0 then (n /! 2) * (first + last) else n * ((first + last) /! 2)
+}
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
