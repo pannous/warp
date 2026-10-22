@@ -4,7 +4,7 @@
 # and then `TAB topic@expression`, what "got it" silences:
 # the pattern a node whose `$name` parts take any node (`data(…)` quotes it), the message and fix texts whose
 # `{name}` holes give that part and `{a name}` it with its article. The stage hands `diagnosed` to Rust, which says
-# the warnings and fails on an error (notes/pure_diagnostics.md).
+# the warnings and fails on an error (notes/pure_diagnostics.md); compiler.warp fails on an error itself.
 use "parser.warp"
 use "words.warp"
 
@@ -82,3 +82,11 @@ filled(message: text, bound: any): text := {
 	result
 }
 shown(part: any): text := if part is symbol then name_of(part) else if part is text then part else "${part}"
+
+# the first error diagnosed, as Rust's Diagnostic says it: the message, then `; fix: ` and the fix when it names one;
+# ø when none is an error
+first_error(): text? := {
+	failing = diagnosed.find(said => said#1 == "error")
+	if not failing { return ø }
+	if failing#3 then failing#2 + "; fix: " + failing#3 else failing#2
+}

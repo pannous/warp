@@ -5,6 +5,7 @@
 use super::*;
 
 pub mod braceless_arguments;
+pub mod keyword_rewrites;
 pub mod library_words;
 pub mod member_phrases;
 pub mod negated_calls;

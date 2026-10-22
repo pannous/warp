@@ -27,6 +27,14 @@ After a context swap, this file and your role file win over anything a handover 
   thing, make the recommended word canonical and the others aliases that work with a got-it note and an "I meant:
   <word>" fix (diagnostic::note_alias; which hint call: notes/fixits.md "Hints, notes and advice"). Ask the
   Interviewer only about differences in meaning.
+- The Rust compiler is frozen legacy (user 2026-10-22: "we don't want to touch the Rust, the old Rust"): new
+  features, generalizations and cleanups go into warp (lib/prelude.warp, lib/compiler/*.warp), never into src/ or
+  crates/. Warp does it the pure, clean way with no special cases, even where Rust keeps a name-keyed hack; the Rust
+  code is not changed to match, only marked where it differs, with a prominent comment banner
+  `// ⚠ WARP DOES THIS DIFFERENTLY: <what> → <lib file>` above the hack (comment-only, so the marks need no cloud
+  run). Rust edits only to keep the bootstrap building (the Rust-compiled compiler.warp) or to fix a crash; Rust
+  branches already Ready still land. A card that would need Rust work is redone as warp work.
+  Exception (user 2026-10-22): `warp fix` (src/cli/formatting.rs, src/formatting/) may still change in Rust.
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.

@@ -54,7 +54,7 @@ cloud sessions and routines share the subscription's limits. Cloud work also unl
 
 Runs a branch's tests on a cloud VM instead of the Mac's queue:
 
-    scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] <branch> <tip> [filters…|--full]
+    scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--slow] <branch> <tip> [filters…|--full]
     scripts/cloud-test.sh --result [same options] [--card <card>] <branch> <tip> [same filters]
 
 - The tip must be pushed (a full commit id from `git rev-parse`). Filters as for tests/queue.sh; `--full` = test.sh's
@@ -64,7 +64,16 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   one summary, red unless every shard is green and Σ passed+failed+ignored equals what a shard lists ("tests
   counted"), with one line per shard. A test binary killed at the limit prints no panic text of its failed tests:
   those run once more alone (`cloud-test: RERUN`, counted for their texts only). probes/cloud_full_shards.sh checks
-  the partition and the merge offline. `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
+  the partition and the merge offline. Slow lane (decision slow-lane, user 2026-10-22): `--full` leaves out the tests of
+  scripts/slow-tests.txt (exact names, sent as the job's file `slow`; each shard logs how many it left out, and the
+  merge expects that many fewer); every --full run appends the tests that took 60 s or more and commits that file
+  alone. `--slow <branch> <tip>` runs only those tests with the --full flags, a few times a day, not per batch: a slow
+  failure becomes a card, not a bounce. Every run writes each test's seconds into data/cloud/<run>/timings.tsv,
+  slowest first (libtest's `-Z unstable-options --report-time`, RUSTC_BOOTSTRAP=1 set through a cargo runner so the
+  build is unchanged), and result.md names the slowest three. Before the slow lane (2026-10-22): shards took build
+  370-480 s plus tests 270-330 s, except the shard holding parser::test_warp_pure (~1260 s of tests: its compiler
+  builds), ~28 min in all. A test binary shared by the shards is not feasible: debug test binaries are hundreds of MB,
+  over GitHub's 100 MB limit, and no other host is reachable from the VMs. `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
 - How: `claude --cloud` in detached tmux with a two-line prompt; the job's arguments go to the branch
   cloud-jobs/<job>, the session runs `cloud-test.sh --job <job>` (calls wait ≤ 9 min, under the cloud Bash tool's
   10 min) until it prints CLOUD TEST DONE. The detached run checks out the tip, adds the wasm32 targets, builds from
@@ -119,4 +128,4 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
 - Failures listed in notes/known_failures.md (read in the tested checkout, as the gate reads it at the tested tip) are
   listed apart as "known" and don't make a run red, like the environmental ones.
 - Cost: ~$0.30 per targeted run, ~$0.50 per full run (tokens, not VM time). A targeted run takes 5–6 min, mostly the
-  cold build. A full run is five shards of ~15 min each and ignores ~150 more tests than the Mac (tests that skip themselves off macOS).
+  cold build. A full run is five shards, ~28 min (above), and ignores ~150 more tests than the Mac (tests that skip themselves off macOS).

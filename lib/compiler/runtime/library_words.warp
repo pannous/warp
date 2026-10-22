@@ -1,5 +1,6 @@
 # The library words on values known only at run time: slices, join, repeat, split, reverse
 use "intrinsics.warp"
+use "../kinds.warp"
 use "arithmetic.warp"
 use "characters.warp"
 use "conversions.warp"
@@ -9,6 +10,7 @@ use "show.warp"
 use "text.warp"
 use "text_words.warp"
 use "types.warp"
+use "../byte_codes.warp"
 # the library words of lib/compiler on values known only at run time, as Rust's text and list words give them
 # `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
 # or beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"

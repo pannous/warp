@@ -38,7 +38,12 @@ use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
 
-passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, element_wise_operators_pass, number_words_pass]
+# the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES): `a of b`, `xs .* 2`,
+# `(p).a`
+sugar_phrases_table = [[is_lookup_word, lookup_phrase], [is_element_operator, element_wise_phrase], [is_dot, ungrouped]]
+sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
+
+passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
@@ -60,14 +65,16 @@ with_used(program: Node, folder: text, prelude: text): Node := with_reached(with
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))
 
-# [the view of the source as the passes leave it, what its checks diagnosed: [level, message, fix] each] (card
-# pure-diagnostics): the checks of the program as written, then those of the lowered program, as Rust runs them
-checked(source: text, folder: text, prelude: text): list := {
+# the program as the passes leave it, its checks run (card pure-diagnostics): those of the program as written, then
+# those of the lowered program, as Rust runs them; what they find goes to `diagnosed` (diagnostics.warp)
+checked_program(source: text, folder: text, prelude: text): Node := {
 	program = plain_node(source_checks(parsed(source), prelude))
 	own_names = statements_in(program).map(declared_name)
-	lowered_checked = main_globals(kind_changes(lowered_node(with_used(program, folder, prelude))), own_names)
-	[view_of(lowered_checked), diagnosed]
+	main_globals(kind_changes(lowered_node(with_used(program, folder, prelude))), own_names)
 }
+
+# [the view of the checked program, what its checks diagnosed: [level, message, fix] each]
+checked(source: text, folder: text, prelude: text): list := [view_of(checked_program(source, folder, prelude)), diagnosed]
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
 # parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them and the
@@ -75,7 +82,7 @@ checked(source: text, folder: text, prelude: text): list := {
 # reaches and the program's uses read from its folder
 stage(request: any, prelude: text): any := {
 	if request#1 == "pure" { return checked(request#2, request#3, prelude) }
-	if request#1 == 0 { return bridged(tree(request#2)) }
+	if request#1 == 0 { return bridged(stage_view(parsed(request#2))) }
 	pass = passes#(request#1)
-	view_of(pass(stage_node(request#2)))
+	stage_view(pass(stage_node(request#2)))
 }

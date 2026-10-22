@@ -1,0 +1,3 @@
+class P { n: int }
+named(p: P) := "a"
+use_a(x) := named(P{n: 1})

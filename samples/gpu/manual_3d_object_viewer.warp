@@ -43,7 +43,7 @@ f 15 16 17 18"
 	points = []
 	corners = []
 	for line in obj.split("\n") {
-		words = line.split(" ").filter(word => word != "")
+		words = line.split(" ").filter(word => word)
 		if #words > 0 and words#1 == "v" { points = points + [[float(words#2), float(words#3), float(words#4)]] }
 		if #words > 3 and words#1 == "f" {
 			face = words.filter(word => word != "f").map(word => points#int(word.split("/")#1))

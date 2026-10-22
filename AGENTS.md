@@ -4,6 +4,9 @@ This is **warp**, a rust implementation of **wasp**
 
 Always commit work and progress, even when a task is not fully solved or tests remain failing. Record unresolved failures honestly, and push when progress is at or near the desired goal.
 
+Answering (user 2026-10-22, every agent): first give a quick answer from what you know now, then run the necessary
+tasks and investigations in the background, then give the complete answer once the information arrives.
+
 https://github.com/pannous/wasp
 https://wasp.pannous.com/
 

@@ -50,16 +50,26 @@ pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiled(program, by), arguments)
 }
 
-/// The value of inline code, `warp pure "x=√72.;x^2"`, compiled as a program file of the current folder would be
-pub fn run_code(code: &str, by: Compiler) -> Node {
+/// The value of `code` (`warp pure "x=√72.;x^2"`, a test case), compiled as a program file of `folder` would be
+pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 	let file = std::env::temp_dir().join(format!("warp-inline-{}.warp", std::process::id()));
-	if let Err(failure) = std::fs::write(&file, code) {
+	if let Err(failure) = std::fs::write(&file, format!("{code}\n")) {
 		return error(&format!("{}: {failure}", file.display()));
 	}
-	let folder = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
-	let module = compiled_in(&file, &folder, by);
+	let module = compiled_in(&file, folder, by).map_err(|failure| inline_positions(&failure, &file));
 	let _ = std::fs::remove_file(&file);
 	ran(module, Vec::new())
+}
+
+/// A failure of inline code: a position in the file it was written to is one in the code (`at 1:5`)
+fn inline_positions(failure: &Node, file: &Path) -> Node {
+	match failure.drop_meta() {
+		Node::Error(message) => match message.drop_meta() {
+			Node::Text(text) => error(&text.replace(&format!("{}:", file.display()), "")),
+			_ => failure.clone(),
+		},
+		_ => failure.clone(),
+	}
 }
 
 /// The value of the compiled module run with these arguments, or why it was not compiled
@@ -93,7 +103,8 @@ fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledMo
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
-		(Node::Error(_), _) => Err(said),
+		// a position the compiler's run names is one in compiler.warp (its `raise`), not in the program
+		(Node::Error(_), _) => Err(crate::errors::diagnostic::located_in_file(&said, &library().join(COMPILER_FILE))),
 		(_, Ok(bytes)) => Ok(module_of_bytes(bytes)),
 		(_, Err(_)) => Err(error(&format!("compiler.warp wrote no module, it gave {}", said.serialize()))),
 	}
@@ -104,6 +115,11 @@ pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	let path = build_path(by);
 	build(by, &path)?;
 	Ok(path)
+}
+
+/// The compiler's build file there, built first when missing: before many runs start at once, so none waits on a build
+pub fn prepare(by: Compiler) -> Result<(), Node> {
+	compiler(by).map(|_| ())
 }
 
 /// compiler.warp's module from its build file, built first when missing; one line when it was built from another lib/

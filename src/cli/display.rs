@@ -53,14 +53,13 @@ pub(crate) fn ended_well(result: &Node) {
 /// A program's value after what it printed, behind `mark`; nothing for ø, the value of `print` (issue #18) and of a
 /// program that only acts, as Python's console shows nothing for None
 pub(crate) fn show(result: &Node, mark: &str) {
+	let result = &diagnostic::error_in_shown_file(result);
 	if !result.is_empty_node() {
 		// markup (`html{ body{ … } }`) is printed as HTML: `warp run page.warp > page.html` (card web-dom)
 		let shown = if markup::is_markup(result) { markup::to_html(result) } else { result.serialize() };
 		println!("{mark}{shown}");
 	}
-	if let Some(excerpt) =
-		diagnostic::error_position(result).and_then(|(line, column)| diagnostic::shown_excerpt(line, column))
-	{
+	if let Some(excerpt) = diagnostic::error_excerpt(result) {
 		let _ = io::stdout().flush();
 		eprintln!("{excerpt}");
 	}

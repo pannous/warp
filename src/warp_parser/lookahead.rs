@@ -12,6 +12,8 @@ pub(super) const FOURTH_ROOT: char = '∜';
 /// absolute value of a number, the Euclidean length of a list, decision S3)
 pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] =
 	[("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("not", Op::Not)];
+/// false, and in a condition the emptiness question `if no xs`
+const NO_WORD: &str = "no";
 /// operators::OPERATOR_SPELLINGS, the longest first: `<=` before `<`, `is less than` before `is`
 static LONGEST_SPELLINGS_FIRST: std::sync::LazyLock<Vec<(&str, Op)>> = std::sync::LazyLock::new(|| {
 	let mut spellings: Vec<_> = crate::operators::all_spellings().collect();
@@ -50,6 +52,17 @@ impl WarpParser {
 	}
 
 	/// An operand may start after `offset` characters and following blanks: not a closing bracket, separator or the end
+	/// `if no xs`: in a condition `no` before an operand asks for emptiness as `not xs` does; elsewhere, or before an
+	/// operator word or a block, `no` is false (decision empty-is-not-missing)
+	fn no_asks_emptiness(&self) -> bool {
+		let after = NO_WORD.len() + self.blanks_at(NO_WORD.len());
+		self.context.equals_compares
+			&& self.matches_keyword(NO_WORD)
+			&& self.operand_follows(NO_WORD.len())
+			&& !matches!(self.peek_char(after), '{' | ':')
+			&& !crate::operators::is_operator_word(&self.word_at(after))
+	}
+
 	pub(super) fn operand_follows(&self, offset: usize) -> bool {
 		let position = offset + self.blanks_at(offset);
 		!matches!(self.peek_char(position), '\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '=')
@@ -319,6 +332,9 @@ impl WarpParser {
 		}
 		if let Some((word, op)) = PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word)) {
 			return (!self.defines_named(word.len())).then_some((op, word.len()));
+		}
+		if self.no_asks_emptiness() {
+			return Some((Op::Not, NO_WORD.len()));
 		}
 		if self.matches_keyword("if") {
 			return Some((Op::If, 2));
