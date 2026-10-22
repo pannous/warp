@@ -59,11 +59,11 @@ lowered_node(n: any): any := {
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
 # prelude (prelude_words.warp)
-lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), folder, prelude))
+lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), source, folder, prelude))
 # (the rewrite rules first, as Rust's lowering runs them before any pass: a fired module's `use` brings its words;
 # declared counts before the prelude is reached, so the words index_positions answers with, `byte_index_of` for a
-# `byte index b = t.find(part)`, bring their definitions)
-with_used(program: Node, folder: text, prelude: text): Node := with_reached(with_used_modules(with_type_module_uses(index_positions(rewritten_program(with_uses(program, folder)))), folder), prelude, no)
+# `byte index b = t.find(part)`, bring their definitions; the source tells a rule's `·` from `*`)
+with_used(program: Node, source: text, folder: text, prelude: text): Node := with_reached(with_used_modules(with_type_module_uses(index_positions(rewritten_program(with_uses(program, folder), source))), folder), prelude, no)
 
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))
@@ -73,7 +73,7 @@ lowered(source: text, folder: text, prelude: text): any := view_of(lowered_progr
 checked_program(source: text, folder: text, prelude: text): Node := {
 	program = plain_node(source_checks(parsed(source), prelude))
 	own_names = statements_in(program).map(declared_name)
-	main_globals(kind_changes(lowered_node(with_used(program, folder, prelude))), own_names)
+	main_globals(kind_changes(lowered_node(with_used(program, source, folder, prelude))), own_names)
 }
 
 # [the view of the checked program, what its checks diagnosed: [level, message, fix] each]

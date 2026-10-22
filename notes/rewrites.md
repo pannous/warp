@@ -17,6 +17,29 @@ A template of several statements `($a; $b)` takes a statement's place; in a valu
 is that value's block `(t·1 = 1; 3; t·1)`. A phrase rule matches the words as written, also where the parser nests
 them (`keep 1 (past 3)`).
 
+## Name building (F5)
+`·` in a template glues words and holes into one name (decision name-glue), the words joined by `_`:
+
+```warp
+rewrite count_up $i till $b => ($i = 1; $i·end = $b; while $i <= $i·end { $i += 1 })   # k_end
+rewrite made $f $ws... => ($f·$ws = 4)          # made square a number → square_a_number = 4
+rewrite doubled $f => (twice·$f(x) := 2 * $f(x)) # doubled sq → twice_sq(x) := 2 * sq(x)
+rewrite speed_unit => km·per·hour                # km_per_hour
+```
+
+- Glue is recognised only in a rule's template, between words and holes (also the head of a
+  call or definition `twice·$f(x)`): the parser reads `·` as `*` (lib/math.warp), so the engine reads the rule's
+  source text before the right operand to tell `·` from `*`. `*` in a template stays the product, and outside templates
+  `x·y` multiplies as before.
+- A hole contributes the word it bound, or each word of a phrase it bound (a rest hole `$ws...` written `$ws`: `a number` → `a_number`); a fresh hole's
+  temporary stays one (`t·3_end`).
+- Numbers multiply: a number written beside `·` (`$x·2`) leaves the product, and so does a hole that bound a number
+  (`$n·ten` of 3 → `3 * ten`). A hole bound to other code (`x + 1`) is an error.
+- A template's definition with a hole or a built name as its head (`$f(x) := …`, `twice·$f(x) := …`, which the parser
+  reads as a phrase) defines that function, and a template of one parenthesized definition is that definition.
+- Open: generated names don't name their rule in help and errors yet; a built name clashing with the program's own
+  isn't refused yet; glue in quoted code (`data(…)`) outside rules.
+
 ## Positions
 Everything the template adds (its words, keys and groups, the fresh names) is placed where the rewritten code was
 written; the holes keep the positions of the code they bound. An error inside a rewrite points at the user's line,
