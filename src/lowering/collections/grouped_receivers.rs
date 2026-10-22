@@ -5,45 +5,32 @@
 //! assignment, a loop variable) ungroups; any other name stays a call: `f().b`, `today().year`, `point().x`, `mk().a`
 //! of `mk = () => …`, and the functions of an imported module
 
+use crate::lowering::keyword_rewrites::{Facts, KeywordRewrite};
 use crate::lowering::nodes::key;
-use crate::program_names::Meaning;
-use std::collections::HashSet;
-
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::program_names::{Bindings, Meaning};
 
-pub fn lower(node: Node) -> Node {
-	let mut grouped = false;
-	node.visit(&mut |part| {
-		grouped |= matches!(part, Node::Key(receiver, Op::Dot, _) if grouped_name(receiver).is_some())
-	});
-	if !grouped {
-		return node;
+/// The keyword rewrite of a dot, an entry of src/pipeline.rs SUGAR_PHRASES
+pub const UNGROUPED: KeywordRewrite =
+	KeywordRewrite { triggered_by: |word| word == Op::Dot.as_str(), rewrite: ungrouped, reads_bindings: true };
+
+fn ungrouped(node: Node, facts: &mut Facts) -> Node {
+	match node.drop_meta() {
+		Node::Key(receiver, Op::Dot, member) => match grouped_name(receiver) {
+			Some(name) if name.symbol_name().is_some_and(|name| is_variable(facts.bindings(), name)) => {
+				key(name.clone(), Op::Dot, member.as_ref().clone()).with_meta_of(&node)
+			}
+			_ => node,
+		},
+		_ => node,
 	}
-	let variables = bound_variables(&node);
-	ungrouped_receivers(node, &variables)
 }
 
-/// The names assigned a value that is no function, and the loop variables
-fn bound_variables(program: &Node) -> HashSet<String> {
-	let bindings = crate::program_names::Bindings::of(program);
-	let is_value = |(_, meaning): &(&str, Meaning)| matches!(meaning, Meaning::Variable | Meaning::Loop);
-	let values = bindings.meanings().filter(is_value).map(|(name, _)| name);
-	values.filter(|name| !bindings.binds_as(name, Meaning::Function)).map(String::from).collect()
-}
-
-fn ungrouped_receivers(node: Node, variables: &HashSet<String>) -> Node {
-	match node {
-		Node::Key(receiver, Op::Dot, member) => {
-			let receiver = ungrouped_receivers(*receiver, variables);
-			let receiver = match grouped_name(&receiver) {
-				Some(name) if variables.contains(name.symbol_name().unwrap_or_default()) => name.clone(),
-				_ => receiver,
-			};
-			key(receiver, Op::Dot, ungrouped_receivers(*member, variables))
-		}
-		other => other.map_children(|child| ungrouped_receivers(child, variables)),
-	}
+/// A name assigned a value that is no function, or a loop variable
+fn is_variable(bindings: &Bindings, name: &str) -> bool {
+	(bindings.binds_as(name, Meaning::Variable) || bindings.binds_as(name, Meaning::Loop))
+		&& !bindings.binds_as(name, Meaning::Function)
 }
 
 /// `(p)`: the one name in parentheses, no function reference

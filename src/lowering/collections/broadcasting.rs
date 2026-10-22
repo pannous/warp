@@ -9,6 +9,7 @@
 use super::nodes::{any_part, call, called_name, children_rewritten, is_colon_pair, key, word_headed, Counter};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
+use crate::lowering::keyword_rewrites::KeywordRewrite;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::InstanceTypes;
@@ -1405,9 +1406,15 @@ pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
 	key(list, Op::Dot, call("map", vec![lambda]))
 }
 
-/// `xs .* 2` as the parser keeps it, the phrase [xs .* 2]: the operator applied to each element (element_wise)
-pub fn lower_element_wise_operators(node: Node) -> Node {
-	let node = node.map_children(lower_element_wise_operators);
+/// `xs .* 2` as the parser keeps it, the phrase [xs .* 2]: the operator applied to each element (element_wise); the
+/// keyword rewrite of an element-wise operator, an entry of src/pipeline.rs SUGAR_PHRASES
+pub const ELEMENT_WISE: KeywordRewrite = KeywordRewrite {
+	triggered_by: |word| crate::operators::element_wise_operator(word).is_some(),
+	rewrite: |node, _| element_wise_phrase(node),
+	reads_bindings: false,
+};
+
+fn element_wise_phrase(node: Node) -> Node {
 	let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() else {
 		return node;
 	};
