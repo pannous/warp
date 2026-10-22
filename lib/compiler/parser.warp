@@ -2835,10 +2835,8 @@ def loop_variable(p: Parser): Node := {
 	names = []
 	while true {
 		skip_spaces(p)
-		// a rule's name hole `$item` stands for the name: `for $item in $xs {…}`
-		hole = if is_at(p.code, p.at, '$', p.n) then 1 else 0
-		if not is_name_start(peek(p.code, p.at + hole, p.n)) { return ø }
-		end = name_end(p.code, p.at + hole, p.n)
+		if not is_name_start(peek(p.code, p.at, p.n)) { return ø }
+		end = name_end(p.code, p.at, p.n)
 		names = names + [symbol(p.code[p.at .. end])]
 		p.at = end
 		skip_spaces(p)
