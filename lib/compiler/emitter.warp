@@ -416,7 +416,9 @@ def number_value(n: any): list {
 exact_decimal_digits = 15
 exact_decimal(n: float): any := {
 	shown = "" + n
-	if shown.contains("e") or not shown.contains(".") { return ø }
+	if shown.contains("e") { return ø }
+	# a whole decimal shows no point (2.0 as 2): the int it is (decision int-list)
+	if not shown.contains(".") { shown += ".0" }
 	negative = shown.starts_with("-")
 	unsigned = if negative then shown[1..] else shown
 	parts = unsigned.split(".")

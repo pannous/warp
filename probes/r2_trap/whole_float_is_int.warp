@@ -1,0 +1,4 @@
+# `2.0 is int` yes, `2.0 is float` no in every lane: a whole decimal literal is exact, an int (decisions int-list, exact-decimals)
+x = 2.0
+print(x is int)
+print(x is float)
