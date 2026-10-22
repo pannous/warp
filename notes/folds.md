@@ -10,8 +10,12 @@ is frozen legacy and only carries `// ⚠ WARP DOES THIS DIFFERENTLY` banners at
   whose words the program binds).
 - `operator_laws` in the prelude: +, *, and, or, max, min are associative; the identity each fold starts from. Data,
   read by nobody yet: the consumers to come are parallel reduction and regrouping (see Open).
-- A range's sum is a rewrite rule in warp: `rewrite sum($first to $last) => range_sum($first, $last)` (and `..`),
-  Gauss's closed form with the even factor halved first. `sum(1 to 3000000000)` is instant.
+- A range's sum is a rewrite rule in warp: `rewrite sum($first to $last) => (if $last < $first then 0 else …)` (and
+  `..`), Gauss's closed form with the even factor halved first. `sum(1 to 3000000000)` is instant. The template names
+  no helper word (card after-sum): it lands in the program's code, so a named helper (the former `range_sum`) meant the
+  program's own word of that name, and `range_sum(a, b) := sum(a..b)` called itself forever (Rust's rewrites.rs has no
+  fresh names). A lambda applied to the bounds would evaluate each once, but the pure emitter refuses applying a
+  lambda group, so the bounds are written out; Rust's lazy_ranges.rs repeats them the same way.
 - lambdas.warp, no new pass:
   - an operator is a fold's function: a bare `+` / `*` (the parser's key with neither side) or the words `and`,
     `or`, `xor` (operator_function): the round is `acc op item`.
