@@ -287,21 +287,22 @@ group_cpu_seconds() {
 }
 
 # The command, its output appended to the log, killed with all its processes after TEST_TIME_LIMIT_SECONDS or once no
-# test finished for STALL_SECONDS while they wait (a hang held batch-3's session 85 min), BUSY_STALL_SECONDS while they
-# compute; the summary then names the unfinished tests
+# test finished while they waited, using no CPU, for STALL_SECONDS on end (a hang held batch-3's session 85 min), or
+# for BUSY_STALL_SECONDS at all; the summary then names the unfinished tests
 run_watched() {
-	local log=$1 runner finished last_finished=-1 still=0 cpu last_cpu=0 limit; shift
+	local log=$1 runner finished last_finished=-1 still=0 idle=0 cpu last_cpu=0; shift
 	timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS "$@" >> "$log" 2>&1 &   # its own process group: a kill reaches the test binaries
 	runner=$!
 	while kill -0 $runner 2>/dev/null; do
 		sleep $WATCH_SECONDS
 		finished=$(grep -c '^test .* \.\.\. ' "$log")
 		cpu=$(group_cpu_seconds $runner)
-		limit=$([ $((cpu - last_cpu)) -ge $BUSY_CPU_SECONDS ] && echo $BUSY_STALL_SECONDS || echo $STALL_SECONDS)
+		if [ "$finished" != "$last_finished" ]; then still=0 idle=0 last_finished=$finished
+		elif [ $((cpu - last_cpu)) -ge $BUSY_CPU_SECONDS ]; then still=$((still + WATCH_SECONDS)) idle=0
+		else still=$((still + WATCH_SECONDS)) idle=$((idle + WATCH_SECONDS)); fi
 		last_cpu=$cpu
-		if [ "$finished" = "$last_finished" ]; then still=$((still + WATCH_SECONDS)); else still=0 last_finished=$finished; fi
-		if [ $still -ge $limit ]; then
-			echo "cloud-test: KILLED: no test finished for $still s" >> "$log"
+		if [ $idle -ge $STALL_SECONDS ] || [ $still -ge $BUSY_STALL_SECONDS ]; then
+			echo "cloud-test: KILLED: no test finished for $still s, the last $idle s of them using no CPU" >> "$log"
 			kill -TERM $runner
 			break
 		fi
