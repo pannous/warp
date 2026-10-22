@@ -300,7 +300,7 @@ pub(crate) fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
 	Ok(said.map(|()| bytes))
 }
 
-/// What the checks of the passes stage diagnosed, [level, message, fix, topic@expression] each
+/// What the checks of the passes stage diagnosed, [level, message, fix, topic@expression, line, column] each
 /// (lib/compiler/diagnostics.warp): an error is the program's value, the warnings and hints are said as the Rust
 /// checks' are
 fn diagnosed(diagnostics: &serde_json::Value) -> Result<Vec<crate::errors::diagnostic::Diagnostic>, Node> {
@@ -309,7 +309,8 @@ fn diagnosed(diagnostics: &serde_json::Value) -> Result<Vec<crate::errors::diagn
 	for diagnostic in diagnostics.as_array().into_iter().flatten() {
 		let text_at = |index: usize| diagnostic.get(index).and_then(serde_json::Value::as_str).unwrap_or_default();
 		let fix = Some(text_at(2)).filter(|fix| !fix.is_empty()).map(String::from);
-		let found = Diagnostic { message: text_at(1).to_string(), fix, ..Default::default() };
+		let number_at = |index: usize| diagnostic.get(index).and_then(serde_json::Value::as_u64).unwrap_or_default() as usize;
+		let found = Diagnostic { message: text_at(1).to_string(), fix, line: number_at(4), column: number_at(5), ..Default::default() };
 		// what "got it" silences: `topic@expression`
 		let found = match text_at(3).split_once('@') {
 			Some((topic, written)) => found.about(topic, written),

@@ -30,7 +30,7 @@ kind_changes(program: Node): Node := {
 	global_names = global_variables(program)
 	for body in [program] + definition_bodies(program) {
 		change = first_kind_change(body, {}, results, global_names)
-		if change != ø { return diagnose(change) }
+		if change != ø { return change }
 	}
 	program
 }
@@ -178,7 +178,7 @@ given_kind(name: text, given: text, value: any, kinds: any): any := {
 	if was != ø and was != "" and given != "" {
 		# P199: 1 and 0 are yes and no, a bool variable stays one
 		kind = if was == bool_kind and (value == 0 or value == 1) then bool_kind else mixed_kind(was, given)
-		if kind == "" { return call_of("kind_change", [symbol(name), was, given]) }
+		if kind == "" { return diagnose(call_of("kind_change", [symbol(name), was, given]), value) }
 	} else if was != ø {
 		kind = ""
 	}

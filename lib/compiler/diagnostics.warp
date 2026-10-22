@@ -1,19 +1,21 @@
 # The diagnostics of the warp compiler (card pure-diagnostics, decision diagnostics-files): a check finds a fact, a
-# node such as `kind_change(x, Int, List)`, and `diagnose(fact)` says it with the message of the first row it
-# matches in errors.data, then warnings.data, then hints.data. A row is `pattern TAB message`, optionally `TAB fix`
+# node such as `kind_change(x, Int, List)`, and `diagnose(fact, at)` says it at the node the check looked at, with the
+# message of the first row it matches in errors.data, then warnings.data, then hints.data. A row is `pattern TAB message`, optionally `TAB fix`
 # and then `TAB topic@expression`, what "got it" silences:
 # the pattern a node whose `$name` parts take any node (`data(…)` quotes it), the message and fix texts whose
 # `{name}` holes give that part and `{a name}` it with its article. The stage hands `diagnosed` to Rust, which says
 # the warnings and fails on an error (notes/pure_diagnostics.md); compiler.warp fails on an error itself.
 use "parser.warp"
 use "words.warp"
+use "walk.warp"
 
 # the message files in the order a fact is looked up, each with the level of its messages
 message_files = [["errors.data", "error"], ["warnings.data", "warning"], ["hints.data", "hint"]]
 quoting_word = "data"
 hole_mark = "$"
 
-# [level, message, fix, topic@expression] of each fact diagnosed so far ("" when it names none)
+# [level, message, fix, topic@expression, line, column] of each fact diagnosed so far ("" when it names none; line
+# and column 0 at a node a pass made)
 global diagnosed = []
 # [level, pattern, message] of every row of the message files, read at the first fact
 global message_rows = ø
@@ -21,10 +23,12 @@ global message_rows = ø
 # the node a check looks at: a key of the operator
 is_operator(n: any, op: text): bool := n is key and op_of(n) == op
 
-diagnose(fact: any): any := {
-	diagnosed += [said_fact(fact)]
+diagnose(fact: any, at: any): any := {
+	diagnosed += [said_fact(fact) + place_of(at)]
 	fact
 }
+# [line, column] where n was written
+place_of(n: any): list := if is_positioned(n) then [line_of(n), column_of(n)] else [0, 0]
 
 # [level, message, fix, topic@expression] of the first row the fact matches; a fact no row matches is an error
 # naming it, loudly
@@ -96,6 +100,9 @@ first_error(found: list): text? := {
 # the warnings among the diagnosed, each as Rust's Diagnostic says it
 warnings_said(found: list): list := found.filter(said => said#1 == "warning").map(said_text)
 
-# a diagnosed [level, message, fix, …] as Rust's Diagnostic says it: the message, then `; fix: ` and the fix when it
-# names one
-said_text(said: list): text := if said#3 then said#2 + "; fix: " + said#3 else said#2
+# a diagnosed [level, message, fix, topic, line, column] as Rust's Diagnostic says it: the message, ` at line:column`
+# when it has a position (the runner names the file and shows the line), then `; fix: ` and the fix when it names one
+said_text(said: list): text := {
+	placed = if said#5 > 0 then said#2 + " at ${said#5}:${said#6}" else said#2
+	if said#3 then placed + "; fix: " + said#3 else placed
+}

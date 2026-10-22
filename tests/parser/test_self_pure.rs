@@ -402,6 +402,14 @@ fn kind_changes_fail_pure() {
 	runs_pure("kinds_that_mix", "x = 1; x = 2.5; x", "2.5");
 }
 
+/// What the pure lane's checks diagnose names where it was written, as Rust's diagnostics do (decision
+/// errors-name-file, card front-warning-positions)
+#[test]
+fn pure_diagnostics_name_their_position() {
+	let (output, _) = lane_run("pure-only", "kind_change_position", "x = 1\nx = \"a\"\nx");
+	assert!(output.contains("x was an Int, is given a Text: use another name at 2:5"), "{output}");
+}
+
 /// card uses-std-modules: a standard module a program uses by name (`use case_tables`, lib/case_tables.warp) brings
 /// the definitions the program reaches, its values included, in front of the program
 #[test]
