@@ -30,6 +30,7 @@ use "data_items.warp"
 use "parse_words.warp"
 use "lambdas.warp"
 use "min_max.warp"
+use "index_positions.warp"
 use "arity_overloads.warp"
 use "coalesce.warp"
 use "kind_changes.warp"
@@ -62,12 +63,14 @@ lowered_program(source: text, folder: text, prelude: text): Node := lowered_node
 # the sugar rules the program at hand keeps (with_used)
 global kept_sugar = []
 # (the rewrite rules first, as Rust's lowering runs them before any pass: a fired module's `use` brings its words;
-# after interpolation, so that a rule sees the code in a text's holes, `"$(2 in xs)"`). The sugar rules the program
-# keeps are chosen here, by its own bindings, before the definitions it reaches join it.
+# after interpolation, so that a rule sees the code in a text's holes, `"$(2 in xs)"`; declared counts before the
+# prelude is reached, so the words index_positions answers with, `byte_index_of` for a `byte index b = t.find(part)`,
+# bring their definitions). The sugar rules the program keeps are chosen here, by its own bindings, before the
+# definitions it reaches join it.
 with_used(program: Node, folder: text, prelude: text): Node := {
 	own = interpolation(with_uses(program, folder))
 	kept_sugar = sugar_rules(own)
-	with_reached(with_used_modules(with_type_module_uses(rewritten_program(own)), folder), prelude, no)
+	with_reached(with_used_modules(with_type_module_uses(index_positions(rewritten_program(own))), folder), prelude, no)
 }
 
 # the sugar rules (lib/sugar/) over the program and the definitions it reached, where list_methods ran: after the

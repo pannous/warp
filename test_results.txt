@@ -3,8 +3,6 @@
 PASSED:
   ✓ compiler::function::tests::test_function_registry
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
-  ✓ control::test_async_ports::a_text_task_within_a_deadline_gives_the_fallback
-  ✓ control::test_async_ports::await_all_of_started_tasks_gives_their_results
   ✓ control::test_async_ports::await_any_gives_the_first_to_finish
   ✓ control::test_async_ports::await_first_is_the_first_tasks_result
   ✓ control::test_async_ports::await_within_a_deadline
@@ -514,6 +512,7 @@ PASSED:
   ✓ control::test_method_let_shadows_field::a_bare_field_write_changes_the_field
   ✓ control::test_method_let_shadows_field::a_let_local_hides_the_field
   ✓ control::test_method_let_shadows_field::a_let_local_starts_after_its_value
+  ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
   ✓ control::test_named_broadcast::a_named_event_reaches_another_program
   ✓ control::test_named_broadcast::a_program_hears_its_own_named_event
@@ -2837,6 +2836,7 @@ PASSED:
   ✓ node::test_node_api::rebuilt_lists_equal_the_written_ones
   ✓ node::test_node_cases::a_called_subject_is_taken_apart
   ✓ node::test_node_cases::a_case_builds_the_node
+  ✓ node::test_node_cases::a_case_is_a_type
   ✓ node::test_node_cases::a_pattern_takes_the_node_apart
   ✓ node::test_node_cases::a_patterns_op_is_spelled_as_text
   ✓ node::test_node_cases::a_programs_own_names_win
@@ -3832,10 +3832,6 @@ PASSED:
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
-  ✓ parser::test_self_pure::lib_forms_run_pure
-  ✓ parser::test_self_pure::long_float_literals_read_pure
-  ✓ parser::test_self_pure::match_values_run_pure
-  ✓ parser::test_self_pure::named_arguments_run_pure
   ✓ parser::test_self_pure::negated_operators_run_pure
   ✓ parser::test_self_pure::number_keys_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
@@ -3844,7 +3840,6 @@ PASSED:
   ✓ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
   ✓ parser::test_self_pure::recursive_results_run_pure
   ✓ parser::test_self_pure::rewrites_run_pure
-  ✓ parser::test_self_pure::spaced_library_words_run_pure
   ✓ parser::test_self_pure::spaced_prefix_calls_run_pure
   ✓ parser::test_self_pure::std_modules_run_pure
   ✓ parser::test_self_pure::text_escapes_read_pure
@@ -3901,7 +3896,6 @@ PASSED:
   ✓ parser::test_warp_format::test_nested_structures
   ✓ parser::test_warp_format::test_warp_roundtrip
   ✓ parser::test_warp_format::test_warp_to_json
-  ✓ parser::test_warp_pure::warp_self_names_the_refusal
   ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
   ✓ parser::test_wisp_malformed::malformed_wisp_is_an_error_not_a_repaired_value
   ✓ parser::test_wisp_malformed::malformed_wisp_never_panics
@@ -4242,6 +4236,7 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
+  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -5116,6 +5111,7 @@ PASSED:
   ✓ types::test_optional_result_variable::a_call_of_a_function_that_can_answer_empty_can_answer_empty
   ✓ types::test_optional_result_variable::a_variable_assigned_empty_can_answer_empty
   ✓ types::test_optional_result_variable::a_variable_never_empty_stays_quiet
+  ✓ types::test_optional_result_warning::a_list_result_of_empty_is_the_empty_list
   ✓ types::test_optional_result_warning::a_result_that_cannot_be_empty_or_is_declared_optional_stays_quiet
   ✓ types::test_optional_result_warning::a_returned_empty_warns_and_reaches_the_caller
   ✓ types::test_optional_result_warning::an_if_without_else_or_a_loop_last_can_answer_empty
@@ -5305,7 +5301,6 @@ PASSED:
   ✓ types::test_time_variables::a_field_of_a_grouped_time_variable
   ✓ types::test_time_variables::a_parameter_named_like_a_time_variable_is_no_time
   ✓ types::test_time_variables::durations_with_the_same_days_order_by_their_exact_part
-  ✓ types::test_time_zones_at_run_time::test_a_calendar_day_keeps_the_wall_time_across_a_transition
   ✓ types::test_time_zones_at_run_time::test_a_day_landing_on_a_skipped_wall_time_is_rejected
   ✓ types::test_time_zones_at_run_time::test_a_local_time_in_a_zone_resolves
   ✓ types::test_time_zones_at_run_time::test_a_repeated_wall_time_is_rejected_unless_chosen
@@ -5924,7 +5919,6 @@ PASSED:
   ✓ web::test_style_rules::selectors_need_no_quotes
   ✓ web::test_styles::a_style_sheet_in_a_component_is_scoped_to_it
   ✓ web::test_styles::a_style_sheet_is_a_block_of_rules
-  ✓ web::test_styles::an_inline_style_is_a_block_of_properties
   ✓ web::test_tag_lists::a_list_among_children_is_spliced_into_them
   ✓ web::test_tag_lists::a_tag_of_one_value_stays_one_tag
   ✓ web::test_tag_lists::a_tag_over_a_list_literal
@@ -5972,7 +5966,6 @@ PASSED:
   ✓ web::test_web_server::serve_answers_routes
   ✓ web::test_web::test_canvas
   ✓ web::test_web::test_dom
-  ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_warp
   ✓ web::test_web::test_inner_html
   ✓ web::test_web::test_js
@@ -6363,7 +6356,10 @@ PASSED:
   ✓ welcoming::test_warning_levels::strict_fails_from_normal_and_the_rust_error_mode_on_every_warning
   ✓ welcoming::test_warning_levels::the_cli_labels_levels_and_shows_from_its_threshold
   ✓ welcoming::test_warning_mode::a_runtime_warning_is_reported_and_yields_nothing
+  ✓ welcoming::test_warning_mode::the_rust_setting_turns_a_runtime_warning_into_an_error
+  ✓ welcoming::test_warning_mode::the_strict_flag_turns_warnings_into_errors
   ✓ welcoming::test_warning_mode::use_strict_turns_a_lint_warning_into_an_error
+  ✓ welcoming::test_warning_mode::use_strict_turns_a_runtime_warning_into_an_error
   ✓ welcoming::test_welcoming_ask::a_kotlin_loop_bound_n_minus_one_asks_about_inclusion
   ✓ welcoming::test_welcoming_ask::a_runtime_error_names_the_range_hint_and_the_guesses_behind_it
   ✓ welcoming::test_welcoming_ask::an_acknowledged_ambiguity_still_compiles_the_same_way
@@ -6466,4 +6462,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6461 passed, 0 failed, 6461 total tested
+13 ignored, 6457 passed, 0 failed, 6457 total tested
