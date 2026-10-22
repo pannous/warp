@@ -1,9 +1,9 @@
 //! Keyword-triggered local rewrites (user decision pass-triggers): a rewrite of one node, triggered by a word of the
-//! node's own (one of its items, or a key's operator), is an entry of a table instead of a pass of its own. One
-//! bottom-up walk applies a whole table at its place in the pass lists (src/pipeline.rs) and skips a program holding
-//! none of the table's words. A fact of the whole program an entry reads (its bindings) is computed once, before the
-//! walk, and handed in; a rewrite that needs another place in the order stays a pass. Twin: lib/compiler/walk.warp
-//! keyword_rewrites.
+//! node's own (has_own_word: one of its items, a key's operator, a declaration head's name), is an
+//! entry of a table instead of a pass of its own. One bottom-up walk applies a whole table at its place in the pass
+//! lists (src/pipeline.rs) and skips a program holding none of the table's words. A fact of the whole program an entry
+//! reads (its bindings) is computed once, before the walk, and handed in; a rewrite that needs another place in the
+//! order stays a pass. Twin: lib/compiler/scope.warp keyword_rewrites.
 
 use crate::node::Node;
 use crate::program_names::Bindings;
@@ -40,11 +40,14 @@ pub fn rewritten(program: Node, table: &[KeywordRewrite]) -> Node {
 	walk(program, &triggered, &mut Facts { fresh: 0, bindings })
 }
 
+/// The entries see a node without its Meta layers, which stay around the result
 fn walk(node: Node, triggered: &[&KeywordRewrite], facts: &mut Facts) -> Node {
-	let node = node.map_children(|child| walk(child, triggered, facts));
-	triggered.iter().fold(node, |node, rewrite| match has_own_word(&node, rewrite.triggered_by) {
-		true => (rewrite.rewrite)(node, facts),
-		false => node,
+	node.under_meta(|node| {
+		let node = node.map_children(|child| walk(child, triggered, facts));
+		triggered.iter().fold(node, |node, rewrite| match has_own_word(&node, rewrite.triggered_by) {
+			true => (rewrite.rewrite)(node, facts),
+			false => node,
+		})
 	})
 }
 
@@ -54,18 +57,31 @@ fn mentions_own_word(program: &Node, triggered_by: fn(&str) -> bool) -> bool {
 		found |= match node {
 			Node::Symbol(word) => triggered_by(word),
 			Node::Key(_, op, _) => triggered_by(op.as_str()),
+			Node::Type { name, .. } => is_word(name, triggered_by),
 			_ => false,
 		}
 	});
 	found
 }
 
+/// A node's own words: its items' words, a key's operator, a declaration head's name (`type of`)
 fn has_own_word(node: &Node, triggered_by: fn(&str) -> bool) -> bool {
-	match node.drop_meta() {
-		Node::List(items, _, _) => {
-			items.iter().any(|item| item.drop_meta().symbol_name().is_some_and(|word| triggered_by(word)))
-		}
+	match node {
+		Node::List(items, _, _) => items.iter().any(|item| is_word_of_item(item, triggered_by)),
 		Node::Key(_, op, _) => triggered_by(op.as_str()),
+		Node::Type { name, .. } => is_word(name, triggered_by),
 		_ => false,
 	}
+}
+
+/// An item's words: the word itself, a declaration head's name
+fn is_word_of_item(item: &Node, triggered_by: fn(&str) -> bool) -> bool {
+	match item.drop_meta() {
+		Node::Type { name, .. } => is_word(name, triggered_by),
+		word => is_word(word, triggered_by),
+	}
+}
+
+fn is_word(node: &Node, triggered_by: fn(&str) -> bool) -> bool {
+	node.drop_meta().symbol_name().is_some_and(|word| triggered_by(word))
 }
