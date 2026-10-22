@@ -66,7 +66,10 @@ fn a_trap_in_the_page_names_the_runtime_error() {
 	assert!(run_outcome(&trap).serialize().contains("index out of range"));
 	assert!(run_outcome(&json!({"failure": "link error"})).serialize().contains("could not run the program"));
 	// the page sends the module's trap_position, line << 12 | column: 4097 is 1:1, the error says where as natively
-	assert_eq!(run_outcome(&json!({"trap": "remainder by zero", "trace": "", "position": "4097"})), warp::wasm_emitter::eval("5%0"));
+	assert_eq!(
+		run_outcome(&json!({"trap": "remainder by zero", "trace": "", "position": "4097"})),
+		warp::wasm_emitter::eval("5%0")
+	);
 	run_outcome(&json!({"result": {"kind": "0"}, "warnings": ["careful"]}));
 	assert_eq!(warp::errors::diagnostic::take_runtime_warnings(), vec!["careful".to_string()]);
 }
