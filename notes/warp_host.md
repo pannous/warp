@@ -7,13 +7,14 @@ count.
 
     warp-host [--compiler self|full] run <file.warp | code> [args…]   compile and run; the run's value printed
     warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
-    warp-host <file.wasm> [args…]
+    warp-host <file.wasm | file.wat> [args…]
 
 - Source: crates/warp-runtime/src/warp_host/
   - main.rs: commands, finding lib/ and the compiler, running a module
   - words.rs: std_io, and compiler.wasm's host.read/fetch/warn
   - nodes.rs: GC nodes in and out
   - cache.rs: kept values and machine code
+  - ffi.rs: C imports
 - It reuses warp-runtime's engine settings, host words, libm and libc linking. Feature `host` (= `compiler` + wasmtime-wasi
   p1). Build: `cargo build --release -p warp-runtime --features host --bin warp-host`.
 - Compiler: compiler-self.wasm by default; `--compiler full` uses compiler.wasm (built by warp-rust). It is looked for in
@@ -51,6 +52,47 @@ count.
   exports no text_heap, so the host writes into pages past the program's memory and reuses them while the memory size
   stays the same.
 
+## C calls (M2)
+
+An import whose module isn't `host` or WASI is a C function: `name` from the library `module`.
+- How the library is found:
+  - `c` is the process itself (libc, macOS libSystem).
+  - Other names go through c_calls.rs library_paths. Linux tries /usr/lib, /usr/local/lib, then lib<name>.so,
+    .so.0 and .so.6 (libm.so.6, libsqlite3.so.0). macOS tries Homebrew, /usr/local/lib, then lib<name>.dylib.
+  - The library is loaded with dlopen and the function found with dlsym.
+- How each parameter and the result cross:
+  - The module's `warp.c_functions` custom section gives one c_signatures.rs CFunction line per function, with nine
+    tab-separated fields: module, library, name, params, ret, result, out pointee, layouts, failure. Example:
+    `sqlite3 sqlite3 sqlite3_prepare_v2 handle,ptr,i32,out,out i32 handle sqlite3_stmt` (tabs between).
+  - Without a line there, the import's own type decides:
+    - numbers stay numbers
+    - a reference parameter is a text
+    - a reference result is a `char *` read back as a text
+  - An import that warp-host's own words already define with the same type keeps that definition (libm's sqrt, the
+    hand-linked libc). An import described in the section always goes to dlsym.
+- Texts: a `ptr` parameter the import declares as a reference takes a warp text node. The host copies it NUL-terminated
+  for the call (c_calls.rs native_arguments), and ø passes NULL. An i32 `ptr` is still an address in linear memory.
+- Results:
+  - Handles cross as ids into the run's CHandles.
+  - A `text` result is built with the module's new_text and needs its text_heap; pure modules don't export text_heap
+    yet (M3).
+- c_calls.rs marshals the call (link_c_function_as, with the import's wasm type).
+- A missing library or symbol fails the run before it starts, status 1:
+  - `warp-host: the C library nosuchlib of the import nosuchlib.nosuch_function is not found (tried …)`
+  - `warp-host: the C library c has no function no_such_c_function`
+- lib/c.warp has the declarations as `strlen(s: text): i64 from 'c'` lines, for M3 (card pure-c-imports, the pure
+  emitter, Claude's).
+  - Their types are the warp.c_functions names: i32 i64 f32 f64 text handle out void.
+  - warp-rust's `warp parse lib/c.warp` reads them. Like lib/math.warp, `abs` and `sqrt` parse as the operators ‖ and √.
+- The pure emitter doesn't emit C imports yet, so tests/host/test_host.sh checks C calls with hand-written WAT modules.
+  warp-host runs `.wat` files (the wat crate).
+- Measured on the box (Linux, libsqlite3.so.0 3.x present, no dev package):
+  - strlen("hello") gives 5 (exit status 5, the Int's)
+  - sqrt(16) gives 4.0
+  - hypot(3, 4) by dlsym gives 5.0
+  - sqlite3_open(":memory:"), prepare_v2 "select 1+2", step, column_int give 3
+- The macOS paths are not tested here.
+
 ## M0 (measured 2026-10-22 on the box: Linux x86_64, 8 cores; warp-host release of this branch)
 
 - Binary size: **11,250,680 B** (11.3 MB), stripped, lto.
@@ -87,8 +129,9 @@ count.
 - The compilers come from beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`).
 - The cache is scratch/host-cache/. The first run computes it (~30 s); later runs take ~15 s.
 
+After M2 (C calls, the wat crate, origin/main merged) the release binary is 12,441,720 B.
+
 ## Next
 
-- M2: texts as host-copied warp text for C calls, and `from 'c'` declarations in lib/c.warp.
 - M3 (card pure-c-imports): the pure emitter emits C imports and a warp.c_functions section, which warp-host dlopens.
 - M4: libffi.
