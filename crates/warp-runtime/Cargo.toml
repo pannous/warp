@@ -16,11 +16,17 @@ path = "src/main.rs"
 required-features = ["engine"]
 
 # the small native host of pure programs (notes/warp_host.md): compiles with compiler-self.wasm and runs the module
-# with WASI, shell commands and C calls; built on its own: `cargo build --release -p warp-runtime --features host --bin warp-host`
+# with WASI, shell commands and C calls; built on its own: `cargo build --profile host -p warp-runtime --features host --bin warp-host`
 [[bin]]
 name = "warp-host"
 path = "src/warp_host/main.rs"
 required-features = ["host"]
+
+# WAT text to a wasm module: `cargo build --release -p warp-runtime --features wat --bin wat2wasm`
+[[bin]]
+name = "wat2wasm"
+path = "src/wat2wasm.rs"
+required-features = ["wat"]
 
 # the stub of page apps (card build-links): the same runtime with the web view, built on its own
 # (`cargo build --release -p warp-runtime --features webview --bin warp-page-runtime`) so plain executables stay small
@@ -42,8 +48,12 @@ webview = ["dep:wry", "dep:winit", "dep:objc2"]
 # the C library libwarp_runtime (library.rs, include/warp_runtime.h): run_wasm compiles the module it is given, so it
 # carries Cranelift; built on its own: `cargo rustc --release -p warp-runtime --lib --crate-type cdylib --features library`
 library = ["compiler"]
-# warp-host: a compiler for the modules it is given, WASI preview 1, WAT text
-host = ["compiler", "dep:wasmtime-wasi", "dep:wat"]
+# warp-host: a compiler for the modules it is given, on all cores (compiler-self's machine code: 8 s on one, 2 s on
+# eight; rayon is ~0.1 MB), WASI preview 1
+host = ["compiler", "wasmtime/parallel-compilation", "dep:wasmtime-wasi"]
+# WAT text (notes/warp_host.md): warp-host runs .wat modules (`--features host,wat`), and the tool wat2wasm, which
+# tests/host/test_host.sh assembles its C modules with; off by default, the wat crate is ~0.8 MB of warp-host
+wat = ["dep:wat"]
 # WARP_PROFILE=<file> (profile.rs): wasmtime's GuestProfiler writing Firefox Profiler JSON; warp has it, the stubs don't
 profiling = ["engine", "wasmtime/profiling"]
 
