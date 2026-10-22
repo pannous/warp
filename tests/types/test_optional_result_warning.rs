@@ -38,3 +38,15 @@ fn a_result_that_cannot_be_empty_or_is_declared_optional_stays_quiet() {
 	assert_eq!(value, Node::Empty);
 	assert!(warnings.is_empty(), "{warnings:?}");
 }
+
+/// `warp fix` (beautify) applies the warning's fix: the declared result gains its `?`, a parameter's type stays
+#[test]
+fn warp_fix_declares_the_result_optional() {
+	let fixed = |code: &str| warp::formatting::beautify(code).expect("it parses").text;
+	assert_eq!(
+		fixed("def half(x: int): int {\n\tif x < 0 { return ø }\n\tx / 2\n}\nhalf(4)\n"),
+		"def half(x: int): int? {\n\tif x < 0 { return ø }\n\tx / 2\n}\nhalf(4)\n"
+	);
+	let declared = "def half(x: int): int? {\n\tif x < 0 { return ø }\n\tx / 2\n}\nhalf(4)\n";
+	assert_eq!(fixed(declared), declared);
+}

@@ -155,6 +155,9 @@ key_view(left: Node, op: text, right: Node): any := {
 	["key", op, view_of(left), view_of(right)]
 }
 
+# one node of several juxtaposed words: `upper w`
+words_phrase(words: list): Node := if #words == 1 then words#1 else List(words, Bracket.None, Separator.Space)
+
 # a group of the items, bracketed and separated as n
 group_like(n: Node, items: list): Node := match n {
 	List(_, bracket, separator): List(items, bracket, separator)
@@ -164,6 +167,9 @@ group_like(n: Node, items: list): Node := match n {
 # the call `name(arguments…)`
 # the symbol `word`
 is_word(n: Node, word: text): bool := n == symbol(word)
+# `pattern Definition = Key(head, Op.Define, body)`, a named pattern (node_matches.warp; Rust twin: named_patterns.rs
+# pattern_definition)
+is_pattern_definition(n: Node): bool := is_group(n) and #n == 2 and is_word(n#1, "pattern") and is_key(n#2, Op.Assign)
 call_of(name: text, arguments: list): Node := bracketed([symbol(name)] + arguments, "(")
 
 # the numbers of the names the passes make, counted across all of them as Rust's nodes.rs fresh_number counts

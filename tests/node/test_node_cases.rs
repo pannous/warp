@@ -49,6 +49,14 @@ fn node_is_the_type_of_any_node() {
 	is!("Node.Empty == ø", true);
 }
 
+/// A case written as a type (decision node-refinements): `k: Key`, `List?` as a result, a program's own Key wins
+#[test]
+fn a_case_is_a_type() {
+	is!("left(k: Key): Node := key_of(k); left(parse(\"a+1\"))", symbol("a"));
+	is!("wrapped(n: Node): List? := if n is key then ø else [n]; wrapped(3)", parse("[3]"));
+	is!("class Key { name: text }; named(k: Key): text := k.name; named(Key(\"x\"))", "x");
+}
+
 #[test]
 fn an_operator_case_is_spelled_as_the_node_carries_it() {
 	is!("Op.Add", symbol("Add"));
