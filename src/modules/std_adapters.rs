@@ -251,8 +251,8 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	}
 }
 
-/// The value kept under `name` (os.keep) while warp, its lib/ and the program stay as they are: a value it computes
-/// the same way at every run, such as compiler.warp's lowered runtime words (card pure-warm-start)
+/// The value kept under `name` (os.keep) while warp and its lib/ stay as they are: a value a program computes the same
+/// way at every run, read by the next run of any program (card pure-warm-start); a compiler module's own (kept_by)
 #[cfg(feature = "native")]
 fn kept_value(name: &str) -> Option<Node> {
 	let key = kept_key(name)?;
@@ -266,26 +266,27 @@ fn keep_value(name: &str, value: &Node) {
 	}
 }
 
-/// The cache key of the value kept under `name` by the running program: another program, such as compiler.warp built
-/// from an older lib/, never reads it (card pure-self-stale-cache)
+/// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs
 #[cfg(feature = "native")]
 fn kept_key(name: &str) -> Option<String> {
-	let program = RUNNING_PROGRAM.with(|program| program.borrow().clone());
-	crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {program} {name}"))
+	let compiler = KEEPING_COMPILER.with(|compiler| compiler.borrow().clone());
+	crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {compiler} {name}"))
 }
 
 #[cfg(feature = "native")]
 thread_local! {
-	/// The SHA-256 of the running program's module, the owner of the values it keeps
-	static RUNNING_PROGRAM: std::cell::RefCell<String> = Default::default();
+	/// The SHA-256 of the compiler module running (compiler.wasm, compiler-self.wasm), empty for any other program
+	static KEEPING_COMPILER: std::cell::RefCell<String> = Default::default();
 }
 
-/// `run` with the module `bytes` as the running program, the one before it again afterwards
+/// `run` of the compiler module whose SHA-256 is `owner`, keeping values of its own: compiler.wasm and
+/// compiler-self.wasm, or a compiler.wasm built from an older lib/, compute compiler.warp's lowered runtime words
+/// differently, and one read another's ('key not found'; card pure-self-stale-cache)
 #[cfg(feature = "native")]
-pub fn running_program<R>(bytes: &[u8], run: impl FnOnce() -> R) -> R {
-	let before = RUNNING_PROGRAM.with(|running| running.replace(crate::extensions::sha256_hex(bytes)));
+pub fn kept_by<R>(owner: String, run: impl FnOnce() -> R) -> R {
+	let before = KEEPING_COMPILER.with(|compiler| compiler.replace(owner));
 	let result = run();
-	RUNNING_PROGRAM.with(|running| running.replace(before));
+	KEEPING_COMPILER.with(|compiler| compiler.replace(before));
 	result
 }
 

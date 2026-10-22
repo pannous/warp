@@ -90,14 +90,6 @@ fn run_main<S: 'static>(
 	state: S,
 	link: impl FnOnce(&mut Linker<S>, &wasmtime::Engine, &Module) -> Result<()>,
 ) -> Result<(Val, Store<S>, Instance)> {
-	crate::modules::std_adapters::running_program(bytes, || run_main_of(bytes, state, link))
-}
-
-fn run_main_of<S: 'static>(
-	bytes: &[u8],
-	state: S,
-	link: impl FnOnce(&mut Linker<S>, &wasmtime::Engine, &Module) -> Result<()>,
-) -> Result<(Val, Store<S>, Instance)> {
 	crate::sound::start_run();
 	let (engine, _) = engine_for(bytes);
 	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
