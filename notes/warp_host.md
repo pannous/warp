@@ -15,8 +15,9 @@ count.
   - nodes.rs: GC nodes in and out
   - cache.rs: kept values and machine code
   - ffi.rs: C imports
-- It reuses warp-runtime's engine settings, host words, libm and libc linking. Feature `host` (= `compiler` + wasmtime-wasi
-  p1). Build: `cargo build --release -p warp-runtime --features host --bin warp-host`.
+- It reuses warp-runtime's engine settings, host words, libm and libc linking. Feature `host` (= `compiler`, parallel
+  compilation, wasmtime-wasi p1); feature `wat` adds WAT text. Build: `cargo build --profile host -p warp-runtime
+  --features host --bin warp-host` (target/host/warp-host, 6,499,736 B; see Size).
 - Compiler: compiler-self.wasm by default; `--compiler full` uses compiler.wasm (built by warp-rust). It is looked for in
   `<lib>/../data/` (a checkout built by `warp rebuild`), then in `<bin>/../share/warp/`, then beside warp-host.
   - lib/ is found the way the launcher finds it: WARP_LIB, else the nearest lib/ holding compiler/ above the source or
@@ -41,11 +42,12 @@ count.
   `Error("…")` and exits 1. A compile's failure is its only stdout line `Error("…")`, status 1, which is what the
   launcher's `refused` expects. A runtime trap prints `warp-host: <message>` on stderr (the failing runtime function's
   name and trap_detail), status 1; WARP_HOST_DEBUG=1 adds the wasm backtrace.
-- Cache (WARP_HOST_CACHE, else $XDG_CACHE_HOME/warp-host, else ~/.cache/warp-host):
+- Cache (WARP_HOST_CACHE, else $XDG_CACHE_HOME/warp-host, else ~/.cache/warp-host), and a shipped one read after it,
+  never written: WARP_HOST_SHIPPED_CACHE, else `<bin>/../share/warp/host-cache` or `<bin>/host-cache`:
   - A compiler module's machine code (`<hash>.cwasm`, ~18 MB for compiler-self, keyed by its bytes and the engine's
     compatibility hash).
-  - Kept values (`<hash>.kept`, keyed by the compiler's bytes, lib/'s file fingerprint and the name). compiler.warp's
-    lowered runtime words are ~380 KB.
+  - Kept values (`<hash>.kept`, keyed by the compiler's bytes, lib/'s files (paths within lib/ and contents, so the key
+    is the same on every machine) and the name). compiler.warp's lowered runtime words are ~380 KB.
   - Values with a big integer, a ratio or a function aren't kept. compiler.wasm's runtime words hold such an Int, so
     `--compiler full` lowers them on every run (~8 s).
 - Texts reach the program through its own `new_text(ptr, len)`, which copies them out of linear memory. compiler-self
@@ -84,8 +86,9 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   emitter, Claude's).
   - Their types are the warp.c_functions names: i32 i64 f32 f64 text handle out void.
   - warp-rust's `warp parse lib/c.warp` reads them. Like lib/math.warp, `abs` and `sqrt` parse as the operators ‖ and √.
-- The pure emitter doesn't emit C imports yet, so tests/host/test_host.sh checks C calls with hand-written WAT modules.
-  warp-host runs `.wat` files (the wat crate).
+- The pure emitter doesn't emit C imports yet, so tests/host/test_host.sh checks C calls with hand-written WAT modules,
+  assembled by the tool wat2wasm (`cargo build --release -p warp-runtime --features wat --bin wat2wasm`). warp-host
+  runs `.wat` files itself only with the feature wat.
 - Measured on the box (Linux, libsqlite3.so.0 3.x present, no dev package):
   - strlen("hello") gives 5 (exit status 5, the Int's)
   - sqrt(16) gives 4.0
@@ -95,7 +98,7 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
 
 ## M0 (measured 2026-10-22 on the box: Linux x86_64, 8 cores; warp-host release of this branch)
 
-- Binary size: **11,250,680 B** (11.3 MB), stripped, lto.
+- Binary size: **11,250,680 B** (11.3 MB), stripped, lto (before card warp-host-size, see Size).
   - For comparison, the warp-runtime stub (no Cranelift, no WASI) is 1,573,240 B in the same build.
   - So Cranelift, the component model and async that wasmtime-wasi p1 pulls in, and WASI add ~9.7 MB on Linux. The
     split between them is not measured.
@@ -115,21 +118,84 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   | `hello.wasm` | 6 ms |
   | a program with `use os` and two commands (sh.warp), warm | 0.64 s |
   | `--compiler full run hello.warp` (nothing kept) | 8.4–11.1 s |
-- Without Cranelift (not built, inferred): warp-host could ship compiler-self as a `.cwasm` for its target. That would
-  drop Cranelift and bring the binary toward the stub's ~1.6 MB plus WASI.
-  - wasmtime-wasi p1 still requires the component model and async features, so that part stays unless WASI p1 is
-    hand-linked like output.rs's fd_write.
-  - Programs would need precompiling too, which can't happen without a compiler. So that build could only run programs
-    compiled elsewhere. Not worth it while 11 MB is fine.
+- Without Cranelift: see Size, option (a).
 
 ## Tests
 
 `tests/queue.sh tests/host/test_host.sh`: outcome checks of warp-host and of the launcher with warp-host beside it.
-- WARP_HOST_BINARY names the host (default target/release/warp-host, else target/debug/).
+- WARP_HOST_BINARY names the host (default target/host/warp-host, else target/release/, else target/debug/).
+- The C modules are assembled by WARP_WAT2WASM, else target/release/wat2wasm, else wabt's wat2wasm on PATH.
 - The compilers come from beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`).
 - The cache is scratch/host-cache/. The first run computes it (~30 s); later runs take ~15 s.
 
 After M2 (C calls, the wat crate, origin/main merged) the release binary is 12,441,720 B.
+
+## Size (card warp-host-size, measured 2026-10-22 on the box: Linux x86_64, 8 cores)
+
+What the 11.4 MB release build holds (`cargo bloat --release --crates`, .text 9.0 MiB, unstripped; guesswork per crate):
+
+| part | .text |
+|---|---|
+| Cranelift (cranelift_codegen 2.2, assembler_x64 1.7, wasmtime_internal_cranelift 0.8, regalloc2 0.4, frontend …) | ~5.2 MiB |
+| wasmtime runtime, wasmparser, environ, gimli, object, pulley_interpreter | ~2.0 MiB |
+| std | 0.85 MiB |
+| WASI: wasmtime_wasi 0.27, tokio 0.13, cap-std and friends | ~0.5 MiB |
+| warp_host 75 KiB, warp_runtime 61 KiB | 0.14 MiB |
+| the wat crate (feature wat) | 1.05 MB of the file (12.44 → 11.39 MB) |
+
+Options, each stripped; times are wall clock of `run hello.warp` (cold = empty cache), `run '6*7'` and the prebuilt
+hello.wasm, warm, 2–3 runs. Host suite 29/29 and launcher suite 22/22 pass with the chosen one.
+
+| option | size | cold | warm hello | warm 6*7 | hello.wasm | notes |
+|---|---|---|---|---|---|---|
+| M2 release (with wat) | 12.44 MB | ~29 s | 0.12–0.15 s | 0.11 s | 6 ms | |
+| (b) wat off by default | 11.39 MB | 32 s | 0.14–0.16 s | 0.11 s | 6–25 ms | tests assemble their WAT with wat2wasm |
+| (c) opt-level "s" | 7.70 MB | 34 s | 0.13–0.16 s | 0.12–0.15 s | 7–9 ms | |
+| (c) opt-level "z" | 6.43 MB | 38 s | 0.14–0.19 s | 0.13–0.16 s | 8–10 ms | Cranelift at z compiles slower |
+| + parallel compilation, opt 3 | 11.47 MB | 27 s | 0.14–0.17 s | 0.11 s | 5–7 ms | compiler-self's machine code 8.3 → 2.4 s |
+| + parallel compilation, "s" | 7.77 MB | 25.5 s | 0.13–0.15 s | 0.10 s | 6 ms | machine code 2.6 s |
+| **+ parallel compilation, "z" (profile host, the default)** | **6.50 MB** | 26 s | 0.15–0.18 s | 0.11–0.12 s | 7–8 ms | machine code 4.1 s |
+| + a shipped .kept (384 KB, any machine) | 6.50 MB + 0.38 MB | **4.1 s** | 0.15 s | 0.12 s | | only the machine code is made |
+| + a shipped .kept and .cwasm (18 MB, one target) | 6.50 MB + 18.5 MB | **0.15 s** | 0.15 s | 0.12 s | | |
+| (a) no Cranelift, precompiled compiler-self | ~2.2 MB (estimate) | — | — | — | — | can't run `run`: see below |
+| (d) hand-written WASI p1 instead of wasmtime-wasi | ~6.0 MB (estimate) | same | same | same | same | not built: ~0.4–0.5 MB for ~300 lines |
+| (e) wasmtime as a shared library (C API) | ~0.5–0.8 MB + 21–32 MB lib (estimate) | 2–4 s machine code + 23 s kept | ~same | ~same | 6 ms (prototype) | see below |
+
+- Cold start: 23 s of the ~26 s is compiler-self computing its kept values (the lowered runtime words), ~2–4 s is
+  Cranelift compiling compiler-self. A shipped `.kept` removes the first, so a fresh install's first run takes ~4 s;
+  shipping the machine code too makes it warm but adds 18 MB per target, against the goal. Packaging can fill the
+  shipped cache by one `WARP_HOST_CACHE=<prefix>/share/warp/host-cache warp-host run hello.warp` (not wired yet).
+- Chosen default: profile host (opt-level "z", wasmtime's runtime at 3), parallel compilation, no wat. It is the
+  smallest with warm times within noise of opt-level 3 (the programs' machine code is Cranelift's either way, so the
+  opt-level only slows the host and Cranelift itself). `--release` still builds the 11.5 MB fast one.
+- (a) Without Cranelift: compiler-self could load as a precompiled `.cwasm`, but every program it compiles is a new
+  module that needs machine code. Pulley (wasmtime's interpreter) gets its bytecode from Cranelift too, and Winch is
+  built on Cranelift's assembler and has no GC or exceptions. So a host without Cranelift runs only modules compiled
+  elsewhere. Estimate: the 1.57 MB stub plus ~0.6 MB of WASI.
+- (d) WASI is ~0.5 MiB of .text; the component model stays anyway (the feature compiler turns it on). Not worth ~300
+  lines of WASI now.
+- (e) Wasmtime's C API as a shared library (prototype in scratch, not committed: hand-written extern blocks, 330 KB
+  linked against the v49.0.1 release's libwasmtime.so):
+  - Coverage: everything Warp uses is there. Config setters for GC, function references and exceptions; anyref, i31,
+    structref (fields read and set, new), arrayref, exnref and tags; full reference value types, concrete struct types
+    among them; host functions with any import type (`wasmtime_linker_define_func`, type from the module's import);
+    WASI p1 (`wasi_config_*`, `wasmtime_linker_define_wasi`); serialize/deserialize. The prototype ran a module with
+    call_ref, throw/try_table, WASI fd_write, and a host function taking a GC struct, reading its fields and answering
+    an i31. Missing: choosing the collector (the release library has DRC, which keeps cycles; warp uses gc-copying)
+    and gc_heap_initial_size.
+  - Size: the host would be warp's own code plus std, ~0.5–0.8 MB (estimate). The library is 31.7 MB (25.5 MB
+    stripped) for Linux from the release, 21.1 MB from Homebrew 50.0.0. The total is 3–4× today's 6.5 MB. A library
+    built with only the needed features would be about as big as what is linked statically now.
+  - Version coupling: the library has no SONAME (Linux) and compatibility version 0.0.0 under an unversioned install
+    name (Homebrew), and wasmtime makes a major release monthly. The C ABI changed little from 49 to 50 (two
+    callbacks took const; new setters), and the v49 prototype ran on 50's library, but nothing guarantees it, and a
+    struct layout change would be undefined behaviour, not an error. `brew upgrade wasmtime` swaps the library under
+    the host; the cached machine code is then refused ("Module was compiled with incompatible version '49'") and
+    rebuilt. So the host would pin a version and ship the library beside itself, or be rebuilt with every upgrade.
+  - Times: the same engine. The prototype compiled compiler-self.wasm in 2.1 s (parallel) and loaded its .cwasm in
+    2 ms, and ran hello.wasm in 6 ms. Cold start would still be dominated by the 23 s of kept values.
+  - Work: nodes.rs, words.rs, ffi.rs, cache.rs and c_calls.rs's linking use the Rust API (Rooted, StructRef, Caller,
+    Linker), so they would be rewritten against the C API: ~1500 lines of unsafe code (estimate).
 
 ## Next
 
