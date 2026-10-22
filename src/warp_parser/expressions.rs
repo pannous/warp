@@ -45,6 +45,8 @@ impl WarpParser {
 			emitted
 		} else if let Some(head) = self.try_parse_operator_method_head() {
 			head
+		} else if let Some(bracketed) = self.try_parse_circumfix() {
+			bracketed
 		} else if let Some((op, chars)) = self.peek_prefix_operator().filter(|_| !self.at_member_name(0)) {
 			let (prefix_line, prefix_column) = self.get_position();
 			// `-7 abs`, `f = abs`, `x abs + 1`: an operator word without its operand is the operator itself, which
@@ -73,8 +75,6 @@ impl WarpParser {
 					node: Box::new(applied),
 					data: Box::new(Node::key(crate::words::OPERATOR_WORD_MARK, Node::True)),
 				}
-			} else if chars == 1 && op == Op::Abs {
-				self.parse_norm_bars()
 			} else {
 				let rhs = self.parse_prefix_operand(op);
 				if op == Op::Hash {

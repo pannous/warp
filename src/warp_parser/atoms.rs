@@ -337,12 +337,13 @@ impl WarpParser {
 			return self.symbol_after(3, |field| Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(field))));
 		}
 
-		// Optional type: `x:int?=ø`, `f(x:int?)`, the field `right? }` (wiki/null.md); a ternary `?` is followed by its branch instead
+		// Optional type: `x:int?=ø`, `f(x:int?)`, the field `right? }`, the result `f(): list? {…}` (wiki/null.md); a ternary `?` is followed by its branch instead
 		if self.current_char() == '?'
 			&& (self.ends_optional_type(self.peek_char(1), self.peek_char(2))
 				|| self.closes_after_blanks(1)
 				|| self.next_field_follows(1)
-				|| self.declaration_follows(&symbol, 1))
+				|| self.declaration_follows(&symbol, 1)
+				|| self.result_body_follows(1))
 		{
 			self.advance();
 			return Symbol(format!("{symbol}?"));

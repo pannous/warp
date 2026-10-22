@@ -7,6 +7,7 @@ Each kind of word has one alias table. Add a spelling to its table, not a new li
 | operators: symbols, glyphs, words (`plus`, `≤`, `is at least`, `and=`) | src/operators/mod.rs OPERATOR_SPELLINGS | longest match first (lookahead.rs peek_operator); context guards in operator_in_context |
 | negated spellings (`is not`, `nand`, `⊼`) | src/operators/mod.rs NEGATED_SPELLINGS | parsed as the positive operator wrapped in Not |
 | prefix operator words (`sqrt`, `abs`, `norm`, `not`) | src/warp_parser/lookahead.rs PREFIX_OPERATOR_WORDS | analyzer checks.rs reads it too |
+| glyph spellings of operators (`×`, `≤`, `√`) and circumfix pairs (`‖ ‖`, `⌊ ⌋`) | lib/math.warp `operator × := *`, `circumfix operator ⌊ ⌋ := floor` | src/operators/aliases.rs reads them; parser.warp operator_aliases, circumfix_aliases; a pair whose function is a prefix operator word (abs) parses to that operator, any other to a call |
 | library words (`sorted`, `uppercase`, `strip`) | src/lowering/words/library_words.rs SYNONYMS | canonical_spelling(); list_phrases uses it |
 | built-in type words (`str`, `string`, `integer`) | src/lowering/types/type_tests.rs BUILTIN_TYPES | canonical_spec_word(), is_text_type_word() |
 | print's spellings (`println`, `writeln`) | src/warp_parser/mod.rs PRINT_SPELLINGS | print is a statement word: a SYNONYMS entry made `print a \|\| b` bind as `(print a) \|\| b` |
