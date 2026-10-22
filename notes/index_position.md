@@ -45,5 +45,6 @@ less than `position p = t.find("b")`, `position top = argmax(xs)` one more than 
 lib/compiler/index_positions.warp; Rust keeps the number as given). The unit is part of the declared type too:
 `byte index b = t.find("b")` is 9 for "a👍🏽b" and `byte position` 10 (find answers in the declared unit, as
 byte_index_of); a byte count given to a character count, or the other way, is an error. The parser reads `byte index`
-and `byte position` as one type name (parser.warp COMPOUND_TYPES). Still Rust only: a position meeting `[ ]`, an index
+and `byte position` as one type name (parser.warp COMPOUND_TYPES). `offset` is a synonym of index (`byte offset` of
+byte index); lib/ names no parameter `offset`, which would make the word a name in every program reaching it. Still Rust only: a position meeting `[ ]`, an index
 meeting `#`, `insert(at:)`, the error on adding two of them.

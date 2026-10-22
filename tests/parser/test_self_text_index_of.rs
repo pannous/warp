@@ -41,6 +41,11 @@ fn find_answers_in_the_declared_unit() {
 }
 
 #[test]
+fn offset_is_a_synonym_of_index() {
+	prints(r#"xs = [10 20 30]; o: offset = xs.index_of(20); byte offset b = "a👍🏽b".find("b"); [o, b]"#, "[1 9]");
+}
+
+#[test]
 fn bytes_and_characters_do_not_mix() {
 	let output = pure_output(r#"t = "a👍🏽b"; b = t.byte_index_of("b"); p: position = b; p"#);
 	assert!(output.contains("a byte index given to a position"), "{output}");

@@ -14,8 +14,8 @@ index_word = "index"
 # what a declared index or position is held as
 count_type = "int"
 # the declared count types as [base, unit] (decision index-units): the base is where it counts from, the unit what it
-# counts, characters by default (no word), bytes with the adjective `byte`
-counted_types = {"position": ["position", ""], "index": ["index", ""], "byte position": ["position", "byte"], "byte index": ["index", "byte"]}
+# counts, characters by default (no word), bytes with the adjective `byte`; `offset` is a synonym of index
+counted_types = {"position": ["position", ""], "index": ["index", ""], "offset": ["index", ""], "byte position": ["position", "byte"], "byte index": ["index", "byte"], "byte offset": ["index", "byte"]}
 # what the counting words give
 counting_calls = {"collection_position": ["position", ""], "find": ["position", ""], "byte_index_of": ["index", "byte"], "argmax": ["index", ""], "argmin": ["index", ""]}
 
