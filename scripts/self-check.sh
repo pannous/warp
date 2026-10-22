@@ -4,7 +4,7 @@
 # and eight at once pushed the load past 60 (supervisor 2026-10-21); one at a time queued checks for 45 min at load 9,
 # so check_slots run at once and a further check waits for a free slot.
 # usage: scripts/self-check.sh [<worktree>, default the current checkout]   (exit 0 = Hello printed)
-worktree=${1:-$(git rev-parse --show-toplevel)}
+worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
 warp=/Users/me/dev/bin/warp
 locks=/Users/me/dev/angles/warp/scratch/self-check
 check_slots=2
