@@ -1,5 +1,5 @@
 # the warp twin of the sugar phrases' walk on a few phrases (card pass-triggers)
 use "../../lib/compiler/passes.warp"
-for source in ["1 + 2", "3 times 4", "xs .* 2", "2 times { 2 times { x } }", "f(p) -> int := p", "o(n) := { i(k) -> int := k; i(n) }", "g = x -> x"] {
+for source in ["1 + 2", "3 times 4", "xs .* 2", "2 times { 2 times { x } }", "f(p) -> int := p", "o(n) := { i(k) -> int := k; i(n) }", "g = x -> x", "f() := sum of [1, 2]", "x = first of [5, 2]"] {
 	print view_of(sugar_phrases(plain_node(parsed(source))))
 }
