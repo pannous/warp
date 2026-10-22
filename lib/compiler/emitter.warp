@@ -973,6 +973,9 @@ def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	# `"ab" * 2.5`: Rust says how a text repeats, a trap could not
 	if textual and (a#1 == "node" or b#1 == "node") and symbol not in comparisons { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if a#1 == "node" or b#1 == "node" { return node_operation(body, symbol, boxed(a), boxed(b)) }
+	# `"ab" * 3`, `3 * " "`: the text repeated, as `3 times "ab"`
+	if symbol == "*" and a#1 in characters and b#1 == "int" { return runtime_call("repeated_text", [b, ["node", boxed(a)]]) }
+	if symbol == "*" and b#1 in characters and a#1 == "int" { return runtime_call("repeated_text", [a, ["node", boxed(b)]]) }
 	if symbol in comparisons and a#1 == "char" and b#1 == "char" { return operation_code(body, symbol, code_point(a), code_point(b)) }
 	if symbol in comparisons and textual and a#1 in characters and b#1 in characters {
 		return operation_code(body, symbol, runtime_call("text_order", [shown_text(a), shown_text(b)]), number_value(0))
