@@ -49,7 +49,7 @@ yes_no_types = ["bool"]
 value_word = "value"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/extremes"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
