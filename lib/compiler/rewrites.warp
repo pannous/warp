@@ -361,7 +361,7 @@ rule_spliced(template: any, bound: any, at: any): any := {
 # `$t` → `t·3`: a compiler temporary (notes/compiler_temporaries.md), apart from every other firing's
 fresh_name(hole: text): any := {
 	fresh_names += 1
-	symbol(hole[#rule_hole_mark ..] + "·" + fresh_names)
+	symbol(hole.remove_prefix(rule_hole_mark) + "·" + fresh_names)
 }
 
 # the node made at the place of `at`, where the user wrote the rewritten code
