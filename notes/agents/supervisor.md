@@ -71,7 +71,8 @@ notes/agents/common.md.
   Treat its agents as our own workers (user 2026-10-22: "freely send them cards"), but first ask the Grok Supervisor
   with grok-msg whether they're busy and how many cards each can take (user 2026-10-22); then `todo take <card> grok-warp-code`
   / `grok-warp-code-2` / `grok-warp-issues` yourself, write the task into scratch/grok-cards.md and ping with
-  grok-msg; they `todo ready`, the Integrator merges.
+  grok-msg; they `todo ready`, the Integrator merges. Capacity (Grok Supervisor, 2026-10-22): at most 1 active + 1
+  queued card per Grok coder; heavy builds (self builds, cold module caches) go to Warp Code 3's Linux box.
 - No web research in my own context: a quick search or side question goes to an
   Agent-tool subagent (background) that returns a short answer with sources; larger research that writes notes goes
   to a warp-research session. I relay only the short answer.
