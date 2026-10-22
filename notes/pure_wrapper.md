@@ -50,6 +50,7 @@ WARP_FALLBACK=rust (and for inline code) is stdout read, through `tee`: stdout i
 | `WARP_COMPILER=pure\|self` (default pure), or the flag `--self` | `self`: compiler-self.wasm (compiler.warp compiled by itself, `warp-rust self`) instead of compiler.wasm. Another value is an error |
 | `WARP_SELF_HOSTED` | warp-rust's own (src/compiler/self_hosted.rs: front, emit, pure, pure-only), passed through untouched |
 | `WARP_RUST=<binary>` | the Rust binary; else `warp-rust` beside the script (links followed, as Homebrew links bin/warp), else on PATH |
+| `WARP_HOST=<binary>\|none` | the native host warp-host (notes/warp_host.md) compiles and runs programs (`run`, inline code, `compile --wasm`) instead of warp-rust's pure lane; else `warp-host` beside the script when there is one; `none`: warp-rust's pure lane. With it, compiler-self.wasm is the default and `WARP_COMPILER=pure` asks for compiler.wasm (`--compiler full`) |
 | WARP_LIB, WARP_HINTS, WARP_NO_WINDOW, WARP_EMIT_REFUSALS, … | warp-rust's, unchanged |
 
 ## Adding a command

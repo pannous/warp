@@ -1,0 +1,4 @@
+# `n times` of a list, a text, a number: prints [0 0 0] abab 20
+print 3 times [0]
+print 2 times "ab"
+print 4 times 5
