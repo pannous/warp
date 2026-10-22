@@ -209,6 +209,9 @@ fn typed_definitions(node: &Node, typed: &mut Vec<(String, String, Node)>) {
 	node.drop_meta().parts().into_iter().for_each(|part| typed_definitions(part, typed));
 }
 
+/// The "got it" topic of the warning, whose fix `warp fix` applies (formatting/synonyms.rs)
+pub(crate) const OPTIONAL_RESULT_TOPIC: &str = "optional-result";
+
 // ⚠ WARP DOES THIS DIFFERENTLY: ø reaching a place declared `list` (a result or a parameter) becomes [] silently, no
 // warning, `list?` keeps ø (decision optional-result, list part reversed by the user); Rust still warns and keeps ø
 // here, and a `list` parameter given ø holds ø → lib/compiler/runtime/conversions.warp list_of_node
@@ -230,7 +233,7 @@ fn optional_when_answering_empty(
 	let warning =
 		crate::errors::diagnostic::Diagnostic::at(place, format!("{function} can answer ø; declare `: {optional}`"))
 			.offer("the result can be ø", &written, &optional)
-			.about("optional-result", &function);
+			.about(OPTIONAL_RESULT_TOPIC, &function);
 	crate::errors::diagnostic::report(&[warning])?;
 	Ok(symbol(&optional))
 }
