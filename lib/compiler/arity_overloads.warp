@@ -8,6 +8,7 @@ use "diagnostics.warp"
 use "phrase_blocks.warp"
 use "scope.warp"
 use "signatures.warp"
+use "clauses.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
 target_call(target: Node): any := match target {
@@ -347,7 +348,7 @@ dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: 
 	for types in in_test_order(candidates, kinds).reverse() {
 		variant = call_of(typed_variant(name, types), passed)
 		tests = tested_places(kinds, types).map(at => run_time_test(passed#at, types#at))
-		chain = if not tests then variant else Key(Key(Key(ø, Op.If, tests.reduce((all, test) => Key(all, Op.And, test))), Op.Then, variant), Op.Else, chain)
+		chain = if not tests then variant else Key(Key(Key(ø, Op.If, joined(tests)), Op.Then, variant), Op.Else, chain)
 	}
 	if not bindings then chain else List(bindings + [chain], Bracket.Round, Separator.Semicolon)
 }
@@ -367,8 +368,7 @@ typed_call(n: Node, overloaded: any, variables: any): any := {
 		return dispatched(name, fitting, kinds, arguments, "`" + written + "` fits no single variant of " + listed)
 	}
 	if not fitting { return diagnose(call_of("no_single_variant", [written, listed])) }
-	best = fitting.map(types => variant_fit(kinds, types)).reduce((least, one) => if one < least then one else least)
-	chosen = fitting.filter(types => variant_fit(kinds, types) == best)
+	chosen = fitting.filter(types => fitting.all(other => variant_fit(kinds, other) >= variant_fit(kinds, types)))
 	if #chosen != 1 { return diagnose(call_of("tied_variants", [written, listed])) }
 	call_of(typed_variant(name, chosen#1), arguments)
 }
