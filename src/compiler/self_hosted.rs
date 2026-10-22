@@ -46,6 +46,9 @@ const EMIT_PROGRAM: &str = concat!(
 const LIBRARY_MARK: &str = "{lib}";
 /// The runtime words emitter.warp compiles into a module, lowered like a program, in the compiler's folder
 const RUNTIME_WORDS: &str = "runtime.warp";
+/// The extended runtime words, which the core (runtime.warp and its parts) never uses: lib/compiler/runtime/extended/
+/// named by this file's `use` lines, joined after the core's (decision runtime-split; compiler.warp RUNTIME_ROOTS)
+const EXTENDED_RUNTIME_WORDS: &str = "runtime_extended.warp";
 /// The module the host words are imported from
 const HOST_MODULE: &str = "host";
 /// The file of the table of words a module may import (the host's and WASI's), and the variable it assigns
@@ -444,9 +447,9 @@ fn runtime_words() -> Result<String, Node> {
 /// declarations of emitter.warp's intrinsics (`is_null(x: any): bool from runtime`) stay out, left to emitter.warp as
 /// definitions.warp drops them
 pub fn runtime_source() -> std::io::Result<String> {
-	let first = compiler_folder().join(RUNTIME_WORDS);
-	let mut joined = HashSet::from([first.clone()]);
-	let mut waiting = VecDeque::from([first]);
+	let roots = [RUNTIME_WORDS, EXTENDED_RUNTIME_WORDS].map(|root| compiler_folder().join(root));
+	let mut joined = HashSet::from(roots.clone());
+	let mut waiting = VecDeque::from(roots);
 	let mut source = String::new();
 	while let Some(file) = waiting.pop_front() {
 		let folder = file.parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -474,7 +477,8 @@ fn is_intrinsic_declaration(line: &str) -> bool {
 /// The file of a `use` line: a quoted path beside the using file, else a module of lib
 fn used_file(folder: &Path, name: &str) -> PathBuf {
 	match name.strip_prefix('"').and_then(|quoted| quoted.strip_suffix('"')) {
-		Some(path) => folder.join(path),
+		// one file however it is reached (runtime/extended/../text.warp is runtime/text.warp)
+		Some(path) => folder.join(path).canonicalize().unwrap_or_else(|_| folder.join(path)),
 		None => library().join(format!("{name}.warp")),
 	}
 }

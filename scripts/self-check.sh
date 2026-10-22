@@ -15,6 +15,13 @@ if [[ $worktree == $main_checkout/* ]]; then
   print -u2 "self-check: $worktree is inside the main checkout; check a worktree under /Volumes/Worktrees or a copy under /Volumes/Junk"
   exit 2
 fi
+# the core runtime (runtime.warp, lib/compiler/runtime/*.warp) never uses the extended one (lib/compiler/runtime/extended/,
+# runtime_extended.warp; decision runtime-split): checked first, needing no slot
+core_uses_extended=$(grep -Hn '^use .*extended' $worktree/lib/compiler/runtime.warp $worktree/lib/compiler/runtime/*.warp)
+if [[ -n $core_uses_extended ]]; then
+  echo "SELF CHECK RED: the core runtime uses the extended runtime: $core_uses_extended"
+  exit 1
+fi
 [[ -n $WARP_SLOT ]] || exec $main_checkout/scripts/slot.sh ${0:a} $worktree
 
 cd $worktree || exit 1

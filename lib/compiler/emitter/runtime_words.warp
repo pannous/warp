@@ -103,7 +103,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		"set_byte": [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc.text])]
 		"output_byte": [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)]
 		"write_output": ["int", write_output(index_code(values#1))]
-		# the address of the output bytes, where runtime/wasi.warp lays out what WASI's calls read and write
+		# the address of the output bytes, where runtime/extended/wasi.warp lays out what WASI's calls read and write
 		"output_address": ["int", [op.i64_const] + sleb(output_address)]
 		"memory_byte": ["int", index_code(values#1) + [op.i32_load8_u, 0, 0, op.i64_extend_i32_u]]
 		# the value written, as `x = v` is v

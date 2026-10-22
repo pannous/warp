@@ -154,7 +154,16 @@ file_used(statement: Node, folder: text): any := {
 	path = path_in(folder, name_of(module) + module_extension)
 	if file_text(path) == ø then ø else path
 }
-path_in(folder: text, name: text): text := if name.starts_with("/") then name else folder + "/" + name
+path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
+# the path with each `folder/..` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
+# runtime/text.warp, card runtime-split)
+without_steps_up(path: text): text := {
+	kept = []
+	for part in path.split("/") {
+		if part == ".." and #kept > 0 and kept#(#kept) != ".." { kept = kept[0 ..< #kept - 1] } else { kept += [part] }
+	}
+	kept.join("/")
+}
 file_text(path: text): any := try read(path) else ø
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,

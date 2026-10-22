@@ -1,9 +1,9 @@
 ## exact rounding: Rust's exact_floor … exact_div_assign (src/wasm_emitter/numbers/exact.rs) as words over an Int
 ## $Node's numerator and denominator; a $Ratio n/0 is ±∞ by n's sign and 0/0 is NaN, as Rust reads them
-use "intrinsics.warp"
-use "../kinds.warp"
-use "exact.warp"
-use "instructions.warp"
+use "../intrinsics.warp"
+use "../../kinds.warp"
+use "../exact.warp"
+use "../instructions.warp"
 # -1 for -∞, 1 for ∞, 0 for a finite x and for NaN
 exact_infinity_rank(x: Node): int := if exact_denominator(x) == 0 then exact_numerator(x) else 0
 exact_is_nan(x: Node): bool := exact_numerator(x) == 0 and exact_denominator(x) == 0

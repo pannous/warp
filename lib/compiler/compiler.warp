@@ -17,10 +17,15 @@ RUNTIME_WORDS = "compiler.warp's lowered runtime words of " + library_folder
 # the prelude's text, whose definitions a program reaches (prelude_words.warp)
 prelude_source = read(library_folder + "/prelude.warp")
 
+# the files of the runtime words, each with the files its `use` lines name: the core and, never used by it, the
+# extended runtime (decision runtime-split)
+RUNTIME_ROOTS = ["runtime.warp", "runtime_extended.warp"]
+
 # the runtime words lowered and kept; keep's answer unused, so a host without the module cache (plain wasmtime answering
 # its imports with defaults) still gets the words
 lowered_runtime_words(): Node := {
-	words = lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source)
+	roots = RUNTIME_ROOTS.map(file => read(library_folder + "/compiler/" + file))
+	words = lowered_program(roots.join("\n"), library_folder + "/compiler", prelude_source)
 	keep(RUNTIME_WORDS, words)
 	words
 }
