@@ -1,0 +1,14 @@
+#!/usr/bin/env warp
+# a lambda parameter named like a function of the program (rebuild pure said: undefined function loop_item_…)
+entry(m: any, k: text): text := ""
+big(entry: list, optional: list): bool := entry#2 > 1
+grown(typed: list): list := {
+	optional = []
+	more = ["start"]
+	while more {
+		more = typed.filter(entry => not (entry#1 in optional) and big(entry, optional)).map(entry => entry#1)
+		optional += more
+	}
+	optional
+}
+print(grown([[1, 2], [3, 4], [5, 0]]))

@@ -382,7 +382,10 @@ impl WarpParser {
 		let blanks = self.chars[self.pos..].iter().take_while(is_blank).count();
 		let word: String =
 			self.chars[self.pos + blanks..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
-		let body_follows = body_follows_at(self.pos + blanks + word.chars().count());
+		// `def f(x): list? {…}`: an optional result type (decision optional-result)
+		let word_end = self.pos + blanks + word.chars().count();
+		let optional = usize::from(self.chars.get(word_end) == Some(&'?'));
+		let body_follows = body_follows_at(word_end + optional);
 		word.starts_with(char::is_uppercase)
 			|| crate::analyzer::type_word_kind(&word).is_some()
 			|| (body_follows && (crate::warp_parser::names_a_type(&word) || word == crate::words::ANY_TYPE))

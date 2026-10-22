@@ -237,14 +237,25 @@ def note_emitting(body: Body, n: any) {
 	module.emitting_at = " at " + file + line_of(n) + ":" + column_of(n)
 }
 
-# a refused form in a few words: `key :=`, `group ( memo_known`, a name
+# a refused form as the program writes it, in a few words: `… := …`, the call `memo_known(…)`, a name
 form_of(n: any): text := {
-	if type(n) is key { return "key " + op_of(n) }
+	if type(n) is key and key_of(n) == symbol(opaque_word) { return opaque_form(value_of(n)) }
+	if type(n) is key { return "`… " + op_of(n) + " …`" }
 	if n is symbol { return name_of(n) }
-	if is_group(n) and #n > 0 and n#1 is symbol { return "group " + bracket_of(n) + " " + name_of(n#1) }
-	if is_group(n) { return "group " + bracket_of(n) }
+	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol { return "the call " + name_of(n#1) + "(…)" }
+	if is_group(n) and #n > 0 and n#1 is symbol { return "`" + opening_of(bracket_of(n)) + name_of(n#1) + " …`" }
+	if is_group(n) { return "the group " + opening_of(bracket_of(n)) + "…" }
 	"a " + type(n).name
 }
+# a template, an error value or an empty group, which travel behind the opaque word (walk.warp), in the program's words
+opaque_form(view: any): text := {
+	kind = kind_of(view)
+	if kind == "list" { return "the empty group " + bracket_pair(view#2) }
+	if kind == "error" { return "an error value" }
+	"a " + kind
+}
+opening_of(bracket: text): text := if bracket == "" then "(" else bracket
+bracket_pair(bracket: text): text := {"(": "()", "[": "[]", "{": "{}"}[opening_of(bracket)] ?? "()"
 
 # a function made with no parameters, its body given later or its code written by the caller
 # `: any` until card class-named: a class Function as a result type fails in the Rust lane
@@ -753,7 +764,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
-	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
+	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
 	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", byte_at: "text_byte", float_bits: "bits_of_float"}
 # node_order knows no user compare: a program ordering instances by its own sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
@@ -1907,6 +1918,8 @@ def key_expression(body: Body, n: any): list {
 	if body.intrinsics and table_number(left, read_field(n)) != ø { return number_value(table_number(left, read_field(n))) }
 	# `{}`: a map of no entries, not ø, so the entries a function given it writes reach every holder, as in Rust's
 	if is_empty_map(n) { return ["node", node(Marked.Map, vector_code([]))] }
+	# `[]`, held behind the opaque word as Rust's parser builds it: a list of no items
+	if is_empty_list(n) { return list_value(body, []) }
 	if operator == ":" and left is symbol and name_of(left) in data_item_checks { return data_item(body, name_of(left), right) }
 	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right, yes) }
 	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø, no) }
@@ -1925,8 +1938,7 @@ def key_expression(body: Body, n: any): list {
 	if is_loop_step(n) { return expression_code(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
-	# `{}`, held behind the opaque word so number_keys.warp can key it: an empty map
-	if is_empty_map(n) { return map_value(body, []) }
+	if left == symbol(opaque_word) { return refuse(opaque_form(right)) }
 	# the key of `Point{x: 1}` has no operator as parser.warp reads it, `:` as Rust's analysis view shows it
 	# `P{}`: every field its default (an empty group reads as ø, or as the opaque `{}`)
 	if operator == "" and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
@@ -2072,9 +2084,11 @@ def logical(body: Body, symbol: text, left: any, right: any): list {
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_body(f: Function): Body := {
 	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [], {})
-	for i in 0..<#f.signature.parameters { local_index(scope, f.signature.parameters[i].name, f.kinds[i]) }
+	for i in 0..<#f.signature.parameters { local_index(scope, parameter_local_name(scope, f.signature.parameters[i].name, i), f.kinds[i]) }
 	scope
 }
+# every parameter has a local of its own: a name given twice, `middle(_, value, _)`, names only the first
+parameter_local_name(scope: Body, name: text, i: int): text := if name in scope.names then "·parameter" + i else name
 
 # is the program analyzed (WARP_SELF_ANALYSIS): then a node meeting a list or text holds one, as analyzer.warp found
 analyzed_program(): bool := module.kinds != ø and "value" in module.kinds

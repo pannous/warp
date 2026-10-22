@@ -33,11 +33,13 @@ written_index_mark = "written_index"
 
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: any): bool := kind_of(view) == "list" and #view == 3
-# an empty map `{}` as plain_node keeps it, behind the opaque word
-is_empty_map(n: Node): bool := match n {
-	Key(left, op, right): left == symbol(opaque_word) and is_empty_group(right) and right#2 == "{"
-	_: no
+# the bracket of an empty map `{}` or list `[]` as plain_node keeps it, behind the opaque word; "" for any other node
+empty_group_bracket(n: Node): text := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) and is_empty_group(right) then right#2 else "" }
+	_: ""
 }
+is_empty_map(n: Node): bool := empty_group_bracket(n) == "{"
+is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø but
 # the empty map `{}` (decision empty-group-node: the bridge keeps Rust's bracket where a pass reads it, number_keys
