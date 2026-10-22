@@ -1193,8 +1193,13 @@ def typed_declaration(body: Body, name: text, type_name: text, value: any): list
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
 # `x: int? = v` (walk.warp's `line_of(n): int? := try n.line else ø`): a T or ø, so x holds a node; a value known
-# only at run time is not checked yet (Rust's is), a value of another kind is refused
+# only at run time is not checked yet (Rust's is), a value of another kind is refused; `x: Node? = v` (any node
+# annotation, a class too: an object or ø) holds the node as it is
 def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
+	if type_name in node_annotations or type_name in module.classes {
+		if value#1 != "node" and value#1 != pending and type_name in module.classes { return refuse("a " + value#1 + " given to a variable declared " + type_name + "?") }
+		return assignment(body, symbol(name), value)
+	}
 	if type_name not in declared_kinds { return refuse("a variable declared " + type_name + "?") }
 	value = texted(type_name, value)
 	kind = value#1
