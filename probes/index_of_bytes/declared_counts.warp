@@ -1,0 +1,8 @@
+# decision index-units: a declared index or position holds a value counted its way
+xs = [10 20 30]
+i: index = xs.index_of(20)
+position p = xs.index_of(20)
+position top = argmax(xs)
+index j = p + 1
+f(k: position) := { at: index = k; at }
+[i, p, top, j, f(2)]
