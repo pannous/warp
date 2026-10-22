@@ -513,7 +513,8 @@ session_is_free() {
 	local file=$1 job since run
 	job=$(pool_field "$file" job); since=$(pool_field "$file" since)
 	[ "$job" = idle ] && return 0
-	run=${job%-*}
+	run=${job%-*-*}   # a job is <run>-<launch time>-<launcher pid>; ${job%-*} kept the time: no result was ever seen, a
+	                  # finished session stayed busy until collected, and was dropped as "never answered" after 90 min
 	git -C "$MAIN_CHECKOUT" ls-remote --exit-code origin "refs/heads/$RESULTS_PREFIX/$run" > /dev/null && return 0
 	[ $(($(date +%s) - since)) -gt $((PENDING_MINUTES * 60)) ] && drop_session "$file" "its job $job never answered"
 	return 1
