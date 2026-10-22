@@ -1437,7 +1437,7 @@ def declared_operators(source: text): list {
 	for statement in statements {
 		if not statement.contains("precedence") { continue }
 		ranked = precedence_declaration(blank_words(statement), found)
-		if ranked == [] { continue }
+		if ranked is empty { continue }
 		found = found.map(operator => if operator#1 == ranked#1 then [operator#1, operator#2, ranked#2] else operator)
 	}
 	found
@@ -1556,7 +1556,7 @@ def holds_top_level_comma(code: text, at: int, n: int): bool {
 		c = code[at]
 		if escaped {
 			escaped = false
-		} else if quote != "" {
+		} else if quote {
 			if c == '\\' { escaped = true } else if "" + c == quote { quote = "" }
 		} else if c == '"' or c == '\'' {
 			quote = "" + c
@@ -1835,7 +1835,7 @@ def prefixed(p: Parser): Node := {
 	if word == "operator" or word == "circumfix" or OPERATOR_KINDS.contains(word) {
 		words = statement_words_at(p)
 		// the pre-scans applied both: declared_operators, operator_aliases
-		if precedence_declaration(words, p.operators) != [] or operator_alias(words).length > 0 or circumfix_alias(words).length > 0 { return skip_statement(p) }
+		if precedence_declaration(words, p.operators) or operator_alias(words).length > 0 or circumfix_alias(words).length > 0 { return skip_statement(p) }
 		declaration = operator_declaration(p, word)
 		if declaration != ø { return declaration }
 		method = operator_method_definition(p, word)

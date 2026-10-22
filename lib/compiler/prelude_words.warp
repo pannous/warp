@@ -119,7 +119,7 @@ module_aliases(source: text): any := {
 with_call_forms(aliases: any, names: list): any := {
 	for name in names {
 		word = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else ""
-		if word != "" and is_name_start(word[0]) and word not in names { aliases[word] = name }
+		if word and is_name_start(word[0]) and word not in names { aliases[word] = name }
 	}
 	aliases
 }
