@@ -48,3 +48,15 @@ fn a_list_result_of_empty_is_the_empty_list() {
 	is!("def found(x: int): list of int { if x > 0 { [x] } }; found(3)", warp::ints(vec![3]));
 	warns_with("def half(x: int): int { if x < 0 { return ø }; x / 2 }; half(-1)", Node::Empty, CAN_ANSWER_EMPTY);
 }
+
+/// `warp fix` (beautify) applies the warning's fix: the declared result gains its `?`, a parameter's type stays
+#[test]
+fn warp_fix_declares_the_result_optional() {
+	let fixed = |code: &str| warp::formatting::beautify(code).expect("it parses").text;
+	assert_eq!(
+		fixed("def half(x: int): int {\n\tif x < 0 { return ø }\n\tx / 2\n}\nhalf(4)\n"),
+		"def half(x: int): int? {\n\tif x < 0 { return ø }\n\tx / 2\n}\nhalf(4)\n"
+	);
+	let declared = "def half(x: int): int? {\n\tif x < 0 { return ø }\n\tx / 2\n}\nhalf(4)\n";
+	assert_eq!(fixed(declared), declared);
+}

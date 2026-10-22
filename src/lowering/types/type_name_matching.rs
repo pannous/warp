@@ -216,6 +216,9 @@ fn typed_definitions(node: &Node, typed: &mut Vec<(String, String, Node)>) {
 	node.drop_meta().parts().into_iter().for_each(|part| typed_definitions(part, typed));
 }
 
+/// The "got it" topic of the warning, whose fix `warp fix` applies (formatting/synonyms.rs)
+pub(crate) const OPTIONAL_RESULT_TOPIC: &str = "optional-result";
+
 /// A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
 /// the `?` as its fix and reads its result as `list?`, so the ø reaches the caller unchanged
 fn optional_when_answering_empty(
@@ -234,7 +237,7 @@ fn optional_when_answering_empty(
 	let warning =
 		crate::errors::diagnostic::Diagnostic::at(place, format!("{function} can answer ø; declare `: {optional}`"))
 			.offer("the result can be ø", &written, &optional)
-			.about("optional-result", &function);
+			.about(OPTIONAL_RESULT_TOPIC, &function);
 	crate::errors::diagnostic::report(&[warning])?;
 	Ok(symbol(&optional))
 }
