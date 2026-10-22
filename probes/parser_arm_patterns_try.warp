@@ -1,0 +1,19 @@
+#!/usr/bin/env warp
+# Try line for parser.warp (the self-hosted front end): match arms with list patterns and relational arms
+describe(xs: list): text := match xs {
+	[]: "empty"
+	[a]: "one: \(a)"
+	[a, _]: "two, first \(a)"
+	_: "many"
+}
+print describe([])
+print describe([7])
+print describe([3, 4])
+print describe([1, 2, 3])
+size(n: int): text := match n {
+	< 0: "negative"
+	0: "zero"
+	_: "positive"
+}
+print size(-5)
+print size(9)

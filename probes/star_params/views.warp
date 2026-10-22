@@ -1,0 +1,3 @@
+// parser.warp's views of Python's markers, rests and spreads (card parser-star-params); `warp parse` gives Rust's
+use "../../lib/compiler/passes.warp"
+for code in ["def total(*xs){sum xs}", "total(*ys)", "[*xs, 4]", "def f(**kw){ kw }", "f(**obj)", "def f(a, *, b): return a + b", "def f(a, /, b): a + b", "f(&x)", "y = *r", "a, *rest = xs", "def total(xs...){sum xs}", "total(...ys)", "fn f(x: &mut i32) { *x }", "f(a, +, b)", "x = &&5", "f(&(a+b))", "*init, last = xs", "y = **r", "x * y", "xs[:]", "a = *init, last = xs"] { print(code + "  =>  " + view_of(parsed(code))) }
