@@ -126,7 +126,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P107 the playground offers only the .wasm download plus a `warp hello.warp` line. P108 Warp.sublime-syntax takes .wasp/.warp/.a/.angle. P229 double-clicking a .warp file opens the editor.
 
 ## Welcoming, diagnostics and newcomer forms
-- errors-name-file (user): every error, warning and hint, in every lane (Rust, pure, self), prints file:line:column and the source line; a refusal never names internal words (`view·opaque`) but the user's code. Cards error-names, pure-error-candidate.
+- errors-name-file (user): every error, warning and hint, in every lane (Rust, pure, self), prints file:line:column and the source line; a refusal never names internal words (`view·opaque`) but the user's code. Cards error-names, pure-error-candidate. Runtime errors and warnings keep their "at line:col" too (Supervisor, card appends-line: the 9 tests pinning the old text are updated, not the positions dropped).
 - Newcomer syntax is eaten, its intent compiled and the warp form hinted, only where it does not clash with a known footgun.
 - Asks become got-it warnings; error-fallback cases (`[x]*n`, insert order, `[1 2 3]+4`, `1+2 squared`) stay loud errors naming the explicit forms (D3, D9/P5).
 - Got-it scope: `[y = this one, a = all of this kind, n]`; an expression is remembered by its text; a `// got it` comment silences the line.
