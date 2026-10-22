@@ -1,0 +1,14 @@
+#!/usr/bin/env warp
+# print(…) keeps words set apart by blanks as its one value, so a match inside it is a match (card match-parse)
+# want: [, 1 2, (1 2 3), -1, no, 3, one on Rust and WARP_SELF_HOSTED=1
+n = parse("[1 2]")
+print(match n { List(items, bracket, s): bracket as text, _: 0 })
+a = 1
+b = 2
+print(a, b)
+print(1 2 3)
+print(-a)
+print(not yes)
+xs = [3 1 2]
+print(first xs)
+print(match a { 1: "one", _: "other" })

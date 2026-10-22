@@ -209,7 +209,7 @@ fn test_case(args: &[String]) -> Option<&[String; 3]> {
 
 /// The tests of one file run, its summary printed: (tests run, failed)
 fn run_tests_of(path: &str) -> (usize, usize) {
-	diagnostic::show_lines_of(&source_of(path));
+	diagnostic::show_lines_of(&source_of(path), Some(path));
 	let result = warp::pipeline::for_tests(|| eval(path));
 	let summary = match result.drop_meta() {
 		Node::Text(summary) => summary.clone(),
@@ -405,9 +405,12 @@ fn run_command(args: &[String], given: &[String]) {
 		// `warp pure <file.warp> [arguments…]`, or inline code as plain `warp <code>` takes it, `use` reading from the
 		// current folder
 		if has_warp_extension(&args[2]) {
+			diagnostic::show_lines_of(&source_of(&args[2]), Some(&args[2]));
 			print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
 		}
-		print_and_exit(run_code(&args[2..].join(" "), &env::current_dir().unwrap_or_default(), by));
+		let code = args[2..].join(" ");
+		diagnostic::show_lines_of(&code, None);
+		print_and_exit(run_code(&code, &env::current_dir().unwrap_or_default(), by));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments([program_arguments, given].concat());
@@ -423,7 +426,7 @@ fn run_command(args: &[String], given: &[String]) {
 			show_in_webview(path, false);
 			return;
 		}
-		diagnostic::show_lines_of(&source_of(path));
+		diagnostic::show_lines_of(&source_of(path), Some(path));
 		warp::run::program_cache::enable(); // its next run starts without compiling (card cache-compiled-shader)
 		let result = eval(path); // a file: its folder is in scope (D15)
 		if !only_run && wants_executable() && !matches!(result, Node::Error(_)) {
@@ -456,7 +459,7 @@ fn run_command(args: &[String], given: &[String]) {
 		println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
 		warp::web::dev_server::open_in_browser("https://github.com/pannous/warp/");
 	} else if let Some(code) = command_argument(&arg_string, "eval") {
-		diagnostic::show_lines_of(code);
+		diagnostic::show_lines_of(code, None);
 		show_and_fail_on_error(&eval(code), RESULT_MARK);
 	} else if let Some(code) = command_argument(&arg_string, LOWER_JSON_COMMAND) {
 		match warp::pipeline::lower(code) {

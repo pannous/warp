@@ -7,7 +7,7 @@ use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; elvis_operands: int; closing_ends: any; stops_at_end: bool; word_types: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; elvis_operands: int; closing_ends: any; stops_at_end: bool; word_types: list; line_starts: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): any := view_of(parsed(source))
@@ -97,7 +97,7 @@ def written_tree(written: text): Node := {
 	source = expanded_entities(written)
 	found = gaps(source, source.length)
 	word_types = multi_word_types(source)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), phrases: [], elvis_operands: 0, closing_ends: {}, stops_at_end: false, word_types: word_types}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), phrases: [], elvis_operands: 0, closing_ends: {}, stops_at_end: false, word_types: word_types, line_starts: line_starts_of(source)}
 	items_until(p, ' ', "")
 }
 
@@ -1869,6 +1869,10 @@ def prefixed(p: Parser): Node := {
 	if event != ø { return event }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else ø
 	if declared != ø { return declared }
+	if word == DATA_WORD and peek(p.code, p.at + word.length, p.n) == ' ' {
+		literal = data_literal(p)
+		if literal != ø { return literal }
+	}
 	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
 	if form == "not" or no_asks_emptiness(p, word) {
 		p.at = p.at + word.length
@@ -1876,6 +1880,26 @@ def prefixed(p: Parser): Node := {
 		return Key(ø, Op.Not, expression(p, 105))
 	}
 	atom(p)
+}
+
+// `x = data a and b` is the data `a and b`, also as an operand (`string(data a and b)`); parentheses around all of it
+// only group it (`data (a and b)`); ø for `data = …`, `data.x`, glued `data(x)` and `data class`, where data stays a word
+// Rust twin: literals/data.rs try_parse_data
+DATA_WORD = "data"
+def data_literal(p: Parser): Node := {
+	before = p.at
+	p.at = p.at + DATA_WORD.length
+	skip_spaces(p)
+	if "}]);,\n\r".contains(peek(p.code, p.at, p.n)) or operator_at(p).length > 0 or word_at(p) == "class" {
+		p.at = before
+		return ø
+	}
+	read = expression(p, binding_powers("=")#2)
+	written = match read {
+		List(parts, Bracket.Round, separator): { if #parts == 1 then parts#1 else read }
+		_: read
+	}
+	listed("", " ", [symbol(DATA_WORD), written])
 }
 
 // `if no xs`: in a condition `no` before an operand asks for emptiness as `not xs` does; elsewhere, or before an
@@ -2718,6 +2742,35 @@ def loop_variable(p: Parser): Node := {
 	listed(bracket, ",", names)
 }
 
+// The atom at the parser's position at its line and column, as the Rust parser marks each atom: a warning or error
+// about it names where it stands (card front-end-warnings)
+// Rust twin: atoms.rs parse_atom (LineInfo::at)
+def atom(p: Parser): Node := {
+	start = p.at
+	found = bare_atom(p)
+	if found === ø { return found }
+	line = line_at(p, start)
+	positioned(found, line, start - p.line_starts[line - 1] + 1)
+}
+
+// Where each line of the source starts
+def line_starts_of(source: text): list {
+	starts = [0]
+	for at in 0 ..< source.length { if source[at] == '\n' { starts += [at + 1] } }
+	starts
+}
+
+// The line (from 1) holding the position `at`, by bisection of the line starts
+def line_at(p: Parser, at: int): int {
+	first = 0
+	last = p.line_starts.length
+	while last - first > 1 {
+		middle = (first + last) /! 2
+		if p.line_starts[middle] <= at { first = middle } else { last = middle }
+	}
+	first + 1
+}
+
 FLOAT_SUFFIXES = "fFdD"
 // the type words naming a kind of number, `number` itself not (Rust twin: type_tests.rs is_number_type_word)
 NUMBER_TYPE_WORDS = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32", "float32", "float64", "fast"]
@@ -2726,7 +2779,7 @@ def written_number(written: text): Node := if written.contains(".") or written.c
 
 // A number, text, name or bracketed group
 // Rust twin: atoms.rs parse_atom, literals.rs read_number_value
-def atom(p: Parser): Node := {
+def bare_atom(p: Parser): Node := {
 	if p.at >= p.n { return ø }
 	c = p.code[p.at]
 	if is_digit(c) {
@@ -3358,7 +3411,8 @@ def named(p: Parser): Node := {
 	}
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
-	arguments = typed_parameters(items_until(p, ')', "("))
+	written = items_until(p, ')', "(")
+	arguments = typed_parameters(written)
 	skip_spaces(p)
 	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
@@ -3366,7 +3420,16 @@ def named(p: Parser): Node := {
 		// the head is the call f(x, y)
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
-	listed("(", "", [name] + spread(arguments))
+	listed("(", "", [name] + (if word == PRINT_WORD then print_arguments(written) else spread(arguments)))
+}
+
+// `print(a b)`, `print(match n {…})`: words set apart by blanks are the one value printed; `print(a, b)` prints each
+// Rust twin: commands.rs print_arguments
+PRINT_WORD = "print"
+def print_arguments(arguments: Node): list {
+	parts = group_parts(arguments)
+	if parts != ø and parts#2 == " " and #parts#3 > 1 { return [arguments] }
+	spread(arguments)
 }
 
 // The type names that take type arguments in angle brackets besides the plural and capitalized ones

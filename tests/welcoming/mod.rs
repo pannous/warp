@@ -20,6 +20,8 @@ mod test_end_and_def_blocks; // cards std-module-swallowed, end-indented, def-in
 mod test_english_operator_words;
 mod test_enum_case_words; // card enum-case-words
 mod test_error_excerpt;
+#[cfg(feature = "native")] // runs the warp binary
+mod test_error_names_file; // card error-names
 mod test_error_positions;
 #[cfg(feature = "native")] // runs the warp binary
 mod test_fi_block_end; // card allow-stupid

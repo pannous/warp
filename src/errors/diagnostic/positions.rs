@@ -107,13 +107,18 @@ fn position_number(digits: &str) -> Option<usize> {
 
 /// Where a failed program's error is: the position its message names (also for an error no diagnostic made)
 pub fn error_position(result: &Node) -> Option<(usize, usize)> {
-	let Node::Error(message) = result.drop_meta() else {
-		return None;
-	};
-	let Node::Text(message) = message.drop_meta() else {
-		return None;
-	};
-	message_position(message)
+	failure_message(result).and_then(message_position)
+}
+
+/// The message of a failed program
+fn failure_message(result: &Node) -> Option<&str> {
+	match result.drop_meta() {
+		Node::Error(message) => match message.drop_meta() {
+			Node::Text(message) => Some(message),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// The source line at a position with `^^` under the word there (one `^` under any other character); tabs before it
@@ -131,18 +136,53 @@ pub fn excerpt(source: &str, line: usize, column: usize) -> Option<String> {
 	Some(format!("  {line} | {text}\n  {gutter} | {indent}{}", "^".repeat(word)))
 }
 
-/// Print the line a later warning or error names, from this program (the CLI's programs; a host shows them itself)
-pub fn show_lines_of(source: &str) {
-	*SHOWN_SOURCE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(source.to_string());
+/// Name the file and print the line a later warning or error names, from this program (the CLI's programs; a host
+/// shows them itself); `file` is None for code given inline
+pub fn show_lines_of(source: &str, file: Option<&str>) {
+	*shown_program() = Some(ShownProgram { source: source.to_string(), file: file.map(str::to_string) });
 }
 
-/// The line of the shown program at a position, with its marks
-pub fn shown_excerpt(line: usize, column: usize) -> Option<String> {
-	SHOWN_SOURCE
-		.lock()
-		.unwrap_or_else(|poisoned| poisoned.into_inner())
-		.as_deref()
-		.and_then(|source| excerpt(source, line, column))
+fn shown_program() -> std::sync::MutexGuard<'static, Option<ShownProgram>> {
+	SHOWN_PROGRAM.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn shown_file() -> Option<String> {
+	shown_program().as_ref().and_then(|program| program.file.clone())
+}
+
+/// The line at a position with its marks: in `file`, else in the shown program
+pub fn shown_excerpt(file: Option<&str>, line: usize, column: usize) -> Option<String> {
+	let program = shown_program();
+	let program = program.as_ref()?;
+	match file {
+		Some(file) if program.file.as_deref() != Some(file) => {
+			excerpt(&std::fs::read_to_string(file).ok()?, line, column)
+		}
+		_ => excerpt(&program.source, line, column),
+	}
+}
+
+/// A diagnostic of the shown program names its file, as one of a used file does
+pub fn in_shown_file(diagnostic: &Diagnostic) -> Diagnostic {
+	let file = diagnostic.file.clone().or_else(|| compile_context::read(|context| context.parsed_file.clone()));
+	Diagnostic { file: file.or_else(shown_file), ..diagnostic.clone() }
+}
+
+/// A failure of the shown program: its position names the file (a used file's failure names its own already)
+pub fn error_in_shown_file(result: &Node) -> Node {
+	match (shown_file(), error_position(result)) {
+		(Some(file), Some(_)) => located_in_file(result, std::path::Path::new(&file)),
+		_ => result.clone(),
+	}
+}
+
+/// The line a failure names, with its marks: in the file it names, else in the shown program
+pub fn error_excerpt(result: &Node) -> Option<String> {
+	let message = failure_message(result)?;
+	match message_file_position(message) {
+		Some((file, line, column)) => shown_excerpt(Some(file), line, column),
+		None => message_position(message).and_then(|(line, column)| shown_excerpt(None, line, column)),
+	}
 }
 
 /// The text of a node for a message: its serialization, or the source from its position to the end of the statement

@@ -1,0 +1,18 @@
+#!/usr/bin/env warp
+# Overloads by parameter type, as every lane picks them (card pure-lane-refuses): the variant the arguments fit best,
+# an int widened to a float, any last, and at run time where only the value tells
+named(x: int) := "a"
+named(x) := "b"
+print(named(1))
+print(named("z"))
+half(x: int) := x / 2
+half(x: float) := x * 10
+print(half(4) + half(0.5))
+widened(x: float) := "float"
+widened(x: text) := "text"
+print(widened(3))
+kind(c: text) := "text"
+kind(m: map) := "map"
+kind(xs: ints) := "ints"
+settings = {a: 1}
+print(kind(settings) + kind("x") + kind([1 2]))

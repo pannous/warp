@@ -61,9 +61,20 @@ pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let file = std::env::temp_dir().join(format!("warp-inline-{}.warp", std::process::id()));
 	std::fs::write(&file, format!("{code}\n")).map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
-	let module = compiled_in(&file, folder, by);
+	let module = compiled_in(&file, folder, by).map_err(|failure| inline_positions(&failure, &file));
 	let _ = std::fs::remove_file(&file);
 	module
+}
+
+/// A failure of inline code: a position in the file it was written to is one in the code (`at 1:5`)
+fn inline_positions(failure: &Node, file: &Path) -> Node {
+	match failure.drop_meta() {
+		Node::Error(message) => match message.drop_meta() {
+			Node::Text(text) => error(&text.replace(&format!("{}:", file.display()), "")),
+			_ => failure.clone(),
+		},
+		_ => failure.clone(),
+	}
 }
 
 /// The value of the compiled module run with these arguments, or why it was not compiled
@@ -97,7 +108,8 @@ fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledMo
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
-		(Node::Error(_), _) => Err(said),
+		// a position the compiler's run names is one in compiler.warp (its `raise`), not in the program
+		(Node::Error(_), _) => Err(crate::errors::diagnostic::located_in_file(&said, &library().join(COMPILER_FILE))),
 		(_, Ok(bytes)) => Ok(module_of_bytes(bytes)),
 		(_, Err(_)) => Err(error(&format!("compiler.warp wrote no module, it gave {}", said.serialize()))),
 	}

@@ -217,12 +217,24 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widenings: int = 0 }
+# program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
+# the program's latest written node being emitted, the place a refusal names (card error-names)
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widenings: int = 0; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
 refuse(why: text): any := {
-	throw outside_the_core + why
+	throw outside_the_core + why + module.emitting_at
+}
+
+# the file the program comes from, which a refusal names
+def emitting_file(file: text) { module.program_file = file }
+
+# a node of the program (no runtime word's) with a position: the place a later refusal names
+def note_emitting(body: Body, n: any) {
+	if body.intrinsics or not is_positioned(n) { return }
+	file = if module.program_file == "" then "" else module.program_file + ":"
+	module.emitting_at = " at " + file + line_of(n) + ":" + column_of(n)
 }
 
 # a refused form as the program writes it, in a few words: `… := …`, the call `memo_known(…)`, a name
@@ -770,9 +782,9 @@ def orders_instances(): bool { module.functions.keys.any(name => name == "compar
 core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error"}
+	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
-	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: []}
+	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: [], code: []}
 def type_test_code(body: Body, subject: any, spec: text): list {
 	if spec in module.sum_types { return refuse("a test of the type " + spec + ", which has cases or subclasses") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
@@ -1699,6 +1711,7 @@ appends_only(n: any, name: text): bool := {
 }
 
 def expression_code(body: Body, n: any): list {
+	note_emitting(body, n)
 	if n is bool { return ["bool", [op.i32_const, if n then 1 else 0]] }
 	if n is number { return number_value(n) }
 	if n is text { return text_value(n) }
@@ -1714,8 +1727,10 @@ def expression_code(body: Body, n: any): list {
 	group_expression(body, n)
 }
 
-# `data e`: e as written, a node (Rust's blocks.rs as_data); `parse("a + 1")` is `as_code(data a + 1)`
-is_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol(quote_word)
+# `data e`, glued `data(e)`: e as written, a node (Rust's blocks.rs as_data, written_quote); `parse("a + 1")` is
+# `as_code(data a + 1)`
+is_quote(n: any): bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == symbol(quote_word)
+is_spaced(n: any): bool := bracket_of(n) == "" and separator_of(n) == " "
 # `print data (a + 1)`, `as_code(data (a + 1))`: a `data` after the head of a line or call quotes the item after it;
 # its place, else 0
 inline_quote_at(n: any): int := {
@@ -1744,8 +1759,6 @@ reads_position(n: any): bool := {
 def quoted_code(body: Body, e: any): list {
 	if module.reads_positions { return refuse("quoted code whose position or comment is read") }
 	if e is symbol { return node(Kind.Symbol, text_bytes(name_of(e))) }
-	# `data (a + 1)`: parentheses around one item only group it
-	if is_group(e) and bracket_of(e) == "(" and #e == 1 { return quoted_code(body, e#1) }
 	if type(e) is key {
 		parts = [["node", quoted_code(body, key_of(e))], text_value(op_of(e)), ["node", quoted_code(body, value_of(e))]]
 		return runtime_call("key_node", parts)#2
@@ -2490,6 +2503,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 }
 module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	module.kinds = kinds
+	module.emitting_at = ""
 	module.functions = {}
 	module.order = []
 	module.runtime = {}
