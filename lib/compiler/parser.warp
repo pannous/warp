@@ -3468,7 +3468,7 @@ def type_application_length(p: Parser, start: int): int {
 }
 
 // `int`, `ints`, `list`, `Point`, `text?`: a word that can stand in type arguments
-def is_type_argument(word: text): bool := is_type_name(required_type(word))
+def is_type_argument(word: text): bool := is_type_name(if word.ends_with("?") then word[0 ..< word.length - 1] else word)
 
 // A word that can take type arguments: a type word, its plural, `list`, `map` …, a capitalized type
 // Rust twin: types/expressions.rs names_a_type
