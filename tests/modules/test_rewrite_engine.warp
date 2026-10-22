@@ -161,3 +161,31 @@ is! 'rewrite mul $a $b => $a * $b
 x = 3
 y = 4
 [mul x y, x·y]' [12, 12]
+
+# where_an_enum
+is! 'enum Coin { Penny, Dime }
+rewrite kind $t => "enum" where $t is enum
+rewrite kind $t => "other"
+x = 1
+[kind Coin, kind x]' ["enum", "other"]
+
+# where_a_case_of_the_one_enum_declaring_it
+is! 'enum Coin { Penny, Dime }
+enum Metal { Gold, Penny }
+rewrite owns $c => "one" where $c is case
+rewrite owns $c => "none"
+[owns Dime, owns Penny, owns 3]' ["one", "none", "none"]
+
+# the_cases_of_the_enum_a_case_binds
+is! 'enum Coin { Penny, Nickel, Dime }
+rewrite size_of $c => #[cases of $e] where $c is case of $e
+rewrite size_of $c => 0
+[size_of Dime, size_of 7]' [3, 0]
+
+# a_case_of_a_named_enum
+is! 'enum Coin { Penny, Dime }
+enum Metal { Gold, Penny }
+rewrite pick $e $c => "case" where $c is case of $e
+rewrite pick $e $c => "not"
+[pick Metal Penny, pick Metal Dime, pick Coin Dime]' ["case", "not", "case"]
+||||||| d8bb3f8518

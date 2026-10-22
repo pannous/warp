@@ -1,8 +1,8 @@
 # Plain enums (card pure-enums; Rust twin: src/lowering/types/plain_enums.rs): `enum Color { Red, Green }` (Swift's
 # `{ case north, south }`) declares the type Color whose variants are its bare cases, `type @variants(Red Green) Color
-# {}`, and `Color.Red`, `Color::Red`, Swift's `.red` are the case itself, the symbol Red. A case's index, counting from
-# 0 as C does, is `Coin.Dime as int`; an int becomes a case explicitly, `2 as Coin` or `Coin(2)`, an error when no case
-# has that index (card enum-leftovers).
+# {}`. A case's index, counting from 0 as C does, is `Coin.Dime as int`, also of a name holding a case; an int becomes
+# a case explicitly, `2 as Coin` or `Coin(2)`, an error when no case has that index (card enum-leftovers). `Color.Red`
+# as the case Red and `c is Coin` are rewrite rules (lib/sugar/enums.warp), which run after this pass.
 use "walk.warp"
 use "phrase_blocks.warp"
 use "shapes.warp"
@@ -94,12 +94,26 @@ owner_of(case: text, enums: any): any := {
 	if #owners == 1 then owners#1 else ø
 }
 
-# the enum of a value: a case by name, or a name declared of the enum, else ø
+# the case a value writes, `Dime`, `Coin.Dime` or `Coin::Dime`: [its enum, its name], else ø
+written_case(value: Node, enums: any): any := {
+	if is_key(value, Op.Dot) or is_key(value, Op.Scope) { return owned_case(key_of(value), value_of(value), enums) }
+	if not is_name(value) { return ø }
+	declaring = owner_of(name_of(value), enums)
+	if declaring == ø then ø else [declaring, name_of(value)]
+}
+
+# `Coin.Dime` of a case Coin declares: [Coin, Dime], else ø
+owned_case(owner: Node, case: Node, enums: any): any := {
+	if not is_name(owner) or not is_name(case) or name_of(owner) not in enums { return ø }
+	if name_of(case) in enums[name_of(owner)] then [name_of(owner), name_of(case)] else ø
+}
+
+# the enum of a value: a case it writes, or a name declared of the enum, else ø
 type_of(value: Node, enums: any, subjects: any): any := {
+	written = written_case(value, enums)
+	if written != ø { return written#1 }
 	if not is_name(value) { return ø }
 	name = name_of(value)
-	owner = owner_of(name, enums)
-	if owner != ø { return owner }
 	if name in subjects and subjects[name] != "" then subjects[name] else ø
 }
 
@@ -109,18 +123,6 @@ enum_type(name: text, cases: list): any := {
 	node_of(["type", ["attribute", variants_word, variants, ["symbol", name]], ["list", "{", ""]])
 }
 
-# `Color.Red` of a case Color declares: Red
-case_of(owner: Node, case: Node, n: Node, enums: any): Node := {
-	if not is_name(owner) or not is_name(case) or name_of(owner) not in enums { return n }
-	if name_of(case) in enums[name_of(owner)] then case else n
-}
-
-# Swift's `.north`, and its arm `case .north:` read as the member `case.north`: north of the one enum having it
-implicit_case(owner: Node, case: Node, n: Node, enums: any): Node := {
-	if not (owner == ø or owner == symbol(case_word)) or not is_name(case) { return n }
-	if owner_of(name_of(case), enums) != ø then case else n
-}
-
 # `match value { arms }`, lowered as node_matches.warp lowers a written one: this pass runs after it
 match_over(value: Node, arms: list, enums: any): Node := matched(value, arms, ø, case_names_of(enums))
 
@@ -128,7 +130,8 @@ match_over(value: Node, arms: list, enums: any): Node := matched(value, arms, ø
 # enum type
 case_number(value: Node, cases: list, first: int, enums: any): Node := {
 	numbers = 1 to #cases
-	if is_name(value) and name_of(value) in cases { return numbers.filter(i => cases#i == name_of(value))#1 - 1 + first }
+	written = written_case(value, enums)
+	if written != ø { return numbers.filter(i => cases#i == written#2)#1 - 1 + first }
 	match_over(value, numbers.map(i => Key(symbol(cases#i), Op.Colon, i - 1 + first)), enums)
 }
 
@@ -157,33 +160,11 @@ case_conversion(value: Node, target: Node, n: Node, enums: any, subjects: any): 
 	case_number(value, enums[enum_name], count_types[target_name], enums)
 }
 
-# `c is Coin`, type_tests.warp's is_type(c, "Coin"): c is one of Coin's cases, as Rust's sum type test
-case_test(value: Node, cases: list): Node := {
-	tested = Key(value, Op.Eq, symbol(cases#1))
-	for case in cases[1..] { tested = Key(tested, Op.Or, Key(value, Op.Eq, symbol(case))) }
-	tested
-}
-
-# is_type(value, "Coin") of a declared enum: the test of its cases, else as it is
-enum_type_test(items: list, n: Node, enums: any): Node := {
-	if #items != 3 or items#1 != symbol("is_type") { return n }
-	enum_name = "" + items#3
-	if enum_name in enums then case_test(items#2, enums[enum_name]) else n
-}
-
 enum_node(n: Node, enums: any, subjects: any): Node := match n {
-	Key(owner, Op.Dot, case): {
-		cased = case_of(owner, case, n, enums)
-		if cased == n then implicit_case(owner, case, n, enums) else cased
-	}
-	Key(owner, Op.Scope, case): case_of(owner, case, n, enums)
 	Key(value, Op.As, target): case_conversion(value, target, n, enums, subjects)
 	Key(left, Op.Eq, right): held_equality(left, Op.Eq, right, n, subjects)
 	Key(left, Op.Ne, right): held_equality(left, Op.Ne, right, n, subjects)
-	List(items, Bracket.Round, separator): {
-		if #items == 2 and is_name(items#1) and name_of(items#1) in enums then case_at(items#2, name_of(items#1), enums)
-		else enum_type_test(items, n, enums)
-	}
+	List(items, Bracket.Round, separator): if #items == 2 and is_name(items#1) and name_of(items#1) in enums then case_at(items#2, name_of(items#1), enums) else n
 	_: {
 		declared = declared_enum(n)
 		if declared == ø then n else enum_type(declared#1, declared#2)
