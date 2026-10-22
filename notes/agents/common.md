@@ -34,6 +34,7 @@ After a context swap, this file and your role file win over anything a handover 
   `// ⚠ WARP DOES THIS DIFFERENTLY: <what> → <lib file>` above the hack (comment-only, so the marks need no cloud
   run). Rust edits only to keep the bootstrap building (the Rust-compiled compiler.warp) or to fix a crash; Rust
   branches already Ready still land. A card that would need Rust work is redone as warp work.
+  Exception (user 2026-10-22): `warp fix` (src/cli/formatting.rs, src/formatting/) may still change in Rust.
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
@@ -183,9 +184,11 @@ After a context swap, this file and your role file win over anything a handover 
   warnings still show: card cli-show). Then the targeted tests in the cloud lane.
 - `warp pure` / `warp self` run compiler.warp's build files compiler.wasm / compiler-self.wasm (decision
   compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
-  (`WARP_LIB=<worktree>/lib`). They are built when missing and otherwise only by `warp rebuild [pure|self]`: after
-  editing lib/, run `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure` before judging `warp pure` (a stale
-  one only prints a one-line notice).
+  (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never rebuild a stale one (user 2026-10-22), they only print
+  a one-line notice. The main checkout's pair is kept fresh by cron: scripts/refresh_compilers.sh rebuilds both
+  once lib/ (or the binary) changed and lib/ has been quiet a minute (log data/refresh_compilers.log). A worktree's
+  pair is yours: after editing lib/, run `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure` before
+  judging `warp pure`.
 - GitHub's API quota (5000 requests/h) is shared by every session: `gh run watch --interval 60` or more, never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points, `todo list Now` as much, commands naming a card
   by its key ~1. Never `gh project item-list` (200-530 points, trips GitHub's secondary limit; gh refuses it): read
