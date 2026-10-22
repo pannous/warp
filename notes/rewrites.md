@@ -57,6 +57,7 @@ After `where`, conditions joined by `and` ask about what the holes bound:
 | `$x is unbound` | a word the program binds nothing to |
 | `$x is value`, `$f is function` | a word the program binds as a value, as a function |
 | `$x is literal` | a number or text written as such |
+| `$w is label` | a word labelling a parameter: a phrase preposition or `as` (words.warp label_words), F10 |
 | `$x is text` (any hole kind) | code of that kind |
 | `$n < 0` (`> <= >= == !=`) | a number literal, `-1` and `(-1)` too, so compared |
 | `$f takes value`, `$f takes int` | a function of the program or a typed library word whose first parameter is typed (not yes/no), or typed int |
@@ -135,3 +136,15 @@ rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is en
 
 The rules of lib/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
 `cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.
+
+## Parameters (F10)
+The place word `parameter` lets a rule rewrite only a parameter of a definition's head, `f(a, with b) := …` (also
+`f(a): T := …`), in the program's own rules and in the sugar step alike; `$w is label` asks for a word that labels a
+parameter. lib/sugar/parameters.warp drops the label, as Swift passes argument labels:
+
+```warp
+rewrite $word $p => $p where parameter and $word is label   # replace(t, old, with new) := … takes new
+```
+
+The sugar step applies a rule of a place only there (before F10 it ignored places). Tests:
+tests/modules/test_rewrite_parameters.warp.
