@@ -83,3 +83,38 @@ p.name' "Al"
 is! 'rewrite field $n => $n: int where member
 class P { field a; field b }
 P(1, 2).b' 2
+
+# a_template_for_each_item_of_a_rest_hole
+is! 'rewrite squares $xs... => [$x * $x for $x in $xs...]
+squares 1 2 3' [1, 4, 9]
+
+# statements_for_each_item
+is! 'rewrite bump_all $vs... => ($v += 1 for $v in $vs...)
+a = 1
+b = 5
+bump_all a b
+[a, b]' [2, 6]
+
+# keys_for_each_item
+is! 'rewrite flags $ns... => {($n: yes) for $n in $ns...}
+m = flags red green
+m.green' yes
+
+
+# a_rule_of_several_statements
+is! 'rewrite (log_start; log_end) => count += 10
+global count = 0
+log_start
+log_end
+count' 10
+
+# statements_holes_bind_across_the_run
+is! 'rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
+p = 4
+q = p
+[p, q]' [4, 5]
+
+# a_result_is_rewritten_again
+is! 'rewrite double $x => $x * 2
+rewrite quadruple $x => double (double $x)
+quadruple 3' 12
