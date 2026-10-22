@@ -19,7 +19,7 @@ Read notes/agents/common.md and notes/roles.md.
   and tell the Supervisor about lost-looking work.
 - Batches of at most ~8 Ready cards. Express cards (and crash fixes) skip the gate:
   `integrator_tools/express.sh [<card>…]` pushes them untested at once (merge, cargo fmt committed, push, close,
-  Playground deploy with skip_checks; ~15 s; supervisor 2026-10-20: main stays formatted between batches), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
+  no Playground deploy while it is paused; ~15 s; supervisor 2026-10-20: main stays formatted between batches), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
 - Warp-only branches land at once, before any Rust batch (user 2026-10-21): a branch that changes no Rust (nothing in
   src/, crates/, tests/**/*.rs, Cargo.*, build.rs) needs no cloud run and no batch, only the self check on the merged
@@ -56,6 +56,12 @@ Read notes/agents/common.md and notes/roles.md.
   (re-adds moved code, reverts decisions): commit the rest, make the cheapest working fix and mention it once.
 - Build tweak (version "<v>-integrate"), `cd "$W" && ./test.sh > ../integrate_test.log 2>&1` (cargo builds the cwd's checkout, so cd first) (it queues
   itself with priority), restore Cargo.toml/Cargo.lock/test_results.txt.
+- PLAYGROUND PAUSED (user 2026-10-22, until the warp compiler is ready to replace it; supervisor a83a023365): no
+  Playground deploys (`gh workflow run Playground`/pages.yml, skip_checks), no browser suite, no tours (tour_at.sh), no
+  runner checks of web branches, no playground native tests (test_web_playground test_served test_playground; prefixes
+  in scripts/paused-tests.txt are left out of cloud --full). The bullets below on the browser suite, tours, the
+  Playground workflow and the bundle budget rest until the user lifts the pause. Web-only branches land after
+  `node --check` of their JS.
 - Browser suite and tour: `web/playground/build.sh optimized` FIRST (worker.js loads served-files.js, which build.sh
   writes; without it every browser test fails with an importScripts NetworkError), then `cargo browser-test`, then
   `build.sh components` and `python3 web/playground/test_in_browser.py --examples` (and `--firefox`).
