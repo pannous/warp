@@ -85,6 +85,9 @@ After a context swap, this file and your role file win over anything a handover 
   never notify it.
 
 ## Where to work
+- Beautiful types (decision beautiful-types): every lib/ declaration a migration or cleanup branch touches leaves it
+  fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
+  adds the shallow subclasses; don't invent parallel ones in your branch.
 - The sugar migration (user 2026-10-22, notes/layers.md) keeps one line of history: warp-layers alone removes sugar
   from lib/compiler/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
   origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
