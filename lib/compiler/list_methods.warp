@@ -15,7 +15,7 @@ pushed(list: Node, call: list, n: Node): Node := {
 
 # `m.remove(k)`, `m.delete(k)` of a variable: the value of k, its entry removed from m (Python's dict.pop); of a list the
 # first element equal to k removed. Rust twin: list_mutations.rs removed_key
-removal_methods: list = ["remove", "delete"]
+removal_methods = ["remove", "delete"]
 removed(collection: Node, removed_key: Node): Node := {
 	held = symbol(name_of(collection) + "·removed")
 	taken = Key(held, Op.Assign, List([symbol("removed_value"), collection, removed_key], Bracket.Round, Separator.None))
@@ -23,7 +23,7 @@ removed(collection: Node, removed_key: Node): Node := {
 	List([taken, rest, held], Bracket.Round, Separator.Semicolon)
 }
 # the methods that change the list or map they are called on, which Rust's list_mutations.rs lowers in place
-in_place_methods: list = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
+in_place_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
 
 method_call(receiver: Node, called: Node, n: Node): Node := match called {
 	List(call, Bracket.Round, Separator.None): pushed(receiver, call, n)
