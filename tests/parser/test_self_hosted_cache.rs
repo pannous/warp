@@ -88,6 +88,7 @@ fn the_stage_programs_ignore_the_working_folder() {
 
 /// WARP_SELF_HOSTED=front: the warp front end with the Rust emitter, for a count of the front end alone
 #[test]
+#[ignore = "redundant: covered by parser::test_self_pure::number_keys_run_in_the_front_lanes"]
 fn the_front_end_alone_leaves_emitting_to_rust() {
 	let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(CACHE_FOLDER);
 	self_hosted_run(&cache, "3 + 4"); // the stage programs compile with the Rust emitter, once

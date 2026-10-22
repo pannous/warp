@@ -18,6 +18,7 @@ fn the_tempo_sets_the_beat() {
 }
 
 #[test]
+#[ignore = "redundant: covered by programs::test_sound_tempo::the_tempo_sets_the_beat"]
 fn notes_last_beats() {
 	is!("use sound\nmelody([C4 E4], beat(1/8))\n7", 7);
 	is!("use sound\nplay([C4 E4], beat(1/16))\n7", 7);

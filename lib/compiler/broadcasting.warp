@@ -21,6 +21,8 @@ element_wise(list: Node, op: text, operand: Node): Node := {
 	Key(list, Op.Dot, call_of("map", [Key(item, Op.Arrow, Key(item, op as Op, operand))]))
 }
 
+# the keyword rewrite of an element-wise operator, an entry of passes.warp sugar_phrases_table
+is_element_operator(word: Node): bool := element_operator(word) != ø
 element_wise_phrase(n: Node): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
 		op = if #parts == 3 then element_operator(parts#2) else ø
@@ -28,5 +30,3 @@ element_wise_phrase(n: Node): Node := match n {
 	}
 	_: n
 }
-
-element_wise_operators_pass(program: Node): Node := bottom_up(program, element_wise_phrase)

@@ -177,3 +177,39 @@ binds_as(scope: any, name: text, meaning: Meaning): bool := scope.has(name) and 
 # of that name is no value there)
 value_meanings = [Meaning.Variable, Meaning.Parameter, Meaning.Loop]
 binds_value(scope: any, name: text): bool := value_meanings.any(meaning => binds_as(scope, name, meaning))
+
+# Keyword-triggered local rewrites (decision pass-triggers; Rust twin: src/lowering/words/keyword_rewrites.rs): each
+# entry [accepts, rewritten] of a table rewrites a node one of whose own words (has_own_word) it accepts,
+# children first, in table order, all in one walk. What an entry reads besides its node: rewritten_bindings(), the
+# scope of the program as it was before the walk, made once
+global program_before_rewrites = ø
+global scope_before_rewrites = ø
+keyword_rewrites(program: Node, table: list): Node := {
+	program_before_rewrites = program
+	scope_before_rewrites = ø
+	bottom_up(program, n => rewritten_by(n, table))
+}
+rewritten_bindings(): any := {
+	if scope_before_rewrites == ø { scope_before_rewrites = scope_of(program_before_rewrites) }
+	scope_before_rewrites
+}
+rewritten_by(n: Node, table: list): Node := {
+	for entry in table { n = rewritten_if(n, entry#1, entry#2) }
+	n
+}
+# TODO a function value in a local, `rewrite = entry#2; rewrite(n)`, once it is called (card function-value-read)
+rewritten_if(n: Node, accepts: function, rewritten: function): Node := if has_own_word(n, accepts) then rewritten(n) else n
+# a node's own words: its items' words, a key's operator, a declaration head's name (`type of`)
+has_own_word(n: Node, accepts: function): bool := match n {
+	List(parts, _, _): parts.any(part => is_word_of_item(part, accepts))
+	Key(left, op, right): { if left == symbol(opaque_word) then is_declaration_word(right, accepts) else accepts(symbol(op as text)) }
+	_: no
+}
+# an item's words: the word itself, a declaration head's name
+is_word_of_item(part: Node, accepts: function): bool := match part {
+	Symbol(name): accepts(part)
+	Key(left, op, right): left == symbol(opaque_word) and is_declaration_word(right, accepts)
+	_: no
+}
+# the opaque view of a type whose name is a word accepts takes
+is_declaration_word(view: any, accepts: function): bool := kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" and accepts(node_of(view#2))

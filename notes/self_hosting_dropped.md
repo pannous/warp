@@ -206,6 +206,11 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   its one entry), Rust's `div:divv:"hi"` (the block dropped around its item). The rendered HTML is the same
   (`<div>{divv:&quot;hi&quot;}</div>`). Source: probes/unknown_tag.warp (accepted by the Integrator with --flaky,
   2026-10-19). Back: the lowered view marks a block that holds one item as that item, as Rust's eval reads it.
+- A map given to a function that changes it: `g(m: any, k: text) := { m[k] = 1 }; m = {}; g(m, "a"); "a" in m` is
+  yes in Rust's module and in every lane of emitter.warp (`warp pure`, `warp self`, WARP_SELF_HOSTED=1), no in the
+  twin's: the twin calls `wasm_module`, which gives typed_wasm_module no analyzer kinds (`{}`), while the pipeline
+  gives it `emitter_kinds(program)`. Source: probes/module_name_clash/map_shared.warp (accepted by the Integrator as
+  flaky, 2026-10-22). Back: the twin runs analyzer.warp and passes its kinds, as compiler.warp's compile does.
 - Case beyond ASCII: `"ÄB".lower()` fails in warp's module ("non ascii text", runtime.warp ascii_case), gives "äb" in
   Rust's, whose case table comes from Rust's char tables at emit time. Back: card unicode-case, the table as warp data.
 - A symbol named like a type word: `type(symbol("key")) is key` gives no in warp's module (symbol(…) is the runtime

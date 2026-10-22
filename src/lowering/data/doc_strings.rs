@@ -35,7 +35,7 @@ fn documented(statement: Node) -> Node {
 	}
 	let comment = leading_comment(&statement).map(str::to_string);
 	let position = crate::compiler::compile_context::read(|context| context.reflection_mode)
-		.then(|| first_position(&statement))
+		.then(|| crate::errors::diagnostic::line_info(&statement))
 		.flatten();
 	functions.into_iter().fold(statement, |statement, function| {
 		let (text, body) = leading_text(&function.body);
@@ -93,16 +93,6 @@ pub fn doc_of(body: &Node) -> Option<String> {
 		Node::Meta { node, data } => entry_text(data, DOC_KEY).map(str::to_string).or_else(|| doc_of(node)),
 		_ => None,
 	}
-}
-
-/// The first position the parser recorded in a statement, through its Meta layers
-fn first_position(statement: &Node) -> Option<crate::compiler::meta::LineInfo> {
-	statement.get_lineinfo().or_else(|| match statement {
-		Node::Meta { node, .. } => first_position(node),
-		Node::Key(left, _, right) => first_position(left).or_else(|| first_position(right)),
-		Node::List(items, _, _) => items.iter().find_map(first_position),
-		_ => None,
-	})
 }
 
 /// Where a function body's definition was written, in reflection mode (doc_strings::lower)

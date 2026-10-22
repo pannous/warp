@@ -141,41 +141,87 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 /// A definition with a declared return type, as the definition whose body converts its result to that type:
 /// `int square(x) = x*x` (items `int`, `square(x) = …`), `square(x) as int := …` and `square(x) : int = …` (also after
 /// `def`) → `square(x) := (x*x) as int`
-fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
-	// `function square(n){…}` names no return type: a definition keyword is no type word here
-	type_name.symbol_name().filter(|word| {
-		(is_kinded_type_or_any(word.trim_end_matches('?')) || is_union(word) || is_collection_type(word))
-			&& !crate::operators::FUNCTION_KEYWORDS.contains(word)
-	})?;
-	let (head, op, body) = match definition.drop_meta() {
-		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
-			(head.as_ref(), *op, body.as_ref())
-		}
-		// `int half(x){ … }`: the signature glued to its block. Without the type word `half(x){…}` stays no definition
-		// (`if(c){…}` has the same shape); with it the definition is unambiguous: `half(x) := {…}`
-		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [head, body] if is_call_head(head) && body.is_block()) => {
-			(&items[0], Op::Define, &items[1])
-		}
-		_ => return None,
-	};
-	let type_name = match optional_when_answering_empty(head, body, type_name) {
+fn typed_return(type_name: &Node, definition: &Node, optional: &[String]) -> Option<Node> {
+	let (head, op, body) = typed_parts(type_name, definition)?;
+	let type_name = match optional_when_answering_empty(head, body, type_name, optional) {
 		Ok(type_name) => type_name,
 		Err(warning_failed) => return Some(warning_failed),
 	};
 	Some(key(head.clone(), op, converted(body, &type_name)))
 }
 
-/// A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
-/// the `?` as its fix and reads its result as `list?`, so the ø reaches the caller unchanged
-fn optional_when_answering_empty(head: &Node, body: &Node, type_name: &Node) -> Result<Node, Node> {
-	let written = type_name.name();
-	if written.ends_with('?') || written == ANY_TYPE || !can_answer_empty(body) {
-		return Ok(type_name.drop_meta().clone());
+/// The head, `=` or `:=`, and the body of a definition after its result type
+fn typed_parts<'a>(type_name: &Node, definition: &'a Node) -> Option<(&'a Node, Op, &'a Node)> {
+	// `function square(n){…}` names no return type: a definition keyword is no type word here
+	type_name.symbol_name().filter(|word| {
+		(is_kinded_type_or_any(word.trim_end_matches('?')) || is_union(word) || is_collection_type(word))
+			&& !crate::operators::FUNCTION_KEYWORDS.contains(word)
+	})?;
+	match definition.drop_meta() {
+		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => Some((head, *op, body)),
+		// `int half(x){ … }`: the signature glued to its block. Without the type word `half(x){…}` stays no definition
+		// (`if(c){…}` has the same shape); with it the definition is unambiguous: `half(x) := {…}`
+		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [head, body] if is_call_head(head) && body.is_block()) => {
+			Some((&items[0], Op::Define, &items[1]))
+		}
+		_ => None,
 	}
-	let function = match head.drop_meta() {
+}
+
+/// `square` of the head `square(x)`
+fn function_name(head: &Node) -> String {
+	match head.drop_meta() {
 		Node::List(items, _, _) => items[0].name(),
 		_ => head.name(),
+	}
+}
+
+/// The functions of a program whose result can be ø: those declared `T?`, and those declared `T` whose body can
+/// answer ø, a call of another such function included
+fn optional_functions(program: &Node) -> Vec<String> {
+	let mut typed = vec![];
+	typed_definitions(program, &mut typed);
+	let mut optional: Vec<String> = vec![];
+	while let Some((name, _, _)) = typed.iter().find(|(name, type_name, body)| {
+		!optional.contains(name)
+			&& (type_name.ends_with('?') || (!holds_empty(type_name) && can_answer_empty(body, &optional)))
+	}) {
+		optional.push(name.clone());
+	}
+	optional
+}
+
+/// Each definition with a declared result type in `node`: its name, its type and its body
+fn typed_definitions(node: &Node, typed: &mut Vec<(String, String, Node)>) {
+	let definition = match node.drop_meta() {
+		Node::Key(target, op @ (Op::Assign | Op::Define), body) => crate::declarations::result_typed_head(target)
+			.map(|(head, type_name)| (type_name, Node::Key(Box::new(head), *op, body.clone()))),
+		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
+			[type_name, definition] => Some((type_name.clone(), definition.clone())),
+			_ => None,
+		},
+		_ => None,
 	};
+	let parts = definition.as_ref().and_then(|(type_name, definition)| {
+		typed_parts(type_name, definition).map(|(head, _, body)| (function_name(head), type_name.name(), body.clone()))
+	});
+	typed.extend(parts);
+	node.drop_meta().parts().into_iter().for_each(|part| typed_definitions(part, typed));
+}
+
+/// A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
+/// the `?` as its fix and reads its result as `list?`, so the ø reaches the caller unchanged
+fn optional_when_answering_empty(
+	head: &Node,
+	body: &Node,
+	type_name: &Node,
+	optional: &[String],
+) -> Result<Node, Node> {
+	let written = type_name.name();
+	if holds_empty(&written) || !can_answer_empty(body, optional) {
+		return Ok(type_name.drop_meta().clone());
+	}
+	let function = function_name(head);
 	let place = if crate::errors::diagnostic::line_info(type_name).is_some() { type_name } else { head };
 	let optional = format!("{written}?");
 	let warning =
@@ -186,18 +232,61 @@ fn optional_when_answering_empty(head: &Node, body: &Node, type_name: &Node) -> 
 	Ok(symbol(&optional))
 }
 
-/// Whether a body can give back ø: a `return ø` or a bare `return`, or ø as its value: ø itself, an `if` without
-/// `else`, a loop, or a choice with such a branch. The definitions and lambdas inside answer for themselves
-fn can_answer_empty(body: &Node) -> bool {
-	returns_empty(body) || value_can_be_empty(body)
+/// `T?`, `any` and `Node` hold ø already: a result of theirs never warns
+fn holds_empty(type_name: &str) -> bool {
+	type_name.ends_with('?') || type_name == ANY_TYPE || type_name == super::node_cases::NODE_TYPE
 }
 
-fn returns_empty(node: &Node) -> bool {
+/// Whether a body can give back ø: a bare `return`, or ø as its value, returned or last: ø itself, an `if` without
+/// `else`, a loop, a choice with such a branch, a call of a function in `optional`, or a variable assigned such a
+/// value other than a call. The definitions and lambdas inside answer for themselves
+fn can_answer_empty(body: &Node, optional: &[String]) -> bool {
+	let scope = EmptyScope { body, optional, looked_up: vec![] };
+	returns_empty(body, &scope) || value_can_be_empty(body, &scope)
+}
+
+/// The body whose assignments a variable's value comes from, the functions whose result can be ø, and the variables
+/// already being looked up
+struct EmptyScope<'a> {
+	body: &'a Node,
+	optional: &'a [String],
+	looked_up: Vec<String>,
+}
+
+/// Every value `name = v` or `name: T = v` assigns in `node`, outside the definitions and lambdas inside
+fn assigned_values<'a>(node: &'a Node, name: &str, values: &mut Vec<&'a Node>) {
+	match node.drop_meta() {
+		Node::Key(head, Op::Assign | Op::Define, _) if is_call_head(head) => {}
+		Node::Key(_, Op::Arrow, _) => {}
+		Node::Key(target, Op::Assign, value) if assigned_name(target) == Some(name) => {
+			values.push(value);
+			assigned_values(value, name, values);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| assigned_values(item, name, values)),
+		Node::Key(left, _, right) => {
+			assigned_values(left, name, values);
+			assigned_values(right, name, values);
+		}
+		_ => {}
+	}
+}
+
+fn assigned_name(target: &Node) -> Option<&str> {
+	match target.drop_meta() {
+		Node::Symbol(name) => Some(name),
+		Node::Key(name, Op::Colon, _) => name.symbol_name(),
+		_ => None,
+	}
+}
+
+fn returns_empty(node: &Node, scope: &EmptyScope) -> bool {
+	let returns_empty = |part: &Node| returns_empty(part, scope);
 	match node.drop_meta() {
 		Node::Symbol(word) => word == crate::words::RETURN_WORD,
-		Node::List(items, _, _) if is_return(items) => items[1].is_empty_node(),
+		Node::List(items, _, _) if is_return(items) => value_can_be_empty(&items[1], scope),
 		Node::Key(head, Op::Assign | Op::Define, _) if is_call_head(head) => false,
-		Node::Key(_, Op::Arrow, _) => false,
+		// `op.return` names a member, no return
+		Node::Key(_, Op::Arrow | Op::Dot, _) => false,
 		Node::List(items, _, _) => items.iter().any(returns_empty),
 		Node::Key(left, _, right) => returns_empty(left) || returns_empty(right),
 		_ => false,
@@ -215,20 +304,31 @@ fn is_loop(node: &Node) -> bool {
 	}
 }
 
-fn value_can_be_empty(value: &Node) -> bool {
+fn value_can_be_empty(value: &Node, scope: &EmptyScope) -> bool {
+	let can_be_empty = |value: &Node| value_can_be_empty(value, scope);
 	match value.drop_meta() {
 		Node::Empty => true,
+		Node::Symbol(name) if !scope.looked_up.contains(name) => {
+			let mut values = vec![];
+			assigned_values(scope.body, name, &mut values);
+			// a call's ø kept in a variable is mostly tested before it is given back (`x = f(); if x == ø …; x`): only
+			// the ø a variable is assigned itself counts
+			let looked_up = [scope.looked_up.clone(), vec![name.clone()]].concat();
+			let scope = EmptyScope { looked_up, optional: &[], ..*scope };
+			values.into_iter().any(|value| value_can_be_empty(value, &scope))
+		}
+		_ if is_call_head(value) => scope.optional.contains(&function_name(value)),
 		Node::List(items, Bracket::Curly, _) if is_statement_block(value) => {
-			items.last().is_some_and(|last| !is_return_statement(last) && value_can_be_empty(last))
+			items.last().is_some_and(|last| !is_return_statement(last) && can_be_empty(last))
 		}
 		Node::Key(_, Op::Then, _) => true,
 		_ if is_loop(value) => true,
 		Node::Key(then, Op::Else, otherwise) => match then.drop_meta() {
-			Node::Key(_, Op::Then, chosen) => value_can_be_empty(chosen) || value_can_be_empty(otherwise),
+			Node::Key(_, Op::Then, chosen) => can_be_empty(chosen) || can_be_empty(otherwise),
 			_ => false,
 		},
 		Node::Key(_, Op::Question, branches) => match branches.drop_meta() {
-			Node::Key(chosen, Op::Colon, otherwise) => value_can_be_empty(chosen) || value_can_be_empty(otherwise),
+			Node::Key(chosen, Op::Colon, otherwise) => can_be_empty(chosen) || can_be_empty(otherwise),
 			_ => false,
 		},
 		_ => false,
@@ -353,7 +453,7 @@ fn converted_returns(node: Node, type_name: &Node) -> Node {
 }
 
 /// `square(x) as int := …` / `square(x) : int = …`: the head with its return type, as `typed_return`
-fn return_typed_definition(node: &Node) -> Option<Node> {
+fn return_typed_definition(node: &Node, optional: &[String]) -> Option<Node> {
 	let Node::Key(target, op @ (Op::Assign | Op::Define), body) = node.drop_meta() else {
 		return None;
 	};
@@ -367,7 +467,7 @@ fn return_typed_definition(node: &Node) -> Option<Node> {
 	if type_name.is_symbol(ANY_TYPE) && is_call_head(&head) {
 		return Some(Node::Key(Box::new(head), *op, body.clone()));
 	}
-	typed_return(&type_name, &Node::Key(Box::new(head), *op, body.clone()))
+	typed_return(&type_name, &Node::Key(Box::new(head), *op, body.clone()), optional)
 }
 
 /// `int age = 30` (C style) is `age: int = 30` (card bind-ignores), so every pass reads one form of a typed
@@ -395,32 +495,40 @@ fn prefixed_declaration(items: &[Node]) -> Option<Node> {
 	))
 }
 
-pub fn lower(node: Node) -> Node {
-	if let Some(definition) = return_typed_definition(&node) {
-		return with_body_lowered(definition);
+pub fn lower(program: Node) -> Node {
+	let optional = optional_functions(&program);
+	lowered(program, &optional)
+}
+
+/// The node with its typed definitions lowered, `optional` the program's functions whose result can be ø
+fn lowered(node: Node, optional: &[String]) -> Node {
+	if let Some(definition) = return_typed_definition(&node, optional) {
+		return with_body_lowered(definition, optional);
 	}
 	match node {
 		Node::List(items, Bracket::None, Separator::Space)
 			if let [type_name, definition] = items.as_slice()
-				&& let Some(typed) = typed_return(type_name, definition) =>
+				&& let Some(typed) = typed_return(type_name, definition, optional) =>
 		{
-			with_body_lowered(typed)
+			with_body_lowered(typed, optional)
 		}
 		Node::List(items, Bracket::None, Separator::Space) if spaced_definition(&items).is_some() => {
-			with_body_lowered(spaced_definition(&items).expect("guarded"))
+			with_body_lowered(spaced_definition(&items).expect("guarded"), optional)
 		}
-		definition @ Node::Key(_, Op::Define | Op::Assign, _) => with_body_lowered(definition),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
-		meta @ Node::Meta { .. } => meta.under_meta(lower),
+		definition @ Node::Key(_, Op::Define | Op::Assign, _) => with_body_lowered(definition, optional),
+		Node::List(items, bracket, separator) => {
+			Node::List(items.into_iter().map(|item| lowered(item, optional)).collect(), bracket, separator)
+		}
+		meta @ Node::Meta { .. } => meta.under_meta(|node| lowered(node, optional)),
 		other => other,
 	}
 }
 
 /// A definition with the definitions in its body lowered too: `def total(xs): int { def inner(): any {…} … }`
-fn with_body_lowered(definition: Node) -> Node {
+fn with_body_lowered(definition: Node, optional: &[String]) -> Node {
 	match definition {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if is_call_head(&head) => {
-			Node::Key(head, op, Box::new(lower(*body)))
+			Node::Key(head, op, Box::new(lowered(*body, optional)))
 		}
 		other => other,
 	}

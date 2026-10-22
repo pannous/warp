@@ -21,6 +21,17 @@ is_key(n: Node, op: Op): bool := match n {
 	Key(_, written, _): written == op
 	_: no
 }
+# every value `name = v` or `name: T = v` assigns in n, outside the definitions and lambdas inside
+assigned_values(n: Node, name: text): list := {
+	if is_key(n, Op.Define) or is_key(n, Op.Arrow) { return [] }
+	inner = parts_of(n).flat_map(part => assigned_values(part, name))
+	if is_key(n, Op.Assign) and assigned_variable(key_of(n)) == symbol(name) { return [value_of(n)] + inner }
+	inner
+}
+assigned_variable(target: Node): Node := match target {
+	Key(variable, Op.Colon, _): variable
+	_: target
+}
 
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
@@ -100,9 +111,27 @@ node_from(view: any, keeps_maps: bool): any := {
 	Key(symbol(opaque_word), Op.Colon, view)
 }
 
+# whether view_of wraps each positioned node as ["at", line, column, view]: only in the view a stage hands Rust
+global showing_positions = no
+
+# the view a stage hands back to Rust, each positioned node as ["at", line, column, view], so the Rust passes after it
+# and the program's warnings and errors name where a node stands (card front-end-warnings)
+# Rust twin: node_views.rs positioned_view
+stage_view(n: Node): any := {
+	showing_positions = yes
+	view = view_of(n)
+	showing_positions = no
+	view
+}
+
 # the view of a node
+view_of(n: Node): any := {
+	view = unpositioned_view_of(n)
+	if showing_positions and is_positioned(n) then ["at", line_of(n), column_of(n), view] else view
+}
+
 # (`[]` equals ø but is not ø itself: the empty list, square bracketed as parser.warp's grouped builds it)
-view_of(n: Node): any := if n == ø and n !== ø then ["list", "[", ""] else match n {
+unpositioned_view_of(n: Node): any := if n == ø and n !== ø then ["list", "[", ""] else match n {
 	Key(left, op, right): key_view(left, op as text, right)
 	Symbol(name): ["symbol", name]
 	Char(c): ["char", c]
@@ -200,9 +229,11 @@ items_of(n: Node): list := {
 # message, preferred)` says it at n's position and gives n; pass_differential's call is `reported(view)`, the view
 # with the reports said meanwhile, [line, column, message, preferred] each
 global said = []
-# where n was written, ø for a node without a position (one a pass made)
-line_of(n: Node): int? := try n.line else ø
-column_of(n: Node): int? := try n.column else ø
+# where n was written, ø for a node without a position (one a pass made); a block's own entry `line = line + 1` is
+# no position
+line_of(n: Node): int? := position_number(try n.line else ø)
+column_of(n: Node): int? := position_number(try n.column else ø)
+position_number(read: any): int? := if read is int then read else ø
 is_positioned(n: Node): bool := line_of(n) != ø
 report(n: T, message: text, preferred: any): T := {
 	said += [[line_of(n), column_of(n), message, preferred]]
