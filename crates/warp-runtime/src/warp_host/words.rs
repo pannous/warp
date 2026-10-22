@@ -128,6 +128,12 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 		("os", "run", [command]) => ran(&command.clone().items().iter().map(text).collect::<Vec<_>>()),
 		// `run_wasm(read_bytes("m.wasm"))`, `run_wasm(compile_wasm("6*7"))`: a module run in this process (main.rs)
 		("os", "run_wasm", [bytes]) => crate::ran_module(&host.engine, module_bytes(bytes)?, host.args.clone()),
+		// `run_wasm(bytes, ["a", "b"])`: the module's own arguments (its args), not the program's
+		("os", "run_wasm", [bytes, given]) => {
+			let name = host.args.first().cloned().unwrap_or_else(|| "module".into());
+			let arguments = std::iter::once(name).chain(given.clone().items().iter().map(text)).collect();
+			crate::ran_module(&host.engine, module_bytes(bytes)?, arguments)
+		}
 		("os", "compile_wasm", [code]) => {
 			let bytes = crate::compiled_code(&host.engine, text(code))?;
 			Ok(Node::List(nodes::SQUARE_LIST, bytes.into_iter().map(|byte| Node::Int(byte.into())).collect()))
