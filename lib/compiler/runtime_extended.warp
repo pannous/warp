@@ -1,9 +1,16 @@
-# The extended runtime words (decision runtime-split): the parts in lib/compiler/runtime/extended/, for what only some
-# programs do (float pow, exact rounding, files over WASI). The core, runtime.warp and lib/compiler/runtime/*.warp,
-# never uses them (scripts/self-check.sh checks it); the emitter calls these words where a program needs them, compiling
-# each on its first call like any runtime word. Loaded after runtime.warp by compiler.warp and
-# src/compiler/self_hosted.rs, the words of each file its `use` lines name in their order.
-use "runtime/extended/pow_tables.warp"
-use "runtime/extended/pow.warp"
-use "runtime/extended/exact_rounding.warp"
-use "runtime/extended/wasi.warp"
+# The extended runtime words (decision runtime-split): the parts in lib/compiler/runtime_extended/, for what only some
+# programs do (exact rationals, durations and times, float pow, exact rounding, files over WASI). The core, runtime.warp
+# and lib/compiler/runtime/*.warp, never uses them nor names their words (scripts/self-check.sh checks it): its generic
+# words hand an extended value to the hooks lib/compiler/runtime/bridge.warp declares, whose bodies are
+# runtime_extended/hooks.warp's. The emitter calls these words where a program needs them, compiling each on its first
+# call like any runtime word.
+# Loaded after runtime.warp by compiler.warp (RUNTIME_ROOTS) and src/compiler/self_hosted.rs, the words of each file its
+# `use` lines name in their order.
+use "runtime_extended/exact.warp"
+use "runtime_extended/durations.warp"
+use "runtime_extended/times.warp"
+use "runtime_extended/pow_tables.warp"
+use "runtime_extended/pow.warp"
+use "runtime_extended/exact_rounding.warp"
+use "runtime_extended/wasi.warp"
+use "runtime_extended/hooks.warp"

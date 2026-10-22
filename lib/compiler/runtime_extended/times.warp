@@ -1,15 +1,22 @@
 ## times (card time-primitives; Rust twin: src/wasm_emitter/time): a time node of a form (src/time/mod.rs TimeForm:
 ## kinds.warp TimeFormCode) and a position, read by the intrinsics
 ## time_form, time_position, duration_months, duration_days, zone_index, zone_offset and made by time_of(info, position)
-use "intrinsics.warp"
+use "../runtime/intrinsics.warp"
 use "../kinds.warp"
-use "conversions.warp"
-use "durations.warp"
+use "../runtime/conversions.warp"
 use "exact.warp"
-use "instructions.warp"
-use "library_words.warp"
-use "nodes.warp"
+use "../runtime/instructions.warp"
+use "../runtime/library_words.warp"
+use "../runtime/nodes.warp"
 use "../byte_codes.warp"
+# durations.warp's words, declared rather than used: it declares exact.warp's words it calls (it also runs from its
+# link lib/compiler/runtime/durations.warp), and a part loading both would find those declared there, defined here
+duration_text(n: Node): text from runtime
+second_nanos(): int from runtime
+millisecond_nanos(): int from runtime
+minute_nanos(): int from runtime
+hour_nanos(): int from runtime
+day_nanos(): int from runtime
 is_time(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Time
 is_instant(t: Node): bool := time_form(t) == TimeFormCode.Instant
 is_date(t: Node): bool := time_form(t) == TimeFormCode.Date

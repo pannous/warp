@@ -71,7 +71,7 @@ host_words = {
 	channel_take: [["int"], ["node"]]
 	channel_more: [["int"], ["int"]]
 	channel_close: [["int"], []]
-	# WASI's words the runtime calls (runtime/extended/wasi.warp): addresses and counts as i32, an error code back
+	# WASI's words the runtime calls (runtime_extended/wasi.warp): addresses and counts as i32, an error code back
 	args_sizes_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	args_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	environ_sizes_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]

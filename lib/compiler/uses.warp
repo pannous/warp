@@ -155,7 +155,7 @@ file_used(statement: Node, folder: text): any := {
 	if file_text(path) == ø then ø else path
 }
 path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
-# the path with each `folder/..` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
+# the path with each `folder/..` taken out, so a file two folders use is one file (runtime_extended/../runtime/text.warp is
 # runtime/text.warp, card runtime-split)
 without_steps_up(path: text): text := {
 	kept = []

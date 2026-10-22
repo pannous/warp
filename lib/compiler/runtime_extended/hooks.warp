@@ -1,0 +1,15 @@
+# The bodies of the hooks lib/compiler/runtime/bridge.warp declares (decision runtime-split): the core hands a value of
+# an extended type here, and each hook calls the extended word for it. Only runtime_extended.warp uses this file, so no
+# other part loads a hook's body next to the bridge's declaration of it
+use "../runtime/intrinsics.warp"
+use "../kinds.warp"
+use "../runtime/instructions.warp"
+use "exact.warp"
+use "times.warp"
+extended_text(n: Node): text := if kind_code(n) == Kind.Time then time_text(n) else exact_text(n)
+extended_order(a: Node, b: Node): int := exact_order(a, b)
+extended_sum(a: Node, b: Node): Node := exact_add(a, b)
+extended_float(n: Node): float := float(exact_numerator(n)) / float(exact_denominator(n))
+extended_truncated(n: Node): int := int_quotient(exact_numerator(n), exact_denominator(n))
+extended_ratio(n: int, d: int): Node := exact_ratio(n, d)
+extended_zeros(count: int): text := zeros(count)

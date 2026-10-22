@@ -17,11 +17,17 @@ if [[ $worktree == $main_checkout/* ]]; then
   print -u2 "self-check: $worktree is inside the main checkout; check a worktree under /Volumes/Worktrees or a copy under /Volumes/Junk"
   exit 2
 fi
-# the core runtime (runtime.warp, lib/compiler/runtime/*.warp) never uses the extended one (lib/compiler/runtime/extended/,
-# runtime_extended.warp; decision runtime-split): checked first, needing no slot
-core_uses_extended=$(grep -Hn '^use .*extended' $worktree/lib/compiler/runtime.warp $worktree/lib/compiler/runtime/*.warp)
-if [[ -n $core_uses_extended ]]; then
-  echo "SELF CHECK RED: the core runtime uses the extended runtime: $core_uses_extended"
+# the core runtime (runtime.warp, lib/compiler/runtime/*.warp) never uses the extended one (lib/compiler/runtime_extended/,
+# runtime_extended.warp; decision runtime-split) nor names a word it defines: it calls the hooks runtime/bridge.warp
+# declares, whose bodies are runtime_extended/hooks.warp's. Checked first, needing no slot. Plain files only (.):
+# runtime/durations.warp links to runtime_extended/durations.warp for tests/numbers/test_duration_words.rs
+core=($worktree/lib/compiler/runtime.warp $worktree/lib/compiler/runtime/*.warp(.))
+extended=($worktree/lib/compiler/runtime_extended/*.warp)
+extended=(${extended:#*/hooks.warp})
+extended_words=$(grep -hv ' from runtime$' $extended | sed -n 's/^\([a-z_][a-z_0-9]*\)(.*:=.*/\1/p' | sort -u | paste -sd'|' -)
+core_uses_extended=$(grep -HnE "^use .*extended|(^|[^a-z_0-9.])($extended_words)\(" $core)
+if [[ -z $extended_words || -n $core_uses_extended ]]; then
+  echo "SELF CHECK RED: the core runtime uses the extended runtime, not through runtime/bridge.warp: $core_uses_extended"
   exit 1
 fi
 [[ -n $WARP_SLOT ]] || exec $main_checkout/scripts/slot.sh ${0:a} $worktree
