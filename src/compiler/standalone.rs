@@ -167,19 +167,25 @@ fn built_from(bytes: &[u8]) -> Vec<String> {
 	crate::host::host_parts::section_names(bytes, BUILD_SECTION, BUILD_SEPARATOR).unwrap_or_default()
 }
 
-/// The build file: next to the binary when that one is for this lib/ (or none is there yet), else beside lib/
+/// The build file: next to the binary when the one there is for this lib/, else beside lib/. A missing one is judged
+/// by its siblings there (none: yes), so a worktree's `warp self` never puts its compiler-self.wasm next to main's
+/// compiler.wasm (card build-path-missing)
 fn build_path(by: Compiler) -> PathBuf {
-	let beside_binary = std::env::current_exe()
+	let binary_folder = std::env::current_exe()
 		.ok()
 		.and_then(|binary| binary.canonicalize().ok())
-		.and_then(|binary| binary.parent().map(|folder| folder.join(by.file_name())));
+		.and_then(|binary| binary.parent().map(Path::to_path_buf));
 	let library_path = library().display().to_string();
-	let for_this_library = |path: &PathBuf| match std::fs::read(path) {
-		Ok(bytes) => built_from(&bytes).first() == Some(&library_path),
-		Err(_) => true,
+	let for_this_library = |folder: &PathBuf| {
+		let read = |file: Compiler| std::fs::read(folder.join(file.file_name())).ok();
+		let judged: Vec<Vec<u8>> = match read(by) {
+			Some(bytes) => vec![bytes],
+			None => Compiler::ALL.into_iter().filter_map(read).collect(),
+		};
+		judged.iter().all(|bytes| built_from(bytes).first() == Some(&library_path))
 	};
-	match beside_binary.filter(for_this_library) {
-		Some(path) => path,
+	match binary_folder.filter(for_this_library) {
+		Some(folder) => folder.join(by.file_name()),
 		None => library().parent().unwrap_or(library()).join(OTHER_LIBRARY_FOLDER).join(by.file_name()),
 	}
 }
