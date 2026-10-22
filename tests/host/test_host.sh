@@ -198,8 +198,12 @@ expect "run_wasm: the module prints to the same stdout" 0 "printed by the module
 expect "run_wasm(compile_wasm(\"6*7\")) evaluates code" 0 "42" -- "$host" run run_compiled.warp
 program run_with_args 'use os' 'print run_wasm(compile_wasm("use os; args"), ["x", "y z"])' \
 	'print run_wasm(compile_wasm("use os; args"))'
-expect "run_wasm(bytes, args): the module sees its own arguments" 0 '"y z"' "['p' 'q']" \
+expect "run_wasm(bytes, args): the module sees its own arguments" 0 "['x' \"y z\"]" "['p' 'q']" ! "\"'x'\"" \
 	-- "$host" run run_with_args.warp p q
+# an uncaught Warp error of the module is its Error, passed through; a trap is a failure of its own (run_trapping)
+program run_raised 'use os' 'try run_wasm(compile_wasm("raise \"bad thing\"")) catch e { print "caught " + e }'
+expect "run_wasm: the module's uncaught Error passes through, no trap" 0 "caught bad thing" ! "os.run_wasm" ! "wasm trap" \
+	-- "$host" run run_raised.warp
 
 # use wasm (card warp-host-wasm-load): other modules and components loaded into the program and called; imports naming
 # a .wasm file linked to that module. Components are assembled from WAT by the checkout's wat2wasm (the wat crate)
