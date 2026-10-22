@@ -1380,17 +1380,23 @@ def call_values(f: Function, values: any): list {
 	}
 	[result, code + [op.call] + uleb(f.index)]
 }
-# a value a compiled function's unannotated parameter cannot take, `last(t)` after `last(xs)`: the module is compiled
-# again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module)
+# a value a compiled function's unannotated parameter does not hold, `last(t)` after `last(xs)`, `vec(s, 0, 0)` with a
+# node s after `vec(1, 1, -1)`: the module is compiled again, the parameter of their joint kind from the start
+# (module.later_kinds, typed_wasm_module); only an annotated parameter converts what it is passed (a node checked as int)
 def passed(f: Function, i: int, value: any): list {
+	slot = parameter_key(f.name, i)
+	if slot in module.unannotated and not held_as(value#1, f.kinds[i]) and value#1 != pending and widened_to(slot, parameter_joint(f.kinds[i], value#1)) { return value#2 }
 	try { converted(value, f.kinds[i]) } catch refusal {
-		slot = parameter_key(f.name, i)
-		joint = parameter_joint(f.kinds[i], value#1)
-		if slot not in module.unannotated or not (joint in type_bytes or joint in references) or module.later_kinds.get(slot) == joint { throw refusal }
-		module.later_kinds[slot] = joint
-		module.widenings += 1
+		if slot not in module.unannotated or not widened_to(slot, parameter_joint(f.kinds[i], value#1)) { throw refusal }
 		value#2
 	}
+}
+# the unannotated parameter `slot` takes the kind `joint` in the module's next compile, if it holds one it did not yet
+widened_to(slot: text, joint: text): bool := {
+	if not (joint in type_bytes or joint in references) or module.later_kinds.get(slot) == joint { return no }
+	module.later_kinds[slot] = joint
+	module.widenings += 1
+	yes
 }
 # a call of a function still compiling (its own body, a cycle) passing an argument its unannotated parameter does not
 # hold, `f(xs#1)` inside `f(n)` first called with a list: the parameter takes their joint kind from f's next reading on
