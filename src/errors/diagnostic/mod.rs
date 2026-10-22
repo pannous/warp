@@ -310,9 +310,14 @@ fn diagnostics<R>(use_them: impl FnOnce(&mut Diagnostics) -> R) -> R {
 	DIAGNOSTICS.with(|diagnostics| use_them(&mut diagnostics.borrow_mut()))
 }
 
-/// The program the CLI runs: its warnings and errors print the line they name (show_lines_of); process-wide, as a
-/// program may compile on another thread
-static SHOWN_SOURCE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// The program the CLI runs and the file it was read from: its warnings and errors name that file and print the line
+/// they name (show_lines_of); process-wide, as a program may compile on another thread
+static SHOWN_PROGRAM: std::sync::Mutex<Option<ShownProgram>> = std::sync::Mutex::new(None);
+
+struct ShownProgram {
+	source: String,
+	file: Option<String>,
+}
 
 /// The warning mode of every later compilation on this thread (the CLI's `--strict`)
 pub fn set_warning_mode(mode: WarningMode) {
@@ -451,6 +456,7 @@ pub fn clear_shown_hints() {
 /// A hint `prefer <preferred> over <written>` (a note when they are the same) with its reason below; a warning with the
 /// source line it names
 fn print(diagnostic: &Diagnostic) {
+	let diagnostic = &in_shown_file(diagnostic);
 	match (&diagnostic.written, &diagnostic.preferred) {
 		(Some(written), Some(preferred)) => {
 			ANY_HINT_PRINTED.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -482,7 +488,7 @@ fn print(diagnostic: &Diagnostic) {
 				level => format!("warning ({})", level.name()),
 			};
 			eprintln!("{label}: {diagnostic}");
-			if let Some(excerpt) = shown_excerpt(diagnostic.line, diagnostic.column) {
+			if let Some(excerpt) = shown_excerpt(diagnostic.file.as_deref(), diagnostic.line, diagnostic.column) {
 				eprintln!("{excerpt}");
 			}
 		}
