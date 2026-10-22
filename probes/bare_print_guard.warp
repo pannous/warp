@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+# A trailing guard after a braceless command guards the whole command (card bare-print-guard)
+a = 2
+print "skipped" unless a == 2
+print "shown" if a == 2
+print "doubled", a * 2 if a > 1
+n = 0
+print n += 1 while n < 3
+xs = [1, 2]
+print xs.length + 1 unless a == 3

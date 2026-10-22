@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+// `ends_with` and `starts_with` give a bool, also as a `: bool` function's result
+plural(word: text): bool := word.ends_with("s")
+print plural("ints")
+print "abc".starts_with("b")

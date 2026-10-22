@@ -1,14 +1,15 @@
 # Interpolated text (card sugar-twins; Rust twin: src/text/interpolation.rs): the parser keeps `"a \(x) b"` as its
 # template ["template", "a ${x} b"] (holes `${expr}`, a literal dollar `$$`); here it becomes text building,
 # `"a " + text_form(x) + " b"`, so every later pass reads the holes as code. The first pass: a template inside a type
-# or an error, which stay opaque views, is rewritten there too. sql and sh templates are not ported
-# (notes/self_hosting_dropped.md).
+# or an error, which stay opaque views, is rewritten there too; sql and sh templates first become their typed values
+# (injection.warp).
 use "walk.warp"
 use "parser.warp"
+use "injection.warp"
 
 text_form_word = "text_form"
 # the hole's code: parsed as a program of its own, its templates built too
-hole(code: text): any := call_of(text_form_word, [interpolated_node(node_of(plain(tree(code))))])
+hole(code: text): any := call_of(text_form_word, [interpolated_node(code_node(code))])
 
 # the literal pieces and holes of a template, in order; an empty literal is none
 pieces(template: text): list := template_pieces(template).map(piece => if piece is list then hole(piece#1) else piece)
@@ -40,4 +41,4 @@ template_built(n: Node): Node := match n {
 
 interpolated_node(n: Node): Node := bottom_up(n, template_built)
 
-interpolation(program: Node): Node := interpolated_node(program)
+interpolation(program: Node): Node := interpolated_node(injected(program))

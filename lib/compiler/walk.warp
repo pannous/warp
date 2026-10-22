@@ -44,11 +44,13 @@ written_index_mark = "written_index"
 
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: any): bool := kind_of(view) == "list" and #view == 3
-# an empty map `{}` as plain_node keeps it, behind the opaque word
-is_empty_map(n: Node): bool := match n {
-	Key(left, op, right): left == symbol(opaque_word) and is_empty_group(right) and right#2 == "{"
-	_: no
+# the bracket of an empty map `{}` or list `[]` as plain_node keeps it, behind the opaque word; "" for any other node
+empty_group_bracket(n: Node): text := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) and is_empty_group(right) then right#2 else "" }
+	_: ""
 }
+is_empty_map(n: Node): bool := empty_group_bracket(n) == "{"
+is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø but
 # the empty map `{}` (decision empty-group-node: the bridge keeps Rust's bracket where a pass reads it, number_keys
@@ -257,21 +259,37 @@ hole_close(template: text, at: int): int := {
 }
 
 # the pieces of a template in order: a literal as its text, a hole as [its code]; an empty literal is none
-template_pieces(template: text): list := {
+template_pieces(template: text): list := holed_pieces(template, no)
+
+# the end of the hole whose `$` is at `at`, `at` when none starts there; with bare_names a `$name` is one too
+# Rust twin: injection.rs parts_with
+piece_hole_end(template: text, at: int, bare_names: bool): int := {
+	if template[at] != '$' or at + 1 >= #template { return at }
+	next = template[at + 1]
+	if next == '{' { return hole_close(template, at + 2) }
+	if not bare_names or not (is_alpha(next) or next == '_') { return at }
+	end = at + 2
+	while end < #template and (is_alphanumeric(template[end]) or template[end] == '_') { end += 1 }
+	end
+}
+
+# the pieces of a template as template_pieces; with bare_names a `$name` is a hole too, as sql and sh templates
+# read it (a text's holes need braces, decision D1)
+holed_pieces(template: text, bare_names: bool): list := {
 	found = []
 	literal = ""
 	at = 0
 	while at < #template {
 		c = template[at]
 		next = if at + 1 < #template then template[at + 1] else ' '
+		end = piece_hole_end(template, at, bare_names)
 		if c == '$' and next == '$' {
 			literal = literal + '$'
 			at += 2
-		} else if c == '$' and next == '{' {
-			end = hole_close(template, at + 2)
+		} else if end > at {
 			if literal != "" { found += [literal] }
 			literal = ""
-			found += [[template[at + 2 .. end - 1]]]
+			found += [[if next == '{' then template[at + 2 .. end - 1] else template[at + 1 .. end]]]
 			at = end
 		} else {
 			literal = literal + c

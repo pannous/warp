@@ -489,6 +489,19 @@ fn parser_words_run_pure() {
 	runs_pure("loop_variable_scope", &chain("slice_loops"), "['b' 'c']");
 	runs_pure("loop_of_functions", &chain("loop_of_functions"), "6\n4");
 	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
+	runs_pure("pending_results", &chain("pending_results"), "[\"int\" 4]\n[5 5 0 5 5 0 0]");
+	runs_pure("map_get_default", &chain("map_get_default"), "ø\n1\n7");
+	runs_pure("own_special_forms", &chain("own_special_forms"), "3\n12\n2\n0");
+	runs_pure("bit_operators", &chain("bit_operators"), "6\n-5\n48\n-1\n6");
+	runs_pure("ord", &chain("ord"), "97\n252\n122\n98");
+	runs_pure("std_module_of_a_used_file", &chain("std_in_used/main"), "6");
+	runs_pure("text_bytes", &chain("text_bytes"), "[97 195 188]\n[121]\n2\n2\n16\n97\n98");
+	runs_pure("float_bits", &chain("float_bits"), "4609434218613702656\n-4625196817309499392");
+	runs_pure("char_as_text", &chain("char_as_text"), "?\none\nab");
+	runs_pure("colon_named_arguments", &chain("colon_named_arguments"), "3\ny\n72");
+	runs_pure("arrow_match_arms", &chain("arrow_arms"), "two\nbig\nfew");
+	runs_pure("absolute_value", &chain("absolute_value"), "7\n2.5\n43\n1.5");
+	runs_pure("type_names", &chain("type_names"), "int\nrational\ntext\nbool\nlist\nempty\nerror\nmap\na float");
 }
 
 /// A type's name is a value, `k = int` prints `class int` (decision type-text); a parameter, a result or a variable
@@ -573,6 +586,33 @@ fn compile_takes_the_pure_lane() {
 	assert_eq!(recorded.trim(), RAN_PURE, "{run:?}");
 }
 
+/// A curly list as a value is the list of its values, a body or branch runs its block, as Rust gives them (card
+/// emitter-runs): emitter.warp ran `{1, 2}` as statements, giving 2
+#[test]
+fn curly_lists_are_values_self_hosted() {
+	for lane in ["1", "pure"] {
+		let gives = |name: &str, code: &str, value: &str| {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.contains(value), "lane {lane}, {code}: {output}");
+		};
+		gives("comma_list", "xs = {1, 2}; xs", "{1 2}");
+		gives("argument_list", "g(x) := x; g({1, 2})", "{1 2}");
+		gives("body_block", "f() := {1, 2}; f()", "» 2");
+		gives("branch_block", "if yes {1, 2} else {5}", "» 2");
+	}
+}
+
+/// The spaced `{3 4}` gives 4 in the self-hosted lanes, its words run as statements, {3 4} in Rust's: the user finds
+/// 4 reasonable, kept as is for now (2026-10-20)
+#[test]
+#[ignore = "emitter-runs: user 2026-10-20: hi := {3 4}; hi() giving 4 is reasonable, keep as is for now"]
+fn spaced_curly_list_is_a_value_self_hosted() {
+	for lane in ["1", "pure"] {
+		let (output, _) = lane_run(lane, "spaced_list", "hi := {3 4}; hi()");
+		assert!(output.contains("{3 4}"), "lane {lane}: {output}");
+	}
+}
+
 /// The entries of `from` linked into the new folder `to`, but the one named `except`
 #[cfg(unix)]
 fn linked_folder(from: &std::path::Path, to: &std::path::Path, except: &str) {
@@ -612,6 +652,39 @@ fn a_failing_stage_names_its_file() {
 	assert!(output.contains("the self-hosted stage") && output.contains("compiler/emitter.warp failed"), "{output}");
 }
 
+/// The forms lib/*.warp uses most that the pure lane refused (card pure-lib-gaps): a constant word declares as `var`
+/// does, map_get_or's fallback is ø unless given, and sum folds a list with + (the program's own sum wins)
+#[test]
+fn lib_forms_run_pure() {
+	runs_pure("let_declares", "f(n) := { let m = n * 2; m + 1 }; const k = 3; f(k)", "» 7");
+	runs_pure("map_get_or_two_arguments", "m = {a: 1}; [map_get_or(m, \"a\"), map_get_or(m, \"b\", 7)]", "» [1 7]");
+	runs_pure("sum_folds", "xs = [1.5, 2]; [sum(xs), sum([])]", "» [3.5 0]");
+	runs_pure("own_sum", "sum(xs) := 42; sum([1])", "» 42");
+}
+
+/// `rewrite PATTERN => TEMPLATE` in lib/compiler/rewrites.warp (card pure-rewrite): a program's own rules with holes,
+/// rest holes, origins and statement templates, and lib/english.warp's rule for a program mentioning its words
+#[test]
+fn rewrites_run_pure() {
+	runs_pure("rewrite_phrase", "rewrite $n half => $n / 2\nx = 8 half\n[x, 6 half]", "» [4 3]");
+	runs_pure("rewrite_rest", "rewrite total $xs... => sum([$xs...])\ntotal 1 2 3", "» 6");
+	runs_pure("rewrite_origin", "rewrite $c.bump() => $c + 1 where $c = counter()\ncounter() := 10\nn = counter()\nother = 5\n[n.bump(), other]", "» [11 5]");
+	runs_pure("rewrite_statements", "rewrite twice $s => ($s; $s)\nn = 0\ntwice n += 1\nn", "» 2");
+	runs_pure("rewrite_english", "p = {width: 3}\nset width of p to 12\np.width", "» 12");
+}
+
+/// `print reverse [1, 2]`: a library word of one typed value calls itself on the value after it (lib/compiler/
+/// library_calls.warp, card pure-lane-knows), a program function's spaced call prints its value
+#[test]
+fn spaced_library_words_run_pure() {
+	runs_pure("spaced_reverse", "print reverse [1, 2]", "[2 1]");
+	runs_pure("spaced_upper", "print upper \"ab\"", "AB");
+	runs_pure("spaced_floor", "print floor 2.5", "2");
+	runs_pure("spaced_synonym", "print sorted [2, 1]", "[1 2]");
+	runs_pure("spaced_sum", "print sum [1, 2]", "3");
+	runs_pure("spaced_prelude_word", "print first [3, 4]", "3");
+}
+
 /// An operator case is its own value and a synonym of its spelling (decision enum-case, card pure-op-cases): the pure
 /// lane prints Op.Add as Add, converts it to and from "+", and a match binds a key's op as its case
 #[test]
@@ -648,4 +721,19 @@ fn a_map_member_beside_its_entry_runs_pure() {
 fn a_match_arm_of_a_constant_runs_pure() {
 	let probe = format!("{}/probes/match_bool_arm.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("match_bool_arm", &probe, "\"yesno\"");
+}
+
+/// `print #xs`, `print -1`, `f -x`: a word taking a value calls it with the count or the negative; a variable before
+/// them subtracts, `size -1` (card pure-lane-print)
+#[test]
+fn spaced_prefix_calls_run_pure() {
+	let probe = format!("{}/probes/spaced_prefix_calls.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("spaced_prefix_calls", &probe, "3\n-1\n-6\n9\n2");
+}
+
+/// `[]` written in code is a list of no items, not ø (decision empty-is-not-missing, card pure-lane-literal)
+#[test]
+fn an_empty_list_literal_runs_pure() {
+	let probe = format!("{}/probes/empty_list_literal.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("empty_list_literal", &probe, "[]\n[]\n[]");
 }

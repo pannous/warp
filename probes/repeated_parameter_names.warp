@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+# a parameter name given twice, `_` for the values a function ignores: each still takes its own argument
+def middle(_, value, _) := value
+print middle(1, 2, 3)
+last_of(_, _, z) := { total = z * 2; total }
+print last_of(1, 2, 3)

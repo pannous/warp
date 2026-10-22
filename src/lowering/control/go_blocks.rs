@@ -245,6 +245,8 @@ fn defines_go(node: &Node) -> bool {
 				other => other.name() == GO_WORD,
 			};
 		}
+		// `def go(n) {…}`, `fun go(n) {…}`: the other definition forms, still unlowered here
+		found |= super::nodes::function_head(part).is_some_and(|definition| definition.name == GO_WORD);
 	});
 	found
 }

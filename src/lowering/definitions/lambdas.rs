@@ -116,7 +116,7 @@ pub fn lower_strict(node: Node) -> Node {
 }
 
 fn lowering(node: Node, strict: bool) -> Node {
-	let context = crate::analyzer::function_context(&node);
+	let context = crate::analyzer::function_definitions(&node);
 	let classes = crate::modules::needed_definitions::class_names(&node);
 	let first_fresh = first_fresh_number(&node);
 	let path_variables = crate::warp_parser::path_variables(&node);

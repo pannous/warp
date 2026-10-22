@@ -876,15 +876,18 @@ PASSED:
   ✓ control::test_task_values::two_tasks_overlap
   ✓ control::test_tasks::a_finished_tasks_handler_runs_and_a_stop_handler_never
   ✓ control::test_tasks::a_program_may_define_its_own_go
+  ✓ control::test_tasks::a_program_may_define_its_own_go_with_def
   ✓ control::test_tasks::await_gives_the_value_of_a_task
   ✓ control::test_tasks::stopping_a_finished_task_warns_and_changes_nothing
   ✓ control::test_test_pairs::a_tab_separates_the_columns_of_a_line
   ✓ control::test_test_pairs::each_pair_is_a_test
   ✓ control::test_test_pairs::warp_test_reports_commented_pairs_as_skipped
+  ✓ control::test_text_in_logical_condition::a_text_in_a_logical_condition_is_true_when_it_has_characters
   ✓ control::test_text_loop_value::a_loop_ending_in_a_character_gives_that_character
   ✓ control::test_text_loop_value::a_loop_ending_in_a_text_gives_that_text
   ✓ control::test_text_loop_value::a_text_loop_that_never_ran_is_empty
   ✓ control::test_text_loop_value::a_text_loop_value_stays_a_text_nested_assigned_and_returned
+  ✓ control::test_text_loop_value::a_text_loop_whose_every_pass_skips_is_empty
   ✓ control::test_text_loop_value::numeric_loops_keep_their_values
   ✓ control::test_text_patterns::a_class_hole_tests_its_characters
   ✓ control::test_text_patterns::a_known_name_in_a_sum_is_a_value
@@ -1039,6 +1042,7 @@ PASSED:
   ✓ control::test_while_value::test_while_value_of_untouched_loop_is_empty
   ✓ control::test_window_clicks::on_click_hears_the_paint_windows_clicks
   ✓ control::test_window_opens::reading_window_open_opens_the_window_once
+  ✓ control::test_word_named_variables::a_bound_name_before_a_word_operator_is_its_value
   ✓ control::test_word_named_variables::a_bound_name_shadows_the_library_word
   ✓ control::test_word_named_variables::a_loop_variable_shadows_words_taking_nothing
   ✓ control::test_word_named_variables::operator_words_and_constants_bind_no_name
@@ -1877,6 +1881,7 @@ PASSED:
   ✓ functions::test_ported_calls::types_built_from_type_parameters_drop_with_them
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
+  ✓ functions::test_precomputed::folding_says_nothing_of_its_own
   ✓ functions::test_preposition_calls::a_call_with_prepositions_inside_another_call
   ✓ functions::test_preposition_calls::a_call_without_brackets_names_arguments
   ✓ functions::test_preposition_calls::a_label_without_its_colon_is_an_error
@@ -2116,6 +2121,7 @@ PASSED:
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
   ✓ lists::test_concat_keeps_arrays::a_concatenation_is_a_copy_of_both_lists
+  ✓ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
   ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
@@ -2302,6 +2308,7 @@ PASSED:
   ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
   ✓ lists::test_list_times_list::round_and_curly_lists_take_the_dot_product
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
+  ✓ lists::test_list_write_by_run_time_key::a_list_takes_a_write_by_a_run_time_key_in_place
   ✓ lists::test_lists_read_by_turns::a_field_set_keeps_the_read_cursors
   ✓ lists::test_lists_read_by_turns::lists_read_by_turns_after_an_in_place_change
   ✓ lists::test_lists_read_by_turns::lists_read_by_turns_take_linear_steps
@@ -2654,6 +2661,7 @@ PASSED:
   ✓ modules::test_std_docs_comment_association::a_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::the_comment_block_directly_above_is_the_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::words_use_the_comment_line_directly_above_their_definition
+  ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
   ✓ modules::test_std_extrema::an_empty_list_has_no_extremum
   ✓ modules::test_std_extrema::extrema_of_one_list_of_candidates
@@ -3004,6 +3012,8 @@ PASSED:
   ✓ numbers::test_fast_scope::fast_decimals_are_floats
   ✓ numbers::test_fast_scope::fast_types_are_machine_types
   ✓ numbers::test_final_construction_units::a_final_construction_shows_its_units
+  ✓ numbers::test_fixed_width_ints::a_c_type_name_says_its_warp_word
+  ✓ numbers::test_fixed_width_ints::c_type_names_of_several_words_are_fixed_widths
   ✓ numbers::test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type
   ✓ numbers::test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow
   ✓ numbers::test_fixed_width_ints::test_fixed_width_assignment_traps_on_overflow
@@ -3474,6 +3484,8 @@ PASSED:
   ✓ operators::test_braceless_operator_words::operator_words_stop_where_calls_stop
   ✓ operators::test_braceless_operator_words::operator_words_take_the_whole_argument
   ✓ operators::test_braceless_operator_words::symbols_stay_tight
+  ✓ operators::test_circumfix_operators::a_program_declares_its_circumfix_operator
+  ✓ operators::test_circumfix_operators::math_circumfix_operators
   ✓ operators::test_comma_next_to_comparison::a_comma_next_to_a_comparison_needs_parentheses
   ✓ operators::test_comma_next_to_comparison::a_parenthesized_comparison_beside_a_comma_is_fine
   ✓ operators::test_compound_assignment::a_list_variable_concatenates_with_plus_assign
@@ -3839,9 +3851,11 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
+  ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
+  ✓ parser::test_self_floor_division::self_hosted_floor_division_prints_as_rust_prints_it
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
   ✓ parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
@@ -3854,15 +3868,20 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
+  ✓ parser::test_self_pure::a_call_with_comma_arguments_parses_pure
   ✓ parser::test_self_pure::a_failing_stage_names_its_file
   ✓ parser::test_self_pure::a_lexer_over_short_words_takes_linear_time_pure
+  ✓ parser::test_self_pure::a_map_member_beside_its_entry_runs_pure
+  ✓ parser::test_self_pure::a_match_arm_of_a_constant_runs_pure
   ✓ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
+  ✓ parser::test_self_pure::an_empty_list_literal_runs_pure
   ✓ parser::test_self_pure::arm_inline_if_reads_self_hosted
   ✓ parser::test_self_pure::assigned_it_blocks_run_pure
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::block_definitions_hold_their_value_pure
   ✓ parser::test_self_pure::compile_takes_the_pure_lane
   ✓ parser::test_self_pure::comprehensions_run_pure
+  ✓ parser::test_self_pure::curly_lists_are_values_self_hosted
   ✓ parser::test_self_pure::defaults_run_pure
   ✓ parser::test_self_pure::digit_casts_run_pure
   ✓ parser::test_self_pure::durations_read_self_hosted
@@ -3880,6 +3899,7 @@ PASSED:
   ✓ parser::test_self_pure::kind_changes_fail_pure
   ✓ parser::test_self_pure::lambdas_run_pure
   ✓ parser::test_self_pure::lib_forms_read_self_hosted
+  ✓ parser::test_self_pure::lib_forms_run_pure
   ✓ parser::test_self_pure::long_float_literals_read_pure
   ✓ parser::test_self_pure::match_values_run_pure
   ✓ parser::test_self_pure::named_arguments_run_pure
@@ -3889,9 +3909,13 @@ PASSED:
   ✓ parser::test_self_pure::op_cases_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
   ✓ parser::test_self_pure::parser_words_run_pure
+  ✓ parser::test_self_pure::phrases_out_of_the_core
   ✓ parser::test_self_pure::program_names_run_pure
   ✓ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
   ✓ parser::test_self_pure::recursive_results_run_pure
+  ✓ parser::test_self_pure::rewrites_run_pure
+  ✓ parser::test_self_pure::spaced_library_words_run_pure
+  ✓ parser::test_self_pure::spaced_prefix_calls_run_pure
   ✓ parser::test_self_pure::std_modules_run_pure
   ✓ parser::test_self_pure::text_escapes_read_pure
   ✓ parser::test_self_pure::the_core_runs_pure
@@ -3950,6 +3974,12 @@ PASSED:
   ✓ parser::test_warp_format::test_nested_structures
   ✓ parser::test_warp_format::test_warp_roundtrip
   ✓ parser::test_warp_format::test_warp_to_json
+  ✓ parser::test_warp_pure::warp_pure_and_self_run_inline_code
+  ✓ parser::test_warp_pure::warp_pure_runs_a_library_word
+  ✓ parser::test_warp_pure::warp_self_runs_hello_world
+  ✓ parser::test_warp_pure::warp_self_runs_loops_and_texts
+  ✓ parser::test_warp_pure::warp_self_takes_repeated_parameter_names
+  ✓ parser::test_warp_pure::warp_self_writes_the_largest_int
   ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
   ✓ parser::test_wisp_malformed::malformed_wisp_is_an_error_not_a_repaired_value
   ✓ parser::test_wisp_malformed::malformed_wisp_never_panics
@@ -4300,6 +4330,7 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
+  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -4604,6 +4635,7 @@ PASSED:
   ✓ text::test_terminal_escapes::escape_and_hex_escapes_are_their_characters
   ✓ text::test_text_as_float::test_text_as_float
   ✓ text::test_text_builders::a_text_grown_in_its_room_leaves_earlier_values
+  ✓ text::test_text_builders::texts_built_in_turn_grow_linearly
   ✓ text::test_text_building::a_text_grown_in_place_leaves_its_earlier_value
   ✓ text::test_text_building::appending_in_a_loop_is_linear
   ✓ text::test_text_bytes::byte_at_reads_one_byte
@@ -4646,6 +4678,7 @@ PASSED:
   ✓ text::test_text_runtime::upper_and_lower_map_latin_greek_and_cyrillic
   ✓ text::test_text_search::a_text_contains_a_text
   ✓ text::test_text_search::a_text_starts_and_ends_with_a_text
+  ✓ text::test_text_search::a_text_test_shows_yes_or_no
   ✓ text::test_text_slices::a_text_slice_is_its_graphemes
   ✓ text::test_text_slices::consecutive_slices_of_a_long_text_take_linear_steps
   ✓ text::test_text_slices::short_texts_read_between_leave_a_long_texts_cursor
@@ -5111,6 +5144,7 @@ PASSED:
   ✓ types::test_mixed_results::a_number_or_a_list_is_known_at_run_time
   ✓ types::test_mixed_results::a_number_or_a_text_is_known_at_run_time
   ✓ types::test_multi_word_class::a_class_of_several_words_is_its_kebab_name
+  ✓ types::test_multi_word_class::a_class_of_several_words_with_a_glued_body
   ✓ types::test_multi_word_class::a_class_of_three_words_is_its_kebab_name
   ✓ types::test_multi_word_class::a_kebab_class_constructs
   ✓ types::test_multi_word_class::a_phrase_slot_matches_the_class_as_a_whole
@@ -5167,6 +5201,11 @@ PASSED:
   ✓ types::test_optional_number_fields::a_comment_after_an_optional_type_ends_the_field
   ✓ types::test_optional_number_fields::a_given_optional_number_is_the_number
   ✓ types::test_optional_number_fields::an_omitted_optional_number_is_empty
+  ✓ types::test_optional_result_body::a_ternary_with_block_branches_stays_a_ternary
+  ✓ types::test_optional_result_body::an_optional_result_before_a_block_body_holds_nothing
+  ✓ types::test_optional_result_warning::a_result_that_cannot_be_empty_or_is_declared_optional_stays_quiet
+  ✓ types::test_optional_result_warning::a_returned_empty_warns_and_reaches_the_caller
+  ✓ types::test_optional_result_warning::an_if_without_else_or_a_loop_last_can_answer_empty
   ✓ types::test_param_named_like_global::a_parameter_named_like_a_list_variable_takes_one_value
   ✓ types::test_param_named_like_global::a_parameter_named_like_an_instance_variable_compares_as_its_own_value
   ✓ types::test_param_named_like_library_word::a_parameter_named_like_a_counting_word_is_a_list_item
@@ -5505,6 +5544,9 @@ PASSED:
   ✓ types::test_typed_list_elements::a_bracketed_list_parameter_holds_its_element_type
   ✓ types::test_typed_list_elements::a_bracketed_list_type_checks_its_items
   ✓ types::test_typed_list_elements::a_fixed_width_list_checks_its_range
+  ✓ types::test_typed_param_phrases::a_parameter_of_a_union_type_takes_either
+  ✓ types::test_typed_param_phrases::a_parameter_typed_list_of_int_takes_the_list
+  ✓ types::test_typed_param_phrases::an_optional_char_result
   ✓ types::test_types_scope::test_kebab_key_that_is_also_subtraction_warns
   ✓ types::test_types_scope::test_plural_type_word_denotes_a_list
   ✓ types::test_types_scope::test_type_of_list_names_its_element_type
@@ -6484,6 +6526,7 @@ PASSED:
   ✓ welcoming::test_welcoming_maps::test_quoted_key_with_a_list_value
   ✓ welcoming::test_welcoming_parse::a_counting_word_after_return_is_the_variable
   ✓ welcoming::test_welcoming_parse::a_space_before_a_bracket_makes_a_list
+  ✓ welcoming::test_welcoming_parse::elif_after_a_bare_name_condition
   ✓ welcoming::test_welcoming_parse::elif_elsif_and_elseif_are_else_if
   ✓ welcoming::test_welcoming_parse::else_if_chains_another_if
   ✓ welcoming::test_welcoming_parse::else_takes_a_python_colon
@@ -6525,10 +6568,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
-  ✗ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
-  ✗ text::test_text_builders::texts_built_in_turn_grow_linearly
 
 SUMMARY:
-13 ignored, 6522 passed, 4 failed, 6526 total tested
+13 ignored, 6565 passed, 1 failed, 6566 total tested

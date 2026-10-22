@@ -1,0 +1,7 @@
+# a word of another meaning with more arguments: xs.first(2), last(xs, 2), round(x, 2), list(t)
+xs = [1, 2, 3, 4]
+print xs.first(2)
+print last(xs, 2)
+print first(xs)
+print round(3.14159, 2)
+print list("ab")
