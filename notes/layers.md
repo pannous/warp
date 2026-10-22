@@ -150,7 +150,7 @@ Sugar passes, with the rule each would become:
 | 97 | library_calls | `rewrite reverse $x => reverse($x)` per typed prelude word: F2 (typed signature), unbound already handled |
 | 91 | clauses | `fib(0) := 0; fib(1) := 1` → one kernel match: F6 |
 | 88 | comprehensions | `rewrite [$e for $x in $xs] => (r = []; for $x in $xs { r += [$e] }; r)`: F3 |
-| 86 | prefix_comparisons | `sq 2 == 4` → `sq(2) == 4`: F2 (parameter typed as a value) |
+| 86 | prefix_comparisons | `sq 2 == 4` done: lib/sugar/comparisons.warp (card sugar-prefix-comparisons); `print #xs`, `f -x` stay a pass, prefix_calls.warp: no `where` condition for "a word taking a value" (untyped parameters, builtins) |
 | 65 | number_words | `rewrite one => 1` per word, works today (module rules skip bound words); keys/members stay: F1 |
 | 65 | parse_words | `rewrite eval($t) => interpret(parse($t))` works today; folding a constant text is a pass |
 | 64 | multiple_assignments | `a, b = b, a + b`: F3 + F4 |

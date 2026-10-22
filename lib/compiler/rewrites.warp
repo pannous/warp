@@ -52,7 +52,7 @@ value_word = "value"
 # Two steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the other after those
 # making or reading the forms its rules take
-first_sugar_module_names = ["sugar/lists"]
+first_sugar_module_names = ["sugar/lists", "sugar/comparisons"]
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
