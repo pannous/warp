@@ -540,7 +540,11 @@ fresh_name(hole: text): any := {
 }
 
 # the node made at the place of `at`, where the user wrote the rewritten code
-placed(made: any, at: any): any := if is_positioned(at) then positioned(made, line_of(at), column_of(at)) else made
+placed(made: any, at: any): any := {
+	line = line_of(at)
+	column = column_of(at)
+	if line is int and column is int then positioned(made, line, column) else made
+}
 
 # the variables assigned code of the shape, then the parameters of the functions called with one, until none is new
 names_assigned_shape(program: any, shape: any): any := {
