@@ -2458,6 +2458,9 @@ def host_int(value: any): list {
 runtime_global(n: any): any := {
 	if not (type(n) is key and op_of(n) == ":" and key_of(n) == symbol("global")) { return ø }
 	name = name_of(key_of(value_of(n)))
+	# a table the runtime parts use for its numbers (kinds.warp, byte_codes.warp) is folded into the code, no variable
+	# of the runtime: the program keeps its own `Kind` (card constants-exist)
+	if name in constant_tables { return ø }
 	module.globals[name] = [#module.global_order, if value_of(value_of(n)) is number then "int" else "text"]
 	module.runtime_globals += [name]
 	module.global_order += [name]
