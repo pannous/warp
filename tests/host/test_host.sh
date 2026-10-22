@@ -98,4 +98,45 @@ expect "the launcher: WARP_HOST=none is warp-rust's pure lane" 0 "ran by warp-ru
 	WARP_RUST="$stage/stub/warp-rust" "$stage/bin/warp" hello.warp
 expect "the launcher: other commands stay warp-rust's" 0 "ran by warp-rust" ! "pure" -- launcher version
 
+# C calls (M2): hand-written modules importing C functions, as the pure emitter will (card pure-c-imports); a text
+# is a warp text node, its warp.c_functions line says how each crosses (c_signatures.rs)
+wat() { # wat <name> <module text>: <name>.wat in the stage
+	printf '%s\n' "$2" >"$stage/$1.wat"
+}
+NODE='(rec (type $Node (struct (field i64) (field anyref) (field (ref null $Node))))) (type $Text (array (mut i8)))'
+text() { echo "(struct.new \$Node (i64.const 3) (array.new_data \$Text $1 (i32.const 0) (i32.const $2)) (ref.null \$Node))"; }
+wat strlen "(module $NODE (import \"c\" \"strlen\" (func \$strlen (param anyref) (result i64)))
+	(memory (export \"memory\") 1) (data \$hello \"hello\")
+	(func (export \"main\") (result i64) (call \$strlen $(text '$hello' 5)))
+	(@custom \"warp.c_functions\" \"c\09c\09strlen\09ptr\09i64\09number\09\09\09\"))"
+wat sqrt '(module (import "m" "sqrt" (func $sqrt (param f64) (result f64)))
+	(func (export "main") (result f64) (call $sqrt (f64.const 16))))'
+wat hypot '(module (import "m" "hypot" (func $hypot (param f64 f64) (result f64)))
+	(func (export "main") (result f64) (call $hypot (f64.const 3) (f64.const 4))))'
+line() { printf 'sqlite3\\09sqlite3\\09%s\\09%s\\09i32\\09%s\\09%s\\09\\09' "$@"; }
+wat sqlite "(module $NODE
+	(import \"sqlite3\" \"sqlite3_open\" (func \$open (param anyref) (result i32)))
+	(import \"sqlite3\" \"sqlite3_prepare_v2\" (func \$prepare (param i32 anyref i32) (result i32)))
+	(import \"sqlite3\" \"sqlite3_step\" (func \$step (param i32) (result i32)))
+	(import \"sqlite3\" \"sqlite3_column_int\" (func \$column_int (param i32 i32) (result i32)))
+	(memory (export \"memory\") 1) (data \$name \":memory:\") (data \$sql \"select 1+2\")
+	(func (export \"main\") (result i64) (local \$db i32) (local \$stmt i32)
+		(local.set \$db (call \$open $(text '$name' 8)))
+		(local.set \$stmt (call \$prepare (local.get \$db) $(text '$sql' 10) (i32.const -1)))
+		(drop (call \$step (local.get \$stmt)))
+		(i64.extend_i32_s (call \$column_int (local.get \$stmt) (i32.const 0))))
+	(@custom \"warp.c_functions\" \"$(line sqlite3_open ptr,out handle sqlite3)\\0a$(line sqlite3_prepare_v2 \
+		handle,ptr,i32,out,out handle sqlite3_stmt)\\0a$(line sqlite3_step handle number '')\\0a$(line \
+		sqlite3_column_int handle,i32 number '')\"))"
+wat nolib '(module (import "nosuchlib" "nosuch_function" (func $f (result i32))) (func (export "main") (result i32) (call $f)))'
+wat nosymbol '(module (import "c" "no_such_c_function" (func $f (result i32))) (func (export "main") (result i32) (call $f)))'
+
+expect "C: strlen(\"hello\") gives 5" 5 "5" -- "$host" strlen.wat
+expect "C: sqrt(16) gives 4.0" 0 "4.0" -- "$host" sqrt.wat
+expect "C: hypot(3, 4) from libm by dlsym gives 5.0" 0 "5.0" -- "$host" hypot.wat
+expect "C: sqlite3 :memory: select 1+2 gives 3" 3 "3" -- "$host" sqlite.wat
+expect "C: a missing library is a clear error" 1 "the C library nosuchlib of the import nosuchlib.nosuch_function is not found (tried" \
+	-- "$host" nolib.wat
+expect "C: a missing symbol is a clear error" 1 "the C library c has no function no_such_c_function" -- "$host" nosymbol.wat
+
 if [ "$failed" = 0 ]; then echo "✓ $run tests passed"; else echo "✗ $failed of $run tests failed"; exit 1; fi
