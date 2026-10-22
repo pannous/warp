@@ -117,3 +117,13 @@ parser::test_self_pure::global_type_words_read_self_hosted
 parser::test_self_pure::host_words_on_nodes_run_pure
 parser::test_self_pure::kind_changes_fail_pure
 web::test_style_rules::lengths_keep_their_units
+control::test_async_ports::a_text_task_within_a_deadline_gives_the_fallback
+control::test_async_ports::await_all_of_started_tasks_gives_their_results
+parser::test_self_pure::lib_forms_run_pure
+parser::test_self_pure::long_float_literals_read_pure
+parser::test_self_pure::match_values_run_pure
+parser::test_self_pure::named_arguments_run_pure
+parser::test_self_pure::spaced_library_words_run_pure
+parser::test_warp_pure::warp_self_names_the_refusal
+web::test_styles::an_inline_style_is_a_block_of_properties
+web::test_web::test_fetch
