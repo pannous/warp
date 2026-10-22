@@ -5,13 +5,28 @@ small: it compiles a program with the warp compiler written in warp, then runs t
 It is no warp-rust: there is no interpreter or Rust compiler in it, and it doesn't aim for parity. Only green tests
 count.
 
-    warp-host [--compiler self|full] run <file.warp | code> [args…]   compile and run; the run's value printed
+    warp-host [--compiler self|full] [run] <file.warp | code> [args…]   compile and run; the run's value printed
     warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
     warp-host <file.wasm | file.wat> [args…]
+    warp-host help | --help | -h                                         the usage, status 0
+
+- No command means run, as with warp: the first word after the flags decides.
+  - `run`, `compile`, `help`: that command.
+  - A name ending in .wasm or .wat, or a file starting with wasm's magic bytes `\0asm`: the module runs.
+  - Anything else is `run`: `warp-host f.warp a b` is `warp-host run f.warp a b`, `warp-host '6*7'` is `run '6*7'`.
+- File or code, as warp decides (src/main.rs program_file, src/cli/formatting.rs has_warp_extension):
+  - A name with a .warp or .wasp extension is a file. When it's missing, that's the error
+    `warp-host: could not read file x.warp` with status 1; it never compiles as code.
+  - Any other existing file (an extensionless `#!` script) is a file too.
+  - Else the word is code, a program of the current folder.
+- Unlike warp, which joins all its words into the code (`warp 6 '*' 7`), warp-host's code is the first word only. The
+  words after it are the program's arguments (`use os; args`), as after a file.
+- The launcher packaging/bin/warp still passes `run` explicitly; both forms are the same run.
 
 - Source: crates/warp-runtime/src/warp_host/
   - main.rs: commands, finding lib/ and the compiler, running a module
   - words.rs: std_io, and compiler.wasm's host.read/fetch/warn
+  - shell.rs: std_io's words of lib/shell.warp (cd, mkdir, copy, move, touch, remove …)
   - nodes.rs: GC nodes in and out
   - cache.rs: kept values and machine code
   - ffi.rs: C imports
@@ -32,6 +47,17 @@ count.
 - std_io:
   - os: env, args, cwd, input, stdin, kept, keep, command, exec, run, run_wasm, compile_wasm
   - file: read, write, append, exists, read_bytes, write_bytes
+  - the words of lib/shell.warp (card unix-words, shell.rs), as warp-rust's src/modules/shell_adapters.rs:
+    - os: cd (the process's working directory; its new one), which (ø when no PATH folder has it), open (open on
+      macOS, xdg-open elsewhere)
+    - file: list (lib/file.warp list_files: names, sorted), glob, mkdir (with the folders above), copy and move (into
+      a folder keeping the name, else to the path), touch, remove (to the Trash: ~/.Trash on macOS, else
+      ~/.local/share/Trash with a .trashinfo; never a pattern, a full folder, the root, home, or the working directory
+      and the folders above it), find, size (du's bytes), info ({size, modified in ms, kind})
+    - A failure names the path: `file.list: nosuch: No such file or directory (os error 2)`.
+  - The file words take `~` and `~/…` as the home folder. A relative path is in the process's working directory, so
+    after `cd` they follow it, as commands do.
+  - compiler-self's output calls them through std_io, so no `warp rebuild self` is needed for them.
   - A failure answers the program an Error with the same text as warp-rust's std_adapters.rs, e.g. `os.command: sh -c
     exit 3 failed (exit status: 3): …`.
   - `run(argv)` (lib/os.warp) gives `{status, out, err}` with trailing newlines dropped. A failing command is no error
@@ -230,6 +256,21 @@ hello.wasm, warm, 2–3 runs. Host suite 29/29 and launcher suite 22/22 pass wit
     2 ms, and ran hello.wasm in 6 ms. Cold start would still be dominated by the 23 s of kept values.
   - Work: nodes.rs, words.rs, ffi.rs, cache.rs and c_calls.rs's linking use the Rust API (Rooted, StructRef, Caller,
     Linker), so they would be rewritten against the C API: ~1500 lines of unsafe code (estimate).
+
+## lib/shell.warp under warp-host (2026-10-22, branch warp-host-shell)
+
+Work: ls, cd (its value, and commands and std_io paths after it), mkdir, touch, cp, mv, rm, cat, echo, head, tail, wc,
+unique_lines, find_files, file_size, info, which, glob, list_files. tests/host/test_host.sh checks them, each in a fresh folder.
+Not yet, for reasons outside warp-host:
+- `pwd`/`cwd` after `cd` still give the start folder. The pure compiler computes a definition without parameters
+  (`cwd := std_io(…)`, `pwd := cwd`) once, where warp-rust runs it at every read; and `f() := …` has no bare `f`.
+- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (lib/compiler/runtime/wasi.warp), not
+  std_io. So they take no `~`, and a relative path stays in the start folder (WASI's preopened `.`) after `cd`.
+- `ls("nosuch")` traps (`node length`): the comprehension takes list_files's Error as a list. `list_files("nosuch")`
+  itself is a catchable Error.
+- `grep`: the compiler refuses `matches(…)` (use regex). `sort_lines`: `sort(file_lines(…))` resolves to shell.warp's
+  `sort(file:Path)` and traps with `no field name`.
+- `print ls` without parentheses prints the symbol ls: the pure compiler calls no function by its bare name.
 
 ## Next
 
