@@ -1,0 +1,74 @@
+// SQLite through its C library (card pure-c-imports): `use sqlite3` declares these functions for the program and brings
+// the warp words below. warp-host loads libsqlite3 (libsqlite3.so.0, libsqlite3.dylib) and calls them; nothing of
+// SQLite is in the host. The types are lib/c.warp's: a handle is a C pointer held as an id, an out-pointer is no
+// argument and its pointer is the call's result.
+//   db = sqlite3_open(":memory:")
+//   rows(db, "select 1+2, 'a'")        [[3, "a"]]
+//   execute(db, "create table t(x)")   the changed rows' count
+sqlite3_libversion(): text from 'sqlite3'
+sqlite3_libversion_number(): i32 from 'sqlite3'
+sqlite3_open(filename: text, db: out): handle from 'sqlite3'
+sqlite3_close(db: handle): i32 from 'sqlite3'
+sqlite3_errmsg(db: handle): text from 'sqlite3'
+sqlite3_errcode(db: handle): i32 from 'sqlite3'
+sqlite3_errstr(code: i32): text from 'sqlite3'
+sqlite3_changes(db: handle): i32 from 'sqlite3'
+sqlite3_last_insert_rowid(db: handle): i64 from 'sqlite3'
+sqlite3_db_handle(statement: handle): handle from 'sqlite3'
+sqlite3_prepare_v2(db: handle, sql: text, length: i32, statement: out, tail: out): handle from 'sqlite3'
+sqlite3_step(statement: handle): i32 from 'sqlite3'
+sqlite3_reset(statement: handle): i32 from 'sqlite3'
+sqlite3_finalize(statement: handle): i32 from 'sqlite3'
+sqlite3_column_count(statement: handle): i32 from 'sqlite3'
+sqlite3_column_type(statement: handle, column: i32): i32 from 'sqlite3'
+sqlite3_column_name(statement: handle, column: i32): text from 'sqlite3'
+sqlite3_column_int(statement: handle, column: i32): i32 from 'sqlite3'
+sqlite3_column_int64(statement: handle, column: i32): i64 from 'sqlite3'
+sqlite3_column_double(statement: handle, column: i32): f64 from 'sqlite3'
+sqlite3_column_text(statement: handle, column: i32): text from 'sqlite3'
+sqlite3_bind_parameter_count(statement: handle): i32 from 'sqlite3'
+sqlite3_bind_int64(statement: handle, index: i32, value: i64): i32 from 'sqlite3'
+sqlite3_bind_double(statement: handle, index: i32, value: f64): i32 from 'sqlite3'
+sqlite3_bind_text(statement: handle, index: i32, value: text, length: i32, destructor: i64): i32 from 'sqlite3'
+sqlite3_bind_null(statement: handle, index: i32): i32 from 'sqlite3'
+
+// sqlite3_step's answer when a row is ready
+SQLITE_ROW = 100
+// sqlite3_column_type's: 1 an integer, 2 a float, 3 a text, 4 a blob, 5 null
+SQLITE_INTEGER = 1
+SQLITE_FLOAT = 2
+SQLITE_NULL = 5
+
+// a column of the current row as its warp value: an Int, a float, a text, ø for null
+column_value(statement: int, column: int) := {
+	kind = sqlite3_column_type(statement, column)
+	if kind == SQLITE_INTEGER { return sqlite3_column_int64(statement, column) }
+	if kind == SQLITE_FLOAT { return sqlite3_column_double(statement, column) }
+	if kind == SQLITE_NULL { return ø }
+	sqlite3_column_text(statement, column)
+}
+
+// the rows `sql` gives on the database `db`, each the list of its columns' values
+rows(db: int, sql: text) := {
+	statement = sqlite3_prepare_v2(db, sql, -1)
+	found = []
+	while sqlite3_step(statement) == SQLITE_ROW {
+		row = []
+		column = 0
+		while column < sqlite3_column_count(statement) {
+			row += [column_value(statement, column)]
+			column += 1
+		}
+		found += [row]
+	}
+	sqlite3_finalize(statement)
+	found
+}
+
+// runs `sql` on `db` for what it does; the count of the rows it changed
+execute(db: int, sql: text) := {
+	statement = sqlite3_prepare_v2(db, sql, -1)
+	while sqlite3_step(statement) == SQLITE_ROW { }
+	sqlite3_finalize(statement)
+	sqlite3_changes(db)
+}
