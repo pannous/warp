@@ -50,10 +50,14 @@ formula and release build set CARGO_NET_OFFLINE=false.
 
 ## At a release
 1. Bump `version` in Cargo.toml, commit, push main.
-2. `git tag v<version> && git push origin v<version>`: the Release workflow publishes the binaries (and Rust CI tests the tag).
+2. `git tag v<version> && git push origin v<version>`: the Release workflow publishes the binaries and, built from the
+   tag's lib/ by them, the warp-written compiler as release assets compiler.wasm and compiler-self.wasm (the bootstrap
+   seed, user 2026-10-22; job `compilers`), and Rust CI tests the tag.
 3. When the Release run is green (all binaries uploaded): `packaging/homebrew/update_formula.sh <version>` writes the
    version and each binary's sha256 into the formula and copies it to the local tap; commit here, push the tap.
-4. Test: `HOMEBREW_NO_AUTO_UPDATE=1 brew reinstall pannous/tap/warp && brew test pannous/tap/warp && brew style pannous/tap/warp`.
-5. PyPI, deb/rpm and AUR need nothing: the tag's Release run publishes them. Commit the PKGBUILD and .SRCINFO
+4. Test: `HOMEBREW_NO_AUTO_UPDATE=1 brew reinstall pannous/tap/warp && brew test pannous/tap/warp && brew style pannous/tap/warp`,
+   then `brew unlink warp`: a linked brew warp comes first on the user's PATH and shadows ~/dev/bin/warp (2026-10-22).
+5. crates.io: `CARGO_NET_OFFLINE=false cargo publish --workspace` (outside the cloud lane; token in ~/.cargo/credentials.toml).
+6. PyPI, deb/rpm and AUR need nothing: the tag's Release run publishes them. Commit the PKGBUILD and .SRCINFO
    `packaging/aur/update_aur.sh <version>` writes, like the formula.
 - Rust CI runs its tests on the tag (pushes to main skip them); the release binaries do not depend on it.
