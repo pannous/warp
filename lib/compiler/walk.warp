@@ -155,6 +155,9 @@ key_view(left: Node, op: text, right: Node): any := {
 	["key", op, view_of(left), view_of(right)]
 }
 
+# one node of several juxtaposed words: `upper w`
+words_phrase(words: list): Node := if #words == 1 then words#1 else List(words, Bracket.None, Separator.Space)
+
 # a group of the items, bracketed and separated as n
 group_like(n: Node, items: list): Node := match n {
 	List(_, bracket, separator): List(items, bracket, separator)
