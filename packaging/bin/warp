@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# warp: programs run through the warp compiler written in warp (compiler.wasm, as `warp-rust pure` runs it), every other
-# command through the Rust binary warp-rust, unchanged (notes/pure_wrapper.md). Plain bash 3.2, macOS's /bin/bash.
+# warp: programs run through the warp compiler written in warp (compiler.wasm, as `warp-rust pure` runs it), fix and
+# beautify as lib/fix/command.warp, every other command through the Rust binary warp-rust, unchanged
+# (notes/pure_wrapper.md). Plain bash 3.2, macOS's /bin/bash.
 #   WARP_PIPELINE=rust            every command as warp-rust runs it
 #   WARP_FALLBACK=rust            a program the pure pipeline refuses runs again through warp-rust, said loudly
 #   WARP_COMPILER=self or --self  compiler-self.wasm (compiler.warp compiled by itself) instead of compiler.wasm (pure)
 #   WARP_RUST=<binary>            the Rust binary; else warp-rust beside this script (links followed), else on PATH
 
-# The commands the pure pipeline runs, one line each: `<word>) echo <function> ;;`. The function gets the words after
-# the command and hands a command it cannot run to warp-rust (pass_on). Every other command is warp-rust's.
+# The commands written in warp, one line each: `<word>) echo <function> [its first words] ;;`. The function gets those
+# words, then the words after the command, and hands a command it cannot run to warp-rust (pass_on). Every other
+# command is warp-rust's.
 pure_command() {
 	case $1 in
-		run) echo run_file ;;           # warp run f.warp [-- args]
-		compile) echo compile_module ;; # warp compile --wasm f.warp
-		# fix) echo run_tool ;;         # a command written in warp (fix and beautify: Warp Code 2's, not yet)
+		run) echo run_file ;;                                     # warp run f.warp [-- args]
+		compile) echo compile_module ;;                           # warp compile --wasm f.warp
+		fix | beautify) echo lib_program fix/command.warp "$1" ;; # warp fix|beautify [check|yes] <file|folder|code>…
 	esac
 }
 
@@ -35,6 +37,15 @@ compile_module() {
 	lib=$(library_for "$source") || fail "no lib/ with compiler/ found for $source: WARP_LIB names one"
 	pure "$(compiler_file)" "${options[@]}" -- "$source" "$module" "$(dirname "$source")" "$lib"
 	echo "compiled $(wc -c <"$module" | tr -d ' ') bytes to $module"
+}
+
+# warp fix …: a command written as a program in lib/, run by warp-rust with the command word and its arguments, its
+# lib/ found as compile's is; its source's hints are not the user's. Without that program (an older lib/) warp-rust's own
+lib_program() {
+	local lib
+	lib=$(library_for "$PWD/.")
+	[ -f "$lib/$1" ] || pass_on
+	WARP_LIB=$lib exec "$RUST" --no-hints "${options[@]}" run "$lib/$1" -- "${@:2}"
 }
 
 # A run of the pure pipeline, its failure exiting with its own status. Its output is looked at only when it must be:
@@ -156,7 +167,7 @@ main() {
 	command_line=("${options[@]}" "$@")
 	local command
 	command=$(pure_command "${1-}")
-	if [ -n "$command" ]; then shift; "$command" "$@"
+	if [ -n "$command" ]; then shift; $command "$@" # the function and its first words
 	elif [[ ${1-} == *.warp ]]; then run_file "$@"
 	elif is_code "${1-}"; then run_code "$@"
 	else pass_on
