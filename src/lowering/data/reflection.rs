@@ -336,7 +336,7 @@ pub fn meta_entries(source: &Node, lowered: &Node, code: &str) -> Vec<(&'static 
 	let declared = crate::class_methods::declared_layouts(source);
 	let is_method = |name: &String| declared.values().any(|layout| layout.methods.contains(name));
 	// the program's own functions, not the library's its lowering brought in (html_render, prelude·replace)
-	let own = user_functions(source);
+	let own = crate::analyzer::function_definitions(source).user_functions;
 	let functions: Vec<(String, Node)> = user_functions(lowered)
 		.values()
 		.filter(|function| own.contains_key(&function.name) && !is_method(&function.name))
