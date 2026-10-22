@@ -122,3 +122,7 @@ checkout's target/debug/warp), compiler.wasm and compiler-self.wasm beside it; s
 
 Pure-pipeline coverage: `tests/queue.sh <warp-rust> test tests` (or `--self`) runs every test of tests/ through the
 pure pipeline and prints `m of n failed`; n − m is the number going green.
+
+Measured 2026-10-22 on the box (tests at 0445edb5e, debug warp-rust bf03df01c, compiler.wasm of 9fc81b9241; one targeted
+queue run, 20 min wall, 8 children): `6006 of 10701 failed in 1630 files`, so **4695 of 10701 tests (44 %) pass
+through the pure pipeline**; 5131 of the failures are refusals ("outside the core").
