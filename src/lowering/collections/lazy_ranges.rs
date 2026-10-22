@@ -110,6 +110,7 @@ impl Lowering {
 				Some(self.length(&range_of(&items[1])?))
 			}
 			Node::List(items, _, separator)
+				// ⚠ WARP DOES THIS DIFFERENTLY: a range's sum in closed form is a rewrite rule in warp → lib/prelude.warp (rewrite sum($first to $last))
 				if is_call(items, separator) && self.sums && items[0].is_symbol(SUM_WORD) =>
 			{
 				Some(self.sum(&range_of(&items[1])?))
