@@ -144,8 +144,8 @@ std_os_env(name: Node): Node := {
 	ø
 }
 # `use os; input(prompt)`: the prompt written, then a line of stdin without its newline; ø at the end of the input. A
-# byte a read, so no byte of the next line is taken
-std_os_input(prompt: Node): Node := {
+# byte a read, so no byte of the next line is taken. `input()` gives no prompt: os.warp's input() calls this with none
+std_os_input(prompt: Node = ø): Node := {
 	if prompt is text { print_text(prompt) }
 	line = ""
 	while yes {
