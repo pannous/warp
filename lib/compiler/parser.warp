@@ -44,25 +44,27 @@ def expanded_entities(source: text): text {
 	if not source.contains(ENTITY_MARK) { return source }
 	points = code_points(source)
 	n = points.length
+	// the pieces between entities are copied whole: one append per character made the run quadratic (card
+	// pure-compile-speed: 69% of a pure-lane compile of uses.warp)
 	parts = []
+	copied = 0
 	at = 0
 	while at < n {
 		skipped = span_end(points, at, n)
 		if skipped > at {
-			parts += points[at .. skipped]
 			at = skipped
 			continue
 		}
 		name = entity_name_at(points, at, n)
 		if name == "" {
-			parts += [points[at]]
 			at = at + 1
 		} else {
-			parts += [entities()[name]]
+			parts += [text_between(points, copied, at), entities()[name]]
 			at = at + 2 + name.length
+			copied = at
 		}
 	}
-	join(parts, "")
+	join(parts + [text_between(points, copied, n)], "")
 }
 // The known entity name written at `at` (`\:name`), else "": its run of ASCII letters, or a longer known name with
 // hyphenated parts (`\:fracture-A`)

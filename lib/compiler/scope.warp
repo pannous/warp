@@ -205,9 +205,11 @@ has_own_word(n: Node, accepts: function): bool := match n {
 	Key(left, op, right): { if left == symbol(opaque_word) then is_declaration_word(right, accepts) else accepts(symbol(op as text)) }
 	_: no
 }
-# an item's words: the word itself, a declaration head's name
+# an item's words: the word itself, a declaration head's name, the words of a phrase the parser grouped inside the
+# phrase (`x = sum of xs` arrives as `sum (of xs)`)
 is_word_of_item(part: Node, accepts: function): bool := match part {
 	Symbol(name): accepts(part)
+	List(words, Bracket.None, Separator.Space): words.any(word => is_word_of_item(word, accepts))
 	Key(left, op, right): left == symbol(opaque_word) and is_declaration_word(right, accepts)
 	_: no
 }
