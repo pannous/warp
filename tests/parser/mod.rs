@@ -93,6 +93,8 @@ mod test_uniscript_hyphen_names; // card uniscript-literal-hyphen
 mod test_url_literal; // card add-http
 mod test_warp_format;
 #[cfg(feature = "native")]
+mod test_warp_commands; // card wasm-commands
+#[cfg(feature = "native")]
 mod test_warp_pure; // card warp-pure
 #[cfg(feature = "native")]
 mod test_warp_wasm_alone; // card standalone

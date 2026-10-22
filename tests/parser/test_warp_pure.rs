@@ -8,7 +8,7 @@ pub(crate) const SELF_BUILD_TIME_LIMIT_SECONDS: &str = "900";
 /// a warm cloud VM keeps compiler-self.wasm of an earlier job's lib/ in target/tmp (card cloud-lane-warm), and building
 /// it inside the first program's run took more than that run's 60 s (card self-build-time-limit). compiler.wasm of
 /// `warp pure` is not rebuilt: that takes ~540 s (warp_pure_runs_hello_world)
-fn lane(command: &str) -> std::process::Command {
+pub(crate) fn lane(command: &str) -> std::process::Command {
 	static SELF_BUILT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 	if command == "self" {
 		SELF_BUILT.get_or_init(build_self_compiler);
