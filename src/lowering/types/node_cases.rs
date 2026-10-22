@@ -183,7 +183,7 @@ pub fn lower(program: Node) -> Node {
 	let builds_nodes = ["Key", "List"].iter().any(|case| mentions(&program, case));
 	let program = match own.iter().any(|name| name == NODE_TYPE) {
 		true => program,
-		false => qualified_cases(program),
+		false => qualified_cases(program, &own),
 	};
 	let enums: Vec<&str> = SPELLED_ENUMS
 		.into_iter()
@@ -196,9 +196,21 @@ pub fn lower(program: Node) -> Node {
 	super::nodes::with_statements_first(program, declarations.collect())
 }
 
-/// `Node.Key`, `Node::Key` → Key, `Node.True` → yes, `Node.Empty` → ø, and `Node` where a type is written → any
-fn qualified_cases(node: Node) -> Node {
-	match node.map_children(qualified_cases) {
+/// A node of that case where its name is written as a type, `left: Key`, `items: List?` (decision node-refinements),
+/// unless the program declares a type of that name; held as any node, the case not checked yet. Symbol, Text, Number,
+/// Char and Error are type words already
+const NODE_CASE_TYPES: [&str; 3] = ["Key", "List", "Meta"];
+
+fn holds_node(kind: &Node, own: &[String]) -> bool {
+	let Some(name) = kind.symbol_name() else { return false };
+	let name = name.trim_end_matches('?');
+	name == NODE_TYPE || (NODE_CASE_TYPES.contains(&name) && !own.iter().any(|own| own == name))
+}
+
+/// `Node.Key`, `Node::Key` → Key, `Node.True` → yes, `Node.Empty` → ø, and `Node` or a case where a type is written
+/// → any
+fn qualified_cases(node: Node, own: &[String]) -> Node {
+	match node.map_children(|child| qualified_cases(child, own)) {
 		Node::Key(owner, Op::Dot | Op::Scope, case) if owner.is_symbol(NODE_TYPE) => {
 			match case.drop_meta().name().as_str() {
 				"True" => Node::True,
@@ -207,7 +219,7 @@ fn qualified_cases(node: Node) -> Node {
 				_ => case.drop_meta().clone(),
 			}
 		}
-		Node::Key(subject, Op::Colon, kind) if kind.is_symbol(NODE_TYPE) => {
+		Node::Key(subject, Op::Colon, kind) if holds_node(&kind, own) => {
 			Node::Key(subject, Op::Colon, Box::new(Node::symbol(ANY_TYPE)))
 		}
 		other => other,

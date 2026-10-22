@@ -69,6 +69,8 @@ fn marked_declarations(node: Node, type_words: &[&str]) -> Node {
 	children_rewritten(node, |child| marked_declarations(child, type_words))
 }
 
+// ⚠ WARP DOES THIS DIFFERENTLY: a declared index or position holds its value counted its way (`i: index =
+// xs.index_of(x)` is one less); find and byte_index_of count too → lib/compiler/index_positions.warp
 /// Every conversion where a position or an index meets the other's brackets, after library_words names index_of
 /// collection_position
 pub fn lower(node: Node) -> Node {

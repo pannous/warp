@@ -208,7 +208,53 @@ spaced_match(parts: list, n: Node, bracket: Node, variants: any): Node := {
 	list_match(n, parts, bracket, Separator.Space, variants)
 }
 
+# `pattern Definition = Key(head, Op.Define, body)` names a pattern (card patterns-values; decision node-refinements:
+# a named refinement of a node case): the definition leaves the program and its name stands for the pattern in an arm
+# `Definition: …`, which binds head and body, in a test `n is Definition`, and as the type `d: Definition`, any node
+# (Rust twin: named_patterns.rs)
+named_pattern(statement: Node): any := if is_pattern_definition(statement) then named_definition(statement#2) else ø
+
+named_definition(definition: Node): any := match definition {
+	Key(Symbol(name), Op.Assign, pattern): [name, pattern]
+	_: ø
+}
+
+named_patterns_of(program: Node): map := {
+	patterns = {}
+	for statement in statements_in(program) {
+		named = named_pattern(statement)
+		if named { patterns[named#1] = named#2 }
+	}
+	patterns
+}
+
+without_named_patterns(program: Node): Node := {
+	if not is_statement_sequence(program) { return program }
+	group_like(program, statements_in(program).filter(statement => not named_pattern(statement)))
+}
+
+# a pattern's name where a pattern, a test or a type goes
+with_named_patterns(n: Node, patterns: map): Node := match n {
+	# `n is Definition`, an equality by now (type_tests.warp: no type of that name): a pattern's name is no value
+	Key(subject, Op.Eq, Symbol(name)): if name in patterns then pattern_test(subject, patterns[name]) else n
+	Key(subject, Op.Colon, Symbol(name)): if name in patterns then Key(subject, Op.Colon, symbol(any_word)) else n
+	List(arms, Bracket.Curly, separator): group_like(n, arms.map(arm => named_arm(arm, patterns)))
+	_: n
+}
+
+# `match subject { pattern: yes, _: no }`
+pattern_test(subject: Node, pattern: Node): Node :=
+	node_match(List([symbol("match"), subject, List([Key(pattern, Op.Colon, yes), Key(symbol(other_arm), Op.Colon, no)], Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space), {})
+
+named_arm(arm: Node, patterns: map): Node := match arm {
+	Key(Symbol(name), Op.Colon, result): if name in patterns then Key(patterns[name], Op.Colon, result) else arm
+	Key(Symbol(name), Op.Arrow, result): if name in patterns then Key(patterns[name], Op.Arrow, result) else arm
+	_: arm
+}
+
 node_matches(program: Node): Node := {
+	patterns = named_patterns_of(program)
+	if patterns { program = bottom_up(without_named_patterns(program), n => with_named_patterns(n, patterns)) }
 	variants = case_names_of(enums_in(program, {}))
 	bottom_up(program, n => node_match(n, variants))
 }

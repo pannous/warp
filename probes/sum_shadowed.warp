@@ -1,0 +1,4 @@
+// a program's own sum replaces the prelude's (card rust-lane-program-2)
+sum(xs) := 42
+print sum([1, 2, 3])
+print sum(1 to 10)

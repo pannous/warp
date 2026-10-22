@@ -8,6 +8,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
+// ⚠ WARP DOES THIS DIFFERENTLY: sum is a function like any other, no reading-word list → lib/prelude.warp
 /// The words reading a list without keeping it
 const READING_WORDS: [&str; 7] = ["count", "size", "sum", "min", "max", "join", "print"];
 

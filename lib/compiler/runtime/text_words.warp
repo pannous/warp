@@ -29,10 +29,12 @@ bytes_match_at(t: text, part: text, at: int): bool := {
 }
 # the character position of part's first place in t, counted from 1; 0 when t holds no part
 text_find(t: text, part: text): int := {
+	at = 0
 	position = 1
-	for at in 0 to byte_count(t) - byte_count(part) {
+	while at <= byte_count(t) - byte_count(part) {
 		if bytes_match_at(t, part, at) { return position }
-		if not is_continuation_byte(byte_at(t, at)) { position += 1 }
+		at = character_end(t, at)
+		position += 1
 	}
 	0
 }

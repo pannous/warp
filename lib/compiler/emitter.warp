@@ -106,6 +106,7 @@ ref_null = 208
 int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "xor": 133, "<<": 134, ">>": 135, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
 # where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
 checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
+bit_operators = ["xor", "<<", ">>"]
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
 # yes/no held as i32: only equal or not
 bool_ops = {"==": 70, "!=": 71}
@@ -430,7 +431,9 @@ def number_value(n: any): list {
 exact_decimal_digits = 15
 exact_decimal(n: float): any := {
 	shown = "" + n
-	if shown.contains("e") or not shown.contains(".") { return ø }
+	if shown.contains("e") { return ø }
+	# a whole decimal shows no point (2.0 as 2): the int it is (decision int-list)
+	if not shown.contains(".") { shown += ".0" }
 	negative = shown.starts_with("-")
 	unsigned = if negative then shown[1..] else shown
 	parts = unsigned.split(".")
@@ -807,11 +810,37 @@ def type_test_code(body: Body, subject: any, spec: text): list {
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
 	value = expression_code(body, subject)
-	kinds = 0
-	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }
-	if value#1 == "node" { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
+	if value#1 == "node" { return node_type_test(body, value, type) }
 	["bool", [op.i32_const, if value#1 in covered_kinds[type] then 1 else 0]]
 }
+# `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline, as
+# Rust's kind masks; a type value (`int is number`) and `is code` ask runtime node_is_type
+def node_type_test(body: Body, value: any, type: text): list {
+	kinds = 0
+	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }
+	if kinds == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
+	held = [op.local_get] + uleb(fresh_local(body, "node"))
+	bits = [op.local_get] + uleb(fresh_local(body, "int"))
+	read = value#2 + [op.local_set] + held[1..] + held_kind_bit_code(body, held) + [op.local_tee] + bits[1..]
+	type_value = read + [op.i64_const] + sleb(kind_bit(HeldBit.TypeValue)) + [op.i64_and, op.i64_eqz, op.i32_eqz]
+	passes = ["bool", bits + [op.i64_const] + sleb(kinds) + [op.i64_and, op.i64_eqz, op.i32_eqz]]
+	["bool", type_value + if_else_code("bool", runtime_call("node_is_type", [["node", held], text_value(type), number_value(kinds)]), passes)]
+}
+# the held kind of the node `held` as one bit, as runtime held_kind_bit places it: 1 << its Kind, a yes/no, type value,
+# map or exact rational the bit of its HeldBit place, ø a list; no call, each mark picked by a select
+def held_kind_bit_code(body: Body, held: list): list {
+	field = [op.local_get] + uleb(fresh_local(body, "int"))
+	kind = field + [op.i64_const] + sleb(kind_mask) + [op.i64_and]
+	is_field = marked => field + [op.i64_const] + sleb(marked) + [op.i64_eq]
+	ratio = kind + [op.i64_const] + sleb(Kind.Int) + [op.i64_eq] + ratio_test(held) + [op.i32_and]
+	marked = as_node(held) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.local_set] + field[1..] + [op.i64_const, 1] + kind + [shift_ops.i64_shl]
+	marked += unless_held(HeldBit.Bool, is_field(Marked.Bool)) + unless_held(HeldBit.TypeValue, is_field(Marked.TypeValue))
+	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio)
+	held + [op.ref_is_null, op.if] + value_type("int") + held_bit(Kind.List) + [op.else] + marked + [op.end]
+}
+def held_bit(place: int): list { [op.i64_const] + sleb(kind_bit(place)) }
+# the bit on the stack, or the place's bit when the test holds
+def unless_held(place: int, test: list): list { held_bit(place) + test + [op.i32_eqz, op.select] }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 def as_node(code: any): list { code + gc_code(gc_ops.ref_cast_null, [gc.node]) }
 def kind_code_of(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
@@ -1046,6 +1075,8 @@ def float_power(body: Body, base: list, exponent: list): list {
 # stays exact; any other two are floats
 def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	if symbol == "+" { return runtime_call("node_add", [["node", a], ["node", b]]) }
+	# a bit operator takes ints only: `1 << place` of a value known only at run time reads it as an int
+	if symbol in bit_operators { return operation_code(body, symbol, ["int", converted(["node", a], "int")], ["int", converted(["node", b], "int")]) }
 	left = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	right = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	ints = operation_code(body, symbol, ["int", unboxed(left#2, gc.int_box)], ["int", unboxed(right#2, gc.int_box)])
@@ -1208,8 +1239,10 @@ def declaration(body: Body, name: text, written_type: text, value: any): list {
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
-	if type_name not in declared_kinds { return refuse("a variable declared " + type_name) }
-	body.declared[name] = declared_kinds[type_name]
+	# `xs: ints = v`, `xs: list of text = v`: a list as `list` declares it
+	kind_word = if is_list_type(type_name) then "list" else type_name
+	if kind_word not in declared_kinds { return refuse("a variable declared " + type_name) }
+	body.declared[name] = declared_kinds[kind_word]
 	assignment(body, symbol(name), value)
 }
 # `x: T = v` of a class or enum T the program declares: x holds an object (an instance, also of a class that fits by
@@ -1403,8 +1436,13 @@ def call_values(f: Function, values: any): list {
 # a value a compiled function's unannotated parameter cannot take, `last(t)` after `last(xs)`: the module is compiled
 # again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module)
 def passed(f: Function, i: int, value: any): list {
-	try { converted(value, f.kinds[i]) } catch refusal {
-		slot = parameter_key(f.name, i)
+	slot = parameter_key(f.name, i)
+	try {
+		# a node may hold any kind (`v.x * s` of a float s): read as an unannotated parameter's int it would trap, so the
+		# parameter widens, as widen_parameter does for a call still compiling
+		if value#1 == "node" and f.kinds[i] != "node" and slot in module.unannotated { refuse("a node where a " + f.kinds[i] + " is needed") }
+		converted(value, f.kinds[i])
+	} catch refusal {
 		joint = parameter_joint(f.kinds[i], value#1)
 		if slot not in module.unannotated or not (joint in type_bytes or joint in references) or module.later_kinds.get(slot) == joint { throw refusal }
 		module.later_kinds[slot] = joint
@@ -1894,7 +1932,8 @@ def group_expression(body: Body, n: any): list {
 		}
 		return call(body, module.runtime[word], items_of(n)[1..])
 	}
-	if is_call_or_line(n) and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
+	# `print a, b` is print(a, b): its values shown, a space between (Rust's print_call)
+	if is_call_or_line(n) and #n >= 2 and n#1 == symbol("print") { return printed(if #n == 2 then printed_value(body, n#2) else texts_joined(body, items_of(n)[1..], " ")) }
 	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in warning_words { return call(body, module.runtime["warned"], [n#2]) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words {
 		# `count = 0; count(users)`: Rust's "`count` is a variable here"
@@ -2233,6 +2272,7 @@ literal_kind(n: any): any := {
 	if n is bool { return "bool" }
 	if n is text { return if #n == 1 then "char" else "text" }
 	if n is int { return "int" }
+	if n is float { return "float" }
 	ø
 }
 def collect_literal_arguments(n: any) {
@@ -2250,8 +2290,9 @@ def collect_literal_arguments(n: any) {
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
 # the annotations of a parameter held as a node: any value, a node, a function, a type value `int`, a map, a number
-# (an int or a float); an optional `text?` is one too, ø or the value
-node_annotations = ["any", "Node", "function", "type", "map", "number"]
+# (an int or a float), a symbol or a key (node_cases.warp holds a written case `Key` as any); an optional `text?` is
+# one too, ø or the value
+node_annotations = ["any", "Node", "function", "type", "map", "number", "symbol", "Symbol", "key"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(written: text): text := {
@@ -2333,6 +2374,7 @@ def zero_code_of(kind: text): list {
 	if kind == "float" { return [op.f64_const] + le64(0) }
 	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
 	if kind == "node" { return boxed(number_value(0)) }
+	if kind == "list" { return vector_code([]) }
 	if kind in references { return [ref_null] + (if kind == "time" then [110] else uleb(references[kind]#2)) }
 	[op.i32_const, 0]
 }
@@ -2490,15 +2532,16 @@ def host_int(value: any): list {
 	converted(value, "int")
 }
 
-# `global name = 0` or `= ""` at the top of runtime.warp: a module variable of that kind its words share, from the
-# kind's zero (ø for a text)
+# `global name = 0`, `= ""` or `= []` at the top of runtime.warp: a module variable of that kind its words share, from
+# the kind's zero (ø for a text, an empty list)
 runtime_global(n: any): any := {
 	if not (type(n) is key and op_of(n) == ":" and key_of(n) == symbol("global")) { return ø }
 	name = name_of(key_of(value_of(n)))
 	# a table the runtime parts use for its numbers (kinds.warp, byte_codes.warp) is folded into the code, no variable
 	# of the runtime: the program keeps its own `Kind` (card constants-exist)
 	if name in constant_tables { return ø }
-	module.globals[name] = [#module.global_order, if value_of(value_of(n)) is number then "int" else "text"]
+	value = value_of(value_of(n))
+	module.globals[name] = [#module.global_order, if value is number then "int" else if type(value) is list then "list" else "text"]
 	module.runtime_globals += [name]
 	module.global_order += [name]
 }
