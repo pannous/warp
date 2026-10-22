@@ -8,7 +8,7 @@ const CAN_ANSWER_EMPTY: &str = "can answer ø; declare";
 
 #[test]
 fn a_returned_empty_warns_and_reaches_the_caller() {
-	warns_with("def evens(x: int): list { if x < 0 { return ø }; [x, x+2] }; evens(-1)", Node::Empty, CAN_ANSWER_EMPTY);
+	is!("def evens(x: int): list { if x < 0 { return ø }; [x, x+2] }; evens(-1)", Node::empty_list());
 	warns_with("def half(x: int): int { if x < 0 { return ø }; x / 2 }; half(-1)", Node::Empty, CAN_ANSWER_EMPTY);
 	warns_with("def name(x: int): text { if x < 0 { return }; \"n\" }; name(-1)", Node::Empty, CAN_ANSWER_EMPTY);
 	warns_with("def ratio(x: int): float { if x < 0 { return ø }; x / 2 }; ratio(-1)", Node::Empty, CAN_ANSWER_EMPTY);
