@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+// card self-cold-trap: definitions.warp is_declaration_word(n: Node) beside scope.warp is_declaration_word(view: any,
+// accepts: function), called with two values: the two-parameter one answers; prints yes
+words = ["var", "let"]
+is_declaration_word(n: Node): bool := match n {
+	Symbol(name): name in words
+	_: no
+}
+is_declaration_word(view: any, accepts: function): bool := view is list and #view == 2 and accepts(view#2)
+print is_declaration_word(["type", 5], x => x > 3)
