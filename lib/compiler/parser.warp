@@ -1869,6 +1869,10 @@ def prefixed(p: Parser): Node := {
 	if event != ø { return event }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else ø
 	if declared != ø { return declared }
+	if word == DATA_WORD and peek(p.code, p.at + word.length, p.n) == ' ' {
+		literal = data_literal(p)
+		if literal != ø { return literal }
+	}
 	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
 	if form == "not" or no_asks_emptiness(p, word) {
 		p.at = p.at + word.length
@@ -1876,6 +1880,26 @@ def prefixed(p: Parser): Node := {
 		return Key(ø, Op.Not, expression(p, 105))
 	}
 	atom(p)
+}
+
+// `x = data a and b` is the data `a and b`, also as an operand (`string(data a and b)`); parentheses around all of it
+// only group it (`data (a and b)`); ø for `data = …`, `data.x`, glued `data(x)` and `data class`, where data stays a word
+// Rust twin: literals/data.rs try_parse_data
+DATA_WORD = "data"
+def data_literal(p: Parser): Node := {
+	before = p.at
+	p.at = p.at + DATA_WORD.length
+	skip_spaces(p)
+	if "}]);,\n\r".contains(peek(p.code, p.at, p.n)) or operator_at(p).length > 0 or word_at(p) == "class" {
+		p.at = before
+		return ø
+	}
+	read = expression(p, binding_powers("=")#2)
+	written = match read {
+		List(parts, Bracket.Round, separator): { if #parts == 1 then parts#1 else read }
+		_: read
+	}
+	listed("", " ", [symbol(DATA_WORD), written])
 }
 
 // `if no xs`: in a condition `no` before an operand asks for emptiness as `not xs` does; elsewhere, or before an
@@ -3387,7 +3411,8 @@ def named(p: Parser): Node := {
 	}
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
-	arguments = typed_parameters(items_until(p, ')', "("))
+	written = items_until(p, ')', "(")
+	arguments = typed_parameters(written)
 	skip_spaces(p)
 	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
@@ -3395,7 +3420,16 @@ def named(p: Parser): Node := {
 		// the head is the call f(x, y)
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
-	listed("(", "", [name] + spread(arguments))
+	listed("(", "", [name] + (if word == PRINT_WORD then print_arguments(written) else spread(arguments)))
+}
+
+// `print(a b)`, `print(match n {…})`: words set apart by blanks are the one value printed; `print(a, b)` prints each
+// Rust twin: commands.rs print_arguments
+PRINT_WORD = "print"
+def print_arguments(arguments: Node): list {
+	parts = group_parts(arguments)
+	if parts != ø and parts#2 == " " and #parts#3 > 1 { return [arguments] }
+	spread(arguments)
 }
 
 // The type names that take type arguments in angle brackets besides the plural and capitalized ones

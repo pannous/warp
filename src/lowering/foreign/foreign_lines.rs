@@ -33,11 +33,20 @@ fn builtin_line(node: &Node, name: &str) -> Node {
 
 /// `is_null(x: any): bool from runtime` (decision bodiless-imports): the self-hosted emitter supplies the word as an
 /// intrinsic; the Rust lane, which has none, compiles the declaration as a function that traps when called, so a
-/// runtime part of lib/compiler/runtime/ compiles alone
+/// runtime part of lib/compiler/runtime/ compiles alone. A value the emitter supplies, `failed_in: text from runtime`,
+/// is a global starting at its type's zero (ø for a type of none)
 fn runtime_line(node: &Node) -> Node {
 	let Some(signature) = signature_of(node) else {
 		return node.clone();
 	};
+	if let Node::Key(name, Op::Colon, type_name) = signature.drop_meta() {
+		if let Node::Symbol(name) = name.drop_meta() {
+			let zero = crate::analyzer::type_word_kind(&type_name.name())
+				.and_then(crate::declarations::zero_value)
+				.unwrap_or(Node::Empty);
+			return crate::warp_parser::parse_generated(&format!("global {name} = {}", zero.serialize()));
+		}
+	}
 	let unreachable = crate::wasm_emitter::functions::wasm_bodies::UNREACHABLE;
 	let call = format!("{}(\"{unreachable}\")", crate::words::WASM_INSTRUCTION_CALL);
 	crate::warp_parser::parse_generated(&format!("{} := {call}", signature.serialize()))
@@ -91,7 +100,9 @@ fn foreign_line(items: &[Node]) -> Option<(String, String)> {
 		Node::Key(head, Op::Colon, _) => head.drop_meta(),
 		head => head,
 	};
-	Some((function_name(head)?, library))
+	// a value only the runtime supplies, `failed_in: text from runtime`, is named by its word
+	let value_name = || head.symbol_name().filter(|_| library == crate::ffi::RUNTIME_LIBRARY).map(str::to_string);
+	Some((function_name(head).or_else(value_name)?, library))
 }
 
 /// `cbrt(x: float)`, or `sqrt(x: float)` as the parser reads it: the prefix operator √ applied

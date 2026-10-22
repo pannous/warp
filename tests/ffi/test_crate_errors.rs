@@ -11,6 +11,7 @@ fn try_catches_a_crate_error() {
 }
 
 #[test]
+#[ignore = "redundant: covered by ffi::test_cargo_crates::test_cargo_crate_errors_are_loud"]
 fn an_uncaught_crate_error_says_only_what_the_crate_said() {
 	fails_with("use cargo semver; semver.Version.parse(\"x\")", "unexpected character 'x'");
 	let error = warp::wasm_emitter::eval("use cargo semver; semver.Version.parse(\"x\")").serialize();

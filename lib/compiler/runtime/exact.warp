@@ -6,6 +6,7 @@ use "conversions.warp"
 use "errors.warp"
 use "floats.warp"
 use "instructions.warp"
+use "../byte_codes.warp"
 int_gcd(a: int, b: int): int := {
 	if a < 0 { a = -a }
 	if b < 0 { b = -b }
