@@ -9,3 +9,5 @@ rewrite (thrice $body) => (3 times $body) where $body is block
 # the condition holds the body and the step (a `continue` in the body is refused until the step is marked `loop·step:` as
 # for_loops.warp marks it, card lib-sugar-loops)
 rewrite for($start; $condition; $step) {$body...} => ($start; while $condition { $body...; $step })
+# `for xs {…}` loops with the variable `it`
+rewrite (for $xs $body) => (for it in $xs $body) where $body is block

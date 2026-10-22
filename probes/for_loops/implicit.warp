@@ -1,0 +1,8 @@
+// expected: 6 6 2 (`for xs {…}` loops with the variable `it`)
+s = 0
+for [1, 2, 3] { s += it }
+t = 0
+for 1 to 3 { t += it }
+n = 0
+for "ab" { n += 1 }
+print "$(s) $(t) $(n)"
