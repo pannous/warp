@@ -153,4 +153,36 @@ expect "C: a missing library is a clear error" 1 "the C library nosuchlib of the
 	-- "$host" nolib.wasm
 expect "C: a missing symbol is a clear error" 1 "the C library c has no function no_such_c_function" -- "$host" nosymbol.wasm
 
+# run_wasm (card warp-host-run-wasm): a module's bytes run inside the program's warp-host, with the same imports and
+# stdout; compile_wasm gives a program's bytes
+wat answer '(module (func (export "main") (result i64) (i64.const 42)))'
+wat trapping '(module (func (export "main") (result i64) unreachable))'
+wat printing '(module (import "wasi_snapshot_preview1" "fd_write" (func $w (param i32 i32 i32 i32) (result i32)))
+	(memory (export "memory") 1) (data (i32.const 16) "printed by the module\n")
+	(func (export "main") (result i64) (i32.store (i32.const 0) (i32.const 16)) (i32.store (i32.const 4) (i32.const 22))
+		(drop (call $w (i32.const 1) (i32.const 0) (i32.const 1) (i32.const 8))) (i64.const 7)))'
+program run_answer 'use os' 'use file' 'print run_wasm(read_bytes("answer.wasm"))'
+program run_twice 'use os' 'use file' 'b = read_bytes("answer.wasm")' 'print "first " + run_wasm(b)' \
+	'print "second " + run_wasm(b)'
+program run_trapping 'use os' 'use file' 'try run_wasm(read_bytes("trapping.wasm")) catch e { print "caught " + e }'
+program run_printing 'use os' 'use file' 'x = run_wasm(read_bytes("printing.wasm"))' 'print "then " + x'
+program run_compiled 'use os' 'print run_wasm(compile_wasm("6*7"))'
+# the module's machine code, cached: an empty cache with the suite's as the shipped one, and a module of its own
+wat cached '(module (func (export "main") (result i64) (i64.const 43)))'
+program run_cached 'use os' 'use file' 'print run_wasm(read_bytes("cached.wasm"))'
+fresh=$stage/run-wasm-cache
+rm -rf "$fresh"
+cached() { # cached: run_cached.warp's output, then how much machine code the empty cache holds
+	WARP_HOST_SHIPPED_CACHE=$WARP_HOST_CACHE WARP_HOST_CACHE=$fresh "$host" run run_cached.warp
+	echo "machine code: $(find "$fresh" -name '*.cwasm' 2>/dev/null | wc -l | tr -d ' ')"
+}
+expect "run_wasm of a module giving 42" 0 "42" -- "$host" run run_answer.warp
+expect "run_wasm: the second run of the same bytes" 0 "first 42" "second 42" -- "$host" run run_twice.warp
+expect "run_wasm: a first run makes the module's machine code" 0 "43" "machine code: 1" -- cached
+expect "run_wasm: a warm run takes it from the cache, making none" 0 "43" "machine code: 1" -- cached
+expect "run_wasm: a trap is an Error" 0 "caught os.run_wasm: wasm trap: wasm \`unreachable\` instruction executed" \
+	-- "$host" run run_trapping.warp
+expect "run_wasm: the module prints to the same stdout" 0 "printed by the module" "then 7" -- "$host" run run_printing.warp
+expect "run_wasm(compile_wasm(\"6*7\")) evaluates code" 0 "42" -- "$host" run run_compiled.warp
+
 if [ "$failed" = 0 ]; then echo "✓ $run tests passed"; else echo "✗ $failed of $run tests failed"; exit 1; fi
