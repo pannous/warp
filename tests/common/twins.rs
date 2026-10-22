@@ -234,8 +234,9 @@ fn module_value(module: &Node, units: Option<&str>) -> Node {
 	let units_entry = units.map(|units| (UNITS_ENTRY, Node::text(units)));
 	let bytes: Option<Vec<u8>> = items.iter().map(byte).collect();
 	let bytes = bytes.map(|bytes| with_entries(bytes, units_entry.into_iter().collect()));
-	let wasi = warp::run::wasm_reader::Imports { wasi: true, ..Default::default() };
-	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes_with_imports(&bytes, wasi)) {
+	// every import family the module may name: WASI, the host's words, libm (a float raised to a power)
+	let imports = warp::run::wasm_reader::Imports::EVERY;
+	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes_with_imports(&bytes, imports)) {
 		Some(Ok(value)) => value,
 		Some(Err(failure)) => Node::text(&format!("{MODULE_FAILED}{failure}")),
 		None => Node::text("a module byte beyond 0..255"),

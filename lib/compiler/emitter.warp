@@ -91,13 +91,6 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 # phrases whose meaning moves out of the compiler into warp library words (card phrases-out-of-core): refused by name
 # until the word exists, never compiled as an unknown name
 pending_library_words = {times: "`n times`", once: "`once …`", twice: "`twice …`", thrice: "`thrice …`"}
-# the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64)
-wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
-	"i64.div_s": 127, "i64.div_u": 128, "i64.rem_s": 129, "i64.rem_u": 130, "i64.and": 131, "i64.or": 132, "i64.xor": 133,
-	"i64.shl": 134, "i64.shr_s": 135, "i64.shr_u": 136, "i64.rotl": 137, "i64.rotr": 138, "f64.abs": 153, "f64.neg": 154,
-	"f64.ceil": 155, "f64.floor": 156, "f64.trunc": 157, "f64.nearest": 158, "f64.sqrt": 159, "f64.add": 160, "f64.sub": 161,
-	"f64.mul": 162, "f64.div": 163, "f64.min": 164, "f64.max": 165, "f64.copysign": 166, "i64.trunc_f64_s": 176,
-	"i64.trunc_f64_u": 177, "f64.convert_i64_s": 185, "f64.convert_i64_u": 186, "i64.reinterpret_f64": 189, "f64.reinterpret_i64": 191}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
@@ -232,14 +225,25 @@ refuse(why: text): any := {
 	throw outside_the_core + why
 }
 
-# a refused form in a few words: `key :=`, `group ( memo_known`, a name
+# a refused form as the program writes it, in a few words: `… := …`, the call `memo_known(…)`, a name
 form_of(n: any): text := {
-	if type(n) is key { return "key " + op_of(n) }
+	if type(n) is key and key_of(n) == symbol(opaque_word) { return opaque_form(value_of(n)) }
+	if type(n) is key { return "`… " + op_of(n) + " …`" }
 	if n is symbol { return name_of(n) }
-	if is_group(n) and #n > 0 and n#1 is symbol { return "group " + bracket_of(n) + " " + name_of(n#1) }
-	if is_group(n) { return "group " + bracket_of(n) }
+	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol { return "the call " + name_of(n#1) + "(…)" }
+	if is_group(n) and #n > 0 and n#1 is symbol { return "`" + opening_of(bracket_of(n)) + name_of(n#1) + " …`" }
+	if is_group(n) { return "the group " + opening_of(bracket_of(n)) + "…" }
 	"a " + type(n).name
 }
+# a template, an error value or an empty group, which travel behind the opaque word (walk.warp), in the program's words
+opaque_form(view: any): text := {
+	kind = kind_of(view)
+	if kind == "list" { return "the empty group " + bracket_pair(view#2) }
+	if kind == "error" { return "an error value" }
+	"a " + kind
+}
+opening_of(bracket: text): text := if bracket == "" then "(" else bracket
+bracket_pair(bracket: text): text := {"(": "()", "[": "[]", "{": "{}"}[opening_of(bracket)] ?? "()"
 
 # a function made with no parameters, its body given later or its code written by the caller
 # `: any` until card class-named: a class Function as a result type fails in the Rust lane
@@ -247,7 +251,6 @@ bare_function(name: text): any := Function(name, Signature(), ø)
 
 # `(name params…) := body` at the program's top level, its head; `name := body` reading `it` is a function of `it`, and
 # `name := { statements }` one of none (Rust's defined_function); `x := 5` is a value (assignment_operators)
-implicit_parameter = "it"
 function_head(n: any): any := {
 	if not (type(n) is key and op_of(n) == ":=") { return ø }
 	left = key_of(n)
@@ -749,7 +752,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
-	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
+	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
 	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", byte_at: "text_byte", float_bits: "bits_of_float"}
 # node_order knows no user compare: a program ordering instances by its own sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
@@ -1192,10 +1195,13 @@ def optional_declaration(body: Body, name: text, type_name: text, value: any): l
 # a value as the declared kind takes it: an int widened to a float, a char (a one-character text) to a text, a value known only at run time checked (a list
 # one stays a node, as Rust keeps ø), else of that kind
 def admitted(value: any, kind: text): list {
-	if value#1 == kind or value#1 == pending { return value }
+	if value#1 == kind { return value }
 	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
 	if value#1 == "char" and kind == "text" { return shown_text(value) }
 	if value#1 == "node" and kind in field_checks { return runtime_call(field_checks[kind], [value]) }
+	# the result of a call still compiling (pending), or a kind guessed from one (`f(x) + g(x)` an int), is held as the
+	# declared kind: the reading is done again once the call's result is known
+	if value#1 == pending or module.saw_pending { return [kind, value#2] }
 	refuse("a " + value#1 + " given to a variable declared " + kind)
 }
 def whole(value: any): list { admitted(value, "int") }
@@ -1896,6 +1902,8 @@ def key_expression(body: Body, n: any): list {
 	if body.intrinsics and table_number(left, read_field(n)) != ø { return number_value(table_number(left, read_field(n))) }
 	# `{}`: a map of no entries, not ø, so the entries a function given it writes reach every holder, as in Rust's
 	if is_empty_map(n) { return ["node", node(Marked.Map, vector_code([]))] }
+	# `[]`, held behind the opaque word as Rust's parser builds it: a list of no items
+	if is_empty_list(n) { return list_value(body, []) }
 	if operator == ":" and left is symbol and name_of(left) in data_item_checks { return data_item(body, name_of(left), right) }
 	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right, yes) }
 	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø, no) }
@@ -1914,8 +1922,7 @@ def key_expression(body: Body, n: any): list {
 	if is_loop_step(n) { return expression_code(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
-	# `{}`, held behind the opaque word so number_keys.warp can key it: an empty map
-	if is_empty_map(n) { return map_value(body, []) }
+	if left == symbol(opaque_word) { return refuse(opaque_form(right)) }
 	# the key of `Point{x: 1}` has no operator as parser.warp reads it, `:` as Rust's analysis view shows it
 	# `P{}`: every field its default (an empty group reads as ø, or as the opaque `{}`)
 	if operator == "" and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
@@ -2060,9 +2067,11 @@ def logical(body: Body, symbol: text, left: any, right: any): list {
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_body(f: Function): Body := {
 	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [], {})
-	for i in 0..<#f.signature.parameters { local_index(scope, f.signature.parameters[i].name, f.kinds[i]) }
+	for i in 0..<#f.signature.parameters { local_index(scope, parameter_local_name(scope, f.signature.parameters[i].name, i), f.kinds[i]) }
 	scope
 }
+# every parameter has a local of its own: a name given twice, `middle(_, value, _)`, names only the first
+parameter_local_name(scope: Body, name: text, i: int): text := if name in scope.names then "·parameter" + i else name
 
 # is the program analyzed (WARP_SELF_ANALYSIS): then a node meeting a list or text holds one, as analyzer.warp found
 analyzed_program(): bool := module.kinds != ø and "value" in module.kinds
@@ -2487,7 +2496,11 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 			seen = #module.closures + #module.dispatchers
 			for f in module.dispatchers { if f.name == closure_text_name { closure_text_code(f) } else { dispatcher_code(f) } }
 		}
-		for f in module.rereads { body_code(f) }
+		# every function compiled, no call gives a guessed kind any more
+		for f in module.rereads {
+			module.saw_pending = no
+			body_code(f)
+		}
 		if main.result != "int" and main.result != "float" {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"

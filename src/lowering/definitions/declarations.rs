@@ -950,7 +950,9 @@ fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) ->
 					false => lower_lists(item, lowering),
 				})
 				.collect();
-			lowering(&items).unwrap_or(Node::List(items, bracket, separator))
+			// `[a, _]`, `[f x]`: a list literal is data or a pattern, no call nor definition (its `_` no placeholder)
+			let lowered = if bracket == Bracket::Square { None } else { lowering(&items) };
+			lowered.unwrap_or(Node::List(items, bracket, separator))
 		}
 		other => children_rewritten(other, |child| lower_lists(child, lowering)),
 	}

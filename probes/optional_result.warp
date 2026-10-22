@@ -1,0 +1,11 @@
+def f(x: int): list? {
+	found = ø
+	if x > 0 { found = [x] }
+	found
+}
+print(f(0))
+print(f(2))
+def k(x: int): int? { ø }
+print(k(2))
+c = yes
+print(c ? {1} : {2})
