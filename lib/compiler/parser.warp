@@ -832,7 +832,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = keyed(op#2, left, ø)
 			} else {
 				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else expression(p, powers#2)
-				left = keyed(op#2, left, if op#2 == ":" then with_switch_cases(p, right) else right)
+				left = keyed(bit_operator(op#1, left, right, op#2), left, if op#2 == ":" then with_switch_cases(p, right) else right)
 				// `{f: x => x * 2}`: the field f holds the lambda; `f: (float) -> float` stays a typed name
 				if op#1 == "=>" { left = field_holding_lambda(left) }
 			}
@@ -840,6 +840,26 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 	}
 	left
 }
+
+// `3 & 5`, `a & 1`, `x | 4`: a single `&` or `|` between operands that may be whole numbers combines their bits, between
+// others it is and/or (`yes & no`, `a > 1 & b`, `int | text`); `xs | sort` stays an or, which may pipe; else `spelled`
+// Rust twin: expressions.rs bitwise, pipes.rs may_be_stage
+def bit_operator(written: text, left: Node, right: Node, spelled: text): text {
+	if not (written == "&" or written == "|") or not may_be_whole_number(left) or not may_be_whole_number(right) { return spelled }
+	if written == "|" and right is symbol { return spelled }
+	written
+}
+
+// A number, a name or an operation that may give a whole number: no float, text, list, type word, capitalized name,
+// comparison or logical operation
+// Rust twin: lowering/nodes.rs may_be_whole_number
+def may_be_whole_number(n: Node): bool := match n {
+	Symbol(name): not is_type_word(name) and not is_capitalized(name)
+	Key(left, op, right): not (NOT_WHOLE_OPERATORS contains op)
+	List(items, bracket, separator): bracket != Bracket.Square and (items is empty or may_be_whole_number(items#1))
+	_: n is int and not (n is bool)
+}
+NOT_WHOLE_OPERATORS = [Op.Eq, Op.Is, Op.Ne, Op.Identical, Op.NotIdentical, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.And, Op.Or, Op.Xor, Op.Not]
 
 // `a ?: b` is `a ? a : b`, also the schema field `debug?: bool`; a left side that is no plain name is evaluated once,
 // into a hidden variable

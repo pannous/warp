@@ -59,7 +59,8 @@ arm_result(arm: Node): Node := match arm {
 # `or`): one it equals one of
 is_value_pattern(pattern: Node, variants: any): bool := pattern is bool or match pattern {
 	ø: yes
-	Key(left, Op.Or, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
+	# `1 | 2`, read as the bits' or between whole numbers (parser.warp bit_operator), names alternatives too
+	Key(left, Op.BitOr, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
 	Symbol(name): name in variants
 	Number(value): yes
 	Text(value): yes
@@ -75,6 +76,7 @@ is_value_pattern(pattern: Node, variants: any): bool := pattern is bool or match
 # the subject equals the value, or one of the alternatives
 value_test(subject: Node, pattern: Node): Node := match pattern {
 	Key(left, Op.Or, right): Key(value_test(subject, left), Op.Or, value_test(subject, right))
+	Key(left, Op.BitOr, right): Key(value_test(subject, left), Op.Or, value_test(subject, right))
 	_: Key(subject, Op.Eq, pattern)
 }
 
