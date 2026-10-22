@@ -27,7 +27,7 @@ fun dijkstra(graph, start) {
 				current = node
 			}
 		}
-		if current == "" { break }
+		if current is empty { break }
 		visited.push(current)
 		for edge in graph[current] {
 			neighbor = edge#1
