@@ -2223,6 +2223,7 @@ literal_kind(n: any): any := {
 	if n is bool { return "bool" }
 	if n is text { return if #n == 1 then "char" else "text" }
 	if n is int { return "int" }
+	if n is float { return "float" }
 	ø
 }
 def collect_literal_arguments(n: any) {
