@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+# `a and b`, `a or b` with a list or text beside a yes/no give one of them, as Rust does (card parser-front)
+# want: [1 2], 0, a, [1 2], [1 2], has, empty on Rust, WARP_SELF_HOSTED=1 and warp pure
+xs = [1 2]
+e = []
+n = 3
+print(n > 1 and xs)
+print(n > 5 and xs)
+print(e or "a")
+print(xs or "a")
+print(n > 5 or xs)
+if n > 1 and xs { print "has" }
+if n > 1 and e { print "bad" } else { print "empty" }
