@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+# uses.warp's with_uses run in the Rust lane on both.warp: two used files declaring named(x) differently are an error
+use "../../lib/compiler/uses.warp"
+folder = module_directory
+program = parsed(file_text(folder + "/both.warp"))
+print(with_uses(plain_node(program), folder))

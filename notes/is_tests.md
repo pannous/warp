@@ -46,6 +46,23 @@ expectations (Node::Symbol, error values, texts of lists, divisions: `1.0 / 3.0`
 2026-10-19: 10498 of 12063 written into 1602 files (pairs and is! files) (skipped: 715 code no literal, 508 #[ignore], the rest Rust-only
 expectations). Comments are `#` lines (warp format's hint).
 
+## `warp test [folder…]`: the pure runner (card warp-test-runner)
+`warp test` (tests/ by default) or `warp test <folder>…` runs every `*.pairs.warp` pair and every top-level `is!`
+line of the `test_*.warp` files under the folders through `warp pure`, with the installed binary, no cargo
+(src/compiler/pure_tests.rs). Each test is its own program in a child process (`warp test --case <file> <index>`,
+half the cores, at most 8 at once, 30 s each), so a hang, trap or crash fails only that test. Its `use` reads from
+the test file's folder. An expected column that is not data (`π`, `(-1)`, `1 + pi`) runs through `warp pure` too.
+Matching as the prelude's is!: `got == expected`, or both falsy, never an error. Prints ⊘ for skipped pairs, a ✗ line
+per failure (`file:line "code" expected: got …`), then `m of n failed in f files, s skipped`; exits 1 on a failure.
+`--self`: through `warp self` (compiler-self.wasm); `--each`: a ✓ line for each passed test too. The verdict lines
+print in file order after the run, so two runs (pure and self) diff line by line. The parent builds a missing
+compiler first, so children never race to build it. `warp test <file.warp>` keeps the Rust pipeline (user 2026-10-21,
+decision test-keyword: all three commands take test blocks once compiler.warp learns them, card test-pure). Probe:
+probes/warp_test_runner/run.sh. Cloud: `scripts/cloud-test.sh <branch> <tip> --warp-test [folder…]`.
+`warp pure "2+3*4"` / `warp self "…"`: inline code through the warp compiler, `use` reading from the current folder.
+- 2026-10-21 tests/functions: 1125 of 1430 failed in 42 s; most were one error, library words (`reverse`, `sum`)
+  failing in `warp pure` with "not a list at 28:2" (card pure-library-words).
+
 ## The fast lane
 `scripts/is_tests.py run [normal|emitter|pure|pure-only] [-- files]`: `warp test` per file, 4 at once,
 WARP_EMIT_REFUSALS per lane; counts and logs in data/is_tests/. Lanes: normal (Rust), emitter (WARP_SELF_HOSTED=1),

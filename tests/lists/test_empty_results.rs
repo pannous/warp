@@ -21,5 +21,5 @@ fn an_empty_result_is_a_list() {
 	is!("xs = [1, 2]; type(xs[0..<0])", "list");
 	is!("xs = [1]; xs.pop(); type(xs)", "list");
 	is!("xs = [1, 2]; ys = xs.filter(x => x > 5); ys + \"a\"", warp::parse("[\"a\"]"));
-	is!("xs = [1, 2]; xs[0..<0] == ø", true);
+	is!("xs = [1, 2]; xs[0..<0] == ø", false); // decision empty-is-not-missing
 }

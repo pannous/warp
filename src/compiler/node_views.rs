@@ -28,7 +28,8 @@ pub fn positioned_view(node: &Node) -> Node {
 /// ["data", "#i"] or ["number", "#i"], its handle in
 /// the returned nodes: `node_of_handled_view` puts the node back where a warp stage left the handle
 pub fn handled_plain_view(node: &Node) -> (Node, Vec<Node>) {
-	let viewer = Viewer { handles: Some(std::cell::RefCell::new(vec![])), marks: true, ..Viewer::default() };
+	// positions too: a warp pass keeps them on the nodes it leaves alone (walk.warp stage_view, card front-end-warnings)
+	let viewer = Viewer { handles: Some(std::cell::RefCell::new(vec![])), marks: true, positions: true.into() };
 	// the attribute layers stay: the Rust passes after the warp stage read them (the mark of `x!`, `extends`)
 	let view = without_layers(viewer.view(node), &["literal"]);
 	(view, viewer.handles.map(std::cell::RefCell::into_inner).unwrap_or_default())
@@ -338,7 +339,16 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 			_ => return Err(unreadable()),
 		},
 		"attribute" => node(3)?.with_attribute(&text(1)?, node(2)?),
-		"literal" | "at" => node(parts.len() - 1)?,
+		// a position parser.warp or a warp pass hands on: the Rust passes after it and the diagnostics read it
+		"at" => {
+			let place = |index: usize| match parts.get(index).map(Node::drop_meta) {
+				Some(Node::Number(Number::Int(value))) => usize::try_from(*value).ok(),
+				_ => None,
+			};
+			let (line, column) = place(1).zip(place(2)).ok_or_else(unreadable)?;
+			node(3)?.with_meta_data(crate::compiler::meta::LineInfo::at(line, column, ""))
+		}
+		"literal" => node(parts.len() - 1)?,
 		"template" => crate::text::interpolation::template_text(&text(1)?),
 		_ => return Err(unreadable()),
 	})

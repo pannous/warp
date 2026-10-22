@@ -217,12 +217,24 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widenings: int = 0 }
+# program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
+# the program's latest written node being emitted, the place a refusal names (card error-names)
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widenings: int = 0; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
 refuse(why: text): any := {
-	throw outside_the_core + why
+	throw outside_the_core + why + module.emitting_at
+}
+
+# the file the program comes from, which a refusal names
+def emitting_file(file: text) { module.program_file = file }
+
+# a node of the program (no runtime word's) with a position: the place a later refusal names
+def note_emitting(body: Body, n: any) {
+	if body.intrinsics or not is_positioned(n) { return }
+	file = if module.program_file == "" then "" else module.program_file + ":"
+	module.emitting_at = " at " + file + line_of(n) + ":" + column_of(n)
 }
 
 # a refused form as the program writes it, in a few words: `… := …`, the call `memo_known(…)`, a name
@@ -1030,11 +1042,8 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	textual = x => condition(runtime_call("textual_node", [x]))
 	[kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, [kind, numbers])]
 }
-# `x == ø`, `x != ø` (a match's `ø:` case): ø and an empty list are nothing, as Rust's equality takes them
-def nothing_test(body: Body, symbol: text, n: any): list {
-	tested_as(symbol, runtime_call("is_nothing", [["node", boxed(expression_code(body, n))]]))
-}
-# `x === ø`, `x !== ø`: x is ø itself, the empty list not (== compares values, === also the kind, as Rust's)
+# `x == ø`, `x === ø` and their negations (a match's `ø:` case): x is ø itself, missing; an empty list, text or map
+# is a value (decision empty-is-not-missing)
 def identity_with_nothing(body: Body, symbol: text, n: any): list {
 	tested_as(symbol, ["bool", boxed(expression_code(body, n)) + [op.ref_is_null]])
 }
@@ -1702,6 +1711,7 @@ appends_only(n: any, name: text): bool := {
 }
 
 def expression_code(body: Body, n: any): list {
+	note_emitting(body, n)
 	if n is bool { return ["bool", [op.i32_const, if n then 1 else 0]] }
 	if n is number { return number_value(n) }
 	if n is text { return text_value(n) }
@@ -1717,8 +1727,10 @@ def expression_code(body: Body, n: any): list {
 	group_expression(body, n)
 }
 
-# `data e`: e as written, a node (Rust's blocks.rs as_data); `parse("a + 1")` is `as_code(data a + 1)`
-is_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol(quote_word)
+# `data e`, glued `data(e)`: e as written, a node (Rust's blocks.rs as_data, written_quote); `parse("a + 1")` is
+# `as_code(data a + 1)`
+is_quote(n: any): bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == symbol(quote_word)
+is_spaced(n: any): bool := bracket_of(n) == "" and separator_of(n) == " "
 # `print data (a + 1)`, `as_code(data (a + 1))`: a `data` after the head of a line or call quotes the item after it;
 # its place, else 0
 inline_quote_at(n: any): int := {
@@ -2042,8 +2054,7 @@ def key_expression(body: Body, n: any): list {
 	if operator == "√" and left == ø { return ["float", converted(expression_code(body, right), "float") + [wasm_instructions["f64.sqrt"]]] }
 	if left === ø or right === ø {
 		other = if left === ø then right else left
-		if operator in identities { return identity_with_nothing(body, operator, other) }
-		if operator in equalities { return nothing_test(body, operator, other) }
+		if operator in identities or operator in equalities { return identity_with_nothing(body, operator, other) }
 		return refuse("the operator " + operator + " with nothing " + (if left === ø then "before" else "after") + " it")
 	}
 	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }
@@ -2494,6 +2505,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 }
 module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	module.kinds = kinds
+	module.emitting_at = ""
 	module.functions = {}
 	module.order = []
 	module.runtime = {}

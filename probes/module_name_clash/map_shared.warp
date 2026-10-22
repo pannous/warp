@@ -1,0 +1,6 @@
+g(m: any, k: text) := {
+	m[k] = 1
+}
+m = {}
+g(m, "a")
+print("a" in m)

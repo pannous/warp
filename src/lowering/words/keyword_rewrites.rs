@@ -87,5 +87,5 @@ fn is_word_of_item(item: &Node, triggered_by: fn(&str) -> bool) -> bool {
 }
 
 fn is_word(node: &Node, triggered_by: fn(&str) -> bool) -> bool {
-	node.drop_meta().symbol_name().is_some_and(|word| triggered_by(word))
+	node.drop_meta().symbol_name().is_some_and(triggered_by)
 }

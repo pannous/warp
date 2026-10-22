@@ -145,7 +145,7 @@ is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
 is_word_char(c) := is_alphanumeric(c) or c == '_'
 // at least one character, each passing is_class: consists_of("42", is_digit)
-consists_of(t: text, is_class) := { if t == "" { return false }; for c in t { if not is_class(c) { return false } }; true }
+consists_of(t: text, is_class) := { if t is empty { return false }; for c in t { if not is_class(c) { return false } }; true }
 // a whole number, optionally signed: "-3"
 is_integer(t: text) := consists_of(remove_prefix(t, "-"), is_digit)
 // a hole's text fits its type in a text pattern: `"/users/" + id: int`, `"v" + n: digits`, `c: letter + "!"`
