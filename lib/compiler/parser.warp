@@ -596,16 +596,19 @@ def indented_block(p: Parser): Node := {
 	listed("{", "", [block])
 }
 
-// The `end` or `fi` alone on the line after a block read by indentation, at the head's indent, read; the line break
-// before the next statement stays
+// The words that may stand alone on the line after a block read by indentation: Ruby's `end`, the shell's `fi`
+INDENTED_BLOCK_ENDS = ["end", "fi"]
+// One of INDENTED_BLOCK_ENDS alone on the line after a block read by indentation, at the head's indent, read; the
+// line break before the next statement stays
 // Rust twin: blocks.rs skip_end_line
 def skip_end_line(p: Parser) {
 	before = p.at
 	newline = skip_blanks(p)
-	closer = if keyword_at(p, "end") then 3 else if keyword_at(p, "fi") then 2 else 0
-	if newline and closer > 0 and line_indent(p) == p.indent and line_ends_after(p, p.at + closer) {
-		p.at = p.at + closer
-		return
+	for closer in INDENTED_BLOCK_ENDS {
+		if newline and keyword_at(p, closer) and line_indent(p) == p.indent and line_ends_after(p, p.at + closer.length) {
+			p.at = p.at + closer.length
+			return
+		}
 	}
 	p.at = before
 }
@@ -2350,13 +2353,11 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 		p.in_branch = word == "if"
 		body = expression(p, 0)
 		p.in_branch = outer
-	} else if word == "while" {
-		// `while x-- > 0`: a loop without a body, its condition does the work
-		return Key(keyed(word, ø, condition), Op.Do, ø)
 	} else {
-		// `while m > 1` ending its line: the lines indented below (Rust twin: blocks.rs indented_lines_below)
+		// `while m > 1` ending its line: the lines indented below (Rust twin: blocks.rs indented_lines_below); without
+		// them `while x-- > 0` is a loop without a body, its condition does the work
 		body = if only_blanks_before_newline(p) then indented_block(p) else ø
-		if body == ø { return keyed(word, ø, condition) }
+		if body == ø { return if word == "while" then Key(keyed(word, ø, condition), Op.Do, ø) else keyed(word, ø, condition) }
 	}
 	head = keyed(word, ø, condition)
 	if word == "while" { return Key(head, Op.Do, body) }

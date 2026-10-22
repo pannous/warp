@@ -1,0 +1,4 @@
+// expected: 1 (a loop without a body; x-- gives the new value)
+x = 3
+while x-- > 0
+print x + 1
