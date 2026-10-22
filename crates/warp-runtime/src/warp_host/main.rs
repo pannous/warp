@@ -32,7 +32,7 @@ pub struct Host {
 	scratch: Option<(u32, u64)>,
 	args: Vec<String>,
 	/// whose kept values os.kept reads: the compiler module and lib/ it compiles with, else the program
-	keeper: Option<String>,
+	keeper: Option<cache::Keeper>,
 	/// the engine of the run, for the modules it runs itself (os.run_wasm) and the code it compiles (os.compile_wasm)
 	engine: Engine,
 }
@@ -156,7 +156,11 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 		.ok_or(format!("no {compiler} beside warp-host nor in {}/../data", lib.display()))?;
 	let bytes = std::fs::read(&compiler).map_err(|problem| format!("{}: {problem}", compiler.display()))?;
 	let keeper = cache::fingerprint((&bytes, cache::folder_fingerprint(&lib)));
+	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
+		eprintln!("warp-host: {} with lib/ {}, kept values {keeper}", compiler.display(), lib.display());
+	}
 	let argv = [compiler.as_path(), &source, &absolute(wasm), &folder, &lib].map(|path| path.display().to_string());
+	let keeper = cache::Keeper { key: keeper, library: argv[4].clone() };
 	match run_wasm(engine, &bytes, argv.to_vec(), Some(keeper), true) {
 		Ran::Value(Node::Error(message)) => Err(String::from_utf8_lossy(&message).into_owned()),
 		Ran::Failed(message) => Err(message),
@@ -229,7 +233,7 @@ fn on_own_stack<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) ->
 
 /// Run a module's main (else _start) with WASI (stdio, environment, the file system at / and .) and the host's words;
 /// `cached`: its machine code from the cache (cache::module)
-fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<String>, cached: bool) -> Ran {
+fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cache::Keeper>, cached: bool) -> Ran {
 	let ran = || -> wasmtime::Result<Ran> {
 		let module = if cached { cache::module(engine, bytes)? } else { Module::new(engine, bytes)? };
 		let mut wasi = WasiCtxBuilder::new();
@@ -241,7 +245,7 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<Str
 			c: CHandles::default(),
 			scratch: None,
 			args: args.clone(),
-			keeper: keeper.clone(),
+			keeper,
 			engine: engine.clone(),
 		};
 		let mut linker = Linker::new(engine);

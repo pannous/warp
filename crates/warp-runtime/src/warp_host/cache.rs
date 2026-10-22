@@ -43,7 +43,7 @@ pub fn folder_fingerprint(folder: &Path) -> String {
 /// `<bin>/../share/warp/host-cache` or `<bin>/host-cache` beside warp-host (packaging fills it by one run with
 /// WARP_HOST_CACHE pointing there)
 fn folders() -> Vec<PathBuf> {
-	let beside = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf));
+	let beside = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok()?.parent().map(Path::to_path_buf));
 	let shipped = match std::env::var_os("WARP_HOST_SHIPPED_CACHE") {
 		Some(folder) => vec![PathBuf::from(folder)],
 		None => {
@@ -84,15 +84,23 @@ fn machine_code(engine: &Engine, bytes: &[u8], name: &str) -> Result<Module> {
 	Ok(module)
 }
 
+/// Whose kept values a run reads and writes: the compiler module and lib/ it compiles with (`key`), and that lib/'s
+/// path as the compiler was given it. compiler.warp names its values with the path ("… runtime words of <lib>"), so
+/// the path is taken out of the name: a cache made from the same lib/ elsewhere (shipped) matches
+pub struct Keeper {
+	pub key: String,
+	pub library: String,
+}
+
 /// The value kept under `name` by the program `keeper` names; None without one
-pub fn kept(keeper: &Option<String>, name: &str) -> Option<Node> {
+pub fn kept(keeper: &Option<Keeper>, name: &str) -> Option<Node> {
 	let file = kept_name(keeper.as_ref()?, name);
 	let bytes = folders().into_iter().find_map(|folder| std::fs::read(folder.join(&file)).ok())?;
 	nodes::decode(&mut bytes.as_slice())
 }
 
 /// Keep `value` for the next run; a value warp-host cannot keep (a function…) is computed again then
-pub fn keep(keeper: &Option<String>, name: &str, value: &Node) {
+pub fn keep(keeper: &Option<Keeper>, name: &str, value: &Node) {
 	let mut bytes = vec![];
 	if let (Some(file), Some(())) =
 		(keeper.as_ref().and_then(|keeper| kept_file(keeper, name)), nodes::encode(value, &mut bytes))
@@ -101,11 +109,12 @@ pub fn keep(keeper: &Option<String>, name: &str, value: &Node) {
 	}
 }
 
-fn kept_name(keeper: &str, name: &str) -> String {
-	fingerprint((keeper, name)) + ".kept"
+fn kept_name(keeper: &Keeper, name: &str) -> String {
+	let name = if keeper.library.is_empty() { name.to_string() } else { name.replace(&keeper.library, "<lib>") };
+	fingerprint((&keeper.key, name)) + ".kept"
 }
 
-fn kept_file(keeper: &str, name: &str) -> Option<PathBuf> {
+fn kept_file(keeper: &Keeper, name: &str) -> Option<PathBuf> {
 	Some(folder()?.join(kept_name(keeper, name)))
 }
 
