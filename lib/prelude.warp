@@ -76,7 +76,6 @@ list_become(place, fresh): same as place from emitter
 list_drop_last(place): same as place from emitter
 removed_value(x, k): any from emitter
 list_sorted_by(xs, keys): any from emitter
-string(x): text from emitter
 str(x): text from emitter
 text_form(x): text from emitter
 int(x): int from emitter
@@ -103,37 +102,7 @@ bracket_of(n): any from emitter
 separator_of(n): any from emitter
 bracketed(n, bracket): list from emitter
 separated(n, separator): list from emitter
-positioned(n, line, column): any from emitter
-// the calls lowering passes write: closures, cells and signals, memos, linear arrays, switch and extremum errors,
-// time points, Uniscript
-closure_new(values...): function from emitter
-cell_get(cell): any from emitter
-cell_set(cell, value): any from emitter
-signal_new(value): signal from emitter
-signal_listeners(signal): any from emitter
-signal_listeners_set(signal, listeners): any from emitter
-memo_known(values...): int from emitter
-memo_value(values...): int from emitter
-memo_store(values...): int from emitter
-linear_new(values...): int from emitter
-linear_count(values...): int from emitter
-linear_getf(values...): float from emitter
-linear_setf(values...): float from emitter
-linear_dotf(values...): float from emitter
-switch_no_case(values...): int from emitter
-empty_extremum(word): int from emitter
-instant_at(values...): time from emitter
-time_of(info, position): time from emitter
-floor_quotient(a, b): int from emitter
-zero_fill(count, filler): list from emitter
-instance_of(x, class_name): bool from emitter
-caught_error(finished, value): error from emitter
-byte_at(t, offset): int from emitter
-uniscript_error(values...): int from emitter
-uniscript_warnings(values...): int from emitter
-uniscript_to_unicode(values...): int from emitter
-uniscript_to_uniscript(values...): int from emitter
-uniscript_explicit(values...): int from emitter
+string(x): text from emitter
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
