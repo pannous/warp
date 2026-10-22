@@ -1,9 +1,11 @@
 //! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): lib/compiler/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
 //! build output (decision compiler-build): compiler.wasm, built by the Rust pipeline, for `warp pure`; compiler-self.wasm,
-//! compiler.warp compiled by itself through the pure lane, for `warp self`. Both lie next to the binary for the lib/ they
-//! record, for any other lib/ in <lib>/../data/; a missing one is built at its first run, an existing one only by
-//! `warp rebuild`, and a run on one built from another lib/ or warp build says so in one line.
+//! compiler.warp compiled by itself through the pure lane, for `warp self`. The pair next to the binary is the delivered
+//! one (a release's, or main's, stamped with the commit it was built from) and is used as it is, whatever lib/ beside
+//! it says (card installed-compilers); a lib/ named by WARP_LIB that the pair is not for keeps its own in
+//! <lib>/../data/, where a run on one built from another lib/ or warp build says so in one line. Only `warp rebuild`
+//! builds one: a missing one is an error naming it.
 use crate::compiler::self_hosted::{library, library_fingerprint, module_of_bytes, pure_bytes, WORKER_STACK};
 use crate::node::{error, Node};
 use crate::pipeline::CompiledModule;
@@ -13,8 +15,15 @@ const COMPILER_FILE: &str = "compiler/compiler.warp";
 /// The custom section of a build file naming what it was built from: lib/, lib/'s fingerprint, the warp build
 const BUILD_SECTION: &str = "warp.build";
 const BUILD_SEPARATOR: &str = "\n";
+/// The build section's parts judged for staleness (judged_build's), the commit after them
+const BUILD_PARTS_JUDGED: usize = 3;
+/// `warp rebuild [pure|self]`, the one command that builds a compiler
+const REBUILD_WORD: &str = "rebuild";
+const SHOWN_COMMIT_LENGTH: usize = 10;
 /// Where a lib/ other than the binary's keeps its build files, beside lib/
 const OTHER_LIBRARY_FOLDER: &str = "data";
+/// Names a lib/ of its own (a worktree's): only then can the compilers be other than those next to the binary
+const LIBRARY_VARIABLE: &str = "WARP_LIB";
 /// What a new build compiles once to compute its kept values
 const WARMING_PROGRAM: &str = "0";
 /// Set to 1: the warnings and hints of compiling compiler.warp itself are shown
@@ -122,23 +131,35 @@ pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	Ok(path)
 }
 
-/// The compiler's build file there, built first when missing: before many runs start at once, so none waits on a build
+/// The compiler's build file there, or the error naming `warp rebuild`: before many runs start at once
 pub fn prepare(by: Compiler) -> Result<(), Node> {
 	compiler(by).map(|_| ())
 }
 
-/// compiler.warp's module from its build file, built first when missing; one line when it was built from another lib/
-/// or warp build
+/// compiler.warp's module from its build file; a missing one is an error naming `warp rebuild`, never built here (card
+/// installed-compilers). One line when a worktree's build in data/ was built from another lib/ or warp build; the
+/// delivered pair next to the binary is used as it is
 fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
 	let path = build_path(by);
 	let Ok(bytes) = std::fs::read(&path) else {
-		eprintln!("building {} (later: warp rebuild)", path.display());
-		return build(by, &path);
+		let rebuild = format!("warp {REBUILD_WORD} {}", by.command());
+		return Err(error(&format!("no {} at {}: `{rebuild}` builds it", by.file_name(), path.display())));
 	};
-	if built_from(&bytes) != current_build() {
+	if !is_delivered(&path) && built_from(&bytes)[..BUILD_PARTS_JUDGED] != judged_build()[..] {
 		eprintln!("{} was built from another lib/ or warp build: `warp rebuild` builds it anew", path.display());
 	}
 	Ok(module_of_bytes(bytes))
+}
+
+/// The folder of the warp binary, where the delivered compilers lie
+fn binary_folder() -> Option<PathBuf> {
+	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;
+	binary.parent().map(Path::to_path_buf)
+}
+
+/// A build file next to the binary: the delivered compiler
+fn is_delivered(path: &Path) -> bool {
+	binary_folder().is_some_and(|folder| path.parent() == Some(folder.as_path()))
 }
 
 /// compiler.warp compiled by `by`, written to `path` with the build section
@@ -183,28 +204,70 @@ fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 /// What a build of now is made from: lib/, its fingerprint, the sources of this warp (WARP_SOURCE, build.rs)
-fn current_build() -> Vec<String> {
+fn judged_build() -> Vec<String> {
 	vec![library().display().to_string(), library_fingerprint(), env!("WARP_SOURCE").to_string()]
 }
 
-/// What a build file was made from, as current_build says it
-fn built_from(bytes: &[u8]) -> Vec<String> {
-	crate::host::host_parts::section_names(bytes, BUILD_SECTION, BUILD_SEPARATOR).unwrap_or_default()
+/// The build section's parts: judged_build's, then the commit of lib/'s checkout (the stamp of a delivered pair; not
+/// judged: a commit of notes alone changes it)
+fn current_build() -> Vec<String> {
+	let mut parts = judged_build();
+	parts.push(library_commit());
+	parts
 }
 
-/// The build file: next to the binary when that one is for this lib/ (or none is there yet), else beside lib/
-fn build_path(by: Compiler) -> PathBuf {
-	let beside_binary = std::env::current_exe()
-		.ok()
-		.and_then(|binary| binary.canonicalize().ok())
-		.and_then(|binary| binary.parent().map(|folder| folder.join(by.file_name())));
-	let library_path = library().display().to_string();
-	let for_this_library = |path: &PathBuf| match std::fs::read(path) {
-		Ok(bytes) => built_from(&bytes).first() == Some(&library_path),
-		Err(_) => true,
+/// The commit lib/'s git checkout is at, "" outside one (an installed lib/)
+fn library_commit() -> String {
+	let said = std::process::Command::new("git").arg("-C").arg(library()).args(["rev-parse", "HEAD"]).output();
+	said.ok()
+		.filter(|said| said.status.success())
+		.map(|said| String::from_utf8_lossy(&said.stdout).trim().to_string())
+		.unwrap_or_default()
+}
+
+/// `warp version`'s line of the compilers in use: `compiler.wasm of <commit>, compiler-self.wasm missing`
+pub fn compilers_line() -> String {
+	let stamp = |by: Compiler| {
+		let path = build_path(by);
+		match std::fs::read(&path) {
+			Ok(bytes) => match &built_from(&bytes)[BUILD_PARTS_JUDGED] {
+				commit if commit.is_empty() => format!("{} of no commit", by.file_name()),
+				commit => format!("{} of {}", by.file_name(), &commit[..commit.len().min(SHOWN_COMMIT_LENGTH)]),
+			},
+			Err(_) => format!("{} missing (warp {REBUILD_WORD} {})", by.file_name(), by.command()),
+		}
 	};
-	match beside_binary.filter(for_this_library) {
-		Some(path) => path,
+	Compiler::ALL.map(stamp).join(", ")
+}
+
+/// What a build file was made from, as current_build says it, its parts all there
+fn built_from(bytes: &[u8]) -> Vec<String> {
+	let mut parts = crate::host::host_parts::section_names(bytes, BUILD_SECTION, BUILD_SEPARATOR).unwrap_or_default();
+	parts.resize(BUILD_PARTS_JUDGED + 1, String::new());
+	parts
+}
+
+/// The build file: next to the binary, unless WARP_LIB names a lib/ the pair there is not for, whose build files lie
+/// beside it. A missing one is judged by its siblings there (none: yes), so a worktree's `warp self` never puts its
+/// compiler-self.wasm next to main's compiler.wasm (card build-path-missing)
+fn build_path(by: Compiler) -> PathBuf {
+	let binary_folder = binary_folder();
+	if std::env::var_os(LIBRARY_VARIABLE).is_none() {
+		if let Some(folder) = &binary_folder {
+			return folder.join(by.file_name());
+		}
+	}
+	let library_path = library().display().to_string();
+	let for_this_library = |folder: &PathBuf| {
+		let read = |file: Compiler| std::fs::read(folder.join(file.file_name())).ok();
+		let judged: Vec<Vec<u8>> = match read(by) {
+			Some(bytes) => vec![bytes],
+			None => Compiler::ALL.into_iter().filter_map(read).collect(),
+		};
+		judged.iter().all(|bytes| built_from(bytes).first() == Some(&library_path))
+	};
+	match binary_folder.filter(for_this_library) {
+		Some(folder) => folder.join(by.file_name()),
 		None => library().parent().unwrap_or(library()).join(OTHER_LIBRARY_FOLDER).join(by.file_name()),
 	}
 }

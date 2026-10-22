@@ -75,6 +75,32 @@ list_become(place, fresh): same as place from emitter
 list_drop_last(place): same as place from emitter
 removed_value(x, k): any from emitter
 list_sorted_by(xs, keys): any from emitter
+str(x): text from emitter
+text_form(x): text from emitter
+int(x): int from emitter
+float(x): float from emitter
+symbol(name): symbol from emitter
+// the emitter's text builtins
+trim(t): text from emitter
+starts_with(t, part): bool from emitter
+ends_with(t, part): bool from emitter
+byte_slice(t, start, end): text from emitter
+chr(code): codepoint from emitter
+read(path): text from emitter
+warning(message): text from emitter
+raise(message): same as message from emitter
+error(message): any from emitter
+is_error(x): bool from emitter
+is_type(x, type_name): bool from emitter
+// a node's parts and a node made of parts (wiki/node.md)
+key_of(n): any from emitter
+value_of(n): any from emitter
+op_of(n): any from emitter
+name_of(n): any from emitter
+bracket_of(n): any from emitter
+separator_of(n): any from emitter
+bracketed(n, bracket): list from emitter
+separated(n, separator): list from emitter
 string(x): text from emitter
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
