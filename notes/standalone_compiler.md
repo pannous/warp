@@ -91,6 +91,9 @@ Warm start (card pure-warm-start): 2.9 s, of which ~97% was compiler.warp loweri
 (WARP_PROFILE: 590 of 613 samples). compiler.warp now keeps them, `kept(name) ?? keep(name, value)` of use os (a
 value in the module cache under stage_key: binary + lib/): warm hello 0.07 s, a new program ~0.1–0.2 s. The kept
 Node crosses to Rust and back (postcard); 38 samples give the same results with and without it.
+Computing that kept value takes ~50 s CPU in compiler-self.wasm on the Mac (more on a 4-core cloud VM): inside a
+program's first run it blew the 60 s turn limit (card cloud-lane-narrow), so a build (`warp rebuild`, or a missing
+build file) runs the new compiler once on `0` to keep it (standalone.rs `warm`).
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
 Card under-pure (2026-10-21): print([1, 2]) failed only here, not in the stage lane, because compiler.warp runs the

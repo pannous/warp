@@ -48,7 +48,7 @@ impl WarpParser {
 	}
 
 	/// `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, which the
-	/// body follows; nothing else starts with a bar
+	/// body follows, in a block also on the lines below; nothing else starts with a bar
 	pub(super) fn pipe_parameters(&mut self) -> Option<Node> {
 		if self.current_char() != '|' || self.options.data_mode {
 			return None;
@@ -65,10 +65,12 @@ impl WarpParser {
 			body_start += 1;
 		}
 		let first_name = 1 + written.len() - written.trim_start().len();
+		// Ruby's `do |item|⏎ … end`, `{ |x|⏎ … }`: inside a block the body may start on the next line
+		let body_below = self.peek_char(body_start) == '\n' && self.in_block();
 		if self.peek_char(length) != '|'
 			|| names.is_empty()
 			|| !self.is_identifier_start(first_name)
-			|| BODY_ENDS.contains(&self.peek_char(body_start))
+			|| (BODY_ENDS.contains(&self.peek_char(body_start)) && !body_below)
 		{
 			return None;
 		}
@@ -77,6 +79,11 @@ impl WarpParser {
 			Ok([name]) => name,
 			Err(names) => Node::List(names, Bracket::Round, Separator::Comma),
 		})
+	}
+
+	/// Inside a bracketed group or a `do … end` block, whose closer ends a body of several lines
+	fn in_block(&self) -> bool {
+		self.context.group_start != (0, 0) || self.context.stops_at_end
 	}
 
 	/// The operand after a single `|`: a bare word or word operator is marked as a possible pipe stage, any other operand gets the hint
