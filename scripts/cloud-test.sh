@@ -72,6 +72,7 @@ SHARD_FLAG=--shard             # --full --shard <i>/<n>: one shard's job, on the
 SHARD_HEADER="==== shard "     # a merged log's line before each shard's log
 RERUN_MARK="cloud-test: RERUN" # a killed run's failed tests run once more for their panic texts: lines after it count no test
 RERUN_SECONDS=600
+LAST_FINISHES_SHOWN=6          # result.md names the tests that finished last, with their time into the test run
 USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
 RUST_TARGETS="wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown" # package and crate-wrapper builds in the tests
 
@@ -336,6 +337,7 @@ run_tests_here() {
 		[ $build_status -ne 0 ] && echo "build: $([ -n "$build_environment" ] && echo ENVIRONMENTAL || echo FAILED) (log.txt.gz)"
 		grep -v '^verdict: ' "$HERE_WORK/summary.txt"
 		echo "wall: build ${build_seconds} s, tests ${test_seconds} s, total $((SECONDS - started)) s"
+		[ -s "$HERE_WORK/finish-times.txt" ] && echo "last to finish: $(sort -rn "$HERE_WORK/finish-times.txt" | head -$LAST_FINISHES_SHOWN | awk '{ printf "%s%s at %s s", NR > 1 ? ", " : "", $2, $1 }')"
 		echo "machine: $(nproc 2>/dev/null) cores, $(free -g 2>/dev/null | awk '/^Mem:/ { print $2 " GB" }'), $(rustc --version)"
 		echo "warm VM: $warm (the checkout and build output of an earlier job)"
 		echo "disk: $disk"
@@ -355,12 +357,16 @@ group_cpu_seconds() {
 # test finished while they waited, using no CPU, for STALL_SECONDS on end (a hang held batch-3's session 85 min), or
 # for BUSY_STALL_SECONDS at all; the summary then names the unfinished tests
 run_watched() {
-	local log=$1 runner finished last_finished=-1 still=0 idle=0 cpu last_cpu=0; shift
+	local log=$1 runner finished last_finished=-1 still=0 idle=0 cpu last_cpu=0 seen started=$SECONDS; shift
+	seen=$(wc -l < "$log")
 	timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS "$@" >> "$log" 2>&1 &   # its own process group: a kill reaches the test binaries
 	runner=$!
 	while kill -0 $runner 2>/dev/null; do
 		sleep $WATCH_SECONDS
 		finished=$(grep -c '^test .* \.\.\. ' "$log")
+		# each test's finish, to WATCH_SECONDS: libtest prints no durations
+		seen=$(awk -v from="$seen" -v at=$((SECONDS - started)) -v times="$HERE_WORK/finish-times.txt" \
+			'NR > from && /^test [^ ]+ \.\.\. / { print at, $2 >> times } END { print NR }' "$log")
 		cpu=$(group_cpu_seconds $runner)
 		if [ "$finished" != "$last_finished" ]; then still=0 idle=0 last_finished=$finished
 		elif [ $((cpu - last_cpu)) -ge $BUSY_CPU_SECONDS ]; then still=$((still + WATCH_SECONDS)) idle=0
@@ -566,7 +572,8 @@ session_is_free() {
 	local file=$1 job since run
 	job=$(pool_field "$file" job); since=$(pool_field "$file" since)
 	[ "$job" = idle ] && return 0
-	run=${job%-*}
+	run=${job%-*-*}   # a job is <run>-<launch time>-<launcher pid>; ${job%-*} kept the time: no result was ever seen, a
+	                  # finished session stayed busy until collected, and was dropped as "never answered" after 90 min
 	git -C "$MAIN_CHECKOUT" ls-remote --exit-code origin "refs/heads/$RESULTS_PREFIX/$run" > /dev/null && return 0
 	[ $(($(date +%s) - since)) -gt $((PENDING_MINUTES * 60)) ] && drop_session "$file" "its job $job never answered"
 	return 1
@@ -782,7 +789,7 @@ merge_shards() {
 		echo "tests counted: $counted of $listed listed$([ "$counted" = "$listed" ] || echo ": INCOMPLETE, a shard lost tests")"
 		echo "wall: $(for shard_folder in "$@"; do sed -n 's/^wall: .*total \([0-9]*\) s.*/\1/p' "$shard_folder/result.md"; done | sort -n | tail -1) s, the slowest shard"
 		for shard_folder in "$@"; do
-			echo "shard ${shard_folder##*/}: $(sed -n 's/^verdict: //p' "$shard_folder/result.md"); $(sed -n 's/^build: //p; s/^error: //p; s/^passed: //p; s/^wall: //p; s/^session: //p' "$shard_folder/result.md" | tr '\n' ';')"
+			echo "shard ${shard_folder##*/}: $(sed -n 's/^verdict: //p' "$shard_folder/result.md"); $(sed -n 's/^build: //p; s/^error: //p; s/^passed: //p; s/^wall: //p; s/^last to finish: /last: /p; s/^session: //p' "$shard_folder/result.md" | tr '\n' ';')"
 		done
 	} > "$folder/result.md"
 	gzip -f "$folder/log.txt"
