@@ -45,6 +45,7 @@ fn self_compiled_compiler(library: &Path) -> PathBuf {
 	let run = crate::common::warp_command()
 		.args(["--no-ask", "rebuild", "self"])
 		.env("WARP_LIB", library)
+		.env("WARP_TIME_LIMIT", super::test_warp_pure::SELF_BUILD_TIME_LIMIT_SECONDS)
 		.env("WARP_NO_WINDOW", "1")
 		.env("WARP_HINTS", "0")
 		.output()

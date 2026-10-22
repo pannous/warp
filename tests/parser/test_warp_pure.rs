@@ -2,7 +2,7 @@
 //! module runs (card warp-pure, src/compiler/standalone.rs)
 const HELLO: &str = "print(\"hello world\")\n";
 /// Time for building compiler-self.wasm: ~60 s on the Mac, more on a cloud VM, past one turn's 60 s default
-const SELF_BUILD_TIME_LIMIT_SECONDS: &str = "900";
+pub(crate) const SELF_BUILD_TIME_LIMIT_SECONDS: &str = "900";
 
 /// `warp <command>` (pure or self), ready for a program. `warp self` gets its compiler built anew once per test run:
 /// a warm cloud VM keeps compiler-self.wasm of an earlier job's lib/ in target/tmp (card cloud-lane-warm), and building
