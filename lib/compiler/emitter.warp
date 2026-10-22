@@ -2189,6 +2189,8 @@ annotated_kind(written: text): text := {
 	if word in node_annotations or word in module.classes or word.ends_with("?") { return "node" }
 	# Rust twin: type_names.rs plural_element_type
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return "list" }
+	# `list of text`, `map of int`: the collection the phrase starts with (parser.warp with_type_phrases)
+	if word.contains(" of ") { return annotated_kind(word.split(" of ")#1) }
 	word
 }
 # the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`; any other word itself
