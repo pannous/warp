@@ -111,7 +111,6 @@ mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
 mod test_map_field; // card map-field
 mod test_map_passed_as_any; // card map-passed
-mod test_type_value_name; // card pure-lane-holds
 mod test_map_read_size; // card map-read
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
@@ -219,6 +218,7 @@ mod test_type_test_is_only;
 mod test_type_tests;
 mod test_type_tests_anywhere;
 mod test_type_upgrading;
+mod test_type_value_name; // card pure-lane-holds
 mod test_type_values; // card type-values
 mod test_type_word_scopes;
 mod test_type_word_user_function;
