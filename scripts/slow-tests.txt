@@ -79,3 +79,9 @@ parser::test_warp_pure::warp_self_writes_the_largest_int
 text::test_text_builders::texts_built_in_turn_grow_linearly
 web::test_fix_buttons_apply::the_samples_fix_buttons_find_their_text
 web::test_style_rules::a_selector_with_a_value_is_its_color
+ffi::test_cargo_crates::test_cargo_crate_trap_names_rust_functions
+parser::test_self_pure::is_tests_types_and_equality_compares_self_hosted
+parser::test_self_pure::op_cases_run_pure
+parser::test_self_pure::lambdas_run_pure
+parser::test_self_pure::number_keys_run_in_the_front_lanes
+parser::test_self_pure::type_values_run_pure
