@@ -5,7 +5,7 @@
 use super::nodes::{assign, block, call, is_call_head, key, spaced_statement};
 use super::nodes::{is_return, typed};
 use crate::analyzer::type_word_kind;
-use crate::node::{parens, symbol, Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Separator, parens, symbol};
 use crate::operators::Op;
 use crate::words::{ANY_TYPE, ERROR_WORD, IMPLICIT_PARAMETER};
 
@@ -165,6 +165,9 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	Some(key(head.clone(), op, converted(body, &type_name)))
 }
 
+/// The "got it" topic of the warning, whose fix `warp fix` applies (formatting/synonyms.rs)
+pub(crate) const OPTIONAL_RESULT_TOPIC: &str = "optional-result";
+
 /// A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
 /// the `?` as its fix and reads its result as `list?`, so the ø reaches the caller unchanged
 fn optional_when_answering_empty(head: &Node, body: &Node, type_name: &Node) -> Result<Node, Node> {
@@ -180,8 +183,9 @@ fn optional_when_answering_empty(head: &Node, body: &Node, type_name: &Node) -> 
 	let optional = format!("{written}?");
 	let warning =
 		crate::errors::diagnostic::Diagnostic::at(place, format!("{function} can answer ø; declare `: {optional}`"))
+			.fix(format!("{written} → {optional}"))
 			.offer("the result can be ø", &written, &optional)
-			.about("optional-result", &function);
+			.about(OPTIONAL_RESULT_TOPIC, &function);
 	crate::errors::diagnostic::report(&[warning])?;
 	Ok(symbol(&optional))
 }
