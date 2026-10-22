@@ -38,7 +38,11 @@ use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
 
-passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, element_wise_operators_pass, number_words_pass]
+# the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES): `xs .* 2`
+sugar_phrases_table = [[is_element_operator, element_wise_phrase], [is_dot, ungrouped]]
+sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
+
+passes = [interpolation, match_arms, arrow_result_types, of_lookups, sugar_phrases, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
