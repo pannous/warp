@@ -60,3 +60,11 @@ fn a_constructor_takes_named_arguments_as_functions_do() {
 	fails_with("class P { x: int; y: int }; P(z=2, x=7)", "no field z");
 	is!("class P { x: int; y = 5 }; p = P(x=7); p.x * 10 + p.y", 75); // no Java declaration `P x = 7`
 }
+
+/// A missing field of the one statement next to a class names its line and column, as one among statements does
+/// (card error-field: `Error("no field x")` without a position)
+#[test]
+fn a_missing_field_next_to_a_class_names_its_position() {
+	is!("class Point { z: int y: int }\nPoint{z: 1 y: 2}.x", warp::error("no field x at 2:1"));
+	is!("{a:1}.x", warp::error("no field x at 1:1"));
+}

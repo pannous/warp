@@ -1,7 +1,9 @@
 # `a == b` of values known only at run time
 use "intrinsics.warp"
+use "../kinds.warp"
 use "conversions.warp"
 use "exact.warp"
+use "nodes.warp"
 use "ordering.warp"
 use "show.warp"
 use "text.warp"

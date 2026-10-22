@@ -105,6 +105,7 @@ fn warp_pure_runs_a_library_word() {
 
 /// `warp self <file>`: compiler.warp compiled by itself (the pure lane) compiles the program (card self-hello)
 #[test]
+#[ignore = "redundant: covered by parser::test_warp_pure::warp_self_runs_loops_and_texts"]
 fn warp_self_runs_hello_world() {
 	let folder = crate::common::scratch_directory("warp_self");
 	std::fs::create_dir_all(&folder).unwrap();
