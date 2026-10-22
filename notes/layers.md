@@ -115,7 +115,7 @@ Sugar (1417), each with the rule it would become:
 | 28 | `/!`, `div`, `÷`, `/!=` | already a math.warp alias (`operator ÷ := /!`): the parser branch duplicates it; `operator div := /!` |
 | 23 | emit words `emit stop{…}` (send, fire, trigger, signal, ask) | `rewrite emit $e... => emit($e...)`, aliases for the others |
 | 22 | test words `x empty`, `x is missing`, `x failed` | `rewrite $x is empty => count($x) == 0` phrase rule, works today |
-| 21 | `n times {…}` | `rewrite $n times $body => repeat($n, $body)`: library word (sugar.warp already says so) |
+| 21 | `n times {…}` | no rewrite: a plain library function `infix times(n: number, b: block)` (user 2026-10-22, decision language-layers) |
 | 15 | `a ?: b` | `rewrite $a ?: $b => if $a then $a else $b`: needs F3 (a once) |
 | 14 | `function f` reference | `rewrite function $f => &$f` |
 | 12 | `if no xs` | `rewrite no $x => not $x`: needs F1 (condition position) |
