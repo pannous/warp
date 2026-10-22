@@ -56,16 +56,30 @@ fn folders() -> Vec<PathBuf> {
 /// The module of `bytes`, its machine code from the cache when an engine of these settings compiled it before
 pub fn module(engine: &Engine, bytes: &[u8]) -> Result<Module> {
 	let name = fingerprint((bytes, engine.precompile_compatibility_hash())) + ".cwasm";
+	// a module this process compiled or loaded already (run_wasm of the same bytes again): Module is a cheap handle
+	static LOADED: std::sync::Mutex<Vec<(String, Module)>> = std::sync::Mutex::new(Vec::new());
+	let loaded = |module: &Module| LOADED.lock().map(|mut loaded| loaded.push((name.clone(), module.clone())));
+	if let Some(module) =
+		LOADED.lock().ok().and_then(|loaded| loaded.iter().find(|(n, _)| *n == name).map(|e| e.1.clone()))
+	{
+		return Ok(module);
+	}
+	let module = machine_code(engine, bytes, &name)?;
+	let _ = loaded(&module);
+	Ok(module)
+}
+
+fn machine_code(engine: &Engine, bytes: &[u8], name: &str) -> Result<Module> {
 	for folder in folders() {
 		// SAFETY: the file is machine code a warp-host serialized for an engine of the same settings, named by both;
 		// wasmtime checks the version, settings and CPU features again, and a mismatch compiles anew
-		if let Ok(module) = unsafe { Module::deserialize_file(engine, folder.join(&name)) } {
+		if let Ok(module) = unsafe { Module::deserialize_file(engine, folder.join(name)) } {
 			return Ok(module);
 		}
 	}
 	let module = Module::new(engine, bytes)?;
 	if let (Some(folder), Ok(code)) = (folder(), module.serialize()) {
-		write(&folder.join(&name), &code);
+		write(&folder.join(name), &code);
 	}
 	Ok(module)
 }

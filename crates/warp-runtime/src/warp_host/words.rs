@@ -121,6 +121,12 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 		("os", "command", [line]) => printed(&["sh".into(), "-c".into(), text(line)]),
 		("os", "exec", [command]) => printed(&command.clone().items().iter().map(text).collect::<Vec<_>>()),
 		("os", "run", [command]) => ran(&command.clone().items().iter().map(text).collect::<Vec<_>>()),
+		// `run_wasm(read_bytes("m.wasm"))`, `run_wasm(compile_wasm("6*7"))`: a module run in this process (main.rs)
+		("os", "run_wasm", [bytes]) => crate::ran_module(&host.engine, module_bytes(bytes)?, host.args.clone()),
+		("os", "compile_wasm", [code]) => {
+			let bytes = crate::compiled_code(&host.engine, text(code))?;
+			Ok(Node::List(nodes::SQUARE_LIST, bytes.into_iter().map(|byte| Node::Int(byte.into())).collect()))
+		}
 		("file", "read", [path]) => {
 			std::fs::read(text(path)).map(Node::Text).map_err(|problem| text(path) + ": " + &said(problem))
 		}
@@ -147,6 +153,21 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 			Ok(content.clone())
 		}
 		_ => Err(format!("warp-host has no {module}.{member} of {} arguments", arguments.len())),
+	}
+}
+
+/// A module's bytes: a list of bytes (read_bytes, compile_wasm), or a text holding them (read)
+fn module_bytes(bytes: &Node) -> Result<Vec<u8>, String> {
+	match bytes {
+		Node::Text(bytes) => Ok(bytes.clone()),
+		Node::List(_, items) => items
+			.iter()
+			.map(|byte| match byte {
+				Node::Int(byte) => u8::try_from(*byte).map_err(|_| format!("{byte} is no byte (0 to 255)")),
+				other => Err(format!("{} is no byte (0 to 255)", other.shown())),
+			})
+			.collect(),
+		other => Err(format!("needs a module's bytes, got {}", other.shown())),
 	}
 }
 
