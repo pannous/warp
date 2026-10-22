@@ -23,3 +23,21 @@ written; the holes keep the positions of the code they bound. An error inside a 
 never at the rule.
 
 Tests: tests/modules/test_rewrite_engine.warp (warp only, `warp test tests/modules`).
+
+## Where-conditions (F2)
+After `where`, conditions joined by `and` ask about what the holes bound:
+
+| condition | holds when the hole bound |
+|---|---|
+| `$c = channel()` | a variable assigned code of that shape (the origin; one per rule) |
+| `$t is type` | a type word no value of the program is named, or a type it declares |
+| `$x is unbound` | a word the program binds nothing to |
+| `$x is value`, `$f is function` | a word the program binds as a value, as a function |
+| `$x is literal` | a number or text written as such |
+| `$x is text` (any hole kind) | code of that kind |
+| `$n < 0` (`> <= >= == !=`) | a number literal, `-1` and `(-1)` too, so compared |
+| `$f takes value`, `$f takes int` | a function of the program or a typed library word whose first parameter is typed (not yes/no), or typed int |
+
+`not` negates any of them except the origin (`where not $f takes value`; `$t is not type` reads the same). Rules try
+in order, so a later rule without conditions is the fallback. The `where` may stand after a template the parser
+continued into it (`=> $c + $n where …`).
