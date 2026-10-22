@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# the result arrow before `:=` anywhere a definition stands: inside a function's body too (card arrow-result-entry)
+outer(n: int) -> int := {
+	inner(k: int) -> int := k * 2
+	inner(n) + 1
+}
+print outer(3)
+twice(p) -> int := p + p
+print twice(4)

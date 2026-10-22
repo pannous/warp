@@ -101,21 +101,21 @@ bare_returns(n: Node): Node := match n {
 	_: children(n, bare_returns)
 }
 
-# arrow_result_types (lower_arrow_result_types): Swift's and Rust's result arrow before `:=`, `x(p:P) -> int := p.n`,
-# is the typed head `x(p:P): int := p.n` every pass reads
+# result arrows (RESULT_ARROWS, an entry of passes.warp sugar_phrases_table): Swift's and Rust's result arrow before
+# `:=`, `x(p:P) -> int := p.n`, is the typed head `x(p:P): int := p.n` every pass reads
 calls_by_name(n: Node): bool := match n {
 	List(parts, Bracket.Round, separator): #parts > 0 and parts#1 is symbol
 	_: no
 }
 
-arrow_result_types(n: Node): Node := match n {
-	Key(target, Op.Define, value): Key(result_typed(target), Op.Define, arrow_result_types(value))
-	Key(target, Op.Assign, value): Key(result_typed(target), Op.Assign, arrow_result_types(value))
-	_: children(n, arrow_result_types)
+is_definition_operator(word: Node): bool := word == symbol(":=") or word == symbol("=")
+result_typed_definition(n: Node): Node := match n {
+	Key(target, op, value): { if op == Op.Define or op == Op.Assign then Key(result_typed(target), op, value) else n }
+	_: n
 }
 
 # `x(p:P) -> int` as `x(p:P): int`
 result_typed(target: Node): Node := match target {
-	Key(head, Op.Arrow, result): { if calls_by_name(head) then Key(head, Op.Colon, result) else arrow_result_types(target) }
-	_: arrow_result_types(target)
+	Key(head, Op.Arrow, result): { if calls_by_name(head) then Key(head, Op.Colon, result) else target }
+	_: target
 }

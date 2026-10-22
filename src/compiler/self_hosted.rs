@@ -91,12 +91,11 @@ const STAGE_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(600
 
 type Pass = fn(Node) -> Node;
 /// Each Rust pass with a warp twin and the twin's index in passes.warp `passes` (counted from 1, as warp's `#`)
-const TWINNED_PASSES: [(Pass, usize); 5] = [
+const TWINNED_PASSES: [(Pass, usize); 4] = [
 	(crate::text::interpolation::lower_program, 1),
 	(crate::lowering::welcome_forms::lower_match_arms, 2),
-	(crate::lowering::welcome_forms::lower_arrow_result_types, 3),
-	(crate::pipeline::sugar_phrases, 4),
-	(crate::lowering::number_words::lower, 5),
+	(crate::pipeline::sugar_phrases, 3),
+	(crate::lowering::number_words::lower, 4),
 ];
 
 thread_local! {

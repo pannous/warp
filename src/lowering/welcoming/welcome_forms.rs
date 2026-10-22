@@ -8,6 +8,7 @@
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use super::nodes::{assign, block, call, children_rewritten, is_call_head, is_kinded_type_word, is_return, key};
+use crate::lowering::keyword_rewrites::KeywordRewrite;
 use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -175,17 +176,21 @@ fn bare_returns(node: Node) -> Node {
 }
 
 /// Swift's and Rust's result arrow before `:=`: `def x(p:P) -> int := p.n` is `x(p:P): int := p.n`, the one typed head
-/// every pass reads (card undefined-function: it was read as a lambda, `undefined function: x`)
-pub fn lower_arrow_result_types(node: Node) -> Node {
+/// every pass reads (card undefined-function: it was read as a lambda, `undefined function: x`); an entry of the
+/// keyword-rewrite table src/pipeline.rs SUGAR_PHRASES, triggered by the definition's `:=` or `=`
+pub const RESULT_ARROWS: KeywordRewrite = KeywordRewrite {
+	triggered_by: |word| word == Op::Define.as_str() || word == Op::Assign.as_str(),
+	rewrite: |node, _| result_typed(node),
+	reads_bindings: false,
+};
+
+fn result_typed(node: Node) -> Node {
 	match node {
-		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
-			let target = match *target {
-				Node::Key(head, Op::Arrow, result) if is_call_head(&head) => key(*head, Op::Colon, *result),
-				other => lower_arrow_result_types(other),
-			};
-			key(target, op, lower_arrow_result_types(*body))
-		}
-		other => other.map_children(lower_arrow_result_types),
+		Node::Key(target, op @ (Op::Define | Op::Assign), body) => match *target {
+			Node::Key(head, Op::Arrow, result) if is_call_head(&head) => key(key(*head, Op::Colon, *result), op, *body),
+			other => key(other, op, *body),
+		},
+		other => other,
 	}
 }
 

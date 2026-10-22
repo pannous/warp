@@ -86,9 +86,11 @@ pub struct CompiledModule {
 
 type Pass = fn(Node) -> Node;
 
-/// The keyword rewrites among the sugar passes (keyword_rewrites.rs), one walk: `a of b` as `b.a`; `xs .* 2` as the
-/// operator applied to each element; `(p).a` of a variable p as `p.a`
+/// The keyword rewrites among the sugar passes (keyword_rewrites.rs), one walk: `x(p:P) -> int := …` as
+/// `x(p:P): int := …`; `a of b` as `b.a`; `xs .* 2` as the operator applied to each element; `(p).a` of a variable p as
+/// `p.a`
 const SUGAR_PHRASES: &[KeywordRewrite] = &[
+	crate::lowering::welcome_forms::RESULT_ARROWS,
 	crate::lowering::of_lookups::LOOKUPS,
 	crate::lowering::broadcasting::ELEMENT_WISE,
 	crate::lowering::grouped_receivers::UNGROUPED,
@@ -114,13 +116,12 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::welcome_forms::lower_match_arms,
 	// a bare `return` as the phrase `return ø` (welcome_forms.rs), before any pass reads a return
 	crate::lowering::welcome_forms::lower_bare_returns,
-	// `x(p:P) -> int := …` is `x(p:P): int := …` (welcome_forms.rs) before any pass reads a definition's head
-	crate::lowering::welcome_forms::lower_arrow_result_types,
 	// `n times {…}`, `n times [x]`, `n times "ab"` (times_phrases.rs) as a loop, a filled list, a repeated text, before
 	// `.*` reads its list
 	crate::lowering::times_phrases::lower,
-	// the phrases the parser keeps as written, keyword rewrites of one walk (SUGAR_PHRASES): `a of b` is `b.a`, `(p).a`
-	// is `p.a` before any pass reads a lookup
+	// the phrases the parser keeps as written, keyword rewrites of one walk (SUGAR_PHRASES): `x(p:P) -> int := …` is
+	// `x(p:P): int := …` before any pass reads a definition's head, `a of b` is `b.a`, `(p).a` is `p.a` before any pass
+	// reads a lookup
 	sugar_phrases,
 	// `window.width = 800`, `canvas.height`, a bare width (property_accessors.rs): getters and setters, before any pass
 	// reads a field's write; resolve brings draw for them
