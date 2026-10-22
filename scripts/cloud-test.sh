@@ -49,7 +49,9 @@ WAIT_HOURS=4
 URL_WAIT_SECONDS=90
 MIN_FREE_GB=15                 # less free disk before a build: the warm VM's build output is pruned (a build ran out of disk)
 TEST_TIME_LIMIT_SECONDS=3600   # the test run is killed after this (a hanging test), its unfinished tests named; a full run on a 4-core VM takes 1600-2400 s since the warp self tests rebuild their compiler (batch-1, batch-2 killed at 2400)
-STALL_SECONDS=900              # …or once no test has finished for this long (the slowest, the self-parser, takes ~230 s alone)
+STALL_SECONDS=900              # …or once no test has finished for this long while the tests use no CPU (a hang waiting)
+BUSY_STALL_SECONDS=1800        # …or for this long while they compute: the self build behind the warp self tests runs up to 900 s (its WARP_TIME_LIMIT) with no test finishing (card cloud-lane-narrow)
+BUSY_CPU_SECONDS=5             # CPU seconds the tests use per watch that count as computing
 WATCH_SECONDS=30               # how often the stall watchdog counts finished tests
 PURE_HELLO_TEST=parser::test_warp_pure::warp_pure_runs_hello_world
 OPTIMIZED_TEST_PROFILE=(--config profile.test.package.warp-lang.opt-level=2)
@@ -279,18 +281,28 @@ run_tests_here() {
 	push_result "$name"
 }
 
+# The CPU seconds the live processes of a process group have used
+group_cpu_seconds() {
+	ps -eo pgid=,times= 2>/dev/null | awk -v group="$1" '$1 == group { total += $2 } END { print int(total) }'
+}
+
 # The command, its output appended to the log, killed with all its processes after TEST_TIME_LIMIT_SECONDS or once no
-# test finished for STALL_SECONDS (a hang held batch-3's session 85 min); the summary then names the unfinished tests
+# test finished while they waited, using no CPU, for STALL_SECONDS on end (a hang held batch-3's session 85 min), or
+# for BUSY_STALL_SECONDS at all; the summary then names the unfinished tests
 run_watched() {
-	local log=$1 runner finished last_finished=-1 still=0; shift
+	local log=$1 runner finished last_finished=-1 still=0 idle=0 cpu last_cpu=0; shift
 	timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS "$@" >> "$log" 2>&1 &   # its own process group: a kill reaches the test binaries
 	runner=$!
 	while kill -0 $runner 2>/dev/null; do
 		sleep $WATCH_SECONDS
 		finished=$(grep -c '^test .* \.\.\. ' "$log")
-		if [ "$finished" = "$last_finished" ]; then still=$((still + WATCH_SECONDS)); else still=0 last_finished=$finished; fi
-		if [ $still -ge $STALL_SECONDS ]; then
-			echo "cloud-test: KILLED: no test finished for $STALL_SECONDS s" >> "$log"
+		cpu=$(group_cpu_seconds $runner)
+		if [ "$finished" != "$last_finished" ]; then still=0 idle=0 last_finished=$finished
+		elif [ $((cpu - last_cpu)) -ge $BUSY_CPU_SECONDS ]; then still=$((still + WATCH_SECONDS)) idle=0
+		else still=$((still + WATCH_SECONDS)) idle=$((idle + WATCH_SECONDS)); fi
+		last_cpu=$cpu
+		if [ $idle -ge $STALL_SECONDS ] || [ $still -ge $BUSY_STALL_SECONDS ]; then
+			echo "cloud-test: KILLED: no test finished for $still s, the last $idle s of them using no CPU" >> "$log"
 			kill -TERM $runner
 			break
 		fi
