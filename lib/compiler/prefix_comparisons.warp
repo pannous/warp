@@ -44,16 +44,16 @@ prefix_call_operators = [Op.Sub, Op.Hash]
 # `f = x => …`), a builtin of one value; not a name it binds as a value
 value_takers(program: Node): list := {
 	scope = scope_of(program)
-	(print_words + defined_functions(program) + one_value_builtins).filter(name => not binds_value(scope, name))
+	(print_words + value_taking_functions(program) + one_value_builtins).filter(name => not binds_value(scope, name))
 }
 
 # the program's functions that take a value
-defined_functions(program: Node): list := nodes_in(program).map(n => value_function(n)).filter(name => name != ø)
+value_taking_functions(program: Node): list := nodes_in(program).map(n => value_function(n)).filter(name => name != ø)
 
 # the value takers that take a count, `print #xs`: a type word converts a negative, `int -3`, but takes no count, as
 # `float[2]` is the subscript `float#3` of a typed array (filled_lists.warp), unless the program defines it as a function
 count_takers(program: Node, takers: list): list := {
-	defined = defined_functions(program)
+	defined = value_taking_functions(program)
 	takers.filter(name => not is_type_word(name) or defined contains name)
 }
 
