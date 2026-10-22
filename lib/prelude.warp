@@ -163,7 +163,7 @@ round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, identity: 1}, and: {associative: yes, identity: yes}, or: {associative: yes, identity: no}, max: {associative: yes}, min: {associative: yes}}
 // the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
 // own sum: src/lowering/words/library_words.rs)
-sum(xs) := fold(xs, 0, +)
+sum(xs: list): element of xs := fold(xs, 0, +)
 // a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small.
 // The template names no helper word: it lands in the program's code, where a program's own word of that name would be
 // called instead (card after-sum); the lambda's parameters take each bound once
