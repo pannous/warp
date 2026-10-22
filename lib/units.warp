@@ -58,6 +58,8 @@ unit_definitions = data {
 	unit N := kg*m/s²
 	unit L := dm³
 	unit l := L
+	unit ml := cm³
+	unit mL := ml
 	unit ha := hm²
 	unit Hz := 1/s
 	unit kHz := 1/ms
@@ -85,6 +87,11 @@ unit_definitions = data {
 	name kilogram := kg
 	name pound := lb
 	name lbs := lb
+	name liter := L
+	name litre := L
+	name milliliter := ml
+	name millilitre := ml
+	name hectare := ha
 }
 
 // At run time the block above stands for the tables the Quantity class reads (src/numbers/units.rs): unit_names,
@@ -140,7 +147,7 @@ unit_product(first, second) := if first == second then first + "²" else first +
 // one unit by name, a power of one (`m²`, `s^2`) or a product of them (`m·kg`, `kg*m`): [its SI amount, its dimension]
 unit_factor(u) := {
 	if u.contains("·") or u.contains("*") {
-		var denominator = 1
+		var scale = 1
 		var dimension = 0
 		for part in u.replace("*", "·").split("·") { factor = unit_factor(part); scale = scale * factor#1; dimension = dimension + factor#2 }
 		return [scale, dimension]

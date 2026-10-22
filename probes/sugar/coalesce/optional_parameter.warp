@@ -1,0 +1,6 @@
+# a parameter given ø falls back. Expected: 5, 2, 11
+f(x) := x ?? 5
+g(a, b) := a + (b ?? 10)
+print f(ø)
+print f(2)
+print g(1, ø)

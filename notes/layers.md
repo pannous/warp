@@ -163,7 +163,7 @@ Sugar passes, with the rule each would become:
 | 30 | preposition_heads | `play(tone, for duration)` → drop the preposition per parameter: F4 |
 | 24 | grouped_receivers | `rewrite ($p).$a => $p.$a`: F2 (p bound to a value) |
 | 18 | phrase_blocks | not sugar: `{print "big"}` as one statement is the notation's grouping; belongs in the reader |
-| 15 | coalesce | `rewrite $a ?? $b => if $a == ø then $b else $a`: F3 |
+| 15 | coalesce | done: lib/sugar/fallbacks.warp (card sugar-coalesce) |
 | 140 | sugar.warp | `rewrite $xs[$i] => $xs#($i + 1)`: works for plain indexes; negative and slice bounds need F2; typed class fields are kernel (types) |
 
 ## Migration order, by gain
@@ -175,6 +175,14 @@ Sugar passes, with the rule each would become:
    list_methods, of_lookups (keep the type-phrase guard), definitions' `def`/`fun`, number_words, test words, emit
    words, unit phrases, `n times`, parse_words' eval. Each is a cloud-free warp change (decision
    warp-only-acceptance) and its twin pass goes.
+   Status (card sugar-migration-2, branch layers): done are list_methods' mutation methods and membership
+   (lib/sugar/methods.warp, applied by the `sugar` pass where list_methods ran, rules chosen by the program's own
+   bindings) and floor division (`/!`, `/!=` table operators, `div` a word alias, lib/sugar/arithmetic.warp). The
+   rest is not "works today": test words, emit words, unit phrases and `n times` are parser grouping (notation, item
+   6); number_words needs F1 (keys and members); parse_words' eval needs scoped shadowing; `def`/`fun` is ~10 of
+   definitions' 186 lines; of_lookups and number_words are twinned stages that Rust drives in the
+   WARP_SELF_HOSTED=1 lane, where lib/sugar rules don't run. `n times {…}` becomes a plain prelude function
+   `infix times(n: number, b: block)` (user), then the parser's times branch goes.
 3. **F3 fresh names + evaluate once** (one engine feature, then ~550 lines): coalesce, `?:`, comprehensions, ranges,
    for_loops, min_max, multiple_assignments, broadcasting. Largest gain per engine line.
 4. **F2 where-predicates** (~450 lines): type_tests, filled_lists, grouped_receivers, library_calls,
