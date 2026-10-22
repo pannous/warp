@@ -1,28 +1,31 @@
-//! `n times …`: the parser keeps the phrase [n times operand] as written (suffixes.rs parse_times_loop), this pass
-//! gives it its meaning. A block is a loop with a hidden counter of its own, so nested loops do not meet; `n times [x]`
-//! is the list of n x; any other operand is repeated by `times·text` (`3 times "ab"`, `3 times 4` multiplies).
+//! `n times …`: the parser keeps the phrase [n times operand] as written (suffixes.rs parse_times_loop), this keyword
+//! rewrite gives it its meaning. A block is a loop with a hidden counter of its own, so nested loops do not meet;
+//! `n times [x]` is the list of n x; any other operand is repeated by `times·text` (`3 times "ab"`, `3 times 4`
+//! multiplies).
 
+use super::keyword_rewrites::{Facts, KeywordRewrite};
 use super::nodes::{assign, call, int, key, symbol};
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, TEXT_TIMES, TIMES_WORD};
 
-pub fn lower(node: Node) -> Node {
-	if !node.mentions_any(&[TIMES_WORD]) {
-		return node;
-	}
-	let mut loops = 0;
-	expand(node, &mut loops)
+/// The keyword rewrite of the phrase
+const REWRITE: KeywordRewrite =
+	KeywordRewrite { triggered_by: |word| word == TIMES_WORD, rewrite: phrase, reads_bindings: false };
+
+/// A walk of its own, outside src/pipeline.rs SUGAR_PHRASES: the warp compiler has no times twin (card
+/// phrases-out-of-core), so the Rust rewrite runs in the self-hosted front lane too
+pub fn lower(program: Node) -> Node {
+	super::keyword_rewrites::rewritten(program, &[REWRITE])
 }
 
-fn expand(node: Node, loops: &mut usize) -> Node {
-	let node = node.map_children(|child| expand(child, loops));
+fn phrase(node: Node, facts: &mut Facts) -> Node {
 	let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() else {
 		return node;
 	};
 	match items.as_slice() {
 		[count, word, operand] if word.is_symbol(TIMES_WORD) => {
-			meaning(count.clone(), operand.clone(), loops).with_meta_of(&node)
+			meaning(count.clone(), operand.clone(), &mut facts.fresh).with_meta_of(&node)
 		}
 		_ => node,
 	}

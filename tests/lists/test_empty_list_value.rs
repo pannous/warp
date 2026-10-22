@@ -1,5 +1,5 @@
 //! Card run-time-empty: `[]` stays the empty list at run time: it prints as `[]`, its type is list, and wherever it
-//! goes (returned, passed, held in a list) `+=` appends to it; it still equals ø
+//! goes (returned, passed, held in a list) `+=` appends to it; it is no ø (decision empty-is-not-missing)
 use crate::is;
 use warp::parse;
 
@@ -20,7 +20,7 @@ fn an_empty_list_prints_as_written() {
 #[test]
 fn an_empty_list_is_a_list() {
 	is!("type([])", "list");
-	is!("[] == ø", true);
+	is!("[] == ø", false);
 }
 
 #[test]

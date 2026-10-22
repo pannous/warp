@@ -197,7 +197,7 @@ fn test_running_a_file_shows_its_hints_once() {
 		.output()
 		.unwrap();
 	let stderr = text(&run.stderr);
-	assert_eq!(stderr.matches("hint").count(), 1, "{stderr}");
+	assert_eq!(stderr.lines().filter(|line| line.starts_with("hint ")).count(), 1, "{stderr}");
 	assert!(executable.exists(), "{stderr}");
 }
 

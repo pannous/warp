@@ -4,7 +4,7 @@
 # and then `TAB topic@expression`, what "got it" silences:
 # the pattern a node whose `$name` parts take any node (`data(…)` quotes it), the message and fix texts whose
 # `{name}` holes give that part and `{a name}` it with its article. The stage hands `diagnosed` to Rust, which says
-# the warnings and fails on an error (notes/pure_diagnostics.md).
+# the warnings and fails on an error (notes/pure_diagnostics.md); compiler.warp fails on an error itself.
 use "parser.warp"
 use "words.warp"
 
@@ -82,3 +82,20 @@ filled(message: text, bound: any): text := {
 	result
 }
 shown(part: any): text := if part is symbol then name_of(part) else if part is text then part else "${part}"
+
+# what was diagnosed after the first `known` facts: a compile's own, past those of the runtime words lowered before it
+diagnosed_since(known: int): list := diagnosed[known ..]
+
+# the first error among the diagnosed, as Rust's Diagnostic says it; ø when none is an error
+first_error(found: list): text? := {
+	failing = found.find(said => said#1 == "error")
+	if not failing { return ø }
+	said_text(failing)
+}
+
+# the warnings among the diagnosed, each as Rust's Diagnostic says it
+warnings_said(found: list): list := found.filter(said => said#1 == "warning").map(said_text)
+
+# a diagnosed [level, message, fix, …] as Rust's Diagnostic says it: the message, then `; fix: ` and the fix when it
+# names one
+said_text(said: list): text := if said#3 then said#2 + "; fix: " + said#3 else said#2

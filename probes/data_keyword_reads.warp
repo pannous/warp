@@ -1,0 +1,8 @@
+#!/usr/bin/env warp
+# `data` takes the whole expression after it, one round group around it only groups it, parsed text keeps its parens (card pure-lane-parse)
+# want: a+1, a and b, (a), ((a)) on Rust, WARP_SELF_HOSTED=1 and warp pure
+print data (a + 1)
+x = data a and b
+print x
+print parse("(a)")
+print parse("((a))")

@@ -76,6 +76,32 @@ list_become(place, fresh): same as place from emitter
 list_drop_last(place): same as place from emitter
 removed_value(x, k): any from emitter
 list_sorted_by(xs, keys): any from emitter
+str(x): text from emitter
+text_form(x): text from emitter
+int(x): int from emitter
+float(x): float from emitter
+symbol(name): symbol from emitter
+// the emitter's text builtins
+trim(t): text from emitter
+starts_with(t, part): bool from emitter
+ends_with(t, part): bool from emitter
+byte_slice(t, start, end): text from emitter
+chr(code): codepoint from emitter
+read(path): text from emitter
+warning(message): text from emitter
+raise(message): same as message from emitter
+error(message): any from emitter
+is_error(x): bool from emitter
+is_type(x, type_name): bool from emitter
+// a node's parts and a node made of parts (wiki/node.md)
+key_of(n): any from emitter
+value_of(n): any from emitter
+op_of(n): any from emitter
+name_of(n): any from emitter
+bracket_of(n): any from emitter
+separator_of(n): any from emitter
+bracketed(n, bracket): list from emitter
+separated(n, separator): list from emitter
 string(x): text from emitter
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
@@ -145,7 +171,7 @@ is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
 is_word_char(c) := is_alphanumeric(c) or c == '_'
 // at least one character, each passing is_class: consists_of("42", is_digit)
-consists_of(t: text, is_class) := { if t == "" { return false }; for c in t { if not is_class(c) { return false } }; true }
+consists_of(t: text, is_class) := { if t is empty { return false }; for c in t { if not is_class(c) { return false } }; true }
 // a whole number, optionally signed: "-3"
 is_integer(t: text) := consists_of(remove_prefix(t, "-"), is_digit)
 // a hole's text fits its type in a text pattern: `"/users/" + id: int`, `"v" + n: digits`, `c: letter + "!"`

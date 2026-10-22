@@ -1,5 +1,6 @@
 # Values as they print: the text of any value known only at run time
 use "intrinsics.warp"
+use "../kinds.warp"
 use "conversions.warp"
 use "exact.warp"
 use "floats.warp"
@@ -7,6 +8,7 @@ use "nodes.warp"
 use "text.warp"
 use "times.warp"
 use "types.warp"
+use "../byte_codes.warp"
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
 # a type value `int` prints `class int`; ahead of the match, as `Symbol(_)` tests it as the type it names. Only the
 # empty value prints ø: a `ø:` case would take an empty list too, which prints [] (it equals ø, as in Rust)
@@ -28,6 +30,8 @@ collection_text(n: Node): text := {
 	if kind_code(n) == Kind.Time { return time_text(n) }
 	# a closure: its lambda as written (emitter.warp closure_text_code)
 	if kind_code(n) == Kind.Function { return closure_text(n) }
+	# a type declaration as written, `type P {x:type int ø}` as Rust's serialization.rs shows it
+	if kind_code(n) == Kind.TypeDef { return "type " + node_text(entry_key(n)) + " " + node_text(key_value(n)) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes

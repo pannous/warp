@@ -1,7 +1,9 @@
 # `a == b` of values known only at run time
 use "intrinsics.warp"
+use "../kinds.warp"
 use "conversions.warp"
 use "exact.warp"
+use "nodes.warp"
 use "ordering.warp"
 use "show.warp"
 use "text.warp"
@@ -12,6 +14,9 @@ node_equal(a: Node, b: Node): bool := {
 	if is_null(a) or is_null(b) { return is_null(a) == is_null(b) }
 	if kind_code(a) == Kind.Key or kind_code(b) == Kind.Key {
 		return code_free_kind(a) == code_free_kind(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
+	}
+	if kind_code(a) == Kind.TypeDef or kind_code(b) == Kind.TypeDef {
+		return kind_code(a) == kind_code(b) and node_equal(entry_key(a), entry_key(b)) and node_equal(key_value(a), key_value(b))
 	}
 	if marked_kind(a) == Marked.Map and marked_kind(b) == Marked.Map { return map_equal(a, b) }
 	if kind_code(a) == Kind.List or kind_code(b) == Kind.List { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }

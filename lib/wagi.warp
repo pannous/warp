@@ -27,7 +27,7 @@ wagi_variable(name: any) := {
 wagi_query(query: any) := {
 	var fields = {}
 	for part in split(query, "&") {
-		if part != "" {
+		if part {
 			let pair = split(part, "=")
 			fields[pair#1] = if count(pair) > 1 then pair#2 else ""
 		}
@@ -78,7 +78,7 @@ wagi_reply(status: any, content_type: any, body: any) := puts "Status: " + str(s
 // the route's value with the status and headers it set
 wagi_answer(value: any) := {
 	let own_type = if value is text then "text/plain; charset=utf-8" else "application/json"
-	let content_type = if wagi_content_type == "" then own_type else wagi_content_type
+	let content_type = if wagi_content_type is empty then own_type else wagi_content_type
 	let body = if value is text then value else wagi_json(value)
 	puts "Status: " + str(wagi_status) + "\nContent-Type: " + content_type + wagi_header_lines + "\n\n" + body
 }

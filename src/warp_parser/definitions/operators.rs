@@ -314,7 +314,7 @@ impl WarpParser {
 	pub(crate) fn try_parse_free_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let glyph = self.current_char();
 		if !is_free_symbol(glyph)
-			|| self.closes_circumfix(glyph)
+			|| self.is_circumfix_glyph(glyph)
 			|| !self.operand_follows(1)
 			|| self.free_symbol_follows(1)
 		{

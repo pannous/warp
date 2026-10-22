@@ -5,6 +5,7 @@
 use "walk.warp"
 use "words.warp"
 use "phrase_blocks.warp"
+use "diagnostics.warp"
 
 is_keyword(n: Node): bool := match n {
 	Symbol(name): name in function_keywords
@@ -63,9 +64,110 @@ result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
 		if not is_call(head) { return n }
 		result = symbol("the result")
-		Key(head, Op.Define, List([Key(Key(result, Op.Colon, result_type), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
+		held = optional_when_answering_empty(head, body, result_type)
+		if name_of(held).ends_with("?") { body = with_empty_otherwise(body) }
+		Key(head, Op.Define, List([Key(Key(result, Op.Colon, held), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
 	}
 	_: n
+}
+
+# A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
+# the `?` as its fix and holds its result as a `list?`, so the ø reaches the caller unchanged (Rust twin:
+# type_name_matching.rs optional_when_answering_empty)
+optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
+	written = name_of(result_type)
+	if not written or holds_empty(written) or not can_answer_empty(body, optional_functions) { return result_type }
+	diagnose(call_of("optional_result", [name_of(head#1), written]))
+	symbol(written + "?")
+}
+
+# an optional result of `if c then x` without `else`, or of a loop, is ø when nothing gave a value, not the kind's zero
+# (Rust twin: type_name_matching.rs as_type)
+with_empty_otherwise(value: Node): Node := match value {
+	Key(then, Op.Else, otherwise): Key(then, Op.Else, with_empty_otherwise(otherwise))
+	Key(_, Op.Then, _): Key(value, Op.Else, ø)
+	Key(_, Op.Do, _): List([value, ø], Bracket.Curly, Separator.Semicolon)
+	_: {
+		if is_loop(value) { return List([value, ø], Bracket.Curly, Separator.Semicolon) }
+		if not is_curly_group(value) or #value == 0 { return value }
+		items = items_of(value)
+		group_like(value, items[0..<(#items - 1)] + [with_empty_otherwise(items#(#items))])
+	}
+}
+
+# `for x in xs {…}`, `each x in xs {…}` before for_loops.warp lowers them; `while c {…}` is a `do` key already
+loop_words = ["for", "each"]
+is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
+
+# a bare `return`, or ø as its value, returned or last: ø itself, an `if` without `else`, a loop, a choice with such a
+# branch, a call of a function in `optional`, or a variable assigned such a value other than a call; the definitions
+# and lambdas inside answer for themselves
+can_answer_empty(body: Node, optional: list): bool := returns_empty(body, body, optional) or value_can_be_empty(body, body, optional, [])
+
+returns_empty(n: Node, body: Node, optional: list): bool := {
+	if is_word(n, "return") { return yes }
+	if is_group(n) and #n == 2 and is_word(n#1, "return") { return value_can_be_empty(n#2, body, optional, []) }
+	# `op.return` names a member, no return
+	if is_key(n, Op.Define) or is_key(n, Op.Arrow) or is_key(n, Op.Dot) { return no }
+	parts_of(n).any(part => returns_empty(part, body, optional))
+}
+
+# the functions of a program whose result can be ø: those declared `T?`, and those declared `T` whose body can answer
+# ø, a call of another such function included (Rust twin: type_name_matching.rs optional_functions)
+global optional_functions = []
+optional_functions_of(program: Node): list := {
+	typed = typed_definitions(program)
+	optional = []
+	more = ["start"]
+	while more {
+		more = typed.filter(candidate => not (candidate#1 in optional) and result_can_be_empty(candidate, optional)).map(candidate => candidate#1)
+		optional += more
+	}
+	optional
+}
+result_can_be_empty(candidate: list, optional: list): bool := {
+	written = candidate#2
+	written.ends_with("?") or (not holds_empty(written) and can_answer_empty(candidate#3, optional))
+}
+# `T?`, `any` and `Node` hold ø already: a result of theirs never warns
+holds_empty(written: text): bool := written.ends_with("?") or written in ["any", "Node"]
+# each definition with a declared result in n, `def f(x): T {…}` and `f(x): T := e`: its name, its type and its body
+typed_definitions(n: Node): list := {
+	inner = parts_of(n).flat_map(typed_definitions)
+	typed = typed_definition(n)
+	if typed then [typed] + inner else inner
+}
+typed_definition(n: Node): any := match n {
+	Key(Key(head, Op.Colon, result_type), Op.Define, body): { if is_call(head) then [name_of(head#1), name_of(result_type), body] else ø }
+	Key(head, Op.Colon, typed_body): {
+		if not is_call(head) or separator_of(typed_body) != " " or #typed_body != 2 or bracket_of(typed_body#2) != "{" { return ø }
+		[name_of(head#1), name_of(typed_body#1), typed_body#2]
+	}
+	_: ø
+}
+
+# a value given back by `body`, whose assignments give its variables their values; the functions `optional` can answer
+# ø, the variables `looked_up` are being followed already
+value_can_be_empty(value: Node, body: Node, optional: list, looked_up: list): bool := {
+	can_be_empty = part => value_can_be_empty(part, body, optional, looked_up)
+	match value {
+		Key(then, Op.Else, otherwise): is_key(then, Op.Then) and (can_be_empty(value_of(then)) or can_be_empty(otherwise))
+		Key(_, Op.Then, _): yes
+		Key(_, Op.Do, _): yes
+		Key(_, Op.Question, branches): is_key(branches, Op.Colon) and (can_be_empty(key_of(branches)) or can_be_empty(value_of(branches)))
+		_: {
+			if value == ø or is_loop(value) { return yes }
+			if value is symbol and not (name_of(value) in looked_up) {
+				# a call's ø kept in a variable is mostly tested before it is given back (`x = f(); if x == ø …; x`): only the
+				# ø a variable is assigned itself counts
+				return assigned_values(body, name_of(value)).any(assigned => value_can_be_empty(assigned, body, [], looked_up + [name_of(value)]))
+			}
+			if is_call(value) { return name_of(value#1) in optional }
+			if not is_curly_group(value) or #value == 0 { return no }
+			last = value#(#value)
+			not (is_group(last) and #last == 2 and is_word(last#1, "return")) and can_be_empty(last)
+		}
+	}
 }
 
 # `f = { it * 2 }` defines a function as `f := { it * 2 }` does: a name assigned a block that reads `it`; other blocks
@@ -78,4 +180,7 @@ is_call(n: Node): bool := match n {
 	_: no
 }
 
-definitions(program: Node): Node := bottom_up(program, definition)
+definitions(program: Node): Node := {
+	optional_functions = optional_functions_of(program)
+	bottom_up(program, definition)
+}
