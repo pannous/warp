@@ -642,7 +642,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 	values = arguments.map(a => expression_code(body, a))
 	match name {
 		"new_text": ["text", index_code(values#1) + gc_code(gc_ops.array_new_default, [gc.text])]
-		"byte_count": ["int", values#1#2 + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
+		"byte_count": ["int", converted(values#1, "text") + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
 		"byte_at": ["int", converted(values#1, "text") + index_code(values#2) + gc_code(gc_ops.array_get_u, [gc.text]) + [op.i64_extend_i32_u]]
 		"kind_code": ["int", kind_code_of(values#1#2)]
 		"unboxed_int": ["int", unboxed(values#1#2, gc.int_box)]
