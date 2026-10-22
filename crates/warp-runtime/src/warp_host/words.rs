@@ -22,6 +22,11 @@ pub fn link(linker: &mut Linker<Host>) -> Result<()> {
 			let mut read = |node: Ref| nodes::read(&wasmtime::Val::AnyRef(node), &mut store, Some(builders.memory()));
 			let (module, member) = (read(module)?.content(), read(member)?.content());
 			let raw = arguments;
+			// `use wasm`: other modules and components loaded and called (wasm_modules.rs)
+			if module == "wasm" {
+				let answer = crate::wasm_modules::answer(&mut store, &builders, &member, wasmtime::Val::AnyRef(raw))?;
+				return Ok(answer.unwrap_anyref().copied());
+			}
 			let arguments = read(arguments)?.items();
 			// keep gives the value it keeps: the program's own, kept or not
 			let given = if (module.as_str(), member.as_str()) == ("os", "keep") {

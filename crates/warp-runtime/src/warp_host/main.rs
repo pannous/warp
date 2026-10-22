@@ -6,8 +6,10 @@
 //!   warp-host <file.wasm | file.wat> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
 //! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`
 mod cache;
+mod components;
 mod ffi;
 mod nodes;
+mod wasm_modules;
 mod words;
 
 use nodes::Node;
@@ -41,6 +43,8 @@ pub struct Host {
 	keeper: Option<cache::Keeper>,
 	/// the engine of the run, for the modules it runs itself (os.run_wasm) and the code it compiles (os.compile_wasm)
 	engine: Engine,
+	/// the modules and components it loaded (wasm_modules.rs): by `use wasm`, and those its imports name
+	wasm: wasm_modules::Loaded,
 }
 
 impl CallsC for Host {
@@ -276,18 +280,11 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cac
 			args: args.clone(),
 			keeper,
 			engine: engine.clone(),
+			wasm: Default::default(),
 		};
-		let mut linker = Linker::new(engine);
-		wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host: &mut Host| &mut host.wasi)?;
-		warp_runtime::host_words::link_host_words(&mut linker)?;
-		warp_runtime::libm::link_libm(&mut linker)?;
-		warp_runtime::c_calls::link_libc_functions(&mut linker)?;
-		words::link(&mut linker)?;
 		let mut store = Store::new(engine, host);
-		ffi::link_c_imports(&mut linker, &mut store, &module, bytes)?;
-		linker.define_unknown_imports_as_traps(&module)?;
 		warp_runtime::engine::cap_memory(&mut store);
-		let instance = linker.instantiate(&mut store, &module)?;
+		let instance = wasm_modules::instantiate(&mut store.as_context_mut(), &module, bytes, None)?;
 		let main = warp_runtime::standalone::ENTRY_POINTS.iter().find_map(|name| instance.get_func(&mut store, name));
 		let main = main.ok_or_else(|| wasmtime::Error::msg("the module has no main nor _start"))?;
 		let mut results = vec![Val::AnyRef(None); main.ty(&store).results().len()];
@@ -316,6 +313,17 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cac
 }
 
 use wasmtime::AsContextMut;
+
+/// The imports every module of a run gets: WASI p1, warp-runtime's host words, libm, libc, std_io
+pub fn program_linker(engine: &Engine) -> wasmtime::Result<Linker<Host>> {
+	let mut linker = Linker::new(engine);
+	wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host: &mut Host| &mut host.wasi)?;
+	warp_runtime::host_words::link_host_words(&mut linker)?;
+	warp_runtime::libm::link_libm(&mut linker)?;
+	warp_runtime::c_calls::link_libc_functions(&mut linker)?;
+	words::link(&mut linker)?;
+	Ok(linker)
+}
 
 /// A failed run's message: a runtime error fails inside a function of its name (index_out_of_range, …), the global
 /// trap_detail holding the value it names; a raise's message is that value (lib/compiler/runtime/errors.warp)
