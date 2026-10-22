@@ -51,6 +51,7 @@ const HOST_CALL: &str = "std_io";
 const SI_AMOUNT_WORD: &str = "si_amount";
 /// The text of a value: `str(q)`, and `text_form(q)` of `${q}` interpolation (interpolation.rs)
 const TEXT_WORDS: [&str; 3] = [STR_WORD, "text_form", "serialize"];
+// ⚠ WARP DOES THIS DIFFERENTLY: sum's result is its fold's → lib/prelude.warp
 /// List words that give an element: its signature (`mean` also spelled `average`, library_words.rs)
 const ELEMENT_WORDS: [&str; 7] = ["sum", "max", "min", "first", "last", "mean", "average"];
 /// `type(q)`: the type of a value, a quantity's is its dimension

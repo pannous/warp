@@ -2,7 +2,9 @@
 """Turns the release tarballs into PyPI wheels of warp-language (`pip install warp-language`), one per platform.
 
 A wheel holds no Python: the binaries go in warp_language-<version>.data/scripts/, which pip and uv install into the
-environment's bin directory, so warp-runtime lands next to warp (the layout maturin's bin bindings produce).
+environment's bin directory, so warp-runtime lands next to warp (the layout maturin's bin bindings produce); the
+warp-written compilers and lib/ go in .data/data/share/warp/, which lands in <environment>/share/warp, where warp finds
+them (card installed-compilers).
 Usage: build_wheels.py <version> <dir with warp-v<version>-<target>.tar.gz> <output dir>; notes/packaging.md
 """
 
@@ -33,6 +35,8 @@ LINUX_ARCHITECTURES = {
     "aarch64-unknown-linux-gnu": "aarch64",
 }
 EXECUTABLE_MODE = (stat.S_IFREG | 0o755) << 16  # pip only marks regular files executable
+BINARY_PREFIX = "warp"  # the tarball's binaries: warp, warp-runtime, warp-page-runtime; the rest is shared data
+SHARED_FOLDER = "share/warp"
 
 
 def newest_glibc(binary: bytes) -> tuple[int, int]:
@@ -47,9 +51,13 @@ def platform_tag(target: str, binaries: dict[str, bytes]) -> str:
     return f"manylinux_{major}_{minor}_{LINUX_ARCHITECTURES[target]}"
 
 
-def read_binaries(archive: Path) -> dict[str, bytes]:
+def read_files(archive: Path) -> dict[str, bytes]:
     with tarfile.open(archive) as tar:
-        return {member.name: tar.extractfile(member).read() for member in tar.getmembers() if member.isfile()}
+        return {member.name.removeprefix("./"): tar.extractfile(member).read() for member in tar.getmembers() if member.isfile()}
+
+
+def is_binary(name: str) -> bool:
+    return "/" not in name and name.startswith(BINARY_PREFIX)
 
 
 def metadata(version: str, readme: str) -> str:
@@ -73,10 +81,14 @@ def record_line(path: str, content: bytes) -> str:
     return f"{path},sha256={digest},{len(content)}"
 
 
-def write_wheel(version: str, target: str, binaries: dict[str, bytes], readme: str, output: Path) -> Path:
+def write_wheel(version: str, target: str, files: dict[str, bytes], readme: str, output: Path) -> Path:
+    binaries = {name: content for name, content in files.items() if is_binary(name)}
+    shared = {name: content for name, content in files.items() if not is_binary(name)}
     tag = f"py3-none-{platform_tag(target, binaries)}"
     dist_info = f"{DISTRIBUTION}-{version}.dist-info"
-    entries = [(f"{DISTRIBUTION}-{version}.data/scripts/{name}", content, True) for name, content in binaries.items()]
+    data = f"{DISTRIBUTION}-{version}.data"
+    entries = [(f"{data}/scripts/{name}", content, True) for name, content in binaries.items()]
+    entries += [(f"{data}/data/{SHARED_FOLDER}/{name}", content, False) for name, content in shared.items()]
     entries += [
         (f"{dist_info}/METADATA", metadata(version, readme).encode(), False),
         (f"{dist_info}/WHEEL", f"Wheel-Version: 1.0\nGenerator: warp build_wheels.py\nRoot-Is-Purelib: false\nTag: {tag}\n".encode(), False),
@@ -103,7 +115,7 @@ def main(version: str, tarballs: str, output: str) -> None:
         sys.exit(f"no warp-v{version}-*.tar.gz in {tarballs}")
     for archive in archives:
         target = archive.name.removeprefix(f"warp-v{version}-").removesuffix(".tar.gz")
-        print(write_wheel(version, target, read_binaries(archive), readme, Path(output)))
+        print(write_wheel(version, target, read_files(archive), readme, Path(output)))
 
 
 if __name__ == "__main__":

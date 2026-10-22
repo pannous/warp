@@ -16,9 +16,6 @@ starts_with_for(n: Node): bool := match n {
 	_: no
 }
 
-# one node of several juxtaposed words: `upper w`
-words_phrase(words: list): Node := if #words == 1 then words#1 else List(words, Bracket.None, Separator.Space)
-
 # The clauses from `(for v in xs …)` and the items after it, as the parser groups them, each ["each", v, xs] or
 # ["if", c]: a second `for` nests in the first clause (`for f in xs (for i in ys ø)`); a filter's condition follows the
 # clause ending in `if`, up to the next `for` clause (`(for f in xs if) (f > 1) (for i in ys ø)`); else ø

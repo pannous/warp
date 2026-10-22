@@ -41,3 +41,53 @@ After `where`, conditions joined by `and` ask about what the holes bound:
 `not` negates any of them except the origin (`where not $f takes value`; `$t is not type` reads the same). Rules try
 in order, so a later rule without conditions is the fallback. The `where` may stand after a template the parser
 continued into it (`=> $c + $n where …`).
+
+## Places (F1)
+A place word among the `where` conditions lets a rule rewrite code only standing there:
+
+| word | where |
+|---|---|
+| `statement` | a statement of a block or the program |
+| `condition` | the condition of an `if` or `while` |
+| `member` | an item of a class body |
+| `key`, `value` | the key or the value of `k: v` |
+
+```warp
+rewrite $s except_if $c => if not $c then $s where statement
+rewrite field $n => $n: int where member
+```
+
+The engine applies a place's rules to a node's parts standing there, right after their own rules ran (children
+first, as everywhere); a rule without a place word rewrites anywhere. Phrase runs (`$n half`) stay for rules without a
+place.
+
+## For each item (F4)
+`T for $x in $xs...` in a template splices T once for each item a rest hole bound, `$x` bound to that item (fresh
+names are fresh for each). It works in a list, a map and a run of statements:
+
+```warp
+rewrite squares $xs... => [$x * $x for $x in $xs...]
+rewrite bump_all $vs... => ($v += 1 for $v in $vs...)
+rewrite flags $ns... => {($n: yes) for $n in $ns...}
+```
+
+Zip over two rest holes (`$a = $b for ($a, $b) in …`) isn't built yet.
+
+## Runs of statements (F6)
+A pattern of several statements `($a; $b)` matches a run of them standing one after the other in a block, holes
+binding across the run; the run is replaced by the template's statements:
+
+```warp
+rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
+```
+
+## Results rewritten again (F7)
+A rule's result is rewritten again by the rules, its parts first, until none fires, so rules build on rules:
+
+```warp
+rewrite double $x => $x * 2
+rewrite quadruple $x => double (double $x)
+quadruple 3   # 12
+```
+
+A result rewritten 64 times in a row (`rewrite_depth_limit`) is the rules' loop: an error, not a hang.

@@ -74,6 +74,8 @@ mod test_self_hosted_library; // card shared-warp-build
 mod test_self_pure; // card pure-runs
 #[cfg(feature = "native")]
 mod test_self_sort; // card sort-warp
+#[cfg(feature = "native")]
+mod test_self_text_index_of; // card index-of-bytes
 #[cfg(feature = "native")] // a lib/compiler file on disk
 mod test_self_time_arithmetic; // card time-arithmetic-warp
 #[cfg(feature = "native")]
@@ -96,6 +98,8 @@ mod test_url_literal; // card add-http
 mod test_warp_format;
 #[cfg(feature = "native")]
 mod test_warp_pure; // card warp-pure
+#[cfg(feature = "native")]
+mod test_warp_wasm_alone; // card standalone
 mod test_wisp_def_params;
 mod test_wisp_malformed;
 mod test_wisp_roundtrip;

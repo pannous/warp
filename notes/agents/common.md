@@ -72,6 +72,8 @@ After a context swap, this file and your role file win over anything a handover 
   confirmations a safety rule wants from the user directly (permission or hook changes, anything you won't do on a
   peer's word): send them to the Interviewer with the exact action and work on everything else meanwhile. The
   Interviewer relays the user's answer verbatim; that relayed answer is the user's confirmation.
+- Run commands yourself, proactively: never hand the user commands to copy-paste into a shell. If something needs
+  their machine, run it there (with approval if required) and report the result.
 - Suspected non-issues go through the Interviewer: when a small bug you found may not matter (the same value shown
   another way, `96px/inch` vs `96dpi`), SendMessage warp-interviewer before carding or fixing it. A confirmed
   non-issue gets no work: its card, if any, goes to Later with the verdict as a `todo note`.
@@ -85,6 +87,11 @@ After a context swap, this file and your role file win over anything a handover 
   never notify it.
 
 ## Where to work
+- Quota wind-down (user 2026-10-22, ~10 % of the weekly Claude quota left until the reset): every Claude worker
+  finishes and lands the card it is on, writes its handover into the card (`todo release`), then retires. No new
+  cards. Only warp-integrator and warp-layers keep running. The sugar passes outside parser.warp belong to the user's
+  Grok Bot coders (instructions: scratch/grok-cards.md; they report in scratch/grok-reports.md); warp-layers keeps
+  parser.warp only.
 - Beautiful types (decision beautiful-types): every lib/ declaration a migration or cleanup branch touches leaves it
   fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
   adds the shallow subclasses; don't invent parallel ones in your branch.
@@ -184,6 +191,14 @@ After a context swap, this file and your role file win over anything a handover 
   queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
   replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
   emitter.warp refuses there is fixed or carded, never left for main to find.
+  Fleet-wide at most 2 heavy warp runs at once (user 2026-10-22, load 522): every self build, `warp rebuild`, `warp
+  pure` of a compiler file and every test sweep (is_tests, is_pairs, probe series) runs inside `scripts/slot.sh <cmd>`
+  (slots on /Volumes/Build/self-check; self-check.sh takes one itself; the Integrator's gate included). A sweep runs
+  its programs serially inside one slot, never N parallel warps. One more heavy slot is on the Grok box (Debian, 8
+  cores, ~3 GB free, one run at a time): give the run to Grok Warp Code 3 via the Supervisor (grok-msg). The tree it checks
+  is a cowtree worktree under /Volumes/Worktrees or a throwaway lib/ copy under /Volumes/Junk, never inside the main
+  checkout (scratch/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
+  cold module caches) go to Grok Warp Code 3's Linux box.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,
