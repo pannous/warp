@@ -73,6 +73,32 @@ jobs:
         tar -czf "$ARCHIVE" -C target/${{ matrix.target }}/release warp warp-runtime warp-page-runtime
         gh release upload "$TAG" "$ARCHIVE" --clobber
 
+  compilers:
+    # the warp-written compiler as wasm, the bootstrap seed shipped with every release (user 2026-10-22):
+    # compiler.wasm (`warp pure`'s, compiled by the Rust pipeline) and compiler-self.wasm (`warp self`'s, compiled by
+    # itself), both from the tag's lib/ by the tag's linux binary
+    needs: binaries
+    if: ${{ !inputs.repackage }}
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WARP_NO_WINDOW: 1
+      WARP_HINTS: 0
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ env.TAG }}
+    - name: build
+      run: |
+        mkdir -p "$RUNNER_TEMP/bin"
+        gh release download "$TAG" -p "warp-$TAG-x86_64-unknown-linux-gnu.tar.gz" -O - | tar -xz -C "$RUNNER_TEMP/bin"
+        export WARP_LIB=$PWD/lib
+        "$RUNNER_TEMP/bin/warp" rebuild pure
+        "$RUNNER_TEMP/bin/warp" rebuild self
+        "$RUNNER_TEMP/bin/warp" self samples/hello/hello.warp | grep -q Hello
+    - name: upload
+      run: gh release upload "$TAG" "$RUNNER_TEMP/bin/compiler.wasm" "$RUNNER_TEMP/bin/compiler-self.wasm" --clobber
+
   packages:
     # the tarballs repackaged: PyPI wheels of warp-language, .deb and .rpm of warp-lang, all attached to the release
     needs: binaries

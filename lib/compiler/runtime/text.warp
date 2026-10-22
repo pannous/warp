@@ -2,6 +2,7 @@
 use "intrinsics.warp"
 use "characters.warp"
 use "walks.warp"
+use "../byte_codes.warp"
 text_join(a: text, b: text): text := {
 	out = new_text(byte_count(a) + byte_count(b))
 	copy_text(out, 0, a, 0, byte_count(a))

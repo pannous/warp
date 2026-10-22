@@ -4,6 +4,10 @@
 use crate::common::fails_with;
 use crate::is;
 
+/// The status of a Rust panic
+#[cfg(feature = "native")]
+const PANIC_STATUS: i32 = 101;
+
 #[test]
 fn a_declared_runtime_word_compiles_where_it_is_not_called() {
 	is!("is_null(x: any): bool from runtime\nis_blank(n: any): bool := is_null(n)\n7", 7);
@@ -21,11 +25,16 @@ fn a_declared_runtime_word_gives_its_declared_type() {
 	is!("new_list(room: int): list from runtime\nfirst_of(items: list): int := 1\ncopied(count: int): int := {\n\tout = new_list(count)\n\tfirst_of(out)\n}\n7", 7);
 }
 
+/// A value the emitter supplies, `failed_in: text from runtime`, is a global the Rust lane starts at its type's zero
+#[test]
+fn a_declared_runtime_value_is_a_global() {
+	is!("g: text from runtime\nf() := { global g; g + \"!\" }\nf()", "!");
+}
+
 /// Each part of lib/compiler/runtime/ names the intrinsics it calls (runtime/intrinsics.warp) and the parts whose words
 /// it calls, so it compiles and runs alone in the Rust lane
 #[cfg(feature = "native")]
 #[test]
-#[ignore = "the parts find every word; their Kind constants (card constants-exist) and Rust lane type gaps (card rust-lane-type-2) remain"]
 fn each_runtime_part_runs_alone() {
 	let mut parts: Vec<_> =
 		std::fs::read_dir("lib/compiler/runtime").unwrap().map(|entry| entry.unwrap().path()).collect();
@@ -35,7 +44,9 @@ fn each_runtime_part_runs_alone() {
 		.filter_map(|part| {
 			let output = crate::common::warp_command().arg("--no-ask").arg(part).output().expect("warp runs");
 			let said = String::from_utf8_lossy(&output.stdout).to_string() + &String::from_utf8_lossy(&output.stderr);
-			(!output.status.success() || said.contains("Error")).then(|| format!("{}: {said}", part.display()))
+			// a part's value is its exit status (P77): only a crash, a signal or a panic, fails it
+			let crashed = matches!(output.status.code(), None | Some(PANIC_STATUS));
+			(crashed || said.contains("Error")).then(|| format!("{}: {said}", part.display()))
 		})
 		.collect();
 	assert!(failed.is_empty(), "{}", failed.join("\n"));

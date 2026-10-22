@@ -131,14 +131,6 @@ holds_entry(body: Body, receiver: any, entry: text): bool := {
 	values = assigned_values(body.function.body, name_of(receiver))
 	#values > 0 and values.all(value => is_group(value) and bracket_of(value) == "{" and #value > 0 and value.all(is_map_entry) and value.any(item => entry_name(item) == entry))
 }
-# the values assigned to the name anywhere in n
-assigned_values(n: any, name: text): list := {
-	if type(n) is key and op_of(n) == "=" and key_of(n) == symbol(name) { return [value_of(n)] + assigned_values(value_of(n), name) }
-	if type(n) is key { return assigned_values(key_of(n), name) + assigned_values(value_of(n), name) }
-	values = []
-	if is_group(n) { for item in n { values += assigned_values(item, name) } }
-	values
-}
 entry_name(entry: any): text := if key_of(entry) is symbol then name_of(key_of(entry)) else "" + key_of(entry)
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list (Rust's node_bytes)
 byte_count_words = {bytecount: yes, byte_size: yes}
@@ -788,9 +780,9 @@ def orders_instances(): bool { module.functions.keys.any(name => name == "compar
 core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error"}
+	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
-	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: []}
+	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: [], code: []}
 def type_test_code(body: Body, subject: any, spec: text): list {
 	if spec in module.sum_types { return refuse("a test of the type " + spec + ", which has cases or subclasses") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
@@ -1765,8 +1757,6 @@ reads_position(n: any): bool := {
 def quoted_code(body: Body, e: any): list {
 	if module.reads_positions { return refuse("quoted code whose position or comment is read") }
 	if e is symbol { return node(Kind.Symbol, text_bytes(name_of(e))) }
-	# `data (a + 1)`: parentheses around one item only group it
-	if is_group(e) and bracket_of(e) == "(" and #e == 1 { return quoted_code(body, e#1) }
 	if type(e) is key {
 		parts = [["node", quoted_code(body, key_of(e))], text_value(op_of(e)), ["node", quoted_code(body, value_of(e))]]
 		return runtime_call("key_node", parts)#2
@@ -2485,6 +2475,9 @@ def host_int(value: any): list {
 runtime_global(n: any): any := {
 	if not (type(n) is key and op_of(n) == ":" and key_of(n) == symbol("global")) { return ø }
 	name = name_of(key_of(value_of(n)))
+	# a table the runtime parts use for its numbers (kinds.warp, byte_codes.warp) is folded into the code, no variable
+	# of the runtime: the program keeps its own `Kind` (card constants-exist)
+	if name in constant_tables { return ø }
 	module.globals[name] = [#module.global_order, if value_of(value_of(n)) is number then "int" else "text"]
 	module.runtime_globals += [name]
 	module.global_order += [name]
