@@ -118,3 +118,74 @@ q = p
 is! 'rewrite double $x => $x * 2
 rewrite quadruple $x => double (double $x)
 quadruple 3' 12
+
+# glue_a_hole_to_a_word
+is! 'rewrite count_up $i till $b => ($i = 1; $i·end = $b; n = 0; while $i <= $i·end { n += $i; $i += 1 })
+count_up k till 4
+[n, k_end]' [10, 4]
+
+# a_name_built_of_a_word_and_a_hole
+is! 'rewrite define_square $a => (square·$a = 9)
+define_square side
+square_side' 9
+
+# a_hole_of_several_words_glues_each
+is! 'rewrite made $f $ws... => ($f·$ws = 4)
+made square a number
+square_a_number' 4
+
+# a_built_name_defines_a_function
+is! 'rewrite doubled $f => (twice·$f(x) := 2 * $f(x))
+sq(n) := n * n
+doubled sq
+twice_sq(3)' 18
+
+# a_name_built_for_each_item
+is! 'rewrite flags_named $ns... => ($n·flag = yes for $n in $ns...)
+flags_named red green
+green_flag' yes
+
+# words_glue_into_a_name
+is! 'rewrite speed_unit => km·per·hour
+km_per_hour = 5
+speed_unit' 5
+
+# a_number_beside_glue_multiplies
+is! 'rewrite scaled $x => $x·2
+rewrite tenfold $n => $n·ten
+ten = 10
+[scaled 4, tenfold 3]' [8, 30]
+
+# star_and_middle_dot_outside_templates_multiply
+is! 'rewrite mul $a $b => $a * $b
+x = 3
+y = 4
+[mul x y, x·y]' [12, 12]
+
+# where_an_enum
+is! 'enum Coin { Penny, Dime }
+rewrite kind $t => "enum" where $t is enum
+rewrite kind $t => "other"
+x = 1
+[kind Coin, kind x]' ["enum", "other"]
+
+# where_a_case_of_the_one_enum_declaring_it
+is! 'enum Coin { Penny, Dime }
+enum Metal { Gold, Penny }
+rewrite owns $c => "one" where $c is case
+rewrite owns $c => "none"
+[owns Dime, owns Penny, owns 3]' ["one", "none", "none"]
+
+# the_cases_of_the_enum_a_case_binds
+is! 'enum Coin { Penny, Nickel, Dime }
+rewrite size_of $c => #[cases of $e] where $c is case of $e
+rewrite size_of $c => 0
+[size_of Dime, size_of 7]' [3, 0]
+
+# a_case_of_a_named_enum
+is! 'enum Coin { Penny, Dime }
+enum Metal { Gold, Penny }
+rewrite pick $e $c => "case" where $c is case of $e
+rewrite pick $e $c => "not"
+[pick Metal Penny, pick Metal Dime, pick Coin Dime]' ["case", "not", "case"]
+||||||| d8bb3f8518

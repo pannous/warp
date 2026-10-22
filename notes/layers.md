@@ -177,7 +177,7 @@ enum_declarations 63 (reads declared types).
 Sugar passes, with the rule each would become:
 | lines | file | rule, or the missing feature |
 |------:|------|------|
-| 197 | plain_enums | `Color.Red` → the case: F2 (declared enum cases) |
+| 197 | plain_enums | `Color.Red`, `Color::Red`, `case .red`, `c is Coin`: lib/sugar/enums.warp (F9, card sugar-plain-enums); the declaration, `as int`/`as Coin`/`Coin(2)` and the names holding cases stay a pass (see the card) |
 | 186 | definitions | `rewrite def $d => $d`, `rewrite $f($p...) = $b => $f($p...) := $b`: works today, minus `xs(1) = …` (F2) |
 | 163 | of_lookups | `rewrite $a of $b => $b.$a`: phrase rule works today; type phrases `list of int` need F2 |
 | 137 | for_loops | see the parser's for row: F3, F5, F7 |
