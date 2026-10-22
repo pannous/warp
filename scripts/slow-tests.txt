@@ -175,3 +175,9 @@ parser::test_warp_commands::parse_shows_prefix_groups
 parser::test_warp_commands::repl_keeps_declarations_for_the_next_lines
 programs::test_music_values::chords_and_scales_are_lists_of_notes
 programs::test_music_values::the_tuning_tunes_every_note
+control::test_atomic_arrays::atomic_is_shared
+control::test_block_parameters::test_code_and_block_prefixes_make_blocks
+control::test_block_parameters::test_data_runs_with_a_warning
+control::test_branch_assigned_variables::a_text_assigned_in_both_branches_is_read_after_them
+parser::test_self_text_index_of::text_index_of_counts_as_find_and_warns
+programs::test_sound_signal::play_of_a_function_plays_it_as_a_signal
