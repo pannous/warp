@@ -54,14 +54,18 @@ pub(crate) fn is_declaration(statement: &Node) -> bool {
 		Node::Type { .. } => true,
 		Node::Key(_, Op::Assign | Op::Define, _) => true,
 		Node::Key(scope, Op::Colon, _) => scope.symbol_name().is_some_and(is_declaration_keyword),
-		Node::List(items, _, _) if items.len() >= 2 => items[0]
-			.symbol_name()
-			.is_some_and(|keyword| is_function_keyword(keyword) || is_declaration_keyword(keyword)),
+		Node::List(items, _, _) if items.len() >= 2 => {
+			items[0]
+				.symbol_name()
+				.is_some_and(|keyword| is_function_keyword(keyword) || is_declaration_keyword(keyword))
+				|| crate::lowering::named_patterns::pattern_definition(statement).is_some()
+		}
 		_ => false,
 	}
 }
 
-/// The name a declaration defines: `f(x) := …`, `x = …`, `x:int = 1`, `fun f(x) {…}`, `global x = …`, `class T {…}`
+/// The name a declaration defines: `f(x) := …`, `x = …`, `x:int = 1`, `fun f(x) {…}`, `global x = …`, `class T {…}`,
+/// `pattern Pair = [_, _]`, which a used file brings like its functions (decision node-refinements)
 pub(crate) fn name_declared_by(statement: &Node) -> Option<String> {
 	if !is_declaration(statement) {
 		return None; // a list `[a, b]` declares nothing
