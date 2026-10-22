@@ -5,6 +5,10 @@ use super::*;
 pub(crate) const LIBRARY_SETTING: &str = "WARP_LIB";
 /// The folder of lib/ that marks a warp checkout's library: the warp-written compiler
 pub const COMPILER_FOLDER: &str = "compiler";
+/// An installed warp's lib/ and compilers when not next to the binary: <prefix>/share/warp for <prefix>/bin/warp
+const INSTALLED_SHARE_FOLDER: &str = "../share/warp";
+/// The compiler file whose presence marks an installed folder (src/compiler/standalone.rs)
+const INSTALLED_COMPILER: &str = "compiler.wasm";
 
 /// `path` as written in the program: a relative path is next to the program's file, or in the working directory for
 /// inline code
@@ -85,8 +89,22 @@ pub fn with_working_folder<R>(folder: &Path, body: impl FnOnce() -> R) -> R {
 	crate::compiler::compile_context::scoped(|context| &mut context.working_folder, Some(folder.to_path_buf()), body)
 }
 
+/// Where an installed warp keeps lib/ and its compilers (card installed-compilers): next to the binary (a release
+/// tarball, main's ~/dev/bin), else <prefix>/share/warp beside the binary's bin/ (Homebrew, deb and rpm, the PyPI
+/// wheel); the binary's own folder when neither holds them
+pub fn installed_folder() -> Option<PathBuf> {
+	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;
+	let folder = binary.parent()?.to_path_buf();
+	let shared = folder.join(INSTALLED_SHARE_FOLDER);
+	let holds_warp = |candidate: &PathBuf| {
+		candidate.join(INSTALLED_COMPILER).exists() || candidate.join(STD_FOLDER).join(COMPILER_FOLDER).is_dir()
+	};
+	Some(if !holds_warp(&folder) && holds_warp(&shared) { shared } else { folder })
+}
+
 /// lib/ of the warp checkout at hand, so one warp build serves every worktree (card shared-warp-build): WARP_LIB, else
-/// the nearest lib/ holding compiler/ above the program file or the working directory, else the one warp was built from
+/// the nearest lib/ holding compiler/ above the program file or the working directory, else the installed one, else the
+/// one warp was built from
 pub fn library_folder() -> PathBuf {
 	if let Some(folder) = crate::setting(LIBRARY_SETTING) {
 		return PathBuf::from(folder);
@@ -96,7 +114,10 @@ pub fn library_folder() -> PathBuf {
 	let checkout_library = starts
 		.flat_map(|start| start.ancestors().map(|folder| folder.join(STD_FOLDER)).collect::<Vec<_>>())
 		.find(|library| library.join(COMPILER_FOLDER).is_dir());
-	checkout_library.unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER))
+	let installed_library = || {
+		installed_folder().map(|folder| folder.join(STD_FOLDER)).filter(|library| library.join(COMPILER_FOLDER).is_dir())
+	};
+	checkout_library.or_else(installed_library).unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER))
 }
 
 pub(crate) fn folder_of(file: &Path) -> PathBuf {

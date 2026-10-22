@@ -96,6 +96,8 @@ mod test_url_literal; // card add-http
 mod test_warp_format;
 #[cfg(feature = "native")]
 mod test_warp_pure; // card warp-pure
+#[cfg(feature = "native")]
+mod test_warp_wasm_alone; // card standalone
 mod test_wisp_def_params;
 mod test_wisp_malformed;
 mod test_wisp_roundtrip;
