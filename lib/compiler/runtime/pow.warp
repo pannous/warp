@@ -4,15 +4,18 @@
 # an unsigned comparison is unsigned_below, a right shift shifted_right. Names follow musl's.
 use "intrinsics.warp"
 use "instructions.warp"
-use "case.warp"
 use "pow_tables.warp"
-# the tables as ints, parsed at the first power
-pow_log_entry(index: int): int := {
-	table_ints(pow_log_table_text())#(index + 1)
+# the table's int at index: its 16 hex digits, read in place
+pow_log_entry(index: int): int := hex_entry(pow_log_table_text(), index)
+pow_exp_entry(index: int): int := hex_entry(pow_exp_table_text(), index)
+# 16 hex digits and a space
+hex_entry_width(): int := 17
+hex_entry(table: text, index: int): int := {
+	bits = 0
+	for at in index * hex_entry_width() ..< index * hex_entry_width() + 16 { bits = bits_or(shifted_left(bits, 4), hex_digit(byte_at(table, at))) }
+	bits
 }
-pow_exp_entry(index: int): int := {
-	table_ints(pow_exp_table_text())#(index + 1)
-}
+hex_digit(b: int): int := if b <= Ascii.Nine then b - Ascii.Zero else b - Ascii.LowerA + 10
 # a < b of the ints read as unsigned 64-bit numbers
 unsigned_below(a: int, b: int): bool := (a + least_float_sign()) < (b + least_float_sign())
 least_float_sign(): int := shifted_left(1, 63)
