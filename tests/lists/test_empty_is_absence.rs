@@ -48,6 +48,15 @@ fn emptiness_is_asked_loosely() {
 	is!("xs = [1]; if xs then 1 else 2", 1);
 }
 
+/// A written `[]` is a test word's subject like a variable holding it (card literal-empty-test)
+#[test]
+fn a_written_empty_list_is_empty() {
+	is!("[] is empty", true);
+	is!("[1] is empty", false);
+	is!("xs = [[] is empty]; xs#1", true);
+	is!("if [] is empty then 1 else 2", 1);
+}
+
 #[test]
 fn the_empty_set_sign_is_nothing() {
 	is!("∅ == ø", true);
