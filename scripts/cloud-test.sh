@@ -1,8 +1,10 @@
 #!/bin/bash
 # The cloud test lane (card cloud-test-lane, notes/cloud_development.md "Cloud test lane"): a branch's tests run in a
 # `claude --cloud` session, a Linux VM of its own paid by the Cloud session credit, instead of the Mac's tests/queue.sh.
-#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] [--pure-hello] [--gate] <branch> <tip> [filters…|--full]
+#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] [--optimized] [--pure-hello] [--gate] <branch> <tip> [filters…|--full]
 #       --env: a setting of the test run alone (not the build: every setting of a tip shares one build)
+#       --optimized: warp-lang at opt-level 2, as the full suite and the gate build it: the warp self tests need it (in
+#       a debug build the self build takes ~1100 s and `warp self` runs out of its 60 s; card cloud-lane-narrow)
 #       --pure-hello: run the ignored end-to-end `warp pure hello` check at test opt-level 2
 #       --gate: the Integrator's run (implied for batch-*/express* branches): it may use every run slot and goes first
 #       filters as for tests/queue.sh (`-- x y` or plain `x y`; `--test tests -- x` passes target flags to cargo);
@@ -745,7 +747,7 @@ main() {
 		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}" "${4:-}"; exit ;;
 	esac
-	card="" wait=1 result_only="" base=() settings=() pure_hello="" gate=""
+	card="" wait=1 result_only="" base=() settings=() pure_hello="" optimized="" gate=""
 	while [[ "${1:-}" == --* ]]; do
 		case "$1" in
 			--card) card=$2; shift 2 ;;
@@ -755,6 +757,7 @@ main() {
 			--on) base=(--on "$2"); shift 2 ;;
 			--env) settings+=(--env "$2"); shift 2 ;;
 			--pure-hello) pure_hello=1; shift ;;
+			--optimized) optimized=1; shift ;;
 			--gate) gate=1; shift ;;
 			*) break ;;
 		esac
@@ -764,6 +767,7 @@ main() {
 		[ $# -eq 2 ] || fail "--pure-hello is a complete test preset and does not take filters"
 		set -- "$1" "$2" "${PURE_HELLO_ARGS[@]}"
 	fi
+	[ -n "$optimized" ] && set -- "$1" "$2" "${OPTIMIZED_TEST_PROFILE[@]}" "${@:3}"
 	local filters=() filter   # the Mac's bash 3.2 has no mapfile
 	while IFS= read -r filter; do filters+=("$filter"); done < <(split_filters "${@:3}")
 	set -- "$1" "$2" ${filters[@]+"${filters[@]}"}
