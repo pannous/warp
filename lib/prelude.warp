@@ -164,13 +164,11 @@ operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, i
 // the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
 // own sum: src/lowering/words/library_words.rs)
 sum(xs) := fold(xs, 0, +)
-// a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small
-rewrite sum($first to $last) => range_sum($first, $last)
-rewrite sum($first .. $end) => range_sum($first, $end - 1)
-range_sum(first, last) := {
-	n = last - first + 1
-	if n <= 0 then 0 else if n % 2 == 0 then (n /! 2) * (first + last) else n * ((first + last) /! 2)
-}
+// a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small.
+// The template names no helper word: it lands in the program's code, where a program's own word of that name would be
+// called instead (card after-sum); the lambda's parameters take each bound once
+rewrite sum($first to $last) => ((first, last) => { let n = last - first + 1; if n <= 0 then 0 else if n % 2 == 0 then (n /! 2) * (first + last) else n * ((first + last) /! 2) })($first, $last)
+rewrite sum($first .. $end) => ((first, last) => { let n = last - first + 1; if n <= 0 then 0 else if n % 2 == 0 then (n /! 2) * (first + last) else n * ((first + last) /! 2) })($first, $end - 1)
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
