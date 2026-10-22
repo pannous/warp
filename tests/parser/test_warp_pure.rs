@@ -91,8 +91,8 @@ fn pure_said(name: &str, code: &str) -> String {
 #[test]
 #[ignore = "slow: compiles all of compiler.warp, as warp_pure_runs_hello_world; run with --ignored"]
 fn warp_pure_says_what_it_refuses() {
-	let said = pure_said("refused", "abs -3\n");
-	assert!(said.contains("outside the core: the operator ‖ with nothing before it"), "{said}");
+	let said = pure_said("refused", "nosuchword 3\n");
+	assert!(said.contains("outside the core: the unknown name nosuchword"), "{said}");
 }
 
 /// A library word compiles through the pure lane (card pure-not-a-list)
