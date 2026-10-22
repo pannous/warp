@@ -1,0 +1,174 @@
+# The command line of warp fix and warp beautify, in warp (card fix-in-lib), as src/cli/formatting.rs gives it for
+# beautify: `warp-rust run lib/fix/command.warp -- <fix|beautify> [check|yes] <file|folder|code>…`. Each warp file is
+# fixed by fix.warp, shown as a diff and written after "apply? y/n" (yes: without asking, check: the changes listed,
+# exit 1 when there are some); code given instead of files is printed fixed. A golf folder and non-warp files are
+# skipped; the end of the input answers no.
+use os
+use file
+use "fix.warp"
+
+check_word = "check"
+yes_word = "yes"
+# `warp format hash-comments` is accepted as beautify does, which always writes # comments
+option_words = [check_word, yes_word, "hash-comments"]
+help_words = ["help", "--help", "-h"]
+usage = "warp beautify [check|yes] <file|folder|code>…  The layout plus the best-practice rewrites (// comments become #, other languages' words the warp words), shown as a diff and applied after \"apply? y/n\" (yes: without asking; warp fix: the same)"
+warp_extensions = [".warp", ".wasp"]
+# code.golf solutions count their bytes: a folder of them keeps its layout, also when named
+skipped_folders = ["golf"]
+skipped_folder_reason = "code golf counts bytes"
+not_warp_reason = "not a warp file"
+code_label = "code"
+
+is_folder(path: text): bool := (try list_files(path) else ø) != ø
+name_of_path(path: text): text := last(path.split("/"))
+has_warp_extension(path: text): bool := warp_extensions.any(extension => path.ends_with(extension))
+
+# warp code by its extension, or an extension-less script whose `#!` line names warp
+is_warp_file(path: text): bool := {
+	if name_of_path(path).contains(".") { return has_warp_extension(path) }
+	first = (try read(path) else "").split("\n")[0]
+	first.starts_with("#!") and first.contains("warp")
+}
+
+# why a path is not fixed: a golf folder or no warp file; "" when it is
+skip_reason(path: text): text := {
+	if is_folder(path) { return if name_of_path(path) in skipped_folders then skipped_folder_reason else "" }
+	if is_warp_file(path) then "" else not_warp_reason
+}
+
+# the warp files of a folder, sorted, its skipped entries left out silently
+warp_files(path: text): list := {
+	if not is_folder(path) { return [path] }
+	found = []
+	for name in sort(list_files(path)) {
+		entry = path + "/" + name
+		if skip_reason(entry) == "" { found += warp_files(entry) }
+	}
+	found
+}
+
+# a name that means a file, never code: `x.warp`, `samples/hello/hello`
+looks_like_path(argument: text): bool := has_warp_extension(argument) or (argument.contains("/") and not argument.contains(" "))
+
+# the changed lines of old → new as `-`/`+` lines under `@@ <file>:<line>`, by their longest common subsequence
+print_diff(shown: text, old: text, new: text) := {
+	a = old.split("\n")
+	b = new.split("\n")
+	if old.ends_with("\n") { a = a[0 ..< #a - 1] }
+	if new.ends_with("\n") { b = b[0 ..< #b - 1] }
+	# common[i * width + j]: the length of the longest common subsequence of a[i..] and b[j..]
+	width = #b + 1
+	common = [0 for k in 0 ..< (#a + 1) * width]
+	i = #a - 1
+	while i >= 0 {
+		j = #b - 1
+		while j >= 0 {
+			common[i * width + j] = if a[i] == b[j] then common[(i + 1) * width + j + 1] + 1 else max(common[(i + 1) * width + j], common[i * width + j + 1])
+			j -= 1
+		}
+		i -= 1
+	}
+	i = 0
+	j = 0
+	in_hunk = no
+	while i < #a or j < #b {
+		if i < #a and j < #b and a[i] == b[j] {
+			i += 1
+			j += 1
+			in_hunk = no
+		} else {
+			if not in_hunk {
+				print "@@ " + shown + ":" + (i + 1)
+				in_hunk = yes
+			}
+			if j == #b or (i < #a and common[(i + 1) * width + j] >= common[i * width + j + 1]) {
+				print "-" + a[i]
+				i += 1
+			} else {
+				print "+" + b[j]
+				j += 1
+			}
+		}
+	}
+}
+
+# shows the diff and asks; the next line of the input answers, its end is no
+confirmed(shown: text, old: text, new: text): bool := {
+	print_diff(shown, old, new)
+	answer = input("apply? y/n ")
+	if answer == ø { print "" }
+	answer != ø and (answer.trim() == "y" or answer.trim() == "yes")
+}
+
+# a change "<line> <rule>" as check lists it
+listed_change(shown: text, change: text): text := {
+	parts = change.split(" ")
+	shown + ":" + parts[0] + ": layout: " + change[(#parts[0] + 1) ..]
+}
+
+# code given instead of files: printed fixed; in check, its changes listed, 1 when there are some
+fixed_code(code: text, checking: bool): int := {
+	result = fixed(code)
+	if not checking { print result[0] }
+	if checking { for change in result[1] { print listed_change(code_label, change) } }
+	if checking and #result[1] > 0 then 1 else 0
+}
+
+# the exit code: 1 when a file cannot be fixed or, with check, would change
+fix_command(command: text, arguments: list): int := {
+	if arguments.any(argument => argument in help_words) {
+		print "  " + usage
+		return 0
+	}
+	words = 0
+	while words < #arguments and arguments[words] in option_words { words += 1 }
+	options = arguments[0 ..< words]
+	paths = arguments[words ..]
+	checking = check_word in options
+	without_asking = yes_word in options
+	if #paths > 0 and paths.all(path => not exists(path) and not looks_like_path(path)) {
+		return fixed_code(paths.join(" "), checking)
+	}
+	files = []
+	for path in paths {
+		reason = skip_reason(path)
+		if reason != "" and exists(path) { print path + ": skipped: " + reason } else { files += warp_files(path) }
+	}
+	if #files == 0 {
+		print "warp " + command + ": name the warp files or folders to format, or give code\n  " + usage
+		return 2
+	}
+	changed = 0
+	failed = 0
+	not_applied = 0
+	for file in files {
+		code = try read(file) else ø
+		if code == ø {
+			print file + ": not formatted: it cannot be read"
+			failed += 1
+		} else {
+			result = fixed(code)
+			lines = #result[1]
+			if result[0] != code {
+				if checking {
+					changed += 1
+					for change in result[1] { print listed_change(file, change) }
+				} else if not without_asking and not confirmed(file, code, result[0]) {
+					print file + ": not applied: `warp beautify yes " + file + "` applies it"
+					not_applied += 1
+				} else {
+					write(file, result[0])
+					changed += 1
+					print "formatted " + file + ": " + lines + " lines"
+				}
+			}
+		}
+	}
+	verb = if checking then "to format" else "changed"
+	previewed = if not_applied > 0 then ", " + not_applied + " not applied" else ""
+	print "warp " + command + ": " + #files + " files, " + changed + " " + verb + previewed + ", " + failed + " not formatted, 0 hints left"
+	if failed > 0 or (checking and changed > 0) then 1 else 0
+}
+
+exit(fix_command(args[0], args[1 ..]))
