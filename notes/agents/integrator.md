@@ -134,8 +134,9 @@ Read notes/agents/common.md and notes/roles.md.
   ~/dev/bin/warp-<commit> (links into ~/dev/bin/main-builds/<commit>/, the binary with its compiler.wasm; card
   keep-main-binaries), for bisecting a regression without a build. The main-binary worktree's own data/compiler.wasm
   is rebuilt too (`warp rebuild pure` and `warp rebuild self`), so `warp pure` and `warp self` there never run the
-  previous main's compiler; the main checkout's stale data/compiler-self.wasm is deleted, its next `warp self` builds
-  it anew (a stale one printed hello while main refused to compile itself; supervisor 2026-10-21). push_tested.sh and
+  previous main's compiler; the main checkout's stale data/compiler-self.wasm is deleted (a stale one printed hello while main
+  refused to compile itself; supervisor 2026-10-21); lib/ changes between refreshes are rebuilt by cron
+  (scripts/refresh_compilers.sh, which waits while a refresh runs). push_tested.sh and
   express.sh start it; after a warp-only push start it yourself.
 - Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
   `integrator_tools/pure_chain_check.sh <worktree>` runs `warp pure samples/hello/hello.warp` with the merged lib
