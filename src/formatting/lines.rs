@@ -175,7 +175,8 @@ pub(crate) fn code_characters(code: &str) -> Vec<bool> {
 fn opens_data(line: &str, scan: &LineScan) -> bool {
 	let code = code_text(line, scan);
 	let before_brace = code.strip_suffix('{').map(str::trim_end);
-	before_brace.is_some_and(|before| before.rsplit(|c: char| !c.is_alphanumeric() && c != '_').next() == Some(DATA_WORD))
+	before_brace
+		.is_some_and(|before| before.rsplit(|c: char| !c.is_alphanumeric() && c != '_').next() == Some(DATA_WORD))
 }
 
 /// For each line, whether it lies inside a block of data (its closing line included), where the layout is the author's
