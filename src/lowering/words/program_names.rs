@@ -27,9 +27,7 @@ impl ProgramNames {
 				functions.entry(head.name.to_string()).or_default().push(head.arity());
 			}
 		});
-		let mut bound = HashSet::new();
-		crate::type_tests::collect_outer_assigned_names(program, &mut bound);
-		bound.extend(outer_loop_variables(program));
+		let mut bound = outer_variables(program);
 		bound.retain(|name| !functions.contains_key(name));
 		ProgramNames { functions, bound }
 	}
@@ -139,6 +137,15 @@ fn binds_inside(node: &Node, word: &str) -> bool {
 	let mut binds = false;
 	node.visit(&mut |part| binds |= function_head(part).is_some_and(|head| bound_in_function(&head).contains(word)));
 	binds
+}
+
+/// The names the top level binds as values: what it assigns and its loop variables (a function value assigned there,
+/// `f = x => …`, included)
+pub fn outer_variables(program: &Node) -> HashSet<String> {
+	let mut bound = HashSet::new();
+	crate::type_tests::collect_outer_assigned_names(program, &mut bound);
+	bound.extend(outer_loop_variables(program));
+	bound
 }
 
 /// The loop variables outside function bodies
