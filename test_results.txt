@@ -10,12 +10,6 @@ PASSED:
   ✓ control::test_bang_words::under_test_each_is_bang_counts
   ✓ control::test_bare_try::a_bare_try_keeps_the_raised_error_as_its_value
   ✓ control::test_bare_try::a_raise_without_try_still_stops_the_program
-  ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
-  ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
-  ✓ control::test_block_assigns_outer::the_declared_and_returned_forms_change_it
-  ✓ control::test_block_parameter_calls::a_block_parameter_takes_a_trailing_block_without_parentheses
-  ✓ control::test_block_parameter_calls::a_parameter_named_block_is_a_block_parameter_and_runs_with_parentheses
-  ✓ control::test_block_parameter_calls::a_parameter_named_code_the_body_never_runs_is_a_value
   ✓ control::test_block_parameter_calls::a_trailing_block_parameter_takes_the_rest_of_the_call
   ✓ control::test_block_parameters::test_code_and_block_prefixes_make_blocks
   ✓ control::test_block_parameters::test_data_runs_with_a_warning
@@ -3821,16 +3815,8 @@ PASSED:
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
-  ✓ parser::test_self_pure::spaced_prefix_calls_run_pure
-  ✓ parser::test_self_pure::std_modules_run_pure
-  ✓ parser::test_self_pure::text_escapes_read_pure
-  ✓ parser::test_self_pure::the_core_runs_pure
   ✓ parser::test_self_pure::type_words_named_by_fields_run_pure
   ✓ parser::test_self_pure::used_files_run_pure
-  ✓ parser::test_self_text_index_of::a_declared_index_or_position_holds_its_count
-  ✓ parser::test_self_text_index_of::a_missing_text_part_is_an_error
-  ✓ parser::test_self_text_index_of::bytes_and_characters_do_not_mix
-  ✓ parser::test_self_text_index_of::find_answers_in_the_declared_unit
   ✓ parser::test_self_text_index_of::offset_is_a_synonym_of_index
   ✓ parser::test_self_text_index_of::text_byte_index_of_counts_bytes_from_zero
   ✓ parser::test_self_text_index_of::text_find_answers_by_the_declared_count
@@ -4225,7 +4211,6 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
-  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -6389,7 +6374,10 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ modules::test_std_prelude::dir_lists_the_prelude
+  ✗ parser::test_warp_commands::a_host_command_names_the_native_warp
+  ✗ parser::test_warp_commands::help_lists_the_commands
+  ✗ parser::test_warp_commands::parse_shows_prefix_groups
+  ✗ parser::test_warp_commands::repl_keeps_declarations_for_the_next_lines
 
 SUMMARY:
-14 ignored, 6386 passed, 1 failed, 6387 total tested
+14 ignored, 6371 passed, 4 failed, 6375 total tested
