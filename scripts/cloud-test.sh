@@ -1,7 +1,7 @@
 #!/bin/bash
 # The cloud test lane (card cloud-test-lane, notes/cloud_development.md "Cloud test lane"): a branch's tests run in a
 # `claude --cloud` session, a Linux VM of its own paid by the Cloud session credit, instead of the Mac's tests/queue.sh.
-#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] [--optimized] [--pure-hello] [--gate] <branch> <tip> [filters…|--full]
+#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] [--optimized] [--pure-hello] [--slow] [--gate] <branch> <tip> [filters…|--full]
 #       --env: a setting of the test run alone (not the build: every setting of a tip shares one build)
 #       --optimized: warp-lang at opt-level 2, as the full suite and the gate build it: the warp self tests need it (in
 #       a debug build the self build takes ~1100 s and `warp self` runs out of its 60 s; card cloud-lane-narrow)
@@ -9,7 +9,10 @@
 #       --gate: the Integrator's run (implied for batch-*/express* branches): it may use every run slot and goes first
 #       filters as for tests/queue.sh (`-- x y` or plain `x y`; `--test tests -- x` passes target flags to cargo);
 #       --full: the whole suite as test.sh runs it (--all-features, warp-lang at opt-level 2), sharded: FULL_SHARDS
-#       jobs on as many VMs, each every FULL_SHARDS-th test file, merged into one result
+#       jobs on as many VMs, each every FULL_SHARDS-th test file, merged into one result; without the slow tests of
+#       scripts/slow-tests.txt, to which it adds each test that took 60 s or more
+#       --slow: only the tests of scripts/slow-tests.txt, with the --full flags (a few times a day, not per batch)
+#       every run keeps each test's seconds in data/cloud/<run>/timings.tsv, slowest first
 #       --warp-test [folder…]: no cargo test: the release binary builds compiler.wasm and runs `warp test [folder…]`,
 #       every pairs and is! line under the folders (default tests/) through `warp pure` (card warp-test-runner)
 #       waits for the result (run it in the background), prints it, keeps it in data/cloud/<run>/ and, with --card,
@@ -30,7 +33,7 @@
 set -uo pipefail
 MODEL=${CLOUD_TEST_MODEL:-haiku}
 THIS_SCRIPT=$0                 # sent along with each job
-SLOW_FILES=""                  # sent along with each --full shard's job (slow_files)
+SLOW_TESTS=""                  # sent along with each --full shard's job: the tests it leaves out (SLOW_TESTS_LIST)
 
 REPO=pannous/warp
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
@@ -72,7 +75,13 @@ SHARD_FLAG=--shard             # --full --shard <i>/<n>: one shard's job, on the
 SHARD_HEADER="==== shard "     # a merged log's line before each shard's log
 RERUN_MARK="cloud-test: RERUN" # a killed run's failed tests run once more for their panic texts: lines after it count no test
 RERUN_SECONDS=600
-LAST_FINISHES_SHOWN=6          # result.md names the tests that finished last, with their time into the test run
+SLOW_TESTS_LIST=scripts/slow-tests.txt   # the tests --full leaves out and --slow runs (user 2026-10-22), in the main checkout
+SLOW_SECONDS=60                # a --full run appends each test that took this long to SLOW_TESTS_LIST
+SLOW_LEFT_OUT="slow tests left out (--slow runs them)"   # a shard's log line: the merge expects that many fewer tests
+TIMINGS=timings.tsv            # data/cloud/<run>/: each test's seconds and name, slowest first (libtest's --report-time)
+# --report-time is unstable: libtest takes it with RUSTC_BOOTSTRAP=1 at run time, set by a runner so the build stays the same
+REPORT_TIME=(-Z unstable-options --report-time)
+LAST_FINISHES_SHOWN=6         # result.md names the tests that finished last, with their time into the test run
 USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
 RUST_TARGETS="wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown" # package and crate-wrapper builds in the tests
 
@@ -147,18 +156,15 @@ unmatched_filters() {
 	done
 }
 
-# The test file of each test name on stdin: <folder>::<file>::
-test_files() { awk -F'::' '{ print (NF < 3 ? $0 : $1 "::" $2 "::") }' | sort -u; }
-
-# The filters of shard <i>/<n>: every n-th test file of the built tests, the slow ones (the job's file `slow`) dealt
-# first so that they spread over the shards (all four self-hosted files once fell to one shard: 1351 s of tests, the
-# others 300 s), then the rest in sorted order
-shard_filters() {
-	local files
-	[ -f "$HERE_WORK/slow" ] || : > "$HERE_WORK/slow"   # missing, grep -v printed no file at all: no filter runs every test
-	files=$(cargo test "${source_flags[@]}" "${test_args[@]}" -- --list 2>/dev/null | sed -n 's/: test$//p' | test_files)
-	{ grep -Fxf "$HERE_WORK/slow" <<< "$files"; grep -vFxf "$HERE_WORK/slow" <<< "$files"; } |
-		awk -v shard="${1%/*}" -v shards="${1#*/}" '(NR - 1) % shards == shard - 1'
+# The exact names of shard <i>/<n>'s tests: the tests of every n-th test file (<folder>::<file>) of the built tests,
+# but not the slow ones (the job's file `slow`, scripts/slow-tests.txt: --slow runs them); logs how many it left out
+shard_tests() {
+	local listed
+	[ -f "$HERE_WORK/slow" ] || : > "$HERE_WORK/slow"   # missing, grep -v printed no test at all: no filter runs every test
+	listed=$(cargo test "${source_flags[@]}" "${test_args[@]}" -- --list 2>/dev/null | sed -n 's/: test$//p')
+	echo "cloud-test: shard $1: $(grep -cFxf "$HERE_WORK/slow" <<< "$listed") $SLOW_LEFT_OUT" >> "$HERE_WORK/log.txt"
+	grep -vFxf "$HERE_WORK/slow" <<< "$listed" | awk -F'::' -v shard="${1%/*}" -v shards="${1#*/}" '
+		{ file = NF < 3 ? $0 : $1 "::" $2; if (!(file in number)) number[file] = files++; if (number[file] % shards == shard - 1) print }'
 }
 
 # A killed test binary prints no panic text of its failed tests (libtest prints them at its end): those run once more,
@@ -286,8 +292,9 @@ run_tests_here() {
 	fi
 	if [ $build_status -eq 0 ] && [ -n "$shard" ]; then
 		local filter
-		while IFS= read -r filter; do filters+=("$filter"); done < <(shard_filters "$shard")
-		echo "cloud-test: shard $shard: ${#filters[@]} test files" >> "$HERE_WORK/log.txt"
+		filters=(--exact)
+		while IFS= read -r filter; do filters+=("$filter"); done < <(shard_tests "$shard")
+		echo "cloud-test: shard $shard: $((${#filters[@]} - 1)) tests" >> "$HERE_WORK/log.txt"
 	fi
 	build_environment=$(detect_build_environment "$build_status" "$HERE_WORK/log.txt")
 	build_seconds=$((SECONDS - build_start))
@@ -315,8 +322,9 @@ run_tests_here() {
 		run_warp_test "$HERE_WORK/log.txt" "$(cargo_target_dir)/release/warp" ${warp_test_folders[@]+"${warp_test_folders[@]}"}
 	elif [ $build_status -eq 0 ]; then
 		printf 'cloud-test: in %s at %s: cargo test %s -- %s\n' "$PWD" "$(git rev-parse --short HEAD)" "${test_args[*]}" "${filters[*]}" >> "$HERE_WORK/log.txt"
-		run_watched "$HERE_WORK/log.txt" \
-			env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
+		local timed=(--config "target.$(rustc -vV | sed -n 's/^host: //p').runner=['env', 'RUSTC_BOOTSTRAP=1']")
+		run_watched "$HERE_WORK/log.txt" env ${settings[@]+"${settings[@]}"} \
+			cargo test "${source_flags[@]}" "${test_args[@]}" "${timed[@]}" --no-fail-fast -- "${REPORT_TIME[@]}" "${filters[@]}"
 		rerun_killed_failures "$HERE_WORK/log.txt" \
 			env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast
 	fi
@@ -544,7 +552,7 @@ cloud_prompt() {
 push_job() {
 	local job=$1 arguments script slow tree commit output; shift
 	arguments=$(printf '%s\n' "$@" | git -C "$MAIN_CHECKOUT" hash-object -w --stdin)
-	slow=$(printf '%s' "$SLOW_FILES" | git -C "$MAIN_CHECKOUT" hash-object -w --stdin)
+	slow=$(printf '%s' "$SLOW_TESTS" | git -C "$MAIN_CHECKOUT" hash-object -w --stdin)
 	script=$(git -C "$MAIN_CHECKOUT" hash-object -w --stdin < "$THIS_SCRIPT")
 	tree=$(printf '100644 blob %s\targuments\n100644 blob %s\tcloud-test.sh\n100644 blob %s\tslow\n' "$arguments" "$script" "$slow" |
 		git -C "$MAIN_CHECKOUT" mktree)
@@ -748,11 +756,18 @@ fetch_result() {
 }
 
 # Prints the result in <folder>, adds it to the card; exit status 0 = green
+# Each test's seconds (libtest's --report-time) into <folder>/TIMINGS, slowest first; the result names the slowest
+write_timings() {
+	local folder=$1
+	gzip -dc "$folder/log.txt.gz" | sed -n 's/^test \([^ ]*\) \.\.\. .* <\([0-9.]*\)s>$/\2	\1/p' | sort -rn > "$folder/$TIMINGS"
+	[ -s "$folder/$TIMINGS" ] && echo "slowest: $(head -3 "$folder/$TIMINGS" | awk -F'\t' '{ printf "%s%s %s s", (NR > 1 ? ", " : ""), $2, $1 }') ($folder/$TIMINGS)" >> "$folder/result.md"
+}
+
 report() {
 	local folder=$1 tip=$2 card=$3
 	cat "$folder/result.md"
 	echo "(log: $folder/log.txt.gz)"
-	[ -n "$card" ] && todo note "$card" "cloud test $(sed -n 's/^verdict: //p' "$folder/result.md"): $(sed -n 's/^tests: //p' "$folder/result.md") at ${tip:0:8}, $(sed -n 's/^passed: //p' "$folder/result.md"); $(sed -n 's/^wall: //p' "$folder/result.md")$(sed -n '/^failures:/,/^[a-z]/{/^  /p;}' "$folder/result.md" | head -10 | tr '\n' ';')" > /dev/null
+	[ -n "$card" ] && todo note "$card" "cloud test $(sed -n 's/^verdict: //p' "$folder/result.md"): $(sed -n 's/^tests: //p' "$folder/result.md" | cut -c1-200) at ${tip:0:8}, $(sed -n 's/^passed: //p' "$folder/result.md"); $(sed -n 's/^wall: //p' "$folder/result.md")$(sed -n '/^failures:/,/^[a-z]/{/^  /p;}' "$folder/result.md" | head -10 | tr '\n' ';')" > /dev/null
 	grep -q '^verdict: green' "$folder/result.md"
 }
 
@@ -761,22 +776,25 @@ collect() {
 	shift 3
 	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$@")
 	fetch_result "$name"
+	write_timings "$MAIN_CHECKOUT/data/cloud/$name"
 	report "$MAIN_CHECKOUT/data/cloud/$name" "$tip" "$card"
 }
 
 # The shards' results as one: their logs one after another, summarized together; green when every shard is and all
-# listed tests ran (each test in one shard: Σ passed+failed+ignored of the shards = what each shard lists)
+# listed tests but the slow ones ran (each in one shard: Σ passed+failed+ignored of the shards = what a shard lists
+# less what it left out)
 merge_shards() {
-	local folder=$1 tip=$2 shard_folder verdict=green counted listed; shift 2
+	local folder=$1 tip=$2 shard_folder verdict=green counted listed left_out; shift 2
 	mkdir -p "$folder"
 	for shard_folder in "$@"; do echo "$SHARD_HEADER${shard_folder##*/}"; gzip -dc "$shard_folder/log.txt.gz"; done > "$folder/log.txt"
 	git -C "$MAIN_CHECKOUT" show "origin/main:$ENVIRONMENTAL_LIST" > "$folder/environmental.txt" 2>/dev/null
 	git -C "$MAIN_CHECKOUT" show "$tip:$KNOWN_FAILURES" > "$folder/known_failures.md" 2>/dev/null
 	summarize "$folder/log.txt" "$folder/environmental.txt" "$folder/known_failures.md" > "$folder/summary.txt"
-	read -r counted listed < <(awk -v RERUN_MARK="$RERUN_MARK" -v SHARD_HEADER="$SHARD_HEADER" '
+	read -r counted listed left_out < <(awk -v RERUN_MARK="$RERUN_MARK" -v SHARD_HEADER="$SHARD_HEADER" -v LEFT_OUT="$SLOW_LEFT_OUT" '
 		index($0, SHARD_HEADER) == 1 { rerun = 0; shard++ } index($0, RERUN_MARK) == 1 { rerun = 1 }
+		index($0, LEFT_OUT) { left_out = $4 }
 		!rerun && /^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored)/) ran += $(i - 1); if ($(i) ~ /^(passed|failed|ignored|filtered)/) listed[shard] += $(i - 1) } }
-		END { for (s in listed) if (listed[s] > most) most = listed[s]; print ran + 0, most + 0 }' "$folder/log.txt")
+		END { for (s in listed) if (listed[s] > most) most = listed[s]; print ran + 0, most - left_out, left_out + 0 }' "$folder/log.txt")
 	grep -q '^verdict: green' "$folder/summary.txt" || verdict=red
 	for shard_folder in "$@"; do grep -q '^verdict: green' "$shard_folder/result.md" || verdict=red; done
 	[ "$counted" = "$listed" ] || verdict=red
@@ -786,7 +804,7 @@ merge_shards() {
 		echo "tests: --full ($# shards)"
 		echo "verdict: $verdict"
 		grep -v '^verdict: ' "$folder/summary.txt"
-		echo "tests counted: $counted of $listed listed$([ "$counted" = "$listed" ] || echo ": INCOMPLETE, a shard lost tests")"
+		echo "tests counted: $counted of $listed listed, $left_out slow ones left out ($SLOW_TESTS_LIST)$([ "$counted" = "$listed" ] || echo ": INCOMPLETE, a shard lost tests")"
 		echo "wall: $(for shard_folder in "$@"; do sed -n 's/^wall: .*total \([0-9]*\) s.*/\1/p' "$shard_folder/result.md"; done | sort -n | tail -1) s, the slowest shard"
 		for shard_folder in "$@"; do
 			echo "shard ${shard_folder##*/}: $(sed -n 's/^verdict: //p' "$shard_folder/result.md"); $(sed -n 's/^build: //p; s/^error: //p; s/^passed: //p; s/^wall: //p; s/^last to finish: /last: /p; s/^session: //p' "$shard_folder/result.md" | tr '\n' ';')"
@@ -795,12 +813,21 @@ merge_shards() {
 	gzip -f "$folder/log.txt"
 }
 
-# The test files with a test that ran over 60 s in the newest merged --full run (the shards deal them first)
-slow_files() {
-	local newest
-	newest=$(ls -t "$MAIN_CHECKOUT"/data/cloud/*/result.md 2>/dev/null | xargs grep -l '^tests: --full (' 2>/dev/null | head -1)
-	[ -n "$newest" ] || return 0
-	gzip -dc "${newest%/*}/log.txt.gz" | sed -n 's/^test \([^ ]*\) has been running for over.*/\1/p' | test_files
+# The tests of SLOW_TESTS_LIST, one per line
+slow_tests() { grep -v '^#' "$MAIN_CHECKOUT/$SLOW_TESTS_LIST" | grep .; }
+
+# Appends to SLOW_TESTS_LIST each test of the run in <folder> that took SLOW_SECONDS or more (its timings, or libtest's
+# "running for over 60 seconds"), commits and pushes the list alone, and says so in the result
+update_slow_tests() {
+	local folder=$1 found
+	found=$({ awk -F'\t' -v at_least=$SLOW_SECONDS '$1 >= at_least { print $2 }' "$folder/$TIMINGS"
+		gzip -dc "$folder/log.txt.gz" | sed -n 's/^test \([^ ]*\) has been running for over.*/\1/p'; } | sort -u | grep -vFxf <(slow_tests))
+	[ -n "$found" ] || return 0
+	echo "$found" >> "$MAIN_CHECKOUT/$SLOW_TESTS_LIST"
+	echo "slow tests added to $SLOW_TESTS_LIST (--full leaves them out from now on): $(echo $found)" >> "$folder/result.md"
+	git -C "$MAIN_CHECKOUT" commit -q -m "chore: slow-tests: $(echo "$found" | wc -l | tr -d ' ') tests took ${SLOW_SECONDS} s or more in ${folder##*/}, --full leaves them out" -- "$SLOW_TESTS_LIST" &&
+		git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash && git -C "$MAIN_CHECKOUT" push -q ||
+		echo "cloud-test: the new slow tests are in $MAIN_CHECKOUT/$SLOW_TESTS_LIST but not pushed: commit and push it" >&2
 }
 
 collect_full() {
@@ -813,6 +840,8 @@ collect_full() {
 	for name in "${shard_names[@]}"; do fetch_result "$name"; done
 	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} --full)
 	merge_shards "$MAIN_CHECKOUT/data/cloud/$name" "$tip" "${shard_folders[@]}"
+	write_timings "$MAIN_CHECKOUT/data/cloud/$name"
+	update_slow_tests "$MAIN_CHECKOUT/data/cloud/$name"
 	report "$MAIN_CHECKOUT/data/cloud/$name" "$tip" "$card"
 }
 
@@ -826,7 +855,7 @@ main() {
 		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}" "${4:-}"; exit ;;
 	esac
-	card="" wait=1 result_only="" base=() settings=() pure_hello="" optimized="" gate=""
+	card="" wait=1 result_only="" base=() settings=() pure_hello="" slow_only="" optimized="" gate=""
 	while [[ "${1:-}" == --* ]]; do
 		case "$1" in
 			--card) card=$2; shift 2 ;;
@@ -836,6 +865,7 @@ main() {
 			--on) base=(--on "$2"); shift 2 ;;
 			--env) settings+=(--env "$2"); shift 2 ;;
 			--pure-hello) pure_hello=1; shift ;;
+			--slow) slow_only=1; shift ;;
 			--optimized) optimized=1; shift ;;
 			--gate) gate=1; shift ;;
 			*) break ;;
@@ -846,6 +876,10 @@ main() {
 		[ $# -eq 2 ] || fail "--pure-hello is a complete test preset and does not take filters"
 		set -- "$1" "$2" "${PURE_HELLO_ARGS[@]}"
 	fi
+	if [ -n "$slow_only" ]; then
+		[ $# -eq 2 ] || fail "--slow is a complete test preset and does not take filters"
+		set -- "$1" "$2" "${FULL_FLAGS[@]}" -- --exact $(slow_tests)
+	fi
 	[ -n "$optimized" ] && set -- "$1" "$2" "${OPTIMIZED_TEST_PROFILE[@]}" "${@:3}"
 	local filters=() filter   # the Mac's bash 3.2 has no mapfile
 	while IFS= read -r filter; do filters+=("$filter"); done < <(split_filters "${@:3}")
@@ -853,7 +887,7 @@ main() {
 	if [ $# -eq 3 ] && [ "$3" = --full ]; then
 		local shard
 		if [ -z "$result_only" ]; then
-			SLOW_FILES=$(slow_files)
+			SLOW_TESTS=$(slow_tests)
 			for shard in $(seq 1 $FULL_SHARDS); do launch "$1" "$2" --full $SHARD_FLAG "$shard/$FULL_SHARDS" || exit; done
 		fi
 		[ -n "$wait$result_only" ] && collect_full "$1" "$2" "$card"
