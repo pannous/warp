@@ -56,3 +56,30 @@ rewrite apply $f to $x => "untyped" where not $f takes value
 sq(n: int) := n * n
 any_of(n) := n
 [apply sq to 3, apply any_of to 3, apply floor to 2.5]' [9, "untyped", 2]
+
+# a_rule_of_a_statement
+is! 'rewrite $s except_if $c => if not $c then $s where statement
+n = 0
+n += 1 except_if yes
+n += 2 except_if no
+n' 2
+
+# a_rule_of_a_condition
+is! 'rewrite lacking $x => count($x) == 0 where condition
+xs = []
+if lacking xs then "none" else "some"' "none"
+
+# a_rule_of_a_value_leaves_the_key
+is! 'rewrite big => 100 where value
+m = {big: big}
+m.big' 100
+
+# a_rule_of_a_key
+is! 'rewrite who => name where key
+p = {who: "Al"}
+p.name' "Al"
+
+# a_rule_of_a_class_member
+is! 'rewrite field $n => $n: int where member
+class P { field a; field b }
+P(1, 2).b' 2

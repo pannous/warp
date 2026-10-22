@@ -28,6 +28,15 @@ test_type_words = ["key", "pair", "operation", "expression", "code", "callable",
 	"unit", "nil", "none", "null", "void", "time", "instant", "date", "duration"]
 is_tested_type_word(word: text): bool := is_type_word(word) or collection_words contains word or test_type_words contains word
 is_type_word_or_any(word: text): bool := word == any_word or is_type_word(word)
+# `ints`, `matches`: the plural of a type word
+plural_type_word(word: text): bool := {
+	if not word.ends_with("s") { return no }
+	if is_type_word(word[0..<(#word - 1)]) { return yes }
+	if word.ends_with("es") { return is_type_word(word[0..<(#word - 2)]) }
+	no
+}
+# `list`, `list of int`, `ints`: a list type
+is_list_type(word: text): bool := word == "list" or word.starts_with("list of ") or plural_type_word(word)
 is_collection_head(word: text): bool := collection_words contains word or foreign_list_heads contains word
 
 # the words separating a phrase's slots, each naming the slot after it, `to add a to b`, and the articles starting a

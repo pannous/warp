@@ -14,6 +14,7 @@ use crate::compiler::context::UserFunctionDef;
 /// Words that read a list or map without holding on to it, besides the counting words: `print m`, `type(xs)`, `m has k`
 pub(crate) const COLLECTION_READING_WORDS: [&str; 7] = ["print", "put", "string", "text", "type", "has", "contains"];
 
+// ⚠ WARP DOES THIS DIFFERENTLY: sum reads its list as any function does → lib/prelude.warp
 /// Words that read a list without holding on to it, besides those reading any collection (reads_collection)
 const LIST_READING_WORDS: [&str; 4] = ["join", "sum", crate::library_words::LIST_SUM, crate::words::RETURN_WORD];
 

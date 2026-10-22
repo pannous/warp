@@ -172,6 +172,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 
 ## Numbers
 - exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.
+- exact-power (user): a power of exact operands stays exact, a whole decimal exponent included (`0.5 ^ 1074.0` prints all ~750 digits of 2^-1074; `print 0.999 ^ 1000000.0` is exact too, however slow); the warp runtime's float pow is used only for float operands. Tests and probes keep their examples to calculations under ~10 s.
 - int-list: a whole decimal literal is int (`type([0.0, 0.0])` is list of int, P196b); a variable's type joins every write. #21 `x=π; type(x)` is real.
 - number-converts: `number` keeps an exact value; only `float` converts.
 - float-text: floats print shortest round-trip digits (Python/JS repr) everywhere; P225 also joined to text.

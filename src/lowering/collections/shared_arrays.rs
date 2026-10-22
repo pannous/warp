@@ -833,6 +833,7 @@ fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: 
 		}
 		_ => node,
 	};
+	// ⚠ WARP DOES THIS DIFFERENTLY: paired linear sums by name; warp fuses any fold → lib/compiler/lambdas.warp
 	let summed = match node.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 2 && items[0].name() == SUM_WORD => {
 			Some(items[1].clone())

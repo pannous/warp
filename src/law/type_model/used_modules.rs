@@ -8,6 +8,7 @@ use crate::modules::{std_module_source, USE_KEYWORDS};
 use crate::node::{Bracket, Node, Separator};
 use crate::words::SUM_WORD;
 
+// ⚠ WARP DOES THIS DIFFERENTLY: sum is a prelude definition like any other → lib/prelude.warp
 /// builtin words read as the warp definitions library_words expands them to: `sum` folds from 0 (`sum(["a", "b"])` is "0ab")
 const LIBRARY_WORDS: [&str; 1] = [SUM_WORD];
 
