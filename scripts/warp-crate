@@ -29,7 +29,7 @@ DYLIB = ("lib", ".dylib") if sys.platform == "darwin" else ("lib", ".so")
 
 # a manifest type → [the foreign line's type, the C parameter type, the C result type]
 NUMBERS = {"i32": "i32", "int": "i32", "i64": "i64", "long": "i64", "f64": "f64", "float": "f64", "f32": "f32"}
-FOREIGN = re.compile(r"^\s*(?P<name>\w+)\s*\((?P<params>[^)]*)\)\s*:\s*(?P<result>[\w:()]+)\s+from\s+'(?P<library>\w+)'\s*=\s*(?P<rust>\S.*?)\s*$")
+FOREIGN = re.compile(r"^\s*(?P<name>\w+)\s*\((?P<params>(?:[^()]|\([^()]*\))*)\)\s*:\s*(?P<result>[\w:()]+)\s+from\s+'(?P<library>\w+)'\s*=\s*(?P<rust>\S.*?)\s*$")
 SETTING = re.compile(r'^\s*(crate|library|features|default_features|uses)\s*:\s*(.*?)\s*$')
 HANDLE = re.compile(r"^handle(?:\((?P<rust>[\w:<>, ]+)\))?$")
 STEP = re.compile(r"(\?\.|\*\.|\.)(\w+)")
@@ -39,11 +39,24 @@ def fail(message):
 	sys.exit(f"warp-crate: {message}")
 
 
+def top_level_split(text):
+	"""`a: i64, b: handle(x::Map<K, V>)` → its parameters, at the commas outside brackets"""
+	parts, depth, current = [], 0, ""
+	for letter in text:
+		depth += letter in "(<[" and 1 or (letter in ")>]" and -1 or 0)
+		if letter == "," and depth == 0:
+			parts.append(current)
+			current = ""
+		else:
+			current += letter
+	return parts + [current]
+
+
 class Function:
 	def __init__(self, line_number, name, params, result, library, rust):
 		self.line_number, self.name, self.library = line_number, name, library
 		self.params = []  # [(name, type)]
-		for written in [p for p in params.split(",") if p.strip()]:
+		for written in [p for p in top_level_split(params) if p.strip()]:
 			if ":" not in written:
 				fail(f"line {line_number}: the parameter {written.strip()!r} of {name} has no type")
 			pname, ptype = (part.strip() for part in written.split(":", 1))
@@ -163,6 +176,8 @@ class Manifest:
 				function = Function(number, **foreign.groupdict())
 				self.functions.append(function)
 				self.native_lines.append(function.foreign_line())
+			elif re.search(r"\bfrom\s+'\w+'\s*=", line):
+				fail(f"{path}:{number}: not a foreign line warp-crate reads: {line.strip()}")
 			else:
 				self.native_lines.append(line)
 		if "crate" not in self.settings:
