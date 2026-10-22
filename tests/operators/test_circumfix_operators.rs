@@ -16,5 +16,5 @@ fn math_circumfix_operators() {
 fn a_program_declares_its_circumfix_operator() {
 	is!("circumfix operator ⟦ ⟧ := round; ⟦2.6⟧", 3);
 	is!("half x := x/2; circumfix operator ⟦ ⟧ := half; ⟦3+5⟧ + 1", 5);
-	is!("next x := x+1; circumfix operator ⟦ ⟧ := round; next ⟦2.6⟧", 4);
+	is!("bump x := x+1; circumfix operator ⟦ ⟧ := round; bump ⟦2.6⟧", 4);
 }
