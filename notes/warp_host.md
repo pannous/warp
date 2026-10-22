@@ -79,7 +79,10 @@ count.
   - The same engine, and the same imports as a top-level module: WASI with the same stdout, std_io, C calls. A store
     and instance of its own, on a thread of its own with the full wasm stack. The args are the program's.
   - Machine code from the cache, keyed by the bytes: a second run is warm (in memory, else the .cwasm).
-  - A trap is an Error, `os.run_wasm: wasm trap: wasm `unreachable` instruction executed`, catchable with try. A
+  - `run_wasm(bytes, ["a", "b"])`: the module's own arguments (its `args`), not the program's.
+  - An uncaught Warp error of the module (a raise, a runtime error such as index out of range) is that Error, passed
+    through unchanged: `try run_wasm(compile_wasm("raise \"bad\"")) catch e` gives `bad`.
+  - A trap is an Error of its own, `os.run_wasm: wasm trap: wasm `unreachable` instruction executed`, catchable with try. A
     nonzero exit is an Error too, `the module exited with status 3`; exit 0 gives ø.
   - The value is copied out of the module's store (nodes.rs); a function or big integer comes back as warp-host's
     Other, as with any run.
