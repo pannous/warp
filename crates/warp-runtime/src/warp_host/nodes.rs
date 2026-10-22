@@ -58,6 +58,8 @@ impl Node {
 	pub fn content(&self) -> String {
 		match self {
 			Node::Text(bytes) | Node::Symbol(bytes) | Node::Error(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+			// a one-letter text such as "x" is a codepoint: its letter, not 'x'
+			Node::Codepoint(code) => char::from_u32(*code).map_or_else(|| self.shown(), String::from),
 			other => other.shown(),
 		}
 	}
