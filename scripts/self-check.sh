@@ -5,7 +5,9 @@
 # so check_slots run at once and a further check waits for a free slot.
 # usage: scripts/self-check.sh [<worktree>, default the current checkout]   (exit 0 = Hello printed)
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
-main_warp=/Users/me/dev/bin/warp
+# main's Rust binary, warp-rust beside the launcher warp (notes/pure_wrapper.md); plain warp until warp-rust is installed
+main_warp=/Users/me/dev/bin/warp-rust
+[[ -x $main_warp ]] || main_warp=/Users/me/dev/bin/warp
 locks=/Users/me/dev/angles/warp/scratch/self-check
 check_slots=2
 expected="Hello"
