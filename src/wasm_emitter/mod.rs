@@ -824,6 +824,10 @@ impl WasmGcEmitter {
 		signal_poll.iter().for_each(|poll| {
 			func.instruction(&I::Call(*poll));
 		});
+		// a program of one expression (`Point{z: 1 y: 2}.x` after its class) is no statement sequence, which sets each
+		// statement's position: its runtime error names the position too (card error-field)
+		self.statement_position = crate::errors::diagnostic::line_info(node);
+		self.emit_trap_position(&mut func);
 		self.emit_node_instructions(&mut func, node);
 		self.emit_shown_value(&mut func);
 		signal_poll.iter().for_each(|poll| {
