@@ -6,7 +6,10 @@
 # pattern also a block of just that statement, and a template of several statements `($a; $b)` takes the statement's
 # place. Rules go bottom-up, children first, each node rewritten once. A program's own rules apply to it; a standard
 # module's rules apply to every program mentioning their words but binding none itself, and one that fires brings its
-# module along with `use` (lib/channels.warp, lib/english.warp).
+# module along with `use` (lib/channels.warp, lib/english.warp). A template's hole the pattern doesn't bind is a fresh
+# name each firing (`$t` → `t·3`, a compiler temporary no program can write), so `rewrite $a ?: $b => ($t = $a; if $t
+# then $t else $b)` computes a once; a template of statements in a value's place is that value's block. What the
+# template adds sits where the rewritten code was written, so errors point at the user's code (notes/rewrites.md).
 # Rust twin: src/modules/rewrites.rs lower
 use "walk.warp"
 use "scope.warp"
@@ -29,6 +32,8 @@ class Rule { pattern: any; template: any; hole: any; shape: any; module: text }
 
 # the standard modules whose rules fired during a rewrite
 global fired_modules = []
+# the fresh names made so far, numbering each one
+global fresh_names = 0
 
 # the program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out
 rewritten_program(program: any): any := {
@@ -206,7 +211,7 @@ is_run_pattern(pattern: any): bool := match pattern {
 }
 
 # the node rewritten by the first rule matching it, a statement sequence's statement sequences spliced in, a phrase's
-# runs rewritten
+# runs rewritten, over its words as written (the parser nests `keep 1 past 3` as `keep 1 (past 3)`)
 rule_rewritten(n: any, rules: list, origins: list): any := {
 	if is_group(n) and separator_of(n) in statement_separators {
 		statements = []
@@ -215,8 +220,14 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 		}
 		n = group_like(n, statements)
 	} else if is_group(n) and #n > 0 {
-		runs = with_runs(items_of(n), rules, origins)
-		n = if bracket_of(n) == "" and separator_of(n) == " " and #runs == 1 then runs#1 else group_like(n, runs)
+		phrase = bracket_of(n) == "" and separator_of(n) == " "
+		items = items_of(n)
+		runs = with_runs(if phrase then words_of_all(items) else items, rules, origins)
+		if phrase and runs == words_of_all(items) { runs = items }
+		runs = runs.map(as_value)
+		n = if phrase and #runs == 1 then runs#1 else group_like(n, runs)
+	} else if n is key and (is_statements_template(key_of(n)) or is_statements_template(value_of(n))) {
+		n = placed(Key(as_value(key_of(n)), op_of(n), as_value(value_of(n))), n)
 	}
 	for index in 0 ..< #rules {
 		if not is_run_pattern(rules[index].pattern) {
@@ -226,6 +237,11 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 	}
 	n
 }
+
+# a template's statements in a value's place: their block `(t = a; t)`
+as_value(n: any): any := if is_statements_template(n) then placed(separated(bracketed(items_of(n), "("), separator_of(n)), n) else n
+
+is_statements_template(n: any): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) in statement_separators and #n > 1
 
 # the items with each run a phrase rule matches rewritten, left to right
 with_runs(items: list, rules: list, origins: list): list := {
@@ -258,7 +274,7 @@ run_at(items: list, rules: list, origins: list): any := {
 			}
 			result = rule_applied(rule, origins[index], rule_phrase(run))
 			if result != ø {
-				return [#rule.pattern, if target == ø then result else Key(key_of(target), op_of(target), result)]
+				return [#rule.pattern, if target == ø then result else placed(Key(key_of(target), op_of(target), as_value(result)), target)]
 			}
 		}
 	}
@@ -268,12 +284,12 @@ run_at(items: list, rules: list, origins: list): any := {
 # the rule's template for the node; a block of a statement the pattern matches keeps its block
 rule_applied(rule: Rule, origin: any, n: any): any := {
 	bound = {}
-	if rule_matches(rule.pattern, n, bound) and origin_holds(rule, origin, bound) { return fired(rule, rule_spliced(rule.template, bound)) }
+	if rule_matches(rule.pattern, n, bound) and origin_holds(rule, origin, bound) { return fired(rule, rule_spliced(rule.template, bound, n)) }
 	if not (is_group(rule.pattern) and bracket_of(rule.pattern) == "" and is_curly_group(n)) { return ø }
 	bound = {}
 	statement = separated(bracketed(items_of(n), ""), separator_of(n))
 	if not (rule_matches(rule.pattern, statement, bound) and origin_holds(rule, origin, bound)) { return ø }
-	fired(rule, List(statements_in(rule_spliced(rule.template, bound)), Bracket.Curly, Separator.Semicolon))
+	fired(rule, List(statements_in(rule_spliced(rule.template, bound, n)), Bracket.Curly, Separator.Semicolon))
 }
 
 fired(rule: Rule, result: any): any := {
@@ -324,19 +340,32 @@ hole_binding(name: text, code: any, bound: any): bool := {
 	yes
 }
 
-# the template with each hole's code, a rest hole's items in its place
-rule_spliced(template: any, bound: any): any := {
+# the template with each hole's code, a rest hole's items in its place, a hole the pattern didn't bind a fresh name;
+# what the template itself adds is placed at the rewritten code `at`
+rule_spliced(template: any, bound: any, at: any): any := {
 	hole = rule_hole(template)
-	if hole != ø and bound.has(hole) { return bound[hole] }
-	if template is key { return Key(rule_spliced(key_of(template), bound), op_of(template), rule_spliced(value_of(template), bound)) }
-	if not is_group(template) { return template }
+	if hole != ø {
+		if not bound.has(hole) { bound[hole] = placed(fresh_name(hole), at) }
+		return bound[hole]
+	}
+	if template is key { return placed(Key(rule_spliced(key_of(template), bound, at), op_of(template), rule_spliced(value_of(template), bound, at)), at) }
+	if not is_group(template) { return placed(template, at) }
 	items = []
 	for item in template {
 		rest = rest_hole_name(item)
-		items += if rest != ø and bound.has(rest) then items_of(bound[rest]) else [rule_spliced(item, bound)]
+		items += if rest != ø and bound.has(rest) then items_of(bound[rest]) else [rule_spliced(item, bound, at)]
 	}
-	group_like(template, items)
+	placed(group_like(template, items), at)
 }
+
+# `$t` → `t·3`: a compiler temporary (notes/compiler_temporaries.md), apart from every other firing's
+fresh_name(hole: text): any := {
+	fresh_names += 1
+	symbol(hole[#rule_hole_mark ..] + "·" + fresh_names)
+}
+
+# the node made at the place of `at`, where the user wrote the rewritten code
+placed(made: any, at: any): any := if is_positioned(at) then positioned(made, line_of(at), column_of(at)) else made
 
 # the variables assigned code of the shape, then the parameters of the functions called with one, until none is new
 names_assigned_shape(program: any, shape: any): any := {

@@ -1,0 +1,17 @@
+# The rewrite engine's features (lib/compiler/rewrites.warp, notes/rewrites.md), written in warp: no Rust twin
+
+# fresh_names_compute_an_operand_once
+is! 'rewrite $a otherwise $b => ($t = $a; if $t then $t else $b)
+global calls = 0
+next() := { calls += 1; calls * 10 }
+[next() otherwise 5, 0 otherwise 3, calls]' [10, 3, 1]
+
+# nested_firings_keep_their_own_fresh_names
+is! 'rewrite keep $a past $b => ($t = $a; $b; $t)
+keep 1 past (keep 2 past 3)' 1
+
+# fresh_names_stay_apart_from_the_programs_names
+is! 'rewrite keep $a past $b => ($t = $a; $b; $t)
+t = 7
+z = keep 1 past 3
+[z, t]' [1, 7]
