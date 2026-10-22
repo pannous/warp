@@ -27,8 +27,9 @@ export_global_byte = 3
 # the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names,
 # the position of the statement it happened in
 exported_globals = ["trap_detail", "text_heap", "trap_position"]
-# trap_position holds line << column_bits | column (src/wasm_emitter/control/traps.rs encoded_position)
-column_bits = 12
+# trap_position holds line * columns_per_line + column, Rust's line << 12 | column (src/wasm_emitter/control/traps.rs
+# encoded_position)
+columns_per_line = 4096
 import_function_byte = 0
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
 fd_write = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
@@ -1665,8 +1666,9 @@ def field_or_word(body: Body, value: any, name: text, word: any): list {
 def position_code(body: Body, n: any): list {
 	at = if body.intrinsics then ø else written_at(n)
 	if not at { return [] }
-	column = min(at#2, (1 << column_bits) - 1)
-	[op.i32_const] + sleb((at#1 << column_bits) + column) + [op.global_set] + uleb(declared_global("trap_position", "i32")#1)
+	line: int = at#1
+	column: int = min(at#2, columns_per_line - 1)
+	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + uleb(declared_global("trap_position", "i32")#1)
 }
 def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
 
