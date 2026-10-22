@@ -174,7 +174,9 @@ After a context swap, this file and your role file win over anything a handover 
   Cargo.*, build.rs) need no cloud run at all: the branch is accepted when the Rust-compiled compiler.warp compiles
   itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's binary; it
   queues behind a running check, one at a time on the Mac: never run `warp rebuild self` in parallel). Mark it
-  `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. Warp
+  `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. While
+  main's own self build is red (its owner fixes it), a branch passes when its pure lane is green and its self check
+  fails no worse than main's (the same error): a red main never blocks the queue (supervisor 2026-10-22). Warp
   branches have priority over Rust-change branches (user 2026-10-21): they land before any Rust batch, and work in
   .warp is preferred whenever a task can be done there.
   A change to lib/compiler/ (types or annotations included) also checks the self build before Ready:
