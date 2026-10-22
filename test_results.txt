@@ -1480,7 +1480,6 @@ PASSED:
   ✓ functions::test_default_parameters::named_arguments_skip_defaults_and_mix_with_positional_ones
   ✓ functions::test_definition_bodies::a_colon_body_may_assign
   ✓ functions::test_definition_bodies::a_method_body_keeps_its_suffix_word
-  ✓ functions::test_definition_bodies::of_phrase_as_a_value
   ✓ functions::test_definition_bodies::ruby_def_indented_by_tabs
   ✓ functions::test_definition_cases::definitions_without_parameters_have_no_literal
   ✓ functions::test_definition_cases::overloads_by_type_and_count_stay
@@ -3908,7 +3907,6 @@ PASSED:
   ✓ parser::test_self_pure::match_values_run_pure
   ✓ parser::test_self_pure::named_arguments_run_pure
   ✓ parser::test_self_pure::negated_operators_run_pure
-  ✓ parser::test_self_pure::number_keys_run_in_the_front_lanes
   ✓ parser::test_self_pure::number_keys_run_pure
   ✓ parser::test_self_pure::op_cases_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
@@ -4335,7 +4333,6 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
-  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -5653,7 +5650,6 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_plain_run_leaves_no_executable_by_default
   ✓ wasm::test_standalone_executable::test_plain_run_with_warp_executable_leaves_it
   ✓ wasm::test_standalone_executable::test_running_a_file_leaves_its_executable
-  ✓ wasm::test_standalone_executable::test_running_a_file_shows_its_hints_once
   ✓ wasm::test_standalone_executable::test_running_without_a_stub_leaves_no_executable
   ✓ wasm::test_standalone_executable::test_warp_run_leaves_no_executable
   ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
@@ -6167,6 +6163,8 @@ PASSED:
   ✓ welcoming::test_error_excerpt::an_excerpt_marks_the_word_at_the_position
   ✓ welcoming::test_error_excerpt::the_cli_prints_the_line_of_an_error_and_a_warning
   ✓ welcoming::test_error_excerpt::the_page_learns_where_the_error_is
+  ✓ welcoming::test_error_names_file::a_runtime_error_names_its_file
+  ✓ welcoming::test_error_names_file::a_warning_names_its_file
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
   ✓ welcoming::test_error_positions::a_wrong_or_stray_closer_is_an_error
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
@@ -6574,8 +6572,11 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ functions::test_definition_bodies::of_phrase_as_a_value
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✗ parser::test_self_pure::a_call_with_comma_arguments_parses_pure
+  ✗ parser::test_self_pure::number_keys_run_in_the_front_lanes
+  ✗ wasm::test_standalone_executable::test_running_a_file_shows_its_hints_once
 
 SUMMARY:
-13 ignored, 6571 passed, 2 failed, 6573 total tested
+13 ignored, 6569 passed, 5 failed, 6574 total tested

@@ -38,7 +38,12 @@ use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
 
-passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, element_wise_operators_pass, number_words_pass]
+# the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES): `a of b`, `xs .* 2`,
+# `(p).a`
+sugar_phrases_table = [[is_lookup_word, lookup_phrase], [is_element_operator, element_wise_phrase], [is_dot, ungrouped]]
+sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
+
+passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
@@ -77,7 +82,7 @@ checked(source: text, folder: text, prelude: text): list := [view_of(checked_pro
 # reaches and the program's uses read from its folder
 stage(request: any, prelude: text): any := {
 	if request#1 == "pure" { return checked(request#2, request#3, prelude) }
-	if request#1 == 0 { return bridged(tree(request#2)) }
+	if request#1 == 0 { return bridged(stage_view(parsed(request#2))) }
 	pass = passes#(request#1)
-	view_of(pass(stage_node(request#2)))
+	stage_view(pass(stage_node(request#2)))
 }
