@@ -482,6 +482,7 @@ fn special_form_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 	if crate::time::TIME_CALLS.contains(&name) {
 		return Some(Kind::Data);
 	}
+	// ⚠ WARP DOES THIS DIFFERENTLY: sum's type is its fold's, no list_sum case → lib/prelude.warp
 	if name == crate::library_words::LIST_SUM && items.len() == 3 {
 		return Some(infer_type(&items[2], scope)); // the loop it dispatches around
 	}

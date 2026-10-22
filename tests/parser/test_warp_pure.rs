@@ -143,3 +143,33 @@ fn warp_self_refuses_a_function_declared_in_two_used_files() {
 	let printed = said_by("self", "clash", code);
 	assert!(printed.contains("is declared in both") && printed.contains("clash_b.warp"), "{printed}");
 }
+
+/// What `warp pure` and `warp self` print for the program, each run's lines
+fn lanes_print(name: &str, code: &str, expected: &[&str]) {
+	for command in ["pure", "self"] {
+		let said = said_by(command, name, code);
+		let lines: Vec<&str> = said.lines().collect();
+		assert!(lines.starts_with(expected), "{command}: {said}");
+	}
+}
+
+/// sum is the prelude's fold, `sum(xs) := fold(xs, 0, +)`, a range's sum its closed form: three billion items in no
+/// time (card sum-plain-fold)
+#[test]
+fn warp_pure_and_self_sum_as_a_fold() {
+	let code = "print sum([1, 2, 3])\nprint sum(1 to 3000000000)\nprint sum(3 .. 7)\nprint sum([1, 2, 3] .* 2)\n";
+	lanes_print("sum_fold", code, &["6", "4500000001500000000", "18", "12"]);
+}
+
+/// A program's own sum replaces the prelude's, its range rule too (cards sum-plain-fold, rust-lane-program-2)
+#[test]
+fn warp_pure_and_self_take_a_programs_own_sum() {
+	lanes_print("own_sum", "sum(xs) := 42\nprint sum([1, 2, 3])\nprint sum(1 to 10)\n", &["42", "42"]);
+}
+
+/// An operator is a fold's function: `*`, and the words `or`, `and` (card sum-plain-fold)
+#[test]
+fn warp_pure_and_self_fold_with_operators() {
+	let code = "print fold([2, 3, 4], 1, *)\nprint fold([no, yes], no, or)\nprint product([2, 3, 4])\n";
+	lanes_print("operator_folds", code, &["24", "yes", "24"]);
+}
