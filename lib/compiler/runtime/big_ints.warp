@@ -1,0 +1,128 @@
+## integers beyond 64 bits, as a power gives them (Rust's twin src/wasm_emitter/numbers/big_int): an Int node of a sign
+## and a magnitude of base 2^32 limbs, little-endian, no leading zero one (intrinsics big_int_of, limb, set_limb)
+use "intrinsics.warp"
+use "instructions.warp"
+use "../byte_codes.warp"
+limb_base(): int := 4294967296
+# a limb times a limb is taken in halves of a limb, so that no sum leaves 64 bits
+half_limb_base(): int := 65536
+# a limb of a big int's text: nine decimal digits, below 2^32 so that a rest times limb_base stays within 64 bits
+digit_chunk(): int := 1000000000
+digit_chunk_length(): int := 9
+# |x| as a magnitude, the smallest int's too
+magnitude_of(x: int): Node := {
+	count = 0
+	rest = x
+	while rest != 0 {
+		rest = int_quotient(rest, limb_base())
+		count += 1
+	}
+	out = big_int_of(no, count)
+	for i in 0..count {
+		part = int_remainder(x, limb_base())
+		set_limb(out, i, if part < 0 then 0 - part else part)
+		x = int_quotient(x, limb_base())
+	}
+	out
+}
+# the first count limbs of n with that sign
+signed_limbs(n: Node, count: int, negative: bool): Node := {
+	out = big_int_of(negative, count)
+	for i in 0..count { set_limb(out, i, limb(n, i)) }
+	out
+}
+# a magnitude without its leading zero limbs
+trimmed_magnitude(n: Node): Node := {
+	count = limb_count(n)
+	while count > 0 and limb(n, count - 1) == 0 { count -= 1 }
+	if count == limb_count(n) { return n }
+	signed_limbs(n, count, no)
+}
+# a · b of two magnitudes, limb by limb
+magnitude_product(a: Node, b: Node): Node := {
+	out = big_int_of(no, limb_count(a) + limb_count(b))
+	for i in 0..limb_count(a) {
+		low = int_remainder(limb(a, i), half_limb_base())
+		high = int_quotient(limb(a, i), half_limb_base())
+		carry = 0
+		for j in 0..limb_count(b) {
+			sum = low * limb(b, j) + limb(out, i + j) + carry
+			upper = int_quotient(sum, half_limb_base()) + high * limb(b, j)
+			set_limb(out, i + j, int_remainder(sum, half_limb_base()) + int_remainder(upper, half_limb_base()) * half_limb_base())
+			carry = int_quotient(upper, half_limb_base())
+		}
+		set_limb(out, i + limb_count(b), carry)
+	}
+	trimmed_magnitude(out)
+}
+# |base| ^ exponent by squaring, exponent at least 0
+magnitude_power(base: int, exponent: int): Node := {
+	result = magnitude_of(1)
+	square = magnitude_of(base)
+	while exponent > 0 {
+		if int_remainder(exponent, 2) == 1 { result = magnitude_product(result, square) }
+		exponent = int_quotient(exponent, 2)
+		if exponent > 0 { square = magnitude_product(square, square) }
+	}
+	result
+}
+# whether a magnitude, negated when negative, is an int: below 2^63, or -2^63
+fits_int(n: Node, negative: bool): bool := {
+	if limb_count(n) < 2 { return yes }
+	if limb_count(n) > 2 { return no }
+	limb(n, 1) < 2147483648 or (negative and limb(n, 1) == 2147483648 and limb(n, 0) == 0)
+}
+# the int of a magnitude of at most two limbs, negated when negative
+int_of_magnitude(n: Node, negative: bool): int := {
+	low = if limb_count(n) > 0 then limb(n, 0) else 0
+	high = if limb_count(n) > 1 then limb(n, 1) else 0
+	if negative then (0 - high) * limb_base() - low else high * limb_base() + low
+}
+# base ^ exponent of an int, exponent at least 0, unbounded (Rust's int_pow in big_int/slow_paths.rs): an int while
+# it fits 64 bits, else a big int
+big_int_power(base: int, exponent: int): Node := {
+	negative = base < 0 and int_remainder(exponent, 2) == 1
+	magnitude = magnitude_power(base, exponent)
+	if fits_int(magnitude, negative) { return int_of_magnitude(magnitude, negative) }
+	signed_limbs(magnitude, limb_count(magnitude), negative)
+}
+# how many bits |x| takes
+bit_length(x: int): int := {
+	bits = 0
+	while x != 0 {
+		x = int_quotient(x, 2)
+		bits += 1
+	}
+	bits
+}
+# a big int's decimal digits: its magnitude divided by 10^9 until nothing is left, each rest nine digits (the last its
+# own); a limb has fewer than ten digits
+big_int_text(n: Node): text := {
+	work = signed_limbs(n, limb_count(n), no)
+	top = limb_count(n)
+	digits = new_text(10 * top)
+	at = byte_count(digits)
+	while top > 0 {
+		rest = 0
+		i = top
+		while i > 0 {
+			i -= 1
+			current = rest * limb_base() + limb(work, i)
+			set_limb(work, i, int_quotient(current, digit_chunk()))
+			rest = int_remainder(current, digit_chunk())
+		}
+		while top > 0 and limb(work, top - 1) == 0 { top -= 1 }
+		written = 0
+		while written < digit_chunk_length() and (top > 0 or rest > 0) {
+			at -= 1
+			set_byte(digits, at, Ascii.Zero + int_remainder(rest, 10))
+			rest = int_quotient(rest, 10)
+			written += 1
+		}
+	}
+	sign = if big_int_negative(n) then 1 else 0
+	out = new_text(sign + byte_count(digits) - at)
+	if sign == 1 { set_byte(out, 0, Ascii.Minus) }
+	copy_text(out, sign, digits, at, byte_count(digits) - at)
+	out
+}

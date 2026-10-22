@@ -30,6 +30,13 @@ is_ratio(n: any): bool from runtime
 ratio_of(numerator: int, denominator: int): any from runtime
 ratio_numerator(n: any): int from runtime
 ratio_denominator(n: any): int from runtime
+# integers beyond 64 bits: an Int node of a sign and base 2^32 limbs, little-endian, built with count zero limbs
+big_int_of(negative: bool, count: int): any from runtime
+is_big_int(n: any): bool from runtime
+big_int_negative(n: any): bool from runtime
+limb_count(n: any): int from runtime
+limb(n: any, at: int): int from runtime
+set_limb(n: any, at: int, value: int) from runtime
 # texts, their bytes and characters
 new_text(length: int): text from runtime
 copy_text(to: text, at: int, source: text, start: int, count: int) from runtime

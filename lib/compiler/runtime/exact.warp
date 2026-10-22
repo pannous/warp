@@ -6,6 +6,7 @@ use "conversions.warp"
 use "errors.warp"
 use "floats.warp"
 use "instructions.warp"
+use "big_ints.warp"
 use "../byte_codes.warp"
 int_gcd(a: int, b: int): int := {
 	if a < 0 { a = -a }
@@ -43,6 +44,7 @@ exact_order(a: Node, b: Node): int := {
 # an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
 # any other as n/d
 exact_text(n: Node): text := {
+	if is_big_int(n) { return big_int_text(n) }
 	if not is_ratio(n) { return int_text(unboxed_int(n)) }
 	numerator = ratio_numerator(n)
 	denominator = ratio_denominator(n)
@@ -126,7 +128,8 @@ floor_quotient(a: int, b: int): int := {
 	q
 }
 # `base ^ exponent` of exact numbers (src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
-# inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names
+# inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names. An int
+# to a positive power is unbounded, 2^10000 a big int of 3011 digits
 exact_pow(base: Node, exponent: Node): Node := {
 	if is_ratio(exponent) { fail() }
 	times = unboxed_int(exponent)
@@ -134,7 +137,8 @@ exact_pow(base: Node, exponent: Node): Node := {
 		base = exact_ratio(exact_denominator(base), exact_numerator(base))
 		times = -times
 	}
-	if not is_ratio(base) { return int_pow(unboxed_int(base), times) }
+	if not is_ratio(base) and times < 64 and bit_length(unboxed_int(base)) * times < 64 { return int_pow(unboxed_int(base), times) }
+	if not is_ratio(base) { return big_int_power(unboxed_int(base), times) }
 	# a ratio in lowest terms stays in lowest terms raised to any power
 	ratio_of(int_pow(ratio_numerator(base), times), int_pow(ratio_denominator(base), times))
 }
