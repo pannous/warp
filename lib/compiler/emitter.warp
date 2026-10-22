@@ -803,11 +803,26 @@ def node_type_test(body: Body, value: any, type: text): list {
 	if type not in passing_kinds { return runtime_call("node_is_type", [value, text_value(type)]) }
 	held = [op.local_get] + uleb(fresh_local(body, "node"))
 	bits = [op.local_get] + uleb(fresh_local(body, "int"))
-	read = runtime_call("held_kind_bit", [["node", value#2 + [op.local_tee] + held[1..]]])#2 + [op.local_tee] + bits[1..]
+	read = value#2 + [op.local_set] + held[1..] + held_kind_bit(body, held) + [op.local_tee] + bits[1..]
 	type_value = read + [op.i64_const] + sleb(1 << HeldKind.TypeValue) + [op.i64_and, op.i64_eqz, op.i32_eqz]
 	passes = ["bool", bits + [op.i64_const] + sleb(held_mask(passing_kinds[type])) + [op.i64_and, op.i64_eqz, op.i32_eqz]]
 	["bool", type_value + if_else_code("bool", runtime_call("node_is_type", [["node", held], text_value(type)]), passes)]
 }
+# the held kind of the node `held` reads as one bit: 1 << its Kind, a yes/no, type value, map or exact rational the bit
+# of its HeldKind place, ø a list; no call, each mark picked by a select
+def held_kind_bit(body: Body, held: list): list {
+	field = [op.local_get] + uleb(fresh_local(body, "int"))
+	kind = field + [op.i64_const] + sleb(kind_mask) + [op.i64_and]
+	is_field = marked => field + [op.i64_const] + sleb(marked) + [op.i64_eq]
+	ratio = kind + [op.i64_const] + sleb(Kind.Int) + [op.i64_eq] + ratio_test(held) + [op.i32_and]
+	marked = as_node(held) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.local_set] + field[1..] + [op.i64_const, 1] + kind + [shift_ops.i64_shl]
+	marked += unless_held(HeldKind.Bool, is_field(Marked.Bool)) + unless_held(HeldKind.TypeValue, is_field(Marked.TypeValue))
+	marked += unless_held(HeldKind.Map, is_field(Marked.Map)) + unless_held(HeldKind.Rational, ratio)
+	held + [op.ref_is_null, op.if] + value_type("int") + held_bit(Kind.List) + [op.else] + marked + [op.end]
+}
+def held_bit(place: int): list { [op.i64_const] + sleb(1 << place) }
+# the bit on the stack, or the place's bit when the test holds
+def unless_held(place: int, test: list): list { held_bit(place) + test + [op.i32_eqz, op.select] }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 def as_node(code: any): list { code + gc_code(gc_ops.ref_cast_null, [gc.node]) }
 def kind_code_of(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }

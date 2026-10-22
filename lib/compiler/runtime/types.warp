@@ -75,16 +75,6 @@ one_character(t: text): bool := byte_count(t) > 0 and character_end(t, 0) == byt
 # the type word of x's kind alone, no class or operation told apart: what `x is type` tests, through no comparison
 # of texts (a text equality tests types through node_is_type)
 kind_type_word(n: any): text := if not is_null(n) and code_bit(n) == 1 then "code" else held_kind_word(n)
-# x's held kind as one bit, which `x is type` of a core type tests against the type's mask with no text compared
-held_kind_bit(n: any): int := {
-	if is_null(n) { return 1 << Kind.List }
-	if marked_kind(n) == Marked.Bool { return 1 << HeldKind.Bool }
-	if names_a_type(n) { return 1 << HeldKind.TypeValue }
-	kind = kind_code(n)
-	if kind == Kind.Int and is_ratio(n) { return 1 << HeldKind.Rational }
-	if marked_kind(n) == Marked.Map { return 1 << HeldKind.Map }
-	1 << kind
-}
 # the type word of x's kind, code or not
 held_kind_word(n: any): text := {
 	if is_null(n) { return "list" }
