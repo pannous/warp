@@ -7,7 +7,7 @@ use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; elvis_operands: int; closing_ends: any; stops_at_end: bool; word_types: list; line_starts: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; closing_ends: any; stops_at_end: bool; word_types: list; line_starts: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): any := view_of(parsed(source))
@@ -99,7 +99,7 @@ def written_tree(written: text): Node := {
 	source = expanded_entities(written)
 	found = gaps(source, source.length)
 	word_types = multi_word_types(source)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), phrases: [], elvis_operands: 0, closing_ends: {}, stops_at_end: false, word_types: word_types, line_starts: line_starts_of(source)}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), phrases: [], closing_ends: {}, stops_at_end: false, word_types: word_types, line_starts: line_starts_of(source)}
 	items_until(p, ' ', "")
 }
 
@@ -596,16 +596,19 @@ def indented_block(p: Parser): Node := {
 	listed("{", "", [block])
 }
 
-// The `end` or `fi` alone on the line after a block read by indentation, at the head's indent, read; the line break
-// before the next statement stays
+// The words that may stand alone on the line after a block read by indentation: Ruby's `end`, the shell's `fi`
+INDENTED_BLOCK_ENDS = ["end", "fi"]
+// One of INDENTED_BLOCK_ENDS alone on the line after a block read by indentation, at the head's indent, read; the
+// line break before the next statement stays
 // Rust twin: blocks.rs skip_end_line
 def skip_end_line(p: Parser) {
 	before = p.at
 	newline = skip_blanks(p)
-	closer = if keyword_at(p, "end") then 3 else if keyword_at(p, "fi") then 2 else 0
-	if newline and closer > 0 and line_indent(p) == p.indent and line_ends_after(p, p.at + closer) {
-		p.at = p.at + closer
-		return
+	for closer in INDENTED_BLOCK_ENDS {
+		if newline and keyword_at(p, closer) and line_indent(p) == p.indent and line_ends_after(p, p.at + closer.length) {
+			p.at = p.at + closer.length
+			return
+		}
 	}
 	p.at = before
 }
@@ -818,11 +821,6 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		}
 		// a declared operator binding looser than the context ends the operand, unless a built-in one of the glyph binds
 		if user_op != ø and user_op#2 != "prefix" and operator_at(p).length == 0 { break }
-		if c == '?' and is_at(p.code, p.at + 1, ':', p.n) {
-			if binding_powers("?")#1 < min_power { break }
-			left = elvis(p, left)
-			continue
-		}
 		power = superscript_power(p, left, min_power)
 		if power != ø {
 			left = power
@@ -928,8 +926,8 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				continue
 			}
 			skip_blanks(p)
-			if ELEMENT_WISE_OPERATORS contains op#1 {
-				left = listed("", " ", [left, symbol(op#1), expression(p, powers#2)])
+			if PHRASE_OPERATORS contains op#1 {
+				left = phrase_operation(left, op#1, expression(p, powers#2))
 			} else if DECLARED_ONLY_OPERATORS contains op#2 {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
 			} else if op#2 == "|>" {
@@ -968,21 +966,6 @@ def may_be_whole_number(n: Node): bool := match n {
 	_: n is int and not (n is bool)
 }
 NOT_WHOLE_OPERATORS = [Op.Eq, Op.Is, Op.Ne, Op.Identical, Op.NotIdentical, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.And, Op.Or, Op.Xor, Op.Not]
-
-// `a ?: b` is `a ? a : b`, also the schema field `debug?: bool`; a left side that is no plain name is evaluated once,
-// into a hidden variable
-// Rust twin: if_else.rs try_parse_elvis
-def elvis(p: Parser, left: Node): Node := {
-	p.at = p.at + 2
-	skip_blanks(p)
-	// left-associative: `a ?: b ?: c` is `(a ?: b) ?: c`, the same value
-	alternative = expression(p, binding_powers("?")#1 + 1)
-	if left is symbol { return Key(left, Op.Question, Key(left, Op.Colon, alternative)) }
-	p.elvis_operands += 1
-	operand = symbol(ELVIS_WORD + "·" + p.elvis_operands)
-	listed("(", ";", [Key(operand, Op.Assign, left), Key(operand, Op.Question, Key(operand, Op.Colon, alternative))])
-}
-ELVIS_WORD = "elvis"
 
 // Ruby/Lua `do … end`, `then … else … end`: the words whose body an `end` may close, and those that open such a body
 END_BLOCK_WORDS = ["do", "then", "else"]
@@ -1425,10 +1408,17 @@ INDEX_POWER = 170
 // The operators written with symbols, longest first, each with its canonical name; alias_spellings() adds their other
 // spellings (lib/aliases.warp)
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = {"===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
-// `xs .* 2` maps `*` over the elements: the phrase [xs .* 2], binding as `*` does (Rust twin: spellings.rs
-// element_wise_word)
-ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
+SYMBOL_OPERATORS = {"===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
+// The operators kept as the phrase [a op b] for the sugar to read: `xs .* 2` maps `*` over the elements, binding as `*`
+// does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (lib/sugar/fallbacks.warp)
+PHRASE_OPERATORS = [".+", ".-", ".*", "./", ".^", "?:"]
+// `left op right` as its phrase; a name's fallback `a ?: b` is the ternary `a ? a : b`, which a type also reads as its
+// optional field `email?: text`, and a fallback of any other value (a rule's hole `$a` too) is computed once by the sugar
+def phrase_operation(left: Node, op: text, right: Node): Node := {
+	if op == ELVIS and left is symbol and not name_of(left).starts_with("$") { return Key(left, Op.Question, Key(left, Op.Colon, right)) }
+	listed("", " ", [left, symbol(op), right])
+}
+ELVIS = "?:"
 // The operators written as words, each with its canonical name; alias_spellings() adds the infix words of lib/aliases.warp
 WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "rem": "rem"}
 // The words that are operators in a loop's iterable alone: Kotlin's `for i in 0 until n` (elsewhere `until` guards)
@@ -1451,7 +1441,7 @@ def operator_at(p: Parser): list {
 		if p.iterable and iterable_operator_at(p).length > 0 { return iterable_operator_at(p) }
 		return aliased_operator_at(p)
 	}
-	if starts_at(p.code, "?:", p.at) or starts_at(p.code, "//", p.at) { return [] }
+	if starts_at(p.code, "//", p.at) { return [] }
 	// `x = 1  # one` is a comment, `xs #1` the index operator (card parser-parses)
 	if c == '#' and skipped_end(p.code, p.at, p.n) > p.at { return [] }
 	spelled_symbol = symbol_operator_at(p, c)
@@ -1791,6 +1781,7 @@ def binding_powers(op: text): list {
 	if op == "or" { return [90, 91] }
 	if op == "??" { return [93, 92] }
 	if op == "?" { return [85, 79] }
+	if op == "?:" { return [85, 86] }
 	if op == "then" { return [77, 76] }
 	if op == "else" { return [75, 74] }
 	if op == "do" { return [77, 10] }
@@ -2351,13 +2342,11 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 		p.in_branch = word == "if"
 		body = expression(p, 0)
 		p.in_branch = outer
-	} else if word == "while" {
-		// `while x-- > 0`: a loop without a body, its condition does the work
-		return Key(keyed(word, ø, condition), Op.Do, ø)
 	} else {
-		// `while m > 1` ending its line: the lines indented below (Rust twin: blocks.rs indented_lines_below)
+		// `while m > 1` ending its line: the lines indented below (Rust twin: blocks.rs indented_lines_below); without
+		// them `while x-- > 0` is a loop without a body, its condition does the work
 		body = if only_blanks_before_newline(p) then indented_block(p) else ø
-		if body == ø { return keyed(word, ø, condition) }
+		if body == ø { return if word == "while" then Key(keyed(word, ø, condition), Op.Do, ø) else keyed(word, ø, condition) }
 	}
 	head = keyed(word, ø, condition)
 	if word == "while" { return Key(head, Op.Do, body) }

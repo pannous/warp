@@ -49,7 +49,7 @@ yes_no_types = ["bool"]
 value_word = "value"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/comprehensions"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/comprehensions"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
@@ -117,8 +117,11 @@ sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
-	bottom_up(program, n => sugar_rewritten(n, rules))
+	bottom_up(program, n => sugared_node(n, rules))
 }
+
+# the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
+sugared_node(n: any, rules: list): any := sugar_rewritten(with_changed_members(n, member => bottom_up(member, part => sugared_node(part, rules))), rules)
 
 # the node rewritten by the first sugar rule matching it, its result rewritten again (F7); a node no rule matches stays
 # as the passes left it
@@ -523,14 +526,17 @@ with_placed_parts(n: any, rules: list, origins: list): any := {
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
 }
 
-# a class with the items of its body rewritten by the rules of the place `member`: the passes see it as the opaque
-# view ["type", name, body]
-with_members(n: any, rules: list, origins: list): any := {
+# a class with the items of its body rewritten by the rules of the place `member`
+with_members(n: any, rules: list, origins: list): any := with_changed_members(n, member => at_place(member, "member", rules, origins))
+
+# a class with each item of its body changed: the passes see it as the opaque view ["type", name, body]
+with_changed_members(n: any, changed: function): any := {
+	if not (n is key and key_of(n) == symbol(opaque_word)) { return n }
 	view = value_of(n)
-	if not (key_of(n) == symbol(opaque_word) and kind_of(view) == "type") { return n }
+	if kind_of(view) != "type" { return n }
 	body = node_of(view#3)
 	if not is_group(body) { return n }
-	members = spliced_statements(items_of(body).map(member => at_place(member, "member", rules, origins)))
+	members = spliced_statements(items_of(body).map(changed))
 	Key(key_of(n), op_of(n), [view#1, view#2, view_of(group_like(body, members))])
 }
 
