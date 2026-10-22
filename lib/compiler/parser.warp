@@ -218,11 +218,12 @@ def longest_spelled_at(p: Parser, candidates: list): any {
 	}
 	longest
 }
-// The infix operator an alias at the parser's position spells, as [written, canonical], else []
+// The infix operator an alias at the parser's position spells, as [written, canonical], else []; a word alias with a
+// block after it stays a name: `div {…}` is the html tag, `7 div 2` the floor division
 def aliased_operator_at(p: Parser): list {
 	alias = alias_at(p)
 	canonical = if alias.length == 0 then "" else canonical_operator(alias#2)
-	if canonical == "" then [] else [alias#1, canonical]
+	if canonical == "" or (is_name_start(alias#1#1) and spells_tag(p, alias#1, canonical)) then [] else [alias#1, canonical]
 }
 // A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `sqrt`)
 // Rust twin: spellings.rs table_operator, PREFIX_OPERATOR_WORDS
@@ -763,16 +764,6 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			p.at = p.at + 5
 			skip_spaces(p)
 			left = listed("", " ", [left, symbol("times"), repeated(p)])
-		} else if floor_division_at(p) {
-			written = floor_division_at(p)
-			assigns = written#2 == "/!="
-			powers = binding_powers(if assigns then "=" else "/")
-			if powers#1 < min_power { break }
-			p.at = p.at + written#1.length
-			skip_blanks(p)
-			right = expression(p, powers#2)
-			// `a /!= b` is the assignment `a = floor_quotient(a, b)`
-			left = if assigns then Key(left, Op.Assign, quotient_call(left, right)) else quotient_call(left, right)
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
 			if MEMBERSHIP_POWERS#1 < min_power { break }
@@ -1120,19 +1111,6 @@ def word_before(p: Parser): text {
 	p.code[start .. end]
 }
 
-// `7 /! 2`, `x /!= 2`, `7 div 2`, `7 ÷ 2`, `x ÷= 2`: the floor division written at the parser's position as [spelling,
-// canonical `/!` or `/!=`], else []; `//` is a comment
-// Rust twin: operators/spellings.rs `/!`, `/!=`, `div`
-def floor_division_at(p: Parser): list {
-	if keyword_at(p, "div") and not opens_block(p, 3) { return ["div", "/!"] }
-	if starts_at(p.code, "/!=", p.at) { return ["/!=", "/!="] }
-	if starts_at(p.code, "/!", p.at) { return ["/!", "/!"] }
-	for written, canonical in SYMBOL_OPERATORS {
-		if (canonical == "/!" or canonical == "/!=") and starts_at(p.code, written, p.at) { return [written, canonical] }
-	}
-	[]
-}
-
 // A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag
 def opens_block(p: Parser, width: int): bool {
 	is_at(p.code, blank_end(p, p.at + width), '{', p.n)
@@ -1352,12 +1330,15 @@ INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = {"...": "to", "..=": "to", "===": "===", "!==": "!==", "..<": "..", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "**=": "^=", "÷=": "/!=", "??": "??", ":=": ":=", "~~": "~", "::": "::", "->": "->", "=>": "->", "|>": "|>", "**": "^", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "!": "not", "¬": "not", "..": "..", "&&": "and", "||": "or", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "*": "*", "×": "*", "⋅": "*", "/": "/", "÷": "/!", "%": "%", "^": "^", "<": "<", ">": ">", "≤": "<=", "≥": ">=", "≠": "!=", "≈": "≈", "~": "~", "&": "and", "|": "or", "#": "#", "?": "?", "…": "to", "↑": "↑", "↓": "↓"}
+SYMBOL_OPERATORS = {"...": "to", "..=": "to", "===": "===", "!==": "!==", "..<": "..", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "**=": "^=", "÷=": "/!=", "/!=": "/!=", "/!": "/!", "??": "??", ":=": ":=", "~~": "~", "::": "::", "->": "->", "=>": "->", "|>": "|>", "**": "^", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "!": "not", "¬": "not", "..": "..", "&&": "and", "||": "or", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "*": "*", "×": "*", "⋅": "*", "/": "/", "÷": "/!", "%": "%", "^": "^", "<": "<", ">": ">", "≤": "<=", "≥": ">=", "≠": "!=", "≈": "≈", "~": "~", "&": "and", "|": "or", "#": "#", "?": "?", "…": "to", "↑": "↑", "↓": "↓"}
 // `xs .* 2` maps `*` over the elements: the phrase [xs .* 2], binding as `*` does (Rust twin: spellings.rs
 // element_wise_word)
 ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
 // The operators written as words, each with its canonical name
-WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "mod": "%", "modulo": "%", "rem": "rem", "upto": ".."}
+WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "mod": "%", "modulo": "%", "rem": "rem", "upto": "..", "div": "/!"}
+// A word spelling another operator with a block after it stays a name: `div {…}` is the html tag, `7 div 2` the floor
+// division; the base words (then, else, do) take blocks
+def spells_tag(p: Parser, written: text, canonical: text): bool := written != canonical and opens_block(p, written.length)
 // The words that are operators in a loop's iterable alone: Kotlin's `for i in 0 until n` (elsewhere `until` guards)
 // Rust twin: lookahead.rs operator_in_context (in_for_header)
 ITERABLE_WORD_OPERATORS = [["until", ".."]]
@@ -1374,7 +1355,7 @@ def operator_at(p: Parser): list {
 	if is_name_start(c) {
 		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
 		for written, canonical in WORD_OPERATORS {
-			if written#1 == c and keyword_at(p, written) and not (p.in_branch and written == "else") { return [written, canonical] }
+			if written#1 == c and keyword_at(p, written) and not (p.in_branch and written == "else") and not spells_tag(p, written, canonical) { return [written, canonical] }
 		}
 		if p.iterable and iterable_operator_at(p).length > 0 { return iterable_operator_at(p) }
 		return aliased_operator_at(p)
@@ -1692,7 +1673,7 @@ def binding_powers(op: text): list {
 	if op == "::" { return [175, 176] }
 	if op == "#" { return [170, 182] }
 	if op == "^" or DECLARED_ONLY_OPERATORS.contains(op) { return [160, 159] }
-	if op == "*" or op == "/" or op == "%" or op == "rem" { return [150, 151] }
+	if op == "*" or op == "/" or op == "/!" or op == "%" or op == "rem" { return [150, 151] }
 	if op == "+" or op == "-" or op == "±" { return [140, 141] }
 	if op == "<<" or op == ">>" { return [135, 136] }
 	if op == ".." or op == "to" { return [130, 131] }

@@ -51,13 +51,14 @@ value_word = "value"
 # Two steps of the passes apply them (passes.warp): the first sugar before the passes reading the kernel forms its
 # rules make (`is_type`), the other after those making or reading the forms its rules take
 first_sugar_module_names = ["sugar/types"]
-sugar_module_names = ["sugar/fallbacks"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
-# the one of rule_places it rewrites only, else "", `module` the standard module declaring it, else ""
-class Rule { pattern: any; template: any; hole: any; shape: any; conditions: list; place: text; module: text }
+# the one of rule_places it rewrites only, else "", `module` the standard module declaring it, else ""; `whole` for a
+# phrase pattern that matches only a whole phrase, not its runs
+class Rule { pattern: any; template: any; hole: any; shape: any; conditions: list; place: text; module: text; whole: bool }
 
 # the standard modules whose rules fired during a rewrite
 global fired_modules = []
@@ -109,9 +110,12 @@ unbound_rules(module_rules: list, program: Node): list := {
 	module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(scope, word) or binds_as(scope, word, Meaning.Function)))
 }
 
-# the program with the rules of the sugar modules applied everywhere, those whose words it binds itself left out
-sugared(program: Node, modules: list): Node := {
-	rules = unbound_rules(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+# the rules of the sugar modules that the program keeps, chosen by the program's own bindings (a program's own `push`
+# keeps its own), before the definitions it reaches from the prelude and the modules join it
+sugar_rules(program: Node, modules: list): list := unbound_rules(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+
+# the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too
+sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	first_parameter_types = typed_first_parameters(program)
 	scoped_sugar(program, rules, scope_with({}, outer_nodes_in(program)))
@@ -193,7 +197,8 @@ rule_of(statement: any, module: text): any := {
 	if arrow_at == 0 { return ø }
 	arrow = items[arrow_at]
 	words = items[1 ..< arrow_at]
-	pattern = if #words == 0 then statement_pattern(key_of(arrow)) else rule_phrase(words_of_all(words + [key_of(arrow)]))
+	whole = #words == 0 and is_parenthesized(key_of(arrow))
+	pattern = if whole then key_of(arrow)#1 else if #words == 0 then statement_pattern(key_of(arrow)) else rule_phrase(words_of_all(words + [key_of(arrow)]))
 	after = items[arrow_at + 1 ..]
 	written = value_of(arrow)
 	where_at = #after
@@ -206,7 +211,7 @@ rule_of(statement: any, module: text): any := {
 	}
 	continued = after[0 ..< max(where_at, 0)]
 	template = statements_template(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)))
-	if where_at == #after { return Rule(pattern, template, ø, ø, [], "", module) }
+	if where_at == #after { return Rule(pattern, template, ø, ø, [], "", module, whole) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
 	places = conditions.filter(is_place_word)
@@ -215,8 +220,8 @@ rule_of(statement: any, module: text): any := {
 	place = if #places == 0 then "" else name_of(places#1)
 	origins = conditions.filter(condition => is_key(condition, Op.Assign))
 	if #origins > 1 { return ø }
-	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module) }
-	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module)
+	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole) }
+	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module, whole)
 }
 
 # [the template before a `where` its last words swallowed, the words after that `where`] (`$c + $n where`, `$s where
@@ -438,6 +443,14 @@ first_word_of(pattern: any): any := {
 	ø
 }
 
+# `($a /!= $b)`, `($x in $xs)`: parentheses around one pattern only group it, so that an operator binding looser than
+# `=>` stays in the pattern; a phrase in them matches only a phrase of just those words (`y = 2 in xs`), never a run
+# of a longer one (`[x for x in xs]`)
+is_parenthesized(pattern: Node): bool := is_group(pattern) and bracket_of(pattern) == "(" and #pattern == 1
+
+# a rule whose phrase pattern matches runs of a phrase
+matches_runs(rule: Rule): bool := not rule.whole and is_run_pattern(rule.pattern)
+
 # a pattern of words without a rest: it matches runs of a phrase
 is_run_pattern(pattern: any): bool := match pattern {
 	List(words, Bracket.None, Separator.Space): not words.any(word => rest_hole_name(word) != ø)
@@ -461,7 +474,7 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 		n = if key_of(n) == symbol(opaque_word) then with_members(n, rules, origins) else with_placed_parts(n, rules, origins)
 	}
 	for index in 0 ..< #rules {
-		if rules[index].place == "" and not is_run_pattern(rules[index].pattern) {
+		if rules[index].place == "" and not matches_runs(rules[index]) {
 			result = rule_applied(rules[index], origins[index], n)
 			if result != ø { return rewritten_again(result, rules, origins) }
 		}
@@ -582,7 +595,7 @@ rewritten_again(result: any, rules: list, origins: list): any := {
 run_at(items: list, rules: list, origins: list): any := {
 	for index in 0 ..< #rules {
 		rule = rules[index]
-		if rule.place == "" and is_run_pattern(rule.pattern) and #items >= #rule.pattern {
+		if rule.place == "" and matches_runs(rule) and #items >= #rule.pattern {
 			run = items[0 ..< #rule.pattern]
 			first = run#1
 			target = ø
