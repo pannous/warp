@@ -77,6 +77,9 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
   - a cache hit takes no build
 - Run through warp-host and compiler.wasm from the pure-c-imports branch: sha256 by a foreign line, `use rs_regex`
   is_match / first_match / find_all / replace_all / find_start / free.
+- `warp-crate scan semver@1` drafts 19 lines (constructors, parse, VersionReq::matches, as_str, free lines). They
+  build unedited, and a warp program then checks version requirements (`versionreq_matches(req, version_parse("1.4.0"))`).
+  scan on regex builds too.
 - tests/host/test_crates.sh: see the card for counts. It needs a host and compiler with C imports (pure-c-imports).
 
 ## Open
