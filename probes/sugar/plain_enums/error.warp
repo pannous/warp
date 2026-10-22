@@ -1,0 +1,2 @@
+enum Coin { Penny, Nickel, Dime }
+print 5 as Coin

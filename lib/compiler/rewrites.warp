@@ -5,7 +5,9 @@
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
 # `$f is function`, `$x is literal`, `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
-# program or a typed library word) and `$f takes int` (typed int). A place word among them, `statement`, `condition`
+# program or a typed library word) and `$f takes int` (typed int); `$e is enum` (a name or text of an enum the program
+# declares), `$c is case` (a case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound,
+# the condition binds it to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
 # (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), lets the rule rewrite code only
 # standing there: `rewrite $s except_if $c => if not $c then $s where statement`. A phrase pattern (`$n beat`) matches each run of those
 # words in a longer phrase (of `x = 2 beats`, which the parser keeps as `(x = 2) beats`, the value), a statement
@@ -22,6 +24,7 @@ use "scope.warp"
 use "uses.warp"
 use "prelude_words.warp"
 use "type_tests.warp"
+use "enum_declarations.warp"
 
 rewrite_word = "rewrite"
 rewrite_line_start = "rewrite "
@@ -32,7 +35,9 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum"]
+# `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
+cases_words = ["cases", "of"]
 # `where $n < 0`: the comparisons of a number literal
 literal_comparisons = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 and_word = "and"
@@ -49,7 +54,7 @@ yes_no_types = ["bool"]
 value_word = "value"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/enums"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
@@ -68,6 +73,9 @@ global rewrite_depth = 0
 global rule_scope = {}
 # function → the type of its first parameter, of the program being rewritten (`where $f takes value`)
 global first_parameter_types = {}
+# enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before the passes
+# lower the declarations: by rewritten_program, and by passes.warp's lowered_node for the sugar rules
+global rule_enums = {}
 
 # the program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out
 rewritten_program(program: any): any := {
@@ -90,6 +98,7 @@ rewritten_program(program: any): any := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
+	rule_enums = enums_in(program, {})
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
 	program = bottom_up(program, n => rule_rewritten(n, rules, origins))
@@ -263,7 +272,7 @@ is_condition(condition: any): bool := {
 	if not (condition is key and rule_hole(key_of(condition)) != ø) { return no }
 	wanted = value_of(condition)
 	if op_of(condition) == Op.Assign { return yes }
-	if op_of(condition) == Op.Is { return is_property(wanted) }
+	if op_of(condition) == Op.Is { return is_property(wanted) or is_case_property(wanted) }
 	literal_comparisons.any(op => is_key(condition, op)) and is_number_literal(wanted)
 }
 
@@ -307,6 +316,36 @@ is_negation(condition: any): bool := is_key(condition, Op.Not) and key_of(condit
 
 is_property(word: any): bool := word is symbol and (name_of(word) in code_properties or name_of(word) in hole_kinds)
 
+# `case`, `case of $e` after `is`
+is_case_property(wanted: any): bool := wanted == symbol(case_word) or enum_hole_of(wanted) != ø
+
+# the hole of `case of $e`, else ø
+enum_hole_of(wanted: any): any := {
+	if not (is_group(wanted) and bracket_of(wanted) == "" and #wanted == 3 and wanted#1 == symbol(case_word) and wanted#2 == symbol(cases_words#2)) { return ø }
+	rule_hole(wanted#3)
+}
+
+# `$c is case of $e`: the code names a case of the enum $e names; with $e unbound (also `$c is case`), of the one enum
+# declaring it, which $e is bound to
+case_holds(code: any, hole: any, bound: any): bool := {
+	if not (code is symbol) { return no }
+	case = name_of(code)
+	if hole != ø and bound.has(hole) {
+		name = named_enum(bound[hole])
+		return rule_enums.has(name) and case in rule_enums[name]
+	}
+	owners = rule_enums.keys.filter(name => case in rule_enums[name])
+	if #owners != 1 { return no }
+	if hole != ø { bound[hole] = symbol(owners#1) }
+	yes
+}
+
+# the enum a name or a text names (`Coin`, `"Coin"` as type_tests.warp's is_type gets it), else ""
+named_enum(code: any): text := {
+	name = if code is symbol then name_of(code) else if code is text then code else ""
+	if rule_enums.has(name) then name else ""
+}
+
 # whether the code a hole bound passes the condition
 condition_holds(condition: any, bound: any): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
@@ -315,13 +354,14 @@ condition_holds(condition: any, bound: any): bool := {
 	if not bound.has(hole) { return no }
 	code = bound[hole]
 	wanted = value_of(condition)
-	if op_of(condition) == Op.Is { return has_property(code, name_of(wanted)) }
+	if op_of(condition) == Op.Is { return if is_case_property(wanted) then case_holds(code, enum_hole_of(wanted), bound) else has_property(code, name_of(wanted)) }
 	is_number_literal(code) and literal_compared(number_of(code), condition, number_of(wanted))
 }
 
 has_property(code: any, property: text): bool := {
 	if property in hole_kinds { return is_hole_kind(code, property) }
 	if property == "literal" { return is_number_literal(code) or code is text }
+	if property == "enum" { return named_enum(code) != "" }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "type" { return is_tested_type(word, rule_scope) }
@@ -674,7 +714,7 @@ rule_spliced(template: any, bound: any, at: any): any := {
 	items = []
 	index = 0
 	while index < #parts {
-		each = if index + 3 <= #parts then each_spliced(parts[index ..< index + 3], bound, at) else ø
+		each = if index + 3 <= #parts then each_spliced(parts[index ..< index + 3], bound, at) ?? cases_spliced(parts[index ..< index + 3], bound, at) else ø
 		if each != ø {
 			items += each
 			index += 3
@@ -700,6 +740,14 @@ each_spliced(parts: list, bound: any, at: any): any := {
 	if item_hole == ø or rest == ø or not bound.has(rest) { return ø }
 	each = if is_group(parts#1) and bracket_of(parts#1) == "(" and #parts#1 == 1 then parts#1#1 else parts#1
 	items_of(bound[rest]).map(item => rule_spliced(each, with_binding(bound, item_hole, item), at))
+}
+
+# `cases of $e`: the cases of the enum the hole names, placed at `at`, else ø (F9)
+cases_spliced(parts: list, bound: any, at: any): any := {
+	if parts#1 != symbol(cases_words#1) or parts#2 != symbol(cases_words#2) { return ø }
+	hole = rule_hole(parts#3)
+	if hole == ø or not bound.has(hole) or named_enum(bound[hole]) == "" { return ø }
+	rule_enums[named_enum(bound[hole])].map(case => placed(symbol(case), at))
 }
 
 # `T for $x in $xs...`

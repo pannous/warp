@@ -1,0 +1,3 @@
+enum Direction { case north, south }
+let d = Direction.south
+print(switch d { case .north: 1; case .south: 2 })
