@@ -123,6 +123,12 @@ linear_dotf(values...): float from emitter
 switch_no_case(values...): int from emitter
 empty_extremum(word): int from emitter
 instant_at(values...): time from emitter
+time_of(info, position): time from emitter
+floor_quotient(a, b): int from emitter
+zero_fill(count, filler): list from emitter
+instance_of(x, class_name): bool from emitter
+caught_error(finished, value): error from emitter
+byte_at(t, offset): int from emitter
 uniscript_error(values...): int from emitter
 uniscript_warnings(values...): int from emitter
 uniscript_to_unicode(values...): int from emitter
