@@ -1,0 +1,215 @@
+# Statements and control flow (emitter.warp's part): try, if, loops with break and continue, statements for effect,
+# sequences, appends in place
+# `ran·without·error{statement}`, what `try` lowers to: 1 when the statement finished, 0 when a runtime error was thrown
+# in it; the depth goes up for the statement and back down on both paths (a jump out of it would skip that: refused)
+def ran_without_error(body: Body, statement: any): list {
+	for jump in ["return", "break", "continue"] { if mentions(statement, jump) { return refuse("a " + jump + " out of a try") } }
+	guarded = [op.try_table, no_value] + uleb(1) + [catch_clause_byte, 0, 0] + nested_effect(body, statement, 3) + [op.end]
+	finished = try_depth_step(op.i64_sub) + [op.i64_const, 1, op.br, 1, op.end]
+	caught = [op.drop] + try_depth_step(op.i64_sub) + [op.i64_const, 0]
+	# the inner block's value: the thrown error's id, an i32
+	["int", try_depth_step(op.i64_add) + [op.block] + value_type("int") + [op.block] + value_type("bool") + guarded + finished + caught + [op.end]]
+}
+def try_depth_step(instruction: int): list {
+	depth = uleb(module.globals[try_depth_name]#1)
+	[op.global_get] + depth + [op.i64_const, 1, instruction, op.global_set] + depth
+}
+# a runtime error's throw while a try runs, ahead of its trap: the global failed_in keeps the message of the error
+# `name`, the function it fails in, for `catch e` (runtime.warp caught_error)
+def error_throw(name: text): list {
+	if not module.catches_errors { return [] }
+	kept = text_bytes(runtime_error_message(name)) + [op.global_set] + uleb(module.globals[failed_in_name]#1)
+	[op.global_get] + uleb(module.globals[try_depth_name]#1) + [op.i64_eqz, op.i32_eqz, op.if, no_value] + kept + [op.i32_const, 0, op.throw, 0, op.end]
+}
+# the message of the runtime error a function of that name fails with, as Rust's words it (runtime_errors.rs
+# runtime_error_message, control/traps.rs trap_error): its name's words, then its fix; a missing field or switch case
+# keeps its name as written
+def runtime_error_message(name: text): text {
+	if name.starts_with(no_field_prefix) { return "no field " + name[#no_field_prefix..] }
+	if name.starts_with(no_case_prefix) { return "no case for " + name[#no_case_prefix..] }
+	words = name.replace("_", " ")
+	if name in runtime_error_fixes then words + "; " + runtime_error_fixes[name] else words
+}
+# `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
+# has_else: `else ø` is a branch giving ø, no missing one
+def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else: bool): list {
+	c = condition(expression_code(body, test))
+	a = nested(body, statements_block(yes_branch), 1)
+	if not has_else { return unmatched(c, a, yes_branch is number) }
+	b = nested(body, statements_block(no_branch), 1)
+	kind = joint_kind(a#1, b#1)
+	# a first reading whose branches both wait on calls still compiling: its kind is not known yet either (its code is
+	# not kept), so the function's other readings decide it
+	if kind == pending and body.function.result == pending { return [pending, c + [op.if] + value_type("node") + a#2 + [op.else] + b#2 + [op.end]] }
+	if kind == pending { kind = "int" }
+	if kind == no_kind or kind == "mixed" { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]] }
+	[kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
+}
+# `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø, as Rust gives
+def unmatched(c: any, a: any, numeric: bool): list {
+	if a#1 == no_kind { return [no_kind, c + [op.if, no_value] + a#2 + [op.end]] }
+	if a#1 == "int" or a#1 == pending { return ["int", c + [op.if] + value_type("int") + converted(a, "int") + [op.else, op.i64_const, 0, op.end]] }
+	otherwise = if numeric or a#1 == "float" or a#1 == "bool" then boxed(number_value(0)) else [ref_null, gc.node]
+	["node", c + [op.if] + value_type("node") + boxed(a) + [op.else] + otherwise + [op.end]]
+}
+# `while c do body`: block { loop { exit unless c; block { body }; step; again } }; a `break` in body branches to the
+# outer block's end, a `continue` to the inner one's, so the step a `for` lowering appends (`loop·step: i++`) still runs.
+# Its value is that of the body's last run, ø when it never ran (the local `last` keeps it)
+def loop_of(body: Body, test: any, block: any): list {
+	last = fresh_local(body, "node")
+	code = loop_code(body, test, block, last)
+	# `while true` without a break ends only by a return: no value, the function's result is its returns' alone
+	if is_endless(test, block) { return [never, code + [op.unreachable]] }
+	["node", code + [op.local_get] + uleb(last)]
+}
+# the code of a loop; each run of its body sets the local `last` to its value, or, with last -1, runs it for its effect
+def loop_code(body: Body, test: any, block: any, last: int): list {
+	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
+	parts = block_statements(block)
+	has_step = #parts > 0 and is_loop_step(parts.last)
+	again = if has_step then dropped(nested(body, value_of(parts.last), 2)) + [op.br, 0] else [op.br, 0]
+	if has_step { parts = parts[0..<(#parts - 1)] }
+	body.exits += [body.depth + 1]
+	body.continuable += [has_step or continued_safely(test, parts)]
+	body.depth += 3
+	looped = if #parts == 0 then [no_kind, []] else if last < 0 then [no_kind, effects(body, parts)] else sequence(body, parts)
+	body.depth -= 3
+	body.exits = body.exits[0..<(#body.exits - 1)]
+	body.continuable = body.continuable[0..<(#body.continuable - 1)]
+	kept = if looped#1 == no_kind then looped#2 else boxed(looped) + [op.local_set] + uleb(last)
+	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + kept + [op.end] + again + [op.end, op.end]
+}
+is_endless(test: any, block: any): bool := test == yes and not mentions(block, "break")
+is_loop_step(n: any): bool := type(n) is key and op_of(n) == ":" and key_of(n) == symbol("loop·step")
+# whether a continue may skip the loop's last statement: not when it assigns a name the test reads, the shape of a
+# lowered `for`'s step that came unmarked (Rust's iterator loops: `x = x·iterator.next()`)
+step_operators = ["=", "+=", "-=", "++", "--"]
+continued_safely(test: any, parts: any): bool := {
+	if #parts == 0 { return yes }
+	final_statement = parts.last
+	not (type(final_statement) is key and op_of(final_statement) in step_operators and key_of(final_statement) is symbol and mentions(test, name_of(key_of(final_statement))))
+}
+# n for its effect alone, its value never made: a statement, so an `if` or a loop only runs its branches or body as
+# statements too (no value boxed for nothing)
+def effect(body: Body, n: any): list {
+	if is_group(n) {
+		if not is_code_block(n) { return dropped(statement(body, n)) }
+		return effects(body, items_of(n))
+	}
+	if not (type(n) is key) { return dropped(statement(body, n)) }
+	operator = op_of(n)
+	left = key_of(n)
+	if operator == "then" and type(left) is key and op_of(left) == "if" {
+		return condition(expression_code(body, right_of_if(left))) + [op.if, no_value] + nested_effect(body, value_of(n), 1) + [op.end]
+	}
+	if operator == "else" and type(left) is key and op_of(left) == "then" and type(key_of(left)) is key and op_of(key_of(left)) == "if" {
+		c = condition(expression_code(body, right_of_if(key_of(left))))
+		return c + [op.if, no_value] + nested_effect(body, value_of(left), 1) + [op.else] + nested_effect(body, value_of(n), 1) + [op.end]
+	}
+	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_code(body, value_of(left), value_of(n), -1) }
+	dropped(statement(body, n))
+}
+def effects(body: Body, items: any): list {
+	code = []
+	for item in items { code += effect(body, item) }
+	code
+}
+# a group of statements: a block, not a map or the spaced `y = 2 x`
+is_code_block(n: any): bool := #n > 0 and separator_of(n) != " " and (bracket_of(n) == "{" or bracket_of(n) == "" or separator_of(n) == ";") and not n.all(is_map_entry)
+def nested_effect(body: Body, n: any, blocks: int): list {
+	body.depth += blocks
+	code = effect(body, n)
+	body.depth -= blocks
+	code
+}
+
+# the code of n read inside `blocks` more blocks, loops or ifs
+def nested(body: Body, n: any, blocks: int): list {
+	body.depth += blocks
+	code = expression_code(body, n)
+	body.depth -= blocks
+	code
+}
+
+# `break`: to the end of the innermost loop's block
+def loop_exit(body: Body): list {
+	if #body.exits == 0 { return refuse("a break outside a loop") }
+	[no_kind, [op.br] + uleb(body.depth - body.exits.last)]
+}
+
+# `continue`: to the end of the block around the innermost loop's body, before its step
+def loop_again(body: Body): list {
+	if #body.exits == 0 { return refuse("a continue outside a loop") }
+	if not body.continuable.last { return refuse("a continue in a loop whose last statement may be its step") }
+	[no_kind, [op.br] + uleb(body.depth - body.exits.last - 2)]
+}
+
+# a statement's code, its value dropped
+# `m.size`, `m.keys`: the entry of that name of a map that has one (`{size: 7}.size` is 7), else the word applied to m
+def field_or_word(body: Body, value: any, name: text, word: any): list {
+	if value#1 != "node" { return word(value) }
+	held = uleb(fresh_local(body, "node"))
+	receiver = ["node", [op.local_get] + held]
+	has_it = condition(runtime_call("has_field", [receiver, text_value_of(name)]))
+	read = boxed(runtime_call("map_get", [receiver, text_value_of(name)]))
+	["node", value#2 + [op.local_set] + held + has_it + [op.if] + value_type("node") + read + [op.else] + boxed(word(receiver)) + [op.end]]
+}
+def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
+
+# `xs += e`: e's items appended to the list xs holds, in place, so every alias sees them; ø when xs holds no list
+appended(body: Body, target_name: any, addition: any): any := {
+	target = expression_code(body, target_name)
+	added = expression_code(body, addition)
+	# a list takes any other value than a list as one item: `xs = []; xs += 3` is [3]
+	if target#1 == "list" and added#1 != "list" and added#1 != "node" { added = ["list", vector_code([boxed(added)])] }
+	# `for w in words { xs += w }`: an addition known only at run time is its items or one item (runtime appended_items)
+	if target#1 == "list" and added#1 == "node" { added = runtime_call("appended_items", [added]) }
+	if target#1 == "list" { return runtime_call("list_append", [target, added]) }
+	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
+	ø
+}
+# the statements in order, the value that of the last
+def sequence(body: Body, items: any): list {
+	if #items == 0 { return refuse("an empty block") }
+	code = effects(body, items[0..<(#items - 1)])
+	last = statement(body, items.last)
+	[last#1, code + last#2]
+}
+# a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,
+# simpler); a fresh list makes it unshared, a list made inside a block of the statement does not outlast it
+def statement(body: Body, n: any): list {
+	kept = []
+	for name in body.unshared { if appends_only(n, name) { kept += [name] } }
+	body.unshared = kept
+	value = expression_code(body, n)
+	after = []
+	for name in body.unshared { if name in kept { after += [name] } }
+	made = fresh_list_name(n)
+	if made != ø and made in body.names { after += [made] }
+	body.unshared = after
+	value
+}
+# `xs = []`, `xs = ø`, `xs = [a, b]`: the local name holds a list made right here
+fresh_list_name(n: any): any := {
+	if not (type(n) is key and op_of(n) == "=" and key_of(n) is symbol) { return ø }
+	if value_of(n) is ø or bracket_of(value_of(n)) == "[" { return name_of(key_of(n)) }
+	ø
+}
+# `xs = xs + e`, `xs += e` of e not mentioning xs: the name xs, else ø
+self_append_name(n: any): any := {
+	if not (type(n) is key and key_of(n) is symbol) { return ø }
+	name = name_of(key_of(n))
+	sum = value_of(n)
+	if op_of(n) == "+=" and not mentions(sum, name) { return name }
+	if op_of(n) != "=" or not (type(sum) is key and op_of(sum) == "+" and key_of(sum) == key_of(n)) { return ø }
+	if mentions(value_of(sum), name) { return ø }
+	name
+}
+# whether n mentions the local name only in appends to it
+appends_only(n: any, name: text): bool := {
+	if self_append_name(n) == name { return yes }
+	if n is symbol { return name_of(n) != name }
+	if type(n) is key { return appends_only(key_of(n), name) and appends_only(value_of(n), name) }
+	if is_group(n) { for x in n { if not appends_only(x, name) { return no } } }
+	yes
+}

@@ -4,6 +4,8 @@
 /// The brackets that open and close the nesting the indentation follows
 const OPENERS: [char; 3] = ['(', '[', '{'];
 const CLOSERS: [char; 3] = [')', ']', '}'];
+/// `units = data {`: the block holds data, read as written (lib/units.warp's unit_definitions), not code to lay out
+const DATA_WORD: &str = "data";
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct LineScan {
@@ -167,4 +169,18 @@ pub(crate) fn code_characters(code: &str) -> Vec<bool> {
 		.zip(scan(&lines))
 		.flat_map(|(line, scan)| line.char_indices().map(move |(at, _)| scan.is_code(at)).chain([false]))
 		.collect()
+}
+
+/// The line opens a block of data: its code ends in `data {`
+fn opens_data(line: &str, scan: &LineScan) -> bool {
+	let code = code_text(line, scan);
+	let before_brace = code.strip_suffix('{').map(str::trim_end);
+	before_brace
+		.is_some_and(|before| before.rsplit(|c: char| !c.is_alphanumeric() && c != '_').next() == Some(DATA_WORD))
+}
+
+/// For each line, whether it lies inside a block of data (its closing line included), where the layout is the author's
+pub(super) fn in_data_blocks(lines: &[String], scans: &[LineScan]) -> Vec<bool> {
+	let opens: Vec<bool> = lines.iter().zip(scans).map(|(line, scan)| opens_data(line, scan)).collect();
+	scans.iter().map(|scan| scan.open_before.iter().any(|&opener| opens[opener])).collect()
 }
