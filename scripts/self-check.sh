@@ -1,20 +1,29 @@
 #!/bin/zsh
 # The warp-only acceptance check (decision warp-only-acceptance): the Rust-compiled compiler.warp compiles itself and
-# that self build runs hello world. One check at a time on the Mac: each self build runs wasm-opt -O3 on ~2.5 cores,
-# and eight at once pushed the load past 60 (supervisor 2026-10-21), so a check waits for the running one.
+# that self build runs hello world. Few checks at a time on the Mac: each self build runs wasm-opt -O3 on ~2.5 cores,
+# and eight at once pushed the load past 60 (supervisor 2026-10-21); one at a time queued checks for 45 min at load 9,
+# so check_slots run at once and a further check waits for a free slot.
 # usage: scripts/self-check.sh [<worktree>, default the current checkout]   (exit 0 = Hello printed)
-worktree=${1:-$(git rev-parse --show-toplevel)}
+worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
 warp=/Users/me/dev/bin/warp
-lock=/Users/me/dev/angles/warp/scratch/self-check.lock
+locks=/Users/me/dev/angles/warp/scratch/self-check
+check_slots=2
 expected="Hello"
 
-mkdir -p ${lock:h}
-until mkdir $lock 2>/dev/null; do
-  holder=$(cat $lock/pid 2>/dev/null)
-  [[ -n $holder ]] && ! kill -0 $holder 2>/dev/null && rm -rf $lock && continue  # its holder died
-  sleep 5
-done
-echo $$ > $lock/pid
+# a slot is a directory holding its check's pid; a slot whose check died is freed
+take_slot() {
+  local slot
+  mkdir -p ${locks:h}
+  while true; do
+    for slot in {1..$check_slots}; do
+      if mkdir $locks.$slot.lock 2>/dev/null; then echo $$ > $locks.$slot.lock/pid; lock=$locks.$slot.lock; return; fi
+      holder=$(cat $locks.$slot.lock/pid 2>/dev/null)
+      [[ -n $holder ]] && ! kill -0 $holder 2>/dev/null && rm -rf $locks.$slot.lock
+    done
+    sleep 5
+  done
+}
+take_slot
 trap "rm -rf $lock" EXIT
 
 cd $worktree || exit 1

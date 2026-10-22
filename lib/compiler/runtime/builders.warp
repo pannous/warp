@@ -26,5 +26,7 @@ built_list(first: Node, rest: Node, info: int): Node := {
 	items = if is_null(rest) then [] else unboxed_list(rest)
 	list_node(info * KindUnit.Info + Kind.List, list_join([first], items))
 }
+# a type declaration as written, `class P { x: int }`: its name and body
+built_type(name: Node, body: Node): Node := keyed(Kind.TypeDef, name, body)
 # a parse failure the program's `try` catches: the Error of the host's message
 built_error(message: Node): Node := error_of(node_text(message))

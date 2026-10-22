@@ -28,6 +28,8 @@ collection_text(n: Node): text := {
 	if kind_code(n) == Kind.Time { return time_text(n) }
 	# a closure: its lambda as written (emitter.warp closure_text_code)
 	if kind_code(n) == Kind.Function { return closure_text(n) }
+	# a type declaration as written, `type P {x:type int ø}` as Rust's serialization.rs shows it
+	if kind_code(n) == Kind.TypeDef { return "type " + node_text(entry_key(n)) + " " + node_text(key_value(n)) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
