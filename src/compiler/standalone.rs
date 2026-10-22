@@ -152,13 +152,12 @@ fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
 	Ok(module_of_bytes(bytes))
 }
 
-/// The folder of the warp binary, where the delivered compilers lie
+/// Where the delivered compilers lie: next to the binary, or in an installed warp's share/warp
 fn binary_folder() -> Option<PathBuf> {
-	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;
-	binary.parent().map(Path::to_path_buf)
+	crate::modules::installed_folder()
 }
 
-/// A build file next to the binary: the delivered compiler
+/// A build file of the installed folder: the delivered compiler
 fn is_delivered(path: &Path) -> bool {
 	binary_folder().is_some_and(|folder| path.parent() == Some(folder.as_path()))
 }

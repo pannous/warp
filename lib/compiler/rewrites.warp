@@ -14,7 +14,7 @@
 # module's rules apply to every program mentioning their words but binding none itself, and one that fires brings its
 # module along with `use` (lib/channels.warp, lib/english.warp). A template's hole the pattern doesn't bind is a fresh
 # name each firing (`$t` → `t·3`, a compiler temporary no program can write), so `rewrite $a ?: $b => ($t = $a; if $t
-# then $t else $b)` computes a once; a template of statements in a value's place is that value's block. What the
+# then $t else $b)` computes a once; a pattern of statements `($a; $b)` matches a run of them in a block; a rule's result is rewritten again until no rule fires; `T for $x in $xs...` splices T once for each item of a rest hole; a template of statements in a value's place is that value's block. What the
 # template adds sits where the rewritten code was written, so errors point at the user's code (notes/rewrites.md).
 # Rust twin: src/modules/rewrites.rs lower
 use "walk.warp"
@@ -36,6 +36,11 @@ code_properties = ["type", "unbound", "value", "function", "literal"]
 # `where $n < 0`: the comparisons of a number literal
 literal_comparisons = [Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Ne]
 and_word = "and"
+# how many times a rule's result may be rewritten again in a row before the rules count as a loop (F7)
+rewrite_depth_limit = 64
+# `T for $x in $xs...` in a template: T once for each item of the rest hole (F4)
+each_word = "for"
+each_in_word = "in"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions
 rule_places = ["statement", "condition", "member", "key", "value"]
 takes_word = "takes"
@@ -53,6 +58,8 @@ class Rule { pattern: any; template: any; hole: any; shape: any; conditions: lis
 global fired_modules = []
 # the fresh names made so far, numbering each one
 global fresh_names = 0
+# how many results are being rewritten again right now, one inside the other
+global rewrite_depth = 0
 # the names the program being rewritten binds, which `where $x is type` and its kin ask
 global rule_scope = {}
 # function → the type of its first parameter, of the program being rewritten (`where $f takes value`)
@@ -318,10 +325,14 @@ literal_compared(a: number, comparison: any, b: number): bool := {
 	a != b
 }
 
-# `($a; $b)`: statements that take the rewritten statement's place
+# `($a; $b)`: statements that take the rewritten statement's place, also `($v += 1 for $v in $vs...)`, one for each
+# item
 statements_template(template: any): any := {
 	if is_group(template) and bracket_of(template) == "(" and separator_of(template) in statement_separators {
 		return separated(bracketed(items_of(template), ""), separator_of(template))
+	}
+	if is_group(template) and bracket_of(template) == "(" and (is_each(template) or (#template == 1 and is_each(template#1))) {
+		return separated(bracketed([if #template == 1 then template#1 else rule_phrase(items_of(template))], ""), ";")
 	}
 	template
 }
@@ -398,7 +409,7 @@ is_run_pattern(pattern: any): bool := match pattern {
 # place rewrite the node's parts standing there first
 rule_rewritten(n: any, rules: list, origins: list): any := {
 	if is_group(n) and separator_of(n) in statement_separators {
-		n = group_like(n, spliced_statements(items_of(n).map(statement => at_place(statement, "statement", rules, origins))))
+		n = group_like(n, statement_runs(spliced_statements(items_of(n).map(statement => at_place(statement, "statement", rules, origins))), rules, origins))
 	} else if is_group(n) and #n > 0 {
 		phrase = bracket_of(n) == "" and separator_of(n) == " "
 		items = items_of(n)
@@ -412,11 +423,45 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 	for index in 0 ..< #rules {
 		if rules[index].place == "" and not is_run_pattern(rules[index].pattern) {
 			result = rule_applied(rules[index], origins[index], n)
-			if result != ø { return result }
+			if result != ø { return rewritten_again(result, rules, origins) }
 		}
 	}
 	n
 }
+
+# the statements with each run a rule of several statements `($a; $b)` matches rewritten, left to right (F6)
+statement_runs(statements: list, rules: list, origins: list): list := {
+	at = 0
+	while at < #statements {
+		found = statement_run_at(statements[at ..], rules, origins)
+		if found == ø {
+			at += 1
+		} else {
+			made = spliced_statements([rewritten_again(found#2, rules, origins)])
+			statements = statements[0 ..< at] + made + statements[at + found#1 ..]
+			at += #made
+		}
+	}
+	statements
+}
+
+# [how many statements starting the list a rule of several statements matches, its rewrite], else ø
+statement_run_at(statements: list, rules: list, origins: list): any := {
+	for index in 0 ..< #rules {
+		rule = rules[index]
+		if rule.place == "" and is_statements_pattern(rule.pattern) and #statements >= #rule.pattern {
+			run = statements[0 ..< #rule.pattern]
+			bound = {}
+			if each_matches(items_of(rule.pattern), run, bound) and conditions_hold(rule, origins[index], bound) {
+				return [#rule.pattern, fired(rule, rule_spliced(rule.template, bound, run#1))]
+			}
+		}
+	}
+	ø
+}
+
+# `($a; $b)`: a pattern of several statements
+is_statements_pattern(pattern: any): bool := is_group(pattern) and bracket_of(pattern) == "(" and separator_of(pattern) in statement_separators and #pattern > 1
 
 # the statements, those a template made of several spliced in
 spliced_statements(statements: list): list := {
@@ -455,7 +500,7 @@ at_place(n: any, place: text, rules: list, origins: list): any := {
 	for index in 0 ..< #rules {
 		if rules[index].place == place {
 			result = rule_applied(rules[index], origins[index], n)
-			if result != ø { return result }
+			if result != ø { return rewritten_again(result, rules, origins) }
 		}
 	}
 	n
@@ -474,12 +519,22 @@ with_runs(items: list, rules: list, origins: list): list := {
 		if found == ø {
 			at += 1
 		} else {
-			replaced = words_of(found#2)
+			replaced = words_of(rewritten_again(found#2, rules, origins))
 			items = items[0 ..< at] + replaced + items[at + found#1 ..]
 			at += #replaced
 		}
 	}
 	items
+}
+
+# a rule's result rewritten again by the rules, its parts first, until none fires (F7): `quadruple 3` → `double
+# (double 3)` → `(3 * 2) * 2`; a result rewritten more than rewrite_depth_limit times in a row is the rules' loop
+rewritten_again(result: any, rules: list, origins: list): any := {
+	if rewrite_depth >= rewrite_depth_limit { return error_node("the rewrite rules loop: each result matches a rule again, " + rewrite_depth_limit + " times in a row") }
+	rewrite_depth += 1
+	again = bottom_up(result, n => rule_rewritten(n, rules, origins))
+	rewrite_depth -= 1
+	again
 }
 
 # [the length of a run starting the items that a phrase rule matches, its rewrite], else ø; a run starting with `x = v`
@@ -576,12 +631,47 @@ rule_spliced(template: any, bound: any, at: any): any := {
 	}
 	if template is key { return placed(Key(rule_spliced(key_of(template), bound, at), op_of(template), rule_spliced(value_of(template), bound, at)), at) }
 	if not is_group(template) { return placed(template, at) }
+	parts = items_of(template)
 	items = []
-	for item in template {
-		rest = rest_hole_name(item)
-		items += if rest != ø and bound.has(rest) then items_of(bound[rest]) else [rule_spliced(item, bound, at)]
+	index = 0
+	while index < #parts {
+		each = if index + 3 <= #parts then each_spliced(parts[index ..< index + 3], bound, at) else ø
+		if each != ø {
+			items += each
+			index += 3
+		} else {
+			item = parts[index]
+			rest = rest_hole_name(item)
+			inner = if is_group(item) and bracket_of(item) == "" then each_spliced(items_of(item), bound, at) else ø
+			items += if inner != ø then inner else if rest != ø and bound.has(rest) then items_of(bound[rest]) else [rule_spliced(item, bound, at)]
+			index += 1
+		}
 	}
 	placed(group_like(template, items), at)
+}
+
+# `T for $x in $xs...`: T spliced once for each item the rest hole bound, $x bound to that item (and fresh names
+# fresh for each), else ø
+each_spliced(parts: list, bound: any, at: any): any := {
+	if #parts != 3 or parts#2 != symbol(each_word) { return ø }
+	clause = parts#3
+	if not (is_group(clause) and bracket_of(clause) == "" and #clause == 3 and clause#2 == symbol(each_in_word)) { return ø }
+	item_hole = rule_hole(clause#1)
+	rest = rest_hole_name(clause#3)
+	if item_hole == ø or rest == ø or not bound.has(rest) { return ø }
+	each = if is_group(parts#1) and bracket_of(parts#1) == "(" and #parts#1 == 1 then parts#1#1 else parts#1
+	items_of(bound[rest]).map(item => rule_spliced(each, with_binding(bound, item_hole, item), at))
+}
+
+# `T for $x in $xs...`
+is_each(n: any): bool := is_group(n) and #n == 3 and n#2 == symbol(each_word)
+
+# a copy of the holes bound, the hole bound to the code
+with_binding(bound: any, hole: text, code: any): any := {
+	copy = {}
+	for name in bound.keys { copy[name] = bound[name] }
+	copy[hole] = code
+	copy
 }
 
 # `$t` → `t·3`: a compiler temporary (notes/compiler_temporaries.md), apart from every other firing's

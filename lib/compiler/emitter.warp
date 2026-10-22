@@ -27,19 +27,13 @@ export_global_byte = 3
 # the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names
 exported_globals = ["trap_detail", "text_heap"]
 import_function_byte = 0
+# the export WASI hosts run a module by (Rust's wasi_emitter.rs WASI_START)
+wasi_start = "_start"
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
-fd_write = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
+fd_write_import = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
 stdout = 1
-# a module that reads files imports the host's read(path address, length) → (answer address, length), as Rust's
-# import_manager.rs host_read; the host writes the answer at the exported global text_heap, past the memory's end
-host_read = ["host", "read", [96, 2, 127, 127, 2, 127, 127]]
-# a module that warns imports the host's warn(message address, length), as Rust's import_manager.rs host_warn: the
-# host says "warning: <message>" as it says every runtime warning
-host_warn = ["host", "warn", [96, 2, 127, 127, 0]]
 # the words that warn, `warning "careful"` and its alias warn (lib/prelude.warp), as a line or a call
 warning_words = ["warning", "warn"]
-# a module raising a float to a power imports libm's pow(base, exponent) → f64, as Rust's emit_float_power calls it
-float_pow = ["m", "pow", [96, 2, 124, 124, 1, 124]]
 text_heap_name = "text_heap"
 # its linear memory, one page: fd_write's iovec {address, count} at 0, the count it wrote at 8, the bytes it writes from
 # output_address (an offset of the store, so `output_byte(i, b)` stores at output_address + i)
@@ -120,11 +114,9 @@ member_word(name: text): any := {
 	word = library_words.get(unaliased(name)) ?? ""
 	if word in module.runtime and #module.runtime[word].signature.parameters == 1 then word else ø
 }
-# a map's own members (src/lowering/data/members.rs MAP_MEMBERS)
-map_members = ["keys", "values", "get", "count", "contains", "remove", "copy", "string"]
 # whether `x.name` is the word's call even when x has an entry of that name, as Rust's reads_entry_first: a map's own
 # member (`found.keys` of a map holding the entry "keys") or a word of a known result, which the code after it reads
-keeps_word(name: text, word: text): bool := name in map_members or module.runtime[word].signature.result not in ["", "any"]
+keeps_word(name: text, word: text): bool := takes_map_first(name) or module.runtime[word].signature.result not in ["", "any"]
 # whether the variable only ever holds map literals with that entry in the function: `n = {keys: 5}; n.keys` is its
 # own member 5, known as it compiles (Rust's OwnMember of a variable only holding object literals)
 holds_entry(body: Body, receiver: any, entry: text): bool := {
@@ -597,7 +589,7 @@ def length_code(value: any): list {
 	if value#1 == "text" { return runtime_call("text_count", [value]) }
 	if value#1 == "list" { return ["int", value#2 + gc_code(gc_ops.struct_get, [gc.list, 0]) + [op.i64_extend_i32_u]] }
 	if value#1 == "node" { return runtime_call("node_length", [value]) }
-	refuse("the length of a " + value#1)
+	refuse("cannot access length code of " + value#1)
 }
 # `xs#i = v`: the i-th item becomes v, boxed; the assignment gives v
 def element_assignment(body: Body, list: any, index: any, value: any): list {
@@ -657,7 +649,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 	values = arguments.map(a => expression_code(body, a))
 	match name {
 		"new_text": ["text", index_code(values#1) + gc_code(gc_ops.array_new_default, [gc.text])]
-		"byte_count": ["int", values#1#2 + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
+		"byte_count": ["int", converted(values#1, "text") + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
 		"byte_at": ["int", converted(values#1, "text") + index_code(values#2) + gc_code(gc_ops.array_get_u, [gc.text]) + [op.i64_extend_i32_u]]
 		"kind_code": ["int", kind_code_of(values#1#2)]
 		"unboxed_int": ["int", unboxed(values#1#2, gc.int_box)]
@@ -733,19 +725,8 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		"set_byte": [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc.text])]
 		"output_byte": [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)]
 		"write_output": ["int", write_output(index_code(values#1))]
-		# host_read(count): the host's read of the path in the first count output bytes, the answer's address; its length
-		# kept where fd_write's count goes, for answered_length()
-		"host_read": {
-			declared_global(text_heap_name, "char")
-			length = uleb(fresh_local(body, "char"))
-			start = uleb(fresh_local(body, "char"))
-			code = [op.i32_const] + sleb(output_address) + index_code(values#1) + [op.call] + uleb(import_index(host_read))
-			code += [op.local_set] + length + [op.local_set] + start
-			code += [op.i32_const] + sleb(written_address) + [op.local_get] + length + [op.i32_store, 2, 0]
-			["int", code + [op.local_get] + start + [op.i64_extend_i32_u]]
-		}
-		"host_warn": [no_kind, [op.i32_const] + sleb(output_address) + index_code(values#1) + [op.call] + uleb(import_index(host_warn))]
-		"answered_length": ["int", [op.i32_const] + sleb(written_address) + [op.i32_load, 2, 0, op.i64_extend_i32_s]]
+		# the address of the output bytes, where runtime/wasi.warp lays out what WASI's calls read and write
+		"output_address": ["int", [op.i64_const] + sleb(output_address)]
 		"memory_byte": ["int", index_code(values#1) + [op.i32_load8_u, 0, 0, op.i64_extend_i32_u]]
 		# the value written, as `x = v` is v
 		"memory_set_byte": {
@@ -760,7 +741,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 # memory_set_byte(address, value)
 program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte"]
 intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
-	output_byte: 2, write_output: 1, host_read: 1, host_warn: 1, answered_length: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
+	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, closure_text: 1}
@@ -845,7 +826,7 @@ def write_output(count: any): list {
 	iovec = [op.i32_const] + sleb(iovec_address) + [op.i32_const] + sleb(output_address) + word
 	iovec += [op.i32_const] + sleb(iovec_address + 4) + count + word
 	arguments = [op.i32_const] + sleb(stdout) + [op.i32_const] + sleb(iovec_address) + [op.i32_const, 1, op.i32_const] + sleb(written_address)
-	iovec + arguments + [op.call] + uleb(import_index(fd_write)) + [op.i64_extend_i32_u]
+	iovec + arguments + [op.call] + uleb(import_index(fd_write_import)) + [op.i64_extend_i32_u]
 }
 import_index(entry: any): int := {
 	index = -1
@@ -1052,10 +1033,10 @@ def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	[result, converted(a, kind) + converted(b, kind) + [ops[symbol]]]
 }
 
-# base ^ exponent of floats: libm's pow; a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
+# base ^ exponent of floats: the runtime word float_pow (runtime/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
 def float_power(body: Body, base: list, exponent: list): list {
 	held = uleb(fresh_local(body, "float"))
-	code = base + exponent + [op.call] + uleb(import_index(float_pow)) + [op.local_tee] + held + [op.local_get] + held
+	code = runtime_call("float_pow", [["float", base], ["float", exponent]])#2 + [op.local_tee] + held + [op.local_get] + held
 	checked = [op.f64_ne, op.if, no_value] + dropped(runtime_call("invalid_number", [])) + [op.end]
 	["float", code + checked + [op.local_get] + held]
 }
@@ -1871,6 +1852,8 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.classes {
 		return positional_instance(body, name_of(n#1), items_of(n)[1..])
 	}
+	std = std_word(n)
+	if std != ø { return call(body, module.runtime[std], std_arguments(n#4)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host {
 		return host_call(body, name_of(n#1), items_of(n)[1..])
 	}
@@ -2442,10 +2425,77 @@ def import_entry(i: int): list {
 }
 
 ## host words: the program's environment, imported from the "host" module (src/host.rs)
+# the words a program reaches: those it refers to (not the keys of its maps: `{paint: …}` names no paint), the runtime
+# words its library words and std calls stand for, and theirs in turn: the host and WASI words they call are imported
+def reached_words(program: any): any {
+	reached = {}
+	referred = {}
+	collect_referred(program, referred)
+	pending = referred.keys
+	i = 0
+	while i < #pending {
+		name = pending[i]
+		i += 1
+		if name not in reached {
+			reached[name] = yes
+			more = {}
+			if name in library_words { more[library_words[name]] = yes }
+			if name in module.runtime { collect_referred_outside(module.runtime[name], more) }
+			pending += more.keys
+		}
+	}
+	reached
+}
+# the words a runtime word refers to, but its parameters and locals: time_text's local `clock` imports no host clock
+def collect_referred_outside(word: Function, found: any) {
+	referred = {}
+	collect_referred(word.body, referred)
+	own = {}
+	collect_assigned(word.body, own)
+	for name in taken_names(word.signature) { own[name] = yes }
+	for name in referred.keys { if name not in own { found[name] = yes } }
+}
+# the names a body assigns, `x = …`
+def collect_assigned(n: any, found: any) {
+	if type(n) is key {
+		if op_of(n) == "=" and key_of(n) is symbol { found[name_of(key_of(n))] = yes }
+		collect_assigned(value_of(n), found)
+	}
+	if is_group(n) { for item in n { collect_assigned(item, found) } }
+}
+def collect_referred(n: any, found: any) {
+	if n is symbol { found[name_of(n)] = yes }
+	if type(n) is key and key_of(n) != symbol(opaque_word) {
+		collect_referred(key_of(n), found)
+		collect_referred(value_of(n), found)
+	}
+	if is_group(n) {
+		std = std_word(n)
+		# a std word the runtime gives itself refers to that runtime word, not to the host's std_io
+		if std != ø {
+			found[std] = yes
+			collect_referred(n#4, found)
+		} else {
+			for item in n {
+				if is_curly_group(n) and is_key(item, Op.Colon) and key_of(item) is symbol { collect_referred(value_of(item), found) } else { collect_referred(item, found) }
+			}
+		}
+	}
+}
+# `std_io("os", "args", [])`, a std module's word the runtime gives itself over WASI (runtime/wasi.warp): the runtime
+# word std_os_args, else ø (the host's std_io answers)
+def std_word(n: any): any {
+	if bracket_of(n) != "(" or #n != 4 { return ø }
+	if n#1 != symbol("std_io") or not (n#2 is text) or not (n#3 is text) or (bracket_of(n#4) != "[" and not is_empty_list(n#4)) { return ø }
+	name = "std_" + n#2 + "_" + n#3
+	if name in module.runtime then name else ø
+}
+# the arguments of a std word: `[]` is held behind the opaque word (is_empty_list)
+std_arguments(arguments: Node): list := if is_empty_list(arguments) then [] else items_of(arguments)
 host_module = "host"
 def host_import(name: text): list {
 	signature = module.host[name]
-	[host_module, name, [function_type_byte] + vector(signature#1.map(host_type)) + vector(signature#2.map(host_type))]
+	[if #signature > 2 then signature#3 else host_module, name, [function_type_byte] + vector(signature#1.map(host_type)) + vector(signature#2.map(host_type))]
 }
 def host_type(kind: text): list { if kind == "i32" then [type_bytes.char] else value_type(kind) }
 
@@ -2591,15 +2641,13 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	module.rereads = []
 	module.builders = []
 	collect_types(program)
-	module.imports = if mentions(program, "print") then [fd_write] else []
-	if mentions(program, "read") { module.imports += [host_read] }
-	if warning_words.any(word => mentions(program, word)) { module.imports += [host_warn] }
-	if has_operator(program, Op.Pow) { module.imports += [float_pow] }
-	# imported ahead of the functions, whose indices follow them: every host word the program names
-	for name in module.host.keys {
-		if mentions(program, name) or (name in time_host_words and makes_time(program)) { module.imports += [host_import(name)] }
-	}
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
+	reached = reached_words(program)
+	module.imports = if "print" in reached then [fd_write_import] else []
+	# imported ahead of the functions, whose indices follow them: every host or WASI word the program reaches
+	for name in module.host.keys {
+		if (name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
+	}
 	for name in module.runtime.keys {
 		word = module.runtime[name]
 		word.is_runtime = yes
@@ -2632,6 +2680,9 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
 		}
+		# WASI's command entry: main run for what it does, so `wasmtime app.wasm` runs the program
+		start = added_function(wasi_start, [], no_kind, [])
+		start.code = [op.call] + uleb(main.index) + [op.drop]
 		if #module.refusals > 0 { throw module.refusals.join("\n") }
 		module_bytes(module.order)
 	} catch refusal {
