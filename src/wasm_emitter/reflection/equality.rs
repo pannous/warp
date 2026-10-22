@@ -104,6 +104,44 @@ impl WasmGcEmitter {
 		(may_be_object(left) && may_be_object(right)).then_some((left, right, *op == Op::NotIdentical))
 	}
 
+	/// `x === ø`, `x == ø`, `x is ø` and their negations: is x ø itself, missing; an empty list, text or map is not, whatever
+	/// x's static type (`f(n: any) := n == ø; f([])` is no, decision empty-is-not-missing): the other side and whether
+	/// the question is negated
+	pub(in crate::wasm_emitter) fn nothing_identity<'a>(&self, node: &'a Node) -> Option<(&'a Node, bool)> {
+		let Node::Key(left, op @ (Op::Identical | Op::NotIdentical | Op::Eq | Op::Ne), right) = node.drop_meta() else {
+			return None;
+		};
+		let nothing_itself = |side: &Node| side.is_empty_node() && !side.is_empty_list_literal();
+		let other = if nothing_itself(right) {
+			left
+		} else if nothing_itself(left) {
+			right
+		} else {
+			return None;
+		};
+		Some((other, matches!(op, Op::NotIdentical | Op::Ne)))
+	}
+
+	/// Push i64 1/0: is the value ø itself, a null reference (a missing map entry) as well
+	pub(in crate::wasm_emitter) fn emit_nothing_identity(
+		&mut self,
+		func: &mut Function,
+		(side, negated): (&Node, bool),
+	) {
+		Self::emit_list(func, &[I::Block(BlockType::Result(ValType::I32)), I::Block(BlockType::Empty)]);
+		self.emit_node_instructions(func, side);
+		Self::emit_list(
+			func,
+			&[I::BrOnNull(0), I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 }],
+		);
+		Self::emit_is_nothing(func);
+		Self::emit_list(func, &[I::Br(1), I::End, I::I32Const(1), I::End]);
+		if negated {
+			func.instruction(&I::I32Eqz);
+		}
+		func.instruction(&I::I64ExtendI32U);
+	}
+
 	/// Push i64 1/0: are the two objects one
 	pub(in crate::wasm_emitter) fn emit_object_identity(
 		&mut self,
@@ -203,6 +241,19 @@ impl WasmGcEmitter {
 		// `if odd x`: an unknown word is an error as in any other code, never a truthy list (card undefined-word)
 		if let Some(message) = self.unknown_word_refusal(condition) {
 			self.emit_type_error(func, message);
+		} else if let Node::Key(left, op @ (Op::And | Op::Or), right) = condition.drop_meta() {
+			// `if name and …`: each side is tested for truth by its own kind (a text by its emptiness), the right one
+			// only when the left leaves the answer open
+			self.emit_condition(func, left, emit_number);
+			func.instruction(&I::If(BlockType::Result(ValType::I32)));
+			if *op == Op::Or {
+				Self::emit_list(func, &[I::I32Const(1), I::Else]);
+			}
+			self.emit_condition(func, right, emit_number);
+			if *op == Op::And {
+				Self::emit_list(func, &[I::Else, I::I32Const(0)]);
+			}
+			func.instruction(&I::End);
 		} else if self.is_structural_operand(condition)
 			|| self.is_held_cell_value(condition)
 			|| self.holds_run_time_kind(condition)
@@ -541,14 +592,8 @@ impl WasmGcEmitter {
 			Self::return_if(f, 0);
 			for (from, to) in [(0, 2), (1, 3)] {
 				Self::field(f, from, node, 0);
-				// `[]` is ø (type_kinds::EMPTY_LIST_KIND): an Empty kind compares without its bracket
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalTee(to),
-					I::I64Const(KIND_MASK), I::I64And, I::I64Eqz, I::If(BlockType::Empty),
-						I::I64Const(Kind::Empty as i64), I::LocalSet(to),
-					I::End,
-				]);
+				// `[]` (type_kinds::EMPTY_LIST_KIND) keeps its bracket: an empty list is no ø (decision empty-is-not-missing)
+				Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalSet(to)]);
 			}
 			s.emit_character_equals_text(f, node, recurse);
 			Self::emit_list(f, &[I::LocalGet(2), I::LocalGet(3), I::I64Ne, I::If(BlockType::Empty)]);

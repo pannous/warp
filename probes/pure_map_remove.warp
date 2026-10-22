@@ -1,0 +1,8 @@
+# `m.remove(k)` of a map: the value of k, its entry removed from m (card pure-map-remove)
+m = {a: 1, b: 2, c: 3}
+print m.remove("b")
+m.delete("a")
+print m
+xs = [1, 2, 3, 2]
+xs.remove(2)
+print xs

@@ -73,7 +73,9 @@ arguments. The Rust pipeline compiles compiler.warp, always (user 2026-10-21: "p
 `warp self` always uses the self-hosted, self-compiled"). `warp self <program.warp>` runs the program through
 compiler.warp compiled by the pure lane, itself, the build file compiler-self.wasm; a refusal of that compile is a loud
 error, never a fallback to the Rust-compiled one. `warp pure` switches to the self-compiled compiler once more tests
-pass with it (the count self vs Rust-compiled goes to the supervisor first). It is also the gate's
+pass with it (the count self vs Rust-compiled goes to the supervisor first: `scripts/is_tests.py run warp-pure
+warp-self` runs every test pair both ways, ~35 min a lane, and ends with the parity line; decision
+self-compiled-parity: self may pass 5 % fewer, reported, no gate yet). It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
 Build files (decision compiler-build, card compiler-wasm): compiler.wasm and compiler-self.wasm lie next to the binary
 for the lib/ they record (custom section `warp.build`: lib/'s path, its fingerprint, the binary's WARP_SOURCE from
@@ -91,6 +93,17 @@ value in the module cache under stage_key: binary + lib/): warm hello 0.07 s, a 
 Node crosses to Rust and back (postcard); 38 samples give the same results with and without it.
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
+Card under-pure (2026-10-21): print([1, 2]) failed only here, not in the stage lane, because compiler.warp runs the
+WARP passes on the runtime words: runtime show.warp's match arm ø (node_matches.warp; main took True/False), and
+emitter.warp refusing a `the result: text` given a kind guessed from a call still compiling (node_text ↔ list_shown
+cycle; admitted() now holds it as the declared kind, the reread fixes the code). A refusal is now the compile's
+error, not "not a list at 23:2". Holding only a typed block's last statement as the result (definitions.warp
+result_held) is no longer needed with admitted() and made `warp rebuild self` refuse ("the operator # on int"), so
+it was dropped. Debug recipe: copy lib to scratch/upN, add prints (`print "CF " + f.name` in compile_function), run
+`WARP_LIB=<copy>/lib warp lib/compiler/compiler.warp p.warp p.wasm <dir> <copy>/lib` to keep the wasm for
+`wasm-tools validate --features all`. A self-build refusal reproduces in ~4 min with `WARP_SELF_HOSTED=pure-only
+WARP_LIB=<copy>/lib warp <copy>/lib/compiler/compiler.warp`; bisect it by copying main's lib and swapping one changed
+file in at a time. Remaining ladder gaps: card under-pure-2.
 
 ### WARP_SELF_HOSTED=pure (alias pure-only)
 pure and pure-only become one lane with no fallback; `pure-only` stays as an alias with a note.
@@ -154,6 +167,24 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
 - warp-compiler-enums: the bare `Round`/`Add`/`Define` symbols in the warp-lowered runtime; walk.warp's `Op`,
   `Bracket`, `Separator` enums are no longer crossed through text views in this lane.
 
+## warp self runs hello (2026-10-21, card self-hello, branch self-hello)
+What stopped compiler.warp compiled by itself, in the order found (each a general fix with a probe and a test):
+- The pure-compiled parser read every call with comma arguments as Error("spelling code"), so runtime.warp's `use`
+  files parsed into one statement and the runtime words lacked char_text ("no field char_text"). Cause: plain_enums.warp
+  decided program-wide, by name, which names hold enum cases; parser.warp's own `bracket = ""` made view_of's matched
+  `bracket` ambiguous, so `bracket as text` gave the case name "None". Now per function scope (the Rust twin
+  plain_enums.rs assigned_cases is still program-wide; the Rust lane does not run its matches through it).
+- prelude_words.warp's symbol_words returned `found.keys` of a map holding the entry "keys" (the word of
+  runtime/ordering.warp's parameter): emitter.warp read the entry. Now a map's own member and a word of known result
+  stay the word's call, as Rust's reads_entry_first.
+- A kept value (os.kept of the lowered runtime words) holding an Int beyond the fixnums: the host built it through the
+  Int runtime's builders, which an emitter.warp module lacks; such a module holds machine i64s (src/host/tasks/values.rs
+  holds_machine_ints).
+- Debugging: a bare `unreachable` trap of compiler.wasm is an error function whose name the runner dropped; bisect with
+  prints in compiler.warp's steps, then reproduce the failing step as a pure-lane program (`WARP_SELF_HOSTED=pure-only
+  warp probe.warp` runs the same emitted code, no compiler rebuild). Set WARP_LIB to the worktree's lib for those runs:
+  from a scratch folder the stages otherwise come from the main checkout's lib.
+
 ## warp.wasm under plain wasmtime (card standalone, reopened 2026-10-21, user: "build in the runtime itself.
 ## wasmtime warp.wasm should behave like the native binary")
 Today `wasmtime run -W gc=y,function-references=y,exceptions=y --dir . compiler.wasm hello.warp h.wasm` stops at the
@@ -180,3 +211,16 @@ compiler.wasm, emitter.warp for compiler-self.wasm):
 Open question (warp-interviewer): running the compiled program inside the same wasmtime process needs either the
 host (instantiate is no WASI call) or an evaluator in warp; default until answered: warp.wasm compiles to a .wasm and
 prints how to run it.
+
+### Float pow without libm (parked 2026-10-21, branch wasi-runtime 69c3d3ac12)
+- lib/compiler/runtime/pow.warp ports musl's pow (src/math/pow.c, the Arm optimized-routines one glibc also has) on
+  its non-fma path (wasm has no fma); pow_tables.warp holds pow_data.c / exp_data.c as the ints of the doubles' bits.
+  C's uint64_t compares go through unsigned_below (add 2^63 to both sides), shifts through shifted_right/_signed.
+- Bitwise oracle: fetch pow.c pow_data.c pow_data.h exp_data.c exp_data.h from
+  https://git.musl-libc.org/cgit/musl/plain/src/math/, add a libm.h shim (asuint64/asdouble via memcpy,
+  predict_false(x) x, WANT_ROUNDING 1, TOINT_INTRINSICS 0, eval_as_double identity, fp_barrier via volatile,
+  issignaling_inline 0, __math_oflow/uflow/invalid as in musl) and a features.h defining `hidden` empty; rename pow to
+  musl_pow and build with `clang -O2 -ffp-contract=off` next to a driver reading hex bit pairs from stdin. Compare
+  against the system pow too: Apple's libm is no musl, a rare last-bit difference there is no bug.
+- Open: `global pow_log_ints = []` then assigning table_ints(…) to it refuses in emitter.warp ("a list where a text
+  is needed"), so the tables are parsed on every call without the cache.

@@ -1,58 +1,13 @@
 // The sugar of parser.warp (card parser-desugar-pass, notes/self_hosting.md "Parser restructuring"): the written forms
 // `xs[i]`, `a /! b`, `a div b` become the tree the passes read as the parser builds them (subscript, quotient_call),
-// a class body's fields get their types (card parser-typed-fields), and count words (`twice {…}`) are rewritten by
-// `counted`, which knows the program's names (card parser-scope-pass).
+// a class body's fields get their types (card parser-typed-fields). The count words `twice {…}` are library words, no
+// sugar (user 2026-10-20, card phrases-out-of-core).
 use "shapes.warp"
-use "scope.warp"
 
-COUNT_WORDS = [["once", 1], ["twice", 2], ["thrice", 3]]
-
-// `thrice {…}`, `twice "ab"`, `once [0]` as `3 times {…}` unless the program gives the word a meaning of its own: a
-// function anywhere (`twice(x) := …`, in `scope`), a variable once assigned (`once = [5]`, statements in order, in
-// `bound`), a parameter inside its definition
-// Rust twin: control/loops.rs try_parse_count_word
-counted(node: Node, scope: any, bound: list): Node := match node {
-	Key(target, Op.Assign, value): Key(target, Op.Assign, counted(value, scope, bound + parameter_names(target)))
-	Key(target, Op.Define, value): Key(target, Op.Define, counted(value, scope, bound + parameter_names(target)))
-	List(items, bracket, separator): count_phrase(List(counted_items(items_of(node), scope, bound), bracket, separator), scope, bound)
-	_: children(node, child => counted(child, scope, bound))
-}
-
-// A list's items in order, each seeing the names the items before it assigned
-counted_items(items: list, scope: any, bound: list): list := {
-	result = []
-	for item in items {
-		result += [counted(item, scope, bound)]
-		bound = bound + assigned_names(item)
-	}
-	result
-}
-
-// `3 times body` of a count word the program leaves alone, else the list as it is
-count_phrase(node: Node, scope: any, bound: list): Node := match node {
-	List(words, Bracket.None, Separator.Space): { if #words == 2 and is_count_phrase(words#1, words#2, scope, bound) then listed("", " ", [count_of(name_of(words#1)), symbol("times"), words#2]) else node }
-	_: node
-}
-
-is_count_phrase(word: Node, body: Node, scope: any, bound: list): bool := word is symbol and counts(body) and is_count_word(name_of(word), scope, bound)
-
-is_count_word(word: text, scope: any, bound: list): bool := {
-	if count_of(word) == ø or (bound contains word) { return false }
-	not binds_as(scope, word, Meaning.Function)
-}
-
-// The name `x = …` or `f(a) := …` binds
-assigned_names(item: Node): list := match item {
-	Key(target, Op.Assign, value): bound_name(target)
-	Key(target, Op.Define, value): bound_name(target)
-	_: []
-}
-
-// x of `x` and of the head `x(a)`
-bound_name(target: Node): list := {
-	if target is symbol { return [name_of(target)] }
-	if is_call_head(target) and target#1 is symbol { return [name_of(target#1)] }
-	[]
+// `name: value` of the program, no opaque view or attribute layer
+is_pair(entry: Node): bool := match entry {
+	Key(name, Op.Colon, value): is_pair_key(entry)
+	_: no
 }
 
 // The parameters of `f(a, b: int) := …`: a and b
@@ -64,35 +19,6 @@ parameter_names(target: Node): list := {
 		if parameter is symbol { names = names + [name_of(parameter)] }
 	}
 	names
-}
-
-// What a count word repeats: a block of code, a list or a text; `twice {a: 1}` passes an object, it stays the call
-counts(body: Node): bool := {
-	if is_block(body) { return not counts_pairs(body) }
-	is_list_of(body, "[") or body is text
-}
-
-// A block of `key: value` entries only, an object rather than code
-counts_pairs(node: Node): bool := {
-	if not is_block(node) or #group_parts(node)#3 == 0 { return false }
-	for entry in group_parts(node)#3 {
-		if not is_pair(entry) { return false }
-	}
-	true
-}
-
-// `name: value` of the program, no opaque view or attribute layer
-is_pair(entry: Node): bool := match entry {
-	Key(name, Op.Colon, value): is_pair_key(entry)
-	_: no
-}
-
-// How often a count word repeats, else ø
-count_of(word: text): any := {
-	for pair in COUNT_WORDS {
-		if pair#1 == word { return pair#2 }
-	}
-	ø
 }
 
 // `a /! b` and `a div b` are the call `floor_quotient(a, b)`
@@ -112,7 +38,7 @@ subscript(target: Node, index: Node): Node := {
 
 // The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
 // Rust twin: subscripts.rs slice_bounds
-slice_bounds(written: Node): list := match written {
+slice_bounds(written: Node): any := match written {
 	// an opaque view (a template `"k\(i)"`) or attribute layer is a key too, but no slice
 	Key(start, Op.Colon, end): { if is_pair_key(written) then [start, end] else ø }
 	Key(start, Op.Range, end): [start, end]
@@ -145,8 +71,33 @@ CODE_MEMBER_WORDS = function_keywords + ["get", "set", "mutating", "override", "
 typed_fields(node: Node): Node := match node {
 	Key(name, Op.Define, value): node
 	Key(name, op, value): { if is_pair_key(node) then Key(name, op, if value is symbol then type_node(value, ø) else value) else node }
-	List(members, bracket, separator): { if starts_code(members#1) then node else typed_members(bracket as text, separator as text, items_of(node).map(typed_fields)) }
+	List(members, bracket, separator): { if starts_code(members#1) then node else typed_members(bracket as text, separator as text, with_type_phrases(items_of(node)).map(typed_fields)) }
 	_: node
+}
+
+// `items: list of text`: the words `of text` after a field's type continue it, the one type `list of text` (as
+// `list<text>` is read); `list of list of int` too
+// Rust twin: types/expressions.rs with_type_phrases
+with_type_phrases(items: list): list := {
+	fields = []
+	at = 1
+	while at <= #items {
+		phrased = if items#at == symbol("of") and at < #items and fields then of_phrase(fields#(#fields), items#(at + 1)) else ø
+		if phrased == ø {
+			fields += [items#at]
+			at += 1
+		} else {
+			fields = fields[0 ..< #fields - 1] + [phrased]
+			at += 2
+		}
+	}
+	fields
+}
+
+// `items: list` and `text`: the field `items: list of text`, ø unless both are words
+of_phrase(field: Node, element: Node): any := match field {
+	Key(name, Op.Colon, kind): { if kind is symbol and element is symbol then Key(name, Op.Colon, symbol(name_of(kind) + " of " + name_of(element))) else ø }
+	_: ø
 }
 
 // `{f: x => x * 2}`: `:` binds tighter than `=>`, so the entry reads as the lambda `(f: x) => x * 2`; a lowercase
@@ -168,7 +119,7 @@ entry_of_lambda(lambda_head: Node, lambda_body: Node, item: Node): Node := match
 is_parameter_word(node: Node): bool := {
 	if is_list_of(node, "(") { return yes }
 	if not (node is symbol) { return no }
-	first = name_of(node)[0]
+	first = name_of(node)#1
 	lower(first) == first and upper(first) != first and not is_type_word(name_of(node))
 }
 

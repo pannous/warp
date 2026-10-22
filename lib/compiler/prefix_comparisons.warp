@@ -2,6 +2,8 @@
 # takes the call: `sq(2) == 4` (P143, card pure-runs; Rust twin: src/lowering/collections/broadcasting.rs
 # nest_prefix_calls). A yes/no parameter keeps the comparison; an untyped one, where both readings work, stays as parsed.
 use "walk.warp"
+use "scope.warp"
+use "builtin_signatures.warp"
 
 comparison_words = ["==", "!=", "<", ">", "<=", ">=", "≤", "≥", "≠"]
 truth_types = ["bool"]
@@ -28,5 +30,57 @@ compared_call(n: Node, functions: list): any := {
 prefix_comparisons(program: Node): Node := {
 	if not is_group(program) { return program }
 	functions = items_of(program).map(x => value_first_function(x)).filter(name => name != ø)
-	bottom_up(program, n => compared_call(n, functions))
+	bottom_up(prefix_calls(program, value_takers(program)), n => compared_call(n, functions))
 }
+
+# `print #xs`, `print -1`, `f -x` parse as `print # xs`, `print - 1`, `f - x`: a word that takes a value calls it with
+# the count or the negative, `print(#xs)`, `f(-x)` (card pure-lane-print; Rust twin: lowering/words/negated_calls.rs).
+# A name the program binds as a value subtracts or indexes: `size -1` of a variable size, `xs #1`.
+print_words = ["print", "puts"]
+prefix_call_operators = [Op.Sub, Op.Hash]
+
+# the words of the program that take a value: print, its functions with a parameter (`f(x) := …`, `f := { it * 2 }`,
+# `f = x => …`), a builtin of one value; not a name it binds as a value
+value_takers(program: Node): list := {
+	scope = scope_of(program)
+	defined = nodes_in(program).map(n => value_function(n)).filter(name => name != ø)
+	(print_words + defined + one_value_builtins).filter(name => not binds_value(scope, name))
+}
+
+value_function(n: Node): any := match n {
+	Key(head, op, body): {
+		if not (op == Op.Define or op == Op.Assign) { return ø }
+		if is_round(head) { return if #items_of(head) > 1 then head_word(head) else ø }
+		if head is symbol and (is_lambda(body) or (op == Op.Define and mentions(body, implicit_parameter))) then name_of(head) else ø
+	}
+	_: ø
+}
+
+one_value_builtin_names = typed_lines.filter(line => arity(line.signature) == [1, 1]).map(line => line.name)
+one_value_builtins = one_value_builtin_names + alias_pairs.filter(pair => pair#2 in one_value_builtin_names).map(pair => pair#1)
+
+takes_value(word: Node, takers: list): bool := word is symbol and name_of(word) in takers
+
+prefix_calls(n: Node, takers: list): Node := {
+	member = counted_member(n, takers)
+	if member != ø { return prefix_calls(member, takers) }
+	match n {
+		Key(word, op, argument): {
+			if op in prefix_call_operators and takes_value(word, takers) then call_of(name_of(word), [prefixed_by(op, prefix_calls(argument, takers))]) else children(n, x => prefix_calls(x, takers))
+		}
+		_: children(n, x => prefix_calls(x, takers))
+	}
+}
+
+# `-x`, `#xs` as the parser writes them
+prefixed_by(op: Op, argument: Node): Node := if op == Op.Sub and argument is number then 0 - argument else Key(ø, op, argument)
+
+# `print #s.names` parses as `(print # s).names`: it counts the field, `print # s.names`; ø for any other node
+counted_member(n: Node, takers: list): any := match n {
+	Key(base, Op.Dot, member): {
+		inner = if is_key(base, Op.Hash) and takes_value(key_of(base), takers) then [key_of(base), value_of(base)] else counted_parts(counted_member(base, takers))
+		if inner == ø then ø else Key(inner#1, Op.Hash, Key(inner#2, Op.Dot, member))
+	}
+	_: ø
+}
+counted_parts(counted: any): any := if counted == ø then ø else [key_of(counted), value_of(counted)]

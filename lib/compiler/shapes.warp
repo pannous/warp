@@ -19,10 +19,24 @@ def template_node(holed: text): Node := opaque(["template", holed])
 def attributed(name: text, value: Node, node: Node): Node := Key(symbol(attribute_word), Op.Colon, [name, value, node])
 
 // [bracket, separator, items] of a group, an empty one too; ø for any other node
-def group_parts(node: Node): list := match node {
+def group_parts(node: Node): any := match node {
 	List(items, bracket, separator): [bracket as text, separator as text, items_of(node)]
 	Key(word, Op.Colon, view): { if word == symbol(opaque_word) and kind_of(view) == "list" then [view#2, view#3, []] else ø }
 	_: ø
+}
+
+// `value |> f(args)` is `f(value, args)`, `value |> f` is `f(value)`; a braceless call is grouped, one argument:
+// `square xs |> filter(p)` is `filter((square xs), p)`
+// Rust twin: pipes.rs piped
+def piped(operand: Node, receiver: Node): Node := {
+	parts = group_parts(operand)
+	if parts != ø and parts#1 == "" and parts#2 == " " { operand = listed("(", "", [operand]) }
+	receiver_parts = group_parts(receiver)
+	if receiver_parts != ø and receiver_parts#1 == "(" and receiver_parts#2 == "" and #receiver_parts#3 > 0 and receiver_parts#3#1 is symbol {
+		items = receiver_parts#3
+		return listed("(", "", [items#1, operand] + items[1 .. #items])
+	}
+	listed("(", "", [receiver, operand])
 }
 
 def is_list_of(node: Node, bracket: text): bool {

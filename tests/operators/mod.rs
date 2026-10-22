@@ -6,6 +6,7 @@ mod test_bar_pipe;
 mod test_bar_pipe_module_calls; // card pipes-after
 mod test_bit_operators_on_ints;
 mod test_braceless_operator_words; // card braceless-prefix
+mod test_circumfix_operators; // card circumfix-operators-user
 mod test_comma_next_to_comparison; // P227
 mod test_compound_assignment;
 mod test_contains_infix;
@@ -33,6 +34,7 @@ mod test_nand_spellings;
 mod test_natural_phrases;
 mod test_negated_call;
 mod test_negated_call_operand; // card leading-minus
+mod test_negated_name_before_operator_word; // card rust-lane-type-2
 mod test_operator_declarations;
 mod test_operator_default_infix; // card operator-infix
 mod test_operator_parsing;

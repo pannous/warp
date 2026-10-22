@@ -5,6 +5,7 @@
 use "walk.warp"
 use "words.warp"
 use "phrase_blocks.warp"
+use "diagnostics.warp"
 
 is_keyword(n: Node): bool := match n {
 	Symbol(name): name in function_keywords
@@ -25,7 +26,9 @@ typed_block(head: Node, typed_body: Node, n: Node): Node := match typed_body {
 	_: n
 }
 
-declaration_words = ["var"]
+# `var x = 1`, and `let`, `const` and the other constant words (Rust twin: words.rs CONSTANT_KEYWORDS): the assignment
+# `x = 1`; that a constant binds once is the checks' to say
+declaration_words = ["var", "let", "const", "constant", "final", "val"]
 
 is_declaration_word(n: Node): bool := match n {
 	Symbol(name): name in declaration_words
@@ -61,9 +64,63 @@ result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
 		if not is_call(head) { return n }
 		result = symbol("the result")
-		Key(head, Op.Define, List([Key(Key(result, Op.Colon, result_type), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
+		held = optional_when_answering_empty(head, body, result_type)
+		if name_of(held).ends_with("?") { body = with_empty_otherwise(body) }
+		Key(head, Op.Define, List([Key(Key(result, Op.Colon, held), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
 	}
 	_: n
+}
+
+# A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
+# the `?` as its fix and holds its result as a `list?`, so the ø reaches the caller unchanged (Rust twin:
+# type_name_matching.rs optional_when_answering_empty)
+optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
+	written = name_of(result_type)
+	if not written or written.ends_with("?") or written == "any" or not can_answer_empty(body) { return result_type }
+	diagnose(call_of("optional_result", [name_of(head#1), written]))
+	symbol(written + "?")
+}
+
+# an optional result of `if c then x` without `else`, or of a loop, is ø when nothing gave a value, not the kind's zero
+# (Rust twin: type_name_matching.rs as_type)
+with_empty_otherwise(value: Node): Node := match value {
+	Key(then, Op.Else, otherwise): Key(then, Op.Else, with_empty_otherwise(otherwise))
+	Key(_, Op.Then, _): Key(value, Op.Else, ø)
+	Key(_, Op.Do, _): List([value, ø], Bracket.Curly, Separator.Semicolon)
+	_: {
+		if is_loop(value) { return List([value, ø], Bracket.Curly, Separator.Semicolon) }
+		if not is_curly_group(value) or #value == 0 { return value }
+		items = items_of(value)
+		group_like(value, items[0..<(#items - 1)] + [with_empty_otherwise(items#(#items))])
+	}
+}
+
+# `for x in xs {…}`, `each x in xs {…}` before for_loops.warp lowers them; `while c {…}` is a `do` key already
+loop_words = ["for", "each"]
+is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
+
+# a `return ø` or a bare `return`, or ø as its value: ø itself, an `if` without `else`, a loop, or a choice with such
+# a branch; the definitions and lambdas inside answer for themselves
+can_answer_empty(body: Node): bool := returns_empty(body) or value_can_be_empty(body)
+
+returns_empty(n: Node): bool := {
+	if is_word(n, "return") { return yes }
+	if is_group(n) and #n == 2 and is_word(n#1, "return") { return n#2 == ø }
+	if is_key(n, Op.Define) or is_key(n, Op.Arrow) { return no }
+	parts_of(n).any(returns_empty)
+}
+
+value_can_be_empty(value: Node): bool := match value {
+	Key(then, Op.Else, otherwise): is_key(then, Op.Then) and (value_can_be_empty(value_of(then)) or value_can_be_empty(otherwise))
+	Key(_, Op.Then, _): yes
+	Key(_, Op.Do, _): yes
+	Key(_, Op.Question, branches): is_key(branches, Op.Colon) and (value_can_be_empty(key_of(branches)) or value_can_be_empty(value_of(branches)))
+	_: {
+		if value == ø or is_loop(value) { return yes }
+		if not is_curly_group(value) or #value == 0 { return no }
+		last = value#(#value)
+		not (is_group(last) and #last == 2 and is_word(last#1, "return")) and value_can_be_empty(last)
+	}
 }
 
 # `f = { it * 2 }` defines a function as `f := { it * 2 }` does: a name assigned a block that reads `it`; other blocks

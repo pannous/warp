@@ -45,6 +45,8 @@ impl WarpParser {
 			emitted
 		} else if let Some(head) = self.try_parse_operator_method_head() {
 			head
+		} else if let Some(bracketed) = self.try_parse_circumfix() {
+			bracketed
 		} else if let Some((op, chars)) = self.peek_prefix_operator().filter(|_| !self.at_member_name(0)) {
 			let (prefix_line, prefix_column) = self.get_position();
 			// `-7 abs`, `f = abs`, `x abs + 1`: an operator word without its operand is the operator itself, which
@@ -73,8 +75,6 @@ impl WarpParser {
 					node: Box::new(applied),
 					data: Box::new(Node::key(crate::words::OPERATOR_WORD_MARK, Node::True)),
 				}
-			} else if chars == 1 && op == Op::Abs {
-				self.parse_norm_bars()
 			} else {
 				let rhs = self.parse_prefix_operand(op);
 				if op == Op::Hash {
@@ -116,7 +116,10 @@ impl WarpParser {
 		let heads_definition = std::mem::take(&mut self.continues_definition_head);
 		// a prefix `if` inside a tighter operand took its own `then` (owns_branches), so its `else` too
 		let mut took_own_then = false;
+		// lhs is the phrase an implicit application made in the round before
+		let mut applied = false;
 		loop {
+			let follows_application = std::mem::take(&mut applied);
 			if self.at_tab_separator() {
 				break;
 			}
@@ -179,10 +182,15 @@ impl WarpParser {
 					//     (including identifiers), `1 + count xs` is `1 + count(xs)`
 					//   - In colon and the like (between): only non-identifier args
 					//   This allows `fetch url` but prevents `a: b c d` from chaining
-					if let Some(updated) = self.try_parse_free_infix(&lhs, min_bp).or_else(|| {
-						self.try_parse_implicit_application(&lhs, min_bp, ARGUMENT_BP, MAX_BP_FOR_APPLICATION)
-					}) {
+					if let Some(updated) = self.try_parse_free_infix(&lhs, min_bp) {
 						lhs = updated;
+						continue;
+					}
+					if let Some(call) =
+						self.try_parse_implicit_application(&lhs, min_bp, ARGUMENT_BP, MAX_BP_FOR_APPLICATION)
+					{
+						lhs = if follows_application { joined_application(call) } else { call };
+						applied = true;
 						continue;
 					}
 					break;
@@ -445,14 +453,19 @@ impl WarpParser {
 			Op::Hash => self.parse_expr(left_bp - 1),
 			Op::Add => self.parse_expr(Op::Neg.binding_power().1), // `+2^2` like `-2^2`
 			// `-floor 2.5` negates the call `floor 2.5`, as `1 + floor 2.5` adds it (card leading-minus); a variable takes
-			// no argument, and in `[-x 1]` the space starts the next item
+			// no argument, in `[-x 1]` the space starts the next item, and an operator word is no argument, as after
+			// any operand: `if c then -b else b`, `-g or 2`
 			Op::Neg => {
 				let operand = self.parse_expr(right_bp);
 				let summand_bp = Op::Add.binding_power().1;
+				let at_operator_word = self.current_char().is_alphabetic() && self.peek_operator().is_some();
 				match operand.drop_meta() {
-					Node::Symbol(name) if !self.context.in_spaced_list && !self.variables.contains(name) => self
-						.try_parse_implicit_application(&operand, summand_bp, ARGUMENT_BP, summand_bp)
-						.unwrap_or(operand),
+					Node::Symbol(name)
+						if !self.context.in_spaced_list && !self.variables.contains(name) && !at_operator_word =>
+					{
+						self.try_parse_implicit_application(&operand, summand_bp, ARGUMENT_BP, summand_bp)
+							.unwrap_or(operand)
+					}
 					_ => operand,
 				}
 			}
@@ -477,6 +490,24 @@ impl WarpParser {}
 /// A prefix `if` takes its own `then` and `else` wherever it stands: `pattern: if c then a else b` is the arm giving the
 /// whole if, though `:` binds tighter than `then` (cards match-arm, arm-inline-if). Only an `else` after a `then` the
 /// if took this way: `if a then if b then c else d` keeps its else for the outer if.
+/// `x = name of q with a`, `x = f 1 2`: the next word after an applied phrase joins it, one flat phrase as the statement
+/// `name of q with a` is, never the pairs `(((name of) q) with) a`
+fn joined_application(call: Node) -> Node {
+	match call {
+		Node::List(mut items, Bracket::None, Separator::Space) if !items.is_empty() => match items.remove(0) {
+			Node::List(mut phrase, Bracket::None, Separator::Space) => {
+				phrase.extend(items);
+				Node::List(phrase, Bracket::None, Separator::Space)
+			}
+			head => {
+				items.insert(0, head);
+				Node::List(items, Bracket::None, Separator::Space)
+			}
+		},
+		other => other,
+	}
+}
+
 fn owns_branches(lhs: &Node, op: Op, took_own_then: bool) -> bool {
 	match (op, lhs.drop_meta()) {
 		(Op::Then, Node::Key(empty, Op::If, _)) => matches!(empty.drop_meta(), Node::Empty),

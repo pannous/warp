@@ -40,3 +40,10 @@ fn the_words_stay_apart_without_the_class() {
 fn a_class_of_three_words_is_its_kebab_name() {
 	is!("class home post code { digits:text }; c = home post code{digits:\"10115\"}; c.digits", "10115");
 }
+
+// card multi-word: the body glued to the braces or to the last word of the name
+#[test]
+fn a_class_of_several_words_with_a_glued_body() {
+	is!("class full name {given:text}; p = full name{given:\"Ann\"}; p.given", "Ann");
+	is!("class full name{given:text}; p = full name{given:\"Ann\"}; p.given", "Ann");
+}

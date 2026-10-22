@@ -94,15 +94,14 @@ const STAGE_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(600
 
 type Pass = fn(Node) -> Node;
 /// Each Rust pass with a warp twin and the twin's index in passes.warp `passes` (counted from 1, as warp's `#`)
-const TWINNED_PASSES: [(Pass, usize); 8] = [
+const TWINNED_PASSES: [(Pass, usize); 7] = [
 	(crate::text::interpolation::lower_program, 1),
 	(crate::lowering::welcome_forms::lower_match_arms, 2),
 	(crate::lowering::welcome_forms::lower_arrow_result_types, 3),
 	(crate::lowering::of_lookups::lower, 4),
 	(crate::lowering::grouped_receivers::lower, 5),
-	(crate::lowering::times_phrases::lower, 6),
-	(crate::lowering::broadcasting::lower_element_wise_operators, 7),
-	(crate::lowering::number_words::lower, 8),
+	(crate::lowering::broadcasting::lower_element_wise_operators, 6),
+	(crate::lowering::number_words::lower, 7),
 ];
 
 thread_local! {
@@ -289,6 +288,7 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 /// the program's compile error instead when the checks of the passes stage diagnose one. Their warnings are said once
 /// the module is made, so a refusal leaves them to the Rust lane, and fail it under `use strict`
 pub(crate) fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
+	started(&[&ANALYSIS, &EMIT]);
 	let checked = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
 	let failed = || PASSES.failed(&checked);
 	let parts: serde_json::Value = serde_json::from_str(&checked).map_err(|_| failed())?;
@@ -488,6 +488,18 @@ fn stage(index: usize, argument: &str, handles: &[Node]) -> Node {
 	match serde_json::from_str(&answer) {
 		Ok(view) => node_of_handled_view(&view_of_json(view), handles),
 		Err(_) => crate::node::error(&PASSES.failed(&format!("pass {index}: {answer}"))),
+	}
+}
+
+/// A worker for each stage without one, its program compiling at once: the later stages of a compile are ready when
+/// the first answers (cold, each takes tens of seconds; one after another they took most of a cold start, card
+/// pure-cold-start)
+fn started(stages: &[&'static Stage]) {
+	for stage in stages {
+		let mut workers = stage.workers.lock().unwrap();
+		if workers.is_empty() {
+			workers.push(spawn_worker(stage));
+		}
 	}
 }
 

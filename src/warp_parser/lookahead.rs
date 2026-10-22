@@ -12,6 +12,8 @@ pub(super) const FOURTH_ROOT: char = '∜';
 /// absolute value of a number, the Euclidean length of a list, decision S3)
 pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] =
 	[("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("not", Op::Not)];
+/// false, and in a condition the emptiness question `if no xs`
+const NO_WORD: &str = "no";
 /// operators::OPERATOR_SPELLINGS, the longest first: `<=` before `<`, `is less than` before `is`
 static LONGEST_SPELLINGS_FIRST: std::sync::LazyLock<Vec<(&str, Op)>> = std::sync::LazyLock::new(|| {
 	let mut spellings: Vec<_> = crate::operators::all_spellings().collect();
@@ -50,6 +52,17 @@ impl WarpParser {
 	}
 
 	/// An operand may start after `offset` characters and following blanks: not a closing bracket, separator or the end
+	/// `if no xs`: in a condition `no` before an operand asks for emptiness as `not xs` does; elsewhere, or before an
+	/// operator word or a block, `no` is false (decision empty-is-not-missing)
+	fn no_asks_emptiness(&self) -> bool {
+		let after = NO_WORD.len() + self.blanks_at(NO_WORD.len());
+		self.context.equals_compares
+			&& self.matches_keyword(NO_WORD)
+			&& self.operand_follows(NO_WORD.len())
+			&& !matches!(self.peek_char(after), '{' | ':')
+			&& !crate::operators::is_operator_word(&self.word_at(after))
+	}
+
 	pub(super) fn operand_follows(&self, offset: usize) -> bool {
 		let position = offset + self.blanks_at(offset);
 		!matches!(self.peek_char(position), '\0' | '\n' | '\r' | '>' | ')' | ']' | '}' | ',' | ';' | '=')
@@ -320,6 +333,9 @@ impl WarpParser {
 		if let Some((word, op)) = PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word)) {
 			return (!self.defines_named(word.len())).then_some((op, word.len()));
 		}
+		if self.no_asks_emptiness() {
+			return Some((Op::Not, NO_WORD.len()));
+		}
 		if self.matches_keyword("if") {
 			return Some((Op::If, 2));
 		}
@@ -340,7 +356,6 @@ impl WarpParser {
 			dash if glyph_operator(dash) == Some(Op::Sub) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
-			'‖' => Some((Op::Abs, 1)),
 			'#' => self.css_color_length().is_none().then_some((Op::Hash, 1)), // prefix # means count/length
 			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
 			// subject; a glued `<tag` stays a bracket
@@ -400,7 +415,8 @@ impl WarpParser {
 	}
 
 	/// After a type word, blanks and then the definition `:=` or a declared name `i =` after `width` characters:
-	/// `int? i = 3` and `as int? := …` are optional types, no ternary
+	/// `int? i = 3` and `as int? := …` are optional types, no ternary; `f(): Name? := …` also of a type the program
+	/// does not declare (a used file's), as a ternary has no empty branch
 	pub(super) fn declaration_follows(&self, type_word: &str, width: usize) -> bool {
 		let is_type =
 			crate::type_tests::builtin_type_name(type_word).is_some() || self.declared_types.contains(type_word);
@@ -413,7 +429,20 @@ impl WarpParser {
 			'=' => self.peek_char(at + 1) != '=',
 			_ => false,
 		};
-		is_type && blanks > 0 && if name == 0 { assigns(start) } else { assigns(after_name) }
+		blanks > 0 && if name == 0 { assigns(start) } else { is_type && assigns(after_name) }
+	}
+
+	/// `def f(x: int): list? {…}`: the word before the `?` here follows a signature's `):` and blanks and a `{` follow
+	/// after `width` characters, so it is an optional result type before the body, no ternary (decision optional-result)
+	pub(super) fn result_body_follows(&self, width: usize) -> bool {
+		let blanks = self.blanks_at(width);
+		let before = &self.chars[..self.pos];
+		let word_start = before.iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
+		let mut written = before[..word_start].iter().rev().filter(|ch| !ch.is_whitespace());
+		blanks > 0
+			&& self.peek_char(width + blanks) == '{'
+			&& written.next() == Some(&':')
+			&& written.next() == Some(&')')
 	}
 
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on

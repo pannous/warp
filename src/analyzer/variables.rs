@@ -31,7 +31,8 @@ pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
 		let widened = std::mem::take(&mut scope.widened_bindings);
 		split_globals.extend(split);
 		*scope = before.clone();
-		scope.globals.extend(split_globals.iter().map(|global| (global.name.clone(), global.clone())));
+		std::rc::Rc::make_mut(&mut scope.globals)
+			.extend(split_globals.iter().map(|global| (global.name.clone(), global.clone())));
 		scope.widened_bindings = widened;
 	}
 }
@@ -111,7 +112,7 @@ pub(super) fn collect_variables_inner(
 		Node::Key(left, Op::Colon, right) if left.is_symbol("global") => {
 			let count = collect_variables_inner(right, scope, true, false);
 			if let Some(global) = global_binding(right, scope).filter(|global| !scope.is_global(&global.name)) {
-				scope.globals.insert(global.name.clone(), global);
+				std::rc::Rc::make_mut(&mut scope.globals).insert(global.name.clone(), global);
 			}
 			count
 		}
@@ -274,7 +275,7 @@ fn bind_assigned_kind(left: &Node, right: &Node, scope: &mut Scope) {
 			};
 			let kind = declared_kind(type_node).unwrap_or(Kind::Int);
 			// `global todos` in a function, `todos:[Todo] = ø` in main (a lowered `stored todos`): the global takes the type
-			if let Some(global) = scope.globals.get_mut(name) {
+			if let Some(global) = scope.own_global_mut(name) {
 				global.kind = kind;
 				global.type_node = Some(type_node.clone());
 			} else if !scope.is_global(name) {
@@ -525,6 +526,9 @@ fn visit_read_words(node: &Node, read: &mut dyn FnMut(&str)) {
 pub type FunctionKinds = std::rc::Rc<HashMap<String, Kind>>;
 /// Variables that hold a closure → `closure_new` targets they may contain, shared like FunctionKinds
 pub type ClosureTargets = std::rc::Rc<HashMap<String, HashSet<String>>>;
+/// Declared globals by name, shared like FunctionKinds: every function body's scope starts with the same table, copied
+/// only by a body that declares or refines one (Rc::make_mut)
+pub type Globals = std::rc::Rc<HashMap<String, Local>>;
 
 /// Scope for tracking variable bindings
 #[derive(Clone, Debug, Default)]
@@ -533,7 +537,7 @@ pub struct Scope {
 	pub function_kinds: FunctionKinds, // Return kinds of user functions, which shadow FFI names like `pow`
 	/// Variables that hold a closure → `closure_new` targets they may contain (per-site closure_call kinds)
 	pub closure_variable_targets: ClosureTargets,
-	pub globals: HashMap<String, Local>, // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
+	pub globals: Globals, // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
 	/// Locals a later write widened (an int to a float, a list's element type): their kind and type from the start
 	/// (collect_variables)
 	pub widened_bindings: HashMap<String, (Kind, Option<Box<Node>>)>,
@@ -578,7 +582,15 @@ impl Scope {
 	pub fn own_binding_mut(&mut self, name: &str) -> Option<&mut Local> {
 		match self.locals.contains_key(name) {
 			true => self.locals.get_mut(name),
-			false => self.globals.get_mut(name),
+			false => self.own_global_mut(name),
+		}
+	}
+
+	/// A declared global of this scope itself, copying the shared table first (Globals)
+	fn own_global_mut(&mut self, name: &str) -> Option<&mut Local> {
+		match self.globals.contains_key(name) {
+			true => std::rc::Rc::make_mut(&mut self.globals).get_mut(name),
+			false => None,
 		}
 	}
 

@@ -87,13 +87,13 @@ opened_file(path: text, open: int): int := {
 	error = path_open(place#1, wasi_follow_links(), output_address() + scratch_bytes(), byte_count(place#2), open, wasi_file_rights(), wasi_file_rights(), 0, output_address() + scratch_fd())
 	if error != 0 then 0 - error else scratch_word(scratch_fd())
 }
-file_failure(word: text, path: text, error: int): any := {
+file_failure(word: text, path: text, error: int): Node := {
 	reason = if error == wasi_no_entry() then "No such file or directory" else "WASI error " + error
 	error_of(word + " " + path + " failed: " + reason)
 }
 
 # `read(path)`: the file's text, or the Error of why not
-read_file(path: any): any := {
+read_file(path: Node): Node := {
 	t = text_of_textual(path)
 	fd = opened_file(t, 0)
 	if fd < 0 { return file_failure("read", t, 0 - fd) }
@@ -132,7 +132,7 @@ std_os_args(): list := {
 	if #given > 0 then given[1..] else []
 }
 # `use os; env(name)`: the variable's value, ø when unset
-std_os_env(name: any): any := {
+std_os_env(name: Node): Node := {
 	prefix = text_of_textual(name) + "="
 	for line in wasi_list(yes) {
 		if text_starts_with(line, prefix) { return bytes_between(line, byte_count(prefix), byte_count(line)) }
@@ -140,8 +140,8 @@ std_os_env(name: any): any := {
 	ø
 }
 # `use os; kept(name) ?? keep(name, value)`: nothing is kept across runs without the host's module cache
-std_os_kept(name: any): any := ø
-std_os_keep(name: any, value: any): any := value
+std_os_kept(name: Node): Node := ø
+std_os_keep(name: Node, value: Node): Node := value
 
 # the first count scratch bytes, written to the open file
 written_bytes(fd: int, count: int) := {
@@ -150,7 +150,7 @@ written_bytes(fd: int, count: int) := {
 	fd_write(fd, output_address() + scratch_iovec(), 1, output_address() + scratch_count())
 }
 # `use file; write_bytes(path, bytes)`: the file made anew of the bytes (ints 0 to 255); ø, or the Error of why not
-std_file_write_bytes(path: any, bytes: any): any := {
+std_file_write_bytes(path: Node, bytes: Node): Node := {
 	t = text_of_textual(path)
 	fd = opened_file(t, wasi_create_new())
 	if fd < 0 { return file_failure("write", t, 0 - fd) }

@@ -1,0 +1,16 @@
+#!/usr/bin/env warp
+# `if no xs` asks emptiness, `no` alone stays the value no (card if-no-emptiness, decision empty-is-not-missing)
+# want: some, none, [], [4], [yes no no], false holds
+xs = [4, 5]
+if no xs { print "none" } else { print "some" }
+ys = []
+if no ys { print "none" } else { print "some" }
+def firsts(zs) {
+	if no zs { return [] }
+	return [zs#1]
+}
+print firsts([])
+print firsts([4, 5])
+flags = [yes no no]
+print flags
+if no { print "never" } else { print "false holds" }

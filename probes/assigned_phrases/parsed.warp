@@ -1,0 +1,5 @@
+# an assigned phrase parses flat, as the statement does (card assigned-phrase-pairs): parser.warp's view of each
+use "../../lib/compiler/parser.warp"
+for source in ["x = name of q with a", "x = sum of xs", "x = f 1 2", "x = print 3 times \"ab\"", "y = first 3 of xs of p", "x = max 3 4", "x = g 1 + 1"] {
+	print view_of(node_of(plain(tree(source))))
+}

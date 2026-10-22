@@ -21,10 +21,13 @@ Read notes/agents/common.md and notes/roles.md.
   `integrator_tools/express.sh [<card>…]` pushes them untested at once (merge, cargo fmt committed, push, close,
   Playground deploy with skip_checks; ~15 s; supervisor 2026-10-20: main stays formatted between batches), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
-- Warp-only branches land at once (user): a branch that changes no Rust (nothing in src/, crates/, tests/**/*.rs,
-  Cargo.*, build.rs; only .warp files, lib/, samples/, probes, notes) needs only the warp test run, not the Rust
-  suite: run its changed and dependent .warp tests with main's binary (/Users/me/dev/bin/warp), push it when
-  green, without waiting for a batch's cloud suite.
+- Warp-only branches land at once, before any Rust batch (user 2026-10-21): a branch that changes no Rust (nothing in
+  src/, crates/, tests/**/*.rs, Cargo.*, build.rs) needs no cloud run and no batch, only the self check on the merged
+  tip: `WARP_LIB=<tip>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp` prints
+  Hello → push (`integrator_tools/express.sh --warp-only` lands the Ready ones: together, one by one when the check is red).
+- Slow lane (decision slow-lane, user 2026-10-22): the gate's `--full` leaves out scripts/slow-tests.txt (tests over
+  10 s; each --full run adds new ones itself). Run `scripts/cloud-test.sh --slow main <origin/main tip>` a few times a
+  day, not per batch; a slow failure becomes a card for the test's owner (`todo add`), never a bounce.
 - Self-hosting twins (tests/common/twins.rs: test_self_parser, test_self_pipeline, test_self_analyzer …) never bounce
   a branch: the warp compiler captures the spirit of the wiki, not an exact copy of Rust (decisions
   self-hosting-minimal). A twin difference goes through with --flaky "<test> (twin difference accepted, owner records
@@ -129,7 +132,10 @@ Read notes/agents/common.md and notes/roles.md.
   pure samples/hello/hello.warp` (a run without Hello logs a WARNING line in main_binary.log); an identical file stays
   as it is; ~/dev/bin/warp-debug is built last. The last 10 distinct main builds stay runnable as
   ~/dev/bin/warp-<commit> (links into ~/dev/bin/main-builds/<commit>/, the binary with its compiler.wasm; card
-  keep-main-binaries), for bisecting a regression without a build. push_tested.sh and
+  keep-main-binaries), for bisecting a regression without a build. The main-binary worktree's own data/compiler.wasm
+  is rebuilt too (`warp rebuild pure` and `warp rebuild self`), so `warp pure` and `warp self` there never run the
+  previous main's compiler; the main checkout's stale data/compiler-self.wasm is deleted, its next `warp self` builds
+  it anew (a stale one printed hello while main refused to compile itself; supervisor 2026-10-21). push_tested.sh and
   express.sh start it; after a warp-only push start it yourself.
 - Every push to main checks the milestone pure chain first (supervisor 2026-10-21, card pure-chain-fails):
   `integrator_tools/pure_chain_check.sh <worktree>` runs `warp pure samples/hello/hello.warp` with the merged lib
@@ -138,9 +144,11 @@ Read notes/agents/common.md and notes/roles.md.
   release build (~14 min; card pure-kinds: batch-32's Rust broke the chain while main's old binary with its lib still
   printed hello), else main's binary (~2.5 min cold, seconds cached). It runs with WARP_COMPILER_WARNINGS=1 and reports
   the warning lines ("PURE CHAIN WARNINGS"), not blocking until card compiling-lib reaches zero. It also runs
-  `warp self samples/hello/hello.warp` (the self-compiled compiler.warp) and reports it ("PURE SELF"), not blocking
-  until it prints hello (user 2026-10-21); then it blocks too. A blocking `warp self` lane may pass up to 5 % fewer
-  tests than `warp pure`, as long as the main tests pass (user, 52b6ac43be). Its Rust test
+  `warp self samples/hello/hello.warp` (the self-compiled compiler.warp, "PURE SELF"), which never holds a batch
+  (user 2026-10-21 21:30): when it is red, bisect by the branches' lib/compiler/ changes (usually one branch touches
+  them), drop the culprit from the batch, bounce it to its owner with the error and merge the rest at once. No culprit
+  within one try: merge anyway and add an urgent card self-hello-red for the author of the newest lib/compiler change.
+  The `warp self` test lane may pass up to 5 % fewer tests than `warp pure`, as long as the main tests pass (user, 52b6ac43be). Its Rust test
   warp_pure_runs_hello_world is ignored as slow, so this check is the only cover.
 - Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the
   function now lives, commit it in the merge, gate as usual and tell the owner afterwards; only logic changed on

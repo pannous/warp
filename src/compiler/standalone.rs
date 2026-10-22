@@ -47,7 +47,23 @@ impl Compiler {
 
 /// The program's value, run from the module compiler.warp made of it, with these arguments (`use os; args`)
 pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
-	match compiled(program, by) {
+	ran(compiled(program, by), arguments)
+}
+
+/// The value of `code` (`warp pure "x=√72.;x^2"`, a test case), compiled as a program file of `folder` would be
+pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
+	let file = std::env::temp_dir().join(format!("warp-inline-{}.warp", std::process::id()));
+	if let Err(failure) = std::fs::write(&file, format!("{code}\n")) {
+		return error(&format!("{}: {failure}", file.display()));
+	}
+	let module = compiled_in(&file, folder, by);
+	let _ = std::fs::remove_file(&file);
+	ran(module, Vec::new())
+}
+
+/// The value of the compiled module run with these arguments, or why it was not compiled
+fn ran(module: Result<CompiledModule, Node>, arguments: Vec<String>) -> Node {
+	match module {
 		Ok(module) => {
 			crate::modules::std_adapters::set_program_arguments(arguments);
 			crate::pipeline::run_module(module)
@@ -56,13 +72,18 @@ pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
 	}
 }
 
-/// The module compiler.warp makes of the program file: `compiler.warp <source> <wasm> <folder> <lib>`
+/// The module compiler.warp makes of the program file, its folder in scope
 pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let program = program.canonicalize().map_err(|failure| error(&format!("{}: {failure}", program.display())))?;
 	let folder = program.parent().unwrap_or(Path::new("/")).to_path_buf();
+	compiled_in(&program, &folder, by)
+}
+
+/// The module compiler.warp makes of the program file with `folder` in scope: `compiler.warp <source> <wasm> <folder> <lib>`
+fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
-	let arguments = [program.as_path(), output.as_path(), folder.as_path(), library()];
+	let arguments = [program, output.as_path(), folder, library()];
 	let compiler = compiler(by)?;
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
@@ -82,6 +103,11 @@ pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	let path = build_path(by);
 	build(by, &path)?;
 	Ok(path)
+}
+
+/// The compiler's build file there, built first when missing: before many runs start at once, so none waits on a build
+pub fn prepare(by: Compiler) -> Result<(), Node> {
+	compiler(by).map(|_| ())
 }
 
 /// compiler.warp's module from its build file, built first when missing; one line when it was built from another lib/
