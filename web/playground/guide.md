@@ -608,7 +608,7 @@ Things go wrong sometimes. In warp an error is a value that says what happened.
 
 `raise` makes your own error.
 
-```warp => Error("boom")
+```warp => Error("boom at 1:7")
 raise "boom"
 ```
 
