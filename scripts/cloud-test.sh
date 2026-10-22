@@ -1,12 +1,15 @@
 #!/bin/bash
 # The cloud test lane (card cloud-test-lane, notes/cloud_development.md "Cloud test lane"): a branch's tests run in a
 # `claude --cloud` session, a Linux VM of its own paid by the Cloud session credit, instead of the Mac's tests/queue.sh.
-#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] [--pure-hello] [--gate] <branch> <tip> [filters…|--full]
+#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] [--optimized] [--pure-hello] [--gate] <branch> <tip> [filters…|--full]
 #       --env: a setting of the test run alone (not the build: every setting of a tip shares one build)
+#       --optimized: warp-lang at opt-level 2, as the full suite and the gate build it: the warp self tests need it (in
+#       a debug build the self build takes ~1100 s and `warp self` runs out of its 60 s; card cloud-lane-narrow)
 #       --pure-hello: run the ignored end-to-end `warp pure hello` check at test opt-level 2
 #       --gate: the Integrator's run (implied for batch-*/express* branches): it may use every run slot and goes first
 #       filters as for tests/queue.sh (`-- x y` or plain `x y`; `--test tests -- x` passes target flags to cargo);
-#       --full: the whole suite as test.sh runs it (--all-features, warp-lang at opt-level 2)
+#       --full: the whole suite as test.sh runs it (--all-features, warp-lang at opt-level 2), sharded: FULL_SHARDS
+#       jobs on as many VMs, each every FULL_SHARDS-th test file, merged into one result
 #       --warp-test [folder…]: no cargo test: the release binary builds compiler.wasm and runs `warp test [folder…]`,
 #       every pairs and is! line under the folders (default tests/) through `warp pure` (card warp-test-runner)
 #       waits for the result (run it in the background), prints it, keeps it in data/cloud/<run>/ and, with --card,
@@ -40,7 +43,7 @@ CARGO_FLAGS_WITH_VALUE='--config|--test|--features|-F|-p|--package|--bin|--examp
 MAX_PARALLEL_RUNS=7           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
 WORKER_RUNS=$((MAX_PARALLEL_RUNS - 2))   # slots a worker's runs may hold: the rest is kept for gate runs (user 2026-10-21)
 GATE_BRANCHES='^(batch-|express)'        # branches whose runs are gate runs without --gate
-PENDING_MINUTES=90             # a job older than this without a result: its session is dropped from the pool (a full run takes ~25)
+PENDING_MINUTES=90             # a job older than this without a result: its session is dropped from the pool (a full run's shard takes ~15)
 POOL=/Users/me/dev/angles/warp/data/cloud/pool   # one file per cloud session: its current job, or idle
 MAX_CLOUD_SESSIONS=10          # pool files plus starting ones: every session stays in the user's session list
 JOBS_PER_SESSION=30            # then the session's context is cleared (/clear): each job adds a little to it
@@ -63,6 +66,11 @@ SHOWN_WARP_TEST_FAILURES=40    # ✗ lines of a --warp-test run in the result
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
 HERE_ROOT=${TMPDIR:-/tmp}/cloud-test # in the VM: tree/ (the checkout, kept for the next job), jobs/<job>/
 FULL_FLAGS=(--all-features "${OPTIMIZED_TEST_PROFILE[@]}")
+FULL_SHARDS=5                  # a --full run's jobs: one VM ran the suite in 1300-3600 s, killed at the limit (card cloud-lane-full)
+SHARD_FLAG=--shard             # --full --shard <i>/<n>: one shard's job, on the cloud side
+SHARD_HEADER="==== shard "     # a merged log's line before each shard's log
+RERUN_MARK="cloud-test: RERUN" # a killed run's failed tests run once more for their panic texts: lines after it count no test
+RERUN_SECONDS=600
 USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
 RUST_TARGETS="wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown" # package and crate-wrapper builds in the tests
 
@@ -137,6 +145,25 @@ unmatched_filters() {
 	done
 }
 
+# The filters of shard <i>/<n>: every n-th test file (<folder>::<file>::) of the built tests, sorted
+shard_filters() {
+	cargo test "${source_flags[@]}" "${test_args[@]}" -- --list 2>/dev/null | sed -n 's/: test$//p' |
+		awk -F'::' '{ print (NF < 3 ? $0 : $1 "::" $2 "::") }' | sort -u |
+		awk -v shard="${1%/*}" -v shards="${1#*/}" '(NR - 1) % shards == shard - 1'
+}
+
+# A killed test binary prints no panic text of its failed tests (libtest prints them at its end): those run once more,
+# alone; $@ is the cargo command before its `--`
+rerun_killed_failures() {
+	local log=$1 failed; shift
+	grep -q '^cloud-test: KILLED' "$log" || return
+	failed=$(awk '/^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1 } /^---- [^ ]+ stdout ----$/ { told[$2] = 1 }
+		END { for (name in failed) if (!(name in told)) print name }' "$log")
+	[ -n "$failed" ] || return
+	echo "$RERUN_MARK of the killed run's failed tests, for their panic texts" >> "$log"
+	timeout --kill-after=30 $RERUN_SECONDS "$@" -- --exact $failed >> "$log" 2>&1
+}
+
 write_summary() {
 	local log=$1 environmental=$2 known=$3 environment=$4
 	if [ -n "$environment" ]; then
@@ -200,9 +227,10 @@ run_tests_here() {
 			"$checkout/vendor" > "$vendor_config"
 		source_flags=(--offline)
 	fi
-	local test_args=() filters=() past_separator="" flag_value_next="" warp_test="" warp_test_folders=()
+	local test_args=() filters=() past_separator="" flag_value_next="" shard="" warp_test="" warp_test_folders=()
 	if [ "${1:-}" = "--full" ]; then
 		test_args=("${FULL_FLAGS[@]}")
+		[ "${2:-}" = "$SHARD_FLAG" ] && shard=$3
 	elif [ "${1:-}" = "$WARP_TEST_PRESET" ]; then
 		warp_test=1 warp_test_folders=("${@:2}")
 	else
@@ -247,6 +275,11 @@ run_tests_here() {
 		unmatched=$(unmatched_filters "${filters[@]}")
 		[ -n "$unmatched" ] && echo "$NO_TESTS_RAN filters matching no test after a fresh build: $unmatched" >> "$HERE_WORK/log.txt"
 	fi
+	if [ $build_status -eq 0 ] && [ -n "$shard" ]; then
+		local filter
+		while IFS= read -r filter; do filters+=("$filter"); done < <(shard_filters "$shard")
+		echo "cloud-test: shard $shard: ${#filters[@]} test files" >> "$HERE_WORK/log.txt"
+	fi
 	build_environment=$(detect_build_environment "$build_status" "$HERE_WORK/log.txt")
 	build_seconds=$((SECONDS - build_start))
 	# the runtime stub the executable tests copy, built with the run's crate source as test.sh does: a test's own
@@ -275,6 +308,8 @@ run_tests_here() {
 		printf 'cloud-test: in %s at %s: cargo test %s -- %s\n' "$PWD" "$(git rev-parse --short HEAD)" "${test_args[*]}" "${filters[*]}" >> "$HERE_WORK/log.txt"
 		run_watched "$HERE_WORK/log.txt" \
 			env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
+		rerun_killed_failures "$HERE_WORK/log.txt" \
+			env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast
 	fi
 	test_seconds=$((SECONDS - test_start))
 	[ -n "$refusals" ] && [ -f "$refusals" ] && cat "$refusals" >> "$HERE_WORK/log.txt"
@@ -309,21 +344,22 @@ group_cpu_seconds() {
 }
 
 # The command, its output appended to the log, killed with all its processes after TEST_TIME_LIMIT_SECONDS or once no
-# test finished for STALL_SECONDS while they wait (a hang held batch-3's session 85 min), BUSY_STALL_SECONDS while they
-# compute; the summary then names the unfinished tests
+# test finished while they waited, using no CPU, for STALL_SECONDS on end (a hang held batch-3's session 85 min), or
+# for BUSY_STALL_SECONDS at all; the summary then names the unfinished tests
 run_watched() {
-	local log=$1 runner finished last_finished=-1 still=0 cpu last_cpu=0 limit; shift
+	local log=$1 runner finished last_finished=-1 still=0 idle=0 cpu last_cpu=0; shift
 	timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS "$@" >> "$log" 2>&1 &   # its own process group: a kill reaches the test binaries
 	runner=$!
 	while kill -0 $runner 2>/dev/null; do
 		sleep $WATCH_SECONDS
 		finished=$(grep -c '^test .* \.\.\. ' "$log")
 		cpu=$(group_cpu_seconds $runner)
-		limit=$([ $((cpu - last_cpu)) -ge $BUSY_CPU_SECONDS ] && echo $BUSY_STALL_SECONDS || echo $STALL_SECONDS)
+		if [ "$finished" != "$last_finished" ]; then still=0 idle=0 last_finished=$finished
+		elif [ $((cpu - last_cpu)) -ge $BUSY_CPU_SECONDS ]; then still=$((still + WATCH_SECONDS)) idle=0
+		else still=$((still + WATCH_SECONDS)) idle=$((idle + WATCH_SECONDS)); fi
 		last_cpu=$cpu
-		if [ "$finished" = "$last_finished" ]; then still=$((still + WATCH_SECONDS)); else still=0 last_finished=$finished; fi
-		if [ $still -ge $limit ]; then
-			echo "cloud-test: KILLED: no test finished for $still s" >> "$log"
+		if [ $idle -ge $STALL_SECONDS ] || [ $still -ge $BUSY_STALL_SECONDS ]; then
+			echo "cloud-test: KILLED: no test finished for $still s, the last $idle s of them using no CPU" >> "$log"
 			kill -TERM $runner
 			break
 		fi
@@ -367,7 +403,8 @@ warp_test_summary() {
 # which the gate accepts too) apart; verdict green|red
 summarize() {
 	local log=$1 environmental=$2 known=${3:-/dev/null}
-	awk -v environmental="$environmental" -v known_list="$known" -v SHOWN_ITEMS=$SHOWN_ITEMS -v NO_TESTS_RAN="$NO_TESTS_RAN" '
+	awk -v environmental="$environmental" -v known_list="$known" -v SHOWN_ITEMS=$SHOWN_ITEMS -v NO_TESTS_RAN="$NO_TESTS_RAN" \
+		-v RERUN_MARK="$RERUN_MARK" -v SHARD_HEADER="$SHARD_HEADER" '
 		BEGIN {
 			# a line is "<test regex>", or "<test regex> <item regex>" for a test whose panic lists items (one sample per
 			# line): then only those items are environmental, and the test is environmental only if every item it lists is
@@ -380,12 +417,15 @@ summarize() {
 			}
 			while ((getline line < known_list) > 0) if (line ~ /^- [^ |]+ \|/) { split(line, field, " "); known[field[2]] = 1 }
 		}
-		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored|filtered)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
-		/^ +(Running|Doc-tests) / { started++ }
+		!rerun && /^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored|filtered)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
+		!rerun && /^ +(Running|Doc-tests) / { started++ }
+		# a rerun (rerun_killed_failures) only adds panic texts; in a merged log the next shard counts again
+		index($0, RERUN_MARK) == 1 { rerun = 1; next }
+		index($0, SHARD_HEADER) == 1 { rerun = 0; next }
 		index($0, NO_TESTS_RAN) == 1 { unmatched_line = $0 }
-		/^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1; order[++failures] = $2 }
-		/^test [^ ]+ has been running for over/ { slow[$2] = 1 }
-		/^test [^ ]+ \.\.\. / { finished_test[$2] = 1 }
+		!rerun && /^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1; order[++failures] = $2 }
+		!rerun && /^test [^ ]+ has been running for over/ { slow[$2] = 1 }
+		!rerun && /^test [^ ]+ \.\.\. / { finished_test[$2] = 1 }
 		/^---- [^ ]+ stdout ----$/ { current = $2; want_panic = 1; next }
 		collecting && /^(stack backtrace:|note: |---- |$)/ { collecting = 0 }
 		collecting { items[current, ++item_count[current]] = $0 }
@@ -668,11 +708,9 @@ finish_session() {
 	unlock_pool
 }
 
-collect() {
-	local branch=$1 tip=$2 card=$3
-	local name folder ref deadline
-	shift 3
-	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$@")
+# Waits for run <name>'s result, saves it to data/cloud/<name>/ and hands its session the next job
+fetch_result() {
+	local name=$1 folder ref deadline
 	folder=$MAIN_CHECKOUT/data/cloud/$name
 	ref=refs/heads/$RESULTS_PREFIX/$name
 	deadline=$((SECONDS + WAIT_HOURS * 3600))
@@ -689,10 +727,67 @@ collect() {
 	git -C "$MAIN_CHECKOUT" push -q origin --delete "$RESULTS_PREFIX/$name" "$JOBS_PREFIX/$(pool_field "$folder/launch.txt" job)" 2>/dev/null
 	git -C "$MAIN_CHECKOUT" update-ref -d "refs/remotes/origin/$RESULTS_PREFIX/$name"
 	finish_session "$(pool_field "$folder/launch.txt" job)" "$folder/result.md"
+}
+
+# Prints the result in <folder>, adds it to the card; exit status 0 = green
+report() {
+	local folder=$1 tip=$2 card=$3
 	cat "$folder/result.md"
 	echo "(log: $folder/log.txt.gz)"
 	[ -n "$card" ] && todo note "$card" "cloud test $(sed -n 's/^verdict: //p' "$folder/result.md"): $(sed -n 's/^tests: //p' "$folder/result.md") at ${tip:0:8}, $(sed -n 's/^passed: //p' "$folder/result.md"); $(sed -n 's/^wall: //p' "$folder/result.md")$(sed -n '/^failures:/,/^[a-z]/{/^  /p;}' "$folder/result.md" | head -10 | tr '\n' ';')" > /dev/null
 	grep -q '^verdict: green' "$folder/result.md"
+}
+
+collect() {
+	local branch=$1 tip=$2 card=$3 name
+	shift 3
+	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$@")
+	fetch_result "$name"
+	report "$MAIN_CHECKOUT/data/cloud/$name" "$tip" "$card"
+}
+
+# The shards' results as one: their logs one after another, summarized together; green when every shard is and all
+# listed tests ran (each test in one shard: Σ passed+failed+ignored of the shards = what each shard lists)
+merge_shards() {
+	local folder=$1 tip=$2 shard_folder verdict=green counted listed; shift 2
+	mkdir -p "$folder"
+	for shard_folder in "$@"; do echo "$SHARD_HEADER${shard_folder##*/}"; gzip -dc "$shard_folder/log.txt.gz"; done > "$folder/log.txt"
+	git -C "$MAIN_CHECKOUT" show "origin/main:$ENVIRONMENTAL_LIST" > "$folder/environmental.txt" 2>/dev/null
+	git -C "$MAIN_CHECKOUT" show "$tip:$KNOWN_FAILURES" > "$folder/known_failures.md" 2>/dev/null
+	summarize "$folder/log.txt" "$folder/environmental.txt" "$folder/known_failures.md" > "$folder/summary.txt"
+	read -r counted listed < <(awk -v RERUN_MARK="$RERUN_MARK" -v SHARD_HEADER="$SHARD_HEADER" '
+		index($0, SHARD_HEADER) == 1 { rerun = 0; shard++ } index($0, RERUN_MARK) == 1 { rerun = 1 }
+		!rerun && /^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored)/) ran += $(i - 1); if ($(i) ~ /^(passed|failed|ignored|filtered)/) listed[shard] += $(i - 1) } }
+		END { for (s in listed) if (listed[s] > most) most = listed[s]; print ran + 0, most + 0 }' "$folder/log.txt")
+	grep -q '^verdict: green' "$folder/summary.txt" || verdict=red
+	for shard_folder in "$@"; do grep -q '^verdict: green' "$shard_folder/result.md" || verdict=red; done
+	[ "$counted" = "$listed" ] || verdict=red
+	{
+		echo "run: ${folder##*/}"
+		grep -m2 '^branch: \|^tip: ' "$1/result.md"
+		echo "tests: --full ($# shards)"
+		echo "verdict: $verdict"
+		grep -v '^verdict: ' "$folder/summary.txt"
+		echo "tests counted: $counted of $listed listed$([ "$counted" = "$listed" ] || echo ": INCOMPLETE, a shard lost tests")"
+		echo "wall: $(for shard_folder in "$@"; do sed -n 's/^wall: .*total \([0-9]*\) s.*/\1/p' "$shard_folder/result.md"; done | sort -n | tail -1) s, the slowest shard"
+		for shard_folder in "$@"; do
+			echo "shard ${shard_folder##*/}: $(sed -n 's/^verdict: //p' "$shard_folder/result.md"); $(sed -n 's/^build: //p; s/^error: //p; s/^passed: //p; s/^wall: //p; s/^session: //p' "$shard_folder/result.md" | tr '\n' ';')"
+		done
+	} > "$folder/result.md"
+	gzip -f "$folder/log.txt"
+}
+
+collect_full() {
+	local branch=$1 tip=$2 card=$3 shard name shard_names=() shard_folders=()
+	shift 3
+	for shard in $(seq 1 $FULL_SHARDS); do
+		name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} --full $SHARD_FLAG "$shard/$FULL_SHARDS")
+		shard_names+=("$name"); shard_folders+=("$MAIN_CHECKOUT/data/cloud/$name")
+	done
+	for name in "${shard_names[@]}"; do fetch_result "$name"; done
+	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} --full)
+	merge_shards "$MAIN_CHECKOUT/data/cloud/$name" "$tip" "${shard_folders[@]}"
+	report "$MAIN_CHECKOUT/data/cloud/$name" "$tip" "$card"
 }
 
 # ---------------------------------------------------------------- arguments
@@ -705,7 +800,7 @@ main() {
 		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}" "${4:-}"; exit ;;
 	esac
-	card="" wait=1 result_only="" base=() settings=() pure_hello="" gate=""
+	card="" wait=1 result_only="" base=() settings=() pure_hello="" optimized="" gate=""
 	while [[ "${1:-}" == --* ]]; do
 		case "$1" in
 			--card) card=$2; shift 2 ;;
@@ -715,6 +810,7 @@ main() {
 			--on) base=(--on "$2"); shift 2 ;;
 			--env) settings+=(--env "$2"); shift 2 ;;
 			--pure-hello) pure_hello=1; shift ;;
+			--optimized) optimized=1; shift ;;
 			--gate) gate=1; shift ;;
 			*) break ;;
 		esac
@@ -724,9 +820,18 @@ main() {
 		[ $# -eq 2 ] || fail "--pure-hello is a complete test preset and does not take filters"
 		set -- "$1" "$2" "${PURE_HELLO_ARGS[@]}"
 	fi
+	[ -n "$optimized" ] && set -- "$1" "$2" "${OPTIMIZED_TEST_PROFILE[@]}" "${@:3}"
 	local filters=() filter   # the Mac's bash 3.2 has no mapfile
 	while IFS= read -r filter; do filters+=("$filter"); done < <(split_filters "${@:3}")
 	set -- "$1" "$2" ${filters[@]+"${filters[@]}"}
+	if [ $# -eq 3 ] && [ "$3" = --full ]; then
+		local shard
+		if [ -z "$result_only" ]; then
+			for shard in $(seq 1 $FULL_SHARDS); do launch "$1" "$2" --full $SHARD_FLAG "$shard/$FULL_SHARDS" || exit; done
+		fi
+		[ -n "$wait$result_only" ] && collect_full "$1" "$2" "$card"
+		return
+	fi
 	if [ -z "$result_only" ]; then launch "$@" || exit; fi
 	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card" "${@:3}"
 }
