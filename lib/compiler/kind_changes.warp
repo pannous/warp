@@ -30,7 +30,7 @@ kind_changes(program: Node): Node := {
 	global_names = global_variables(program)
 	for body in [program] + definition_bodies(program) {
 		change = first_kind_change(body, {}, results, global_names)
-		if change != ø { return diagnose(change) }
+		if change != ø { return diagnose(change, change) }
 	}
 	program
 }

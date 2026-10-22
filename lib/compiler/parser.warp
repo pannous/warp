@@ -2053,10 +2053,12 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		return prefixed(p)
 	}
 	if (c == '-' or DASH_GLYPHS.contains(c)) and next != '>' and next != '-' {
+		sign = p.at
 		p.at = p.at + 1
 		skip_spaces(p)
 		operand = expression(p, 155)
-		if operand is number { return 0 - operand }
+		// `-7` is the number, written where its sign is
+		if operand is number { return placed_at(p, 0 - operand, sign) }
 		return keyed("-", ø, operand)
 	}
 	if c == '!' or c == '¬' {
@@ -2790,8 +2792,13 @@ def atom(p: Parser): Node := {
 	start = p.at
 	found = bare_atom(p)
 	if found === ø { return found }
+	placed_at(p, found, start)
+}
+
+// The node, written at the source's offset `start`: its line and column
+def placed_at(p: Parser, n: Node, start: int): Node := {
 	line = line_at(p, start)
-	positioned(found, line, start - p.line_starts[line - 1] + 1)
+	positioned(n, line, start - p.line_starts[line - 1] + 1)
 }
 
 // Where each line of the source starts
