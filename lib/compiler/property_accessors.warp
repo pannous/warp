@@ -53,7 +53,7 @@ def properties_collected(definitions: list, module: text, table: any) {
 	parameters = table.parameters
 	owners = table.owners
 	for found in definitions {
-		name = found#1 + "." + found#2
+		name = "${found#1}.${found#2}"
 		if found#3 == "" { getters[name] = found#4 } else {
 			setters[name] = found#4
 			parameters[name] = found#3
