@@ -4,14 +4,15 @@
 # (also symbol, list, block, map, int, number) only code of that kind, a block code in braces and a map their
 # entries `{a: 1}` or a name holding only maps. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$x is literal`, `$x is missing` (ø, also an operand not written: `rest...`), `$x is text` (a hole
-# kind), each also `is not`, `$n < 0` (a number literal
+# `$f is function`, `$x is literal`, `$w is label` (a word labelling a parameter, `with new`), `$x is missing` (ø,
+# also an operand not written: `rest...`), `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word), `$f takes int` (typed int) and `$f takes one` (a library word the program leaves
 # free, of exactly one typed value); `$e is enum` (a name or text of an enum the program declares), `$c is case` (a
 # case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound, the condition binds it
 # to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
-# (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), lets the rule rewrite code only
+# (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), `parameter` (of a definition's head,
+# F10), lets the rule rewrite code only
 # standing there: `rewrite $s except_if $c => if not $c then $s where statement`. The mark `alias` says the
 # pattern's first word is another spelling of the template's, which each firing notes as Rust's note_alias does ("warp
 # says for", until "got it"): `rewrite each $xs $body => for $xs $body where statement and alias`. A phrase pattern
@@ -33,6 +34,7 @@ use "type_tests.warp"
 use "diagnostics.warp"
 use "builtin_signatures.warp"
 use "enum_declarations.warp"
+use "words.warp"
 
 rewrite_word = "rewrite"
 rewrite_line_start = "rewrite "
@@ -43,7 +45,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label"]
 # `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
 # with (card engine-rule-conditions)
 context_words = ["method", "shadowed"]
@@ -71,7 +73,7 @@ each_in_word = "in"
 # `T for $x at $i in $xs...`: $i the item's position, from 1
 each_at_word = "at"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions
-rule_places = ["statement", "condition", "member", "key", "value"]
+rule_places = ["statement", "condition", "member", "key", "value", "parameter"]
 # the mark of a rule whose pattern's first word spells the template's another way
 alias_mark = "alias"
 takes_word = "takes"
@@ -87,7 +89,7 @@ one_word = "one"
 # making or reading the forms its rules take, the iteration sugar lowering the `for` loops once loop_heads.warp read
 # their heads, and the late sugar after it took the loops a range counts: a range left is a value (sugar/ranges)
 first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads"]
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls", "sugar/parameters"]
 iteration_sugar_module_names = ["sugar/iteration"]
 late_sugar_module_names = ["sugar/ranges"]
 # the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
@@ -178,7 +180,8 @@ enums_declared(program: Node): Node := {
 	program
 }
 
-# the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too
+# the program with the sugar rules applied everywhere, the definitions it reached from the prelude and the modules too;
+# the rules of a place apply only there
 sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
@@ -564,6 +567,7 @@ has_property(code: any, property: text): bool := {
 	if property == "missing" { return code == ø }
 	if not (code is symbol) { return no }
 	word = name_of(code)
+	if property == "label" { return word in label_words }
 	if property == "type" { return is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }
 	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) }
@@ -927,8 +931,8 @@ spliced_statements(statements: list): list := {
 	spliced
 }
 
-# the key with its condition (`if c`, `while c`), its key and value (`k: v`) rewritten by `placed_code` (code, place) with the
-# rules of that place, a template's statements in its parts their blocks
+# the key with its condition (`if c`, `while c`), its key and value (`k: v`), a definition's parameters (F10) rewritten
+# by `placed_code` (code, place) with the rules of that place, a template's statements in its parts their blocks
 with_placed_parts(n: any, placed_code: function): any := {
 	left = key_of(n)
 	right = value_of(n)
@@ -937,8 +941,21 @@ with_placed_parts(n: any, placed_code: function): any := {
 		left = placed_code(left, "key")
 		right = placed_code(right, "value")
 	}
+	if is_key(n, Op.Define) { left = head_with_parameters(left, parameter => placed_code(parameter, "parameter")) }
 	if left == key_of(n) and right == value_of(n) and not is_statements_template(left) and not is_statements_template(right) { return n }
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
+}
+
+# the head of `f(a, b) := …` (also `f(a): T`) with each parameter changed, its name kept (F10)
+head_with_parameters(head: any, changed: function): any := {
+	if is_key(head, Op.Colon) {
+		inner = head_with_parameters(key_of(head), changed)
+		return if inner == key_of(head) then head else placed(Key(inner, Op.Colon, value_of(head)), head)
+	}
+	if not (is_round(head) and #head > 1 and head#1 is symbol) { return head }
+	parameters = items_of(head)[1 ..]
+	rewritten = parameters.map(changed)
+	if rewritten == parameters then head else placed(group_like(head, [head#1] + rewritten), head)
 }
 
 # a class with each item of its body changed: the passes see it as the opaque view ["type", name, body]

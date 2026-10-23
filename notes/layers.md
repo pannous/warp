@@ -197,7 +197,7 @@ Sugar passes, with the rule each would become:
 | 36 | ranges | range value → loop: F3 |
 | 35 | filled_lists | done: lib/sugar/lists.warp (card sugar-filled-lists) |
 | 32 | broadcasting | `rewrite $xs .* $y => $xs.map(e => e * $y)`: F3 (hygienic e) |
-| 30 | preposition_heads | `play(tone, for duration)` → drop the preposition per parameter: F4 |
+| 30 | preposition_heads | done: `rewrite $word $p => $p where parameter and $word is label` (lib/sugar/parameters.warp, F10 place `parameter`; card sugar-preposition-heads) |
 | 24 | grouped_receivers | `rewrite ($p).$a => $p.$a`: F2 (p bound to a value) |
 | 18 | phrase_blocks | not sugar: `{print "big"}` as one statement is the notation's grouping; belongs in the reader |
 | 15 | coalesce | done: lib/sugar/fallbacks.warp (card sugar-coalesce) |
