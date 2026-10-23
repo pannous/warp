@@ -17,6 +17,8 @@ use "byte_codes.warp"
 use math
 use os
 use "emitter/encoding.warp"
+use "emitter/quantities.warp"
+use "unit_table.warp"
 use "emitter/module_layout.warp"
 use "emitter/literals.warp"
 use "emitter/lists.warp"
@@ -723,6 +725,9 @@ def group_expression(body: Body, n: any): list {
 		label = if type(n#2) is key and key_of(n#2) is text then key_of(n#2) else "value"
 		return ended_in(pending, no_case_prefix + label)
 	}
+	# `quantity_value(5, km)`, a unit literal (lib/sugar/units.warp): its amount in SI base units; `str(5 km)` its text
+	if is_quantity_value(n) { return quantity_amount(body, n) }
+	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in quantity_text_words and shown_unit(n#2) != "" { return quantity_text(body, n#2, shown_unit(n#2)) }
 	# `raise X` (also throw, fail, panic), called or a line of its own: the run fails with X as its message, a value of
 	# no kind; a program's own function of that name is its function
 	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in raise_words and name_of(n#1) not in module.functions {
@@ -1074,6 +1079,11 @@ hosted_wasm_module(program: any, runtime: any, host: any): any := typed_wasm_mod
 # as hosted_wasm_module, an unannotated parameter of the kind analyzer.warp found in `kinds` (WARP_SELF_ANALYSIS); again
 # while a call widens a parameter (passed)
 typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
+	# a program mixing kinds of quantity, or showing one this doesn't, the analyzer refused (analyzer.warp quantity_facts)
+	if kinds is map and kinds.has("quantities") {
+		if kinds["quantities"]["refusal"] != "" { return outside_the_core + kinds["quantities"]["refusal"] }
+		shown_units = kinds["quantities"]["units"]
+	}
 	module.later_kinds = {}
 	module.widenings = 0
 	widenings = -1

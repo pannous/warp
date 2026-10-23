@@ -8,6 +8,7 @@ use "words.warp"
 use "signatures.warp"
 use "types.warp"
 use "builtin_signatures.warp"
+use "unit_table.warp"
 
 # name → the function's definition `(f a b) := body`, its signature, its result kind, and the scope of its body ("" for
 # main)
@@ -965,6 +966,132 @@ emitter_elements(scope: Scope): map := {
 	elements
 }
 
+# --- unit literals (card pure-unit-literals) ---
+# A unit literal is quantity_value(amount, unit) (lib/sugar/units.warp), the amount in SI base units at run time; the
+# analyzer follows the unit as written: quantity_units gives the emitter the unit each variable and function holds, so
+# a shown quantity reads `5km` (emitter.warp quantity_text), and quantity_refusal says why the pure lane refuses a
+# program adding or comparing two kinds of quantity (Rust's DimensionError), a text joined with a quantity (also one
+# there), showing a quantity of a unit it can't show yet (`m²`, a unit of several units) or one as the program's value
+# (a text there), else "". Rust twin: src/numbers/units/static_units.rs, stages 1 and 3
+# (texts: puts and println are print by the time the analyzer reads the program)
+showing_words = ["print", "str", "text", "text_form", "serialize"]
+comparing_ops = [Op.Eq, Op.Ne, Op.Lt, Op.Gt, Op.Le, Op.Ge]
+dimension_ops = [Op.Add, Op.Sub, Op.Eq, Op.Ne, Op.Lt, Op.Gt, Op.Le, Op.Ge]
+# the unit of a quantity a function the program defines gives when called with a quantity: not known here
+unknown_unit = "?"
+
+# the unit of the quantity n computes, as it shows (km, m·s, 1/s), "" for a plain value; held: name → the unit of the
+# variables holding quantities, "name()" of the functions giving them
+quantity_unit(n: Node, held: map, defined: map): text := {
+	if n is symbol { return held.get(name_of(n)) ?? "" }
+	if is_curly_group(n) and #n > 0 { return quantity_unit(computed(n), held, defined) }
+	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return quantity_unit(n#1, held, defined) }
+	if is_group(n) and #n == 3 and head_name(n) == quantity_word and n#3 is symbol { return unit_symbol(name_of(n#3)) }
+	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol {
+		called = head_name(n) + "()"
+		if held.has(called) { return held[called] }
+		if defined.has(head_name(n)) and n[1..].any(argument => quantity_unit(argument, held, defined) != "") { return unknown_unit }
+		return ""
+	}
+	match n {
+		Key(left, op, right): key_unit(quantity_unit(left, held, defined), op, quantity_unit(right, held, defined))
+		_: ""
+	}
+}
+# the unit of `a op b` of operands of those units: a sum shows in the finer one (`5 cm + 1 m` is 105cm), a ratio of
+# one kind of quantity is a plain number
+key_unit(a: text, op: Op, b: text): text := {
+	if op in comparing_ops { return "" }
+	if a == "" or b == "" {
+		if op == Op.Div and a == "" and b != "" { return "1/" + b }
+		return a + b
+	}
+	if op == Op.Add or op == Op.Sub { return finer_unit(a, b) }
+	if op == Op.Mul { return a + "·" + b }
+	if op == Op.Div { return if unit_dimension(a) == unit_dimension(b) then "" else a + "/" + b }
+	a + "^"
+}
+# the kind of quantity a unit measures: length of km; a unit of several units is a kind of its own
+unit_dimension(unit: text): text := if is_unit_name(unit) then unit_quantity(unit) else unit
+
+# the units the program's variables and functions hold, read until nothing more is learned
+held_quantities(statements: list, defined: map): map := {
+	held = {}
+	learned = -1
+	while learned != #held {
+		learned = #held
+		for statement in statements { learn_quantity(statement, held, defined) }
+	}
+	held
+}
+learn_quantity(n: Node, held: map, defined: map) := {
+	if is_definition(n) {
+		found = quantity_unit(computed(value_of(n)), held, defined)
+		if found != "" { held[defined_name(n) + "()"] = found }
+		return ø
+	}
+	if (is_key(n, Op.Assign) or is_key(n, Op.Define)) and key_of(n) is symbol {
+		found = quantity_unit(assigned_value(n), held, defined)
+		if found != "" { held[name_of(key_of(n))] = found }
+	}
+	for part in node_parts(n) { learn_quantity(part, held, defined) }
+}
+
+# whether the pure lane shows a quantity of the unit: one lib/units.warp declares
+shows_unit(unit: text): bool := unit == "" or is_unit_name(unit)
+
+# why two kinds of quantity mix in n, a text joins a quantity or a quantity of a unit not shown yet is shown, else ""
+quantity_misuse(n: Node, held: map, defined: map): text := {
+	if is_definition(n) { return quantity_misuse(value_of(n), held, defined) }
+	if is_group(n) and #n > 1 and head_name(n) in showing_words {
+		for argument in n[1..] {
+			unit = quantity_unit(argument, held, defined)
+			if not shows_unit(unit) { return "a quantity of the unit " + unit + " shown by " + head_name(n) + ": the pure lane does not show it yet" }
+		}
+	}
+	match n {
+		Key(left, op, right): {
+			a = quantity_unit(left, held, defined)
+			b = quantity_unit(right, held, defined)
+			if op in dimension_ops and a != "" and b != "" and a != unknown_unit and b != unknown_unit and unit_dimension(a) != unit_dimension(b) {
+				return "DimensionError: " + a + " " + op_symbol(op) + " " + b + ": incompatible units"
+			}
+			if op == Op.Add and ((is_literal_text(left) and b != "") or (is_literal_text(right) and a != "")) {
+				return "DimensionError: a text + " + (if a != "" then a else b) + ": incompatible units"
+			}
+		}
+		_: ø
+	}
+	for part in node_parts(n) {
+		found = quantity_misuse(part, held, defined)
+		if found != "" { return found }
+	}
+	""
+}
+# how `a op b` writes the operator in a DimensionError
+op_symbol(op: Op): text := {
+	if op == Op.Add { return "+" }
+	if op == Op.Sub { return "-" }
+	"compared to"
+}
+
+# the units each variable and function of the program holds, its refusal (or "") with them
+quantity_facts(program: Node): map := {
+	statements = flat_statements(program)
+	if not statements.any(statement => mentions_quantity(statement)) { return {units: {}, refusal: ""} }
+	defined = {}
+	for statement in statements { if is_definition(statement) { defined[defined_name(statement)] = yes } }
+	held = held_quantities(statements, defined)
+	for statement in statements {
+		found = quantity_misuse(statement, held, defined)
+		if found != "" { return {units: held, refusal: found} }
+	}
+	values = statements.filter(statement => not is_definition(statement) and head_name(statement) != "use")
+	if #values > 0 and quantity_unit(values#(#values), held, defined) != "" { return {units: held, refusal: "a quantity as the program's value: the pure lane gives it as a text yet"} }
+	{units: held, refusal: ""}
+}
+mentions_quantity(n: Node): bool := (n is symbol and name_of(n) == quantity_word) or node_parts(n).any(part => mentions_quantity(part))
+
 # what emitter.warp reads (card emitter-takes): {functions: {f: {params: [kind…], result, locals: {x: kind}, elements:
 # {xs: kind}}}, variables: {x: kind}, elements: {xs: kind}, value: kind}, kinds as emitter_kind names them
 emitter_kinds(program: Node): map := {
@@ -976,7 +1103,7 @@ emitter_kinds(program: Node): map := {
 		functions[name] = {params: parameters.map(own => emitter_kind(scope.kinds[own])), result: emitter_kind(results[name]), locals: emitter_locals(scope, parameters), elements: emitter_elements(scope)}
 	}
 	main = scopes[""]
-	{functions: functions, variables: emitter_locals(main, []), elements: emitter_elements(main), value: emitter_kind(inferred_kind(program, main))}
+	{functions: functions, variables: emitter_locals(main, []), elements: emitter_elements(main), value: emitter_kind(inferred_kind(program, main)), quantities: quantity_facts(program)}
 }
 
 inferred_kinds(program: Node): list := {

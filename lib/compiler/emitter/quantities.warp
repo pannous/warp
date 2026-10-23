@@ -1,0 +1,44 @@
+# Unit literals (emitter.warp's part, card pure-unit-literals; Rust twin: src/numbers/units/static_units.rs):
+# quantity_value(5, km) of lib/sugar/units.warp is its amount in SI base units, 5000, and a quantity print, str or a
+# text shows is the text of its amount in its unit, then the unit: `5km`. analyzer.warp gave the unit each variable and
+# function holds (quantity_facts) and refused what this doesn't show
+quantity_text_words = ["str", "text", "text_form"]
+# name → the unit of the quantity it holds, "f()" of the one function f gives (the analyzer's)
+global shown_units = {}
+
+# quantity_value(amount, unit): the amount in SI base units
+def quantity_amount(body: Body, n: any): list {
+	unit = name_of(n#3)
+	amount = expression_code(body, n#2)
+	if unit_numerator(unit) != 1 { amount = operation_code(body, "*", amount, number_value(unit_numerator(unit))) }
+	if unit_denominator(unit) != 1 { amount = operation_code(body, "/", amount, number_value(unit_denominator(unit))) }
+	amount
+}
+def is_quantity_value(n: any): bool := is_group(n) and bracket_of(n) == "(" and #n == 3 and n#1 == symbol(quantity_word) and n#3 is symbol
+
+# the unit n shows in, "" for a plain value: analyzer.warp's quantity_unit of what it lets show
+def shown_unit(n: any): text {
+	if n is symbol { return shown_units.get(name_of(n)) ?? "" }
+	if is_quantity_value(n) { return unit_symbol(name_of(n#3)) }
+	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return shown_unit(n#1) }
+	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol { return shown_units.get(name_of(n#1) + "()") ?? "" }
+	if not (type(n) is key) { return "" }
+	a = shown_unit(key_of(n))
+	b = shown_unit(value_of(n))
+	if op_of(n) == "+" or op_of(n) == "-" { return if a == "" then b else if b == "" then a else finer_unit(a, b) }
+	if (op_of(n) == "*" and (a == "" or b == "")) or (op_of(n) == "/" and b == "") { return a + b }
+	""
+}
+
+# the text a quantity of the unit shows as: its amount in that unit, then the unit
+def quantity_text(body: Body, n: any, unit: text): list {
+	amount = expression_code(body, n)
+	if unit_denominator(unit) != 1 { amount = operation_code(body, "*", amount, number_value(unit_denominator(unit))) }
+	if unit_numerator(unit) != 1 { amount = operation_code(body, "/", amount, number_value(unit_numerator(unit))) }
+	runtime_call("text_join", [shown_text(amount), text_value(unit)])
+}
+# the code of a value print or a join shows: a quantity's text, else the value's
+def shown_code(body: Body, n: any): list {
+	unit = shown_unit(n)
+	if unit == "" then expression_code(body, n) else quantity_text(body, n, unit)
+}

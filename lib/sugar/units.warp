@@ -1,0 +1,9 @@
+# Unit literals (card pure-unit-literals, notes/layers.md row 110; Rust twin: src/numbers/units/static_units.rs): `5 km`,
+# `500ms`, `3 kilometers`, which the parser reads as products (`5 * km`), are quantities of a unit lib/units.warp
+# declares in unit_definitions (compiler/unit_table.warp reads it): quantity_value(5, km), which emitter.warp compiles
+# as the amount in SI base units, 5000, so `3km == 3000m` and `sleep(20ms)` (sleep counts seconds) compute as Rust's lane
+# does; the analyzer keeps the written unit, a shown quantity reads `5km`, and adding or comparing two quantities of
+# different kinds is a DimensionError (analyzer.warp quantity_refusal). A program binding a unit's word (`m = 2`) keeps
+# its own. Pure lane only: Rust's rewrites run before its static units, so this rule stays out of lib/units.warp, which
+# Rust reads. Not yet: `km/h`, `m²`, temperatures, SI prefixes of a unit not declared.
+rewrite $n * $u => quantity_value($n, $u) where $n is literal and $u is unit
