@@ -31,6 +31,8 @@ base_layers = ["extends", "inherited_from"]
 kept_methods = ["init"]
 # the words the runtime or the emitter defines (`sort`), which a call on a list or a text must still reach
 typed_words = typed_lines.map(signature_line => signature_line.name)
+# a word of the runtime, the emitter or a typed line of the library (lib/math.warp's `max`, `round`)
+is_library_word(word: text): bool := word in typed_words or word_lines().has(word)
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
 # the function a bare call of a sibling method calls: the dispatcher of a routed one
@@ -61,7 +63,7 @@ methods_lifted(program: Node): Node := {
 		rewritten += [if name in liftable then without_methods(top_statement, view) else top_statement]
 	}
 	functions = functions_defined(top_statements)
-	routes = methods_of(classes, liftable).filter(method => method in typed_words or method in functions)
+	routes = methods_of(classes, liftable).filter(method => is_library_word(method) or method in functions)
 	for name in methods_of(classes, liftable) { rewritten += functions_of(classes, liftable, name, routes) }
 	if #routes > 0 { rewritten = rewritten.map(top_statement => routed(top_statement, classes, liftable, routes)) }
 	if extended { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then widened_tests(top_statement, classes) else top_statement) }
@@ -95,10 +97,15 @@ spelled_members(member: any): list := {
 		_: [member]
 	}
 }
-# the names a space lists, `name age`, else none
+# the fields a space lists, `name age`, or `name age: int` as the parser groups it, `name (age: int)`, else none
 word_run(n: Node): list := match n {
-	List(parts, Bracket.None, Separator.Space): { if #parts > 1 and not parts.any(part => not (part is symbol)) then parts else [] }
+	List(parts, Bracket.None, Separator.Space): { if #parts > 1 and not parts.any(part => not is_field_part(part)) then parts else [] }
 	_: []
+}
+# a field's name, `age`, or the name with its type, `age: int`
+is_field_part(part: Node): bool := match part {
+	Key(left, Op.Colon, right): left is symbol
+	_: part is symbol
 }
 
 # the view ["type", name, body] of a class declaration, else ø
