@@ -486,7 +486,7 @@ is_takes(condition: any): bool := is_group(condition) and bracket_of(condition) 
 
 # whether the code names a function whose first parameter is typed as wanted: `value` any type but yes/no
 first_parameter_fits(code: any, wanted: text): bool := {
-	if not (code is symbol) { return no }
+	if not (code is symbol) or locally_bound(code) { return no }
 	word = name_of(code)
 	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
 	typed = if first_parameter_types.has(word) then first_parameter_types[word] else library_first_type(word)
@@ -582,9 +582,14 @@ has_property(code: any, property: text): bool := {
 	if property == "label" { return word in label_words }
 	if property == "type" { return is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }
-	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) }
+	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) and not locally_bound(code) }
 	not rule_scope.has(word)
 }
+
+# a name a definition around the code binds, a parameter or a local (`listed = …; assigned or listed`): it shadows the
+# program's function and the library word of that name (notes/dispatch.md: shadowing is scoped), so `x | listed` is
+# no pipe and `count xs` of a local count no call
+locally_bound(code: any): bool := code is symbol and name_of(code) in rule_binding
 
 # `method`, `shadowed`: a condition about where the matched code stands, not about a hole
 is_context_word(condition: any): bool := condition is symbol and name_of(condition) in context_words
@@ -620,8 +625,7 @@ starting_word(code: any): any := {
 context_holds(code: any, context: text): bool := {
 	if code == ø { return no }
 	if context == "method" { return rule_method_part != ø and code == rule_method_part }
-	word = starting_word(code)
-	word is symbol and name_of(word) in rule_binding
+	locally_bound(starting_word(code))
 }
 
 # bottom_up for the rules, keeping where the node they try stands (rule_method_part, rule_binding): the method part
@@ -647,20 +651,27 @@ bottom_up_placed(n: any, f: function): any := {
 # the names a definition binds inside it: its parameters, the names its body's statements declare
 bound_by_definition(definition: any): list := {
 	names = []
-	head = key_of(definition)
+	head = untyped_head(key_of(definition))
 	if is_group(head) and #head > 1 {
 		for parameter in items_of(head)[1 ..] {
 			name = leftmost_name(parameter)
 			if name != ø { names += [name] }
 		}
 	}
-	body = value_of(definition)
-	statements = if is_group(body) and separator_of(body) in statement_separators then items_of(body) else [body]
-	for statement in statements {
-		name = declared_name(statement)
-		if name != ø { names += [name] }
-	}
-	names
+	declared_within(value_of(definition), names)
+}
+# the call `f(x)` of a definition's head `f(x): T` typing its result, else the head
+untyped_head(head: any): any := if is_key(head, Op.Colon) then key_of(head) else head
+# the names the statements of a body declare, those of its nested blocks too (an if's branch, the block `the result:
+# T = {…}` of a typed result), added to `names`; not inside a definition of its own, which binds its names itself
+declared_within(code: any, names: list): list := {
+	if is_key(code, Op.Define) { return names }
+	found = names
+	name = declared_name(code)
+	if name != ø and name not in found { found += [name] }
+	if code is key { return declared_within(value_of(code), declared_within(key_of(code), found)) }
+	if is_group(code) { for part in items_of(code) { found = declared_within(part, found) } }
+	found
 }
 
 # `3`, `-1`, `(-1)`: a number written as such
