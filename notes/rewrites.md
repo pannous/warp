@@ -35,6 +35,10 @@ rewrite speed_unit => km·per·hour                # km_per_hour
   temporary stays one (`t·3_end`).
 - Numbers multiply: a number written beside `·` (`$x·2`) leaves the product, and so does a hole that bound a number
   (`$n·ten` of 3 → `3 * ten`). A hole bound to other code (`x + 1`) is an error.
+- `··` glues with the mark itself: `loop··step` is the hidden compiler name `loop·step` (notes/compiler_temporaries.md)
+  no program can write, the way for_loops.warp marks a loop's step; `$i··end` of k is `k·end`, `$i·end··x` is
+  `k_end·x`. The parser reads `a··b` as the declared-only operator call `operator_··(a, b)`, so outside a template it is
+  an operator nothing declares, an error (lib/sugar/loops.warp: the C-style for's `loop··step: $step`).
 - A template's definition with a hole or a built name as its head (`$f(x) := …`, `twice·$f(x) := …`, which the parser
   reads as a phrase) defines that function, and a template of one parenthesized definition is that definition.
 - Open: generated names don't name their rule in help and errors yet; a built name clashing with the program's own
@@ -136,14 +140,3 @@ rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is en
 
 The rules of lib/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
 `cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.
-
-## Compiler marks (F10)
-A template may write one of the compiler's own `·` names, which no program can write and the passes after the rules
-read. `·` between plain words spelling one of them (rewrites.warp `compiler_marks`) keeps that name instead of gluing
-it (F5's `km·per·hour` is still km_per_hour). The one mark so far is a loop's step, which a `continue` still runs:
-
-```warp
-rewrite stepping $i below $n {$body...} => ($i = 0; while $i < $n { $body...; loop·step: $i++ })
-```
-
-lib/sugar/iteration.warp lowers every `for` with it. Tests: tests/modules/test_rewrite_marks.warp.
