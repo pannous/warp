@@ -1,0 +1,10 @@
+# Match arms as other languages spell them, in warp's own (notes/layers.md, sugar; Rust twin: welcome_forms.rs
+# lower_match_arms): `k => v` is the arm `k: v`, `_ => v` and `else -> v` the arm `default: v`, Swift's `case .north: 1`
+# and `.north: 1` the arm of the case north, `case 1: v` the arm `1: v`. `switch` is match's other word.
+rewrite match $s {$arms...} => match $s {($k: $v) for ($k => $v) in $arms...}
+rewrite match $s {$arms...} => match $s {(default: $v) for (_: $v) in $arms...}
+rewrite match $s {$arms...} => match $s {(default: $v) for (else: $v) in $arms...}
+rewrite match $s {$arms...} => match $s {($k: $v) for (case.$k: $v) in $arms...}
+rewrite match $s {$arms...} => match $s {($k: $v) for (.$k: $v) in $arms...}
+rewrite match $s {$arms...} => match $s {($k: $v) for (case $k: $v) in $arms...}
+rewrite switch $s {$arms...} => match $s {$arms...}
