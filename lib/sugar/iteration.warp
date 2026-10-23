@@ -6,5 +6,6 @@
 rewrite for $i in $a..$b {$body...} => ($i = $a; $end = $b; while $i < $end { $body...; loop··step: $i++ }) where $i is symbol
 rewrite for $i in $a to $b {$body...} => ($i = $a; $end = $b; while $i <= $end { $body...; loop··step: $i++ }) where $i is symbol
 rewrite for $i in reverse($a to $b) {$body...} => ($i = $b; $end = $a; while $i >= $end { $body...; loop··step: $i-- }) where $i is symbol
-# Any other iterable is walked item by item: a list, a text, the keys of a map (loop_heads.warp).
+# A map is walked by its keys, as in Python; any other iterable item by item: a list, a text.
+rewrite for $k in $m {$body...} => ($items = map_keys($m); $index = 0; while $index < #$items { $k = $items#($index + 1); $body...; loop··step: $index++ }) where $k is symbol and $m is map
 rewrite for $x in $xs {$body...} => ($items = $xs; $index = 0; while $index < #$items { $x = $items#($index + 1); $body...; loop··step: $index++ }) where $x is symbol
