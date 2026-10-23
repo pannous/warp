@@ -188,8 +188,8 @@ c_functions_of(source: text, library_folder: text): list := {
 	# warp's own words (floor, abs) stay warp's when libc or libm is imported or used, as Rust's lane keeps its built-ins
 	own = warp_word_names(library_folder)
 	missing = []
-	# the imports every name of which is a C function or warp's own: left out as the foreign lines are, so that no
-	# name of theirs reaches the emitter uncalled (an import the host would have to link)
+	# the imports every name of which is a C function: left out as the foreign lines are, so that no name of theirs
+	# reaches the emitter uncalled (an import the host would have to link); one naming warp's own words stays for them
 	resolved = []
 	for statement in statements {
 		imported = c_import(statement)
@@ -203,7 +203,7 @@ c_functions_of(source: text, library_folder: text): list := {
 					if #found > 0 { functions[name] = found#1 } else { missing += [name + " from '" + imported#1 + "'"] }
 				}
 			}
-			if #missing == before { resolved += [statement] }
+			if #missing == before and imported#2.all(name => functions.has(name)) { resolved += [statement] }
 		}
 		library = c_use(statement)
 		if library != ø {
