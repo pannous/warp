@@ -32,14 +32,14 @@ n = 3
 
 # a_place_word_first_among_the_conditions
 is! 'rewrite tag $p => $p * 10 where value and $p is literal
-rewrite tag $p => $p
+rewrite tag $p => $p where $p is not literal
 y = 2
 m = {a: tag 5, b: tag y}
 [m.a, m.b]' [50, 2]
 
 # a_place_word_last_among_the_conditions
 is! 'rewrite tag $p => $p * 10 where $p is literal and value
-rewrite tag $p => $p
+rewrite tag $p => $p where $p is not literal
 y = 2
 m = {a: tag 5, b: tag y}
 [m.a, m.b]' [50, 2]

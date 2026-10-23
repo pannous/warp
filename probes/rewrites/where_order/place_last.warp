@@ -2,7 +2,7 @@
 // out: 2
 // the same conditions the other way round, `where $p is literal and statement`
 rewrite shout $p => print($p * 10) where $p is literal and statement
-rewrite shout $p => print($p)
+rewrite shout $p => print($p) where $p is not literal
 shout 5
 y = 2
 shout y
