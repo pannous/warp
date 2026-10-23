@@ -220,15 +220,20 @@ fn library_for(source: &Path) -> Option<PathBuf> {
 	source.parent().map(Path::to_path_buf).and_then(above).or_else(|| current.and_then(above)).or(installed)
 }
 
-/// The compiler module: built from that lib/ (<lib>/../data/, a checkout's), else installed beside warp-host
+/// The compiler module: beside warp-host first (its own folder, symlinks resolved: the build puts the pair there),
+/// else built from that lib/ (<lib>/../data/, a checkout's), else installed in <bin>/../share/warp
 fn compiler_file(lib: &Path, name: &str) -> Option<PathBuf> {
-	let folders = [vec![lib.join("../data")], installed_folders()].concat();
+	let folders = [own_folder().into_iter().collect(), vec![lib.join("../data")], installed_folders()].concat();
 	folders.into_iter().map(|folder| folder.join(name)).find(|file| file.is_file())
 }
 
+/// The folder of warp-host's own file, a symlink to it followed
+fn own_folder() -> Option<PathBuf> {
+	std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok()?.parent().map(Path::to_path_buf))
+}
+
 fn installed_folders() -> Vec<PathBuf> {
-	let beside = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok()?.parent().map(Path::to_path_buf));
-	beside.map(|folder| vec![folder.join("../share/warp"), folder]).unwrap_or_default()
+	own_folder().map(|folder| vec![folder.join("../share/warp"), folder]).unwrap_or_default()
 }
 
 /// `run_wasm(bytes)` (os.run_wasm): a module run in this process with the same engine and imports as a program, its

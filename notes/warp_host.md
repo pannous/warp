@@ -33,8 +33,11 @@ count.
 - It reuses warp-runtime's engine settings, host words, libm and libc linking. Feature `host` (= `compiler`, parallel
   compilation, wasmtime-wasi p1); feature `wat` adds WAT text. Build: `cargo build --profile host -p warp-runtime
   --features host --bin warp-host` (target/host/warp-host, 6,499,736 B; see Size).
-- Compiler: compiler-self.wasm by default; `--compiler full` uses compiler.wasm (built by warp-rust). It is looked for in
-  `<lib>/../data/` (a checkout built by `warp rebuild`), then in `<bin>/../share/warp/`, then beside warp-host.
+- Compiler: compiler-self.wasm by default; `--compiler full` uses compiler.wasm (built by warp-rust). It is looked for
+  beside warp-host first (its own folder, a symlink to it followed), then in `<lib>/../data/` (a checkout built by
+  `warp rebuild`), then in `<bin>/../share/warp/` (card warp-host-compiler-beside).
+  - The build puts both beside the binary: crates/warp-runtime/build.rs, with the feature host, copies them from
+    WARP_HOST_COMPILERS (a folder), else the checkout's data/, to target/<profile>/ (a cargo warning when missing).
   - lib/ is found the way the launcher finds it: WARP_LIB, else the nearest lib/ holding compiler/ above the source or
     the current folder, else the installed one.
   - compiler-self reads std modules (`use os`) from the lib/ it was built from (its module_directory), not from the lib/
