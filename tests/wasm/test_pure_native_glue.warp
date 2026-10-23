@@ -1,0 +1,31 @@
+# card host-glue-native: GC-free glue code. `"…" as cstr` lays a text's bytes and a NUL in linear memory and gives
+# their address, an int as C's char * takes it; `use native` keeps numbers and cstrs as they are (its prints:
+# tests/host/test_host_native.sh). `warp test tests/wasm` runs them through warp pure
+
+# a_cstr_holds_the_bytes_and_a_nul
+is! 'x = "hi" as cstr
+memory_byte(x) + memory_byte(x + 1)' 209
+is! 'x = "hi" as cstr
+memory_byte(x + 2)' 0
+is! 'use native
+x = "hi" as cstr
+memory_byte(x) + memory_byte(x + 1)' 209
+
+# two_cstrs_keep_their_own_bytes
+is! 'a = "ab" as cstr
+b = "cd" as cstr
+memory_byte(a) * 1000 + memory_byte(b + 1)' 97100
+
+# a_cstr_is_an_address_to_count_on
+is! 'x = "hello" as cstr
+n = 0
+while memory_byte(x + n) != 0 { n = n + 1 }
+n' 5
+
+# native_code_keeps_its_numbers
+is! 'use native
+6 * 7' 42
+is! 'use native
+s = 0
+for i in 0..<5 { s = s + i }
+s' 10

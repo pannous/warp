@@ -62,7 +62,9 @@ binding_operators = assigning_operators + [":=", ":"]
 type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
 	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
 	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
-	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", real: "empty", exact: "empty"}
+	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", real: "empty", exact: "empty",
+	# a C string, `"hi" as cstr` (emitter/literals.warp cstr_value): the address of its bytes in linear memory
+	cstr: "int"}
 
 # `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
 with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word

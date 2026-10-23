@@ -46,3 +46,47 @@ text_trim(t: text): text := {
 	while stop > start and is_space_byte(byte_at(t, stop - 1)) { stop -= 1 }
 	bytes_between(t, start, stop)
 }
+
+## print without texts (`use native`): straight from ints and linear memory into the output bytes, no GC value made
+# n's decimal digits and a newline to stdout; its digits counted on the negative side, where every int has its magnitude
+print_int_line(n: int): int := {
+	at = if n < 0 then 1 else 0
+	if n < 0 { output_byte(0, Ascii.Minus) }
+	low = if n < 0 then n else 0 - n
+	width = 1
+	rest = toward_zero_tenth(low)
+	while rest < 0 {
+		width += 1
+		rest = toward_zero_tenth(rest)
+	}
+	rest = low
+	for i in 0..<width {
+		output_byte(at + width - 1 - i, Ascii.Zero + last_digit_below_zero(rest))
+		rest = toward_zero_tenth(rest)
+	}
+	output_byte(at + width, Ascii.Newline)
+	write_output(at + width + 1)
+}
+# low (0 or less) divided by 10, rounded toward 0, and the digit that drops
+toward_zero_tenth(low: int): int := if low % 10 == 0 then floor_quotient(low, 10) else floor_quotient(low, 10) + 1
+last_digit_below_zero(low: int): int := if low % 10 == 0 then 0 else 10 - low % 10
+# the NUL-terminated bytes at address (a cstr, `"hi" as cstr`) and a newline to stdout, the output room at a time
+print_cstr_line(address: int): int := {
+	at = address
+	count = 0
+	while memory_byte(at) != 0 {
+		if count == output_room() {
+			write_output(count)
+			count = 0
+		}
+		output_byte(count, memory_byte(at))
+		count += 1
+		at += 1
+	}
+	if count == output_room() {
+		write_output(count)
+		count = 0
+	}
+	output_byte(count, Ascii.Newline)
+	write_output(count + 1)
+}
