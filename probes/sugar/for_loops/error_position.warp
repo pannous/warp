@@ -1,0 +1,6 @@
+# an error in a loop body points at what the user wrote. Expected: the unknown name zed
+s = 0
+for i in 1 to 3 {
+	s += zed
+}
+print s

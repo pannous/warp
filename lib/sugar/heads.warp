@@ -1,0 +1,4 @@
+# Returns as other languages write them (notes/layers.md, sugar; Rust twin: welcome_forms.rs lower_bare_returns): a
+# bare `return` returns ø, the phrase `return ø` the emitter compiles. (A result arrow `x(p: P) -> int := …` is the
+# parser's typed head.)
+rewrite return => return ø where statement
