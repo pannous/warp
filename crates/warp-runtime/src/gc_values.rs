@@ -36,15 +36,12 @@ const NEW_TEXT: &str = "new_text";
 const NEW_SYMBOL: &str = "new_symbol";
 const NEW_KEY: &str = "new_key";
 const NEW_LIST: &str = "new_list";
-/// A list of 0 to 255 from bytes in linear memory in one call (lib/compiler/runtime/byte_lists.warp), when exported
-pub const NEW_BYTES: &str = "new_bytes";
 /// The exports an integer beyond the fixnums is composed with: shift left, add, subtract (warp's EXACT_BUILDERS)
 const SHIFT_LEFT: &str = "int_shift_left";
 const ADD: &str = "exact_add";
 const SUBTRACT: &str = "exact_sub";
-pub const BUILDERS: [&str; 12] = [
-	NEW_EMPTY, NEW_INT, NEW_FLOAT, NEW_CODEPOINT, NEW_TEXT, NEW_SYMBOL, NEW_KEY, NEW_LIST, SHIFT_LEFT, ADD, SUBTRACT, NEW_BYTES,
-];
+pub const BUILDERS: [&str; 11] =
+	[NEW_EMPTY, NEW_INT, NEW_FLOAT, NEW_CODEPOINT, NEW_TEXT, NEW_SYMBOL, NEW_KEY, NEW_LIST, SHIFT_LEFT, ADD, SUBTRACT];
 /// The global holding the end of the program's texts (warp's TEXT_HEAP_EXPORT)
 pub const TEXT_HEAP: &str = "text_heap";
 pub const MEMORY: &str = "memory";
@@ -301,23 +298,11 @@ impl Builders {
 		}
 	}
 
-	/// A list of `bytes`, each 0 to 255 (a C call's bytes result): ø for none and for no bytes, as `[]` is; in one call
-	/// of new_bytes when the program exports it, else a cell at a time as build does
+	/// A list of `bytes`, each 0 to 255 (a C call's bytes result); ø for none and for no bytes, as `[]` is
 	pub fn byte_list<T>(&self, bytes: Option<&[u8]>, store: &mut StoreContextMut<'_, T>) -> Result<Val> {
-		match bytes {
-			Some(bytes) if !bytes.is_empty() && self.has(NEW_BYTES) && self.heap.is_some() => {
-				self.text(NEW_BYTES, bytes, store)
-			}
-			Some(bytes) => {
-				let items = bytes.iter().map(|byte| self.node(NEW_INT, &[Val::I64((*byte).into())], store));
-				self.list(items.collect::<Result<_>>()?, SQUARE, store)
-			}
-			None => self.node(NEW_EMPTY, &[], store),
-		}
-	}
-
-	fn has(&self, name: &str) -> bool {
-		self.functions.iter().any(|(known, _)| *known == name)
+		let Some(bytes) = bytes else { return self.node(NEW_EMPTY, &[], store) };
+		let items = bytes.iter().map(|byte| self.node(NEW_INT, &[Val::I64((*byte).into())], store));
+		self.list(items.collect::<Result<_>>()?, SQUARE, store)
 	}
 
 	/// A text of `bytes` as they are (a C function's text needs no valid UTF-8), ø for none
@@ -336,8 +321,10 @@ impl Builders {
 
 	/// ø for no items, as the emitter makes `[]`
 	fn list<T>(&self, items: Vec<Val>, bracket: i64, store: &mut StoreContextMut<'_, T>) -> Result<Val> {
-		if items.is_empty() {
-			return self.node(NEW_EMPTY, &[], store);
+		let Some(first) = items.first() else { return self.node(NEW_EMPTY, &[], store) };
+		let list = self.node(NEW_LIST, &[*first, Val::AnyRef(None), Val::I64(bracket)], store)?;
+		if let Some(list) = vectored(list, &items, store)? {
+			return Ok(list);
 		}
 		items
 			.into_iter()
@@ -467,4 +454,28 @@ pub fn foreign_call<T>(
 	let answer = crate::foreign::call(&runtime, &module_name, module, &member, arguments, &mut no_callbacks)
 		.map_err(wasmtime::Error::msg)?;
 	Ok(builders.build(&answer, &mut store)?.unwrap_anyref().copied())
+}
+
+/// `list`, a one-item list new_list made, holding all of `items` at once, when the program's lists are vectors (a node
+/// over a `{count: i32, items: array}` struct, compiler-self's); None for a program whose lists are cons cells.
+/// new_list(first, rest) copies rest's items into a new vector, so building a list a cell at a time copies n²/2
+/// items (24,000 bytes of read_bytes: 288 million, past the memory cap)
+pub fn vectored<T>(list: Val, items: &[Val], store: &mut StoreContextMut<'_, T>) -> Result<Option<Val>> {
+	let Some((_, data, _)) = fields(&list, store) else { return Ok(None) };
+	let Some(vector) = data.unwrap_anyref().and_then(|data| data.as_struct(&*store).ok().flatten()) else {
+		return Ok(None);
+	};
+	let room = vector.field(&mut *store, 1).ok().and_then(|room| room.unwrap_anyref().copied());
+	let Some(room) = room.and_then(|room| room.as_array(&*store).ok().flatten()) else { return Ok(None) };
+	if !matches!(vector.field(&mut *store, 0), Ok(Val::I32(_))) {
+		return Ok(None);
+	}
+	let room_type = room.ty(&*store)?;
+	let allocator = wasmtime::ArrayRefPre::new(&mut *store, room_type);
+	let array = wasmtime::ArrayRef::new_fixed(&mut *store, &allocator, items)?;
+	if vector.set_field(&mut *store, 1, Val::AnyRef(Some(array.to_anyref()))).is_err() {
+		return Ok(None);
+	}
+	vector.set_field(&mut *store, 0, Val::I32(items.len() as i32))?;
+	Ok(Some(list))
 }

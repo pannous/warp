@@ -31,8 +31,7 @@ def host_call(body: Body, name: text, arguments: any): list {
 host_builders = [["new_empty", [], "built_empty"], ["new_int", ["int"], "built_int"], ["new_bool", ["int"], "built_bool"],
 	["new_float", ["float"], "built_float"], ["new_codepoint", ["char"], "built_codepoint"], ["new_text", ["char", "char"], "built_text"],
 	["new_symbol", ["char", "char"], "built_symbol"], ["new_key", ["node", "node", "int"], "built_key"],
-	["new_list", ["node", "node", "int"], "built_list"], ["new_type", ["node", "node"], "built_type"], ["error_of", ["node"], "built_error"],
-	["new_bytes", ["char", "char"], "built_bytes"]]
+	["new_list", ["node", "node", "int"], "built_list"], ["new_type", ["node", "node"], "built_type"], ["error_of", ["node"], "built_error"]]
 # made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
 # the trap detail the host left (src/host/native.rs raised)
 def exported_builders(): any {
