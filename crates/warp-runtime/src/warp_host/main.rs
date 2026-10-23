@@ -1,9 +1,10 @@
 //! warp-host: the small native host of pure warp programs (notes/warp_host.md). It compiles a program with the warp
 //! compiler written in warp (compiler-self.wasm, or compiler.wasm with `--compiler full`) and runs the module with WASI
 //! and what wasm cannot do itself: shell commands (os.command, os.exec, os.run), C calls, the host words.
-//!   warp-host [--compiler self|full] run <file.warp | code> [args…]   compile and run; the run's value printed
+//!   warp-host [--compiler self|full] [run] <file.warp | code> [args…]   compile and run; the run's value printed
 //!   warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
 //!   warp-host <file.wasm | file.wat> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
+//! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`
 mod cache;
 mod ffi;
 mod nodes;
@@ -20,9 +21,14 @@ use wasmtime_wasi::{FsPerms, WasiCtxBuilder};
 /// The stack wasm runs on: the compiler recurses deeply (warp's self-hosted stage workers take 64 MB)
 const WASM_STACK: usize = 240 << 20;
 const THREAD_STACK: usize = WASM_STACK + (16 << 20);
-const USAGE: &str = "usage: warp-host [--compiler self|full] run <file.warp | code> [args…]
+const USAGE: &str = "usage: warp-host [--compiler self|full] [run] <file.warp | code> [args…]
        warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
-       warp-host <file.wasm | file.wat> [args…]";
+       warp-host <file.wasm | file.wat> [args…]
+no command means run: warp-host f.warp, warp-host '6*7'";
+/// The words warp-host takes as commands; any other first word is a program (`run` implied), as with warp
+const COMMANDS: [&str; 3] = ["run", "compile", "help"];
+/// The extensions of warp source, as warp's (src/cli/formatting.rs WARP_EXTENSIONS)
+const WARP_EXTENSIONS: [&str; 2] = ["warp", "wasp"];
 
 /// A run's state: WASI's, the C handles of its C calls, and what std_io needs
 pub struct Host {
@@ -32,7 +38,9 @@ pub struct Host {
 	scratch: Option<(u32, u64)>,
 	args: Vec<String>,
 	/// whose kept values os.kept reads: the compiler module and lib/ it compiles with, else the program
-	keeper: Option<String>,
+	keeper: Option<cache::Keeper>,
+	/// the engine of the run, for the modules it runs itself (os.run_wasm) and the code it compiles (os.compile_wasm)
+	engine: Engine,
 }
 
 impl CallsC for Host {
@@ -40,6 +48,9 @@ impl CallsC for Host {
 		&mut self.c
 	}
 }
+
+/// The compiler module of this warp-host's runs: compiler-self.wasm, or compiler.wasm with `--compiler full`
+static COMPILER: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
 
 /// How a run ended
 enum Ran {
@@ -61,6 +72,7 @@ fn command(given: Vec<String>) -> i32 {
 		let before_file =
 			args.is_empty() || matches!(args.as_slice(), [command] if command == "run" || command == "compile");
 		match word.as_str() {
+			"--help" | "-h" if before_file => args.push("help".into()),
 			"--compiler" | "--fuel" if before_file => {
 				full |= word == "--compiler" && given.next().as_deref() == Some("full")
 			}
@@ -73,22 +85,38 @@ fn command(given: Vec<String>) -> i32 {
 		Err(problem) => return failed(&format!("{problem:#}")),
 	};
 	let compiler = if full { "compiler.wasm" } else { "compiler-self.wasm" };
+	let _ = COMPILER.set(compiler);
 	match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
 		["run", source, ..] => run_source(&engine, compiler, source, &args[2..]),
 		["compile", source] => {
 			compile_file(&engine, compiler, Path::new(source), &Path::new(source).with_extension("wasm"))
 		}
 		["compile", source, wasm] => compile_file(&engine, compiler, Path::new(source), Path::new(wasm)),
-		[file, ..] if file.ends_with(".wasm") || file.ends_with(".wat") => match module_bytes(file) {
-			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None)),
+		["help", ..] => {
+			println!("{USAGE}");
+			0
+		}
+		[file, ..] if is_module(file) => match module_bytes(file) {
+			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None, false)),
 			Err(problem) => failed(&format!("{file}: {problem}")),
 		},
-		[source, ..] if source.ends_with(".warp") => run_source(&engine, compiler, source, &args[1..]),
+		// no command: run, as `warp f.warp` and `warp '6*7'` run
+		[source, ..] if !COMMANDS.contains(source) => run_source(&engine, compiler, source, &args[1..]),
 		_ => {
 			eprintln!("{USAGE}");
 			2
 		}
 	}
+}
+
+/// A module to run: a .wasm or .wat file by its name, else a file starting with wasm's magic bytes (`\0asm`)
+fn is_module(file: &str) -> bool {
+	use std::io::Read;
+	let mut magic = [0u8; 4];
+	let starts_as_wasm = Path::new(file).is_file()
+		&& std::fs::File::open(file).and_then(|mut opened| opened.read_exact(&mut magic)).is_ok()
+		&& &magic == b"\0asm";
+	file.ends_with(".wasm") || file.ends_with(".wat") || starts_as_wasm
 }
 
 /// A module file's bytes; WAT text only in a build with the feature wat
@@ -110,8 +138,15 @@ fn engine() -> wasmtime::Result<Engine> {
 	Engine::new(&config)
 }
 
-/// `run f.warp`, `run <code>` (a program of the current folder): compiled to a module of its own, then run
+/// `run f.warp`, `run <code>` (a program of the current folder): compiled to a module of its own, then run. As warp
+/// decides: a name with a warp extension is a file, and a missing one an error, not code; any other existing file (a
+/// `#!` script) is a file too, else the word is code
 fn run_source(engine: &Engine, compiler: &str, source: &str, args: &[String]) -> i32 {
+	let named_warp =
+		Path::new(source).extension().is_some_and(|extension| WARP_EXTENSIONS.iter().any(|warp| extension == *warp));
+	if named_warp && !Path::new(source).is_file() {
+		return failed(&format!("could not read file {source}"));
+	}
 	let scratch = std::env::temp_dir().join(format!("warp-host-{}", std::process::id()));
 	let code = scratch.with_extension("warp");
 	let (file, folder) = if Path::new(source).is_file() {
@@ -127,7 +162,7 @@ fn run_source(engine: &Engine, compiler: &str, source: &str, args: &[String]) ->
 	let module = compiled.and_then(|()| std::fs::read(&wasm).map_err(|problem| problem.to_string()));
 	let _ = std::fs::remove_file(&wasm);
 	match module {
-		Ok(bytes) => shown(run_wasm(engine, &bytes, [vec![source.to_string()], args.to_vec()].concat(), None)),
+		Ok(bytes) => shown(run_wasm(engine, &bytes, [vec![source.to_string()], args.to_vec()].concat(), None, false)),
 		Err(problem) => refused(&problem),
 	}
 }
@@ -150,8 +185,12 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 		.ok_or(format!("no {compiler} beside warp-host nor in {}/../data", lib.display()))?;
 	let bytes = std::fs::read(&compiler).map_err(|problem| format!("{}: {problem}", compiler.display()))?;
 	let keeper = cache::fingerprint((&bytes, cache::folder_fingerprint(&lib)));
+	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
+		eprintln!("warp-host: {} with lib/ {}, kept values {keeper}", compiler.display(), lib.display());
+	}
 	let argv = [compiler.as_path(), &source, &absolute(wasm), &folder, &lib].map(|path| path.display().to_string());
-	match run_wasm(engine, &bytes, argv.to_vec(), Some(keeper)) {
+	let keeper = cache::Keeper { key: keeper, library: argv[4].clone() };
+	match run_wasm(engine, &bytes, argv.to_vec(), Some(keeper), true) {
 		Ran::Value(Node::Error(message)) => Err(String::from_utf8_lossy(&message).into_owned()),
 		Ran::Failed(message) => Err(message),
 		Ran::Exited(status) if status != 0 => Err(format!("the compiler exited with status {status}")),
@@ -184,10 +223,48 @@ fn installed_folders() -> Vec<PathBuf> {
 	beside.map(|folder| vec![folder.join("../share/warp"), folder]).unwrap_or_default()
 }
 
-/// Run a module's main (else _start) with WASI (stdio, environment, the file system at / and .) and the host's words
-fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<String>) -> Ran {
+/// `run_wasm(bytes)` (os.run_wasm): a module run in this process with the same engine and imports as a program, its
+/// machine code cached by its bytes, in a store of its own on a thread of its own (its own deep stack); its main's
+/// value, else the trap's or the exit status's reason
+pub fn ran_module(engine: &Engine, bytes: Vec<u8>, args: Vec<String>) -> Result<Node, String> {
+	let engine = engine.clone();
+	match on_own_stack(move || run_wasm(&engine, &bytes, args, None, true))? {
+		Ran::Value(value) => Ok(value),
+		Ran::Exited(0) => Ok(Node::Empty),
+		Ran::Exited(status) => Err(format!("the module exited with status {status}")),
+		Ran::Failed(message) => Err(message),
+	}
+}
+
+/// `compile_wasm(code)` (os.compile_wasm): the code, a program of the current folder, compiled by this warp-host's
+/// compiler in this process; the module's bytes, as read_bytes gives them, or the compiler's refusal
+pub fn compiled_code(engine: &Engine, code: String) -> Result<Vec<u8>, String> {
+	static COMPILES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+	let number = COMPILES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+	let scratch = std::env::temp_dir().join(format!("warp-host-{}-{number}", std::process::id()));
+	let (source, wasm) = (scratch.with_extension("warp"), scratch.with_extension("wasm"));
+	std::fs::write(&source, code).map_err(|problem| format!("{}: {problem}", source.display()))?;
+	let engine = engine.clone();
+	let compiler = COMPILER.get().copied().unwrap_or("compiler-self.wasm");
+	let (from, to) = (source.clone(), wasm.clone());
+	let compiled = on_own_stack(move || compile(&engine, compiler, &from, &to, std::env::current_dir().ok()));
+	let bytes = compiled.and_then(|compiled| compiled).and_then(|()| std::fs::read(&wasm).map_err(|e| e.to_string()));
+	let _ = std::fs::remove_file(&source);
+	let _ = std::fs::remove_file(&wasm);
+	bytes
+}
+
+/// `work` on a thread with the stack a run needs: a module run from inside a host word starts its wasm stack afresh
+fn on_own_stack<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
+	let worker = std::thread::Builder::new().stack_size(THREAD_STACK).spawn(work).map_err(|e| e.to_string())?;
+	worker.join().map_err(|_| "the run's thread failed".to_string())
+}
+
+/// Run a module's main (else _start) with WASI (stdio, environment, the file system at / and .) and the host's words;
+/// `cached`: its machine code from the cache (cache::module)
+fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cache::Keeper>, cached: bool) -> Ran {
 	let ran = || -> wasmtime::Result<Ran> {
-		let module = if keeper.is_some() { cache::module(engine, bytes)? } else { Module::new(engine, bytes)? };
+		let module = if cached { cache::module(engine, bytes)? } else { Module::new(engine, bytes)? };
 		let mut wasi = WasiCtxBuilder::new();
 		wasi.inherit_stdio().inherit_env().args(&args);
 		wasi.preopened_dir("/", "/", FsPerms::ReadWrite)?;
@@ -197,7 +274,8 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<Str
 			c: CHandles::default(),
 			scratch: None,
 			args: args.clone(),
-			keeper: keeper.clone(),
+			keeper,
+			engine: engine.clone(),
 		};
 		let mut linker = Linker::new(engine);
 		wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host: &mut Host| &mut host.wasi)?;
@@ -260,7 +338,11 @@ fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance
 		(Some("returned error") | None, Some(detail)) => detail.content(),
 		(Some(name), Some(detail)) => format!("{name}: {}", detail.shown()),
 		(Some(name), None) if !name.starts_with("wasm") => name.to_string(),
-		_ => format!("{:#}", error),
+		// a trap of the machine's own, without the backtrace: `wasm trap: wasm `unreachable` instruction executed`
+		_ => match error.downcast_ref::<wasmtime::Trap>() {
+			Some(trap) => trap.to_string(),
+			None => format!("{:#}", error),
+		},
 	}
 }
 
