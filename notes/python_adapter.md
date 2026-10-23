@@ -124,3 +124,11 @@ default `--compiler self` lane is untested [I: it shares lib/compiler/c_imports.
 - No callbacks (Python calling warp functions): would need a generic C callback primitive in warp-host.
 - The GIL: the program's thread initializes Python and holds the GIL; calls from other threads are not handled.
 - `print` of a reference shows `{python:37 type:"Counter"}`; python_text gives its str.
+
+## After merging origin/pure-c-imports 57f273b59 (2026-10-23 ~03:00 CEST)
+
+One version_named_sonames (theirs: plain sonames before version-named ones). warp-host rebuilt (1m24s), compilers of
+the pure-c-imports worktree at 57f273b59. [M] tests/host/test_python.sh: 15/15 with `--compiler full` (2m21s) and
+15/15 with `--compiler self` (57s), so the self lane works too. LD_DEBUG=files: `python` opens
+/lib/x86_64-linux-gnu/libpython3.13.so.1 after the plain names libpython.so, .so.0 and .so.6 (also in the crates cache)
+miss.
