@@ -1,0 +1,4 @@
+// out: 7
+// the line after a rule ending in `$s...` is a statement of its own, not the range's end
+rewrite loudly $s... => $s...
+loudly print 7

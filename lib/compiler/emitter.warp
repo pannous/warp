@@ -159,6 +159,11 @@ no_kind = "none"
 # the kind of code that never ends normally (an endless loop): it joins as a call still compiling does, taking the
 # other kind
 never = pending
+# the host word that never returns
+ending_host_word = "exit"
+# the code of a [kind, code] value that ends the run, nothing after it reached (read through a parameter as converted
+# reads its value: `host_call(…)#2 + […]` written in place is read as a text's character)
+def ended_code(value: any): list { value#2 + [op.unreachable] }
 # the names of the helpers Rust's lowering adds to a program (prelude·round_to)
 prelude_prefix = "prelude·"
 # WARP_EMIT_SURVEY set: a refused function is recorded and taken as giving a node, the others compiled on, and the
@@ -695,6 +700,9 @@ def group_expression(body: Body, n: any): list {
 	std = std_word(n)
 	if std != ø { return call(body, module.runtime[std], std_arguments(n#4)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host {
+		# `exit(1)` ends the run: never a value, so `try 42 catch e { exit(1) }` and `if x > 0 { x } else { exit(1) }`
+		# take the other branch's kind (card pure-exit-miscompile)
+		if name_of(n#1) == ending_host_word { return [never, ended_code(host_call(body, name_of(n#1), items_of(n)[1..]))] }
 		return host_call(body, name_of(n#1), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in intrinsics and (body.intrinsics or name_of(n#1) in program_intrinsics) {

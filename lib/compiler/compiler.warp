@@ -10,7 +10,7 @@ use os
 use file
 
 # lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the folder above this file's
-library_folder = if #args > 3 then args#4 else env("WARP_LIB") ?? folder_of(module_directory)
+library_folder = if #args > 3 then args#4 else run_library()
 # the messages of the diagnostics from that lib/, not from the folder this compiler was built in
 messages_from(library_folder + "/compiler")
 
@@ -46,7 +46,7 @@ compile(source: text, folder: text): any := {
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?
 	made = typed_wasm_module(program, runtime_words, with_c_functions(host_words, foreign#2), emitter_kinds(program))
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
-	if made is text { throw made }
+	if made is text { throw c_refusal_owned(made, foreign#2, library_folder) }
 	# the warnings once the module is made, as Rust's pure lane says them
 	for warning in warnings_said(found) { warn warning }
 	made
