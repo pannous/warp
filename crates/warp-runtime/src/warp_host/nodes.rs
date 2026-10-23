@@ -20,6 +20,9 @@ pub enum Node {
 	Int(i64),
 	Bool(bool),
 	Float(f64),
+	/// an exact rational, numerator and denominator (above 1): the pure lane's `2.5` and `1/3`, an Int node holding a
+	/// $Ratio of two $i64box (lib/compiler/emitter.warp gc_types)
+	Ratio(i64, i64),
 	Codepoint(u32),
 	Text(Vec<u8>),
 	Symbol(Vec<u8>),
@@ -80,6 +83,7 @@ impl Node {
 			Node::Int(n) => n.to_string(),
 			Node::Bool(truth) => (if *truth { "true" } else { "false" }).into(),
 			Node::Float(x) => format!("{x:?}"),
+			Node::Ratio(numerator, denominator) => ratio_shown(*numerator, *denominator),
 			Node::Codepoint(code) => format!("'{}'", char::from_u32(*code).unwrap_or('\u{fffd}')),
 			Node::Text(bytes) => quoted(bytes),
 			Node::Symbol(bytes) => String::from_utf8_lossy(bytes).into_owned(),
@@ -110,6 +114,35 @@ fn boxed(data: &Val, store: &mut StoreContextMut<'_, Host>) -> Option<Val> {
 	data.unwrap_anyref()?.unwrap_struct(&*store).ok()?.field(&mut *store, 0).ok()
 }
 
+/// The numerator and denominator of a $Ratio(numerator, denominator), each an $i64box
+fn ratio_of(data: &Val, store: &mut StoreContextMut<'_, Host>) -> Option<(i64, i64)> {
+	let ratio = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
+	let (numerator, denominator) = (ratio.field(&mut *store, 0).ok()?, ratio.field(&mut *store, 1).ok()?);
+	match (boxed(&numerator, store)?, boxed(&denominator, store)?) {
+		(Val::I64(n), Val::I64(d)) if d != 0 => Some((n, d)),
+		_ => None,
+	}
+}
+
+/// A rational as the pure lane prints it: a decimal when it has one (5/2 is 2.5), else n/d (1/3)
+fn ratio_shown(numerator: i64, denominator: i64) -> String {
+	let (sign, numerator, denominator) = match (numerator < 0) != (denominator < 0) {
+		true => ("-", i128::from(numerator).abs(), i128::from(denominator).abs()),
+		false => ("", i128::from(numerator).abs(), i128::from(denominator).abs()),
+	};
+	// the decimal digits: a power of ten the denominator divides
+	let places = (1..=18u32).find(|places| 10i128.pow(*places) % denominator == 0);
+	match places {
+		Some(places) => {
+			let scaled = numerator * (10i128.pow(places) / denominator);
+			let (whole, fraction) = (scaled / 10i128.pow(places), scaled % 10i128.pow(places));
+			let fraction = format!("{fraction:0width$}", width = places as usize);
+			format!("{sign}{whole}.{}", fraction.trim_end_matches('0'))
+		}
+		None => format!("{sign}{numerator}/{denominator}"),
+	}
+}
+
 /// The program's node as a host value; a main's plain result as its number
 pub fn read(node: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<Memory>) -> Result<Node> {
 	let Some((kind, data, value)) = fields(node, store) else {
@@ -134,7 +167,11 @@ pub fn read(node: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<Me
 			None => match boxed(&data, store) {
 				Some(Val::I64(n)) if info == BOOL_INFO => Node::Bool(n != 0),
 				Some(Val::I64(n)) => Node::Int(n),
-				_ => Node::Other(kind),
+				_ => match ratio_of(&data, store) {
+					Some((n, 1)) => Node::Int(n),
+					Some((n, d)) => Node::Ratio(n, d),
+					None => Node::Other(kind),
+				},
 			},
 		},
 		FLOAT => boxed(&data, store).and_then(|x| x.f64()).map_or(Node::Other(kind), Node::Float),
@@ -219,6 +256,7 @@ impl Builders {
 			Node::Int(n) => self.call("new_int", &[Val::I64(*n)], store),
 			Node::Bool(truth) => self.call("new_bool", &[Val::I64(i64::from(*truth))], store),
 			Node::Float(x) => self.call("new_float", &[Val::F64(x.to_bits())], store),
+			Node::Ratio(numerator, denominator) => self.ratio(*numerator, *denominator, store),
 			Node::Codepoint(code) => self.call("new_codepoint", &[Val::I32(*code as i32)], store),
 			Node::Text(bytes) => self.text("new_text", bytes, store),
 			Node::Symbol(bytes) => self.text("new_symbol", bytes, store),
@@ -246,6 +284,30 @@ impl Builders {
 			}
 			other => wasmtime::bail!("warp-host cannot give a program {}", other.shown()),
 		}
+	}
+
+	/// An Int node holding a $Ratio of two $i64box, as the program makes `2.5`: no builder makes one, so the structs are
+	/// made here, of the types the program's own (structural, final) $i64box and $Ratio are, the node of new_int's type
+	fn ratio(&self, numerator: i64, denominator: i64, store: &mut StoreContextMut<'_, Host>) -> Result<Val> {
+		use wasmtime::{FieldType, Mutability, StorageType, StructRef, StructRefPre, StructType, ValType};
+		let int = self.call("new_int", &[Val::I64(numerator)], store)?;
+		let node = int.unwrap_anyref().and_then(|node| node.as_struct(&*store).ok().flatten());
+		let node = node.ok_or_else(|| wasmtime::Error::msg("new_int made no node"))?;
+		let node_type = node.ty(&*store)?;
+		let engine = store.engine().clone();
+		let field = |value: ValType| FieldType::new(Mutability::Const, StorageType::ValType(value));
+		let int_box = StructRefPre::new(&mut *store, StructType::new(&engine, [field(ValType::I64)])?);
+		let ratio =
+			StructRefPre::new(&mut *store, StructType::new(&engine, [field(ValType::ANYREF), field(ValType::ANYREF)])?);
+		let boxed = |n: i64, store: &mut StoreContextMut<'_, Host>| -> Result<Val> {
+			Ok(Val::AnyRef(Some(StructRef::new(&mut *store, &int_box, &[Val::I64(n)])?.to_anyref())))
+		};
+		let parts = [boxed(numerator, store)?, boxed(denominator, store)?];
+		let ratio = StructRef::new(&mut *store, &ratio, &parts)?.to_anyref();
+		let kind = node.field(&mut *store, 0)?;
+		let allocator = StructRefPre::new(&mut *store, node_type);
+		let built = StructRef::new(&mut *store, &allocator, &[kind, Val::AnyRef(Some(ratio)), Val::AnyRef(None)])?;
+		Ok(Val::AnyRef(Some(built.to_anyref())))
 	}
 
 	/// A list of the items at once, for a program whose lists are vectors (a node over a `{count: i32, items: array}`
@@ -325,6 +387,9 @@ pub fn encode(node: &Node, out: &mut Vec<u8>) -> Option<()> {
 		Node::Int(n) => bytes(1, &n.to_le_bytes(), out),
 		Node::Bool(truth) => bytes(2, &[u8::from(*truth)], out),
 		Node::Float(x) => bytes(3, &x.to_le_bytes(), out),
+		Node::Ratio(numerator, denominator) => {
+			bytes(11, &[numerator.to_le_bytes(), denominator.to_le_bytes()].concat(), out)
+		}
 		Node::Codepoint(code) => bytes(4, &code.to_le_bytes(), out),
 		Node::Text(text) => bytes(5, text, out),
 		Node::Symbol(text) => bytes(6, text, out),
@@ -369,6 +434,13 @@ pub fn decode(input: &mut &[u8]) -> Option<Node> {
 		1 => Node::Int(i64::from_le_bytes(part(input)?.try_into().ok()?)),
 		2 => Node::Bool(part(input)? == [1]),
 		3 => Node::Float(f64::from_le_bytes(part(input)?.try_into().ok()?)),
+		11 => {
+			let (numerator, denominator) = part(input)?.split_at_checked(8)?;
+			Node::Ratio(
+				i64::from_le_bytes(numerator.try_into().ok()?),
+				i64::from_le_bytes(denominator.try_into().ok()?),
+			)
+		}
 		4 => Node::Codepoint(u32::from_le_bytes(part(input)?.try_into().ok()?)),
 		5 => Node::Text(part(input)?.to_vec()),
 		6 => Node::Symbol(part(input)?.to_vec()),
