@@ -305,8 +305,12 @@ fn library_for(source: &Path) -> Option<PathBuf> {
 }
 
 /// The compiler module: built from that lib/ (<lib>/../data/, a checkout's), else installed beside warp-host
+/// The compiler beside warp-host comes first: the one a harness staged there or `warp rebuild` wrote into target/, not
+/// a checkout's data/ one, which may be older than its lib/ (a data/compiler-self.wasm without C imports refused every
+/// C call as "outside the core"); then lib/../data, then <prefix>/share/warp
 fn compiler_file(lib: &Path, name: &str) -> Option<PathBuf> {
-	let folders = [vec![lib.join("../data")], installed_folders()].concat();
+	let beside = installed_folders().pop().into_iter().collect::<Vec<_>>();
+	let folders = [beside, vec![lib.join("../data")], installed_folders()].concat();
 	folders.into_iter().map(|folder| folder.join(name)).find(|file| file.is_file())
 }
 
