@@ -218,7 +218,7 @@ pub fn run_child_case(command: &str, file: &str, index: &str) -> bool {
 /// `PartialEq<i64>` / `PartialEq<f64>` for Node (`Float(2.0) == 2`), and a one-character text and its char,
 /// `PartialEq<char>` for Node (`Text("b") == 'b'`). Only at the top, as `is!` was: lists compare as Node does
 fn as_is_compares(got: &Node, expected: &Node) -> bool {
-	use crate::numbers::Number::{Float, Int};
+	use crate::extensions::numbers::Number::{Float, Int};
 	match (got.drop_meta(), expected.drop_meta()) {
 		(Node::Number(Int(int)), Node::Number(Float(float))) | (Node::Number(Float(float)), Node::Number(Int(int))) => {
 			*int as f64 == *float
@@ -244,7 +244,7 @@ fn is_data(expected: &Node) -> bool {
 mod tests {
 	use super::as_is_compares;
 	use crate::node::Node;
-	use crate::numbers::Number::{Float, Int};
+	use crate::extensions::numbers::Number::{Float, Int};
 
 	#[test]
 	fn compares_as_is_did() {
