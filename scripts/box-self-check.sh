@@ -30,6 +30,10 @@ case $? in
 	*) echo "SELF CHECK RED: scripts/rebuild.sh failed in $tree: $(echo "$pair" | tail -3)"; exit 1 ;;
 esac
 echo "$pair"
+# the pair beside the copy too: the shared binary takes the compilers beside it first (its own installed pair)
+for name in compiler compiler-self; do
+	[ -f "$tree/data/$name.wasm" ] && cp "$tree/data/$name.wasm" "$scratch/"
+done
 verdict= passed=0
 lane() { # lane <name> <command…>: the command prints Hello as its last line
 	local name=$1 said
