@@ -552,14 +552,14 @@ fn a_lexer_over_short_words_takes_linear_time_pure() {
 	runs_pure("lexer_short_words", &lexer, "6000");
 }
 
-/// `n times` and sleep's units are no passes of the warp compiler (card phrases-out-of-core): `n times` is refused by
-/// name until it is a library word, `sleep(seconds)` is the prelude word calling the host word sleep_ms
+/// `n times` and sleep's units are no passes of the warp compiler (card phrases-out-of-core): `n times`, `twice` and
+/// `thrice` are library words (lib/sugar/loops.warp), `sleep(seconds)` is the prelude word calling the host word sleep_ms
 #[test]
 fn phrases_out_of_the_core() {
-	let (output, _) = lane_run("pure-only", "times_pending", "a = 0; 3 times { a += 1 }; a");
-	assert!(output.contains("outside the core: pure: `n times` (library word pending)"), "{output}");
-	let (output, _) = lane_run("pure-only", "twice_pending", "n = 0; twice { n += 1 }; n");
-	assert!(output.contains("outside the core: pure: `twice …` (library word pending)"), "{output}");
+	runs_pure("times_runs", "a = 0; 3 times { a += 7 }; a", "21");
+	runs_pure("times_prints", "3 times { print \"hi\" }", "hi\nhi\nhi");
+	runs_pure("twice_runs", "n = 0; twice { n += 5 }; n", "10");
+	runs_pure("thrice_runs", "n = 0; thrice { n += 5 }; n", "15");
 	runs_pure("own_twice", "twice(x) := x * 2; twice(4)", "8");
 	let sleep = format!("{}/probes/pure_chains/sleep_seconds.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("sleep_seconds", &sleep, "yes\nwoke");

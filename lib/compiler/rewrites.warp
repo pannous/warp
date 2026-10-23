@@ -90,6 +90,9 @@ first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/arms", "s
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls"]
 iteration_sugar_module_names = ["sugar/iteration"]
 late_sugar_module_names = ["sugar/ranges"]
+# the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
+# a list literal (card sugar-comprehensions)
+comprehension_sugar_module_names = ["sugar/comprehensions"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
@@ -148,7 +151,7 @@ rewritten_program(program: any, source: text): any := {
 	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
-	program = bottom_up_placed(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
+	program = placed_map_scoped(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
 	uses = []
 	for module in fired_modules {
 		statement = plain_node(parsed("use " + module))
@@ -181,7 +184,7 @@ sugared(program: Node, rules: list): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_case_holders = case_holders_of(program)
-	bottom_up_placed(program, n => sugared_node(n, rules), map_names_of(program))
+	placed_map_scoped(program, n => sugared_node(n, rules), map_names_of(program))
 }
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
@@ -610,32 +613,23 @@ context_holds(code: any, context: text): bool := {
 	word is symbol and name_of(word) in rule_binding
 }
 
-# bottom_up for the rules, keeping where the node they try stands (rule_method_part, rule_binding, rule_maps): the
-# method part of a `.` is tried as such, a definition's parts inside the names it binds, the maps scoped as
-# map_scoped_bottom_up scopes them
-bottom_up_placed(n: any, f: function, maps: any): any := {
-	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
+# bottom_up for the rules, keeping where the node they try stands (rule_method_part, rule_binding): the method part
+# of a `.` is tried as such, a definition's parts inside the names it binds
+bottom_up_placed(n: any, f: function): any := {
 	if is_key(n, Op.Dot) {
-		left = bottom_up_placed(key_of(n), f, inner)
-		part = children(value_of(n), x => bottom_up_placed(x, f, inner))
+		left = bottom_up_placed(key_of(n), f)
+		part = children(value_of(n), x => bottom_up_placed(x, f))
 		outer_part = rule_method_part
 		rule_method_part = part
-		rule_maps = maps
 		right = f(part)
 		rule_method_part = outer_part
-		rule_maps = maps
 		return f(Key(left, Op.Dot, right))
 	}
-	if not is_key(n, Op.Define) {
-		walked = children(n, x => bottom_up_placed(x, f, inner))
-		rule_maps = maps
-		return f(walked)
-	}
+	if not is_key(n, Op.Define) { return f(children(n, x => bottom_up_placed(x, f))) }
 	outer = rule_binding
 	rule_binding = rule_binding + bound_by_definition(n)
-	walked = children(n, x => bottom_up_placed(x, f, inner))
+	walked = children(n, x => bottom_up_placed(x, f))
 	rule_binding = outer
-	rule_maps = maps
 	f(walked)
 }
 
@@ -777,6 +771,36 @@ map_names_in(nodes: list, outer: any): any := {
 map_scoped_bottom_up(n: Node, f: function, maps: any): Node := {
 	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
 	walked = children(n, x => map_scoped_bottom_up(x, f, inner))
+	rule_maps = maps
+	f(walked)
+}
+
+# bottom_up_placed and map_scoped_bottom_up in one walk, for the rules: the method part of a `.` tried as such, a
+# definition's parts inside the names it binds (rule_method_part, rule_binding), and rule_maps holding the names that
+# hold a map where f meets each node, a function's own inside it (merge of engine-rule-conditions with main's
+# map scoping)
+placed_map_scoped(n: any, f: function, maps: any): any := {
+	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
+	if is_key(n, Op.Dot) {
+		left = placed_map_scoped(key_of(n), f, inner)
+		part = children(value_of(n), x => placed_map_scoped(x, f, inner))
+		outer_part = rule_method_part
+		rule_method_part = part
+		rule_maps = maps
+		right = f(part)
+		rule_method_part = outer_part
+		rule_maps = maps
+		return f(Key(left, Op.Dot, right))
+	}
+	if not is_key(n, Op.Define) {
+		walked = children(n, x => placed_map_scoped(x, f, inner))
+		rule_maps = maps
+		return f(walked)
+	}
+	outer = rule_binding
+	rule_binding = rule_binding + bound_by_definition(n)
+	walked = children(n, x => placed_map_scoped(x, f, inner))
+	rule_binding = outer
 	rule_maps = maps
 	f(walked)
 }
