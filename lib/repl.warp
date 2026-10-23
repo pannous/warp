@@ -1,6 +1,8 @@
-// The interactive console in pure warp (card pure-repl), run by warp-host: `warp-host lib/repl.warp`. An entry is
-// compiled together with the session's earlier state-changing entries and run in this process (compile_wasm,
-// run_wasm): source replay as the Rust console's (notes/console.md), so `a = 7` then `a` gives 7
+// The interactive console in pure warp (card pure-repl), run by warp-host: `warp-host lib/repl.warp`, or warp-host
+// alone on a terminal. An entry is compiled together with the session's kept entries and run in this process
+// (compile_wasm, run_wasm), so `a = 7` then `a` gives 7. The session keeps uses and definitions as written, and an
+// assignment as its value (`x = command("date")` kept as `x = "Fri …"`), so later entries never run its effects again;
+// a value without a literal (a list holding what text_form can't write back) keeps the assignment as written
 use os
 
 // how many brackets a text leaves open: an entry goes on over the next lines while some are
@@ -25,6 +27,25 @@ state_entry(entry: text) := {
 	contains(plain, "=")
 }
 
+// the name an entry assigns: `a = 7`, `a += 2`, `a++` give a; "" for any other entry (a definition `f(x) := …`, `a.b = 1`)
+assigned_name(entry: text) := {
+	t = trim(entry)
+	name = ""
+	for c in t {
+		if is_alphanumeric(c) or c == "_" { name = name + c } else { break }
+	}
+	if name == "" { return "" }
+	rest = trim(t[count(name):])
+	for op in ["+=", "-=", "*=", "/=", "++", "--"] {
+		if starts_with(rest, op) { return name }
+	}
+	if starts_with(rest, "=") and not starts_with(rest, "==") { return name }
+	""
+}
+
+// a text written as warp reads it back: quoted, its backslashes, quotes and line ends escaped
+quoted(t: text) := "\"" + replace(replace(replace(t, "\\", "\\\\"), "\"", "\\\""), "\n", "\\n") + "\""
+
 // one entry, the brackets of its first line still open: read on until they close, ø at the input's end
 entry_from(first: text) := {
 	entry = first
@@ -46,11 +67,48 @@ evaluated(source: text) := {
 	try run_wasm(bytes) catch e { e }
 }
 
-// the console: read an entry, evaluate it with the session's state, print its value or its Error; an entry that
+// an Error's message as the entry's: without the os.compile_wasm prefix and the scratch file the compiler read, its
+// line counted from the entry's first (the session's `kept` lines come before it) when the compiler's is past them
+message(error: any, kept: int) := {
+	m = replace(str(error), "os.compile_wasm: ", "")
+	parts = split(m, " at /")
+	if count(parts) < 2 { return m }
+	place = split(parts[count(parts) - 1], ".warp:")
+	position = split(place[count(place) - 1], ":")
+	if count(place) < 2 or count(position) != 2 { return m }
+	line = int(position[0]) - kept
+	if line < 1 { line = int(position[0]) }
+	parts[0] + " at line " + str(line) + ":" + position[1]
+}
+
+// the value as warp source that gives it back, ø when there's none: a text quoted, a number or yes/no as shown, a
+// list as shown if that reads back as the same
+literal(value: any) := {
+	if is_type(value, "text") { return quoted(value) }
+	written = text_form(value)
+	if is_type(value, "list") {
+		back = evaluated(written)
+		if is_error(back) or text_form(back) != written { return ø }
+	}
+	written
+}
+
+// what the session keeps of an entry evaluated to `value`: an assignment's name bound to the value's literal, else the
+// entry as written
+kept_line(entry: text, value: any) := {
+	name = assigned_name(entry)
+	if name == "" { return entry }
+	written = literal(value)
+	if written == ø { return entry }
+	name + " = " + written
+}
+
+// the console: read an entry, evaluate it with the session's kept lines, print its value or its Error; an entry that
 // failed is not kept
 repl() := {
 	print "Interactive console (Ctrl+D to exit)"
 	session = ""
+	kept = 0
 	while true {
 		line = input("🌀")
 		if line == ø { break }
@@ -58,15 +116,21 @@ repl() := {
 		if entry == "exit" or entry == "quit" { break }
 		if entry == ":help" { print repl_help }
 		else if entry == ":session" { print session }
-		else if entry == ":reset" { session = "" }
+		else if entry == ":reset" {
+			session = ""
+			kept = 0
+		}
 		else if entry != "" {
-			source = session + entry
-			value = evaluated(source)
-			if is_error(value) { print "Error: " + value }
+			value = evaluated(session + entry)
+			if is_error(value) { print "Error: " + message(value, kept) }
 			else {
 				// a definition's own value is the session's last one: not shown
 				if value != ø and not contains(entry, ":=") { print value }
-				session = if state_entry(entry) then source + "\n" else session
+				if state_entry(entry) {
+					kept_entry = kept_line(entry, value)
+					session = session + kept_entry + "\n"
+					kept = kept + count(split(kept_entry, "\n"))
+				}
 			}
 		}
 	}

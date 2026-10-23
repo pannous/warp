@@ -59,4 +59,11 @@ console ":session lists the kept entries" "a = 7" -- 'a = 7' 'a' ':session'
 console "quit ends the console" ! "42" -- 'quit' '6*7'
 console "the input's end ends the console" "🌀1" -- '1'
 
+# the session keeps an assignment's value, not its effects: later entries never run them again
+console "an assignment's effect runs once" "🌀🌀once"$'\n'"🌀once"$'\n'"🌀once!" ! "once"$'\n'"once" \
+	-- 'use os' 'x = command("echo once >&2; echo once")' 'x' 'x + "!"'
+console "a kept assignment is its value" 'x = "a \"q\""' "n = 8" -- 'x = "a \"q\""' 'n = 7' 'n++' ':session'
+console "an Error names the entry's line, not the scratch file" "unknown name nope at line 1:1" ! "/tmp/" \
+	! "os.compile_wasm" -- 'a = 1' 'nope'
+
 if [ "$failed" = 0 ]; then echo "✓ $run tests passed"; else echo "✗ $failed of $run tests failed"; exit 1; fi
