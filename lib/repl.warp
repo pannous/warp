@@ -1,0 +1,76 @@
+// The interactive console in pure warp (card pure-repl), run by warp-host: `warp-host lib/repl.warp`. An entry is
+// compiled together with the session's earlier state-changing entries and run in this process (compile_wasm,
+// run_wasm): source replay as the Rust console's (notes/console.md), so `a = 7` then `a` gives 7
+use os
+
+// how many brackets a text leaves open: an entry goes on over the next lines while some are
+open_brackets(t: text) := {
+	depth = 0
+	for c in t {
+		if c == "(" or c == "[" or c == "{" { depth = depth + 1 }
+		if c == ")" or c == "]" or c == "}" { depth = depth - 1 }
+	}
+	depth
+}
+
+// an entry the later ones need: a use, a declaration, a definition, an assignment, ++ or --; not an expression nor a
+// comparison (==, !=, <=, >=)
+state_entry(entry: text) := {
+	t = trim(entry)
+	for word in ["use ", "let ", "var ", "const ", "global ", "class "] {
+		if starts_with(t, word) { return true }
+	}
+	if ends_with(t, "++") or ends_with(t, "--") { return true }
+	plain = replace(replace(replace(replace(t, "==", ""), "!=", ""), "<=", ""), ">=", "")
+	contains(plain, "=")
+}
+
+// one entry, the brackets of its first line still open: read on until they close, ø at the input's end
+entry_from(first: text) := {
+	entry = first
+	while open_brackets(entry) > 0 {
+		more = input("… ")
+		if more == ø { return entry }
+		entry = entry + "\n" + more
+	}
+	entry
+}
+
+repl_help := "exit or quit (or Ctrl+D) ends; :session lists the kept entries, :reset forgets them"
+
+// the value of a program, else its Error: the compiler's refusal (compile_wasm answers it, raising nothing), the run's
+// raise or trap
+evaluated(source: text) := {
+	bytes = compile_wasm(source)
+	if is_error(bytes) { return bytes }
+	try run_wasm(bytes) catch e { e }
+}
+
+// the console: read an entry, evaluate it with the session's state, print its value or its Error; an entry that
+// failed is not kept
+repl() := {
+	print "Interactive console (Ctrl+D to exit)"
+	session = ""
+	while true {
+		line = input("🌀")
+		if line == ø { break }
+		entry = trim(entry_from(line))
+		if entry == "exit" or entry == "quit" { break }
+		if entry == ":help" { print repl_help }
+		else if entry == ":session" { print session }
+		else if entry == ":reset" { session = "" }
+		else if entry != "" {
+			source = session + entry
+			value = evaluated(source)
+			if is_error(value) { print "Error: " + value }
+			else {
+				// a definition's own value is the session's last one: not shown
+				if value != ø and not contains(entry, ":=") { print value }
+				session = if state_entry(entry) then source + "\n" else session
+			}
+		}
+	}
+	ø
+}
+
+repl()
