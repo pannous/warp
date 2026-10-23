@@ -86,7 +86,7 @@ one_word = "one"
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
 # making or reading the forms its rules take, the iteration sugar lowering the `for` loops once loop_heads.warp read
 # their heads, and the late sugar after it took the loops a range counts: a range left is a value (sugar/ranges)
-first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads"]
+first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "compiler/extensions/tuples"]
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls"]
 iteration_sugar_module_names = ["sugar/iteration"]
 late_sugar_module_names = ["sugar/ranges"]
