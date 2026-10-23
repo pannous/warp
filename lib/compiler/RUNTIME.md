@@ -20,7 +20,7 @@ show, float printing, arithmetic, equality, ordering, types, conversions, text_n
 fields, nodes, errors and builders, plus bridge (below).
 
 **Extended** is `runtime_extended.warp` and the parts it names in `lib/compiler/runtime_extended/`, for optional
-features: exact, exact_rounding, pow and pow_tables, durations, times and wasi, plus hooks (below).
+features: exact, exact_rounding, pow and pow_tables, durations, times and wasi, plus the hooks' bodies (below).
 `runtime/durations.warp` is a link to `runtime_extended/durations.warp`, kept while
 tests/numbers/test_duration_words.rs reads the file at its old path.
 
@@ -44,8 +44,8 @@ Core's generic words hand a value of an extended type, an exact ratio or a time,
 | `extended_ratio` | text_numbers | "3/4" read as n/d in lowest terms |
 | `extended_zeros` | floats | a text of zero digits |
 
-`runtime_extended/hooks.warp` gives their bodies, calling exact's and times' words. Only `runtime_extended.warp` uses
-it: the Rust lane refuses a word declared in one used file and defined in another. Plain ints never reach a hook, so a
+`runtime_extended.warp` gives their bodies itself, calling exact's and times' words: the Rust lane refuses a word
+declared in one used file and defined in another, so the bodies are the root's own words, and the root runs alone. Plain ints never reach a hook, so a
 hello world calls nothing from extended. In the Rust lane a core part runs alone with its hooks trapping if called.
 
 ## Rules
@@ -53,7 +53,7 @@ hello world calls nothing from extended. In the Rust lane a core part runs alone
 - `runtime.warp` uses only core files.
 - Core never uses extended and never names an extended word: it calls the bridge's hooks.
   `scripts/self-check.sh` checks both before taking a slot: no `^use .*extended` line in `runtime.warp` or a plain
-  file of `runtime/`, and no call there to a word that a `runtime_extended/*.warp` file defines (hooks.warp aside).
+  file of `runtime/`, and no call there to a word that a `runtime_extended/*.warp` file defines.
 - An extended part is only ever loaded by `runtime_extended.warp`; its words compile only when called, for example
   float `^` compiles pow's.
 - The emitter declares each GC type only on first use, so a hello world contains none of extended's.

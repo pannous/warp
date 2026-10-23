@@ -9,14 +9,8 @@ use "../runtime/instructions.warp"
 use "../runtime/library_words.warp"
 use "../runtime/nodes.warp"
 use "../byte_codes.warp"
-# durations.warp's words, declared rather than used: it declares exact.warp's words it calls (it also runs from its
-# link lib/compiler/runtime/durations.warp), and a part loading both would find those declared there, defined here
-duration_text(n: Node): text from runtime
-second_nanos(): int from runtime
-millisecond_nanos(): int from runtime
-minute_nanos(): int from runtime
-hour_nanos(): int from runtime
-day_nanos(): int from runtime
+# durations.warp's duration_text and its nanosecond constants
+use "durations.warp"
 is_time(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Time
 is_instant(t: Node): bool := time_form(t) == TimeFormCode.Instant
 is_date(t: Node): bool := time_form(t) == TimeFormCode.Date
