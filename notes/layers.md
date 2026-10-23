@@ -183,7 +183,7 @@ Sugar passes, with the rule each would become:
 | 137 | for_loops | done (card sugar-for-loops): lib/sugar/iteration.warp lowers every `for` (F3, F7, F10); loop_heads.warp keeps what needs the program's knowledge: which iterables are maps (scoped), a type word as the variable |
 | 121 | welcome_forms | match-arm spellings onto one: rows of rules, F4 for arms |
 | 121 | foreign_forms | `rewrite public $d... => $d...`, `rewrite new $c => $c`: F1 (statement head); `attr_accessor` F1 (class body) |
-| 116 | min_max | `max(a, b)` → library function; the comparison form needs F3 |
+| 116 | min_max | done (card min-max-sugar): lib/sugar/extremes.warp, twelve rules; the pass file is gone. The prelude function stays a later step (lib/extrema.warp, once measured as fast) |
 | 97 | library_calls | `rewrite reverse $x => reverse($x)` per typed prelude word: F2 (typed signature), unbound already handled |
 | 91 | clauses | `fib(0) := 0; fib(1) := 1` → one kernel match: F6 |
 | 88 | comprehensions | `rewrite [$e for $x in $xs] => (r = []; for $x in $xs { r += [$e] }; r)`: F3 |
