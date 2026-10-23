@@ -276,7 +276,7 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 	let compiler = compiler_file(&lib, compiler)
 		.ok_or(format!("no {compiler} beside warp-host nor in {}/../data", lib.display()))?;
 	let bytes = std::fs::read(&compiler).map_err(|problem| format!("{}: {problem}", compiler.display()))?;
-	let keeper = cache::fingerprint((&bytes, cache::folder_fingerprint(&lib)));
+	let keeper = cache::fingerprint((&bytes, cache::compiler_inputs_fingerprint(&lib)));
 	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
 		eprintln!("warp-host: {} with lib/ {}, kept values {keeper}", compiler.display(), lib.display());
 	}
