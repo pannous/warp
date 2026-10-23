@@ -88,7 +88,14 @@ one_word = "one"
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
 # making or reading the forms its rules take, the iteration sugar lowering the `for` loops once loop_heads.warp read
 # their heads, and the late sugar after it took the loops a range counts: a range left is a value (sugar/ranges)
-first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads"]
+# the compiler extensions (notes/agents/common.md: new capabilities, one file each in lib/compiler/extensions/), applied
+# with the first sugar, ahead of it: data_items reads the names in `[a, b]` before the later sugar steps could see them.
+# A new extension adds its line here.
+extension_module_names = [
+	"compiler/extensions/tuples"
+	"compiler/extensions/safe_navigation"
+]
+first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads"]
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls", "sugar/parameters"]
 iteration_sugar_module_names = ["sugar/iteration"]
 late_sugar_module_names = ["sugar/ranges", "sugar/method_calls"]
@@ -1091,10 +1098,13 @@ rule_matches(pattern: any, code: any, bound: any): bool := {
 	typed = typed_hole(pattern)
 	if typed != ø { return is_hole_kind(code, typed#2) and hole_binding(typed#1, code, bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
-	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and items_match(items_of(pattern), items_of(code), bound) }
+	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) }
 	if code is key or is_group(code) { return no }
 	pattern == code
 }
+
+# a tuple pattern `($a, $b)` matches a tuple, never the call `f(a, b)`, whose parentheses hold no commas
+tuple_fits(pattern: any, code: any): bool := not (bracket_of(pattern) == "(" and separator_of(pattern) == ",") or separator_of(code) == ","
 
 items_match(patterns: list, items: list, bound: any): bool := {
 	rest_at = ø
