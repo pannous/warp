@@ -10,22 +10,60 @@ use warp_runtime::c_signatures::{CFunction, CPointer, Failure, ParamType, RetTyp
 use wasmtime::{AsContextMut, ExternType, FuncType, Linker, Module, Result, ValType};
 
 pub const C_FUNCTIONS_SECTION: &str = "warp.c_functions";
+/// warp-rust's description of its C calls (src/modules/wasm_modules/c_calls.rs): `module name parameters result`
+/// tab-separated, a letter per parameter, `t` a text it copied NUL-terminated into its memory, the parameter its address
+pub const C_CALLS_SECTION: &str = "warp.c_calls";
 
-/// Link every C import of `module` that the linker has no fitting definition for, or that the section describes
-pub fn link_c_imports(
-	linker: &mut Linker<Host>,
-	store: &mut impl AsContextMut<Data = Host>,
-	module: &Module,
-	bytes: &[u8],
-) -> Result<()> {
-	let described: Vec<CFunction> = custom_sections(bytes, C_FUNCTIONS_SECTION)
+/// The C functions a module's `warp.c_functions` section describes (machine code keeps no custom section: aot.rs
+/// carries them in front of it)
+pub fn described(bytes: &[u8]) -> Result<Vec<CFunction>> {
+	custom_sections(bytes, C_FUNCTIONS_SECTION)
 		.flat_map(|section| String::from_utf8_lossy(section).lines().map(str::to_string).collect::<Vec<_>>())
 		.filter(|line| !line.trim().is_empty())
 		.map(|line| {
 			CFunction::of_line(&line)
 				.ok_or_else(|| wasmtime::Error::msg(format!("{C_FUNCTIONS_SECTION}: not a C function: {line:?}")))
 		})
-		.collect::<Result<_>>()?;
+		.collect()
+}
+
+/// A C call warp-rust's `warp.c_calls` section letters: module, name, a letter per parameter
+pub type Lettered = (String, String, String);
+
+/// module.name → its parameters' letters, from warp-rust's modules (none for machine code, which keeps no section)
+pub fn lettered(bytes: &[u8]) -> Vec<Lettered> {
+	custom_sections(bytes, C_CALLS_SECTION)
+		.flat_map(|section| String::from_utf8_lossy(section).lines().map(str::to_string).collect::<Vec<_>>())
+		.filter_map(|line| {
+			let fields: Vec<&str> = line.split('\t').collect();
+			(fields.len() >= 3).then(|| (fields[0].to_string(), fields[1].to_string(), fields[2].to_string()))
+		})
+		.collect()
+}
+
+/// What a module says of its C imports: its `warp.c_functions` (carried in front of machine code, aot.rs) and the
+/// letters of warp-rust's `warp.c_calls`
+#[derive(Default)]
+pub struct CImports {
+	pub described: Vec<CFunction>,
+	pub lettered: Vec<Lettered>,
+}
+
+impl CImports {
+	/// Both sections of a module's bytes
+	pub fn of(bytes: &[u8]) -> Result<Self> {
+		Ok(CImports { described: described(bytes)?, lettered: lettered(bytes) })
+	}
+}
+
+/// Link every C import of `module` that the linker has no fitting definition for, or that `c.described` names
+pub fn link_c_imports(
+	linker: &mut Linker<Host>,
+	store: &mut impl AsContextMut<Data = Host>,
+	module: &Module,
+	c: &CImports,
+) -> Result<()> {
+	let (described, lettered) = (&c.described, &c.lettered);
 	linker.allow_shadowing(true);
 	for import in module.imports() {
 		let (library, name) = (import.module(), import.name());
@@ -39,7 +77,10 @@ pub fn link_c_imports(
 		let function = match description {
 			Some(function) => function.clone(),
 			None if fits => continue,
-			None => of_import(library, name, &func_type),
+			None => {
+				let letters = lettered.iter().find(|(module, function, _)| module == library && function == name);
+				of_import(library, name, &func_type, letters.map(|(_, _, letters)| letters.as_str()))
+			}
 		};
 		let loaded = get_or_load_library(&function.library).ok_or_else(|| {
 			let tried = library_paths(&function.library).join(", ");
@@ -64,8 +105,8 @@ pub fn link_c_imports(
 }
 
 /// A C function as the import's own type says: numbers as they are, a reference parameter a text, a reference result
-/// a text read back
-fn of_import(library: &str, name: &str, func_type: &FuncType) -> CFunction {
+/// a text read back; a parameter warp-rust's letters mark `t` the address of a text in linear memory
+fn of_import(library: &str, name: &str, func_type: &FuncType, letters: Option<&str>) -> CFunction {
 	let param = |value: ValType| match value {
 		ValType::I64 => ParamType::I64,
 		ValType::F32 => ParamType::F32,
@@ -85,7 +126,14 @@ fn of_import(library: &str, name: &str, func_type: &FuncType) -> CFunction {
 		module: library.to_string(),
 		library: library.to_string(),
 		name: name.to_string(),
-		param_types: func_type.params().map(param).collect(),
+		param_types: func_type
+			.params()
+			.enumerate()
+			.map(|(index, value)| match letters.and_then(|letters| letters.chars().nth(index)) {
+				Some('t') => ParamType::Ptr,
+				_ => param(value),
+			})
+			.collect(),
 		result,
 		ret_type,
 		out_pointee: None,

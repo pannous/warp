@@ -17,9 +17,8 @@ hole_mark = "$"
 global diagnosed = []
 # [level, pattern, message] of every row of the message files, read at the first fact
 global message_rows = ø
-# the folder of the message files: this file's, or the one `messages_from` names (compiler.warp's lib/, since a
-# compiler.wasm keeps as module_directory the folder it was built from, gone or elsewhere where it runs)
-global message_folder = module_directory
+# the folder of the message files: the run's lib/compiler (parser.warp run_library), or the one `messages_from` names
+global message_folder = run_library() + "/compiler"
 
 # the message files read from this folder from now on
 def messages_from(folder: text) {

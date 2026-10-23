@@ -1,0 +1,2 @@
+class Square{side:int; def scaled(k) { side * k }}
+print Square(3).scaled(2)

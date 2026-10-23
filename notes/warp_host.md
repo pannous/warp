@@ -6,8 +6,9 @@ It is no warp-rust: there is no interpreter or Rust compiler in it, and it doesn
 count.
 
     warp-host [--compiler self|full] [run] <file.warp | code> [args…]   compile and run; the run's value printed
-    warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
-    warp-host <file.wasm | file.wat> [args…]
+    warp-host [--compiler self|full] compile [--aot] <file.warp> [<file.wasm>]
+    warp-host [--compiler self|full] build <file.warp | file.wasm> [-o <app>]
+    warp-host <file.wasm | file.wat | file.cwasm> [args…]
     warp-host help | --help | -h                                         the usage, status 0
 
 - No command means run, as with warp: the first word after the flags decides.
@@ -26,6 +27,7 @@ count.
 - Source: crates/warp-runtime/src/warp_host/
   - main.rs: commands, finding lib/ and the compiler, running a module
   - words.rs: std_io, and compiler.wasm's host.read/fetch/warn
+  - shell.rs: std_io's words of lib/shell.warp (cd, mkdir, copy, move, touch, remove …)
   - nodes.rs: GC nodes in and out
   - cache.rs: kept values and machine code
   - ffi.rs: C imports
@@ -46,6 +48,17 @@ count.
 - std_io:
   - os: env, args, cwd, input, stdin, kept, keep, command, exec, run, run_wasm, compile_wasm
   - file: read, write, append, exists, read_bytes, write_bytes
+  - the words of lib/shell.warp (card unix-words, shell.rs), as warp-rust's src/modules/shell_adapters.rs:
+    - os: cd (the process's working directory; its new one), which (ø when no PATH folder has it), open (open on
+      macOS, xdg-open elsewhere)
+    - file: list (lib/file.warp list_files: names, sorted), glob, mkdir (with the folders above), copy and move (into
+      a folder keeping the name, else to the path), touch, remove (to the Trash: ~/.Trash on macOS, else
+      ~/.local/share/Trash with a .trashinfo; never a pattern, a full folder, the root, home, or the working directory
+      and the folders above it), find, size (du's bytes), info ({size, modified in ms, kind})
+    - A failure names the path: `file.list: nosuch: No such file or directory (os error 2)`.
+  - The file words take `~` and `~/…` as the home folder. A relative path is in the process's working directory, so
+    after `cd` they follow it, as commands do.
+  - compiler-self's output calls them through std_io, so no `warp rebuild self` is needed for them.
   - A failure answers the program an Error with the same text as warp-rust's std_adapters.rs, e.g. `os.command: sh -c
     exit 3 failed (exit status: 3): …`.
   - `run(argv)` (lib/os.warp) gives `{status, out, err}` with trailing newlines dropped. A failing command is no error
@@ -306,6 +319,70 @@ hello.wasm, warm, 2–3 runs. Host suite 29/29 and launcher suite 22/22 pass wit
     2 ms, and ran hello.wasm in 6 ms. Cold start would still be dominated by the 23 s of kept values.
   - Work: nodes.rs, words.rs, ffi.rs, cache.rs and c_calls.rs's linking use the Rust API (Rooted, StructRef, Caller,
     Linker), so they would be rewritten against the C API: ~1500 lines of unsafe code (estimate).
+
+## lib/shell.warp under warp-host (2026-10-22, branch warp-host-shell)
+
+Work: ls, cd (its value, and commands and std_io paths after it), mkdir, touch, cp, mv, rm, cat, echo, head, tail, wc,
+unique_lines, find_files, file_size, info, which, glob, list_files. tests/host/test_host.sh checks them, each in a fresh folder.
+Not yet, for reasons outside warp-host:
+- `pwd`/`cwd` after `cd` still give the start folder. The pure compiler computes a definition without parameters
+  (`cwd := std_io(…)`, `pwd := cwd`) once, where warp-rust runs it at every read; and `f() := …` has no bare `f`.
+- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (lib/compiler/runtime/wasi.warp), not
+  std_io. So they take no `~`, and a relative path stays in the start folder (WASI's preopened `.`) after `cd`.
+- `ls("nosuch")` traps (`node length`): the comprehension takes list_files's Error as a list. `list_files("nosuch")`
+  itself is a catchable Error.
+- `grep`: the compiler refuses `matches(…)` (use regex). `sort_lines`: `sort(file_lines(…))` resolves to shell.warp's
+  `sort(file:Path)` and traps with `no field name`.
+- `print ls` without parentheses prints the symbol ls: the pure compiler calls no function by its bare name.
+
+## Ahead of time (card warp-host-aot)
+
+Adopted from warp-rust's `compile --aot` and `build` (notes/aot.md), in crates/warp-runtime/src/warp_host/aot.rs.
+- `warp-host compile --aot f.warp [f.wasm]` writes the module and beside it f.cwasm, its machine code for this machine
+  from the engine warp-host runs with (engine.precompile_module). `compile --aot m.wasm` writes only m.cwasm.
+- `warp-host f.cwasm [args…]` runs it through Module::deserialize. Machine code is recognized by its .cwasm name, else
+  by how it starts (wasmtime's ELF image, or the C table below).
+  - Machine code of another wasmtime version, other engine settings or another target is refused before it runs:
+    `warp-host: f.cwasm was compiled by another warp-host or for another machine (Module was compiled with incompatible
+    version '48'): compile it again with `warp-host compile --aot``.
+  - A file that is no machine code: `f.cwasm is no machine code of a module`.
+  - Trust: a .cwasm is native code, so running one is like running an executable.
+- C calls: machine code keeps no custom sections, so the module's warp.c_functions lines travel in front of it in the
+  table warp build uses (c_signatures.rs with_c_functions, `WRPCcfun`). The libraries are dlopened when it starts.
+- `warp-host build f.warp [-o app]` writes the standalone executable f (f.exe on Windows), or a module's with
+  `build m.wasm`. It is a copy of this warp-host with the machine code appended, behind warp's executable trailer
+  (standalone.rs with_machine_code: deflated, its u64 length, `WRPCwasm`, padded to 16).
+  - On start warp-host reads its own end (std::env::current_exe, standalone::embedded_machine_code: the load commands
+    and the last 32 bytes). When it carries a program it runs that with all its arguments, so `app --help` is the
+    program's, and prints the value as `warp-host f.warp` does. It needs no compiler, lib/ or cache.
+  - It is one binary: WASI, std_io (shell words, commands, run_wasm) and C calls work as in warp-host. compile_wasm
+    still needs a compiler-self.wasm to be found.
+  - macOS: appending after the signature breaks it. Instead, the signature is dropped, the program goes inside
+    __LINKEDIT (macho.rs), and the file is signed ad hoc with `codesign --sign - --force`.
+    `codesign --verify --strict` passes (tested on the Mac, arm64).
+  - Building again over an executable replaces its program. build never writes over its source (`build script` of an
+    extensionless file needs -o).
+- Tests: `tests/queue.sh tests/host/test_host_aot.sh`, with the same settings as test_host.sh. 34 checks: box 33 (no
+  codesign check), Mac 34.
+- Measured 2026-10-23 with hello.warp. Both machines were heavily loaded (box load ~50 on 8 cores, Mac ~60), so the
+  times are upper bounds:
+
+  | | box, Linux x86_64 | Mac, arm64 |
+  |---|---|---|
+  | warp-host (profile host) | 6,598,344 B | 4,042,576 B |
+  | hello.cwasm (hello.wasm 1,685 B) | 19,712 B | 52,488 B |
+  | executable `hello` | 6,603,328 B (+5 KB) | 4,024,336 B |
+  | executable of a `use os` program | 6,666,320 B | 4,084,256 B |
+  | `./hello` (executable) | 4 ms | 12.9 ms ± 3.2 |
+  | `warp-host hello.cwasm` | 6 ms | 17.2 ms ± 6.8 |
+  | `warp-host hello.wasm` (Cranelift each run) | 35 ms | 24.6 ms ± 11 |
+  | `warp-host hello.warp`, warm cache | 333 ms | 482 ms ± 78 |
+  | `warp-host hello.warp`, cold (empty cache, none shipped) | minutes (loaded box) | 43.3 s |
+
+  The executable is warp-host plus the deflated machine code. On the Mac it came out smaller than warp-host itself:
+  the linker's signature is replaced by codesign's.
+- The optional precompiled compiler-self.cwasm already exists as the shipped host-cache's .cwasm (18–19 MB per
+  target, see Size). It is opt-in through packaging (packaging/host_cache.sh), so no second mechanism was added.
 
 ## Next
 
