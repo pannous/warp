@@ -15,7 +15,7 @@ for compiler in compiler.wasm compiler-self.wasm; do
 	[ -f "$compilers/$compiler" ] || { echo "✗ no $compiler in $compilers: scripts/rebuild.sh copies the pair"; exit 1; }
 done
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/cache" || exit 1
-cp "$host" "$compilers"/compiler.wasm "$compilers"/compiler-self.wasm "$stage/bin/" && cp -R "$checkout/lib" "$stage/lib" || exit 1
+cp "$host" "$stage/bin/warp-host" && cp "$compilers"/compiler.wasm "$compilers"/compiler-self.wasm "$stage/bin/" && cp -R "$checkout/lib" "$stage/lib" || exit 1
 export WARP_HOST_CACHE=$stage/cache WARP_LIB=$stage/lib WARP_NO_WINDOW=1 WARP_HINTS=0
 cd "$stage" || exit 1
 printf '%s\n' '6 * 7' >program.warp
