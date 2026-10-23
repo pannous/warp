@@ -304,7 +304,7 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 
 /// lib/ for compiler.warp, as warp-rust finds it: WARP_LIB, else the nearest lib/ holding compiler/ above the source or
 /// the current folder, else the one installed beside warp-host or in <prefix>/share/warp
-pub(crate) fn library_for(source: &Path) -> Option<PathBuf> {
+fn library_for(source: &Path) -> Option<PathBuf> {
 	if let Some(lib) = std::env::var_os("WARP_LIB") {
 		return Some(PathBuf::from(lib));
 	}
@@ -317,7 +317,7 @@ pub(crate) fn library_for(source: &Path) -> Option<PathBuf> {
 }
 
 /// The compiler module: built from that lib/ (<lib>/../data/, a checkout's), else installed beside warp-host
-pub(crate) fn compiler_file(lib: &Path, name: &str) -> Option<PathBuf> {
+fn compiler_file(lib: &Path, name: &str) -> Option<PathBuf> {
 	let folders = [vec![lib.join("../data")], installed_folders()].concat();
 	folders.into_iter().map(|folder| folder.join(name)).find(|file| file.is_file())
 }
