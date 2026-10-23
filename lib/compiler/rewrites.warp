@@ -165,16 +165,41 @@ sugared(program: Node, rules: list): Node := {
 }
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
-sugared_node(n: any, rules: list): any := sugar_rewritten(with_changed_members(n, member => bottom_up(member, part => sugared_node(part, rules))), rules)
+sugared_node(n: any, rules: list): any := {
+	n = with_changed_members(n, member => sugar_at_place(bottom_up(member, part => sugared_node(part, rules)), "member", rules))
+	if holds_statements(n) {
+		n = group_like(n, spliced_statements(items_of(n).map(statement => sugar_at_place(statement, "statement", rules))))
+	} else if n is key and key_of(n) != symbol(opaque_word) {
+		n = with_placed_parts(n, (code, place) => sugar_at_place(code, place, rules))
+	}
+	sugar_rewritten(n, rules)
+}
+
+# the statements of a block or the program, a block of one statement too (`if c { twice{…} }`); a map written out
+# `{a: 1}` holds entries
+holds_statements(n: any): bool := is_group(n) and (separator_of(n) in statement_separators or (is_curly_group(n) and #n == 1 and not is_braced_map(n)))
+
+# the code rewritten by the first sugar rule of the place matching it, the result rewritten again
+sugar_at_place(n: any, place: text, rules: list): any := {
+	for rule in rules {
+		if rule.place == place {
+			result = rule_applied(rule, {}, n)
+			if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+		}
+	}
+	n
+}
 
 # the node rewritten by the first sugar rule matching it, its result rewritten again (F7); a node no rule matches stays
 # as the passes left it
 sugar_rewritten(n: any, rules: list): any := {
 	written = flattened_phrase(n)
 	for rule in rules {
-		result = rule_applied(rule, {}, n)
-		if result == ø and written != ø { result = rule_applied(rule, {}, written) }
-		if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+		if rule.place == "" {
+			result = rule_applied(rule, {}, n)
+			if result == ø and written != ø { result = rule_applied(rule, {}, written) }
+			if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+		}
 	}
 	n
 }
@@ -562,7 +587,7 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 		# statements (`$f(x) := …` defines f where the phrase stood), a value's turns into its block (as_value) there
 		n = if phrase and #runs == 1 then runs#1 else group_like(n, runs.map(as_value))
 	} else if n is key {
-		n = if key_of(n) == symbol(opaque_word) then with_members(n, rules, origins) else with_placed_parts(n, rules, origins)
+		n = if key_of(n) == symbol(opaque_word) then with_changed_members(n, member => at_place(member, "member", rules, origins)) else with_placed_parts(n, (code, place) => at_place(code, place, rules, origins))
 	}
 	for index in 0 ..< #rules {
 		if rules[index].place == "" and not matches_runs(rules[index]) {
@@ -614,22 +639,19 @@ spliced_statements(statements: list): list := {
 	spliced
 }
 
-# the key with its condition (`if c`, `while c`), its key and value (`k: v`) rewritten by the rules of that place, a
-# template's statements in its parts their blocks
-with_placed_parts(n: any, rules: list, origins: list): any := {
+# the key with its condition (`if c`, `while c`), its key and value (`k: v`) rewritten by `placed_code` (code, place) with the
+# rules of that place, a template's statements in its parts their blocks
+with_placed_parts(n: any, placed_code: function): any := {
 	left = key_of(n)
 	right = value_of(n)
-	if (is_key(n, Op.If) or is_key(n, Op.While)) and left == ø { right = at_place(right, "condition", rules, origins) }
+	if (is_key(n, Op.If) or is_key(n, Op.While)) and left == ø { right = placed_code(right, "condition") }
 	if is_key(n, Op.Colon) {
-		left = at_place(left, "key", rules, origins)
-		right = at_place(right, "value", rules, origins)
+		left = placed_code(left, "key")
+		right = placed_code(right, "value")
 	}
 	if left == key_of(n) and right == value_of(n) and not is_statements_template(left) and not is_statements_template(right) { return n }
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
 }
-
-# a class with the items of its body rewritten by the rules of the place `member`
-with_members(n: any, rules: list, origins: list): any := with_changed_members(n, member => at_place(member, "member", rules, origins))
 
 # a class with each item of its body changed: the passes see it as the opaque view ["type", name, body]
 with_changed_members(n: any, changed: function): any := {
