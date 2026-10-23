@@ -120,7 +120,7 @@ fn command(given: Vec<String>) -> i32 {
 		}
 		[file, ..] if aot::is_machine_code(file) => match std::fs::read(file) {
 			Ok(machine_code) => match aot::load(&engine, &machine_code, file) {
-				Ok((module, functions)) => shown(run_module(&engine, &module, &functions, args.clone(), None)),
+				Ok((module, functions)) => shown(run_module(&engine, &module, &functions, &[], args.clone(), None)),
 				Err(problem) => failed(&problem),
 			},
 			Err(problem) => failed(&format!("{file}: {problem}")),
@@ -254,7 +254,7 @@ fn run_carried(machine_code: &[u8], args: Vec<String>) -> i32 {
 		Err(problem) => return failed(&format!("{problem:#}")),
 	};
 	match aot::load(&engine, machine_code, &args[0]) {
-		Ok((module, functions)) => shown(run_module(&engine, &module, &functions, args, None)),
+		Ok((module, functions)) => shown(run_module(&engine, &module, &functions, &[], args, None)),
 		Err(problem) => failed(&problem),
 	}
 }
@@ -360,7 +360,7 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cac
 		Ok((module, ffi::described(bytes)?))
 	};
 	match loaded() {
-		Ok((module, functions)) => run_module(engine, &module, &functions, args, keeper),
+		Ok((module, functions)) => run_module(engine, &module, &functions, &ffi::lettered(bytes), args, keeper),
 		Err(problem) => Ran::Failed(format!("{problem:#}")),
 	}
 }
@@ -370,6 +370,7 @@ fn run_module(
 	engine: &Engine,
 	module: &Module,
 	functions: &[CFunction],
+	lettered: &[ffi::Lettered],
 	args: Vec<String>,
 	keeper: Option<cache::Keeper>,
 ) -> Ran {
@@ -393,7 +394,7 @@ fn run_module(
 		warp_runtime::c_calls::link_libc_functions(&mut linker)?;
 		words::link(&mut linker)?;
 		let mut store = Store::new(engine, host);
-		ffi::link_c_imports(&mut linker, &mut store, module, functions)?;
+		ffi::link_c_imports(&mut linker, &mut store, module, functions, lettered)?;
 		linker.define_unknown_imports_as_traps(module)?;
 		warp_runtime::engine::cap_memory(&mut store);
 		let instance = linker.instantiate(&mut store, module)?;
