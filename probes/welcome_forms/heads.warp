@@ -1,0 +1,7 @@
+// expected: 7 7 ø (a result arrow `-> int` is the typed head; a bare return returns ø)
+x(n: int) -> int := n + 1
+print x(6)
+y(n: int) -> int = n + 2
+print y(5)
+f(n) := { if n > 0 { return }; 3 }
+print f(1)

@@ -1,0 +1,2 @@
+class Square{side:int; def area() -> int { side * side }; def volume() -> int { side * side * side }}
+print Square(3).volume()

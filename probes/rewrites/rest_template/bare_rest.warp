@@ -1,0 +1,9 @@
+// out: 3
+// 7
+// a bare rest template rebuilds the phrase its hole bound (card engine-rest-template): the declaration words go,
+// the definition and the call they stood before stay
+rewrite loudly $s... => $s...
+rewrite gently $s... => $s...
+loudly gently f() := 3
+print f()
+loudly print 7

@@ -12,5 +12,5 @@ rewrite max([$a]) => $a
 rewrite max([$items...]) => max($items...)
 rewrite min $values... => min($values...)
 rewrite max $values... => max($values...)
-rewrite min($xs) => ($held = $xs; if count($held) == 0 then empty_extremum(min) else ($best = $held#1; $at = 2; while $at <= count($held) { $item = $held#$at; $best = if $item < $best then $item else $best; $at += 1 }; $best))
-rewrite max($xs) => ($held = $xs; if count($held) == 0 then empty_extremum(max) else ($best = $held#1; $at = 2; while $at <= count($held) { $item = $held#$at; $best = if $item > $best then $item else $best; $at += 1 }; $best))
+rewrite min($xs) => ($held = $xs; if count($held) == 0 then empty_extremum(min) else ($best = $held#1; for $item in $held { $best = if $item < $best then $item else $best }; $best))
+rewrite max($xs) => ($held = $xs; if count($held) == 0 then empty_extremum(max) else ($best = $held#1; for $item in $held { $best = if $item > $best then $item else $best }; $best))
