@@ -527,7 +527,7 @@ def assignment(body: Body, target: any, value: any): list {
 
 # `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (field_checks: int_admitted,
 # bool_checked, …), any other value Rust would check at run time (a fraction, a byte's range) is refused
-declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool"}
+declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool", char: "char"}
 def declaration(body: Body, name: text, written_type: text, value: any): list {
 	type_name = aliased_type(written_type)
 	# `x: any = v` admits every value: the plain assignment; `t: type = int`, `m: map = {}` too, a node like any
