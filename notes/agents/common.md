@@ -176,6 +176,11 @@ After a context swap, this file and your role file win over anything a handover 
   needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1
   tests/queue.sh -- <filter>`. The Integrator's full suite runs in the cloud too. Warp tests (`warp test`,
   scripts/is_tests.py) run locally with the shared binary.
+- Stop isolation (user 2026-10-23, very important): an agent stops only its own helper jobs, never with a stop that
+  reaches other agents.
+- Communicate less (user 2026-10-23): message only when it really matters (Ready, blocked, a decision needed); batch
+  the rest and send FYIs without waking the agent. Git is the status: branch name, commit messages and the board
+  card. Ready means the card moved and the branch pushed, no chat needed.
 - Low effort for routine runs (user 2026-10-23): routine builds and tests (rebuilds, targeted test runs, self-checks,
   gate runs) go to a helper at low effort with a step cap; give it the exact commands and stop when they finish.
   Higher effort only for real debugging or design work.
