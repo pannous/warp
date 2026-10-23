@@ -5,3 +5,11 @@
 rewrite ($f $x) => $f($x) where $f takes one
 # before several words it takes the phrase they make: `reverse sort xs` is `reverse(sort xs)`, then `reverse(sort(xs))`
 rewrite ($f $x $more...) => $f(($x $more...)) where $f takes one
+
+# Pipes (wiki/pipe.md, decision D6): `x | f` is the call f(x) of a function of the program or a library word of one
+# value, `3 | inc | dbl` is dbl(inc(3)); between two functions `|` composes them, `inc | dbl` is `x => x | inc | dbl`,
+# and a composition piped on composes, `inc | dbl | square`; between values `|` stays the logical or. Rust twin: pipes.rs
+rewrite ($it => $body) | $g => $it => $body | $g where $g is function
+rewrite $f | $g => $it => $it | $f | $g where $f is function and $g is function
+rewrite $x | $f => $f($x) where $f is function
+rewrite $x | $f => $f($x) where $f takes one
