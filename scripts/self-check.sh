@@ -3,7 +3,12 @@
 # that self build runs hello world. Few checks at a time on the Mac: each self build runs wasm-opt -O3 on ~2.5 cores,
 # and eight at once pushed the load past 60 (supervisor 2026-10-21); one at a time queued checks for 45 min at load 9,
 # so the check runs in one of scripts/slot.sh's fleet-wide slots.
-# usage: scripts/self-check.sh [<worktree>, default the current checkout]   (exit 0 = Hello printed)
+# The pair checked is the one for the branch's compiler inputs (scripts/rebuild.sh, notes/compiler_rebuilds.md): data/'s
+# or the shared store's. A miss is said ("REBUILD NEEDED") and the existing pair is checked: the check builds only when
+# asked to, with --rebuild (then in a slot). Nothing rebuilds the compilers because lib/ changed (user 2026-10-23).
+# usage: scripts/self-check.sh [--rebuild] [<worktree>, default the current checkout]   (exit 0 = Hello printed)
+rebuild=
+[[ ${1-} == --rebuild ]] && { rebuild=1; shift; }
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
 # main's Rust binary, warp-rust beside the launcher warp (notes/pure_wrapper.md); plain warp until warp-rust is installed
 main_warp=/Users/me/dev/bin/warp-rust
@@ -17,15 +22,13 @@ if [[ $worktree == $main_checkout/* ]]; then
   print -u2 "self-check: $worktree is inside the main checkout; check a worktree under /Volumes/Worktrees or a copy under /Volumes/Junk"
   exit 2
 fi
-[[ -n $WARP_SLOT ]] || exec $main_checkout/scripts/slot.sh ${0:a} $worktree
+[[ -n $rebuild && -z $WARP_SLOT ]] && exec $main_checkout/scripts/slot.sh ${0:a} --rebuild $worktree
 
 cd $worktree || exit 1
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
 # both compilers of the branch's lib/: compiler.wasm (`warp pure`, built by Rust) and compiler-self.wasm (`warp self`,
 # built by itself); a lib/ that passed self alone broke main's `warp rebuild pure` twice on 2026-10-22
 check_lane() {
-  local built
-  built=$($warp rebuild $1 2>&1) || { verdict="SELF CHECK RED: warp rebuild $1 failed in $worktree: $(print -r -- $built | grep -v '^warning\|^ *[0-9]* |\|^ *|' | tail -3)"; return 1; }
   said=$($warp $1 samples/hello/hello.warp 2>&1 | tail -1)
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp $1 hello said: $said"; return 1; }
   verdict="SELF CHECK ok: $said"
@@ -33,8 +36,24 @@ check_lane() {
 # main's binary is refreshed after each pushed batch: a compiler.wasm built by the old binary and a self build by the
 # new one make a self compiler that traps on every program (card self-trap-function-param). The check runs its own copy
 # of the binary, taken once, so a refresh never overlaps it (retrying instead kept checks queued for hours, 2026-10-22)
-warp=$WARP_SLOT/warp
+scratch=$WARP_SLOT
+[[ -n $scratch ]] || { scratch=$(mktemp -d /tmp/self-check.XXXXXX) && trap "rm -rf $scratch" EXIT; }
+warp=$scratch/warp
 cp $main_warp $warp || exit 1
+# the pair for these inputs: data/'s, else the store's; built by the copy only with --rebuild. The Rust fingerprint is
+# that of main's binary, read from the pair beside it (the copy has none beside it)
+export WARP_RUST_FINGERPRINT=$(LC_ALL=C tr '\0' '\n' <${main_warp:h}/compiler.wasm 2>/dev/null | LC_ALL=C sed -n '/warp\.build/{n;n;p;q;}' | LC_ALL=C grep -ao '^[0-9a-f]\{16\}' | head -1)
+if [[ -n $rebuild ]]; then
+  pair=$(WARP_BINARY=$warp $worktree/scripts/rebuild.sh both $worktree 2>&1)
+else
+  pair=$(WARP_BINARY=$warp $worktree/scripts/rebuild.sh --check both $worktree 2>&1)
+fi
+case $? in
+  0) ;;
+  3) print -r -- "self-check: REBUILD NEEDED: no pair for these compiler inputs in data/ nor the store; checking the existing pair (scripts/self-check.sh --rebuild builds it)" ;;
+  *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree: $(print -r -- $pair | tail -3)"; exit 1 ;;
+esac
+print -r -- $pair
 check_lane pure && check_lane self
 passed=$?
 echo $verdict

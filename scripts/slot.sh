@@ -27,6 +27,8 @@ take_slot() {
 slot_numbers=({1..$heavy_slots})
 [[ -n $WARP_SLOT_GATE ]] && slot_numbers=(0)
 take_slot
+# one line per slot run in the shared rebuild log (scripts/rebuild.sh writes its hits and misses there too)
+print -r -- "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$PWD hash=${WARP_INPUTS_HASH:--} slot=${WARP_SLOT:t} $*" >>/Volumes/Build/compilers/rebuilds.log 2>/dev/null
 trap "rm -rf $WARP_SLOT" EXIT
 export WARP_SLOT
 "$@"
