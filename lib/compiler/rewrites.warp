@@ -45,7 +45,7 @@ code_properties = ["type", "unbound", "value", "function", "literal", "enum", "m
 # with (card engine-rule-conditions)
 context_words = ["method", "shadowed"]
 # `where $f is in [add, push]`: the hole bound one of the words listed
-in_word = "in"
+listed_word = "in"
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
 cases_words = ["cases", "of"]
 # `where $n < 0`: the comparisons of a number literal
@@ -501,7 +501,7 @@ is_context_word(condition: any): bool := condition is symbol and name_of(conditi
 
 # `in [add, push]` after `is`: the words listed (names, or texts naming them), else ø
 listed_words(wanted: any): any := {
-	if not (is_group(wanted) and bracket_of(wanted) == "" and #wanted == 2 and wanted#1 == symbol(in_word)) { return ø }
+	if not (is_group(wanted) and bracket_of(wanted) == "" and #wanted == 2 and wanted#1 == symbol(listed_word)) { return ø }
 	listing = wanted#2
 	if not (is_group(listing) and bracket_of(listing) == "[") { return ø }
 	words = items_of(listing)
