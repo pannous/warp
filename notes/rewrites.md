@@ -95,7 +95,7 @@ rewrite bump_all $vs... => ($v += 1 for $v in $vs...)
 rewrite flags $ns... => {($n: yes) for $n in $ns...}
 ```
 
-Zip over two rest holes (`$a = $b for ($a, $b) in …`) isn't built yet.
+Zip over two rest holes is F11 below.
 
 ## Runs of statements (F6)
 A pattern of several statements `($a; $b)` matches a run of them standing one after the other in a block, holes
@@ -148,3 +148,19 @@ rewrite $word $p => $p where parameter and $word is label   # replace(t, old, wi
 
 The sugar step applies a rule of a place only there (before F10 it ignored places). Tests:
 tests/modules/test_rewrite_parameters.warp.
+
+## Zip over rest holes (F11)
+`T for ($x, $y) in ($xs..., $ys...)` splices T once for each position of the rest holes, `$x` and `$y` bound to their
+items there. A rest hole the pattern didn't bind is as many fresh names as the others hold items (F3), and stays bound
+for the rest of the firing; rest holes of different lengths give an error:
+
+```warp
+rewrite zipped([$xs...], [$ys...]) => [$x * $y for ($x, $y) in ($xs..., $ys...)]   # zipped([1, 2], [3, 4]) is [3, 8]
+rewrite kept($xs...) => ($t = $x for ($t, $x) in ($ts..., $xs...); [$ts...])       # t·1 = 7; t·2 = 8; [t·1, t·2]
+```
+
+## Shorter runs tried again (F12)
+A run of statements (F6) a rule made shorter is tried again where it stands, together with the statements after it,
+so a pairwise rule folds a whole run: `rewrite (add_up($a); add_up($b)) => add_up($a + $b)` turns `add_up(1);
+add_up(2); add_up(3)` into `add_up((1 + 2) + 3)`. A run as long or longer moves on, so this can't loop. The sugar step
+(lib/sugar) matches runs of statements the same way. Tests: tests/modules/test_rewrite_zip.warp.

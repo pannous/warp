@@ -146,15 +146,37 @@ sugared(program: Node, rules: list): Node := {
 	first_parameter_types = typed_first_parameters(program)
 	placed_rules = rules.filter(rule => rule.place != "")
 	plain_rules = rules.filter(rule => rule.place == "")
-	bottom_up(program, n => sugared_node(n, plain_rules, placed_rules))
+	run_rules = plain_rules.filter(rule => is_statements_pattern(rule.pattern))
+	bottom_up(program, n => sugared_node(n, plain_rules, placed_rules, run_rules))
 }
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view), a definition's
 # parameters by the rules of the place `parameter`
-sugared_node(n: any, rules: list, placed_rules: list): any := {
-	n = with_changed_members(n, member => bottom_up(member, part => sugared_node(part, rules, placed_rules)))
+sugared_node(n: any, rules: list, placed_rules: list, run_rules: list): any := {
+	n = with_changed_members(n, member => bottom_up(member, part => sugared_node(part, rules, placed_rules, run_rules)))
 	if is_key(n, Op.Define) and #placed_rules > 0 { n = with_parameters_sugared(n, rules, placed_rules) }
+	if #run_rules > 0 and is_group(n) and separator_of(n) in statement_separators { n = with_runs_sugared(n, rules, run_rules) }
 	sugar_rewritten(n, rules)
+}
+
+# the statements with each run a sugar rule of several statements `($a; $b)` matches rewritten, as statement_runs
+# does for the program's own rules (F6, F12)
+with_runs_sugared(n: any, rules: list, run_rules: list): any := {
+	statements = items_of(n)
+	unchanged = statements
+	no_origins = run_rules.map(rule => {})
+	at = 0
+	while at < #statements {
+		found = statement_run_at(statements[at ..], run_rules, no_origins)
+		if found == ø {
+			at += 1
+		} else {
+			made = spliced_statements([bottom_up(found#2, part => sugar_rewritten(part, rules))])
+			statements = statements[0 ..< at] + made + statements[at + found#1 ..]
+			if #made >= found#1 { at += #made }
+		}
+	}
+	if statements == unchanged then n else placed(group_like(n, statements), n)
 }
 
 # `f(a, with b) := …` with its parameters rewritten by the sugar rules of the place `parameter` (F10)
@@ -567,7 +589,10 @@ statement_runs(statements: list, rules: list, origins: list): list := {
 		} else {
 			made = spliced_statements([rewritten_again(found#2, rules, origins)])
 			statements = statements[0 ..< at] + made + statements[at + found#1 ..]
-			at += #made
+			# a run made shorter is tried again where it stands, with the statements after it (F12): `f(0) := 0;
+			# f(1) := 1; f(n) := …` folds into one statement pair by pair; a run as long or longer moves on, so the
+			# rules can't loop here
+			if #made >= found#1 { at += #made }
 		}
 	}
 	statements
@@ -883,11 +908,35 @@ each_spliced(parts: list, bound: any, at: any): any := {
 	if #parts != 3 or parts#2 != symbol(each_word) { return ø }
 	clause = parts#3
 	if not (is_group(clause) and bracket_of(clause) == "" and #clause == 3 and clause#2 == symbol(each_in_word)) { return ø }
-	item_hole = rule_hole(clause#1)
-	rest = rest_hole_name(clause#3)
-	if item_hole == ø or rest == ø or not bound.has(rest) { return ø }
+	item_holes = each_holes(clause#1)
+	rests = each_rests(clause#3)
+	if item_holes == ø or rests == ø or #item_holes != #rests { return ø }
+	known = rests.filter(rest => bound.has(rest))
+	if #known == 0 { return ø }
+	count = #items_of(bound[known#1])
+	if not known.all(rest => #items_of(bound[rest]) == count) { return [error_node("the rest holes " + rests.join(", ") + " hold different numbers of items")] }
+	# a rest hole the pattern didn't bind is as many fresh names (F11)
+	for rest in rests {
+		if not bound.has(rest) { bound[rest] = rule_phrase((0 ..< count).map(index => placed(fresh_name(rest), at))) }
+	}
 	each = if is_group(parts#1) and bracket_of(parts#1) == "(" and #parts#1 == 1 then parts#1#1 else parts#1
-	items_of(bound[rest]).map(item => rule_spliced(each, with_binding(bound, item_hole, item), at))
+	(0 ..< count).map(index => rule_spliced(each, with_bindings(bound, item_holes, rests.map(rest => items_of(bound[rest])[index])), at))
+}
+
+# `$x` or `($x, $y)` after `for`: the item holes, else ø
+each_holes(n: any): any := {
+	if rule_hole(n) != ø { return [rule_hole(n)] }
+	if not (is_round(n) and separator_of(n) == "," and #n > 1) { return ø }
+	holes = items_of(n).map(rule_hole)
+	if holes.any(hole => hole == ø) then ø else holes
+}
+
+# `$xs...` or `($xs..., $ys...)` after `in`: the rest holes zipped, else ø
+each_rests(n: any): any := {
+	if rest_hole_name(n) != ø { return [rest_hole_name(n)] }
+	if not (is_round(n) and separator_of(n) == "," and #n > 1) { return ø }
+	rests = items_of(n).map(rest_hole_name)
+	if rests.any(rest => rest == ø) then ø else rests
 }
 
 # `cases of $e`: the cases of the enum the hole names, placed at `at`, else ø (F9)
@@ -901,13 +950,14 @@ cases_spliced(parts: list, bound: any, at: any): any := {
 # `T for $x in $xs...`
 is_each(n: any): bool := is_group(n) and #n == 3 and n#2 == symbol(each_word)
 
-# a copy of the holes bound, the hole bound to the code
-with_binding(bound: any, hole: text, code: any): any := {
+# a copy of the holes bound, each hole bound to its code
+with_bindings(bound: any, holes: list, codes: list): any := {
 	copy = {}
 	for name in bound.keys { copy[name] = bound[name] }
-	copy[hole] = code
+	for index in 0 ..< #holes { copy[holes[index]] = codes[index] }
 	copy
 }
+
 
 # `$t` → `t·3`: a compiler temporary (notes/compiler_temporaries.md), apart from every other firing's
 fresh_name(hole: text): any := {

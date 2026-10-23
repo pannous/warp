@@ -1,0 +1,17 @@
+# The rewrite engine's zip over rest holes (F11) and shrinking statement runs (F12), lib/compiler/rewrites.warp,
+# notes/rewrites.md: warp only, no Rust twin
+
+# a_template_zips_two_rest_holes
+is! 'rewrite zipped([$xs...], [$ys...]) => [$x * $y for ($x, $y) in ($xs..., $ys...)]
+zipped([1, 2, 3], [4, 5, 6])' [4, 10, 18]
+
+# a_rest_hole_the_pattern_did_not_bind_is_as_many_fresh_names
+is! 'rewrite kept($xs...) => ($t = $x for ($t, $x) in ($ts..., $xs...); [$ts...])
+kept(7, 8)' [7, 8]
+
+# a_shorter_run_is_tried_again_where_it_stands
+is! 'rewrite (add_up($a); add_up($b)) => add_up($a + $b)
+add_up(x) := x
+add_up(1)
+add_up(2)
+add_up(3)' 6
