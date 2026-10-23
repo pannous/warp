@@ -7,7 +7,7 @@ use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; closing_ends: any; stops_at_end: bool; word_types: list; line_starts: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; bracket: text; closing_ends: any; stops_at_end: bool; word_types: list; line_starts: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source: text): any := view_of(parsed(source))
@@ -28,11 +28,14 @@ def parsed(source: text): Node := {
 ENTITY_MARK = "\\:"
 // `name TAB characters` lines, the table Rust include_str!s
 ENTITY_FILE = "entities.tsv"
+// The lib/ a run uses: WARP_LIB, else the one above this file. A compiled stage is kept for every identical lib/ and
+// runs from wherever that is now, so nothing reads the folder it was compiled in (card pure-lane-nondeterministic)
+def run_library(): text := env("WARP_LIB") ?? folder_of(module_directory)
 global entity_table = ø
 def entities(): any {
 	if entity_table == ø {
 		entity_table = {}
-		lines = (try read(module_directory + "/" + ENTITY_FILE) else "").split("\n")
+		lines = (try read(run_library() + "/compiler/" + ENTITY_FILE) else "").split("\n")
 		for line in lines {
 			columns = line.split("\t")
 			if columns.length == 2 { entity_table[columns#1] = columns#2 }
@@ -99,7 +102,7 @@ def written_tree(written: text): Node := {
 	source = expanded_entities(written)
 	found = gaps(source, source.length)
 	word_types = multi_word_types(source)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), phrases: [], closing_ends: {}, stops_at_end: false, word_types: word_types, line_starts: line_starts_of(source)}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, in_branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), phrases: [], bracket: "", closing_ends: {}, stops_at_end: false, word_types: word_types, line_starts: line_starts_of(source)}
 	items_until(p, ' ', "")
 }
 
@@ -224,7 +227,7 @@ def own_spellings(): Spellings := {
 	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: []}
 }
 def aliased_spellings(): Spellings := {
-	path = folder_of(module_directory) + "/" + ALIASES_FILE
+	path = run_library() + "/" + ALIASES_FILE
 	source = try read(path) else ""
 	if source == "" { fail "the alias table ${path} is missing: the parser reads its operator spellings there" }
 	tables = own_spellings()
@@ -454,12 +457,14 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 	opener = p.at - 1
 	outer_branch = p.in_branch
 	outer_grouped = p.grouped
+	outer_bracket = p.bracket
 	outer_end = p.stops_at_end
 	rest = closer == REST_CLOSER
 	// the rest of the enclosing group or block stops where that one stops
 	p.in_branch = if rest then outer_branch else closer == THEN_CLOSER
 	p.stops_at_end = if rest then outer_end else closer == END_CLOSER or closer == THEN_CLOSER
 	p.grouped = p.grouped or (closer != ' ' and not rest)
+	if not rest { p.bracket = bracket }
 	while true {
 		skip_blanks(p)
 		if closes_block(p) {
@@ -505,6 +510,7 @@ def items_until(p: Parser, closer: text, bracket: text): Node := {
 	}
 	p.in_branch = outer_branch
 	p.grouped = outer_grouped
+	p.bracket = outer_bracket
 	p.stops_at_end = outer_end
 	grouped(found, bracket)
 }
@@ -932,8 +938,8 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
 			} else if op#2 == "|>" {
 				left = piped(left, expression(p, powers#2))
-			} else if (op#2 == ".." or op#2 == "to") and starts_at(p.code, "=>", p.at) {
-				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`: a range without end
+			} else if (op#2 == ".." or op#2 == "to") and (starts_at(p.code, "=>", p.at) or ",;)]}".contains(peek(p.code, p.at, p.n))) {
+				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`, `($as..., $bs...)`: a range without end
 				left = keyed(op#2, left, ø)
 			} else {
 				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else expression(p, powers#2)
@@ -1595,7 +1601,7 @@ def used_module_sources(source: text): list {
 	for statement in code_statements(source) {
 		words = blank_words(statement)
 		if words.length == 2 and USE_KEYWORDS.contains(words#1) {
-			module = try read(folder_of(module_directory) + "/" + words#2 + ".warp") else ""
+			module = try read(run_library() + "/" + words#2 + ".warp") else ""
 			if module { sources += [module] }
 		}
 	}
@@ -2705,7 +2711,8 @@ def named_loop(p: Parser): Node := {
 }
 
 // A loop's iterable: one expression, or the words up to the body as a space list, `reverse xs` of
-// `for x in reverse xs {…}`
+// `for x in reverse xs {…}`; in a comprehension, whose loop has no body, the words up to the closer or its
+// `if`: `[c * 2 for c in reverse xs]`, `[c for c in cases of Coin]`
 // Rust twin: loops.rs parse_iterable
 def iterable_words(p: Parser): Node := {
 	p.iterable = true
@@ -2720,7 +2727,8 @@ def iterable_words(p: Parser): Node := {
 		if p.at == start { break }
 	}
 	p.iterable = false
-	if words.length == 1 or not at_loop_body(p) {
+	ends_clause = in_comprehension(p) and (p.at >= p.n or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if"))
+	if words.length == 1 or not (at_loop_body(p) or ends_clause) {
 		p.at = after_first
 		return first
 	}
@@ -2737,10 +2745,14 @@ def at_loop_body(p: Parser): bool {
 	c == '{' or c == ':' or c == '\n' or starts_at(p.code, "//", p.at) or keyword_at(p, "do") or body_hole_at(p)
 }
 
+// In a list or braces, where a loop is a comprehension's clause: `[x * 2 for x in reverse xs]`
+def in_comprehension(p: Parser): bool := p.bracket == "[" or p.bracket == "{"
+
 // A rule's hole ending a loop's header is its body: `$body` of `for $i in 1 to $n $body`, then the line's end, a
-// closer or the rule's `where`
+// closer or the rule's `where`; in a comprehension the loop is an each clause (`[$c for $c in cases of $e]`), its
+// iterable ending there
 def body_hole_at(p: Parser): bool {
-	if not (is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n))) { return false }
+	if in_comprehension(p) or not (is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n))) { return false }
 	after = spaces_end(p, name_end(p.code, p.at + 1, p.n))
 	after >= p.n or "\n;)}]".contains(p.code[after]) or keyword_at_position(p, "where", after)
 }
