@@ -4,7 +4,8 @@
 # added to a temporary lib's os.warp, named by WARP_LIB, found beside the binary, or through the launcher. Run it
 # through the queue: tests/queue.sh tests/host/test_host_library.sh
 # The host and the compilers as in test_host.sh: WARP_HOST_BINARY (default target/host/warp-host, else target/release/,
-# else target/debug/), compiler-self.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp).
+# else target/debug/), compiler-self.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp). That compiler must
+# read WARP_LIB (run_library, main ab93badf7) and match the lib/ staged: WARP_TEST_LIB (default the checkout's lib/).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
@@ -19,7 +20,7 @@ compiler=$(dirname "$rust")/compiler-self.wasm
 [ -f "$compiler" ] || { echo "✗ no compiler-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/installed" "$stage/stub" "$stage/work" || exit 1
 # lib/ copied into the stage (two places, one content: the kept values are shared), with a word no other lib/ has
-cp -R "$checkout/lib" "$stage/lib" || exit 1
+cp -R "${WARP_TEST_LIB:-$checkout/lib}" "$stage/lib" || exit 1
 printf '\n%s\n' 'word_of_the_temporary_lib() := 42' >>"$stage/lib/os.warp"
 cp -R "$stage/lib" "$stage/installed/lib" || exit 1
 for folder in bin installed; do
