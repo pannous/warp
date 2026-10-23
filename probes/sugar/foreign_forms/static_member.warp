@@ -1,3 +1,3 @@
-# `static k = 3` in a class: a static member read on the class. Expected: the error: no field k (warp pure and self refuse it today)
+# `static k = 3` in a class: a static member read on the class. Expected: 3 (warp pure and self don't reach it today)
 class Circle{r:int; static k = 3}
 print Circle.k

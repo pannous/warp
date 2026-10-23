@@ -1,3 +1,3 @@
-# a C# method head with modifiers. Expected: the error: the call Half(…) at 2:15 (warp pure and self refuse it today)
+# a C# method head with modifiers. Expected: 1.5 (warp pure and self don't reach it today)
 public static double Half(double x) => x / 2
 print Half(3)

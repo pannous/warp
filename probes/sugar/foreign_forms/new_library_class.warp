@@ -1,4 +1,4 @@
-# `new Set(…)` of a library class. Expected: the error: the unknown name new at 3:5 (warp pure and self refuse it today)
+# `new Set(…)` of a library class. Expected: 2 (warp pure and self don't reach it today)
 use collections
 s = new Set([1 2 2])
 print s.size()

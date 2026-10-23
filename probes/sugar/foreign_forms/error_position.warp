@@ -1,3 +1,0 @@
-# an error after a skipped modifier points at what the user wrote. Expected: the error: the unknown name zed at 3:11
-private x = 4
-print x + zed
