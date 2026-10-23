@@ -108,7 +108,16 @@ After a context swap, this file and your role file win over anything a handover 
   main. A new root .warp data file (components.warp …): tell the Integrator the commit, tests read it.
 - Anything in src/, crates/, tests/, Cargo.* or build.rs keeps its worktree, however small (a half-done edit there
   breaks every build of the main checkout): `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main` on the
-  Worktrees volume (never touch /Volumes/Worktrees/warp, cowtree's donor, nor /Volumes/Worktrees/integrator).
+  Worktrees volume (never touch /Volumes/Worktrees/warp, cowtree's donor, /Volumes/Worktrees/integrator, nor the
+  user's own /Volumes/Worktrees/me, which prune-worktrees.sh never removes). A new worktree's files get their last
+  commit's time (~/.git-hooks/post-checkout runs ~/dev/bin/restore-mtimes), not the checkout time.
+- On the Grok box (Debian, /workspace) worktrees come from `boxtree <branch> [base]` (default origin/main): a
+  copy-on-write copy of /workspace/cow/warp, target/ build cache included, at /workspace/cow/trees/<branch> on a new
+  branch <branch>. Remove your own with `boxtree rm <branch>` after landing. Never work in /workspace/cow/warp itself.
+  Run compilers with `WARP_LIB=<tree>/lib`. The shared box binary is /workspace/cow/sol-warp-latest (built from main;
+  refresh with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh`, which moves the link only after a passing
+  smoke test); a branch with Rust changes uses its own build. Branch self-check: `/workspace/box-slot.sh
+  /workspace/selfcheck-branch.sh <branch>`.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
@@ -135,6 +144,11 @@ After a context swap, this file and your role file win over anything a handover 
   `&&`-chained commit silently doesn't happen. Check `git show --stat HEAD` after committing.
 
 ## Testing
+- PAUSED (user 2026-10-22 21:58: "stop all the Cloud pipelines and stop respawning scripts"): no cloud runs
+  (scripts/cloud-test.sh refuses while ~/.config/warp/cloud-paused exists), GitHub workflows disabled, the context-swap
+  hook swaps nobody (~/.claude/swap/swap_tokens = 1e9), crons urgent-card-watch, codex_worker.sh and nightly.sh
+  commented out (#PAUSED-by-user). Until the user lifts it, only warp-only branches land (self-check), Rust branches
+  wait.
 - Rust tests run in the cloud (user 2026-10-20: "From now on, run the Rust test suite completely in the cloud"):
   commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs (a hook blocks them), except tests
   needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1
@@ -194,8 +208,10 @@ After a context swap, this file and your role file win over anything a handover 
   Fleet-wide at most 2 heavy warp runs at once (user 2026-10-22, load 522): every self build, `warp rebuild`, `warp
   pure` of a compiler file and every test sweep (is_tests, is_pairs, probe series) runs inside `scripts/slot.sh <cmd>`
   (slots on /Volumes/Build/self-check; self-check.sh takes one itself; the Integrator's gate included). A sweep runs
-  its programs serially inside one slot, never N parallel warps. One more heavy slot is on the Grok box (Debian, 8
-  cores, ~3 GB free, one run at a time): give the run to Grok Warp Code 3 via the Supervisor (grok-msg). The tree it checks
+  its programs serially inside one slot, never N parallel warps. The Integrator's gate runs with WARP_SLOT_GATE=1 in
+  a reserved slot of its own, so it never waits behind workers. The Grok box (Debian, 8 cores, 15 GB) has 3 heavy
+  slots of its own: every heavy box run goes through `/workspace/box-slot.sh <cmd>` (slots 2-3 open only with >= 4 GB
+  free); Mac sessions hand box runs to the Supervisor (grok-msg). The tree it checks
   is a cowtree worktree under /Volumes/Worktrees or a throwaway lib/ copy under /Volumes/Junk, never inside the main
   checkout (scratch/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
   cold module caches) go to Grok Warp Code 3's Linux box.
