@@ -1071,6 +1071,8 @@ hosted_wasm_module(program: any, runtime: any, host: any): any := typed_wasm_mod
 # as hosted_wasm_module, an unannotated parameter of the kind analyzer.warp found in `kinds` (WARP_SELF_ANALYSIS); again
 # while a call widens a parameter (passed)
 typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
+	# a program showing a quantity, or mixing dimensions, the analyzer refused (analyzer.warp quantity_refusal)
+	if kinds is map and kinds.has("quantity_refusal") and kinds["quantity_refusal"] != "" { return outside_the_core + kinds["quantity_refusal"] }
 	module.later_kinds = {}
 	module.widenings = 0
 	widenings = -1

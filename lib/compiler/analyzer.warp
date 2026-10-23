@@ -965,6 +965,115 @@ emitter_elements(scope: Scope): map := {
 	elements
 }
 
+# --- unit literals (card pure-unit-literals) ---
+# A unit literal is quantity_value(amount, "dimension") (lib/sugar/units.warp): a plain SI amount, its unit not kept.
+# quantity_refusal says why the pure lane refuses a program that would show a quantity (its value, print, str, a text
+# joined with one: Rust shows `5km`) or add, subtract or compare two dimensions (Rust's DimensionError), else "".
+# Rust twin: src/numbers/units/static_units.rs, stages 1 and 3
+quantity_word = "quantity_value"
+showing_words = {print: 1, str: 1, text: 1, puts: 1, println: 1, text_form: 1, serialize: 1}
+comparing_ops = [Op.Eq, Op.Ne, Op.Lt, Op.Gt, Op.Le, Op.Ge]
+dimension_ops = [Op.Add, Op.Sub, Op.Eq, Op.Ne, Op.Lt, Op.Gt, Op.Le, Op.Ge]
+# the dimension of a quantity a call of a function the program defines gives with a quantity argument: not known here
+unknown_dimension = "quantity"
+
+# the dimension of the quantity n computes, "" for a plain value; held: name → dimension of the variables holding
+# quantities, "name()" of the functions giving them
+quantity_dimension(n: Node, held: map, defined: map): text := {
+	if n is symbol { return held.get(name_of(n)) ?? "" }
+	if is_curly_group(n) and #n > 0 { return quantity_dimension(computed(n), held, defined) }
+	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return quantity_dimension(n#1, held, defined) }
+	if is_group(n) and #n == 3 and head_name(n) == quantity_word and n#3 is text { return n#3 }
+	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol {
+		called = head_name(n) + "()"
+		if held.has(called) { return held[called] }
+		if defined.has(head_name(n)) and n[1..].any(argument => quantity_dimension(argument, held, defined) != "") { return unknown_dimension }
+		return ""
+	}
+	match n {
+		Key(left, op, right): key_dimension(quantity_dimension(left, held, defined), op, quantity_dimension(right, held, defined))
+		_: ""
+	}
+}
+# the dimension of `a op b` of operands of those dimensions: a ratio of one dimension is a plain number
+key_dimension(a: text, op: Op, b: text): text := {
+	if op in comparing_ops { return "" }
+	if op == Op.Add or op == Op.Sub { return if a != "" then a else b }
+	if op == Op.Mul { return if a != "" and b != "" then a + "·" + b else a + b }
+	if op == Op.Div {
+		if a != "" and b != "" { return if a == b then "" else a + "/" + b }
+		return if b != "" then "1/" + b else a
+	}
+	if op == Op.Pow { return a }
+	""
+}
+
+# the quantities the program's variables and functions hold, read until nothing more is learned
+held_quantities(statements: list, defined: map): map := {
+	held = {}
+	learned = -1
+	while learned != #held {
+		learned = #held
+		for statement in statements { learn_quantity(statement, held, defined) }
+	}
+	held
+}
+learn_quantity(n: Node, held: map, defined: map) := {
+	if is_definition(n) {
+		found = quantity_dimension(computed(value_of(n)), held, defined)
+		if found != "" { held[defined_name(n) + "()"] = found }
+		return ø
+	}
+	if (is_key(n, Op.Assign) or is_key(n, Op.Define)) and key_of(n) is symbol {
+		found = quantity_dimension(assigned_value(n), held, defined)
+		if found != "" { held[name_of(key_of(n))] = found }
+	}
+	for part in node_parts(n) { learn_quantity(part, held, defined) }
+}
+
+# why a quantity is shown or two dimensions mix in n, else ""
+quantity_misuse(n: Node, held: map, defined: map): text := {
+	if is_definition(n) { return quantity_misuse(value_of(n), held, defined) }
+	if is_group(n) and #n > 1 and head_name(n) in showing_words and n[1..].any(argument => quantity_dimension(argument, held, defined) != "") {
+		return "a quantity shown by " + head_name(n) + ": the pure lane does not keep its unit yet"
+	}
+	match n {
+		Key(left, op, right): {
+			a = quantity_dimension(left, held, defined)
+			b = quantity_dimension(right, held, defined)
+			if op in dimension_ops and a != "" and b != "" and a != b and a != unknown_dimension and b != unknown_dimension {
+				return "DimensionError: a " + a + " and a " + b + " do not add or compare"
+			}
+			if op == Op.Add and ((is_literal_text(left) and b != "") or (is_literal_text(right) and a != "")) {
+				return "a quantity joined to a text: the pure lane does not keep its unit yet"
+			}
+		}
+		_: ø
+	}
+	for part in node_parts(n) {
+		found = quantity_misuse(part, held, defined)
+		if found != "" { return found }
+	}
+	""
+}
+
+# the refusal of a program showing a quantity or mixing dimensions, else ""
+quantity_refusal(program: Node): text := {
+	statements = flat_statements(program)
+	if not statements.any(statement => mentions_quantity(statement)) { return "" }
+	defined = {}
+	for statement in statements { if is_definition(statement) { defined[defined_name(statement)] = yes } }
+	held = held_quantities(statements, defined)
+	for statement in statements {
+		found = quantity_misuse(statement, held, defined)
+		if found != "" { return found }
+	}
+	values = statements.filter(statement => not is_definition(statement) and head_name(statement) != "use")
+	if #values > 0 and quantity_dimension(values#(#values), held, defined) != "" { return "a quantity as the program's value: the pure lane does not keep its unit yet" }
+	""
+}
+mentions_quantity(n: Node): bool := (n is symbol and name_of(n) == quantity_word) or node_parts(n).any(part => mentions_quantity(part))
+
 # what emitter.warp reads (card emitter-takes): {functions: {f: {params: [kind…], result, locals: {x: kind}, elements:
 # {xs: kind}}}, variables: {x: kind}, elements: {xs: kind}, value: kind}, kinds as emitter_kind names them
 emitter_kinds(program: Node): map := {
@@ -976,7 +1085,7 @@ emitter_kinds(program: Node): map := {
 		functions[name] = {params: parameters.map(own => emitter_kind(scope.kinds[own])), result: emitter_kind(results[name]), locals: emitter_locals(scope, parameters), elements: emitter_elements(scope)}
 	}
 	main = scopes[""]
-	{functions: functions, variables: emitter_locals(main, []), elements: emitter_elements(main), value: emitter_kind(inferred_kind(program, main))}
+	{functions: functions, variables: emitter_locals(main, []), elements: emitter_elements(main), value: emitter_kind(inferred_kind(program, main)), quantity_refusal: quantity_refusal(program)}
 }
 
 inferred_kinds(program: Node): list := {
