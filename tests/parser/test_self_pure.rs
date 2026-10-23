@@ -47,6 +47,13 @@ fn the_core_runs_pure() {
 	runs_pure("function", "f(x) := x * 2; f(4)", "8");
 }
 
+/// min and max of one number are that number (lib/sugar/extremes.warp, card test-no-refusal-asserts-2)
+#[test]
+fn the_extremum_of_one_number_runs_pure() {
+	runs_pure("max_of_one", "max(3)", "3");
+	runs_pure("min_of_one", "min(7)", "7");
+}
+
 /// `for` lowers to `while` in lib/compiler/for_loops.warp: counted ranges, `to` including its end, walked lists
 #[test]
 fn for_loops_run_pure() {
