@@ -1,0 +1,7 @@
+// out: 4
+// a guarded call pattern matches the call the operand is (card engine-guarded-call-phrase); `new` itself the parser
+// still drops before a known type (foreign_forms.warp), so the probe names the word `build`
+rewrite build $t($a...) => $t($a...) where $t is type
+class P { x: int }
+p = build P(4)
+print p.x

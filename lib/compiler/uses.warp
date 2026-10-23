@@ -138,7 +138,7 @@ call_head(n: Node): any := {
 }
 
 # lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one)
-std_module_path(name: text): text := folder_of(module_directory) + "/" + name + module_extension
+std_module_path(name: text): text := run_library() + "/" + name + module_extension
 
 # what a `use` statement names, ø for another statement
 use_target(statement: Node): any := {
