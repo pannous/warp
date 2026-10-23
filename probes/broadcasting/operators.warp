@@ -1,0 +1,9 @@
+// expected: [2 4 6] [2 3 4] [0 1 2] [0.5 1 1.5] [1 4 9] [11 12] (`xs .* 2`: the operator on each element)
+xs = [1, 2, 3]
+print xs .* 2
+print xs .+ 1
+print xs .- 1
+print xs ./ 2
+print xs .^ 2
+e = 10
+print [1, 2] .+ e

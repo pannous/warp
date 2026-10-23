@@ -6,7 +6,6 @@ use "welcome_forms.warp"
 use "number_words.warp"
 use "of_lookups.warp"
 use "grouped_receivers.warp"
-use "broadcasting.warp"
 use "definitions.warp"
 use "multiple_assignments.warp"
 use "clauses.warp"
@@ -27,7 +26,6 @@ use "prefix_calls.warp"
 use "data_items.warp"
 use "parse_words.warp"
 use "lambdas.warp"
-use "min_max.warp"
 use "index_positions.warp"
 use "arity_overloads.warp"
 use "kind_changes.warp"
@@ -36,16 +34,16 @@ use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
 
-# the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES): `a of b`, `xs .* 2`,
-# `(p).a`
-sugar_phrases_table = [[is_lookup_word, lookup_phrase], [is_element_operator, element_wise_phrase], [is_dot, ungrouped]]
+# the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES, which also lowers
+# `xs .* 2`: lib/sugar/arithmetic.warp's rules here): `a of b`, `(p).a`
+sugar_phrases_table = [[is_lookup_word, lookup_phrase], [is_dot, ungrouped]]
 sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
 
 passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [bare_returns, first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, min_max, sugar, lambdas, for_loops, late_sugar, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [bare_returns, first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, sugar, lambdas, for_loops, late_sugar, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
