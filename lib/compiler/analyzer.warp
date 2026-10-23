@@ -971,7 +971,8 @@ emitter_elements(scope: Scope): map := {
 # joined with one: Rust shows `5km`) or add, subtract or compare two dimensions (Rust's DimensionError), else "".
 # Rust twin: src/numbers/units/static_units.rs, stages 1 and 3
 quantity_word = "quantity_value"
-showing_words = {print: 1, str: 1, text: 1, puts: 1, println: 1, text_form: 1, serialize: 1}
+# (texts: puts and println are print by the time the analyzer reads the program)
+showing_words = ["print", "str", "text", "text_form", "serialize"]
 comparing_ops = [Op.Eq, Op.Ne, Op.Lt, Op.Gt, Op.Le, Op.Ge]
 dimension_ops = [Op.Add, Op.Sub, Op.Eq, Op.Ne, Op.Lt, Op.Gt, Op.Le, Op.Ge]
 # the dimension of a quantity a call of a function the program defines gives with a quantity argument: not known here
