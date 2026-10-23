@@ -6,7 +6,7 @@
 //! it says (card installed-compilers); a lib/ named by WARP_LIB that the pair is not for keeps its own in
 //! <lib>/../data/, where a run on one built from another lib/ or warp build says so in one line. Only `warp rebuild`
 //! builds one: a missing one is an error naming it.
-use crate::compiler::self_hosted::{library, library_fingerprint, module_of_bytes, pure_bytes, WORKER_STACK};
+use crate::compiler::self_hosted::{compiler_inputs_hash, library, module_of_bytes, pure_bytes, WORKER_STACK};
 use crate::node::{error, Node};
 use crate::pipeline::CompiledModule;
 use std::path::{Path, PathBuf};
@@ -138,16 +138,28 @@ pub fn prepare(by: Compiler) -> Result<(), Node> {
 }
 
 /// compiler.warp's module from its build file; a missing one is an error naming `warp rebuild`, never built here (card
-/// installed-compilers). One line when a worktree's build in data/ was built from another lib/ or warp build; the
-/// delivered pair next to the binary is used as it is
+/// installed-compilers: no run rebuilds a compiler, a stale one is at most a hint). A worktree without its own build in
+/// data/ uses the delivered one when that was built from the same compiler inputs (card compiler-cache-keys). One line
+/// when a worktree's build in data/ was built from other compiler inputs or warp build; the delivered pair next to the
+/// binary is used as it is
 fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
 	let path = build_path(by);
-	let Ok(bytes) = std::fs::read(&path) else {
+	let delivered = binary_folder().map(|folder| folder.join(by.file_name())).filter(|file| *file != path);
+	let same_inputs = |bytes: &Vec<u8>| built_from(bytes)[1..BUILD_PARTS_JUDGED] == judged_build()[1..];
+	let found = std::fs::read(&path).ok().map(|bytes| (path.clone(), bytes)).or_else(|| {
+		let file = delivered?;
+		std::fs::read(&file).ok().filter(same_inputs).map(|bytes| (file, bytes))
+	});
+	let Some((path, bytes)) = found else {
 		let rebuild = format!("warp {REBUILD_WORD} {}", by.command());
-		return Err(error(&format!("no {} at {}: `{rebuild}` builds it", by.file_name(), path.display())));
+		return Err(error(&format!(
+			"no {} at {}: `{rebuild}` builds it, scripts/rebuild.sh copies the shared pair for its inputs",
+			by.file_name(),
+			path.display()
+		)));
 	};
-	if !is_delivered(&path) && built_from(&bytes)[..BUILD_PARTS_JUDGED] != judged_build()[..] {
-		eprintln!("{} was built from another lib/ or warp build: `warp rebuild` builds it anew", path.display());
+	if !is_delivered(&path) && !same_inputs(&bytes) {
+		eprintln!("{} was built from other compiler inputs or warp build: `warp rebuild` builds it anew", path.display());
 	}
 	Ok(module_of_bytes(bytes))
 }
@@ -203,9 +215,11 @@ fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 	std::fs::rename(&new, path)
 }
 
-/// What a build of now is made from: lib/, its fingerprint, the sources of this warp (WARP_SOURCE, build.rs)
+/// What a build of now is made from: lib/ (where, not judged), the compiler inputs hash (lib/compiler and the modules it
+/// embeds, with WARP_SOURCE: scripts/compiler-inputs.sh's), the sources of this warp (WARP_SOURCE, build.rs). An edit of
+/// lib/ outside the compiler's inputs leaves a build current (card compiler-cache-keys)
 fn judged_build() -> Vec<String> {
-	vec![library().display().to_string(), library_fingerprint(), env!("WARP_SOURCE").to_string()]
+	vec![library().display().to_string(), compiler_inputs_hash(), env!("WARP_SOURCE").to_string()]
 }
 
 /// The build section's parts: judged_build's, then the commit of lib/'s checkout (the stamp of a delivered pair; not
