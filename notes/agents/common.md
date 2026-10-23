@@ -38,6 +38,12 @@ After a context swap, this file and your role file win over anything a handover 
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
+  Soft ban (user 2026-10-23): the core passes compile the compiler, so new work is one of two kinds, neither a pass.
+  Sugar (new spellings of what the kernel already does) goes straight into lib/sugar/*.warp as rules. Extensions
+  (new capabilities such as signals, threads, channels or FFI libraries) go into their own lib/<topic>/ folder (e.g.
+  lib/concurrency/), written in Warp on top of the kernel and the library, not as compiler passes. Neither needs a
+  question. A new pass, a new entry in passes.warp's pass lists or a new lib/compiler/*.warp file needs the user's
+  yes, asked through Supervisor before the branch is written.
 - New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
   declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
   when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
