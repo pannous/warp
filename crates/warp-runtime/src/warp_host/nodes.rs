@@ -65,29 +65,90 @@ impl Node {
 		}
 	}
 
+	/// The node as warp-rust prints a run's value (src/node/serialization.rs serialize): ints and floats as numbers (4,
+	/// not 4.0), yes and no, texts in double quotes with only a quote or `\\` escaped, a character in single quotes,
+	/// `key:value` with the key bare
 	pub fn shown(&self) -> String {
-		let quoted = |bytes: &[u8]| format!("{:?}", String::from_utf8_lossy(bytes));
 		match self {
 			Node::Empty => "ø".into(),
 			Node::Int(n) => n.to_string(),
-			Node::Bool(truth) => (if *truth { "true" } else { "false" }).into(),
-			Node::Float(x) => format!("{x:?}"),
-			Node::Codepoint(code) => format!("'{}'", char::from_u32(*code).unwrap_or('\u{fffd}')),
-			Node::Text(bytes) => quoted(bytes),
+			Node::Bool(truth) => (if *truth { "yes" } else { "no" }).into(),
+			Node::Float(x) => float_text(*x),
+			Node::Codepoint(code) => quoted(&char::from_u32(*code).unwrap_or('\u{fffd}').to_string(), '\''),
+			Node::Text(bytes) => quoted(&String::from_utf8_lossy(bytes), '"'),
 			Node::Symbol(bytes) => String::from_utf8_lossy(bytes).into_owned(),
-			Node::Error(bytes) => format!("Error({})", quoted(bytes)),
-			Node::Key(kind, key, value) if kind >> KIND_BITS & 0xFF == 1 => {
-				format!("{}: {}", key.shown(), value.shown())
-			}
+			Node::Error(bytes) => format!("Error({})", quoted(&String::from_utf8_lossy(bytes), '"')),
+			Node::Key(kind, key, value) if kind >> KIND_BITS & 0xFF == 1 => format!("{}:{}", key.content(), value.shown()),
 			Node::Key(_, key, value) => format!("{}={}", key.shown(), value.shown()),
 			Node::List(kind, items) => {
 				let (open, close) = BRACKETS.get((kind >> KIND_BITS & 0xFF) as usize).copied().unwrap_or(("", ""));
-				format!("{open}{}{close}", items.iter().map(Node::shown).collect::<Vec<_>>().join(" "))
+				let items = items.iter().map(|item| item.item_shown(!open.is_empty())).collect::<Vec<_>>();
+				format!("{open}{}{close}", items.join(" "))
 			}
 			Node::Type(name, body) => format!("{}{}", name.shown(), body.shown()),
 			Node::Other(kind) => format!("<a value of kind {}>", kind & KIND_MASK),
 		}
 	}
+
+	/// A list's item: a one-letter text in brackets in single quotes, as a character prints, and a character without
+	/// brackets in double quotes (serialization.rs item_text)
+	fn item_shown(&self, bracketed: bool) -> String {
+		match self {
+			Node::Text(bytes) if bracketed && String::from_utf8_lossy(bytes).chars().count() == 1 => {
+				quoted(&String::from_utf8_lossy(bytes), '\'')
+			}
+			Node::Codepoint(code) if !bracketed => quoted(&char::from_u32(*code).unwrap_or('\u{fffd}').to_string(), '"'),
+			_ => self.shown(),
+		}
+	}
+}
+
+/// A text in quotes, a quote or `\\` in it escaped by a `\\` so it reads back (serialization.rs quoted_by)
+fn quoted(text: &str, quote: char) -> String {
+	let mut written = String::from(quote);
+	for c in text.chars() {
+		if c == quote || c == '\\' {
+			written.push('\\');
+		}
+		written.push(c);
+	}
+	written.push(quote);
+	written
+}
+
+/// A float as warp writes it (src/extensions/numbers.rs float_text): the shortest digits that read back, positional
+/// for decimal exponents in [-5, 15), else `1.5e-7`; a whole float without `.0`; NaN, ∞ and -∞
+pub fn float_text(x: f64) -> String {
+	const SMALLEST_POSITIONAL: i32 = -5;
+	const LARGEST_POSITIONAL: i32 = 15;
+	if x.is_nan() {
+		return "NaN".into();
+	}
+	if x.is_infinite() {
+		return if x > 0.0 { "∞" } else { "-∞" }.into();
+	}
+	if x == 0.0 {
+		return "0".into();
+	}
+	let written = format!("{:e}", x.abs()); // Rust writes the shortest digits that read back
+	let (mantissa, exponent) = written.split_once('e').unwrap_or((&written, "0"));
+	let digits = mantissa.replace('.', "");
+	let exponent: i32 = exponent.parse().unwrap_or(0);
+	let count = digits.len() as i32;
+	let sign = if x < 0.0 { "-" } else { "" };
+	let zeros = |how_many: i32| "0".repeat(how_many.max(0) as usize);
+	let placed = if !(SMALLEST_POSITIONAL..LARGEST_POSITIONAL).contains(&exponent) {
+		let rest = if count > 1 { format!(".{}", &digits[1..]) } else { String::new() };
+		format!("{}{rest}e{exponent}", &digits[..1])
+	} else if exponent >= count - 1 {
+		digits.clone() + &zeros(exponent - count + 1)
+	} else if exponent >= 0 {
+		let (before, after) = digits.split_at(exponent as usize + 1);
+		format!("{before}.{after}")
+	} else {
+		format!("0.{}{digits}", zeros(-1 - exponent))
+	};
+	format!("{sign}{placed}")
 }
 
 /// A node's kind, data and value fields; None for null
@@ -126,6 +187,8 @@ pub fn read(node: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<Me
 			None => match boxed(&data, store) {
 				Some(Val::I64(n)) if info == BOOL_INFO => Node::Bool(n != 0),
 				Some(Val::I64(n)) => Node::Int(n),
+				// a number whose kind says int and whose box holds a float (`x = 7.0; x /= 2`): the float
+				Some(Val::F64(bits)) => Node::Float(f64::from_bits(bits)),
 				_ => Node::Other(kind),
 			},
 		},
