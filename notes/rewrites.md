@@ -136,3 +136,14 @@ rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is en
 
 The rules of lib/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
 `cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.
+
+## Called holes
+A hole written right before `(`, `$t($a...)`, is the call it reads as, as the code's `P(1)` is; the parser itself reads
+it as the hole and a group, `$t ($a...)`, which matched no call (card engine-guarded-call-phrase; rewrites.warp
+with_called_holes, in patterns and templates). `$t ($a)`, with a space, stays the hole and a group.
+
+```warp
+rewrite build $t($a...) => $t($a...) where $t is type   # p = build P(4) → p = P(4); build f(2) stays
+```
+
+Tests: tests/modules/test_rewrite_engine.warp; probes: probes/rewrites/guarded_call.
