@@ -185,29 +185,42 @@ c_functions_of(source: text, library_folder: text): list := {
 		}
 	}
 	catalog = c_catalog(library_folder, native.map(n => n#2))
+	# warp's own words (floor, abs) stay warp's when libc or libm is imported or used, as Rust's lane keeps its built-ins
+	own = warp_word_names(library_folder)
 	missing = []
+	# the imports every name of which is a C function or warp's own: left out as the foreign lines are, so that no
+	# name of theirs reaches the emitter uncalled (an import the host would have to link)
+	resolved = []
 	for statement in statements {
 		imported = c_import(statement)
 		if imported != ø {
+			before = #missing
 			for name in imported#2 {
-				if not functions.has(name) {
+				if not functions.has(name) and not c_warps(own, name, imported#1) {
 					found = catalog.filter(d => d#1 == name and d#2 == imported#1)
 					# libc and libm are one library on macOS: `import sqrtf from "c"` takes libm's line
 					if #found == 0 and imported#1 in c_and_m { found = catalog.filter(d => d#1 == name and d#2 in c_and_m) }
 					if #found > 0 { functions[name] = found#1 } else { missing += [name + " from '" + imported#1 + "'"] }
 				}
 			}
+			if #missing == before { resolved += [statement] }
 		}
 		library = c_use(statement)
 		if library != ø {
-			for d in catalog { if d#2 == library and not functions.has(d#1) { functions[d#1] = d } }
+			for d in catalog { if d#2 == library and not functions.has(d#1) and not c_warps(own, d#1, library) { functions[d#1] = d } }
 		}
 	}
 	# libm's functions warp has no word for, called without an import as Rust's lane calls them
-	own = warp_word_names(library_folder)
 	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not own.has(d#1) and source.contains(d#1 + "(") { functions[d#1] = d } }
-	[kept.join("\n"), functions, missing]
+	[c_without(kept, resolved).join("\n"), functions, missing]
 }
+# the lines without the statements of `statements`, the other statements of a line kept (a line left empty stays)
+c_without(lines: list, statements: list): list := {
+	if #statements == 0 { return lines }
+	lines.map(line => line.split(";").filter(part => part.trim() not in statements).join(";"))
+}
+# whether `name` of `library` is a word of warp's own (`own`, warp_word_names), which a libc or libm import leaves warp's
+c_warps(own: any, name: text, library: text): bool := library in c_and_m and own.has(name)
 # the line with each `use sqlite3` of a library of `native` ([library, path] each) a `use` of its native file
 native_uses(line: text, native: list): text := {
 	if #native == 0 or not line.contains("use ") { return line }
