@@ -6,8 +6,10 @@
 //!   warp-host <file.wasm | file.wat> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
 //! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`
 mod cache;
+mod components;
 mod ffi;
 mod nodes;
+mod wasm_modules;
 mod words;
 
 use nodes::Node;
@@ -41,6 +43,8 @@ pub struct Host {
 	keeper: Option<cache::Keeper>,
 	/// the engine of the run, for the modules it runs itself (os.run_wasm) and the code it compiles (os.compile_wasm)
 	engine: Engine,
+	/// the modules and components it loaded (wasm_modules.rs): by `use wasm`, and those its imports name
+	wasm: wasm_modules::Loaded,
 }
 
 impl CallsC for Host {
@@ -56,7 +60,10 @@ static COMPILER: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
 enum Ran {
 	Value(Node),
 	Exited(i32),
+	/// a trap of the machine's own (`wasm trap: …`), or a module that could not run
 	Failed(String),
+	/// an uncaught Warp error: a raise, or a runtime error such as index out of range (its message)
+	Raised(String),
 }
 
 fn main() {
@@ -192,7 +199,7 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 	let keeper = cache::Keeper { key: keeper, library: argv[4].clone() };
 	match run_wasm(engine, &bytes, argv.to_vec(), Some(keeper), true) {
 		Ran::Value(Node::Error(message)) => Err(String::from_utf8_lossy(&message).into_owned()),
-		Ran::Failed(message) => Err(message),
+		Ran::Failed(message) | Ran::Raised(message) => Err(message),
 		Ran::Exited(status) if status != 0 => Err(format!("the compiler exited with status {status}")),
 		_ => Ok(()),
 	}
@@ -225,13 +232,15 @@ fn installed_folders() -> Vec<PathBuf> {
 
 /// `run_wasm(bytes)` (os.run_wasm): a module run in this process with the same engine and imports as a program, its
 /// machine code cached by its bytes, in a store of its own on a thread of its own (its own deep stack); its main's
-/// value, else the trap's or the exit status's reason
+/// value, else the trap's or the exit status's reason; an uncaught Warp error is that Error, passed through as the
+/// module's value, a trap a failure of its own
 pub fn ran_module(engine: &Engine, bytes: Vec<u8>, args: Vec<String>) -> Result<Node, String> {
 	let engine = engine.clone();
 	match on_own_stack(move || run_wasm(&engine, &bytes, args, None, true))? {
 		Ran::Value(value) => Ok(value),
 		Ran::Exited(0) => Ok(Node::Empty),
 		Ran::Exited(status) => Err(format!("the module exited with status {status}")),
+		Ran::Raised(message) => Ok(Node::Error(message.into_bytes())),
 		Ran::Failed(message) => Err(message),
 	}
 }
@@ -276,18 +285,11 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cac
 			args: args.clone(),
 			keeper,
 			engine: engine.clone(),
+			wasm: Default::default(),
 		};
-		let mut linker = Linker::new(engine);
-		wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host: &mut Host| &mut host.wasi)?;
-		warp_runtime::host_words::link_host_words(&mut linker)?;
-		warp_runtime::libm::link_libm(&mut linker)?;
-		warp_runtime::c_calls::link_libc_functions(&mut linker)?;
-		words::link(&mut linker)?;
 		let mut store = Store::new(engine, host);
-		ffi::link_c_imports(&mut linker, &mut store, &module, bytes)?;
-		linker.define_unknown_imports_as_traps(&module)?;
 		warp_runtime::engine::cap_memory(&mut store);
-		let instance = linker.instantiate(&mut store, &module)?;
+		let instance = wasm_modules::instantiate(&mut store.as_context_mut(), &module, bytes, None)?;
 		let main = warp_runtime::standalone::ENTRY_POINTS.iter().find_map(|name| instance.get_func(&mut store, name));
 		let main = main.ok_or_else(|| wasmtime::Error::msg("the module has no main nor _start"))?;
 		let mut results = vec![Val::AnyRef(None); main.ty(&store).results().len()];
@@ -308,7 +310,7 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cac
 			Ok(None) => Ran::Exited(system_signals::take_exit_code().unwrap_or(0)),
 			Err(error) => match error.downcast_ref::<wasmtime_wasi::I32Exit>() {
 				Some(exit) => Ran::Exited(exit.0),
-				None => Ran::Failed(failure(&error, &mut store, &instance)),
+				None => failure(&error, &mut store, &instance),
 			},
 		})
 	};
@@ -317,9 +319,20 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cac
 
 use wasmtime::AsContextMut;
 
+/// The imports every module of a run gets: WASI p1, warp-runtime's host words, libm, libc, std_io
+pub fn program_linker(engine: &Engine) -> wasmtime::Result<Linker<Host>> {
+	let mut linker = Linker::new(engine);
+	wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host: &mut Host| &mut host.wasi)?;
+	warp_runtime::host_words::link_host_words(&mut linker)?;
+	warp_runtime::libm::link_libm(&mut linker)?;
+	warp_runtime::c_calls::link_libc_functions(&mut linker)?;
+	words::link(&mut linker)?;
+	Ok(linker)
+}
+
 /// A failed run's message: a runtime error fails inside a function of its name (index_out_of_range, …), the global
 /// trap_detail holding the value it names; a raise's message is that value (lib/compiler/runtime/errors.warp)
-fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance) -> String {
+fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance) -> Ran {
 	// WARP_HOST_DEBUG=1: the failure with its wasm backtrace too
 	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
 		eprintln!("{error:?}");
@@ -335,14 +348,14 @@ fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance
 			.find_map(|frame| frame.func_name().map(|name| name.split('·').next().unwrap_or(name).replace('_', " ")))
 	});
 	match (frame.as_deref(), detail) {
-		(Some("returned error") | None, Some(detail)) => detail.content(),
-		(Some(name), Some(detail)) => format!("{name}: {}", detail.shown()),
-		(Some(name), None) if !name.starts_with("wasm") => name.to_string(),
+		(Some("returned error") | None, Some(detail)) => Ran::Raised(detail.content()),
+		(Some(name), Some(detail)) => Ran::Raised(format!("{name}: {}", detail.shown())),
+		(Some(name), None) if !name.starts_with("wasm") => Ran::Raised(name.to_string()),
 		// a trap of the machine's own, without the backtrace: `wasm trap: wasm `unreachable` instruction executed`
-		_ => match error.downcast_ref::<wasmtime::Trap>() {
+		_ => Ran::Failed(match error.downcast_ref::<wasmtime::Trap>() {
 			Some(trap) => trap.to_string(),
 			None => format!("{:#}", error),
-		},
+		}),
 	}
 }
 
@@ -359,7 +372,7 @@ fn shown(ran: Ran) -> i32 {
 			}
 		}
 		Ran::Exited(status) => status,
-		Ran::Failed(message) => failed(&message),
+		Ran::Failed(message) | Ran::Raised(message) => failed(&message),
 	}
 }
 

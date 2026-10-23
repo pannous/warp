@@ -7,12 +7,17 @@
 use crate::Host;
 use warp_runtime::c_calls::{function_pointer, get_or_load_library, library_paths, link_c_function_as};
 use warp_runtime::c_signatures::{CFunction, CPointer, Failure, ParamType, RetType};
-use wasmtime::{ExternType, FuncType, Linker, Module, Result, Store, ValType};
+use wasmtime::{AsContextMut, ExternType, FuncType, Linker, Module, Result, ValType};
 
 pub const C_FUNCTIONS_SECTION: &str = "warp.c_functions";
 
 /// Link every C import of `module` that the linker has no fitting definition for, or that the section describes
-pub fn link_c_imports(linker: &mut Linker<Host>, store: &mut Store<Host>, module: &Module, bytes: &[u8]) -> Result<()> {
+pub fn link_c_imports(
+	linker: &mut Linker<Host>,
+	store: &mut impl AsContextMut<Data = Host>,
+	module: &Module,
+	bytes: &[u8],
+) -> Result<()> {
 	let described: Vec<CFunction> = custom_sections(bytes, C_FUNCTIONS_SECTION)
 		.flat_map(|section| String::from_utf8_lossy(section).lines().map(str::to_string).collect::<Vec<_>>())
 		.filter(|line| !line.trim().is_empty())

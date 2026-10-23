@@ -22,6 +22,11 @@ pub fn link(linker: &mut Linker<Host>) -> Result<()> {
 			let mut read = |node: Ref| nodes::read(&wasmtime::Val::AnyRef(node), &mut store, Some(builders.memory()));
 			let (module, member) = (read(module)?.content(), read(member)?.content());
 			let raw = arguments;
+			// `use wasm`: other modules and components loaded and called (wasm_modules.rs)
+			if module == "wasm" {
+				let answer = crate::wasm_modules::answer(&mut store, &builders, &member, wasmtime::Val::AnyRef(raw))?;
+				return Ok(answer.unwrap_anyref().copied());
+			}
 			let arguments = read(arguments)?.items();
 			// keep gives the value it keeps: the program's own, kept or not
 			let given = if (module.as_str(), member.as_str()) == ("os", "keep") {
@@ -123,6 +128,12 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 		("os", "run", [command]) => ran(&command.clone().items().iter().map(text).collect::<Vec<_>>()),
 		// `run_wasm(read_bytes("m.wasm"))`, `run_wasm(compile_wasm("6*7"))`: a module run in this process (main.rs)
 		("os", "run_wasm", [bytes]) => crate::ran_module(&host.engine, module_bytes(bytes)?, host.args.clone()),
+		// `run_wasm(bytes, ["a", "b"])`: the module's own arguments (its args), not the program's
+		("os", "run_wasm", [bytes, given]) => {
+			let name = host.args.first().cloned().unwrap_or_else(|| "module".into());
+			let arguments = std::iter::once(name).chain(given.clone().items().iter().map(text)).collect();
+			crate::ran_module(&host.engine, module_bytes(bytes)?, arguments)
+		}
 		("os", "compile_wasm", [code]) => {
 			let bytes = crate::compiled_code(&host.engine, text(code))?;
 			Ok(Node::List(nodes::SQUARE_LIST, bytes.into_iter().map(|byte| Node::Int(byte.into())).collect()))

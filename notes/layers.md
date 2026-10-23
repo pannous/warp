@@ -120,10 +120,47 @@ Sugar (1417), each with the rule it would become:
 | 28 | `/!`, `div`, `÷`, `/!=` | already a math.warp alias (`operator ÷ := /!`): the parser branch duplicates it; `operator div := /!` |
 | 23 | emit words `emit stop{…}` (send, fire, trigger, signal, ask) | `rewrite emit $e... => emit($e...)`, aliases for the others |
 | 22 | test words `x empty`, `x is missing`, `x failed` | `rewrite $x is empty => count($x) == 0` phrase rule, works today |
-| 21 | `n times {…}` | no rewrite: a plain library function `infix times(n: number, b: block)` (user 2026-10-22, decision language-layers) |
-| 15 | `a ?: b` | `rewrite $a ?: $b => if $a then $a else $b`: needs F3 (a once) |
+| 21 | `n times {…}` | done: `rewrite $n times $body => for $i in 1 to $n $body where $body is block` (lib/sugar/loops.warp); later the prelude function `infix times(n: number, b: block)` (user 2026-10-22, card times-prelude) |
+| 15 | `a ?: b` | done (card non-name): a non-name left side is `rewrite $a ?: $b => ($t = $a; $t ? $t : $b)` (lib/sugar/fallbacks.warp); a name's stays the parser's ternary `a ? a : b`, the one shape Rust's type and pattern readers know as the optional field `email?: text` (type_kinds.rs optional_field), and pure-lane classes outside the core fall back to the hybrid lane. Sugar rules never reach a class body (card lib-sugar) |
 | 14 | `function f` reference | `rewrite function $f => &$f` |
 | 12 | `if no xs` | `rewrite no $x => not $x`: needs F1 (condition position) |
+
+### What became of the 1417 sugar lines (warp-layers, 2026-10-22 evening)
+parser.warp was 4272 lines at the survey (861faecfe6) and is 4346 now. Lines that left: sugar-migration-2's ~54
+(list methods, `/!`/`div` as table rows), elvis() ~12. Lines that came in: the alias reader (+104, operator and
+circumfix declarations, which replace branches the next migrations would have needed) and small notation tables.
+Most of the 1417 counted lines turned out to be notation once read closely: the parser has to find a form's words
+and its extent whether or not a rule then gives its meaning, and that finding is the bulk of each row. Only the part
+that gives the meaning can move, and it is small. Rule work done meanwhile mostly moved meaning out of *passes*
+(lib/sugar/loops.warp: `n times`, once/twice/thrice, C-style for, `for xs`; fallbacks.warp: `??`, `?:`), not out of
+the parser.
+
+| lines | form | stays because | movable part |
+|------:|------|---------------|--------------|
+| 236 | for heads: C-style, `for each`, named loops, `for x in xs:`, loop variables | notation: the parser only groups `for … in … body`; the lowering was always for_loops.warp's | 0 in the parser; for_loops.warp's lowering needs F5 (the `loop·step:` mark, `x·items` names) |
+| 187 | English definitions `To square a number: …`, phrase slots | engine gap: slots are read at parse time (phrase_slots), F5 phrase names | ~150 once F5 lands, as a pass in warp (sugar by meaning, pass by mechanism) |
+| 153 | `&x`, `&mut x`, `*r`, `\|x\| body`, `> 100 =>`, rest/spread `*xs` | notation: deciding when `*`/`&` is a prefix and not an operator, a spread, a rest is lexical context; dropping the prefix is one line | ~5 (the drop), at a hybrid-lane cost |
+| 110 | duration literals `3 days`, `1 month 2 days` | notation: a literal, its calendar length folded at parse time into Rust's data view, like `10:30` | 0 (a `days(n)` family in the prelude would be a change of meaning, not a move) |
+| 103 | `do … end`, `then … end`, `fi` | notation: grouping, already tables (END_BLOCK_WORDS, INDENTED_BLOCK_ENDS) | 0 (a circumfix declaration would move the table, not delete code; skipped, supervisor) |
+| 99 | `shader {…}`, `wgsl {…}` | notation: raw text, a table (SHADER_WORDS) | 0 |
+| 98 | `unsigned int`, multi-word type names | notation: lexical, a table (COMPOUND_TYPES) | 0 |
+| 134 | enums with values, Swift `case` rows | engine gap: F4 for the values (per-item templates with an index) | ~100 with F4 + a rule; the grouping stays |
+| 68 | subscripts, slices, negative bounds, `x.sort!` | hybrid lane: raw subscripts before the Rust passes break most indexing tests (supervisor, (a)) | ~40 (sugar.warp subscript, forced) once the hybrid lane retires |
+| 58 | trailing guards | notation: finding the guard and its condition; meaning is guarded_statement's 4 lines | 4, at the hybrid cost of every guard test |
+| 36 | `is not`, `isn't`, `not in`, `nand` | already a table (NEGATED_SPELLINGS) | 0 |
+| 28 | `/!`, `div`, `÷` | done (sugar-migration-2) | done |
+| 23 | emit words | notation: grouping the event words; meaning is the kernel `emit` | 0 |
+| 22 | test words `x is empty`, `x failed` | notation for the finding; tested() is 4 lines | 4, at a hybrid cost |
+| 21 | `n times` | notation: grouping (repeated()); meaning is now a rule (loops.warp) | done |
+| 15 | `a ?: b` | a name's ternary stays (Rust's optional-field readers, hybrid lane) | done for other values; the name's 1 line with hybrid retirement |
+| 14 | `function f` | notation: a mark the closure pass reads | 0 |
+| 12 | `if no xs` | notation: `no` as `not`'s alias in a condition, already the `not` branch | 0 |
+
+Real movable remainder: about 10 lines today. About 50 more once the WARP_SELF_HOSTED=1 hybrid lane retires (card
+hybrid-lane retirement: subscripts, test words, trailing guards, the name `?:`, the prefix drop). About 250 more
+with F4 and F5 (enum values, English definitions), and those move into warp passes rather than one-line rules. The
+parser's size is mostly notation, which is the layer it is meant to hold; shrinking it further is a notation design
+question (tables and declarations instead of branches), not a sugar one.
 
 ## The other lib/compiler/*.warp files (62 files, 10841 lines)
 
@@ -140,7 +177,7 @@ enum_declarations 63 (reads declared types).
 Sugar passes, with the rule each would become:
 | lines | file | rule, or the missing feature |
 |------:|------|------|
-| 197 | plain_enums | `Color.Red` → the case: F2 (declared enum cases) |
+| 197 | plain_enums | `Color.Red`, `Color::Red`, `case .red`, `c is Coin`: lib/sugar/enums.warp (F9, card sugar-plain-enums); the declaration, `as int`/`as Coin`/`Coin(2)` and the names holding cases stay a pass (see the card) |
 | 186 | definitions | `rewrite def $d => $d`, `rewrite $f($p...) = $b => $f($p...) := $b`: works today, minus `xs(1) = …` (F2) |
 | 163 | of_lookups | `rewrite $a of $b => $b.$a`: phrase rule works today; type phrases `list of int` need F2 |
 | 137 | for_loops | see the parser's for row: F3, F5, F7 |
@@ -181,13 +218,23 @@ Sugar passes, with the rule each would become:
    rest is not "works today": test words, emit words, unit phrases and `n times` are parser grouping (notation, item
    6); number_words needs F1 (keys and members); parse_words' eval needs scoped shadowing; `def`/`fun` is ~10 of
    definitions' 186 lines; of_lookups and number_words are twinned stages that Rust drives in the
-   WARP_SELF_HOSTED=1 lane, where lib/sugar rules don't run. `n times {…}` becomes a plain prelude function
-   `infix times(n: number, b: block)` (user), then the parser's times branch goes.
+   WARP_SELF_HOSTED=1 lane, where lib/sugar rules don't run. `n times {…}` (and `once`, `twice`, `thrice`) is
+   the rule of lib/sugar/loops.warp, onto the for loop (interviewer 2026-10-22, decision language-layers); the parser
+   keeps the grouping. The user's prelude function `infix times(n: number, b: block)` replaces the rule once the pure
+   lane has block parameters and shared captures (card times-prelude).
 3. **F3 fresh names + evaluate once** (one engine feature, then ~550 lines): coalesce, `?:`, comprehensions, ranges,
    for_loops, min_max, multiple_assignments, broadcasting. Largest gain per engine line.
 4. **F2 where-predicates** (~450 lines): type_tests, filled_lists, grouped_receivers, library_calls,
    prefix_comparisons, plain_enums, subscripts with negative bounds, Java `int[]`.
+   Status (warp-layers, 2026-10-22): subscripts, slices and negative bounds stay parse-time (sugar.warp subscript())
+   until the WARP_SELF_HOSTED=1 hybrid lane retires: raw subscripts before the Rust passes would cost that lane most
+   indexing tests (supervisor). Java `int[]` stays notation: a type spelling parse-time typed_parameter reads
+   (`int[] xs`, `params int[] xs`), which a sugar rule would reach too late.
 5. **F1 positions** (~250 lines): trailing guards, `if no xs`, foreign modifiers, C-style for heads.
+   Status (warp-layers, 2026-10-22): the C-style head is a lib/sugar/loops.warp rule onto while (the parser only groups
+   it). Trailing guards and `if no xs` stay: the parser must find the guard word and the condition context anyway
+   (grouping), what is left is guarded_statement's four lines onto the kernel if/while and `no` as `not`'s alias in a
+   condition, while moving them costs the hybrid lane all their tests.
 6. **Notation generalizations** replacing parser branches (~300 lines): word brackets (`do … end`, `fi`), raw-text
    block words (shader, wgsl), compound names. Each is one table, never a keyword branch.
 7. **F4–F7, last**: clauses, preposition heads, English `To …:` definitions (~310 lines). These may stay
