@@ -14,7 +14,8 @@ const ELF_MAGIC: &[u8; 4] = b"\x7fELF";
 /// code keeps no custom section of; c_signatures.rs with_c_functions, as warp build carries it), then wasmtime's image
 pub fn machine_code(engine: &Engine, wasm: &[u8]) -> Result<Vec<u8>, String> {
 	let functions = crate::ffi::described(wasm).map_err(|problem| format!("{problem:#}"))?;
-	let image = engine.precompile_module(wasm).map_err(|problem| format!("cannot compile to machine code: {problem:#}"))?;
+	let image =
+		engine.precompile_module(wasm).map_err(|problem| format!("cannot compile to machine code: {problem:#}"))?;
 	Ok(with_c_functions(&functions, &image))
 }
 

@@ -102,7 +102,9 @@ fn command(given: Vec<String>) -> i32 {
 	let _ = COMPILER.set(compiler);
 	match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
 		["run", source, ..] => run_source(&engine, compiler, source, &args[2..]),
-		["compile", source] if aot => compile_ahead(&engine, compiler, source, &Path::new(source).with_extension("wasm")),
+		["compile", source] if aot => {
+			compile_ahead(&engine, compiler, source, &Path::new(source).with_extension("wasm"))
+		}
 		["compile", source, wasm] if aot => compile_ahead(&engine, compiler, source, Path::new(wasm)),
 		["compile", source] => {
 			compile_file(&engine, compiler, Path::new(source), &Path::new(source).with_extension("wasm"))
@@ -211,8 +213,9 @@ fn machine_code(engine: &Engine, compiler: &str, source: &str, wasm: &Path) -> R
 /// `compile --aot f.warp [f.wasm]`: the module and its machine code beside it, f.cwasm (of a module: only that)
 fn compile_ahead(engine: &Engine, compiler: &str, source: &str, wasm: &Path) -> i32 {
 	let cwasm = wasm.with_extension(aot::EXTENSION);
-	let written = machine_code(engine, compiler, source, wasm)
-		.and_then(|code| std::fs::write(&cwasm, &code).map(|()| code.len()).map_err(|e| format!("{}: {e}", cwasm.display())));
+	let written = machine_code(engine, compiler, source, wasm).and_then(|code| {
+		std::fs::write(&cwasm, &code).map(|()| code.len()).map_err(|e| format!("{}: {e}", cwasm.display()))
+	});
 	match written {
 		Ok(size) => {
 			println!("compiled {size} bytes of machine code to {}", cwasm.display());
