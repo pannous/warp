@@ -55,4 +55,12 @@ is_spaced_value(n: any): bool := {
 is_negative_literal(n: any): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == "-" and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
 def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc.node]] }
+# `print v` under `use native`: an int's digits, or a literal text laid out as a cstr, straight into the output bytes
+# (runtime/text_words.warp); no text made, nothing given
+def native_printed(body: Body, n: any): list {
+	if n is text { return [no_kind, dropped(runtime_call("print_cstr_line", [cstr_value(n)]))] }
+	value = expression_code(body, n)
+	if value#1 == "int" { return [no_kind, dropped(runtime_call("print_int_line", [value]))] }
+	refuse("print of a " + value#1 + " in native code (an int or a literal text)")
+}
 def runtime_call(name: text, values: any): list { call_values(module.runtime[name], values) }

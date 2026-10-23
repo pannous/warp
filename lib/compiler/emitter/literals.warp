@@ -39,4 +39,13 @@ def text_value(t: text): list {
 	if one_code_point(t) { return ["char", [op.i32_const] + sleb(ord(t))] }
 	["text", text_bytes(t)]
 }
+# `"hi" as cstr`: t's bytes and a NUL from cstr_address on (module_layout.warp's active segment), the same text once;
+# its address an int
+def cstr_value(t: text): list {
+	if t not in module.cstrs {
+		module.cstrs[t] = cstr_address + #module.cstr_bytes
+		module.cstr_bytes += t.bytes + [0]
+	}
+	["int", [op.i64_const] + sleb(module.cstrs[t])]
+}
 def text_bytes(t: text): list { [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code(gc_ops.array_new_data, [gc.text, 0]) }

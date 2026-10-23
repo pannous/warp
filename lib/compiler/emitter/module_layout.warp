@@ -50,7 +50,9 @@ def module_bytes(functions: any): list {
 	declared = section(section_ids.function, vector(functions.map(f => uleb(#gc_types + f.index))))
 	exports = [name_bytes("main") + [export_function_byte] + uleb(functions#1.index)]
 	# always a memory, exported as Rust's: the host of a program importing this module compiled reads it
-	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
+	# and the pages of the cstrs past it
+	cstr_pages = (#module.cstr_bytes + 65535) /! 65536
+	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages + cstr_pages)]))
 	exports += [name_bytes("memory") + [export_memory_byte, 0]]
 	if #module.imports == 0 { imported = [] }
 	for name in exported_globals {
@@ -69,10 +71,12 @@ def module_bytes(functions: any): list {
 		}
 	}
 	exported = section(section_ids.export, vector(exports))
-	# the texts' bytes: one passive segment, which array.new_data reads
-	segments = section(section_ids.data_count, uleb(1))
+	# the texts' bytes: one passive segment, which array.new_data reads; the cstrs' an active one at cstr_address
+	segment_bytes = [[passive_segment] + uleb(#module.bytes) + module.bytes]
+	if #module.cstr_bytes > 0 { segment_bytes += [[0, op.i32_const] + sleb(cstr_address) + [op.end] + uleb(#module.cstr_bytes) + module.cstr_bytes] }
+	segments = section(section_ids.data_count, uleb(#segment_bytes))
 	codes = section(section_ids.code, vector(functions.map(function_body)))
-	texts = section(section_ids.data, vector([[passive_segment] + uleb(#module.bytes) + module.bytes]))
+	texts = section(section_ids.data, vector(segment_bytes))
 	globals = section(section_ids.globals, vector(module.global_order.map(global_entry)))
 	tags = []
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#gc_types + #module.imports + #functions)])) }
