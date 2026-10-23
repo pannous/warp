@@ -131,6 +131,15 @@ quadruple 3   # 12
 
 A result rewritten 64 times in a row (`rewrite_depth_limit`) is the rules' loop: an error, not a hang.
 
+A rule of a place (F1) rewrites its result again by the rules of that place, until none matches, so the declaration
+words before a statement all go, in any order (card engine-placed-where-chain; rewrites.warp at_place):
+
+```warp
+rewrite loudly $s... => $s... where statement
+rewrite gently $s... => $s... where statement
+gently loudly gently f() := 3      # f() := 3
+```
+
 ## Enum cases (F9)
 Three more `where` conditions ask about the enums the program declares (`enum Coin { Penny, Dime }`, Swift's
 `{ case north, south }`), read before plain_enums.warp lowers the declarations:
@@ -165,3 +174,31 @@ Write the place word last: with it first, `where parameter and $w is label`, the
 (`scaled(x, by factor) := x * factor` lost `x`, so the body's `x` was unknown). The sugar step applies a rule of a
 place only there (before F10 it ignored places). Tests:
 tests/modules/test_rewrite_parameters.warp.
+
+## Rest templates
+A template that is a rest hole alone, `$s...`, is the words the hole bound, rebuilt as a phrase; a phrase template
+that comes out one word long is that word. So one rule drops a declaration word before anything:
+
+```warp
+rewrite public $s... => $s...    # public static fun f() := 3 → static fun f() := 3, and so on by the next rules
+rewrite marked $a $b... => $a $b...   # marked 5 → 5
+```
+
+The parser reads `...` at the end of a line as a range going on into the next line, so a rule ending in `$s...`
+swallowed the line after it (the next rule, or the program's next statement); the engine ends such a rule line with
+`;` before parsing (rewrites.warp rules_ended, for the program in passes.warp and for each module). Before (card
+engine-rest-template) a bare `$s...` gave the tree `$s to ø` around the words, and a phrase of one word stayed a
+phrase, so each word took two fixed-arity rules. A `where` after a template ending in `$s...`
+on its line, which the parser reads as the range's end, ends the template (split_at_where); on the next line it is
+still swallowed. Tests: tests/modules/test_rewrite_engine.warp.
+
+## Called holes
+A hole written right before `(`, `$t($a...)`, is the call it reads as, as the code's `P(1)` is; the parser itself reads
+it as the hole and a group, `$t ($a...)`, which matched no call (card engine-guarded-call-phrase; rewrites.warp
+with_called_holes, in patterns and templates). `$t ($a)`, with a space, stays the hole and a group.
+
+```warp
+rewrite build $t($a...) => $t($a...) where $t is type   # p = build P(4) → p = P(4); build f(2) stays
+```
+
+Tests: tests/modules/test_rewrite_engine.warp; probes: probes/rewrites/guarded_call.

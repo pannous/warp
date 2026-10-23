@@ -30,6 +30,7 @@ use "source_checks.warp"
 use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
+use "property_accessors.warp"
 
 # the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES, which also lowers
 # `xs .* 2` and `(p).a`: lib/sugar/arithmetic.warp's and methods.warp's rules here): `a of b`
@@ -53,7 +54,7 @@ lowered_node(n: any): any := {
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
 # prelude (prelude_words.warp)
-lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), source, folder, prelude))
+lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(rules_ended(source))), source, folder, prelude))
 # the sugar rules the program at hand keeps (with_used), of each sugar step
 global kept_first_sugar = []
 global kept_sugar = []
@@ -71,7 +72,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	kept_sugar = sugar_rules(own, sugar_module_names)
 	kept_iteration_sugar = sugar_rules(own, iteration_sugar_module_names)
 	kept_late_sugar = sugar_rules(own, late_sugar_module_names)
-	with_reached(with_used_modules(with_type_module_uses(index_positions(rewritten_program(own, source))), folder), prelude, no)
+	with_reached(with_used_modules(with_type_module_uses(property_accessors(index_positions(rewritten_program(own, source)))), folder), prelude, no)
 }
 
 # the sugar rules (lib/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
@@ -92,7 +93,7 @@ lowered(source: text, folder: text, prelude: text): any := view_of(lowered_progr
 # the program as the passes leave it, its checks run (card pure-diagnostics): those of the program as written, then
 # those of the lowered program, as Rust runs them; what they find goes to `diagnosed` (diagnostics.warp)
 checked_program(source: text, folder: text, prelude: text): Node := {
-	program = plain_node(source_checks(parsed(source), prelude))
+	program = plain_node(source_checks(parsed(rules_ended(source)), prelude))
 	own_names = statements_in(program).map(declared_name)
 	main_globals(kind_changes(lowered_node(with_used(program, source, folder, prelude))), own_names)
 }

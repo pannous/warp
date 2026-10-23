@@ -270,7 +270,60 @@ first_alphabetic_word(written: text): text := {
 	""
 }
 
-module_rules_of(source: text, module: text): list := statements_in(plain_node(parsed(source))).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+module_rules_of(source: text, module: text): list := statements_in(plain_node(parsed(rules_ended(source)))).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+
+# the source with each rule ending its line in `$s...` ended by `;`: the parser reads `...` at the end of a line as a
+# range going on into the next line (`rewrite loudly $s... => $s...` and the line after it as `$s ... (next line)`),
+# which swallowed the next rule or statement
+rules_ended(source: text): text := {
+	if not source.contains(rewrite_line_start) { return source }
+	lines = source.split("\n")
+	ended = []
+	changed = no
+	for line in lines {
+		rule = line.trim()
+		ending = rule.starts_with(rewrite_line_start) and rule.contains("=>") and rule.ends_with("...")
+		if ending { changed = yes }
+		ended += [if ending then line + ";" else line]
+	}
+	if changed then ended.join("\n") else source
+}
+
+# the rule's code with each hole written right before `(`, `$t($a...)`, the call it is, as the code's `P(1)` is: the
+# parser reads it as the hole and a group, `$t ($a...)` (card engine-guarded-call-phrase)
+with_called_holes(n: any, lines: list): any := if #lines == 0 then n else bottom_up(n, part => called_holes_in(part, lines))
+
+# the group with each hole and the round group written right after it one call
+called_holes_in(n: any, lines: list): any := {
+	if not (is_group(n) and bracket_of(n) == "" and #n > 1) { return n }
+	items = items_of(n)
+	merged = []
+	index = 0
+	while index < #items {
+		item = items[index]
+		next = if index + 1 < #items then items[index + 1] else ø
+		if next != ø and is_group(next) and bracket_of(next) == "(" and called_hole(item, lines) {
+			merged += [placed(List([item] + items_of(next), Bracket.Round, Separator.None), item)]
+			index += 2
+		} else {
+			merged += [item]
+			index += 1
+		}
+	}
+	if #merged == #items { return n }
+	if #merged == 1 and separator_of(n) == " " then merged#1 else placed(group_like(n, merged), n)
+}
+
+# whether the source writes `(` right after the hole
+called_hole(n: any, lines: list): bool := {
+	if rule_hole(n) == ø { return no }
+	line = line_of(n)
+	column = column_of(n)
+	if not (line is int and column is int) or line < 1 or line > #lines { return no }
+	written: text = lines[line - 1]
+	at = column - 1 + #name_of(n)
+	at < #written and written[at ..< at + 1] == "("
+}
 
 # the word a program must mention for the rule to fire: the first of its origin's shape, else of its pattern
 needed_word(rule: Rule): text := first_word_of(rule.shape ?? rule.pattern) ?? ""
@@ -302,6 +355,9 @@ rule_of(statement: any, module: text, source: text): any := {
 	}
 	continued = after[0 ..< max(where_at, 0)]
 	template = statements_template(each_clauses(glued(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)), source)))
+	lines = if source.contains(rule_hole_mark) then source.split("\n") else []
+	pattern = with_called_holes(pattern, lines)
+	template = with_called_holes(template, lines)
 	if where_at == #after { return Rule(pattern, template, ø, ø, [], "", module, whole, no) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
@@ -322,7 +378,11 @@ rule_of(statement: any, module: text, source: text): any := {
 split_at_where(n: any): any := {
 	if n is key {
 		inner = split_at_where(value_of(n))
-		return if inner == ø then ø else [Key(key_of(n), op_of(n), inner#1), inner#2]
+		if inner == ø { return ø }
+		# `$s... where statement`: the parser read the conditions as the end of the rest's range, which ends nowhere
+		before = inner#1
+		if is_group(before) and #before == 0 { before = ø }
+		return [Key(key_of(n), op_of(n), before), inner#2]
 	}
 	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 0) { return ø }
 	items = items_of(n)
@@ -761,12 +821,21 @@ with_changed_members(n: any, changed: function): any := {
 	Key(key_of(n), op_of(n), [view#1, view#2, view_of(group_like(body, members))])
 }
 
-# the code rewritten by the first rule of the place matching it
+# the code rewritten by the first rule of the place matching it, its result again by the rules of the place, until none
+# matches (`loudly gently f() := 3` loses both words to the rules `loudly $s...` and `gently $s...`, card
+# engine-placed-where-chain)
 at_place(n: any, place: text, rules: list, origins: list): any := {
 	for index in 0 ..< #rules {
 		if rules[index].place == place {
 			result = rule_applied(rules[index], origins[index], n)
-			if result != ø { return rewritten_again(result, rules, origins) }
+			if result != ø {
+				again = rewritten_again(result, rules, origins)
+				if rewrite_depth >= rewrite_depth_limit { return error_node("the rewrite rules loop: each result matches a rule again, " + rewrite_depth_limit + " times in a row") }
+				rewrite_depth += 1
+				chained = at_place(again, place, rules, origins)
+				rewrite_depth -= 1
+				return chained
+			}
 		}
 	}
 	n
@@ -896,6 +965,10 @@ rule_spliced(template: any, bound: any, at: any): any := {
 		if not bound.has(hole) { bound[hole] = placed(fresh_name(hole), at) }
 		return bound[hole]
 	}
+	# a bare rest template `$s...` is the words its hole bound, rebuilt as a phrase: `public static fun f() := 3`
+	# under `rewrite public $s... => $s...` is `static fun f() := 3`
+	rest = rest_hole_name(template)
+	if rest != ø and bound.has(rest) { return as_phrase(items_of(bound[rest])) }
 	if is_glue(template) { return placed(glued_name(items_of(template)[1 ..].map(part => rule_spliced(part, bound, at))), at) }
 	if template is key { return placed(Key(rule_spliced(key_of(template), bound, at), op_of(template), rule_spliced(value_of(template), bound, at)), at) }
 	if not is_group(template) { return placed(template, at) }
@@ -915,8 +988,12 @@ rule_spliced(template: any, bound: any, at: any): any := {
 			index += 1
 		}
 	}
+	if is_phrase(template) { return placed(as_phrase(items), at) }
 	placed(group_like(template, items), at)
 }
+
+# the words as a phrase, one word as itself: `$a $b...` with $b binding nothing is $a
+as_phrase(words: list): any := if #words == 1 then words#1 else rule_phrase(words)
 
 # the template with each `·` written between words and holes a name to build (F5, decision name-glue): `square·$a`,
 # `$i·end`, `km·per·hour`, also the head of a call or definition `twice·$f(x)`; `·` beside anything else (`2·$x`) stays
