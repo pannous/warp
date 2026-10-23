@@ -1,0 +1,8 @@
+# between two comparisons `and` joins them, also in a group and an assignment. Expected: no yes yes no
+sq(x: int) := x * x
+print sq 2 == 4 and sq 3 == 8
+x = sq 2 == 4 and sq 3 == 9
+print x
+print (sq 2 == 4)
+y = (sq 2 == 4 and sq 3 == 8)
+print y

@@ -1,0 +1,5 @@
+# A range as a value (notes/layers.md, sugar): `a to b` (also `a … b`) is the list of the ints from a through b, `a..b`
+# the same without b, each end computed once. A loop over a range counts without the list (for_loops.warp), and the
+# rest of a list pattern, `rest...`, has no end.
+rewrite $a to $b => ($xs = ø; $i = $a; $end = $b; while $i <= $end { $xs += [$i]; $i++ }; $xs) where $a is not missing and $b is not missing
+rewrite $a .. $b => ($xs = ø; $i = $a; $end = $b; while $i < $end { $xs += [$i]; $i++ }; $xs) where $a is not missing and $b is not missing

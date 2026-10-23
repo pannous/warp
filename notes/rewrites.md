@@ -57,6 +57,7 @@ After `where`, conditions joined by `and` ask about what the holes bound:
 | `$x is unbound` | a word the program binds nothing to |
 | `$x is value`, `$f is function` | a word the program binds as a value, as a function |
 | `$x is literal` | a number or text written as such |
+| `$x is missing` | ø, also an operand not written (the end of `rest...`) |
 | `$x is text` (any hole kind) | code of that kind |
 | `$n < 0` (`> <= >= == !=`) | a number literal, `-1` and `(-1)` too, so compared |
 | `$f takes value`, `$f takes int` | a function of the program or a typed library word whose first parameter is typed (not yes/no), or typed int |
