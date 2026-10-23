@@ -1,0 +1,7 @@
+# card pure-class-methods-2: a class's methods in Python's brace-less form, `def area(): side * side`
+# (run-time instances: `warp test tests/types` runs them through warp pure, `warp test --self tests/types` through
+# warp self)
+
+# a_colon_method
+is! 'class Square { side: int; def area(): side * side }; Square(3).area()' 9
+is! 'class P { x: int; def next(): x + 1 }; P{x: 4}.next()' 5

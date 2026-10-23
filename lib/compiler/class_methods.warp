@@ -75,9 +75,15 @@ class_declared(top_statement: Node, view: any): Declared := {
 	methods = members.filter(member => defined_word(member) != ø)
 	Declared(top_statement, base_of(view#2), members.filter(member => defined_word(member) == ø).map(field_name), methods)
 }
-# a member read as the definitions pass reads a definition, `def area() -> int {…}` as `area() := …` (`definition` of
-# definitions.warp, which lifts the methods)
-member_read(member: any): Node := bottom_up(node_of(member), definition)
+# a member read as the definitions pass reads a definition (`definition` of definitions.warp, which lifts the
+# methods): `def area() -> int {…}` as `area() := …`, `def area(): …` the same
+member_read(member: any): Node := colon_method(bottom_up(node_of(member), definition))
+# Python's brace-less `def area(): side * side`, read as `area(): side * side`: a member whose name takes parentheses
+# is a method, its body after the colon (a field has no parentheses)
+colon_method(member: Node): Node := match member {
+	Key(left, Op.Colon, right): { if is_called_name(left) then Key(left, Op.Define, right) else member }
+	_: member
+}
 # the class a declaration's name says it extends, else "" (not ø: the self lane traps on `ø in` a map)
 base_of(name: any): text := {
 	if kind_of(name) != "attribute" { return "" }
