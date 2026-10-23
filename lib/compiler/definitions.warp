@@ -260,7 +260,7 @@ conversion_of(n: any, scope: any): any := {
 # the words showing a value as text, which show it through a program's conversion to text
 showing_words = ["print", "str", "text", "text_form"]
 # x as the program's conversion to text shows it; a text as it is
-shown(x: any): any := if x is text then x else call_of(conversion_name("text"), [x])
+shown_converted(x: any): any := if x is text then x else call_of(conversion_name("text"), [x])
 
 # every `x as B` of a target B the program converts to as the call of its conversion; `x as B = v` and `f(x) as B := …`
 # declare and stay
@@ -274,10 +274,10 @@ converting_uses(n: any, targets: any): any := {
 	}
 	if not targets.has("text") { return walked }
 	if is_group(walked) and #walked > 1 and walked#1 is symbol and name_of(walked#1) in showing_words and (bracket_of(walked) == "(" or bracket_of(walked) == "") {
-		return group_like(walked, [walked#1] + items_of(walked)[1 ..].map(shown))
+		return group_like(walked, [walked#1] + items_of(walked)[1 ..].map(shown_converted))
 	}
 	# `"hi " + p`: a join with a text
-	if is_key(walked, Op.Add) and (key_of(walked) is text or value_of(walked) is text) { return Key(shown(key_of(walked)), Op.Add, shown(value_of(walked))) }
+	if is_key(walked, Op.Add) and (key_of(walked) is text or value_of(walked) is text) { return Key(shown_converted(key_of(walked)), Op.Add, shown_converted(value_of(walked))) }
 	walked
 }
 
