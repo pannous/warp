@@ -3820,6 +3820,8 @@ def typed_parameters(arguments: Node): Node := {
 // Rust twin: definitions/functions.rs typed_parameter
 def typed_parameter(argument: Node): Node := {
 	parts = group_parts(argument)
+	if parts != ø and parts#1 == "(" and #parts#3 == 1 and is_optional_name(parts#3#1) { return listed("(", parts#2, [optional_parameter(parts#3#1)]) }
+	if is_optional_name(argument) { return optional_parameter(argument) }
 	if parts == ø or parts#2 != " " or parts#1 == "[" or #parts#3 == 0 { return argument }
 	words = parts#3
 	first = words#1
@@ -3842,6 +3844,11 @@ def rest_parameter(last: Node, argument: Node): Node := match last {
 	Key(name, Op.Colon, kind): { if name is symbol then symbol("*" + name_of(name)) else argument }
 	_: argument
 }
+
+// `f(x?)`: the optional parameter x, ø where a call leaves it out, as `f(x = ø)`. A parser case, not a rule: the parser
+// reads `x?` as the one name `x?`, and no rule pattern takes a name apart (F5 glues names in templates only)
+def optional_parameter(argument: Node): Node := if is_optional_name(argument) then Key(symbol(name_of(argument).remove_suffix("?")), Op.Assign, ø) else argument
+def is_optional_name(argument: Node): bool := is_symbol(argument) and name_of(argument).length > 1 and name_of(argument).ends_with("?")
 
 // `int b = 2` as b:int = 2
 def typed_default(last: Node, kind: Node, argument: Node): Node := match last {
