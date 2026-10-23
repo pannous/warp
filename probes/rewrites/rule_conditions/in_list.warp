@@ -1,7 +1,7 @@
 // out: [1, 1, 2, 0, 9]
-// `where $w is in […]`, `is not in […]`: the hole bound one of the words listed, a name or a text
-rewrite tag($w) => 1 where $w is in [red, "green"]
+// `where $w in […]`, `not in […]`: the hole bound one of the words listed, a name or a text
+rewrite tag($w) => 1 where $w in [red, "green"]
 rewrite tag($w) => 2
-rewrite mark($w) => 0 where $w is not in [push, add]
+rewrite mark($w) => 0 where $w not in [push, add]
 rewrite mark($w) => 9
 print [tag(red), tag("green"), tag(blue), mark(pop), mark(push)]

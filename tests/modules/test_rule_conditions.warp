@@ -14,12 +14,12 @@ g(plus, t) := plus(t)
 [plus(2), f(5), g(x => x - 1, 5)]' [2000, 6, 4]
 
 # where_in_a_word_list
-is! 'rewrite tag($w) => 1 where $w is in [red, "green"]
+is! 'rewrite tag($w) => 1 where $w in [red, "green"]
 rewrite tag($w) => 2
 [tag(red), tag("green"), tag(blue)]' [1, 1, 2]
 
 # where_not_in_a_word_list
-is! 'rewrite mark($w) => 0 where $w is not in [push, add]
+is! 'rewrite mark($w) => 0 where $w not in [push, add]
 rewrite mark($w) => 9
 [mark(pop), mark(push), mark(add)]' [0, 9, 9]
 

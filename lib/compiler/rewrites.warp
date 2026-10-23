@@ -105,7 +105,7 @@ global first_parameter_types = {}
 global rule_enums = {}
 # the program being rewritten, which `where not method` and `where not shadowed` read where code stands in, and what
 # they read off it once asked: [the method parts' head words, the words a definition around them binds], each as
-# written_at keys; ø until a rule asks
+# name → the written words of that name; ø until a rule asks
 global rule_program = ø
 global rule_contexts = ø
 # the code the rule being tried matched, for the context conditions; ø for a run of statements
