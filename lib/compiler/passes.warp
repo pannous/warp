@@ -3,18 +3,15 @@
 use "parser.warp"
 use "interpolation.warp"
 use "welcome_forms.warp"
-use "filled_lists.warp"
 use "number_words.warp"
 use "of_lookups.warp"
 use "grouped_receivers.warp"
-use "broadcasting.warp"
 use "definitions.warp"
 use "multiple_assignments.warp"
 use "clauses.warp"
 use "phrase_blocks.warp"
 use "comprehensions.warp"
 use "for_loops.warp"
-use "ranges.warp"
 use "list_methods.warp"
 use "node_matches.warp"
 use "node_cases.warp"
@@ -25,11 +22,10 @@ use "prelude_words.warp"
 use "preposition_heads.warp"
 use "plain_enums.warp"
 use "uses.warp"
-use "prefix_comparisons.warp"
+use "prefix_calls.warp"
 use "data_items.warp"
 use "parse_words.warp"
 use "lambdas.warp"
-use "min_max.warp"
 use "index_positions.warp"
 use "arity_overloads.warp"
 use "kind_changes.warp"
@@ -38,16 +34,16 @@ use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
 
-# the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES): `a of b`, `xs .* 2`,
-# `(p).a`
-sugar_phrases_table = [[is_lookup_word, lookup_phrase], [is_element_operator, element_wise_phrase], [is_dot, ungrouped]]
+# the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES, which also lowers
+# `xs .* 2`: lib/sugar/arithmetic.warp's rules here): `a of b`, `(p).a`
+sugar_phrases_table = [[is_lookup_word, lookup_phrase], [is_dot, ungrouped]]
 sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
 
 passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, prefix_comparisons] + passes + [bare_returns, filled_lists, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, min_max, sugar, lambdas, for_loops, ranges, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [bare_returns, first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, sugar, lambdas, for_loops, late_sugar, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
@@ -59,8 +55,11 @@ lowered_node(n: any): any := {
 # it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
 # prelude (prelude_words.warp)
 lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), source, folder, prelude))
-# the sugar rules the program at hand keeps (with_used)
+# the sugar rules the program at hand keeps (with_used), of each sugar step
+global kept_first_sugar = []
 global kept_sugar = []
+# the late sugar rules it keeps (rewrites.warp late_sugar_module_names)
+global kept_late_sugar = []
 # (the rewrite rules first, as Rust's lowering runs them before any pass: a fired module's `use` brings its words;
 # after interpolation, so that a rule sees the code in a text's holes, `"$(2 in xs)"`; declared counts before the
 # prelude is reached, so the words index_positions answers with, `byte_index_of` for a `byte index b = t.find(part)`,
@@ -68,14 +67,20 @@ global kept_sugar = []
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	own = interpolation(with_uses(program, folder))
-	kept_sugar = sugar_rules(own)
+	kept_first_sugar = sugar_rules(own, first_sugar_module_names)
+	kept_sugar = sugar_rules(own, sugar_module_names)
+	kept_late_sugar = sugar_rules(own, late_sugar_module_names)
 	with_reached(with_used_modules(with_type_module_uses(index_positions(rewritten_program(own, source))), folder), prelude, no)
 }
 
-# the sugar rules (lib/sugar/) the program keeps, over it and the definitions it reached, where the passes before them
-# have made their forms (definitions' `?? []` of a list result) and read the written ones (data_items `xs.add(x)`,
-# of_lookups `keys in m`)
+# the sugar rules (lib/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
+# that would read its forms as something else (rewrites.warp first_sugar_module_names), the others where the passes
+# before them have made their forms (definitions' `?? []` of a list result) and read the written ones (data_items
+# `xs.add(x)`, of_lookups `keys in m`)
+first_sugar(program: Node): Node := sugared(program, kept_first_sugar)
 sugar(program: Node): Node := sugared(program, kept_sugar)
+# the late sugar rules, after for_loops took the loops over a range
+late_sugar(program: Node): Node := sugared(program, kept_late_sugar)
 
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))

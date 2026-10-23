@@ -3,14 +3,17 @@
 # where the hole binds a variable assigned code of that shape, or a parameter of a function called with one; `$x: text`
 # (also symbol, list, block, int, number) only code of that kind. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$x is literal`, `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
+# `$f is function`, `$x is literal`, `$x is missing` (ø, also an operand not written: `rest...`), `$x is text` (a hole
+# kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word) and `$f takes int` (typed int); `$e is enum` (a name or text of an enum the program
 # declares), `$c is case` (a case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound,
 # the condition binds it to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
 # (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), lets the rule rewrite code only
-# standing there: `rewrite $s except_if $c => if not $c then $s where statement`. A phrase pattern (`$n beat`) matches each run of those
-# words in a longer phrase (of `x = 2 beats`, which the parser keeps as `(x = 2) beats`, the value), a statement
+# standing there: `rewrite $s except_if $c => if not $c then $s where statement`. The mark `alias` says the
+# pattern's first word is another spelling of the template's, which each firing notes as Rust's note_alias does ("warp
+# says for", until "got it"): `rewrite each $xs $body => for $xs $body where statement and alias`. A phrase pattern
+# (`$n beat`) matches each run of those words in a longer phrase (of `x = 2 beats`, which the parser keeps as `(x = 2) beats`, the value), a statement
 # pattern also a block of just that statement, and a template of several statements `($a; $b)` takes the statement's
 # place. Rules go bottom-up, children first, each node rewritten once. A program's own rules apply to it; a standard
 # module's rules apply to every program mentioning their words but binding none itself, and one that fires brings its
@@ -25,6 +28,7 @@ use "scope.warp"
 use "uses.warp"
 use "prelude_words.warp"
 use "type_tests.warp"
+use "diagnostics.warp"
 use "enum_declarations.warp"
 
 rewrite_word = "rewrite"
@@ -36,7 +40,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing"]
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
 cases_words = ["cases", "of"]
 # `where $n < 0`: the comparisons of a number literal
@@ -54,20 +58,28 @@ each_word = "for"
 each_in_word = "in"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions
 rule_places = ["statement", "condition", "member", "key", "value"]
+# the mark of a rule whose pattern's first word spells the template's another way
+alias_mark = "alias"
 takes_word = "takes"
 # `where $f takes value`: any first parameter typed, except these
 yes_no_types = ["bool"]
 value_word = "value"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
-# program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums"]
+# program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
+# Three steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
+# something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
+# making or reading the forms its rules take, and the late sugar after for_loops took the loops a range counts: a
+# range left is a value (sugar/ranges)
+first_sugar_module_names = ["sugar/lists", "sugar/comparisons"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes"]
+late_sugar_module_names = ["sugar/ranges"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one of rule_places it rewrites only, else "", `module` the standard module declaring it, else ""; `whole` for a
-# phrase pattern that matches only a whole phrase, not its runs
-class Rule { pattern: any; template: any; hole: any; shape: any; conditions: list; place: text; module: text; whole: bool }
+# phrase pattern that matches only a whole phrase, not its runs; `alias` for a rule marked alias
+class Rule { pattern: any; template: any; hole: any; shape: any; conditions: list; place: text; module: text; whole: bool; alias: bool }
 
 # the standard modules whose rules fired during a rewrite
 global fired_modules = []
@@ -126,7 +138,7 @@ unbound_rules(module_rules: list, program: Node): list := {
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (a program's own `push`
 # keeps its own), before the definitions it reaches from the prelude and the modules join it
-sugar_rules(program: Node): list := unbound_rules(sugar_module_names.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+sugar_rules(program: Node, modules: list): list := unbound_rules(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
 
 # the program as it is, the enums it declares kept for the sugar rules: a pass right before plain_enums.warp lowers
 # their declarations, after node_cases.warp declared node.warp's Op, Bracket and Separator for a program naming them
@@ -149,11 +161,22 @@ sugared_node(n: any, rules: list): any := sugar_rewritten(with_changed_members(n
 # the node rewritten by the first sugar rule matching it, its result rewritten again (F7); a node no rule matches stays
 # as the passes left it
 sugar_rewritten(n: any, rules: list): any := {
+	written = flattened_phrase(n)
 	for rule in rules {
 		result = rule_applied(rule, {}, n)
+		if result == ø and written != ø { result = rule_applied(rule, {}, written) }
 		if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
 	}
 	n
+}
+
+# a phrase holding phrases as its words as written, which a phrase rule matches as the module rules do (the parser
+# nests `print each xs` as `print (each xs)`), else ø
+flattened_phrase(n: any): any := match n {
+	List(items, Bracket.None, Separator.Space): {
+		if items.any(item => is_group(item) and bracket_of(item) == "" and separator_of(item) == " ") then List(words_of_all(items), Bracket.None, Separator.Space) else ø
+	}
+	_: ø
 }
 
 word_set(words: list): any := {
@@ -224,17 +247,19 @@ rule_of(statement: any, module: text, source: text): any := {
 	}
 	continued = after[0 ..< max(where_at, 0)]
 	template = statements_template(glued(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)), source))
-	if where_at == #after { return Rule(pattern, template, ø, ø, [], "", module, whole) }
+	if where_at == #after { return Rule(pattern, template, ø, ø, [], "", module, whole, no) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
+	aliased = conditions.any(condition => condition == symbol(alias_mark))
+	conditions = conditions.filter(condition => condition != symbol(alias_mark))
 	places = conditions.filter(is_place_word)
 	conditions = conditions.filter(condition => not is_place_word(condition))
 	if #places > 1 or not conditions.all(is_condition) { return ø }
 	place = if #places == 0 then "" else name_of(places#1)
 	origins = conditions.filter(condition => is_key(condition, Op.Assign))
 	if #origins > 1 { return ø }
-	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole) }
-	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module, whole)
+	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole, aliased) }
+	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module, whole, aliased)
 }
 
 # [the template before a `where` its last words swallowed, the words after that `where`] (`$c + $n where`, `$s where
@@ -380,6 +405,7 @@ has_property(code: any, property: text): bool := {
 	if property in hole_kinds { return is_hole_kind(code, property) }
 	if property == "literal" { return is_number_literal(code) or code is text }
 	if property == "enum" { return named_enum(code) != "" }
+	if property == "missing" { return code == ø }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "type" { return is_tested_type(word, rule_scope) }
@@ -674,6 +700,7 @@ rule_applied(rule: Rule, origin: any, n: any): any := {
 
 fired(rule: Rule, result: any): any := {
 	if rule.module != "" { fired_modules += [rule.module] }
+	if rule.alias { diagnose(call_of("alias_word", [symbol(first_word_of(rule.pattern)), symbol(first_word_of(rule.template))])) }
 	result
 }
 
