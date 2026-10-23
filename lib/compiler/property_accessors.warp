@@ -44,36 +44,39 @@ defines_property(line: text): bool := {
 	leading_name(line[#object + 1 ..]) != "" and line.contains(":=")
 }
 
-# the properties `statements` define, each "object.property" → [getter or ø, [parameter, setter] or ø, module]
-def properties_collected(statements: list, module: text, properties: any) {
-	for statement in statements {
-		found = property_definition(statement)
-		if found != ø {
-			name = found#1 + "." + found#2
-			known = if properties.has(name) then properties[name] else [ø, ø, module]
-			properties[name] = if found#3 == "" then [found#4, known#2, module] else [known#1, [found#3, found#4], module]
+# the properties `definitions` define, into the table: "object.property" → its getter's body, its setter's body and
+# parameter, the module it needs
+def properties_collected(definitions: list, module: text, table: any) {
+	for found in definitions {
+		name = found#1 + "." + found#2
+		if found#3 == "" { table.getters[name] = found#4 } else {
+			table.setters[name] = found#4
+			table.parameters[name] = found#3
 		}
+		table.owners[name] = module
 	}
 }
+property_definitions(statements: list): list := statements.map(property_definition).filter(found => found != ø)
+# the object of "object.property"
+property_object(name: text): text := name.split(".")#1
+property_table(): any := {getters: {}, setters: {}, parameters: {}, owners: {}}
 
-# the standard properties: the property lines of each module's text, parsed on their own
-standard_properties(): any := {
-	properties = {}
+# the standard properties of each module's text, its property lines parsed on their own, into the table
+def standard_properties(table: any) {
 	for module in property_modules {
 		source = file_text(std_module_path(module))
 		if source != ø {
 			lines = source.split("\n").filter(defines_property)
-			if #lines > 0 { properties_collected(statements_in(plain_node(parsed(lines.join("\n")))), if module == prelude_module then "" else module, properties) }
+			if #lines > 0 { properties_collected(property_definitions(statements_in(plain_node(parsed(lines.join("\n"))))), if module == prelude_module then "" else module, table) }
 		}
 	}
-	properties
 }
 
 # "object.property" of `object.member`, "" when it names no property or the program binds the object as a value
 property_named(object: Node, member: Node, properties: any, scope: any): text := {
 	if not (object is symbol) or not (member is symbol) or binds_value(scope, name_of(object)) { return "" }
 	name = name_of(object) + "." + name_of(member)
-	if properties.has(name) then name else ""
+	if properties.getters.has(name) or properties.setters.has(name) then name else ""
 }
 dotted_property(n: Node, properties: any, scope: any): text := if is_key(n, Op.Dot) then property_named(key_of(n), value_of(n), properties, scope) else ""
 
@@ -89,7 +92,7 @@ compound_base(op: Op): any := {
 # the program with each read of a property its getter and each write its setter
 property_accessed(n: Node, properties: any, scope: any): Node := {
 	getter_name = dotted_property(n, properties, scope)
-	if getter_name != "" and properties[getter_name]#1 != ø { return properties[getter_name]#1 }
+	if getter_name != "" and properties.getters.has(getter_name) { return properties.getters[getter_name] }
 	match n {
 		Key(left, op, right): key_accessed(left, op, right, properties, scope)
 		_: children(n, part => property_accessed(part, properties, scope))
@@ -102,7 +105,7 @@ key_accessed(left: Node, op: Op, right: Node, properties: any, scope: any): Node
 	value = property_accessed(right, properties, scope)
 	if target != "" and op == Op.Assign { return property_written(target, value, properties) }
 	base = compound_base(op)
-	if target != "" and base != ø and properties[target]#1 != ø { return property_written(target, Key(properties[target]#1, base, value), properties) }
+	if target != "" and base != ø and properties.getters.has(target) { return property_written(target, Key(properties.getters[target], base, value), properties) }
 	if op == Op.Dot and is_round(right) and #items_of(right) == 2 {
 		items = items_of(right)
 		called = property_named(left, items#1, properties, scope)
@@ -115,26 +118,25 @@ key_accessed(left: Node, op: Op, right: Node, properties: any, scope: any): Node
 
 # the setter's body, its parameter the value; a property without a setter is a loud error where it is written
 property_written(name: text, value: Node, properties: any): Node := {
-	setter = properties[name]#2
-	if setter == ø { return call_of("raise", [Text(name + " is read-only, it has no setter")]) }
-	setter_with_value(setter#2, setter#1, value)
+	if not properties.setters.has(name) { return call_of("raise", [Text(name + " is read-only, it has no setter")]) }
+	setter_with_value(properties.setters[name], properties.parameters[name], value)
 }
 
 # the program's properties in use, its own definitions gone; `use draw` in front when a canvas property needs it
 property_accessors(program: Node): Node := {
 	statements = statements_in(program)
-	own = {}
-	properties_collected(statements, "", own)
+	own = property_definitions(statements)
 	mentioned = symbol_words(program)
 	wants_standard = mentioned.any(word => word in ["window", "display", "canvas"])
-	if #own.keys == 0 and not wants_standard { return program }
-	properties = if wants_standard then standard_properties() else {}
-	for name in own.keys { properties[name] = own[name] }
+	if #own == 0 and not wants_standard { return program }
+	properties = property_table()
+	if wants_standard { standard_properties(properties) }
+	properties_collected(own, "", properties)
 	kept = statements.filter(statement => property_definition(statement) == ø)
 	scope = scope_of(program)
 	rewritten = kept.map(statement => property_accessed(statement, properties, scope))
 	# the modules of the properties the program names: `use draw` in front for the canvas's
-	needed = properties.keys.filter(name => name.split(".")#1 in mentioned).map(name => properties[name]#3)
+	needed = properties.owners.keys.filter(name => property_object(name) in mentioned).map(name => properties.owners[name])
 	uses = statements.map(use_target).filter(target => target is symbol).map(name_of)
 	brought = property_modules.filter(module => module != prelude_module and module in needed and module not in uses)
 	separated(bracketed(brought.map(module => plain_node(parsed("use " + module))) + rewritten, ""), ";")
