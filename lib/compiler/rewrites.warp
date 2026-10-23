@@ -66,7 +66,7 @@ value_word = "value"
 # making or reading the forms its rules take, and the late sugar after for_loops took the loops a range counts: a
 # range left is a value (sugar/ranges)
 first_sugar_module_names = ["sugar/lists", "sugar/comparisons"]
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes"]
 late_sugar_module_names = ["sugar/ranges"]
 # the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
 # a list literal (card sugar-comprehensions)
