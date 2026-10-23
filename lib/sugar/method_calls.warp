@@ -5,6 +5,7 @@
 # arity_overloads).
 # `m.remove(k)`, `m.delete(k)` of a variable: the value of k, its entry removed from m (Python's dict.pop); of a list the
 # first element equal to k removed. Rust twin: list_mutations.rs removed_key
-rewrite $m.remove($k) => ($r = removed_value($m, $k); $m = map_without($m, $k); $r) where $m is symbol
-rewrite $m.delete($k) => ($r = removed_value($m, $k); $m = map_without($m, $k); $r) where $m is symbol
+# The method word is a hole: a rule naming `remove` would give way to a program's own remove(a, b), which the pass
+# never did
+rewrite $m.$f($k) => ($r = removed_value($m, $k); $m = map_without($m, $k); $r) where $m is symbol and $f in [remove, delete]
 rewrite $x.$f($a...) => $f($x, $a...) where $f is symbol and $f not in [add, append, push, insert, pop, remove, delete, clear]
