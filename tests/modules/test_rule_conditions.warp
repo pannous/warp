@@ -31,15 +31,15 @@ n = 3
 [plus(2), n.plus(4), f(5)]' [2000, 7, 6]
 
 # a_place_word_first_among_the_conditions
-is! 'rewrite tag $p => $p * 10 where value and $p is literal
-rewrite tag $p => $p where $p is not literal
+is! 'rewrite keep $p => $p where value and $p is literal
+rewrite keep $p => 0 where $p is not literal
 y = 2
-m = {a: tag 5, b: tag y}
-[m.a, m.b]' [50, 2]
+m = {a: keep 5, b: keep y}
+[m.a, m.b]' [5, 0]
 
 # a_place_word_last_among_the_conditions
-is! 'rewrite tag $p => $p * 10 where $p is literal and value
-rewrite tag $p => $p where $p is not literal
+is! 'rewrite keep $p => $p where $p is literal and value
+rewrite keep $p => 0 where $p is not literal
 y = 2
-m = {a: tag 5, b: tag y}
-[m.a, m.b]' [50, 2]
+m = {a: keep 5, b: keep y}
+[m.a, m.b]' [5, 0]
