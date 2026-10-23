@@ -6,7 +6,7 @@ add(a, given b) := a + b
 add(1, 2)' 3
 
 # a_label_word_is_a_condition
-is! 'rewrite $w $p => $p where parameter and $w is label
+is! 'rewrite $w $p => $p where $w is label and parameter
 scaled(x, by factor) := x * factor
 scaled(3, 4)' 12
 

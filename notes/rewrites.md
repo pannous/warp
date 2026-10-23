@@ -143,8 +143,10 @@ The place word `parameter` lets a rule rewrite only a parameter of a definition'
 parameter. lib/sugar/parameters.warp drops the label, as Swift passes argument labels:
 
 ```warp
-rewrite $word $p => $p where parameter and $word is label   # replace(t, old, with new) := … takes new
+rewrite $word $p => $p where $word is label and parameter   # replace(t, old, with new) := … takes new
 ```
 
-The sugar step applies a rule of a place only there (before F10 it ignored places). Tests:
+Write the place word last: with it first, `where parameter and $w is label`, the rule rewrote the head wrongly
+(`scaled(x, by factor) := x * factor` lost `x`, so the body's `x` was unknown). The sugar step applies a rule of a
+place only there (before F10 it ignored places). Tests:
 tests/modules/test_rewrite_parameters.warp.
