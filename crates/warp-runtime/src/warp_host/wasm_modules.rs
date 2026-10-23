@@ -10,6 +10,7 @@ use crate::nodes::{self, Builders, Node};
 use crate::{cache, components, ffi, Host};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use warp_runtime::c_signatures::CFunction;
 use warp_runtime::gc_values::parts_of;
 use wasmtime::{Extern, Instance, Linker, Module, Result, StoreContextMut, Val, ValType};
 
@@ -163,7 +164,7 @@ fn load_bytes(
 	} else {
 		let engine = store.data().engine.clone();
 		let module = cache::module(&engine, bytes)?;
-		Item::Module(instantiate(store, &module, bytes, folder)?)
+		Item::Module(instantiate(store, &module, &ffi::described(bytes)?, &ffi::lettered(bytes), folder)?)
 	};
 	let entries = &mut store.data_mut().wasm.entries;
 	entries.push(Entry { path, item });
@@ -210,12 +211,13 @@ fn import_file(name: &str, folder: Option<&Path>) -> Option<PathBuf> {
 pub fn instantiate(
 	store: &mut StoreContextMut<'_, Host>,
 	module: &Module,
-	bytes: &[u8],
+	described: &[CFunction],
+	lettered: &[ffi::Lettered],
 	folder: Option<&Path>,
 ) -> Result<Instance> {
 	let mut linker = crate::program_linker(module.engine())?;
 	link_module_imports(&mut linker, store, module, folder)?;
-	ffi::link_c_imports(&mut linker, store, module, bytes)?;
+	ffi::link_c_imports(&mut linker, store, module, described, lettered)?;
 	linker.define_unknown_imports_as_traps(module)?;
 	linker.instantiate(store, module)
 }
