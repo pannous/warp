@@ -2,9 +2,11 @@
 //! compiler written in warp (compiler-self.wasm, or compiler.wasm with `--compiler full`) and runs the module with WASI
 //! and what wasm cannot do itself: shell commands (os.command, os.exec, os.run), C calls, the host words.
 //!   warp-host [--compiler self|full] [run] <file.warp | code> [args…]   compile and run; the run's value printed
-//!   warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
-//!   warp-host <file.wasm | file.wat> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
+//!   warp-host [--compiler self|full] compile [--aot] <file.warp> [<file.wasm>]   --aot: also its machine code, .cwasm
+//!   warp-host [--compiler self|full] build <file.warp | file.wasm> [-o <app>]   a standalone executable (aot.rs)
+//!   warp-host <file.wasm | file.wat | file.cwasm> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
 //! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`
+mod aot;
 mod cache;
 mod components;
 mod ffi;
@@ -25,11 +27,13 @@ use wasmtime_wasi::{FsPerms, WasiCtxBuilder};
 const WASM_STACK: usize = 240 << 20;
 const THREAD_STACK: usize = WASM_STACK + (16 << 20);
 const USAGE: &str = "usage: warp-host [--compiler self|full] [run] <file.warp | code> [args…]
-       warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
-       warp-host <file.wasm | file.wat> [args…]
-no command means run: warp-host f.warp, warp-host '6*7'";
+       warp-host [--compiler self|full] compile [--aot] <file.warp> [<file.wasm>]
+       warp-host [--compiler self|full] build <file.warp | file.wasm> [-o <app>]
+       warp-host <file.wasm | file.wat | file.cwasm> [args…]
+no command means run: warp-host f.warp, warp-host '6*7'
+compile --aot also writes the machine code for this machine, <file>.cwasm; build writes an executable carrying it";
 /// The words warp-host takes as commands; any other first word is a program (`run` implied), as with warp
-const COMMANDS: [&str; 3] = ["run", "compile", "help"];
+const COMMANDS: [&str; 4] = ["run", "compile", "build", "help"];
 /// The extensions of warp source, as warp's (src/cli/formatting.rs WARP_EXTENSIONS)
 const WARP_EXTENSIONS: [&str; 2] = ["warp", "wasp"];
 
@@ -68,19 +72,27 @@ enum Ran {
 }
 
 fn main() {
-	let args = std::env::args().skip(1).collect();
-	let worker = std::thread::Builder::new().stack_size(THREAD_STACK).spawn(move || command(args));
+	let mut args = std::env::args();
+	let name = args.next().unwrap_or_default();
+	let args = args.collect();
+	// an executable `build` wrote runs the program it carries with all its arguments; else warp-host's commands
+	let run = move || match aot::carried() {
+		Some(machine_code) => run_carried(&machine_code, [vec![name], args].concat()),
+		None => command(args),
+	};
+	let worker = std::thread::Builder::new().stack_size(THREAD_STACK).spawn(run);
 	std::process::exit(worker.map_or(1, |worker| worker.join().unwrap_or(1)))
 }
 
 fn command(given: Vec<String>) -> i32 {
 	// options before the file: --compiler, and the launcher's (--no-hints, --fuel n …), which warp-host ignores
-	let (mut full, mut args, mut given) = (false, Vec::<String>::new(), given.into_iter());
+	let (mut full, mut aot, mut args, mut given) = (false, false, Vec::<String>::new(), given.into_iter());
 	while let Some(word) = given.next() {
-		let before_file =
-			args.is_empty() || matches!(args.as_slice(), [command] if command == "run" || command == "compile");
+		let before_file = args.is_empty()
+			|| matches!(args.as_slice(), [command] if command == "run" || command == "compile" || command == "build");
 		match word.as_str() {
 			"--help" | "-h" if before_file => args.push("help".into()),
+			"--aot" if before_file => aot = true,
 			"--compiler" | "--fuel" if before_file => {
 				full |= word == "--compiler" && given.next().as_deref() == Some("full")
 			}
@@ -96,14 +108,29 @@ fn command(given: Vec<String>) -> i32 {
 	let _ = COMPILER.set(compiler);
 	match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
 		["run", source, ..] => run_source(&engine, compiler, source, &args[2..]),
+		["compile", source] if aot => {
+			compile_ahead(&engine, compiler, source, &Path::new(source).with_extension("wasm"))
+		}
+		["compile", source, wasm] if aot => compile_ahead(&engine, compiler, source, Path::new(wasm)),
 		["compile", source] => {
 			compile_file(&engine, compiler, Path::new(source), &Path::new(source).with_extension("wasm"))
 		}
 		["compile", source, wasm] => compile_file(&engine, compiler, Path::new(source), Path::new(wasm)),
+		["build", source] => build(&engine, compiler, source, &executable_name(source)),
+		["build", source, "-o" | "--output", output] | ["build", "-o" | "--output", output, source] => {
+			build(&engine, compiler, source, Path::new(output))
+		}
 		["help", ..] => {
 			println!("{USAGE}");
 			0
 		}
+		[file, ..] if aot::is_machine_code(file) => match std::fs::read(file) {
+			Ok(machine_code) => match aot::load(&engine, &machine_code, file) {
+				Ok((module, functions)) => shown(run_module(&engine, &module, &ffi::CImports { described: functions, ..Default::default() }, args.clone(), None)),
+				Err(problem) => failed(&problem),
+			},
+			Err(problem) => failed(&format!("{file}: {problem}")),
+		},
 		[file, ..] if is_module(file) => match module_bytes(file) {
 			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None, false)),
 			Err(problem) => failed(&format!("{file}: {problem}")),
@@ -172,6 +199,69 @@ fn run_source(engine: &Engine, compiler: &str, source: &str, args: &[String]) ->
 	match module {
 		Ok(bytes) => shown(run_wasm(engine, &bytes, [vec![source.to_string()], args.to_vec()].concat(), None, false)),
 		Err(problem) => refused(&problem),
+	}
+}
+
+/// The machine code of a program or module, as wasm compiled it, for this warp-host and machine: a program's module
+/// written to `wasm` as compile writes it
+fn machine_code(engine: &Engine, compiler: &str, source: &str, wasm: &Path) -> Result<Vec<u8>, String> {
+	let bytes = if is_module(source) {
+		module_bytes(source).map_err(|problem| format!("{source}: {problem}"))?
+	} else if !Path::new(source).is_file() {
+		return Err(format!("could not read file {source}"));
+	} else {
+		compile(engine, compiler, Path::new(source), wasm, None)?;
+		std::fs::read(wasm).map_err(|problem| format!("{}: {problem}", wasm.display()))?
+	};
+	aot::machine_code(engine, &bytes)
+}
+
+/// `compile --aot f.warp [f.wasm]`: the module and its machine code beside it, f.cwasm (of a module: only that)
+fn compile_ahead(engine: &Engine, compiler: &str, source: &str, wasm: &Path) -> i32 {
+	let cwasm = wasm.with_extension(aot::EXTENSION);
+	let written = machine_code(engine, compiler, source, wasm).and_then(|code| {
+		std::fs::write(&cwasm, &code).map(|()| code.len()).map_err(|e| format!("{}: {e}", cwasm.display()))
+	});
+	match written {
+		Ok(size) => {
+			println!("compiled {size} bytes of machine code to {}", cwasm.display());
+			0
+		}
+		Err(problem) => refused(&problem),
+	}
+}
+
+/// `build f.warp [-o app]`: the standalone executable, f beside f.warp (f.exe on Windows) unless -o names it
+fn build(engine: &Engine, compiler: &str, source: &str, output: &Path) -> i32 {
+	if output == Path::new(source) {
+		return refused(&format!("build would write the executable over {source}: name another with -o"));
+	}
+	let scratch = std::env::temp_dir().join(format!("warp-host-{}.wasm", std::process::id()));
+	let code = machine_code(engine, compiler, source, &scratch);
+	let _ = std::fs::remove_file(&scratch);
+	match code.and_then(|code| aot::write_executable(&code, output)) {
+		Ok(size) => {
+			println!("wrote {} ({size} bytes)", output.display());
+			0
+		}
+		Err(problem) => refused(&problem),
+	}
+}
+
+fn executable_name(source: &str) -> PathBuf {
+	Path::new(source).with_extension(std::env::consts::EXE_EXTENSION)
+}
+
+/// The program an executable carries, run with the executable's arguments as a program's (its name first); its
+/// value printed, as `warp-host f.warp` prints it
+fn run_carried(machine_code: &[u8], args: Vec<String>) -> i32 {
+	let engine = match engine() {
+		Ok(engine) => engine,
+		Err(problem) => return failed(&format!("{problem:#}")),
+	};
+	match aot::load(&engine, machine_code, &args[0]) {
+		Ok((module, functions)) => shown(run_module(&engine, &module, &ffi::CImports { described: functions, ..Default::default() }, args, None)),
+		Err(problem) => failed(&problem),
 	}
 }
 
@@ -273,8 +363,25 @@ fn on_own_stack<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) ->
 /// Run a module's main (else _start) with WASI (stdio, environment, the file system at / and .) and the host's words;
 /// `cached`: its machine code from the cache (cache::module)
 fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cache::Keeper>, cached: bool) -> Ran {
-	let ran = || -> wasmtime::Result<Ran> {
+	let loaded = || -> wasmtime::Result<(Module, ffi::CImports)> {
 		let module = if cached { cache::module(engine, bytes)? } else { Module::new(engine, bytes)? };
+		Ok((module, ffi::CImports::of(bytes)?))
+	};
+	match loaded() {
+		Ok((module, c)) => run_module(engine, &module, &c, args, keeper),
+		Err(problem) => Ran::Failed(format!("{problem:#}")),
+	}
+}
+
+/// Run a compiled module (run_wasm), the C functions `c` describes linked with its other C imports
+fn run_module(
+	engine: &Engine,
+	module: &Module,
+	c: &ffi::CImports,
+	args: Vec<String>,
+	keeper: Option<cache::Keeper>,
+) -> Ran {
+	let ran = || -> wasmtime::Result<Ran> {
 		let mut wasi = WasiCtxBuilder::new();
 		wasi.inherit_stdio().inherit_env().args(&args);
 		wasi.preopened_dir("/", "/", FsPerms::ReadWrite)?;
@@ -290,7 +397,7 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cac
 		};
 		let mut store = Store::new(engine, host);
 		warp_runtime::engine::cap_memory(&mut store);
-		let instance = wasm_modules::instantiate(&mut store.as_context_mut(), &module, bytes, None)?;
+		let instance = wasm_modules::instantiate(&mut store.as_context_mut(), module, c, None)?;
 		let main = warp_runtime::standalone::ENTRY_POINTS.iter().find_map(|name| instance.get_func(&mut store, name));
 		let main = main.ok_or_else(|| wasmtime::Error::msg("the module has no main nor _start"))?;
 		let mut results = vec![Val::AnyRef(None); main.ty(&store).results().len()];

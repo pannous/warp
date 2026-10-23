@@ -10,7 +10,7 @@ use os
 use file
 
 # lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the folder above this file's
-library_folder = if #args > 3 then args#4 else env("WARP_LIB") ?? folder_of(module_directory)
+library_folder = if #args > 3 then args#4 else run_library()
 # the messages of the diagnostics from that lib/, not from the folder this compiler was built in
 messages_from(library_folder + "/compiler")
 

@@ -52,9 +52,6 @@ enum_word = "enum"
 # of_lookups.rs SELECTOR_WORDS)
 selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "bytes", "letters", "words", "lines",
 	"keys", "values"]
-# the operators a dotted spelling applies to each element, `xs .* 2` (Rust twin: operators/spellings.rs
-# ELEMENT_WISE_OPERATORS)
-element_wise_operators = ["+", "-", "*", "/", "^", "%"]
 # the operators that change their target, `n = …`, `n += …` (a branch's value assigns through them: parser.warp
 # branch_value; a function changing main's n: main_globals.warp)
 assigning_operators = ["=", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
