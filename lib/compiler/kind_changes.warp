@@ -5,12 +5,11 @@
 use "walk.warp"
 use "words.warp"
 use "scope.warp"
-use "prefix_comparisons.warp"
 use "diagnostics.warp"
 
 # Rust Op is_arithmetic and is_comparison
 arithmetic_operators = ["+", "-", "*", "/", "/!", "%", "rem", "^"]
-bool_operators = comparison_words + ["is", "===", "!=="]
+bool_operators = ["==", "!=", "<", ">", "<=", ">=", "≤", "≥", "≠", "is", "===", "!=="]
 # the kinds as messages name them, by the kind type_kinds holds a type as
 shown_kinds = {int: "Int", float: "Float", text: "Text", codepoint: "Text", list: "List", symbol: "Symbol"}
 bool_kind = "Bool"

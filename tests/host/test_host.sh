@@ -317,4 +317,54 @@ expect "component: a wrong argument is an Error naming the parameter" 0 "add(a):
 expect "component: rust_demo's lists, records, enums and results" 0 "fib 55" '["hello" "big" "world"]' \
 	"{words:3 letters:13}" "sides 4" "sqrt 4" "caught wasm.call: no real square root of -1" -- "$host" run component_rust.warp
 
+# the Unix commands of lib/shell.warp (card unix-words), file.list and file.glob: each program in a fresh folder below
+# the stage (work/), its own HOME beside it (home/, where rm's Trash goes), removed after
+shell_in() { # shell_in [run] <code>: `use shell` and the code, run by warp-host (bare, or with run) in a fresh folder
+	local folder status command=()
+	[ "$1" = run ] && command=(run) && shift
+	folder=$(mktemp -d "$stage/shell.XXXXXX") || return 1
+	(mkdir "$folder/home" "$folder/work" && cd "$folder/work" && HOME=$folder/home "$host" "${command[@]}" "use shell"$'\n'"$1")
+	status=$?
+	rm -rf "$folder"
+	return $status
+}
+expect "shell: ls gives the names, sorted, without hidden ones" 0 '["alpha.txt" "beta.txt" "sub"]' ! ".hidden" \
+	-- shell_in run $'touch("beta.txt")\ntouch("alpha.txt")\ntouch(".hidden")\nmkdir("sub")\nprint ls()'
+expect "shell: ls of a folder, bare warp-host" 0 '["inner.txt"]' -- shell_in $'mkdir("d")\ntouch("d/inner.txt")\nprint ls("d")'
+expect "shell: pwd is the working directory" 0 "same yes" -- shell_in run $'print "same " + (pwd() == command("pwd"))'
+expect "shell: cd gives the new folder, where relative paths and commands go" 0 "/sub/deeper" '["here.txt"]' \
+	"pwd /" -- shell_in run $'mkdir("sub/deeper")\nprint cd("sub/deeper")\ntouch("here.txt")\nprint ls(".")\nprint "pwd " + command("pwd")'
+expect "shell: cd(\"/tmp\") and a command after it" 0 "/tmp" -- shell_in run $'cd("/tmp")\nprint command("pwd")'
+expect "shell: cd ~ is the home folder" 0 "/home" -- shell_in run $'print cd("~")'
+expect "shell: cd of a missing folder is an Error" 0 "caught os.cd: nosuch: No such file or directory" \
+	-- shell_in run $'try cd("nosuch") catch e { print "caught " + e }'
+expect "shell: mkdir, write and cat round trip" 0 "one" "two" -- shell_in run \
+	$'mkdir("a/b/c")\nwrite("a/b/c/notes.txt", "one\\ntwo\\n")\nprint cat("a/b/c/notes.txt")'
+expect "shell: ~ in a path is the home folder" 0 "at home yes" '["x.txt"]' -- shell_in run \
+	$'write("~/x.txt", "at home")\nprint "at home " + exists("~/x.txt")\nprint ls("~")'
+expect "shell: touch makes an empty file, keeps a full one" 0 "empty 0" "kept 4" -- shell_in run \
+	$'touch("new.txt")\nprint "empty " + file_size("new.txt")\nwrite("full.txt", "full")\ntouch("full.txt")\nprint "kept " + file_size("full.txt")'
+expect "shell: cp into a folder keeps the name, cp to a file copies" 0 '["x.txt"]' "copy x" -- shell_in run \
+	$'write("x.txt", "x")\nmkdir("into")\ncp("x.txt", "into")\nprint ls("into")\ncp("x.txt", "y.txt")\nprint "copy " + cat("y.txt")'
+expect "shell: mv renames, and moves into a folder" 0 '["b.txt" "dir"]' '["c.txt"]' -- shell_in run \
+	$'write("a.txt", "a")\nmv("a.txt", "b.txt")\nmkdir("dir")\nwrite("c.txt", "c")\nmv("c.txt", "dir")\nprint ls()\nprint ls("dir")'
+expect "shell: rm moves a file to the Trash" 0 "gone no" "trashed gone.txt" -- shell_in run \
+	$'write("gone.txt", "bye")\nrm("gone.txt")\nprint "gone " + exists("gone.txt")\nprint "trashed " + command("ls ~/.Trash 2>/dev/null || ls ~/.local/share/Trash/files")'
+expect "shell: rm removes an empty folder" 0 "left no" -- shell_in run $'mkdir("empty")\nrm("empty")\nprint "left " + exists("empty")'
+expect "shell: rm refuses a full folder" 0 "caught file.remove: rm removes a folder only when empty: full has 1 entries" \
+	-- shell_in run $'mkdir("full")\ntouch("full/f.txt")\ntry rm("full") catch e { print "caught " + e }'
+expect "shell: rm refuses a pattern" 0 "caught file.remove: rm takes one path, no pattern" \
+	-- shell_in run $'try rm("*.txt") catch e { print "caught " + e }'
+expect "shell: rm refuses the working directory" 0 "caught file.remove: rm never removes" \
+	-- shell_in run $'try rm(".") catch e { print "caught " + e }'
+expect "shell: list_files of a missing folder is an Error" 0 "caught file.list: nosuch: No such file or directory" \
+	-- shell_in run $'try list_files("nosuch") catch e { print "caught " + e }'
+expect "shell: head, tail and wc" 0 '["l1" "l2 two"]' '["l3"]' "{lines:3 words:4 bytes:13}" -- shell_in run \
+	$'write("t.txt", "l1\\nl2 two\\nl3\\n")\nprint head("t.txt", 2)\nprint tail("t.txt", 1)\nprint wc("t.txt")'
+expect "shell: find_files, glob and file_size" 0 '["./src/a.warp" "./src/deep/b.warp"]' '["src/a.warp"]' "size 5" \
+	-- shell_in run $'mkdir("src/deep")\nwrite("src/a.warp", "ab")\nwrite("src/deep/b.warp", "cde")\ntouch("src/c.txt")\nprint find_files(".", "*.warp")\nprint glob("src/*.warp")\nprint "size " + file_size("src")'
+expect "shell: info of a file" 0 "size:3" 'kind:"file"' "modified:" -- shell_in run $'write("i.txt", "abc")\nprint info("i.txt")'
+expect "shell: which finds sh, ø for no program" 0 "/sh" "none ø" -- shell_in run \
+	$'print which("sh")\nprint "none " + which("no-such-program-xyz")'
+
 if [ "$failed" = 0 ]; then echo "✓ $run tests passed"; else echo "✗ $failed of $run tests failed"; exit 1; fi

@@ -9,6 +9,7 @@ mod cache;
 mod components;
 mod ffi;
 mod nodes;
+mod shell;
 mod wasm_modules;
 mod words;
 
