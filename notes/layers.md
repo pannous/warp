@@ -168,7 +168,9 @@ Machinery, no layer: emitter 2651, analyzer 991, lexer 461 (notation), rewrites 
 prelude_words 251, scope 215, uses 193 (kernel `use`), serializer 138, builtin_signatures 113, words 107, diagnostics
 101, host_words 74, compiler 48, passes 88, shapes 52, signatures 41, node 39, runtime 33, kinds 20, positions 10,
 types 10, byte_codes 9. Checks, no layer: kind_changes 187, source_checks 140, main_globals 94, lints 69.
-time_arithmetic 158 and injection 217 are library (runtime words, typed templates), not syntax.
+time_arithmetic 158 and injection 217 are library (runtime words, typed templates), not syntax; time_arithmetic
+is now a class library, lib/time_arithmetic.warp, which the compiler never loads (card time-arithmetic-library), a
+link at its old path.
 
 Kernel passes (analysis a rewrite can't carry): node_matches 214 and node_cases 178 (match, kernel by decision), lambdas 283 (closures), arity_overloads 388 (overloads by count),
 number_keys 152 and data_items 150 (map key typing, writes through references), tries 91 (try lowering),
