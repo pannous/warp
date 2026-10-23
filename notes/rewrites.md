@@ -136,3 +136,14 @@ rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is en
 
 The rules of lib/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
 `cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.
+
+## Compiler marks (F10)
+A template may write one of the compiler's own `·` names, which no program can write and the passes after the rules
+read. `·` between plain words spelling one of them (rewrites.warp `compiler_marks`) keeps that name instead of gluing
+it (F5's `km·per·hour` is still km_per_hour). The one mark so far is a loop's step, which a `continue` still runs:
+
+```warp
+rewrite count $i below $n {$body...} => ($i = 0; while $i < $n { $body...; loop·step: $i += 1 })
+```
+
+lib/sugar/iteration.warp lowers every `for` with it. Tests: tests/modules/test_rewrite_marks.warp.

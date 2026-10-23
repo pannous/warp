@@ -1,7 +1,7 @@
 # The `for` heads whose meaning needs what the program knows, made plain for lib/sugar/iteration.warp's rules, which
-# lower every `for` onto `while` (Rust twin: src/lowering/control/for_loop.rs):
-# `for k in m`, `for k, v in m` over a map walk its keys, as in Python: `for k in map_keys(m)`, `for (k, v) in
-#   map_keys(m)` (Rust twin: library_words.rs for_over_map); a map is written out, or a name its function or the
+# lower every `for` onto `while` (Rust twin: src/lowering/control/for_loop.rs); a bare body becomes a `{…}` block:
+# `for k in m`, `for k, v in m` over a map walk its keys, as in Python: `for k in map_keys(m)`, `for k in
+#   map_keys(m) { v = m#(k + 1); body }` (Rust twin: library_words.rs for_over_map); a map is written out, or a name its function or the
 #   program around assigns one, or a parameter declared `map`
 # `for int in xs body` (a type word as the variable) visits only the items of that type, tested as read, before the
 #   variable holds one (a character held by a text variable is a text): `for int·typed in xs { if is_type(int·typed,
@@ -46,26 +46,31 @@ loop_statements(body: Node): list := match body {
 
 loop_head(variable: Node, iterable: Node, body: Node): Node := List([symbol(loop_word), variable, symbol(loop_in_word), iterable, body], Bracket.None, Separator.Space)
 
+braced(statements: list): Node := List(statements, Bracket.Curly, Separator.Semicolon)
+
 # `for int·typed in xs { if is_type(int·typed, "int") { int = int·typed; body } }`
-type_filtered(variable: Node, iterable: Node, body: Node): Node := {
+type_filtered(variable: Node, iterable: Node, body: list): Node := {
 	item = symbol(name_of(variable) + "·typed")
 	test = call_of("is_type", [item, name_of(variable)])
-	kept = List([Key(variable, Op.Assign, item)] + loop_statements(body), Bracket.Curly, Separator.Semicolon)
-	loop_head(item, iterable, List([Key(Key(ø, Op.If, test), Op.Then, kept)], Bracket.Curly, Separator.Semicolon))
+	loop_head(item, iterable, braced([Key(Key(ø, Op.If, test), Op.Then, braced([Key(variable, Op.Assign, item)] + body))]))
 }
 
+# a loop over a map, of a type word, or of a bare body as the rules take it; any other node as it is
 loop_heads_of(n: Node, maps: list): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
-		if #parts == 5 and parts#1 == symbol(loop_word) and parts#3 == symbol(loop_in_word) {
-			variable = parts#2
-			iterable = parts#4
-			is_map = is_map_literal(iterable) or (iterable is symbol and name_of(iterable) in maps)
-			keys = call_of(map_keys_word, [iterable])
-			if is_map and is_name(variable) { return loop_head(variable, keys, parts#5) }
-			if is_map and is_name_pair(variable) { return loop_head(List(items_of(variable), Bracket.Round, Separator.Comma), keys, parts#5) }
-			if filters_by_type(variable) { return type_filtered(variable, iterable, parts#5) }
+		if #parts != 5 or parts#1 != symbol(loop_word) or parts#3 != symbol(loop_in_word) { return n }
+		variable = parts#2
+		iterable = parts#4
+		body = loop_statements(parts#5)
+		is_map = is_map_literal(iterable) or (iterable is symbol and name_of(iterable) in maps)
+		keys = call_of(map_keys_word, [iterable])
+		if is_map and is_name(variable) { return loop_head(variable, keys, braced(body)) }
+		if is_map and is_name_pair(variable) {
+			lookup = Key(variable#2, Op.Assign, Key(iterable, Op.Hash, Key(variable#1, Op.Add, 1)))
+			return loop_head(variable#1, keys, braced([lookup] + body))
 		}
-		n
+		if filters_by_type(variable) { return type_filtered(variable, iterable, body) }
+		if is_curly_group(parts#5) then n else loop_head(variable, iterable, braced(body))
 	}
 	_: n
 }
