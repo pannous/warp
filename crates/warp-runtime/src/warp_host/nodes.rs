@@ -116,10 +116,18 @@ fn boxed(data: &Val, store: &mut StoreContextMut<'_, Host>) -> Option<Val> {
 
 /// The numerator and denominator of a $Ratio(numerator, denominator), each an $i64box
 fn ratio_of(data: &Val, store: &mut StoreContextMut<'_, Host>) -> Option<(i64, i64)> {
-	let ratio = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
-	let (numerator, denominator) = (ratio.field(&mut *store, 0).ok()?, ratio.field(&mut *store, 1).ok()?);
-	match (boxed(&numerator, store)?, boxed(&denominator, store)?) {
-		(Val::I64(n), Val::I64(d)) if d != 0 => Some((n, d)),
+	let ratio = data.anyref().flatten()?.as_struct(&*store).ok().flatten()?;
+	if ratio.ty(&*store).ok()?.fields().len() != 2 {
+		return None;
+	}
+	// each part an $i64box (compiler-self's), or the number itself
+	let mut part = |index: usize| match ratio.field(&mut *store, index).ok()? {
+		Val::I64(n) => Some(n),
+		part @ Val::AnyRef(Some(_)) => boxed(&part, store)?.i64(),
+		_ => None,
+	};
+	match (part(0)?, part(1)?) {
+		(n, d) if d != 0 => Some((n, d)),
 		_ => None,
 	}
 }
