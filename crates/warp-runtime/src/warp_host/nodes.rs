@@ -151,6 +151,44 @@ pub fn float_text(x: f64) -> String {
 	format!("{sign}{placed}")
 }
 
+/// The numerator and denominator of a `$Ratio(numerator, denominator)` of two `$i64box`
+fn ratio(data: &Val, store: &mut StoreContextMut<'_, Host>) -> Option<(i64, i64)> {
+	let ratio = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
+	let numerator = ratio.field(&mut *store, 0).ok()?;
+	let denominator = ratio.field(&mut *store, 1).ok()?;
+	Some((boxed(&numerator, store)?.i64()?, boxed(&denominator, store)?.i64()?))
+}
+
+/// An exact rational as warp prints it (src/extensions/numbers.rs Number::Quotient, terminating_decimal): a
+/// terminating decimal positionally with all its digits (3.5, 0.3, 0.00000095367431640625), any other as
+/// numerator/denominator (1/3); a float when its shortest digits are those
+fn exact(numerator: i64, denominator: i64) -> Node {
+	fn gcd(a: i128, b: i128) -> i128 {
+		if b == 0 { a.abs() } else { gcd(b, a % b) }
+	}
+	let divisor = gcd(numerator.into(), denominator.into()).max(1) * i128::from(denominator.signum());
+	let (numerator, denominator) = (i128::from(numerator) / divisor, i128::from(denominator) / divisor);
+	let (mut rest, mut digits) = (denominator, 0u32);
+	for factor in [2, 5] {
+		let mut count = 0;
+		while rest % factor == 0 {
+			rest /= factor;
+			count += 1;
+		}
+		digits = digits.max(count);
+	}
+	let scaled = 10i128.checked_pow(digits).and_then(|scale| numerator.checked_mul(scale)).map(|n| n / denominator);
+	let (true, Some(scaled)) = (rest == 1, scaled) else {
+		return Node::Symbol(format!("{numerator}/{denominator}").into_bytes());
+	};
+	let sign = if scaled < 0 { "-" } else { "" };
+	let padded = format!("{:0>width$}", scaled.unsigned_abs(), width = digits as usize + 1);
+	let (whole, fraction) = padded.split_at(padded.len() - digits as usize);
+	let decimal = if fraction.is_empty() { format!("{sign}{whole}") } else { format!("{sign}{whole}.{fraction}") };
+	let float = numerator as f64 / denominator as f64;
+	if float_text(float) == decimal { Node::Float(float) } else { Node::Symbol(decimal.into_bytes()) }
+}
+
 /// A node's kind, data and value fields; None for null
 fn fields(node: &Val, store: &mut StoreContextMut<'_, Host>) -> Option<(i64, Val, Val)> {
 	let node = node.anyref().flatten()?.unwrap_struct(&*store).ok()?;
@@ -189,6 +227,8 @@ pub fn read(node: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<Me
 				Some(Val::I64(n)) => Node::Int(n),
 				// a number whose kind says int and whose box holds a float (`x = 7.0; x /= 2`): the float
 				Some(Val::F64(bits)) => Node::Float(f64::from_bits(bits)),
+				// an exact rational (`3.5`, `0.1 + 0.2`; lib/compiler/runtime/exact.warp): a $Ratio of two $i64box
+				Some(Val::AnyRef(_)) => ratio(&data, store).map_or(Node::Other(kind), |(n, d)| exact(n, d)),
 				_ => Node::Other(kind),
 			},
 		},

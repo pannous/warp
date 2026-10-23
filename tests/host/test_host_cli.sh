@@ -18,7 +18,7 @@ for compiler in compiler.wasm compiler-self.wasm; do
 	[ -f "$compilers/$compiler" ] || { echo "✗ no $compiler in $compilers: scripts/rebuild.sh copies the pair"; exit 1; }
 done
 rm -rf "$stage" && mkdir -p "$stage/bin" || exit 1
-cp "$host" "$compilers"/compiler.wasm "$compilers"/compiler-self.wasm "$stage/bin/" || exit 1
+cp "$host" "$stage/bin/warp-host" && cp "$compilers"/compiler.wasm "$compilers"/compiler-self.wasm "$stage/bin/" || exit 1
 host=$stage/bin/warp-host
 cd "$stage" || exit 1
 program() { # program <name> <source lines…>: <name>.warp in the stage
@@ -50,6 +50,9 @@ program hello '"Hello " + "🌍" + (2000 + 26)'
 is "a text in double quotes" '"Hello 🌍2026"' -- "$host" hello.warp
 is "a whole float without .0" 4 -- "$host" '4.0'
 is "a float" 3.5 -- "$host" '3.5'
+is "an exact sum" 0.3 -- "$host" '0.1 + 0.2'
+is "an exact third" 1/3 -- "$host" '1/3'
+is "an exact small fraction positionally" 0.00000095367431640625 -- "$host" '1/1048576'
 is "a float from sqrt" 4 -- "$host" 'sqrt(16)'
 is "a small float in scientific notation" 1.5e-7 -- "$host" '1.5e-7'
 is "a float of 15 digits stays positional" 123456789012345 -- "$host" '123456789012345.0'
