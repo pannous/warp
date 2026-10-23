@@ -123,7 +123,7 @@ check metadata "column names and declared types, parameter names and indexes, th
 	"2" "n" "TEXT" "1" ":least" "select name, n from t where n > :least" ! "Error"
 check reset "bind, step and reset a statement again" 0 "3 6" ! "Error"
 check file_db "a file database: kept after close, read-only by open_v2" 0 "kept" "caught" "readonly database" ! "Error:"
-check bad_query "a query that doesn't prepare fails the run, naming its C status" 1 "sqlite3_prepare_v2 gave no sqlite3_stmt"
+check bad_query "a query that doesn't prepare fails the run, naming its C status" 1 "sqlite3_prepare_v2 gave no statement (C status 1)"
 check complete "sqlite3_complete and sqlite3_get_autocommit" 0 ! "Error"
 
 echo "sqlite: $((run - failed)) passed / $run"
