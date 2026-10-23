@@ -32,14 +32,18 @@ use "emitter/host.warp"
 use "emitter/times.warp"
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
-type_bytes = {int: 126, float: 124, bool: 127, char: 127}
+type_bytes = {int: 126, float: 124, bool: 127, char: 127, i32: 127}
 section_ids = {custom: 0, type: 1, import: 2, function: 3, memory: 5, globals: 6, export: 7, code: 10, data: 11, data_count: 12, tag: 13}
 function_type_byte = 96
 export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
-# the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names
-exported_globals = ["trap_detail", "text_heap"]
+# the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names,
+# the position of the statement it happened in
+exported_globals = ["trap_detail", "text_heap", "trap_position"]
+# trap_position holds line * columns_per_line + column, Rust's line << 12 | column (src/wasm_emitter/control/traps.rs
+# encoded_position)
+columns_per_line = 4096
 import_function_byte = 0
 # the export WASI hosts run a module by (Rust's wasi_emitter.rs WASI_START)
 wasi_start = "_start"
@@ -201,11 +205,10 @@ refuse(why: text): any := {
 # the file the program comes from, which a refusal names
 def emitting_file(file: text) { module.program_file = file }
 
-# a node of the program (no runtime word's) with a position: the place a later refusal names
+# a node of the program (no runtime word's) written somewhere: the place a later refusal names
 def note_emitting(body: Body, n: any) {
-	if body.intrinsics or not is_positioned(n) { return }
-	file = if module.program_file == "" then "" else module.program_file + ":"
-	module.emitting_at = " at " + file + line_of(n) + ":" + column_of(n)
+	at = if body.intrinsics then ø else written_at(n)
+	if at { module.emitting_at = place_text(at, module.program_file) }
 }
 
 # a refused form as the program writes it, in a few words: `… := …`, the call `memo_known(…)`, a name

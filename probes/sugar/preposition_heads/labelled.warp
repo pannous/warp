@@ -1,0 +1,4 @@
+// out: a+b
+// a parameter after a preposition is passed by that word: the definition takes the parameter alone
+swap(t: text, old: text, with new: text) := join(split(t, old), new)
+print swap("a-b", "-", "+")
