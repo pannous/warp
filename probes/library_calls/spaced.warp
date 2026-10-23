@@ -1,0 +1,11 @@
+// expected: [3 2 1] HI 2 [1 2 3] 3 3 2 (a library word of one typed value takes the value after it)
+xs = [3, 1, 2]
+print reverse sort xs
+print upper "hi"
+print floor 2.7
+print sorted xs
+print #xs
+ys = [1, 2, 3]
+print #ys
+s = "ab"
+print #s

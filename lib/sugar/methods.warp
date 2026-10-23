@@ -13,3 +13,8 @@ rewrite ($x in $xs) => collection_contains($xs, $x)
 rewrite ($xs contains $x) => collection_contains($xs, $x)
 rewrite ($xs has $x) => collection_contains($xs, $x)
 rewrite ($xs includes $x) => collection_contains($xs, $x)
+
+# `(p).a` is `p.a` (notes/layers.md, sugar): parentheses around a variable before a dot only group it; the parser gives
+# the call `f()` the form of the group `(f)`, so a function's name keeps its call, `f().b`. Rust twin:
+# grouped_receivers.rs
+rewrite ($p).$m => $p.$m where $p is value and $p is not function

@@ -203,3 +203,31 @@ declared_call_kind(word: text, arguments: int): any := {
 	}
 	if host_words.has(word) { host_result_kind(host_words[word]#2) } else { ø }
 }
+
+# the libraries of the typed lines: warp's runtime, the emitter's expansions, libm
+typed_libraries = ["warp", "emitter", "'m'"]
+
+# word → its typed lines of lib/prelude.warp and lib/math.warp, the first written first
+global typed_word_lines = ø
+word_lines(): any := {
+	if typed_word_lines != ø { return typed_word_lines }
+	typed_word_lines = {}
+	for line in (prelude_text + "\n" + module_source("math")).split("\n") {
+		for library in typed_libraries {
+			typed = typed_line(line, library)
+			if typed != ø {
+				if not typed_word_lines.has(typed.name) { typed_word_lines[typed.name] = [] }
+				typed_word_lines[typed.name] = typed_word_lines[typed.name] + [typed]
+			}
+		}
+	}
+	typed_word_lines
+}
+
+# whether the word's first line takes exactly one value, typed
+takes_one_typed_value(word: text): bool := {
+	lines = word_lines()
+	if not lines.has(word) { return no }
+	parameters = lines[word]#1.signature.parameters
+	#parameters == 1 and parameters#1.type_name != "" and not parameters#1.rest
+}

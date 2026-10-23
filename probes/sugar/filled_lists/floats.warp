@@ -1,0 +1,6 @@
+# `float[n]` holds float zeros. Expected: 2 0 1.5 (the pure lane prints a float zero as 0)
+xs = float[2]
+print count xs
+print xs#1
+xs#2 = 1.5
+print xs#2
