@@ -1407,7 +1407,7 @@ INDEX_POWER = 170
 // The operators written with symbols, longest first, each with its canonical name; alias_spellings() adds their other
 // spellings (lib/aliases.warp)
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = {"===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
+SYMBOL_OPERATORS = {"===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `xs .* 2` maps `*` over the elements, binding as `*`
 // does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (lib/sugar/fallbacks.warp)
 PHRASE_OPERATORS = [".+", ".-", ".*", "./", ".^", "?:"]
@@ -1479,9 +1479,10 @@ def down_to_at(p: Parser): int {
 	if at > p.at + 4 and keyword_at_position(p, "to", at) then at + 2 - p.at else 0
 }
 
-// The operators only a declaration gives meaning (lib/prelude.warp `infix operator ↑`): `2↑3` calls operator_↑(2, 3)
+// The operators only a declaration gives meaning (lib/prelude.warp `infix operator ↑`): `2↑3` calls operator_↑(2, 3);
+// `loop··step` in a rule's template glues the hidden name loop·step (rewrites.warp), elsewhere the call of no operator
 // Rust twin: Op::is_declared_only, word_operators.rs log_calls
-DECLARED_ONLY_OPERATORS = ["↑", "↓"]
+DECLARED_ONLY_OPERATORS = ["↑", "↓", "··"]
 // The name of the function an operator declaration defines: `infix operator ⊕` defines operator_⊕
 // Rust twin: operators/mod.rs OPERATOR_FUNCTION_PREFIX
 OPERATOR_FUNCTION_PREFIX = "operator_"
