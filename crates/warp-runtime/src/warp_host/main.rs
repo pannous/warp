@@ -424,6 +424,7 @@ fn run_module(
 			wasm: Default::default(),
 		};
 		let mut store = Store::new(engine, host);
+		cli::fuel(&mut store);
 		warp_runtime::engine::cap_memory(&mut store);
 		let instance = wasm_modules::instantiate(&mut store.as_context_mut(), module, c, None)?;
 		let main = warp_runtime::standalone::ENTRY_POINTS.iter().find_map(|name| instance.get_func(&mut store, name));

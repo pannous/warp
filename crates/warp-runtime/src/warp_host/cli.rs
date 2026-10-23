@@ -45,12 +45,18 @@ pub fn compiling_engine(engine: &Engine) -> Engine {
 		.clone()
 }
 
-/// The limits of a run about to start: its fuel, and its time when WARP_TIME_LIMIT sets one (warp-rust's limit of a
-/// turn's computing, the CPU time of the thread running it); the watch ends when the returned guard drops
-pub fn limit<T>(store: &mut Store<T>) -> Limit {
+/// A new store's fuel, the steps --fuel gives, so what runs before main (a start function, an instantiated module's
+/// own) has its steps too: a store of a metered engine starts with none
+pub fn fuel<T>(store: &mut Store<T>) {
 	if let Some(steps) = FUEL.get() {
 		let _ = store.set_fuel(*steps);
 	}
+}
+
+/// The limits of a run about to start: its fuel, and its time when WARP_TIME_LIMIT sets one (warp-rust's limit of a
+/// turn's computing, the CPU time of the thread running it); the watch ends when the returned guard drops
+pub fn limit<T>(store: &mut Store<T>) -> Limit {
+	fuel(store);
 	let done = Arc::new(AtomicBool::new(false));
 	if let Some(limit) = warp_runtime::fuel::time_limit_from_environment() {
 		let clock = thread_clock();
