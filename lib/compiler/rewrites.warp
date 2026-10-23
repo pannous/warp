@@ -1003,7 +1003,7 @@ each_spliced(parts: list, bound: any, at: any): any := {
 	}
 	rows = each_rows(clause#3, bound, at)
 	if rows == ø { return ø }
-	each = if is_group(parts#1) and bracket_of(parts#1) == "(" and #parts#1 == 1 then parts#1#1 else parts#1
+	each = ungrouped_one(parts#1)
 	spliced = []
 	for position in 1 to #rows {
 		binding = item_binding(pattern, rows#position, bound)
@@ -1049,10 +1049,10 @@ item_binding(pattern: any, row: list, bound: any): any := {
 	if rule_matches(ungrouped_one(pattern), ungrouped_one(row#1), binding) then binding else ø
 }
 
-# `(x)`, `(case $k: $v)`: parentheses around one item or a phrase only group it
+# `(x)`, `(case $k: $v)`, `($ks..., $k => $v)`: parentheses around one item, a phrase or a comma list only group it
 ungrouped_one(n: any): any := {
 	if is_round(n) and #n == 1 { return n#1 }
-	if is_round(n) and separator_of(n) == " " { return List(items_of(n), Bracket.None, Separator.Space) }
+	if is_round(n) and (separator_of(n) == " " or separator_of(n) == ",") { return separated(bracketed(items_of(n), ""), separator_of(n)) }
 	n
 }
 
