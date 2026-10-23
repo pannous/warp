@@ -24,8 +24,8 @@ base_layers = ["extends", "inherited_from"]
 # defines (`sort`), which a call on a list or a text must still reach
 kept_methods = ["init"] + typed_lines.map(line => line.name)
 
-# the classes of the program, by name: [statement, parent name or ø, field names, methods]
-class Declared { statement: Node; parent: any; fields: list; methods: list }
+# the classes of the program, by name: [statement, parent name or "", field names, methods]
+class Declared { statement: Node; parent: text; fields: list; methods: list }
 
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
@@ -60,9 +60,9 @@ class_declared(statement: Node, view: any): Declared := {
 # a member read as the definitions pass reads a definition, `def area() -> int {…}` as `area() := …` (`definition` of
 # definitions.warp, which lifts the methods)
 member_read(member: any): Node := bottom_up(node_of(member), definition)
-# the class a declaration's name says it extends, else ø
-base_of(name: any): any := {
-	if kind_of(name) != "attribute" { return ø }
+# the class a declaration's name says it extends, else "" (not ø: the self lane traps on `ø in` a map)
+base_of(name: any): text := {
+	if kind_of(name) != "attribute" { return "" }
 	if name#2 in base_layers and kind_of(name#3) == "symbol" { return name#3#2 }
 	base_of(name#4)
 }
