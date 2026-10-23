@@ -205,12 +205,30 @@ pub fn run_child_case(command: &str, file: &str, index: &str) -> bool {
 	let folder = file.parent().unwrap_or(Path::new("/"));
 	let got = run_code(&code, folder, by);
 	let expected = if is_data(&expected) { expected } else { run_code(&expected.serialize(), folder, by) };
-	let matches =
-		!matches!(got.drop_meta(), Node::Error(_)) && (got == expected || (got.is_falsy() && expected.is_falsy()));
+	let matches = !matches!(got.drop_meta(), Node::Error(_))
+		&& (got == expected || as_is_compares(&got, &expected) || (got.is_falsy() && expected.is_falsy()));
 	if !matches {
 		println!("{GOT}{}", got.serialize());
 	}
 	matches
+}
+
+/// The two looser matches of the Rust `is!` tests these cases were translated from (scripts/is_tests.py), which
+/// compared the result with a Rust literal (src/node/comparison.rs): an int and a float of the same value,
+/// `PartialEq<i64>` / `PartialEq<f64>` for Node (`Float(2.0) == 2`), and a one-character text and its char,
+/// `PartialEq<char>` for Node (`Text("b") == 'b'`). Only at the top, as `is!` was: lists compare as Node does
+fn as_is_compares(got: &Node, expected: &Node) -> bool {
+	use crate::numbers::Number::{Float, Int};
+	match (got.drop_meta(), expected.drop_meta()) {
+		(Node::Number(Int(int)), Node::Number(Float(float))) | (Node::Number(Float(float)), Node::Number(Int(int))) => {
+			*int as f64 == *float
+		}
+		(Node::Text(text), Node::Char(char)) | (Node::Char(char), Node::Text(text)) => {
+			let mut chars = text.chars();
+			chars.next() == Some(*char) && chars.next().is_none()
+		}
+		_ => false,
+	}
 }
 
 /// An expected value written as data, compared as it is; anything else (`π`, `(-1)`, `1 + pi`) is code to run
@@ -219,5 +237,25 @@ fn is_data(expected: &Node) -> bool {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
 		Node::List(items, crate::node::Bracket::Square, _) => items.iter().all(is_data),
 		_ => false,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::as_is_compares;
+	use crate::node::Node;
+	use crate::numbers::Number::{Float, Int};
+
+	#[test]
+	fn compares_as_is_did() {
+		let text = |t: &str| Node::Text(t.into());
+		assert!(as_is_compares(&Node::Number(Float(2.0)), &Node::Number(Int(2))));
+		assert!(as_is_compares(&Node::Number(Int(2)), &Node::Number(Float(2.0))));
+		assert!(!as_is_compares(&Node::Number(Float(2.5)), &Node::Number(Int(2))));
+		assert!(as_is_compares(&text("b"), &Node::Char('b')));
+		assert!(as_is_compares(&Node::Char('b'), &text("b")));
+		assert!(!as_is_compares(&text("bc"), &Node::Char('b')));
+		assert!(!as_is_compares(&text(""), &Node::Char('b')));
+		assert!(!as_is_compares(&Node::Number(Int(1)), &Node::True));
 	}
 }
