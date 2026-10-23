@@ -2739,7 +2739,15 @@ ITERABLE_ENDS = ";}]),"
 // Rust twin: loops.rs at_loop_body
 def at_loop_body(p: Parser): bool {
 	c = peek(p.code, p.at, p.n)
-	c == '{' or c == ':' or c == '\n' or starts_at(p.code, "//", p.at) or keyword_at(p, "do")
+	c == '{' or c == ':' or c == '\n' or starts_at(p.code, "//", p.at) or keyword_at(p, "do") or body_hole_at(p)
+}
+
+// A rule's hole ending a loop's header is its body: `$body` of `for $i in 1 to $n $body`, then the line's end, a
+// closer or the rule's `where`
+def body_hole_at(p: Parser): bool {
+	if not (is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n))) { return false }
+	after = spaces_end(p, name_end(p.code, p.at + 1, p.n))
+	after >= p.n or "\n;)}]".contains(p.code[after]) or keyword_at_position(p, "where", after)
 }
 
 // `for 1…100: print it`, `for xs {…}` and `for 0 to 2` with the lines indented below: a loop over the iterable without
@@ -2841,11 +2849,10 @@ def loop_variable(p: Parser): Node := {
 	names = []
 	while true {
 		skip_spaces(p)
-		// `$x`, a rule's name hole: `rewrite [$e for $x in $xs] => …` (card sugar-comprehensions, #3004)
-		holed = is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n))
-		start = if holed then p.at + 1 else p.at
-		if not is_name_start(peek(p.code, start, p.n)) { return ø }
-		end = if holed then symbol_end(p.code, start, p.n) else name_end(p.code, start, p.n)
+		// a rule's name hole `$item` stands for the name: `for $item in $xs {…}`
+		hole = if is_at(p.code, p.at, '$', p.n) then 1 else 0
+		if not is_name_start(peek(p.code, p.at + hole, p.n)) { return ø }
+		end = name_end(p.code, p.at + hole, p.n)
 		names = names + [symbol(p.code[p.at .. end])]
 		p.at = end
 		skip_spaces(p)
