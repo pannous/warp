@@ -1,4 +1,5 @@
 // out: 5
 // `$a $b...` with $b binding nothing is $a alone
 rewrite marked $a $b... => $a $b...
-print(marked 5)
+n = marked 5
+print n
