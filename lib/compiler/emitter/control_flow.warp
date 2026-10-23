@@ -154,6 +154,15 @@ def field_or_word(body: Body, value: any, name: text, word: any): list {
 	read = boxed(runtime_call("map_get", [receiver, text_value_of(name)]))
 	["node", value#2 + [op.local_set] + held + has_it + [op.if] + value_type("node") + read + [op.else] + boxed(word(receiver)) + [op.end]]
 }
+# the program's statement n about to run, its position in trap_position: a runtime error names it, as Rust's
+# (emit_trap_position); a runtime word's statements leave it
+def position_code(body: Body, n: any): list {
+	at = if body.intrinsics then ø else written_at(n)
+	if not at { return [] }
+	line: int = at#1
+	column: int = min(at#2, columns_per_line - 1)
+	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + uleb(declared_global("trap_position", "i32")#1)
+}
 def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
 
 # `xs += e`: e's items appended to the list xs holds, in place, so every alias sees them; ø when xs holds no list
@@ -182,6 +191,7 @@ def statement(body: Body, n: any): list {
 	for name in body.unshared { if appends_only(n, name) { kept += [name] } }
 	body.unshared = kept
 	value = expression_code(body, n)
+	value = [value#1, position_code(body, n) + value#2]
 	after = []
 	for name in body.unshared { if name in kept { after += [name] } }
 	made = fresh_list_name(n)

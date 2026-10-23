@@ -127,6 +127,13 @@ wasi_list(environment: bool): list := {
 	}
 	found
 }
+# wasi_environment() (lib/prelude.warp, Rust's wasi_emitter.rs): the environment as WASI gives it, each NAME=value line
+# ended by a zero byte, which lib/wagi.warp splits by chr(0)
+wasi_environment(): text := {
+	joined = ""
+	for line in wasi_list(yes) { joined = joined + line + chr(0) }
+	joined
+}
 # `use os; args`: the arguments after the program, as `warp prog.warp a b` gives ["a" "b"]
 std_os_args(): list := {
 	given = wasi_list(no)

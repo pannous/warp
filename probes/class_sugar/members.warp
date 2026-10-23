@@ -1,0 +1,10 @@
+// expected: 3 7 [1 2] 4 (sugar inside a class body: a default's `??`, `?:`, a method's push, n times)
+class box {
+	size = ø ?? 3
+	fallback = 0 ?: 7
+	items = []
+	fill() := { items.push(1); items.push(2); items }
+	count() := { k = 0; 4 times { k += 1 }; k }
+}
+b = box{}
+print "$(b.size) $(b.fallback) $(b.fill()) $(b.count())"

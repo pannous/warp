@@ -20,7 +20,7 @@ and_or(n: any): any := {
 	condition = key_of(key_of(n))
 	middle = value_of(key_of(n))
 	if is_truthy_literal(middle) { return ø }
-	diagnose(call_of("and_or", [as_written(condition), as_written(middle), as_written(value_of(n))]))
+	diagnose(call_of("and_or", [as_written(condition), as_written(middle), as_written(value_of(n))]), n)
 }
 is_truthy_literal(n: any): bool := (n is number or n is text or n is codepoint or n == yes) and n != 0 and n != ""
 
@@ -31,9 +31,9 @@ negative_modulo(n: any): any := {
 	right = value_of(n)
 	if not is_negative(left) and not is_negative(right) { return ø }
 	if left is int and right is int and right != 0 and left % right != left rem right {
-		return diagnose(call_of("negative_modulo", [as_written(left), as_written(right), "${left % right}", "${left rem right}"]))
+		return diagnose(call_of("negative_modulo", [as_written(left), as_written(right), "${left % right}", "${left rem right}"]), n)
 	}
-	diagnose(call_of("negative_modulo", [as_written(left), as_written(right)]))
+	diagnose(call_of("negative_modulo", [as_written(left), as_written(right)]), n)
 }
 is_negative(n: any): bool := {
 	if n is number { return n < 0 }
@@ -45,7 +45,7 @@ is_negative(n: any): bool := {
 float_equality(n: any): any := {
 	if not is_operator(n, "==") and not is_operator(n, "!=") { return ø }
 	if not is_float_value(key_of(n)) and not is_float_value(value_of(n)) { return ø }
-	diagnose(call_of(if is_operator(n, "==") then "float_equality" else "float_inequality", [as_written(key_of(n)), as_written(value_of(n))]))
+	diagnose(call_of(if is_operator(n, "==") then "float_equality" else "float_inequality", [as_written(key_of(n)), as_written(value_of(n))]), n)
 }
 # a value written as a float: decimals are exact, `0.1 as float`, `0.1:float` and arithmetic of them are floats
 is_float_value(n: any): bool := {
@@ -62,7 +62,7 @@ arithmetic_conversion(n: any): any := {
 	last = value_of(whole)
 	target = as_written(value_of(n))
 	tight = if last is number then as_written(last) + ":" + target else "(" + as_written(last) + " as " + target + ")"
-	diagnose(call_of("arithmetic_conversion", [as_written(whole), target, as_written(key_of(whole)) + " " + op_of(whole) + " " + tight]))
+	diagnose(call_of("arithmetic_conversion", [as_written(whole), target, as_written(key_of(whole)) + " " + op_of(whole) + " " + tight]), n)
 }
 
 # a node as the warnings quote it

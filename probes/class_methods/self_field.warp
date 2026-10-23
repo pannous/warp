@@ -1,0 +1,2 @@
+class P{x:int; get() := self.x + 1}
+print P{x: 4}.get()
