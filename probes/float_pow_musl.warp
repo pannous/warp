@@ -1,4 +1,4 @@
-# float ^ float through runtime_extended/pow.warp (musl's pow, tables read as hex in place): the pure lane prints what Rust's does
+# float ^ float through runtime/extended/pow.warp (musl's pow, tables read as hex in place): the pure lane prints what Rust's does
 print 1.5 ^ 2.5
 print 10.0 ^ -3.7
 print 0.5 ^ 1073.5

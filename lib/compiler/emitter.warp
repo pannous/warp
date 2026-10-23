@@ -1051,7 +1051,7 @@ def collect_referred(n: any, found: any) {
 		}
 	}
 }
-# `std_io("os", "args", [])`, a std module's word the runtime gives itself over WASI (runtime_extended/wasi.warp): the runtime
+# `std_io("os", "args", [])`, a std module's word the runtime gives itself over WASI (runtime/extended/wasi.warp): the runtime
 # word std_os_args, else ø (the host's std_io answers)
 def std_word(n: any): any {
 	if bracket_of(n) != "(" or #n != 4 { return ø }

@@ -1,4 +1,4 @@
-# The extended runtime words (decision runtime-split): the parts in lib/compiler/runtime_extended/, for what only some
+# The extended runtime words (decision runtime-split): the parts in lib/compiler/runtime/extended/, for what only some
 # programs do (exact rationals, durations and times, float pow, exact rounding, files over WASI). The core, runtime.warp
 # and lib/compiler/runtime/*.warp, never uses them nor names their words (scripts/self-check.sh checks it): its generic
 # words hand an extended value to the hooks lib/compiler/runtime/bridge.warp declares, whose bodies are this
@@ -6,19 +6,19 @@
 # call like any runtime word.
 # Loaded after runtime.warp by compiler.warp (RUNTIME_ROOTS) and src/compiler/self_hosted.rs, the words of each file its
 # `use` lines name in their order.
-use "runtime_extended/exact.warp"
-use "runtime_extended/durations.warp"
-use "runtime_extended/times.warp"
-use "runtime_extended/pow_tables.warp"
-use "runtime_extended/pow.warp"
-use "runtime_extended/exact_rounding.warp"
-use "runtime_extended/wasi.warp"
+use "extended/exact.warp"
+use "extended/durations.warp"
+use "extended/times.warp"
+use "extended/pow_tables.warp"
+use "extended/pow.warp"
+use "extended/exact_rounding.warp"
+use "extended/wasi.warp"
 # The bodies of the hooks lib/compiler/runtime/bridge.warp declares: the core hands a value of an extended type here,
 # and each hook calls the extended word for it. They are this root's own words, not a used file's, so that the root
 # runs alone in the Rust lane, which refuses a word declared in one used file (bridge.warp) and defined in another
-use "runtime/intrinsics.warp"
-use "kinds.warp"
-use "runtime/instructions.warp"
+use "intrinsics.warp"
+use "../kinds.warp"
+use "instructions.warp"
 extended_text(n: Node): text := if kind_code(n) == Kind.Time then time_text(n) else exact_text(n)
 extended_order(a: Node, b: Node): int := exact_order(a, b)
 extended_sum(a: Node, b: Node): Node := exact_add(a, b)
