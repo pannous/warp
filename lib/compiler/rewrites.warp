@@ -875,8 +875,8 @@ rule_spliced(template: any, bound: any, at: any): any := {
 			index += 1
 		}
 	}
-	# `(2)` of a folded `($i + 1)`: parentheses around a number only group it
-	if is_round(template) and #items == 1 and items#1 is number { return items#1 }
+	# `($i + 1)`, `(2)` folded: parentheses around one operation or number only group it, the tree keeps their order
+	if is_round(template) and separator_of(template) != "" and #items == 1 and (items#1 is number or items#1 is key) { return items#1 }
 	placed(group_like(template, items), at)
 }
 
