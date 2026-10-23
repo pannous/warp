@@ -353,14 +353,14 @@ conjuncts(condition: any): list := match condition {
 	_: [condition]
 }
 
-# `$c = shape`, `$t is type`, `not $t is type` (also written `$t is not type`), `$n < 0`, `$f takes value`
+# `$c = shape`, `$t is type`, `not $t is type` (also written `$t is not type`), `$b is ø`, `$n < 0`, `$f takes value`
 is_condition(condition: any): bool := {
 	if is_takes(condition) { return yes }
 	if is_negation(condition) { return is_condition(value_of(condition)) and not is_key(value_of(condition), Op.Assign) }
 	if not (condition is key and rule_hole(key_of(condition)) != ø) { return no }
 	wanted = value_of(condition)
 	if op_of(condition) == Op.Assign { return yes }
-	if op_of(condition) == Op.Is { return is_property(wanted) or is_case_property(wanted) }
+	if op_of(condition) == Op.Is { return wanted == ø or is_property(wanted) or is_case_property(wanted) }
 	literal_comparisons.any(op => is_key(condition, op)) and is_number_literal(wanted)
 }
 
@@ -445,6 +445,8 @@ condition_holds(condition: any, bound: any): bool := {
 		return yes
 	}
 	hole = rule_hole(key_of(condition))
+	# `$b is ø`: the hole bound nothing, the end left out of `xs[a...]`
+	if op_of(condition) == Op.Is and value_of(condition) == ø { return not bound.has(hole) or bound[hole] == ø }
 	if not bound.has(hole) { return no }
 	code = bound[hole]
 	wanted = value_of(condition)

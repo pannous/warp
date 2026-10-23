@@ -4,6 +4,6 @@
 # sugar (passes.warp written_sugar): every pass reads `xs#i`.
 rewrite $xs[$a:$b] => slice($xs, $a, $b)
 rewrite $xs[$a..$b] => slice($xs, $a, $b)
-rewrite $xs[$a...$b] => slice($xs, $a, $b + 1) where $b != ø
+rewrite $xs[$a...$b] => slice($xs, $a, $b + 1) where $b is not ø
 rewrite $xs[$a...$b] => slice($xs, $a, ø)
 rewrite $xs[$i] => $xs#($i + 1)
