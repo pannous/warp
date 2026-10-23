@@ -2,11 +2,10 @@
 use "../runtime/intrinsics.warp"
 use "../runtime/conversions.warp"
 use "../runtime/instructions.warp"
-# exact.warp's words, declared rather than used: the file also runs from its link lib/compiler/runtime/durations.warp
-# (tests/numbers/test_duration_words.rs reads it there), where exact.warp is no sibling
-floor_quotient(a: int, b: int): int from runtime
-power(base: int, exponent: int): int from runtime
-zeros(count: int): text from runtime
+# exact.warp's floor_quotient, power and zeros, used by a path that holds from this folder and from the link
+# lib/compiler/runtime/durations.warp (tests/numbers/test_duration_words.rs reads it there): declaring them here too
+# made runtime_extended.warp, which loads both files, refuse floor_quotient as declared twice
+use "../runtime_extended/exact.warp"
 ## durations (card duration-warp; src/wasm_emitter/time times.rs duration_text, time_arithmetic.rs duration_order): a
 ## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
 ## bits (src/time/mod.rs MONTHS_SHIFT), its nanoseconds in its box. The words below the unpacking ones take the three

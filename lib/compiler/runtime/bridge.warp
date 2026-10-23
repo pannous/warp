@@ -2,7 +2,7 @@
 # exact ratio or a time, to the extended runtime (lib/compiler/runtime_extended/, joined by runtime_extended.warp).
 # Core's generic words (show, ordering, equality, arithmetic, conversions, text_numbers, floats) call these hooks and
 # never an extended word, nor use an extended file. Each hook is declared here by its typed head only; its body is
-# runtime_extended/hooks.warp's, which fills it with the extended words when the extended runtime is compiled in. The
+# runtime_extended.warp's, which fills it with the extended words when the extended runtime is compiled in. The
 # emitter compiles a word on its first call, so a program with no ratio, time or float carries none of them. In the
 # Rust lane a core part runs alone with a hook trapping when called (decision bodiless-imports).
 # scripts/self-check.sh checks that no core file uses an extended file or names an extended word.
