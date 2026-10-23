@@ -390,10 +390,9 @@ conjuncts(condition: any): list := match condition {
 is_condition(condition: any): bool := {
 	if is_takes(condition) { return yes }
 	if is_negation(condition) { return is_condition(value_of(condition)) and not is_key(value_of(condition), Op.Assign) }
-	if is_context_word(condition) { return yes }
+	if is_context_word(condition) or membership(condition) != ø { return yes }
 	if not (condition is key and rule_hole(key_of(condition)) != ø) { return no }
 	wanted = value_of(condition)
-	if op_of(condition) == Op.Is and listed_words(wanted) != ø { return yes }
 	if op_of(condition) == Op.Assign { return yes }
 	if op_of(condition) == Op.Is { return is_property(wanted) or is_case_property(wanted) }
 	literal_comparisons.any(op => is_key(condition, op)) and is_number_literal(wanted)
@@ -474,11 +473,12 @@ condition_holds(condition: any, bound: any): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
 	if is_takes(condition) { return first_parameter_fits(bound[rule_hole(condition#1)], name_of(condition#3)) }
 	if is_context_word(condition) { return context_holds(starting_word(rule_matched), name_of(condition)) }
+	listing = membership(condition)
+	if listing != ø { return bound.has(listing#1) and word_listed(bound[listing#1], listing#2) }
 	hole = rule_hole(key_of(condition))
 	if not bound.has(hole) { return no }
 	code = bound[hole]
 	wanted = value_of(condition)
-	if op_of(condition) == Op.Is and listed_words(wanted) != ø { return word_listed(code, listed_words(wanted)) }
 	if op_of(condition) == Op.Is { return if is_case_property(wanted) then case_holds(code, enum_hole_of(wanted), bound) else has_property(code, name_of(wanted)) }
 	is_number_literal(code) and literal_compared(number_of(code), condition, number_of(wanted))
 }
@@ -499,10 +499,17 @@ has_property(code: any, property: text): bool := {
 # `method`, `shadowed`: a condition about where the matched code stands, not about a hole
 is_context_word(condition: any): bool := condition is symbol and name_of(condition) in context_words
 
-# `in [add, push]` after `is`: the words listed (names, or texts naming them), else ø
-listed_words(wanted: any): any := {
-	if not (is_group(wanted) and bracket_of(wanted) == "" and #wanted == 2 and wanted#1 == symbol(listed_word)) { return ø }
-	listing = wanted#2
+# `$f in [add, push]` (the parser reads `$f is in […]` as it): [the hole, the words listed (names, or texts naming
+# them)], else ø
+membership(condition: any): any := {
+	if not (is_group(condition) and bracket_of(condition) == "" and #condition == 3 and condition#2 == symbol(listed_word)) { return ø }
+	hole = rule_hole(condition#1)
+	words = listed_words(condition#3)
+	if hole == ø or words == ø then ø else [hole, words]
+}
+
+# `[add, "push"]`: the words listed, names or texts naming them, else ø
+listed_words(listing: any): any := {
 	if not (is_group(listing) and bracket_of(listing) == "[") { return ø }
 	words = items_of(listing)
 	if words.all(word => word is symbol or word is text) then words.map(word => if word is symbol then name_of(word) else word) else ø
@@ -517,14 +524,6 @@ starting_word(code: any): any := {
 	if is_group(code) and #code > 0 and (bracket_of(code) == "(" or bracket_of(code) == "") and code#1 is symbol then code#1 else ø
 }
 
-# where the word stands, as written: its line, column and name; ø for a word a pass made
-written_at(word: any): any := {
-	if not (word is symbol) { return ø }
-	line = line_of(word)
-	column = column_of(word)
-	if line is int and column is int then "" + line + ":" + column + ":" + name_of(word) else ø
-}
-
 # the program a rewrite reads, for the context conditions to read once asked
 rule_program_read(program: any): any := {
 	rule_program = program
@@ -533,39 +532,42 @@ rule_program_read(program: any): any := {
 }
 
 # `method`: the word starts the right of `x.f(…)`, `x.f`; `shadowed`: a definition around it binds the word, as a
-# parameter or in its body (`f(t) := { parse = x => 7; parse(t) }`, notes/dispatch.md: shadowing is scoped). A word
-# a pass made, written nowhere, stands in neither
+# parameter or in its body (`f(t) := { parse = x => 7; parse(t) }`, notes/dispatch.md: shadowing is scoped). The
+# words are those written in the program, each told apart from another of its name by identity (`===`): a pass keeps
+# a word it doesn't change, so a word a pass or a template made stands in neither
 context_holds(word: any, context: text): bool := {
-	at = written_at(word)
-	if at == ø or rule_program == ø { return no }
+	if not (word is symbol) or rule_program == ø { return no }
 	if rule_contexts == ø { rule_contexts = [method_words(rule_program), shadowed_words(rule_program, [], {})] }
-	if context == "method" then rule_contexts#1.has(at) else rule_contexts#2.has(at)
+	found = if context == "method" then rule_contexts#1 else rule_contexts#2
+	name = name_of(word)
+	found.has(name) and found[name].any(written => written === word)
 }
 
-# the head words of the right of each `.`, as written_at keys
+# name → the words of that name written as the head of the right of a `.`
 method_words(program: any): any := {
 	found = {}
 	for n in nodes_in(program) {
-		if is_key(n, Op.Dot) {
-			at = written_at(starting_word(value_of(n)))
-			if at != ø { found[at] = yes }
-		}
+		if is_key(n, Op.Dot) { word_kept(starting_word(value_of(n)), found) }
 	}
 	found
 }
 
-# the words in n that a definition around them binds (the names in `binding`), as written_at keys, into found
+# the word kept in found under its name
+word_kept(word: any, found: any): any := {
+	if not (word is symbol) { return found }
+	name = name_of(word)
+	if found.has(name) { found[name] = found[name] + [word] } else { found[name] = [word] }
+	found
+}
+
+# name → the words of that name in n that a definition around them binds (the names in `binding`), kept in found
 shadowed_words(n: any, binding: list, found: any): any := {
 	if is_key(n, Op.Define) {
-		inner = binding + bound_by_definition(n)
-		shadowed_words(value_of(n), inner, found)
+		shadowed_words(value_of(n), binding + bound_by_definition(n), found)
 		return found
 	}
 	if n is symbol {
-		if name_of(n) in binding {
-			at = written_at(n)
-			if at != ø { found[at] = yes }
-		}
+		if name_of(n) in binding { word_kept(n, found) }
 		return found
 	}
 	for part in parts_of(n) { shadowed_words(part, binding, found) }
