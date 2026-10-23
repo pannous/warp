@@ -145,7 +145,7 @@ Sugar passes, with the rule each would become:
 | 163 | of_lookups | `rewrite $a of $b => $b.$a`: phrase rule works today; type phrases `list of int` need F2 |
 | 137 | for_loops | see the parser's for row: F3, F5, F7 |
 | 121 | welcome_forms | match-arm spellings onto one: rows of rules, F4 for arms |
-| 121 | foreign_forms | `rewrite public $d... => $d...`, `rewrite new $c => $c`: F1 (statement head); `attr_accessor` F1 (class body) |
+| 121 | foreign_forms | partly done (card sugar-foreign-forms): modifiers without warp meaning and `constant x` are lib/sugar/declarations.warp; stay parser-side: mixed runs with warp modifiers (`public export fun`), class modifiers, `enum class`, `attr_accessor`, `mixin` (they decide what the parser reads next), and `new P(…)` (a guarded call pattern `new $t($a...) where $t is type` doesn't match a phrase operand) |
 | 116 | min_max | `max(a, b)` → library function; the comparison form needs F3 |
 | 97 | library_calls | `rewrite reverse $x => reverse($x)` per typed prelude word: F2 (typed signature), unbound already handled |
 | 91 | clauses | `fib(0) := 0; fib(1) := 1` → one kernel match: F6 |

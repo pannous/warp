@@ -1,0 +1,4 @@
+# a Kotlin data class with a primary constructor. Expected: the error: a none as a value (warp pure and self refuse it today)
+data class Point(val x: Int, val y: Int)
+val p = Point(1, 2)
+print p.x + p.y

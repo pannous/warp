@@ -1,0 +1,7 @@
+# `new Point(1, 2)` of a JavaScript class. Expected: the error: an instance of Point, a class with methods (warp pure and self refuse it today)
+class Point {
+  constructor(x, y) { this.x = x; this.y = y }
+  sum() { return this.x + this.y }
+}
+p = new Point(3, 4)
+print new Point(1, 2).sum() + p.y

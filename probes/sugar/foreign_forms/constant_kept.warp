@@ -1,0 +1,4 @@
+# a constant keeps its value: assigning it again is an error. Expected: 4
+constant x = 3
+x = 4
+print x
