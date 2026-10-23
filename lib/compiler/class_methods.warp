@@ -14,6 +14,7 @@
 #   `xs.sum()` still sums
 # - `x is Animal` is true of an instance of a class extending Animal too: `x is Animal or x is Dog`, and so is a
 #   dispatcher's test of each owner (widened_tests, after the methods are lifted)
+# - fields a space lists, `class person{name age: int}`, are each a field, `name; age: int` (the last takes the type)
 # A class keeping a member that is neither field nor method (an operator, `init`), or whose method takes another count
 # of parameters than its namesakes, stays as written: the
 # emitter refuses it as a class with methods.
@@ -42,7 +43,9 @@ class Declared { top_statement: Node; parent: text; fields: list; methods: list 
 
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
-	top_statements = statements_in(program)
+	given_statements = statements_in(program)
+	top_statements = given_statements.map(fields_spelled)
+	respelled = top_statements != given_statements
 	classes = {}
 	for top_statement in top_statements {
 		view = class_view(top_statement)
@@ -50,7 +53,7 @@ methods_lifted(program: Node): Node := {
 	}
 	extended = classes.keys.any(name => #extending_classes(classes, name) > 1)
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
-	if #liftable == 0 and not extended { return program }
+	if #liftable == 0 and not extended and not respelled { return program }
 	rewritten = []
 	for top_statement in top_statements {
 		view = class_view(top_statement)
@@ -63,6 +66,39 @@ methods_lifted(program: Node): Node := {
 	if #routes > 0 { rewritten = rewritten.map(top_statement => routed(top_statement, classes, liftable, routes)) }
 	if extended { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then widened_tests(top_statement, classes) else top_statement) }
 	group_like(program, rewritten)
+}
+
+# the class declaration with each field its own member: `name age: int` as `name; age: int`
+fields_spelled(top_statement: Node): Node := {
+	view = class_view(top_statement)
+	if view == ø { return top_statement }
+	body = view#3
+	members = body[3..]
+	spelled = members.flat_map(spelled_members)
+	if #spelled == #members { return top_statement }
+	match top_statement {
+		Key(left, key_op, right): Key(left, key_op, [view#1, view#2, body[0..<3] + spelled])
+		_: top_statement
+	}
+}
+# a member `name age` as the fields name and age, `name age: int` as name and `age: int`, else the member itself
+spelled_members(member: any): list := {
+	n = node_of(member)
+	field_words = word_run(n)
+	if #field_words > 0 { return field_words.map(view_of) }
+	match n {
+		Key(left, Op.Colon, right): {
+			typed_names = word_run(left)
+			if #typed_names == 0 { return [member] }
+			typed_names[0..<(#typed_names - 1)].map(view_of) + [view_of(Key(typed_names#(#typed_names), Op.Colon, right))]
+		}
+		_: [member]
+	}
+}
+# the names a space lists, `name age`, else none
+word_run(n: Node): list := match n {
+	List(parts, Bracket.None, Separator.Space): { if #parts > 1 and not parts.any(part => not (part is symbol)) then parts else [] }
+	_: []
 }
 
 # the view ["type", name, body] of a class declaration, else ø
