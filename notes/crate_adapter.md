@@ -6,7 +6,7 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
 ## How it works
 
     lib/crates/regex.warp ──scripts/warp-crate build──▶ ~/.cache/warp/crates/lib/librs_regex.so   (dlopen'd by warp-host)
-                                                      ▶ ~/.cache/warp/crates/native/rs_regex.warp (`use rs_regex`)
+                                                      ▶ ~/.cache/warp/crates/native/rs_regex.warp (`use crate "regex@1"`)
 
 - A crate manifest is a lib/native file (a library's foreign lines plus warp words over them, like lib/native/sqlite3.warp).
   Each foreign line also ends with `= <rust item>`:
@@ -21,9 +21,14 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
 
 - `scripts/warp-crate build <manifest>…` generates a cdylib crate: the fixed runtime scripts/crate_adapter/runtime.rs,
   and one `#[no_mangle] extern "C"` wrapper per line, named as the line. It builds it with cargo and caches the result.
-  Then it installs the .so and writes the native file: the manifest with the `= rust` parts cut and settings commented
-  out. warp-host needs no change: the pure compiler (card pure-c-imports) turns the lines into imports of module
-  `rs_regex` with a warp.c_functions section, and warp-host dlopens `librs_regex.so`.
+  Then it installs the .so into `$WARP_CRATES_CACHE/lib` (default ~/.cache/warp/crates). It writes the native file to
+  `$WARP_CRATES_CACHE/native`: the manifest with the `= rust` parts cut and settings commented out.
+- Both folders are where pure-c-imports (57f273b59 or later) looks, so no environment setup is needed:
+  - warp-host searches the cache's lib/ and native/ after WARP_LIBRARY_PATH
+  - lib/compiler/c_imports.warp reads `<lib>/native/<name>.warp`, else the cache's native/<name>.warp
+  - `use crate "regex@1"` is `use rs_regex`
+  - The compiler turns the lines into imports of module `rs_regex` with a warp.c_functions section, and warp-host
+    dlopens `librs_regex.so`. Nothing about a crate is in warp-host.
 - Other commands:
   - `warp-crate source <manifest>`: the generated Rust
   - `warp-crate scan regex@1`: draft manifest lines for the crate's root functions and its structs' inherent methods,
@@ -37,9 +42,10 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
 | i32 i64 f32 f64 | same | same | `as _` casts in; any int/float out |
 | bool | i32 in, C bool out | bool | `!= 0` |
 | text | `const char *` (NUL-terminated copy) | text | `&str` (`string`: `String`) |
-| bytes | `const char *` | text | `&[u8]` up to the NUL |
+| bytes (parameter) | `const uint8_t *, size_t` | `bytes, <name>_size: length` | `&[u8]` (`bytes_vec`: `Vec<u8>`): a text's bytes or a list of 0 to 255, zero bytes too |
+| bytes (result) | handle to a byte buffer | handle + warp word | `AsRef<[u8]>` (Vec<u8>, a digest), a warp list of 0 to 255 |
 | hex (result) | `const char *` | text | `AsRef<[u8]>` as lowercase hex (digests) |
-| list (result) | handle to a text list | handle | any iterator of texts/numbers, collected at once |
+| list (result) | handle to a text list | handle + warp word | any iterator of texts/numbers, collected at once; a warp list |
 | handle(T) | `T *` (Box) | handle | result: T, Option<T> or Result<T, E> boxed; parameter: `&mut T` |
 | void | void | void | `()` or `Result<(), E>` |
 
@@ -51,7 +57,12 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
   - An Err's Display, or the panic message, goes into `<library>_last_error()` (ø after a call that worked).
   - Panics are caught; unwinding into warp-host would abort it.
 - Text results live in a ring of 16 per thread inside the shim. warp-host copies each one into a warp text at once.
-- Every shim also exports `<library>_last_error`, `<library>_list_count/_list_text/_list_free`.
+- How a list or bytes result comes back:
+  - The C function is `<name>_handle`. The native file adds a warp word `<name>` that reads the handle into a warp list
+    and frees it, through `<library>_take_texts` / `_take_bytes`.
+  - The host has no byte or list result type, so this goes through generic shim accessors, one call per item:
+    `<library>_list_count/_list_text/_list_free` and `<library>_bytes_count/_bytes_at/_bytes_free`.
+  - Every shim exports these accessors, plus `<library>_last_error`.
 
 ## Decisions (made on the card, 2026-10-23)
 
@@ -65,29 +76,35 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
   item's real type (Option, Result, String, &str, Cow, any integer), so the generator never needs that type.
 - Library names are `rs_<crate>`. That avoids clashes with system libraries (libregex) and with warp's std modules
   (`use regex` stays lib/regex.warp until it is switched over).
-- bytes cross as NUL-terminated texts for now. The pure lane's foreign lines have no ptr+len type, so a byte 0 ends
-  the data (a `bytes` foreign type is in Open below).
-- No new warp-host primitive was needed or added (shared FFI primitives: none). Library lookup uses pure-c-imports'
-  WARP_LIBRARY_PATH (or LD/DYLD_LIBRARY_PATH).
+- bytes parameters use pure-c-imports' `bytes` foreign type: a pointer, plus the `length` the host fills.
+  Earlier they were NUL-terminated texts.
+- Shared FFI primitives:
+  - none were added to warp-host by this card
+  - library lookup in the crates cache, `use crate` and `bytes`/`length` came from pure-c-imports 57f273b59 (Warp FFI)
+  - Warp Python's version_named_sonames (4edbfe6d4, merged into pure-c-imports as one soname search) isn't needed for
+    rs_* names, which carry no version (`librs_regex.so`)
 
 ## Status (measured on the box, Linux x86-64)
 
 - regex 1.12, sha2 0.10.9 and crc32fast 1 build into shims:
   - first build ~1-8 min on the loaded box; a manifest change rebuilds in ~9 s (shared target dir)
   - a cache hit takes no build
-- Run through warp-host and compiler.wasm from the pure-c-imports branch: sha256 by a foreign line, `use rs_regex`
-  is_match / first_match / find_all / replace_all / find_start / free.
+- Run through warp-host and compiler.wasm built from this branch merged with pure-c-imports 57f273b59 (2026-10-23):
+  - sha256 by a foreign line
+  - `use crate "regex@1"`, and `use rs_regex` with is_match / first_match / find_all / replace_all / find_start / free
+  - sha256 of [97, 0, 98] (a zero byte), sha256_bytes as 32 raw bytes, crc32 of bytes with a zero byte
 - `warp-crate scan semver@1` drafts 19 lines (constructors, parse, VersionReq::matches, as_str, free lines). They
   build unedited, and a warp program then checks version requirements (`versionreq_matches(req, version_parse("1.4.0"))`).
   scan on regex builds too.
-- tests/host/test_crates.sh: see the card for counts. It needs a host and compiler with C imports (pure-c-imports).
+- tests/host/test_crates.sh: 20/20 (2026-10-23, box). It needs a warp-host and compiler.wasm from pure-c-imports
+  57f273b59 or later, which this branch includes.
 
 ## Open
 
-- `use crate "regex@1"` in the compiler, building on demand: needs lib/compiler (c_imports.warp, Warp Wrapper's).
-  Today a program says `use rs_regex` and the native file must be in `<lib>/native/`. Proposal: c_imports also reads
-  `$WARP_CRATES_CACHE/native/` (default ~/.cache/warp/crates/native).
-- A `bytes` foreign type (ptr + length) for binary data, and byte results (Vec<u8>) as warp bytes.
+- `use crate "regex@1"` doesn't build on demand: the shim must be built first (`warp-crate build`, or fetched once
+  precompiled-crates lands). The version after @ isn't checked against the built one.
+- Byte and list results cost one FFI call per item. A host result type for bytes (pointer + length out) would make
+  them one call.
 - A one-letter text from C prints as a codepoint ('1' in find_all's list): a pure-lane printing quirk, not the shim's.
 - bool results print as 1/0 on the pure lane (c_parameter_kinds maps bool to i32).
 - Retiring src/modules/std_adapters.rs hash/regex: switch lib/hash.warp and lib/regex.warp to `use rs_sha2` /

@@ -1,7 +1,7 @@
 // Rust's regex crate as a C library (card ffi-rust-crate-adapter, notes/crate_adapter.md): `scripts/warp-crate build
 // lib/crates/regex.warp` builds librs_regex and writes native/rs_regex.warp, these lines without their `= rust` parts;
 // a program then says `use rs_regex`. Each foreign line's `= path` is the Rust item answering it, `?.m` maps m over an
-// Option, `*.m` over an iterator (whose items come back as a list).
+// Option, `*.m` over an iterator (whose items come back as a warp list).
 crate: "regex@1"
 
 regex_new(pattern: text): handle(regex::Regex) from 'rs_regex' = regex::Regex::new
@@ -21,17 +21,6 @@ regex_of(pattern: text) := {
 	if re == 0 { raise "regex: " + rs_regex_last_error() }
 	re
 }
-// the texts of a list rs_regex handed back, which it then frees
-rs_regex_texts(list: int) := {
-	found = []
-	i = 0
-	while i < rs_regex_list_count(list) {
-		found += [rs_regex_list_text(list, i)]
-		i += 1
-	}
-	rs_regex_list_free(list)
-	found
-}
 is_match(subject: text, pattern: text) := {
 	re = regex_of(pattern)
 	found = regex_is_match(re, subject)
@@ -46,7 +35,7 @@ first_match(subject: text, pattern: text) := {
 }
 find_all(subject: text, pattern: text) := {
 	re = regex_of(pattern)
-	found = rs_regex_texts(regex_find_all(re, subject))
+	found = regex_find_all(re, subject)
 	regex_free(re)
 	found
 }

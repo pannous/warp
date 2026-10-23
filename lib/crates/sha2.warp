@@ -1,6 +1,6 @@
 // Rust's sha2 crate as a C library (card ffi-rust-crate-adapter, notes/crate_adapter.md): `scripts/warp-crate build
-// lib/crates/sha2.warp`, then `use rs_sha2`. A digest crosses as lowercase hex (the result type hex); a bytes
-// parameter is the text's UTF-8 bytes (up to a NUL, which a text cannot carry across yet).
+// lib/crates/sha2.warp`, then `use crate "sha2@0.10"` (or `use rs_sha2`). The data is a text's UTF-8 bytes or a list
+// of 0 to 255, zero bytes and all; a digest comes back as lowercase hex (hex) or as its raw bytes, a list (bytes).
 crate: "sha2@0.10"
 uses: "sha2::Digest"
 
@@ -8,3 +8,5 @@ sha224(data: bytes): hex from 'rs_sha2' = sha2::Sha224::digest
 sha256(data: bytes): hex from 'rs_sha2' = sha2::Sha256::digest
 sha384(data: bytes): hex from 'rs_sha2' = sha2::Sha384::digest
 sha512(data: bytes): hex from 'rs_sha2' = sha2::Sha512::digest
+sha256_bytes(data: bytes): bytes from 'rs_sha2' = sha2::Sha256::digest
+sha512_bytes(data: bytes): bytes from 'rs_sha2' = sha2::Sha512::digest

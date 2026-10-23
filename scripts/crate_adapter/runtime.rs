@@ -50,12 +50,12 @@ pub unsafe fn text_in<'a>(pointer: *const c_char) -> &'a str {
 		Err(_) => "",
 	}
 }
-/// A bytes parameter: the text's bytes up to its NUL
-pub unsafe fn bytes_in<'a>(pointer: *const c_char) -> &'a [u8] {
-	if pointer.is_null() {
+/// A bytes parameter: warp-host passes the bytes of a text or a list of 0 to 255, NULs and all, and their count
+pub unsafe fn bytes_in<'a>(pointer: *const u8, size: usize) -> &'a [u8] {
+	if pointer.is_null() || size == 0 {
 		return &[];
 	}
-	CStr::from_ptr(pointer).to_bytes()
+	std::slice::from_raw_parts(pointer, size)
 }
 /// A handle parameter: the value a handle result boxed; NULL fails the call
 pub unsafe fn handle_in<'a, T>(pointer: *mut T, name: &str) -> Option<&'a mut T> {
@@ -185,6 +185,12 @@ impl<T, E: Display> HandleOut<T> for Result<T, E> {
 pub fn hex_out(bytes: impl AsRef<[u8]>) -> *const c_char {
 	let text: String = bytes.as_ref().iter().map(|byte| format!("{byte:02x}")).collect();
 	keep_text(&text)
+}
+
+/// Bytes kept as a handle: warp reads them with <library>_bytes_count / _bytes_at into a list of 0 to 255
+pub struct ByteList(pub Vec<u8>);
+pub fn bytes_out(bytes: impl AsRef<[u8]>) -> *mut ByteList {
+	Box::into_raw(Box::new(ByteList(bytes.as_ref().to_vec())))
 }
 
 /// A list of texts kept as a handle: warp reads it with <library>_list_count / _list_text and frees it
