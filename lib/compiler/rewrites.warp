@@ -372,7 +372,12 @@ rule_of(statement: any, module: text, source: text): any := {
 split_at_where(n: any): any := {
 	if n is key {
 		inner = split_at_where(value_of(n))
-		if inner == ø { return ø }
+		if inner == ø {
+			# `$p where parameter and $w is label`: the parser joined a condition after `where` to the next by the
+			# operator, the `where` inside its left side; the operator joins them again after the cut
+			left = split_at_where(key_of(n))
+			return if left == ø then ø else [left#1, [Key(as_phrase(left#2), op_of(n), value_of(n))]]
+		}
 		# `$s... where statement`: the parser read the conditions as the end of the rest's range, which ends nowhere
 		before = inner#1
 		if is_group(before) and #before == 0 { before = ø }

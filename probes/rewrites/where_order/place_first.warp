@@ -1,0 +1,8 @@
+// out: 50
+// out: 2
+// a place word first among the conditions, `where statement and $p is literal`, keeps the condition after `and`
+rewrite shout $p => print($p * 10) where statement and $p is literal
+rewrite shout $p => print($p)
+shout 5
+y = 2
+shout y
