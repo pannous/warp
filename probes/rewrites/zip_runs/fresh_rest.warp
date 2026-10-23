@@ -1,3 +1,3 @@
-// expected: [7, 8] (F11: a zipped rest hole the pattern didn't bind is as many fresh names, bound for the rest of the firing)
+// expected: [7 8] (F11: a zipped rest hole the pattern didn't bind is as many fresh names, bound for the rest of the firing)
 rewrite kept($xs...) => (($t = $x) for ($t, $x) in ($ts..., $xs...); [$ts...])
 print kept(7, 8)
