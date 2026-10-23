@@ -188,4 +188,3 @@ enum Metal { Gold, Penny }
 rewrite pick $e $c => "case" where $c is case of $e
 rewrite pick $e $c => "not"
 [pick Metal Penny, pick Metal Dime, pick Coin Dime]' ["case", "not", "case"]
-||||||| d8bb3f8518
