@@ -11,7 +11,7 @@ use "../byte_codes.warp"
 # a boxed int (kind code 1), exact rational or float as a float
 float_of_node(n: Node): float := {
 	if kind_code(n) != Kind.Int { return unboxed_float(n) }
-	if is_ratio(n) then extended_float(n) else float(unboxed_int(n))
+	if is_plain_int(n) then float(unboxed_int(n)) else extended_float(n)
 }
 # `x.bytecount`: the bytes of a text's or character's UTF-8, 8 an item of a list or map; an error has none
 node_bytes(n: Node): int := {

@@ -26,6 +26,7 @@ def takes_arguments(f: Function, arguments: any): bool {
 }
 # the words the runtime is written in, each one or two instructions
 def intrinsic(body: Body, name: text, arguments: any): list {
+	if name in big_int_cases { return big_int_case(body, big_int_cases[name], arguments) }
 	values = arguments.map(a => expression_code(body, a))
 	match name {
 		"new_text": ["text", index_code(values#1) + gc_code(gc_ops.array_new_default, [gc_type(gc.text)])]
@@ -95,7 +96,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		# the error is the word's: a variant of it by arity is named `word·arity`
 		"fail": [pending, error_throw(body.function.name.split("·")#1) + [op.unreachable]]
 		"is_ratio": ["bool", ratio_test(values#1#2)]
-		"is_plain_int": ["bool", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)])]
+		"is_plain_int": ["bool", plain_int_test(values#1#2)]
 		"ratio_of": {
 			box = v => converted(v, "int") + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])
 			["node", node(Kind.Int, box(values#1) + box(values#2) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))]
@@ -133,7 +134,7 @@ program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte"]
 intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
-	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, big_sum_case: 2, big_difference_case: 2, big_product_case: 2, big_order_case: 2, big_float_case: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, closure_text: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
@@ -209,6 +210,8 @@ def kind_code_of(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [
 def payload(code: any, held: int): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
 def unboxed(code: any, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
 # whether an Int $Node holds a $Ratio (an i32); the numerator (0) or denominator (1) of one
+# whether an Int $Node holds its number in an $i64box (an i32), neither a ratio nor a big int
+def plain_int_test(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
 def ratio_test(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
 def ratio_part(code: any, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
 # the $Limbs array of an Int $Node holding a $BigInt
@@ -220,4 +223,25 @@ shown_big_int_name = "shown_big_int"
 shown_big_int_code(f: Function): any := {
 	f.code = [op.unreachable]
 	if module.runtime["big_int_power"].kinds != ø { f.code = call_values(module.runtime["big_int_text"], [["node", [op.local_get, 0]]])#2 }
+}
+# `big_sum_case(a, b)` … in exact.warp: once the program makes big ints (module.makes_big_ints), the return of
+# big_ints.warp's word of the operands where one holds a big int; before that nothing, so a plain-int program's exact
+# words stay as they were. Its function is noted (module.big_int_sites) and read again once every function is
+# compiled, when big_int_power was (module_compiled)
+big_int_cases = {big_sum_case: "big_int_sum", big_difference_case: "big_int_difference", big_product_case: "big_int_product",
+	big_order_case: "big_int_order", big_float_case: "big_int_float"}
+def big_int_case(body: Body, word_name: text, arguments: any): list {
+	if not module.makes_big_ints {
+		if not module.big_int_sites.any(f => f.name == body.function.name) { module.big_int_sites += [body.function] }
+		return [no_kind, []]
+	}
+	word = module.runtime[word_name]
+	values = arguments.map(a => expression_code(body, a))
+	test = []
+	for i in 0..<#values {
+		test += condition(call_values(module.runtime["holds_big_int"], [values[i]]))
+		if i > 0 { test += [op.i32_or] }
+	}
+	called = return_value(body, call_values(word, values))
+	[no_kind, test + [op.if, no_value] + called#2 + [op.end]]
 }
