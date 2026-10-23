@@ -13,8 +13,8 @@ use "types.warp"
 node_order(a: Node, b: Node): int := {
 	if textual_node(a) and textual_node(b) { return text_order(node_text(a), node_text(b)) }
 	if not numeric_node(a) or not numeric_node(b) { fail() }
-	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_ratio(a) or is_ratio(b)) { return extended_order(a, b) }
-	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return int_order_of(unboxed_int(a), unboxed_int(b)) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return int_order_of(unboxed_int(a), unboxed_int(b)) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_order(a, b) }
 	float_order(float_of_node(a), float_of_node(b))
 }
 # 1 for a boxed int, exact rational or float, else 0

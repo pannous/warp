@@ -65,7 +65,8 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	floats = operation_code(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
 	kind = if ints#1 == "bool" then "bool" else "node"
 	exact = exact_operation(body, symbol, left, right, floats)
-	integers = ratio_test(left#2) + ratio_test(right#2) + [op.i32_or] + if_else_code(kind, exact, ints)
+	# two Ints in $i64boxes stay ints; a ratio or a big int on either side takes the exact word
+	integers = plain_int_test(left#2) + plain_int_test(right#2) + [op.i32_and] + if_else_code(kind, ints, exact)
 	numbers = both_of_kind(left#2, right#2, Kind.Int) + if_else_code(kind, [kind, integers], floats)
 	code = a + [op.local_set] + left#2[1..] + b + [op.local_set] + right#2[1..]
 	if symbol not in comparisons { return [kind, code + numbers] }

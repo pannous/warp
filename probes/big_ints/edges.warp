@@ -1,0 +1,12 @@
+# big ints at the 64-bit edges and with negatives (card pure-big-int-ops), the same on the Rust, pure and self lanes
+print 2 ^ 63
+print 2 ^ 63 - 1
+print (-2) ^ 63 - 2 ^ 64
+print 0 - 2 ^ 64 + 1
+print (-3) ^ 41 * (-3) ^ 41
+print (-3) ^ 41 + 3 ^ 41
+print 2 ^ 64 > -5
+print (-2) ^ 65 < (-2) ^ 63
+print 2 ^ 64 == 2 ^ 64 + 0
+print ((-2) ^ 65) as float
+print [2 ^ 64, 2 ^ 64 - 1] == [2 ^ 64, 2 ^ 64 - 1]
