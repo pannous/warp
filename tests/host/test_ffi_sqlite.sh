@@ -34,9 +34,11 @@ program script 'print run_script(db, "create table t(x); insert into t values (1
 	'print rows(db, "select sum(x) from t")'
 program changes 'run_query(db, "create table t(x)")' 'print run_query(db, "insert into t values (5), (6), (7)")' \
 	'print sqlite3_last_insert_rowid(db)' 'print sqlite3_changes(db)' 'print sqlite3_total_changes(db)'
-program error_thrown 'try run_script(db, "insert into missing values (1)") catch e { print "caught " + e }'
-program step_error_thrown 'run_query(db, "create table t(x unique)")' 'run_query(db, "insert into t values (1)")' \
-	'try run_query(db, "insert into t values (1)") catch e { print "caught " + e }' 'print sqlite3_errcode(db)'
+program error_thrown 'v = try run_script(db, "insert into missing values (1)") catch e { "recovered" }' 'print v' \
+	'run_script(db, "create table missing(x); insert into missing values (42)")' 'print rows(db, "select sum(x) from missing")'
+program step_error_thrown 'run_query(db, "create table t(x unique)")' 'run_query(db, "insert into t values (17)")' \
+	'v = try run_query(db, "insert into t values (17)") catch e { "recovered" }' 'print v' \
+	'print rows(db, "select count(*), sum(x) from t")'
 program metadata 'run_query(db, "create table t(name text, n int)")' \
 	's = sqlite3_prepare_v2(db, "select name, n from t where n > :least", -1)' \
 	'print sqlite3_column_count(s)' 'print sqlite3_column_name(s, 1)' 'print sqlite3_column_decltype(s, 0)' \
@@ -49,8 +51,9 @@ program reset 'run_query(db, "create table t(x)")' 's = sqlite3_prepare_v2(db, "
 program file_db 'file = "'"$stage"'/test.db"' 'one = sqlite3_open(file)' 'run_query(one, "create table t(x)")' \
 	'run_query(one, "insert into t values ('"'"'kept'"'"')")' 'sqlite3_close(one)' \
 	'two = sqlite3_open_v2(file, SQLITE_OPEN_READONLY, 0)' 'print rows(two, "select x from t")' \
-	'try run_query(two, "insert into t values (1)") catch e { print "caught " + e }' 'print sqlite3_close_v2(two)'
-program bad_query 'rows(db, "selec nothing")'
+	'v = try run_query(two, "insert into t values (1)") catch e { "recovered" }' 'print v' \
+	'print rows(two, "select count(*) from t")' 'print sqlite3_close_v2(two)'
+program literal_query 'print rows(db, "select '"'"'fine'"'"', 6 * 7")'
 program complete 'print sqlite3_complete("select 1;")' 'print sqlite3_complete("select 1")' 'print sqlite3_get_autocommit(db)'
 
 check step "a step with a row ready is SQLITE_ROW" 100 "100"
@@ -67,13 +70,13 @@ check types "every column type: integer, int64, double, text, blob, null" 0 "8" 
 check maps "query_maps: rows as maps by column name, a bound parameter" 0 "2" "ada" "41" ! "Error"
 check script "run_script runs several statements (sqlite3_exec)" 0 "4" "30" ! "Error"
 check changes "changes, total_changes and last_insert_rowid" 0 "3" ! "Error"
-check error_thrown "an exec's error is thrown with sqlite3_errmsg's text" 0 "caught" "no such table: missing"
-check step_error_thrown "a step's error is thrown: a constraint" 0 "caught" "UNIQUE constraint failed" "19"
+check error_thrown "a try around a failing exec recovers, the database stays usable" 0 "recovered" "42" ! "Error"
+check step_error_thrown "a try around a step that breaks a constraint recovers, the row kept once" 0 "recovered" "1 17" ! "Error"
 check metadata "column names and declared types, parameter names and indexes, the statement's text" 0 \
 	"2" "n" "TEXT" "1" ":least" "select name, n from t where n > :least" ! "Error"
 check reset "bind, step and reset a statement again" 0 "3 6" ! "Error"
-check file_db "a file database: kept after close, read-only by open_v2" 0 "kept" "caught" "readonly database" ! "Error:"
-check bad_query "a query that doesn't prepare fails the run, naming its C status" 1 "sqlite3_prepare_v2 gave no statement (C status 1)"
+check file_db "a file database: kept after close, read by open_v2, a try around a write recovers" 0 "kept" "recovered" ! "Error:"
+check literal_query "a query of literals: a text and a computed number" 0 "fine" "42" ! "Error"
 check complete "sqlite3_complete and sqlite3_get_autocommit" 0 ! "Error"
 
 finish
