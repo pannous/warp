@@ -1,0 +1,8 @@
+// out: [3, 7, 8]
+// a use: parse_words' `eval` as a rule, leaving a method `x.eval(…)` and a definition's own eval
+rewrite evaluate($t) => interpret(parse($t)) where not method and not shadowed
+class Calc { k: int }
+evaluate(c: Calc, t: text) := c.k
+own(t) := { evaluate = s => 8; evaluate(t) }
+c = Calc(7)
+print [evaluate("1 + 2"), c.evaluate("x"), own("y")]

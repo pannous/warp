@@ -41,6 +41,11 @@ rule_word_marks = "_$"
 hole_kinds = ["text", "symbol", "list", "block", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
 code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing"]
+# `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
+# with (card engine-rule-conditions)
+context_words = ["method", "shadowed"]
+# `where $f is in [add, push]`: the hole bound one of the words listed
+in_word = "in"
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
 cases_words = ["cases", "of"]
 # `where $n < 0`: the comparisons of a number literal
@@ -98,6 +103,13 @@ global first_parameter_types = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
+# the program being rewritten, which `where not method` and `where not shadowed` read where code stands in, and what
+# they read off it once asked: [the method parts' head words, the words a definition around them binds], each as
+# written_at keys; ø until a rule asks
+global rule_program = ø
+global rule_contexts = ø
+# the code the rule being tried matched, for the context conditions; ø for a run of statements
+global rule_matched = ø
 
 # the program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out;
 # `source` is the text the program was parsed from, which tells a template's `·` from `*`
@@ -122,6 +134,7 @@ rewritten_program(program: any, source: text): any := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_enums = enums_in(program, {})
+	rule_program_read(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
 	program = bottom_up(program, n => rule_rewritten(n, rules, origins))
@@ -156,6 +169,7 @@ sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
+	rule_program_read(program)
 	bottom_up(program, n => sugared_node(n, rules))
 }
 
@@ -376,8 +390,10 @@ conjuncts(condition: any): list := match condition {
 is_condition(condition: any): bool := {
 	if is_takes(condition) { return yes }
 	if is_negation(condition) { return is_condition(value_of(condition)) and not is_key(value_of(condition), Op.Assign) }
+	if is_context_word(condition) { return yes }
 	if not (condition is key and rule_hole(key_of(condition)) != ø) { return no }
 	wanted = value_of(condition)
+	if op_of(condition) == Op.Is and listed_words(wanted) != ø { return yes }
 	if op_of(condition) == Op.Assign { return yes }
 	if op_of(condition) == Op.Is { return is_property(wanted) or is_case_property(wanted) }
 	literal_comparisons.any(op => is_key(condition, op)) and is_number_literal(wanted)
@@ -457,10 +473,12 @@ named_enum(code: any): text := {
 condition_holds(condition: any, bound: any): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
 	if is_takes(condition) { return first_parameter_fits(bound[rule_hole(condition#1)], name_of(condition#3)) }
+	if is_context_word(condition) { return context_holds(head_word(rule_matched), name_of(condition)) }
 	hole = rule_hole(key_of(condition))
 	if not bound.has(hole) { return no }
 	code = bound[hole]
 	wanted = value_of(condition)
+	if op_of(condition) == Op.Is and listed_words(wanted) != ø { return word_listed(code, listed_words(wanted)) }
 	if op_of(condition) == Op.Is { return if is_case_property(wanted) then case_holds(code, enum_hole_of(wanted), bound) else has_property(code, name_of(wanted)) }
 	is_number_literal(code) and literal_compared(number_of(code), condition, number_of(wanted))
 }
@@ -476,6 +494,101 @@ has_property(code: any, property: text): bool := {
 	if property == "value" { return binds_value(rule_scope, word) }
 	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) }
 	not rule_scope.has(word)
+}
+
+# `method`, `shadowed`: a condition about where the matched code stands, not about a hole
+is_context_word(condition: any): bool := condition is symbol and name_of(condition) in context_words
+
+# `in [add, push]` after `is`: the words listed (names, or texts naming them), else ø
+listed_words(wanted: any): any := {
+	if not (is_group(wanted) and bracket_of(wanted) == "" and #wanted == 2 and wanted#1 == symbol(in_word)) { return ø }
+	listing = wanted#2
+	if not (is_group(listing) and bracket_of(listing) == "[") { return ø }
+	words = items_of(listing)
+	if words.all(word => word is symbol or word is text) then words.map(word => if word is symbol then name_of(word) else word) else ø
+}
+
+# whether the code is a word of the list, as a name or a text
+word_listed(code: any, words: list): bool := (code is symbol and name_of(code) in words) or (code is text and code in words)
+
+# the word the code starts with: itself, a call's or a phrase's first word, else ø
+head_word(code: any): any := {
+	if code is symbol { return code }
+	if is_group(code) and #code > 0 and (bracket_of(code) == "(" or bracket_of(code) == "") and code#1 is symbol then code#1 else ø
+}
+
+# where the word stands, as written: its line, column and name; ø for a word a pass made
+written_at(word: any): any := {
+	if not (word is symbol) { return ø }
+	line = line_of(word)
+	column = column_of(word)
+	if line is int and column is int then "" + line + ":" + column + ":" + name_of(word) else ø
+}
+
+# the program a rewrite reads, for the context conditions to read once asked
+rule_program_read(program: any): any := {
+	rule_program = program
+	rule_contexts = ø
+	program
+}
+
+# `method`: the word starts the right of `x.f(…)`, `x.f`; `shadowed`: a definition around it binds the word, as a
+# parameter or in its body (`f(t) := { parse = x => 7; parse(t) }`, notes/dispatch.md: shadowing is scoped). A word
+# a pass made, written nowhere, stands in neither
+context_holds(word: any, context: text): bool := {
+	at = written_at(word)
+	if at == ø or rule_program == ø { return no }
+	if rule_contexts == ø { rule_contexts = [method_words(rule_program), shadowed_words(rule_program, [], {})] }
+	if context == "method" then rule_contexts#1.has(at) else rule_contexts#2.has(at)
+}
+
+# the head words of the right of each `.`, as written_at keys
+method_words(program: any): any := {
+	found = {}
+	for n in nodes_in(program) {
+		if is_key(n, Op.Dot) {
+			at = written_at(head_word(value_of(n)))
+			if at != ø { found[at] = yes }
+		}
+	}
+	found
+}
+
+# the words in n that a definition around them binds (the names in `binding`), as written_at keys, into found
+shadowed_words(n: any, binding: list, found: any): any := {
+	if is_key(n, Op.Define) {
+		inner = binding + bound_by_definition(n)
+		shadowed_words(value_of(n), inner, found)
+		return found
+	}
+	if n is symbol {
+		if name_of(n) in binding {
+			at = written_at(n)
+			if at != ø { found[at] = yes }
+		}
+		return found
+	}
+	for part in parts_of(n) { shadowed_words(part, binding, found) }
+	found
+}
+
+# the names a definition binds inside it: its parameters, the names its body's statements declare
+bound_by_definition(definition: any): list := {
+	names = []
+	head = key_of(definition)
+	if is_group(head) and #head > 1 {
+		for parameter in items_of(head)[1 ..] {
+			name = leftmost_name(parameter)
+			if name != ø { names += [name] }
+		}
+	}
+	body = value_of(definition)
+	statements = if is_group(body) and separator_of(body) in statement_separators then items_of(body) else [body]
+	for statement in statements {
+		name = declared_name(statement)
+		if name != ø { names += [name] }
+	}
+	names
 }
 
 # `3`, `-1`, `(-1)`: a number written as such
@@ -763,11 +876,11 @@ run_at(items: list, rules: list, origins: list): any := {
 # the rule's template for the node; a block of a statement the pattern matches keeps its block
 rule_applied(rule: Rule, origin: any, n: any): any := {
 	bound = {}
-	if rule_matches(rule.pattern, n, bound) and conditions_hold(rule, origin, bound) { return fired(rule, rule_spliced(rule.template, bound, n)) }
+	if rule_matches(rule.pattern, n, bound) and conditions_hold_at(rule, origin, bound, n) { return fired(rule, rule_spliced(rule.template, bound, n)) }
 	if not (is_group(rule.pattern) and bracket_of(rule.pattern) == "" and is_curly_group(n)) { return ø }
 	bound = {}
 	statement = separated(bracketed(items_of(n), ""), separator_of(n))
-	if not (rule_matches(rule.pattern, statement, bound) and conditions_hold(rule, origin, bound)) { return ø }
+	if not (rule_matches(rule.pattern, statement, bound) and conditions_hold_at(rule, origin, bound, n)) { return ø }
 	fired(rule, List(statements_in(rule_spliced(rule.template, bound, n)), Bracket.Curly, Separator.Semicolon))
 }
 
@@ -779,6 +892,14 @@ fired(rule: Rule, result: any): any := {
 
 # the rule's `where` conditions hold of what its holes bound
 conditions_hold(rule: Rule, origin: any, bound: any): bool := origin_holds(rule, origin, bound) and rule.conditions.all(condition => condition_holds(condition, bound))
+
+# the conditions hold of the code n the rule matched, which the context conditions ask where it stands
+conditions_hold_at(rule: Rule, origin: any, bound: any, n: any): bool := {
+	rule_matched = n
+	holding = conditions_hold(rule, origin, bound)
+	rule_matched = ø
+	holding
+}
 
 # `where $c = shape`: the hole binds a name of the variables assigned that shape
 origin_holds(rule: Rule, origin: any, bound: any): bool := {
