@@ -11,6 +11,8 @@ has_library z || { echo "- z: no libz here, skipped"; exit 0; }
 middle=('b = []' 'i = 0' 'while i < 20000 { b += [i % 251]; i += 1 }')
 big=('b = []' 'i = 0' 'while i < 100000 { b += [i % 251]; i += 1 }')
 small=('d = []' 'i = 0' 'while i < 50 { d += [0, 1, 0, 2, 0, 255]; i += 1 }')
+# 1 MiB i % 251, and a byte list result of that size (c_bytes, uncompress, inflate) built in one call (new_bytes)
+huge=('b = []' 'i = 0' 'while i < 1048576 { b += [i % 251]; i += 1 }')
 # python: zlib.compress("hello, warp\0and zlib".encode())
 known='[120, 156, 203, 72, 205, 201, 201, 215, 81, 40, 79, 44, 42, 96, 72, 204, 75, 81, 168, 202, 201, 76, 2, 0, 74, 250, 7, 31]'
 
@@ -33,6 +35,9 @@ program large "${big[@]}" 'c = compressed(b)' 'print #c' 'print crc32_of(c)'
 program middle "${middle[@]}" 'c = compressed(b)' 'print #c' 'print crc32_of(c)' 'u = uncompressed(c, #b)' 'print #u' 'print crc32_of(u)'
 program known_input "print uncompressed($known, 100)" 'print crc32_of(uncompressed('"$known"', 100))'
 program too_small "${small[@]}" 'uncompressed(compressed(d), 10)'
+program huge "${huge[@]}" 'c = compressed(b)' 'print #c' 'print crc32_of(c)' 'u = uncompressed(c, #b)' 'print #u' 'print crc32_of(u)'
+program huge_stream "${huge[@]}" 'u = inflated(deflated(b, Z_DEFAULT_COMPRESSION))' 'print #u' 'print crc32_of(u)'
+program huge_c_bytes 'zeros = c_bytes(calloc(1, 1048576), 1048576)' 'print #zeros' 'print crc32_of(zeros)'
 # the stream API
 program stream_round_trip "${middle[@]}" 'c = deflated(b, Z_DEFAULT_COMPRESSION)' 'print crc32_of(c)' 'u = inflated(c)' 'print #u' 'print crc32_of(u)'
 program stream_known "print inflated($known)" 'print crc32_of(inflated('"$known"'))'
@@ -59,4 +64,7 @@ check stream_known "inflate of python's zlib.compress, its size unknown" 0 "[104
 check gzip "gzip through a stream: its magic bytes, and back" 0 "31" "139" "same" ! "differs"
 check bad_stream "inflate of no zlib data throws zlib's message" 0 "caught zlib: incorrect header check"
 check truncated "inflate of a truncated stream throws" 0 "caught zlib: the data ends before its stream does"
+check huge "1 MiB compressed to python's 4390 bytes and back" 0 "4390" "3128219806" "1048576" "4010696788" ! "Error"
+check huge_stream "1 MiB deflated and inflated through a stream" 0 "1048576" "4010696788" ! "Error"
+check huge_c_bytes "c_bytes of 1 MiB" 0 "1048576" "2805525020" ! "Error"
 finish

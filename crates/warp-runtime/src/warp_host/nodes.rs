@@ -2,7 +2,7 @@
 //! keeps across runs, what a run's value prints as
 use crate::Host;
 use warp_runtime::gc_values::{items_of, BLOCK, BOOL_INFO, CODEPOINT, EMPTY, ERROR, FLOAT, INT, KEY, KIND_BITS};
-use warp_runtime::gc_values::{write_to_heap, KIND_MASK, LIST, SYMBOL, TEXT, TEXT_HEAP};
+use warp_runtime::gc_values::{write_to_heap, KIND_MASK, LIST, NEW_BYTES, SYMBOL, TEXT, TEXT_HEAP};
 use wasmtime::{Extern, Func, Global, Memory, Result, StoreContextMut, Val};
 
 const TYPE_DEF: u8 = 12;
@@ -179,7 +179,7 @@ pub struct Builders {
 	functions: Vec<(&'static str, Func)>,
 }
 
-const CONSTRUCTORS: [&str; 11] = [
+const CONSTRUCTORS: [&str; 12] = [
 	"new_empty",
 	"new_int",
 	"new_bool",
@@ -191,6 +191,8 @@ const CONSTRUCTORS: [&str; 11] = [
 	"new_list",
 	"new_type",
 	"error_of",
+	// a list of 0 to 255 in one call (lib/compiler/runtime/byte_lists.warp), when the program exports it
+	NEW_BYTES,
 ];
 
 impl Builders {
@@ -224,6 +226,11 @@ impl Builders {
 			}
 			Node::List(_, items) if items.is_empty() => self.call("new_empty", &[], store),
 			Node::List(kind, items) if (kind & KIND_MASK) as u8 == LIST => {
+				// a list of bytes (c.bytes, a blob): copied at once, as a text is, not a cell per byte
+				let bytes = (*kind == SQUARE_LIST && self.has(NEW_BYTES)).then(|| byte_items(items)).flatten();
+				if let Some(bytes) = bytes {
+					return self.text(NEW_BYTES, &bytes, store);
+				}
 				let items = items.iter().map(|item| self.build(item, store)).collect::<Result<Vec<_>>>()?;
 				items.into_iter().rev().try_fold(Val::AnyRef(None), |rest, first| {
 					self.call("new_list", &[first, rest, Val::I64(kind >> KIND_BITS)], store)
@@ -235,6 +242,10 @@ impl Builders {
 			}
 			other => wasmtime::bail!("warp-host cannot give a program {}", other.shown()),
 		}
+	}
+
+	fn has(&self, name: &str) -> bool {
+		self.functions.iter().any(|(export, _)| *export == name)
 	}
 
 	fn call(&self, name: &str, arguments: &[Val], store: &mut StoreContextMut<'_, Host>) -> Result<Val> {
@@ -249,6 +260,11 @@ impl Builders {
 		let place = placed(self.memory, self.heap, bytes, store)?;
 		self.call(constructor, &[Val::I32(place as i32), Val::I32(bytes.len() as i32)], store)
 	}
+}
+
+/// The items as bytes when every one is an Int of 0 to 255
+fn byte_items(items: &[Node]) -> Option<Vec<u8>> {
+	items.iter().map(|item| if let Node::Int(byte) = item { u8::try_from(*byte).ok() } else { None }).collect()
 }
 
 /// Bytes put into the program's memory for it to copy out at once, their address: at its text heap when it has one

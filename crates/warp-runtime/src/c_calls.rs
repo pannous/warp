@@ -414,9 +414,9 @@ fn bytes_output<T>(caller: &mut Caller<'_, T>, memory: &CallMemory, pointer: usi
 		// SAFETY: the C function returned a pointer to `written` bytes (the declaration's contract)
 		None => Some(unsafe { std::slice::from_raw_parts(pointer as *const u8, written.unwrap_or(0)) }),
 	};
-	let value = bytes.map_or(serde_json::Value::Null, |bytes| bytes.iter().map(|byte| serde_json::Value::from(*byte)).collect());
+	let bytes = bytes.map(<[u8]>::to_vec);
 	let builders = crate::gc_values::Builders::of(&mut |name| caller.get_export(name))?;
-	builders.build(&value, &mut wasmtime::AsContextMut::as_context_mut(caller))
+	builders.byte_list(bytes.as_deref(), &mut wasmtime::AsContextMut::as_context_mut(caller))
 }
 
 /// The struct output of a call as a warp map, or a list of maps
