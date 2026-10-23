@@ -180,7 +180,7 @@ Sugar passes, with the rule each would become:
 | 197 | plain_enums | `Color.Red`, `Color::Red`, `case .red`, `c is Coin`: lib/sugar/enums.warp (F9, card sugar-plain-enums); the declaration, `as int`/`as Coin`/`Coin(2)` and the names holding cases stay a pass (see the card) |
 | 186 | definitions | `rewrite def $d => $d`, `rewrite $f($p...) = $b => $f($p...) := $b`: works today, minus `xs(1) = …` (F2) |
 | 163 | of_lookups | `rewrite $a of $b => $b.$a`: phrase rule works today; type phrases `list of int` need F2 |
-| 137 | for_loops | done (card sugar-for-loops): lib/sugar/iteration.warp lowers every `for` (F3, F7, hidden glue); loop_heads.warp keeps what needs the program's knowledge: which iterables are maps (scoped; goes for `where $m is map` once sugar-places lands), a type word as the variable |
+| 137 | for_loops | done (card sugar-for-loops): lib/sugar/iteration.warp lowers every `for` (F3, F7, hidden glue); a map's keys by `where $m is map` (sugar-places); loop_heads.warp keeps what a rule cannot write yet: `for k, v in m` (two names), a type word as the variable. Gap: `is map` is not scoped, so a name a map in one function and a parameter `found: list` in another counts as a map in both (probes/sugar/for_loops/map_parameter.warp) |
 | 121 | welcome_forms | match-arm spellings onto one: rows of rules, F4 for arms |
 | 121 | foreign_forms | `rewrite public $d... => $d...`, `rewrite new $c => $c`: F1 (statement head); `attr_accessor` F1 (class body) |
 | 116 | min_max | done (card min-max-sugar): lib/sugar/extremes.warp, twelve rules; the pass file is gone. The prelude function stays a later step (lib/extrema.warp, once measured as fast) |
