@@ -75,7 +75,7 @@ Three more ask about a word list and where the matched code stands (card engine-
 | condition | holds when |
 |---|---|
 | `$x in [add, push]` (also `$x is in […]`) | the hole bound one of the words listed, a name or a text naming it (`"push"`) |
-| `method` | the word the matched code starts with is the method part of `x.f(…)` or `x.f`, the right of `.` |
+| `method` | the matched code is the method part of `x.f(…)` or `x.f`: `f(…)`, `f`, the right of `.` |
 | `shadowed` | a definition around the matched code binds the word it starts with: a parameter, or a name its body declares (`f(t) := { parse = x => 7; parse(t) }`, notes/dispatch.md: shadowing is scoped) |
 
 Each is negated as the others: `where $f not in [add, push]`, `where not method and not shadowed`:
