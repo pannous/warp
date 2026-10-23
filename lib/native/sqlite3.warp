@@ -3,23 +3,44 @@
 // SQLite is in the host. The types are lib/c.warp's: a handle is a C pointer held as an id, an out-pointer is no
 // argument and its pointer is the call's result.
 //   db = sqlite3_open(":memory:")
-//   rows(db, "select 1+2, 'a'")        [[3, "a"]]
-//   run_query(db, "create table t(x)") the changed rows' count
+//   rows(db, "select 1+2, 'a'")                         [[3, "a"]]
+//   run_query(db, "create table t(x)")                  the changed rows' count
+//   run_script(db, "create table t(x); insert …")      several statements, sqlite3_exec
+//   query(db, "select * from t where x > ?", [2])       rows of a query with its ? parameters bound
+//   query_maps(db, "select x from t", [])               each row a map, column name → value
+// Values: an Int is an integer, a float a double, a text a text, ø null, a list of 0 to 255 a blob.
+// A failing step or exec throws sqlite3_errmsg's text; a query that doesn't prepare fails the run, naming its C status.
+use c_memory
 // (`sql` and `execute` are warp's words for sql templates, lib/compiler/injection.warp)
 sqlite3_libversion(): text from 'sqlite3'
 sqlite3_libversion_number(): i32 from 'sqlite3'
+sqlite3_sourceid(): text from 'sqlite3'
+sqlite3_threadsafe(): i32 from 'sqlite3'
 sqlite3_open(filename: text, db: out): handle from 'sqlite3'
+sqlite3_open_v2(filename: text, db: out, flags: i32, vfs: i64): handle from 'sqlite3'
 sqlite3_close(db: handle): i32 from 'sqlite3'
+sqlite3_close_v2(db: handle): i32 from 'sqlite3'
+sqlite3_exec(db: handle, script: text, callback: i64, argument: i64, error: i64): i32 from 'sqlite3'
+sqlite3_complete(sql_text: text): i32 from 'sqlite3'
+sqlite3_busy_timeout(db: handle, milliseconds: i32): i32 from 'sqlite3'
+sqlite3_get_autocommit(db: handle): i32 from 'sqlite3'
+sqlite3_interrupt(db: handle): void from 'sqlite3'
+sqlite3_extended_errcode(db: handle): i32 from 'sqlite3'
+sqlite3_total_changes(db: handle): i32 from 'sqlite3'
 sqlite3_errmsg(db: handle): text from 'sqlite3'
 sqlite3_errcode(db: handle): i32 from 'sqlite3'
 sqlite3_errstr(code: i32): text from 'sqlite3'
 sqlite3_changes(db: handle): i32 from 'sqlite3'
 sqlite3_last_insert_rowid(db: handle): i64 from 'sqlite3'
 sqlite3_db_handle(statement: handle): handle from 'sqlite3'
-sqlite3_prepare_v2(db: handle, query: text, length: i32, statement: out, tail: out): handle from 'sqlite3'
+sqlite3_prepare_v2(db: handle, sql_text: text, length: i32, statement: out, tail: out): handle from 'sqlite3'
 sqlite3_step(statement: handle): i32 from 'sqlite3'
 sqlite3_reset(statement: handle): i32 from 'sqlite3'
 sqlite3_finalize(statement: handle): i32 from 'sqlite3'
+sqlite3_clear_bindings(statement: handle): i32 from 'sqlite3'
+sqlite3_sql(statement: handle): text from 'sqlite3'
+sqlite3_data_count(statement: handle): i32 from 'sqlite3'
+sqlite3_stmt_readonly(statement: handle): i32 from 'sqlite3'
 sqlite3_column_count(statement: handle): i32 from 'sqlite3'
 sqlite3_column_type(statement: handle, column: i32): i32 from 'sqlite3'
 sqlite3_column_name(statement: handle, column: i32): text from 'sqlite3'
@@ -27,18 +48,37 @@ sqlite3_column_int(statement: handle, column: i32): i32 from 'sqlite3'
 sqlite3_column_int64(statement: handle, column: i32): i64 from 'sqlite3'
 sqlite3_column_double(statement: handle, column: i32): f64 from 'sqlite3'
 sqlite3_column_text(statement: handle, column: i32): text from 'sqlite3'
+// a blob's address, for c_bytes (lib/c_memory.warp); valid until the next step
+sqlite3_column_blob(statement: handle, column: i32): i64 from 'sqlite3'
+sqlite3_column_bytes(statement: handle, column: i32): i32 from 'sqlite3'
+sqlite3_column_decltype(statement: handle, column: i32): text from 'sqlite3'
 sqlite3_bind_parameter_count(statement: handle): i32 from 'sqlite3'
+sqlite3_bind_parameter_index(statement: handle, name: text): i32 from 'sqlite3'
+sqlite3_bind_parameter_name(statement: handle, index: i32): text from 'sqlite3'
+sqlite3_bind_int(statement: handle, index: i32, value: i32): i32 from 'sqlite3'
 sqlite3_bind_int64(statement: handle, index: i32, value: i64): i32 from 'sqlite3'
 sqlite3_bind_double(statement: handle, index: i32, value: f64): i32 from 'sqlite3'
 sqlite3_bind_text(statement: handle, index: i32, value: text, length: i32, destructor: i64): i32 from 'sqlite3'
 sqlite3_bind_null(statement: handle, index: i32): i32 from 'sqlite3'
+sqlite3_bind_blob(statement: handle, index: i32, value: bytes, size: length, destructor: i64): i32 from 'sqlite3'
 
-// sqlite3_step's answer when a row is ready
+// result codes: sqlite3_step's when a row is ready, and when the statement is done
+SQLITE_OK = 0
+SQLITE_ERROR = 1
 SQLITE_ROW = 100
+SQLITE_DONE = 101
 // sqlite3_column_type's: 1 an integer, 2 a float, 3 a text, 4 a blob, 5 null
 SQLITE_INTEGER = 1
 SQLITE_FLOAT = 2
+SQLITE_TEXT = 3
+SQLITE_BLOB = 4
 SQLITE_NULL = 5
+// sqlite3_open_v2's flags
+SQLITE_OPEN_READONLY = 1
+SQLITE_OPEN_READWRITE = 2
+SQLITE_OPEN_CREATE = 4
+// a bind's destructor: SQLite copies the value before the call returns
+SQLITE_TRANSIENT = -1
 
 // a column of the current row as its warp value: an Int, a float, a text, ø for null
 column_value(statement: int, column: int) := {
@@ -46,31 +86,100 @@ column_value(statement: int, column: int) := {
 	if kind == SQLITE_INTEGER { return sqlite3_column_int64(statement, column) }
 	if kind == SQLITE_FLOAT { return sqlite3_column_double(statement, column) }
 	if kind == SQLITE_NULL { return ø }
+	if kind == SQLITE_BLOB { return c_bytes(sqlite3_column_blob(statement, column), sqlite3_column_bytes(statement, column)) }
 	sqlite3_column_text(statement, column)
 }
 
-// the rows `query` gives on the database `db`, each the list of its columns' values
-rows(db: int, query: text) := {
-	statement = sqlite3_prepare_v2(db, query, -1)
+// throws `db`'s error message unless `status` is OK, ROW or DONE; the status
+checked(db: int, status: int) := {
+	if status != SQLITE_OK and status != SQLITE_ROW and status != SQLITE_DONE { throw "sqlite3: " + sqlite3_errmsg(db) }
+	status
+}
+
+// binds `value` to the ? parameter `index` (from 1) by its type: Int, float, text, ø, or a list of bytes as a blob
+bind_value(statement: int, index: int, value: any) := {
+	db = sqlite3_db_handle(statement)
+	if value == ø { return checked(db, sqlite3_bind_null(statement, index)) }
+	if value is int { return checked(db, sqlite3_bind_int64(statement, index, value)) }
+	if value is float { return checked(db, sqlite3_bind_double(statement, index, value)) }
+	if value is list { return checked(db, sqlite3_bind_blob(statement, index, value, SQLITE_TRANSIENT)) }
+	checked(db, sqlite3_bind_text(statement, index, value, -1, SQLITE_TRANSIENT))
+}
+
+// binds the parameters in order to the statement's ? parameters
+bind_all(statement: int, parameters: list) := {
+	index = 1
+	for value in parameters {
+		bind_value(statement, index, value)
+		index += 1
+	}
+	statement
+}
+
+// the current row of `statement`, the list of its columns' values
+row_values(statement: int) := {
+	row = []
+	column = 0
+	while column < sqlite3_column_count(statement) {
+		row += [column_value(statement, column)]
+		column += 1
+	}
+	row
+}
+
+// the current row of `statement` as a map, column name → value
+row_map(statement: int) := {
+	row = {}
+	column = 0
+	while column < sqlite3_column_count(statement) {
+		row[sqlite3_column_name(statement, column)] = column_value(statement, column)
+		column += 1
+	}
+	row
+}
+
+// the rows `sql_text` gives on the database `db`, each the list of its columns' values
+rows(db: int, sql_text: text) := {
+	query(db, sql_text, [])
+}
+
+// the rows of `sql_text` with its ? parameters bound to `parameters`, each the list of its columns' values
+query(db: int, sql_text: text, parameters: list) := {
+	statement = bind_all(sqlite3_prepare_v2(db, sql_text, -1), parameters)
 	found = []
-	while sqlite3_step(statement) == SQLITE_ROW {
-		row = []
-		column = 0
-		while column < sqlite3_column_count(statement) {
-			row += [column_value(statement, column)]
-			column += 1
-		}
-		found += [row]
+	stepped = checked(db, sqlite3_step(statement))
+	while stepped == SQLITE_ROW {
+		found += [row_values(statement)]
+		stepped = checked(db, sqlite3_step(statement))
 	}
 	sqlite3_finalize(statement)
 	found
 }
 
-// runs `query` on `db` for what it does; the count of the rows it changed
-run_query(db: int, query: text) := {
-	statement = sqlite3_prepare_v2(db, query, -1)
-	stepped = sqlite3_step(statement)
-	while stepped == SQLITE_ROW { stepped = sqlite3_step(statement) }
+// the rows of `sql_text` with its ? parameters bound, each a map, column name → value
+query_maps(db: int, sql_text: text, parameters: list) := {
+	statement = bind_all(sqlite3_prepare_v2(db, sql_text, -1), parameters)
+	found = []
+	stepped = checked(db, sqlite3_step(statement))
+	while stepped == SQLITE_ROW {
+		found += [row_map(statement)]
+		stepped = checked(db, sqlite3_step(statement))
+	}
+	sqlite3_finalize(statement)
+	found
+}
+
+// runs the statements of `script` (sqlite3_exec), throwing the first one's error; the total of changed rows so far
+run_script(db: int, script: text) := {
+	checked(db, sqlite3_exec(db, script, 0, 0, 0))
+	sqlite3_total_changes(db)
+}
+
+// runs `sql_text` on `db` for what it does; the count of the rows it changed
+run_query(db: int, sql_text: text) := {
+	statement = sqlite3_prepare_v2(db, sql_text, -1)
+	stepped = checked(db, sqlite3_step(statement))
+	while stepped == SQLITE_ROW { stepped = checked(db, sqlite3_step(statement)) }
 	sqlite3_finalize(statement)
 	sqlite3_changes(db)
 }

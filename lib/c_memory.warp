@@ -1,0 +1,10 @@
+// C memory at an address a C function gave the program (notes/ffi_primitives.md): a pointer a foreign line declares
+// i64 is its address as a number. warp-host reads it (crates/warp-runtime/src/warp_host/c_memory.rs); nothing here
+// knows a library.
+//   c_bytes(sqlite3_column_blob(statement, 0), sqlite3_column_bytes(statement, 0))   the blob's bytes, a list of 0 to 255
+//   c_text(address)                                                               the NUL-terminated text there, ø for NULL
+
+// the `count` bytes at `address`, [] for NULL
+c_bytes(address: int, count: int) := std_io("c", "bytes", [address, count])
+// the NUL-terminated text at `address`, ø for NULL
+c_text(address: int) := std_io("c", "text", [address])
