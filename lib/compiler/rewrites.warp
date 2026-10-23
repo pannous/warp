@@ -1,14 +1,16 @@
 # `rewrite PATTERN => TEMPLATE` (cards compiler-modules, pure-rewrite): code extending the compiler. A pattern's holes
 # `$a` and `$xs...` bind as in a code pattern of a match, the template splices them in. `where $c = channel()` holds
 # where the hole binds a variable assigned code of that shape, or a parameter of a function called with one; `$x: text`
-# (also symbol, list, block, int, number) only code of that kind. More conditions follow `where`, joined by `and`:
+# (also symbol, list, block, map, int, number) only code of that kind, a block code in braces and a map their
+# entries `{a: 1}` or a name holding only maps. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
 # `$f is function`, `$x is literal`, `$x is missing` (ø, also an operand not written: `rest...`), `$x is text` (a hole
 # kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
-# program or a typed library word) and `$f takes int` (typed int); `$e is enum` (a name or text of an enum the program
-# declares), `$c is case` (a case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound,
-# the condition binds it to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
+# program or a typed library word), `$f takes int` (typed int) and `$f takes one` (a library word the program leaves
+# free, of exactly one typed value); `$e is enum` (a name or text of an enum the program declares), `$c is case` (a
+# case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound, the condition binds it
+# to that enum), whose cases `cases of $e` lists among a template's items. A place word among them, `statement`, `condition`
 # (of an if or while), `member` (of a class body), `key` or `value` (of `k: v`), lets the rule rewrite code only
 # standing there: `rewrite $s except_if $c => if not $c then $s where statement`. The mark `alias` says the
 # pattern's first word is another spelling of the template's, which each firing notes as Rust's note_alias does ("warp
@@ -29,6 +31,7 @@ use "uses.warp"
 use "prelude_words.warp"
 use "type_tests.warp"
 use "diagnostics.warp"
+use "builtin_signatures.warp"
 use "enum_declarations.warp"
 
 rewrite_word = "rewrite"
@@ -38,7 +41,7 @@ rule_hole_mark = "$"
 # the characters of a word in a rule's text besides letters and digits
 rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
-hole_kinds = ["text", "symbol", "list", "block", "int", "number"]
+hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
 code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing"]
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
@@ -68,6 +71,8 @@ takes_word = "takes"
 # `where $f takes value`: any first parameter typed, except these
 yes_no_types = ["bool"]
 value_word = "value"
+# `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
+one_word = "one"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
 # Four steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
@@ -75,7 +80,7 @@ value_word = "value"
 # making or reading the forms its rules take, the iteration sugar lowering the `for` loops once loop_heads.warp read
 # their heads, and the late sugar after it took the loops a range counts: a range left is a value (sugar/ranges)
 first_sugar_module_names = ["sugar/lists", "sugar/comparisons"]
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls"]
 iteration_sugar_module_names = ["sugar/iteration"]
 late_sugar_module_names = ["sugar/ranges"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
@@ -96,6 +101,8 @@ global rewrite_depth = 0
 global rule_scope = {}
 # function → the type of its first parameter, of the program being rewritten (`where $f takes value`)
 global first_parameter_types = {}
+# the names that hold a map, of the program being rewritten (`where $m is map`)
+global rule_maps = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
@@ -122,6 +129,7 @@ rewritten_program(program: any, source: text): any := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
+	rule_maps = map_names_of(program)
 	rule_enums = enums_in(program, {})
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
@@ -157,20 +165,46 @@ sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
+	rule_maps = map_names_of(program)
 	bottom_up(program, n => sugared_node(n, rules))
 }
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
-sugared_node(n: any, rules: list): any := sugar_rewritten(with_changed_members(n, member => bottom_up(member, part => sugared_node(part, rules))), rules)
+sugared_node(n: any, rules: list): any := {
+	n = with_changed_members(n, member => sugar_at_place(bottom_up(member, part => sugared_node(part, rules)), "member", rules))
+	if holds_statements(n) {
+		n = group_like(n, spliced_statements(items_of(n).map(statement => sugar_at_place(statement, "statement", rules))))
+	} else if n is key and key_of(n) != symbol(opaque_word) {
+		n = with_placed_parts(n, (code, place) => sugar_at_place(code, place, rules))
+	}
+	sugar_rewritten(n, rules)
+}
+
+# the statements of a block or the program, a block of one statement too (`if c { twice{…} }`); a map written out
+# `{a: 1}` holds entries
+holds_statements(n: any): bool := is_group(n) and (separator_of(n) in statement_separators or (is_curly_group(n) and #n == 1 and not is_braced_map(n)))
+
+# the code rewritten by the first sugar rule of the place matching it, the result rewritten again
+sugar_at_place(n: any, place: text, rules: list): any := {
+	for rule in rules {
+		if rule.place == place {
+			result = rule_applied(rule, {}, n)
+			if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+		}
+	}
+	n
+}
 
 # the node rewritten by the first sugar rule matching it, its result rewritten again (F7); a node no rule matches stays
 # as the passes left it
 sugar_rewritten(n: any, rules: list): any := {
 	written = flattened_phrase(n)
 	for rule in rules {
-		result = rule_applied(rule, {}, n)
-		if result == ø and written != ø { result = rule_applied(rule, {}, written) }
-		if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+		if rule.place == "" {
+			result = rule_applied(rule, {}, n)
+			if result == ø and written != ø { result = rule_applied(rule, {}, written) }
+			if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+		}
 	}
 	n
 }
@@ -251,7 +285,7 @@ rule_of(statement: any, module: text, source: text): any := {
 		where_at = -1
 	}
 	continued = after[0 ..< max(where_at, 0)]
-	template = statements_template(glued(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)), source))
+	template = statements_template(each_clauses(glued(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)), source)))
 	if where_at == #after { return Rule(pattern, template, ø, ø, [], "", module, whole, no) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
@@ -331,14 +365,14 @@ is_takes(condition: any): bool := is_group(condition) and bracket_of(condition) 
 first_parameter_fits(code: any, wanted: text): bool := {
 	if not (code is symbol) { return no }
 	word = name_of(code)
+	if wanted == one_word { return not rule_scope.has(word) and takes_one_typed_value(unaliased(word)) }
 	typed = if first_parameter_types.has(word) then first_parameter_types[word] else library_first_type(word)
 	if typed == ø or typed == "" { return no }
 	if wanted == value_word then not (typed in yes_no_types) else typed == wanted
 }
 
-# the type of a typed library word's first parameter (lib/prelude.warp, lib/math.warp), else ø: library_calls.warp's
-# word_lines, which passes.warp loads after this file (used from here, its globals read math.warp before the parser's
-# operator table exists)
+# the type of a typed library word's first parameter (lib/prelude.warp, lib/math.warp), else ø (builtin_signatures.warp
+# word_lines)
 library_first_type(word: text): any := {
 	lines = word_lines()
 	if not lines.has(word) or rule_scope.has(word) { return ø }
@@ -397,7 +431,13 @@ named_enum(code: any): text := {
 # whether the code a hole bound passes the condition
 condition_holds(condition: any, bound: any): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
-	if is_takes(condition) { return first_parameter_fits(bound[rule_hole(condition#1)], name_of(condition#3)) }
+	if is_takes(condition) {
+		hole = rule_hole(condition#1)
+		if not first_parameter_fits(bound[hole], name_of(condition#3)) { return no }
+		# `$f takes one` binds the word the synonym calls: `size xs` is count(xs)
+		if name_of(condition#3) == one_word { bound[hole] = placed(symbol(unaliased(name_of(bound[hole]))), bound[hole]) }
+		return yes
+	}
 	hole = rule_hole(key_of(condition))
 	if not bound.has(hole) { return no }
 	code = bound[hole]
@@ -503,9 +543,30 @@ is_hole_kind(code: any, kind: text): bool := {
 	if kind == "number" { return code is number }
 	if kind == "int" { return code is int }
 	if kind == "list" { return is_group(code) and bracket_of(code) == "[" }
-	if kind == "block" { return is_curly_group(code) }
+	if kind == "block" { return is_curly_group(code) and not is_braced_map(code) }
+	if kind == "map" { return (is_curly_group(code) and is_braced_map(code)) or (code is symbol and rule_maps.has(name_of(code))) }
 	code is symbol and rule_hole(code) == ø
 }
+
+# the names a program gives only maps: a parameter typed map (`f(m: map)`), or a name every assignment of which is a
+# map written out (`m = {a: 1}`); a name also given anything else holds no map for sure
+map_names_of(program: any): any := {
+	maps = {}
+	others = {}
+	for n in nodes_in(program) {
+		if is_key(n, Op.Assign) and key_of(n) is symbol {
+			name = name_of(key_of(n))
+			if is_curly_group(value_of(n)) and is_braced_map(value_of(n)) { maps[name] = yes } else { others[name] = yes }
+		}
+		if is_key(n, Op.Colon) and key_of(n) is symbol and value_of(n) == symbol("map") { maps[name_of(key_of(n))] = yes }
+	}
+	only_maps = {}
+	for name in maps.keys { if not others.has(name) { only_maps[name] = yes } }
+	only_maps
+}
+
+# `{a: 1, b: 2}`: braces of entries only, a map written out, not a block of code
+is_braced_map(code: any): bool := #code > 0 and items_of(code).all(item => is_key(item, Op.Colon) and key_of(item) != symbol(opaque_word))
 
 # the pattern's words that are no holes
 literal_words(pattern: any): list := mentioned_names(pattern, []).filter(name => not name.starts_with(rule_hole_mark))
@@ -548,7 +609,7 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 		# statements (`$f(x) := …` defines f where the phrase stood), a value's turns into its block (as_value) there
 		n = if phrase and #runs == 1 then runs#1 else group_like(n, runs.map(as_value))
 	} else if n is key {
-		n = if key_of(n) == symbol(opaque_word) then with_members(n, rules, origins) else with_placed_parts(n, rules, origins)
+		n = if key_of(n) == symbol(opaque_word) then with_changed_members(n, member => at_place(member, "member", rules, origins)) else with_placed_parts(n, (code, place) => at_place(code, place, rules, origins))
 	}
 	for index in 0 ..< #rules {
 		if rules[index].place == "" and not matches_runs(rules[index]) {
@@ -600,22 +661,19 @@ spliced_statements(statements: list): list := {
 	spliced
 }
 
-# the key with its condition (`if c`, `while c`), its key and value (`k: v`) rewritten by the rules of that place, a
-# template's statements in its parts their blocks
-with_placed_parts(n: any, rules: list, origins: list): any := {
+# the key with its condition (`if c`, `while c`), its key and value (`k: v`) rewritten by `placed_code` (code, place) with the
+# rules of that place, a template's statements in its parts their blocks
+with_placed_parts(n: any, placed_code: function): any := {
 	left = key_of(n)
 	right = value_of(n)
-	if (is_key(n, Op.If) or is_key(n, Op.While)) and left == ø { right = at_place(right, "condition", rules, origins) }
+	if (is_key(n, Op.If) or is_key(n, Op.While)) and left == ø { right = placed_code(right, "condition") }
 	if is_key(n, Op.Colon) {
-		left = at_place(left, "key", rules, origins)
-		right = at_place(right, "value", rules, origins)
+		left = placed_code(left, "key")
+		right = placed_code(right, "value")
 	}
 	if left == key_of(n) and right == value_of(n) and not is_statements_template(left) and not is_statements_template(right) { return n }
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
 }
-
-# a class with the items of its body rewritten by the rules of the place `member`
-with_members(n: any, rules: list, origins: list): any := with_changed_members(n, member => at_place(member, "member", rules, origins))
 
 # a class with each item of its body changed: the passes see it as the opaque view ["type", name, body]
 with_changed_members(n: any, changed: function): any := {
@@ -910,6 +968,16 @@ cases_spliced(parts: list, bound: any, at: any): any := {
 
 # `T for $x in $xs...`
 is_each(n: any): bool := is_group(n) and #n == 3 and n#2 == symbol(each_word)
+
+# the template with `T for $x in $xs...` as each_spliced reads it, `T`, `for`, `$x in $xs...`: the parser groups the
+# loop of a hole, `for $x in $xs...` with no body, as a loop of its own
+each_clauses(template: any): any := bottom_up(template, n => if is_group(n) then group_like(n, items_of(n).flat_map(each_clause_parts)) else n)
+
+# `for $x in $xs...` with no body as the parts `for` and `$x in $xs...`, any other item as it is
+each_clause_parts(item: any): list := {
+	if not (is_phrase(item) and #item == 5 and item#1 == symbol(each_word) and item#3 == symbol(each_in_word) and item#5 == ø) { return [item] }
+	[symbol(each_word), List([item#2, item#3, item#4], Bracket.None, Separator.Space)]
+}
 
 # a copy of the holes bound, the hole bound to the code
 with_binding(bound: any, hole: text, code: any): any := {
