@@ -326,6 +326,10 @@ fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance
 	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
 		eprintln!("{error:?}");
 	}
+	// a host function's own failure, no trap of the module's (a C call's NULL out-pointer): its message
+	if error.downcast_ref::<wasmtime::Trap>().is_none() {
+		return error.root_cause().to_string();
+	}
 	let detail = instance.get_global(&mut *store, "trap_detail").map(|global| global.get(&mut *store));
 	let memory = instance.get_memory(&mut *store, "memory");
 	let detail = detail.filter(|value| !matches!(value, Val::AnyRef(None)));

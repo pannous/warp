@@ -120,7 +120,7 @@ check changes "changes, total_changes and last_insert_rowid" 0 "3" ! "Error"
 check error_thrown "an exec's error is thrown with sqlite3_errmsg's text" 0 "caught" "no such table: missing"
 check step_error_thrown "a step's error is thrown: a constraint" 0 "caught" "UNIQUE constraint failed" "19"
 check metadata "column names and declared types, parameter names and indexes, the statement's text" 0 \
-	"2" "n" "text" "1" ":least" "select name, n from t where n > :least" ! "Error"
+	"2" "n" "TEXT" "1" ":least" "select name, n from t where n > :least" ! "Error"
 check reset "bind, step and reset a statement again" 0 "3 6" ! "Error"
 check file_db "a file database: kept after close, read-only by open_v2" 0 "kept" "caught" "readonly database" ! "Error:"
 check bad_query "a query that doesn't prepare fails the run, naming its C status" 1 "sqlite3_prepare_v2 gave no sqlite3_stmt"

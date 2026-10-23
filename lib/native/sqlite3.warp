@@ -100,7 +100,11 @@ checked(db: int, status: int) := {
 bind_value(statement: int, index: int, value: any) := {
 	db = sqlite3_db_handle(statement)
 	if value == ø { return checked(db, sqlite3_bind_null(statement, index)) }
-	if value is int { return checked(db, sqlite3_bind_int64(statement, index, value)) }
+	# an int local: a value of any type reaches a C parameter through a float, and 2^53 + 1 would lose its last bit
+	if value is int {
+		whole: int = value
+		return checked(db, sqlite3_bind_int64(statement, index, whole))
+	}
 	if value is float { return checked(db, sqlite3_bind_double(statement, index, value)) }
 	if value is list { return checked(db, sqlite3_bind_blob(statement, index, value, SQLITE_TRANSIENT)) }
 	checked(db, sqlite3_bind_text(statement, index, value, -1, SQLITE_TRANSIENT))
