@@ -681,9 +681,14 @@ with_placed_parts(n: any, placed_code: function): any := {
 
 # the head of `f(a, b) := …` (also `f(a): T`) with each parameter changed, its name kept (F10)
 head_with_parameters(head: any, changed: function): any := {
-	if is_key(head, Op.Colon) { return placed(Key(head_with_parameters(key_of(head), changed), Op.Colon, value_of(head)), head) }
+	if is_key(head, Op.Colon) {
+		inner = head_with_parameters(key_of(head), changed)
+		return if inner == key_of(head) then head else placed(Key(inner, Op.Colon, value_of(head)), head)
+	}
 	if not (is_round(head) and #head > 1 and head#1 is symbol) { return head }
-	placed(group_like(head, [head#1] + items_of(head)[1 ..].map(changed)), head)
+	parameters = items_of(head)[1 ..]
+	rewritten = parameters.map(changed)
+	if rewritten == parameters then head else placed(group_like(head, [head#1] + rewritten), head)
 }
 
 # a class with each item of its body changed: the passes see it as the opaque view ["type", name, body]
