@@ -8,7 +8,7 @@
 # `use` lines name in their order.
 use "extended/big_ints.warp"
 use "extended/exact.warp"
-use "extended/durations.warp"
+use "durations.warp"
 use "extended/times.warp"
 use "extended/pow_tables.warp"
 use "extended/pow.warp"
