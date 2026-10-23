@@ -1,0 +1,10 @@
+// expected: 2 3
+x = 0
+if yes
+	x = 2
+fi
+y = 0
+while y < 3
+	y += 1
+end
+print "$(x) $(y)"
