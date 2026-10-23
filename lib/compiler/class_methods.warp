@@ -66,18 +66,22 @@ methods_lifted(program: Node): Node := {
 	}
 	functions = functions_defined(top_statements)
 	methods = methods_of(classes, liftable)
-	operator_methods = methods.filter(method => operator_word(method) != ø and taken_count(classes, liftable, method) == 1)
+	operator_table = operator_spellings()
+	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and taken_count(classes, liftable, method) == 1)
 	routes = methods.filter(method => method in typed_words or method in functions or method in operator_methods)
 	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
-	operator_words = []
-	for method in operator_methods { if operator_word(method)#1 not in operator_words { operator_words += [operator_word(method)#1] } }
+	entry_words = []
+	for method in operator_methods {
+		word = spelled_operator(operator_table, method)#1
+		if word not in entry_words { entry_words += [word] }
+	}
 	if #routes > 0 { rewritten = rewritten.map(top_statement => routed(top_statement, classes, liftable, routes)) }
 	for name in methods.filter(method => method in routes or #owners_of(classes, liftable, method) > 1) {
 		owners = owners_of(classes, liftable, name)
-		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), name in routes)]
+		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), name in routes, spelled_operator(operator_table, name))]
 	}
-	for word in operator_words {
-		spellings = operator_methods.filter(method => operator_word(method)#1 == word)
+	for word in entry_words {
+		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
 		owners = []
 		owned_spellings = []
 		for spelling in spellings {
@@ -86,7 +90,8 @@ methods_lifted(program: Node): Node := {
 				owned_spellings += [spelling]
 			}
 		}
-		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator_word(spellings#1)#2 + "·operator", yes)]
+		operator = spelled_operator(operator_table, spellings#1)
+		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator)]
 	}
 	if extended { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then widened_tests(top_statement, classes) else top_statement) }
 	group_like(program, rewritten)
@@ -231,14 +236,13 @@ assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 # `name(self, parameters…)` of a method several classes declare, of a routed one or of an operator: the call of the
 # instance's class's own, each class tested before the classes it extends; each owner's spelling of it (an operator's
 # `plus` in one class, `+` in another); the last owner taking any other instance, unless it falls back
-method_dispatcher(classes: any, owners: list, spellings: list, name: text, falls_back: bool): Node := {
+method_dispatcher(classes: any, owners: list, spellings: list, name: text, falls_back: bool, operator: any): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
 	for i in 0..<#owners { called[owners[i]] = owned_name(spellings[i], owners[i]) }
-	glyph = operator_word(spellings#1)
-	operated = falls_back and glyph != ø and #call_arguments == 2
-	fallback = if not falls_back then ø else if operated then Key(call_arguments#1, glyph#2 as Op, call_arguments#2) else call_of(spellings#1, call_arguments)
+	operated = falls_back and operator != ø and #call_arguments == 2
+	fallback = if not falls_back then ø else if operated then Key(call_arguments#1, operator#2 as Op, call_arguments#2) else call_of(spellings#1, call_arguments)
 	# an operator's operands are any values: a number reaches the builtin, an instance its class's method
 	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [self_node] + parameters
 	Key(call_of(name, head), Op.Define, class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback))
@@ -268,21 +272,20 @@ routed(n: Node, classes: any, names: list, routed_methods: list): Node := match 
 	_: children(n, part => routed(part, classes, names, routed_methods))
 }
 # the operators lib/aliases.warp names (an entry with its `operator`), by each spelling a method may take: the glyph,
-# the entry's word and its aliases, `+`, add and plus each [add, "+"]; read once
-global operator_spellings = ø
-# the operator a method's name spells, [its word, its glyph] (`plus` and `+` give [add, "+"]), else ø
-operator_word(spelled: text): any := {
-	if operator_spellings == ø {
-		operator_spellings = {}
-		source = try read(run_library() + "/" + ALIASES_FILE) else ""
-		for row in items_of(written_tree(source)) {
-			glyph = alias_field(row#2, "operator")
-			word = spelling_text(row#1)
-			if glyph is text { for spelling in [glyph, word] + (alias_field(row#2, "aliases") ?? []) { operator_spellings[spelling] = [word, glyph] } }
-		}
+# the entry's word and its aliases, `+`, add and plus each [add, "+"]; read once per program
+operator_spellings(): any := {
+	found = {}
+	source = try read(run_library() + "/" + ALIASES_FILE) else ""
+	for row in items_of(written_tree(source)) {
+		glyph = alias_field(row#2, "operator")
+		word = spelling_text(row#1)
+		if glyph is text { for spelling in [glyph, word] + (alias_field(row#2, "aliases") ?? []) { found[spelling] = [word, glyph] } }
 	}
-	operator_spellings.get(spelled)
+	found
 }
+# the operator a method's name spells (not named operator_word: a plural reads as the function's, and lambdas.warp's
+# global operator_words would be its call), [its word, its glyph] (`plus` and `+` give [add, "+"]), else ø
+spelled_operator(operator_table: any, spelled: text): any := if spelled in operator_table then operator_table[spelled] else ø
 # how many parameters the method of that name takes (besides its instance)
 taken_count(classes: any, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
 is_field_of_any(classes: any, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
