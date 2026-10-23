@@ -158,6 +158,8 @@ no_kind = "none"
 # the kind of code that never ends normally (an endless loop): it joins as a call still compiling does, taking the
 # other kind
 never = pending
+# the word holding a unit literal's amount (lib/sugar/units.warp)
+quantity_word = "quantity_value"
 # the names of the helpers Rust's lowering adds to a program (prelude·round_to)
 prelude_prefix = "prelude·"
 # WARP_EMIT_SURVEY set: a refused function is recorded and taken as giving a node, the others compiled on, and the
@@ -715,6 +717,9 @@ def group_expression(body: Body, n: any): list {
 		label = if type(n#2) is key and key_of(n#2) is text then key_of(n#2) else "value"
 		return ended_in(pending, no_case_prefix + label)
 	}
+	# `quantity_value(5000, "length")`, a unit literal's amount in SI base units (lib/sugar/units.warp): the amount; the
+	# analyzer checked its dimension and refused a program showing it (analyzer.warp shown_quantity)
+	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol(quantity_word) { return expression_code(body, n#2) }
 	# `raise X` (also throw, fail, panic), called or a line of its own: the run fails with X as its message, a value of
 	# no kind; a program's own function of that name is its function
 	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in raise_words and name_of(n#1) not in module.functions {

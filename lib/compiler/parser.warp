@@ -665,7 +665,7 @@ def tab_separates(p: Parser): bool {
 	start = p.at - line_blanks(p)
 	end = blank_end(p, p.at)
 	if start == 0 or p.code[start - 1] == '\n' or line_ends_after(p, p.at) { return false }
-	p.code[start ..< end].contains('\t')
+	p.code[start .. end].contains('\t')
 }
 
 // How loosely a separator groups: a blank tightest, a newline loosest, "" (the end) never
@@ -3406,6 +3406,10 @@ def vulgar_fraction(p: Parser, glyph: text): Node := {
 // Rust twin: literals.rs with_juxtaposed_factor
 def with_glued_factor(p: Parser, amount: Node): Node := {
 	c = peek(p.code, p.at, p.n)
+	if c == ' ' and at_spaced_unit(p) {
+		p.at = spaces_end(p, p.at)
+		return Key(amount, Op.Mul, atom(p))
+	}
 	if not (is_name_start(c) or c == '(' or c == DEGREE) or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
 		return amount
 	}
@@ -3413,6 +3417,22 @@ def with_glued_factor(p: Parser, amount: Node): Node := {
 	power = superscript_power(p, factor, 0)
 	Key(amount, Op.Mul, if power == ø then factor else power)
 }
+
+// `2 km`, `1500 meters`: a known unit word after a number and a space multiplies it as a glued one does, unless an entry
+// or a condition goes on after it (`{w:2 h:3}`, `if x > 1500 m : "far"`); the unit literals lib/sugar/units.warp reads
+// Rust twin: literals/units.rs at_spaced_unit, names_unit and is_long_unit_name
+def at_spaced_unit(p: Parser): bool := {
+	start = spaces_end(p, p.at)
+	end = name_end(p.code, start, p.n)
+	if end == start or p.code[start .. end] not in SPACED_UNIT_WORDS { return no }
+	after = peek(p.code, end, p.n)
+	after != ':' and after != '=' and peek(p.code, spaces_end(p, end), p.n) != ':'
+}
+// the unit words lib/sugar/units.warp knows (stage 1 of card pure-unit-literals), short and long
+SPACED_UNIT_WORDS = ["ms", "s", "min", "h", "mm", "cm", "m", "km", "mg", "g", "kg", "millisecond", "milliseconds", "second",
+	"seconds", "minute", "minutes", "hour", "hours", "millimeter", "millimeters", "millimetre", "millimetres", "centimeter",
+	"centimeters", "centimetre", "centimetres", "meter", "meters", "metre", "metres", "kilometer", "kilometers", "kilometre",
+	"kilometres", "milligram", "milligrams", "gram", "grams", "kilogram", "kilograms"]
 
 // `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5:
 // the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
