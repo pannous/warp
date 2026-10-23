@@ -4,7 +4,8 @@
 # (also symbol, list, block, map, int, number) only code of that kind, a block code in braces and a map their
 # entries `{a: 1}` or a name holding only maps. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$x is literal`, `$x is missing` (ø, also an operand not written: `rest...`), `$x is text` (a hole
+# `$f is function`, `$x is literal`, `$u is unit` (a unit lib/units.warp declares, unit_table.warp, the program leaving
+# the word free), `$x is missing` (ø, also an operand not written: `rest...`), `$x is text` (a hole
 # kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word), `$f takes int` (typed int) and `$f takes one` (a library word the program leaves
@@ -33,6 +34,7 @@ use "type_tests.warp"
 use "diagnostics.warp"
 use "builtin_signatures.warp"
 use "enum_declarations.warp"
+use "unit_table.warp"
 
 rewrite_word = "rewrite"
 rewrite_line_start = "rewrite "
@@ -43,7 +45,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "unit"]
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
 cases_words = ["cases", "of"]
 # `where $n < 0`: the comparisons of a number literal
@@ -461,6 +463,7 @@ has_property(code: any, property: text): bool := {
 	if property == "type" { return is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }
 	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) }
+	if property == "unit" { return is_unit_name(word) and not rule_scope.has(word) }
 	not rule_scope.has(word)
 }
 

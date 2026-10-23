@@ -1,0 +1,165 @@
+// The units lib/units.warp declares in its unit_definitions block, read at compile time (card pure-unit-literals): a
+// written unit's amount in SI base units, exact as a fraction, and its quantity: km 1000 of a length, inch 254/10000,
+// hours 3600 of a duration.
+// The plain declarations only, `quantity length meter`, `unit km := 1000 m`, `unit cm := m/100` and `name hour := h`
+// (also its plural); a unit of several units or a computed one (`unit N := kg*m/s²`, `unit °C as K := …`) and the SI
+// prefixes of a unit not declared (µs) are no unit here yet
+// Rust twin: src/numbers/units/definitions.rs
+use os
+UNITS_FILE = "units.warp"
+// the word of a unit literal, quantity_value(5, km) (lib/sugar/units.warp), which the analyzer and the emitter read
+quantity_word = "quantity_value"
+UNIT_DEFINITIONS_START = "unit_definitions = data {"
+DIGIT_TEXTS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+// name → its amount in SI base units as numerator and denominator, name → its quantity, read on first use
+global unit_numerators = ø
+global unit_denominators = {}
+global unit_quantities = {}
+// a unit's long name → the unit it names: kilometers → km
+global unit_symbols = {}
+
+// whether a word names a unit: km, meters, h
+def is_unit_name(word: text): bool := known_units().has(word)
+// a unit's amount in SI base units is unit_numerator / unit_denominator: 1000/1 for km, 1/1000 for ms
+def unit_numerator(word: text): int := known_units()[word]
+def unit_denominator(word: text): int {
+	known_units()
+	unit_denominators[word]
+}
+// the unit a word writes, as a quantity shows it: km of kilometers
+def unit_symbol(word: text): text {
+	known_units()
+	unit_symbols.get(word) ?? word
+}
+// a unit's quantity: "length" for km
+def unit_quantity(word: text): text {
+	known_units()
+	unit_quantities[word]
+}
+
+// the smaller of two units of one kind of quantity, else the first: a sum of them shows in it (`5 cm + 1 m` is 105cm)
+def finer_unit(a: text, b: text): text {
+	if not (is_unit_name(a) and is_unit_name(b)) { return a }
+	if unit_numerator(b) * unit_denominator(a) < unit_numerator(a) * unit_denominator(b) then b else a
+}
+
+def known_units(): any {
+	if unit_numerators == ø {
+		unit_numerators = {}
+		folder = env("WARP_LIB") ?? module_directory + "/.."
+		written = {}
+		for line in declaration_lines(try read(folder + "/" + UNITS_FILE) else "") { learn_unit_line(line.split(" "), written) }
+		for name in written.keys { resolve_unit(name, written, 0) }
+	}
+	unit_numerators
+}
+
+// the lines of the unit_definitions block, trimmed, comments left out
+def declaration_lines(source: text): list {
+	lines = []
+	inside = no
+	for line in source.split("\n") {
+		trimmed = line.trim()
+		if trimmed == UNIT_DEFINITIONS_START { inside = yes }
+		else if inside and trimmed == "}" { return lines }
+		else if inside and trimmed != "" and not trimmed.starts_with("//") { lines += [trimmed] }
+	}
+	lines
+}
+
+// `quantity length meter`: meter is 1 of a length; `unit km := 1000 m` and `name hour := h`: what the name is written as
+def learn_unit_line(words: list, written: map) {
+	n = words.length
+	if n >= 3 and words#(n - 2) != ":=" and (words#1 == "quantity" or (words#1 == "SI" and words#2 == "quantity")) {
+		anchor = words#n
+		if is_plain_unit_word(anchor) { learn_unit(anchor, 1, 1, words#(n - 1)) }
+	}
+	if n >= 4 and (words#1 == "unit" or words#1 == "name") and words#3 == ":=" {
+		written[words#2] = words[3 ..]
+		if words#1 == "name" and n == 4 {
+			written["${words#2}s"] = words[3 ..]
+			unit_symbols[words#2] = words#4
+			unit_symbols["${words#2}s"] = words#4
+		}
+	}
+}
+
+// the amount of a written unit, from the unit it is written in: `1000 m`, `2.54 cm`, `m/100`, `h`; else it stays unknown
+def resolve_unit(name: text, written: map, depth: int) {
+	if unit_numerators.has(name) or not written.has(name) or depth > 16 { return }
+	parts = written[name]
+	numerator = 1
+	denominator = 1
+	base = ""
+	if parts.length == 1 {
+		halves = parts#1.split("/")
+		base = halves#1
+		if halves.length == 2 {
+			if not is_decimal(halves#2) { return }
+			numerator = decimal_denominator(halves#2)
+			denominator = decimal_numerator(halves#2)
+		} else if halves.length != 1 { return }
+	} else if parts.length == 2 and is_decimal(parts#1) {
+		numerator = decimal_numerator(parts#1)
+		denominator = decimal_denominator(parts#1)
+		base = parts#2
+	} else { return }
+	if not is_plain_unit_word(base) { return }
+	resolve_unit(base, written, depth + 1)
+	if not unit_numerators.has(base) { return }
+	learn_unit(name, numerator * unit_numerators[base], denominator * unit_denominators[base], unit_quantities[base])
+}
+
+// a unit's amount in lowest terms
+def learn_unit(name: text, numerator: int, denominator: int, quantity: text) {
+	common = greatest_divisor(numerator, denominator)
+	unit_numerators[name] = numerator / common
+	unit_denominators[name] = denominator / common
+	unit_quantities[name] = quantity
+}
+
+def greatest_divisor(a: int, b: int): int := if b == 0 then a else greatest_divisor(b, a % b)
+
+// `1000`, `2.54`: digits with at most one point
+def is_decimal(t: text): bool {
+	if t == "" { return no }
+	points = 0
+	for c in t {
+		if c == '.' { points += 1 }
+		else if not is_digit(c) { return no }
+	}
+	points <= 1
+}
+
+// the digits `2.54` writes, 254, over decimal_denominator, 100
+def decimal_numerator(t: text): int {
+	amount = 0
+	for c in t { if c != '.' { amount = amount * 10 + digit_value(c) } }
+	amount
+}
+def decimal_denominator(t: text): int {
+	denominator = 1
+	after_point = no
+	for c in t {
+		if after_point { denominator = denominator * 10 }
+		if c == '.' { after_point = yes }
+	}
+	denominator
+}
+
+// the value of a digit character: 7 of '7'
+def digit_value(c: any): int {
+	value = 0
+	for d in DIGIT_TEXTS {
+		if d == "${c}" { return value }
+		value += 1
+	}
+	value
+}
+
+// a unit written as one word of letters: m, kg, meter (not m/s, m², dm³ or π)
+def is_plain_unit_word(t: text): bool {
+	if t == "" { return no }
+	for c in t { if not ((c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')) { return no } }
+	yes
+}

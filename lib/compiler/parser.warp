@@ -6,6 +6,7 @@ use "shapes.warp"
 use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
+use "unit_table.warp"
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; bracket: text; closing_ends: any; stops_at_end: bool; word_types: list; line_starts: list }
 
@@ -665,7 +666,7 @@ def tab_separates(p: Parser): bool {
 	start = p.at - line_blanks(p)
 	end = blank_end(p, p.at)
 	if start == 0 or p.code[start - 1] == '\n' or line_ends_after(p, p.at) { return false }
-	p.code[start .. end].contains('\t')
+	p.code[start ..< end].contains('\t')
 }
 
 // How loosely a separator groups: a blank tightest, a newline loosest, "" (the end) never
@@ -3418,21 +3419,21 @@ def with_glued_factor(p: Parser, amount: Node): Node := {
 	Key(amount, Op.Mul, if power == ø then factor else power)
 }
 
-// `2 km`, `1500 meters`: a known unit word after a number and a space multiplies it as a glued one does, unless an entry
-// or a condition goes on after it (`{w:2 h:3}`, `if x > 1500 m : "far"`); the unit literals lib/sugar/units.warp reads
+// `2 km`, `1500 meters`: a word lib/units.warp declares as a unit (unit_table.warp) after a number and a space
+// multiplies it as a glued one does, unless an entry or a definition goes on after it (`{w:2 h:3}`, `5 ms: …`,
+// `if x > 1500 m : "far"`); the unit literals lib/sugar/units.warp reads
 // Rust twin: literals/units.rs at_spaced_unit, names_unit and is_long_unit_name
 def at_spaced_unit(p: Parser): bool := {
 	start = spaces_end(p, p.at)
 	end = name_end(p.code, start, p.n)
-	if end == start or p.code[start .. end] not in SPACED_UNIT_WORDS { return no }
-	after = peek(p.code, end, p.n)
-	after != ':' and after != '=' and peek(p.code, spaces_end(p, end), p.n) != ':'
+	if end == start or not is_unit_name(p.code[start .. end]) { return no }
+	not defines_after(p, end) and not defines_after(p, spaces_end(p, end))
 }
-// the unit words lib/sugar/units.warp knows (stage 1 of card pure-unit-literals), short and long
-SPACED_UNIT_WORDS = ["ms", "s", "min", "h", "mm", "cm", "m", "km", "mg", "g", "kg", "millisecond", "milliseconds", "second",
-	"seconds", "minute", "minutes", "hour", "hours", "millimeter", "millimeters", "millimetre", "millimetres", "centimeter",
-	"centimeters", "centimetre", "centimetres", "meter", "meters", "metre", "metres", "kilometer", "kilometers", "kilometre",
-	"kilometres", "milligram", "milligrams", "gram", "grams", "kilogram", "kilograms"]
+// whether `:` or a lone `=` follows at the position: what comes before is defined, not a value
+def defines_after(p: Parser, at: int): bool := {
+	c = peek(p.code, at, p.n)
+	c == ':' or (c == '=' and peek(p.code, at + 1, p.n) != '=')
+}
 
 // `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5:
 // the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
