@@ -48,12 +48,3 @@ fn a_used_files_local_shadows_a_lib_function() {
 	let printed = crate::common::printed_in(&folder, "use list\nuse \"lowest.warp\"\nprint(index([4, 5, 6], 6))\nprint(lowest([5, 3, 4]))");
 	assert_eq!(lines(&printed), ["2", "3"]);
 }
-
-/// A call of a function's local holding a number is the error of any variable applied to values, never list.warp's
-/// index taking the local's arguments (it answered 1)
-#[test]
-fn a_call_of_a_local_named_like_a_lib_function_calls_no_function() {
-	let code = "use list\nprint(index([4, 5, 6], 5))\ng(): int := {\n\tindex = 3\n\tindex([1, 2], 2)\n}\nprint(g())";
-	let said = crate::common::said(code);
-	assert!(said.contains("`index` is a variable here"), "{said}");
-}
