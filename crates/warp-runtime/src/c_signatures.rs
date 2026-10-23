@@ -23,6 +23,9 @@ pub enum CPointer {
 	Out,
 	/// `wasmtime_instance_t *instance` as the call's output: the struct read back as a map (c_structs.rs)
 	Struct,
+	/// bytes as a list of 0 to 255: the output buffer's (ByteOutput), else `length` bytes at the pointer returned,
+	/// the length the written parameter received
+	Bytes,
 }
 
 /// A C parameter: a number by its wasm type, or a pointer by what it crosses as
@@ -106,11 +109,12 @@ const RET_NAMES: [(RetType, &str); 6] = [
 	(RetType::Bool, "bool"),
 ];
 /// The pointers a result crosses as; a number result is "number"
-const RESULT_NAMES: [(Option<CPointer>, &str); 4] = [
+const RESULT_NAMES: [(Option<CPointer>, &str); 5] = [
 	(None, "number"),
 	(Some(CPointer::Text), "text"),
 	(Some(CPointer::Handle), "handle"),
 	(Some(CPointer::Struct), "struct"),
+	(Some(CPointer::Bytes), "bytes"),
 ];
 const LAYOUT_SEPARATOR: char = ';';
 
@@ -148,9 +152,48 @@ pub enum Failure {
 	None,
 	NotNull,
 	False,
+	/// an int status, 0 success (zlib's Z_OK, SQLITE_OK), as a function with an output buffer reports
+	NonZero,
 }
-const FAILURE_NAMES: [(Failure, &str); 3] =
-	[(Failure::None, ""), (Failure::NotNull, "not_null"), (Failure::False, "false")];
+const FAILURE_NAMES: [(Failure, &str); 4] =
+	[(Failure::None, ""), (Failure::NotNull, "not_null"), (Failure::False, "false"), (Failure::NonZero, "nonzero")];
+
+/// A parameter of a warp.c_functions line beyond ParamType's (notes/ffi_primitives.md), by its index:
+/// `buffer`, a caller-sized output buffer (the warp call passes its capacity, the host allocates it zeroed) and
+/// `written`, a `size_t *` / `uLongf *` the call reads the capacity from and writes the length into. A Bytes result is
+/// the buffer's first `written` bytes, or without a buffer `written` bytes at the pointer the C function returns
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ByteOutput {
+	pub buffer: Option<usize>,
+	pub written: Option<usize>,
+}
+const BUFFER_NAME: &str = "buffer";
+const WRITTEN_NAME: &str = "written";
+
+impl ByteOutput {
+	/// A line's C function and its byte output: `buffer` crosses as an i64 (its capacity), `written` as a length (no
+	/// argument)
+	pub fn of_line(line: &str) -> Option<(CFunction, ByteOutput)> {
+		let mut fields: Vec<String> = line.split(FIELD_SEPARATOR).map(str::to_string).collect();
+		let mut output = ByteOutput::default();
+		let params = fields.get(3)?.split(LIST_SEPARATOR).filter(|param| !param.is_empty()).enumerate();
+		let renamed: Vec<&str> = params
+			.map(|(index, param)| match param {
+				BUFFER_NAME => {
+					output.buffer.get_or_insert(index);
+					name_of(&PARAM_NAMES, ParamType::I64)
+				}
+				WRITTEN_NAME => {
+					output.written.get_or_insert(index);
+					name_of(&PARAM_NAMES, ParamType::Length)
+				}
+				other => other,
+			})
+			.collect();
+		fields[3] = renamed.join(&LIST_SEPARATOR.to_string());
+		Some((CFunction::of_line(&fields.join(&FIELD_SEPARATOR.to_string()))?, output))
+	}
+}
 
 /// An error-shaped C type: a non-NULL one reports a failure (`wasmtime_error_t *`, `wasm_trap_t **`)
 pub fn is_error_type(c_type: &str) -> bool {

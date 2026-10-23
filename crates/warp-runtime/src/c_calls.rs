@@ -1,7 +1,7 @@
 //! Calling C from a program, for a store of any state that keeps the run's C handles: loading libraries, the
 //! hand-linked libc functions, and one wrapper for every C function as c_signatures.rs describes it. warp links these
 //! after reading the headers (src/ffi/link.rs); an executable links the functions it carries (standalone.rs)
-use crate::c_signatures::{CFunction, CPointer, Failure, ParamType, RetType, HAND_LINKED_LIBC};
+use crate::c_signatures::{ByteOutput, CFunction, CPointer, Failure, ParamType, RetType, HAND_LINKED_LIBC};
 use crate::c_structs::CStruct;
 use libloading::Library;
 use std::collections::HashMap;
@@ -275,7 +275,7 @@ fn wasm_param(param: ParamType) -> Option<ValType> {
 /// The wasm results of a C function: a text node, a handle id, else its number
 fn wasm_results(function: &CFunction) -> Vec<ValType> {
 	match (function.result, function.ret_type) {
-		(Some(CPointer::Text | CPointer::Struct), _) => vec![ValType::ANYREF],
+		(Some(CPointer::Text | CPointer::Struct | CPointer::Bytes), _) => vec![ValType::ANYREF],
 		(Some(_), _) => vec![ValType::I32],
 		(None, RetType::Void) => vec![],
 		(None, RetType::I64) => vec![ValType::I64],
@@ -314,12 +314,23 @@ pub fn link_c_function_as<T: CallsC>(
 	func_ptr: usize,
 	func_type: FuncType,
 ) -> Result<()> {
+	link_c_function_with_output(linker, function, ByteOutput::default(), func_ptr, func_type)
+}
+
+/// link_c_function_as with a byte output: an output buffer and the written length a Bytes result reads
+pub fn link_c_function_with_output<T: CallsC>(
+	linker: &mut Linker<T>,
+	function: CFunction,
+	output: ByteOutput,
+	func_ptr: usize,
+	func_type: FuncType,
+) -> Result<()> {
 	let (module, name) = (function.module.clone(), function.name.clone());
 	let thread_safe = is_thread_safe(&function.library);
 	let layouts: Vec<Option<CStruct>> = function.layouts.iter().map(|text| CStruct::of_text(text)).collect();
 	linker.func_new(&module, &name, func_type, move |mut caller, params, results| {
 		let _turn = (!thread_safe).then(|| NATIVE_CALL_TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
-		call_c_function(&mut caller, &function, &layouts, func_ptr, params, results)
+		call_c_function(&mut caller, &function, &layouts, output, func_ptr, params, results)
 	})?;
 	Ok(())
 }
@@ -328,19 +339,24 @@ fn call_c_function<T: CallsC>(
 	caller: &mut Caller<'_, T>,
 	function: &CFunction,
 	layouts: &[Option<CStruct>],
+	output: ByteOutput,
 	func_ptr: usize,
 	params: &[Val],
 	results: &mut [Val],
 ) -> Result<()> {
 	// live through the call: the out-pointer slots, the copies of byte and struct parameters, the struct outputs
 	let mut memory = CallMemory::default();
-	let args = native_arguments(caller, function, layouts, params, &mut memory)?;
+	let args = native_arguments(caller, function, layouts, output, params, &mut memory)?;
 	let returned = unsafe { call_native_function(func_ptr, &args, function.ret_type) };
 	let failed = match function.failure {
 		Failure::None => false,
 		Failure::NotNull => returned != 0,
 		Failure::False => returned as u8 == 0,
+		Failure::NonZero => returned as i32 != 0,
 	};
+	if function.failure == Failure::NonZero && failed {
+		wasmtime::bail!("{} failed (C status {})", function.name, returned as i32);
+	}
 	if failed || memory.error_slots.iter().any(|slot| *slot != 0) {
 		wasmtime::bail!("{} failed (C result {returned:#x})", function.name);
 	}
@@ -361,6 +377,7 @@ fn call_c_function<T: CallsC>(
 			text_node(caller, text.as_deref())?
 		}
 		Some(CPointer::Struct) => struct_output(caller, &memory)?,
+		Some(CPointer::Bytes) => bytes_output(caller, &memory, pointer)?,
 		Some(_) => Val::I32(caller.data_mut().c_handles().id_of(pointer)),
 		None => native_result(returned, function.ret_type),
 	};
@@ -378,6 +395,28 @@ struct CallMemory {
 	buffers: Vec<Vec<u8>>,
 	/// the first struct output: its layout, how many, and its buffer
 	output: Option<(CStruct, Option<usize>, usize)>,
+	/// the output buffer (ByteOutput): its index among the buffers
+	byte_buffer: Option<usize>,
+	/// what the written parameter points to: the buffer's capacity before the call, the length after
+	written: Option<Box<u64>>,
+}
+
+/// A Bytes result as a warp list of 0 to 255: the output buffer's first `written` bytes (all without a written
+/// parameter), else `written` bytes at the returned pointer; ø for a NULL one
+fn bytes_output<T>(caller: &mut Caller<'_, T>, memory: &CallMemory, pointer: usize) -> Result<Val> {
+	let written = memory.written.as_deref().map(|length| *length as usize);
+	let bytes: Option<&[u8]> = match memory.byte_buffer {
+		Some(buffer) => {
+			let buffer = &memory.buffers[buffer];
+			Some(&buffer[..written.unwrap_or(buffer.len()).min(buffer.len())])
+		}
+		None if pointer == 0 => None,
+		// SAFETY: the C function returned a pointer to `written` bytes (the declaration's contract)
+		None => Some(unsafe { std::slice::from_raw_parts(pointer as *const u8, written.unwrap_or(0)) }),
+	};
+	let value = bytes.map_or(serde_json::Value::Null, |bytes| bytes.iter().map(|byte| serde_json::Value::from(*byte)).collect());
+	let builders = crate::gc_values::Builders::of(&mut |name| caller.get_export(name))?;
+	builders.build(&value, &mut wasmtime::AsContextMut::as_context_mut(caller))
 }
 
 /// The struct output of a call as a warp map, or a list of maps
@@ -420,6 +459,7 @@ fn native_arguments<T: CallsC>(
 	caller: &mut Caller<'_, T>,
 	function: &CFunction,
 	layouts: &[Option<CStruct>],
+	output: ByteOutput,
 	params: &[Val],
 	memory: &mut CallMemory,
 ) -> Result<NativeArguments> {
@@ -442,6 +482,20 @@ fn native_arguments<T: CallsC>(
 				.ok_or_else(|| wasmtime::Error::msg(format!("{name}: no struct layout")))
 		};
 		let value = match ptype {
+			// the output buffer: the warp call passes its capacity
+			ParamType::I64 if output.buffer == Some(index) => {
+				let Some(param) = warp_params.next() else { break };
+				let capacity = param.i64().unwrap_or(0).max(0) as usize;
+				memory.buffers.push(vec![0; capacity]);
+				memory.byte_buffer = Some(memory.buffers.len() - 1);
+				memory.buffers.last().map(|bytes| bytes.as_ptr() as u64)
+			}
+			// the written length: the buffer's capacity in, the length out
+			ParamType::Length if output.written == Some(index) => {
+				let capacity = memory.byte_buffer.map_or(0, |buffer| memory.buffers[buffer].len());
+				let slot = memory.written.insert(Box::new(capacity as u64));
+				Some(&mut **slot as *mut u64 as u64)
+			}
 			ParamType::Out => {
 				let slot = std::mem::take(&mut first_out).then_some(&mut *memory.out_slot as *mut usize as u64);
 				Some(slot.unwrap_or(0))

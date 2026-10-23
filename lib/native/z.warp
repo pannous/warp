@@ -1,6 +1,147 @@
-// zlib through its C library (card pure-c-imports): `use z` (or `use zlib`), or `import compressBound from "z"`;
-// warp-host loads libz (libz.so.1, libz.dylib). A text crosses as its bytes, NUL-terminated.
+// zlib through its C library (topic ffi-libraries-roadmap): `use z` (or `use zlib`), or `import compressBound from "z"`;
+// warp-host loads libz (libz.so.1, libz.dylib) and calls it, nothing of zlib in Rust. Data is bytes: a list of 0 to 255,
+// or a text's bytes, NULs and all (notes/ffi_primitives.md).
+//   compressed(data)                        zlib's format; uncompressed(compressed(data), #data) is data again
+//   deflated(data, level), inflated(data)   the same through a z_stream, without knowing the size beforehand
+//   gzipped(data), gunzipped(data)          the gzip format
+//   crc32_of(data), adler32_of(data)        checksums
+use c_memory
+
 zlibVersion(): text from 'z'
+zError(code: i32): text from 'z'
 compressBound(length: i64): i64 from 'z'
-adler32(start: i64, data: text, length: i32): i64 from 'z'
-crc32(start: i64, data: text, length: i32): i64 from 'z'
+// a checksum of `size` bytes of data (the call takes the size, as C's does)
+adler32(start: i64, data: bytes, size: i32): i64 from 'z'
+crc32(start: i64, data: bytes, size: i32): i64 from 'z'
+adler32_combine(first: i64, second: i64, second_length: i64): i64 from 'z'
+crc32_combine(first: i64, second: i64, second_length: i64): i64 from 'z'
+// one call each: the output buffer's capacity is the argument, the result its bytes
+compress(dest: buffer, destLen: written, source: bytes, sourceLen: length): bytes from 'z'
+compress2(dest: buffer, destLen: written, source: bytes, sourceLen: length, level: i32): bytes from 'z'
+uncompress(dest: buffer, destLen: written, source: bytes, sourceLen: length): bytes from 'z'
+// the stream API over a z_stream in C memory (calloc'd, Z_STREAM_SIZE bytes)
+deflateInit_(stream: i64, level: i32, version: text, size: i32): i32 from 'z'
+deflateInit2_(stream: i64, level: i32, method: i32, window_bits: i32, memory_level: i32, strategy: i32, version: text, size: i32): i32 from 'z'
+deflate(stream: i64, flush: i32): i32 from 'z'
+deflateEnd(stream: i64): i32 from 'z'
+inflateInit_(stream: i64, version: text, size: i32): i32 from 'z'
+inflateInit2_(stream: i64, window_bits: i32, version: text, size: i32): i32 from 'z'
+inflate(stream: i64, flush: i32): i32 from 'z'
+inflateEnd(stream: i64): i32 from 'z'
+// C memory for the streams
+calloc(count: i64, size: i64): i64 from 'c'
+free(address: i64): void from 'c'
+
+Z_OK = 0
+Z_STREAM_END = 1
+Z_BUF_ERROR = -5
+Z_NO_FLUSH = 0
+Z_FINISH = 4
+Z_DEFAULT_COMPRESSION = -1
+Z_BEST_SPEED = 1
+Z_BEST_COMPRESSION = 9
+Z_DEFLATED = 8
+// window bits: 15 zlib's format, +16 gzip's, +32 detecting either
+Z_MAX_WBITS = 15
+Z_GZIP_WBITS = 31
+Z_DETECT_WBITS = 47
+// z_stream on LP64 (Linux and macOS, x86-64 and arm64): its fields' offsets and its size
+Z_NEXT_IN = 0
+Z_AVAIL_IN = 8
+Z_NEXT_OUT = 24
+Z_AVAIL_OUT = 32
+Z_MSG = 48
+Z_STREAM_SIZE = 112
+// the bytes a stream writes per step
+Z_CHUNK = 65536
+
+// data as a list of bytes: a list as it is, a text its UTF-8
+z_bytes(data: any) := if data is list then data else data.bytes
+
+crc32_of(data: any) := {
+	bytes = z_bytes(data)
+	crc32(0, bytes, #bytes)
+}
+adler32_of(data: any) := {
+	bytes = z_bytes(data)
+	adler32(1, bytes, #bytes)
+}
+
+// data in zlib's format, at the default level or `level` (0 to 9)
+compressed(data: any) := {
+	bytes = z_bytes(data)
+	compress(compressBound(#bytes), bytes)
+}
+compressed_at(data: any, level: int) := {
+	bytes = z_bytes(data)
+	compress2(compressBound(#bytes), bytes, level)
+}
+// the `size` bytes zlib's format `data` holds (a larger size works too, a smaller fails the call)
+uncompressed(data: list, size: int) := uncompress(size, data)
+
+// throws zlib's message for a failing stream status
+z_checked(stream: int, status: int) := {
+	if status < 0 and status != Z_BUF_ERROR {
+		message = c_text(c_load(stream + Z_MSG, 8))
+		throw "zlib: " + (message ?? zError(status))
+	}
+	status
+}
+
+// a z_stream in C memory reading `bytes`; [stream, its input]
+z_stream_of(bytes: list) := {
+	stream = calloc(1, Z_STREAM_SIZE)
+	input = calloc(1, #bytes + 1)
+	c_write(input, bytes)
+	c_store(stream + Z_NEXT_IN, 8, input)
+	c_store(stream + Z_AVAIL_IN, 4, #bytes)
+	[stream, input]
+}
+
+// runs `step` (deflate or inflate of the stream) until the stream ends; the bytes it wrote
+z_streamed(stream: int, finishing: bool) := {
+	output = calloc(1, Z_CHUNK)
+	found = []
+	status = Z_OK
+	while status != Z_STREAM_END {
+		c_store(stream + Z_NEXT_OUT, 8, output)
+		c_store(stream + Z_AVAIL_OUT, 4, Z_CHUNK)
+		status = z_checked(stream, if finishing then deflate(stream, Z_FINISH) else inflate(stream, Z_NO_FLUSH))
+		written = Z_CHUNK - c_load(stream + Z_AVAIL_OUT, 4)
+		found += c_bytes(output, written)
+		if status == Z_BUF_ERROR and written == 0 {
+			free(output)
+			throw "zlib: the data ends before its stream does"
+		}
+	}
+	free(output)
+	found
+}
+
+// data deflated through a stream at `level`, in `window_bits`' format (Z_MAX_WBITS zlib's, Z_GZIP_WBITS gzip's)
+z_deflated(data: any, level: int, window_bits: int) := {
+	opened = z_stream_of(z_bytes(data))
+	stream = opened#1
+	z_checked(stream, deflateInit2_(stream, level, Z_DEFLATED, window_bits, 8, 0, zlibVersion(), Z_STREAM_SIZE))
+	found = z_streamed(stream, yes)
+	deflateEnd(stream)
+	free(opened#2)
+	free(stream)
+	found
+}
+// compressed data inflated through a stream, its size unknown beforehand, in `window_bits`' format
+z_inflated(data: list, window_bits: int) := {
+	opened = z_stream_of(data)
+	stream = opened#1
+	z_checked(stream, inflateInit2_(stream, window_bits, zlibVersion(), Z_STREAM_SIZE))
+	found = z_streamed(stream, no)
+	inflateEnd(stream)
+	free(opened#2)
+	free(stream)
+	found
+}
+
+deflated(data: any, level: int) := z_deflated(data, level, Z_MAX_WBITS)
+inflated(data: list) := z_inflated(data, Z_DETECT_WBITS)
+gzipped(data: any) := z_deflated(data, Z_DEFAULT_COMPRESSION, Z_GZIP_WBITS)
+gunzipped(data: list) := z_inflated(data, Z_DETECT_WBITS)

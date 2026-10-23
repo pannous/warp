@@ -15,7 +15,13 @@
 #   bytes    a warp text's bytes or a list of 0 to 255 as a pointer, NULs and all; the length a `length` parameter after it
 #            gets: `crc32(start: i64, data: bytes, size: length): i64 from 'z'` is called crc32(0, [97, 0, 98])
 #   length   the byte count of the bytes parameter before it: no argument
+#   buffer   an output buffer the host allocates: the argument is its capacity in bytes
+#   written  a `size_t *` (zlib's `uLongf *`) after the buffer: no argument; the capacity in, the length the call wrote out
 #   void     no result
+# A bytes result is a list of 0 to 255 in one call: with a buffer, its first `written` bytes, and the C result an int
+# status, 0 success, anything else failing the call naming it (`compress(dest: buffer, destLen: written, source: bytes,
+# sourceLen: length): bytes from 'z'` is called compress(capacity, data)); without one, `written` bytes at the pointer
+# the C function returns, NULL ø (notes/ffi_primitives.md)
 
 # the names the libraries go by in a program: `use libm` is `use m`
 c_library_aliases = {libc: "c", libm: "m", zlib: "z", SDL2: "SDL2", sdl: "SDL2", sdl2: "SDL2"}
@@ -30,15 +36,18 @@ c_quotes = ["'", "\""]
 # a type word of a foreign line → the type it crosses as
 c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "bool", char: "i32", i64: "i64", int64: "i64", long: "i64", size_t: "i64",
 	f64: "f64", float: "f64", double: "f64", number: "f64", f32: "f32", float32: "f32", text: "text", string: "text", handle: "handle", pointer: "handle",
-	out: "out", bytes: "bytes", length: "length", void: "void", nothing: "void"}
+	out: "out", bytes: "bytes", length: "length", buffer: "buffer", written: "written", void: "void", nothing: "void"}
 # the kind the emitter passes a type as (host_words.warp's), and the c_signatures.rs name of the parameter
-c_parameter_kinds = {bool: "i32", i32: "i32", i64: "int", f64: "float", f32: "f32", text: "node", bytes: "node", handle: "i32"}
+c_parameter_kinds = {bool: "i32", i32: "i32", i64: "int", f64: "float", f32: "f32", text: "node", bytes: "node", handle: "i32",
+	buffer: "int"}
 c_parameter_names = {bool: "i32", i32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", bytes: "bytes", length: "length",
-	handle: "handle", out: "out"}
+	handle: "handle", out: "out", buffer: "buffer", written: "written"}
 # the parameters the host fills, which take no argument
-c_filled_types = ["out", "length"]
+c_filled_types = ["out", "length", "written"]
 # the types only a parameter has
-c_parameter_only_types = ["out", "bytes", "length"]
+c_parameter_only_types = ["out", "length", "buffer", "written"]
+# the warp.c_functions failure of a C result that is an int status, 0 success
+c_status_failure = "nonzero"
 
 # a library as written, `'m'`, `"c"`, `sqlite3`, `libm` → its name; ø for none or a library of warp's
 c_library_of(written: text, quoted: bool): any := {
@@ -200,7 +209,10 @@ c_functions_of(source: text, library_folder: text): list := {
 		}
 		library = c_use(statement)
 		if library != ø {
-			for d in catalog { if d#2 == library and not functions.has(d#1) { functions[d#1] = d } }
+			# a native file's every line, also those of the libraries it calls besides its own (calloc from 'c')
+			own = native.filter(n => n#1 == library)
+			declared = if #own > 0 then c_declarations_in(try read(own#1#2) else "") else catalog.filter(d => d#2 == library)
+			for d in declared { if not functions.has(d#1) { functions[d#1] = d } }
 		}
 	}
 	# libm's functions warp has no word for, called without an import as Rust's lane calls them
@@ -227,7 +239,8 @@ c_host_word(declaration: list): any := {
 	result = declaration#5
 	if "?" in types or result == "?" or result in c_parameter_only_types { return ø }
 	kinds = types.filter(t => t not in c_filled_types).map(t => c_parameter_kinds[t])
-	results = if result == "void" then [] else if result == "text" then ["node"] else [c_parameter_kinds[result]]
+	results = if result == "void" then [] else if result in ["text", "bytes"] then ["node"] else [c_parameter_kinds[result]]
+	buffered = "buffer" in types
 	# the first out-pointer's parameter name: a NULL there fails the call naming it
 	pointee = ""
 	i = 0
@@ -236,9 +249,11 @@ c_host_word(declaration: list): any := {
 		i += 1
 	}
 	returned = if result == "text" then "i64" else if result == "handle" then (if pointee != "" then "i32" else "i64") else result
-	crossing = if result == "text" then "text" else if result == "handle" then "handle" else "number"
+	if result == "bytes" { returned = if buffered then "i32" else "i64" }
+	crossing = if result in ["text", "handle", "bytes"] then result else "number"
 	if result != "handle" { pointee = "" }
-	fields = [declaration#2, declaration#2, declaration#1, types.map(t => c_parameter_names[t]).join(","), returned, crossing, pointee, "", ""]
+	failure = if result == "bytes" and buffered then c_status_failure else ""
+	fields = [declaration#2, declaration#2, declaration#1, types.map(t => c_parameter_names[t]).join(","), returned, crossing, pointee, "", failure]
 	[kinds, results, declaration#2, fields.join("\t")]
 }
 

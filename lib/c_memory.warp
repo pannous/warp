@@ -3,8 +3,15 @@
 // knows a library.
 //   c_bytes(sqlite3_column_blob(statement, 0), sqlite3_column_bytes(statement, 0))   the blob's bytes, a list of 0 to 255
 //   c_text(address)                                                               the NUL-terminated text there, ø for NULL
+//   c_write(address, bytes), c_load(address, size), c_store(address, size, n)       C memory the program got from calloc
 
 // the `count` bytes at `address`, [] for NULL
 c_bytes(address: int, count: int) := std_io("c", "bytes", [address, count])
 // the NUL-terminated text at `address`, ø for NULL
 c_text(address: int) := std_io("c", "text", [address])
+// copies a text's bytes or a list of 0 to 255 to `address`; their count
+c_write(address: int, data: any) := std_io("c", "write", [address, data])
+// the unsigned integer of `size` (1, 2, 4 or 8) little-endian bytes at `address`
+c_load(address: int, size: int) := std_io("c", "load", [address, size])
+// writes `value` as `size` bytes at `address`; the value
+c_store(address: int, size: int, value: int) := std_io("c", "store", [address, size, value])
