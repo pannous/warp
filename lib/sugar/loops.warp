@@ -20,3 +20,8 @@ rewrite $xs.each $body => for $xs $body where statement and $body is block and a
 # text's characters
 rewrite each $t.character => each chars($t)
 rewrite $f each $xs => $xs.map($e -> $f($e))
+# glued to their block too: `twice{n += 1}`, which the parser reads as the tagged block `twice: {…}` (a map, `{once:
+# {a: 1}}`, keeps its key)
+rewrite once: $body => (1 times $body) where $body is block
+rewrite twice: $body => (2 times $body) where $body is block
+rewrite thrice: $body => (3 times $body) where $body is block

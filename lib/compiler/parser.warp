@@ -2985,7 +2985,10 @@ def bare_atom(p: Parser): Node := {
 		end = symbol_end(p.code, p.at + 1, p.n)
 		hole = symbol(p.code[p.at .. end])
 		p.at = end
-		return hole
+		// a hole glued to `(` is called as a name is: `$f($x)`
+		if not is_at(p.code, p.at, '(', p.n) { return hole }
+		p.at = p.at + 1
+		return listed("(", "", [hole] + spread(items_until(p, ')', "(")))
 	}
 	if EXACT_CONSTANTS.contains("$(c)") {
 		p.at = p.at + 1
