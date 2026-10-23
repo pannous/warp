@@ -1,0 +1,3 @@
+# `a to b` as a value: the list of its ints, both ends included. Expected: [1 2 3 4]
+xs = 1 to 4
+print xs
