@@ -1,0 +1,9 @@
+# a range with computed ends, each computed once. Expected: [2 3 4] 1
+global calls = 0
+low() := {
+	calls += 1
+	2
+}
+n = 4
+ys = low() to n
+print "$(ys) $(calls)"
