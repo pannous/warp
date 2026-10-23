@@ -1,8 +1,8 @@
 # Methods written as calls on a value (notes/layers.md, sugar; card sugar-list-methods, was the pass list_methods.warp):
 # `x.f(a, b)` is the call `f(x, a, b)`, as Rust's library_words.rs method_call makes it of a word, but for a method that
-# changes its list or map in place, which Rust's list_mutations.rs lowers (lib/sugar/methods.warp appends). Its own
-# step after for_loops and the late sugar (passes.warp method_sugar), after the passes reading method calls (lambdas,
-# arity_overloads).
+# changes its list or map in place, which Rust's list_mutations.rs lowers (lib/sugar/methods.warp appends). In the
+# late sugar (rewrites.warp late_sugar_module_names), where the pass stood: after the passes reading method calls
+# (lambdas, arity_overloads) and the iteration sugar.
 # `m.remove(k)`, `m.delete(k)` of a variable: the value of k, its entry removed from m (Python's dict.pop); of a list the
 # first element equal to k removed. Rust twin: list_mutations.rs removed_key
 # The method word is a hole: a rule naming `remove` would give way to a program's own remove(a, b), which the pass
