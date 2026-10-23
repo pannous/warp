@@ -1,6 +1,6 @@
 // zlib through its C library (topic ffi-libraries-roadmap): `use z` (or `use zlib`), or `import compressBound from "z"`;
 // warp-host loads libz (libz.so.1, libz.dylib) and calls it, nothing of zlib in Rust. Data is bytes: a list of 0 to 255,
-// or a text's bytes, NULs and all (notes/ffi_primitives.md).
+// NULs and all; a text gives its own with text.bytes (notes/ffi_primitives.md).
 //   compressed(data)                        zlib's format; uncompressed(compressed(data), #data) is data again
 //   deflated(data, level), inflated(data)   the same through a z_stream, without knowing the size beforehand
 //   gzipped(data), gunzipped(data)          the gzip format
@@ -55,29 +55,23 @@ Z_STREAM_SIZE = 112
 // the bytes a stream writes per step
 Z_CHUNK = 65536
 
-// data as a list of bytes: a list as it is, a text its UTF-8
-z_bytes(data: any) := if data is list then data else data.bytes
-
-crc32_of(data: any) := {
-	bytes = z_bytes(data)
-	crc32(0, bytes, #bytes)
+// data is a list of bytes; a text's are text.bytes (the pure lane has no run-time `is` for an any yet)
+crc32_of(source: list) := {
+	crc32(0, source, #source)
 }
-adler32_of(data: any) := {
-	bytes = z_bytes(data)
-	adler32(1, bytes, #bytes)
+adler32_of(source: list) := {
+	adler32(1, source, #source)
 }
 
 // data in zlib's format, at the default level or `level` (0 to 9)
-compressed(data: any) := {
-	bytes = z_bytes(data)
-	compress(compressBound(#bytes), bytes)
+compressed(source: list) := {
+	compress(compressBound(#source), source)
 }
-compressed_at(data: any, level: int) := {
-	bytes = z_bytes(data)
-	compress2(compressBound(#bytes), bytes, level)
+compressed_at(source: list, level: int) := {
+	compress2(compressBound(#source), source, level)
 }
 // the `size` bytes zlib's format `data` holds (a larger size works too, a smaller fails the call)
-uncompressed(data: list, size: int) := uncompress(size, data)
+uncompressed(source: list, size: int) := uncompress(size, source)
 
 // throws zlib's message for a failing stream status
 z_checked(stream: int, status: int) := {
@@ -88,13 +82,13 @@ z_checked(stream: int, status: int) := {
 	status
 }
 
-// a z_stream in C memory reading `bytes`; [stream, its input]
-z_stream_of(bytes: list) := {
+// a z_stream in C memory reading `source`; [stream, its input]
+z_stream_of(source: list) := {
 	stream = calloc(1, Z_STREAM_SIZE)
-	input = calloc(1, #bytes + 1)
-	c_write(input, bytes)
+	input = calloc(1, #source + 1)
+	c_write(input, source)
 	c_store(stream + Z_NEXT_IN, 8, input)
-	c_store(stream + Z_AVAIL_IN, 4, #bytes)
+	c_store(stream + Z_AVAIL_IN, 4, #source)
 	[stream, input]
 }
 
@@ -119,8 +113,8 @@ z_streamed(stream: int, finishing: bool) := {
 }
 
 // data deflated through a stream at `level`, in `window_bits`' format (Z_MAX_WBITS zlib's, Z_GZIP_WBITS gzip's)
-z_deflated(data: any, level: int, window_bits: int) := {
-	opened = z_stream_of(z_bytes(data))
+z_deflated(source: list, level: int, window_bits: int) := {
+	opened = z_stream_of(source)
 	stream = opened#1
 	z_checked(stream, deflateInit2_(stream, level, Z_DEFLATED, window_bits, 8, 0, zlibVersion(), Z_STREAM_SIZE))
 	found = z_streamed(stream, yes)
@@ -130,8 +124,8 @@ z_deflated(data: any, level: int, window_bits: int) := {
 	found
 }
 // compressed data inflated through a stream, its size unknown beforehand, in `window_bits`' format
-z_inflated(data: list, window_bits: int) := {
-	opened = z_stream_of(data)
+z_inflated(source: list, window_bits: int) := {
+	opened = z_stream_of(source)
 	stream = opened#1
 	z_checked(stream, inflateInit2_(stream, window_bits, zlibVersion(), Z_STREAM_SIZE))
 	found = z_streamed(stream, no)
@@ -141,7 +135,7 @@ z_inflated(data: list, window_bits: int) := {
 	found
 }
 
-deflated(data: any, level: int) := z_deflated(data, level, Z_MAX_WBITS)
-inflated(data: list) := z_inflated(data, Z_DETECT_WBITS)
-gzipped(data: any) := z_deflated(data, Z_DEFAULT_COMPRESSION, Z_GZIP_WBITS)
-gunzipped(data: list) := z_inflated(data, Z_DETECT_WBITS)
+deflated(source: list, level: int) := z_deflated(source, level, Z_MAX_WBITS)
+inflated(source: list) := z_inflated(source, Z_DETECT_WBITS)
+gzipped(source: list) := z_deflated(source, Z_DEFAULT_COMPRESSION, Z_GZIP_WBITS)
+gunzipped(source: list) := z_inflated(source, Z_DETECT_WBITS)
