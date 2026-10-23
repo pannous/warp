@@ -208,11 +208,14 @@ rules_ended(source: text): text := {
 	if not source.contains(rewrite_line_start) { return source }
 	lines = source.split("\n")
 	ended = []
+	changed = no
 	for line in lines {
 		rule = line.trim()
-		ended += [if rule.starts_with(rewrite_line_start) and rule.contains("=>") and rule.ends_with("...") then line + ";" else line]
+		ending = rule.starts_with(rewrite_line_start) and rule.contains("=>") and rule.ends_with("...")
+		if ending { changed = yes }
+		ended += [if ending then line + ";" else line]
 	}
-	ended.join("\n")
+	if changed then ended.join("\n") else source
 }
 
 # the word a program must mention for the rule to fire: the first of its origin's shape, else of its pattern
