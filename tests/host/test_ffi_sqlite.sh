@@ -4,36 +4,10 @@
 # tests/ffi/ (test_ffi_handles, test_ffi_gaps, test_ffi_text_results) on this lane. Run it through the queue:
 # tests/queue.sh tests/host/test_ffi_sqlite.sh. The host and compiler are found as tests/host/test_ffi.sh finds them.
 # Skips everything without libsqlite3.
-checkout=$(cd "$(dirname "$0")/../.." && pwd)
-host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
-[ -x "$host" ] || host=$checkout/target/release/warp-host
-[ -x "$host" ] || host=$checkout/target/debug/warp-host
-rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
-stage=$checkout/scratch/ffi-sqlite-test
-export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$checkout/lib
-unset WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED WARP_CRATES_CACHE
-
-[ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
-compiler_path=${WARP_FFI_COMPILER_FILE:-$(dirname "$rust")/compiler-self.wasm}
-[ -f "$compiler_path" ] || { echo "✗ no compiler-self.wasm beside $rust: $rust rebuild self builds it"; exit 1; }
-has_sqlite() {
-	local file
-	for file in /usr/lib/*/libsqlite3.so* /lib/*/libsqlite3.so* /usr/lib64/libsqlite3.so* /opt/homebrew/lib/libsqlite3.dylib; do
-		[ -e "$file" ] && return 0
-	done
-	[ "$(uname)" = Darwin ] # in the dyld cache
-}
-has_sqlite || { echo "- sqlite: no libsqlite3 here, skipped"; exit 0; }
-rm -rf "$stage" && mkdir -p "$stage/bin" || exit 1
-ln -f "$host" "$stage/bin/warp-host" 2>/dev/null || cp "$host" "$stage/bin/warp-host" || exit 1
-cp "$compiler_path" "$stage/bin/compiler-self.wasm" || exit 1
-host=$stage/bin/warp-host
-cd "$stage" || exit 1
-program() { # program <name> <source lines…>: <name>.warp in the stage, after `use sqlite3` and an in-memory db
-	local name=$1
-	shift
-	printf '%s\n' 'use sqlite3' 'db = sqlite3_open(":memory:")' "$@" >"$stage/$name.warp"
-}
+LIBRARY=sqlite
+PRELUDE=('use sqlite3' 'db = sqlite3_open(":memory:")')
+source "$(dirname "$0")/ffi_library_test.sh"
+has_library sqlite3 || { echo "- sqlite: no libsqlite3 here, skipped"; exit 0; }
 statement='statement = sqlite3_prepare_v2(db, "select 1+2, '"'"'warp'"'"'", -1)'
 
 # tests/ffi/test_ffi_handles: a session on handles
@@ -79,30 +53,6 @@ program file_db 'file = "'"$stage"'/test.db"' 'one = sqlite3_open(file)' 'run_qu
 program bad_query 'rows(db, "selec nothing")'
 program complete 'print sqlite3_complete("select 1;")' 'print sqlite3_complete("select 1")' 'print sqlite3_get_autocommit(db)'
 
-run=0 failed=0
-# expect <name> <exit status> <text the output holds>… [! <text it lacks>…]: stdout and stderr together
-expect() {
-	local name=$1 status=$2 wanted=() unwanted=() said got text problems=""
-	shift 2
-	while [ $# -gt 0 ]; do
-		if [ "$1" = '!' ]; then unwanted+=("$2"); shift; else wanted+=("$1"); fi
-		shift
-	done
-	said=$("$host" --compiler self run "$program.warp" 2>&1)
-	got=$?
-	run=$((run + 1))
-	for text in "${wanted[@]}"; do [[ $said == *"$text"* ]] || problems+=" missing [$text]"; done
-	for text in "${unwanted[@]}"; do [[ $said == *"$text"* ]] && problems+=" unwanted [$text]"; done
-	if [ "$got" = "$status" ] && [ -z "$problems" ]; then
-		echo "✓ $name"
-	else
-		failed=$((failed + 1))
-		echo "✗ $name: exit $got (expected $status),$problems"
-		echo "$said" | sed 's/^/    /'
-	fi
-}
-check() { program=$1; shift; expect "$@"; }
-
 check step "a step with a row ready is SQLITE_ROW" 100 "100"
 check column_int "sqlite3_column_int" 3 "3"
 check column_text "sqlite3_column_text is a text" 0 "warp" ! "Error"
@@ -126,5 +76,4 @@ check file_db "a file database: kept after close, read-only by open_v2" 0 "kept"
 check bad_query "a query that doesn't prepare fails the run, naming its C status" 1 "sqlite3_prepare_v2 gave no statement (C status 1)"
 check complete "sqlite3_complete and sqlite3_get_autocommit" 0 ! "Error"
 
-echo "sqlite: $((run - failed)) passed / $run"
-[ "$failed" = 0 ]
+finish
