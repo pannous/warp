@@ -10,7 +10,8 @@
 #   3. loose files in the worktrees folder (logs, patches, dumps) older than LEFTOVER_DAYS: moved to data/
 #   4. unmerged branches nobody moves (a branch only merges once its card is Ready): remote ones `todo ready --stray`
 #      lists and local ones never pushed, with a tip older than STALE_HOURS, are typed to the supervisor (tmux
-#      SUPERVISOR_TMUX) to ready, merge or discard. The cloud lanes' result branches (RESULT_BRANCHES) are skipped
+#      SUPERVISOR_TMUX) to ready, merge or discard. The cloud lanes' result branches (RESULT_BRANCHES) are skipped there
+#   5. the cloud lane's cloud-jobs/ and cloud-results/ branches older than LEFTOVER_DAYS: deleted
 # Detached worktrees (integrate, main-binary …) are never removed; DONOR, which cowtree clones new worktrees from on
 # the Worktrees volume (notes/churn_volume.md), is moved to origin/main when clean. Skips for untracked files are listed.
 #   prune-worktrees.sh            prune, print what it did
@@ -78,6 +79,11 @@ done
 for remote in $($git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin); do
   (( ${KEPT_BRANCHES[(Ie)$remote]} || ${checked_out[(Ie)$remote]} )) && continue
   merged origin/$remote && old_tip origin/$remote && act $git push --quiet origin --delete $remote
+done
+
+# the cloud lane's job and result branches (never merged: collected into data/cloud/ when the run ends), after LEFTOVER_DAYS
+for remote in $($git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin/cloud-jobs refs/remotes/origin/cloud-results); do
+  older_than $(( LEFTOVER_DAYS * 24 )) origin/$remote && act $git push --quiet origin --delete $remote
 done
 
 # the donor follows main, so new clones share most files with it
