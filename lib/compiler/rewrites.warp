@@ -90,6 +90,9 @@ first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/arms", "s
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls"]
 iteration_sugar_module_names = ["sugar/iteration"]
 late_sugar_module_names = ["sugar/ranges"]
+# the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
+# a list literal (card sugar-comprehensions)
+comprehension_sugar_module_names = ["sugar/comprehensions"]
 # the method sugar, after the late sugar: `x.f(a)` the call f(x, a) once the passes reading method calls ran
 method_sugar_module_names = ["sugar/method_calls"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
@@ -150,7 +153,7 @@ rewritten_program(program: any, source: text): any := {
 	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
-	program = bottom_up_placed(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
+	program = placed_map_scoped(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
 	uses = []
 	for module in fired_modules {
 		statement = plain_node(parsed("use " + module))
@@ -183,18 +186,38 @@ sugared(program: Node, rules: list): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_case_holders = case_holders_of(program)
-	bottom_up_placed(program, n => sugared_node(n, rules), map_names_of(program))
+	placed_map_scoped(program, n => sugared_node(n, rules), map_names_of(program))
 }
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
 sugared_node(n: any, rules: list): any := {
 	n = with_changed_members(n, member => sugar_at_place(bottom_up(member, part => sugared_node(part, rules)), "member", rules))
 	if holds_statements(n) {
-		n = group_like(n, spliced_statements(items_of(n).map(statement => sugar_at_place(statement, "statement", rules))))
+		n = group_like(n, sugar_runs(spliced_statements(items_of(n).map(statement => sugar_at_place(statement, "statement", rules))), rules))
 	} else if n is key and key_of(n) != symbol(opaque_word) {
 		n = with_placed_parts(n, (code, place) => sugar_at_place(code, place, rules))
 	}
 	sugar_rewritten(n, rules)
+}
+
+# the statements with each run a sugar rule of several statements `($a; $b)` matches rewritten, as statement_runs
+# does for the program's own rules, a run made shorter tried again where it stands (F6, F12)
+sugar_runs(statements: list, rules: list): list := {
+	run_rules = rules.filter(rule => rule.place == "" and is_statements_pattern(rule.pattern))
+	if #run_rules == 0 { return statements }
+	no_origins = run_rules.map(rule => {})
+	at = 0
+	while at < #statements {
+		found = statement_run_at(statements[at ..], run_rules, no_origins)
+		if found == ø {
+			at += 1
+		} else {
+			made = spliced_statements([bottom_up(as_value(found#2), part => sugar_rewritten(part, rules))])
+			statements = statements[0 ..< at] + made + statements[at + found#1 ..]
+			if #made >= found#1 { at += #made }
+		}
+	}
+	statements
 }
 
 # the statements of a block or the program, a block of one statement too (`if c { twice{…} }`); a map written out
@@ -592,32 +615,23 @@ context_holds(code: any, context: text): bool := {
 	word is symbol and name_of(word) in rule_binding
 }
 
-# bottom_up for the rules, keeping where the node they try stands (rule_method_part, rule_binding, rule_maps): the
-# method part of a `.` is tried as such, a definition's parts inside the names it binds, the maps scoped as
-# map_scoped_bottom_up scopes them
-bottom_up_placed(n: any, f: function, maps: any): any := {
-	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
+# bottom_up for the rules, keeping where the node they try stands (rule_method_part, rule_binding): the method part
+# of a `.` is tried as such, a definition's parts inside the names it binds
+bottom_up_placed(n: any, f: function): any := {
 	if is_key(n, Op.Dot) {
-		left = bottom_up_placed(key_of(n), f, inner)
-		part = children(value_of(n), x => bottom_up_placed(x, f, inner))
+		left = bottom_up_placed(key_of(n), f)
+		part = children(value_of(n), x => bottom_up_placed(x, f))
 		outer_part = rule_method_part
 		rule_method_part = part
-		rule_maps = maps
 		right = f(part)
 		rule_method_part = outer_part
-		rule_maps = maps
 		return f(Key(left, Op.Dot, right))
 	}
-	if not is_key(n, Op.Define) {
-		walked = children(n, x => bottom_up_placed(x, f, inner))
-		rule_maps = maps
-		return f(walked)
-	}
+	if not is_key(n, Op.Define) { return f(children(n, x => bottom_up_placed(x, f))) }
 	outer = rule_binding
 	rule_binding = rule_binding + bound_by_definition(n)
-	walked = children(n, x => bottom_up_placed(x, f, inner))
+	walked = children(n, x => bottom_up_placed(x, f))
 	rule_binding = outer
-	rule_maps = maps
 	f(walked)
 }
 
@@ -763,6 +777,36 @@ map_scoped_bottom_up(n: Node, f: function, maps: any): Node := {
 	f(walked)
 }
 
+# bottom_up_placed and map_scoped_bottom_up in one walk, for the rules: the method part of a `.` tried as such, a
+# definition's parts inside the names it binds (rule_method_part, rule_binding), and rule_maps holding the names that
+# hold a map where f meets each node, a function's own inside it (merge of engine-rule-conditions with main's
+# map scoping)
+placed_map_scoped(n: any, f: function, maps: any): any := {
+	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
+	if is_key(n, Op.Dot) {
+		left = placed_map_scoped(key_of(n), f, inner)
+		part = children(value_of(n), x => placed_map_scoped(x, f, inner))
+		outer_part = rule_method_part
+		rule_method_part = part
+		rule_maps = maps
+		right = f(part)
+		rule_method_part = outer_part
+		rule_maps = maps
+		return f(Key(left, Op.Dot, right))
+	}
+	if not is_key(n, Op.Define) {
+		walked = children(n, x => placed_map_scoped(x, f, inner))
+		rule_maps = maps
+		return f(walked)
+	}
+	outer = rule_binding
+	rule_binding = rule_binding + bound_by_definition(n)
+	walked = children(n, x => placed_map_scoped(x, f, inner))
+	rule_binding = outer
+	rule_maps = maps
+	f(walked)
+}
+
 # name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which
 # is a case of one enum (`c = Coin.Dime`, `c = Dime`); a name also given anything else holds no case for sure
 case_holders_of(program: any): any := {
@@ -846,7 +890,7 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 	n
 }
 
-# the statements with each run a rule of several statements `($a; $b)` matches rewritten, left to right (F6)
+# the statements with each run a rule of several statements `($a; $b)` matches rewritten, left to right (F6, F12)
 statement_runs(statements: list, rules: list, origins: list): list := {
 	at = 0
 	while at < #statements {
@@ -856,7 +900,10 @@ statement_runs(statements: list, rules: list, origins: list): list := {
 		} else {
 			made = spliced_statements([rewritten_again(found#2, rules, origins)])
 			statements = statements[0 ..< at] + made + statements[at + found#1 ..]
-			at += #made
+			# a run made shorter is tried again where it stands, with the statements after it (F12): a pairwise rule
+			# `(add_up($a); add_up($b)) => add_up($a + $b)` folds a whole run; a run as long or longer moves on, so the
+			# rules can't loop here
+			if #made >= found#1 { at += #made }
 		}
 	}
 	statements
@@ -1234,13 +1281,18 @@ each_rows(iterable: any, bound: any, at: any): any := {
 	cases = if is_phrase(iterable) then cases_spliced(items_of(iterable), bound, at) else ø
 	if cases != ø { return cases.map(case => [case]) }
 	if not (is_round(iterable) and #iterable > 1) { return ø }
-	lists = []
-	for part in items_of(iterable) {
-		zipped = rest_hole_name(part)
-		if zipped == ø or not bound.has(zipped) { return ø }
-		lists += [items_of(bound[zipped])]
+	zipped = items_of(iterable).map(rest_hole_name)
+	if zipped.any(name => name == ø) { return ø }
+	known = zipped.filter(name => bound.has(name))
+	if #known == 0 { return ø }
+	count = #items_of(bound[known#1])
+	# a rest hole the pattern didn't bind is as many fresh names as the others hold items, bound for the rest of the
+	# firing (F11): `(($t = $x) for ($t, $x) in ($ts..., $xs...); [$ts...])`
+	for name in zipped {
+		if not bound.has(name) { bound[name] = rule_phrase(if count == 0 then [] else (1 to count).map(position => placed(fresh_name(name), at))) }
 	}
-	if not lists.all(items => #items == #lists#1) { return ø }
+	lists = zipped.map(name => items_of(bound[name]))
+	if not lists.all(items => #items == count) { return ø }
 	(1 to #lists#1).map(position => lists.map(items => items#position))
 }
 

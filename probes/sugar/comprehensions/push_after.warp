@@ -1,0 +1,4 @@
+xs = [1, 2, 3]
+ys = [x * x for x in xs]
+ys.push(10)
+print ys
