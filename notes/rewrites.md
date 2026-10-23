@@ -143,7 +143,7 @@ read. `·` between plain words spelling one of them (rewrites.warp `compiler_mar
 it (F5's `km·per·hour` is still km_per_hour). The one mark so far is a loop's step, which a `continue` still runs:
 
 ```warp
-rewrite count $i below $n {$body...} => ($i = 0; while $i < $n { $body...; loop·step: $i += 1 })
+rewrite stepping $i below $n {$body...} => ($i = 0; while $i < $n { $body...; loop·step: $i++ })
 ```
 
 lib/sugar/iteration.warp lowers every `for` with it. Tests: tests/modules/test_rewrite_marks.warp.
