@@ -35,6 +35,7 @@ use "source_checks.warp"
 use "main_globals.warp"
 use "rewrites.warp"
 use "library_calls.warp"
+use "property_accessors.warp"
 
 # the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES): `a of b`, `xs .* 2`,
 # `(p).a`
@@ -72,7 +73,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	kept_first_sugar = sugar_rules(own, first_sugar_module_names)
 	kept_sugar = sugar_rules(own, sugar_module_names)
 	kept_late_sugar = sugar_rules(own, late_sugar_module_names)
-	with_reached(with_used_modules(with_type_module_uses(index_positions(rewritten_program(own, source))), folder), prelude, no)
+	with_reached(with_used_modules(with_type_module_uses(property_accessors(index_positions(rewritten_program(own, source)))), folder), prelude, no)
 }
 
 # the sugar rules (lib/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
