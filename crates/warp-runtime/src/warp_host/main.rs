@@ -5,6 +5,7 @@
 //!   warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
 //!   warp-host <file.wasm | file.wat> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
 //! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`
+mod c_memory;
 mod cache;
 mod ffi;
 mod nodes;

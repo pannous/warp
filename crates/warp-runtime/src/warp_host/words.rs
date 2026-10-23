@@ -2,7 +2,7 @@
 //! over WASI. A failing word answers the program an Error, `os.command: … failed (exit status: 3): …`, as warp-rust's
 //! std_adapters.rs does.
 use crate::nodes::{self, Builders, Node};
-use crate::{cache, shell, Host};
+use crate::{c_memory, cache, shell, Host};
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
 use warp_runtime::gc_values::{parts_of, TEXT_HEAP};
@@ -158,6 +158,8 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 			shell::file(member, arguments).unwrap_or_else(|| unknown(module, member, arguments))
 		}
 		("os", member, arguments) => shell::os(member, arguments).unwrap_or_else(|| unknown(module, member, arguments)),
+		// C memory at an address a C function gave (c_memory.rs)
+		("c", member, arguments) => c_memory::c(member, arguments).unwrap_or_else(|| unknown(module, member, arguments)),
 		_ => unknown(module, member, &arguments),
 	}
 }
