@@ -19,6 +19,9 @@ module's custom section `warp.c_functions` (crates/warp-runtime/src/c_signatures
 | handle | any pointer | an id into the run's handle table, 0 NULL |
 | out | `T **` | no argument; the first one's pointer is a handle result, NULL fails the run naming it |
 | i64 as a pointer | `const void *` result | the raw address, for c_bytes / c_text below |
+| buffer | `void *dest` | the argument is its capacity; the host allocates that many zeroed bytes (card ffi-z) |
+| written | `uLongf *destLen`, `size_t *` | no argument; a slot holding the buffer's capacity in, the written length out |
+| bytes (result) | see below | a list of 0 to 255, NULs and all; ø for a NULL pointer |
 | void | | no result |
 
 ## C memory reads (card ffi-sqlite3)
@@ -31,6 +34,32 @@ lib/c_memory.warp, answered by warp-host's std_io (crates/warp-runtime/src/warp_
 
 The address must come from C and still be valid. Only warp-host answers them (not warp-rust's lanes).
 
+## Bytes results in one call (card ffi-z)
+
+A `bytes` result turns one C call into a byte list, the C convention either way:
+
+- **Caller-sized buffer**, an int status: `compress(dest: buffer, destLen: written, source: bytes, sourceLen:
+  length): bytes from 'z'` is called `compress(capacity, data)`. The host allocates `capacity` bytes, passes the
+  slot with the capacity, and answers `dest[..*destLen]`. The C int result is the status: non-zero fails the run with
+  "compress failed (C status -5)" (failure `nonzero`).
+- **Returned pointer** with a written length, for a crate shim keeping its buffer valid (thread-local, static):
+  `rs_x_encode(data: bytes, size: length, out_size: written): bytes from 'rs_x'` answers `*out_size` bytes at the
+  returned pointer, copied before the next call; NULL is ø. The slot starts at 0 and nothing is freed.
+
+In `warp.c_functions` these are plain lines: `buffer` crosses as `i64` and `written` as `length`; result `bytes`,
+failure `nonzero` with a buffer. warp-host reads the two indexes back from the parameter names
+(c_signatures.rs `ByteOutput::of_line`), so warp-rust's src/ffi still parses the same lines.
+
+## C memory writes (card ffi-z)
+
+For structs passed by pointer (z_stream): `calloc`/`free` declared from 'c' in the library's native file, then
+
+- `c_write(address, data)`: copies a text's bytes or a byte list to the address, answers the count.
+- `c_load(address, size)` / `c_store(address, size, value)`: an unsigned little-endian 1, 2, 4 or 8-byte integer
+  at the address, e.g. a field at its offset (`c_store(stream + Z_AVAIL_IN, 4, #data)`).
+
+NULL fails the run. Offsets are the platform's (z.warp's are LP64's, Linux and macOS).
+
 ## Library lookup (crates/warp-runtime/src/c_calls.rs library_paths)
 
 A path as written; else WARP_LIBRARY_PATH's folders, then the crates cache's `$WARP_CRATES_CACHE/{lib,native}`
@@ -39,7 +68,8 @@ version-named ones (libSDL2-2.0.so.0, libpython3.13.so.1), highest version first
 
 ## Not yet
 
-- Writes to C memory, malloc'd out-parameters other than the first handle (`char **errmsg` of sqlite3_exec is passed
+- Malloc'd out-parameters other than the first handle (`char **errmsg` of sqlite3_exec is passed
   0), callbacks, structs by value (wasmtime's StructIn/StructOut lines exist in c_signatures.rs but c_imports.warp
   doesn't declare them yet).
-- A NULL out-pointer fails the run; it is not a catchable Error yet.
+- A NULL out-pointer or a non-zero status fails the run; it is not a catchable Error yet.
+- A struct-layout primitive (fields by name instead of offsets).
