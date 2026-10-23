@@ -284,7 +284,7 @@ rule_of(statement: any, module: text, source: text): any := {
 		where_at = -1
 	}
 	continued = after[0 ..< max(where_at, 0)]
-	template = statements_template(glued(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)), source))
+	template = statements_template(each_clauses(glued(if #continued == 0 then written else rule_phrase(words_of_all([written] + continued)), source)))
 	if where_at == #after { return Rule(pattern, template, ø, ø, [], "", module, whole, no) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
@@ -967,6 +967,16 @@ cases_spliced(parts: list, bound: any, at: any): any := {
 
 # `T for $x in $xs...`
 is_each(n: any): bool := is_group(n) and #n == 3 and n#2 == symbol(each_word)
+
+# the template with `T for $x in $xs...` as each_spliced reads it, `T`, `for`, `$x in $xs...`: the parser groups the
+# loop of a hole, `for $x in $xs...` with no body, as a loop of its own
+each_clauses(template: any): any := bottom_up(template, n => if is_group(n) then group_like(n, items_of(n).flat_map(each_clause_parts)) else n)
+
+# `for $x in $xs...` with no body as the parts `for` and `$x in $xs...`, any other item as it is
+each_clause_parts(item: any): list := {
+	if not (is_phrase(item) and #item == 5 and item#1 == symbol(each_word) and item#3 == symbol(each_in_word) and item#5 == ø) { return [item] }
+	[symbol(each_word), List([item#2, item#3, item#4], Bracket.None, Separator.Space)]
+}
 
 # a copy of the holes bound, the hole bound to the code
 with_binding(bound: any, hole: text, code: any): any := {
