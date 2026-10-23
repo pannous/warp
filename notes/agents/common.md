@@ -131,6 +131,10 @@ After a context swap, this file and your role file win over anything a handover 
   refresh with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh`, which moves the link only after a passing
   smoke test); a branch with Rust changes uses its own build. Branch self-check: `/workspace/box-slot.sh
   /workspace/selfcheck-branch.sh <branch>`.
+- Only the pure pipeline counts (user, 2026-10-23): coverage is what passes purely; the Rust compiler's results don't
+  matter. Don't cargo-build `warp` per branch: run `/workspace/box-slot.sh /workspace/cow/sol-warp-latest rebuild pure`
+  with `WARP_LIB=<tree>/lib`. Rebuild Rust only on branches that change Rust code (src/ is frozen except urgent fixes);
+  crates/warp-runtime changes need only a warp-host build. The merger refreshes the shared binary after Rust lands.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
