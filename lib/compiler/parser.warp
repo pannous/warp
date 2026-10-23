@@ -1006,10 +1006,10 @@ def closing_ends_of(code: text, n: int, openers: list): ClosingEnds := {
 	// a program naming a variable `end` closes no block with it: `if a == 0 then 1 else end` hands back the variable
 	if names_end { return ClosingEnds{word_starts: [], balances: [], lowest_from: []} }
 	lowest_from = [balance for balance in balances]
-	index = lowest_from.length - 1
-	while index > 0 {
-		lowest_from[index - 1] = min(lowest_from[index - 1], lowest_from[index])
-		index = index - 1
+	lowest_at = lowest_from.length - 1
+	while lowest_at > 0 {
+		lowest_from[lowest_at - 1] = min(lowest_from[lowest_at - 1], lowest_from[lowest_at])
+		lowest_at = lowest_at - 1
 	}
 	ClosingEnds{word_starts: word_starts, balances: balances, lowest_from: lowest_from}
 }
