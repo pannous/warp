@@ -146,5 +146,8 @@ rewrite public $s... => $s...    # public static fun f() := 3 → static fun f()
 rewrite marked $a $b... => $a $b...   # marked 5 → 5
 ```
 
-Before (card engine-rest-template) a bare `$s...` gave the tree `$s to ø` around the words, and a phrase of one word
-stayed a phrase, so each word took two fixed-arity rules. Tests: tests/modules/test_rewrite_engine.warp.
+The parser reads `...` at the end of a line as a range going on into the next line, so a rule ending in `$s...`
+swallowed the line after it (the next rule, or the program's next statement); the engine gives that line back as a
+statement of its own (rewrites.warp rule_statements). Before (card engine-rest-template) a bare `$s...` gave the tree
+`$s to ø` around the words, and a phrase of one word stayed a phrase, so each word took two fixed-arity rules. Open: a
+`where` right after a template ending in `$s...` is swallowed the same way on its line; end such a rule with `$s...`. Tests: tests/modules/test_rewrite_engine.warp.

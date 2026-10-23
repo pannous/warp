@@ -95,7 +95,7 @@ global rule_enums = {}
 rewritten_program(program: any, source: text): any := {
 	rules = []
 	kept = []
-	for statement in statements_in(program) {
+	for statement in rule_statements(statements_in(program)) {
 		rule = rule_of(statement, "", source)
 		if rule == ø { kept += [statement] } else { rules += [rule] }
 	}
@@ -199,7 +199,43 @@ first_alphabetic_word(written: text): text := {
 	""
 }
 
-module_rules_of(source: text, module: text): list := statements_in(plain_node(parsed(source))).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+module_rules_of(source: text, module: text): list := rule_statements(statements_in(plain_node(parsed(source)))).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+
+# the statements with the line a rule's template swallowed given back: the parser reads `...` at the end of a line as
+# a range going on into the next (`rewrite public $s... => $s...` and the line after it as `$s ... (next line)`), so
+# the rest hole ends the template there and the next line is a statement of its own, a rule too
+rule_statements(statements: list): list := {
+	given_back = []
+	for statement in statements {
+		cut = if is_phrase(statement) and #statement > 1 and statement#1 == symbol(rewrite_word) then swallowed_line(statement) else ø
+		given_back += if cut == ø then [statement] else [cut#1] + rule_statements(statements_in(cut#2))
+	}
+	given_back
+}
+
+# [the code with the rest hole ending its last line, the next line's code it swallowed], else ø
+swallowed_line(n: any): any := {
+	if (is_key(n, Op.To) or is_key(n, Op.Range)) and rule_hole(key_of(n)) != ø and value_of(n) != ø and on_later_line(value_of(n), key_of(n)) {
+		return [placed(Key(key_of(n), op_of(n), ø), n), value_of(n)]
+	}
+	if n is key {
+		inner = swallowed_line(value_of(n))
+		return if inner == ø then ø else [placed(Key(key_of(n), op_of(n), inner#1), n), inner#2]
+	}
+	if not (is_group(n) and #n > 0) { return ø }
+	items = items_of(n)
+	inner = swallowed_line(items[#items - 1])
+	if inner == ø then ø else [placed(group_like(n, items[0 ..< #items - 1] + [inner#1]), n), inner#2]
+}
+
+# whether the code starts on a line after the word's
+on_later_line(code: any, word: any): bool := {
+	first = first_leaf(code)
+	if first == ø { return no }
+	line = line_of(first)
+	before = line_of(word)
+	line is int and before is int and line > before
+}
 
 # the word a program must mention for the rule to fire: the first of its origin's shape, else of its pattern
 needed_word(rule: Rule): text := first_word_of(rule.shape ?? rule.pattern) ?? ""
