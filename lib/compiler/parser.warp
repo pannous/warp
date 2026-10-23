@@ -31,6 +31,14 @@ ENTITY_FILE = "entities.tsv"
 // The lib/ a run uses: WARP_LIB, else the one above this file. A compiled stage is kept for every identical lib/ and
 // runs from wherever that is now, so nothing reads the folder it was compiled in (card pure-lane-nondeterministic)
 def run_library(): text := env("WARP_LIB") ?? folder_of(module_directory)
+// A standard module's text, lib/<name>.warp of the run's lib/; else `embedded`, its text as this compiler was built
+// with (module_source, for a host without lib/ files: the browser). So a change of prelude, math, list or regex needs no
+// rebuild of the compiler (card compiler-library-source, notes/compiler_rebuilds.md)
+def library_source(name: text, embedded: text): text {
+	found = try read(run_library() + "/" + name + ".warp") else ""
+	if found != "" { return found }
+	embedded
+}
 global entity_table = ø
 def entities(): any {
 	if entity_table == ø {
@@ -125,7 +133,7 @@ def bang_words(source: text): list {
 // front stage 5× slower (card front-stage-5x-slower)
 global prelude_bangs = ø
 def prelude_bang_words(): list {
-	if prelude_bangs == ø { prelude_bangs = bang_words(module_source("prelude")) }
+	if prelude_bangs == ø { prelude_bangs = bang_words(library_source("prelude", module_source("prelude"))) }
 	prelude_bangs
 }
 
@@ -177,7 +185,7 @@ def operator_aliases(source: text): list {
 // Rust twin: aliases.rs math_aliases
 global math_aliases = ø
 def math_operator_aliases(): list {
-	if math_aliases == ø { math_aliases = operator_aliases(module_source("math")) }
+	if math_aliases == ø { math_aliases = operator_aliases(library_source("math", module_source("math"))) }
 	math_aliases
 }
 // `circumfix operator ⌊ ⌋ := floor`: [opening, closing, function] of a circumfix statement's words, else []
@@ -200,7 +208,7 @@ def circumfix_aliases(source: text): list {
 // Rust twin: aliases.rs math_circumfixes
 global math_circumfixes = ø
 def math_circumfix_aliases(): list {
-	if math_circumfixes == ø { math_circumfixes = circumfix_aliases(module_source("math")) }
+	if math_circumfixes == ø { math_circumfixes = circumfix_aliases(library_source("math", module_source("math"))) }
 	math_circumfixes
 }
 // The canonical names of the alias targets parser.warp's operator lists spell otherwise
@@ -1587,7 +1595,7 @@ def scanned_operators(source: text): list {
 global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
-		declared = declared_operators(module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex"))
+		declared = declared_operators(library_source("math", module_source("math")) + "\n" + library_source("list", module_source("list")) + "\n" + library_source("regex", module_source("regex")))
 		library_operators = declared.filter(operator => not is_name_start(operator#1#1))
 	}
 	library_operators
