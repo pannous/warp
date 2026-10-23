@@ -786,7 +786,7 @@ rule_spliced(template: any, bound: any, at: any): any := {
 # `$` before no hole the pattern bound stays as written
 text_spliced(written: text, bound: any): any := {
 	if not written.contains(rule_hole_mark) { return written }
-	spliced = ""
+	pieces = []
 	from = 0
 	at = 0
 	while at < #written {
@@ -797,12 +797,16 @@ text_spliced(written: text, bound: any): any := {
 		hole = written[at ..< end]
 		if end > at + 1 and bound.has(hole) {
 			if not (bound[hole] is symbol) { return error_node("a hole in a template's text takes a word, and it bound other code") }
-			spliced += written[from ..< at] + name_of(bound[hole])
+			if at > from { pieces += [written[from ..< at]] }
+			pieces += [name_of(bound[hole])]
 			from = end
 		}
 		at = end
 	}
-	spliced + written[from ..]
+	if from < #written { pieces += [written[from ..]] }
+	# a text of one hole is the word's name itself: built from empty pieces around it, sugar/enums' `$e is enum` missed
+	# the enum in the pure lane (probes/sugar/plain_enums/tests.warp; why is not pinned down, see card sugar-type-tests)
+	if #pieces == 1 then pieces#1 else pieces.join("")
 }
 
 # the template with each `·` written between words and holes a name to build (F5, decision name-glue): `square·$a`,
