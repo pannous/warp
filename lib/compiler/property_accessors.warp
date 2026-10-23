@@ -16,10 +16,11 @@ use "prelude_words.warp"
 
 # the parameter of a setter written getter-shaped: `canvas.width := canvas(it, canvas_height)`
 setter_word = "it"
-# the standard modules defining properties, and the module a use of one brings ("" for the prelude, always there)
-property_modules = [["prelude", ""], ["draw", "draw"]]
-compound_assignments = [[Op.AddAssign, Op.Add], [Op.SubAssign, Op.Sub], [Op.MulAssign, Op.Mul], [Op.DivAssign, Op.Div],
-	[Op.FloorDivAssign, Op.FloorDiv], [Op.ModAssign, Op.Mod], [Op.PowAssign, Op.Pow]]
+# the standard modules defining properties: the prelude's are always there, another's come with its `use`
+property_modules = ["prelude", "draw"]
+prelude_module = "prelude"
+# `+=` and its kin by their text, and the operator each applies
+compound_bases = {"+=": Op.Add, "-=": Op.Sub, "*=": Op.Mul, "/=": Op.Div, "/!=": Op.FloorDiv, "%=": Op.Mod, "^=": Op.Pow}
 
 # [object, property, the setter's parameter or "" for a getter, body] of `o.p := …` and `o.p(v) := …`, else ø
 property_definition(n: Node): any := {
@@ -58,11 +59,11 @@ def properties_collected(statements: list, module: text, properties: any) {
 # the standard properties: the property lines of each module's text, parsed on their own
 standard_properties(): any := {
 	properties = {}
-	for entry in property_modules {
-		source = file_text(std_module_path(entry[0]))
+	for module in property_modules {
+		source = file_text(std_module_path(module))
 		if source != ø {
 			lines = source.split("\n").filter(defines_property)
-			if #lines > 0 { properties_collected(statements_in(plain_node(parsed(lines.join("\n")))), entry[1], properties) }
+			if #lines > 0 { properties_collected(statements_in(plain_node(parsed(lines.join("\n")))), if module == prelude_module then "" else module, properties) }
 		}
 	}
 	properties
@@ -81,8 +82,8 @@ setter_with_value(body: Node, parameter: text, value: Node): Node := bottom_up(b
 
 # the base operator of `+=` and its kin, ø for another
 compound_base(op: Op): any := {
-	for pair in compound_assignments { if op == pair[0] { return pair[1] } }
-	ø
+	written = op as text
+	if compound_bases.has(written) then compound_bases[written] else ø
 }
 
 # the program with each read of a property its getter and each write its setter
@@ -135,6 +136,6 @@ property_accessors(program: Node): Node := {
 	# the modules of the properties the program names: `use draw` in front for the canvas's
 	needed = properties.keys.filter(name => name.split(".")#1 in mentioned).map(name => properties[name]#3)
 	uses = statements.map(use_target).filter(target => target is symbol).map(name_of)
-	brought = property_modules.map(entry => entry[1]).filter(module => module != "" and module in needed and module not in uses)
+	brought = property_modules.filter(module => module != prelude_module and module in needed and module not in uses)
 	separated(bracketed(brought.map(module => plain_node(parsed("use " + module))) + rewritten, ""), ";")
 }
