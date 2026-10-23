@@ -3,7 +3,8 @@
 # where the hole binds a variable assigned code of that shape, or a parameter of a function called with one; `$x: text`
 # (also symbol, list, block, int, number) only code of that kind. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$x is literal`, `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
+# `$f is function`, `$x is literal`, `$x is missing` (ø, also an operand not written: `rest...`), `$x is text` (a hole
+# kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word) and `$f takes int` (typed int); `$e is enum` (a name or text of an enum the program
 # declares), `$c is case` (a case of the one enum declaring it) and `$c is case of $e` (of the enum $e names; $e unbound,
@@ -36,7 +37,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing"]
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
 cases_words = ["cases", "of"]
 # `where $n < 0`: the comparisons of a number literal
@@ -59,8 +60,17 @@ takes_word = "takes"
 yes_no_types = ["bool"]
 value_word = "value"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
-# program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/comprehensions"]
+# program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
+# Three steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
+# something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
+# making or reading the forms its rules take, and the late sugar after for_loops took the loops a range counts: a
+# range left is a value (sugar/ranges)
+first_sugar_module_names = ["sugar/lists", "sugar/comparisons"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums"]
+late_sugar_module_names = ["sugar/ranges"]
+# the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
+# a list literal (card sugar-comprehensions)
+comprehension_sugar_module_names = ["sugar/comprehensions"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
@@ -126,7 +136,7 @@ unbound_rules(module_rules: list, program: Node): list := {
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (a program's own `push`
 # keeps its own), before the definitions it reaches from the prelude and the modules join it
-sugar_rules(program: Node): list := unbound_rules(sugar_module_names.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+sugar_rules(program: Node, modules: list): list := unbound_rules(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
 
 # the program as it is, the enums it declares kept for the sugar rules: a pass right before plain_enums.warp lowers
 # their declarations, after node_cases.warp declared node.warp's Op, Bracket and Separator for a program naming them
@@ -380,6 +390,7 @@ has_property(code: any, property: text): bool := {
 	if property in hole_kinds { return is_hole_kind(code, property) }
 	if property == "literal" { return is_number_literal(code) or code is text }
 	if property == "enum" { return named_enum(code) != "" }
+	if property == "missing" { return code == ø }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "type" { return is_tested_type(word, rule_scope) }
