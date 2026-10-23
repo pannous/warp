@@ -915,7 +915,7 @@ each_spliced(parts: list, bound: any, at: any): any := {
 	if #known == 0 { return ø }
 	count = #items_of(bound[known#1])
 	if not known.all(rest => #items_of(bound[rest]) == count) { return [error_node("the rest holes " + rests.join(", ") + " hold different numbers of items")] }
-	# a rest hole the pattern didn't bind is as many fresh names (F11)
+	# a hole the pattern didn't bind is as many fresh names (F11)
 	for rest in rests {
 		if not bound.has(rest) { bound[rest] = rule_phrase((0 ..< count).map(index => placed(fresh_name(rest), at))) }
 	}
@@ -931,11 +931,11 @@ each_holes(n: any): any := {
 	if holes.any(hole => hole == ø) then ø else holes
 }
 
-# `$xs...` or `($xs..., $ys...)` after `in`: the rest holes zipped, else ø
+# `$xs...` or `($xs, $ys)` after `in`: the rest holes zipped, else ø (the parser takes no `...` before a comma)
 each_rests(n: any): any := {
 	if rest_hole_name(n) != ø { return [rest_hole_name(n)] }
 	if not (is_round(n) and separator_of(n) == "," and #n > 1) { return ø }
-	rests = items_of(n).map(rest_hole_name)
+	rests = items_of(n).map(rule_hole)
 	if rests.any(rest => rest == ø) then ø else rests
 }
 

@@ -1,0 +1,3 @@
+// out: [7, 8]
+rewrite kept($xs...) => (($t = $x) for ($t, $x) in ($ts, $xs); [$ts...])
+print kept(7, 8)

@@ -150,13 +150,13 @@ The sugar step applies a rule of a place only there (before F10 it ignored place
 tests/modules/test_rewrite_parameters.warp.
 
 ## Zip over rest holes (F11)
-`T for ($x, $y) in ($xs..., $ys...)` splices T once for each position of the rest holes, `$x` and `$y` bound to their
-items there. A rest hole the pattern didn't bind is as many fresh names as the others hold items (F3), and stays bound
+`T for ($x, $y) in ($xs, $ys)` splices T once for each position of the rest holes `$xs...` and `$ys...` (written
+without their dots, which the parser takes only last), `$x` and `$y` bound to their items there. A hole the pattern didn't bind is as many fresh names as the others hold items (F3), and stays bound
 for the rest of the firing; rest holes of different lengths give an error:
 
 ```warp
-rewrite zipped([$xs...], [$ys...]) => [$x * $y for ($x, $y) in ($xs..., $ys...)]   # zipped([1, 2], [3, 4]) is [3, 8]
-rewrite kept($xs...) => ($t = $x for ($t, $x) in ($ts..., $xs...); [$ts...])       # t·1 = 7; t·2 = 8; [t·1, t·2]
+rewrite zipped([$xs...], [$ys...]) => [$x * $y for ($x, $y) in ($xs, $ys)]   # zipped([1, 2], [3, 4]) is [3, 8]
+rewrite kept($xs...) => (($t = $x) for ($t, $x) in ($ts, $xs); [$ts...])       # t·1 = 7; t·2 = 8; [t·1, t·2]
 ```
 
 ## Shorter runs tried again (F12)
