@@ -21,6 +21,8 @@ node_bytes(n: Node): int := {
 }
 # `n as float` of a value known only at run time: a text or character spells the number
 float_cast(n: Node): float := if textual_node(n) then text_as_float(text_of_node(n)) else float_of_node(n)
+# `x as number` of a value known only at run time: a text or character spells the number, a number stays
+number_cast(n: Node): Node := if textual_node(n) then text_as_number(text_of_node(n)) else n
 # a % b of floats as in mathematics, as the floats of Rust: the truncated remainder, plus |b| when below 0
 float_mod(a: float, b: float): float := {
 	if b == 0 { divide_by_zero() }
