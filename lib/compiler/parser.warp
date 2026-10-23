@@ -28,11 +28,14 @@ def parsed(source: text): Node := {
 ENTITY_MARK = "\\:"
 // `name TAB characters` lines, the table Rust include_str!s
 ENTITY_FILE = "entities.tsv"
+// The lib/ a run uses: WARP_LIB, else the one above this file. A compiled stage is kept for every identical lib/ and
+// runs from wherever that is now, so nothing reads the folder it was compiled in (card pure-lane-nondeterministic)
+def run_library(): text := env("WARP_LIB") ?? folder_of(module_directory)
 global entity_table = ø
 def entities(): any {
 	if entity_table == ø {
 		entity_table = {}
-		lines = (try read(module_directory + "/" + ENTITY_FILE) else "").split("\n")
+		lines = (try read(run_library() + "/compiler/" + ENTITY_FILE) else "").split("\n")
 		for line in lines {
 			columns = line.split("\t")
 			if columns.length == 2 { entity_table[columns#1] = columns#2 }
@@ -224,7 +227,7 @@ def own_spellings(): Spellings := {
 	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: []}
 }
 def aliased_spellings(): Spellings := {
-	path = folder_of(module_directory) + "/" + ALIASES_FILE
+	path = run_library() + "/" + ALIASES_FILE
 	source = try read(path) else ""
 	if source == "" { fail "the alias table ${path} is missing: the parser reads its operator spellings there" }
 	tables = own_spellings()
@@ -1598,7 +1601,7 @@ def used_module_sources(source: text): list {
 	for statement in code_statements(source) {
 		words = blank_words(statement)
 		if words.length == 2 and USE_KEYWORDS.contains(words#1) {
-			module = try read(folder_of(module_directory) + "/" + words#2 + ".warp") else ""
+			module = try read(run_library() + "/" + words#2 + ".warp") else ""
 			if module { sources += [module] }
 		}
 	}
