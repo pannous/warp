@@ -104,6 +104,8 @@ global rule_scope = {}
 global first_parameter_types = {}
 # the names that hold a map, of the program being rewritten (`where $m is map`)
 global rule_maps = {}
+# name → the enum whose cases it holds, of the program being rewritten (`where $c is case of $e`)
+global rule_case_holders = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
@@ -132,6 +134,7 @@ rewritten_program(program: any, source: text): any := {
 	first_parameter_types = typed_first_parameters(program)
 	rule_maps = map_names_of(program)
 	rule_enums = enums_in(program, {})
+	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
 	program = bottom_up(program, n => rule_rewritten(n, rules, origins))
@@ -167,6 +170,7 @@ sugared(program: Node, rules: list): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_maps = map_names_of(program)
+	rule_case_holders = case_holders_of(program)
 	bottom_up(program, n => sugared_node(n, rules))
 }
 
@@ -415,9 +419,9 @@ case_holds(code: any, hole: any, bound: any): bool := {
 	case = name_of(code)
 	if hole != ø and bound.has(hole) {
 		name = named_enum(bound[hole])
-		return rule_enums.has(name) and case in rule_enums[name]
+		return rule_enums.has(name) and (case in rule_enums[name] or rule_case_holders.get(case) == name)
 	}
-	owners = rule_enums.keys.filter(name => case in rule_enums[name])
+	owners = rule_enums.keys.filter(name => case in rule_enums[name] or rule_case_holders.get(case) == name)
 	if #owners != 1 { return no }
 	if hole != ø { bound[hole] = symbol(owners#1) }
 	yes
@@ -564,6 +568,34 @@ map_names_of(program: any): any := {
 	only_maps = {}
 	for name in maps.keys { if not others.has(name) { only_maps[name] = yes } }
 	only_maps
+}
+
+# name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which
+# is a case of one enum (`c = Coin.Dime`, `c = Dime`); a name also given anything else holds no case for sure
+case_holders_of(program: any): any := {
+	holders = {}
+	others = {}
+	for n in nodes_in(program) {
+		if is_key(n, Op.Assign) and key_of(n) is symbol {
+			name = name_of(key_of(n))
+			enum_name = enum_of_case(value_of(n))
+			if enum_name != "" and (not holders.has(name) or holders[name] == enum_name) { holders[name] = enum_name } else { others[name] = yes }
+		}
+		if is_key(n, Op.Colon) and key_of(n) is symbol and named_enum(value_of(n)) != "" { holders[name_of(key_of(n))] = named_enum(value_of(n)) }
+	}
+	only_cases = {}
+	for name in holders.keys { if not others.has(name) { only_cases[name] = holders[name] } }
+	only_cases
+}
+
+# the enum a case written belongs to, `Dime` of the one enum declaring it, `Coin.Dime`, `Coin::Dime`; else ""
+enum_of_case(code: any): text := {
+	if (is_key(code, Op.Dot) or is_key(code, Op.Scope)) and named_enum(key_of(code)) != "" and value_of(code) is symbol {
+		return if name_of(value_of(code)) in rule_enums[named_enum(key_of(code))] then named_enum(key_of(code)) else ""
+	}
+	if not (code is symbol) { return "" }
+	owners = rule_enums.keys.filter(name => name_of(code) in rule_enums[name])
+	if #owners == 1 then owners#1 else ""
 }
 
 # `{a: 1, b: 2}`: braces of entries only, a map written out, not a block of code
