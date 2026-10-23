@@ -177,11 +177,31 @@ sugared(program: Node, rules: list): Node := {
 sugared_node(n: any, rules: list): any := {
 	n = with_changed_members(n, member => sugar_at_place(bottom_up(member, part => sugared_node(part, rules)), "member", rules))
 	if holds_statements(n) {
-		n = group_like(n, spliced_statements(items_of(n).map(statement => sugar_at_place(statement, "statement", rules))))
+		n = group_like(n, sugar_runs(spliced_statements(items_of(n).map(statement => sugar_at_place(statement, "statement", rules))), rules))
 	} else if n is key and key_of(n) != symbol(opaque_word) {
 		n = with_placed_parts(n, (code, place) => sugar_at_place(code, place, rules))
 	}
 	sugar_rewritten(n, rules)
+}
+
+# the statements with each run a sugar rule of several statements `($a; $b)` matches rewritten, as statement_runs
+# does for the program's own rules, a run made shorter tried again where it stands (F6, F12)
+sugar_runs(statements: list, rules: list): list := {
+	run_rules = rules.filter(rule => rule.place == "" and is_statements_pattern(rule.pattern))
+	if #run_rules == 0 { return statements }
+	no_origins = run_rules.map(rule => {})
+	at = 0
+	while at < #statements {
+		found = statement_run_at(statements[at ..], run_rules, no_origins)
+		if found == ø {
+			at += 1
+		} else {
+			made = spliced_statements([bottom_up(as_value(found#2), part => sugar_rewritten(part, rules))])
+			statements = statements[0 ..< at] + made + statements[at + found#1 ..]
+			if #made >= found#1 { at += #made }
+		}
+	}
+	statements
 }
 
 # the statements of a block or the program, a block of one statement too (`if c { twice{…} }`); a map written out
@@ -738,7 +758,7 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 	n
 }
 
-# the statements with each run a rule of several statements `($a; $b)` matches rewritten, left to right (F6)
+# the statements with each run a rule of several statements `($a; $b)` matches rewritten, left to right (F6, F12)
 statement_runs(statements: list, rules: list, origins: list): list := {
 	at = 0
 	while at < #statements {
@@ -748,7 +768,10 @@ statement_runs(statements: list, rules: list, origins: list): list := {
 		} else {
 			made = spliced_statements([rewritten_again(found#2, rules, origins)])
 			statements = statements[0 ..< at] + made + statements[at + found#1 ..]
-			at += #made
+			# a run made shorter is tried again where it stands, with the statements after it (F12): a pairwise rule
+			# `(add_up($a); add_up($b)) => add_up($a + $b)` folds a whole run; a run as long or longer moves on, so the
+			# rules can't loop here
+			if #made >= found#1 { at += #made }
 		}
 	}
 	statements
@@ -1118,13 +1141,18 @@ each_rows(iterable: any, bound: any, at: any): any := {
 	cases = if is_phrase(iterable) then cases_spliced(items_of(iterable), bound, at) else ø
 	if cases != ø { return cases.map(case => [case]) }
 	if not (is_round(iterable) and #iterable > 1) { return ø }
-	lists = []
-	for part in items_of(iterable) {
-		zipped = rest_hole_name(part)
-		if zipped == ø or not bound.has(zipped) { return ø }
-		lists += [items_of(bound[zipped])]
+	zipped = items_of(iterable).map(rest_hole_name)
+	if zipped.any(name => name == ø) { return ø }
+	known = zipped.filter(name => bound.has(name))
+	if #known == 0 { return ø }
+	count = #items_of(bound[known#1])
+	# a rest hole the pattern didn't bind is as many fresh names as the others hold items, bound for the rest of the
+	# firing (F11): `(($t = $x) for ($t, $x) in ($ts..., $xs...); [$ts...])`
+	for name in zipped {
+		if not bound.has(name) { bound[name] = rule_phrase(if count == 0 then [] else (1 to count).map(position => placed(fresh_name(name), at))) }
 	}
-	if not lists.all(items => #items == #lists#1) { return ø }
+	lists = zipped.map(name => items_of(bound[name]))
+	if not lists.all(items => #items == count) { return ø }
 	(1 to #lists#1).map(position => lists.map(items => items#position))
 }
 

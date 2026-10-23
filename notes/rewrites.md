@@ -109,7 +109,13 @@ rewrite positions_of $e => [$i for $c at $i in cases of $e] where $e is enum    
 ```
 
 An item a taking-apart pattern doesn't match stays in the result as it is (`($k + $v)` over `(1 + 2) 5` gives `[2 5]`);
-zipped rest holes of different lengths don't splice (the rule doesn't fire).
+zipped rest holes of different lengths don't splice (the rule doesn't fire). A zipped rest hole the pattern didn't
+bind is as many fresh names (F3) as the others hold items, and stays bound for the rest of the firing (F11, card
+rewrite-zip-runs):
+
+```warp
+rewrite kept($xs...) => (($t = $x) for ($t, $x) in ($ts..., $xs...); [$ts...])   # t·1 = 7; t·2 = 8; [t·1, t·2]
+```
 
 ## Runs of statements (F6)
 A pattern of several statements `($a; $b)` matches a run of them standing one after the other in a block, holes
@@ -118,6 +124,11 @@ binding across the run; the run is replaced by the template's statements:
 ```warp
 rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
 ```
+
+A run a rule made shorter is tried again where it stands, together with the statements after it, so a pairwise rule
+folds a whole run: `rewrite (add_up($a); add_up($b)) => add_up($a + $b)` turns `add_up(1); add_up(2); add_up(3)` into
+`add_up((1 + 2) + 3)`; a run as long or longer moves on, so this can't loop (F12). The sugar step (lib/sugar) matches
+runs of statements the same way. Tests: tests/modules/test_rewrite_zip_runs.warp, probes/rewrites/zip_runs.
 
 ## Results rewritten again (F7)
 A rule's result is rewritten again by the rules, its parts first, until none fires, so rules build on rules:
