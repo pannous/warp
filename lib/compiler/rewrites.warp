@@ -103,11 +103,10 @@ global first_parameter_types = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
-# the program being rewritten, which `where not method` and `where not shadowed` read where code stands in, and what
-# they read off it once asked: [the method parts' head words, the words a definition around them binds], each as
-# name → the written words of that name; ø until a rule asks
-global rule_program = ø
-global rule_contexts = ø
+# where the node the rules try stands, for `where not method` and `where not shadowed`: the method part of the `.`
+# being walked (the right of `x.f(…)`), else ø; the names the definitions around it bind
+global rule_method_part = ø
+global rule_binding = []
 # the code the rule being tried matched, for the context conditions; ø for a run of statements
 global rule_matched = ø
 
@@ -134,10 +133,9 @@ rewritten_program(program: any, source: text): any := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_enums = enums_in(program, {})
-	rule_program_read(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
-	program = bottom_up(program, n => rule_rewritten(n, rules, origins))
+	program = bottom_up_placed(program, n => rule_rewritten(n, rules, origins))
 	uses = []
 	for module in fired_modules {
 		statement = plain_node(parsed("use " + module))
@@ -169,8 +167,7 @@ sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
-	rule_program_read(program)
-	bottom_up(program, n => sugared_node(n, rules))
+	bottom_up_placed(program, n => sugared_node(n, rules))
 }
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
@@ -472,7 +469,7 @@ named_enum(code: any): text := {
 condition_holds(condition: any, bound: any): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
 	if is_takes(condition) { return first_parameter_fits(bound[rule_hole(condition#1)], name_of(condition#3)) }
-	if is_context_word(condition) { return context_holds(starting_word(rule_matched), name_of(condition)) }
+	if is_context_word(condition) { return context_holds(rule_matched, name_of(condition)) }
 	listing = membership(condition)
 	if listing != ø { return bound.has(listing#1) and word_listed(bound[listing#1], listing#2) }
 	hole = rule_hole(key_of(condition))
@@ -524,54 +521,34 @@ starting_word(code: any): any := {
 	if is_group(code) and #code > 0 and (bracket_of(code) == "(" or bracket_of(code) == "") and code#1 is symbol then code#1 else ø
 }
 
-# the program a rewrite reads, for the context conditions to read once asked
-rule_program_read(program: any): any := {
-	rule_program = program
-	rule_contexts = ø
-	program
+# `method`: the code is the method part of the `.` being walked, `f(…)` of `x.f(…)`, `f` of `x.f`; `shadowed`: a
+# definition around it binds the word it starts with, as a parameter or in its body (`f(t) := { parse = x => 7;
+# parse(t) }`, notes/dispatch.md: shadowing is scoped)
+context_holds(code: any, context: text): bool := {
+	if code == ø { return no }
+	if context == "method" { return rule_method_part != ø and code == rule_method_part }
+	word = starting_word(code)
+	word is symbol and name_of(word) in rule_binding
 }
 
-# `method`: the word starts the right of `x.f(…)`, `x.f`; `shadowed`: a definition around it binds the word, as a
-# parameter or in its body (`f(t) := { parse = x => 7; parse(t) }`, notes/dispatch.md: shadowing is scoped). The
-# words are those written in the program, each told apart from another of its name by identity (`===`): a pass keeps
-# a word it doesn't change, so a word a pass or a template made stands in neither
-context_holds(word: any, context: text): bool := {
-	if not (word is symbol) or rule_program == ø { return no }
-	if rule_contexts == ø { rule_contexts = [method_words(rule_program), shadowed_words(rule_program, [], {})] }
-	found = if context == "method" then rule_contexts#1 else rule_contexts#2
-	name = name_of(word)
-	found.has(name) and found[name].any(written => written === word)
-}
-
-# name → the words of that name written as the head of the right of a `.`
-method_words(program: any): any := {
-	found = {}
-	for n in nodes_in(program) {
-		if is_key(n, Op.Dot) { word_kept(starting_word(value_of(n)), found) }
+# bottom_up for the rules, keeping where the node they try stands (rule_method_part, rule_binding): the method part
+# of a `.` is tried as such, a definition's parts inside the names it binds
+bottom_up_placed(n: any, f: function): any := {
+	if is_key(n, Op.Dot) {
+		left = bottom_up_placed(key_of(n), f)
+		part = children(value_of(n), x => bottom_up_placed(x, f))
+		outer_part = rule_method_part
+		rule_method_part = part
+		right = f(part)
+		rule_method_part = outer_part
+		return f(Key(left, Op.Dot, right))
 	}
-	found
-}
-
-# the word kept in found under its name
-word_kept(word: any, found: any): any := {
-	if not (word is symbol) { return found }
-	name = name_of(word)
-	if found.has(name) { found[name] = found[name] + [word] } else { found[name] = [word] }
-	found
-}
-
-# name → the words of that name in n that a definition around them binds (the names in `binding`), kept in found
-shadowed_words(n: any, binding: list, found: any): any := {
-	if is_key(n, Op.Define) {
-		shadowed_words(value_of(n), binding + bound_by_definition(n), found)
-		return found
-	}
-	if n is symbol {
-		if name_of(n) in binding { word_kept(n, found) }
-		return found
-	}
-	for part in parts_of(n) { shadowed_words(part, binding, found) }
-	found
+	if not is_key(n, Op.Define) { return f(children(n, x => bottom_up_placed(x, f))) }
+	outer = rule_binding
+	rule_binding = rule_binding + bound_by_definition(n)
+	walked = children(n, x => bottom_up_placed(x, f))
+	rule_binding = outer
+	f(walked)
 }
 
 # the names a definition binds inside it: its parameters, the names its body's statements declare

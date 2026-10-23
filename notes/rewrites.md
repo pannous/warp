@@ -85,11 +85,12 @@ rewrite evaluate($t) => interpret(parse($t)) where not method and not shadowed
 rewrite $x.$f($a) => $f($x, $a) where $f not in [add, append, push, insert, pop, remove, delete, clear]
 ```
 
-`method` and `shadowed` ask about the word as written in the program, told apart from another of its name by identity
-(`===`): a pass keeps a word it doesn't change, so a word a pass or a template made stands in neither. `shadowed` asks only the definitions around the code; a word the program binds at its top level keeps the
-module and sugar rules away already (a program's own word keeps its meaning), and `$x is unbound` asks it of a hole.
-A run of statements (F6) has no word it starts with, so both hold of none there. Open: a lambda's parameter
-(`plus => plus(1)`) and a class's method bodies don't shadow yet.
+The engine walks the program keeping where the node it tries stands (rewrites.warp bottom_up_placed): the method part
+of the `.` it is in, the names the definitions around it bind. `shadowed` asks only the definitions around the code; a
+word the program binds at its top level keeps the module and sugar rules away already (a program's own word keeps its
+meaning), and `$x is unbound` asks it of a hole. A run of statements (F6) has no matched code of its own, so neither
+holds there. Open: a lambda's parameter (`plus => plus(1)`) and a class's method bodies don't shadow yet, and a
+result rewritten again (F7) is walked without them.
 
 Tests: tests/modules/test_rule_conditions.warp; probes/rewrites/rule_conditions.
 
