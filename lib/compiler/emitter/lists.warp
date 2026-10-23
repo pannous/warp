@@ -6,9 +6,11 @@ def vector_code(item_codes: any): list {
 }
 # an int as an i32 index
 def index_code(value: any): list { converted(value, "int") + [op.i32_wrap_i64] }
-# `#x`: the characters of a text, the items of a list or map, either known only at run time
+# `#x`: the characters of a text (a character is a one-character text), the items of a list or map, either known only
+# at run time
 def length_code(value: any): list {
 	if value#1 == "text" { return runtime_call("text_count", [value]) }
+	if value#1 == "char" { return length_code(["text", converted(value, "text")]) }
 	if value#1 == "list" { return ["int", value#2 + gc_code(gc_ops.struct_get, [gc.list, 0]) + [op.i64_extend_i32_u]] }
 	if value#1 == "node" { return runtime_call("node_length", [value]) }
 	refuse("cannot access length code of " + value#1)
