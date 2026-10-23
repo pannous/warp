@@ -1,10 +1,10 @@
 # Arithmetic on times and durations at run time (card time-arithmetic-warp; Rust twin:
 # src/wasm_emitter/time/time_arithmetic.rs, notes/dates_at_run_time.md): `d + 1 day`, `t - 90 minutes`, `a - b`,
 # `1 month + 2 days`, `3 * 1 hour`, as calendar.rs `Time::add`, `since`, `Duration::plus` and `times` do for constants.
-# Runtime words, not a compiler pass (notes/layers.md), so an extended part (card time-arithmetic-library); the old
-# path lib/compiler/time_arithmetic.warp links here while tests/parser/test_self_time_arithmetic.rs reads it there.
-# runtime/extended.warp does not load it yet: its time_form, day_nanos, hour_nanos and sign_of clash with times.warp's
-# and durations.warp's, and nothing calls it. The calendar is plain integers here: a time is its form and position, a
+# A class library beside lib/units.warp, not a compiler pass nor a runtime part (card time-arithmetic-library): the
+# compiler never loads it, as Span's plus would send every `+` it compiles through operator dispatch. The old path
+# lib/compiler/time_arithmetic.warp links here while tests/parser/test_self_time_arithmetic.rs reads it there. Its
+# time_form, day_nanos, hour_nanos and sign_of also clash with the runtime's times.warp and durations.warp. The calendar is plain integers here: a time is its form and position, a
 # duration its month, day and nanosecond counts. Wiring it to run-time time nodes (times.warp's time_form,
 # time_position, duration_months, duration_days, time_of, duration_of) waits for a bridge hook in node_add and the
 # emitter's node_operation for - and *; until then node_add, node_sub and node_mul call the Rust function.

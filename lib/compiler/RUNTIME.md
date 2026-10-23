@@ -23,11 +23,12 @@ fields, nodes, errors and builders, plus bridge (below).
 features: exact, exact_rounding, pow and pow_tables, durations, times and wasi, plus the hooks' bodies (below).
 `runtime/durations.warp` is an extended part kept in `runtime/`, as tests/numbers/test_duration_words.rs reads it
 there: only `runtime/extended.warp` uses it, and `scripts/self-check.sh` counts it as extended.
-`runtime/extended/time_arithmetic.warp` (calendar arithmetic, card time-arithmetic-library) is an extended part the root
-does not load yet: its words work on plain integers (form and position, month/day/nanosecond counts), some of its names
-(time_form, day_nanos, hour_nanos, sign_of) clash with times' and durations', and node_add, node_sub and node_mul do
-not call it yet. `lib/compiler/time_arithmetic.warp` links to it while tests/parser/test_self_time_arithmetic.rs reads
-the file at its old path.
+Calendar arithmetic is not part of the runtime: `lib/time_arithmetic.warp` (card time-arithmetic-library) is a class
+library beside `lib/units.warp`, over plain integers (form and position, month/day/nanosecond counts). The compiler
+never loads it: its Span's plus would send every `+` the compiler compiles through operator dispatch, and some of its
+names (time_form, day_nanos, hour_nanos, sign_of) clash with times' and durations'. `lib/compiler/time_arithmetic.warp`
+is only a link to it, kept while tests/parser/test_self_time_arithmetic.rs reads the file at that path; nothing in the
+compiler uses it.
 
 Both roots are loaded, core first: by `compiler.warp` (`RUNTIME_ROOTS`) and by `src/compiler/self_hosted.rs`
 (`EXTENDED_RUNTIME_WORDS`), each `use` path from the folder of the file it is in (compiler.warp `root_text` prefixes
