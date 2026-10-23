@@ -11,8 +11,11 @@ use wasmtime::{AsContextMut, ExternType, FuncType, Linker, Module, Result, ValTy
 
 pub const C_FUNCTIONS_SECTION: &str = "warp.c_functions";
 /// warp-rust's description of its C calls (src/modules/wasm_modules/c_calls.rs): `module name parameters result`
-/// tab-separated, a letter per parameter, `t` a text it copied NUL-terminated into its memory, the parameter its address
+/// tab-separated, a letter per parameter, `t` a text it copied NUL-terminated into its memory, the parameter its address;
+/// the result `t` a `char *` read back as a text, `ft` one the caller owns, read back and then freed (strdup's)
 pub const C_CALLS_SECTION: &str = "warp.c_calls";
+/// The result letters of an owned `char *` in C_CALLS_SECTION: "free the text" after reading it
+pub const OWNED_TEXT_LETTERS: &str = "ft";
 
 /// The C functions a module's `warp.c_functions` section describes (machine code keeps no custom section: aot.rs
 /// carries them in front of it)
@@ -27,8 +30,8 @@ pub fn described(bytes: &[u8]) -> Result<Vec<CFunction>> {
 		.collect()
 }
 
-/// A C call warp-rust's `warp.c_calls` section letters: module, name, a letter per parameter
-pub type Lettered = (String, String, String);
+/// A C call warp-rust's `warp.c_calls` section letters: module, name, a letter per parameter, the result's letters
+pub type Lettered = (String, String, String, String);
 
 /// module.name → its parameters' letters, from warp-rust's modules (none for machine code, which keeps no section)
 pub fn lettered(bytes: &[u8]) -> Vec<Lettered> {
@@ -36,7 +39,8 @@ pub fn lettered(bytes: &[u8]) -> Vec<Lettered> {
 		.flat_map(|section| String::from_utf8_lossy(section).lines().map(str::to_string).collect::<Vec<_>>())
 		.filter_map(|line| {
 			let fields: Vec<&str> = line.split('\t').collect();
-			(fields.len() >= 3).then(|| (fields[0].to_string(), fields[1].to_string(), fields[2].to_string()))
+			let field = |index: usize| fields.get(index).copied().unwrap_or_default().to_string();
+			(fields.len() >= 3).then(|| (field(0), field(1), field(2), field(3)))
 		})
 		.collect()
 }
@@ -78,8 +82,9 @@ pub fn link_c_imports(
 			Some(function) => function.clone(),
 			None if fits => continue,
 			None => {
-				let letters = lettered.iter().find(|(module, function, _)| module == library && function == name);
-				of_import(library, name, &func_type, letters.map(|(_, _, letters)| letters.as_str()))
+				let letters = lettered.iter().find(|(module, function, _, _)| module == library && function == name);
+				let letters = letters.map(|(_, _, parameters, result)| (parameters.as_str(), result.as_str()));
+				of_import(library, name, &func_type, letters)
 			}
 		};
 		let loaded = get_or_load_library(&function.library).ok_or_else(|| {
@@ -105,8 +110,9 @@ pub fn link_c_imports(
 }
 
 /// A C function as the import's own type says: numbers as they are, a reference parameter a text, a reference result
-/// a text read back; a parameter warp-rust's letters mark `t` the address of a text in linear memory
-fn of_import(library: &str, name: &str, func_type: &FuncType, letters: Option<&str>) -> CFunction {
+/// a text read back (freed after when the result's letters are `ft`); a parameter warp-rust's letters mark `t` the
+/// address of a text in linear memory
+fn of_import(library: &str, name: &str, func_type: &FuncType, letters: Option<(&str, &str)>) -> CFunction {
 	let param = |value: ValType| match value {
 		ValType::I64 => ParamType::I64,
 		ValType::F32 => ParamType::F32,
@@ -119,6 +125,9 @@ fn of_import(library: &str, name: &str, func_type: &FuncType, letters: Option<&s
 		Some(ValType::I64) => (RetType::I64, None),
 		Some(ValType::F32) => (RetType::F32, None),
 		Some(ValType::F64) => (RetType::F64, None),
+		Some(ValType::Ref(_)) if letters.is_some_and(|(_, result)| result == OWNED_TEXT_LETTERS) => {
+			(RetType::I64, Some(CPointer::OwnedText))
+		}
 		Some(ValType::Ref(_)) => (RetType::I64, Some(CPointer::Text)),
 		Some(_) => (RetType::I32, None),
 	};
@@ -129,7 +138,7 @@ fn of_import(library: &str, name: &str, func_type: &FuncType, letters: Option<&s
 		param_types: func_type
 			.params()
 			.enumerate()
-			.map(|(index, value)| match letters.and_then(|letters| letters.chars().nth(index)) {
+			.map(|(index, value)| match letters.and_then(|(letters, _)| letters.chars().nth(index)) {
 				Some('t') => ParamType::Ptr,
 				_ => param(value),
 			})

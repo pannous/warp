@@ -72,6 +72,7 @@ enum Ran {
 }
 
 fn main() {
+	with_users_ctype();
 	let mut args = std::env::args();
 	let name = args.next().unwrap_or_default();
 	let args = args.collect();
@@ -82,6 +83,17 @@ fn main() {
 	};
 	let worker = std::thread::Builder::new().stack_size(THREAD_STACK).spawn(run);
 	std::process::exit(worker.map_or(1, |worker| worker.join().unwrap_or(1)))
+}
+
+/// The character type of the user's locale (LC_ALL, LC_CTYPE, LANG), as a C program sets it first: the C libraries a
+/// program calls read UTF-8 then (libedit's readline crashes on a prompt of non-ASCII letters in the C locale). Only
+/// LC_CTYPE: numbers keep printing with a point
+fn with_users_ctype() {
+	#[cfg(unix)]
+	// SAFETY: before any other thread runs; the empty name asks for the environment's locale
+	unsafe {
+		libc::setlocale(libc::LC_CTYPE, c"".as_ptr());
+	}
 }
 
 fn command(given: Vec<String>) -> i32 {

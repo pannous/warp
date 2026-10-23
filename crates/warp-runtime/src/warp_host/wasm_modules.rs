@@ -353,6 +353,7 @@ fn crossed_in(
 	};
 	let number = |node: &Node| match node {
 		Node::Float(x) => Ok(*x),
+		Node::Ratio(numerator, denominator) => Ok(*numerator as f64 / *denominator as f64),
 		Node::Int(n) => Ok(*n as f64),
 		other => Err(format!("{} is no number", other.shown())),
 	};

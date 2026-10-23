@@ -10,6 +10,7 @@
 # The types of a foreign line:
 #   i32 (also int, char), i64 (long, size_t), f64 (float, double), f32 (a C float), bool (a C bool, its low byte)
 #   text     a NUL-terminated copy of a warp text; a result is a `char *` read back as a text, NULL ø
+#   owned_text  a result only: a `char *` the caller owns (strdup's, readline's), read back as a text, then freed
 #   handle   a C pointer the program holds as an id
 #   out      an out-pointer the call fills: no argument; the first one's pointer is the result of a handle result
 #   bytes    a warp text's bytes or a list of 0 to 255 as a pointer, NULs and all; the length a `length` parameter after it
@@ -29,7 +30,7 @@ c_foreign_mark = " from "
 c_quotes = ["'", "\""]
 # a type word of a foreign line → the type it crosses as
 c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "bool", char: "i32", i64: "i64", int64: "i64", long: "i64", size_t: "i64",
-	f64: "f64", float: "f64", double: "f64", number: "f64", f32: "f32", float32: "f32", text: "text", string: "text", handle: "handle", pointer: "handle",
+	f64: "f64", float: "f64", double: "f64", number: "f64", f32: "f32", float32: "f32", text: "text", string: "text", owned_text: "owned_text", handle: "handle", pointer: "handle",
 	out: "out", bytes: "bytes", length: "length", void: "void", nothing: "void"}
 # the kind the emitter passes a type as (host_words.warp's), and the c_signatures.rs name of the parameter
 c_parameter_kinds = {bool: "i32", i32: "i32", i64: "int", f64: "float", f32: "f32", text: "node", bytes: "node", handle: "i32"}
@@ -242,9 +243,10 @@ native_uses(line: text, native: list): text := {
 c_host_word(declaration: list): any := {
 	types = declaration#3
 	result = declaration#5
-	if "?" in types or result == "?" or result in c_parameter_only_types { return ø }
+	if "?" in types or "owned_text" in types or result == "?" or result in c_parameter_only_types { return ø }
 	kinds = types.filter(t => t not in c_filled_types).map(t => c_parameter_kinds[t])
-	results = if result == "void" then [] else if result == "text" then ["node"] else [c_parameter_kinds[result]]
+	gives_text = result == "text" or result == "owned_text"
+	results = if result == "void" then [] else if gives_text then ["node"] else [c_parameter_kinds[result]]
 	# the first out-pointer's parameter name: a NULL there fails the call naming it
 	pointee = ""
 	i = 0
@@ -252,8 +254,8 @@ c_host_word(declaration: list): any := {
 		if types[i] == "out" and pointee == "" { pointee = declaration#4[i] }
 		i += 1
 	}
-	returned = if result == "text" then "i64" else if result == "handle" then (if pointee != "" then "i32" else "i64") else result
-	crossing = if result == "text" then "text" else if result == "handle" then "handle" else "number"
+	returned = if gives_text then "i64" else if result == "handle" then (if pointee != "" then "i32" else "i64") else result
+	crossing = if gives_text or result == "handle" then result else "number"
 	if result != "handle" { pointee = "" }
 	fields = [declaration#2, declaration#2, declaration#1, types.map(t => c_parameter_names[t]).join(","), returned, crossing, pointee, "", ""]
 	[kinds, results, declaration#2, fields.join("\t")]
