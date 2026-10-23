@@ -109,7 +109,7 @@ Sugar (1417), each with the rule it would become:
 | 236 | for variants: C-style `for (i=0;i<n;i++)`, `for each`, named loops, `for x in xs:`, loop variables | `rewrite for $i in $a to $b $body => ($i = $a; $i·end = $b; while $i <= $i·end { $body; $i++ })`: needs F3/F5; C-style needs F1 (a header of three statements) |
 | 187 | English definitions `To square a number: …`, phrase slots | F2 (type words in the head) + F5 (phrase name); hardest, last |
 | 153 | symbol prefixes: Rust `&x`, `&mut x`, `*r`; `\|x\| body`; `> 100 =>` relational arm; rest/spread `*xs` | `rewrite &$x => $x`, `rewrite \|$p...\| $b => ($p...) => $b`; spread is notation |
-| 110 | `3 days` unit phrases (time literals `10:30` stay notation) | `rewrite $n: number days => days($n)` phrase rule, works today (lib/units.warp style) |
+| 110 | `3 days` unit phrases (time literals `10:30` stay notation) | `rewrite $n: number days => days($n)` phrase rule, works today (lib/units.warp style). Unit literals (`5 km`, `500ms`): lib/sugar/units.warp on purpose, since Rust's rewrites run before its static units; they move into lib/units.warp when the Rust lane retires (card pure-unit-literals) |
 | 103 | Ruby/Lua `do … end`, `then … end`, `fi` | not a rewrite: grouping. Becomes notation: declared word brackets (`circumfix operator do end`) |
 | 99 | `shader {…}` / `wgsl {…}` raw-text blocks | not a rewrite: lexical. Notation: a declared raw-block word list |
 | 98 | multi-word type names `class full name {…}`, `unsigned int` | lexical (needs a pre-scan); notation table of compound names, or drop |
