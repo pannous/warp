@@ -185,7 +185,7 @@ c_functions_of(source: text, library_folder: text): list := {
 		}
 	}
 	catalog = c_catalog(library_folder, native.map(n => n#2))
-	# warp's own words (floor, abs) stay warp's when libc or libm is imported or used, as Rust's lane keeps its built-ins
+	# warp's own floor stays warp's when libm is imported or used (c_warps)
 	own = warp_word_names(library_folder)
 	missing = []
 	# the imports every name of which is a C function: left out as the foreign lines are, so that no name of theirs
@@ -219,8 +219,12 @@ c_without(lines: list, statements: list): list := {
 	if #statements == 0 { return lines }
 	lines.map(line => line.split(";").filter(part => part.trim() not in statements).join(";"))
 }
-# whether `name` of `library` is a word of warp's own (`own`, warp_word_names), which a libc or libm import leaves warp's
-c_warps(own: any, name: text, library: text): bool := library in c_and_m and own.has(name)
+# the words of warp's own the pure emitter makes itself (emitter.warp `floored`), of other results than C's: warp's
+# floor is an int, libm's a float; warp's other math words (ceil, round) have no pure code yet, so libm's serve
+c_emitted_words = ["floor"]
+# whether `name` of `library` is such a word of warp's own (`own`, warp_word_names), which a libc or libm import leaves
+# warp's, as Rust's lane keeps its built-ins (src/ffi/mod.rs)
+c_warps(own: any, name: text, library: text): bool := library in c_and_m and own.has(name) and name in c_emitted_words
 # the line with each `use sqlite3` of a library of `native` ([library, path] each) a `use` of its native file
 native_uses(line: text, native: list): text := {
 	if #native == 0 or not line.contains("use ") { return line }
