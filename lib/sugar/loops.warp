@@ -1,0 +1,27 @@
+# Counted loops (notes/layers.md, sugar): `n times {…}` (also `n times: …`, which the parser reads as its block) runs
+# the block n times; `n times [x]` and `n times "ab"` repeat a list or a text (emitter.warp). Rust twin:
+# times_phrases.rs
+rewrite $n times $body => for $i in 1 to $n $body where $body is block
+rewrite (once $body) => (1 times $body) where $body is block
+rewrite (twice $body) => (2 times $body) where $body is block
+rewrite (thrice $body) => (3 times $body) where $body is block
+# The C-style head `for (i=0; i<n; i++) {…}` (the parser groups it as for(head) and the body): its start, then while
+# the condition holds the body and the step, marked `loop·step:` as the for rules of
+# sugar/iteration mark theirs, so that a `continue` still runs it
+rewrite for($start; $condition; $step) {$body...} => ($start; while $condition { $body...; loop··step: $step })
+# `for xs {…}` loops with the variable `it`
+rewrite (for $xs $body) => (for it in $xs $body) where $body is block
+# `each xs {…}` and `xs.each {…}` head that loop too, as statements with a block (inside an expression, `print each
+# xs`, each is the broadcasting word); warp says for
+rewrite each $xs $body => for $xs $body where statement and $body is block and alias
+rewrite $xs.each $body => for $xs $body where statement and $body is block and alias
+# Inside an expression `each` is the broadcasting word: `print each xs` calls print with each item, the list of the
+# results its value (`xs.map(e -> print(e))`); `each character of t` (`t.character` by then, of_lookups) walks the
+# text's characters
+rewrite each $t.character => each chars($t)
+rewrite $f each $xs => $xs.map($e -> $f($e))
+# glued to their block too: `twice{n += 1}`, which the parser reads as the tagged block `twice: {…}` (a map, `{once:
+# {a: 1}}`, keeps its key)
+rewrite once: $body => (1 times $body) where $body is block
+rewrite twice: $body => (2 times $body) where $body is block
+rewrite thrice: $body => (3 times $body) where $body is block

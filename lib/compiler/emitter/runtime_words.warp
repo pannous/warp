@@ -142,7 +142,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", byte_at: "text_byte", float_bits: "bits_of_float"}
+	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", byte_at: "text_byte", float_bits: "bits_of_float", wasi_environment: "wasi_environment"}
 # node_order knows no user compare: a program ordering instances by its own sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # a `compare(a: T, b: T)` of the program (its witness compare·T once Rust's traits.rs named it): the order of T's
@@ -153,7 +153,7 @@ def orders_instances(): bool { module.functions.keys.any(name => name == "compar
 core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
+	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
 # the kinds of a value known only at run time each type passes, as Rust's BUILTIN_TYPES masks take them: an int is a
 # rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
 # types.warp node_is_type, held_kind_bit)

@@ -108,6 +108,8 @@ const TWINNED_PASSES: [(Pass, usize); 5] = [
 thread_local! {
 	/// Set in a worker: the stage program itself compiles with the Rust parser and passes
 	static IN_WORKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// Set while a program the pure lane refused compiles fully on Rust (after_pure)
+	static ON_RUST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// One request to a worker: its JSON, and where the result's view goes as JSON
@@ -164,7 +166,27 @@ fn compiler_folder() -> PathBuf {
 fn switch() -> Option<&'static str> {
 	static VALUE: OnceLock<Option<String>> = OnceLock::new();
 	let value = VALUE.get_or_init(|| crate::setting(SWITCH)).as_deref();
-	value.filter(|_| !IN_WORKER.with(|inside| inside.get()))
+	value.filter(|_| !IN_WORKER.with(|inside| inside.get()) && !ON_RUST.with(|on| on.get()))
+}
+
+// ⚠ WARP DOES THIS DIFFERENTLY: a program the pure lane refuses runs fully on Rust, never on the hybrid mix of
+// parser.warp, the twinned passes and Rust's other passes (decision pure-fallback, notes/hybrid_lane.md): the sugar
+// moved into lib/sugar no longer has to keep the shapes Rust's passes read → lib/sugar/*.warp
+/// `compile`, the usual compile after pure_module gave none: under WARP_SELF_HOSTED=pure, where that means the pure
+/// lane refused the program, with the switch off, so all of it runs on Rust
+pub fn after_pure<T>(compile: impl FnOnce() -> T) -> T {
+	if switch() != Some(PURE) {
+		return compile();
+	}
+	struct Restored;
+	impl Drop for Restored {
+		fn drop(&mut self) {
+			ON_RUST.with(|on| on.set(false));
+		}
+	}
+	ON_RUST.with(|on| on.set(true));
+	let _restored = Restored;
+	compile()
 }
 
 fn enabled() -> bool {

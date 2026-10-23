@@ -1,0 +1,3 @@
+f(x) := x + 1
+xs = [1, 2, 3]
+print [f w for w in xs if w > 1]

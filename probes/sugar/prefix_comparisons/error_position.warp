@@ -1,0 +1,3 @@
+# an error inside the compared call points at what the user wrote. Expected: the unknown name zed at 3:10
+sq(x: int) := x * x
+print sq zed == 4
