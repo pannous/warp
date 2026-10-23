@@ -2,12 +2,14 @@
 # What warp-host prints and exits with (notes/warp_host.md): pure programs compiled by compiler-self.wasm and run with
 # WASI and shell commands, and the launcher packaging/bin/warp handing programs to a warp-host beside it. Run it through
 # the queue: tests/queue.sh tests/host/test_host.sh
-# The host under test is WARP_HOST_BINARY (default the checkout's target/release/warp-host, else target/debug/: `cargo
-# build --release -p warp-runtime --features host --bin warp-host`), with compiler-self.wasm and compiler.wasm from
-# beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`); staged in scratch/host-test/ as installed.
+# The host under test is WARP_HOST_BINARY (default the checkout's target/host/warp-host, else target/release/, else
+# target/debug/: `cargo build --profile host -p warp-runtime --features host --bin warp-host`), with compiler-self.wasm
+# and compiler.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`); staged in
+# scratch/host-test/ as installed.
 # Kept values and machine code go to scratch/host-cache/, kept between runs: the first run computes them (~30 s).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
-host=${WARP_HOST_BINARY:-$checkout/target/release/warp-host}
+host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
+[ -x "$host" ] || host=$checkout/target/release/warp-host
 [ -x "$host" ] || host=$checkout/target/debug/warp-host
 rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
 stage=$checkout/scratch/host-test
@@ -15,7 +17,7 @@ HELLO='"Hello 🌍2026"'
 export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=0
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
-[ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --release -p warp-runtime --features host --bin warp-host"; exit 1; }
+[ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
 for compiler in compiler.wasm compiler-self.wasm; do
 	[ -f "$(dirname "$rust")/$compiler" ] || { echo "✗ no $compiler beside $rust: $rust rebuild builds it"; exit 1; }
 done
@@ -100,8 +102,20 @@ expect "the launcher: other commands stay warp-rust's" 0 "ran by warp-rust" ! "p
 
 # C calls (M2): hand-written modules importing C functions, as the pure emitter will (card pure-c-imports); a text
 # is a warp text node, its warp.c_functions line says how each crosses (c_signatures.rs)
-wat() { # wat <name> <module text>: <name>.wat in the stage
+# assembled to <name>.wasm by wat2wasm, as warp-host reads WAT text only with the feature wat: WARP_WAT2WASM, else the
+# checkout's (`cargo build --release -p warp-runtime --features wat --bin wat2wasm`), else one on PATH (wabt)
+assembler=${WARP_WAT2WASM:-$checkout/target/release/wat2wasm}
+[ -x "$assembler" ] || assembler=$checkout/target/host/wat2wasm
+[ -x "$assembler" ] || assembler=$checkout/target/debug/wat2wasm
+[ -x "$assembler" ] || assembler=$(command -v wat2wasm)
+[ -x "$assembler" ] || { echo "✗ no wat2wasm: cargo build --release -p warp-runtime --features wat --bin wat2wasm"; exit 1; }
+wat() { # wat <name> <module text>: <name>.wat in the stage, assembled into <name>.wasm
 	printf '%s\n' "$2" >"$stage/$1.wat"
+	if [ "$(basename "$assembler")" = wat2wasm ] && "$assembler" --help 2>&1 | grep -q -- --enable-all; then
+		"$assembler" --enable-all "$stage/$1.wat" -o "$stage/$1.wasm"
+	else
+		"$assembler" "$stage/$1.wat" "$stage/$1.wasm"
+	fi || echo "✗ wat2wasm could not assemble $1.wat"
 }
 NODE='(rec (type $Node (struct (field i64) (field anyref) (field (ref null $Node))))) (type $Text (array (mut i8)))'
 text() { echo "(struct.new \$Node (i64.const 3) (array.new_data \$Text $1 (i32.const 0) (i32.const $2)) (ref.null \$Node))"; }
@@ -131,12 +145,12 @@ wat sqlite "(module $NODE
 wat nolib '(module (import "nosuchlib" "nosuch_function" (func $f (result i32))) (func (export "main") (result i32) (call $f)))'
 wat nosymbol '(module (import "c" "no_such_c_function" (func $f (result i32))) (func (export "main") (result i32) (call $f)))'
 
-expect "C: strlen(\"hello\") gives 5" 5 "5" -- "$host" strlen.wat
-expect "C: sqrt(16) gives 4.0" 0 "4.0" -- "$host" sqrt.wat
-expect "C: hypot(3, 4) from libm by dlsym gives 5.0" 0 "5.0" -- "$host" hypot.wat
-expect "C: sqlite3 :memory: select 1+2 gives 3" 3 "3" -- "$host" sqlite.wat
+expect "C: strlen(\"hello\") gives 5" 5 "5" -- "$host" strlen.wasm
+expect "C: sqrt(16) gives 4.0" 0 "4.0" -- "$host" sqrt.wasm
+expect "C: hypot(3, 4) from libm by dlsym gives 5.0" 0 "5.0" -- "$host" hypot.wasm
+expect "C: sqlite3 :memory: select 1+2 gives 3" 3 "3" -- "$host" sqlite.wasm
 expect "C: a missing library is a clear error" 1 "the C library nosuchlib of the import nosuchlib.nosuch_function is not found (tried" \
-	-- "$host" nolib.wat
-expect "C: a missing symbol is a clear error" 1 "the C library c has no function no_such_c_function" -- "$host" nosymbol.wat
+	-- "$host" nolib.wasm
+expect "C: a missing symbol is a clear error" 1 "the C library c has no function no_such_c_function" -- "$host" nosymbol.wasm
 
 if [ "$failed" = 0 ]; then echo "✓ $run tests passed"; else echo "✗ $failed of $run tests failed"; exit 1; fi

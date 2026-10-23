@@ -79,22 +79,28 @@ fn command(given: Vec<String>) -> i32 {
 			compile_file(&engine, compiler, Path::new(source), &Path::new(source).with_extension("wasm"))
 		}
 		["compile", source, wasm] => compile_file(&engine, compiler, Path::new(source), Path::new(wasm)),
-		[file, ..] if file.ends_with(".wasm") || file.ends_with(".wat") => {
-			let bytes = std::fs::read(file).map_err(|problem| problem.to_string());
-			let bytes = bytes.and_then(|bytes| {
-				wat::parse_bytes(&bytes).map(|bytes| bytes.to_vec()).map_err(|problem| problem.to_string())
-			});
-			match bytes {
-				Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None)),
-				Err(problem) => failed(&format!("{file}: {problem}")),
-			}
-		}
+		[file, ..] if file.ends_with(".wasm") || file.ends_with(".wat") => match module_bytes(file) {
+			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None)),
+			Err(problem) => failed(&format!("{file}: {problem}")),
+		},
 		[source, ..] if source.ends_with(".warp") => run_source(&engine, compiler, source, &args[1..]),
 		_ => {
 			eprintln!("{USAGE}");
 			2
 		}
 	}
+}
+
+/// A module file's bytes; WAT text only in a build with the feature wat
+fn module_bytes(file: &str) -> Result<Vec<u8>, String> {
+	let bytes = std::fs::read(file).map_err(|problem| problem.to_string())?;
+	if !file.ends_with(".wat") {
+		return Ok(bytes);
+	}
+	#[cfg(feature = "wat")]
+	return wat::parse_bytes(&bytes).map(|bytes| bytes.to_vec()).map_err(|problem| problem.to_string());
+	#[cfg(not(feature = "wat"))]
+	Err("this warp-host reads no WAT text: build it with --features wat, or assemble the module (wat2wasm)".into())
 }
 
 /// warp's engine settings (GC, typed function references; exceptions come with GC), the deep stack the compiler needs
