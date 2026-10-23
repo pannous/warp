@@ -203,3 +203,14 @@ marked 5' 5
 is! 'rewrite marked $a $b... => $a $b...
 n = marked 5
 n' 5
+
+# placed_rules_chain_on_their_own_result
+is! 'rewrite loudly $s... => $s... where statement
+rewrite gently $s... => $s... where statement
+gently loudly gently f() := 3
+f()' 3
+
+# one_placed_rule_fires_on_its_result_again
+is! 'rewrite loudly $s... => $s... where statement
+loudly loudly h() := 5
+h()' 5

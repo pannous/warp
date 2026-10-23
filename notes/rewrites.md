@@ -116,6 +116,15 @@ quadruple 3   # 12
 
 A result rewritten 64 times in a row (`rewrite_depth_limit`) is the rules' loop: an error, not a hang.
 
+A rule of a place (F1) rewrites its result again by the rules of that place, until none matches, so the declaration
+words before a statement all go, in any order (card engine-placed-where-chain; rewrites.warp at_place):
+
+```warp
+rewrite loudly $s... => $s... where statement
+rewrite gently $s... => $s... where statement
+gently loudly gently f() := 3      # f() := 3
+```
+
 ## Enum cases (F9)
 Three more `where` conditions ask about the enums the program declares (`enum Coin { Penny, Dime }`, Swift's
 `{ case north, south }`), read before plain_enums.warp lowers the declarations:
@@ -150,5 +159,6 @@ The parser reads `...` at the end of a line as a range going on into the next li
 swallowed the line after it (the next rule, or the program's next statement); the engine ends such a rule line with
 `;` before parsing (rewrites.warp rules_ended, for the program in passes.warp and for each module). Before (card
 engine-rest-template) a bare `$s...` gave the tree `$s to ø` around the words, and a phrase of one word stayed a
-phrase, so each word took two fixed-arity rules. Open: a `where` after a template ending in `$s...`, on its line or
-the next, is swallowed the same way. Tests: tests/modules/test_rewrite_engine.warp.
+phrase, so each word took two fixed-arity rules. A `where` after a template ending in `$s...`
+on its line, which the parser reads as the range's end, ends the template (split_at_where); on the next line it is
+still swallowed. Tests: tests/modules/test_rewrite_engine.warp.
