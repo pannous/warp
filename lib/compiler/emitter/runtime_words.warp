@@ -142,7 +142,7 @@ def orders_instances(): bool { module.functions.keys.any(name => name == "compar
 core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
+	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
 # the kinds of a value known only at run time each type passes, as Rust's BUILTIN_TYPES masks take them: an int is a
 # rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
 # types.warp node_is_type, held_kind_bit)
