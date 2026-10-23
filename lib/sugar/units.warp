@@ -7,3 +7,5 @@
 # its own. Pure lane only: Rust's rewrites run before its static units, so this rule stays out of lib/units.warp, which
 # Rust reads. Not yet: `km/h`, `m²`, temperatures, SI prefixes of a unit not declared.
 rewrite $n * $u => quantity_value($n, $u) where $n is literal and $u is unit
+# `3 km as m` is the quantity shown in m, 3000m; `5 as ms` a plain number as that many of the unit, 5ms
+rewrite $v as $u => quantity_as($v, $u) where $u is unit

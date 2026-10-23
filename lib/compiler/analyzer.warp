@@ -986,7 +986,7 @@ quantity_unit(n: Node, held: map, defined: map): text := {
 	if n is symbol { return held.get(name_of(n)) ?? "" }
 	if is_curly_group(n) and #n > 0 { return quantity_unit(computed(n), held, defined) }
 	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return quantity_unit(n#1, held, defined) }
-	if is_group(n) and #n == 3 and head_name(n) == quantity_word and n#3 is symbol { return unit_symbol(name_of(n#3)) }
+	if is_group(n) and #n == 3 and (head_name(n) == quantity_word or head_name(n) == quantity_as_word) and n#3 is symbol { return unit_symbol(name_of(n#3)) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol {
 		called = head_name(n) + "()"
 		if held.has(called) { return held[called] }
@@ -1049,6 +1049,13 @@ quantity_misuse(n: Node, held: map, defined: map): text := {
 			if not shows_unit(unit) { return "a quantity of the unit " + unit + " shown by " + head_name(n) + ": the pure lane does not show it yet" }
 		}
 	}
+	# `3 km as s`: a quantity converted to a unit of another kind
+	if is_group(n) and #n == 3 and head_name(n) == quantity_as_word and n#3 is symbol {
+		from = quantity_unit(n#2, held, defined)
+		if from != "" and from != unknown_unit and unit_dimension(from) != unit_dimension(unit_symbol(name_of(n#3))) {
+			return "DimensionError: " + from + " as " + name_of(n#3) + ": incompatible units"
+		}
+	}
 	match n {
 		Key(left, op, right): {
 			a = quantity_unit(left, held, defined)
@@ -1090,7 +1097,7 @@ quantity_facts(program: Node): map := {
 	if #values > 0 and quantity_unit(values#(#values), held, defined) != "" { return {units: held, refusal: "a quantity as the program's value: the pure lane gives it as a text yet"} }
 	{units: held, refusal: ""}
 }
-mentions_quantity(n: Node): bool := (n is symbol and name_of(n) == quantity_word) or node_parts(n).any(part => mentions_quantity(part))
+mentions_quantity(n: Node): bool := (n is symbol and (name_of(n) == quantity_word or name_of(n) == quantity_as_word)) or node_parts(n).any(part => mentions_quantity(part))
 
 # what emitter.warp reads (card emitter-takes): {functions: {f: {params: [kind…], result, locals: {x: kind}, elements:
 # {xs: kind}}}, variables: {x: kind}, elements: {xs: kind}, value: kind}, kinds as emitter_kind names them

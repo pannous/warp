@@ -727,6 +727,7 @@ def group_expression(body: Body, n: any): list {
 	}
 	# `quantity_value(5, km)`, a unit literal (lib/sugar/units.warp): its amount in SI base units; `str(5 km)` its text
 	if is_quantity_value(n) { return quantity_amount(body, n) }
+	if is_quantity_as(n) { return quantity_as_amount(body, n) }
 	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in quantity_text_words and shown_unit(n#2) != "" { return quantity_text(body, n#2, shown_unit(n#2)) }
 	# `raise X` (also throw, fail, panic), called or a line of its own: the run fails with X as its message, a value of
 	# no kind; a program's own function of that name is its function

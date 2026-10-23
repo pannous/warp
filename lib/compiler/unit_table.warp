@@ -9,6 +9,8 @@ use os
 UNITS_FILE = "units.warp"
 // the word of a unit literal, quantity_value(5, km) (lib/sugar/units.warp), which the analyzer and the emitter read
 quantity_word = "quantity_value"
+// the word of a conversion to a unit, quantity_as(3 km, m) of `3 km as m` (lib/sugar/units.warp): the value in that unit
+quantity_as_word = "quantity_as"
 UNIT_DEFINITIONS_START = "unit_definitions = data {"
 DIGIT_TEXTS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 // name → its amount in SI base units as numerator and denominator, name → its quantity, read on first use
