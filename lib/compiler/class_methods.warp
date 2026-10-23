@@ -166,8 +166,6 @@ deepest_first(classes: any, names: list): list := {
 
 # a method's body as a function of the instance: a field read or written bare is the instance's, `self.name`; a
 # sibling method read or called bare is called on it; a member after a dot, an entry's or named argument's name and
-# the arguments of the call, as functions of the instance
-arguments_on_instance(call: Node, fields: list, siblings: list): list := items_of(call)[1..].map(part => on_instance(part, fields, siblings))
 # the names a lambda takes stay as written
 on_instance(n: Node, fields: list, siblings: list): Node := {
 	if n is symbol and name_of(n) in instance_names { return self_node }
