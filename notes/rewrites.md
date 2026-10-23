@@ -70,6 +70,29 @@ After `where`, conditions joined by `and` ask about what the holes bound:
 in order, so a later rule without conditions is the fallback. The `where` may stand after a template the parser
 continued into it (`=> $c + $n where …`).
 
+Three more ask about a word list and where the matched code stands (card engine-rule-conditions):
+
+| condition | holds when |
+|---|---|
+| `$x is in [add, push]` | the hole bound one of the words listed, a name or a text naming it (`"push"`) |
+| `method` | the word the matched code starts with is the method part of `x.f(…)` or `x.f`, the right of `.` |
+| `shadowed` | a definition around the matched code binds the word it starts with: a parameter, or a name its body declares (`f(t) := { parse = x => 7; parse(t) }`, notes/dispatch.md: shadowing is scoped) |
+
+They are written negated: `where $f is not in [add, push]`, `where not method and not shadowed`:
+
+```warp
+rewrite evaluate($t) => interpret(parse($t)) where not method and not shadowed
+rewrite $x.$f($a) => $f($x, $a) where $f is not in [add, append, push, insert, pop, remove, delete, clear]
+```
+
+`method` and `shadowed` read where the word was written (its line and column): a word a pass or a template made stands
+in neither. `shadowed` asks only the definitions around the code; a word the program binds at its top level keeps the
+module and sugar rules away already (a program's own word keeps its meaning), and `$x is unbound` asks it of a hole.
+A run of statements (F6) has no word it starts with, so both hold of none there. Open: a lambda's parameter
+(`plus => plus(1)`) and a class's method bodies don't shadow yet.
+
+Tests: tests/modules/test_rule_conditions.warp; probes/rewrites/rule_conditions.
+
 ## Places (F1)
 A place word among the `where` conditions lets a rule rewrite code only standing there:
 
