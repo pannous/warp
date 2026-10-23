@@ -1150,13 +1150,15 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 		seen = -1
 		while seen != #module.closures + #module.dispatchers {
 			seen = #module.closures + #module.dispatchers
-			for f in module.dispatchers { if f.name == closure_text_name { closure_text_code(f) } else { dispatcher_code(f) } }
+			for f in module.dispatchers { if f.name == closure_text_name { closure_text_code(f) } else if f.name == shown_big_int_name { shown_big_int_code(f) } else { dispatcher_code(f) } }
 		}
 		# every function compiled, no call gives a guessed kind any more
 		for f in module.rereads {
 			module.saw_pending = no
 			body_code(f)
 		}
+		# a closure's target compiled late may make big ints: shown_big_int's code once every function is compiled
+		for f in module.dispatchers { if f.name == shown_big_int_name { shown_big_int_code(f) } }
 		if main.result != "int" and main.result != "float" {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"

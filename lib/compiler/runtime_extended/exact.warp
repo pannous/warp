@@ -44,8 +44,8 @@ exact_order(a: Node, b: Node): int := {
 # an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
 # any other as n/d
 exact_text(n: Node): text := {
-	if is_big_int(n) { return big_int_text(n) }
-	if not is_ratio(n) { return int_text(unboxed_int(n)) }
+	# an Int that is no ratio: a plain int, else a big int, whose text a program without one never compiles (shown_big_int)
+	if not is_ratio(n) { return if is_plain_int(n) then int_text(unboxed_int(n)) else shown_big_int(n) }
 	numerator = ratio_numerator(n)
 	denominator = ratio_denominator(n)
 	twos = factor_count(denominator, 2)
