@@ -1,0 +1,4 @@
+// expected: [6 4 2] [2 3] (a comprehension over several words, `reverse xs`; the Rust lane gives [1 2 3])
+xs = [1, 2, 3]
+print [c * 2 for c in reverse xs]
+print [c for c in xs if c > 1]

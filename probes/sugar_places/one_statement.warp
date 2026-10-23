@@ -1,0 +1,3 @@
+// expected: 1 then 2 (a program of one statement)
+xs = [1, 2]
+each xs { print it }

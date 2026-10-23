@@ -1,0 +1,6 @@
+# `int[n]` is n zeros, a list to write into. Expected: [0 0 0 0] 4 7
+x = int[4]
+print x
+print count x
+x#2 = 7
+print x#2

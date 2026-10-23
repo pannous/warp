@@ -14,24 +14,44 @@ pub const C_FUNCTIONS_SECTION: &str = "warp.c_functions";
 /// tab-separated, a letter per parameter, `t` a text it copied NUL-terminated into its memory, the parameter its address
 pub const C_CALLS_SECTION: &str = "warp.c_calls";
 
-/// Link every C import of `module` that the linker has no fitting definition for, or that the section describes
-pub fn link_c_imports(linker: &mut Linker<Host>, store: &mut Store<Host>, module: &Module, bytes: &[u8]) -> Result<()> {
-	let described: Vec<(CFunction, ByteOutput)> = custom_sections(bytes, C_FUNCTIONS_SECTION)
+/// A described C function and its byte output (c_signatures.rs ByteOutput)
+pub type Described = (CFunction, ByteOutput);
+
+/// The C functions a module's `warp.c_functions` section describes (machine code keeps no custom section: aot.rs
+/// carries them in front of it)
+pub fn described(bytes: &[u8]) -> Result<Vec<Described>> {
+	custom_sections(bytes, C_FUNCTIONS_SECTION)
 		.flat_map(|section| String::from_utf8_lossy(section).lines().map(str::to_string).collect::<Vec<_>>())
 		.filter(|line| !line.trim().is_empty())
 		.map(|line| {
 			ByteOutput::of_line(&line)
 				.ok_or_else(|| wasmtime::Error::msg(format!("{C_FUNCTIONS_SECTION}: not a C function: {line:?}")))
 		})
-		.collect::<Result<_>>()?;
-	// module.name → its parameters' letters, from warp-rust's modules
-	let lettered: Vec<(String, String, String)> = custom_sections(bytes, C_CALLS_SECTION)
+		.collect()
+}
+
+/// warp-rust's letters of a C import: (module, name, a letter per parameter)
+pub type Lettered = (String, String, String);
+
+/// The parameters' letters of warp-rust's C imports (its `warp.c_calls` section), module.name each
+pub fn lettered(bytes: &[u8]) -> Vec<Lettered> {
+	custom_sections(bytes, C_CALLS_SECTION)
 		.flat_map(|section| String::from_utf8_lossy(section).lines().map(str::to_string).collect::<Vec<_>>())
 		.filter_map(|line| {
 			let fields: Vec<&str> = line.split('\t').collect();
 			(fields.len() >= 3).then(|| (fields[0].to_string(), fields[1].to_string(), fields[2].to_string()))
 		})
-		.collect();
+		.collect()
+}
+
+/// Link every C import of `module` that the linker has no fitting definition for, or that `described` names
+pub fn link_c_imports(
+	linker: &mut Linker<Host>,
+	store: &mut Store<Host>,
+	module: &Module,
+	described: &[Described],
+	lettered: &[Lettered],
+) -> Result<()> {
 	linker.allow_shadowing(true);
 	for import in module.imports() {
 		let (library, name) = (import.module(), import.name());

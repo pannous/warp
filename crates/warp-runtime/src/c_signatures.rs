@@ -193,6 +193,24 @@ impl ByteOutput {
 		fields[3] = renamed.join(&LIST_SEPARATOR.to_string());
 		Some((CFunction::of_line(&fields.join(&FIELD_SEPARATOR.to_string()))?, output))
 	}
+
+	/// The line `of_line` reads back as `function` and this output: its buffer and written parameters named again
+	pub fn line(&self, function: &CFunction) -> String {
+		let mut fields: Vec<String> = function.line().split(FIELD_SEPARATOR).map(str::to_string).collect();
+		if let Some(params) = fields.get_mut(3) {
+			let renamed: Vec<&str> = params
+				.split(LIST_SEPARATOR)
+				.enumerate()
+				.map(|(index, param)| match index {
+					_ if self.buffer == Some(index) => BUFFER_NAME,
+					_ if self.written == Some(index) => WRITTEN_NAME,
+					_ => param,
+				})
+				.collect();
+			*params = renamed.join(&LIST_SEPARATOR.to_string());
+		}
+		fields.join(&FIELD_SEPARATOR.to_string())
+	}
 }
 
 /// An error-shaped C type: a non-NULL one reports a failure (`wasmtime_error_t *`, `wasm_trap_t **`)
@@ -252,8 +270,23 @@ pub fn with_c_functions(functions: &[CFunction], machine_code: &[u8]) -> Vec<u8>
 	[CARRIED_C_FUNCTIONS.as_slice(), &(table.len() as u64).to_le_bytes(), table.as_bytes(), machine_code].concat()
 }
 
+/// `machine_code` with the C functions it imports in front, as with_c_functions, each with its byte output
+pub fn with_described(functions: &[(CFunction, ByteOutput)], machine_code: &[u8]) -> Vec<u8> {
+	if functions.is_empty() {
+		return machine_code.to_vec();
+	}
+	let table = functions.iter().map(|(function, output)| output.line(function)).collect::<Vec<_>>().join("\n");
+	[CARRIED_C_FUNCTIONS.as_slice(), &(table.len() as u64).to_le_bytes(), table.as_bytes(), machine_code].concat()
+}
+
 /// The C functions and the machine code `with_c_functions` joined; none for plain machine code
 pub fn split_c_functions(carried: &[u8]) -> Result<(Vec<CFunction>, &[u8]), String> {
+	let (described, machine_code) = split_described(carried)?;
+	Ok((described.into_iter().map(|(function, _)| function).collect(), machine_code))
+}
+
+/// The C functions with their byte outputs and the machine code `with_described` (or with_c_functions) joined
+pub fn split_described(carried: &[u8]) -> Result<(Vec<(CFunction, ByteOutput)>, &[u8]), String> {
 	let Some(rest) = carried.strip_prefix(CARRIED_C_FUNCTIONS.as_slice()) else {
 		return Ok((vec![], carried));
 	};
@@ -261,6 +294,6 @@ pub fn split_c_functions(carried: &[u8]) -> Result<(Vec<CFunction>, &[u8]), Stri
 	let (length, rest) = rest.split_first_chunk::<8>().ok_or_else(damaged)?;
 	let (table, machine_code) = rest.split_at_checked(u64::from_le_bytes(*length) as usize).ok_or_else(damaged)?;
 	let table = std::str::from_utf8(table).map_err(|_| damaged())?;
-	let functions = table.lines().map(CFunction::of_line).collect::<Option<_>>().ok_or_else(damaged)?;
+	let functions = table.lines().map(ByteOutput::of_line).collect::<Option<_>>().ok_or_else(damaged)?;
 	Ok((functions, machine_code))
 }
