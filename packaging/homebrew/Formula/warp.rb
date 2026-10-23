@@ -48,6 +48,9 @@ class Warp < Formula
       bin.install "warp", "warp-runtime"
       # releases before the page stub (card build-links) ship none
       bin.install "warp-page-runtime" if File.exist?("warp-page-runtime")
+      # warp-host and its shipped cache, compiler-self's kept values (notes/warp_host.md); newer releases only
+      bin.install "warp-host" if File.exist?("warp-host")
+      pkgshare.install "host-cache" if File.exist?("host-cache")
       # the warp-written compilers and lib/, found by warp in <prefix>/share/warp (card installed-compilers); releases
       # before 1.5.0 ship none
       pkgshare.install "compiler.wasm", "compiler-self.wasm", "lib" if File.exist?("compiler.wasm")

@@ -37,6 +37,11 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
   `/!=`, `div` alias) and lib/sugar/methods.warp (list mutation methods, membership); one `sugared` step loads every
   lib/sugar module. **alias-mechanism** on main (915192565d): word alternatives are aliases in a table, not parser
   branches (migration step 1).
+- **The parser's sugar was overcounted** (warp-layers' accounting, notes/layers.md "What became of the 1417 sugar
+  lines"): read closely, almost all of the 1417 is notation (finding a form's words and extent); only the meaning moves.
+  Movable from parser.warp: ~10 lines now, ~50 once the hybrid lane retires, ~250 with F4/F5 (as warp passes).
+  parser.warp: 4272 → ~4346 (−66 sugar, +104 alias reader). The real shrink is in the pass files (~2448 lines) and
+  in notation design, not in parser sugar.
 - **Not rule-ready yet** (found by warp-layers): of_lookups and number_words (twin stages Rust drives), parse_words'
   eval (needs scoped shadowing), test/emit/unit phrases and `n times` (parser grouping).
 - **Around it:** emitter.warp split into 14 files under lib/compiler/emitter/ (bb97b383e7); node patterns and

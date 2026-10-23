@@ -1,0 +1,7 @@
+# Library words before their value (notes/layers.md, sugar): `reverse xs`, `upper t`, `floor x`, a library word of one
+# typed value the program leaves free (lib/prelude.warp, lib/math.warp: `floor(x: number): int from warp`) applies to
+# the value after it, as `reverse(xs)` does; a synonym calls its word (`sorted xs`). A word with a default or a rest
+# parameter takes no spaced argument. Rust twin: library_words.rs word_call, library_signatures.rs typed_first_arity
+rewrite ($f $x) => $f($x) where $f takes one
+# before several words it takes the phrase they make: `reverse sort xs` is `reverse(sort xs)`, then `reverse(sort(xs))`
+rewrite ($f $x $more...) => $f(($x $more...)) where $f takes one

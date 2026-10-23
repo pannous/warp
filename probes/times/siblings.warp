@@ -1,0 +1,13 @@
+# `n times` in other places: prints 6 4 9 2
+n = 0
+2 times: n += 3
+print n
+count = 2
+m = 0
+count times { count times { m += 1 } }
+print m
+total(k: number) := { s = 0; k times { s += 3 }; s }
+print total(3)
+w = 0
+1 + 1 times { w += 1 }
+print w
