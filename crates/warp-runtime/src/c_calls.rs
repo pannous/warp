@@ -209,7 +209,7 @@ fn version_named_sonames(name: &str, extra: &[String]) -> Vec<String> {
 	// the version between the name and `.so`: "3.13" of libpython3.13.so.1, as numbers
 	let version_of = |file: &str| -> Option<Vec<u32>> {
 		let version = file.strip_prefix(&prefix)?.split(".so").next()?.trim_start_matches(['.', '-']);
-		// a soname versioned after `.so` only, libz.so.1: no version, after the named ones
+		// a soname versioned after `.so` only, libz.so.1: no version, before the named ones
 		if version.is_empty() {
 			return file.starts_with(&format!("{prefix}.so.")).then(Vec::new);
 		}
@@ -227,8 +227,12 @@ fn version_named_sonames(name: &str, extra: &[String]) -> Vec<String> {
 				.collect::<Vec<_>>()
 		})
 		.collect();
+	// libz.so.1 before libz3.so.4, then the highest version first
 	found.sort_by(|(first, first_path), (second, second_path)| {
-		second.cmp(first).then(first_path.len().cmp(&second_path.len()))
+		(!first.is_empty())
+			.cmp(&!second.is_empty())
+			.then(second.cmp(first))
+			.then(first_path.len().cmp(&second_path.len()))
 	});
 	found.into_iter().map(|(_, path)| path).collect()
 }

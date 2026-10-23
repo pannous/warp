@@ -5,6 +5,7 @@
 # The host and compilers are found as tests/host/test_host.sh finds them; WARP_FFI_COMPILER=full tests compiler.wasm,
 # WARP_FFI_COMPILER_FILE names the compiler module to use.
 # A library missing on this machine skips its checks (sqlite3, z).
+# The texts are longer than one letter: the pure lane prints a one-letter text in a list as a codepoint ('a'), C's or not.
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
@@ -53,9 +54,9 @@ program unknown_import 'import no_such_function from "c"' 'no_such_function(1)'
 program unknown_library "no_such_function(x: i32): i32 from 'no_such_library'" 'no_such_function(1)'
 program sqlite_raw 'use sqlite3' 'db = sqlite3_open(":memory:")' 'statement = sqlite3_prepare_v2(db, "select 1+2", -1)' \
 	'sqlite3_step(statement)' 'sqlite3_column_int(statement, 0)'
-program sqlite_rows 'use sqlite3' 'db = sqlite3_open(":memory:")' 'print rows(db, "select 1+2, '"'"'a'"'"', 2.5, null")'
+program sqlite_rows 'use sqlite3' 'db = sqlite3_open(":memory:")' 'print rows(db, "select 1+2, '"'"'ab'"'"', 2.5, null")'
 program sqlite_table 'use sqlite3' 'db = sqlite3_open(":memory:")' 'run_query(db, "create table t(name text, n int)")' \
-	'run_query(db, "insert into t values ('"'"'x'"'"', 1), ('"'"'y'"'"', 2)")' 'print rows(db, "select name, n * 10 from t order by n")' \
+	'run_query(db, "insert into t values ('"'"'xy'"'"', 1), ('"'"'yz'"'"', 2)")' 'print rows(db, "select name, n * 10 from t order by n")' \
 	'sqlite3_close(db)'
 program sqlite_errstr 'use sqlite3' 'sqlite3_errstr(1)'
 program zlib "compressBound(length: i64): i64 from 'z'" 'compressBound(100)'
@@ -101,8 +102,8 @@ expect "an import of no known line is refused, naming it" 1 "no C signature for 
 expect "a missing library fails the run, naming it" 1 "no_such_library" -- runs unknown_library.warp
 if has_library sqlite3; then
 	expect "sqlite3 by its C functions: select 1+2" 3 "3" -- runs sqlite_raw.warp
-	expect "sqlite3 rows: an Int, a text, a float, ø" 0 '3' '"a"' '2.5' -- runs sqlite_rows.warp
-	expect "sqlite3 run_query and rows of a table" 0 '"x"' '10' '"y"' '20' ! "Error" -- runs sqlite_table.warp
+	expect "sqlite3 rows: an Int, a text, a float, ø" 0 '3' '"ab"' '2.5' -- runs sqlite_rows.warp
+	expect "sqlite3 run_query and rows of a table" 0 '"xy"' '10' '"yz"' '20' ! "Error" -- runs sqlite_table.warp
 	expect "sqlite3_errstr: a C text result" 0 "SQL logic error" -- runs sqlite_errstr.warp
 else
 	for name in sqlite_raw sqlite_rows sqlite_table sqlite_errstr; do skip $name sqlite3; done
