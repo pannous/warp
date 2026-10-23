@@ -38,6 +38,19 @@ After a context swap, this file and your role file win over anything a handover 
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
+  Soft ban (user 2026-10-23): the core passes compile the compiler, so new work is one of two kinds, neither a pass.
+  Sugar (new spellings of what the kernel already does) goes straight into lib/sugar/*.warp as rules. Compiler
+  extensions (new capabilities such as tuples, varargs, optional parameters, `?.`, signals, threads, channels) go
+  into core/extensions/ as one file each (core/extensions/tuples.warp); only a big topic gets its own subfolder
+  (core/extensions/concurrency/). The compiler itself moves from lib/compiler to core/ (card compiler-to-core, one
+  scripted sweep by Warp Wrapper); until then use lib/compiler/extensions/, which the sweep moves along. Plain
+  library code written in Warp (e.g. the units Quantity class) stays in lib/. Neither sugar nor extensions needs a
+  question. A new pass, a new entry in passes.warp's pass lists or a new lib/compiler/*.warp file needs the user's
+  yes, asked through Supervisor before the branch is written. Bigger changes to existing lib/compiler/*.warp files
+  (more than ~40 changed lines there, or a new lowering case, special case or refusal path) need Supervisor's OK
+  before the branch is written: send the files, functions and a 3-line reason. Supervisor checks that it isn't sugar
+  or an extension in disguise and takes the large ones to the user. Small fixes (a bug in an existing case) need no
+  question. Supervisor's merger bounces branches that skipped this.
 - New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
   declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
   when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
