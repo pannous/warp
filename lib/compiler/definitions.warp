@@ -8,6 +8,7 @@ use "phrase_blocks.warp"
 use "diagnostics.warp"
 use "class_methods.warp"
 use "scope.warp"
+use "lambdas.warp"
 
 is_keyword(n: Node): bool := match n {
 	Symbol(name): name in function_keywords
@@ -240,10 +241,9 @@ definitions(program: Node): Node := {
 # to text too, and a program converting to text shows values through it: print, str, text, an interpolation, a join.
 
 # `as·text`: the function converting to the target, a name no program can write; its parameter, which a body's `it`
-# (or the name `text(p: Person)` gives) is renamed to
+# (or the name `text(p: Person)` gives) is renamed to (lambdas.warp renamed)
 conversion_name(target: text): text := "as·" + target
 converted_value = "converted·value"
-renamed(n: any, from: text, to: text): any := bottom_up(n, x => if x == symbol(from) then symbol(to) else x)
 
 # a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
 names_type(n: any, scope: any): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
@@ -292,7 +292,7 @@ conversion_functions(target: text, written: list, targets: any): list := {
 	functions = []
 	for conversion in written.reverse() {
 		name = conversion_name(target) + "·" + conversion#1
-		body = converting_uses(renamed(conversion#3, conversion#4, converted_value), targets)
+		body = converting_uses(renamed(conversion#3, conversion#4, it), targets)
 		functions += [Key(call_of(name, [Key(it, Op.Colon, symbol(conversion#1))]), Op.Define, body)]
 		tried = Key(Key(Key(ø, Op.If, Key(it, Op.Is, symbol(conversion#1))), Op.Then, call_of(name, [it])), Op.Else, tried)
 	}
