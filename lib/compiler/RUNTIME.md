@@ -3,8 +3,7 @@
 The runtime words are what the pure Warp compiler gives compiled programs. Each word is compiled into a module only
 on its first call, so a word nobody calls costs nothing. This file sits beside the runtime folder, not in it:
 every entry of `lib/compiler/runtime/` must run alone as warp (tests/functions/test_bodiless_runtime_words.rs
-`each_runtime_part_runs_alone`, a Rust-lane test; its folder `extended/` is no program, so that test, which runs
-every entry, needs to skip folders).
+`each_runtime_part_runs_alone`; for its folder `extended/` warp says it is a folder, no program).
 
 > **Guideline:** once the compiler is fully functional, new functionality normally goes into
 > `extended/`, not core. Core grows only for what every program needs.
@@ -22,8 +21,8 @@ fields, nodes, errors and builders, plus bridge (below).
 
 **Extended** is `runtime/extended.warp` and the parts it names in `lib/compiler/runtime/extended/`, for optional
 features: exact, exact_rounding, pow and pow_tables, durations, times and wasi, plus the hooks' bodies (below).
-`runtime/durations.warp` is a link to `extended/durations.warp`, kept while
-tests/numbers/test_duration_words.rs reads the file at its old path.
+`runtime/durations.warp` is an extended part kept in `runtime/`, as tests/numbers/test_duration_words.rs reads it
+there: only `runtime/extended.warp` uses it, and `scripts/self-check.sh` counts it as extended.
 
 Both roots are loaded, core first: by `compiler.warp` (`RUNTIME_ROOTS`) and by `src/compiler/self_hosted.rs`
 (`EXTENDED_RUNTIME_WORDS`), each `use` path from the folder of the file it is in (compiler.warp `root_text` prefixes
@@ -55,7 +54,7 @@ hello world calls nothing from extended. In the Rust lane a core part runs alone
 - `runtime.warp` uses only core files.
 - Core never uses extended and never names an extended word: it calls the bridge's hooks.
   `scripts/self-check.sh` checks both before taking a slot: no `^use .*extended` line in `runtime.warp` or a plain
-  file of `runtime/` (`extended.warp` aside), and no call there to a word that a `runtime/extended/*.warp` file defines.
+  file of `runtime/` (`extended.warp` and `durations.warp` aside), and no call there to a word that `durations.warp` or a `runtime/extended/*.warp` file defines.
 - An extended part is only ever loaded by `runtime/extended.warp`; its words compile only when called, for example
   float `^` compiles pow's.
 - The emitter declares each GC type only on first use, so a hello world contains none of extended's.
