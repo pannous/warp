@@ -46,6 +46,14 @@ impl Node {
 		Node::List(MAP, entries.into_iter().map(entry).collect())
 	}
 
+	/// `{name: value}` with names made at run time (a module's exports, a record's fields)
+	pub fn named_map(entries: Vec<(String, Node)>) -> Node {
+		let entry = |(name, value): (String, Node)| {
+			Node::Key(ENTRY, Box::new(Node::Symbol(name.into_bytes())), Box::new(value))
+		};
+		Node::List(MAP, entries.into_iter().map(entry).collect())
+	}
+
 	/// A text's, symbol's or error's content, a codepoint's character (a one-letter text such as "." arrives as one),
 	/// anything else as shown
 	pub fn content(&self) -> String {
