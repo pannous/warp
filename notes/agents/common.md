@@ -199,6 +199,9 @@ After a context swap, this file and your role file win over anything a handover 
   Interviewer's approval only, not a new question.
 - Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
   intermediate; a test pinning one may be deleted or rewritten as one is! line.
+- Tests are result-based (user, 2026-10-23): assert what a program computes, e.g. `is! '6*7' 42`, or its printed
+  output. Don't pin incidental details such as exit codes of successful runs, internal forms, pass names, error
+  wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
 - Native-only test code: anything used only by a `#[cfg(feature = "native")]` test gets the same cfg; a whole test
   file running the CLI or std::os::unix gets it on its `mod` line, and a new `mod x;` never goes between a cfg line
   and the module it guards. Register a new test file in its folder's mod.rs before `cargo fmt` (fmt skips it).
