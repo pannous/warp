@@ -143,3 +143,12 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
   - test_host.sh (64 checks now) with warp-host built from 5bc01c62f (7,382,248 B) and /tmp/tarball's compilers: 51 of
     64 pass [M]. All 13 failures are that compiler-self's refusals of the branch's new words (run_wasm with arguments,
     `use wasm`, components), not the host.
+- Measured 2026-10-23 04:20 [M], host-from-warp merged with origin/warp-host-wasm-load 4e3808b76 (main and pure-c-imports
+  included): warp-host built from the merged tree (7,429,400 B), compiler-self.wasm sha1 6269c5f5… (1,544,202 B) and
+  compiler.wasm f0689f43… from warp-host-wasm-load's target/debug, wasm-tools 1.262.0 as WARP_WAT2WASM.
+  - test_host.sh directly: 86 of 86, 2 min 17 s.
+  - run_checks.sh in-process (compile_wasm, run_wasm): 86 of 86, 1 min 45 s. The cache checks and the run_wasm argument
+    check pass with the driver's changes above; no driver fix was needed.
+  - run_checks.sh --spawn: 86 of 86, 1 min 40 s.
+  - Not covered by test_host.sh, still different: an uncaught raise prints `Error("bad")` on stdout from the driver,
+    `warp-host: bad` on stderr from warp-host (both status 1).
