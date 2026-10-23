@@ -16,7 +16,6 @@ fn test_undefined_variable_compound_assignment_is_an_error_value() {
 }
 
 #[test]
-#[ignore = "card gap-element-array"]
 fn an_element_array_phrase_declares_the_list() {
 	crate::is!("x is a 100 element array; x.length", 100);
 }
