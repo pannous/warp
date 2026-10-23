@@ -35,6 +35,10 @@ rewrite speed_unit => km·per·hour                # km_per_hour
   temporary stays one (`t·3_end`).
 - Numbers multiply: a number written beside `·` (`$x·2`) leaves the product, and so does a hole that bound a number
   (`$n·ten` of 3 → `3 * ten`). A hole bound to other code (`x + 1`) is an error.
+- `··` glues with the mark itself: `loop··step` is the hidden compiler name `loop·step` (notes/compiler_temporaries.md)
+  no program can write, the way for_loops.warp marks a loop's step; `$i··end` of k is `k·end`, `$i·end··x` is
+  `k_end·x`. The parser reads `a··b` as the declared-only operator call `operator_··(a, b)`, so outside a template it is
+  an operator nothing declares, an error (lib/sugar/loops.warp: the C-style for's `loop··step: $step`).
 - A template's definition with a hole or a built name as its head (`$f(x) := …`, `twice·$f(x) := …`, which the parser
   reads as a phrase) defines that function, and a template of one parenthesized definition is that definition.
 - Open: generated names don't name their rule in help and errors yet; a built name clashing with the program's own
@@ -95,7 +99,17 @@ rewrite bump_all $vs... => ($v += 1 for $v in $vs...)
 rewrite flags $ns... => {($n: yes) for $n in $ns...}
 ```
 
-Zip over two rest holes (`$a = $b for ($a, $b) in …`) isn't built yet.
+The clause takes more than one hole (card f4, 2026-10-23):
+
+```warp
+rewrite numbered $xs... => [$x * $i for $x at $i in $xs...]              # numbered 5 5 5 → [5 10 15]: $i the position, from 1
+rewrite paired ($as...) ($bs...) => [$a + $b for ($a, $b) in ($as..., $bs...)]   # zip: rest holes of as many items
+rewrite pairs {$as...} => [$k * 10 + $v for ($k: $v) in $as...]          # a pattern takes each item apart
+rewrite positions_of $e => [$i for $c at $i in cases of $e] where $e is enum     # the cases of an enum
+```
+
+An item a taking-apart pattern doesn't match stays in the result as it is (`($k + $v)` over `(1 + 2) 5` gives `[2 5]`);
+zipped rest holes of different lengths don't splice (the rule doesn't fire).
 
 ## Runs of statements (F6)
 A pattern of several statements `($a; $b)` matches a run of them standing one after the other in a block, holes

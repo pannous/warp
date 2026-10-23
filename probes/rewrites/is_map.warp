@@ -1,0 +1,9 @@
+// expected: map other map map other (`where $m is map`: a map written out, a name holding only maps, a parameter typed map); pure lane (the Rust rewrite engine knows no `is map`)
+rewrite kind_of_it $m => "map" where $m is map
+rewrite kind_of_it $m => "other"
+m = {a: 1}
+xs = [1]
+found = {a: 1}
+found = [2]
+f(t: map) := kind_of_it t
+print "$(kind_of_it m) $(kind_of_it xs) $(kind_of_it {b: 2}) $(f(m)) $(kind_of_it found)"
