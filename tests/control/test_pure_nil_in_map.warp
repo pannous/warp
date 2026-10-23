@@ -1,0 +1,23 @@
+# card pure-nil-in-any-map (issue #3119): ø names no entry of a map, so `ø in m` is no, also where the map is held as
+# any inside a function (it trapped on the null node in pure-built code)
+# (`warp test tests/control` runs them through warp pure)
+
+# nil_is_in_no_map
+is! "f(m: any): bool := { p: any = ø
+p in m }
+f({a: 1})" no
+is! "f(m: any): bool := { p: any = ø
+p not in m }
+f({a: 1})" yes
+
+# nil_is_in_no_map_of_instances (the shape of issue #3119)
+is! "class D { parent: any; methods: list }
+classes = {}
+classes[\"P\"] = D(ø, [\"one\"])
+f(classes: any): bool := { p: any = ø
+p not in classes }
+f(classes)" yes
+
+# a_key_is_still_found
+is! "g(m: any, k: any): bool := k in m
+[g({a: 1}, \"a\"), g({a: 1}, \"b\"), g([1, 2], 2)]" [yes, no, yes]
