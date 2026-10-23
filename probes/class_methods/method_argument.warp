@@ -1,0 +1,2 @@
+class person{name; age:int; older(years) := age + years}
+print person("Ann", 40).older(2)
