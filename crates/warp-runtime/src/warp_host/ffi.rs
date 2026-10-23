@@ -11,16 +11,26 @@ use wasmtime::{ExternType, FuncType, Linker, Module, Result, Store, ValType};
 
 pub const C_FUNCTIONS_SECTION: &str = "warp.c_functions";
 
-/// Link every C import of `module` that the linker has no fitting definition for, or that the section describes
-pub fn link_c_imports(linker: &mut Linker<Host>, store: &mut Store<Host>, module: &Module, bytes: &[u8]) -> Result<()> {
-	let described: Vec<CFunction> = custom_sections(bytes, C_FUNCTIONS_SECTION)
+/// The C functions a module's `warp.c_functions` section describes (machine code keeps no custom section: aot.rs
+/// carries them in front of it)
+pub fn described(bytes: &[u8]) -> Result<Vec<CFunction>> {
+	custom_sections(bytes, C_FUNCTIONS_SECTION)
 		.flat_map(|section| String::from_utf8_lossy(section).lines().map(str::to_string).collect::<Vec<_>>())
 		.filter(|line| !line.trim().is_empty())
 		.map(|line| {
 			CFunction::of_line(&line)
 				.ok_or_else(|| wasmtime::Error::msg(format!("{C_FUNCTIONS_SECTION}: not a C function: {line:?}")))
 		})
-		.collect::<Result<_>>()?;
+		.collect()
+}
+
+/// Link every C import of `module` that the linker has no fitting definition for, or that `described` names
+pub fn link_c_imports(
+	linker: &mut Linker<Host>,
+	store: &mut Store<Host>,
+	module: &Module,
+	described: &[CFunction],
+) -> Result<()> {
 	linker.allow_shadowing(true);
 	for import in module.imports() {
 		let (library, name) = (import.module(), import.name());
