@@ -177,7 +177,7 @@ enum_declarations 63 (reads declared types).
 Sugar passes, with the rule each would become:
 | lines | file | rule, or the missing feature |
 |------:|------|------|
-| 197 | plain_enums | `Color.Red` → the case: F2 (declared enum cases) |
+| 197 | plain_enums | `Color.Red`, `Color::Red`, `case .red`, `c is Coin`: lib/sugar/enums.warp (F9, card sugar-plain-enums); the declaration, `as int`/`as Coin`/`Coin(2)` and the names holding cases stay a pass (see the card) |
 | 186 | definitions | `rewrite def $d => $d`, `rewrite $f($p...) = $b => $f($p...) := $b`: works today, minus `xs(1) = …` (F2) |
 | 163 | of_lookups | `rewrite $a of $b => $b.$a`: phrase rule works today; type phrases `list of int` need F2 |
 | 137 | for_loops | see the parser's for row: F3, F5, F7 |
@@ -187,7 +187,7 @@ Sugar passes, with the rule each would become:
 | 97 | library_calls | `rewrite reverse $x => reverse($x)` per typed prelude word: F2 (typed signature), unbound already handled |
 | 91 | clauses | `fib(0) := 0; fib(1) := 1` → one kernel match: F6 |
 | 88 | comprehensions | `rewrite [$e for $x in $xs] => (r = []; for $x in $xs { r += [$e] }; r)`: F3 |
-| 86 | prefix_comparisons | `sq 2 == 4` → `sq(2) == 4`: F2 (parameter typed as a value) |
+| 86 | prefix_comparisons | `sq 2 == 4` done: lib/sugar/comparisons.warp (card sugar-prefix-comparisons); `print #xs`, `f -x` stay a pass, prefix_calls.warp: no `where` condition for "a word taking a value" (untyped parameters, builtins) |
 | 65 | number_words | `rewrite one => 1` per word, works today (module rules skip bound words); keys/members stay: F1 |
 | 65 | parse_words | `rewrite eval($t) => interpret(parse($t))` works today; folding a constant text is a pass |
 | 64 | multiple_assignments | `a, b = b, a + b`: F3 + F4 |
@@ -195,7 +195,7 @@ Sugar passes, with the rule each would become:
 | 44 | interpolation | F8 |
 | 42 | type_tests | `rewrite $x is $t => is_type($x, "$t")`: F2 (t a type word no name binds) |
 | 36 | ranges | range value → loop: F3 |
-| 35 | filled_lists | `rewrite $t[$n] => zero_fill($n, zero($t))`: F2 (t a type word) |
+| 35 | filled_lists | done: lib/sugar/lists.warp (card sugar-filled-lists) |
 | 32 | broadcasting | `rewrite $xs .* $y => $xs.map(e => e * $y)`: F3 (hygienic e) |
 | 30 | preposition_heads | `play(tone, for duration)` → drop the preposition per parameter: F4 |
 | 24 | grouped_receivers | `rewrite ($p).$a => $p.$a`: F2 (p bound to a value) |

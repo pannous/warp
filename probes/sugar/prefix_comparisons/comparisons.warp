@@ -1,0 +1,8 @@
+# every comparison. Expected: yes yes yes yes yes yes
+sq(x: int) := x * x
+print sq 2 != 5
+print sq 2 < 5
+print sq 2 > 3
+print sq 2 <= 4
+print sq 2 >= 4
+print sq 2 ≤ 4

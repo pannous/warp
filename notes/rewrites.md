@@ -17,6 +17,29 @@ A template of several statements `($a; $b)` takes a statement's place; in a valu
 is that value's block `(t·1 = 1; 3; t·1)`. A phrase rule matches the words as written, also where the parser nests
 them (`keep 1 (past 3)`).
 
+## Name building (F5)
+`·` in a template glues words and holes into one name (decision name-glue), the words joined by `_`:
+
+```warp
+rewrite count_up $i till $b => ($i = 1; $i·end = $b; while $i <= $i·end { $i += 1 })   # k_end
+rewrite made $f $ws... => ($f·$ws = 4)          # made square a number → square_a_number = 4
+rewrite doubled $f => (twice·$f(x) := 2 * $f(x)) # doubled sq → twice_sq(x) := 2 * sq(x)
+rewrite speed_unit => km·per·hour                # km_per_hour
+```
+
+- Glue is recognised only in a rule's template, between words and holes (also the head of a
+  call or definition `twice·$f(x)`): the parser reads `·` as `*` (lib/math.warp), so the engine reads the rule's
+  source text before the right operand to tell `·` from `*`. `*` in a template stays the product, and outside templates
+  `x·y` multiplies as before.
+- A hole contributes the word it bound, or each word of a phrase it bound (a rest hole `$ws...` written `$ws`: `a number` → `a_number`); a fresh hole's
+  temporary stays one (`t·3_end`).
+- Numbers multiply: a number written beside `·` (`$x·2`) leaves the product, and so does a hole that bound a number
+  (`$n·ten` of 3 → `3 * ten`). A hole bound to other code (`x + 1`) is an error.
+- A template's definition with a hole or a built name as its head (`$f(x) := …`, `twice·$f(x) := …`, which the parser
+  reads as a phrase) defines that function, and a template of one parenthesized definition is that definition.
+- Open: generated names don't name their rule in help and errors yet; a built name clashing with the program's own
+  isn't refused yet; glue in quoted code (`data(…)`) outside rules.
+
 ## Positions
 Everything the template adds (its words, keys and groups, the fresh names) is placed where the rewritten code was
 written; the holes keep the positions of the code they bound. An error inside a rewrite points at the user's line,
@@ -34,6 +57,7 @@ After `where`, conditions joined by `and` ask about what the holes bound:
 | `$x is unbound` | a word the program binds nothing to |
 | `$x is value`, `$f is function` | a word the program binds as a value, as a function |
 | `$x is literal` | a number or text written as such |
+| `$x is missing` | ø, also an operand not written (the end of `rest...`) |
 | `$x is text` (any hole kind) | code of that kind |
 | `$n < 0` (`> <= >= == !=`) | a number literal, `-1` and `(-1)` too, so compared |
 | `$f takes value`, `$f takes int` | a function of the program or a typed library word whose first parameter is typed (not yes/no), or typed int |
@@ -91,3 +115,24 @@ quadruple 3   # 12
 ```
 
 A result rewritten 64 times in a row (`rewrite_depth_limit`) is the rules' loop: an error, not a hang.
+
+## Enum cases (F9)
+Three more `where` conditions ask about the enums the program declares (`enum Coin { Penny, Dime }`, Swift's
+`{ case north, south }`), read before plain_enums.warp lowers the declarations:
+
+| condition | holds when the hole bound |
+|---|---|
+| `$e is enum` | a name of a declared enum, or that name as a text (`is_type(c, "Coin")`) |
+| `$c is case of $e` | a case of the enum `$e` bound; with `$e` unbound, a case of the one enum declaring it, `$e` then bound to that enum |
+| `$c is case` | a case of the one enum declaring it |
+
+In a template, `cases of $e` stands among a list's or a call's items for the cases of the enum `$e` names, each a
+symbol placed where the rewritten code was written:
+
+```warp
+rewrite $e.$c => $c where $c is case of $e
+rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is enum
+```
+
+The rules of lib/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
+`cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.

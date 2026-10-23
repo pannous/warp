@@ -1,0 +1,13 @@
+# sugar-plain-enums probe; expected: [3 0 0] / ["enum" "other"] / ["one" "none"]
+enum Coin { Penny, Nickel, Dime }
+enum Metal { Gold, Penny }
+rewrite size_of $c => #[cases of $e] where $c is case of $e
+rewrite size_of $c => 0
+rewrite kind $t => "enum" where $t is enum
+rewrite kind $t => "other"
+rewrite owns $c => "one" where $c is case
+rewrite owns $c => "none"
+x = 1
+print [size_of Dime, size_of 7, size_of Penny]
+print [kind Coin, kind x]
+print [owns Dime, owns Penny]
