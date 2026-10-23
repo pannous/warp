@@ -1,0 +1,10 @@
+# Tasks in the pure lane (notes/layers.md, sugar): a task runs at once, where it's started, so `go x` is x's value and
+# awaiting it is that value; `await all jobs` the values, `await any`/`first` the first one's. No thread runs beside it.
+rewrite await go {$body...} => ($body...)
+rewrite await go $x => $x
+rewrite go {$body...} => ($body...)
+rewrite go $x => $x
+rewrite await all $xs => $xs
+rewrite await any $xs => $xs#1
+rewrite await first $xs => $xs#1
+rewrite await $x => $x

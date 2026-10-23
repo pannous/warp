@@ -1,0 +1,4 @@
+// expected: 21
+n = 20
+job = go { n + 1 }
+print await job

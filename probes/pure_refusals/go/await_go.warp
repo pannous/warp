@@ -1,0 +1,3 @@
+// expected: 42
+f(x) := x * 2
+print await go f(21)
