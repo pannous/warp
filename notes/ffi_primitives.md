@@ -60,6 +60,28 @@ For structs passed by pointer (z_stream): `calloc`/`free` declared from 'c' in t
 
 NULL fails the run. Offsets are the platform's (z.warp's are LP64's, Linux and macOS).
 
+## errno and libc (card ffi-libc)
+
+- `c_errno()` (lib/c_memory.warp, std_io `c.errno`): errno as the last C call left it. c_calls.rs reads it right
+  after each described call, before the host's own work can change it; it is per thread. Meaningful only after a
+  call that reported a failure (-1, NULL): `unlink(path) == -1` then `strerror(c_errno())`.
+- libc is plain foreign lines in lib/c.warp, warp-rust's hand-linked eight (c_signatures.rs HAND_LINKED_LIBC: abs
+  strlen atoi atol atof strcmp strncmp rand) included. warp-host links those Rust shims (texts as linear-memory
+  pointers) only for a module without a warp.c_functions section, a warp-rust one; a pure module's C calls are all
+  described and dlsym'd. The shims stay while frozen src/ffi (mod.rs, link.rs) and standalone.rs use them.
+  tests/host/test_ffi_libc.sh.
+
+## Variadic functions: not supported
+
+printf, snprintf, sscanf, open(path, flags, mode), fcntl, ioctl and other `...` functions have no foreign line.
+A described call passes its arguments the way the platform passes fixed ones. That happens to work for int and
+pointer varargs on x86-64 Linux (they go in the same registers; only %al, the count of vector registers, is
+unset), but not for doubles there, and not at all on arm64 macOS, where every variadic argument goes on the stack.
+So a declared `snprintf(buffer: i64, size: i64, format: text, x: i32): i32` would print garbage on a Mac.
+Use a fixed-argument function instead (strtol, strtod, strerror; open's 3-argument form is fixed on Linux only), or
+format in warp. A real primitive would need a `...` type in foreign lines and libffi's ffi_prep_cif_var (or
+hand-written per-ABI calls) in c_calls.rs.
+
 ## Library lookup (crates/warp-runtime/src/c_calls.rs library_paths)
 
 A path as written; else WARP_LIBRARY_PATH's folders, then the crates cache's `$WARP_CRATES_CACHE/{lib,native}`
