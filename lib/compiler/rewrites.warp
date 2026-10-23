@@ -63,6 +63,8 @@ hidden_joint = "glue·hidden"
 # `T for $x in $xs...` in a template: T once for each item of the rest hole (F4)
 each_word = "for"
 each_in_word = "in"
+# `T for $x at $i in $xs...`: $i the item's position, from 1
+each_at_word = "at"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions
 rule_places = ["statement", "condition", "member", "key", "value"]
 # the mark of a rule whose pattern's first word spells the template's another way
@@ -102,6 +104,8 @@ global rule_scope = {}
 global first_parameter_types = {}
 # the names that hold a map, of the program being rewritten (`where $m is map`)
 global rule_maps = {}
+# name → the enum whose cases it holds, of the program being rewritten (`where $c is case of $e`)
+global rule_case_holders = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
@@ -130,6 +134,7 @@ rewritten_program(program: any, source: text): any := {
 	first_parameter_types = typed_first_parameters(program)
 	rule_maps = map_names_of(program)
 	rule_enums = enums_in(program, {})
+	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
 	program = bottom_up(program, n => rule_rewritten(n, rules, origins))
@@ -165,6 +170,7 @@ sugared(program: Node, rules: list): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_maps = map_names_of(program)
+	rule_case_holders = case_holders_of(program)
 	bottom_up(program, n => sugared_node(n, rules))
 }
 
@@ -413,9 +419,9 @@ case_holds(code: any, hole: any, bound: any): bool := {
 	case = name_of(code)
 	if hole != ø and bound.has(hole) {
 		name = named_enum(bound[hole])
-		return rule_enums.has(name) and case in rule_enums[name]
+		return rule_enums.has(name) and (case in rule_enums[name] or rule_case_holders.get(case) == name)
 	}
-	owners = rule_enums.keys.filter(name => case in rule_enums[name])
+	owners = rule_enums.keys.filter(name => case in rule_enums[name] or rule_case_holders.get(case) == name)
 	if #owners != 1 { return no }
 	if hole != ø { bound[hole] = symbol(owners#1) }
 	yes
@@ -562,6 +568,34 @@ map_names_of(program: any): any := {
 	only_maps = {}
 	for name in maps.keys { if not others.has(name) { only_maps[name] = yes } }
 	only_maps
+}
+
+# name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which
+# is a case of one enum (`c = Coin.Dime`, `c = Dime`); a name also given anything else holds no case for sure
+case_holders_of(program: any): any := {
+	holders = {}
+	others = {}
+	for n in nodes_in(program) {
+		if is_key(n, Op.Assign) and key_of(n) is symbol {
+			name = name_of(key_of(n))
+			enum_name = enum_of_case(value_of(n))
+			if enum_name != "" and (not holders.has(name) or holders[name] == enum_name) { holders[name] = enum_name } else { others[name] = yes }
+		}
+		if is_key(n, Op.Colon) and key_of(n) is symbol and named_enum(value_of(n)) != "" { holders[name_of(key_of(n))] = named_enum(value_of(n)) }
+	}
+	only_cases = {}
+	for name in holders.keys { if not others.has(name) { only_cases[name] = holders[name] } }
+	only_cases
+}
+
+# the enum a case written belongs to, `Dime` of the one enum declaring it, `Coin.Dime`, `Coin::Dime`; else ""
+enum_of_case(code: any): text := {
+	if (is_key(code, Op.Dot) or is_key(code, Op.Scope)) and named_enum(key_of(code)) != "" and value_of(code) is symbol {
+		return if name_of(value_of(code)) in rule_enums[named_enum(key_of(code))] then named_enum(key_of(code)) else ""
+	}
+	if not (code is symbol) { return "" }
+	owners = rule_enums.keys.filter(name => name_of(code) in rule_enums[name])
+	if #owners == 1 then owners#1 else ""
 }
 
 # `{a: 1, b: 2}`: braces of entries only, a map written out, not a block of code
@@ -945,17 +979,69 @@ glued_name(parts: list): any := {
 }
 
 # `T for $x in $xs...`: T spliced once for each item the rest hole bound, $x bound to that item (and fresh names
-# fresh for each), else ø
+# fresh for each), else ø. `$x at $i` also binds the item's position, from 1; `($a, $b) in ($as..., $bs...)` zips rest
+# holes of as many items; any other pattern, `($k => $v)`, takes an item apart, an item it doesn't match staying as it
+# is (F4)
 each_spliced(parts: list, bound: any, at: any): any := {
 	if #parts != 3 or parts#2 != symbol(each_word) { return ø }
 	clause = parts#3
-	if not (is_group(clause) and bracket_of(clause) == "" and #clause == 3 and clause#2 == symbol(each_in_word)) { return ø }
-	item_hole = rule_hole(clause#1)
-	rest = rest_hole_name(clause#3)
-	if item_hole == ø or rest == ø or not bound.has(rest) { return ø }
+	if not (is_phrase(clause) and #clause == 3 and clause#2 == symbol(each_in_word)) { return ø }
+	pattern = clause#1
+	index_hole = ø
+	if is_phrase(pattern) and #pattern == 3 and pattern#2 == symbol(each_at_word) and rule_hole(pattern#3) != ø {
+		index_hole = rule_hole(pattern#3)
+		pattern = pattern#1
+	}
+	rows = each_rows(clause#3, bound, at)
+	if rows == ø { return ø }
 	each = if is_group(parts#1) and bracket_of(parts#1) == "(" and #parts#1 == 1 then parts#1#1 else parts#1
-	items_of(bound[rest]).map(item => rule_spliced(each, with_binding(bound, item_hole, item), at))
+	spliced = []
+	for position in 1 to #rows {
+		binding = item_binding(pattern, rows#position, bound)
+		if binding == ø {
+			spliced += [rows#position#1]
+		} else {
+			if index_hole != ø { binding[index_hole] = position }
+			spliced += [rule_spliced(each, binding, at)]
+		}
+	}
+	spliced
 }
+
+# the items an each clause walks, a list per item: of a rest hole, the cases of an enum (`cases of $e`), or of several
+# rest holes zipped (`($as..., $bs...)`, as many items each); else ø
+each_rows(iterable: any, bound: any, at: any): any := {
+	rest = rest_hole_name(iterable)
+	if rest != ø { return if bound.has(rest) then items_of(bound[rest]).map(item => [item]) else ø }
+	cases = if is_phrase(iterable) then cases_spliced(items_of(iterable), bound, at) else ø
+	if cases != ø { return cases.map(case => [case]) }
+	if not (is_round(iterable) and #iterable > 1) { return ø }
+	lists = []
+	for part in items_of(iterable) {
+		zipped = rest_hole_name(part)
+		if zipped == ø or not bound.has(zipped) { return ø }
+		lists += [items_of(bound[zipped])]
+	}
+	if not lists.all(items => #items == #lists#1) { return ø }
+	(1 to #lists#1).map(position => lists.map(items => items#position))
+}
+
+# the holes bound with an item's row: the pattern's hole its item, a tuple of holes the zipped items, any other pattern
+# what matching the item binds; ø when the item doesn't match
+item_binding(pattern: any, row: list, bound: any): any := {
+	if rule_hole(pattern) != ø and #row == 1 { return with_binding(bound, rule_hole(pattern), row#1) }
+	if is_round(pattern) and #pattern == #row and #row > 1 and items_of(pattern).all(part => rule_hole(part) != ø) {
+		binding = with_binding(bound, rule_hole(pattern#1), row#1)
+		for position in 2 to #row { binding[rule_hole(pattern#position)] = row#position }
+		return binding
+	}
+	if #row != 1 { return ø }
+	binding = copied_binding(bound)
+	if rule_matches(ungrouped_one(pattern), ungrouped_one(row#1), binding) then binding else ø
+}
+
+# `(x)`: parentheses around one item only group it
+ungrouped_one(n: any): any := if is_round(n) and #n == 1 then n#1 else n
 
 # `cases of $e`: the cases of the enum the hole names, placed at `at`, else ø (F9)
 cases_spliced(parts: list, bound: any, at: any): any := {
@@ -970,7 +1056,29 @@ is_each(n: any): bool := is_group(n) and #n == 3 and n#2 == symbol(each_word)
 
 # the template with `T for $x in $xs...` as each_spliced reads it, `T`, `for`, `$x in $xs...`: the parser groups the
 # loop of a hole, `for $x in $xs...` with no body, as a loop of its own
-each_clauses(template: any): any := bottom_up(template, n => if is_group(n) then group_like(n, items_of(n).flat_map(each_clause_parts)) else n)
+each_clauses(template: any): any := bottom_up(template, n => if is_group(n) then group_like(n, indexed_clauses(items_of(n).flat_map(each_clause_parts))) else n)
+
+# the items with `for $x at ($i in $xs...)`, as the parser reads the index, as `for` and `($x at $i) in $xs...`
+indexed_clauses(items: list): list := {
+	found = []
+	at = 0
+	while at < #items {
+		indexed = at + 3 < #items and items[at] == symbol(each_word) and items[at + 2] == symbol(each_at_word) and is_phrase(items[at + 3]) and #items[at + 3] == 3 and items[at + 3]#2 == symbol(each_in_word)
+		if indexed {
+			clause = items[at + 3]
+			# the iterable's words the parser left after the clause, `cases of` `$e`, up to the end or an `if`
+			last = at + 4
+			while last < #items and items[last] != symbol("if") { last += 1 }
+			iterable = if last == at + 4 then clause#3 else List(words_of(clause#3) + items[at + 4 ..< last], Bracket.None, Separator.Space)
+			found += [items[at], List([List([items[at + 1], items[at + 2], clause#1], Bracket.None, Separator.Space), clause#2, iterable], Bracket.None, Separator.Space)]
+			at = last
+		} else {
+			found += [items[at]]
+			at += 1
+		}
+	}
+	found
+}
 
 # `for $x in $xs...` with no body as the parts `for` and `$x in $xs...`, any other item as it is
 each_clause_parts(item: any): list := {
@@ -980,9 +1088,15 @@ each_clause_parts(item: any): list := {
 
 # a copy of the holes bound, the hole bound to the code
 with_binding(bound: any, hole: text, code: any): any := {
+	copy = copied_binding(bound)
+	copy[hole] = code
+	copy
+}
+
+# a copy of the holes bound
+copied_binding(bound: any): any := {
 	copy = {}
 	for name in bound.keys { copy[name] = bound[name] }
-	copy[hole] = code
 	copy
 }
 
