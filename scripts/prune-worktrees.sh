@@ -25,6 +25,7 @@ TWEAK_FILES=(Cargo.toml Cargo.lock crates/warp-runtime/Cargo.toml)
 IDLE_HOURS=${IDLE_HOURS:-6}
 LEFTOVER_DAYS=2
 KEPT_BRANCHES=(main HEAD)
+KEPT_WORKTREES=(/Volumes/Worktrees/me)  # the user's own worktree: never removed, its branch never deleted (user 2026-10-23)
 STALE_HOURS=${STALE_HOURS:-12}
 SUPERVISOR_TMUX=warp-supervisor
 TODO=/Users/me/dev/bin/todo  # cron's PATH lacks ~/dev/bin
@@ -57,7 +58,7 @@ $git fetch --prune --quiet origin
 checked_out=()
 $git worktree list --porcelain | awk '/^worktree /{path=$2} /^branch /{sub("refs/heads/","",$2); print path, $2}' |
 while read -r worktree branch; do
-  in_worktree_roots $worktree || { checked_out+=($branch); continue; }
+  in_worktree_roots $worktree && (( ! ${KEPT_WORKTREES[(Ie)$worktree]} )) || { checked_out+=($branch); continue; }
   worktree_status=$(git -C $worktree status --porcelain 2>/dev/null)
   changed=$(print -r -- $worktree_status | grep -v '^??' | cut -c4- | grep -vxF -f <(print -l $TWEAK_FILES))
   if ! merged $(git -C $worktree rev-parse HEAD) || [[ -n $changed ]] || recently_written $worktree; then

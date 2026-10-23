@@ -108,7 +108,9 @@ After a context swap, this file and your role file win over anything a handover 
   main. A new root .warp data file (components.warp …): tell the Integrator the commit, tests read it.
 - Anything in src/, crates/, tests/, Cargo.* or build.rs keeps its worktree, however small (a half-done edit there
   breaks every build of the main checkout): `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main` on the
-  Worktrees volume (never touch /Volumes/Worktrees/warp, cowtree's donor, nor /Volumes/Worktrees/integrator).
+  Worktrees volume (never touch /Volumes/Worktrees/warp, cowtree's donor, /Volumes/Worktrees/integrator, nor the
+  user's own /Volumes/Worktrees/me, which prune-worktrees.sh never removes). A new worktree's files get their last
+  commit's time (~/.git-hooks/post-checkout runs ~/dev/bin/restore-mtimes), not the checkout time.
 - On the Grok box (Debian, /workspace) worktrees come from `boxtree <branch> [base]` (default origin/main): a
   copy-on-write copy of /workspace/cow/warp, target/ build cache included, at /workspace/cow/trees/<branch> on a new
   branch <branch>. Remove your own with `boxtree rm <branch>` after landing. Never work in /workspace/cow/warp itself.
