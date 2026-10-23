@@ -28,9 +28,10 @@ def parsed(source: text): Node := {
 ENTITY_MARK = "\\:"
 // `name TAB characters` lines, the table Rust include_str!s
 ENTITY_FILE = "entities.tsv"
-// The lib/ a run uses: WARP_LIB, else the one above this file. A compiled stage is kept for every identical lib/ and
-// runs from wherever that is now, so nothing reads the folder it was compiled in (card pure-lane-nondeterministic)
-def run_library(): text := env("WARP_LIB") ?? folder_of(module_directory)
+// The lib/ a run uses: WARP_LIB, else the one above this file, or beside it when the file was reached as core/ (card
+// compiler-core-link). A compiled stage is kept for every identical lib/ and runs from wherever that is now, so nothing
+// reads the folder it was compiled in (card pure-lane-nondeterministic)
+def run_library(): text := env("WARP_LIB") ?? (if module_directory.ends_with("/core") then folder_of(module_directory) + "/lib" else folder_of(module_directory))
 global entity_table = ø
 def entities(): any {
 	if entity_table == ø {
