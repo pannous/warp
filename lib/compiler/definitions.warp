@@ -281,18 +281,18 @@ converting_uses(n: any, targets: any): any := {
 	walked
 }
 
-# the conversion to `target`: the program's conversions to it tried in order, by the source type, then the built-in one
-conversion_function(target: text, written: list, targets: any): any := {
+# the conversion to `target`: a typed function of each source type, `as·text·Person(p: Person) := body`, and the one
+# trying them in order by the value's type, then the built-in conversion, `as·text(it: any)`
+conversion_functions(target: text, written: list, targets: any): list := {
 	it = symbol(implicit_parameter)
 	tried = Key(it, Op.As, symbol(target))
+	functions = []
 	for conversion in written.reverse() {
-		test = Key(it, Op.Is, symbol(conversion#1))
-		body = converting_uses(conversion#3, targets)
-		# `text(p: Person) := "P " + p.name`: p names the value
-		if conversion#4 != implicit_parameter { body = List([Key(symbol(conversion#4), Op.Assign, it), body], Bracket.Round, Separator.Semicolon) }
-		tried = Key(Key(Key(ø, Op.If, test), Op.Then, body), Op.Else, tried)
+		name = conversion_name(target) + "·" + conversion#1
+		functions += [Key(call_of(name, [Key(symbol(conversion#4), Op.Colon, symbol(conversion#1))]), Op.Define, converting_uses(conversion#3, targets))]
+		tried = Key(Key(Key(ø, Op.If, Key(it, Op.Is, symbol(conversion#1))), Op.Then, call_of(name, [it])), Op.Else, tried)
 	}
-	Key(call_of(conversion_name(target), [it]), Op.Define, tried)
+	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried)]
 }
 
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
@@ -317,6 +317,6 @@ conversions(program: any): any := {
 		}
 	}
 	if not order { return if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline) }
-	functions = order.map(target => conversion_function(target, targets[target], targets))
+	functions = order.map(target => conversion_functions(target, targets[target], targets)).flatten()
 	List(functions + kept.map(statement => converting_uses(statement, targets)), Bracket.None, Separator.Newline)
 }
