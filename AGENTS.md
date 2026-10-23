@@ -235,6 +235,10 @@ Ready goes through the board, not chat: when a branch is finished and pushed, ru
 `todo add "merge: <branch> <sha>" Now -b "<one-line summary, tests run>"`. The Integrator merges the `merge:` cards
 in Now and closes them with `todo done`.
 
+## Commit everything (user 2026-10-23)
+Commit and push all meaningful progress all the time, including notes, handovers and WIP: a box or session can
+disappear at any moment and anything only on disk is lost. Unfinished work goes to its branch as a `wip:` commit.
+
 # Important
 Don't cargo clean unless absolutely necessary!
 

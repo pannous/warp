@@ -23,6 +23,7 @@ few things differently. Where this file and the role files disagree, Grok agents
 - An agent stops only its own helper jobs, never with a stop that reaches other agents.
 
 ## The box
+- The box can go away: commit and push all progress, notes and handovers right away (AGENTS.md).
 - All agents share one Linux box. The shared binary is /workspace/cow/sol-warp-latest, refreshed by the Integrator
   with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh` after pushed batches.
 - Pure only: `warp rebuild pure` and `rebuild self` on the shared binary, with WARP_LIB=<worktree>/lib. No per-branch
