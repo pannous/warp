@@ -1,0 +1,4 @@
+# `byte` walks a text's bytes, not a filter by type. Expected: 3
+n = 0
+for byte in "abc" { n += 1 }
+print n

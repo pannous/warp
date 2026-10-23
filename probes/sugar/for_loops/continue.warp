@@ -1,0 +1,12 @@
+# a `continue` still runs the step, in a counted loop and over a list. Expected: 4 4
+s = 0
+for i in 1 to 3 {
+	if i == 2 { continue }
+	s += i
+}
+t = 0
+for x in [1, 2, 3] {
+	if x == 2 { continue }
+	t += x
+}
+print "$(s) $(t)"
