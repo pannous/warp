@@ -10,3 +10,12 @@ rewrite (thrice $body) => (3 times $body) where $body is block
 rewrite for($start; $condition; $step) {$body...} => ($start; while $condition { $body...; loop·step: $step })
 # `for xs {…}` loops with the variable `it`
 rewrite (for $xs $body) => (for it in $xs $body) where $body is block
+# `each xs {…}` and `xs.each {…}` head that loop too, as statements with a block (inside an expression, `print each
+# xs`, each is the broadcasting word); warp says for
+rewrite each $xs $body => for $xs $body where statement and $body is block and alias
+rewrite $xs.each $body => for $xs $body where statement and $body is block and alias
+# Inside an expression `each` is the broadcasting word: `print each xs` calls print with each item, the list of the
+# results its value (`xs.map(e -> print(e))`); `each character of t` (`t.character` by then, of_lookups) walks the
+# text's characters
+rewrite each $t.character => each chars($t)
+rewrite $f each $xs => $xs.map($e -> $f($e))

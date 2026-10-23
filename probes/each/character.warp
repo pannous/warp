@@ -1,0 +1,2 @@
+// expected: a b c [ø ø ø] (pure lane; the Rust lane says "undefined function: character")
+print each character of "abc"
