@@ -231,6 +231,9 @@ Every worker gets a plan from Supervisor, and everything in it is pre-approved: 
 A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
 When in doubt, ask the user directly, not Supervisor. This replaces per-change OKs (pass ban, lib/compiler size
 limits) for work inside a plan.
+Ready goes through the board, not chat: when a branch is finished and pushed, run
+`todo add "merge: <branch> <sha>" Now -b "<one-line summary, tests run>"`. The Integrator merges the `merge:` cards
+in Now and closes them with `todo done`.
 
 # Important
 Don't cargo clean unless absolutely necessary!
