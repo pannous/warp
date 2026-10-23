@@ -1,0 +1,5 @@
+# the count computed at run time. Expected: 5 0
+n = 5
+xs = int[n]
+print count xs
+print xs#5

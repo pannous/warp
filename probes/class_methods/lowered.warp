@@ -1,0 +1,8 @@
+#!/usr/bin/env warp
+# the programs files hold as the pure lane's passes leave them, without the prelude: `warp probes/class_methods/lowered.warp <file>…`
+use "../../lib/compiler/passes.warp"
+use os
+for file in args {
+	print "-- " + file
+	for statement in statements_in(lowered_program(read(file), ".", "")) { print view_of(statement) }
+}

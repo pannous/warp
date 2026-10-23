@@ -978,8 +978,8 @@ const WASI_PROGRAM_NAME: &str = "warp";
 
 /// WASI of a run: stdout and stderr the process's, or stdout captured (with_captured_stdout); the process environment
 /// as `use os; env(name)` reads it natively, for wasi_environment(); the program's arguments; the file system as "/"
-/// and the working folder as "." (runtime/wasi.warp reads and writes files through them, card standalone); sandboxed,
-/// "/" only read and "." the state folder, the one place it writes
+/// and the working folder as "." (runtime/extended/wasi.warp reads and writes files through them, card standalone);
+/// sandboxed, "/" only read and "." the state folder, the one place it writes
 fn wasi_context() -> wasmtime_wasi::p1::WasiP1Ctx {
 	use std::path::PathBuf;
 	use wasmtime_wasi::FsPerms::{ReadOnly, ReadWrite};

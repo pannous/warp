@@ -1,0 +1,20 @@
+// expected: 2 0 1 Dime Nickel Penny 2 3 1 30 2 3 (a case's index and position, the case at an index, of a case written, a parameter of the enum type and a name holding a case)
+enum Coin { Penny, Nickel, Dime }
+print Coin.Dime as int
+print Penny as int
+cents(c: Coin) := c as int
+print cents(Coin.Nickel)
+print 2 as Coin
+print Coin(1)
+n = 0
+print n as Coin
+print Coin.Dime as index
+print Coin.Dime as position
+places(c: Coin) := c as position
+print places(Coin.Penny)
+xs = [10, 20, 30]
+print xs#(Coin.Dime as position)
+d = Coin.Dime
+print d as int
+e = Dime
+print e as position

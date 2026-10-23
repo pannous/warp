@@ -7,7 +7,6 @@ The writes shown: the items of a list literal `[e 2]`, `xs#1 = e`, `xs.add(e)`, 
 to admit an Error stays unmarked: a variable of the scope `xs: [int or error] = …`, a parameter `f(xs: [int?])`.
 */
 use "walk.warp"
-use "for_loops.warp"
 use "shapes.warp"
 
 list_item_mark = "data·item"

@@ -60,11 +60,14 @@ jobs:
       with:
         targets: ${{ matrix.target }}
     - name: build
-      # three builds: built on its own, warp-runtime has no Cranelift (about 1 MB); the page stub adds the web view
+      # four builds: built on its own, warp-runtime has no Cranelift (about 1 MB); the page stub adds the web view;
+      # warp-host (notes/warp_host.md), the small host of pure programs, in its size profile, copied beside the others
       run: |
         cargo build --release --locked --target ${{ matrix.target }}
         cargo build --release --locked --target ${{ matrix.target }} -p warp-runtime --features webview --bin warp-page-runtime
         cargo build --release --locked --target ${{ matrix.target }} -p warp-runtime --bin warp-runtime
+        cargo build --profile host --locked --target ${{ matrix.target }} -p warp-runtime --features host --bin warp-host
+        cp target/${{ matrix.target }}/host/warp-host target/${{ matrix.target }}/release/warp-host
     - uses: actions/upload-artifact@v7
       with:
         name: binaries-${{ matrix.target }}
@@ -72,6 +75,7 @@ jobs:
           target/${{ matrix.target }}/release/warp
           target/${{ matrix.target }}/release/warp-runtime
           target/${{ matrix.target }}/release/warp-page-runtime
+          target/${{ matrix.target }}/release/warp-host
 
   compilers:
     # the warp-written compiler as wasm, shipped in every tarball beside the binary and as release assets (user
@@ -106,12 +110,20 @@ jobs:
         echo "$said"
         [[ $said == *Hello* ]]
         bin/warp self samples/hello/hello.warp || echo "warp self hello failed (card self-cold-trap)"
+    - name: warp-host's shipped cache
+      # compiler-self's kept values, made once in a tarball's layout and shipped in every one (the same on every
+      # platform), so an installed warp-host's first run takes ~4 s, not ~26 s; no machine code (card warp-host-size)
+      run: |
+        mkdir -p stage && cp bin/warp-host bin/compiler-self.wasm stage/ && cp -R lib stage/lib
+        packaging/host_cache.sh stage
+        mv stage/host-cache bin/host-cache
     - uses: actions/upload-artifact@v7
       with:
         name: compilers
         path: |
           bin/compiler.wasm
           bin/compiler-self.wasm
+          bin/host-cache
     - name: upload
       run: gh release upload "$TAG" bin/compiler.wasm bin/compiler-self.wasm --clobber
 
@@ -142,9 +154,9 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         ARCHIVE: warp-${{ env.TAG }}-${{ matrix.target }}.tar.gz
       run: |
-        chmod +x dist/warp dist/warp-runtime dist/warp-page-runtime
+        chmod +x dist/warp dist/warp-runtime dist/warp-page-runtime dist/warp-host
         cp -R lib dist/lib
-        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime compiler.wasm compiler-self.wasm lib
+        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime warp-host compiler.wasm compiler-self.wasm lib host-cache
         gh release upload "$TAG" "$ARCHIVE" --clobber
 
   packages:

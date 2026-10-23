@@ -1,0 +1,17 @@
+# Enum cases (notes/layers.md, sugar): `Color.Red`, Rust's `Color::Red` are the case Red the enum Color declares, Swift's
+# arm `case .red:` the case red of the one enum declaring it
+rewrite $e.$c => $c where $c is case of $e
+rewrite $e::$c => $c where $c is case of $e
+rewrite case.$c => $c where $c is case
+
+# `c is Coin` (type_tests.warp's is_type(c, "Coin")) of an enum: c is one of its cases
+rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is enum
+
+# A case's number: `Coin.Dime as int` (also `as index`) its index from 0, as C counts, `as position` its position from
+# 1, as `xs#p` counts; of a name holding a case too (`c = Coin.Dime`, `c: Coin`)
+rewrite $v as int => collection_position([cases of $e], $v) - 1 where $v is case of $e
+rewrite $v as index => collection_position([cases of $e], $v) - 1 where $v is case of $e
+rewrite $v as position => collection_position([cases of $e], $v) where $v is case of $e
+# the case at an index, `2 as Coin`, `Coin(2)`; an index no case has is an error
+rewrite $n as $e => ($k = $n; $cs = [cases of $e]; if $k >= 0 and $k < count($cs) then $cs#($k + 1) else raise "" + $k + " is no case: the cases count from 0 to " + (count($cs) - 1)) where $e is enum
+rewrite $e($n) => $n as $e where $e is enum

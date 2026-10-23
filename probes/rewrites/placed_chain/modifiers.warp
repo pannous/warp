@@ -1,0 +1,8 @@
+// out: 3
+// a rule placed `where statement` rewrites its own result again (card engine-placed-where-chain): each declaration
+// word before a statement goes, however many there are (the parser itself drops `public` and `static`)
+rewrite loudly $s... => $s... where statement
+rewrite gently $s... => $s... where statement
+loudly gently f() := 3
+gently loudly gently g() := 4
+print f() + g() - 4

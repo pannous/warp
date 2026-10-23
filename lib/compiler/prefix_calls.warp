@@ -1,0 +1,70 @@
+# `print #xs`, `print -1`, `f -x` parse as `print # xs`, `print - 1`, `f - x`: a word that takes a value calls it with
+# the count or the negative, `print(#xs)`, `f(-x)` (card pure-lane-print; Rust twin: lowering/words/negated_calls.rs).
+# A name the program binds as a value subtracts or indexes: `size -1` of a variable size, `xs #1`. A pass, not a rewrite
+# rule: which words take a value (the program's functions with a parameter, untyped too, and the builtins of one
+# value) is no `where` condition yet. `sq 2 == 4` is lib/sugar/comparisons.warp.
+use "walk.warp"
+use "scope.warp"
+use "builtin_signatures.warp"
+
+spaced_prefix_calls(program: Node): Node := {
+	takers = value_takers(program)
+	prefix_calls(program, takers, count_takers(program, takers))
+}
+
+prefix_call_operators = [Op.Sub, Op.Hash]
+
+# the words of the program that take a value: print, its functions with a parameter (`f(x) := …`, `f := { it * 2 }`,
+# `f = x => …`), a builtin of one value; not a name it binds as a value
+value_takers(program: Node): list := {
+	scope = scope_of(program)
+	(value_taking_functions(program) + value_taking_words).filter(name => not binds_value(scope, name))
+}
+
+# the program's functions that take a value
+value_taking_functions(program: Node): list := nodes_in(program).map(n => value_function(n)).filter(name => name != ø)
+
+# the value takers that take a count, `print #xs`: a type word converts a negative, `int -3`, but takes no count, as
+# `float[2]` is the subscript `float#3` of a typed array (lib/sugar/lists.warp), unless the program defines it as a function
+count_takers(program: Node, takers: list): list := {
+	defined = value_taking_functions(program)
+	takers.filter(name => not is_type_word(name) or defined contains name)
+}
+
+value_function(n: Node): any := match n {
+	Key(head, op, body): {
+		if not (op == Op.Define or op == Op.Assign) { return ø }
+		if is_round(head) { return if #items_of(head) > 1 then head_word(head) else ø }
+		if head is symbol and (is_lambda(body) or (op == Op.Define and mentions(body, implicit_parameter))) then name_of(head) else ø
+	}
+	_: ø
+}
+
+
+takes_value(word: Node, takers: list): bool := word is symbol and name_of(word) in takers
+
+# `counters`: the takers of a count (count_takers)
+prefix_calls(n: Node, takers: list, counters: list): Node := {
+	member = counted_member(n, counters)
+	if member != ø { return prefix_calls(member, takers, counters) }
+	match n {
+		Key(word, op, argument): {
+			callers = if op == Op.Hash then counters else takers
+			if op in prefix_call_operators and takes_value(word, callers) then call_of(name_of(word), [prefixed_by(op, prefix_calls(argument, takers, counters))]) else children(n, x => prefix_calls(x, takers, counters))
+		}
+		_: children(n, x => prefix_calls(x, takers, counters))
+	}
+}
+
+# `-x`, `#xs` as the parser writes them
+prefixed_by(op: Op, argument: Node): Node := if op == Op.Sub and argument is number then 0 - argument else Key(ø, op, argument)
+
+# `print #s.names` parses as `(print # s).names`: it counts the field, `print # s.names`; ø for any other node
+counted_member(n: Node, takers: list): any := match n {
+	Key(base, Op.Dot, member): {
+		inner = if is_key(base, Op.Hash) and takes_value(key_of(base), takers) then [key_of(base), value_of(base)] else counted_parts(counted_member(base, takers))
+		if inner == ø then ø else Key(inner#1, Op.Hash, Key(inner#2, Op.Dot, member))
+	}
+	_: ø
+}
+counted_parts(counted: any): any := if counted == ø then ø else [key_of(counted), value_of(counted)]

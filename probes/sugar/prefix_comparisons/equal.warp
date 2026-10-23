@@ -1,0 +1,4 @@
+# `sq 2 == 4` of a function taking a typed value first is `sq(2) == 4`. Expected: yes no
+sq(x: int) := x * x
+print sq 2 == 4
+print sq 3 == 8

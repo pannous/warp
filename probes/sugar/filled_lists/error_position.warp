@@ -1,0 +1,3 @@
+# an error inside the count points at what the user wrote. Expected: the unknown name zed at 2:9
+x = int[zed]
+print x
