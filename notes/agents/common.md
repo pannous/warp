@@ -184,6 +184,18 @@ After a context swap, this file and your role file win over anything a handover 
 - Low effort for routine runs (user 2026-10-23): routine builds and tests (rebuilds, targeted test runs, self-checks,
   gate runs) go to a helper at low effort with a step cap; give it the exact commands and stop when they finish.
   Higher effort only for real debugging or design work.
+- Tiered gate, pure pipeline first (user 2026-10-23: the gate must not become a bottleneck): `scripts/gate-probes.sh
+  [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure and self, both
+  hellos (the self check, minutes). Tier 1: every probes/gate/<name>.warp in both lanes against <name>.expected
+  (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
+  Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). Tier 3,
+  Rust tests: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; the script names it, the cargo
+  gate or cloud lane runs it. On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/sol-warp-latest.
+- Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate-probes.sh --tag-good` tags it
+  `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `scripts/bisect-lane.sh [--lane
+  pure|self|both] <probe.warp> <expected> [good] [bad]` (default the newest good/* tag .. origin/main, first-parent)
+  bisects in a temporary worktree it removes: per step rebuild pure and self with the shared binary, bad only on
+  wrong output, skipped (125) on a failed rebuild or a timeout; it prints the first bad commit.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
   suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
@@ -331,6 +343,8 @@ After a context swap, this file and your role file win over anything a handover 
      conflicts, never the Integrator. Take a side of a conflicted file only after `git diff <merge-base> HEAD --
      <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check `git diff
      origin/main -- <file>` shows only your change. No need to re-run the tests after a clean update.
+     Keep merges real: one merge commit per branch, and never let a plain `git pull --rebase` flatten them (it replays
+     a merged branch's commits onto main and conflicts): `git pull --rebase=merges` or `git merge origin/main`.
   3. Push the branch, then `todo ready <card>`. It reads the tip itself and refuses a branch that is not pushed,
      differs from origin, or does not merge cleanly (naming the files); `--force` only for a branch carrying other
      branches. Several cards on one branch: ready each. First a `todo note <card>` in this fixed form: `card | branch |
