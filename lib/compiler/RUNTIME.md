@@ -23,6 +23,11 @@ fields, nodes, errors and builders, plus bridge (below).
 features: exact, exact_rounding, pow and pow_tables, durations, times and wasi, plus the hooks' bodies (below).
 `runtime/durations.warp` is a link to `runtime_extended/durations.warp`, kept while
 tests/numbers/test_duration_words.rs reads the file at its old path.
+`runtime_extended/time_arithmetic.warp` (calendar arithmetic, card time-arithmetic-library) is an extended part the root
+does not load yet: its words work on plain integers (form and position, month/day/nanosecond counts), some of its names
+(time_form, day_nanos, hour_nanos, sign_of) clash with times' and durations', and node_add, node_sub and node_mul do
+not call it yet. `lib/compiler/time_arithmetic.warp` links to it while tests/parser/test_self_time_arithmetic.rs reads
+the file at its old path.
 
 Both roots are loaded, core first: by `compiler.warp` (`RUNTIME_ROOTS`) and by `src/compiler/self_hosted.rs`
 (`EXTENDED_RUNTIME_WORDS`). Loading only joins the source; the emitter still compiles a word only on its first call.
