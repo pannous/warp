@@ -46,3 +46,9 @@ is! 'class Person { name: text }
 text(p: Person) := "Person " + p.name
 p = Person("Ann")
 str(p)' 'Person Ann'
+
+# a_list_converts_each_item
+is! 'ys = [1, 2] as list of text
+ys#1 + "!"' '1!'
+is! 'ys = ["1", "2"] as list of int
+ys#1 + ys#2' 3
