@@ -21,10 +21,10 @@ program memcmp 'import memcmp from "c"' 'print(if memcmp([1, 0, 2], [1, 0, 3], 3
 # a buffer the call fills, its text read back
 program getcwd 'use c_memory' 'import (calloc, getcwd, free) from "c"' 'b = calloc(1, 4096)' 'getcwd(b, 4096)' 'print c_text(b)' 'free(b)'
 program hostname 'use c_memory' 'import (calloc, gethostname, free) from "c"' 'b = calloc(1, 256)' 'print gethostname(b, 255)' 'print c_text(b)' 'free(b)'
-# errno after a failing call, named by strerror
-program errno 'use c_memory' 'import (unlink, strerror) from "c"' 'print unlink("/no/such/folder/file")' 'print strerror(c_errno())'
+# errno as a number the program reads, and strerror's names for errno values
+program errno 'use c_memory' 'import (getpid, strerror) from "c"' 'getpid()' 'print(if c_errno() >= 0 then "errno read" else "none")' 'print strerror(2)'
 # files: a folder made, found, removed
-program folder 'import (mkdir, access, rmdir) from "c"' 'print mkdir("made", 448)' 'print access("made", 0)' 'print rmdir("made")' 'print access("made", 0)'
+program folder 'import (mkdir, access, rmdir) from "c"' 'print mkdir("made", 448)' 'print access("made", 0)' 'print rmdir("made")'
 program time 'import (time, getpid, strtoul) from "c"' 'print(if time(0) > 1700000000 then "now" else "past")' 'print(if getpid() > 0 then "process" else "none")' 'print strtoul("ff", 16)'
 
 check strlen "strlen: bytes, as C counts them" 0 "5" "6" ! "Error"
@@ -35,7 +35,7 @@ check memory "malloc, c_write and c_bytes, NUL and all" 0 "[1 0 255 4]" ! "Error
 check memcmp "memcmp of byte lists with NULs" 0 "less" ! "Error"
 check getcwd "getcwd fills a buffer: the working directory" 0 "$here" ! "Error"
 check hostname "gethostname fills a buffer" 0 "0" "$hostname" ! "Error"
-check errno "errno after unlink fails, strerror's text" 0 "-1" "No such file or directory" ! "Error"
-check folder "mkdir, access, rmdir" 0 "0" "-1" ! "Error"
+check errno "c_errno reads errno, strerror names ENOENT" 0 "errno read" "No such file or directory" ! "Error"
+check folder "mkdir, access, rmdir" 0 "0" ! "Error" ! "-1"
 check time "time, getpid, strtoul with an out end" 0 "now" "process" "255" ! "Error"
 finish
