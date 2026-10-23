@@ -42,6 +42,34 @@ sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_ta
 # types are lib/sugar/arms.warp's and heads.warp's rules now, their places kept so the indexes hold
 passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 
+# The pass order, by stage (card pass-order-owners). Before the passes (compiler.warp compile): c_imports reads the
+# foreign lines and C imports off the source. with_used: interpolation, the program's rewrite rules, index_positions,
+# property_accessors, the used files and modules, the prelude's definitions it reaches. Then pure_passes in order:
+#   parse_words tries definitions          `parse`/`eval` words, try/catch, definitions and their heads (`… from runtime`)
+#   preposition_heads arity_overloads      `f of x` heads, several definitions of one name by arity
+#   clauses multiple_assignments           `where`/`unless` clauses, `a, b = …`
+#   type_tests spaced_prefix_calls         `x is T`, `f x` calls
+#   passes (twinned with Rust by index)    interpolation, two kept slots (arms and result arrows are rules now),
+#                                          sugar_phrases (`a of b`), number_words_pass
+#   first_sugar node_matches node_cases    lib/sugar's first rules (arms, heads), `match`, node cases
+#   enums_declared plain_enums             enums
+#   phrase_blocks comprehensions           phrase blocks, `[x for x in xs]`
+#   data_items library_calls sugar         data items, library calls, lib/sugar's main rules (fallbacks, places)
+#   lambdas loop_heads iteration_sugar     lambdas, `for` heads, the `for` loops lowered onto `while`
+#   late_sugar list_methods number_keys    late rules, `xs.add(x)`-style methods, number keys
+
+# the pass that owns each form the emitter may refuse: a refusal of that form names it, so a form that reaches the
+# emitter unlowered says which pass did not claim it
+pass_owners = {"foreign C call": "c_imports", "runtime declaration": "definitions", "try": "tries", "multiple assignment": "multiple_assignments",
+	"for loop": "loop_heads and iteration_sugar", "match": "node_matches", "match arm": "first_sugar (lib/sugar/arms.warp)", "enum": "enums_declared",
+	"comprehension": "comprehensions", "lambda": "lambdas", "number word": "number_words_pass", "fallback": "sugar (lib/sugar/fallbacks.warp)"}
+
+# the emitter's refusal naming its form and owner pass: `form` one of pass_owners, ø for a form no pass owns
+owned_refusal(refusal: text, form: any): text := {
+	if form == ø { return refusal + " (no owner)" }
+	refusal + " (" + form + "; owner " + (pass_owners.get(form) ?? "none") + " did not claim it)"
+}
+
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
 pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, list_methods, number_keys]
