@@ -119,10 +119,15 @@ spelled_members(member: any): list := {
 		_: [member]
 	}
 }
-# the names a space lists, `name age`, else none
+# the fields a space lists, `name age`, or `name age: int` as the parser groups it, `name (age: int)`, else none
 word_run(n: Node): list := match n {
-	List(parts, Bracket.None, Separator.Space): { if #parts > 1 and not parts.any(part => not (part is symbol)) then parts else [] }
+	List(parts, Bracket.None, Separator.Space): { if #parts > 1 and not parts.any(part => not is_field_part(part)) then parts else [] }
 	_: []
+}
+# a field's name, `age`, or the name with its type, `age: int`
+is_field_part(part: Node): bool := match part {
+	Key(left, Op.Colon, right): left is symbol
+	_: part is symbol
 }
 
 # the view ["type", name, body] of a class declaration, else ø
