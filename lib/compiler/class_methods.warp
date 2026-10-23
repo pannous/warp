@@ -263,20 +263,30 @@ routed(n: Node, classes: any, names: list, routed_methods: list): Node := match 
 	_: children(n, part => routed(part, classes, names, routed_methods))
 }
 # the operators lib/aliases.warp names (an entry with its `operator`), by each spelling a method may take: the glyph,
-# the entry's word and its aliases, `+`, add and plus each [add, "+"]; read once
-global operator_spellings = ø
+# the entry's word and its aliases, `+`, add and plus each spelling add and "+"; read once, as texts by spelling (the
+# self lane holds a map of texts as parser.warp's alias tables)
+global operator_glyphs = ø
+global operator_entry_words = {}
 # the operator a method's name spells, [its word, its glyph] (`plus` and `+` give [add, "+"]), else ø
 operator_word(spelled: text): any := {
-	if operator_spellings == ø {
-		operator_spellings = {}
+	if operator_glyphs == ø {
+		operator_glyphs = {}
 		source = try read(run_library() + "/" + ALIASES_FILE) else ""
-		for row in items_of(written_tree(source)) {
-			glyph = alias_field(row#2, "operator")
-			word = spelling_text(row#1)
-			if glyph is text { for spelling in [glyph, word] + (alias_field(row#2, "aliases") ?? []) { operator_spellings[spelling] = [word, glyph] } }
-		}
+		for row in items_of(written_tree(source)) { add_operator_spellings(spelling_text(row#1), row#2) }
 	}
-	operator_spellings.get(spelled)
+	if spelled in operator_glyphs then [operator_entry_words[spelled], operator_glyphs[spelled]] else ø
+}
+# the spellings of an entry naming an operator: its glyph, its word and each alias
+def add_operator_spellings(word: text, fields: Node) {
+	glyph = alias_field(fields, "operator")
+	if not (glyph is text) { return }
+	spells_operator(glyph, word, glyph)
+	spells_operator(word, word, glyph)
+	for spelling in alias_field(fields, "aliases") ?? [] { spells_operator(spelling, word, glyph) }
+}
+def spells_operator(spelling: text, word: text, glyph: text) {
+	operator_glyphs[spelling] = glyph
+	operator_entry_words[spelling] = word
 }
 # how many parameters the method of that name takes (besides its instance)
 taken_count(classes: any, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
