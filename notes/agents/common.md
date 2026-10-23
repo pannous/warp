@@ -199,7 +199,8 @@ After a context swap, this file and your role file win over anything a handover 
   Fleet-wide at most 2 heavy warp runs at once (user 2026-10-22, load 522): every self build, `warp rebuild`, `warp
   pure` of a compiler file and every test sweep (is_tests, is_pairs, probe series) runs inside `scripts/slot.sh <cmd>`
   (slots on /Volumes/Build/self-check; self-check.sh takes one itself; the Integrator's gate included). A sweep runs
-  its programs serially inside one slot, never N parallel warps. One more heavy slot is on the Grok box (Debian, 8
+  its programs serially inside one slot, never N parallel warps. The Integrator's gate runs with WARP_SLOT_GATE=1 in
+  a reserved slot of its own, so it never waits behind workers. One more heavy slot is on the Grok box (Debian, 8
   cores, ~3 GB free, one run at a time): give the run to Grok Warp Code 3 via the Supervisor (grok-msg). The tree it checks
   is a cowtree worktree under /Volumes/Worktrees or a throwaway lib/ copy under /Volumes/Junk, never inside the main
   checkout (scratch/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
