@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To present
+- pure-fallback: `warp pure` runs all-warp or all-Rust, never the hybrid; one Rust call-site edit (bends rust-frozen once).
 - n-times-interim (Interviewer's decision): `n times {…}` is a lib/sugar rewrite to a for loop until block parameters and shared captures exist, then the prelude function.
 
 ## Parked

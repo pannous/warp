@@ -1,0 +1,2 @@
+// expected: an error: `··` means nothing outside a rule template
+print(2··3)

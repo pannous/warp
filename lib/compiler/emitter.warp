@@ -32,14 +32,18 @@ use "emitter/host.warp"
 use "emitter/times.warp"
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
-type_bytes = {int: 126, float: 124, bool: 127, char: 127}
+type_bytes = {int: 126, float: 124, bool: 127, char: 127, i32: 127}
 section_ids = {custom: 0, type: 1, import: 2, function: 3, memory: 5, globals: 6, export: 7, code: 10, data: 11, data_count: 12, tag: 13}
 function_type_byte = 96
 export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
-# the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names
-exported_globals = ["trap_detail", "text_heap"]
+# the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names,
+# the position of the statement it happened in
+exported_globals = ["trap_detail", "text_heap", "trap_position"]
+# trap_position holds line * columns_per_line + column, Rust's line << 12 | column (src/wasm_emitter/control/traps.rs
+# encoded_position)
+columns_per_line = 4096
 import_function_byte = 0
 # the export WASI hosts run a module by (Rust's wasi_emitter.rs WASI_START)
 wasi_start = "_start"
@@ -104,9 +108,6 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_trunc: 157, f64_nearest: 158, f64_sub: 161, f64_mul: 162, f64_div: 163, f64_abs: 153, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
-# phrases whose meaning moves out of the compiler into warp library words (card phrases-out-of-core): refused by name
-# until the word exists, never compiled as an unknown name
-pending_library_words = {times: "`n times`", once: "`once …`", twice: "`twice …`", thrice: "`thrice …`"}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
@@ -164,6 +165,11 @@ no_kind = "none"
 # the kind of code that never ends normally (an endless loop): it joins as a call still compiling does, taking the
 # other kind
 never = pending
+# the host word that never returns
+ending_host_word = "exit"
+# the code of a [kind, code] value that ends the run, nothing after it reached (read through a parameter as converted
+# reads its value: `host_call(…)#2 + […]` written in place is read as a text's character)
+def ended_code(value: any): list { value#2 + [op.unreachable] }
 # the names of the helpers Rust's lowering adds to a program (prelude·round_to)
 prelude_prefix = "prelude·"
 # WARP_EMIT_SURVEY set: a refused function is recorded and taken as giving a node, the others compiled on, and the
@@ -203,11 +209,10 @@ refuse(why: text): any := {
 # the file the program comes from, which a refusal names
 def emitting_file(file: text) { module.program_file = file }
 
-# a node of the program (no runtime word's) with a position: the place a later refusal names
+# a node of the program (no runtime word's) written somewhere: the place a later refusal names
 def note_emitting(body: Body, n: any) {
-	if body.intrinsics or not is_positioned(n) { return }
-	file = if module.program_file == "" then "" else module.program_file + ":"
-	module.emitting_at = " at " + file + line_of(n) + ":" + column_of(n)
+	at = if body.intrinsics then ø else written_at(n)
+	if at { module.emitting_at = place_text(at, module.program_file) }
 }
 
 # a refused form as the program writes it, in a few words: `… := …`, the call `memo_known(…)`, a name
@@ -450,10 +455,28 @@ def local_value(body: Body, n: any): list {
 	if name not in body.names and name in module.variants { return ["node", node(Kind.Symbol, text_bytes(name))] }
 	# a type's name, unbound, is the type value: `k = int` (Rust: names_a_type_value)
 	if name not in body.names and names_a_type_value(name) { return ["node", node(Marked.TypeValue, text_bytes(name))] }
-	if name not in body.names and name in pending_library_words { return refuse(pending_library_words[name] + " (library word pending)") }
+	if name not in body.names and system_value_kinds.has(name) { return system_value_read(name) }
 	if name not in body.names { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
+}
+# a system value the program leaves unbound (Rust: lowering/signals/system_values.rs, warp-runtime host_words.rs
+# SYSTEM_VALUES): `view_width`, `online`, `mouse_x` read now by the host word system_value(name), a yes/no one as its
+# reading != 0, the mouse's place a float (Rust's FLOAT_VALUES); the phrases (`dark mode`) and listeners on one come later
+system_value_kinds = {battery: "int", charging: "bool", online: "bool", mouse_x: "float", mouse_y: "float", mouse_down: "bool",
+	mouse_wheel: "int", key_down: "bool", window_open: "bool", view_width: "int", view_height: "int", gpu_drawing: "bool",
+	window_width: "int", window_height: "int", display_width: "int", display_height: "int", display_dpi: "int"}
+# where the name goes, a C string as the host reads it: the scratch bytes past the output's (runtime/extended/wasi.warp scratch_bytes)
+system_name_at = 32
+def system_value_read(name: text): list {
+	bytes = name.bytes + [0]
+	code = []
+	for i in 0..<#bytes { code += [op.i32_const] + sleb(system_name_at + i) + [op.i32_const] + sleb(bytes#(i + 1)) + [op.i32_store8, 0] + uleb(output_address) }
+	code += [op.i32_const] + sleb(output_address + system_name_at) + [op.call] + uleb(import_index(host_import("system_value")))
+	kind = system_value_kinds[name]
+	if kind == "bool" { return ["bool", code + [op.i64_const, 0, op.i64_ne]] }
+	if kind == "float" { return ["float", code + [op.f64_convert_i64_s]] }
+	["int", code]
 }
 
 # a rem b of floats, the sign of a as with ints: a - trunc(a / b) * b (wasm has no f64 remainder)
@@ -653,7 +676,7 @@ is_spaced_call(body: Body, n: any): bool := {
 is_call_or_line(n: any): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
 # `n times [x]`, `n times "ab"`, `n times t` among the items of a spaced group or a call `print(3 times [7])`: n copies,
 # as Rust's times_phrases.rs lowers them (zero_fill, times·text, which multiplies a number), the count the item before;
-# `n times {…}` waits for its library word (pending_library_words). The index of `times` in items, 0 for none
+# `n times {…}` is a loop by then (lib/sugar/loops.warp). The index of `times` in items, 0 for none
 repetition_at(items: any): int := {
 	places = range_list(#items).map(i => i + 1).filter(at => at > 1 and at < #items and repeats_at(items, at))
 	if places then places#1 else 0
@@ -700,6 +723,9 @@ def group_expression(body: Body, n: any): list {
 	std = std_word(n)
 	if std != ø { return call(body, module.runtime[std], std_arguments(n#4)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host {
+		# `exit(1)` ends the run: never a value, so `try 42 catch e { exit(1) }` and `if x > 0 { x } else { exit(1) }`
+		# take the other branch's kind (card pure-exit-miscompile)
+		if name_of(n#1) == ending_host_word { return [never, ended_code(host_call(body, name_of(n#1), items_of(n)[1..]))] }
 		return host_call(body, name_of(n#1), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in intrinsics and (body.intrinsics or name_of(n#1) in program_intrinsics) {
@@ -1009,6 +1035,7 @@ def reached_words(program: any): any {
 			reached[name] = yes
 			more = {}
 			if name in library_words { more[library_words[name]] = yes }
+			if system_value_kinds.has(name) { more["system_value"] = yes }
 			if name in module.runtime { collect_referred_outside(module.runtime[name], more) }
 			pending += more.keys
 		}

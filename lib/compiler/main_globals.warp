@@ -28,8 +28,8 @@ main_globals(program: any, own_names: list): any := {
 			for name in changed_names(body) {
 				if name in main_names and name not in global_names and name not in own and name not in decided and not declares_local(body, name) {
 					decided[name] = yes
-					if first_mention(body, name) != fresh_mention { return diagnose(call_of("main_variable_change", [name])) }
-					diagnose(call_of("local_or_global", [name, defined_function]))
+					if first_mention(body, name) != fresh_mention { return diagnose(call_of("main_variable_change", [name]), function_definition) }
+					diagnose(call_of("local_or_global", [name, defined_function]), function_definition)
 				}
 			}
 		}

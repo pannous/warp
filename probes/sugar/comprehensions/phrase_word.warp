@@ -1,0 +1,2 @@
+words = ["ab", "cd"]
+print [upper w for w in words]

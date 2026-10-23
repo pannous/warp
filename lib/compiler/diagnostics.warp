@@ -1,6 +1,6 @@
 # The diagnostics of the warp compiler (card pure-diagnostics, decision diagnostics-files): a check finds a fact, a
-# node such as `kind_change(x, Int, List)`, and `diagnose(fact)` says it with the message of the first row it
-# matches in errors.data, then warnings.data, then hints.data. A row is `pattern TAB message`, optionally `TAB fix`
+# node such as `kind_change(x, Int, List)`, and `diagnose(fact, about)` says it where the program wrote the node
+# `about`, with the message of the first row it matches in errors.data, then warnings.data, then hints.data. A row is `pattern TAB message`, optionally `TAB fix`
 # and then `TAB topic@expression`, what "got it" silences:
 # the pattern a node whose `$name` parts take any node (`data(…)` quotes it), the message and fix texts whose
 # `{name}` holes give that part and `{a name}` it with its article. The stage hands `diagnosed` to Rust, which says
@@ -13,13 +13,13 @@ message_files = [["errors.data", "error"], ["warnings.data", "warning"], ["hints
 quoting_word = "data"
 hole_mark = "$"
 
-# [level, message, fix, topic@expression] of each fact diagnosed so far ("" when it names none)
+# [level, message, fix, topic@expression, [line, column] or ø] of each fact diagnosed so far ("" when it names none),
+# the place where the program wrote the node the fact is about
 global diagnosed = []
 # [level, pattern, message] of every row of the message files, read at the first fact
 global message_rows = ø
-# the folder of the message files: this file's, or the one `messages_from` names (compiler.warp's lib/, since a
-# compiler.wasm keeps as module_directory the folder it was built from, gone or elsewhere where it runs)
-global message_folder = module_directory
+# the folder of the message files: the run's lib/compiler (parser.warp run_library), or the one `messages_from` names
+global message_folder = run_library() + "/compiler"
 
 # the message files read from this folder from now on
 def messages_from(folder: text) {
@@ -30,8 +30,9 @@ def messages_from(folder: text) {
 # the node a check looks at: a key of the operator
 is_operator(n: any, op: text): bool := n is key and op_of(n) == op
 
-diagnose(fact: any): any := {
-	diagnosed += [said_fact(fact)]
+# the fact about the program's node `about`, which names where it is written
+diagnose(fact: any, about: any): any := {
+	diagnosed += [said_fact(fact) + [written_at(about)]]
 	fact
 }
 
@@ -95,16 +96,19 @@ shown(part: any): text := if part is symbol then name_of(part) else if part is t
 # what was diagnosed after the first `known` facts: a compile's own, past those of the runtime words lowered before it
 diagnosed_since(known: int): list := diagnosed[known ..]
 
-# the first error among the diagnosed, as Rust's Diagnostic says it; ø when none is an error
-first_error(found: list): text? := {
+# the first error among the diagnosed in the program's file, as Rust's Diagnostic says it; ø when none is an error
+first_error(found: list, file: text): text? := {
 	failing = found.find(said => said#1 == "error")
 	if not failing { return ø }
-	said_text(failing)
+	said_text(failing, file)
 }
 
-# the warnings among the diagnosed, each as Rust's Diagnostic says it
-warnings_said(found: list): list := found.filter(said => said#1 == "warning").map(said_text)
+# the warnings among the diagnosed in the program's file, each as Rust's Diagnostic says it
+warnings_said(found: list, file: text): list := found.filter(said => said#1 == "warning").map(said => said_text(said, file))
 
-# a diagnosed [level, message, fix, …] as Rust's Diagnostic says it: the message, then `; fix: ` and the fix when it
-# names one
-said_text(said: list): text := if said#3 then said#2 + "; fix: " + said#3 else said#2
+# a diagnosed [level, message, fix, topic, place] as Rust's Diagnostic says it: the message and where in the file,
+# then `; fix: ` and the fix when it names one
+said_text(said: list, file: text): text := {
+	text = said#2 + place_text(said#5, file)
+	if said#3 then text + "; fix: " + said#3 else text
+}

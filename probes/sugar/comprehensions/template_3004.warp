@@ -1,0 +1,3 @@
+rewrite doubled $xs => [$x * 2 for $x in $xs]
+ys = [1, 2]
+print doubled ys

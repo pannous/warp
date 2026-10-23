@@ -11,7 +11,7 @@ priority: optional
 maintainer: pannous <info@pannous.com>
 description: |-
   Warp: a data notation that is also a programming language, compiled to WebAssembly GC.
-  Ships warp and warp-runtime, the stub of the standalone executables `warp build` makes.
+  Ships warp and warp-runtime, the stub of the standalone executables `warp build` makes, and warp-host.
 vendor: pannous
 homepage: https://warp.pannous.com/
 license: AGPL-3.0-or-later AND MIT # the compiler AGPL, warp-runtime MIT (CONTRIBUTING.md)
@@ -26,4 +26,8 @@ contents:
     dst: /usr/share/warp/
   - src: ./lib
     dst: /usr/share/warp/lib
+    type: tree
+  # warp-host's shipped cache, compiler-self's kept values (packaging/host_cache.sh, notes/warp_host.md)
+  - src: ./host-cache
+    dst: /usr/share/warp/host-cache
     type: tree
