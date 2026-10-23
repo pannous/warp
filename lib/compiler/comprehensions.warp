@@ -1,6 +1,6 @@
 # `[x * x for x in 1..10]` and `[x for x in xs if x % 2 == 0]`: a list built by a loop,
 # `(comprehension_list·1 = []; for x in xs { if c { comprehension_list·1 += [x * x] } }; comprehension_list·1)`, before
-# for_loops.warp lowers the loop (card pure-comprehensions). Python's generator argument `sum(x * x for x in xs)` is the
+# lib/sugar/iteration.warp lowers the loop (card pure-comprehensions). Python's generator argument `sum(x * x for x in xs)` is the
 # call of that list. Rust twin: src/lowering/collections/comprehensions.rs lower
 use "walk.warp"
 use "phrase_blocks.warp"
