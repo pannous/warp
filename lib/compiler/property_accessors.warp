@@ -127,6 +127,14 @@ property_written(name: text, value: Node, properties: any): Node := {
 	setter_with_value(properties.setters[name], properties.parameters[name], value)
 }
 
+# the program with each write of an object's member, `canvas.width = 300`, `p.x += 1`, its value alone: such a write
+# binds no object, so it leaves `canvas` a property's (scope.warp reads `canvas.width = …` as binding canvas)
+without_dotted_writes(program: Node): Node := bottom_up(program, n => match n {
+	Key(target, op, value): if is_dotted_write(target, op) then value else n
+	_: n
+})
+is_dotted_write(target: Node, op: Op): bool := is_key(target, Op.Dot) and key_of(target) is symbol and (op == Op.Assign or compound_base(op) != ø)
+
 # the program's properties in use, its own definitions gone; `use draw` in front when a canvas property needs it
 property_accessors(program: Node): Node := {
 	statements = statements_in(program)
@@ -138,7 +146,7 @@ property_accessors(program: Node): Node := {
 	if wants_standard { standard_properties(properties) }
 	properties_collected(own, "", properties)
 	kept = statements.filter(statement => property_definition(statement) == ø)
-	scope = scope_of(program)
+	scope = scope_of(without_dotted_writes(program))
 	rewritten = kept.map(statement => property_accessed(statement, properties, scope))
 	# the modules of the properties the program names: `use draw` in front for the canvas's
 	needed = properties.owners.keys.filter(name => property_object(name) in mentioned).map(name => properties.owners[name])
