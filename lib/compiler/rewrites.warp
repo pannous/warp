@@ -81,7 +81,7 @@ one_word = "one"
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
 # making or reading the forms its rules take, and the late sugar after for_loops took the loops a range counts: a
 # range left is a value (sugar/ranges)
-first_sugar_module_names = ["sugar/lists", "sugar/comparisons"]
+first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/units"]
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls"]
 late_sugar_module_names = ["sugar/ranges"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them

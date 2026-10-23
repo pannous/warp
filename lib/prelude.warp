@@ -360,6 +360,9 @@ pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 paint_each(f, width, height) := paint([pixel_color(f(i % width, i /! width)) for i in 0..width * height], width, height)
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
 sleep(amount) := sleep_ms(amount * 1000)
+// a unit literal's amount in SI base units, `5 km` as quantity_value(5000, "length") (lib/sugar/units.warp, the pure
+// lane's): the amount itself; its dimension is for the checks that refuse showing or mixing quantities
+quantity_value(amount, dimension) := amount
 // random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
 // a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
 random_fraction(a, b) := a + random() * (b - a)

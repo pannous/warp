@@ -1,0 +1,59 @@
+# Unit literals, stage 1 (card pure-unit-literals, notes/layers.md row 110; Rust twin: src/numbers/units/static_units.rs,
+# whose table is lib/units.warp's unit_definitions): `5 km`, `500ms`, `3 kilometers` are their amounts in SI base units,
+# exact (`5 cm` is 1/20 m), held by quantity_value(amount, dimension), so `3km == 3000m`, `sleep(20ms)` (sleep counts
+# seconds) and `2 kilograms < 3000 grams` compute as Rust's lane does. A quantity's unit is not kept: the analyzer
+# refuses a program that would show one (analyzer.warp shown_quantity), and one adding or comparing two dimensions.
+# Pure lane only: Rust's rewrites run before its static units, so these rules stay out of lib/units.warp, which Rust
+# reads. A program binding a unit's word (`m = 2`) keeps its own. Not yet: other units, `km/h`, `m²`, temperatures.
+rewrite $n ms => quantity_value($n / 1000, "duration") where $n is literal
+rewrite $n * ms => quantity_value($n / 1000, "duration") where $n is literal
+rewrite $n millisecond => quantity_value($n / 1000, "duration") where $n is literal
+rewrite $n milliseconds => quantity_value($n / 1000, "duration") where $n is literal
+rewrite $n s => quantity_value($n, "duration") where $n is literal
+rewrite $n * s => quantity_value($n, "duration") where $n is literal
+rewrite $n second => quantity_value($n, "duration") where $n is literal
+rewrite $n seconds => quantity_value($n, "duration") where $n is literal
+rewrite $n min => quantity_value($n * 60, "duration") where $n is literal
+rewrite $n * min => quantity_value($n * 60, "duration") where $n is literal
+rewrite $n minute => quantity_value($n * 60, "duration") where $n is literal
+rewrite $n minutes => quantity_value($n * 60, "duration") where $n is literal
+rewrite $n h => quantity_value($n * 3600, "duration") where $n is literal
+rewrite $n * h => quantity_value($n * 3600, "duration") where $n is literal
+rewrite $n hour => quantity_value($n * 3600, "duration") where $n is literal
+rewrite $n hours => quantity_value($n * 3600, "duration") where $n is literal
+rewrite $n mm => quantity_value($n / 1000, "length") where $n is literal
+rewrite $n * mm => quantity_value($n / 1000, "length") where $n is literal
+rewrite $n millimeter => quantity_value($n / 1000, "length") where $n is literal
+rewrite $n millimeters => quantity_value($n / 1000, "length") where $n is literal
+rewrite $n millimetre => quantity_value($n / 1000, "length") where $n is literal
+rewrite $n millimetres => quantity_value($n / 1000, "length") where $n is literal
+rewrite $n cm => quantity_value($n / 100, "length") where $n is literal
+rewrite $n * cm => quantity_value($n / 100, "length") where $n is literal
+rewrite $n centimeter => quantity_value($n / 100, "length") where $n is literal
+rewrite $n centimeters => quantity_value($n / 100, "length") where $n is literal
+rewrite $n centimetre => quantity_value($n / 100, "length") where $n is literal
+rewrite $n centimetres => quantity_value($n / 100, "length") where $n is literal
+rewrite $n m => quantity_value($n, "length") where $n is literal
+rewrite $n * m => quantity_value($n, "length") where $n is literal
+rewrite $n meter => quantity_value($n, "length") where $n is literal
+rewrite $n meters => quantity_value($n, "length") where $n is literal
+rewrite $n metre => quantity_value($n, "length") where $n is literal
+rewrite $n metres => quantity_value($n, "length") where $n is literal
+rewrite $n km => quantity_value($n * 1000, "length") where $n is literal
+rewrite $n * km => quantity_value($n * 1000, "length") where $n is literal
+rewrite $n kilometer => quantity_value($n * 1000, "length") where $n is literal
+rewrite $n kilometers => quantity_value($n * 1000, "length") where $n is literal
+rewrite $n kilometre => quantity_value($n * 1000, "length") where $n is literal
+rewrite $n kilometres => quantity_value($n * 1000, "length") where $n is literal
+rewrite $n mg => quantity_value($n / 1000000, "mass") where $n is literal
+rewrite $n * mg => quantity_value($n / 1000000, "mass") where $n is literal
+rewrite $n milligram => quantity_value($n / 1000000, "mass") where $n is literal
+rewrite $n milligrams => quantity_value($n / 1000000, "mass") where $n is literal
+rewrite $n g => quantity_value($n / 1000, "mass") where $n is literal
+rewrite $n * g => quantity_value($n / 1000, "mass") where $n is literal
+rewrite $n gram => quantity_value($n / 1000, "mass") where $n is literal
+rewrite $n grams => quantity_value($n / 1000, "mass") where $n is literal
+rewrite $n kg => quantity_value($n, "mass") where $n is literal
+rewrite $n * kg => quantity_value($n, "mass") where $n is literal
+rewrite $n kilogram => quantity_value($n, "mass") where $n is literal
+rewrite $n kilograms => quantity_value($n, "mass") where $n is literal
