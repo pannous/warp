@@ -32,7 +32,7 @@ is_plain_int(n: any): bool from runtime
 ratio_of(numerator: int, denominator: int): any from runtime
 ratio_numerator(n: any): int from runtime
 ratio_denominator(n: any): int from runtime
-# integers beyond 64 bits (runtime_extended/big_ints.warp): an Int node of a sign and base 2^32 limbs, little-endian,
+# integers beyond 64 bits (runtime/extended/big_ints.warp): an Int node of a sign and base 2^32 limbs, little-endian,
 # built with count zero limbs
 big_int_of(negative: bool, count: int): any from runtime
 is_big_int(n: any): bool from runtime

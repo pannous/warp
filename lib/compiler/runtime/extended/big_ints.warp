@@ -1,9 +1,9 @@
 ## integers beyond 64 bits, as a power gives them (Rust's twin src/wasm_emitter/numbers/big_int): an Int node of a sign
 ## and a magnitude of base 2^32 limbs, little-endian, no leading zero one (intrinsics big_int_of, limb, set_limb).
 ## Extended (decision runtime-split): exact_pow and exact_text reach these words, show through the bridge's extended_text
-use "../runtime/intrinsics.warp"
-use "../runtime/instructions.warp"
-use "../byte_codes.warp"
+use "../intrinsics.warp"
+use "../instructions.warp"
+use "../../byte_codes.warp"
 limb_base(): int := 4294967296
 # a limb times a limb is taken in halves of a limb, so that no sum leaves 64 bits
 half_limb_base(): int := 65536

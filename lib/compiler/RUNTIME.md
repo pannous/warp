@@ -1,14 +1,15 @@
 # Runtime
 
 The runtime words are what the pure Warp compiler gives compiled programs. Each word is compiled into a module only
-on its first call, so a word nobody calls costs nothing. This file sits beside the runtime folders, not in them:
+on its first call, so a word nobody calls costs nothing. This file sits beside the runtime folder, not in it:
 every entry of `lib/compiler/runtime/` must run alone as warp (tests/functions/test_bodiless_runtime_words.rs
-`each_runtime_part_runs_alone`).
+`each_runtime_part_runs_alone`); its folder `extended/` there is no program, and `warp <folder>` says so without an
+error.
 
 > **Guideline:** once the compiler is fully functional, new functionality normally goes into
 > `extended/`, not core. Core grows only for what every program needs.
 
-(`extended/` is now `lib/compiler/runtime_extended/`.)
+(`extended/` is `lib/compiler/runtime/extended/`: no underscore compound folder names.)
 
 ## Core and extended
 
@@ -19,13 +20,14 @@ or the compiler itself, needs: instructions, intrinsics, walks, text, text_words
 show, float printing, arithmetic, equality, ordering, types, conversions, text_numbers, lists, library_words, maps,
 fields, nodes, errors and builders, plus bridge (below).
 
-**Extended** is `runtime_extended.warp` and the parts it names in `lib/compiler/runtime_extended/`, for optional
+**Extended** is `runtime/extended.warp` and the parts it names in `lib/compiler/runtime/extended/`, for optional
 features: exact, exact_rounding, pow and pow_tables, durations, times and wasi, plus the hooks' bodies (below).
-`runtime/durations.warp` is a link to `runtime_extended/durations.warp`, kept while
+`runtime/durations.warp` is a link to `extended/durations.warp`, kept while
 tests/numbers/test_duration_words.rs reads the file at its old path.
 
 Both roots are loaded, core first: by `compiler.warp` (`RUNTIME_ROOTS`) and by `src/compiler/self_hosted.rs`
-(`EXTENDED_RUNTIME_WORDS`). Loading only joins the source; the emitter still compiles a word only on its first call.
+(`EXTENDED_RUNTIME_WORDS`), each `use` path from the folder of the file it is in (compiler.warp `root_text` prefixes
+`runtime/` to the extended root's, as it lowers both roots in lib/compiler). Loading only joins the source; the emitter still compiles a word only on its first call.
 
 Units, uncertain, math and similar modules are not part of the runtime. They stay ordinary library modules in `lib/`.
 
@@ -44,7 +46,7 @@ Core's generic words hand a value of an extended type, an exact ratio or a time,
 | `extended_ratio` | text_numbers | "3/4" read as n/d in lowest terms |
 | `extended_zeros` | floats | a text of zero digits |
 
-`runtime_extended.warp` gives their bodies itself, calling exact's and times' words: the Rust lane refuses a word
+`runtime/extended.warp` gives their bodies itself, calling exact's and times' words: the Rust lane refuses a word
 declared in one used file and defined in another, so the bodies are the root's own words, and the root runs alone. Plain ints never reach a hook, so a
 hello world calls nothing from extended. In the Rust lane a core part runs alone with its hooks trapping if called.
 
@@ -53,8 +55,8 @@ hello world calls nothing from extended. In the Rust lane a core part runs alone
 - `runtime.warp` uses only core files.
 - Core never uses extended and never names an extended word: it calls the bridge's hooks.
   `scripts/self-check.sh` checks both before taking a slot: no `^use .*extended` line in `runtime.warp` or a plain
-  file of `runtime/`, and no call there to a word that a `runtime_extended/*.warp` file defines.
-- An extended part is only ever loaded by `runtime_extended.warp`; its words compile only when called, for example
+  file of `runtime/` (`extended.warp` aside), and no call there to a word that a `runtime/extended/*.warp` file defines.
+- An extended part is only ever loaded by `runtime/extended.warp`; its words compile only when called, for example
   float `^` compiles pow's.
 - The emitter declares each GC type only on first use, so a hello world contains none of extended's.
 - Intrinsics that cost nothing unless called may stay in core.

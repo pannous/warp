@@ -84,7 +84,7 @@ mutable = 1
 # a positioned node a $MetaNode, the final subtype (79, one supertype) of the open $Node (80, none) adding its line,
 # column and comment (src/wasm_emitter/type_manager.rs emit_meta_node_type); an integer beyond 64 bits an Int $Node
 # holding a $BigInt(negative, limbs), its magnitude little-endian base 2^32 limbs in a $Limbs array of i32, no leading
-# zero one (Rust's $BigInt, read back by read_payload; runtime_extended/big_ints.warp).
+# zero one (Rust's $BigInt, read back by read_payload; runtime/extended/big_ints.warp).
 # A module declares a type only once its code uses it, as it compiles a runtime word on its first call (decision
 # runtime-split): gc names each type by its name, and gc_type gives the index the module takes it under. A type
 # another type refers to is written as that type's name in gc_types (gc_bytes), and comes first
@@ -1053,7 +1053,7 @@ def collect_referred(n: any, found: any) {
 		}
 	}
 }
-# `std_io("os", "args", [])`, a std module's word the runtime gives itself over WASI (runtime_extended/wasi.warp): the runtime
+# `std_io("os", "args", [])`, a std module's word the runtime gives itself over WASI (runtime/extended/wasi.warp): the runtime
 # word std_os_args, else ø (the host's std_io answers)
 def std_word(n: any): any {
 	if bracket_of(n) != "(" or #n != 4 { return ø }

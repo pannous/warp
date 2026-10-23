@@ -2,10 +2,10 @@
 # without fma (wasm has none), its tables in pow_tables.warp: the same algorithm and every special case, so it gives
 # bit for bit the result of musl and glibc built without fma; worst-case error 0.54 ULP. Ints stand for C's uint64_t:
 # an unsigned comparison is unsigned_below, a right shift shifted_right. Names follow musl's.
-use "../runtime/intrinsics.warp"
-use "../runtime/instructions.warp"
+use "../intrinsics.warp"
+use "../instructions.warp"
 use "pow_tables.warp"
-use "../byte_codes.warp"
+use "../../byte_codes.warp"
 # the table's int at index: its 16 hex digits, read in place
 pow_log_entry(index: int): int := hex_entry(pow_log_table_text(), index)
 pow_exp_entry(index: int): int := hex_entry(pow_exp_table_text(), index)
