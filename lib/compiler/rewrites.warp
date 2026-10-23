@@ -71,8 +71,8 @@ late_sugar_module_names = ["sugar/ranges"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
-# before definitions.warp (sugar/functions)
-early_sugar_module_names = ["sugar/functions"]
+# or a declaration word before definitions.warp (sugar/functions, sugar/declarations)
+early_sugar_module_names = ["sugar/functions", "sugar/declarations"]
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one of rule_places it rewrites only, else "", `module` the standard module declaring it, else ""; `whole` for a
