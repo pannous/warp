@@ -3,7 +3,9 @@
 # builds, pure compiles of compiler files, test sweeps. At most heavy_slots run at once; a further command waits for a
 # free slot. A sweep runs its programs serially inside one slot. Inside a slot WARP_SLOT names the slot's directory
 # (a command can keep its scratch files there), and a nested slot.sh runs its command at once.
-# usage: scripts/slot.sh <command> [<args>…]   (exit status: the command's)
+# The Integrator's gate never queues behind workers: with WARP_SLOT_GATE=1 it takes its own reserved slot 0 (at most
+# one gate run plus heavy_slots worker runs at once).
+# usage: [WARP_SLOT_GATE=1] scripts/slot.sh <command> [<args>…]   (exit status: the command's)
 slots=/Volumes/Build/self-check/slot  # off the Data volume (fseventsd load)
 heavy_slots=2
 
@@ -14,7 +16,7 @@ take_slot() {
   local slot holder
   mkdir -p ${slots:h}
   while true; do
-    for slot in {1..$heavy_slots}; do
+    for slot in $slot_numbers; do
       if mkdir $slots.$slot.lock 2>/dev/null; then echo $$ > $slots.$slot.lock/pid; WARP_SLOT=$slots.$slot.lock; return; fi
       holder=$(cat $slots.$slot.lock/pid 2>/dev/null)
       [[ -n $holder ]] && ! kill -0 $holder 2>/dev/null && rm -rf $slots.$slot.lock
@@ -22,6 +24,8 @@ take_slot() {
     sleep 5
   done
 }
+slot_numbers=({1..$heavy_slots})
+[[ -n $WARP_SLOT_GATE ]] && slot_numbers=(0)
 take_slot
 trap "rm -rf $WARP_SLOT" EXIT
 export WARP_SLOT
