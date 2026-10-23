@@ -219,8 +219,8 @@ Open question (warp-interviewer): running the compiled program inside the same w
 host (instantiate is no WASI call) or an evaluator in warp; default until answered: warp.wasm compiles to a .wasm and
 prints how to run it.
 
-### Float pow without libm (runtime_extended/pow.warp, card standalone)
-- lib/compiler/runtime_extended/pow.warp ports musl's pow (src/math/pow.c, the Arm optimized-routines one glibc also has) on
+### Float pow without libm (runtime/extended/pow.warp, card standalone)
+- lib/compiler/runtime/extended/pow.warp ports musl's pow (src/math/pow.c, the Arm optimized-routines one glibc also has) on
   its non-fma path (wasm has no fma); pow_tables.warp holds pow_data.c / exp_data.c as the doubles' bits, 16 hex digits each,
   read in place by hex_entry (no table list, no global).
   C's uint64_t compares go through unsigned_below (add 2^63 to both sides), shifts through shifted_right/_signed.

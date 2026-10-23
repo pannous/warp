@@ -102,7 +102,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		"ratio_numerator": ["int", ratio_part(values#1#2, 0)]
 		"ratio_denominator": ["int", ratio_part(values#1#2, 1)]
 		# big_int_of(negative, count): an Int $Node of a $BigInt of count zero limbs; limb(n, i), set_limb(n, i, v) one
-		# limb as an int from 0 to 2^32 - 1 (runtime_extended/big_ints.warp)
+		# limb as an int from 0 to 2^32 - 1 (runtime/extended/big_ints.warp)
 		"big_int_of": ["node", node(Kind.Int, converted(values#1, "bool") + index_code(values#2) + gc_code(gc_ops.array_new_default, [gc_type(gc.limbs)]) + gc_code(gc_ops.struct_new, [gc_type(gc.big_int)]))]
 		"is_big_int": ["bool", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.big_int)])]
 		"big_int_negative": ["bool", payload(values#1#2, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 0])]
@@ -114,7 +114,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		"set_byte": [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc_type(gc.text)])]
 		"output_byte": [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)]
 		"write_output": ["int", write_output(index_code(values#1))]
-		# the address of the output bytes, where runtime_extended/wasi.warp lays out what WASI's calls read and write
+		# the address of the output bytes, where runtime/extended/wasi.warp lays out what WASI's calls read and write
 		"output_address": ["int", [op.i64_const] + sleb(output_address)]
 		"memory_byte": ["int", index_code(values#1) + [op.i32_load8_u, 0, 0, op.i64_extend_i32_u]]
 		# the value written, as `x = v` is v
