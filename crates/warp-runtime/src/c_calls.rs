@@ -134,7 +134,7 @@ pub fn get_or_load_library(name: &str) -> Option<Arc<Library>> {
 }
 
 /// Where the library `name` may be
-fn library_paths(name: &str) -> Vec<String> {
+pub fn library_paths(name: &str) -> Vec<String> {
 	#[cfg(target_os = "macos")]
 	return vec![
 		format!("/opt/homebrew/lib/lib{name}.dylib"),
@@ -146,6 +146,8 @@ fn library_paths(name: &str) -> Vec<String> {
 		format!("/usr/lib/lib{name}.so"),
 		format!("/usr/local/lib/lib{name}.so"),
 		format!("lib{name}.so"),
+		// a library without its development package: libsqlite3.so.0
+		format!("lib{name}.so.0"),
 		// glibc's libm.so and libc.so are linker scripts dlopen refuses: the libraries go by their soname
 		format!("lib{name}.so.6"),
 	];
@@ -219,6 +221,17 @@ pub fn link_c_function<T: CallsC>(
 ) -> Result<()> {
 	let params: Vec<ValType> = function.param_types.iter().filter_map(|param| wasm_param(*param)).collect();
 	let func_type = FuncType::new(engine, params, wasm_results(&function));
+	link_c_function_as(linker, function, func_ptr, func_type)
+}
+
+/// link_c_function with the wasm type the importing module declares (warp-host): a `ptr` parameter it declares as a
+/// reference takes a warp text, copied NUL-terminated for the call
+pub fn link_c_function_as<T: CallsC>(
+	linker: &mut Linker<T>,
+	function: CFunction,
+	func_ptr: usize,
+	func_type: FuncType,
+) -> Result<()> {
 	let (module, name) = (function.module.clone(), function.name.clone());
 	let thread_safe = is_thread_safe(&function.library);
 	let layouts: Vec<Option<CStruct>> = function.layouts.iter().map(|text| CStruct::of_text(text)).collect();
@@ -373,7 +386,18 @@ fn native_arguments<T: CallsC>(
 				match passed {
 					ParamType::I32 => Some(param.unwrap_i32() as u64),
 					ParamType::I64 => Some(param.unwrap_i64() as u64),
-					ParamType::Ptr => Some(memory_pointer(caller, param.unwrap_i32() as usize) as u64),
+					ParamType::Ptr => match param {
+						// a warp text: a NUL-terminated copy, ø NULL
+						Val::AnyRef(_) => match json_value(caller, name, param)? {
+							serde_json::Value::Null => Some(0),
+							value => {
+								let text = value.as_str().map_or_else(|| value.to_string(), str::to_string);
+								memory.buffers.push([text.as_bytes(), &[0]].concat());
+								memory.buffers.last().map(|bytes| bytes.as_ptr() as u64)
+							}
+						},
+						_ => Some(memory_pointer(caller, param.unwrap_i32() as usize) as u64),
+					},
 					ParamType::Handle => Some(handle_pointer(caller, name, param.unwrap_i32())? as u64),
 					ParamType::F32 | ParamType::F64 => {
 						let bits = if *passed == ParamType::F32 {
