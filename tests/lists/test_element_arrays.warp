@@ -1,0 +1,4 @@
+# `x is a 100 element array` declares x as that many zeros (lib/sugar/lists.warp, card gap-element-array)
+
+is! 'x is a 100 element array; x.length' 100
+is! 'xs is a 3 element array; xs#2 = 5; xs' [0 5 0]
