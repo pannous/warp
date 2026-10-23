@@ -664,8 +664,8 @@ spliced_statements(statements: list): list := {
 	spliced
 }
 
-# the key with its condition (`if c`, `while c`), its key and value (`k: v`) rewritten by `placed_code` (code, place) with the
-# rules of that place, a template's statements in its parts their blocks
+# the key with its condition (`if c`, `while c`), its key and value (`k: v`), a definition's parameters (F10) rewritten
+# by `placed_code` (code, place) with the rules of that place, a template's statements in its parts their blocks
 with_placed_parts(n: any, placed_code: function): any := {
 	left = key_of(n)
 	right = value_of(n)
