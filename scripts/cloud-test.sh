@@ -877,7 +877,7 @@ main() {
 			--slow) slow_only=1; shift ;;
 			--optimized) optimized=1; shift ;;
 			--gate) gate=1; shift ;;
-			*) break ;;
+			*) echo "cloud-test: unknown option '$1'" >&2; sed -n '2,20p' "$0" >&2; exit 2 ;;
 		esac
 	done
 	[ $# -ge 2 ] || { sed -n '2,20p' "$0"; exit 2; }
