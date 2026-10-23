@@ -115,7 +115,7 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 	match (module, member, arguments.as_slice()) {
 		("os", "env", [name]) => {
 			let name = text(name);
-			let found = crate::environment(host.keeper.as_ref()).into_iter().find(|(variable, _)| *variable == name);
+			let found = cache::environment(host.keeper.as_ref()).into_iter().find(|(variable, _)| *variable == name);
 			Ok(found.map_or(Node::Empty, |(_, value)| Node::text(value)))
 		}
 		("os", "args", []) => Ok(Node::List(nodes::SQUARE_LIST, host.args.iter().skip(1).map(Node::text).collect())),
