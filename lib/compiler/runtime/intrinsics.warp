@@ -27,9 +27,22 @@ meta_column(n: any): int from runtime
 closure_text(n: any): text from runtime
 # exact rationals
 is_ratio(n: any): bool from runtime
+# whether an Int node holds its number in an $i64box, neither a ratio nor a big int
+is_plain_int(n: any): bool from runtime
 ratio_of(numerator: int, denominator: int): any from runtime
 ratio_numerator(n: any): int from runtime
 ratio_denominator(n: any): int from runtime
+# integers beyond 64 bits (runtime/extended/big_ints.warp): an Int node of a sign and base 2^32 limbs, little-endian,
+# built with count zero limbs
+big_int_of(negative: bool, count: int): any from runtime
+is_big_int(n: any): bool from runtime
+big_int_negative(n: any): bool from runtime
+limb_count(n: any): int from runtime
+limb(n: any, at: int): int from runtime
+set_limb(n: any, at: int, value: int) from runtime
+# a big int's text by big_ints.warp's big_int_text where the program makes big ints (big_int_power compiled), else a
+# trap: what prints an int at run time carries no big int code nor GC type unless the program can make one
+shown_big_int(n: any): text from runtime
 # texts, their bytes and characters
 new_text(length: int): text from runtime
 copy_text(to: text, at: int, source: text, start: int, count: int) from runtime

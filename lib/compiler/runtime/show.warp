@@ -23,7 +23,8 @@ node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_t
 }
 number_text(n: Node): text := {
 	if kind_code(n) != Kind.Int { return float_text(unboxed_float(n)) }
-	if is_ratio(n) then extended_text(n) else int_text(unboxed_int(n))
+	# an Int not in an $i64box is an extended one, a ratio or a big int: a plain int's printing names no extended type
+	if is_plain_int(n) then int_text(unboxed_int(n)) else extended_text(n)
 }
 # a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
 collection_text(n: Node): text := {
