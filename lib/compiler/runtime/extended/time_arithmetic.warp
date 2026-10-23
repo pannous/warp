@@ -3,7 +3,7 @@
 # `1 month + 2 days`, `3 * 1 hour`, as calendar.rs `Time::add`, `since`, `Duration::plus` and `times` do for constants.
 # Runtime words, not a compiler pass (notes/layers.md), so an extended part (card time-arithmetic-library); the old
 # path lib/compiler/time_arithmetic.warp links here while tests/parser/test_self_time_arithmetic.rs reads it there.
-# runtime_extended.warp does not load it yet: its time_form, day_nanos, hour_nanos and sign_of clash with times.warp's
+# runtime/extended.warp does not load it yet: its time_form, day_nanos, hour_nanos and sign_of clash with times.warp's
 # and durations.warp's, and nothing calls it. The calendar is plain integers here: a time is its form and position, a
 # duration its month, day and nanosecond counts. Wiring it to run-time time nodes (times.warp's time_form,
 # time_position, duration_months, duration_days, time_of, duration_of) waits for a bridge hook in node_add and the

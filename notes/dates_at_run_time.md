@@ -76,7 +76,7 @@ month is a run-time error naming `add(…, overflow: clamp)`), duration ± durat
 round), `a - b` of two times of one form (days between dates, else a duration). A date takes no time of day, an instant
 no months or days. `1 month 2 days` is lexed as one duration
 (literals.rs `with_time_unit`).
-- warp twin (card time-arithmetic-warp): lib/compiler/runtime_extended/time_arithmetic.warp (moved there by card
+- warp twin (card time-arithmetic-warp): lib/compiler/runtime/extended/time_arithmetic.warp (moved there by card
   time-arithmetic-library; the old path links to it), the same arithmetic typed over plain
   integers (enum TimeForm, class Span of month/day/nano counts, class Moment of form and position, enum Operand);
   test tests/parser/test_self_time_arithmetic.rs. Not wired yet: node_add/sub/mul still call the Rust function until
