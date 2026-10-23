@@ -2,7 +2,6 @@
 # each pass twin in the order src/pipeline.rs runs its Rust twin. A pass joins here once its twin matches.
 use "parser.warp"
 use "interpolation.warp"
-use "welcome_forms.warp"
 use "number_words.warp"
 use "of_lookups.warp"
 use "definitions.warp"
@@ -38,11 +37,13 @@ use "library_calls.warp"
 sugar_phrases_table = [[is_lookup_word, lookup_phrase]]
 sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
 
-passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_words_pass]
+# the twins Rust's WARP_SELF_HOSTED=1 lane drives by index (self_hosted.rs TWINNED_PASSES); match arms and arrow result
+# types are lib/sugar/arms.warp's and heads.warp's rules now, their places kept so the indexes hold
+passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [bare_returns, first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
