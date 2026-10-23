@@ -473,7 +473,7 @@ named_enum(code: any): text := {
 condition_holds(condition: any, bound: any): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
 	if is_takes(condition) { return first_parameter_fits(bound[rule_hole(condition#1)], name_of(condition#3)) }
-	if is_context_word(condition) { return context_holds(head_word(rule_matched), name_of(condition)) }
+	if is_context_word(condition) { return context_holds(starting_word(rule_matched), name_of(condition)) }
 	hole = rule_hole(key_of(condition))
 	if not bound.has(hole) { return no }
 	code = bound[hole]
@@ -512,7 +512,7 @@ listed_words(wanted: any): any := {
 word_listed(code: any, words: list): bool := (code is symbol and name_of(code) in words) or (code is text and code in words)
 
 # the word the code starts with: itself, a call's or a phrase's first word, else ø
-head_word(code: any): any := {
+starting_word(code: any): any := {
 	if code is symbol { return code }
 	if is_group(code) and #code > 0 and (bracket_of(code) == "(" or bracket_of(code) == "") and code#1 is symbol then code#1 else ø
 }
@@ -547,7 +547,7 @@ method_words(program: any): any := {
 	found = {}
 	for n in nodes_in(program) {
 		if is_key(n, Op.Dot) {
-			at = written_at(head_word(value_of(n)))
+			at = written_at(starting_word(value_of(n)))
 			if at != ø { found[at] = yes }
 		}
 	}
@@ -1138,7 +1138,7 @@ names_assigned_shape(program: any, shape: any): any := {
 		if is_key(n, Op.Assign) and key_of(n) is symbol and rule_matches(shape, value_of(n), {}) { names[name_of(key_of(n))] = yes }
 		if is_key(n, Op.Define) and is_round(key_of(n)) and #key_of(n) > 0 {
 			head = items_of(key_of(n))
-			functions[head_word(head#1)] = head[1 ..].map(parameter => head_word(parameter))
+			functions[starting_word(head#1)] = head[1 ..].map(parameter => starting_word(parameter))
 		}
 	}
 	growing = #names.keys > 0 and #functions.keys > 0
