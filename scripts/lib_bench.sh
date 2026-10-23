@@ -5,7 +5,7 @@
 #   pure-compiled the whole file compiles in the pure lane alone (WARP_SELF_HOSTED=pure-only): no refusal, no failed stage
 #   Rust          the file compiles in the Rust lane (its module runs); one that doesn't (a runtime part, a file
 #                 missing a `use`) is no pure-lane gap and is counted apart
-#   lib/compiler/runtime/ (emitter.warp's runtime parts) and lib/compiler/emitter/ (emitter.warp's own parts) are
+#   core/runtime/ (emitter.warp's runtime parts) and core/emitter/ (emitter.warp's own parts) are
 #   counted apart from the headline
 # usage: scripts/lib_bench.sh [warp binary, default main's shared Rust binary /Users/me/dev/bin/warp-rust] [path regex]
 #   → data/lib_bench/<commit>.txt (<commit>-partial.txt with a regex): a line per file "<file>  parse: <verdict>  pure: <verdict>" (each the first error), the
@@ -27,10 +27,10 @@ RAN_PURE="pure: ran" # the line the pure lane writes for a program it compiled (
 RAN_RUST="ms  run (" # WARP_PHASE_TIMES' line of a module that ran (src/compiler/phase_times.rs)
 # emitter.warp's runtime parts: they call its primitives, so no lane compiles one alone (until they declare them
 # bodiless, card bodiless-imports); listed and counted apart from the headline (card bench-runtime-apart)
-RUNTIME_PARTS=lib/compiler/runtime/
+RUNTIME_PARTS=core/runtime/
 # emitter.warp's own parts (its `use "emitter/…"` lines): they take its classes (Body, Function), so no lane compiles one
 # alone either; counted apart like the runtime parts
-EMITTER_PARTS=lib/compiler/emitter/
+EMITTER_PARTS=core/emitter/
 rm -rf "$work" && mkdir -p "$work/pure" "$work/rust" "$(dirname "$report")"
 export WARP=$warp WORK=$work ROOT=$root TIMEOUT_SECONDS RAN_PURE RAN_RUST
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_CRASH_CARDS=0 WARP_LIB=$root/lib

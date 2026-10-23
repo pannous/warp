@@ -1,4 +1,4 @@
-# The rewrite engine (lib/compiler/rewrites.warp, card rewrite-engine)
+# The rewrite engine (core/rewrites.warp, card rewrite-engine)
 
 `rewrite PATTERN => TEMPLATE [where …]` rules carry the sugar layer (notes/layers.md). The engine gains the features
 the migration needs one at a time, each landed on its own before warp-layers moves the modules it unblocks.
@@ -38,7 +38,7 @@ rewrite speed_unit => km·per·hour                # km_per_hour
 - `··` glues with the mark itself: `loop··step` is the hidden compiler name `loop·step` (notes/compiler_temporaries.md)
   no program can write, the way for_loops.warp marks a loop's step; `$i··end` of k is `k·end`, `$i·end··x` is
   `k_end·x`. The parser reads `a··b` as the declared-only operator call `operator_··(a, b)`, so outside a template it is
-  an operator nothing declares, an error (lib/sugar/loops.warp: the C-style for's `loop··step: $step`).
+  an operator nothing declares, an error (core/sugar/loops.warp: the C-style for's `loop··step: $step`).
 - A template's definition with a hole or a built name as its head (`$f(x) := …`, `twice·$f(x) := …`, which the parser
   reads as a phrase) defines that function, and a template of one parenthesized definition is that definition.
 - Open: generated names don't name their rule in help and errors yet; a built name clashing with the program's own
@@ -151,7 +151,7 @@ rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
 
 A run a rule made shorter is tried again where it stands, together with the statements after it, so a pairwise rule
 folds a whole run: `rewrite (add_up($a); add_up($b)) => add_up($a + $b)` turns `add_up(1); add_up(2); add_up(3)` into
-`add_up((1 + 2) + 3)`; a run as long or longer moves on, so this can't loop (F12). The sugar step (lib/sugar) matches
+`add_up((1 + 2) + 3)`; a run as long or longer moves on, so this can't loop (F12). The sugar step (core/sugar) matches
 runs of statements the same way. Tests: tests/modules/test_rewrite_zip_runs.warp, probes/rewrites/zip_runs.
 
 ## Results rewritten again (F7)
@@ -192,7 +192,7 @@ rewrite $e.$c => $c where $c is case of $e
 rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is enum
 ```
 
-The rules of lib/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
+The rules of core/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
 `cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.
 
 ## Rest templates

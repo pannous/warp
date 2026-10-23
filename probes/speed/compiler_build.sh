@@ -27,12 +27,12 @@ seconds=$(( EPOCHREALTIME - start ))
 [[ -s $scratch/stderr.txt ]] && fail "installed copy said on stderr: $(<$scratch/stderr.txt)"
 printf "ok: installed copy ran pure hello in %.2fs\n" $seconds
 
-cp -R lib $scratch/other/lib && echo "// changed" >> $scratch/other/lib/compiler/compiler.warp
+cp -R lib $scratch/other/lib && echo "// changed" >> $scratch/other/core/compiler.warp
 other_said=$(WARP_LIB=$scratch/other/lib $scratch/installed/warp pure samples/hello/hello.warp 2>&1)
 [[ -f $scratch/other/data/compiler.wasm ]] || fail "another lib/ got no compiler.wasm of its own: $other_said"
 echo "ok: another lib/ builds $scratch/other/data/compiler.wasm"
 
-echo "// changed again" >> $scratch/other/lib/compiler/compiler.warp
+echo "// changed again" >> $scratch/other/core/compiler.warp
 stale=$(WARP_LIB=$scratch/other/lib $scratch/installed/warp pure samples/hello/hello.warp 2>&1)
 [[ $stale == *"warp rebuild"* && $stale == *Hello* ]] || fail "a changed lib/ ran without the notice: $stale"
 echo "ok: a changed lib/ says: $(echo $stale | grep 'warp rebuild')"

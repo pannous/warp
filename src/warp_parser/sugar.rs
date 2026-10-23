@@ -1,4 +1,4 @@
-//! The sugar pass (card rust-cleanup S1, notes/rust_cleanup.md; warp twin lib/compiler/sugar.warp): the parser
+//! The sugar pass (card rust-cleanup S1, notes/rust_cleanup.md; warp twin core/sugar.warp): the parser
 //! builds what the source says, `xs[i]`, `xs#(a..b)`, `a /! b`, `a /!= b`, `x => y`; parse() rewrites each written
 //! form, one arm per form, into the tree the pipeline reads
 use super::*;

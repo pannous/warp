@@ -33,12 +33,12 @@ use "library_calls.warp"
 use "property_accessors.warp"
 
 # the keyword rewrites among the sugar passes, one walk (Rust twin: src/pipeline.rs SUGAR_PHRASES, which also lowers
-# `xs .* 2` and `(p).a`: lib/sugar/arithmetic.warp's and methods.warp's rules here): `a of b`
+# `xs .* 2` and `(p).a`: core/sugar/arithmetic.warp's and methods.warp's rules here): `a of b`
 sugar_phrases_table = [[is_lookup_word, lookup_phrase]]
 sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
 
 # the twins Rust's WARP_SELF_HOSTED=1 lane drives by index (self_hosted.rs TWINNED_PASSES); match arms and arrow result
-# types are lib/sugar/arms.warp's and heads.warp's rules now, their places kept so the indexes hold
+# types are core/sugar/arms.warp's and heads.warp's rules now, their places kept so the indexes hold
 passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
@@ -78,7 +78,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	with_reached(with_used_modules(with_type_module_uses(property_accessors(index_positions(rewritten_program(own, source)))), folder), prelude, no)
 }
 
-# the sugar rules (lib/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
+# the sugar rules (core/sugar/) the program keeps, over it and the definitions it reached: the first before the passes
 # that would read its forms as something else (rewrites.warp first_sugar_module_names), the others where the passes
 # before them have made their forms (definitions' `?? []` of a list result) and read the written ones (data_items
 # `xs.add(x)`, of_lookups `keys in m`)

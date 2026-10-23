@@ -1,4 +1,4 @@
-//! The built-in node's cases (decision compiler-node-enum): lib/compiler/node.warp declares `enum Node` case for case as
+//! The built-in node's cases (decision compiler-node-enum): core/node.warp declares `enum Node` case for case as
 //! src/node/mod.rs has it, and its Op, Bracket and Separator. No class is made of Node: `Node` is the type of any node,
 //! `Node.Key` is the case Key, `Key(a, Op.Add, b)` builds the key `a+b`, and a match arm `Key(left, op, right):` tests the
 //! kind and reads the node's parts (destructuring.rs). Op, Bracket and Separator are plain enums whose cases are spelled
@@ -9,7 +9,7 @@ use crate::node::{call, Bracket, Node};
 use crate::operators::{Op, OP_CODES};
 use std::collections::HashMap;
 
-pub const NODE_DECLARATION: &str = include_str!("../../../lib/compiler/node.warp");
+pub const NODE_DECLARATION: &str = include_str!("../../../core/node.warp");
 pub const NODE_TYPE: &str = "Node";
 /// The enums of node.warp whose cases are spelled, in its order
 pub const SPELLED_ENUMS: [&str; 3] = ["Op", "Bracket", "Separator"];

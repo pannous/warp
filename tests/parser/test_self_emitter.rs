@@ -1,4 +1,4 @@
-//! card emits-wasm (notes/self_hosting.md step 15): lib/compiler/emitter.warp turns the lowered program into a wasm
+//! card emits-wasm (notes/self_hosting.md step 15): core/emitter.warp turns the lowered program into a wasm
 //! module of its own, whose run gives the value Rust's module gives (tests/common/twins.rs emitter_differential)
 use crate::common::twins::{emitter_differential, sources, twin_sources};
 use std::path::PathBuf;

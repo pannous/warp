@@ -9,7 +9,7 @@ Rust's emitter.
 It is not only a measuring mode: `WARP_SELF_HOSTED=pure` (`warp pure`) compiles a program the pure lane refuses
 ("outside the core: pure: …") "the usual way" with the switch still on (self_hosted.rs pure_module, `reads()`), which is
 the hybrid lane. So every program outside the pure core runs hybrid, and every form moved from the parser or a
-twinned pass into lib/sugar drops out of it (decision sugar-hybrid-lane): elvis' non-name `?:` (1 test),
+twinned pass into core/sugar drops out of it (decision sugar-hybrid-lane): elvis' non-name `?:` (1 test),
 broadcasting (22 tests), a non-name `?:` inside a class with methods printing `0 ?: 7` silently (card
 hybrid-silent-elvis).
 
@@ -31,7 +31,7 @@ Every 4th test pair line, 2060 programs: 1330 ran pure (65%), 720 were refused b
   self_hosted.rs, pure_module's caller). `warp pure` then means warp or all-Rust, never the mix; the hybrid lane is
   reached only by an explicit `WARP_SELF_HOSTED=1`, which can then go with the self-hosted suite counts it feeds
   (scripts/self-hosted-suite.sh, data/self_hosting/suite_counts.txt), and the twins with it. Every hybrid cost so far
-  disappears at once, and the parser and twinned passes are free to move to lib/sugar (subscripts and negative
+  disappears at once, and the parser and twinned passes are free to move to core/sugar (subscripts and negative
   bounds, test words, trailing guards, the name `?:`, match_arms). Cost: a Rust edit (the Rust compiler is frozen
   save for bootstrap and crashes, so it needs the user), and the suite counts stop measuring the warp front end
   under Rust's back end.

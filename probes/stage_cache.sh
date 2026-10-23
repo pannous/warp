@@ -7,7 +7,7 @@ lib=${1:-$PWD/lib}
 junk=/Volumes/Junk/stage-cache-$$
 mark="# stage cache probe $$ $(date +%s)"
 for copy in a b; do
-  mkdir -p $junk/$copy && cp -R $lib $junk/$copy/lib && print -r -- $mark >> $junk/$copy/lib/compiler/walk.warp
+  mkdir -p $junk/$copy && cp -R $lib $junk/$copy/lib && print -r -- $mark >> $junk/$copy/core/walk.warp
 done
 run() { WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_SELF_HOSTED=pure-only WARP_LIB=$1/lib timeout 300 /Users/me/dev/bin/warp 'print(1 + 2)' 2>&1 | tail -1 }
 echo "built from a: $(run $junk/a)"

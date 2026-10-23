@@ -47,7 +47,7 @@ fn the_core_runs_pure() {
 	runs_pure("function", "f(x) := x * 2; f(4)", "8");
 }
 
-/// `for` lowers to `while` in lib/compiler/for_loops.warp: counted ranges, `to` including its end, walked lists
+/// `for` lowers to `while` in core/for_loops.warp: counted ranges, `to` including its end, walked lists
 #[test]
 fn for_loops_run_pure() {
 	runs_pure("for_range", "s = 0; for i in 0..4 { s += i }; s", "6");
@@ -56,7 +56,7 @@ fn for_loops_run_pure() {
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
 
-/// lib/compiler/parser.warp reads `for each x in xs` and `each x in xs` as `for x in xs`; a loop variable named `each`
+/// core/parser.warp reads `for each x in xs` and `each x in xs` as `for x in xs`; a loop variable named `each`
 /// stays one (card pure-error-undefined)
 #[test]
 fn for_each_loops_run_pure() {
@@ -274,7 +274,7 @@ fn is_tests_types_and_equality_compares_self_hosted() {
 	}
 }
 
-/// lib/compiler/lambdas.warp: iteration words over a lambda or a function loop, other lambdas are closures capturing
+/// core/lambdas.warp: iteration words over a lambda or a function loop, other lambdas are closures capturing
 /// their variables, a function's name is a value and a variable holding one is called (card pure-lambdas)
 #[test]
 fn lambdas_run_pure() {
@@ -293,7 +293,7 @@ fn lambdas_run_pure() {
 	);
 }
 
-/// lib/compiler/type_tests.warp: a field named like a type word (`{symbol: …}`) leaves `x is symbol` a type test, only
+/// core/type_tests.warp: a field named like a type word (`{symbol: …}`) leaves `x is symbol` a type test, only
 /// a variable of that name is compared (card pure-lane-symbol)
 #[test]
 fn type_words_named_by_fields_run_pure() {
@@ -301,20 +301,20 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
 
-/// lib/compiler/analyzer.warp: a field read `p.code` is a value known at run time, so is a slice of it, held in a
+/// core/analyzer.warp: a field read `p.code` is a value known at run time, so is a slice of it, held in a
 /// variable (card pure-field-slice)
 #[test]
 fn field_slices_run_pure() {
 	runs_pure("field_slice", "class P { code: text }; p = P{code: \"hello\"}; w = p.code[1 .. 3]; w + \"!\"", "el!");
 }
 
-/// lib/compiler/definitions.warp: `f = { it + 1 }` defines a function of `it` as `f := { it + 1 }` does (card pure-error)
+/// core/definitions.warp: `f = { it + 1 }` defines a function of `it` as `f := { it + 1 }` does (card pure-error)
 #[test]
 fn assigned_it_blocks_run_pure() {
 	runs_pure("assigned_it_block", "f = { it + 1 }; f(2)", "3");
 }
 
-/// lib/compiler/min_max.warp: min and max of arguments, of a list literal, of a list known at run time (card
+/// core/min_max.warp: min and max of arguments, of a list literal, of a list known at run time (card
 /// pure-library-words)
 #[test]
 fn extrema_run_pure() {
@@ -368,7 +368,7 @@ fn unicode_glyphs_read_self_hosted() {
 	}
 }
 
-/// lib/compiler/kind_changes.warp: a variable given a value of a kind that does not mix fails with the message of
+/// core/kind_changes.warp: a variable given a value of a kind that does not mix fails with the message of
 /// A type word after `global` types the declared name, every type word Rust knows (`long`, `double`), not only `int`
 #[test]
 fn global_type_words_read_self_hosted() {
@@ -392,7 +392,7 @@ fn arm_inline_if_reads_self_hosted() {
 	}
 }
 
-/// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
+/// core/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
 #[test]
 fn kind_changes_fail_pure() {
 	let (output, _) = lane_run("pure-only", "kind_change", "x = 5; x = [1]; x");
@@ -409,7 +409,7 @@ fn std_modules_run_pure() {
 	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
 }
 
-/// lib/compiler/emitter.warp: an instance leaving out fields gives them their declared defaults, an optional field ø
+/// core/emitter.warp: an instance leaving out fields gives them their declared defaults, an optional field ø
 /// (card pure-field-defaults)
 #[test]
 fn field_defaults_run_pure() {
@@ -418,7 +418,7 @@ fn field_defaults_run_pure() {
 	runs_pure("optional_field", "class opt { a: int; b? }; opt(4).a", "4");
 }
 
-/// lib/compiler/emitter.warp: a named argument `name = value` takes its parameter's or field's place (P37), a left-out
+/// core/emitter.warp: a named argument `name = value` takes its parameter's or field's place (P37), a left-out
 /// one its default (card pure-named-arguments)
 #[test]
 fn named_arguments_run_pure() {
@@ -438,7 +438,7 @@ fn enums_of_used_files_and_type_variables_run_pure() {
 	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
 }
 
-/// lib/compiler/parser.warp reads every negated spelling as Rust's spellings.rs NEGATED_SPELLINGS: `x not in xs`,
+/// core/parser.warp reads every negated spelling as Rust's spellings.rs NEGATED_SPELLINGS: `x not in xs`,
 /// `x ∉ xs`, `a nand b`, `a ⊼ b`, `a ¬& b`, `x is not y`, `x isn't y` are the negated operation
 #[test]
 fn negated_operators_run_pure() {
@@ -446,7 +446,7 @@ fn negated_operators_run_pure() {
 	runs_pure("negated", code, "yes\nno\nyes\nno\nyes\nyes\nno");
 }
 
-/// lib/compiler/emitter.warp: a host word taking or giving nodes (parse_code, std_pure) builds the program's values with
+/// core/emitter.warp: a host word taking or giving nodes (parse_code, std_pure) builds the program's values with
 /// the constructors the module exports for the host, as Rust's do (card emitter-imports)
 #[test]
 fn host_words_on_nodes_run_pure() {
@@ -553,7 +553,7 @@ fn a_lexer_over_short_words_takes_linear_time_pure() {
 }
 
 /// `n times` and sleep's units are no passes of the warp compiler (card phrases-out-of-core): `n times`, `twice` and
-/// `thrice` are library words (lib/sugar/loops.warp), `sleep(seconds)` is the prelude word calling the host word sleep_ms
+/// `thrice` are library words (core/sugar/loops.warp), `sleep(seconds)` is the prelude word calling the host word sleep_ms
 #[test]
 fn phrases_out_of_the_core() {
 	runs_pure("times_runs", "a = 0; 3 times { a += 7 }; a", "21");
@@ -625,12 +625,12 @@ fn linked_folder(from: &std::path::Path, to: &std::path::Path, except: &str) {
 /// A copy of lib/ whose compiler folder holds `emitter` as emitter.warp, the other files linked
 #[cfg(unix)]
 fn lib_with_emitter(name: &str, emitter: &str) -> PathBuf {
-	let library = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("{name}_{}", std::process::id()));
+	let library = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("{name}_{}/lib", std::process::id()));
 	let _ = std::fs::remove_dir_all(&library);
 	let shipped = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib");
 	linked_folder(&shipped, &library, "compiler");
-	linked_folder(&shipped.join("compiler"), &library.join("compiler"), "emitter.warp");
-	std::fs::write(library.join("compiler/emitter.warp"), emitter).unwrap();
+	linked_folder(&shipped.join("../core"), &library.join("../core"), "emitter.warp");
+	std::fs::write(library.join("../core/emitter.warp"), emitter).unwrap();
 	library
 }
 
@@ -649,7 +649,7 @@ fn a_failing_stage_names_its_file() {
 		.expect("warp runs");
 	let output = String::from_utf8_lossy(&run.stdout).into_owned() + &String::from_utf8_lossy(&run.stderr);
 	let _ = std::fs::remove_dir_all(&library);
-	assert!(output.contains("the self-hosted stage") && output.contains("compiler/emitter.warp failed"), "{output}");
+	assert!(output.contains("the self-hosted stage") && output.contains("core/emitter.warp failed"), "{output}");
 }
 
 /// The forms lib/*.warp uses most that the pure lane refused (card pure-lib-gaps): a constant word declares as `var`
@@ -662,7 +662,7 @@ fn lib_forms_run_pure() {
 	runs_pure("own_sum", "sum(xs) := 42; sum([1])", "» 42");
 }
 
-/// `rewrite PATTERN => TEMPLATE` in lib/compiler/rewrites.warp (card pure-rewrite): a program's own rules with holes,
+/// `rewrite PATTERN => TEMPLATE` in core/rewrites.warp (card pure-rewrite): a program's own rules with holes,
 /// rest holes, origins and statement templates, and lib/english.warp's rule for a program mentioning its words
 #[test]
 fn rewrites_run_pure() {
@@ -673,7 +673,7 @@ fn rewrites_run_pure() {
 	runs_pure("rewrite_english", "p = {width: 3}\nset width of p to 12\np.width", "» 12");
 }
 
-/// `print reverse [1, 2]`: a library word of one typed value calls itself on the value after it (lib/compiler/
+/// `print reverse [1, 2]`: a library word of one typed value calls itself on the value after it (core/
 /// library_calls.warp, card pure-lane-knows), a program function's spaced call prints its value
 #[test]
 fn spaced_library_words_run_pure() {

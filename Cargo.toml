@@ -22,7 +22,7 @@ readme = "README.md"
 keywords = ["wasm", "webassembly", "language", "compiler", "notation"]
 categories = ["compilers", "wasm", "command-line-utilities"]
 # the published crate: the sources and the files they include_str! (lib/, the playground's host scripts), not the tests or wiki
-include = ["src/**", "build.rs", "packages.warp", "web/playground/foreign_python.py", "web/playground/*.js", "lib/**", "README.md", "LICENSE"]
+include = ["src/**", "build.rs", "packages.warp", "web/playground/foreign_python.py", "web/playground/*.js", "lib/**", "core/**", "README.md", "LICENSE"]
 # One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
 autotests = false
 

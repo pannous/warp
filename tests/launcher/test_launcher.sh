@@ -43,7 +43,7 @@ fi
 echo "ran by $lane"
 STUB
 chmod +x "$stub_rust" && touch "$stage/stub/compiler.wasm" "$stage/stub/refused.warp" || exit 1
-mkdir -p "$stage/stub/lib/compiler"
+mkdir -p "$stage/stub/core"
 stub() { WARP_RUST=$stub_rust "$warp" "$@"; }
 
 run=0 failed=0

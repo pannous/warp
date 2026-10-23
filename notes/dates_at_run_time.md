@@ -61,7 +61,7 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
   names enter linear memory only when a zoned constant requires `ZONE_NAMES` (analyzer/imports.rs).
 - node_order compares two times of one form by position; two forms trap with "no implicit conversion between kinds
   of time", durations with "cannot order durations".
-- warp twins (card duration-warp): lib/compiler/runtime.warp `## durations` has `duration_text(n)` and
+- warp twins (card duration-warp): core/runtime.warp `## durations` has `duration_text(n)` and
   `duration_order(a, b)`, each unpacking the node (months above bit 43 of the kind word, days the signed 32 bits
   above bit 11, nanoseconds in the box) into `duration_parts_text` / `duration_parts_order` over the three amounts,
   checked against calendar.rs by tests/numbers/test_duration_words.rs. emitter.warp compiles no time yet, so the
@@ -76,7 +76,7 @@ month is a run-time error naming `add(…, overflow: clamp)`), duration ± durat
 round), `a - b` of two times of one form (days between dates, else a duration). A date takes no time of day, an instant
 no months or days. `1 month 2 days` is lexed as one duration
 (literals.rs `with_time_unit`).
-- warp twin (card time-arithmetic-warp): lib/compiler/time_arithmetic.warp, the same arithmetic typed over plain
+- warp twin (card time-arithmetic-warp): core/time_arithmetic.warp, the same arithmetic typed over plain
   integers (enum TimeForm, class Span of month/day/nano counts, class Moment of form and position, enum Operand);
   test tests/parser/test_self_time_arithmetic.rs. Not wired yet: node_add/sub/mul still call the Rust function until
   card time-primitives reads a node's form, position and parts. Zoned times are refused there (card time-zones-warp).

@@ -272,11 +272,11 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 	let absolute = |path: &Path| std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
 	let source = absolute(source);
 	let folder = folder.or_else(|| source.parent().map(Path::to_path_buf)).unwrap_or_default();
-	let lib = library_for(&source).ok_or("no lib/ with compiler/ found: WARP_LIB names one")?;
+	let lib = library_for(&source).ok_or("no lib/ with core/ beside it found: WARP_LIB names one")?;
 	let compiler = compiler_file(&lib, compiler)
 		.ok_or(format!("no {compiler} beside warp-host nor in {}/../data", lib.display()))?;
 	let bytes = std::fs::read(&compiler).map_err(|problem| format!("{}: {problem}", compiler.display()))?;
-	let keeper = cache::fingerprint((&bytes, cache::folder_fingerprint(&lib)));
+	let keeper = cache::fingerprint((&bytes, cache::folder_fingerprint(&lib), cache::folder_fingerprint(&core_beside(&lib))));
 	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
 		eprintln!("warp-host: {} with lib/ {}, kept values {keeper}", compiler.display(), lib.display());
 	}
@@ -290,17 +290,22 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 	}
 }
 
-/// lib/ for compiler.warp, as warp-rust finds it: WARP_LIB, else the nearest lib/ holding compiler/ above the source or
+/// core/ beside a lib/: the compiler's own folder (card compiler-to-core)
+fn core_beside(lib: &Path) -> PathBuf {
+	std::path::absolute(lib).unwrap_or_else(|_| lib.to_path_buf()).with_file_name("core")
+}
+
+/// lib/ for compiler.warp, as warp-rust finds it: WARP_LIB, else the nearest lib/ with core/ beside it above the source or
 /// the current folder, else the one installed beside warp-host or in <prefix>/share/warp
 fn library_for(source: &Path) -> Option<PathBuf> {
 	if let Some(lib) = std::env::var_os("WARP_LIB") {
 		return Some(PathBuf::from(lib));
 	}
 	let above =
-		|start: PathBuf| start.ancestors().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
+		|start: PathBuf| start.ancestors().map(|folder| folder.join("lib")).find(|lib| core_beside(lib).is_dir());
 	let current = std::env::current_dir().ok();
 	let installed =
-		installed_folders().into_iter().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
+		installed_folders().into_iter().map(|folder| folder.join("lib")).find(|lib| core_beside(lib).is_dir());
 	source.parent().map(Path::to_path_buf).and_then(above).or_else(|| current.and_then(above)).or(installed)
 }
 
@@ -427,7 +432,7 @@ fn run_module(
 use wasmtime::AsContextMut;
 
 /// A failed run's message: a runtime error fails inside a function of its name (index_out_of_range, …), the global
-/// trap_detail holding the value it names; a raise's message is that value (lib/compiler/runtime/errors.warp)
+/// trap_detail holding the value it names; a raise's message is that value (core/runtime/errors.warp)
 fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance) -> String {
 	// WARP_HOST_DEBUG=1: the failure with its wasm backtrace too
 	if std::env::var_os("WARP_HOST_DEBUG").is_some() {

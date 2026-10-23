@@ -8,7 +8,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## To present
 - pure-fallback: `warp pure` runs all-warp or all-Rust, never the hybrid; one Rust call-site edit (bends rust-frozen once).
-- n-times-interim (Interviewer's decision): `n times {…}` is a lib/sugar rewrite to a for loop until block parameters and shared captures exist, then the prelude function.
+- n-times-interim (Interviewer's decision): `n times {…}` is a core/sugar rewrite to a for loop until block parameters and shared captures exist, then the prelude function.
 
 ## Parked
 - graphics-plain (warp-markup, parked): display alias table with notes (stays in Rust); bare width/height as canvas sides with did-you-mean (stays).

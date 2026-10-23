@@ -1,8 +1,8 @@
-# lowers a lib/compiler file (args#1) as the pure lane's passes.warp stage does, in the Rust lane, for errors with text
+# lowers a core file (args#1) as the pure lane's passes.warp stage does, in the Rust lane, for errors with text
 
-use "../lib/compiler/passes.warp"
+use "../core/passes.warp"
 use os
 use file
 lib = env("WARP_LIB")
-view = lowered(read(lib + "/compiler/" + args#1), lib + "/compiler", read(lib + "/prelude.warp"))
+view = lowered(read(lib + "/../core/" + args#1), lib + "/../core", read(lib + "/prelude.warp"))
 print "lowered"

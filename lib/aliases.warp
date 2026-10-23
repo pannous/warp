@@ -2,7 +2,7 @@
 # form format and print show, with the other spellings that mean the same.
 #   operator: the infix operator the word names; prefix-operator: its prefix operator; an entry named by an operator
 #   is that operator
-#   symbol: the operation, an Op of lib/compiler/node.warp
+#   symbol: the operation, an Op of core/node.warp
 #   aliases: the other spellings, a symbol one spells the operator, a word one the word
 #   infix: yes when the word and its word aliases are written between operands too (`7 mod 2`), but
 #   name a block written right after them (`div {…}` is the html tag)

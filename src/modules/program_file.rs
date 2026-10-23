@@ -3,8 +3,9 @@ use super::*;
 
 /// The setting naming the lib/ folder warp reads, whichever checkout built it
 pub(crate) const LIBRARY_SETTING: &str = "WARP_LIB";
-/// The folder of lib/ that marks a warp checkout's library: the warp-written compiler
-pub const COMPILER_FOLDER: &str = "compiler";
+/// The folder beside lib/ that marks a warp checkout: the warp-written compiler, its runtime, the sugar rules and the
+/// compiler extensions (card compiler-to-core)
+pub const CORE_FOLDER: &str = "core";
 /// An installed warp's lib/ and compilers when not next to the binary: <prefix>/share/warp for <prefix>/bin/warp
 const INSTALLED_SHARE_FOLDER: &str = "../share/warp";
 /// The compiler file whose presence marks an installed folder (src/compiler/standalone.rs)
@@ -97,13 +98,13 @@ pub fn installed_folder() -> Option<PathBuf> {
 	let folder = binary.parent()?.to_path_buf();
 	let shared = folder.join(INSTALLED_SHARE_FOLDER);
 	let holds_warp = |candidate: &PathBuf| {
-		candidate.join(INSTALLED_COMPILER).exists() || candidate.join(STD_FOLDER).join(COMPILER_FOLDER).is_dir()
+		candidate.join(INSTALLED_COMPILER).exists() || candidate.join(CORE_FOLDER).is_dir()
 	};
 	Some(if !holds_warp(&folder) && holds_warp(&shared) { shared } else { folder })
 }
 
 /// lib/ of the warp checkout at hand, so one warp build serves every worktree (card shared-warp-build): WARP_LIB, else
-/// the nearest lib/ holding compiler/ above the program file or the working directory, else the installed one, else the
+/// the nearest lib/ with core/ beside it above the program file or the working directory, else the installed one, else the
 /// one warp was built from
 pub fn library_folder() -> PathBuf {
 	if let Some(folder) = crate::setting(LIBRARY_SETTING) {
@@ -113,15 +114,21 @@ pub fn library_folder() -> PathBuf {
 	let starts = program_folder.into_iter().chain(std::env::current_dir().ok());
 	let checkout_library = starts
 		.flat_map(|start| start.ancestors().map(|folder| folder.join(STD_FOLDER)).collect::<Vec<_>>())
-		.find(|library| library.join(COMPILER_FOLDER).is_dir());
+		.find(|library| core_of(library).is_dir());
 	let installed_library = || {
 		installed_folder()
 			.map(|folder| folder.join(STD_FOLDER))
-			.filter(|library| library.join(COMPILER_FOLDER).is_dir())
+			.filter(|library| core_of(library).is_dir())
 	};
 	checkout_library
 		.or_else(installed_library)
 		.unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER))
+}
+
+/// core/ beside `library`, a lib/: <checkout>/core for <checkout>/lib
+pub fn core_of(library: &Path) -> PathBuf {
+	let library = std::path::absolute(library).unwrap_or_else(|_| library.to_path_buf());
+	library.parent().unwrap_or(Path::new("/")).join(CORE_FOLDER)
 }
 
 pub(crate) fn folder_of(file: &Path) -> PathBuf {

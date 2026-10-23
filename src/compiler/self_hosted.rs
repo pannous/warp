@@ -1,6 +1,6 @@
 //! The compile through the warp-written compiler (card warp-pipeline-suite, notes/self_hosting.md): with
-//! WARP_SELF_HOSTED set, lib/compiler/parser.warp parses each program and every Rust pass with a warp twin in
-//! lib/compiler/passes.warp gives way to it, and emitter.warp emits each program inside its core; the passes without
+//! WARP_SELF_HOSTED set, core/parser.warp parses each program and every Rust pass with a warp twin in
+//! core/passes.warp gives way to it, and emitter.warp emits each program inside its core; the passes without
 //! a twin and the Rust emitter do the rest. The suite run this way (tests/self_hosted.sh) counts how much of warp the
 //! warp compiler already compiles.
 //! A stage is a warp program answering one request, compiled once per worker thread: the compile of the stage program
@@ -29,21 +29,23 @@ const PURE_STAGE: &str = "\"pure\"";
 /// reads its kinds (a suite count of + analyzer)
 const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
 /// passes.warp `stage` of the request in the worker's input file, with the prelude's text in its setup file
-const PASSES_PROGRAM: &str = "use \"{lib}/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)), read(args#2))";
+const PASSES_PROGRAM: &str = "use \"{core}/passes.warp\"\nuse os\nstage(json(read(args#1)), read(args#2))";
 /// analyzer.warp `emitter_kinds` of the view in the worker's input file, as JSON (shape: notes/self_hosting.md): a
 /// program of its own, as analyzer.warp's names clash with parser.warp's (its local `digits`, its field `.separator`)
 const ANALYSIS_PROGRAM: &str =
-	"use \"{lib}/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(emitter_kinds(node_of(json(read(args#1)))))";
+	"use \"{core}/analyzer.warp\"\nuse os\nuse json\nto_json(emitter_kinds(node_of(json(read(args#1)))))";
 /// emitter.warp `typed_wasm_module` of the request in the worker's input file, [the lowered program's view, its kinds
 /// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE;
 /// `stage_node` keeps `{}` an empty map, as the passes get it, not ø
 const EMIT_PROGRAM: &str = concat!(
-	"use \"{lib}/compiler/emitter.warp\"\nuse os\n",
+	"use \"{core}/emitter.warp\"\nuse os\n",
 	"request = json(read(args#1))\n",
 	"typed_wasm_module(stage_node(request#1), stage_node(json(read(args#2))), json(read(args#3)), request#2)"
 );
 /// Where a stage program names lib/, the folder library() resolves
 const LIBRARY_MARK: &str = "{lib}";
+/// Where a stage program names core/, the compiler's folder beside lib/ (compiler_folder)
+const CORE_MARK: &str = "{core}";
 /// The runtime words emitter.warp compiles into a module, lowered like a program, in the compiler's folder
 const RUNTIME_WORDS: &str = "runtime.warp";
 /// The module the host words are imported from
@@ -51,7 +53,7 @@ const HOST_MODULE: &str = "host";
 /// The file of the table of words a module may import (the host's and WASI's), and the variable it assigns
 const HOST_WORDS_FILE: &str = "host_words.warp";
 const HOST_WORDS_NAME: &str = "host_words";
-/// The levels of lib/compiler/diagnostics.warp's message files beside a warning: errors.data, hints.data
+/// The levels of core/diagnostics.warp's message files beside a warning: errors.data, hints.data
 const ERROR_LEVEL: &str = "error";
 const HINT_LEVEL: &str = "hint";
 /// How emitter.warp refuses a program beyond its core; the Rust emitter emits it then
@@ -115,7 +117,7 @@ type Request = (String, Sender<String>);
 /// The JSON text a stage program reads as one of its setup files, or why it could not be made
 type Setup = fn() -> Result<String, Node>;
 
-/// A stage program, named by its file in lib/compiler, the JSON texts a worker writes once for it to read as `args#2`,
+/// A stage program, named by its file in core, the JSON texts a worker writes once for it to read as `args#2`,
 /// `args#3`…, and its idle workers
 struct Stage {
 	file: &'static str,
@@ -138,7 +140,8 @@ static EMIT: Stage = Stage {
 impl Stage {
 	/// The stage program, naming the files of library()
 	fn text(&self) -> String {
-		self.program.replace(LIBRARY_MARK, &library().display().to_string())
+		let program = self.program.replace(CORE_MARK, &compiler_folder().display().to_string());
+		program.replace(LIBRARY_MARK, &library().display().to_string())
 	}
 
 	/// The failure of a run of the stage, naming its file, so a bare warp error says where it came from
@@ -156,7 +159,7 @@ pub(crate) fn library() -> &'static std::path::Path {
 
 /// The folder of the compiler's warp files, where runtime.warp's parts are named from
 fn compiler_folder() -> PathBuf {
-	library().join(crate::modules::COMPILER_FOLDER)
+	crate::modules::core_of(library())
 }
 
 /// The switch's value: None when off
@@ -168,7 +171,7 @@ fn switch() -> Option<&'static str> {
 
 // ⚠ WARP DOES THIS DIFFERENTLY: a program the pure lane refuses runs fully on Rust, never on the hybrid mix of
 // parser.warp, the twinned passes and Rust's other passes (decision pure-fallback, notes/hybrid_lane.md): the sugar
-// moved into lib/sugar no longer has to keep the shapes Rust's passes read → lib/sugar/*.warp
+// moved into core/sugar no longer has to keep the shapes Rust's passes read → core/sugar/*.warp
 /// `compile`, the usual compile after pure_module gave none: under WARP_SELF_HOSTED=pure, where that means the pure
 /// lane refused the program, with the switch off, so all of it runs on Rust
 pub fn after_pure<T>(compile: impl FnOnce() -> T) -> T {
@@ -326,7 +329,7 @@ pub(crate) fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
 }
 
 /// What the checks of the passes stage diagnosed, [level, message, fix, topic@expression] each
-/// (lib/compiler/diagnostics.warp): an error is the program's value, the warnings and hints are said as the Rust
+/// (core/diagnostics.warp): an error is the program's value, the warnings and hints are said as the Rust
 /// checks' are
 fn diagnosed(diagnostics: &serde_json::Value) -> Result<Vec<crate::errors::diagnostic::Diagnostic>, Node> {
 	use crate::errors::diagnostic::{Diagnostic, Level};
@@ -409,7 +412,7 @@ fn module_of(answer: &str) -> Result<Vec<u8>, String> {
 	}
 }
 
-/// The words a module may import, as JSON: the table lib/compiler/host_words.warp assigns to HOST_WORDS_NAME, {name:
+/// The words a module may import, as JSON: the table core/host_words.warp assigns to HOST_WORDS_NAME, {name:
 /// [[parameter kind…], [result kind…], module when not the host's]}, the one compiler.warp reads too
 fn host_words() -> Result<String, Node> {
 	let file = compiler_folder().join(HOST_WORDS_FILE);
@@ -442,12 +445,12 @@ fn without_meta(node: &Node) -> Node {
 	}
 }
 
-/// The prelude's source, whose definitions a pure program reaches (lib/compiler/prelude_words.warp)
+/// The prelude's source, whose definitions a pure program reaches (core/prelude_words.warp)
 fn prelude_text() -> Result<String, Node> {
 	Ok(crate::modules::std_module(crate::modules::PRELUDE_MODULE).unwrap_or_default().to_string())
 }
 
-/// The view of lib/compiler/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
+/// The view of core/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
 /// keeps its result's kind); a warp older than lib/ may fail to lower it (card crash-3)
 fn runtime_words() -> Result<String, Node> {
 	runtime_source()
@@ -455,12 +458,12 @@ fn runtime_words() -> Result<String, Node> {
 		.and_then(|source| crate::pipeline::lower(&source))
 		.map(|lowered| view_json(&analysis_view(&lowered)))
 		.map_err(|failure| {
-			crate::node::error(&format!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()))
+			crate::node::error(&format!("core/runtime.warp does not lower: {}", failure.serialize()))
 		})
 }
 
 /// runtime.warp with the files its `use` lines name in their place, after it: a module of lib (`use case_tables`) or
-/// one of its parts (`use "runtime/text.warp"`, relative to lib/compiler). Their words become runtime words, compiled
+/// one of its parts (`use "runtime/text.warp"`, relative to core). Their words become runtime words, compiled
 /// into a module only when called. A part's own `use "x.warp"` lines (its siblings, the intrinsics it declares, so it
 /// compiles alone) join the same way, each file once, breadth first: the parts keep runtime.warp's order. The
 /// declarations of emitter.warp's intrinsics (`is_null(x: any): bool from runtime`) stay out, left to emitter.warp as
@@ -671,7 +674,7 @@ fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Nod
 }
 
 /// With the switch on, the key of the warp compiler that compiles programs (lib/ and the binary): a kept program of an
-/// older lib/compiler is no program of this one
+/// older core is no program of this one
 #[cfg(feature = "native")]
 pub fn compiler_key() -> Option<&'static str> {
 	static KEY: OnceLock<Option<String>> = OnceLock::new();
@@ -688,6 +691,7 @@ pub(crate) fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	let mut hasher = Sha256::new();
 	let library = library();
+	let program = program.replace(&compiler_folder().display().to_string(), CORE_MARK);
 	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
@@ -709,10 +713,15 @@ pub(crate) fn library_fingerprint() -> String {
 fn hash_library(hasher: &mut sha2::Sha256) {
 	use sha2::Digest;
 	let library = library();
+	let core = compiler_folder();
+	// lib/ and core/ beside it, each file once: a symlink (a compatibility link until step 3) is no second copy
 	let mut files: Vec<PathBuf> = files_below(library.to_path_buf());
+	files.extend(files_below(core.clone()));
 	files.sort();
 	for file in files {
-		hasher.update(format!("{}\n", file.strip_prefix(library).unwrap_or(&file).display()));
+		let inside = file.strip_prefix(library).map(Path::to_path_buf);
+		let inside = inside.or_else(|_| file.strip_prefix(&core).map(|path| Path::new("../core").join(path)));
+		hasher.update(format!("{}\n", inside.unwrap_or_else(|_| file.clone()).display()));
 		hasher.update(std::fs::read(&file).unwrap_or_default());
 	}
 }
@@ -721,6 +730,7 @@ fn hash_library(hasher: &mut sha2::Sha256) {
 #[cfg(feature = "native")]
 fn files_below(folder: PathBuf) -> Vec<PathBuf> {
 	let entries = std::fs::read_dir(&folder).into_iter().flatten().flatten().map(|entry| entry.path());
+	let entries = entries.filter(|path| !path.is_symlink());
 	entries.flat_map(|path| if path.is_dir() { files_below(path) } else { vec![path] }).collect()
 }
 

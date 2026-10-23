@@ -1,5 +1,5 @@
 // The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as nodes
-// (lib/compiler/shapes.warp), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs),
+// (core/shapes.warp), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs),
 // which compares its view (tests/common/twins.rs node_view)
 use "lexer.warp"
 use "shapes.warp"
@@ -28,14 +28,16 @@ def parsed(source: text): Node := {
 ENTITY_MARK = "\\:"
 // `name TAB characters` lines, the table Rust include_str!s
 ENTITY_FILE = "entities.tsv"
-// The lib/ a run uses: WARP_LIB, else the one above this file. A compiled stage is kept for every identical lib/ and
+// The lib/ a run uses: WARP_LIB, else the one beside this file's core/ (card compiler-to-core). A compiled stage is kept for every identical lib/ and
 // runs from wherever that is now, so nothing reads the folder it was compiled in (card pure-lane-nondeterministic)
-def run_library(): text := env("WARP_LIB") ?? folder_of(module_directory)
+def run_library(): text := env("WARP_LIB") ?? folder_of(module_directory) + "/lib"
+// core/ beside that lib/: the compiler, its runtime, the sugar rules and the compiler extensions
+def run_core(): text := folder_of(run_library()) + "/core"
 global entity_table = ø
 def entities(): any {
 	if entity_table == ø {
 		entity_table = {}
-		lines = (try read(run_library() + "/compiler/" + ENTITY_FILE) else "").split("\n")
+		lines = (try read(run_core() + "/" + ENTITY_FILE) else "").split("\n")
 		for line in lines {
 			columns = line.split("\t")
 			if columns.length == 2 { entity_table[columns#1] = columns#2 }
@@ -1429,9 +1431,9 @@ INDEX_POWER = 170
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
 SYMBOL_OPERATORS = {"===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `xs .* 2` maps `*` over the elements, binding as `*`
-// does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (lib/sugar/fallbacks.warp)
+// does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (core/sugar/fallbacks.warp)
 PHRASE_OPERATORS = [".+", ".-", ".*", "./", ".^", "?:"]
-// `left op right` as its phrase, for the sugar to read (lib/sugar/arithmetic.warp, fallbacks.warp)
+// `left op right` as its phrase, for the sugar to read (core/sugar/arithmetic.warp, fallbacks.warp)
 def phrase_operation(left: Node, op: text, right: Node): Node := listed("", " ", [left, symbol(op), right])
 // The operators written as words, each with its canonical name; alias_spellings() adds the infix words of lib/aliases.warp
 WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "rem": "rem"}
@@ -1597,7 +1599,7 @@ def library_glyph_operators(): list {
 // The words of a statement that uses a module: `use regex`, `require regex`, `import regex`
 // Rust twin: use_statements.rs USE_KEYWORDS
 USE_KEYWORDS = ["use", "require", "import"]
-// The folder holding the file of a path: lib/compiler of lib/compiler/parser.warp
+// The folder holding the file of a path: core of core/parser.warp
 def folder_of(path: text): text {
 	parts = path.split("/")
 	parts[0 ..< #parts - 1].join("/")

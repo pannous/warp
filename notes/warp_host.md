@@ -265,7 +265,7 @@ unique_lines, find_files, file_size, info, which, glob, list_files. tests/host/t
 Not yet, for reasons outside warp-host:
 - `pwd`/`cwd` after `cd` still give the start folder. The pure compiler computes a definition without parameters
   (`cwd := std_io(…)`, `pwd := cwd`) once, where warp-rust runs it at every read; and `f() := …` has no bare `f`.
-- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (lib/compiler/runtime/wasi.warp), not
+- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (core/runtime/wasi.warp), not
   std_io. So they take no `~`, and a relative path stays in the start folder (WASI's preopened `.`) after `cd`.
 - `ls("nosuch")` traps (`node length`): the comprehension takes list_files's Error as a list. `list_files("nosuch")`
   itself is a catchable Error.

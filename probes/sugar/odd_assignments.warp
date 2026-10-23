@@ -1,10 +1,10 @@
-# lowers a lib/compiler file (args#1) as the pure lane's passes stage does and prints each assignment whose target is
+# lowers a core file (args#1) as the pure lane's passes stage does and prints each assignment whose target is
 # no name, key or group: the forms the emitter refuses as "an assignment to a …"
-use "../../lib/compiler/passes.warp"
+use "../../core/passes.warp"
 use os
 use file
 lib = env("WARP_LIB")
-program = lowered_program(read(lib + "/compiler/" + args#1), lib + "/compiler", read(lib + "/prelude.warp"))
+program = lowered_program(read(lib + "/../core/" + args#1), lib + "/../core", read(lib + "/prelude.warp"))
 odd(n: Node): Node := {
 	if type(n) is key and op_of(n) in ["=", "+=", "-=", "*=", "/=", ":="] and not (key_of(n) is symbol or type(key_of(n)) is key or is_group(key_of(n))) { print type(key_of(n)).name; print view_of(n) }
 	n

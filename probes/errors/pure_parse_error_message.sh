@@ -1,8 +1,8 @@
 #!/bin/bash
 # A compiler.wasm run away from the lib/ it was built from (an installed pair, a copied build, a removed worktree)
 # says a parse error with its message from the lib/ it is given (card pure-parse-error-message). Before the fix it said
-# "no message for the diagnostic (parse_error …) in lib/compiler/errors.data, …": diagnostics.warp read errors.data
-# from module_directory, which the build bakes in as the build's own lib/compiler.
+# "no message for the diagnostic (parse_error …) in core/errors.data, …": diagnostics.warp read errors.data
+# from module_directory, which the build bakes in as the build's own core.
 # Expected last line: Error("`]` is missing: the group opened at 1:5 runs to the end of the input at …")
 # usage: probes/errors/pure_parse_error_message.sh [<warp binary>, default target/release/warp]   (a heavy run: slot.sh)
 cd "$(dirname "$0")/../.." || exit 1

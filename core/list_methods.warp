@@ -1,7 +1,7 @@
 # Methods written as calls on a value (card pure-runs): any `x.f(a, b)` but a change in place (in_place_methods) is the
 # call `f(x, a, b)`, as Rust's library_words.rs method_call makes it of a word (card pure-lane-lowers); it runs after the
 # passes that read method calls (lambdas, arity_overloads). `m.remove(k)` needs a hidden name, which a rewrite cannot
-# make yet (notes/layers.md F3). The appending methods and `x in xs` are lib/sugar/methods.warp.
+# make yet (notes/layers.md F3). The appending methods and `x in xs` are core/sugar/methods.warp.
 use "walk.warp"
 use "phrase_blocks.warp"
 

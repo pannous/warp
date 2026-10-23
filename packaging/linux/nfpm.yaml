@@ -27,6 +27,9 @@ contents:
   - src: ./lib
     dst: /usr/share/warp/lib
     type: tree
+  - src: ./core
+    dst: /usr/share/warp/core
+    type: tree
   # warp-host's shipped cache, compiler-self's kept values (packaging/host_cache.sh, notes/warp_host.md)
   - src: ./host-cache
     dst: /usr/share/warp/host-cache

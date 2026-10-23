@@ -1,4 +1,4 @@
-# comprehensions as the sugar rules of lib/sugar/comprehensions.warp (card sugar-comprehensions)
+# comprehensions as the sugar rules of core/sugar/comprehensions.warp (card sugar-comprehensions)
 
 # a rule's template holding a comprehension (#3004)
 is! 'rewrite doubled $xs => [$x * 2 for $x in $xs]; ys = [1, 2]; doubled ys' [2 4]

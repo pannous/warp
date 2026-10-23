@@ -1,4 +1,4 @@
-//! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): lib/compiler/compiler.warp,
+//! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): core/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
 //! build output (decision compiler-build): compiler.wasm, built by the Rust pipeline, for `warp pure`; compiler-self.wasm,
 //! compiler.warp compiled by itself through the pure lane, for `warp self`. The pair next to the binary is the delivered
@@ -11,7 +11,7 @@ use crate::node::{error, Node};
 use crate::pipeline::CompiledModule;
 use std::path::{Path, PathBuf};
 
-const COMPILER_FILE: &str = "compiler/compiler.warp";
+const COMPILER_FILE: &str = "compiler.warp";
 /// The custom section of a build file naming what it was built from: lib/, lib/'s fingerprint, the warp build
 const BUILD_SECTION: &str = "warp.build";
 const BUILD_SEPARATOR: &str = "\n";
@@ -119,7 +119,7 @@ fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledMo
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
 		// a position the compiler's run names is one in compiler.warp (its `raise`), not in the program
-		(Node::Error(_), _) => Err(crate::errors::diagnostic::located_in_file(&said, &library().join(COMPILER_FILE))),
+		(Node::Error(_), _) => Err(crate::errors::diagnostic::located_in_file(&said, &crate::modules::core_of(library()).join(COMPILER_FILE))),
 		(_, Ok(bytes)) => Ok(module_of_bytes(bytes)),
 		(_, Err(_)) => Err(error(&format!("compiler.warp wrote no module, it gave {}", said.serialize()))),
 	}
@@ -164,7 +164,7 @@ fn is_delivered(path: &Path) -> bool {
 
 /// compiler.warp compiled by `by`, written to `path` with the build section
 fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
-	let file = library().join(COMPILER_FILE);
+	let file = crate::modules::core_of(library()).join(COMPILER_FILE);
 	let source = std::fs::read_to_string(&file).map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let module = match by {
 		Compiler::SelfCompiled => pure_compiled(&file, source).map_err(|refusal| {
@@ -284,7 +284,7 @@ fn pure_compiled(file: &Path, source: String) -> Result<CompiledModule, String> 
 
 /// `compile` as the program of `file`, in a thread with a stack deep enough for a compile of the compiler; quietly: the
 /// compiler's own warnings and hints are no news to the user of `warp pure` (card prefix-count-warning), but they are
-/// to whoever works on lib/compiler: WARP_COMPILER_WARNINGS=1 shows them (the Integrator's pure-chain check)
+/// to whoever works on core: WARP_COMPILER_WARNINGS=1 shows them (the Integrator's pure-chain check)
 fn on_big_stack<T: Send + 'static>(file: PathBuf, compile: impl FnOnce() -> T + Send + 'static) -> T {
 	let work = move || {
 		let compile = || crate::modules::with_program_file(&file, compile);

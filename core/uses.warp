@@ -137,8 +137,10 @@ call_head(n: Node): any := {
 	if n#1 is symbol then (if bracket_of(n) == "(" then n else ø) else call_head(n#1)
 }
 
-# lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one)
+# lib/<name>.warp, a standard module's file (the std modules are the files of lib/, beside core/)
 std_module_path(name: text): text := run_library() + "/" + name + module_extension
+# core/<name>.warp, a file of the compiler's own folder: the sugar rules (`sugar/ranges`)
+core_module_path(name: text): text := run_core() + "/" + name + module_extension
 
 # what a `use` statement names, ø for another statement
 use_target(statement: Node): any := {

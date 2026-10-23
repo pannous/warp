@@ -7,7 +7,7 @@
 # warp-host reads it after the user's own cache.
 set -euo pipefail
 dir=$(cd "${1:?usage: packaging/host_cache.sh <dir with warp-host, compiler-self.wasm and lib/>}" && pwd)
-for file in warp-host compiler-self.wasm lib/compiler; do
+for file in warp-host compiler-self.wasm core; do
 	[ -e "$dir/$file" ] || { echo "host_cache.sh: no $file in $dir" >&2; exit 1; }
 done
 work=$(mktemp -d)

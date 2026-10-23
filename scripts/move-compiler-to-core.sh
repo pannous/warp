@@ -112,7 +112,7 @@ EDITS = [
   "\tlet library = library();\n\tlet mut files: Vec<PathBuf> = files_below(library.to_path_buf());\n\tfiles.sort();\n\tfor file in files {\n"
   "\t\thasher.update(format!(\"{}\\n\", file.strip_prefix(library).unwrap_or(&file).display()));\n",
   "\tlet library = library();\n\tlet core = compiler_folder();\n"
-  "\t// lib/ and core/ beside it, each file once: a symlink (lib/compiler, lib/sugar until step 3) is no second copy\n"
+  "\t// lib/ and core/ beside it, each file once: a symlink (a compatibility link until step 3) is no second copy\n"
   "\tlet mut files: Vec<PathBuf> = files_below(library.to_path_buf());\n\tfiles.extend(files_below(core.clone()));\n\tfiles.sort();\n\tfor file in files {\n"
   "\t\tlet inside = file.strip_prefix(library).map(Path::to_path_buf);\n"
   "\t\tlet inside = inside.or_else(|_| file.strip_prefix(&core).map(|path| Path::new(\"../core\").join(path)));\n"
@@ -143,6 +143,12 @@ EDITS = [
  ("packaging/linux/nfpm.yaml", "  - src: ./lib\n    dst: /usr/share/warp/lib\n    type: tree\n",
   "  - src: ./lib\n    dst: /usr/share/warp/lib\n    type: tree\n  - src: ./core\n    dst: /usr/share/warp/core\n    type: tree\n", 1),
  ("probes/emitter_split.py", 'REPOSITORY / "lib" / "compiler"', 'REPOSITORY / "core"', 1),
+ ("probes/elvis/lowered.warp", 'lib + "/compiler"', 'lib + "/../core"', 1),
+ ("probes/lower_program.warp", 'lib + "/compiler"', 'lib + "/../core"', 1),
+ ("probes/lower_compiler.warp", 'lib + "/compiler', 'lib + "/../core', 2),
+ ("probes/sugar/odd_assignments.warp", 'lib + "/compiler', 'lib + "/../core', 2),
+ ("notes/standalone_compiler.md", 'read(library_folder + "/compiler/runtime.warp")', 'read(core_folder + "/runtime.warp")', 1),
+ ("core/extensions/README.md", "; this folder moves to core/extensions/ with the compiler (card compiler-to-core).", ".", 1),
  # --- tests: path strings only (a copy of lib/ now sits in a folder of its own, its core/ beside it) ---
  ("tests/parser/test_self_pure.rs", 'join(format!("{name}_{}", std::process::id()))', 'join(format!("{name}_{}/lib", std::process::id()))', 1),
  ("tests/parser/test_self_pure.rs", 'linked_folder(&shipped.join("compiler"), &library.join("compiler"), "emitter.warp");',

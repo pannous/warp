@@ -53,7 +53,7 @@ class Warp < Formula
       pkgshare.install "host-cache" if File.exist?("host-cache")
       # the warp-written compilers and lib/, found by warp in <prefix>/share/warp (card installed-compilers); releases
       # before 1.5.0 ship none
-      pkgshare.install "compiler.wasm", "compiler-self.wasm", "lib" if File.exist?("compiler.wasm")
+      pkgshare.install "compiler.wasm", "compiler-self.wasm", "lib", "core" if File.exist?("compiler.wasm")
     end
   end
 

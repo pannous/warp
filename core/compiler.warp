@@ -1,5 +1,5 @@
 # The warp compiler as one warp program (card standalone, notes/standalone_compiler.md): source text in, wasm bytes out,
-# its stages handing each other plain warp values. `warp lib/compiler/compiler.warp app.warp app.wasm`, then
+# its stages handing each other plain warp values. `warp core/compiler.warp app.warp app.wasm`, then
 # `warp app.wasm`; a form beyond the emitter's core is the compile's error ("outside the core: …")
 use "passes.warp"
 use "analyzer.warp"
@@ -8,10 +8,12 @@ use "host_words.warp"
 use os
 use file
 
-# lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the folder above this file's
+# lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the one beside this file's folder
 library_folder = if #args > 3 then args#4 else run_library()
+# core/ beside that lib/: the compiler's own files
+core_folder = folder_of(library_folder) + "/core"
 # the messages of the diagnostics from that lib/, not from the folder this compiler was built in
-messages_from(library_folder + "/compiler")
+messages_from(core_folder)
 
 # the name the lowered runtime words are kept under
 RUNTIME_WORDS = "compiler.warp's lowered runtime words of " + library_folder
@@ -22,7 +24,7 @@ prelude_source = read(library_folder + "/prelude.warp")
 # the runtime words lowered and kept; keep's answer unused, so a host without the module cache (plain wasmtime answering
 # its imports with defaults) still gets the words
 lowered_runtime_words(): Node := {
-	words = lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source)
+	words = lowered_program(read(core_folder + "/runtime.warp"), core_folder, prelude_source)
 	keep(RUNTIME_WORDS, words)
 	words
 }

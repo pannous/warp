@@ -1,5 +1,5 @@
 // card rust-lane-type-2: `if b < 0 then -b else b` of a parameter b read `-b else` as the call b(else), so float_mod of
-// lib/compiler/runtime/conversions.warp failed "b is a float where an exact Int is expected"; an operator word after a
+// core/runtime/conversions.warp failed "b is a float where an exact Int is expected"; an operator word after a
 // negated name is the operator, as after any operand
 use crate::is;
 

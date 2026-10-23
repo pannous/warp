@@ -37,7 +37,7 @@ compile_module() {
 	if [ -n "$HOST" ]; then
 		pure "$HOST" "${host_options[@]}" compile "$source" "$module"
 	else
-		lib=$(library_for "$source") || fail "no lib/ with compiler/ found for $source: WARP_LIB names one"
+		lib=$(library_for "$source") || fail "no lib/ with core/ beside it found for $source: WARP_LIB names one"
 		pure "$RUST" "$(compiler_file)" "${options[@]}" -- "$source" "$module" "$(dirname "$source")" "$lib"
 	fi
 	echo "compiled $(wc -c <"$module" | tr -d ' ') bytes to $module"
@@ -122,7 +122,7 @@ installed_folder() {
 }
 
 holds_warp() {
-	[ -e "$1/compiler.wasm" ] || [ -d "$1/lib/compiler" ]
+	[ -e "$1/compiler.wasm" ] || [ -d "$1/core" ]
 }
 
 # The compiler's build file, as warp-rust finds it: a worktree's (WARP_LIB) in <lib>/../data/, else the installed one
@@ -132,19 +132,19 @@ compiler_file() {
 	[ -f "${WARP_LIB:-/nonexistent}/../data/$name" ] && echo "$WARP_LIB/../data/$name" || echo "$(installed_folder)/$name"
 }
 
-# lib/ for compiler.warp, as warp-rust finds it: WARP_LIB, else the nearest lib/ holding compiler/ above the source or
+# lib/ for compiler.warp, as warp-rust finds it: WARP_LIB, else the nearest lib/ with core/ beside it above the source or
 # the current folder, else the installed one, else the lib/ the compiler was built from (its warp.build section)
 library_for() {
 	[ -n "${WARP_LIB-}" ] && { echo "$WARP_LIB"; return; }
 	local folder
 	for folder in "$(cd "$(dirname "$1")" && pwd)" "$PWD"; do
-		while [ ! -d "$folder/lib/compiler" ] && [ "$folder" != / ]; do folder=$(dirname "$folder"); done
-		[ -d "$folder/lib/compiler" ] && { echo "$folder/lib"; return; }
+		while [ ! -d "$folder/core" ] && [ "$folder" != / ]; do folder=$(dirname "$folder"); done
+		[ -d "$folder/core" ] && { echo "$folder/lib"; return; }
 	done
 	folder=$(installed_folder)
-	[ -d "$folder/lib/compiler" ] && { echo "$folder/lib"; return; }
+	[ -d "$folder/core" ] && { echo "$folder/lib"; return; }
 	folder=$(LC_ALL=C sed -n 's/.*warp\.build[^/]*\(\/[^[:cntrl:]]*\).*/\1/p' "$(compiler_file)" | head -1)
-	[ -d "$folder/compiler" ] && echo "$folder"
+	[ -d "$folder/../core" ] && echo "$folder"
 }
 
 # inline code (`warp '6*7'`): neither a command, a file nor an option; a plain word stays warp-rust's (`warp pi`)

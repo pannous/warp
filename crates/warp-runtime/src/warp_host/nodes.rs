@@ -7,7 +7,7 @@ use wasmtime::{Extern, Func, Global, Memory, Result, StoreContextMut, Val};
 
 const TYPE_DEF: u8 = 12;
 const PAGE_BITS: u32 = 16;
-/// A list's bracket code above the Kind (lib/compiler/kinds.warp BracketCode)
+/// A list's bracket code above the Kind (core/kinds.warp BracketCode)
 const BRACKETS: [(&str, &str); 4] = [("{", "}"), ("[", "]"), ("(", ")"), ("<", ">")];
 /// A curly list of `key: value` entries, and its entries' kind (kinds.warp Marked)
 pub const MAP: i64 = LIST as i64;
@@ -172,7 +172,7 @@ fn bytes_of(piece: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<M
 	Ok(bytes.ok_or_else(|| wasmtime::Error::msg("a text beyond memory"))?.to_vec())
 }
 
-/// The constructors a program exports for its host calls (lib/compiler/emitter/host.warp host_builders) and its memory
+/// The constructors a program exports for its host calls (core/emitter/host.warp host_builders) and its memory
 pub struct Builders {
 	memory: Memory,
 	heap: Option<Global>,

@@ -2,7 +2,7 @@
 
 Labels: [M] = measured this session on the box; [N] = from repo notes, measured by others; [I] = inferred or estimated.
 Scratch (ignored, uncommitted): /workspace/cow/trees/host-from-warp/scratch/hfw (box) (tools/, mods/, ffi/). The worktree is boxtree
-`host-from-warp` on origin/warp-host-run-wasm 1aec4ee9f. Nothing was committed. src/ and lib/compiler were not touched.
+`host-from-warp` on origin/warp-host-run-wasm 1aec4ee9f. Nothing was committed. src/ and core were not touched.
 
 ## Verdict
 - **Fully native host with no Rust and no wasmtime: not feasible now.** No wasm→C or wasm→native tool takes our real modules.
@@ -66,8 +66,8 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
 ## Approaches
 | approach | missing | effort | blockers / outside our areas |
 |---|---|---|---|
-| (a) host.warp → wasm → wasm2c/wamrc + C runtime | GC+EH in the tool; still needs an engine for run_wasm | large; blocked | upstream WAMR/wabt; or lib/compiler emitter EH lowering (Wrapper's or the compiler owner's call) |
-| (b) Warp emits C or LLVM IR | a whole backend: GC (Boehm or own), EH (setjmp), FFI | weeks–months [I] | lib/compiler (not ours); still needs an engine for `run` |
+| (a) host.warp → wasm → wasm2c/wamrc + C runtime | GC+EH in the tool; still needs an engine for run_wasm | large; blocked | upstream WAMR/wabt; or core emitter EH lowering (Wrapper's or the compiler owner's call) |
+| (b) Warp emits C or LLVM IR | a whole backend: GC (Boehm or own), EH (setjmp), FFI | weeks–months [I] | core (not ours); still needs an engine for `run` |
 | (c) host.warp → .cwasm inside a prebuilt Rust stub that exposes primitives | stub variant with Cranelift + std_io + run_wasm; host.warp; a compiler-self that accepts os/file words | days [I] | crates/warp-runtime stub feature (allowed, Rust), compiler-self rebuild with os words |
 | (c') host.warp on a WasmEdge-based C shim | measure the AOT run; a C shim for std_io and FFI | ~1 week [I] | 64 MB library; C++ toolchain to build it |
 
@@ -90,7 +90,7 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
 - Warp Wrapper: since compiler-self runs under plain `wasmtime run` with a null host stub, could the wrapper skip the custom
   host for compiling and keep warp-host only for os/FFI words and kept values?
 - Warp Wrapper: should the emitter offer an EH-free mode (status flag returns instead of 8 try_table and 5,441 throw)? That
-  would open WAMR (0.6 MB interp, AOT) and wasm2c-legacy-EH routes. It is an emitter change in lib/compiler.
+  would open WAMR (0.6 MB interp, AOT) and wasm2c-legacy-EH routes. It is an emitter change in core.
 - Supervisor: is ~6.5 MB with Cranelift acceptable long-term? Answered yes (Decisions below).
 - (Cancelled 2026-10-23 by the user decision below: the WasmEdge AOT retry.)
 

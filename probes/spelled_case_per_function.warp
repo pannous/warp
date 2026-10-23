@@ -2,6 +2,6 @@
 # match binds `bracket` a Bracket case while the parser assigns its own `bracket = ""`, and `bracket as text` is still
 # the case's spelling (the pure-compiled parser read every call with comma arguments as Error("spelling code"), so
 # runtime.warp's use files became one statement and the self-compiled compiler lacked char_text; card self-hello)
-use "../lib/compiler/uses.warp"
+use "../core/uses.warp"
 print(view_of(parsed("f(a, 2)")))
 print(#statements_in(plain_node(parsed("a = 1\nf(a, 2)"))))

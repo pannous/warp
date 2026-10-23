@@ -1,4 +1,4 @@
-//! The emitter and analyzer twins (notes/self_hosting.md): a warp-written compiler part in lib/compiler/ runs over
+//! The emitter and analyzer twins (notes/self_hosting.md): a warp-written compiler part in core/ runs over
 //! every sample and probe, judged by the program's value next to Rust's, until the pipeline runs completely in warp
 //! (AGENTS.md "Outcome tests only"); the first file where the two differ fails the test. The gate checks every GATE_SHARE-th source (a different
 //! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
@@ -12,7 +12,7 @@ use warp::{Node, Number};
 
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
 const SOURCE_EXTENSION: &str = "warp";
-const COMPILER_FOLDER: &str = "lib/compiler";
+const COMPILER_FOLDER: &str = "core";
 /// The input files of the twin programs, the arguments of their calls (scratch/: temporary, ignored)
 const INPUT_FOLDER: &str = "scratch/twins";
 /// The fringe forms a pass twin leaves out, with how to bring each back
@@ -125,7 +125,7 @@ fn in_parallel<T: Send>(paths: Vec<PathBuf>, case: impl Fn(&Path) -> Option<T> +
 }
 
 /// The analyzer stage (card emitter-takes, decision ignore-rust): each source the pipeline lowers goes to
-/// `emitter_kinds` of lib/compiler/analyzer.warp as a node, which must give its kinds without failing; its kinds are
+/// `emitter_kinds` of core/analyzer.warp as a node, which must give its kinds without failing; its kinds are
 /// judged by the programs emitter.warp runs with them, never compared with src/analyzer
 pub fn analyzer_runs(paths: &[PathBuf]) {
 	let cases = in_parallel(paths.to_vec(), |path| {
@@ -158,7 +158,7 @@ pub fn analyzed(code: &str) -> Option<(Node, Vec<String>)> {
 }
 
 /// The emitter core's twin (card emits-wasm, notes/self_hosting.md step 15): every lowered program (pipeline::lower)
-/// goes to lib/compiler/emitter.warp `wasm_module` as a node, the module it gives runs, and its value is compared with
+/// goes to core/emitter.warp `wasm_module` as a node, the module it gives runs, and its value is compared with
 /// the program's value run by Rust. A program outside the core (a text "outside the core: …") is no case; fails
 /// unless at least `least` programs are inside it. Returns the paths inside the core
 pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
@@ -174,7 +174,7 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	let number = RUNTIME_FILES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 	let runtime = Path::new(INPUT_FOLDER).join(format!("emitter-runtime-{}-{number}.json", std::process::id()));
 	let runtime_source = warp::compiler::self_hosted::runtime_source().unwrap();
-	let lowered_runtime = warp::pipeline::lower(&runtime_source).expect("lib/compiler/runtime.warp lowers");
+	let lowered_runtime = warp::pipeline::lower(&runtime_source).expect("core/runtime.warp lowers");
 	std::fs::create_dir_all(INPUT_FOLDER).unwrap();
 	std::fs::write(&runtime, view_json(&plain_view(&lowered_runtime))).unwrap();
 	let setup = format!("runtime_words = node_of(json(read(\"{}\")))", runtime.display());
@@ -216,7 +216,7 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	inside
 }
 
-/// What lib/compiler/emitter.warp says of a program it leaves to the Rust emitter
+/// What core/emitter.warp says of a program it leaves to the Rust emitter
 const OUTSIDE_THE_CORE: &str = "outside the core";
 /// Set, the emitter twin lists why the sources outside the core are outside, the most frequent first
 const REFUSALS_REPORT: &str = "EMITTER_REFUSALS";

@@ -7,8 +7,8 @@ The user asked whether to separate the core parser from the core language and th
    comments, operators from one precedence table (extensible by `operator` declarations), juxtaposition; no keywords.
 2. **kernel**: the forms the analyzer and emitter must know. Test: a form is kernel only if it cannot be a rewrite
    into other kernel forms.
-3. **sugar**: everything expressible as `rewrite` rules (lib/compiler/rewrites.warp) into the kernel, one module per
-   topic in lib/sugar/*.warp loaded by the prelude. New syntax extends the notation generally (a table row, an
+3. **sugar**: everything expressible as `rewrite` rules (core/rewrites.warp) into the kernel, one module per
+   topic in core/sugar/*.warp loaded by the prelude. New syntax extends the notation generally (a table row, an
    operator or alias declaration), never a parser keyword branch.
 
 Measured: parser.warp is today ~50 % notation (2102 lines), ~16 % kernel (686), ~34 % sugar (1417); 26 of the 62
@@ -32,7 +32,7 @@ other compiler files (2448 of their 10841 lines) are sugar passes. Sugar in all:
 | 12 | `rewrite p => t`, `operator …` declarations | the meta forms that build layer 3 and extend layer 1 |
 | 13 | `match subject { pattern => value … }` | user decision; its lowering (node_matches, node_cases) is emitter work, never sugar |
 
-Not kernel (evidence: a pass already lowers them away before the emitter): `for` (lib/sugar/iteration.warp → while), `enum` (plain_enums.warp → class with variants), `unless`/`until`, `?:`, `??`,
+Not kernel (evidence: a pass already lowers them away before the emitter): `for` (core/sugar/iteration.warp → while), `enum` (plain_enums.warp → class with variants), `unless`/`until`, `?:`, `??`,
 `x is T` (type_tests.warp → is_type call), `as` (conversion calls), comprehensions, ranges, `n times`. Operators are
 notation; their meaning is a call (arithmetic ones are emitter intrinsics, as any builtin).
 
@@ -62,7 +62,7 @@ F5 unparked with high priority by the user 2026-10-22 evening, card rewrite-temp
 - **F8 text holes** (open, not started; idea: a text pattern `"…$x…"` binding holes from its
   interpolation parts, the template's text holes spliced the same way): rules over a template's holes (interpolation, `sql "…$x"`); stays a pass otherwise.
 
-## lib/compiler/parser.warp by form (4237 lines)
+## core/parser.warp by form (4237 lines)
 
 Notation (2102):
 | lines | form |
@@ -120,8 +120,8 @@ Sugar (1417), each with the rule it would become:
 | 28 | `/!`, `div`, `÷`, `/!=` | already a math.warp alias (`operator ÷ := /!`): the parser branch duplicates it; `operator div := /!` |
 | 23 | emit words `emit stop{…}` (send, fire, trigger, signal, ask) | `rewrite emit $e... => emit($e...)`, aliases for the others |
 | 22 | test words `x empty`, `x is missing`, `x failed` | `rewrite $x is empty => count($x) == 0` phrase rule, works today |
-| 21 | `n times {…}` | done: `rewrite $n times $body => for $i in 1 to $n $body where $body is block` (lib/sugar/loops.warp); later the prelude function `infix times(n: number, b: block)` (user 2026-10-22, card times-prelude) |
-| 15 | `a ?: b` | done (card non-name): a non-name left side is `rewrite $a ?: $b => ($t = $a; $t ? $t : $b)` (lib/sugar/fallbacks.warp); a name's stays the parser's ternary `a ? a : b`, the one shape Rust's type and pattern readers know as the optional field `email?: text` (type_kinds.rs optional_field), and pure-lane classes outside the core fall back to the hybrid lane. Sugar rules never reach a class body (card lib-sugar) |
+| 21 | `n times {…}` | done: `rewrite $n times $body => for $i in 1 to $n $body where $body is block` (core/sugar/loops.warp); later the prelude function `infix times(n: number, b: block)` (user 2026-10-22, card times-prelude) |
+| 15 | `a ?: b` | done (card non-name): a non-name left side is `rewrite $a ?: $b => ($t = $a; $t ? $t : $b)` (core/sugar/fallbacks.warp); a name's stays the parser's ternary `a ? a : b`, the one shape Rust's type and pattern readers know as the optional field `email?: text` (type_kinds.rs optional_field), and pure-lane classes outside the core fall back to the hybrid lane. Sugar rules never reach a class body (card lib-sugar) |
 | 14 | `function f` reference | `rewrite function $f => &$f` |
 | 12 | `if no xs` | `rewrite no $x => not $x`: needs F1 (condition position) |
 
@@ -132,12 +132,12 @@ circumfix declarations, which replace branches the next migrations would have ne
 Most of the 1417 counted lines turned out to be notation once read closely: the parser has to find a form's words
 and its extent whether or not a rule then gives its meaning, and that finding is the bulk of each row. Only the part
 that gives the meaning can move, and it is small. Rule work done meanwhile mostly moved meaning out of *passes*
-(lib/sugar/loops.warp: `n times`, once/twice/thrice, C-style for, `for xs`; fallbacks.warp: `??`, `?:`), not out of
+(core/sugar/loops.warp: `n times`, once/twice/thrice, C-style for, `for xs`; fallbacks.warp: `??`, `?:`), not out of
 the parser.
 
 | lines | form | stays because | movable part |
 |------:|------|---------------|--------------|
-| 236 | for heads: C-style, `for each`, named loops, `for x in xs:`, loop variables | notation: the parser only groups `for … in … body`; the lowering was always for_loops.warp's | 0 in the parser; the lowering is rules now (lib/sugar/iteration.warp, F3 fresh names, hidden glue `loop··step` for the step mark; card sugar-for-loops) |
+| 236 | for heads: C-style, `for each`, named loops, `for x in xs:`, loop variables | notation: the parser only groups `for … in … body`; the lowering was always for_loops.warp's | 0 in the parser; the lowering is rules now (core/sugar/iteration.warp, F3 fresh names, hidden glue `loop··step` for the step mark; card sugar-for-loops) |
 | 187 | English definitions `To square a number: …`, phrase slots | engine gap: slots are read at parse time (phrase_slots), F5 phrase names | ~150 once F5 lands, as a pass in warp (sugar by meaning, pass by mechanism) |
 | 153 | `&x`, `&mut x`, `*r`, `\|x\| body`, `> 100 =>`, rest/spread `*xs` | notation: deciding when `*`/`&` is a prefix and not an operator, a spread, a rest is lexical context; dropping the prefix is one line | ~5 (the drop), at a hybrid-lane cost |
 | 110 | duration literals `3 days`, `1 month 2 days` | notation: a literal, its calendar length folded at parse time into Rust's data view, like `10:30` | 0 (a `days(n)` family in the prelude would be a change of meaning, not a move) |
@@ -162,7 +162,7 @@ with F4 and F5 (enum values, English definitions), and those move into warp pass
 parser's size is mostly notation, which is the layer it is meant to hold; shrinking it further is a notation design
 question (tables and declarations instead of branches), not a sugar one.
 
-## The other lib/compiler/*.warp files (62 files, 10841 lines)
+## The other core/*.warp files (62 files, 10841 lines)
 
 Machinery, no layer: emitter 2651, analyzer 991, lexer 461 (notation), rewrites 371 (the sugar engine), walk 367,
 prelude_words 251, scope 215, uses 193 (kernel `use`), serializer 138, builtin_signatures 113, words 107, diagnostics
@@ -177,17 +177,17 @@ enum_declarations 63 (reads declared types).
 Sugar passes, with the rule each would become:
 | lines | file | rule, or the missing feature |
 |------:|------|------|
-| 197 | plain_enums | `Color.Red`, `Color::Red`, `case .red`, `c is Coin`: lib/sugar/enums.warp (F9, card sugar-plain-enums); the declaration, `as int`/`as Coin`/`Coin(2)` and the names holding cases stay a pass (see the card) |
+| 197 | plain_enums | `Color.Red`, `Color::Red`, `case .red`, `c is Coin`: core/sugar/enums.warp (F9, card sugar-plain-enums); the declaration, `as int`/`as Coin`/`Coin(2)` and the names holding cases stay a pass (see the card) |
 | 186 | definitions | `rewrite def $d => $d`, `rewrite $f($p...) = $b => $f($p...) := $b`: works today, minus `xs(1) = …` (F2) |
 | 163 | of_lookups | `rewrite $a of $b => $b.$a`: phrase rule works today; type phrases `list of int` need F2 |
-| 137 | for_loops | done (card sugar-for-loops): lib/sugar/iteration.warp lowers every `for` (F3, F7, hidden glue); a map's keys by `where $m is map` (sugar-places); loop_heads.warp keeps what a rule cannot write yet: `for k, v in m` (two names), a type word as the variable; `is map` sees a function's own maps over the program's, and a parameter of another type (`found: list`) is no map (probes/sugar/for_loops/map_parameter.warp) |
+| 137 | for_loops | done (card sugar-for-loops): core/sugar/iteration.warp lowers every `for` (F3, F7, hidden glue); a map's keys by `where $m is map` (sugar-places); loop_heads.warp keeps what a rule cannot write yet: `for k, v in m` (two names), a type word as the variable; `is map` sees a function's own maps over the program's, and a parameter of another type (`found: list`) is no map (probes/sugar/for_loops/map_parameter.warp) |
 | 121 | welcome_forms | match-arm spellings onto one: rows of rules, F4 for arms |
 | 121 | foreign_forms | `rewrite public $d... => $d...`, `rewrite new $c => $c`: F1 (statement head); `attr_accessor` F1 (class body) |
-| 116 | min_max | done (card min-max-sugar): lib/sugar/extremes.warp, twelve rules; the pass file is gone. The prelude function stays a later step (lib/extrema.warp, once measured as fast) |
+| 116 | min_max | done (card min-max-sugar): core/sugar/extremes.warp, twelve rules; the pass file is gone. The prelude function stays a later step (lib/extrema.warp, once measured as fast) |
 | 97 | library_calls | `rewrite reverse $x => reverse($x)` per typed prelude word: F2 (typed signature), unbound already handled |
 | 91 | clauses | `fib(0) := 0; fib(1) := 1` → one kernel match: F6 |
 | 88 | comprehensions | `rewrite [$e for $x in $xs] => (r = []; for $x in $xs { r += [$e] }; r)`: F3 |
-| 86 | prefix_comparisons | `sq 2 == 4` done: lib/sugar/comparisons.warp (card sugar-prefix-comparisons); `print #xs`, `f -x` stay a pass, prefix_calls.warp: no `where` condition for "a word taking a value" (untyped parameters, builtins) |
+| 86 | prefix_comparisons | `sq 2 == 4` done: core/sugar/comparisons.warp (card sugar-prefix-comparisons); `print #xs`, `f -x` stay a pass, prefix_calls.warp: no `where` condition for "a word taking a value" (untyped parameters, builtins) |
 | 65 | number_words | `rewrite one => 1` per word, works today (module rules skip bound words); keys/members stay: F1 |
 | 65 | parse_words | `rewrite eval($t) => interpret(parse($t))` works today; folding a constant text is a pass |
 | 64 | multiple_assignments | stays a pass (supervisor, 2026-10-22): as rules it needs zip over two rest holes, an index binding (`x, y = [1, 2]`), two rest holes in one pattern (the matcher has one, rewrites.warp rest_at) and conditions over a rest hole (all names, equal counts), ~60–100 engine lines for a 64-line pass. Built once a second pass needs them (comprehensions' zip, F4 enum values) |
@@ -195,12 +195,12 @@ Sugar passes, with the rule each would become:
 | 44 | interpolation | F8 |
 | 42 | type_tests | `rewrite $x is $t => is_type($x, "$t")`: F2 (t a type word no name binds) |
 | 36 | ranges | range value → loop: F3 |
-| 35 | filled_lists | done: lib/sugar/lists.warp (card sugar-filled-lists) |
+| 35 | filled_lists | done: core/sugar/lists.warp (card sugar-filled-lists) |
 | 32 | broadcasting | `rewrite $xs .* $y => $xs.map(e => e * $y)`: F3 (hygienic e) |
 | 30 | preposition_heads | `play(tone, for duration)` → drop the preposition per parameter: F4 |
 | 24 | grouped_receivers | `rewrite ($p).$a => $p.$a`: F2 (p bound to a value) |
 | 18 | phrase_blocks | not sugar: `{print "big"}` as one statement is the notation's grouping; belongs in the reader |
-| 15 | coalesce | done: lib/sugar/fallbacks.warp (card sugar-coalesce) |
+| 15 | coalesce | done: core/sugar/fallbacks.warp (card sugar-coalesce) |
 | 140 | sugar.warp | `rewrite $xs[$i] => $xs#($i + 1)`: works for plain indexes; negative and slice bounds need F2; typed class fields are kernel (types) |
 
 ## Migration order, by gain
@@ -208,18 +208,18 @@ Sugar passes, with the rule each would become:
 1. **Word aliases into tables, no rewrite needed** (~100 parser lines): elif/elsif/elseif, null/nil/none/…, yes/true,
    func/function, contains/has/includes, `div`/`÷` (math.warp already has `÷`: delete the parser branch), `isn't`,
    `nand`, `not in`. KEYWORD_FORMS keeps only kernel words.
-2. **Rules that work today** into lib/sugar/*.warp (~550 lines of passes and parser branches → ~30 rule lines):
+2. **Rules that work today** into core/sugar/*.warp (~550 lines of passes and parser branches → ~30 rule lines):
    list_methods, of_lookups (keep the type-phrase guard), definitions' `def`/`fun`, number_words, test words, emit
    words, unit phrases, `n times`, parse_words' eval. Each is a cloud-free warp change (decision
    warp-only-acceptance) and its twin pass goes.
    Status (card sugar-migration-2, branch layers): done are list_methods' mutation methods and membership
-   (lib/sugar/methods.warp, applied by the `sugar` pass where list_methods ran, rules chosen by the program's own
-   bindings) and floor division (`/!`, `/!=` table operators, `div` a word alias, lib/sugar/arithmetic.warp). The
+   (core/sugar/methods.warp, applied by the `sugar` pass where list_methods ran, rules chosen by the program's own
+   bindings) and floor division (`/!`, `/!=` table operators, `div` a word alias, core/sugar/arithmetic.warp). The
    rest is not "works today": test words, emit words, unit phrases and `n times` are parser grouping (notation, item
    6); number_words needs F1 (keys and members); parse_words' eval needs scoped shadowing; `def`/`fun` is ~10 of
    definitions' 186 lines; of_lookups and number_words are twinned stages that Rust drives in the
-   WARP_SELF_HOSTED=1 lane, where lib/sugar rules don't run. `n times {…}` (and `once`, `twice`, `thrice`) is
-   the rule of lib/sugar/loops.warp, onto the for loop (interviewer 2026-10-22, decision language-layers); the parser
+   WARP_SELF_HOSTED=1 lane, where core/sugar rules don't run. `n times {…}` (and `once`, `twice`, `thrice`) is
+   the rule of core/sugar/loops.warp, onto the for loop (interviewer 2026-10-22, decision language-layers); the parser
    keeps the grouping. The user's prelude function `infix times(n: number, b: block)` replaces the rule once the pure
    lane has block parameters and shared captures (card times-prelude).
 3. **F3 fresh names + evaluate once** (one engine feature, then ~550 lines): coalesce, `?:`, comprehensions, ranges,
@@ -231,7 +231,7 @@ Sugar passes, with the rule each would become:
    indexing tests (supervisor). Java `int[]` stays notation: a type spelling parse-time typed_parameter reads
    (`int[] xs`, `params int[] xs`), which a sugar rule would reach too late.
 5. **F1 positions** (~250 lines): trailing guards, `if no xs`, foreign modifiers, C-style for heads.
-   Status (warp-layers, 2026-10-22): the C-style head is a lib/sugar/loops.warp rule onto while (the parser only groups
+   Status (warp-layers, 2026-10-22): the C-style head is a core/sugar/loops.warp rule onto while (the parser only groups
    it). Trailing guards and `if no xs` stay: the parser must find the guard word and the condition context anyway
    (grouping), what is left is guarded_statement's four lines onto the kernel if/while and `no` as `not`'s alias in a
    condition, while moving them costs the hybrid lane all their tests.
@@ -241,7 +241,7 @@ Sugar passes, with the rule each would become:
    passes written in warp; they are sugar by meaning, passes by mechanism.
 
 Rule of thumb for new syntax from now on: a table row or a declaration (notation), else a `rewrite` line in
-lib/sugar/ (sugar); a new parser branch or pass only with the missing engine feature named in the commit.
+core/sugar/ (sugar); a new parser branch or pass only with the missing engine feature named in the commit.
 
 Related: notes/self_hosting.md "Parser restructuring" (parser-keyword-table, parser-desugar-pass), notes/passes.md
 (inventory; the keyword-rewrite table was parked for speed, not shape), notes/compiler_temporaries.md (F3's `·` names),

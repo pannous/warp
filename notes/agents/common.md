@@ -28,7 +28,7 @@ After a context swap, this file and your role file win over anything a handover 
   <word>" fix (diagnostic::note_alias; which hint call: notes/fixits.md "Hints, notes and advice"). Ask the
   Interviewer only about differences in meaning.
 - The Rust compiler is frozen legacy (user 2026-10-22: "we don't want to touch the Rust, the old Rust"): new
-  features, generalizations and cleanups go into warp (lib/prelude.warp, lib/compiler/*.warp), never into src/ or
+  features, generalizations and cleanups go into warp (lib/prelude.warp, core/*.warp), never into src/ or
   crates/. Warp does it the pure, clean way with no special cases, even where Rust keeps a name-keyed hack; the Rust
   code is not changed to match, only marked where it differs, with a prominent comment banner
   `// ⚠ WARP DOES THIS DIFFERENTLY: <what> → <lib file>` above the hack (comment-only, so the marks need no cloud
@@ -39,14 +39,14 @@ After a context swap, this file and your role file win over anything a handover 
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
   Soft ban (user 2026-10-23): the core passes compile the compiler, so new work is one of two kinds, neither a pass.
-  Sugar (new spellings of what the kernel already does) goes straight into lib/sugar/*.warp as rules. Compiler
+  Sugar (new spellings of what the kernel already does) goes straight into core/sugar/*.warp as rules. Compiler
   extensions (new capabilities such as tuples, varargs, optional parameters, `?.`, signals, threads, channels) go
   into core/extensions/ as one file each (core/extensions/tuples.warp); only a big topic gets its own subfolder
-  (core/extensions/concurrency/). The compiler itself moves from lib/compiler to core/ (card compiler-to-core, one
-  scripted sweep by Warp Wrapper); until then use lib/compiler/extensions/, which the sweep moves along. Plain
+  (core/extensions/concurrency/). The compiler itself moves from core to core/ (card compiler-to-core, one
+  scripted sweep by Warp Wrapper); until then use core/extensions/, which the sweep moves along. Plain
   library code written in Warp (e.g. the units Quantity class) stays in lib/. Neither sugar nor extensions needs a
-  question. A new pass, a new entry in passes.warp's pass lists or a new lib/compiler/*.warp file needs the user's
-  yes, asked through Supervisor before the branch is written. Bigger changes to existing lib/compiler/*.warp files
+  question. A new pass, a new entry in passes.warp's pass lists or a new core/*.warp file needs the user's
+  yes, asked through Supervisor before the branch is written. Bigger changes to existing core/*.warp files
   (more than ~40 changed lines there, or a new lowering case, special case or refusal path) need Supervisor's OK
   before the branch is written: send the files, functions and a 3-line reason. Supervisor checks that it isn't sugar
   or an extension in disguise and takes the large ones to the user. Small fixes (a bug in an existing case) need no
@@ -54,10 +54,10 @@ After a context swap, this file and your role file win over anything a handover 
 - Layout (user 2026-10-23, card compiler-to-core): core/ holds the compiler, the runtime (runtime/, runtime/extended/),
   the sugar rules (core/sugar) and compiler extensions (core/extensions/<name>.warp). lib/ holds plain Warp modules that
   programs import (math, units, date and time), which the compiler never depends on. Folder names never combine two
-  topics with an underscore; nest folders instead. Until the flip, existing paths are still named lib/compiler/... and
-  lib/sugar/... (core is a symlink to lib/compiler, lib/compiler/sugar one to lib/sugar).
+  topics with an underscore; nest folders instead. Since the flip the files live in core/; until step 3 retires them,
+  lib/compiler -> ../core and lib/sugar -> ../core/sugar remain as compatibility symlinks.
 - New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
-  declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
+  declaration (operator, alias) first, else a `rewrite` line in core/sugar/*.warp; a parser branch or a pass only
   when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
   user's (match included); never plan a kernel form as sugar.
 - Rare edge cases go to Later: a corner real programs rarely hit (exotic literals like ∞/NaN, wording nits on code
@@ -114,7 +114,7 @@ After a context swap, this file and your role file win over anything a handover 
   fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
   adds the shallow subclasses; don't invent parallel ones in your branch.
 - The sugar migration (user 2026-10-22, notes/layers.md) keeps one line of history: warp-layers alone removes sugar
-  from lib/compiler/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
+  from core/parser.warp and moves passes into core/sugar/, one module group per branch, branched from
   origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
   express the same day. Other branches touching parser.warp or a pass on the migration list stay small and land
   express; one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
@@ -180,7 +180,7 @@ After a context swap, this file and your role file win over anything a handover 
   build for their tests"): only main's build runs on the Mac (/Users/me/dev/bin/warp, /Users/me/dev/bin/warp-debug,
   refreshed after each pushed batch). Workers run no cargo build, check or own-warp.sh locally: .warp changes are
   checked with that binary, Rust changes are built and tested by the cloud lane. It reads lib/ from WARP_LIB, else
-  the nearest lib/compiler above the program or cwd, so run it from your worktree (or `WARP_LIB=<worktree>/lib`).
+  the nearest core above the program or cwd, so run it from your worktree (or `WARP_LIB=<worktree>/lib`).
   Standard modules (`use list`) still come from its build (card std-modules).
   One exception (user 2026-10-20, decision speed-local-builds): warp-speed may build its own branches locally (quick
   release, CARGO_BUILD_JOBS=2, one build at a time) to time Rust speed changes before they land; timing runs only,
@@ -218,7 +218,7 @@ After a context swap, this file and your role file win over anything a handover 
   fails no worse than main's (the same error): a red main never blocks the queue (supervisor 2026-10-22). Warp
   branches have priority over Rust-change branches (user 2026-10-21): they land before any Rust batch, and work in
   .warp is preferred whenever a task can be done there.
-  A change to lib/compiler/ (types or annotations included) also checks the self build before Ready:
+  A change to core/ (types or annotations included) also checks the self build before Ready:
   `scripts/self-check.sh <worktree>` (it rebuilds both compilers in a queue slot; a bare `warp rebuild self` skips the
   queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
   replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
@@ -244,7 +244,7 @@ After a context swap, this file and your role file win over anything a handover 
 - Quick check first, before the cloud lane: run the .warp code you wrote or touched through the shared binary from
   your worktree, `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp probes/<x>.warp`, and for compiler work through the
   self-hosted pipeline: `WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 /Users/me/dev/bin/warp probes/<x>.warp` (=front:
-  front end only). The stages load your worktree's lib/compiler/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
+  front end only). The stages load your worktree's core/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
   the stage programs (~35 s with the optimized /Users/me/dev/bin/warp, ~2 min with warp-debug: use warp-debug only for a backtrace; prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
   and wrong values in seconds. `WARP_EMIT_REFUSALS=/dev/stderr` shows whether emitter.warp refused the program
   (`outside the core: …`, then the Rust emitter emitted it); `WARP_HINTS=0` hides hints (the stage programs' own

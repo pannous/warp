@@ -17,8 +17,8 @@ hole_mark = "$"
 global diagnosed = []
 # [level, pattern, message] of every row of the message files, read at the first fact
 global message_rows = ø
-# the folder of the message files: the run's lib/compiler (parser.warp run_library), or the one `messages_from` names
-global message_folder = run_library() + "/compiler"
+# the folder of the message files: the run's core (parser.warp run_library), or the one `messages_from` names
+global message_folder = run_core()
 
 # the message files read from this folder from now on
 def messages_from(folder: text) {
@@ -41,7 +41,7 @@ said_fact(fact: any): list := {
 		bound = {}
 		if matches(row#2, fact, bound) { return [row#1] + row[2..].map(message => filled(message, bound)) }
 	}
-	["error", "no message for the diagnostic ${fact} in lib/compiler/" + message_files.map(file => file#1).join(", "), "", ""]
+	["error", "no message for the diagnostic ${fact} in core/" + message_files.map(file => file#1).join(", "), "", ""]
 }
 
 rows(): list := {

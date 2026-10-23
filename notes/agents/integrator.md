@@ -33,8 +33,8 @@ Read notes/agents/common.md and notes/roles.md.
   self-hosting-minimal). A twin difference goes through with --flaky "<test> (twin difference accepted, owner records
   the drop)" and the owner records the dropped form or loosens the comparison afterwards.
 - Sugar leaving the hybrid lane (decision sugar-hybrid-lane): a branch moving a sugar form from parser.warp into
-  lib/sugar names the form and the WARP_SELF_HOSTED=1 tests it costs; exactly those go through with --flaky "<test>
-  (sugar-hybrid-lane: <form> lives in lib/sugar)", provided `warp pure`/`warp self` stay green for them. Any other
+  core/sugar names the form and the WARP_SELF_HOSTED=1 tests it costs; exactly those go through with --flaky "<test>
+  (sugar-hybrid-lane: <form> lives in core/sugar)", provided `warp pure`/`warp self` stay green for them. Any other
   =1 failure bounces as usual.
 - Rust cleanup phase (notes/rust_cleanup.md, user 2026-10-17): a self-hosting worker's cleanup branch may break up
   to 10% of the tests when they are edge cases. It lists them in notes/known_failures.md (test, card, reason);
@@ -163,9 +163,9 @@ Read notes/agents/common.md and notes/roles.md.
   printed hello), else main's binary (~2.5 min cold, seconds cached). It runs with WARP_COMPILER_WARNINGS=1 and reports
   the warning lines ("PURE CHAIN WARNINGS"), not blocking until card compiling-lib reaches zero. It also runs
   `warp self samples/hello/hello.warp` (the self-compiled compiler.warp, "PURE SELF"), which never holds a batch
-  (user 2026-10-21 21:30): when it is red, bisect by the branches' lib/compiler/ changes (usually one branch touches
+  (user 2026-10-21 21:30): when it is red, bisect by the branches' core/ changes (usually one branch touches
   them), drop the culprit from the batch, bounce it to its owner with the error and merge the rest at once. No culprit
-  within one try: merge anyway and add an urgent card self-hello-red for the author of the newest lib/compiler change.
+  within one try: merge anyway and add an urgent card self-hello-red for the author of the newest core change.
   The `warp self` test lane may pass up to 5 % fewer tests than `warp pure`, as long as the main tests pass (user, 52b6ac43be). Its Rust test
   warp_pure_runs_hello_world is ignored as slow, so this check is the only cover.
 - Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the

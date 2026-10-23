@@ -1,4 +1,4 @@
-//! `warp pure <file>`: lib/compiler/compiler.warp, the warp compiler as one warp program, compiles the program and its
+//! `warp pure <file>`: core/compiler.warp, the warp compiler as one warp program, compiles the program and its
 //! module runs (card warp-pure, src/compiler/standalone.rs)
 const HELLO: &str = "print(\"hello world\")\n";
 /// Time for building compiler-self.wasm: ~60 s on the Mac, more on a cloud VM, past one turn's 60 s default

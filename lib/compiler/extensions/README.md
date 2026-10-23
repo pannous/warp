@@ -1,1 +1,0 @@
-# Compiler extensions: one new capability per file (tuples.warp, varargs.warp, …), a subfolder only for a big topic (concurrency/); this folder moves to core/extensions/ with the compiler (card compiler-to-core).

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Split lib/compiler/emitter.warp into used files by moving whole top-level items (card emitter-split).
+"""Split core/emitter.warp into used files by moving whole top-level items (card emitter-split).
 
 An item is a top-level definition (function, class, constant) with the comment lines right above it. The plan
 (PLAN below, or a file of that form) names each new file, its header comment and the items it takes; emitter.warp keeps the
@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parent.parent
-COMPILER = REPOSITORY / "lib" / "compiler"
+COMPILER = REPOSITORY / "core"
 EMITTER = COMPILER / "emitter.warp"
-# each `file:` of lib/compiler gets the emitter.warp items named below it, in this order (`first..last`: the items
+# each `file:` of core gets the emitter.warp items named below it, in this order (`first..last`: the items
 # between, as emitter.warp has them); a `#` line is the file's header
 PLAN = """
 file: emitter/encoding.warp

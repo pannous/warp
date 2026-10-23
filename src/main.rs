@@ -65,10 +65,10 @@ const APP_CHECK: &str = "--check";
 const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
-/// `warp lower --json <code>`: the lowered program as the JSON node view lib/compiler reads with `node_of(json(…))`,
+/// `warp lower --json <code>`: the lowered program as the JSON node view core reads with `node_of(json(…))`,
 /// lossless where the serialized text is not (probes/self_hosting/emitter/emit_lowered.sh)
 const LOWER_JSON_COMMAND: &str = "lower --json";
-/// `warp pure <file> [arguments…]`: the program compiled by lib/compiler/compiler.warp, the warp compiler as one warp
+/// `warp pure <file> [arguments…]`: the program compiled by core/compiler.warp, the warp compiler as one warp
 /// program, compiled by Rust, and run (src/compiler/standalone.rs)
 const PURE_COMMAND: &str = "pure";
 /// `warp self <file> [arguments…]`: as `warp pure`, with compiler.warp compiled by itself (the pure lane)
@@ -589,7 +589,7 @@ fn usage() {
 	// println!("Usage: warp [options] [file]");
 	println!("  warp <file.warp>     Run a warp file (env WARP_EXECUTABLE=1: also leave its standalone executable <file> next to it)");
 	println!("  warp run <file.warp> Run a warp file, never an executable");
-	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (lib/compiler/compiler.warp)");
+	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (core/compiler.warp)");
 	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by Rust");
 	println!("  warp rebuild [pure|self] Build compiler.wasm / compiler-self.wasm, their compilers, anew from lib/");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");

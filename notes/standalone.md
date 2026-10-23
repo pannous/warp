@@ -25,7 +25,7 @@ wasmtime run -W gc=y,function-references=y,exceptions=y hello.wasm
 - The GC, function-references and exceptions proposals are needed for both modules.
 - The modules import only the WASI calls they reach (args, environ, path_open, fd_read, fd_write, fd_close …);
   `print`, files, `use os` (args, env) all run over WASI. Float `^` is musl's pow ported to warp
-  (lib/compiler/runtime/pow.warp), so no libm import either.
+  (core/runtime/pow.warp), so no libm import either.
 - Under plain WASI there is no network (`read` of a URL fails loudly) and no module cache (`kept` is always ø).
   A WASI file cache would make it warm (card wasi-module, Later).
 

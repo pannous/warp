@@ -80,7 +80,7 @@ yes_no_types = ["bool"]
 value_word = "value"
 # `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
 one_word = "one"
-# the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
+# the sugar of the language (notes/layers.md), core/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
 # Four steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
@@ -169,7 +169,7 @@ unbound_rules(module_rules: list, program: Node): list := {
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (a program's own `push`
 # keeps its own), before the definitions it reaches from the prelude and the modules join it
-sugar_rules(program: Node, modules: list): list := unbound_rules(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+sugar_rules(program: Node, modules: list): list := unbound_rules(modules.flat_map(module => module_rules_of(file_text(core_module_path(module)) ?? "", "")), program)
 
 # the program as it is, the enums it declares kept for the sugar rules: a pass right before plain_enums.warp lowers
 # their declarations, after node_cases.warp declared node.warp's Op, Bracket and Separator for a program naming them
