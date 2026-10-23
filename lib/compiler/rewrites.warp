@@ -44,6 +44,11 @@ rule_word_marks = "_$"
 hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
 code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing"]
+# `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
+# with (card engine-rule-conditions)
+context_words = ["method", "shadowed"]
+# `where $f is in [add, push]`: the hole bound one of the words listed
+listed_word = "in"
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
 cases_words = ["cases", "of"]
 # `where $n < 0`: the comparisons of a number literal
@@ -110,6 +115,12 @@ global rule_case_holders = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
+# where the node the rules try stands, for `where not method` and `where not shadowed`: the method part of the `.`
+# being walked (the right of `x.f(…)`), else ø; the names the definitions around it bind
+global rule_method_part = ø
+global rule_binding = []
+# the code the rule being tried matched, for the context conditions; ø for a run of statements
+global rule_matched = ø
 
 # the program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out;
 # `source` is the text the program was parsed from, which tells a template's `·` from `*`
@@ -137,7 +148,7 @@ rewritten_program(program: any, source: text): any := {
 	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
-	program = map_scoped_bottom_up(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
+	program = placed_map_scoped(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
 	uses = []
 	for module in fired_modules {
 		statement = plain_node(parsed("use " + module))
@@ -170,7 +181,7 @@ sugared(program: Node, rules: list): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_case_holders = case_holders_of(program)
-	map_scoped_bottom_up(program, n => sugared_node(n, rules), map_names_of(program))
+	placed_map_scoped(program, n => sugared_node(n, rules), map_names_of(program))
 }
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
@@ -424,6 +435,7 @@ conjuncts(condition: any): list := match condition {
 is_condition(condition: any): bool := {
 	if is_takes(condition) { return yes }
 	if is_negation(condition) { return is_condition(value_of(condition)) and not is_key(value_of(condition), Op.Assign) }
+	if is_context_word(condition) or membership(condition) != ø { return yes }
 	if not (condition is key and rule_hole(key_of(condition)) != ø) { return no }
 	wanted = value_of(condition)
 	if op_of(condition) == Op.Assign { return yes }
@@ -511,6 +523,9 @@ condition_holds(condition: any, bound: any): bool := {
 		if name_of(condition#3) == one_word { bound[hole] = placed(symbol(unaliased(name_of(bound[hole]))), bound[hole]) }
 		return yes
 	}
+	if is_context_word(condition) { return context_holds(rule_matched, name_of(condition)) }
+	listing = membership(condition)
+	if listing != ø { return bound.has(listing#1) and word_listed(bound[listing#1], listing#2) }
 	hole = rule_hole(key_of(condition))
 	if not bound.has(hole) { return no }
 	code = bound[hole]
@@ -530,6 +545,83 @@ has_property(code: any, property: text): bool := {
 	if property == "value" { return binds_value(rule_scope, word) }
 	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) }
 	not rule_scope.has(word)
+}
+
+# `method`, `shadowed`: a condition about where the matched code stands, not about a hole
+is_context_word(condition: any): bool := condition is symbol and name_of(condition) in context_words
+
+# `$f in [add, push]` (the parser reads `$f is in […]` as it): [the hole, the words listed (names, or texts naming
+# them)], else ø
+membership(condition: any): any := {
+	if not (is_group(condition) and bracket_of(condition) == "" and #condition == 3 and condition#2 == symbol(listed_word)) { return ø }
+	hole = rule_hole(condition#1)
+	words = listed_words(condition#3)
+	if hole == ø or words == ø then ø else [hole, words]
+}
+
+# `[add, "push"]`: the words listed, names or texts naming them, else ø
+listed_words(listing: any): any := {
+	if not (is_group(listing) and bracket_of(listing) == "[") { return ø }
+	words = items_of(listing)
+	if words.all(word => word is symbol or word is text) then words.map(word => if word is symbol then name_of(word) else word) else ø
+}
+
+# whether the code is a word of the list, as a name or a text
+word_listed(code: any, words: list): bool := (code is symbol and name_of(code) in words) or (code is text and code in words)
+
+# the word the code starts with: itself, a call's or a phrase's first word, else ø
+starting_word(code: any): any := {
+	if code is symbol { return code }
+	if is_group(code) and #code > 0 and (bracket_of(code) == "(" or bracket_of(code) == "") and code#1 is symbol then code#1 else ø
+}
+
+# `method`: the code is the method part of the `.` being walked, `f(…)` of `x.f(…)`, `f` of `x.f`; `shadowed`: a
+# definition around it binds the word it starts with, as a parameter or in its body (`f(t) := { parse = x => 7;
+# parse(t) }`, notes/dispatch.md: shadowing is scoped)
+context_holds(code: any, context: text): bool := {
+	if code == ø { return no }
+	if context == "method" { return rule_method_part != ø and code == rule_method_part }
+	word = starting_word(code)
+	word is symbol and name_of(word) in rule_binding
+}
+
+# bottom_up for the rules, keeping where the node they try stands (rule_method_part, rule_binding): the method part
+# of a `.` is tried as such, a definition's parts inside the names it binds
+bottom_up_placed(n: any, f: function): any := {
+	if is_key(n, Op.Dot) {
+		left = bottom_up_placed(key_of(n), f)
+		part = children(value_of(n), x => bottom_up_placed(x, f))
+		outer_part = rule_method_part
+		rule_method_part = part
+		right = f(part)
+		rule_method_part = outer_part
+		return f(Key(left, Op.Dot, right))
+	}
+	if not is_key(n, Op.Define) { return f(children(n, x => bottom_up_placed(x, f))) }
+	outer = rule_binding
+	rule_binding = rule_binding + bound_by_definition(n)
+	walked = children(n, x => bottom_up_placed(x, f))
+	rule_binding = outer
+	f(walked)
+}
+
+# the names a definition binds inside it: its parameters, the names its body's statements declare
+bound_by_definition(definition: any): list := {
+	names = []
+	head = key_of(definition)
+	if is_group(head) and #head > 1 {
+		for parameter in items_of(head)[1 ..] {
+			name = leftmost_name(parameter)
+			if name != ø { names += [name] }
+		}
+	}
+	body = value_of(definition)
+	statements = if is_group(body) and separator_of(body) in statement_separators then items_of(body) else [body]
+	for statement in statements {
+		name = declared_name(statement)
+		if name != ø { names += [name] }
+	}
+	names
 }
 
 # `3`, `-1`, `(-1)`: a number written as such
@@ -651,6 +743,36 @@ map_names_in(nodes: list, outer: any): any := {
 map_scoped_bottom_up(n: Node, f: function, maps: any): Node := {
 	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
 	walked = children(n, x => map_scoped_bottom_up(x, f, inner))
+	rule_maps = maps
+	f(walked)
+}
+
+# bottom_up_placed and map_scoped_bottom_up in one walk, for the rules: the method part of a `.` tried as such, a
+# definition's parts inside the names it binds (rule_method_part, rule_binding), and rule_maps holding the names that
+# hold a map where f meets each node, a function's own inside it (merge of engine-rule-conditions with main's
+# map scoping)
+placed_map_scoped(n: any, f: function, maps: any): any := {
+	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
+	if is_key(n, Op.Dot) {
+		left = placed_map_scoped(key_of(n), f, inner)
+		part = children(value_of(n), x => placed_map_scoped(x, f, inner))
+		outer_part = rule_method_part
+		rule_method_part = part
+		rule_maps = maps
+		right = f(part)
+		rule_method_part = outer_part
+		rule_maps = maps
+		return f(Key(left, Op.Dot, right))
+	}
+	if not is_key(n, Op.Define) {
+		walked = children(n, x => placed_map_scoped(x, f, inner))
+		rule_maps = maps
+		return f(walked)
+	}
+	outer = rule_binding
+	rule_binding = rule_binding + bound_by_definition(n)
+	walked = children(n, x => placed_map_scoped(x, f, inner))
+	rule_binding = outer
 	rule_maps = maps
 	f(walked)
 }
@@ -880,11 +1002,11 @@ run_at(items: list, rules: list, origins: list): any := {
 # the rule's template for the node; a block of a statement the pattern matches keeps its block
 rule_applied(rule: Rule, origin: any, n: any): any := {
 	bound = {}
-	if rule_matches(rule.pattern, n, bound) and conditions_hold(rule, origin, bound) { return fired(rule, rule_spliced(rule.template, bound, n)) }
+	if rule_matches(rule.pattern, n, bound) and conditions_hold_at(rule, origin, bound, n) { return fired(rule, rule_spliced(rule.template, bound, n)) }
 	if not (is_group(rule.pattern) and bracket_of(rule.pattern) == "" and is_curly_group(n)) { return ø }
 	bound = {}
 	statement = separated(bracketed(items_of(n), ""), separator_of(n))
-	if not (rule_matches(rule.pattern, statement, bound) and conditions_hold(rule, origin, bound)) { return ø }
+	if not (rule_matches(rule.pattern, statement, bound) and conditions_hold_at(rule, origin, bound, n)) { return ø }
 	fired(rule, List(statements_in(rule_spliced(rule.template, bound, n)), Bracket.Curly, Separator.Semicolon))
 }
 
@@ -896,6 +1018,14 @@ fired(rule: Rule, result: any): any := {
 
 # the rule's `where` conditions hold of what its holes bound
 conditions_hold(rule: Rule, origin: any, bound: any): bool := origin_holds(rule, origin, bound) and rule.conditions.all(condition => condition_holds(condition, bound))
+
+# the conditions hold of the code n the rule matched, which the context conditions ask where it stands
+conditions_hold_at(rule: Rule, origin: any, bound: any, n: any): bool := {
+	rule_matched = n
+	holding = conditions_hold(rule, origin, bound)
+	rule_matched = ø
+	holding
+}
 
 # `where $c = shape`: the hole binds a name of the variables assigned that shape
 origin_holds(rule: Rule, origin: any, bound: any): bool := {
