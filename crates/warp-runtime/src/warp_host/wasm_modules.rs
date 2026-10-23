@@ -163,7 +163,7 @@ fn load_bytes(
 	} else {
 		let engine = store.data().engine.clone();
 		let module = cache::module(&engine, bytes)?;
-		Item::Module(instantiate(store, &module, bytes, folder)?)
+		Item::Module(instantiate(store, &module, &ffi::CImports::of(bytes)?, folder)?)
 	};
 	let entries = &mut store.data_mut().wasm.entries;
 	entries.push(Entry { path, item });
@@ -210,12 +210,12 @@ fn import_file(name: &str, folder: Option<&Path>) -> Option<PathBuf> {
 pub fn instantiate(
 	store: &mut StoreContextMut<'_, Host>,
 	module: &Module,
-	bytes: &[u8],
+	c: &ffi::CImports,
 	folder: Option<&Path>,
 ) -> Result<Instance> {
 	let mut linker = crate::program_linker(module.engine())?;
 	link_module_imports(&mut linker, store, module, folder)?;
-	ffi::link_c_imports(&mut linker, store, module, bytes)?;
+	ffi::link_c_imports(&mut linker, store, module, c)?;
 	linker.define_unknown_imports_as_traps(module)?;
 	linker.instantiate(store, module)
 }

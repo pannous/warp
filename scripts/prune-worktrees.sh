@@ -10,7 +10,8 @@
 #   3. loose files in the worktrees folder (logs, patches, dumps) older than LEFTOVER_DAYS: moved to data/
 #   4. unmerged branches nobody moves (a branch only merges once its card is Ready): remote ones `todo ready --stray`
 #      lists and local ones never pushed, with a tip older than STALE_HOURS, are typed to the supervisor (tmux
-#      SUPERVISOR_TMUX) to ready, merge or discard. The cloud lanes' result branches (RESULT_BRANCHES) are skipped
+#      SUPERVISOR_TMUX) to ready, merge or discard. The cloud lanes' result branches (RESULT_BRANCHES) are skipped there
+#   5. the cloud lane's cloud-jobs/ and cloud-results/ branches older than LEFTOVER_DAYS: deleted
 # Detached worktrees (integrate, main-binary …) are never removed; DONOR, which cowtree clones new worktrees from on
 # the Worktrees volume (notes/churn_volume.md), is moved to origin/main when clean. Skips for untracked files are listed.
 #   prune-worktrees.sh            prune, print what it did
@@ -25,6 +26,7 @@ TWEAK_FILES=(Cargo.toml Cargo.lock crates/warp-runtime/Cargo.toml)
 IDLE_HOURS=${IDLE_HOURS:-6}
 LEFTOVER_DAYS=2
 KEPT_BRANCHES=(main HEAD)
+KEPT_WORKTREES=(/Volumes/Worktrees/me)  # the user's own worktree: never removed, its branch never deleted (user 2026-10-23)
 STALE_HOURS=${STALE_HOURS:-12}
 SUPERVISOR_TMUX=warp-supervisor
 TODO=/Users/me/dev/bin/todo  # cron's PATH lacks ~/dev/bin
@@ -57,7 +59,7 @@ $git fetch --prune --quiet origin
 checked_out=()
 $git worktree list --porcelain | awk '/^worktree /{path=$2} /^branch /{sub("refs/heads/","",$2); print path, $2}' |
 while read -r worktree branch; do
-  in_worktree_roots $worktree || { checked_out+=($branch); continue; }
+  in_worktree_roots $worktree && (( ! ${KEPT_WORKTREES[(Ie)$worktree]} )) || { checked_out+=($branch); continue; }
   worktree_status=$(git -C $worktree status --porcelain 2>/dev/null)
   changed=$(print -r -- $worktree_status | grep -v '^??' | cut -c4- | grep -vxF -f <(print -l $TWEAK_FILES))
   if ! merged $(git -C $worktree rev-parse HEAD) || [[ -n $changed ]] || recently_written $worktree; then
@@ -77,6 +79,11 @@ done
 for remote in $($git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin); do
   (( ${KEPT_BRANCHES[(Ie)$remote]} || ${checked_out[(Ie)$remote]} )) && continue
   merged origin/$remote && old_tip origin/$remote && act $git push --quiet origin --delete $remote
+done
+
+# the cloud lane's job and result branches (never merged: collected into data/cloud/ when the run ends), after LEFTOVER_DAYS
+for remote in $($git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin/cloud-jobs refs/remotes/origin/cloud-results); do
+  older_than $(( LEFTOVER_DAYS * 24 )) origin/$remote && act $git push --quiet origin --delete $remote
 done
 
 # the donor follows main, so new clones share most files with it

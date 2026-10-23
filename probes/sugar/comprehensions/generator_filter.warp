@@ -1,0 +1,2 @@
+xs = [1, 2, 3, 4]
+print sum(x for x in xs if x > 2)
