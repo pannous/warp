@@ -19,6 +19,7 @@ source_checks(program: any, prelude: text): any := {
 	aliases = module_aliases(prelude)
 	for n in nodes_in(program) {
 		located_error(n)
+		negative_index(n)
 		spelled_number_join(n)
 		bare_sleep(n)
 		text_index_of(n, program)
@@ -32,7 +33,25 @@ source_checks(program: any, prelude: text): any := {
 	program
 }
 
-# an error the parser leaves in the tree (a negative index), the program's value
+# `xs[-1]`: warp never wraps around (wiki/Footguns.md), the error names the last element
+negative_index(n: any): any := {
+	if not (is_group(n) and bracket_of(n) == "[" and separator_of(n) == "" and #n == 2) { return ø }
+	for bound in subscript_bounds(n#2) {
+		if counts_from_the_end(bound) { diagnose(call_of("negative_index", [negated_form(bound), "${n#1}"])) }
+	}
+	ø
+}
+
+# the bounds of a slice index `a:b`, `a..b`, `a...b`, else the index itself
+subscript_bounds(index: any): list := if is_key(index, Op.Colon) or is_key(index, Op.Range) or is_key(index, Op.To) then [key_of(index), value_of(index)] else [index]
+
+# a negative number or a negated expression: `-1`, `-k`
+counts_from_the_end(bound: any): bool := if bound is number then bound < 0 else bound is key and op_of(bound) == "-" and key_of(bound) == ø
+
+# `-1`, `-k` as written
+negated_form(bound: any): text := if bound is number then "${bound}" else "-${value_of(bound)}"
+
+# an error the parser leaves in the tree, the program's value
 located_error(n: any): any := {
 	if n is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2])) }
 	ø

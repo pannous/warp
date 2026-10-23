@@ -1,0 +1,8 @@
+# Subscripts (notes/layers.md, sugar; Rust twin: warp_parser subscript): `xs[i]` is the 1-based `xs#(i+1)`; a slice
+# `xs[a:b]` or `xs[a..b]` the call `slice(xs, a, b)`, its start from 0 and its end exclusive, ø where omitted
+# (`xs[1:]`), `xs[a...b]` ending after b. A negative bound is source_checks.warp's error. These run first of all the
+# sugar (passes.warp written_sugar): every pass reads `xs#i`.
+rewrite $xs[$a:$b] => slice($xs, $a, $b)
+rewrite $xs[$a..$b] => slice($xs, $a, $b)
+rewrite $xs[$a...$b] => slice($xs, $a, $b + 1)
+rewrite $xs[$i] => $xs#($i + 1)

@@ -854,7 +854,8 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			if index == ø { index = expression(p, 0) }
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
-			left = subscript(left, index)
+			// `xs[i]`, glued as a call is: the subscript [xs, i], which lib/sugar/subscripts.warp lowers
+			left = listed("[", "", [left, index])
 		} else if left != ø and keyword_at(p, "times") and times_binds(p, min_power) {
 			p.at = p.at + 5
 			skip_spaces(p)

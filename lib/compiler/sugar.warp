@@ -1,6 +1,5 @@
-// The sugar of parser.warp (card parser-desugar-pass, notes/self_hosting.md "Parser restructuring"): the written form
-// `xs[i]` becomes the tree the passes read as the parser builds it (subscript),
-// a class body's fields get their types (card parser-typed-fields). The count words `twice {…}` are library words, no
+// The sugar of parser.warp (card parser-desugar-pass, notes/self_hosting.md "Parser restructuring"): a class body's
+// fields get their types (card parser-typed-fields); `xs[i]` is lib/sugar/subscripts.warp's. The count words `twice {…}` are library words, no
 // sugar (user 2026-10-20, card phrases-out-of-core).
 use "shapes.warp"
 
@@ -21,44 +20,6 @@ parameter_names(target: Node): list := {
 	names
 }
 
-
-// `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
-// Rust twin: warp_parser subscript
-// A negative index is an error that names the way to the last element: warp never wraps around (Footguns.md)
-subscript(target: Node, index: Node): Node := {
-	bounds = slice_bounds(index)
-	for bound in subscript_positions(index) {
-		if counts_from_the_end(bound) { return error_node("index out of range: negative index " + negated_form(bound) + " does not wrap around, the last element is last(${target})") }
-	}
-	if bounds != ø { return listed("(", "", [symbol("slice"), target] + bounds) }
-	Key(target, Op.Hash, one_based(index))
-}
-
-// The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
-// Rust twin: subscripts.rs slice_bounds
-slice_bounds(written: Node): any := match written {
-	// an opaque view (a template `"k\(i)"`) or attribute layer is a key too, but no slice
-	Key(start, Op.Colon, end): { if is_pair_key(written) then [start, end] else ø }
-	Key(start, Op.Range, end): [start, end]
-	Key(start, Op.To, last): [start, if last === ø then ø else Key(last, Op.Add, 1)]
-	_: ø
-}
-
-// The bounds of a slice index, else the index itself
-subscript_positions(index: any): list := slice_bounds(index) ?? [index]
-
-// A negative number or a negated expression: `-1`, `-k`
-// Rust twin: subscripts.rs counts_from_the_end
-counts_from_the_end(bound: any): bool := if bound is number then bound < 0 else type(bound) is key and op_of(bound) == "-" and key_of(bound) == ø
-
-// `-1`, `-k` as written
-negated_form(bound: any): text := if bound is number then "${bound}" else "-${value_of(bound)}"
-
-// `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
-// Rust twin: warp_parser subscript
-// A number index keeps the number written in an attribute layer, as Rust's parser keeps WrittenIndex on `d#2`: a map
-// keyed by numbers reads it (number_keys.rs); plain_node drops the layer, number_keys.warp reads `d#2` itself
-one_based(index: Node): Node := if index is number then attributed(written_index_mark, index, index + 1) else Key(index, Op.Add, 1)
 
 // The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
 // Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS

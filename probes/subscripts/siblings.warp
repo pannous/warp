@@ -1,0 +1,10 @@
+// expected: [10 99 30] 6 4 1 (an assigned element, nested subscripts, a subscript of a call, try on an index out of range)
+xs = [10, 20, 30]
+xs[1] = 99
+print xs
+m = [[1, 2], [3, 6]]
+print m[1][1]
+f() := [4, 5]
+print f()[0]
+r = try xs[9]
+print(if r failed then 1 else 2)

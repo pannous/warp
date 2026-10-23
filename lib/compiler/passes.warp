@@ -42,7 +42,7 @@ passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_w
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [bare_returns, first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, sugar, lambdas, for_loops, late_sugar, list_methods, number_keys]
+pure_passes = [written_sugar, parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [bare_returns, first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, sugar, lambdas, for_loops, late_sugar, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
@@ -55,6 +55,7 @@ lowered_node(n: any): any := {
 # prelude (prelude_words.warp)
 lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), source, folder, prelude))
 # the sugar rules the program at hand keeps (with_used), of each sugar step
+global kept_written_sugar = []
 global kept_first_sugar = []
 global kept_sugar = []
 # the late sugar rules it keeps (rewrites.warp late_sugar_module_names)
@@ -66,6 +67,7 @@ global kept_late_sugar = []
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	own = interpolation(with_uses(program, folder))
+	kept_written_sugar = sugar_rules(own, written_sugar_module_names)
 	kept_first_sugar = sugar_rules(own, first_sugar_module_names)
 	kept_sugar = sugar_rules(own, sugar_module_names)
 	kept_late_sugar = sugar_rules(own, late_sugar_module_names)
@@ -76,6 +78,9 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 # that would read its forms as something else (rewrites.warp first_sugar_module_names), the others where the passes
 # before them have made their forms (definitions' `?? []` of a list result) and read the written ones (data_items
 # `xs.add(x)`, of_lookups `keys in m`)
+# the written sugar before every pass, the forms all of them read (`xs[i]` as `xs#(i+1)`, rewrites.warp
+# written_sugar_module_names)
+written_sugar(program: Node): Node := sugared(program, kept_written_sugar)
 first_sugar(program: Node): Node := sugared(program, kept_first_sugar)
 sugar(program: Node): Node := sugared(program, kept_sugar)
 # the late sugar rules, after for_loops took the loops over a range

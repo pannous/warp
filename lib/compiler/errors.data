@@ -11,3 +11,6 @@ no_single_variant($written, $variants)	"`{written}` fits no single variant of {v
 tied_variants($written, $variants)	"`{written}` fits no single variant of {variants}: give the arguments a type, e.g. `x as float`"	"x as float"
 # decision index-units: a count of bytes given to one of characters, or the other way (index_positions.warp)
 mixed_count_units($given, $declared)	"{a given} given to {a declared}: bytes and characters count differently; find counts characters, byte_index_of bytes"
+
+# a negative index (source_checks.warp negative_index): warp never wraps around
+negative_index($bound, $target)	"index out of range: negative index {bound} does not wrap around, the last element is last({target})"

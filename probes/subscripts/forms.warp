@@ -1,0 +1,12 @@
+// expected: 20 [20 30] [10 20] [20 30] [30] [10 20 30] 2 b (`xs[i]` from 0, slices, a map's number key)
+xs = [10, 20, 30]
+print xs[1]
+print xs[1:3]
+print xs[0..2]
+print xs[1...2]
+print xs[2:]
+print xs[:3]
+i = 1
+print xs[i] / 10
+d = {1: "b"}
+print d[1]

@@ -1,0 +1,3 @@
+// expected: the error "index out of range: negative index -1 does not wrap around, the last element is last(xs)"
+xs = [1, 2]
+print xs[-1]
