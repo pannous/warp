@@ -197,21 +197,21 @@ sugared_node(n: any, rules: list): any := {
 }
 
 # the statements with each run a sugar rule of several statements `($a; $b)` matches rewritten, as statement_runs
-# does for the program's own rules, a run made shorter tried again where it stands (F6, F12)
+# does for the program's own rules: right to left, a run made shorter tried again where it stands (F6, F12, F13)
 sugar_runs(statements: list, rules: list): list := {
 	run_rules = rules.filter(rule => rule.place == "" and is_statements_pattern(rule.pattern))
 	if #run_rules == 0 { return statements }
 	no_origins = run_rules.map(rule => {})
-	at = 0
-	while at < #statements {
+	at = #statements - 1
+	while at >= 0 {
 		found = statement_run_at(statements[at ..], run_rules, no_origins)
-		if found == ø {
-			at += 1
-		} else {
+		shorter = no
+		if found != ø {
 			made = spliced_statements([bottom_up(as_value(found#2), part => sugar_rewritten(part, rules))])
 			statements = statements[0 ..< at] + made + statements[at + found#1 ..]
-			if #made >= found#1 { at += #made }
+			shorter = #made < found#1
 		}
+		if not shorter { at -= 1 }
 	}
 	statements
 }
@@ -830,21 +830,23 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 	n
 }
 
-# the statements with each run a rule of several statements `($a; $b)` matches rewritten, left to right (F6, F12)
+# the statements with each run a rule of several statements `($a; $b)` matches rewritten (F6), right to left (F13): a
+# run is rewritten after the runs that follow it, so a rule for the first two clauses of `fib(0) := 0; fib(1) := 1;
+# fib(n) := …` sees the last two already joined, what follows them
 statement_runs(statements: list, rules: list, origins: list): list := {
-	at = 0
-	while at < #statements {
+	at = #statements - 1
+	while at >= 0 {
 		found = statement_run_at(statements[at ..], rules, origins)
-		if found == ø {
-			at += 1
-		} else {
+		shorter = no
+		if found != ø {
 			made = spliced_statements([rewritten_again(found#2, rules, origins)])
 			statements = statements[0 ..< at] + made + statements[at + found#1 ..]
 			# a run made shorter is tried again where it stands, with the statements after it (F12): a pairwise rule
 			# `(add_up($a); add_up($b)) => add_up($a + $b)` folds a whole run; a run as long or longer moves on, so the
 			# rules can't loop here
-			if #made >= found#1 { at += #made }
+			shorter = #made < found#1
 		}
+		if not shorter { at -= 1 }
 	}
 	statements
 }

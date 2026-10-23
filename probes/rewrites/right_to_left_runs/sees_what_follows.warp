@@ -1,0 +1,9 @@
+// expected: 6 (F13: the last pair joins first, so the rule for each pair before it sees the joined rest; left to right: 1 2 3)
+rewrite (item($a); done) => last_item($a)
+rewrite (item($a); last_item($b)) => last_item($a + $b)
+item(x) := print x
+last_item(x) := print x
+item(1)
+item(2)
+item(3)
+done
