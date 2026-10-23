@@ -36,14 +36,14 @@ fn eval_source(code: &str) -> Node {
 		Some(Err(refusal)) => return refusal,
 		None => {}
 	}
-	match lawful_program(code) {
+	crate::compiler::self_hosted::after_pure(|| match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);
 			let result = crate::graphics::shader_errors::relocated(eval_parsed(program, code), code);
 			explain_runtime_error(result, exclusive_range)
 		}
 		Err(violation) => violation,
-	}
+	})
 }
 
 /// Parse the source and check its laws; `Err` is the violation.
