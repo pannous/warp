@@ -3,7 +3,7 @@ use "intrinsics.warp"
 use "../kinds.warp"
 use "arithmetic.warp"
 use "conversions.warp"
-use "exact.warp"
+use "bridge.warp"
 use "library_words.warp"
 use "show.warp"
 use "text.warp"
@@ -13,13 +13,15 @@ use "types.warp"
 node_order(a: Node, b: Node): int := {
 	if textual_node(a) and textual_node(b) { return text_order(node_text(a), node_text(b)) }
 	if not numeric_node(a) or not numeric_node(b) { fail() }
-	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return exact_order(a, b) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_ratio(a) or is_ratio(b)) { return extended_order(a, b) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return int_order_of(unboxed_int(a), unboxed_int(b)) }
 	float_order(float_of_node(a), float_of_node(b))
 }
 # 1 for a boxed int, exact rational or float, else 0
 numeric_node(n: Node): bool := kind_code(n) == Kind.Int or kind_code(n) == Kind.Float
 # -1, 0 or 1 as x is below, equal to or above y; NaN equals everything, as f64.gt - f64.lt gives
 float_order(x: float, y: float): int := if x < y then -1 else if x > y then 1 else 0
+int_order_of(x: int, y: int): int := if x < y then -1 else if x > y then 1 else 0
 # `sort xs`, `sorted "hello"`: a new list of xs's items (a new text of its characters) in ascending order
 sorted_node(xs: Node): Node := {
 	if is_null(xs) { return xs }

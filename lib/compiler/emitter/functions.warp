@@ -276,7 +276,7 @@ body_code(f: Function) := {
 	scope = new_body(f)
 	value = expression_code(scope, statements_block(f.body))
 	value = [value#1, position_code(scope, f.body) + value#2]
-	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
+	f.code = if f.gives_nothing then value#2 + [ref_null, gc_type(gc.node)] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.signature.parameters)..]
 	f.local_names = scope.order
 }

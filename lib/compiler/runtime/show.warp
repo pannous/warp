@@ -2,11 +2,10 @@
 use "intrinsics.warp"
 use "../kinds.warp"
 use "conversions.warp"
-use "exact.warp"
+use "bridge.warp"
 use "floats.warp"
 use "nodes.warp"
 use "text.warp"
-use "times.warp"
 use "types.warp"
 use "../byte_codes.warp"
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
@@ -22,12 +21,15 @@ node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_t
 	False: "no"
 	_: collection_text(n)
 }
-number_text(n: Node): text := if kind_code(n) == Kind.Int then exact_text(n) else float_text(unboxed_float(n))
+number_text(n: Node): text := {
+	if kind_code(n) != Kind.Int { return float_text(unboxed_float(n)) }
+	if is_ratio(n) then extended_text(n) else int_text(unboxed_int(n))
+}
 # a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
 collection_text(n: Node): text := {
 	if kind_code(n) == Kind.List { return list_shown(n) }
 	if node_is_error(n) { return unboxed_text(n) }
-	if kind_code(n) == Kind.Time { return time_text(n) }
+	if kind_code(n) == Kind.Time { return extended_text(n) }
 	# a closure: its lambda as written (emitter.warp closure_text_code)
 	if kind_code(n) == Kind.Function { return closure_text(n) }
 	# a type declaration as written, `type P {x:type int ø}` as Rust's serialization.rs shows it

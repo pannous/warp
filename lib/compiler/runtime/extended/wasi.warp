@@ -3,10 +3,10 @@
 ## Files are found through the preopened folders: an absolute path in the one named by its longest prefix ("/" for
 ## `wasmtime --dir /`), a relative one in ".". The calls pass linear memory addresses: the scratch area of the output
 ## bytes (output_address() on), laid out by the offsets below
-use "intrinsics.warp"
-use "builders.warp"
-use "library_words.warp"
-use "text_words.warp"
+use "../intrinsics.warp"
+use "../builders.warp"
+use "../library_words.warp"
+use "../text_words.warp"
 use "exact.warp"
 
 # WASI's words, imported from wasi_snapshot_preview1 (host_words.warp names the module); each gives its error code

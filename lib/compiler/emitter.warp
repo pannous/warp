@@ -86,11 +86,14 @@ mutable = 1
 # value ref null $Node) a boxed value (CLAUDE.md "Serialization"), its number in an $i64box or $f64box; an exact
 # rational an Int $Node holding a $Ratio(numerator, denominator) of two $i64box (src/run/wasm_reader.rs read_payload);
 # a positioned node a $MetaNode, the final subtype (79, one supertype) of the open $Node (80, none) adding its line,
-# column and comment (src/wasm_emitter/type_manager.rs emit_meta_node_type)
-gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5, ratio: 6, meta_node: 7}
-node_fields = [126, 0, 110, 0, 99, 3, 0]
-gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
-	[79, 1, 3, 95, 6] + node_fields + [126, 0, 126, 0, 99, 3, 0]]
+# column and comment (src/wasm_emitter/type_manager.rs emit_meta_node_type).
+# A module declares a type only once its code uses it, as it compiles a runtime word on its first call (decision
+# runtime-split): gc names each type by its name, and gc_type gives the index the module takes it under. A type
+# another type refers to is written as that type's name in gc_types (gc_bytes), and comes first
+gc = {text: "text", items: "items", list: "list", node: "Node", int_box: "i64box", float_box: "f64box", ratio: "Ratio", meta_node: "MetaNode"}
+node_fields = [126, 0, 110, 0, 99, gc.node, 0]
+gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, gc.items, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
+	[79, 1, gc.node, 95, 6] + node_fields + [126, 0, 126, 0, 99, gc.node, 0]]
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
 	["MetaNode", ["kind", "data", "value", "line", "column", "comment"]]]
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
@@ -192,9 +195,10 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
+# gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; parents: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widenings: int = 0; program_file: text = ""; emitting_at: text = "" }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; parents: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widenings: int = 0; gc_indices: map = {}; gc_order: list = []; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
@@ -395,10 +399,27 @@ def number_value(n: any): list {
 
 # a GC instruction with its immediates
 def gc_code(code: int, immediates: any): list { [gc_prefix] + uleb(code) + concatenated(immediates.map(uleb)) }
+# the index of the GC type of this name in the module, taken on the type's first use: after the types it refers to,
+# so each type follows those it names (a type naming itself, as $Node, refers to the index it takes)
+def gc_type(name: text): int {
+	if name in module.gc_indices { return module.gc_indices[name] }
+	for part in gc_types#(gc_position(name)) { if part is text and part != name { gc_type(part) } }
+	module.gc_indices[name] = #module.gc_order
+	module.gc_order += [name]
+	module.gc_indices[name]
+}
+# the position (from 1) of the GC type of this name in gc_types and gc_names
+def gc_position(name: text): int {
+	for i in 1 to #gc_names { if gc_names#i#1 == name { return i } }
+	throw "no GC type " + name
+}
+# bytes that name GC types by their names (a type's definition in gc_types, a reference in references): each name the
+# index the module takes the type under
+def gc_bytes(parts: list): list { concatenated(parts.map(part => if part is text then uleb(gc_type(part)) else [part])) }
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
 def node(kind_code: int, payload: any): list { node_code([op.i64_const] + sleb(kind_code), payload) }
 # a $Node of the kind field the code gives
-def node_code(kind: any, payload: any): list { kind + payload + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.node]) }
+def node_code(kind: any, payload: any): list { kind + payload + [ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.node)]) }
 # a value boxed as a $Node: a number or yes/no in its box, a character as an i31
 def boxed(value: any): list {
 	kind = value#1
@@ -407,10 +428,10 @@ def boxed(value: any): list {
 	if kind == "text" { return node(Kind.Text, code) }
 	if kind == "list" { return node(Marked.SquareList, code) }
 	if kind == "char" { return node(Kind.Codepoint, code + gc_code(gc_ops.ref_i31, [])) }
-	if kind == "float" { return node(Kind.Float, code + gc_code(gc_ops.struct_new, [gc.float_box])) }
-	if kind == "bool" { return node(Marked.Bool, code + [op.i64_extend_i32_u] + gc_code(gc_ops.struct_new, [gc.int_box])) }
+	if kind == "float" { return node(Kind.Float, code + gc_code(gc_ops.struct_new, [gc_type(gc.float_box)])) }
+	if kind == "bool" { return node(Marked.Bool, code + [op.i64_extend_i32_u] + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])) }
 	if kind != "int" and kind != pending { refuse("a " + kind + " as a value") }
-	node(Kind.Int, code + gc_code(gc_ops.struct_new, [gc.int_box]))
+	node(Kind.Int, code + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)]))
 }
 # `[a, b, c]`: a vector of its items, boxed, read in order
 # `{1, 2}` as a value is a curly list of its values, as Rust builds the list structure; `{a; b}` and the spaced `{3 4}`
@@ -445,7 +466,7 @@ def local_value(body: Body, n: any): list {
 system_value_kinds = {battery: "int", charging: "bool", online: "bool", mouse_x: "float", mouse_y: "float", mouse_down: "bool",
 	mouse_wheel: "int", key_down: "bool", window_open: "bool", view_width: "int", view_height: "int", gpu_drawing: "bool",
 	window_width: "int", window_height: "int", display_width: "int", display_height: "int", display_dpi: "int"}
-# where the name goes, a C string as the host reads it: the scratch bytes past the output's (runtime/wasi.warp scratch_bytes)
+# where the name goes, a C string as the host reads it: the scratch bytes past the output's (runtime/extended/wasi.warp scratch_bytes)
 system_name_at = 32
 def system_value_read(name: text): list {
 	bytes = name.bytes + [0]
@@ -633,7 +654,7 @@ def expression_code(body: Body, n: any): list {
 	if n is bool { return ["bool", [op.i32_const, if n then 1 else 0]] }
 	if n is number { return number_value(n) }
 	if n is text { return text_value(n) }
-	if n === ø { return ["node", [ref_null, gc.node]] }
+	if n === ø { return ["node", [ref_null, gc_type(gc.node)]] }
 	if n == symbol("break") { return loop_exit(body) }
 	if n == symbol("continue") { return loop_again(body) }
 	# `{ return ø }`: the block keeps a bare return, its ø no item of the group
@@ -891,7 +912,7 @@ def key_expression(body: Body, n: any): list {
 		return field_or_word(body, expression_code(body, left), name_of(right), length_code)
 	}
 	# `type(x).name`
-	if operator == "." and right == symbol("name") and is_type_call(left) { return ["text", payload(type_value_of(body, expression_code(body, left#2))#2, gc.text)] }
+	if operator == "." and right == symbol("name") and is_type_call(left) { return ["text", payload(type_value_of(body, expression_code(body, left#2))#2, gc_type(gc.text))] }
 	if operator == "." and right is symbol and member_word(name_of(right)) != ø {
 		word = member_word(name_of(right))
 		value = expression_code(body, left)
@@ -1057,7 +1078,7 @@ def collect_referred(n: any, found: any) {
 		}
 	}
 }
-# `std_io("os", "args", [])`, a std module's word the runtime gives itself over WASI (runtime/wasi.warp): the runtime
+# `std_io("os", "args", [])`, a std module's word the runtime gives itself over WASI (runtime/extended/wasi.warp): the runtime
 # word std_os_args, else ø (the host's std_io answers)
 def std_word(n: any): any {
 	if bracket_of(n) != "(" or #n != 4 { return ø }
@@ -1122,6 +1143,8 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	module.saw_pending = no
 	module.rereads = []
 	module.builders = []
+	module.gc_indices = {}
+	module.gc_order = []
 	collect_types(program)
 	for child in module.parents.keys { inherit_fields(child) }
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
