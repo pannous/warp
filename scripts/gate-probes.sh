@@ -55,7 +55,7 @@ if wants 0; then
 			"$warp" rebuild $lane > "$logs/rebuild-$lane.log" 2>&1 || { echo "FAIL rebuild $lane: $(grep -i 'error\|refus' "$logs/rebuild-$lane.log" | head -1 | cut -c1-160) (log $logs/rebuild-$lane.log)"; red 0; }
 		fi
 		got=$(timeout 300 "$warp" $lane samples/hello/hello.warp 2>&1 | tail -1)
-		[[ $got == *Hello* ]] || { echo "FAIL $lane hello: got ${got:0:160}"; ok=0; }
+		[[ $got == *Hello* ]] || { echo "FAIL $lane hello: got ${got:0:160}"; red 0; }
 	done
 	echo "tier 0 (rebuild + hello, both lanes): $( ((ok)) && echo ok || echo RED) $(since $t0)"
 	((ok)) || red 0
