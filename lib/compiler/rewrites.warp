@@ -91,7 +91,7 @@ one_word = "one"
 first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads"]
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls", "sugar/parameters"]
 iteration_sugar_module_names = ["sugar/iteration"]
-late_sugar_module_names = ["sugar/ranges"]
+late_sugar_module_names = ["sugar/ranges", "sugar/method_calls"]
 # the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
 # a list literal (card sugar-comprehensions)
 comprehension_sugar_module_names = ["sugar/comprehensions"]
