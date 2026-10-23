@@ -206,18 +206,18 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 	}
 }
 
-/// lib/ for compiler.warp, as warp-rust finds it: WARP_LIB, else the nearest lib/ holding compiler/ above the source or
-/// the current folder, else the one installed beside warp-host or in <prefix>/share/warp
+/// lib/ for compiler.warp: WARP_LIB, else the one installed beside warp-host or in <prefix>/share/warp (the lib/ its
+/// compilers ship with), else the nearest lib/ holding compiler/ above the source or the current folder. The compiler
+/// run gets it as WARP_LIB (environment)
 fn library_for(source: &Path) -> Option<PathBuf> {
-	if let Some(lib) = std::env::var_os("WARP_LIB") {
+	if let Some(lib) = std::env::var_os(LIBRARY_VARIABLE) {
 		return Some(PathBuf::from(lib));
 	}
-	let above =
-		|start: PathBuf| start.ancestors().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
+	let has_compiler = |lib: &PathBuf| lib.join("compiler").is_dir();
+	let installed = installed_folders().into_iter().map(|folder| folder.join("lib")).find(has_compiler);
+	let above = |start: PathBuf| start.ancestors().map(|folder| folder.join("lib")).find(has_compiler);
 	let current = std::env::current_dir().ok();
-	let installed =
-		installed_folders().into_iter().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
-	source.parent().map(Path::to_path_buf).and_then(above).or_else(|| current.and_then(above)).or(installed)
+	installed.or_else(|| source.parent().map(Path::to_path_buf).and_then(above)).or_else(|| current.and_then(above))
 }
 
 /// The compiler module: built from that lib/ (<lib>/../data/, a checkout's), else installed beside warp-host
@@ -276,7 +276,12 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cac
 	let ran = || -> wasmtime::Result<Ran> {
 		let module = if cached { cache::module(engine, bytes)? } else { Module::new(engine, bytes)? };
 		let mut wasi = WasiCtxBuilder::new();
-		wasi.inherit_stdio().inherit_env().args(&args);
+		wasi.inherit_stdio().args(&args);
+		// the compiler run sees as WARP_LIB the lib/ warp-host resolved, so it reads the std modules there and never
+		// from the folder it was built in (notes/compiler_rebuilds.md); any other run, the environment as it is
+		for (name, value) in environment(keeper.as_ref()) {
+			wasi.env(&name, &value);
+		}
 		wasi.preopened_dir("/", "/", FsPerms::ReadWrite)?;
 		wasi.preopened_dir(".", ".", FsPerms::ReadWrite)?;
 		let host = Host {
@@ -319,6 +324,20 @@ fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cac
 }
 
 use wasmtime::AsContextMut;
+
+/// The variable naming the lib/ a compiler run reads its std modules from (lib/compiler/parser.warp run_library)
+pub const LIBRARY_VARIABLE: &str = "WARP_LIB";
+
+/// The environment a run sees: this process's, with WARP_LIB the compiler run's lib/ (its keeper's) when it has one
+pub fn environment(keeper: Option<&cache::Keeper>) -> Vec<(String, String)> {
+	let library = keeper.map(|keeper| keeper.library.clone()).filter(|library| !library.is_empty());
+	let mut variables: Vec<(String, String)> =
+		std::env::vars().filter(|(name, _)| library.is_none() || name != LIBRARY_VARIABLE).collect();
+	if let Some(library) = library {
+		variables.push((LIBRARY_VARIABLE.to_string(), library));
+	}
+	variables
+}
 
 /// The imports every module of a run gets: WASI p1, warp-runtime's host words, libm, libc, std_io
 pub fn program_linker(engine: &Engine) -> wasmtime::Result<Linker<Host>> {

@@ -236,6 +236,12 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   | `--compiler full run hello.warp` (nothing kept) | 8.4–11.1 s |
 - Without Cranelift: see Size, option (a).
 
+## The lib/ of a compile (card compiler-rebuild-policy)
+
+warp-host resolves lib/ as WARP_LIB, else the lib/ beside the binary, else the one above the program or the current
+folder. It hands that lib/ to the compiler run as WARP_LIB, so a compiler-self.wasm built anywhere reads the std
+modules of that lib/. How agents get a compiler pair without building it: notes/compiler_rebuilds.md.
+
 ## Tests
 
 `tests/queue.sh tests/host/test_host.sh`: outcome checks of warp-host and of the launcher with warp-host beside it.
