@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
 # warp: programs run through the warp compiler written in warp (compiler.wasm, as `warp-rust pure` runs it), every other
 # command through the Rust binary warp-rust, unchanged (notes/pure_wrapper.md). Plain bash 3.2, macOS's /bin/bash.
+# With warp-host (card launcher-host-dispatch): run, pure, self, compile, inline code and a .wasm module are warp-host's;
+# rebuild is the checkout's scripts/rebuild.sh; test is the test runner's (WARP_TEST_RUNNER, else warp-rust for now);
+# every other command is the shared warp-rust's.
 #   WARP_PIPELINE=rust            every command as warp-rust runs it
 #   WARP_FALLBACK=rust            a program the pure pipeline refuses runs again through warp-rust, said loudly
 #   WARP_COMPILER=self or --self  compiler-self.wasm (compiler.warp compiled by itself) instead of compiler.wasm (pure)
-#   WARP_RUST=<binary>            the Rust binary; else warp-rust beside this script (links followed), else on PATH
+#   WARP_RUST=<binary>            the Rust binary; else warp-rust beside this script (links followed), else on PATH,
+#                                 else the shared one: /workspace/cow/sol-warp-latest on the box, ~/dev/bin/warp on the Mac
 #   WARP_HOST=<binary>|none       the native host warp-host compiles and runs programs instead of warp-rust's pure lane
 #                                 (notes/warp_host.md); else warp-host beside this script when there is one
+#   WARP_TEST_RUNNER=<command>    `warp test …` runs `<command> …`; else warp-rust's test
 
 # The commands the pure pipeline runs, one line each: `<word>) echo <function> ;;`. The function gets the words after
 # the command and hands a command it cannot run to warp-rust (pass_on). Every other command is warp-rust's.
 pure_command() {
 	case $1 in
 		run) echo run_file ;;           # warp run f.warp [-- args]
+		pure | self) echo run_with ;;   # warp pure f.warp, warp self f.warp: through compiler.wasm, compiler-self.wasm
 		compile) echo compile_module ;; # warp compile --wasm f.warp
+		rebuild) echo rebuild_pair ;;   # warp rebuild [pure|self]: scripts/rebuild.sh of the checkout
+		test) echo run_tests ;;         # warp test …: the test runner
 		# fix) echo run_tool ;;         # a command written in warp (fix and beautify: Warp Code 2's, not yet)
 	esac
 }
@@ -37,6 +45,42 @@ run_file() {
 	[[ ${1-} == *.warp ]] || pass_on
 	export_library "$1"
 	pure "${runner[@]}" "${options[@]}" "$@"
+}
+
+# warp pure f.warp, warp self f.warp: run by warp-host through the compiler named; without warp-host warp-rust's own
+# `pure` or `self` (pass_on), as is any other form of these commands
+run_with() {
+	[ -n "$HOST" ] && [[ ${1-} == *.warp ]] || pass_on
+	if [ "$word" = pure ]; then runner=("$HOST" --compiler full run); else runner=("$HOST" run); fi
+	run_file "$@"
+}
+
+# warp f.wasm [args]: a module warp-host runs (its main's value printed), else warp-rust's
+run_module() {
+	[ -n "$HOST" ] || pass_on
+	pure "$HOST" "${host_options[@]}" "${options[@]}" "$@"
+}
+
+# warp rebuild [pure|self|both] [--check|--force]: the compiler pair of the checkout around the current folder (else
+# around the lib/ resolved) by scripts/rebuild.sh, from the shared store when it has it (notes/compiler_rebuilds.md);
+# without such a checkout, or with words rebuild.sh does not take, warp-rust's rebuild
+rebuild_pair() {
+	local top lib given
+	for given in "$@"; do
+		case $given in pure | self | both | --check | --force) ;; *) pass_on ;; esac
+	done
+	top=$(git rev-parse --show-toplevel 2>/dev/null)
+	if [ -z "$top" ] || [ ! -x "$top/scripts/rebuild.sh" ]; then
+		lib=$(library_for "$PWD/code.warp") && top=$(dirname "$lib")
+	fi
+	[ -n "$top" ] && [ -x "$top/scripts/rebuild.sh" ] || pass_on
+	exec "$top/scripts/rebuild.sh" "$@" "$top"
+}
+
+# warp test …: the test runner WARP_TEST_RUNNER names; else, until a runner written in warp takes it, warp-rust's test
+run_tests() {
+	[ -n "${WARP_TEST_RUNNER-}" ] || pass_on
+	exec $WARP_TEST_RUNNER "$@"
 }
 
 # warp <code>: inline code, compiled as a program of the current folder; its value printed, exit status 0
@@ -117,8 +161,19 @@ find_rust() {
 	beside=$(dirname "$(resolved "$0")")/warp-rust
 	if [ -n "${WARP_RUST-}" ]; then echo "$WARP_RUST"
 	elif [ -x "$beside" ]; then echo "$beside"
-	else command -v warp-rust || fail "no warp-rust beside $0 nor on PATH (WARP_RUST names it)"
+	elif command -v warp-rust; then :
+	else shared_rust || fail "no warp-rust beside $0 nor on PATH (WARP_RUST names it)"
 	fi
+}
+
+# The shared Rust binary every agent runs: /workspace/cow/sol-warp-latest on the box, ~/dev/bin/warp on the Mac, when
+# it is no launcher (this script installed as warp)
+shared_rust() {
+	local shared
+	for shared in /workspace/cow/sol-warp-latest "${HOME-}/dev/bin/warp"; do
+		[ -x "$shared" ] && ! head -c 2 "$(resolved "$shared")" | grep -q '#!' && { echo "$shared"; return; }
+	done
+	return 1
 }
 
 # warp-host: WARP_HOST (none: no host), else warp-host beside this script, else none
@@ -194,9 +249,11 @@ main() {
 	[ "${WARP_COMPILER-}" = pure ] && host_options=(--compiler full)
 	if [ -n "$HOST" ]; then runner=("$HOST" "${host_options[@]}" run); else runner=("$RUST" "$compiler"); fi
 	local command
-	command=$(pure_command "${1-}")
+	word=${1-}
+	command=$(pure_command "$word")
 	if [ -n "$command" ]; then shift; "$command" "$@"
 	elif [[ ${1-} == *.warp ]]; then run_file "$@"
+	elif [[ ${1-} == *.wasm && -f ${1-} ]]; then run_module "$@"
 	elif is_code "${1-}"; then run_code "$@"
 	else pass_on
 	fi
