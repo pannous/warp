@@ -127,3 +127,19 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
 - Not covered by the driver yet: `--compiler full` (compile_wasm uses the compiler warp-host started with), stderr
   (no word: the driver's failures go to stdout), and in-process compiles of a .warp file as code of the current folder.
   The driver itself needs no C imports. Programs' C imports unblock with pure-c-imports.
+- Follow-up, 2026-10-23 02:35 (host-from-warp merged with origin/warp-host-wasm-load 5bc01c62f, which has the list fix
+  00c3c9b5c and os.run_wasm(bytes, args)):
+  - driver.warp now passes the program's arguments (run_wasm(module, program_args)). An uncaught Error of the program
+    (no "os.run_wasm: " prefix) prints as `Error("…")`, status 1; a trap or a module that could not run prints as
+    `warp-host: …`, status 1; "the module exited with status N" exits N.
+  - Cache checks: run_wasm caches the program's own machine code, which warp-host never does for the program it runs,
+    so the fresh cache held 2 .cwasm. The driver lists the cache folder before the run and removes the oldest .cwasm the
+    run added afterwards (the program's: run_wasm compiles it before anything it loads). A run_wasm without caching
+    would make that unneeded.
+  - Not measured yet [I]: no compiler-self built from warp-host-wasm-load's lib/ existed by 02:33 (waited ~30 min).
+    Older ones refuse the new words: /tmp/tarball's gives "outside the core: a call of run_wasm with 2 arguments",
+    the one in rmain/data (origin/main 11aa8cbbf, 02:21) gives "outside the core: the call compile_wasm(…)" even with
+    this lib/. So driver.wasm does not compile yet and run_checks.sh could not run.
+  - test_host.sh (64 checks now) with warp-host built from 5bc01c62f (7,382,248 B) and /tmp/tarball's compilers: 51 of
+    64 pass [M]. All 13 failures are that compiler-self's refusals of the branch's new words (run_wasm with arguments,
+    `use wasm`, components), not the host.

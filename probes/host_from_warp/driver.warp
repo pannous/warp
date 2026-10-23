@@ -10,12 +10,11 @@
 # - WARP_DRIVER_SPAWN=<warp-host>: by warp-host processes of their own (os.run): `<warp-host> compile <file> <module>`,
 #   `<warp-host> <module> <args…>`; their output comes after they end (out, then err), not as it is printed
 #
-# TODO(host): a list of more than ~20,000 items from a host word fails ("memory cap: growing a memory to 4096 MB …",
-#   "list join: 0"): read_bytes of a 24,000-byte file does, of a 20,000-byte one not. compile_wasm gives its module as
-#   such a list, so in-process compiling fails for any module over ~20 KB, which is every program with `use os`.
-#   Modules from files go to run_wasm as texts (read), which works at any size.
-# TODO(host): run_wasm takes no argument vector: a module run in-process sees the driver's arguments (args gives
-#   ["run" "f.warp" "a"] where warp-host gives ["a"]); needs os.run_wasm(bytes, args), or WARP_DRIVER_SPAWN.
+# TODO(host): run_wasm caches a module's machine code, a program's too, where warp-host caches none of the program it
+#   runs: the driver takes the program's .cwasm out of the cache again after the run (forget_program); a run_wasm
+#   without the cache (an option, or a word of its own) would make that unneeded.
+# TODO(host): an uncaught Error of the program is that Error from run_wasm, an Error value of its main the same: both
+#   print as `Error("…")`, status 1, where warp-host prints an uncaught raise as `warp-host: …` on stderr.
 # TODO(host): compile_wasm uses the compiler warp-host was started with; `--compiler full` is read and ignored here.
 # TODO(host): no stderr word: the driver's own failures go to stdout, where warp-host prints them on stderr.
 # TODO(host): in-process, a .warp file is compiled as code of the current folder (compile_wasm takes code, not a path).
@@ -52,7 +51,6 @@ reason(e, word) := if starts_with(e, word + ": ") then slice(e, count(word) + 2)
 is_warp_name(name) := ends_with(name, ".warp") or ends_with(name, ".wasp")
 
 # a module: a .wasm or .wat name, else a file starting with wasm's magic bytes
-# (TODO(host): read_bytes of an unnamed module over ~20 KB fails, see above)
 is_module(name) := {
 	if ends_with(name, ".wasm") or ends_with(name, ".wat") then true
 	else if not exists(name) then false
@@ -62,16 +60,41 @@ is_module(name) := {
 	}
 }
 
-# a failed in-process run: the module's exit status passed on, else warp-host's failure
+# where run_wasm keeps machine code (as cache.rs's folder)
+cache_folder() := {
+	given = env("WARP_HOST_CACHE")
+	xdg = env("XDG_CACHE_HOME")
+	if given and count(given) > 0 then given
+	else if xdg and count(xdg) > 0 then xdg + "/warp-host"
+	else env("HOME") + "/.cache/warp-host"
+}
+cache_before = "/tmp/warp-driver-cache-before"
+
+# the cache's machine code before a run, to tell the program's own from it afterwards
+remember_cache() := run(["sh", "-c", "ls \"$0\" > \"$1\" 2>/dev/null; true", cache_folder(), cache_before])
+
+# the program's machine code taken out of the cache again: the oldest .cwasm the run added (run_wasm compiles the
+# program before anything the program loads), as warp-host keeps none of the program it runs
+forget_program() := run(["sh", "-c",
+	"cd \"$0\" 2>/dev/null && ls -tr | grep '[.]cwasm$' | grep -vxF -f \"$1\" | head -n 1 | xargs -r rm -f; true",
+	cache_folder(), cache_before])
+
+# a failed in-process run: the module's exit status passed on, a trap warp-host's failure; an uncaught Error of the
+# program (it has no "os.run_wasm: ") the Error printed, status 1
 given_up(failure) := {
 	why = reason(failure, "os.run_wasm")
 	exited = "the module exited with status "
-	if starts_with(why, exited) then exit(int(slice(why, count(exited)))) else failed(why)
+	if why == failure then refused(failure)
+	else if starts_with(why, exited) then exit(int(slice(why, count(exited))))
+	else failed(why)
 }
 
-# a module (its bytes, or a text holding them) run in-process: its value, which warp-host prints and exits with
-ran(module) := {
-	value = try run_wasm(module) catch e { failure_mark + e }
+# a module (its bytes, or a text holding them) run in-process with the program's arguments: its value, which
+# warp-host prints and exits with
+ran(module, program_args) := {
+	remember_cache()
+	value = try run_wasm(module, program_args) catch e { failure_mark + e }
+	forget_program()
 	if value is text and starts_with(value, failure_mark) then given_up(slice(value, count(failure_mark))) else value
 }
 
@@ -83,7 +106,7 @@ finished(result) := {
 }
 
 # a module file run: in-process (as a text: no byte list), else by a warp-host process with the program's arguments
-module_run(file, program_args) := if spawning then spawned(file, program_args) else ran(read(file))
+module_run(file, program_args) := if spawning then spawned(file, program_args) else ran(read(file), program_args)
 
 # a module run by a warp-host process; one without .wasm or .wat in its name goes as a .wasm copy (warp-hosts before
 # 1aec4ee9f know a module by its name only)
@@ -118,7 +141,7 @@ run_source(source, program_args) := {
 		module = "/tmp/warp-driver-run.wasm"
 		compiled_by_process(source, module)
 		module_run(module, program_args)
-	} else { ran(compiled_here(source)) }
+	} else { ran(compiled_here(source), program_args) }
 }
 
 # `compile <source> <module>`
