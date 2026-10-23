@@ -8,8 +8,15 @@
 # - a method one class declares keeps its name, its subclasses inheriting it; a method several classes declare is
 #   `speak·Dog` in each, and `speak` the dispatcher on the instance's class, a subclass tested before its parent:
 #   `speak(self) := if self is Dog then speak·Dog(self) else speak·Animal(self)`
-# A class keeping a member that is neither field nor method (an operator, `init`, a builtin word), or whose method is
-# named like a function of the program or takes another count of parameters than its namesakes, stays as written: the
+# - a method named like a function of the program (the library's `sum`, `max`, `double` it reaches) or a word the
+#   runtime or the emitter defines (`sort`) is `sum·Bag` in each class declaring it, and a call `x.sum()` the dispatcher
+#   `sum·method(x)`, which calls the function itself, sum(x), on any value not an instance of those classes: a list's
+#   `xs.sum()` still sums
+# - `x is Animal` is true of an instance of a class extending Animal too: `x is Animal or x is Dog`, and so is a
+#   dispatcher's test of each owner (widened_tests, after the methods are lifted)
+# - fields a space lists, `class person{name age: int}`, are each a field, `name; age: int` (the last takes the type)
+# A class keeping a member that is neither field nor method (an operator, `init`), or whose method takes another count
+# of parameters than its namesakes, stays as written: the
 # emitter refuses it as a class with methods.
 use "walk.warp"
 use "signatures.warp"
@@ -20,31 +27,78 @@ self_node = symbol("self")
 instance_names = ["self", "this"]
 # the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
 base_layers = ["extends", "inherited_from"]
-# methods with a meaning of their own, which stay in their class: `init`, and a word the runtime or the emitter
-# defines (`sort`), which a call on a list or a text must still reach
-kept_methods = ["init"] + typed_lines.map(signature_line => signature_line.name)
+# methods with a meaning of their own, which stay in their class
+kept_methods = ["init"]
+# the words the runtime or the emitter defines (`sort`), which a call on a list or a text must still reach
+typed_words = typed_lines.map(signature_line => signature_line.name)
+# the dispatcher a call `x.sum()` of a method named like a function or a library word calls
+routed_name(method: text): text := method + "·method"
+# the function a bare call of a sibling method calls: the dispatcher of a routed one
+called_name(method: text, routes: list): text := if method in routes then routed_name(method) else method
+# the functions the program defines, by name
+functions_defined(top_statements: list): list := top_statements.map(defined_word).filter(found_word => found_word != ø)
 
 # the classes of the program, by name: [statement, parent name or "", field names, methods]
 class Declared { top_statement: Node; parent: text; fields: list; methods: list }
 
 # the program with the methods of its classes lifted out as functions
 methods_lifted(program: Node): Node := {
-	top_statements = statements_in(program)
+	given_statements = statements_in(program)
+	top_statements = given_statements.map(fields_spelled)
+	respelled = top_statements != given_statements
 	classes = {}
 	for top_statement in top_statements {
 		view = class_view(top_statement)
 		if view != ø { classes[declared_type_name(view#2)] = class_declared(top_statement, view) }
 	}
+	extended = classes.keys.any(name => #extending_classes(classes, name) > 1)
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
-	if #liftable == 0 { return program }
+	if #liftable == 0 and not extended and not respelled { return program }
 	rewritten = []
 	for top_statement in top_statements {
 		view = class_view(top_statement)
 		name = if view == ø then "" else declared_type_name(view#2)
 		rewritten += [if name in liftable then without_methods(top_statement, view) else top_statement]
 	}
-	for name in methods_of(classes, liftable) { rewritten += functions_of(classes, liftable, name) }
+	functions = functions_defined(top_statements)
+	routes = methods_of(classes, liftable).filter(method => method in typed_words or method in functions)
+	for name in methods_of(classes, liftable) { rewritten += functions_of(classes, liftable, name, routes) }
+	if #routes > 0 { rewritten = rewritten.map(top_statement => routed(top_statement, classes, liftable, routes)) }
+	if extended { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then widened_tests(top_statement, classes) else top_statement) }
 	group_like(program, rewritten)
+}
+
+# the class declaration with each field its own member: `name age: int` as `name; age: int`
+fields_spelled(top_statement: Node): Node := {
+	view = class_view(top_statement)
+	if view == ø { return top_statement }
+	body = view#3
+	members = body[3..]
+	spelled = members.flat_map(spelled_members)
+	if #spelled == #members { return top_statement }
+	match top_statement {
+		Key(left, key_op, right): Key(left, key_op, [view#1, view#2, body[0..<3] + spelled])
+		_: top_statement
+	}
+}
+# a member `name age` as the fields name and age, `name age: int` as name and `age: int`, else the member itself
+spelled_members(member: any): list := {
+	n = node_of(member)
+	field_words = word_run(n)
+	if #field_words > 0 { return field_words.map(view_of) }
+	match n {
+		Key(left, Op.Colon, right): {
+			typed_names = word_run(left)
+			if #typed_names == 0 { return [member] }
+			typed_names[0..<(#typed_names - 1)].map(view_of) + [view_of(Key(typed_names#(#typed_names), Op.Colon, right))]
+		}
+		_: [member]
+	}
+}
+# the names a space lists, `name age`, else none
+word_run(n: Node): list := match n {
+	List(parts, Bracket.None, Separator.Space): { if #parts > 1 and not parts.any(part => not (part is symbol)) then parts else [] }
+	_: []
 }
 
 # the view ["type", name, body] of a class declaration, else ø
@@ -57,9 +111,15 @@ class_declared(top_statement: Node, view: any): Declared := {
 	methods = members.filter(member => defined_word(member) != ø)
 	Declared(top_statement, base_of(view#2), members.filter(member => defined_word(member) == ø).map(field_name), methods)
 }
-# a member read as the definitions pass reads a definition, `def area() -> int {…}` as `area() := …` (`definition` of
-# definitions.warp, which lifts the methods)
-member_read(member: any): Node := bottom_up(node_of(member), definition)
+# a member read as the definitions pass reads a definition (`definition` of definitions.warp, which lifts the
+# methods): `def area() -> int {…}` as `area() := …`, `def area(): …` the same
+member_read(member: any): Node := colon_method(bottom_up(node_of(member), definition))
+# Python's brace-less `def area(): side * side`, read as `area(): side * side`: a member whose name takes parentheses
+# is a method, its body after the colon (a field has no parentheses)
+colon_method(member: Node): Node := match member {
+	Key(left, Op.Colon, right): { if is_called_name(left) then Key(left, Op.Define, right) else member }
+	_: member
+}
 # the class a declaration's name says it extends, else "" (not ø: the self lane traps on `ø in` a map)
 base_of(name: any): text := {
 	if kind_of(name) != "attribute" { return "" }
@@ -95,15 +155,14 @@ methods_of(classes: any, names: list): list := {
 }
 method_in(declared: Declared, method: text): Node := declared.methods.filter(m => defined_word(m) == method)#1
 
-# whether a class's methods may be lifted: each member a field or a method, no method named like a function of the
-# program or kept, the classes it shares a method name with taking as many parameters, and so its ancestors
+# whether a class's methods may be lifted: each member a field or a method, no method kept or named like a class, the
+# classes it shares a method name with taking as many parameters, and so its ancestors
 lifts(classes: any, name: text, top_statements: list): bool := {
 	declared = classes[name]
 	if #declared.methods == 0 or declared.fields.any(field => field == ø) { return no }
-	functions = top_statements.map(defined_word).filter(found_word => found_word != ø)
 	for method in declared.methods {
 		word = defined_word(method)
-		if word in kept_methods or word in functions or word in classes { return no }
+		if word in kept_methods or word in classes { return no }
 		counts = owners_of(classes, classes.keys, word).map(owning_class => #method_parameters(method_in(classes[owning_class], word)))
 		if counts.any(parameter_count => parameter_count != #method_parameters(method)) { return no }
 	}
@@ -121,37 +180,72 @@ without_methods(top_statement: Node, view: any): Node := {
 }
 
 # the functions of the method `name`: the method itself when one class declares it, else each owner's and the dispatcher
-functions_of(classes: any, names: list, method: text): list := {
+functions_of(classes: any, names: list, method: text, routes: list): list := {
 	owners = owners_of(classes, names, method)
-	if #owners == 1 { return [method_function(classes, owners#1, method, method)] }
-	owners.map(owning_class => method_function(classes, owning_class, method, owned_name(method, owning_class))) + [method_dispatcher(classes, owners, method)]
+	if #owners == 1 and method not in routes { return [method_function(classes, owners#1, method, method, routes)] }
+	owners.map(owning_class => method_function(classes, owning_class, method, owned_name(method, owning_class), routes)) + [method_dispatcher(classes, owners, method, routes)]
 }
 owned_name(method: text, owning_class: text): text := method + "·" + owning_class
 # the class's method as the function `name(self, parameters…)` of its instance
-method_function(classes: any, owning_class: text, method: text, name: text): Node := {
+method_function(classes: any, owning_class: text, method: text, name: text, routes: list): Node := {
 	declared = method_in(classes[owning_class], method)
 	parameters = method_parameters(declared)
 	taken = parameters.map(parameter_name)
 	body = value_of(declared)
 	fields = fields_reaching(classes, owning_class).filter(field => field not in taken)
 	siblings = methods_reaching(classes, owning_class).filter(sibling => sibling not in taken and not assigns_name(body, sibling))
-	Key(call_of(name, [self_node] + parameters), Op.Define, on_instance(body, fields, siblings))
+	Key(call_of(name, [self_node] + parameters), Op.Define, on_instance(body, fields, siblings, routes))
 }
 assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 
 # `name(self, parameters…)` of a method several classes declare: the call of the instance's class's own, each class
 # tested before the classes it extends, the last owner taking any other instance
-method_dispatcher(classes: any, owners: list, method: text): Node := {
+method_dispatcher(classes: any, owners: list, method: text, routes: list): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], method))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
-	Key(call_of(method, [self_node] + parameters), Op.Define, class_dispatch(deepest_first(classes, owners), method, call_arguments))
+	Key(call_of(called_name(method, routes), [self_node] + parameters), Op.Define, class_dispatch(deepest_first(classes, owners), method, call_arguments, method in routes))
 }
-# the call of the first owner's method on an instance of it, else of the next owner's…, the last owner's on any other
-class_dispatch(owners: list, method: text, call_arguments: list): Node := {
+# the call of the first owner's method on an instance of it, else of the next owner's…, the last owner's on any other;
+# of a routed one, the function itself on any value not an instance of the owners
+class_dispatch(owners: list, method: text, call_arguments: list, falls_back: bool): Node := {
 	called = call_of(owned_name(method, owners#1), call_arguments)
-	if #owners == 1 { return called }
+	if #owners == 1 and not falls_back { return called }
+	otherwise = if #owners == 1 then call_of(method, call_arguments) else class_dispatch(owners[1..], method, call_arguments, falls_back)
 	test = Key(ø, Op.If, Key(self_node, Op.Is, symbol(owners#1)))
-	Key(Key(test, Op.Then, called), Op.Else, class_dispatch(owners[1..], method, call_arguments))
+	Key(Key(test, Op.Then, called), Op.Else, otherwise)
+}
+
+# a call `x.sum(…)` of a routed method, the dispatcher's `sum·method(x, …)` when it passes as many
+# arguments as the method takes; `x.sum` the same of a method of none not also a field's name; a call on a class
+# (`Math.max(a, b)`) stays
+routed(n: Node, classes: any, names: list, routed_methods: list): Node := match n {
+	Key(left, Op.Dot, right): {
+		object = routed(left, classes, names, routed_methods)
+		static = left is symbol and name_of(left) in classes
+		if not static and right is symbol and name_of(right) in routed_methods and taken_count(classes, names, name_of(right)) == 0 and not is_field_of_any(classes, names, name_of(right)) { return call_of(routed_name(name_of(right)), [object]) }
+		if not static and is_called_name(right) and name_of(right#1) in routed_methods and #right - 1 == taken_count(classes, names, name_of(right#1)) { return call_of(routed_name(name_of(right#1)), [object] + items_of(right)[1..].map(part => routed(part, classes, names, routed_methods))) }
+		Key(object, Op.Dot, routed(right, classes, names, routed_methods))
+	}
+	_: children(n, part => routed(part, classes, names, routed_methods))
+}
+# how many parameters the method of that name takes (besides its instance)
+taken_count(classes: any, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
+is_field_of_any(classes: any, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
+
+# the class and the classes of the program extending it, directly or through others
+extending_classes(classes: any, name: text): list := classes.keys.filter(other => name in lineage(classes, other))
+# that the value is an instance of the class or of one extending it: `x is Animal or x is Dog`
+instance_check(classes: any, name: text, tested_value: Node): Node := {
+	extending = extending_classes(classes, name)
+	test = Key(tested_value, Op.Is, symbol(name))
+	for class_kind in extending { if class_kind != name { test = Key(test, Op.Or, Key(tested_value, Op.Is, symbol(class_kind))) } }
+	test
+}
+# a program's test `x is Animal` of a class others extend, as instance_check; a value not a name is tested once, as
+# written
+widened_tests(n: Node, classes: any): Node := match n {
+	Key(left, Op.Is, right): { if left is symbol and right is symbol and name_of(right) in classes and #extending_classes(classes, name_of(right)) > 1 then instance_check(classes, name_of(right), left) else children(n, part => widened_tests(part, classes)) }
+	_: children(n, part => widened_tests(part, classes))
 }
 
 # the classes, each before the classes it extends
@@ -167,25 +261,25 @@ deepest_first(classes: any, names: list): list := {
 # a method's body as a function of the instance: a field read or written bare is the instance's, `self.name`; a
 # sibling method read or called bare is called on it; a member after a dot, an entry's or named argument's name and
 # the names a lambda takes stay as written
-on_instance(n: Node, fields: list, siblings: list): Node := {
+on_instance(n: Node, fields: list, siblings: list, routes: list): Node := {
 	if n is symbol and name_of(n) in instance_names { return self_node }
 	if n is symbol and name_of(n) in fields { return Key(self_node, Op.Dot, n) }
-	if n is symbol and name_of(n) in siblings { return call_of(name_of(n), [self_node]) }
-	if is_called_name(n) and name_of(n#1) in siblings { return call_of(name_of(n#1), [self_node] + arguments_on_instance(n, fields, siblings)) }
+	if n is symbol and name_of(n) in siblings { return call_of(called_name(name_of(n), routes), [self_node]) }
+	if is_called_name(n) and name_of(n#1) in siblings { return call_of(called_name(name_of(n#1), routes), [self_node] + arguments_on_instance(n, fields, siblings, routes)) }
 	match n {
 		Key(left, Op.Dot, right): {
-			member = if is_called_name(right) then group_like(right, [right#1] + arguments_on_instance(right, fields, siblings)) else right
-			Key(on_instance(left, fields, siblings), Op.Dot, member)
+			member = if is_called_name(right) then group_like(right, [right#1] + arguments_on_instance(right, fields, siblings, routes)) else right
+			Key(on_instance(left, fields, siblings, routes), Op.Dot, member)
 		}
-		Key(left, Op.Colon, right): { if left is symbol then Key(left, Op.Colon, on_instance(right, fields, siblings)) else children(n, part => on_instance(part, fields, siblings)) }
+		Key(left, Op.Colon, right): { if left is symbol then Key(left, Op.Colon, on_instance(right, fields, siblings, routes)) else children(n, part => on_instance(part, fields, siblings, routes)) }
 		Key(left, Op.Arrow, right): {
 			taken = lambda_parameters(left)
-			Key(left, Op.Arrow, on_instance(right, fields.filter(field => field not in taken), siblings.filter(sibling => sibling not in taken)))
+			Key(left, Op.Arrow, on_instance(right, fields.filter(field => field not in taken), siblings.filter(sibling => sibling not in taken), routes))
 		}
-		_: children(n, part => on_instance(part, fields, siblings))
+		_: children(n, part => on_instance(part, fields, siblings, routes))
 	}
 }
 # the arguments of the call, as functions of the instance
-arguments_on_instance(invocation: Node, fields: list, siblings: list): list := items_of(invocation)[1..].map(part => on_instance(part, fields, siblings))
+arguments_on_instance(invocation: Node, fields: list, siblings: list, routes: list): list := items_of(invocation)[1..].map(part => on_instance(part, fields, siblings, routes))
 # the names a lambda takes: `x`, `(a, b)`
 lambda_parameters(left: Node): list := if left is symbol then [name_of(left)] else if is_group(left) then items_of(left).filter(x => x is symbol).map(name_of) else []
