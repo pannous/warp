@@ -188,3 +188,18 @@ enum Metal { Gold, Penny }
 rewrite pick $e $c => "case" where $c is case of $e
 rewrite pick $e $c => "not"
 [pick Metal Penny, pick Metal Dime, pick Coin Dime]' ["case", "not", "case"]
+
+# a_bare_rest_template_rebuilds_the_phrase
+is! 'rewrite loudly $s... => $s...
+rewrite gently $s... => $s...
+loudly gently f() := 3
+loudly f()' 3
+
+# a_rest_template_of_one_word_is_that_word
+is! 'rewrite marked $a $b... => $a $b...
+marked 5' 5
+
+# a_rule_ending_in_a_rest_keeps_the_next_line
+is! 'rewrite marked $a $b... => $a $b...
+n = marked 5
+n' 5

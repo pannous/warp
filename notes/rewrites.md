@@ -136,3 +136,19 @@ rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is en
 
 The rules of lib/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
 `cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.
+
+## Rest templates
+A template that is a rest hole alone, `$s...`, is the words the hole bound, rebuilt as a phrase; a phrase template
+that comes out one word long is that word. So one rule drops a declaration word before anything:
+
+```warp
+rewrite public $s... => $s...    # public static fun f() := 3 → static fun f() := 3, and so on by the next rules
+rewrite marked $a $b... => $a $b...   # marked 5 → 5
+```
+
+The parser reads `...` at the end of a line as a range going on into the next line, so a rule ending in `$s...`
+swallowed the line after it (the next rule, or the program's next statement); the engine ends such a rule line with
+`;` before parsing (rewrites.warp rules_ended, for the program in passes.warp and for each module). Before (card
+engine-rest-template) a bare `$s...` gave the tree `$s to ø` around the words, and a phrase of one word stayed a
+phrase, so each word took two fixed-arity rules. Open: a `where` after a template ending in `$s...`, on its line or
+the next, is swallowed the same way. Tests: tests/modules/test_rewrite_engine.warp.
