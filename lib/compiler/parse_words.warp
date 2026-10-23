@@ -5,7 +5,6 @@
 use "walk.warp"
 use "parser.warp"
 use "uses.warp"
-use "for_loops.warp"
 
 parse_word = "parse"
 eval_word = "eval"
@@ -54,7 +53,9 @@ words_rewritten(n: Node, rewrite: function, words: list): any := {
 binds_word(definition: any, word: text): bool := {
 	head = key_of(definition)
 	if is_group(head) and items_of(head).any(part => part == symbol(word)) { return yes }
-	body_statements(value_of(definition)).any(statement => declared_name(statement) == word)
+	body = value_of(definition)
+	statements = if is_curly_group(body) then items_of(body) else [body]
+	statements.any(statement => declared_name(statement) == word)
 }
 
 parse_words(program: Node): Node := {
