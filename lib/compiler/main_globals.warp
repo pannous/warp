@@ -7,10 +7,12 @@ use "uses.warp"
 use "sugar.warp"
 use "kind_changes.warp"
 use "diagnostics.warp"
-use "list_methods.warp"
 use "words.warp"
 
 counting_operators = ["++", "--"]
+# the methods that change the list or map they are called on, which Rust's list_mutations.rs lowers in place (and
+# lib/sugar/method_calls.warp leaves as methods)
+in_place_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
 # the operators a changed target is reached through: `xs#i`, `p.x`, the declared `k: int`
 target_operators = ["#", ".", ":"]
 

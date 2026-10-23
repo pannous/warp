@@ -51,6 +51,11 @@ After a context swap, this file and your role file win over anything a handover 
   before the branch is written: send the files, functions and a 3-line reason. Supervisor checks that it isn't sugar
   or an extension in disguise and takes the large ones to the user. Small fixes (a bug in an existing case) need no
   question. Supervisor's merger bounces branches that skipped this.
+- Layout (user 2026-10-23, card compiler-to-core): core/ holds the compiler, the runtime (runtime/, runtime/extended/),
+  the sugar rules (core/sugar) and compiler extensions (core/extensions/<name>.warp). lib/ holds plain Warp modules that
+  programs import (math, units, date and time), which the compiler never depends on. Folder names never combine two
+  topics with an underscore; nest folders instead. Until the flip, existing paths are still named lib/compiler/... and
+  lib/sugar/... (core is a symlink to lib/compiler, lib/compiler/sugar one to lib/sugar).
 - New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
   declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
   when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
