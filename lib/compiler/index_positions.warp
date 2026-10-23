@@ -69,7 +69,7 @@ declared_assignment(count: list, assignment: Node): any := match assignment {
 # the value counted as the declared count counts: from the other base one off; of another unit an error
 recounted(value: Node, counts: any, declared: list): Node := {
 	if counts is ø { return value }
-	if counts#2 != declared#2 { return diagnose(call_of("mixed_count_units", [count_name(counts), count_name(declared)])) }
+	if counts#2 != declared#2 { return diagnose(call_of("mixed_count_units", [count_name(counts), count_name(declared)]), value) }
 	if counts#1 == position_word and declared#1 == index_word { return Key(value, Op.Sub, 1) }
 	if counts#1 == index_word and declared#1 == position_word { return Key(value, Op.Add, 1) }
 	value
