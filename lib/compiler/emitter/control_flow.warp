@@ -160,7 +160,7 @@ def position_code(body: Body, n: any): list {
 	at = if body.intrinsics then ø else written_at(n)
 	if not at { return [] }
 	line: int = at#1
-	column: int = if at#2 < columns_per_line then at#2 else columns_per_line - 1
+	column: int = min(at#2, columns_per_line - 1)
 	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + uleb(declared_global("trap_position", "i32")#1)
 }
 def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
