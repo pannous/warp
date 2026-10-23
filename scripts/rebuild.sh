@@ -10,6 +10,9 @@
 # --check: steps 1 and 2 only, exit 3 on a miss. --force: step 3 whatever the hash says.
 # The warp binary building: WARP_BINARY, else the worktree's target/debug/warp, else main's. Its Rust fingerprint:
 # WARP_RUST_FINGERPRINT, else the warp.build section of the compiler.wasm beside it (the pair that binary built).
+# warp-host takes the compiler beside it first, then lib/../data, then <prefix>/share/warp (card pure-c-imports): so the
+# pair, once in data/, is also copied beside the tree's warp-host (target/{debug,host,release}/), where an older one
+# would shadow it. Not beside a lone warp binary: warp-rust judges its own target/debug/ build by the path baked in it. The lookup itself stays warp-host's: this only fills its first folder.
 # Every hit and miss is a line of <store>/rebuilds.log: time, tree, hash, compiler, hit or miss.
 set -uo pipefail
 check= force= which=both tree=
@@ -71,6 +74,16 @@ mark_main() {
 	[ -n "$remote" ] && [ "$head" = "$remote" ] && git -C "$tree" diff --quiet HEAD -- lib/compiler && ln -sfn "$hash" "$store/main"
 }
 
+# data/'s file beside each of the tree's warp-host binaries, unless the same file is there
+besides() {
+	local name=$1 folder
+	for folder in "$tree"/target/debug "$tree"/target/host "$tree"/target/release; do
+		[ -x "$folder/warp-host" ] || continue
+		cmp -s "$data/$name.wasm" "$folder/$name.wasm" && continue
+		copied "$data/$name.wasm" "$folder/$name.wasm.new-$$" && mv "$folder/$name.wasm.new-$$" "$folder/$name.wasm" &&
+			cp "$data/$name.wasm.inputs" "$folder/$name.wasm.inputs" && echo "rebuild.sh: $name beside ${folder#"$tree"/}"
+	done
+}
 one() {
 	local name=$1 file=$data/$1.wasm built status
 	if [ -z "$force" ] && [ -f "$file" ] && [ "$(cut -d' ' -f1 "$file.inputs" 2>/dev/null)" = "$hash" ]; then logged "$name" hit-data; return 0; fi
@@ -101,5 +114,9 @@ case $which in
 	self) one compiler-self || result=$? ;;
 	both) one compiler || result=$?; [ $result = 1 ] || one compiler-self || result=$? ;;
 esac
+if [ $result = 0 ]; then
+	[ $which = self ] || besides compiler
+	[ $which = pure ] || besides compiler-self
+fi
 [ $result = 0 ] && [ -f "$data/compiler.wasm" ] && [ -f "$data/compiler-self.wasm" ] && [ -f "$store/$hash/compiler-self.wasm" ] && mark_main
 exit $result
