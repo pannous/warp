@@ -97,7 +97,7 @@ with_empty_otherwise(value: Node): Node := match value {
 	}
 }
 
-# `for x in xs {…}`, `each x in xs {…}` before for_loops.warp lowers them; `while c {…}` is a `do` key already
+# `for x in xs {…}`, `each x in xs {…}` before lib/sugar/iteration.warp lowers them; `while c {…}` is a `do` key already
 loop_words = ["for", "each"]
 is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
 

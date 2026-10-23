@@ -2,7 +2,7 @@
 //! over WASI. A failing word answers the program an Error, `os.command: … failed (exit status: 3): …`, as warp-rust's
 //! std_adapters.rs does.
 use crate::nodes::{self, Builders, Node};
-use crate::{cache, Host};
+use crate::{cache, shell, Host};
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
 use warp_runtime::gc_values::{parts_of, TEXT_HEAP};
@@ -45,7 +45,7 @@ pub fn link(linker: &mut Linker<Host>) -> Result<()> {
 fn link_memory_words(linker: &mut Linker<Host>) -> Result<()> {
 	linker.func_wrap(HOST_LIBRARY, "read", |mut caller: Caller<'_, Host>, pointer: i32, length: i32| {
 		answered(&mut caller, pointer, length, |path| {
-			std::fs::read(path).map_err(|problem| format!("read {path} failed: {problem}"))
+			std::fs::read(shell::home_expanded(path)).map_err(|problem| format!("read {path} failed: {problem}"))
 		})
 	})?;
 	linker.func_wrap(HOST_LIBRARY, "fetch", |mut caller: Caller<'_, Host>, pointer: i32, length: i32| {
@@ -106,10 +106,11 @@ use wasmtime::AsContextMut;
 
 fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> Result<Node, String> {
 	let text = |node: &Node| node.content();
+	let path_of = shell::path_of;
 	match (module, member, arguments.as_slice()) {
 		("os", "env", [name]) => Ok(std::env::var(text(name)).map_or(Node::Empty, Node::text)),
 		("os", "args", []) => Ok(Node::List(nodes::SQUARE_LIST, host.args.iter().skip(1).map(Node::text).collect())),
-		("os", "cwd", []) => std::env::current_dir().map(|folder| Node::text(folder.to_string_lossy())).map_err(said),
+		("os", "cwd", []) => shell::cwd(),
 		("os", "input", prompt) => typed_line(prompt.first().map(text)),
 		("os", "stdin", []) => std::io::read_to_string(std::io::stdin()).map(Node::text).map_err(said),
 		("os", "kept", [name]) => Ok(cache::kept(&host.keeper, &text(name)).unwrap_or(Node::Empty)),
@@ -121,12 +122,18 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 		("os", "command", [line]) => printed(&["sh".into(), "-c".into(), text(line)]),
 		("os", "exec", [command]) => printed(&command.clone().items().iter().map(text).collect::<Vec<_>>()),
 		("os", "run", [command]) => ran(&command.clone().items().iter().map(text).collect::<Vec<_>>()),
-		("file", "read", [path]) => {
-			std::fs::read(text(path)).map(Node::Text).map_err(|problem| text(path) + ": " + &said(problem))
+		// `run_wasm(read_bytes("m.wasm"))`, `run_wasm(compile_wasm("6*7"))`: a module run in this process (main.rs)
+		("os", "run_wasm", [bytes]) => crate::ran_module(&host.engine, module_bytes(bytes)?, host.args.clone()),
+		("os", "compile_wasm", [code]) => {
+			let bytes = crate::compiled_code(&host.engine, text(code))?;
+			Ok(Node::List(nodes::SQUARE_LIST, bytes.into_iter().map(|byte| Node::Int(byte.into())).collect()))
 		}
-		("file", "exists", [path]) => Ok(Node::Bool(std::path::Path::new(&text(path)).exists())),
+		("file", "read", [path]) => {
+			std::fs::read(path_of(path)).map(Node::Text).map_err(|problem| path_of(path) + ": " + &said(problem))
+		}
+		("file", "exists", [path]) => Ok(Node::Bool(std::path::Path::new(&path_of(path)).exists())),
 		("file", "write", [path, content]) => {
-			std::fs::write(text(path), text(content)).map_err(said)?;
+			std::fs::write(path_of(path), text(content)).map_err(said)?;
 			Ok(content.clone())
 		}
 		("file", "write_bytes", [path, bytes]) => {
@@ -134,19 +141,43 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 				Node::Int(byte) => u8::try_from(byte).map_err(|_| format!("{byte} is no byte (0 to 255)")),
 				other => Err(format!("{} is no byte (0 to 255)", other.shown())),
 			});
-			std::fs::write(text(path), bytes.collect::<Result<Vec<u8>, String>>()?).map_err(said)?;
+			std::fs::write(path_of(path), bytes.collect::<Result<Vec<u8>, String>>()?).map_err(said)?;
 			Ok(Node::Empty)
 		}
 		("file", "read_bytes", [path]) => {
-			let bytes = std::fs::read(text(path)).map_err(said)?;
+			let bytes = std::fs::read(path_of(path)).map_err(said)?;
 			Ok(Node::List(nodes::SQUARE_LIST, bytes.into_iter().map(|byte| Node::Int(byte.into())).collect()))
 		}
 		("file", "append", [path, content]) => {
-			let mut file = std::fs::OpenOptions::new().append(true).create(true).open(text(path)).map_err(said)?;
+			let mut file = std::fs::OpenOptions::new().append(true).create(true).open(path_of(path)).map_err(said)?;
 			file.write_all(text(content).as_bytes()).map_err(said)?;
 			Ok(content.clone())
 		}
-		_ => Err(format!("warp-host has no {module}.{member} of {} arguments", arguments.len())),
+		// the Unix commands of lib/shell.warp, and file.list and file.glob (shell.rs)
+		("file", member, arguments) => {
+			shell::file(member, arguments).unwrap_or_else(|| unknown(module, member, arguments))
+		}
+		("os", member, arguments) => shell::os(member, arguments).unwrap_or_else(|| unknown(module, member, arguments)),
+		_ => unknown(module, member, &arguments),
+	}
+}
+
+fn unknown(module: &str, member: &str, arguments: &[Node]) -> Result<Node, String> {
+	Err(format!("warp-host has no {module}.{member} of {} arguments", arguments.len()))
+}
+
+/// A module's bytes: a list of bytes (read_bytes, compile_wasm), or a text holding them (read)
+fn module_bytes(bytes: &Node) -> Result<Vec<u8>, String> {
+	match bytes {
+		Node::Text(bytes) => Ok(bytes.clone()),
+		Node::List(_, items) => items
+			.iter()
+			.map(|byte| match byte {
+				Node::Int(byte) => u8::try_from(*byte).map_err(|_| format!("{byte} is no byte (0 to 255)")),
+				other => Err(format!("{} is no byte (0 to 255)", other.shown())),
+			})
+			.collect(),
+		other => Err(format!("needs a module's bytes, got {}", other.shown())),
 	}
 }
 
