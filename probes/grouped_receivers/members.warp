@@ -1,0 +1,8 @@
+// expected: 1 3 2 1 (`(p).a` is `p.a` for a variable, a loop variable too; a call `f().b` stays a call)
+p = {a: 1}
+print (p).a
+xs = [1, 2, 3]
+print (xs).count
+f() := {b: 2}
+print f().b
+for item in [{a: 1}] { print (item).a }
