@@ -239,8 +239,11 @@ definitions(program: Node): Node := {
 # A use is its call, `as·text(p)`; a declaration `x as text = "a"` stays one. `text(p: Person) := …` is the conversion
 # to text too, and a program converting to text shows values through it: print, str, text, an interpolation, a join.
 
-# `as·text`: the function converting to the target, a name no program can write
+# `as·text`: the function converting to the target, a name no program can write; its parameter, which a body's `it`
+# (or the name `text(p: Person)` gives) is renamed to
 conversion_name(target: text): text := "as·" + target
+converted_value = "converted·value"
+renamed(n: any, from: text, to: text): any := bottom_up(n, x => if x == symbol(from) then symbol(to) else x)
 
 # a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
 names_type(n: any, scope: any): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
@@ -284,12 +287,13 @@ converting_uses(n: any, targets: any): any := {
 # the conversion to `target`: a typed function of each source type, `as·text·Person(p: Person) := body`, and the one
 # trying them in order by the value's type, then the built-in conversion, `as·text(it: any)`
 conversion_functions(target: text, written: list, targets: any): list := {
-	it = symbol(implicit_parameter)
+	it = symbol(converted_value)
 	tried = Key(it, Op.As, symbol(target))
 	functions = []
 	for conversion in written.reverse() {
 		name = conversion_name(target) + "·" + conversion#1
-		functions += [Key(call_of(name, [Key(symbol(conversion#4), Op.Colon, symbol(conversion#1))]), Op.Define, converting_uses(conversion#3, targets))]
+		body = converting_uses(renamed(conversion#3, conversion#4, converted_value), targets)
+		functions += [Key(call_of(name, [Key(it, Op.Colon, symbol(conversion#1))]), Op.Define, body)]
 		tried = Key(Key(Key(ø, Op.If, Key(it, Op.Is, symbol(conversion#1))), Op.Then, call_of(name, [it])), Op.Else, tried)
 	}
 	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried)]
