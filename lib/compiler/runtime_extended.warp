@@ -6,6 +6,7 @@
 # call like any runtime word.
 # Loaded after runtime.warp by compiler.warp (RUNTIME_ROOTS) and src/compiler/self_hosted.rs, the words of each file its
 # `use` lines name in their order.
+use "runtime_extended/big_ints.warp"
 use "runtime_extended/exact.warp"
 use "runtime_extended/durations.warp"
 use "runtime_extended/times.warp"

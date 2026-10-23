@@ -23,7 +23,7 @@ node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_t
 }
 number_text(n: Node): text := {
 	if kind_code(n) != Kind.Int { return float_text(unboxed_float(n)) }
-	if is_ratio(n) then extended_text(n) else int_text(unboxed_int(n))
+	if is_ratio(n) or is_big_int(n) then extended_text(n) else int_text(unboxed_int(n))
 }
 # a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
 collection_text(n: Node): text := {
