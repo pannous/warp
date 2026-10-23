@@ -43,7 +43,11 @@ After a context swap, this file and your role file win over anything a handover 
   (new capabilities such as signals, threads, channels or FFI libraries) go into their own lib/<topic>/ folder (e.g.
   lib/concurrency/), written in Warp on top of the kernel and the library, not as compiler passes. Neither needs a
   question. A new pass, a new entry in passes.warp's pass lists or a new lib/compiler/*.warp file needs the user's
-  yes, asked through Supervisor before the branch is written.
+  yes, asked through Supervisor before the branch is written. Bigger changes to existing lib/compiler/*.warp files
+  (more than ~40 changed lines there, or a new lowering case, special case or refusal path) need Supervisor's OK
+  before the branch is written: send the files, functions and a 3-line reason. Supervisor checks that it isn't sugar
+  or an extension in disguise and takes the large ones to the user. Small fixes (a bug in an existing case) need no
+  question. Supervisor's merger bounces branches that skipped this.
 - New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
   declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
   when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
