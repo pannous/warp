@@ -226,6 +226,12 @@ is!("def square:=it*it; square(3)",9);
 is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
 ```
 
+## Pre-approved plans, no approval ping-pong (user 2026-10-23, very important)
+Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
+A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
+When in doubt, ask the user directly, not Supervisor. This replaces per-change OKs (pass ban, lib/compiler size
+limits) for work inside a plan.
+
 # Important
 Don't cargo clean unless absolutely necessary!
 
