@@ -1,0 +1,5 @@
+# a parameter of type block, run with `!`: prints 6 (pure lane refuses it: card pure-lane-parameter-2)
+run(n: number, body: block) := { for i in 1 to n { body! } }
+k = 0
+run(3, { k += 2 })
+print k

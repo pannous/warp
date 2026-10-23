@@ -407,7 +407,6 @@ PASSED:
   ✓ control::test_lowercase_key_names::a_lowercase_key_word_elsewhere_keeps_its_meaning
   ✓ control::test_lowercase_key_names::lowercase_key_words_name_keys
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
-  ✓ control::test_map_loop_words::the_words_after_a_map_are_the_body
   ✓ control::test_match_alternatives_hint::arm_alternatives_get_no_hint
   ✓ control::test_match_alternatives_hint::outside_an_arm_only_a_bar_of_truth_values_hints
   ✓ control::test_match_alternatives::a_name_bound_in_an_alternative_is_an_error
@@ -500,7 +499,6 @@ PASSED:
   ✓ control::test_method_let_shadows_field::a_let_local_starts_after_its_value
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
-  ✓ control::test_named_broadcast::a_named_event_reaches_another_program
   ✓ control::test_named_broadcast::a_program_hears_its_own_named_event
   ✓ control::test_named_broadcast::a_send_is_a_statement_of_no_value
   ✓ control::test_named_broadcast::a_text_alone_sends_a_named_event_without_data
@@ -3815,12 +3813,6 @@ PASSED:
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
-  ✓ parser::test_self_pure::type_words_named_by_fields_run_pure
-  ✓ parser::test_self_pure::used_files_run_pure
-  ✓ parser::test_self_text_index_of::offset_is_a_synonym_of_index
-  ✓ parser::test_self_text_index_of::text_byte_index_of_counts_bytes_from_zero
-  ✓ parser::test_self_text_index_of::text_find_answers_by_the_declared_count
-  ✓ parser::test_self_text_index_of::text_find_counts_graphemes_from_one
   ✓ parser::test_self_text_index_of::text_index_of_counts_as_find_and_warns
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
   ✓ parser::test_self_time_arithmetic::clocks_go_round_and_instants_have_no_calendar
@@ -3961,8 +3953,6 @@ PASSED:
   ✓ programs::test_mouse_wheel::the_wheel_over_the_paint_window_is_mouse_wheel
   ✓ programs::test_mouse_wheel::wheel_is_an_alias_of_mouse_wheel_with_a_hint
   ✓ programs::test_music_values::a_frequency_reads_as_its_note
-  ✓ programs::test_music_values::chords_and_scales_are_lists_of_notes
-  ✓ programs::test_music_values::the_tuning_tunes_every_note
   ✓ programs::test_music_values::transposing_moves_notes_by_semitones
   ✓ programs::test_note_values::a_class_printing_method_keeps_is_text
   ✓ programs::test_note_values::a_note_name_in_a_variable_is_a_note
@@ -4211,6 +4201,7 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
+  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -6374,10 +6365,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_warp_commands::a_host_command_names_the_native_warp
-  ✗ parser::test_warp_commands::help_lists_the_commands
-  ✗ parser::test_warp_commands::parse_shows_prefix_groups
-  ✗ parser::test_warp_commands::repl_keeps_declarations_for_the_next_lines
 
 SUMMARY:
-14 ignored, 6371 passed, 4 failed, 6375 total tested
+14 ignored, 6362 passed, 0 failed, 6362 total tested

@@ -134,15 +134,13 @@ pub fn get_or_load_library(name: &str) -> Option<Arc<Library>> {
 }
 
 /// Where the library `name` may be: a path as it is; else the usual folders and names of this system, the folders of
-/// WARP_LIBRARY_PATH (`:`-separated) first; on Linux also a versioned soname found in the library folders
-/// (libz.so.1, libcurl.so.4), on macOS a framework (`Cocoa`)
+/// WARP_LIBRARY_PATH (`:`-separated) first, then the crates cache's (`library_folders`); on Linux also a versioned
+/// soname found in the library folders (libz.so.1, libcurl.so.4, libSDL2-2.0.so.0, libpython3.13.so.1), on macOS a framework (`Cocoa`)
 pub fn library_paths(name: &str) -> Vec<String> {
 	if name.contains('/') {
 		return vec![name.to_string()];
 	}
-	let extra: Vec<String> = std::env::var("WARP_LIBRARY_PATH")
-		.map(|folders| folders.split(':').filter(|folder| !folder.is_empty()).map(str::to_string).collect())
-		.unwrap_or_default();
+	let extra = library_folders();
 	#[cfg(target_os = "macos")]
 	{
 		let mut paths: Vec<String> = extra.iter().map(|folder| format!("{folder}/lib{name}.dylib")).collect();
@@ -168,7 +166,6 @@ pub fn library_paths(name: &str) -> Vec<String> {
 			// glibc's libm.so and libc.so are linker scripts dlopen refuses: the libraries go by their soname
 			format!("lib{name}.so.6"),
 		]);
-		paths.extend(versioned_sonames(name, &extra));
 		paths.extend(version_named_sonames(name, &extra));
 		paths
 	}
@@ -179,32 +176,20 @@ pub fn library_paths(name: &str) -> Vec<String> {
 	}
 }
 
-/// The `lib<name>.so.<version>` files of the library folders, shortest name first (libz.so.1 before libz.so.1.3.1)
-#[cfg(target_os = "linux")]
-fn versioned_sonames(name: &str, extra: &[String]) -> Vec<String> {
-	let prefix = format!("lib{name}.so.");
-	let folders = extra.iter().map(String::as_str).chain([
-		"/usr/lib/x86_64-linux-gnu",
-		"/usr/lib/aarch64-linux-gnu",
-		"/lib/x86_64-linux-gnu",
-		"/lib/aarch64-linux-gnu",
-		"/usr/lib64",
-		"/usr/lib",
-		"/usr/local/lib",
-	]);
-	let mut found: Vec<String> = folders
-		.filter_map(|folder| std::fs::read_dir(folder).ok().map(|entries| (folder.to_string(), entries)))
-		.flat_map(|(folder, entries)| {
-			entries
-				.filter_map(Result::ok)
-				.filter_map(|entry| entry.file_name().into_string().ok())
-				.filter(|file| file.starts_with(&prefix))
-				.map(move |file| format!("{folder}/{file}"))
-				.collect::<Vec<_>>()
-		})
-		.collect();
-	found.sort_by_key(String::len);
-	found
+/// The folders searched before the system's: WARP_LIBRARY_PATH's, then where `scripts/warp-crate build` installs a
+/// crate's library (notes/crate_adapter.md): `$WARP_CRATES_CACHE/lib` and `/native`, by default under ~/.cache/warp/crates
+fn library_folders() -> Vec<String> {
+	let mut folders: Vec<String> = std::env::var("WARP_LIBRARY_PATH")
+		.map(|folders| folders.split(':').filter(|folder| !folder.is_empty()).map(str::to_string).collect())
+		.unwrap_or_default();
+	let cache = std::env::var("WARP_CRATES_CACHE")
+		.ok()
+		.filter(|folder| !folder.is_empty())
+		.or_else(|| std::env::var("HOME").ok().map(|home| format!("{home}/.cache/warp/crates")));
+	if let Some(cache) = cache {
+		folders.extend(["lib", "native"].map(|folder| format!("{cache}/{folder}")));
+	}
+	folders
 }
 
 /// A library named without the version its file name carries: `python` or `python3` finds libpython3.13.so.1,
@@ -224,6 +209,10 @@ fn version_named_sonames(name: &str, extra: &[String]) -> Vec<String> {
 	// the version between the name and `.so`: "3.13" of libpython3.13.so.1, as numbers
 	let version_of = |file: &str| -> Option<Vec<u32>> {
 		let version = file.strip_prefix(&prefix)?.split(".so").next()?.trim_start_matches(['.', '-']);
+		// a soname versioned after `.so` only, libz.so.1: no version, before the named ones
+		if version.is_empty() {
+			return file.starts_with(&format!("{prefix}.so.")).then(Vec::new);
+		}
 		let numbers: Option<Vec<u32>> = version.split('.').map(|part| part.parse().ok()).collect();
 		numbers.filter(|numbers| !numbers.is_empty())
 	};
@@ -238,8 +227,12 @@ fn version_named_sonames(name: &str, extra: &[String]) -> Vec<String> {
 				.collect::<Vec<_>>()
 		})
 		.collect();
+	// libz.so.1 before libz3.so.4, then the highest version first
 	found.sort_by(|(first, first_path), (second, second_path)| {
-		second.cmp(first).then(first_path.len().cmp(&second_path.len()))
+		(!first.is_empty())
+			.cmp(&!second.is_empty())
+			.then(second.cmp(first))
+			.then(first_path.len().cmp(&second_path.len()))
 	});
 	found.into_iter().map(|(_, path)| path).collect()
 }

@@ -46,4 +46,14 @@ unsetenv(name: text): i32 from 'c'
 strerror(code: i32): text from 'c'
 strstr(haystack: text, needle: text): handle from 'c'
 
+strtol(s: text, end: out, base: i32): i64 from 'c'
+strtod(s: text, end: out): f64 from 'c'
+
+// libm's float (f32) functions
+sqrtf(x: f32): f32 from 'm'
+fabsf(x: f32): f32 from 'm'
+ldexpf(x: f32, exponent: i32): f32 from 'm'
+ldexp(x: f64, exponent: i32): f64 from 'm'
+cbrt(x: f64): f64 from 'm'
+
 // SQLite's functions are in lib/native/sqlite3.warp (`use sqlite3`), other libraries' in lib/native/<library>.warp
