@@ -238,6 +238,7 @@ in Now and closes them with `todo done`.
 ## Commit everything (user 2026-10-23)
 Commit and push all meaningful progress all the time, including notes, handovers and WIP: a box or session can
 disappear at any moment and anything only on disk is lost. Unfinished work goes to its branch as a `wip:` commit.
+Pushing a work branch is always fine, so push it after every commit or two; only main goes through the Integrator.
 
 # Important
 Don't cargo clean unless absolutely necessary!
