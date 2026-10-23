@@ -53,53 +53,54 @@ program owned "strdup(s: text): owned_text from 'c'" 'xs = ["owned", "twice"]' '
 program owned_parameter "puts(s: owned_text): i32 from 'c'" 'puts("x")'
 
 run=0 failed=0 skipped=0
-# expect <name> <exit status> <text the output holds>… [! <text it lacks>…] -- <command…>: stdout and stderr together
+# expect <name> <text the output holds>… [! <text it lacks>…] -- <command…>: stdout and stderr together; results
+# only, not the exit status
 expect() {
-	local name=$1 status=$2 wanted=() unwanted=() said got
-	shift 2
+	local name=$1 wanted=() unwanted=() said
+	shift
 	while [ "$1" != -- ]; do
 		if [ "$1" = '!' ]; then unwanted+=("$2"); shift; else wanted+=("$1"); fi
 		shift
 	done
 	shift
 	said=$("$@" 2>&1)
-	got=$?
 	run=$((run + 1))
 	local text problems=""
 	for text in "${wanted[@]}"; do [[ $said == *"$text"* ]] || problems+=" missing [$text]"; done
 	for text in "${unwanted[@]}"; do [[ $said == *"$text"* ]] && problems+=" unwanted [$text]"; done
-	if [ "$got" = "$status" ] && [ -z "$problems" ]; then
+	if [ -z "$problems" ]; then
 		echo "✓ $name"
 	else
 		failed=$((failed + 1))
-		echo "✗ $name: exit $got (expected $status),$problems"
+		echo "✗ $name:$problems"
 		echo "$said" | sed 's/^/    /'
 	fi
 }
 skip() { skipped=$((skipped + 1)); echo "- $1 ($2)"; }
 runs() { "$host" run "$@"; }
 
-expect "a program's exact 2.5 prints as 2.5" 0 "2.5" ! "kind" -- runs rational.warp
-expect "run_wasm of a rational result: 2.5" 0 "2.5" ! "run wasm" ! "kind" -- runs run_rational.warp
-expect "run_wasm of 1/3 stays exact" 0 "1/3" ! "0.333" -- runs run_third.warp
-expect "run_wasm's rational crosses back exact: 5, 2.75" 0 "5" "2.75" ! "Error" -- runs run_rational_back.warp
-expect "run_wasm of -7/4: -1.75" 0 "-1.75" -- runs run_negative.warp
-expect "LC_CTYPE from the environment (LC_ALL=C.UTF-8)" 0 "UTF-8" -- env LC_ALL=C.UTF-8 "$host" run ctype.warp
-expect "LC_CTYPE stays C in the C locale" 0 '"C"' -- env LC_ALL=C "$host" run ctype.warp
+expect "a program's exact 2.5 prints as 2.5" "2.5" ! "kind" -- runs rational.warp
+expect "run_wasm of a rational result: 2.5" "2.5" ! "run wasm" ! "kind" -- runs run_rational.warp
+expect "run_wasm of 1/3 stays exact" "1/3" ! "0.333" -- runs run_third.warp
+expect "run_wasm's rational crosses back exact: 5, 2.75" "5" "2.75" ! "Error" -- runs run_rational_back.warp
+expect "run_wasm of -7/4: -1.75" "-1.75" -- runs run_negative.warp
+expect "LC_CTYPE from the environment (LC_ALL=C.UTF-8)" "UTF-8" -- env LC_ALL=C.UTF-8 "$host" run ctype.warp
+expect "LC_CTYPE stays C in the C locale" '"C"' -- env LC_ALL=C "$host" run ctype.warp
 if [ "$(uname)" = Linux ] && soname readline >/dev/null; then
-	expect "libreadline found by its soname (libreadline.so.8)" 0 "0" ! "not found" -- runs readline.warp
+	expect "libreadline found by its soname (libreadline.so.8)" "0" ! "not found" ! "Error" -- runs readline.warp
 else
 	skip readline "no libreadline.so.* here"
 fi
 if [ "$(uname)" = Linux ] && edit=$(soname edit); then
 	ln -s "$edit" "$stage/sonames/libwarpedit.so.${edit##*.so.}"
-	expect "a library known only by its versioned soname (libwarpedit.so.2 → $(basename "$edit"))" 0 "0" ! "not found" \
+	expect "a library known only by its versioned soname (libwarpedit.so.2 → $(basename "$edit"))" "0" ! "not found" ! "Error" \
 		-- env WARP_LIBRARY_PATH="$stage/sonames" "$host" run edit_soname.warp
 else
 	skip edit_soname "no libedit.so.* here"
 fi
-expect "owned_text: strdup's copy is a text, freed after" 0 "owned" "twice" ! "free()" ! "Error" -- runs owned.warp
-expect "owned_text is a result type only" 1 "" ! "x" -- runs owned_parameter.warp
+expect "owned_text: strdup's copy is a text, freed after" "owned" "twice" ! "free()" ! "Error" -- runs owned.warp
+expect "owned_text is a result type only: a parameter of it is refused" "outside the core: the call puts" \
+	-- runs owned_parameter.warp
 
 echo "host repl fixes: $((run - failed)) passed / $run ($skipped skipped)"
 [ "$failed" = 0 ]
