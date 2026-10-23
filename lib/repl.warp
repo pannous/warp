@@ -5,6 +5,12 @@
 // a value without a literal (a list holding what text_form can't write back) keeps the assignment as written
 use os
 
+// whether a file descriptor is a terminal: 1 for the console's own standard input when a person types
+isatty(fd: i32): i32 from 'c'
+// the locale from the environment: libedit crashes on a prompt beyond ASCII (🌀) in the C locale; category 0 is
+// LC_CTYPE on Linux and LC_ALL on macOS, the character type either way
+setlocale(category: i32, locale: text): text from 'c'
+
 // how many brackets a text leaves open: an entry goes on over the next lines while some are
 open_brackets(t: text) := {
 	depth = 0
@@ -46,11 +52,55 @@ assigned_name(entry: text) := {
 // a text written as warp reads it back: quoted, its backslashes, quotes and line ends escaped
 quoted(t: text) := "\"" + replace(replace(replace(t, "\\", "\\\\"), "\"", "\\\""), "\n", "\\n") + "\""
 
+// The line editor on a terminal: libedit's readline (arrows, history kept in ~/.warp_history) in a module of its own,
+// run for each line, so the console still starts where the library is missing. Its arguments: "history" and the
+// history file to load it; else the prompt and the history file: the line typed, ø at the input's end (Ctrl+D)
+editor_source() := {
+	// the library's name built from its quotes: a `from '…'` line inside a text literal is lost (card to file)
+	edit = str(chr(39)) + "edit" + str(chr(39))
+	lines = [
+		"use os",
+		"readline(prompt: text): text from " + edit,
+		"add_history(line: text): i32 from " + edit,
+		"read_history(path: text): i32 from " + edit,
+		"write_history(path: text): i32 from " + edit,
+		"if args[0] == \"history\" { read_history(args[1]) } else {",
+		"	line = readline(args[0])",
+		"	if line != ø and trim(line) != \"\" {",
+		"		add_history(line)",
+		"		write_history(args[1])",
+		"	}",
+		"	line",
+		"}"
+	]
+	join(lines, "\n")
+}
+
+// the editor's module and history file when standard input is a terminal and libedit is there, else ø: input reads
+line_editor() := {
+	if isatty(0) != 1 { return ø }
+	setlocale(0, "")
+	editor = compile_wasm(editor_source())
+	if is_error(editor) { return ø }
+	history = str(env("HOME")) + "/.warp_history"
+	loaded = try run_wasm(editor, ["history", history]) catch e { e }
+	if is_error(loaded) { return ø }
+	{bytes: editor, history: history}
+}
+
+// a line typed after the prompt, by the editor if there is one, ø at the input's end
+typed(prompt: text, editor: any) := {
+	if editor == ø { return input(prompt) }
+	line = try run_wasm(editor.bytes, [prompt, editor.history]) catch e { e }
+	if is_error(line) { return input(prompt) }
+	line
+}
+
 // one entry, the brackets of its first line still open: read on until they close, ø at the input's end
-entry_from(first: text) := {
+entry_from(first: text, editor: any) := {
 	entry = first
 	while open_brackets(entry) > 0 {
-		more = input("… ")
+		more = typed("… ", editor)
 		if more == ø { return entry }
 		entry = entry + "\n" + more
 	}
@@ -109,10 +159,11 @@ repl() := {
 	print "Interactive console (Ctrl+D to exit)"
 	session = ""
 	kept = 0
+	editor = line_editor()
 	while true {
-		line = input("🌀")
+		line = typed("🌀", editor)
 		if line == ø { break }
-		entry = trim(entry_from(line))
+		entry = trim(entry_from(line, editor))
 		if entry == "exit" or entry == "quit" { break }
 		if entry == ":help" { print repl_help }
 		else if entry == ":session" { print session }
