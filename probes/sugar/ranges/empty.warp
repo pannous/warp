@@ -1,0 +1,2 @@
+# an empty range. Expected: ø
+print 3 to 1
