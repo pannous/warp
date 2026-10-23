@@ -78,7 +78,7 @@ def module_bytes(functions: any): list {
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#gc_types + #module.imports + #functions)])) }
 	parts = [types, imported, declared, memory, tags, globals, exported, segments, codes, texts]
 	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
-	wasm_header + concatenated(parts) + names_section(functions) + marks
+	wasm_header + concatenated(parts) + names_section(functions) + marks + c_functions_custom_section()
 }
 def import_entry(i: int): list {
 	entry = module.imports#(i + 1)

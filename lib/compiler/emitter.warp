@@ -30,6 +30,7 @@ use "emitter/control_flow.warp"
 use "emitter/quotes.warp"
 use "emitter/host.warp"
 use "emitter/times.warp"
+use "emitter/c_functions.warp"
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
 type_bytes = {int: 126, float: 124, bool: 127, char: 127}
@@ -1100,6 +1101,7 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	for name in module.host.keys {
 		if (name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
 	}
+	c_function_globals()
 	for name in module.runtime.keys {
 		word = module.runtime[name]
 		word.is_runtime = yes
