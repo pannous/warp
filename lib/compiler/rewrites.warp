@@ -284,7 +284,11 @@ rule_of(statement: any, module: text, source: text): any := {
 split_at_where(n: any): any := {
 	if n is key {
 		inner = split_at_where(value_of(n))
-		return if inner == ø then ø else [Key(key_of(n), op_of(n), inner#1), inner#2]
+		if inner == ø { return ø }
+		# `$s... where statement`: the parser read the conditions as the end of the rest's range, which ends nowhere
+		before = inner#1
+		if is_group(before) and #before == 0 { before = ø }
+		return [Key(key_of(n), op_of(n), before), inner#2]
 	}
 	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 0) { return ø }
 	items = items_of(n)
@@ -640,12 +644,21 @@ with_changed_members(n: any, changed: function): any := {
 	Key(key_of(n), op_of(n), [view#1, view#2, view_of(group_like(body, members))])
 }
 
-# the code rewritten by the first rule of the place matching it
+# the code rewritten by the first rule of the place matching it, its result again by the rules of the place, until none
+# matches (`loudly gently f() := 3` loses both words to the rules `loudly $s...` and `gently $s...`, card
+# engine-placed-where-chain)
 at_place(n: any, place: text, rules: list, origins: list): any := {
 	for index in 0 ..< #rules {
 		if rules[index].place == place {
 			result = rule_applied(rules[index], origins[index], n)
-			if result != ø { return rewritten_again(result, rules, origins) }
+			if result != ø {
+				again = rewritten_again(result, rules, origins)
+				if rewrite_depth >= rewrite_depth_limit { return error_node("the rewrite rules loop: each result matches a rule again, " + rewrite_depth_limit + " times in a row") }
+				rewrite_depth += 1
+				chained = at_place(again, place, rules, origins)
+				rewrite_depth -= 1
+				return chained
+			}
 		}
 	}
 	n
