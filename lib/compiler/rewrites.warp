@@ -2,7 +2,7 @@
 # `$a` and `$xs...` bind as in a code pattern of a match, the template splices them in. `where $c = channel()` holds
 # where the hole binds a variable assigned code of that shape, or a parameter of a function called with one; `$x: text`
 # (also symbol, list, block, map, int, number) only code of that kind, a block code in braces and a map their
-# entries `{a: 1}`. More conditions follow `where`, joined by `and`:
+# entries `{a: 1}` or a name holding only maps. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
 # `$f is function`, `$x is literal`, `$x is missing` (ø, also an operand not written: `rest...`), `$x is text` (a hole
 # kind), each also `is not`, `$n < 0` (a number literal
@@ -100,6 +100,8 @@ global rewrite_depth = 0
 global rule_scope = {}
 # function → the type of its first parameter, of the program being rewritten (`where $f takes value`)
 global first_parameter_types = {}
+# the names that hold a map, of the program being rewritten (`where $m is map`)
+global rule_maps = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
@@ -126,6 +128,7 @@ rewritten_program(program: any, source: text): any := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
+	rule_maps = map_names_of(program)
 	rule_enums = enums_in(program, {})
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
@@ -161,6 +164,7 @@ sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
+	rule_maps = map_names_of(program)
 	bottom_up(program, n => sugared_node(n, rules))
 }
 
@@ -539,8 +543,25 @@ is_hole_kind(code: any, kind: text): bool := {
 	if kind == "int" { return code is int }
 	if kind == "list" { return is_group(code) and bracket_of(code) == "[" }
 	if kind == "block" { return is_curly_group(code) and not is_braced_map(code) }
-	if kind == "map" { return is_curly_group(code) and is_braced_map(code) }
+	if kind == "map" { return (is_curly_group(code) and is_braced_map(code)) or (code is symbol and rule_maps.has(name_of(code))) }
 	code is symbol and rule_hole(code) == ø
+}
+
+# the names a program gives only maps: a parameter typed map (`f(m: map)`), or a name every assignment of which is a
+# map written out (`m = {a: 1}`); a name also given anything else holds no map for sure
+map_names_of(program: any): any := {
+	maps = {}
+	others = {}
+	for n in nodes_in(program) {
+		if is_key(n, Op.Assign) and key_of(n) is symbol {
+			name = name_of(key_of(n))
+			if is_curly_group(value_of(n)) and is_braced_map(value_of(n)) { maps[name] = yes } else { others[name] = yes }
+		}
+		if is_key(n, Op.Colon) and key_of(n) is symbol and value_of(n) == symbol("map") { maps[name_of(key_of(n))] = yes }
+	}
+	only_maps = {}
+	for name in maps.keys { if not others.has(name) { only_maps[name] = yes } }
+	only_maps
 }
 
 # `{a: 1, b: 2}`: braces of entries only, a map written out, not a block of code
