@@ -128,9 +128,9 @@ remember_calls(n: Node, called: any, counted_in: function): any := {
 # called function calls that parameter with
 passed_variants(n: Node, overloaded: any, called: any): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol) { return n }
-	callee = name_of(n#1)
+	callee_name = name_of(n#1)
 	arguments = items_of(n)[1 ..]
-	passed = (1 to #arguments).map(index => passed_variant(arguments#index, parameter_key(callee, index), overloaded, called))
+	passed = (1 to #arguments).map(argument_at => passed_variant(arguments#argument_at, parameter_key(callee_name, argument_at), overloaded, called))
 	group_like(n, [n#1] + passed)
 }
 

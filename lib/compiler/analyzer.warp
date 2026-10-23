@@ -815,11 +815,11 @@ forwarded_kinds(name: Name): map := {
 	own = taken_names(defined_signatures[name])
 	forwarded = {}
 	for call in calls(value_of(defined_functions[name]), []) {
-		callee = function_parameters(call#1)
+		callee_params = function_parameters(call#1)
 		arguments = call#2
-		for index in 0..<min(#arguments, #callee) {
-			argument = arguments[index]
-			kind = scopes[call#1].kinds[callee[index].name]
+		for param_at in 0..<min(#arguments, #callee_params) {
+			argument = arguments[param_at]
+			kind = scopes[call#1].kinds[callee_params[param_at].name]
 			if argument is symbol and name_of(argument) in own and kind != "" and kind != "int" {
 				passed = name_of(argument)
 				forwarded[passed] = joined_kind(forwarded.get(passed) ?? "", kind)
