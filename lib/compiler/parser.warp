@@ -938,8 +938,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
 			} else if op#2 == "|>" {
 				left = piped(left, expression(p, powers#2))
-			} else if (op#2 == ".." or op#2 == "to") and (starts_at(p.code, "=>", p.at) or ",;)]}".contains(peek(p.code, p.at, p.n))) {
-				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`, `($as..., $bs...)`: a range without end
+			} else if (op#2 == ".." or op#2 == "to") and (starts_at(p.code, "=>", p.at) or ",;)]}".contains(peek(p.code, p.at, p.n)) or (left is symbol and name_of(left).starts_with("$") and keyword_at(p, "for"))) {
+				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`, `($as..., $bs...)`: a range without end; also a
+				// rule's rest hole before a comprehension's clause, `[$e... for $x in $xs]` (card sugar-comprehensions)
 				left = keyed(op#2, left, ø)
 			} else {
 				right = if END_BLOCK_WORDS contains op#2 then end_block_operand(p, op#2, powers#2) else expression(p, powers#2)
@@ -2730,12 +2731,17 @@ def iterable_words(p: Parser): Node := {
 	while true {
 		skip_spaces(p)
 		start = p.at
-		if p.at >= p.n or at_loop_body(p) or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") { break }
+		if p.at >= p.n or at_loop_body(p) or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") or comprehension_clause_at(p) { break }
+		// a rule's hole after the iterable is the loop's body, `for $i in 1 to $n $body` (card sugar-comprehensions)
+		if words.length == 1 and is_at(p.code, p.at, '$', p.n) and is_name_start(peek(p.code, p.at + 1, p.n)) {
+			p.iterable = false
+			return first
+		}
 		words += [header_expression(p, 81)]
 		if p.at == start { break }
 	}
 	p.iterable = false
-	ends_clause = in_comprehension(p) and (p.at >= p.n or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if"))
+	ends_clause = in_comprehension(p) and (p.at >= p.n or ITERABLE_ENDS.contains(peek(p.code, p.at, p.n)) or keyword_at(p, "if") or keyword_at(p, "for"))
 	if words.length == 1 or not (at_loop_body(p) or ends_clause) {
 		p.at = after_first
 		return first
@@ -2755,6 +2761,9 @@ def at_loop_body(p: Parser): bool {
 
 // In a list or braces, where a loop is a comprehension's clause: `[x * 2 for x in reverse xs]`
 def in_comprehension(p: Parser): bool := p.bracket == "[" or p.bracket == "{"
+
+// A comprehension's next clause, which ends the iterable before it: `for b` of `[a + b for a in xs for b in ys]`
+def comprehension_clause_at(p: Parser): bool := in_comprehension(p) and keyword_at(p, "for")
 
 // A rule's hole ending a loop's header is its body: `$body` of `for $i in 1 to $n $body`, then the line's end, a
 // closer or the rule's `where`; in a comprehension the loop is an each clause (`[$c for $c in cases of $e]`), its
@@ -3006,10 +3015,10 @@ def bare_atom(p: Parser): Node := {
 		end = symbol_end(p.code, p.at + 1, p.n)
 		hole = symbol(p.code[p.at .. end])
 		p.at = end
-		// a hole glued to `(` is called as a name is: `$f($x)`
+		// a hole glued to `(` is called as a name is, its arguments read as a call's (typed_parameters): `$f($x)`
 		if not is_at(p.code, p.at, '(', p.n) { return hole }
 		p.at = p.at + 1
-		return listed("(", "", [hole] + spread(items_until(p, ')', "(")))
+		return listed("(", "", [hole] + spread(typed_parameters(items_until(p, ')', "("))))
 	}
 	if EXACT_CONSTANTS.contains("$(c)") {
 		p.at = p.at + 1

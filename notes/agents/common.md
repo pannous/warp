@@ -38,6 +38,19 @@ After a context swap, this file and your role file win over anything a handover 
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
+  Soft ban (user 2026-10-23): the core passes compile the compiler, so new work is one of two kinds, neither a pass.
+  Sugar (new spellings of what the kernel already does) goes straight into lib/sugar/*.warp as rules. Compiler
+  extensions (new capabilities such as tuples, varargs, optional parameters, `?.`, signals, threads, channels) go
+  into core/extensions/ as one file each (core/extensions/tuples.warp); only a big topic gets its own subfolder
+  (core/extensions/concurrency/). The compiler itself moves from lib/compiler to core/ (card compiler-to-core, one
+  scripted sweep by Warp Wrapper); until then use lib/compiler/extensions/, which the sweep moves along. Plain
+  library code written in Warp (e.g. the units Quantity class) stays in lib/. Neither sugar nor extensions needs a
+  question. A new pass, a new entry in passes.warp's pass lists or a new lib/compiler/*.warp file needs the user's
+  yes, asked through Supervisor before the branch is written. Bigger changes to existing lib/compiler/*.warp files
+  (more than ~40 changed lines there, or a new lowering case, special case or refusal path) need Supervisor's OK
+  before the branch is written: send the files, functions and a 3-line reason. Supervisor checks that it isn't sugar
+  or an extension in disguise and takes the large ones to the user. Small fixes (a bug in an existing case) need no
+  question. Supervisor's merger bounces branches that skipped this.
 - New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
   declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
   when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
@@ -118,6 +131,10 @@ After a context swap, this file and your role file win over anything a handover 
   refresh with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh`, which moves the link only after a passing
   smoke test); a branch with Rust changes uses its own build. Branch self-check: `/workspace/box-slot.sh
   /workspace/selfcheck-branch.sh <branch>`.
+- Only the pure pipeline counts (user, 2026-10-23): coverage is what passes purely; the Rust compiler's results don't
+  matter. Don't cargo-build `warp` per branch: run `/workspace/box-slot.sh /workspace/cow/sol-warp-latest rebuild pure`
+  with `WARP_LIB=<tree>/lib`. Rebuild Rust only on branches that change Rust code (src/ is frozen except urgent fixes);
+  crates/warp-runtime changes need only a warp-host build. The merger refreshes the shared binary after Rust lands.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
@@ -182,6 +199,9 @@ After a context swap, this file and your role file win over anything a handover 
   Interviewer's approval only, not a new question.
 - Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
   intermediate; a test pinning one may be deleted or rewritten as one is! line.
+- Tests are result-based (user, 2026-10-23): assert what a program computes, e.g. `is! '6*7' 42`, or its printed
+  output. Don't pin incidental details such as exit codes of successful runs, internal forms, pass names, error
+  wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
 - Native-only test code: anything used only by a `#[cfg(feature = "native")]` test gets the same cfg; a whole test
   file running the CLI or std::os::unix gets it on its `mod` line, and a new `mod x;` never goes between a cfg line
   and the module it guards. Register a new test file in its folder's mod.rs before `cargo fmt` (fmt skips it).
