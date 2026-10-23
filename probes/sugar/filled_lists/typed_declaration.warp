@@ -1,0 +1,5 @@
+# a declaration typed as an array. Expected: 5 100 (the pure lane refuses it: the unknown name pixel at 2:1)
+pixel: int[100]
+pixel#1 = 5
+print pixel#1
+print pixel.length
