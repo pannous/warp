@@ -1003,6 +1003,7 @@ def reached_words(program: any): any {
 			reached[name] = yes
 			more = {}
 			if name in library_words { more[library_words[name]] = yes }
+			if system_value_kinds.has(name) { more["system_value"] = yes }
 			if name in module.runtime { collect_referred_outside(module.runtime[name], more) }
 			pending += more.keys
 		}
