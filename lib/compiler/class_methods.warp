@@ -12,6 +12,8 @@
 #   runtime or the emitter defines (`sort`) is `sum·Bag` in each class declaring it, and a call `x.sum()` the dispatcher
 #   `sum·method(x)`, which calls the function itself, sum(x), on any value not an instance of those classes: a list's
 #   `xs.sum()` still sums
+# - `x is Animal` is true of an instance of a class extending Animal too: `x is Animal or x is Dog`, and so is a
+#   dispatcher's test of each owner (widened_tests, after the methods are lifted)
 # A class keeping a member that is neither field nor method (an operator, `init`), or whose method takes another count
 # of parameters than its namesakes, stays as written: the
 # emitter refuses it as a class with methods.
@@ -46,8 +48,9 @@ methods_lifted(program: Node): Node := {
 		view = class_view(top_statement)
 		if view != ø { classes[declared_type_name(view#2)] = class_declared(top_statement, view) }
 	}
+	extended = classes.keys.any(name => #extending_classes(classes, name) > 1)
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
-	if #liftable == 0 { return program }
+	if #liftable == 0 and not extended { return program }
 	rewritten = []
 	for top_statement in top_statements {
 		view = class_view(top_statement)
@@ -58,6 +61,7 @@ methods_lifted(program: Node): Node := {
 	routes = methods_of(classes, liftable).filter(method => method in typed_words or method in functions)
 	for name in methods_of(classes, liftable) { rewritten += functions_of(classes, liftable, name, routes) }
 	if #routes > 0 { rewritten = rewritten.map(top_statement => routed(top_statement, classes, liftable, routes)) }
+	if extended { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then widened_tests(top_statement, classes) else top_statement) }
 	group_like(program, rewritten)
 }
 
@@ -185,6 +189,22 @@ routed(n: Node, classes: any, names: list, routed_methods: list): Node := match 
 # how many parameters the method of that name takes (besides its instance)
 taken_count(classes: any, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
 is_field_of_any(classes: any, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
+
+# the class and the classes of the program extending it, directly or through others
+extending_classes(classes: any, name: text): list := classes.keys.filter(other => name in lineage(classes, other))
+# that the value is an instance of the class or of one extending it: `x is Animal or x is Dog`
+instance_check(classes: any, name: text, tested_value: Node): Node := {
+	extending = extending_classes(classes, name)
+	test = Key(tested_value, Op.Is, symbol(name))
+	for class_kind in extending { if class_kind != name { test = Key(test, Op.Or, Key(tested_value, Op.Is, symbol(class_kind))) } }
+	test
+}
+# a program's test `x is Animal` of a class others extend, as instance_check; a value not a name is tested once, as
+# written
+widened_tests(n: Node, classes: any): Node := match n {
+	Key(left, Op.Is, right): { if left is symbol and right is symbol and name_of(right) in classes and #extending_classes(classes, name_of(right)) > 1 then instance_check(classes, name_of(right), left) else children(n, part => widened_tests(part, classes)) }
+	_: children(n, part => widened_tests(part, classes))
+}
 
 # the classes, each before the classes it extends
 deepest_first(classes: any, names: list): list := {
