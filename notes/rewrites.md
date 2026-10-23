@@ -35,6 +35,10 @@ rewrite speed_unit => km·per·hour                # km_per_hour
   temporary stays one (`t·3_end`).
 - Numbers multiply: a number written beside `·` (`$x·2`) leaves the product, and so does a hole that bound a number
   (`$n·ten` of 3 → `3 * ten`). A hole bound to other code (`x + 1`) is an error.
+- `··` glues with the mark itself: `loop··step` is the hidden compiler name `loop·step` (notes/compiler_temporaries.md)
+  no program can write, the way for_loops.warp marks a loop's step; `$i··end` of k is `k·end`, `$i·end··x` is
+  `k_end·x`. The parser reads `a··b` as the declared-only operator call `operator_··(a, b)`, so outside a template it is
+  an operator nothing declares, an error (lib/sugar/loops.warp: the C-style for's `loop··step: $step`).
 - A template's definition with a hole or a built name as its head (`$f(x) := …`, `twice·$f(x) := …`, which the parser
   reads as a phrase) defines that function, and a template of one parenthesized definition is that definition.
 - Open: generated names don't name their rule in help and errors yet; a built name clashing with the program's own
