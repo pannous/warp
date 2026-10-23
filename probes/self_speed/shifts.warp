@@ -1,0 +1,9 @@
+# bit shifts of table values and of loop items known only at run time
+Places = {Bool: 20, Rational: 21}
+masked(places: any): int := {
+	mask = 0
+	for place in places { mask = mask | (1 << place) }
+	mask
+}
+print(1 << Places.Bool)
+print(masked([Places.Bool, 3]))

@@ -1,0 +1,5 @@
+# a lambda changing a global, called by a function: prints 6 (pure lane 0: card pure-lane-lambda)
+run(n, body) := { for i in 1 to n { body() } }
+global k = 0
+run(3, () => k += 2)
+print k

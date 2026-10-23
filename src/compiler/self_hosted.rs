@@ -48,6 +48,9 @@ const LIBRARY_MARK: &str = "{lib}";
 const RUNTIME_WORDS: &str = "runtime.warp";
 /// The module the host words are imported from
 const HOST_MODULE: &str = "host";
+/// The file of the table of words a module may import (the host's and WASI's), and the variable it assigns
+const HOST_WORDS_FILE: &str = "host_words.warp";
+const HOST_WORDS_NAME: &str = "host_words";
 /// The levels of lib/compiler/diagnostics.warp's message files beside a warning: errors.data, hints.data
 const ERROR_LEVEL: &str = "error";
 const HINT_LEVEL: &str = "hint";
@@ -102,6 +105,8 @@ const TWINNED_PASSES: [(Pass, usize); 5] = [
 thread_local! {
 	/// Set in a worker: the stage program itself compiles with the Rust parser and passes
 	static IN_WORKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// Set while a program the pure lane refused compiles fully on Rust (after_pure)
+	static ON_RUST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// One request to a worker: its JSON, and where the result's view goes as JSON
@@ -158,7 +163,27 @@ fn compiler_folder() -> PathBuf {
 fn switch() -> Option<&'static str> {
 	static VALUE: OnceLock<Option<String>> = OnceLock::new();
 	let value = VALUE.get_or_init(|| crate::setting(SWITCH)).as_deref();
-	value.filter(|_| !IN_WORKER.with(|inside| inside.get()))
+	value.filter(|_| !IN_WORKER.with(|inside| inside.get()) && !ON_RUST.with(|on| on.get()))
+}
+
+// ⚠ WARP DOES THIS DIFFERENTLY: a program the pure lane refuses runs fully on Rust, never on the hybrid mix of
+// parser.warp, the twinned passes and Rust's other passes (decision pure-fallback, notes/hybrid_lane.md): the sugar
+// moved into lib/sugar no longer has to keep the shapes Rust's passes read → lib/sugar/*.warp
+/// `compile`, the usual compile after pure_module gave none: under WARP_SELF_HOSTED=pure, where that means the pure
+/// lane refused the program, with the switch off, so all of it runs on Rust
+pub fn after_pure<T>(compile: impl FnOnce() -> T) -> T {
+	if switch() != Some(PURE) {
+		return compile();
+	}
+	struct Restored;
+	impl Drop for Restored {
+		fn drop(&mut self) {
+			ON_RUST.with(|on| on.set(false));
+		}
+	}
+	ON_RUST.with(|on| on.set(true));
+	let _restored = Restored;
+	compile()
 }
 
 fn enabled() -> bool {
@@ -384,21 +409,37 @@ fn module_of(answer: &str) -> Result<Vec<u8>, String> {
 	}
 }
 
-/// The words a module imports from the host (src/host.rs), as JSON: {name: [[parameter kind…], [result kind…]]}, a kind
-/// as emitter.warp names it (an anyref is a "node")
+/// The words a module may import, as JSON: the table lib/compiler/host_words.warp assigns to HOST_WORDS_NAME, {name:
+/// [[parameter kind…], [result kind…], module when not the host's]}, the one compiler.warp reads too
 fn host_words() -> Result<String, Node> {
-	use wasm_encoder::ValType;
-	let kind = |value_type: &ValType| match value_type {
-		ValType::I64 => "int",
-		ValType::F64 => "float",
-		ValType::I32 => "i32",
-		_ => "node",
-	};
-	let kinds = |types: &[ValType]| types.iter().map(kind).collect::<Vec<_>>();
-	let words = crate::host::HOST_WORD_SIGNATURES
-		.iter()
-		.map(|(name, parameters, results)| (name.to_string(), serde_json::json!([kinds(parameters), kinds(results)])));
-	Ok(serde_json::Value::Object(words.collect()).to_string())
+	let file = compiler_folder().join(HOST_WORDS_FILE);
+	let source = std::fs::read_to_string(&file)
+		.map_err(|reason| crate::node::error(&format!("the host words {}: {reason}", file.display())))?;
+	let program = crate::warp_parser::parse(&source);
+	// a file of one statement parses as that statement, not as a list of it
+	let program = program.drop_meta();
+	let statements = if let Node::List(items, _, _) = program { items.clone() } else { vec![program.clone()] };
+	let table = statements.iter().find_map(|statement| match statement.drop_meta() {
+		Node::Key(name, crate::operators::Op::Assign, table) if name.drop_meta().name() == HOST_WORDS_NAME => {
+			Some(table.as_ref().clone())
+		}
+		_ => None,
+	});
+	let table = table.ok_or_else(|| crate::node::error(&format!("{} assigns no {HOST_WORDS_NAME}", file.display())))?;
+	without_meta(&table).to_json_compact().map_err(|reason| crate::node::error(&reason.to_string()))
+}
+
+/// The node without its comments and positions, at every depth: plain data
+fn without_meta(node: &Node) -> Node {
+	match node.drop_meta() {
+		Node::List(items, bracket, separator) => {
+			Node::List(items.iter().map(without_meta).collect(), bracket.clone(), separator.clone())
+		}
+		Node::Key(left, op, right) => {
+			Node::Key(Box::new(without_meta(left)), op.clone(), Box::new(without_meta(right)))
+		}
+		plain => plain.clone(),
+	}
 }
 
 /// The prelude's source, whose definitions a pure program reaches (lib/compiler/prelude_words.warp)

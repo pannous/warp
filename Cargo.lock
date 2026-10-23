@@ -3811,7 +3811,7 @@ dependencies = [
 
 [[package]]
 name = "warp-lang"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -3851,7 +3851,7 @@ dependencies = [
 
 [[package]]
 name = "warp-runtime"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "libc",
  "libloading 0.9.0",
@@ -3859,6 +3859,8 @@ dependencies = [
  "objc2 0.6.5",
  "serde_json",
  "wasmtime",
+ "wasmtime-wasi",
+ "wat",
  "winit",
  "wry",
 ]

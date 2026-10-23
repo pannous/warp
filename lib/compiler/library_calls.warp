@@ -1,55 +1,10 @@
-# `reverse xs`, `upper t`, `floor x` (card pure-lane-knows): a library word of one typed value applies to the value after
-# it, as `reverse(xs)` does, wherever it stands; a synonym calls its word (`sorted xs` is sort(xs)). A program binding
-# the word keeps its own. The words and their parameters are the typed lines of lib/prelude.warp and lib/math.warp
-# (`floor(x: number): int from warp`); a word with a default or a rest parameter takes no spaced argument.
-# `print #xs` parses as the subscript `print#xs`: a word taking one value, or a function of the program with
-# parameters, counts the value after it, `print(#xs)` (card print-hash-count).
-# Rust twins: src/lowering/words/library_words.rs word_call (`sin x`), library_signatures.rs typed_first_arity,
-# negated_calls.rs (`print #xs`)
+# `print #xs` parses as the subscript `print#xs`: a word taking one value, or a function of the program with parameters,
+# counts the value after it, `print(#xs)` (card print-hash-count), from the top, so that `print #s.names` counts the
+# field. (`reverse xs`, a library word of one typed value before its value, is lib/sugar/calls.warp's rule.)
+# Rust twin: negated_calls.rs
 use "walk.warp"
 use "scope.warp"
 use "builtin_signatures.warp"
-
-# the printing words, which count the value after them as a word of one value does
-printing_words = ["print", "puts"]
-
-# the libraries of the typed lines: warp's runtime, the emitter's expansions, libm
-typed_libraries = ["warp", "emitter", "'m'"]
-math_text = module_source("math")
-
-# word → its typed lines of lib/prelude.warp and lib/math.warp, the first written first
-global typed_word_lines = ø
-word_lines(): any := {
-	if typed_word_lines != ø { return typed_word_lines }
-	typed_word_lines = {}
-	for line in (prelude_text + "\n" + math_text).split("\n") {
-		for library in typed_libraries {
-			typed = typed_line(line, library)
-			if typed != ø {
-				if not typed_word_lines.has(typed.name) { typed_word_lines[typed.name] = [] }
-				typed_word_lines[typed.name] = typed_word_lines[typed.name] + [typed]
-			}
-		}
-	}
-	typed_word_lines
-}
-
-# whether the word's first line takes exactly one value, typed
-takes_one_typed_value(word: text): bool := {
-	lines = word_lines()
-	if not lines.has(word) { return no }
-	parameters = lines[word]#1.signature.parameters
-	#parameters == 1 and parameters#1.type_name != "" and not parameters#1.rest
-}
-
-# `word value` → `word(value)` for a library word of one typed value the program leaves free
-spaced_library_call(n: any, scope: any): any := {
-	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 is symbol) { return n }
-	written = name_of(n#1)
-	word = unaliased(written)
-	if binds(scope, written) or not takes_one_typed_value(word) { return n }
-	call_of(word, [n#2])
-}
 
 # the functions the program defines with parameters: `f(a) := …`, `def f(a) {…}`
 functions_with_parameters(program: any): list := {
@@ -69,7 +24,7 @@ counts_after(word: any, functions: list, scope: any): bool := {
 	written = name_of(word)
 	if binds_value(scope, written) { return no }
 	if functions contains written { return yes }
-	not binds(scope, written) and (printing_words contains written or takes_one_typed_value(unaliased(written)))
+	not binds(scope, written) and (value_taking_words contains written or takes_one_typed_value(unaliased(written)))
 }
 
 # [the word, the counted value] of `word#x`, or of a member chain on it: `print #s.names` parses as `(print#s).names`
@@ -90,8 +45,4 @@ counted_calls(n: any, functions: list, scope: any): any := {
 	children(n, x => counted_calls(x, functions, scope))
 }
 
-library_calls(program: any): any := {
-	scope = scope_of(program)
-	counted = counted_calls(program, functions_with_parameters(program), scope)
-	bottom_up(counted, n => spaced_library_call(n, scope))
-}
+library_calls(program: any): any := counted_calls(program, functions_with_parameters(program), scope_of(program))

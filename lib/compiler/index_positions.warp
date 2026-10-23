@@ -1,0 +1,172 @@
+# Indexes and positions (decisions index-position and index-units; Rust twin: src/lowering/collections/index_positions.rs):
+# `index` counts from 0 (`xs[i]`), `position` from 1 (`xs#p`), both ints. A variable declared one, `p: position = v`
+# or `position p = v`, holds its value counted its way: a position given to an index is one less, an index given to a
+# position one more, so `i: index = "a👍🏽b".find("b")` is 2 and `p: position = …` 3. `find(t, part)` and `index_of`
+# give positions, `byte_index_of`, `argmax` and `argmin` indexes; arithmetic with a plain int keeps what a value counts,
+# and so does a name assigned only such values. A function definition is its own scope.
+use "walk.warp"
+use "scope.warp"
+use "number_keys.warp"
+use "diagnostics.warp"
+
+position_word = "position"
+index_word = "index"
+# what a declared index or position is held as
+count_type = "int"
+# the declared count types as [base, unit] (decision index-units): the base is where it counts from, the unit what it
+# counts, characters by default (no word), bytes with the adjective `byte`; `offset` is a synonym of index
+counted_types = {"position": ["position", ""], "index": ["index", ""], "offset": ["index", ""], "byte position": ["position", "byte"], "byte index": ["index", "byte"], "byte offset": ["index", "byte"]}
+# what the counting words give
+counting_calls = {"index_of": ["position", ""], "collection_position": ["position", ""], "find": ["position", ""], "byte_index_of": ["index", "byte"], "argmax": ["index", ""], "argmin": ["index", ""]}
+
+# find answers in the declared count's unit (decision index-units): the word it is in each unit but characters
+find_word = "find"
+unit_finds = {"byte": "byte_index_of"}
+
+# what a value counts, [base, unit]; ø for a plain value
+counting(n: Node, counted: any): any := match n {
+	Symbol(name): { if name in counted then counted[name] else ø }
+	Key(receiver, Op.Dot, called): call_count(received_call(receiver, called))
+	Key(left, Op.Add, right): sum_count(counting(left, counted), counting(right, counted), yes)
+	Key(left, Op.Sub, right): sum_count(counting(left, counted), counting(right, counted), no)
+	List(items, Bracket.Round, separator): { if #items == 1 then counting(items#1, counted) else call_count(items) }
+	_: ø
+}
+# `p + 1`, `i - 1`, `1 + p`: what the counted side counts; `q - p` of two is a plain count
+sum_count(left: any, right: any, adding: bool): any := {
+	if right is ø { return left }
+	if left is ø and adding { return right }
+	ø
+}
+# `xs.argmax()`, `t.find(part)` as the call `argmax(xs)`, `find(t, part)`
+received_call(receiver: Node, called: Node): list := {
+	items = if is_group(called) then items_of(called) else [called]
+	if #items == 0 then [] else [items#1, receiver] + items[1..]
+}
+# a call of a counting word; `find(xs, x => …)` finds an item
+call_count(items: list): any := {
+	if #items < 2 or not (items#1 is symbol) or is_lambda(items#(#items)) { return ø }
+	word = name_of(items#1)
+	if word in counting_calls then counting_calls[word] else ø
+}
+
+# [name, count type, value] of `name: position = v`, `byte index name = v`; else ø
+counted_declaration(n: Node, type_words: list): any := match n {
+	Key(target, Op.Assign, value): {
+		declared = if is_key(target, Op.Colon) then value_of(target) else ø
+		if declared is symbol and name_of(declared) in type_words and key_of(target) is symbol then [name_of(key_of(target)), counted_types[name_of(declared)], value] else ø
+	}
+	List(items, Bracket.None, Separator.Space): {
+		if #items == 2 and items#1 is symbol and name_of(items#1) in type_words then declared_assignment(counted_types[name_of(items#1)], items#2) else ø
+	}
+	_: ø
+}
+declared_assignment(count: list, assignment: Node): any := match assignment {
+	Key(target, Op.Assign, value): { if target is symbol then [name_of(target), count, value] else ø }
+	_: ø
+}
+
+# the value counted as the declared count counts: from the other base one off; of another unit an error
+recounted(value: Node, counts: any, declared: list): Node := {
+	if counts is ø { return value }
+	if counts#2 != declared#2 { return diagnose(call_of("mixed_count_units", [count_name(counts), count_name(declared)]), value) }
+	if counts#1 == position_word and declared#1 == index_word { return Key(value, Op.Sub, 1) }
+	if counts#1 == index_word and declared#1 == position_word { return Key(value, Op.Add, 1) }
+	value
+}
+# `byte index b = t.find(part)`: `byte_index_of(t, part)`; any other value as it is
+found_in_unit(value: Node, unit: text): Node := {
+	call = call_items(value)
+	if unit not in unit_finds or call_count(call) is ø or call#1 != symbol(find_word) { return value }
+	call_of(unit_finds[unit], call[1..])
+}
+# the items of a call, `t.find(part)` as `find(t, part)`; [] for another node
+call_items(n: Node): list := match n {
+	Key(receiver, Op.Dot, called): received_call(receiver, called)
+	List(items, Bracket.Round, separator): { if #items == 1 then call_items(items#1) else items }
+	_: []
+}
+# `byte index`, `position` (a count of characters)
+count_name(count: list): text := if count#2 == "" then count#1 else count#2 + " " + count#1
+
+# the names one scope counts: those around it, its own declared ones, and those it assigns only values counting the
+# same way, in program order; not those of the functions it defines
+scope_counts(body: Node, counted: any, type_words: list): any := {
+	own = {}
+	for name in counted.keys() { own[name] = counted[name] }
+	statements = outer_nodes_in(body)
+	declared_names = {}
+	for n in statements {
+		declared = counted_declaration(n, type_words)
+		if declared != ø {
+			own[declared#1] = declared#2
+			declared_names[declared#1] = yes
+		}
+	}
+	for n in statements {
+		match n {
+			Key(target, Op.Assign, value): {
+				name = if target is symbol then name_of(target) else ""
+				if name != "" and name not in declared_names { own[name] = assigned_count(name, counting(value, own), own) }
+			}
+			_: ø
+		}
+	}
+	own
+}
+# a name's count after one more assignment: the same as before, or ø once two differ
+assigned_count(name: text, given: any, own: any): any := if name in own and own[name] != given then ø else given
+
+counted_node(n: Node, counted: any, type_words: list): Node := {
+	parts = definition_parts(n)
+	if parts != ø {
+		return match n {
+			Key(head, op, body): {
+				inner = unbound(counted, parts#1)
+				for parameter in counted_parameters(head, type_words) { inner[parameter#1] = parameter#2 }
+				Key(plain_counted(head, type_words), op, counted_node(body, scope_counts(body, inner, type_words), type_words))
+			}
+			_: n
+		}
+	}
+	declared = counted_declaration(n, type_words)
+	if declared != ø {
+		value = found_in_unit(counted_node(declared#3, counted, type_words), declared#2#2)
+		return Key(Key(symbol(declared#1), Op.Colon, symbol(count_type)), Op.Assign, recounted(value, counting(value, counted), declared#2))
+	}
+	children(n, x => counted_node(x, counted, type_words))
+}
+
+# [name, count] of each parameter declared a position or an index: `f(p: position)`
+counted_parameters(head: Node, type_words: list): list := nodes_in(head).map(n => declared_count(n, type_words)).filter(found => found != ø)
+declared_count(n: Node, type_words: list): any := match n {
+	Key(name, Op.Colon, type_name): { if name is symbol and type_name is symbol and name_of(type_name) in type_words then [name_of(name), counted_types[name_of(type_name)]] else ø }
+	_: ø
+}
+# the head with its counted parameters declared ints
+plain_counted(n: Node, type_words: list): Node := {
+	if declared_count(n, type_words) != ø { return Key(key_of(n), Op.Colon, symbol(count_type)) }
+	children(n, x => plain_counted(x, type_words))
+}
+# what the names around a function count, but those its parameters bind
+unbound(counted: any, parameters: list): any := {
+	seen = {}
+	for name in counted.keys() { if name not in parameters { seen[name] = counted[name] } }
+	seen
+}
+
+# the type words a program leaves free: one it assigns or declares is its own name (`index = 3`, `position: int`)
+free_type_words(program: Node): list := {
+	bound = nodes_in(program).map(bound_name).filter(name => name != "")
+	counted_types.keys().filter(word => word not in bound)
+}
+bound_name(n: Node): text := match n {
+	Key(target, op, value): { if (op == Op.Assign or op == Op.Colon) and target is symbol then name_of(target) else "" }
+	_: ""
+}
+
+index_positions(program: Node): Node := {
+	if not counted_types.keys().any(word => mentions(program, word)) { return program }
+	type_words = free_type_words(program)
+	counted_node(program, scope_counts(program, {}, type_words), type_words)
+}

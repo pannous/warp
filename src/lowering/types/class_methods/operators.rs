@@ -519,6 +519,7 @@ pub(super) fn summed_quantities<'n>(node: &'n Node, operands: &Operands) -> Opti
 	(!items.is_empty() && items.iter().all(is_quantity)).then_some(list)
 }
 
+// ⚠ WARP DOES THIS DIFFERENTLY: sum of a class's values is the fold's + on them, no summed_list case → lib/prelude.warp
 /// The list of `sum(xs)`, `xs.sum()`
 pub(super) fn summed_list(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {

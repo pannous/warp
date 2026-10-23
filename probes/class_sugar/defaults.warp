@@ -1,0 +1,7 @@
+// expected: 3 7 (sugar in a class body's defaults: `??`, `?:` of a value)
+class box {
+	size = ø ?? 3
+	fallback = 0 ?: 7
+}
+b = box{}
+print "$(b.size) $(b.fallback)"

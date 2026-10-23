@@ -36,14 +36,14 @@ fn eval_source(code: &str) -> Node {
 		Some(Err(refusal)) => return refusal,
 		None => {}
 	}
-	match lawful_program(code) {
+	crate::compiler::self_hosted::after_pure(|| match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);
 			let result = crate::graphics::shader_errors::relocated(eval_parsed(program, code), code);
 			explain_runtime_error(result, exclusive_range)
 		}
 		Err(violation) => violation,
-	}
+	})
 }
 
 /// Parse the source and check its laws; `Err` is the violation.
@@ -228,6 +228,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `5 m ± 1 cm; x * 2`: a run-time quantity with an interval amount (units.rs), before the units module is loaded for it
 	crate::numbers::units::lower_run_time_tolerances,
 	crate::modules::insert_module_classes,
+	// a used file's `pattern Definition = Key(…)`, which insert_module_classes put in front (decision node-refinements)
+	crate::lowering::named_patterns::lower,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
 	crate::lowering::type_aliases::lower,
 	// `f(t: type)` takes the type value itself, `id(x: T): T` holds a type variable as any (type_parameters.rs), before

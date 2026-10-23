@@ -1,0 +1,6 @@
+// expected: 3 2 (two loops of one variable over a list and a text)
+s = 0
+for x in [1, 2] { s += x }
+n = 0
+for x in "ab" { n += 1 }
+print "$(s) $(n)"

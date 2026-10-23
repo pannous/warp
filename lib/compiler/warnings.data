@@ -4,6 +4,8 @@
 spelled_number_join($written, $spelled, $as_sum, $as_text)	"{written} joins the texts; {spelled} spells a number"	"{as_sum} or {as_text}"
 # user issue #17: sleep counts seconds, a bare number gets the units named
 bare_sleep($amount)	"sleep needs a unit: sleep {amount}s or sleep {amount}ms (a bare number is seconds)"
+# decision byte-index-of: a text names the unit it counts a place in
+text_index_of()	"index_of of a text names no unit: it counts characters from 1, as find does; byte_index_of gives the byte offset from 0"	"find"	"text-index-of@index_of"
 # wiki/mutable.md: a statement dropping a copy word's result, an assignment of a mutating call, a dropped error value
 dropped_copy($word, $variable)	"unused value of {word} {variable}: assign it (y = {word} {variable}) or write {variable}.{word}! to change {variable}"
 assigned_mutation($target, $variable)	"{target} = …! changes {variable} too: assign the copy without `!`, or mutate {variable} first and then write {target} = {variable}"
@@ -16,6 +18,6 @@ float_equality($left, $right)	"`{left} == {right}` compares floats exactly: roun
 float_inequality($left, $right)	"`{left} != {right}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"	"use ≈ or exact numbers"
 arithmetic_conversion($whole, $target, $tight)	"`{whole} as {target}` converts the whole `{whole}`, not only its last operand"	"({whole}) as {target} or {tight}"	"arithmetic-conversion@{whole} as {target}"
 # definitions.warp (Rust twin: lowering/types/type_name_matching.rs): a function declared `: T` that can answer ø (decision optional-result)
-optional_result($function, $type)	"{function} can answer ø; declare `: {type}?`"	": {type}?"	"optional-result@{function}"
+optional_result($function, $type)	"{function} can answer ø; declare `: {type}?`"	"{type} → {type}?"	"optional-result@{function}"
 # main_globals.warp: `n = …` in a function where main has an n, taken as a new local of the function
 local_or_global($name, $function)	"does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}? (taking a new local of {function})"	"let {name} = …"	"local-or-global@{name} = …"

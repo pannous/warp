@@ -31,6 +31,11 @@
 # CLOUD_TEST_MODEL=<model>: the session's model (default haiku: it only repeats one command); a reused session gets it as
 # `/model` before each job (`--model` on a follow-up message doesn't switch it). Fast mode applies to new sessions only.
 set -uo pipefail
+CLOUD_PAUSED=$HOME/.config/warp/cloud-paused   # on the Mac only: while it exists no job starts (user 2026-10-22)
+if [ -f "$CLOUD_PAUSED" ]; then
+	echo "cloud-test: the cloud lane is paused ($CLOUD_PAUSED: $(cat "$CLOUD_PAUSED")); remove the file to resume" >&2
+	exit 3
+fi
 MODEL=${CLOUD_TEST_MODEL:-haiku}
 THIS_SCRIPT=$0                 # sent along with each job
 SLOW_TESTS=""                  # sent along with each --full shard's job: the tests it leaves out (SLOW_TESTS_LIST)
@@ -76,6 +81,7 @@ SHARD_HEADER="==== shard "     # a merged log's line before each shard's log
 RERUN_MARK="cloud-test: RERUN" # a killed run's failed tests run once more for their panic texts: lines after it count no test
 RERUN_SECONDS=600
 SLOW_TESTS_LIST=scripts/slow-tests.txt   # the tests --full leaves out and --slow runs (user 2026-10-22), in the main checkout
+PAUSED_TESTS_LIST=scripts/paused-tests.txt   # name prefixes --full leaves out and nothing runs (user 2026-10-22: the playground tests)
 SLOW_SECONDS=10                # a --full run appends each test that took this long to SLOW_TESTS_LIST
 SLOW_LEFT_OUT="slow tests left out (--slow runs them)"   # a shard's log line: the merge expects that many fewer tests
 TIMINGS=timings.tsv            # data/cloud/<run>/: each test's seconds and name, slowest first (libtest's --report-time)
@@ -157,13 +163,13 @@ unmatched_filters() {
 }
 
 # The exact names of shard <i>/<n>'s tests: the tests of every n-th test file (<folder>::<file>) of the built tests,
-# but not the slow ones (the job's file `slow`, scripts/slow-tests.txt: --slow runs them); logs how many it left out
+# but not the slow and paused ones (the job's file `slow`: scripts/slow-tests.txt, --slow runs them, and scripts/paused-tests.txt); logs how many it left out
 shard_tests() {
 	local listed
 	[ -f "$HERE_WORK/slow" ] || : > "$HERE_WORK/slow"   # missing, grep -v printed no test at all: no filter runs every test
 	listed=$(cargo test "${source_flags[@]}" "${test_args[@]}" -- --list 2>/dev/null | sed -n 's/: test$//p')
-	echo "cloud-test: shard $1: $(grep -cFxf "$HERE_WORK/slow" <<< "$listed") $SLOW_LEFT_OUT" >> "$HERE_WORK/log.txt"
-	grep -vFxf "$HERE_WORK/slow" <<< "$listed" | awk -F'::' -v shard="${1%/*}" -v shards="${1#*/}" '
+	echo "cloud-test: shard $1: $(grep -cFf "$HERE_WORK/slow" <<< "$listed") $SLOW_LEFT_OUT" >> "$HERE_WORK/log.txt"
+	grep -vFf "$HERE_WORK/slow" <<< "$listed" | awk -F'::' -v shard="${1%/*}" -v shards="${1#*/}" '
 		{ file = NF < 3 ? $0 : $1 "::" $2; if (!(file in number)) number[file] = files++; if (number[file] % shards == shard - 1) print }'
 }
 
@@ -815,6 +821,8 @@ merge_shards() {
 
 # The tests of SLOW_TESTS_LIST, one per line
 slow_tests() { grep -v '^#' "$MAIN_CHECKOUT/$SLOW_TESTS_LIST" | grep .; }
+# what --full leaves out: the slow tests (exact names) and the paused ones (name prefixes), matched as substrings
+left_out_tests() { slow_tests; grep -v '^#' "$MAIN_CHECKOUT/$PAUSED_TESTS_LIST" | grep .; }
 
 # Appends to SLOW_TESTS_LIST each test of the run in <folder> that took SLOW_SECONDS or more (its timings, or libtest's
 # "running for over 60 seconds"), commits and pushes the list alone, and says so in the result
@@ -887,7 +895,7 @@ main() {
 	if [ $# -eq 3 ] && [ "$3" = --full ]; then
 		local shard
 		if [ -z "$result_only" ]; then
-			SLOW_TESTS=$(slow_tests)
+			SLOW_TESTS=$(left_out_tests)
 			for shard in $(seq 1 $FULL_SHARDS); do launch "$1" "$2" --full $SHARD_FLAG "$shard/$FULL_SHARDS" || exit; done
 		fi
 		[ -n "$wait$result_only" ] && collect_full "$1" "$2" "$card"

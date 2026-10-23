@@ -1,9 +1,10 @@
 # `for` loops lower to the `while` loop (card pure-runs; Rust twin: src/lowering/control/for_loop.rs):
-# `for i in a..b body` → `i = a; i·end = b; while i < i·end { body; i++ }` (`to` and `...` include b: `<=`), so b is
+# `for i in a..b body` → `i = a; i·end·1 = b; while i < i·end·1 { body; i++ }` (`to` and `...` include b: `<=`), so b is
 #   evaluated once, before the loop, and i is b (b+1) afterwards
-# `for x in xs body`   → `x·items = xs; x·index = 0; while x·index < #x·items { x = x·items#(x·index+1); body; x·index++ }`
+# `for x in xs body`   → `x·items·2 = xs; x·index·2 = 0; while x·index·2 < #x·items·2 { x = x·items·2#(x·index·2+1); body;
+#   x·index·2++ }`, each loop numbering its hidden names
 # `for i in b down to a body` (the parser's `reverse(a to b)`) → `i = b; while i >= a { body; i-- }`
-# `for xs body` loops with the variable `it`. Any other `for` stays as written and is refused downstream, loudly.
+# (`for xs body`, the loop of `it`, is lib/sugar/loops.warp's.) Any other `for` stays as written and is refused downstream, loudly.
 # The step is marked `loop·step: i++`, as Rust marks it (node_views.rs SHOWN_STEP): a `continue` still runs it, and
 # the loop's value is the body's, not the step's.
 use "walk.warp"
@@ -13,8 +14,18 @@ use "scope.warp"
 
 marked_step(step: Node): Node := Key(symbol("loop·step"), Op.Colon, step)
 
-loop_name(variable: Node, suffix: text): Node := match variable {
-	Symbol(name): symbol(name + "·" + suffix)
+# the loops lowered so far: a loop's hidden names carry its number, so two loops of one variable, over a list and
+# over a text, keep their own
+loops_made = 0
+
+next_loop(): int := {
+	global loops_made
+	loops_made += 1
+	loops_made
+}
+
+loop_name(variable: Node, suffix: text, loop: int): Node := match variable {
+	Symbol(name): symbol(name + "·" + suffix + "·" + loop)
 	_: variable
 }
 
@@ -39,7 +50,7 @@ stepped(variable: Node, start: Node, end: Node, condition: Node, step: any, body
 	limit = end
 	setup = [Key(variable, Op.Assign, start)]
 	if not (end is number) {
-		limit = loop_name(variable, "end")
+		limit = loop_name(variable, "end", next_loop())
 		setup = setup + [Key(limit, Op.Assign, end)]
 	}
 	statement_sequence(setup + [while_loop(Key(variable, condition, limit), body_statements(body) + [marked_step(Key(variable, step, ø))])])
@@ -61,8 +72,9 @@ walked(variable: Node, iterable: Node, body: Node): Node := walked_kept(variable
 # a walk whose body runs only for the items of the type `kept` (ø: every item); the item is tested as read, before
 # the variable holds it (a character held by a text variable is a text)
 walked_kept(variable: Node, iterable: Node, body: Node, kept: any): Node := {
-	items = loop_name(variable, "items")
-	index = loop_name(variable, "index")
+	loop = next_loop()
+	items = loop_name(variable, "items", loop)
+	index = loop_name(variable, "index", loop)
 	element = Key(items, Op.Hash, Key(index, Op.Add, 1))
 	statements = body_statements(body)
 	if kept != ø {
@@ -93,6 +105,9 @@ is_map_literal(n: Node): bool := {
 # the names the nodes assign a written map (`m = {a: 1}`)
 map_names(nodes: list): list := nodes.filter(n => is_key(n, Op.Assign) and key_of(n) is symbol and is_map_literal(value_of(n))).map(n => name_of(key_of(n)))
 
+# the parameters a function head declares maps (`f(t: map)`); a class's fields of that name stay out
+declared_maps(nodes: list): list := nodes.filter(n => is_key(n, Op.Colon) and key_of(n) is symbol and value_of(n) == symbol("map")).map(n => name_of(key_of(n)))
+
 # `k, v` or `(k, v)`: the two names a loop over a map binds
 is_name_pair(n: Node): bool := is_group(n) and #n == 2 and is_name(n#1) and is_name(n#2)
 
@@ -121,7 +136,6 @@ lowered_for(n: Node, maps: list): Node := match n {
 			if filters_by_type(parts#2) { return walked_kept(parts#2, iterable, parts#5, name_of(parts#2)) }
 			if is_name(parts#2) { return loop_over(parts#2, iterable, parts#5) }
 		}
-		if #parts == 3 and parts#1 == symbol("for") { return loop_over(symbol(implicit_parameter), parts#2, parts#3) }
 		n
 	}
 	_: n
@@ -130,7 +144,7 @@ lowered_for(n: Node, maps: list): Node := match n {
 # a loop sees the maps of its own function and of the functions and program around it, as Rust's Names::within: a
 # list `found` stays a list beside another function's map `found`, a nested function's maps stay its own
 scoped_for_loops(n: Node, outer: list): Node := {
-	maps = if is_function_definition(n) then outer + map_names(outer_nodes_in(value_of(n))) else outer
+	maps = if is_function_definition(n) then outer + declared_maps(nodes_in(key_of(n))) + map_names(outer_nodes_in(value_of(n))) else outer
 	lowered_for(children(n, x => scoped_for_loops(x, maps)), maps)
 }
 

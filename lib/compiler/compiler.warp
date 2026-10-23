@@ -9,7 +9,9 @@ use os
 use file
 
 # lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the folder above this file's
-library_folder = if #args > 3 then args#4 else env("WARP_LIB") ?? folder_of(module_directory)
+library_folder = if #args > 3 then args#4 else run_library()
+# the messages of the diagnostics from that lib/, not from the folder this compiler was built in
+messages_from(library_folder + "/compiler")
 
 # the name the lowered runtime words are kept under
 RUNTIME_WORDS = "compiler.warp's lowered runtime words of " + library_folder
@@ -17,9 +19,16 @@ RUNTIME_WORDS = "compiler.warp's lowered runtime words of " + library_folder
 # the prelude's text, whose definitions a program reaches (prelude_words.warp)
 prelude_source = read(library_folder + "/prelude.warp")
 
+# the runtime words lowered and kept; keep's answer unused, so a host without the module cache (plain wasmtime answering
+# its imports with defaults) still gets the words
+lowered_runtime_words(): Node := {
+	words = lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source)
+	keep(RUNTIME_WORDS, words)
+	words
+}
 # the runtime words, lowered by the same passes as a program; the same at every run while lib/ stays as it is, so kept
 # across runs and lowered once (card pure-warm-start)
-runtime_words = kept(RUNTIME_WORDS) ?? keep(RUNTIME_WORDS, lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source))
+runtime_words = kept(RUNTIME_WORDS) ?? lowered_runtime_words()
 
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core
 compile(source: text, folder: text): any := {

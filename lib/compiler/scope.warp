@@ -199,30 +199,19 @@ rewritten_by(n: Node, table: list): Node := {
 }
 # TODO a function value in a local, `rewrite = entry#2; rewrite(n)`, once it is called (card function-value-read)
 rewritten_if(n: Node, accepts: function, rewritten: function): Node := if has_own_word(n, accepts) then rewritten(n) else n
-# ⚠ WARP DOES THIS DIFFERENTLY: hides a self-lane miscompile, card self-cold-trap. The test is called only here, on
-# a list of words: handing `accepts` on to is_word_of_item / is_declaration_word made compiler-self trap while lowering
-# runtime.warp (only with a cold module cache; a warm one skips that lowering, which is why fe31d1c072 took it for a
-# stale build). Keep this form until that miscompile is fixed.
-has_own_word(n: Node, accepts: function): bool := own_words(n).any(word => accepts(word))
 # a node's own words: its items' words, a key's operator, a declaration head's name (`type of`)
-own_words(n: Node): list := candidate_words(n).filter(word => word is not ø)
-candidate_words(n: Node): list := match n {
-	List(parts, _, _): flat_words(parts)
-	Key(left, op, right): [if left == symbol(opaque_word) then type_view_name(right) else symbol(op as text)]
-	_: []
+has_own_word(n: Node, accepts: function): bool := match n {
+	List(parts, _, _): parts.any(part => is_word_of_item(part, accepts))
+	Key(left, op, right): { if left == symbol(opaque_word) then is_declaration_word(right, accepts) else accepts(symbol(op as text)) }
+	_: no
 }
-# the items' words: the word itself, a declaration head's name, the words of a phrase the parser grouped inside the
+# an item's words: the word itself, a declaration head's name, the words of a phrase the parser grouped inside the
 # phrase (`x = sum of xs` arrives as `sum (of xs)`)
-flat_words(parts: list): list := {
-	words = []
-	for part in parts { words += item_words(part) }
-	words
+is_word_of_item(part: Node, accepts: function): bool := match part {
+	Symbol(name): accepts(part)
+	List(words, Bracket.None, Separator.Space): words.any(word => is_word_of_item(word, accepts))
+	Key(left, op, right): left == symbol(opaque_word) and is_declaration_word(right, accepts)
+	_: no
 }
-item_words(part: Node): list := match part {
-	Symbol(name): [part]
-	List(words, Bracket.None, Separator.Space): flat_words(words)
-	Key(left, op, right): [if left == symbol(opaque_word) then type_view_name(right) else ø]
-	_: []
-}
-# the name of the opaque view of a type, else ø
-type_view_name(view: any): any := if kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" then node_of(view#2) else ø
+# the opaque view of a type whose name is a word accepts takes
+is_declaration_word(view: any, accepts: function): bool := kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" and accepts(node_of(view#2))
