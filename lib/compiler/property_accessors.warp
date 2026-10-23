@@ -123,7 +123,8 @@ key_accessed(left: Node, op: Op, right: Node, properties: any, scope: any): Node
 
 # the setter's body, its parameter the value; a property without a setter is a loud error where it is written
 property_written(name: text, value: Node, properties: any): Node := {
-	if not properties.setters.has(name) { return call_of("raise", [Text(name + " is read-only, it has no setter")]) }
+	# (parsed, not a Text(…) node built here: the self-hosted compiler compiling itself has no node constructors)
+	if not properties.setters.has(name) { return plain_node(parsed("raise \"" + name + " is read-only, it has no setter\"")) }
 	setter_with_value(properties.setters[name], properties.parameters[name], value)
 }
 
