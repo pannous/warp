@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # What the launcher packaging/bin/warp prints and exits with (notes/pure_wrapper.md): programs through the pure
 # pipeline, other commands through warp-rust. Run it through the queue: tests/queue.sh tests/launcher/test_launcher.sh
-# The Rust binary under test is WARP_LAUNCHER_RUST (default the checkout's target/debug/warp) with compiler.wasm and
+# The Rust binary under test is WARP_LAUNCHER_RUST (default the shared warp, scripts/shared-warp.sh) with compiler.wasm and
 # compiler-self.wasm beside it (`warp rebuild pure`, `warp rebuild self`); it and the launcher are staged together in
 # scratch/launcher-test/, as installed. Refusals and failures come from a stand-in warp-rust (stub_rust below), so these
 # checks hold whatever the pure pipeline covers.
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
-rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
+rust=${WARP_LAUNCHER_RUST:-$("$checkout"/scripts/shared-warp.sh "$checkout")}
 stage=$checkout/scratch/launcher-test
 hello=$checkout/samples/hello/hello.warp
 HELLO='"Hello 🌍2026"'

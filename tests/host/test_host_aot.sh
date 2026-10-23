@@ -8,7 +8,7 @@ checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
 [ -x "$host" ] || host=$checkout/target/debug/warp-host
-rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
+rust=${WARP_LAUNCHER_RUST:-$("$checkout"/scripts/shared-warp.sh "$checkout")}
 stage=$checkout/scratch/host-aot-test
 HELLO='"Hello 🌍2026"'
 export WARP_HOST_CACHE=${WARP_HOST_CACHE:-$checkout/scratch/host-cache} WARP_NO_WINDOW=1 WARP_HINTS=0
