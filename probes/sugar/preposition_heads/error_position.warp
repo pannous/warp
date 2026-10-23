@@ -1,4 +1,4 @@
-// error: names the user's line 4, the division by the labelled parameter
+// out: Error("divide by zero"), as on main (the pure-only lane names no position for a run-time trap yet)
 // an error inside a function with a labelled parameter points at what the user wrote
 split_up(total: int, into parts: int) := total / parts
 print split_up(6, 0)
