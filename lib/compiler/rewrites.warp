@@ -1,7 +1,8 @@
 # `rewrite PATTERN => TEMPLATE` (cards compiler-modules, pure-rewrite): code extending the compiler. A pattern's holes
 # `$a` and `$xs...` bind as in a code pattern of a match, the template splices them in. `where $c = channel()` holds
 # where the hole binds a variable assigned code of that shape, or a parameter of a function called with one; `$x: text`
-# (also symbol, list, block, int, number) only code of that kind. More conditions follow `where`, joined by `and`:
+# (also symbol, list, block, map, int, number) only code of that kind, a block code in braces and a map their
+# entries `{a: 1}`. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
 # `$f is function`, `$x is literal`, `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
@@ -39,7 +40,7 @@ rule_hole_mark = "$"
 # the characters of a word in a rule's text besides letters and digits
 rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
-hole_kinds = ["text", "symbol", "list", "block", "int", "number"]
+hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
 code_properties = ["type", "unbound", "value", "function", "literal", "enum"]
 # `cases of $e` in a template: the cases of the enum the hole names, among the items there (F9)
@@ -389,7 +390,13 @@ named_enum(code: any): text := {
 # whether the code a hole bound passes the condition
 condition_holds(condition: any, bound: any): bool := {
 	if is_negation(condition) { return not condition_holds(value_of(condition), bound) }
-	if is_takes(condition) { return first_parameter_fits(bound[rule_hole(condition#1)], name_of(condition#3)) }
+	if is_takes(condition) {
+		hole = rule_hole(condition#1)
+		if not first_parameter_fits(bound[hole], name_of(condition#3)) { return no }
+		# `$f takes one` binds the word the synonym calls: `size xs` is count(xs)
+		if name_of(condition#3) == one_word { bound[hole] = placed(symbol(unaliased(name_of(bound[hole]))), bound[hole]) }
+		return yes
+	}
 	hole = rule_hole(key_of(condition))
 	if not bound.has(hole) { return no }
 	code = bound[hole]
@@ -494,9 +501,13 @@ is_hole_kind(code: any, kind: text): bool := {
 	if kind == "number" { return code is number }
 	if kind == "int" { return code is int }
 	if kind == "list" { return is_group(code) and bracket_of(code) == "[" }
-	if kind == "block" { return is_curly_group(code) }
+	if kind == "block" { return is_curly_group(code) and not is_braced_map(code) }
+	if kind == "map" { return is_curly_group(code) and is_braced_map(code) }
 	code is symbol and rule_hole(code) == ø
 }
+
+# `{a: 1, b: 2}`: braces of entries only, a map written out, not a block of code
+is_braced_map(code: any): bool := #code > 0 and items_of(code).all(item => is_key(item, Op.Colon) and key_of(item) != symbol(opaque_word))
 
 # the pattern's words that are no holes
 literal_words(pattern: any): list := mentioned_names(pattern, []).filter(name => not name.starts_with(rule_hole_mark))
