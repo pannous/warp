@@ -10,7 +10,7 @@ use "../library_words.warp"
 use "../nodes.warp"
 use "../../byte_codes.warp"
 # durations.warp's duration_text and its nanosecond constants
-use "durations.warp"
+use "../durations.warp"
 is_time(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Time
 is_instant(t: Node): bool := time_form(t) == TimeFormCode.Instant
 is_date(t: Node): bool := time_form(t) == TimeFormCode.Date
