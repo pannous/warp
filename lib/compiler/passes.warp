@@ -2,7 +2,6 @@
 # each pass twin in the order src/pipeline.rs runs its Rust twin. A pass joins here once its twin matches.
 use "parser.warp"
 use "interpolation.warp"
-use "welcome_forms.warp"
 use "number_words.warp"
 use "of_lookups.warp"
 use "definitions.warp"
@@ -10,7 +9,7 @@ use "multiple_assignments.warp"
 use "clauses.warp"
 use "phrase_blocks.warp"
 use "comprehensions.warp"
-use "for_loops.warp"
+use "loop_heads.warp"
 use "list_methods.warp"
 use "node_matches.warp"
 use "node_cases.warp"
@@ -38,11 +37,13 @@ use "library_calls.warp"
 sugar_phrases_table = [[is_lookup_word, lookup_phrase]]
 sugar_phrases(program: Node): Node := keyword_rewrites(program, sugar_phrases_table)
 
-passes = [interpolation, match_arms, arrow_result_types, sugar_phrases, number_words_pass]
+# the twins Rust's WARP_SELF_HOSTED=1 lane drives by index (self_hosted.rs TWINNED_PASSES); match arms and arrow result
+# types are lib/sugar/arms.warp's and heads.warp's rules now, their places kept so the indexes hold
+passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [bare_returns, first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, sugar, lambdas, for_loops, late_sugar, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehensions, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
@@ -58,6 +59,7 @@ lowered_program(source: text, folder: text, prelude: text): Node := lowered_node
 global kept_first_sugar = []
 global kept_sugar = []
 # the late sugar rules it keeps (rewrites.warp late_sugar_module_names)
+global kept_iteration_sugar = []
 global kept_late_sugar = []
 # (the rewrite rules first, as Rust's lowering runs them before any pass: a fired module's `use` brings its words;
 # after interpolation, so that a rule sees the code in a text's holes, `"$(2 in xs)"`; declared counts before the
@@ -68,6 +70,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	own = interpolation(with_uses(program, folder))
 	kept_first_sugar = sugar_rules(own, first_sugar_module_names)
 	kept_sugar = sugar_rules(own, sugar_module_names)
+	kept_iteration_sugar = sugar_rules(own, iteration_sugar_module_names)
 	kept_late_sugar = sugar_rules(own, late_sugar_module_names)
 	with_reached(with_used_modules(with_type_module_uses(index_positions(rewritten_program(own, source))), folder), prelude, no)
 }
@@ -78,7 +81,10 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 # `xs.add(x)`, of_lookups `keys in m`)
 first_sugar(program: Node): Node := sugared(program, kept_first_sugar)
 sugar(program: Node): Node := sugared(program, kept_sugar)
-# the late sugar rules, after for_loops took the loops over a range
+# the iteration sugar rules, which lower the `for` loops the passes before them made and loop_heads.warp read, while a
+# range in a loop's head is not yet a list
+iteration_sugar(program: Node): Node := sugared(program, kept_iteration_sugar)
+# the late sugar rules, after the iteration sugar took the loops over a range
 late_sugar(program: Node): Node := sugared(program, kept_late_sugar)
 
 # the source text as the passes leave it, as its view

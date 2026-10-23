@@ -77,12 +77,13 @@ value_word = "value"
 one_word = "one"
 # the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
-# Three steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
+# Four steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
-# making or reading the forms its rules take, and the late sugar after for_loops took the loops a range counts: a
-# range left is a value (sugar/ranges)
-first_sugar_module_names = ["sugar/lists", "sugar/comparisons"]
+# making or reading the forms its rules take, the iteration sugar lowering the `for` loops once loop_heads.warp read
+# their heads, and the late sugar after it took the loops a range counts: a range left is a value (sugar/ranges)
+first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads"]
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls"]
+iteration_sugar_module_names = ["sugar/iteration"]
 late_sugar_module_names = ["sugar/ranges"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
@@ -132,12 +133,11 @@ rewritten_program(program: any, source: text): any := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
-	rule_maps = map_names_of(program)
 	rule_enums = enums_in(program, {})
 	rule_case_holders = case_holders_of(program)
 	origins = rules.map(rule => if rule.shape == ø then {} else names_assigned_shape(program, rule.shape))
 	fired_modules = []
-	program = bottom_up(program, n => rule_rewritten(n, rules, origins))
+	program = map_scoped_bottom_up(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
 	uses = []
 	for module in fired_modules {
 		statement = plain_node(parsed("use " + module))
@@ -169,9 +169,8 @@ sugared(program: Node, rules: list): Node := {
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
-	rule_maps = map_names_of(program)
 	rule_case_holders = case_holders_of(program)
-	bottom_up(program, n => sugared_node(n, rules))
+	map_scoped_bottom_up(program, n => sugared_node(n, rules), map_names_of(program))
 }
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
@@ -194,7 +193,7 @@ sugar_at_place(n: any, place: text, rules: list): any := {
 	for rule in rules {
 		if rule.place == place {
 			result = rule_applied(rule, {}, n)
-			if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
 		}
 	}
 	n
@@ -207,19 +206,28 @@ sugar_rewritten(n: any, rules: list): any := {
 	for rule in rules {
 		if rule.place == "" {
 			result = rule_applied(rule, {}, n)
-			if result == ø and written != ø { result = rule_applied(rule, {}, written) }
-			if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+			if not changes(result, n) and written != ø { result = regrouped(rule_applied(rule, {}, written), n) }
+			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
 		}
 	}
 	n
 }
 
+# a result of a phrase matched in its parentheses, `(match x {…})`, back in them
+regrouped(result: any, n: any): any := if result != ø and is_round(n) then List([as_value(result)], Bracket.Round, separator_of(n)) else result
+
+# whether a rule's result changes the code it rewrote, positions aside: a rule whose result is that code didn't fire (else a rule
+# matching its own result, `match $s {…}` of the arms it left, would rewrite it forever)
+changes(result: any, n: any): bool := result != ø and view_of(result) != view_of(n)
+
 # a phrase holding phrases as its words as written, which a phrase rule matches as the module rules do (the parser
-# nests `print each xs` as `print (each xs)`), else ø
+# nests `print each xs` as `print (each xs)`), also a phrase in parentheses; else ø
 flattened_phrase(n: any): any := match n {
 	List(items, Bracket.None, Separator.Space): {
 		if items.any(item => is_group(item) and bracket_of(item) == "" and separator_of(item) == " ") then List(words_of_all(items), Bracket.None, Separator.Space) else ø
 	}
+	# `print(match x {…})`: parentheses around a phrase only group it
+	List(items, Bracket.Round, Separator.Space): List(words_of_all(items), Bracket.None, Separator.Space)
 	_: ø
 }
 
@@ -615,19 +623,36 @@ is_hole_kind(code: any, kind: text): bool := {
 
 # the names a program gives only maps: a parameter typed map (`f(m: map)`), or a name every assignment of which is a
 # map written out (`m = {a: 1}`); a name also given anything else holds no map for sure
-map_names_of(program: any): any := {
+map_names_of(program: any): any := map_names_in(outer_nodes_in(program), {})
+
+# the names among the outer maps and those the nodes assign a written map or declare a parameter `map` that hold
+# only maps there: a name the nodes assign another value or declare another type (`found: list`) is no map
+map_names_in(nodes: list, outer: any): any := {
 	maps = {}
 	others = {}
-	for n in nodes_in(program) {
+	for n in nodes {
 		if is_key(n, Op.Assign) and key_of(n) is symbol {
 			name = name_of(key_of(n))
 			if is_curly_group(value_of(n)) and is_braced_map(value_of(n)) { maps[name] = yes } else { others[name] = yes }
 		}
-		if is_key(n, Op.Colon) and key_of(n) is symbol and value_of(n) == symbol("map") { maps[name_of(key_of(n))] = yes }
+		if is_key(n, Op.Colon) and key_of(n) is symbol and value_of(n) is symbol {
+			if value_of(n) == symbol("map") { maps[name_of(key_of(n))] = yes } else { others[name_of(key_of(n))] = yes }
+		}
 	}
 	only_maps = {}
+	for name in outer.keys { if not others.has(name) { only_maps[name] = yes } }
 	for name in maps.keys { if not others.has(name) { only_maps[name] = yes } }
 	only_maps
+}
+
+# the node walked bottom-up by f, rule_maps holding the names that hold a map where f meets each node: those of the
+# program, inside a function its own over them, as Rust's Names::within (a list `found` beside another function's
+# map `found`; a nested function's maps stay its own)
+map_scoped_bottom_up(n: Node, f: function, maps: any): Node := {
+	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
+	walked = children(n, x => map_scoped_bottom_up(x, f, inner))
+	rule_maps = maps
+	f(walked)
 }
 
 # name → the enum whose cases it holds: a parameter typed with an enum (`c: Coin`), or a name every assignment of which
@@ -1071,7 +1096,7 @@ each_spliced(parts: list, bound: any, at: any): any := {
 	}
 	rows = each_rows(clause#3, bound, at)
 	if rows == ø { return ø }
-	each = if is_group(parts#1) and bracket_of(parts#1) == "(" and #parts#1 == 1 then parts#1#1 else parts#1
+	each = ungrouped_one(parts#1)
 	spliced = []
 	for position in 1 to #rows {
 		binding = item_binding(pattern, rows#position, bound)
@@ -1117,8 +1142,12 @@ item_binding(pattern: any, row: list, bound: any): any := {
 	if rule_matches(ungrouped_one(pattern), ungrouped_one(row#1), binding) then binding else ø
 }
 
-# `(x)`: parentheses around one item only group it
-ungrouped_one(n: any): any := if is_round(n) and #n == 1 then n#1 else n
+# `(x)`, `(case $k: $v)`, `($ks..., $k => $v)`: parentheses around one item, a phrase or a comma list only group it
+ungrouped_one(n: any): any := {
+	if is_round(n) and #n == 1 { return n#1 }
+	if is_round(n) and (separator_of(n) == " " or separator_of(n) == ",") { return separated(bracketed(items_of(n), ""), separator_of(n)) }
+	n
+}
 
 # `cases of $e`: the cases of the enum the hole names, placed at `at`, else ø (F9)
 cases_spliced(parts: list, bound: any, at: any): any := {
