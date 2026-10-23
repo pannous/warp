@@ -47,13 +47,18 @@ defines_property(line: text): bool := {
 # the properties `definitions` define, into the table: "object.property" → its getter's body, its setter's body and
 # parameter, the module it needs
 def properties_collected(definitions: list, module: text, table: any) {
+	# (through locals: `table.getters[name] = …` errors "not an int", as analyzer.warp notes for `m[k][i] = v`)
+	getters = table.getters
+	setters = table.setters
+	parameters = table.parameters
+	owners = table.owners
 	for found in definitions {
 		name = found#1 + "." + found#2
-		if found#3 == "" { table.getters[name] = found#4 } else {
-			table.setters[name] = found#4
-			table.parameters[name] = found#3
+		if found#3 == "" { getters[name] = found#4 } else {
+			setters[name] = found#4
+			parameters[name] = found#3
 		}
-		table.owners[name] = module
+		owners[name] = module
 	}
 }
 property_definitions(statements: list): list := statements.map(property_definition).filter(found => found != ø)
