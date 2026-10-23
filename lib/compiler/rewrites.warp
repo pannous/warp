@@ -81,7 +81,7 @@ one_word = "one"
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
 # making or reading the forms its rules take, and the late sugar after for_loops took the loops a range counts: a
 # range left is a value (sugar/ranges)
-first_sugar_module_names = ["sugar/lists", "sugar/comparisons"]
+first_sugar_module_names = ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads"]
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls"]
 late_sugar_module_names = ["sugar/ranges"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
@@ -194,7 +194,7 @@ sugar_at_place(n: any, place: text, rules: list): any := {
 	for rule in rules {
 		if rule.place == place {
 			result = rule_applied(rule, {}, n)
-			if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
 		}
 	}
 	n
@@ -207,19 +207,28 @@ sugar_rewritten(n: any, rules: list): any := {
 	for rule in rules {
 		if rule.place == "" {
 			result = rule_applied(rule, {}, n)
-			if result == ø and written != ø { result = rule_applied(rule, {}, written) }
-			if result != ø { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+			if not changes(result, n) and written != ø { result = regrouped(rule_applied(rule, {}, written), n) }
+			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
 		}
 	}
 	n
 }
 
+# a result of a phrase matched in its parentheses, `(match x {…})`, back in them
+regrouped(result: any, n: any): any := if result != ø and is_round(n) then List([as_value(result)], Bracket.Round, separator_of(n)) else result
+
+# whether a rule's result changes the code it rewrote, positions aside: a rule whose result is that code didn't fire (else a rule
+# matching its own result, `match $s {…}` of the arms it left, would rewrite it forever)
+changes(result: any, n: any): bool := result != ø and view_of(result) != view_of(n)
+
 # a phrase holding phrases as its words as written, which a phrase rule matches as the module rules do (the parser
-# nests `print each xs` as `print (each xs)`), else ø
+# nests `print each xs` as `print (each xs)`), also a phrase in parentheses; else ø
 flattened_phrase(n: any): any := match n {
 	List(items, Bracket.None, Separator.Space): {
 		if items.any(item => is_group(item) and bracket_of(item) == "" and separator_of(item) == " ") then List(words_of_all(items), Bracket.None, Separator.Space) else ø
 	}
+	# `print(match x {…})`: parentheses around a phrase only group it
+	List(items, Bracket.Round, Separator.Space): List(words_of_all(items), Bracket.None, Separator.Space)
 	_: ø
 }
 
@@ -1040,8 +1049,12 @@ item_binding(pattern: any, row: list, bound: any): any := {
 	if rule_matches(ungrouped_one(pattern), ungrouped_one(row#1), binding) then binding else ø
 }
 
-# `(x)`: parentheses around one item only group it
-ungrouped_one(n: any): any := if is_round(n) and #n == 1 then n#1 else n
+# `(x)`, `(case $k: $v)`: parentheses around one item or a phrase only group it
+ungrouped_one(n: any): any := {
+	if is_round(n) and #n == 1 { return n#1 }
+	if is_round(n) and separator_of(n) == " " { return List(items_of(n), Bracket.None, Separator.Space) }
+	n
+}
 
 # `cases of $e`: the cases of the enum the hole names, placed at `at`, else ø (F9)
 cases_spliced(parts: list, bound: any, at: any): any := {
