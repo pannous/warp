@@ -1069,10 +1069,13 @@ rule_matches(pattern: any, code: any, bound: any): bool := {
 	typed = typed_hole(pattern)
 	if typed != ø { return is_hole_kind(code, typed#2) and hole_binding(typed#1, code, bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
-	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and items_match(items_of(pattern), items_of(code), bound) }
+	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) }
 	if code is key or is_group(code) { return no }
 	pattern == code
 }
+
+# a tuple pattern `($a, $b)` matches a tuple, never the call `f(a, b)`, whose parentheses hold no commas
+tuple_fits(pattern: any, code: any): bool := not (bracket_of(pattern) == "(" and separator_of(pattern) == ",") or separator_of(code) == ","
 
 items_match(patterns: list, items: list, bound: any): bool := {
 	rest_at = ø
