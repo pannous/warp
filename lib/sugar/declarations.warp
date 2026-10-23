@@ -1,43 +1,30 @@
 # Modifiers of other languages with no meaning in warp (decision P78): `public static fun f() := 3`, `private x = 4`,
 # `static int k = 3` are the statement without them. Rust twin: foreign.rs skip_foreign_modifiers
-rewrite public $a $b => $a $b
-rewrite public $a => $a
-rewrite private $a $b => $a $b
-rewrite private $a => $a
-rewrite protected $a $b => $a $b
-rewrite protected $a => $a
-rewrite internal $a $b => $a $b
-rewrite internal $a => $a
-rewrite static $a $b => $a $b
-rewrite static $a => $a
-rewrite extern $a $b => $a $b
-rewrite extern $a => $a
-rewrite external $a $b => $a $b
-rewrite external $a => $a
+# One rule per word (card engine-rest-template): a bare rest template rebuilds the words after it, the words after
+# one may be a phrase (`static fun f() := 3`) or one word (`private x = 4` reads as `private (x = 4)`).
+# C is also a type name (`class C{…}; c = C(4)`): it goes only before a word the program leaves free, by two rules of
+# fixed arity: in `C $a $b... => $a $b... where $a is unbound` the rest's range swallows the `where` (only a `where`
+# right after a template ending in the rest is split off), so the condition became template words
+rewrite public $s... => $s...
+rewrite private $s... => $s...
+rewrite protected $s... => $s...
+rewrite internal $s... => $s...
+rewrite static $s... => $s...
+rewrite extern $s... => $s...
+rewrite external $s... => $s...
 rewrite C $a $b => $a $b where $a is unbound
 rewrite C $a => $a where $a is unbound
-rewrite inline $a $b => $a $b
-rewrite inline $a => $a
-rewrite local $a $b => $a $b
-rewrite local $a => $a
-rewrite virtual $a $b => $a $b
-rewrite virtual $a => $a
-rewrite override $a $b => $a $b
-rewrite override $a => $a
-rewrite abstract $a $b => $a $b
-rewrite abstract $a => $a
-rewrite constexpr $a $b => $a $b
-rewrite constexpr $a => $a
-rewrite volatile $a $b => $a $b
-rewrite volatile $a => $a
-rewrite thread_local $a $b => $a $b
-rewrite thread_local $a => $a
-rewrite synchronized $a $b => $a $b
-rewrite synchronized $a => $a
-rewrite transient $a $b => $a $b
-rewrite transient $a => $a
-rewrite native $a $b => $a $b
-rewrite native $a => $a
+rewrite inline $s... => $s...
+rewrite local $s... => $s...
+rewrite virtual $s... => $s...
+rewrite override $s... => $s...
+rewrite abstract $s... => $s...
+rewrite constexpr $s... => $s...
+rewrite volatile $s... => $s...
+rewrite thread_local $s... => $s...
+rewrite synchronized $s... => $s...
+rewrite transient $s... => $s...
+rewrite native $s... => $s...
 
 # `constant x = 3` declares the constant x as `const x = 3` does
 rewrite constant $a => const $a
