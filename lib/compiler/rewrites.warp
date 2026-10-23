@@ -1138,7 +1138,7 @@ names_assigned_shape(program: any, shape: any): any := {
 		if is_key(n, Op.Assign) and key_of(n) is symbol and rule_matches(shape, value_of(n), {}) { names[name_of(key_of(n))] = yes }
 		if is_key(n, Op.Define) and is_round(key_of(n)) and #key_of(n) > 0 {
 			head = items_of(key_of(n))
-			functions[starting_word(head#1)] = head[1 ..].map(parameter => starting_word(parameter))
+			functions[head_word(head#1)] = head[1 ..].map(parameter => head_word(parameter))
 		}
 	}
 	growing = #names.keys > 0 and #functions.keys > 0
