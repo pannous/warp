@@ -15,3 +15,5 @@ c_write(address: int, data: any) := std_io("c", "write", [address, data])
 c_load(address: int, size: int) := std_io("c", "load", [address, size])
 // writes `value` as `size` bytes at `address`; the value
 c_store(address: int, size: int, value: int) := std_io("c", "store", [address, size, value])
+// errno as the last C call left it: after one that reports a failure (-1, NULL), strerror(c_errno()) says why
+c_errno() := std_io("c", "errno", [])

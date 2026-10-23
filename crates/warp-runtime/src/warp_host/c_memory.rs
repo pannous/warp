@@ -5,6 +5,7 @@
 //!   std_io("c", "write", [address, bytes])   copies a text's bytes or a list of 0 to 255 there; their count
 //!   std_io("c", "load", [address, size])     the unsigned little-endian integer of 1, 2, 4 or 8 bytes there
 //!   std_io("c", "store", [address, size, n]) writes n there as `size` bytes; n
+//!   std_io("c", "errno", [])                 errno as the last C call left it (strerror names it)
 //! Memory to write to comes from C too: calloc and free are libc's (lib/c_memory.warp).
 //! The address must come from C and stay valid while it is read (a blob until the next step), as with ctypes.string_at.
 use crate::nodes::{self, Node};
@@ -14,6 +15,7 @@ pub fn c(member: &str, arguments: &[Node]) -> Option<Result<Node, String>> {
 	match (member, arguments) {
 		("bytes", [Node::Int(address), Node::Int(count)]) => Some(Ok(bytes(*address, *count))),
 		("text", [Node::Int(address)]) => Some(Ok(text(*address))),
+		("errno", []) => Some(Ok(Node::Int(warp_runtime::c_calls::last_errno().into()))),
 		("write", [Node::Int(address), bytes]) => Some(written(*address, bytes)),
 		("load", [Node::Int(address), Node::Int(size)]) => Some(sized(*size).and_then(|size| loaded(*address, size))),
 		("store", [Node::Int(address), Node::Int(size), Node::Int(value)]) => {

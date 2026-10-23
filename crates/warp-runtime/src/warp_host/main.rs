@@ -391,7 +391,10 @@ fn run_module(
 		wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host: &mut Host| &mut host.wasi)?;
 		warp_runtime::host_words::link_host_words(&mut linker)?;
 		warp_runtime::libm::link_libm(&mut linker)?;
-		warp_runtime::c_calls::link_libc_functions(&mut linker)?;
+		// warp-rust's hand-linked libc (texts in linear memory); a pure module's C calls are all described, plain C
+		if functions.is_empty() {
+			warp_runtime::c_calls::link_libc_functions(&mut linker)?;
+		}
 		words::link(&mut linker)?;
 		let mut store = Store::new(engine, host);
 		ffi::link_c_imports(&mut linker, &mut store, module, functions, lettered)?;

@@ -8,6 +8,16 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use wasmtime::{Caller, Engine, FuncType, Linker, Result, Val, ValType};
 
+thread_local! {
+	/// errno as the last C call on this thread left it, read before the host's own work can change it
+	static LAST_ERRNO: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
+}
+
+/// errno as the last C call of this thread left it (std_io c.errno): meaningful after a call that reports a failure
+pub fn last_errno() -> i32 {
+	LAST_ERRNO.get()
+}
+
 /// The import module of libc
 pub const LIBC: &str = "c";
 /// The other names programs import libc and libm under: (alias, module)
@@ -348,6 +358,7 @@ fn call_c_function<T: CallsC>(
 	let mut memory = CallMemory::default();
 	let args = native_arguments(caller, function, layouts, output, params, &mut memory)?;
 	let returned = unsafe { call_native_function(func_ptr, &args, function.ret_type) };
+	LAST_ERRNO.set(std::io::Error::last_os_error().raw_os_error().unwrap_or(0));
 	let failed = match function.failure {
 		Failure::None => false,
 		Failure::NotNull => returned != 0,
