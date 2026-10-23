@@ -8,6 +8,7 @@
 mod cache;
 mod ffi;
 mod nodes;
+mod shell;
 mod words;
 
 use nodes::Node;
