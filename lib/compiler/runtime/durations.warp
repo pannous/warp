@@ -1,11 +1,12 @@
 # Durations: their months, days and nanoseconds unpacked, shown and ordered
-use "../intrinsics.warp"
-use "../conversions.warp"
-use "../instructions.warp"
-# exact.warp's floor_quotient, power and zeros, used rather than declared here too: that made runtime/extended.warp,
-# which loads both files, refuse floor_quotient as declared twice. The link lib/compiler/runtime/durations.warp
-# (tests/numbers/test_duration_words.rs reads it there) resolves these paths from this file's own folder
-use "exact.warp"
+use "intrinsics.warp"
+use "conversions.warp"
+use "instructions.warp"
+# An extended part kept in runtime/ (tests/numbers/test_duration_words.rs reads it here); only runtime/extended.warp
+# loads it, and scripts/self-check.sh counts it as extended. exact.warp's floor_quotient, power and zeros are used
+# rather than declared here too: that made runtime/extended.warp, which loads both files, refuse floor_quotient as
+# declared twice
+use "extended/exact.warp"
 ## durations (card duration-warp; src/wasm_emitter/time times.rs duration_text, time_arithmetic.rs duration_order): a
 ## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
 ## bits (src/time/mod.rs MONTHS_SHIFT), its nanoseconds in its box. The words below the unpacking ones take the three

@@ -7,7 +7,7 @@
 # Loaded after runtime.warp by compiler.warp (RUNTIME_ROOTS) and src/compiler/self_hosted.rs, the words of each file its
 # `use` lines name in their order.
 use "extended/exact.warp"
-use "extended/durations.warp"
+use "durations.warp"
 use "extended/times.warp"
 use "extended/pow_tables.warp"
 use "extended/pow.warp"

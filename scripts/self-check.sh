@@ -19,11 +19,11 @@ if [[ $worktree == $main_checkout/* ]]; then
 fi
 # the core runtime (runtime.warp, lib/compiler/runtime/*.warp) never uses the extended one (lib/compiler/runtime/extended/,
 # runtime/extended.warp; decision runtime-split) nor names a word it defines: it calls the hooks runtime/bridge.warp
-# declares, whose bodies are runtime/extended.warp's. Checked first, needing no slot. Plain files only (.), the extended root aside:
-# runtime/durations.warp links to extended/durations.warp for tests/numbers/test_duration_words.rs
+# declares, whose bodies are runtime/extended.warp's. Checked first, needing no slot. Plain files only (.); the extended root and
+# runtime/durations.warp, an extended part kept in runtime/ for tests/numbers/test_duration_words.rs, count as extended
 core=($worktree/lib/compiler/runtime.warp $worktree/lib/compiler/runtime/*.warp(.))
-core=(${core:#*/runtime/extended.warp})
-extended=($worktree/lib/compiler/runtime/extended/*.warp)
+core=(${${core:#*/runtime/extended.warp}:#*/runtime/durations.warp})
+extended=($worktree/lib/compiler/runtime/extended/*.warp $worktree/lib/compiler/runtime/durations.warp)
 extended=(${extended:#*/hooks.warp})
 extended_words=$(grep -hv ' from runtime$' $extended | sed -n 's/^\([a-z_][a-z_0-9]*\)(.*:=.*/\1/p' | sort -u | paste -sd'|' -)
 core_uses_extended=$(grep -HnE "^use .*extended|(^|[^a-z_0-9.])($extended_words)\(" $core)
