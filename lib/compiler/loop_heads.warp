@@ -46,13 +46,13 @@ loop_statements(body: Node): list := match body {
 
 loop_head(variable: Node, iterable: Node, body: Node): Node := List([symbol(loop_word), variable, symbol(loop_in_word), iterable, body], Bracket.None, Separator.Space)
 
-braced(statements: list): Node := List(statements, Bracket.Curly, Separator.Semicolon)
+loop_block(statements: list): Node := List(statements, Bracket.Curly, Separator.Semicolon)
 
 # `for int·typed in xs { if is_type(int·typed, "int") { int = int·typed; body } }`
 type_filtered(variable: Node, iterable: Node, body: list): Node := {
 	item = symbol(name_of(variable) + "·typed")
 	test = call_of("is_type", [item, name_of(variable)])
-	loop_head(item, iterable, braced([Key(Key(ø, Op.If, test), Op.Then, braced([Key(variable, Op.Assign, item)] + body))]))
+	loop_head(item, iterable, loop_block([Key(Key(ø, Op.If, test), Op.Then, loop_block([Key(variable, Op.Assign, item)] + body))]))
 }
 
 # a loop over a map, of a type word, or of a bare body as the rules take it; any other node as it is
@@ -64,13 +64,13 @@ loop_heads_of(n: Node, maps: list): Node := match n {
 		body = loop_statements(parts#5)
 		is_map = is_map_literal(iterable) or (iterable is symbol and name_of(iterable) in maps)
 		keys = call_of(map_keys_word, [iterable])
-		if is_map and is_name(variable) { return loop_head(variable, keys, braced(body)) }
+		if is_map and is_name(variable) { return loop_head(variable, keys, loop_block(body)) }
 		if is_map and is_name_pair(variable) {
 			lookup = Key(variable#2, Op.Assign, Key(iterable, Op.Hash, Key(variable#1, Op.Add, 1)))
-			return loop_head(variable#1, keys, braced([lookup] + body))
+			return loop_head(variable#1, keys, loop_block([lookup] + body))
 		}
 		if filters_by_type(variable) { return type_filtered(variable, iterable, body) }
-		if is_curly_group(parts#5) then n else loop_head(variable, iterable, braced(body))
+		if is_curly_group(parts#5) then n else loop_head(variable, iterable, loop_block(body))
 	}
 	_: n
 }
