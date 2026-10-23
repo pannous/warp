@@ -426,9 +426,28 @@ def local_value(body: Body, n: any): list {
 	if name not in body.names and name in module.variants { return ["node", node(Kind.Symbol, text_bytes(name))] }
 	# a type's name, unbound, is the type value: `k = int` (Rust: names_a_type_value)
 	if name not in body.names and names_a_type_value(name) { return ["node", node(Marked.TypeValue, text_bytes(name))] }
+	if name not in body.names and system_value_kinds.has(name) { return system_value_read(name) }
 	if name not in body.names { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
+}
+# a system value the program leaves unbound (Rust: lowering/signals/system_values.rs, warp-runtime host_words.rs
+# SYSTEM_VALUES): `view_width`, `online`, `mouse_x` read now by the host word system_value(name), a yes/no one as its
+# reading != 0, the mouse's place a float (Rust's FLOAT_VALUES); the phrases (`dark mode`) and listeners on one come later
+system_value_kinds = {battery: "int", charging: "bool", online: "bool", mouse_x: "float", mouse_y: "float", mouse_down: "bool",
+	mouse_wheel: "int", key_down: "bool", window_open: "bool", view_width: "int", view_height: "int", gpu_drawing: "bool",
+	window_width: "int", window_height: "int", display_width: "int", display_height: "int", display_dpi: "int"}
+# where the name goes, a C string as the host reads it: the scratch bytes past the output's (runtime/wasi.warp scratch_bytes)
+system_name_at = 32
+def system_value_read(name: text): list {
+	bytes = name.bytes + [0]
+	code = []
+	for i in 0..<#bytes { code += [op.i32_const] + sleb(system_name_at + i) + [op.i32_const] + sleb(bytes#(i + 1)) + [op.i32_store8, 0] + uleb(output_address) }
+	code += [op.i32_const] + sleb(output_address + system_name_at) + [op.call] + uleb(import_index(host_import("system_value")))
+	kind = system_value_kinds[name]
+	if kind == "bool" { return ["bool", code + [op.i64_const, 0, op.i64_ne]] }
+	if kind == "float" { return ["float", code + [op.f64_convert_i64_s]] }
+	["int", code]
 }
 
 # a rem b of floats, the sign of a as with ints: a - trunc(a / b) * b (wasm has no f64 remainder)
