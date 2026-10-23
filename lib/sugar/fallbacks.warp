@@ -2,6 +2,7 @@
 # A name is tested as it is, any other operand computed once.
 rewrite $a ?? $b => if $a == ø then $b else $a where $a is symbol
 rewrite $a ?? $b => ($t = $a; if $t == ø then $b else $t)
-# `a ?: b` is b where a is falsy (ø, 0, "", no), else a; the parser reads a name's as the ternary `a ? a : b`, any other
-# operand is computed once
+# `a ?: b` is b where a is falsy (ø, 0, "", no), else a: of a name the ternary `a ? a : b`, which a type also reads as
+# its optional field `email?: text`; any other operand computed once
+rewrite $a ?: $b => $a ? $a : $b where $a is symbol
 rewrite $a ?: $b => ($t = $a; $t ? $t : $b)

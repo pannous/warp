@@ -24,6 +24,10 @@ needs (task engine when it starts tasks). `warp <file>.cwasm` runs it (Engine::d
 .cwasm is recognized by failing to load into the gc engine). Trust: a .cwasm is native code, loading it is like running
 an executable. `warp <file>.wasm` / `.cwasm` link host, WASI and FFI imports.
 
+warp-host (the pure lane's host) has the same two: `warp-host compile --aot`, `warp-host f.cwasm` and `warp-host build`.
+Its executables are copies of warp-host itself, so they keep WASI, std_io and C calls (notes/warp_host.md "Ahead of
+time").
+
 ## Standalone executable, `warp build <file>`
 - `warp build`/`compile` write the executable `<file>` (`<file>.exe` on Windows) and the module `<file>.wasm`; `--exe`
   is accepted (redundant), `--wasm` writes only the module. A plain run leaves an executable next to the file only with

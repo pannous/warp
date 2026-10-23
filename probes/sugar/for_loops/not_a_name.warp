@@ -1,0 +1,4 @@
+# a loop whose variable is no name stays as written and is refused. Expected: an error, not a crash (pure lane at baseline: cannot access length code of bool)
+s = 0
+for (1 + 2) in [1, 2] { s += 1 }
+print s
