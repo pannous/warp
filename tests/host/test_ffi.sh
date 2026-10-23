@@ -13,7 +13,7 @@ host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
 stage=$checkout/scratch/ffi-test
 export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$checkout/lib
-unset WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
+unset WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED WARP_CRATES_CACHE
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
 compiler=${WARP_FFI_COMPILER:-self}
@@ -61,6 +61,18 @@ program sqlite_table 'use sqlite3' 'db = sqlite3_open(":memory:")' 'run_query(db
 program sqlite_errstr 'use sqlite3' 'sqlite3_errstr(1)'
 program zlib "compressBound(length: i64): i64 from 'z'" 'compressBound(100)'
 program zlib_text "adler32(start: i64, data: text, length: i32): i64 from 'z'" 'adler32(1, "abc", 3)'
+# bytes: a pointer and the length a `length` parameter gets, so a NUL doesn't end them
+program zlib_bytes "crc32(start: i64, data: bytes, size: length): i64 from 'z'" 'crc32(0, [97, 0, 98])'
+program zlib_bytes_text "crc32(start: i64, data: bytes, size: length): i64 from 'z'" 'crc32(0, "abc")'
+# a crate's library and native file where scripts/warp-crate installs them, ~/.cache/warp/crates/{lib,native}
+# (notes/crate_adapter.md); libm stands in for a crate's library
+crates=$stage/home/.cache/warp/crates
+mkdir -p "$crates/lib" "$crates/native"
+printf '%s\n' "nextafter(x: f64, y: f64): f64 from 'rs_m'" 'towards_zero(x: float) := nextafter(x, 0.0)' >"$crates/native/rs_m.warp"
+libm=$(ls /lib/*/libm.so.6 /usr/lib/*/libm.so.6 /usr/lib64/libm.so.6 2>/dev/null | head -1)
+[ -n "$libm" ] && ln -s "$libm" "$crates/lib/librs_m.so"
+program crate_use 'use crate "m@1"' 'print nextafter(1.0, 2.0)'
+program crate_native 'use rs_m' 'print(if towards_zero(1.0) < 1.0 then "below" else "not below")'
 
 run=0 failed=0 skipped=0
 # expect <name> <exit status> <text the output holds>… [! <text it lacks>…] -- <command…>: stdout and stderr together
@@ -111,8 +123,18 @@ fi
 if has_library z; then
 	expect "zlib by a foreign line, its versioned soname found" 113 "113" -- runs zlib.warp
 	expect "zlib adler32 of a text: 38600999, its low byte the status" 39 "38600999" -- runs zlib_text.warp
+	expect "bytes and their length: crc32 of a, NUL, b is 367556721" 113 "367556721" -- runs zlib_bytes.warp
+	expect "a text as bytes: crc32 of abc is 891568578" 194 "891568578" -- runs zlib_bytes_text.warp
 else
-	for name in zlib zlib_text; do skip $name z; done
+	for name in zlib zlib_text zlib_bytes zlib_bytes_text; do skip $name z; done
+fi
+if [ -n "$libm" ]; then
+	expect "use crate \"m@1\": rs_m's native file and library from ~/.cache/warp/crates" 0 "1.0000000000000002" -- \
+		env HOME="$stage/home" "$host" --compiler "$compiler" run crate_use.warp
+	expect "use rs_m: a crate's warp words over its lines" 0 "below" ! "not below" ! "Error" -- \
+		env HOME="$stage/home" "$host" --compiler "$compiler" run crate_native.warp
+else
+	for name in crate_use crate_native; do skip $name m.so.6; done
 fi
 
 echo "ffi: $((run - failed)) passed / $run ($skipped skipped)"

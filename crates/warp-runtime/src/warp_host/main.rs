@@ -126,7 +126,13 @@ fn command(given: Vec<String>) -> i32 {
 		}
 		[file, ..] if aot::is_machine_code(file) => match std::fs::read(file) {
 			Ok(machine_code) => match aot::load(&engine, &machine_code, file) {
-				Ok((module, functions)) => shown(run_module(&engine, &module, &ffi::CImports { described: functions, ..Default::default() }, args.clone(), None)),
+				Ok((module, functions)) => shown(run_module(
+					&engine,
+					&module,
+					&ffi::CImports { described: functions, ..Default::default() },
+					args.clone(),
+					None,
+				)),
 				Err(problem) => failed(&problem),
 			},
 			Err(problem) => failed(&format!("{file}: {problem}")),
@@ -260,7 +266,13 @@ fn run_carried(machine_code: &[u8], args: Vec<String>) -> i32 {
 		Err(problem) => return failed(&format!("{problem:#}")),
 	};
 	match aot::load(&engine, machine_code, &args[0]) {
-		Ok((module, functions)) => shown(run_module(&engine, &module, &ffi::CImports { described: functions, ..Default::default() }, args, None)),
+		Ok((module, functions)) => shown(run_module(
+			&engine,
+			&module,
+			&ffi::CImports { described: functions, ..Default::default() },
+			args,
+			None,
+		)),
 		Err(problem) => failed(&problem),
 	}
 }
@@ -311,8 +323,12 @@ fn library_for(source: &Path) -> Option<PathBuf> {
 }
 
 /// The compiler module: built from that lib/ (<lib>/../data/, a checkout's), else installed beside warp-host
+/// The compiler beside warp-host comes first: the one a harness staged there or `warp rebuild` wrote into target/, not
+/// a checkout's data/ one, which may be older than its lib/ (a data/compiler-self.wasm without C imports refused every
+/// C call as "outside the core"); then lib/../data, then <prefix>/share/warp
 fn compiler_file(lib: &Path, name: &str) -> Option<PathBuf> {
-	let folders = [vec![lib.join("../data")], installed_folders()].concat();
+	let beside = installed_folders().pop().into_iter().collect::<Vec<_>>();
+	let folders = [beside, vec![lib.join("../data")], installed_folders()].concat();
 	folders.into_iter().map(|folder| folder.join(name)).find(|file| file.is_file())
 }
 
