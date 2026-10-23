@@ -39,9 +39,12 @@ After a context swap, this file and your role file win over anything a handover 
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
   Soft ban (user 2026-10-23): the core passes compile the compiler, so new work is one of two kinds, neither a pass.
-  Sugar (new spellings of what the kernel already does) goes straight into lib/sugar/*.warp as rules. Extensions
-  (new capabilities such as signals, threads, channels or FFI libraries) go into their own lib/<topic>/ folder (e.g.
-  lib/concurrency/), written in Warp on top of the kernel and the library, not as compiler passes. Neither needs a
+  Sugar (new spellings of what the kernel already does) goes straight into lib/sugar/*.warp as rules. Compiler
+  extensions (new capabilities such as tuples, varargs, optional parameters, `?.`, signals, threads, channels) go
+  into core/extensions/ as one file each (core/extensions/tuples.warp); only a big topic gets its own subfolder
+  (core/extensions/concurrency/). The compiler itself moves from lib/compiler to core/ (card compiler-to-core, one
+  scripted sweep by Warp Wrapper); until then use lib/compiler/extensions/, which the sweep moves along. Plain
+  library code written in Warp (e.g. the units Quantity class) stays in lib/. Neither sugar nor extensions needs a
   question. A new pass, a new entry in passes.warp's pass lists or a new lib/compiler/*.warp file needs the user's
   yes, asked through Supervisor before the branch is written. Bigger changes to existing lib/compiler/*.warp files
   (more than ~40 changed lines there, or a new lowering case, special case or refusal path) need Supervisor's OK
