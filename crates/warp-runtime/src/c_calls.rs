@@ -275,7 +275,7 @@ fn wasm_param(param: ParamType) -> Option<ValType> {
 /// The wasm results of a C function: a text node, a handle id, else its number
 fn wasm_results(function: &CFunction) -> Vec<ValType> {
 	match (function.result, function.ret_type) {
-		(Some(CPointer::Text | CPointer::Struct), _) => vec![ValType::ANYREF],
+		(Some(CPointer::Text | CPointer::OwnedText | CPointer::Struct), _) => vec![ValType::ANYREF],
 		(Some(_), _) => vec![ValType::I32],
 		(None, RetType::Void) => vec![],
 		(None, RetType::I64) => vec![ValType::I64],
@@ -354,10 +354,14 @@ fn call_c_function<T: CallsC>(
 		return Ok(());
 	};
 	*result = match function.result {
-		Some(CPointer::Text) => {
+		Some(owned @ (CPointer::Text | CPointer::OwnedText)) => {
 			// copied before anything else runs: a C string from getenv may change with the next call
-			let pointer = pointer as *const std::ffi::c_char;
+			let pointer = pointer as *mut std::ffi::c_char;
 			let text = (!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
+			if owned == CPointer::OwnedText && !pointer.is_null() {
+				// SAFETY: an owned_text result is the caller's malloc'd string (strdup, readline), freed once here
+				unsafe { free(pointer.cast()) };
+			}
 			text_node(caller, text.as_deref())?
 		}
 		Some(CPointer::Struct) => struct_output(caller, &memory)?,
@@ -365,6 +369,11 @@ fn call_c_function<T: CallsC>(
 		None => native_result(returned, function.ret_type),
 	};
 	Ok(())
+}
+
+extern "C" {
+	/// C's free, for the owned_text results
+	fn free(pointer: *mut std::ffi::c_void);
 }
 
 /// What a call's arguments point to, alive through the call

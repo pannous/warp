@@ -148,6 +148,7 @@ fn value_of(argument: &Node, ty: &Type) -> Result<Val, String> {
 	let fits = |what: &str| format!("{} does not fit a {what}", shown());
 	let number = || match argument {
 		Node::Float(x) => Ok(*x),
+		Node::Ratio(numerator, denominator) => Ok(*numerator as f64 / *denominator as f64),
 		Node::Int(n) => Ok(*n as f64),
 		_ => Err(format!("{} is no number", shown())),
 	};
