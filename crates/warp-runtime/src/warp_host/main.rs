@@ -5,7 +5,8 @@
 //!   warp-host [--compiler self|full] compile [--aot] <file.warp> [<file.wasm>]   --aot: also its machine code, .cwasm
 //!   warp-host [--compiler self|full] build <file.warp | file.wasm> [-o <app>]   a standalone executable (aot.rs)
 //!   warp-host <file.wasm | file.wat | file.cwasm> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
-//! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`
+//! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`; nothing at
+//! all on a terminal is the console (lib/repl.warp)
 mod aot;
 mod cache;
 mod components;
@@ -75,6 +76,7 @@ enum Ran {
 }
 
 fn main() {
+	with_users_ctype();
 	let mut args = std::env::args();
 	let name = args.next().unwrap_or_default();
 	let args = args.collect();
@@ -85,6 +87,17 @@ fn main() {
 	};
 	let worker = std::thread::Builder::new().stack_size(THREAD_STACK).spawn(run);
 	std::process::exit(worker.map_or(1, |worker| worker.join().unwrap_or(1)))
+}
+
+/// The character type of the user's locale (LC_ALL, LC_CTYPE, LANG), as a C program sets it first: the C libraries a
+/// program calls read UTF-8 then (libedit's readline crashes on a prompt of non-ASCII letters in the C locale). Only
+/// LC_CTYPE: numbers keep printing with a point
+fn with_users_ctype() {
+	#[cfg(unix)]
+	// SAFETY: before any other thread runs; the empty name asks for the environment's locale
+	unsafe {
+		libc::setlocale(libc::LC_CTYPE, c"".as_ptr());
+	}
 }
 
 fn command(given: Vec<String>) -> i32 {
@@ -151,6 +164,11 @@ fn command(given: Vec<String>) -> i32 {
 			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None, false)),
 			Err(problem) => failed(&format!("{file}: {problem}")),
 		},
+		// nothing on a terminal: the console, lib/repl.warp in pure warp (card pure-repl)
+		[] if console_wanted() => match console_file() {
+			Some(console) => run_source(&engine, compiler, &console.display().to_string(), &[]),
+			None => failed("no lib/repl.warp for the console beside warp-host nor in lib/: WARP_LIB names one"),
+		},
 		// no command: run, as `warp f.warp` and `warp '6*7'` run
 		[source, ..] if !COMMANDS.contains(source) => run_source(&engine, compiler, source, &args[1..]),
 		_ => {
@@ -158,6 +176,19 @@ fn command(given: Vec<String>) -> i32 {
 			2
 		}
 	}
+}
+
+/// The console only for a person: standard input and output both a terminal, so a script or a pipe still gets the usage
+fn console_wanted() -> bool {
+	use std::io::IsTerminal;
+	std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
+}
+
+/// The console's program: lib/repl.warp installed beside warp-host, else in the lib/ the compiler uses
+fn console_file() -> Option<PathBuf> {
+	let installed = installed_folders().into_iter().map(|folder| folder.join("lib"));
+	let library = library_for(Path::new("repl.warp"));
+	installed.chain(library).map(|lib| lib.join("repl.warp")).find(|file| file.is_file())
 }
 
 /// A module to run: a .wasm or .wat file by its name, else a file starting with wasm's magic bytes (`\0asm`)
@@ -213,8 +244,16 @@ fn run_source(engine: &Engine, compiler: &str, source: &str, args: &[String]) ->
 	let _ = std::fs::remove_file(&code);
 	let module = compiled.and_then(|()| std::fs::read(&wasm).map_err(|problem| problem.to_string()));
 	let _ = std::fs::remove_file(&wasm);
+	let inline = file == code;
 	match module {
-		Ok(bytes) => shown(run_wasm(engine, &bytes, [vec![source.to_string()], args.to_vec()].concat(), None, false)),
+		Ok(bytes) => {
+			let ran = run_wasm(engine, &bytes, [vec![source.to_string()], args.to_vec()].concat(), None, false);
+			if inline {
+				shown_inline(ran)
+			} else {
+				shown(ran)
+			}
+		}
 		Err(problem) => refused(&problem),
 	}
 }
@@ -512,6 +551,18 @@ fn shown(ran: Ran) -> i32 {
 		}
 		Ran::Exited(status) => status,
 		Ran::Failed(message) | Ran::Raised(message) => failed(&message),
+	}
+}
+
+/// Inline code's value printed as a file's, its status 0 whatever the value, as warp-rust's show_and_fail_on_error: only
+/// an Error, a failed run or the program's exit(code) give another
+fn shown_inline(ran: Ran) -> i32 {
+	let value = matches!(ran, Ran::Value(ref value) if !matches!(value, Node::Error(_)));
+	let status = shown(ran);
+	if value {
+		0
+	} else {
+		status
 	}
 }
 

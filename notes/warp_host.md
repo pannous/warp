@@ -103,6 +103,10 @@ count.
     nonzero exit is an Error too, `the module exited with status 3`; exit 0 gives ø.
   - The value is copied out of the module's store (nodes.rs); a function or big integer comes back as warp-host's
     Other, as with any run.
+  - An exact rational (the pure lane's `2.5`, `1/3`: an Int node holding a $Ratio of two $i64box) comes back exact,
+    nodes.rs Node::Ratio: it prints as the program does (2.5, 1/3) and crosses back into the calling program as the
+    same structs, made by the host of the program's structural types (card host-run-wasm-float; it had failed
+    `run wasm: 0`).
 - `compile_wasm(code)`: the code, a program of the current folder, compiled in-process by warp-host's compiler
   (compiler-self, or compiler.wasm with `--compiler full`); its bytes, or the refusal as an Error.
   - `run_wasm(compile_wasm("6*7"))` gives 42: an eval.
@@ -175,6 +179,12 @@ count.
     host already links.
   - A compiled warp module exports only main, so functions of other warp modules can't be called yet.
 
+## Locale
+
+warp-host sets LC_CTYPE from the environment at startup (`setlocale(LC_CTYPE, "")`, main.rs with_users_ctype), as a C
+program would: the C libraries a program calls read UTF-8 then (libedit's readline crashed on a UTF-8 prompt in the C
+locale). Only the character type: numbers keep printing with a point.
+
 ## C calls (M2)
 
 An import whose module isn't `host` or WASI is a C function: `name` from the library `module`.
@@ -182,6 +192,9 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   - `c` is the process itself (libc, macOS libSystem).
   - Other names go through c_calls.rs library_paths. Linux tries /usr/lib, /usr/local/lib, then lib<name>.so,
     .so.0 and .so.6 (libm.so.6, libsqlite3.so.0). macOS tries Homebrew, /usr/local/lib, then lib<name>.dylib.
+  - Linux also finds a library by any versioned soname in WARP_LIBRARY_PATH and the system's library folders
+    (version_named_sonames): libedit.so.2 and libreadline.so.8 load without their -dev packages' lib<name>.so links
+    (tests/host/test_host_repl_fixes.sh).
   - The library is loaded with dlopen and the function found with dlsym.
 - How each parameter and the result cross:
   - The module's `warp.c_functions` custom section gives one c_signatures.rs CFunction line per function, with nine
@@ -197,6 +210,12 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   for the call (c_calls.rs native_arguments), and ø passes NULL. An i32 `ptr` is still an address in linear memory.
 - Results:
   - Handles cross as ids into the run's CHandles.
+  - `owned_text` (card warp-host-repl-fixes): a `char *` the caller owns, strdup's or readline's, is copied into a
+    text like `text` and then given to free(); NULL is ø, freed never. Spelled:
+    - in a foreign line, a result type only: `readline(prompt: text): owned_text from 'edit'`
+      (lib/compiler/c_imports.warp)
+    - in warp.c_functions, the result field `owned_text` (c_signatures.rs CPointer::OwnedText)
+    - in warp.c_calls, the result letters `ft`, "free the text", beside `t` and `ot` (ffi.rs OWNED_TEXT_LETTERS)
   - A `text` result is built with the module's new_text and needs its text_heap; pure modules don't export text_heap
     yet (M3).
 - c_calls.rs marshals the call (link_c_function_as, with the import's wasm type).
@@ -331,7 +350,7 @@ unique_lines, find_files, file_size, info, which, glob, list_files. tests/host/t
 Not yet, for reasons outside warp-host:
 - `pwd`/`cwd` after `cd` still give the start folder. The pure compiler computes a definition without parameters
   (`cwd := std_io(…)`, `pwd := cwd`) once, where warp-rust runs it at every read; and `f() := …` has no bare `f`.
-- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (lib/compiler/runtime/wasi.warp), not
+- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (lib/compiler/runtime/extended/wasi.warp), not
   std_io. So they take no `~`, and a relative path stays in the start folder (WASI's preopened `.`) after `cd`.
 - `ls("nosuch")` traps (`node length`): the comprehension takes list_files's Error as a list. `list_files("nosuch")`
   itself is a catchable Error.

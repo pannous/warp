@@ -1,0 +1,3 @@
+# a list read by index (the self lane broke here on 0c9660041: outside the core: the call bytes_between)
+xs = [1, 2]
+print xs#1 + xs#2

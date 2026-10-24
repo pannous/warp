@@ -51,6 +51,11 @@ After a context swap, this file and your role file win over anything a handover 
   before the branch is written: send the files, functions and a 3-line reason. Supervisor checks that it isn't sugar
   or an extension in disguise and takes the large ones to the user. Small fixes (a bug in an existing case) need no
   question. Supervisor's merger bounces branches that skipped this.
+- Layout (user 2026-10-23, card compiler-to-core): core/ holds the compiler, the runtime (runtime/, runtime/extended/),
+  the sugar rules (core/sugar) and compiler extensions (core/extensions/<name>.warp). lib/ holds plain Warp modules that
+  programs import (math, units, date and time), which the compiler never depends on. Folder names never combine two
+  topics with an underscore; nest folders instead. Until the flip, existing paths are still named lib/compiler/... and
+  lib/sugar/... (core is a symlink to lib/compiler, lib/compiler/sugar one to lib/sugar).
 - New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
   declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
   when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
@@ -171,6 +176,26 @@ After a context swap, this file and your role file win over anything a handover 
   needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1
   tests/queue.sh -- <filter>`. The Integrator's full suite runs in the cloud too. Warp tests (`warp test`,
   scripts/is_tests.py) run locally with the shared binary.
+- Stop isolation (user 2026-10-23, very important): an agent stops only its own helper jobs, never with a stop that
+  reaches other agents.
+- Communicate less (user 2026-10-23): message only when it really matters (Ready, blocked, a decision needed); batch
+  the rest and send FYIs without waking the agent. Git is the status: branch name, commit messages and the board
+  card. Ready means the card moved and the branch pushed, no chat needed.
+- Low effort for routine runs (user 2026-10-23): routine builds and tests (rebuilds, targeted test runs, self-checks,
+  gate runs) go to a helper at low effort with a step cap; give it the exact commands and stop when they finish.
+  Higher effort only for real debugging or design work.
+- Tiered gate, pure pipeline first (user 2026-10-23: the gate must not become a bottleneck): `scripts/gate-probes.sh
+  [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure and self, both
+  hellos (the self check, minutes). Tier 1: every probes/gate/<name>.warp in both lanes against <name>.expected
+  (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
+  Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). Tier 3,
+  Rust tests: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; the script names it, the cargo
+  gate or cloud lane runs it. On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/sol-warp-latest.
+- Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate-probes.sh --tag-good` tags it
+  `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `scripts/bisect-lane.sh [--lane
+  pure|self|both] <probe.warp> <expected> [good] [bad]` (default the newest good/* tag .. origin/main, first-parent)
+  bisects in a temporary worktree it removes: per step rebuild pure and self with the shared binary, bad only on
+  wrong output, skipped (125) on a failed rebuild or a timeout; it prints the first bad commit.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
   suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
@@ -274,9 +299,23 @@ After a context swap, this file and your role file win over anything a handover 
   loose Next cards; then Soon. Within that, prefer fresh, easy cards related to your current task, and pick a topic's
   cards together: `todo list Next --by-topic` groups them, `todo take --topic <topic> [-n 3]` takes its waiting cards
   at once.
+- Backlog cards (user 2026-10-24): Soon and Later mix the user's own ideas and bugs with auto-generated and parked
+  cards. Before taking a card from Soon or Later, check it's still relevant: is it already fixed on main, a duplicate,
+  or obsolete (e.g. Rust-only work)? If it's clearly dead, archive it with a one-line note. If unsure, ask the user,
+  interviewing them briefly (what's the card for, is it still wanted) before starting work.
+- Picking cards (user 2026-10-24): never read whole columns or the board to choose work. Run `todo pick` (or the top
+  of the column in board order): the top few cards of the highest non-empty column, in board order. Take the first
+  one that's still relevant; the board order is the priority.
 - The board's mechanics (topics, sub-cards, keys, renames on take, `--keep-name`, `--title`) are in `todo --help`.
   Every card has a meaningful key: rename a poor one at once (`todo key <card> <short-name>`) and use the key in
   branch names and messages. Priority lives at the topic level (a topic card's column).
+- Every branch belongs to a card (user 2026-10-24): when you start a branch, comment the branch name on its card
+  (create the card first if there is none); when you park a branch, write a handover file and link it from the card.
+  The comment names the branch, its tip, ahead/behind main, whether it merges cleanly, its state in one sentence and
+  the next step; an issue card gets an issue comment, a draft card the same lines appended to its body. Branch
+  handovers live in the repo, one file per branch: notes/handover/<branch>.md (a `/` in the name becomes `-`), with
+  what's done, what's missing, how to test it and its known failures; whoever picks the branch up reads it first and
+  updates it. Session handovers stay in notes/box/handover/<session>.md.
 - Unrelated problems you meet go on the board: `todo add "…"` (column Next; when the board stays unreachable it says
   "CARD QUEUED" and keeps the card in ~/.cache/todo-board/pending.json5 for `todo flush`; never into todo.md).
 - Fix tiny things on the spot instead of carding them. Tiny means all of: a few minutes, one obvious fix with no
@@ -318,6 +357,8 @@ After a context swap, this file and your role file win over anything a handover 
      conflicts, never the Integrator. Take a side of a conflicted file only after `git diff <merge-base> HEAD --
      <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check `git diff
      origin/main -- <file>` shows only your change. No need to re-run the tests after a clean update.
+     Keep merges real: one merge commit per branch, and never let a plain `git pull --rebase` flatten them (it replays
+     a merged branch's commits onto main and conflicts): `git pull --rebase=merges` or `git merge origin/main`.
   3. Push the branch, then `todo ready <card>`. It reads the tip itself and refuses a branch that is not pushed,
      differs from origin, or does not merge cleanly (naming the files); `--force` only for a branch carrying other
      branches. Several cards on one branch: ready each. First a `todo note <card>` in this fixed form: `card | branch |
