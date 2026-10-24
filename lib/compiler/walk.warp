@@ -242,6 +242,22 @@ report(n: T, message: text, preferred: any): T := {
 	said += [[line_of(n), column_of(n), message, preferred]]
 	n
 }
+# where n was written, [line, column]: its own position, else its first positioned part's (only atoms carry one), ø
+# for a node a pass made of none (Rust twin: diagnostic positions.rs line_info)
+written_at(n: Node): list? := {
+	if is_positioned(n) { return [line_of(n), column_of(n)] }
+	for part in parts_of(n) {
+		found = written_at(part)
+		if found { return found }
+	}
+	ø
+}
+# ` at file:line:column` of a place written_at found, as Rust's diagnostics name it; ` at line:column` without a file,
+# "" without a place
+place_text(at: list?, file: text): text := {
+	if not at { return "" }
+	" at " + (if file then file + ":" else "") + at#1 + ":" + at#2
+}
 reported(view: any): list := {
 	found = said
 	said = []

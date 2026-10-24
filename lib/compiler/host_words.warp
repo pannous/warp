@@ -1,5 +1,5 @@
 # The host words a compiled program may import from the module "host": name → [parameter kinds, result kinds], the kinds
-# int, float, i32 and node (a $Node reference). The table src/host.rs HOST_WORD_SIGNATURES gives the Rust host (card
+# int, float, i32 and node (a $Node reference); a third item names the module when it is another (WASI's). The table src/host.rs HOST_WORD_SIGNATURES gives the Rust host (card
 # standalone: build.rs makes it from here next)
 host_words = {
 	draw_shape: [["int", "float", "float", "float", "float", "int"], []]
@@ -71,4 +71,15 @@ host_words = {
 	channel_take: [["int"], ["node"]]
 	channel_more: [["int"], ["int"]]
 	channel_close: [["int"], []]
+	# WASI's words the runtime calls (runtime/extended/wasi.warp): addresses and counts as i32, an error code back
+	args_sizes_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
+	args_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
+	environ_sizes_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
+	environ_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
+	fd_prestat_get: [["i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
+	fd_prestat_dir_name: [["i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
+	path_open: [["i32", "i32", "i32", "i32", "i32", "int", "int", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
+	fd_read: [["i32", "i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
+	fd_close: [["i32"], ["i32"], "wasi_snapshot_preview1"]
+	fd_write: [["i32", "i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 }

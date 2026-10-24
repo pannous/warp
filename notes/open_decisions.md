@@ -6,8 +6,11 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
 
+## To present
+- pure-fallback: `warp pure` runs all-warp or all-Rust, never the hybrid; one Rust call-site edit (bends rust-frozen once).
+- n-times-interim (Interviewer's decision): `n times {…}` is a lib/sugar rewrite to a for loop until block parameters and shared captures exist, then the prelude function.
+
 ## Parked
-- name-glue (card rewrite-templates, Soon; uses and catches in its notes): how a rewrite template builds a visible name from a hole (`To square a number:` → `square_a_number`). User leans to gluing with `·` (`square·$a`), either dropping `·` as a multiplication alias or overloading it by type (a symbol or hole beside it glues, numbers multiply); alternative `name("square_$a")`. Revisit when F5 is the next step.
 - graphics-plain (warp-markup, parked): display alias table with notes (stays in Rust); bare width/height as canvas sides with did-you-mean (stays).
 - maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.
 - body-statements: a function body looped as a list of statements, each with its kind (operation, call, assignment…); no `.kind` until then.

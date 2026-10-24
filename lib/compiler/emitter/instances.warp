@@ -1,0 +1,268 @@
+# Maps and class instances (emitter.warp's part): literals, the declared classes and fields, field reads and writes
+## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
+# `name: value` as a map entry: its name a symbol, its value boxed
+def entry_code(name_code: any, value_code: any): list { keyed_code(node(Kind.Symbol, name_code), value_code) }
+def keyed_code(name_node: any, value_code: any): list { key_code(Marked.Entry, name_node, value_code) }
+def key_code(kind: int, name_node: any, value_code: any): list { [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]) }
+# an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
+def name_node(name: any): list {
+	if name is symbol { return node(Kind.Symbol, text_bytes(name_of(name))) }
+	if one_code_point(name) { return node(Kind.Codepoint, [op.i32_const] + sleb(ord(name)) + gc_code(gc_ops.ref_i31, [])) }
+	node(Kind.Text, text_bytes(name))
+}
+# (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry)
+is_map_entry(n: any): bool := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global")
+# `{a: 1, b: "x"}`: a map
+def map_value(body: Body, entries: any): list { ["node", entries_code(body, entries.map(e => key_of(e)), entries.map(e => value_of(e)))] }
+# the map of the names to the values
+def entries_code(body: Body, entry_names: any, entry_values: any): list {
+	codes = []
+	for i in 0..<#entry_names { codes += [keyed_code(name_node(entry_names[i]), boxed(expression_code(body, entry_values[i])))] }
+	node(Marked.Map, vector_code(codes))
+}
+# `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
+# an instance's key has no operator (Op::None), as Rust's has
+# Rust checks each typed field's value (src/declared_values.rs): an instance is built here only when every value has
+# its field's kind already or is checked at run time; a class not declared in the program (a markup tag, a module's)
+# is refused
+def instance_value(body: Body, class_name: text, fields: any): list {
+	instance_of_fields(body, class_name, fields.map(field => name_of(key_of(field))), fields.map(field => value_of(field)))
+}
+# `Point(2, 3)`: the instance whose fields, in the order the class declares them, are the arguments
+def positional_instance(body: Body, class_name: text, arguments: any): list {
+	field_names = if class_name in module.classes then module.classes[class_name].keys else []
+	slots = placed_arguments(field_names, arguments)
+	if not (slots is list) { return refuse("an instance of " + class_name + " given more values than fields") }
+	given = range_list(#slots).filter(i => slots[i] != ø)
+	instance_of_fields(body, class_name, given.map(i => field_names[i]), given.map(i => slots[i]#1))
+}
+# the instance of the class whose fields of these names hold these values
+def instance_of_fields(body: Body, class_name: text, field_names: any, field_values: any): list {
+	if class_name not in module.classes { return refuse("an instance of " + class_name + ", a class not declared here") }
+	# methods (`S·init`, `C·put`) change their instance in place in Rust's: not yet compiled alike here
+	if class_name in module.member_classes or module.functions.keys.any(name => name.starts_with(class_name + "·")) { return refuse("an instance of " + class_name + ", a class with methods") }
+	declared = module.classes[class_name]
+	# the fields left out take their defaults, as Rust's type_constructor.rs with_defaults
+	defaults = module.class_defaults[class_name]
+	for name in declared.keys {
+		if name not in field_names {
+			if name not in defaults { return refuse("an instance of " + class_name + " not giving each field") }
+			field_names += [name]
+			field_values += [node_of(defaults[name]#1)]
+		}
+	}
+	codes = []
+	for i in 0..<#field_names {
+		if field_names[i] not in declared { return refuse("a field " + class_name + " does not declare") }
+		written_type = declared[field_names[i]]
+		# an optional field `b: text?` takes ø as it is, any other value as its base type
+		field_type = if field_values[i] == ø and written_type != base_type(written_type) then ø else base_type(written_type)
+		value = texted(field_type, expression_code(body, field_values[i]))
+		if not checked_at_run_time(field_type, value#1) and not admits(field_type, value#1) { return refuse("a " + value#1 + " for a typed field of " + class_name) }
+		codes += [keyed_code(name_node(symbol(field_names[i])), boxed(field_value(field_type, value)))]
+	}
+	name = node(Kind.Symbol, text_bytes(class_name))
+	["node", key_code(Marked.Instance, name, node(Marked.Map, vector_code(codes)))]
+}
+# `m.x`, lowered as the subscript `m#("x"+1)`: the name's text, else ø
+subscript_name(index: any): any := {
+	# (type() of an arithmetic key is "operation", not key)
+	if op_of(index) == "+" and value_of(index) == 1 and key_of(index) is text { return key_of(index) }
+	ø
+}
+# `k+1`, the index `m[k]` lowers to
+is_shifted_index(index: any): bool := op_of(index) == "+" and value_of(index) == 1
+# `m.name`, `m["name"]`: a map's or an instance's entry, a swizzle's components of a list of 2 to 4 numbers (`p.zy`),
+# else the run ends in no_field_<name>, which Rust's run reports as "no field name"
+def field_read(body: Body, target: any, name: text): list {
+	held = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
+	named = text_value_of(name)
+	missing = ended_in("node", no_field_prefix + name)
+	if is_swizzle(name) {
+		word = if #name == 1 then "swizzled_one" else "swizzled"
+		fits = condition(runtime_call("swizzle_fits", [held, named]))
+		missing = ["node", fits + if_else_code("node", runtime_call(word, [held, named]), missing)]
+	}
+	found = condition(runtime_call("has_field", [held, named]))
+	["node", boxed(target) + [op.local_set] + held#2[1..] + found + if_else_code("node", runtime_call("map_get", [held, named]), missing)]
+}
+def is_swizzle(name: text): bool { #name >= 1 and #name <= 4 and name.all(c => c in "xyzw") }
+# a value of the kind given that ends the run in the error function named
+def ended_in(kind: text, error: text): list { [kind, [op.call] + uleb(error_function(error)) + [op.drop, op.unreachable]] }
+# the index of a function that only traps, named so the run's error reads as Rust's does (src/wasm_emitter/control/traps.rs)
+def error_function(name: text): int {
+	if name in module.errors { return module.errors[name].index }
+	f = added_function(name, [], "int", [])
+	f.code = error_throw(name) + [op.unreachable]
+	module.errors[name] = f
+	f.index
+}
+def field_of(body: Body, value: any, name: text): list { if value#1 == "node" then field_read(body, value, name) else refuse("the field " + name + " of a " + value#1) }
+# `m.x = v`: the map with its entry x set to v
+def field_assignment(map: any, name: any, value: any): list { runtime_call("field_with", [["node", boxed(map)], shown_text(name), ["node", boxed(value)]]) }
+# a name as a text value, even of one character (text_value gives a "char" then)
+def text_value_of(name: text): list { ["text", text_bytes(name)] }
+# the classes and enum cases the program declares, wherever it does (a declaration arrives as an opaque view
+# ["type", name, body], its name an attribute layer for an enum's bare cases or a base class)
+# the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
+base_class_layers = ["extends", "inherited_from"]
+collect_types(n: any): any := {
+	if declares_type(n) { return record_type(value_of(n)#2, value_of(n)#3) }
+	if is_type_alias(n) { return module.aliases[value_of(key_of(n))#2#2] = name_of(value_of(n)) }
+	if is_group(n) { for x in n { collect_types(x) } }
+}
+# a class or enum declaration, the opaque view ["type", name, body]
+declares_type(n: any): bool := type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type"
+# `type Name = text`: a declaration of no body naming another type
+is_type_alias(n: any): bool := type(n) is key and op_of(n) == "=" and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and value_of(n) is symbol
+record_type(name: any, body: any): any := {
+	if kind_of(name) == "symbol" {
+		module.class_defaults[name#2] = field_defaults(body)
+		if declared_members(body).any(member => member == ø) { module.member_classes[name#2] = yes }
+		return module.classes[name#2] = field_types(body)
+	}
+	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
+	if name#2 == "variants" {
+		for variant in name#3[3..] { module.variants[variant#2] = yes }
+		if #name#3 > 3 { module.sum_types[declared_type_name(name)] = "cases" }
+	}
+	if name#2 in base_class_layers and kind_of(name#3) == "symbol" {
+		if name#3#2 not in module.sum_types { module.sum_types[name#3#2] = "subclasses" }
+		if kind_of(name#4) == "symbol" { module.parents[name#4#2] = name#3#2 }
+	}
+	record_type(name#4, body)
+}
+# `class Dog extends Animal {…}`: Dog's fields and defaults are Animal's first, then its own; a chain of parents in any
+# order of declaration (merging twice changes nothing)
+inherit_fields(child: text): any := {
+	if child not in module.parents { return module.classes[child] }
+	parent = module.parents[child]
+	if parent not in module.classes { return refuse("a class extending " + parent + ", a class not declared here") }
+	module.classes[child] = entries_of_both(inherit_fields(parent), module.classes[child])
+	module.class_defaults[child] = entries_of_both(module.class_defaults[parent], module.class_defaults[child])
+	if parent in module.member_classes { module.member_classes[child] = yes }
+	module.classes[child]
+}
+# the entries of inherited, then those of own, which win (no local is named like a map word: `entries` broke a map
+# program in the pure lane)
+entries_of_both(inherited: any, own: any): any := {
+	both = {}
+	for name in inherited.keys { both[name] = inherited[name] }
+	for name in own.keys { both[name] = own[name] }
+	both
+}
+# the kind a field typed `type` holds: a type word's of the core, a node of any value (a map, a node, a function), a
+# list of a plural type word (`texts`), each through a type alias; ø untyped, "instance" of a class
+def field_kind(type: any): any {
+	if type == ø { return ø }
+	word = aliased_type(base_type(type))
+	if word in module.classes { return "instance" }
+	if word in node_annotations { return "node" }
+	if word in core_type_words { return core_type_words[word] }
+	if annotated_kind(word) == "list" { return "list" }
+	"instance"
+}
+# a character given to a field typed text is that text (`"r"` is a character here)
+def texted(type: any, value: any): list { if value#1 == "char" and field_kind(type) == "text" then shown_text(value) else value }
+# whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion; an
+# instance of a class is a node, as Rust's class-typed fields take it
+def admits(type: any, kind: text): bool {
+	type == ø or field_kind(type) == "node" or field_kind(type) == kind or (kind == "node" and aliased_type(type) in module.classes)
+}
+# a write to a field `name` of a target known only at run time: every class's field so named takes the kind; a value
+# known only at run time too is written as it is, as Rust's field writes check no field type
+def field_admits(name: text, kind: text): bool {
+	if kind == "node" { return yes }
+	# the class of the target is not known here: a field of that name in any class admitting the kind may be the one
+	# written (Function's `code: any` beside Parser's `code: text`)
+	holders = module.classes.keys.filter(class_name => name in module.classes[class_name])
+	#holders == 0 or holders.any(class_name => admits(module.classes[class_name][name], kind))
+}
+# the members a class body declares, a field as [name, type name (ø: untyped), default ([view], ø: none)]: `x`,
+# `left?` (untyped, ø by default), `x: int`, `x: int = 0`, `n = 0`; any other member (a method `sq() := …`, an
+# operator) as ø
+declared_members(body: any): list := if kind_of(body) == "list" then body[3..].map(declared_field) else []
+declared_fields(body: any): list := declared_members(body).filter(field => field != ø)
+# a field's name as the view holds it: `x`, `"my field"`, `pi` (a constant's word)
+field_name_kinds = ["symbol", "text", "number"]
+without_optional_mark(name: text): text := name[0..<(#name - 1)]
+declared_field(field: any): any := {
+	kind = kind_of(field)
+	if kind in field_name_kinds and field#2.ends_with("?") { return [without_optional_mark(field#2), ø, [ø]] }
+	if kind in field_name_kinds { return [field#2, ø, ø] }
+	if kind != "key" { return ø }
+	if field#2 == ":" and kind_of(field#3) in field_name_kinds {
+		type_name = type_name_of(field#4)
+		# `b: text?`, optional: ø by default
+		return [field#3#2, type_name, if type_name == base_type(type_name) then ø else [ø]]
+	}
+	if field#2 != "=" { return ø }
+	named = declared_field(field#3)
+	if named == ø { return ø }
+	[named#1, named#2, [field#4]]
+}
+# an optional type's base, `text?` → text; any other type as it is
+base_type(type: any): any := if type is text and #type > 1 and type.ends_with("?") then type[0..<(#type - 1)] else type
+# a field's declared type as a name: `int` read as a type or as a symbol, else "?"
+type_name_of(type: any): text := {
+	if kind_of(type) == "symbol" { return type#2 }
+	if kind_of(type) == "type" and kind_of(type#2) == "symbol" { return type#2#2 }
+	"?"
+}
+field_types(body: any): any := {
+	types = {}
+	for field in declared_fields(body) { types[field#1] = field#2 }
+	types
+}
+field_defaults(body: any): any := {
+	defaults = {}
+	for field in declared_fields(body) { if field#3 != ø { defaults[field#1] = field#3 } }
+	defaults
+}
+
+# a typed field's value of another kind, or known only at run time, is checked then: "not an int" as Rust's
+# (src/wasm_emitter/declared_values.rs), a float field keeping an int
+field_checks = {int: "int_admitted", list: "list_admitted", text: "text_checked", bool: "bool_checked", float: "float_checked"}
+def checked_at_run_time(field_type: any, kind: text): bool { not admits(field_type, kind) and field_kind(field_type) in field_checks }
+def field_value(field_type: any, value: any): list { if checked_at_run_time(field_type, value#1) then runtime_call(field_checks[field_kind(field_type)], [value]) else value }
+
+# `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
+def map_assignment(body: Body, target: any, name: text, value: any): list {
+	if checks_fields(body, target) and not field_admits(name, value#1) { return refuse("a " + value#1 + " written to a typed field " + name) }
+	entry_assignment(body, target, text_value_of(name), value)
+}
+# the entry named by the text `name` of the map `target` set to value, a variable target holding the result, a map
+# made of ø; the assignment gives the value
+def entry_assignment(body: Body, target: any, name: any, value: any): list {
+	if checks_fields(body, target) and name#1 != "text" and #module.classes.keys > 0 { return refuse("a field write by a name a typed field may refuse") }
+	held = [op.local_get] + uleb(fresh_local(body, value#1))
+	object = expression_code(body, target)
+	set = put_back(body, target, object, ["node", field_assignment(object, name, [value#1, held])#2])
+	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+}
+# `m[k] = v` of a value known only at run time, as lowered `m#(k+1) = v`: an int k sets the item k+1, any other key
+# the entry named so (runtime.warp node_put); a variable m holds the result, a map made of ø; the assignment gives v
+def keyed_assignment(body: Body, target: any, object: any, key: any, value: any): list {
+	held = [op.local_get] + uleb(fresh_local(body, value#1))
+	put = ["node", runtime_call("node_put", [object, ["node", boxed(key)], ["node", boxed([value#1, held])]])#2]
+	set = put_back(body, target, object, put)
+	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+}
+# the code of a put into the map node a place target holds (a variable, or a field or element of one: `p.b.c = 4`),
+# which takes its result (ø becomes a map), else the put with its result dropped (a local named map reads as the word
+# map: card local-named); a main-level variable a function changes an entry of is changed for every function, as a
+# reference is in Rust's (`module.texts[t] = …`), not a new local of the function
+def put_back(body: Body, target: any, object: any, put: any): list {
+	if target is symbol and object#1 == "node" and is_global(body, name_of(target)) { return dropped(global_assignment(name_of(target), put)) }
+	if is_place(target) and object#1 == "node" then dropped(assignment(body, target, put)) else dropped(put)
+}
+# a variable, or a field or element of one: what an assignment can write
+def is_place(target: any): bool {
+	if target is symbol { return yes }
+	type(target) is key and (op_of(target) == "." or op_of(target) == "#") and is_place(key_of(target))
+}
+# Rust checks a field write against the field's type only on a local it holds as an instance of the class
+# (struct_backend.rs find_typed_structs), never on a parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
+def checks_fields(body: Body, target: any): bool {
+	not (target is symbol and name_of(target) in body.names and body.names[name_of(target)] < #body.function.signature.parameters)
+}

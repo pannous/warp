@@ -1,0 +1,8 @@
+// expected: [1 4 9] 5 (`T for $x in $xs...`: once per item, in a list and as statements)
+rewrite squares $xs... => [$x * $x for $x in $xs...]
+print squares 1 2 3
+rewrite bump_all $vs... => ($v += 1 for $v in $vs...)
+a = 1
+b = 2
+bump_all a b
+print a + b

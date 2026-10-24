@@ -5,12 +5,11 @@
 use "walk.warp"
 use "words.warp"
 use "scope.warp"
-use "prefix_comparisons.warp"
 use "diagnostics.warp"
 
 # Rust Op is_arithmetic and is_comparison
 arithmetic_operators = ["+", "-", "*", "/", "/!", "%", "rem", "^"]
-bool_operators = comparison_words + ["is", "===", "!=="]
+bool_operators = ["==", "!=", "<", ">", "<=", ">=", "≤", "≥", "≠", "is", "===", "!=="]
 # the kinds as messages name them, by the kind type_kinds holds a type as
 shown_kinds = {int: "Int", float: "Float", text: "Text", codepoint: "Text", list: "List", symbol: "Symbol"}
 bool_kind = "Bool"
@@ -19,6 +18,8 @@ function_kind = "function"
 number_kinds = {Int: 1, Float: 1}
 # marks a function's result among the known kinds, apart from a variable of the same name
 call_suffix = "()"
+# the value whose kind is the first change, where the error points (Rust: the assigned value)
+global changed_value = ø
 # the call a closure value is made with (lambdas.warp)
 closure_word = "closure_new"
 global_word = "global"
@@ -30,7 +31,7 @@ kind_changes(program: Node): Node := {
 	global_names = global_variables(program)
 	for body in [program] + definition_bodies(program) {
 		change = first_kind_change(body, {}, results, global_names)
-		if change != ø { return diagnose(change) }
+		if change != ø { return diagnose(change, changed_value) }
 	}
 	program
 }
@@ -178,7 +179,10 @@ given_kind(name: text, given: text, value: any, kinds: any): any := {
 	if was and given {
 		# P199: 1 and 0 are yes and no, a bool variable stays one
 		kind = if was == bool_kind and (value == 0 or value == 1) then bool_kind else mixed_kind(was, given)
-		if kind is empty { return call_of("kind_change", [symbol(name), was, given]) }
+		if kind is empty {
+			changed_value = value
+			return call_of("kind_change", [symbol(name), was, given])
+		}
 	} else if was != ø {
 		kind = ""
 	}

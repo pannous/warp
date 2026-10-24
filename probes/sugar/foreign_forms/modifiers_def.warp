@@ -1,0 +1,3 @@
+# `public def g(x)`: a modifier before def. Expected: 10
+public def g(x){x*2}
+print g(5)

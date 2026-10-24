@@ -1,0 +1,9 @@
+# `for k, v in t` over a map, written out or a parameter typed map: prints a b, [[a 1]]
+m = {"a": 1, "b": 2}
+for key, value in m { print key }
+def f(t: map): list {
+	pairs = []
+	for key, value in t { pairs += [[key, value]] }
+	pairs
+}
+print f({"a": 1})

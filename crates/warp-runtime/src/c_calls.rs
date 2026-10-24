@@ -133,24 +133,108 @@ pub fn get_or_load_library(name: &str) -> Option<Arc<Library>> {
 	Some(library)
 }
 
-/// Where the library `name` may be
-fn library_paths(name: &str) -> Vec<String> {
+/// Where the library `name` may be: a path as it is; else the usual folders and names of this system, the folders of
+/// WARP_LIBRARY_PATH (`:`-separated) first, then the crates cache's (`library_folders`); on Linux also a versioned
+/// soname found in the library folders (libz.so.1, libcurl.so.4, libSDL2-2.0.so.0, libpython3.13.so.1), on macOS a framework (`Cocoa`)
+pub fn library_paths(name: &str) -> Vec<String> {
+	if name.contains('/') {
+		return vec![name.to_string()];
+	}
+	let extra = library_folders();
 	#[cfg(target_os = "macos")]
-	return vec![
-		format!("/opt/homebrew/lib/lib{name}.dylib"),
-		format!("/usr/local/lib/lib{name}.dylib"),
-		format!("lib{name}.dylib"),
-	];
+	{
+		let mut paths: Vec<String> = extra.iter().map(|folder| format!("{folder}/lib{name}.dylib")).collect();
+		paths.extend([
+			format!("/opt/homebrew/lib/lib{name}.dylib"),
+			format!("/usr/local/lib/lib{name}.dylib"),
+			format!("lib{name}.dylib"),
+			format!("/opt/homebrew/opt/{name}/lib/lib{name}.dylib"),
+			format!("/Library/Frameworks/{name}.framework/{name}"),
+			format!("/System/Library/Frameworks/{name}.framework/{name}"),
+		]);
+		paths
+	}
 	#[cfg(target_os = "linux")]
-	return vec![
-		format!("/usr/lib/lib{name}.so"),
-		format!("/usr/local/lib/lib{name}.so"),
-		format!("lib{name}.so"),
-		// glibc's libm.so and libc.so are linker scripts dlopen refuses: the libraries go by their soname
-		format!("lib{name}.so.6"),
-	];
+	{
+		let mut paths: Vec<String> = extra.iter().map(|folder| format!("{folder}/lib{name}.so")).collect();
+		paths.extend([
+			format!("/usr/lib/lib{name}.so"),
+			format!("/usr/local/lib/lib{name}.so"),
+			format!("lib{name}.so"),
+			// a library without its development package: libsqlite3.so.0
+			format!("lib{name}.so.0"),
+			// glibc's libm.so and libc.so are linker scripts dlopen refuses: the libraries go by their soname
+			format!("lib{name}.so.6"),
+		]);
+		paths.extend(version_named_sonames(name, &extra));
+		paths
+	}
 	#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-	return vec![format!("{name}.dll")];
+	{
+		let _ = extra;
+		vec![format!("{name}.dll")]
+	}
+}
+
+/// The folders searched before the system's: WARP_LIBRARY_PATH's, then where `scripts/warp-crate build` installs a
+/// crate's library (notes/crate_adapter.md): `$WARP_CRATES_CACHE/lib` and `/native`, by default under ~/.cache/warp/crates
+fn library_folders() -> Vec<String> {
+	let mut folders: Vec<String> = std::env::var("WARP_LIBRARY_PATH")
+		.map(|folders| folders.split(':').filter(|folder| !folder.is_empty()).map(str::to_string).collect())
+		.unwrap_or_default();
+	let cache = std::env::var("WARP_CRATES_CACHE")
+		.ok()
+		.filter(|folder| !folder.is_empty())
+		.or_else(|| std::env::var("HOME").ok().map(|home| format!("{home}/.cache/warp/crates")));
+	if let Some(cache) = cache {
+		folders.extend(["lib", "native"].map(|folder| format!("{cache}/{folder}")));
+	}
+	folders
+}
+
+/// A library named without the version its file name carries: `python` or `python3` finds libpython3.13.so.1,
+/// `lua` liblua5.4.so.0. The files `lib<name><version>.so…` of the library folders, the highest version first
+#[cfg(target_os = "linux")]
+fn version_named_sonames(name: &str, extra: &[String]) -> Vec<String> {
+	let prefix = format!("lib{name}");
+	let folders = extra.iter().map(String::as_str).chain([
+		"/usr/lib/x86_64-linux-gnu",
+		"/usr/lib/aarch64-linux-gnu",
+		"/lib/x86_64-linux-gnu",
+		"/lib/aarch64-linux-gnu",
+		"/usr/lib64",
+		"/usr/lib",
+		"/usr/local/lib",
+	]);
+	// the version between the name and `.so`: "3.13" of libpython3.13.so.1, as numbers
+	let version_of = |file: &str| -> Option<Vec<u32>> {
+		let version = file.strip_prefix(&prefix)?.split(".so").next()?.trim_start_matches(['.', '-']);
+		// a soname versioned after `.so` only, libz.so.1: no version, before the named ones
+		if version.is_empty() {
+			return file.starts_with(&format!("{prefix}.so.")).then(Vec::new);
+		}
+		let numbers: Option<Vec<u32>> = version.split('.').map(|part| part.parse().ok()).collect();
+		numbers.filter(|numbers| !numbers.is_empty())
+	};
+	let mut found: Vec<(Vec<u32>, String)> = folders
+		.filter_map(|folder| std::fs::read_dir(folder).ok().map(|entries| (folder.to_string(), entries)))
+		.flat_map(|(folder, entries)| {
+			entries
+				.filter_map(Result::ok)
+				.filter_map(|entry| entry.file_name().into_string().ok())
+				.filter(|file| file.contains(".so"))
+				.filter_map(|file| version_of(&file).map(|version| (version, format!("{folder}/{file}"))))
+				.collect::<Vec<_>>()
+		})
+		.collect();
+	// libz.so.1 before libz3.so.4, then the highest version first
+	found.sort_by(|(first, first_path), (second, second_path)| {
+		(!first.is_empty())
+			.cmp(&!second.is_empty())
+			.then(second.cmp(first))
+			.then(first_path.len().cmp(&second_path.len()))
+	});
+	found.into_iter().map(|(_, path)| path).collect()
 }
 
 /// The address of `function` in its loaded library
@@ -191,7 +275,7 @@ fn wasm_param(param: ParamType) -> Option<ValType> {
 /// The wasm results of a C function: a text node, a handle id, else its number
 fn wasm_results(function: &CFunction) -> Vec<ValType> {
 	match (function.result, function.ret_type) {
-		(Some(CPointer::Text | CPointer::Struct), _) => vec![ValType::ANYREF],
+		(Some(CPointer::Text | CPointer::OwnedText | CPointer::Struct), _) => vec![ValType::ANYREF],
 		(Some(_), _) => vec![ValType::I32],
 		(None, RetType::Void) => vec![],
 		(None, RetType::I64) => vec![ValType::I64],
@@ -219,6 +303,17 @@ pub fn link_c_function<T: CallsC>(
 ) -> Result<()> {
 	let params: Vec<ValType> = function.param_types.iter().filter_map(|param| wasm_param(*param)).collect();
 	let func_type = FuncType::new(engine, params, wasm_results(&function));
+	link_c_function_as(linker, function, func_ptr, func_type)
+}
+
+/// link_c_function with the wasm type the importing module declares (warp-host): a `ptr` parameter it declares as a
+/// reference takes a warp text, copied NUL-terminated for the call
+pub fn link_c_function_as<T: CallsC>(
+	linker: &mut Linker<T>,
+	function: CFunction,
+	func_ptr: usize,
+	func_type: FuncType,
+) -> Result<()> {
 	let (module, name) = (function.module.clone(), function.name.clone());
 	let thread_safe = is_thread_safe(&function.library);
 	let layouts: Vec<Option<CStruct>> = function.layouts.iter().map(|text| CStruct::of_text(text)).collect();
@@ -259,10 +354,14 @@ fn call_c_function<T: CallsC>(
 		return Ok(());
 	};
 	*result = match function.result {
-		Some(CPointer::Text) => {
+		Some(owned @ (CPointer::Text | CPointer::OwnedText)) => {
 			// copied before anything else runs: a C string from getenv may change with the next call
-			let pointer = pointer as *const std::ffi::c_char;
+			let pointer = pointer as *mut std::ffi::c_char;
 			let text = (!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
+			if owned == CPointer::OwnedText && !pointer.is_null() {
+				// SAFETY: an owned_text result is the caller's malloc'd string (strdup, readline), freed once here
+				unsafe { free(pointer.cast()) };
+			}
 			text_node(caller, text.as_deref())?
 		}
 		Some(CPointer::Struct) => struct_output(caller, &memory)?,
@@ -270,6 +369,11 @@ fn call_c_function<T: CallsC>(
 		None => native_result(returned, function.ret_type),
 	};
 	Ok(())
+}
+
+extern "C" {
+	/// C's free, for the owned_text results
+	fn free(pointer: *mut std::ffi::c_void);
 }
 
 /// What a call's arguments point to, alive through the call
@@ -373,7 +477,18 @@ fn native_arguments<T: CallsC>(
 				match passed {
 					ParamType::I32 => Some(param.unwrap_i32() as u64),
 					ParamType::I64 => Some(param.unwrap_i64() as u64),
-					ParamType::Ptr => Some(memory_pointer(caller, param.unwrap_i32() as usize) as u64),
+					ParamType::Ptr => match param {
+						// a warp text: a NUL-terminated copy, ø NULL
+						Val::AnyRef(_) => match json_value(caller, name, param)? {
+							serde_json::Value::Null => Some(0),
+							value => {
+								let text = value.as_str().map_or_else(|| value.to_string(), str::to_string);
+								memory.buffers.push([text.as_bytes(), &[0]].concat());
+								memory.buffers.last().map(|bytes| bytes.as_ptr() as u64)
+							}
+						},
+						_ => Some(memory_pointer(caller, param.unwrap_i32() as usize) as u64),
+					},
 					ParamType::Handle => Some(handle_pointer(caller, name, param.unwrap_i32())? as u64),
 					ParamType::F32 | ParamType::F64 => {
 						let bits = if *passed == ParamType::F32 {

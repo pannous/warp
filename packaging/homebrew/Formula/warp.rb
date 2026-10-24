@@ -1,5 +1,5 @@
 # Homebrew formula for the tap pannous/homebrew-tap (brew install pannous/tap/warp): warp and warp-runtime (the stub
-# standalone executables are made from, next to warp), the prebuilt binaries of the tag's GitHub release (seconds, no
+# standalone executables are made from, next to warp), the compilers and lib/ in share/warp, the prebuilt binaries of the tag's GitHub release (seconds, no
 # Rust build); --HEAD builds main from source. Source of truth; the tap gets a copy.
 # At a release: packaging/homebrew/update_formula.sh <version> writes the version and the binaries' sha256, see notes/packaging.md
 class Warp < Formula
@@ -48,11 +48,18 @@ class Warp < Formula
       bin.install "warp", "warp-runtime"
       # releases before the page stub (card build-links) ship none
       bin.install "warp-page-runtime" if File.exist?("warp-page-runtime")
+      # warp-host and its shipped cache, compiler-self's kept values (notes/warp_host.md); newer releases only
+      bin.install "warp-host" if File.exist?("warp-host")
+      pkgshare.install "host-cache" if File.exist?("host-cache")
+      # the warp-written compilers and lib/, found by warp in <prefix>/share/warp (card installed-compilers); releases
+      # before 1.5.0 ship none
+      pkgshare.install "compiler.wasm", "compiler-self.wasm", "lib" if File.exist?("compiler.wasm")
     end
   end
 
   test do
     assert_match version.to_s, shell_output("#{bin}/warp --version") unless build.head?
     assert_equal "42", shell_output("#{bin}/warp eval '6*7'").strip.split.last
+    assert_equal "42", shell_output("#{bin}/warp pure '6*7'").strip.split.last if (pkgshare/"compiler.wasm").exist?
   end
 end

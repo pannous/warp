@@ -1,0 +1,3 @@
+# Safe navigation (extension, card pure-safe-navigation): `a?.b` is ø where a is missing (ø), else a.b; a computed
+# once. A chain `a?.b?.c` stops at the first missing value.
+rewrite $a ?. $m => ($t = $a; if $t == ø then ø else $t.$m)

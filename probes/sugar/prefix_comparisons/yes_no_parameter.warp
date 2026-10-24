@@ -1,0 +1,3 @@
+# a yes/no first parameter keeps the comparison its argument. Expected: yes
+flip(b: bool) := not b
+print flip 2 == 3

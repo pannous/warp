@@ -1,14 +1,15 @@
 #!/usr/bin/env warp
 # Measurements with uncertainty: x ± r is an interval that flows through arithmetic
-length = 6.0 ± 0.3
-width = 2.0 ± 0.2
+# a plain tolerance counts in the value's unit: 6.0m ± 0.3 is 6.0m ± 0.3m
+length = 6.0m ± 0.3
+width = 2.0m ± 0.2
 area = length * width
-print "area: " + str(area) + " m²"
+print "area: " + str(area)
 print "between " + str(area.low) + " and " + str(area.high)
 
 # a comparison answers only when the whole interval agrees
-big = area certainly > 10
-maybe_huge = area possibly > 14
+big = area certainly > 10m²
+maybe_huge = area possibly > 14m²
 if big then print "certainly more than 10 m²"
 if maybe_huge then print "possibly more than 14 m²"
 
@@ -24,10 +25,11 @@ print "with a 20 cm knot: " + str(rope + 20cm)  # the exact 20 cm adds no spread
 print "pulled in 2 s: " + str(rope / 2s)
 # one function serves a quantity and a plain number alike
 twice(x) := x * 2
-print "twice: \(twice(rope)) and \(twice(3))"
+print "twice: \(twice(rope))"
+# print "twice: \(twice(rope)) and \(twice(3))" // TODO card pure-self: unit literals and ± in the pure/self lanes
 # print "twice: \{twice(rope)} and \(twice(3))"
 
-print "area about " + area.value + " m²"
+print "area about " + str(area.value)
 # 1σ makes a Gaussian: one standard deviation, independent errors add in quadrature (an interval adds them whole)
 mass = 6.0 ± 0.3σ
 volume = 2.0 ± 0.2σ
