@@ -68,7 +68,15 @@ case $? in
   *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree: $(print -r -- $pair | tail -3)"; exit 1 ;;
 esac
 print -r -- $pair
-check_lane pure && check_lane self
+# warp-host's lanes too, when there is one: WARP_HOST_BINARY, else warp-host beside main's binary (no per-tree cargo
+# build, card scripts-off-cargo)
+host=${WARP_HOST_BINARY:-${main_warp:h}/warp-host}
+check_host() {
+  said=$($host $@ samples/hello/hello.warp 2>&1 | tail -1)
+  [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp-host $* hello said: $said"; return 1; }
+  verdict="SELF CHECK ok: $said"
+}
+check_lane pure && check_lane self && { [[ ! -x $host ]] || { check_host --compiler full run && check_host run; }; }
 passed=$?
 echo $verdict
 exit $passed

@@ -4,13 +4,13 @@
 # added to a temporary lib's os.warp, named by WARP_LIB, found beside the binary, or through the launcher. Run it
 # through the queue: tests/queue.sh tests/host/test_host_library.sh
 # The host and the compilers as in test_host.sh: WARP_HOST_BINARY (default target/host/warp-host, else target/release/,
-# else target/debug/), compiler-self.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp). That compiler must
+# else target/debug/), compiler-self.wasm from beside WARP_LAUNCHER_RUST (default the shared warp, scripts/shared-warp.sh). That compiler must
 # read WARP_LIB (run_library, main ab93badf7) and match the lib/ staged: WARP_TEST_LIB (default the checkout's lib/).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
 [ -x "$host" ] || host=$checkout/target/debug/warp-host
-rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
+rust=${WARP_LAUNCHER_RUST:-$("$checkout"/scripts/shared-warp.sh "$checkout")}
 stage=$checkout/scratch/host-library-test
 export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=0
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED

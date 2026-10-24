@@ -4,14 +4,14 @@
 # the queue: tests/queue.sh tests/host/test_host.sh
 # The host under test is WARP_HOST_BINARY (default the checkout's target/host/warp-host, else target/release/, else
 # target/debug/: `cargo build --profile host -p warp-runtime --features host --bin warp-host`), with compiler-self.wasm
-# and compiler.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`); staged in
+# and compiler.wasm from beside WARP_LAUNCHER_RUST (default the shared warp, scripts/shared-warp.sh); staged in
 # scratch/host-test/ as installed.
 # Kept values and machine code go to scratch/host-cache/, kept between runs: the first run computes them (~30 s).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
 [ -x "$host" ] || host=$checkout/target/debug/warp-host
-rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
+rust=${WARP_LAUNCHER_RUST:-$("$checkout"/scripts/shared-warp.sh "$checkout")}
 stage=$checkout/scratch/host-test
 HELLO='"Hello 🌍2026"'
 export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=0
