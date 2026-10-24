@@ -5,7 +5,8 @@
 //!   warp-host [--compiler self|full] compile [--aot] <file.warp> [<file.wasm>]   --aot: also its machine code, .cwasm
 //!   warp-host [--compiler self|full] build <file.warp | file.wasm> [-o <app>]   a standalone executable (aot.rs)
 //!   warp-host <file.wasm | file.wat | file.cwasm> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
-//! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`
+//! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`; nothing at
+//! all on a terminal is the console (lib/repl.warp)
 mod aot;
 mod cache;
 mod components;
@@ -147,6 +148,11 @@ fn command(given: Vec<String>) -> i32 {
 			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None, false)),
 			Err(problem) => failed(&format!("{file}: {problem}")),
 		},
+		// nothing on a terminal: the console, lib/repl.warp in pure warp (card pure-repl)
+		[] if console_wanted() => match console_file() {
+			Some(console) => run_source(&engine, compiler, &console.display().to_string(), &[]),
+			None => failed("no lib/repl.warp for the console beside warp-host nor in lib/: WARP_LIB names one"),
+		},
 		// no command: run, as `warp f.warp` and `warp '6*7'` run
 		[source, ..] if !COMMANDS.contains(source) => run_source(&engine, compiler, source, &args[1..]),
 		_ => {
@@ -154,6 +160,19 @@ fn command(given: Vec<String>) -> i32 {
 			2
 		}
 	}
+}
+
+/// The console only for a person: standard input and output both a terminal, so a script or a pipe still gets the usage
+fn console_wanted() -> bool {
+	use std::io::IsTerminal;
+	std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
+}
+
+/// The console's program: lib/repl.warp installed beside warp-host, else in the lib/ the compiler uses
+fn console_file() -> Option<PathBuf> {
+	let installed = installed_folders().into_iter().map(|folder| folder.join("lib"));
+	let library = library_for(Path::new("repl.warp"));
+	installed.chain(library).map(|lib| lib.join("repl.warp")).find(|file| file.is_file())
 }
 
 /// A module to run: a .wasm or .wat file by its name, else a file starting with wasm's magic bytes (`\0asm`)
