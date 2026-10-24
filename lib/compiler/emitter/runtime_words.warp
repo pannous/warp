@@ -168,7 +168,8 @@ covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["in
 	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: [], code: []}
 kind_bit(kind: int): int := 1 << kind
 def type_test_code(body: Body, subject: any, spec: text): list {
-	if spec in module.sum_types { return refuse("a test of the type " + spec + ", which has cases or subclasses") }
+	# a parent's subclasses are tested by class_methods.warp's widened_tests (`x is Animal or x is Dog`): only cases refuse
+	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
