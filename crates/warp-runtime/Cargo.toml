@@ -50,9 +50,10 @@ webview = ["dep:wry", "dep:winit", "dep:objc2"]
 library = ["compiler"]
 # warp-host: a compiler for the modules it is given, on all cores (compiler-self's machine code: 8 s on one, 2 s on
 # eight; rayon is ~0.1 MB), WASI preview 1
-host = ["compiler", "wasmtime/parallel-compilation", "dep:wasmtime-wasi"]
-# WAT text (notes/warp_host.md): warp-host runs .wat modules (`--features host,wat`), and the tool wat2wasm, which
-# tests/host/test_host.sh assembles its C modules with; off by default, the wat crate is ~0.8 MB of warp-host
+host = ["compiler", "wasmtime/parallel-compilation", "dep:wasmtime-wasi", "wat"]
+# WAT text (notes/warp_host.md): warp-host runs .wat modules, as warp does (card warp-host-cli-parity: in the host
+# build, 0.66 MB of its 7.3 MB, measured 2026-10-23), and the tool wat2wasm, which tests/host/test_host.sh assembles its
+# C modules with
 wat = ["dep:wat"]
 # WARP_PROFILE=<file> (profile.rs): wasmtime's GuestProfiler writing Firefox Profiler JSON; warp has it, the stubs don't
 profiling = ["engine", "wasmtime/profiling"]

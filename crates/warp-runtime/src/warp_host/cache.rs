@@ -18,15 +18,25 @@ pub fn fingerprint(parts: impl Hash) -> String {
 	format!("{:016x}", hasher.finish())
 }
 
-/// The fingerprint of a folder's files: their paths within it and their contents, so a cache made from the same lib/
-/// elsewhere (a shipped cache, `shipped()`) matches; reading lib/ (~1.7 MB) takes a few ms
-pub fn folder_fingerprint(folder: &Path) -> String {
+/// The std modules a compile reads from lib/ besides lib/compiler: the parser's spellings (aliases), the prelude, and
+/// the modules compiler.warp's lowered runtime words use or reach as type modules (the Rust lane's STAGE_MODULES, card
+/// compiler-cache-keys)
+const COMPILER_MODULES: [&str; 10] = ["aliases", "prelude", "math", "list", "regex", "os", "file", "map", "text", "time"];
+
+/// The fingerprint of what the compiler reads from lib/ for the values it keeps (compiler.warp's lowered runtime
+/// words): the files below lib/compiler and lib/<module>.warp of COMPILER_MODULES, by their paths within lib/ and their
+/// contents, so a cache made from the same lib/ elsewhere (a shipped cache, `shipped()`) matches, and an edit of any
+/// other file of lib/ (a std module, a sugar file, a test) keeps them (card warp-host-cache-key: hashing all of lib/
+/// made a one-line lib/ edit cost every agent a cold run of ~40 s); reading these takes a few ms
+pub fn compiler_inputs_fingerprint(library: &Path) -> String {
 	fn walk(root: &Path, folder: &Path, found: &mut Vec<(PathBuf, Vec<u8>)>) {
 		let Ok(entries) = std::fs::read_dir(folder) else { return };
 		for entry in entries.flatten() {
 			let Ok(kind) = entry.file_type() else { continue };
 			let path = entry.path();
-			if kind.is_dir() {
+			if entry.file_name().to_string_lossy().starts_with('.') {
+				continue;
+			} else if kind.is_dir() {
 				walk(root, &path, found)
 			} else if let Ok(bytes) = std::fs::read(&path) {
 				found.push((path.strip_prefix(root).unwrap_or(&path).to_path_buf(), bytes))
@@ -34,7 +44,13 @@ pub fn folder_fingerprint(folder: &Path) -> String {
 		}
 	}
 	let mut found = vec![];
-	walk(folder, folder, &mut found);
+	walk(library, &library.join("compiler"), &mut found);
+	for module in COMPILER_MODULES {
+		let file = library.join(format!("{module}.warp"));
+		if let Ok(bytes) = std::fs::read(&file) {
+			found.push((PathBuf::from(format!("{module}.warp")), bytes))
+		}
+	}
 	found.sort();
 	fingerprint(found)
 }

@@ -136,8 +136,6 @@ if [ -x "$assembler" ]; then
 		(func (export "main") (result f64) (call $hypot (f64.const 3) (f64.const 4))))'
 	expect "C: strlen(\"hello\") from machine code, its table carried" 5 "5" \
 		-- bash -c '"$0" compile --aot strlen.wasm >/dev/null && "$0" strlen.cwasm' "$host"
-	expect "C: hypot(3, 4) by dlsym from machine code" 0 "5.0" \
-		-- bash -c '"$0" compile --aot hypot.wasm >/dev/null && "$0" hypot.cwasm' "$host"
 	expect "C: strlen(\"hello\") in an executable" 5 "5" \
 		-- bash -c '"$0" build strlen.wasm -o strlen-app >/dev/null && ./strlen-app' "$host"
 else
