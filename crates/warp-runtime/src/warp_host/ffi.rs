@@ -143,7 +143,7 @@ fn of_import(library: &str, name: &str, func_type: &FuncType, letters: Option<&s
 }
 
 /// The payloads of the module's custom sections of that name
-fn custom_sections<'a>(bytes: &'a [u8], wanted: &'a str) -> impl Iterator<Item = &'a [u8]> + 'a {
+pub(crate) fn custom_sections<'a>(bytes: &'a [u8], wanted: &'a str) -> impl Iterator<Item = &'a [u8]> + 'a {
 	fn uleb(bytes: &[u8], at: &mut usize) -> Option<usize> {
 		let (mut value, mut shift) = (0usize, 0);
 		loop {

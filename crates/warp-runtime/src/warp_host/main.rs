@@ -10,6 +10,7 @@ mod aot;
 mod cache;
 mod components;
 mod ffi;
+mod cli;
 mod nodes;
 mod shell;
 mod wasm_modules;
@@ -24,16 +25,18 @@ use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::{FsPerms, WasiCtxBuilder};
 
 /// The stack wasm runs on: the compiler recurses deeply (warp's self-hosted stage workers take 64 MB)
-const WASM_STACK: usize = 240 << 20;
+pub(crate) const WASM_STACK: usize = 240 << 20;
 const THREAD_STACK: usize = WASM_STACK + (16 << 20);
 const USAGE: &str = "usage: warp-host [--compiler self|full] [run] <file.warp | code> [args…]
        warp-host [--compiler self|full] compile [--aot] <file.warp> [<file.wasm>]
        warp-host [--compiler self|full] build <file.warp | file.wasm> [-o <app>]
        warp-host <file.wasm | file.wat | file.cwasm> [args…]
+       warp-host version
+pure and self are --compiler full and self; --fuel <steps> counts a program's steps, WARP_TIME_LIMIT=<seconds> its time
 no command means run: warp-host f.warp, warp-host '6*7'
 compile --aot also writes the machine code for this machine, <file>.cwasm; build writes an executable carrying it";
 /// The words warp-host takes as commands; any other first word is a program (`run` implied), as with warp
-const COMMANDS: [&str; 4] = ["run", "compile", "build", "help"];
+const COMMANDS: [&str; 5] = ["run", "compile", "build", "help", "version"];
 /// The extensions of warp source, as warp's (src/cli/formatting.rs WARP_EXTENSIONS)
 const WARP_EXTENSIONS: [&str; 2] = ["warp", "wasp"];
 
@@ -85,16 +88,22 @@ fn main() {
 }
 
 fn command(given: Vec<String>) -> i32 {
-	// options before the file: --compiler, and the launcher's (--no-hints, --fuel n …), which warp-host ignores
+	// options before the file: --compiler (or the word pure or self, as warp's commands), --fuel n, and the launcher's
+	// (--no-hints …), which warp-host ignores
 	let (mut full, mut aot, mut args, mut given) = (false, false, Vec::<String>::new(), given.into_iter());
 	while let Some(word) = given.next() {
 		let before_file = args.is_empty()
 			|| matches!(args.as_slice(), [command] if command == "run" || command == "compile" || command == "build");
 		match word.as_str() {
 			"--help" | "-h" if before_file => args.push("help".into()),
+			"--version" | "-v" if before_file => args.push("version".into()),
 			"--aot" if before_file => aot = true,
-			"--compiler" | "--fuel" if before_file => {
-				full |= word == "--compiler" && given.next().as_deref() == Some("full")
+			"--compiler" if before_file => full = given.next().as_deref() == Some("full"),
+			"pure" | "self" if args.is_empty() => full = word == "pure",
+			"--fuel" if before_file => {
+				if let Err(problem) = cli::set_fuel(given.next()) {
+					return failed(&problem);
+				}
 			}
 			option if before_file && option.starts_with("--") => {}
 			_ => args.push(word),
@@ -124,6 +133,7 @@ fn command(given: Vec<String>) -> i32 {
 			println!("{USAGE}");
 			0
 		}
+		["version"] => cli::version(),
 		[file, ..] if aot::is_machine_code(file) => match std::fs::read(file) {
 			Ok(machine_code) => match aot::load(&engine, &machine_code, file) {
 				Ok((module, functions)) => shown(run_module(
@@ -176,6 +186,7 @@ fn module_bytes(file: &str) -> Result<Vec<u8>, String> {
 fn engine() -> wasmtime::Result<Engine> {
 	let mut config = warp_runtime::engine::deterministic_config();
 	config.async_stack_size(WASM_STACK).max_wasm_stack(WASM_STACK);
+	cli::configure(&mut config);
 	Engine::new(&config)
 }
 
@@ -287,6 +298,7 @@ fn compile_file(engine: &Engine, compiler: &str, source: &Path, wasm: &Path) -> 
 /// The module of `source` written to `wasm` by the compiler, the uses of `folder` (else the source's) in reach; the
 /// compile's error, a refusal of a form beyond the emitter's core among them ("outside the core: …")
 fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: Option<PathBuf>) -> Result<(), String> {
+	let engine = &cli::compiling_engine(engine);
 	let absolute = |path: &Path| std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
 	let source = absolute(source);
 	let folder = folder.or_else(|| source.parent().map(Path::to_path_buf)).unwrap_or_default();
@@ -412,12 +424,14 @@ fn run_module(
 			wasm: Default::default(),
 		};
 		let mut store = Store::new(engine, host);
+		cli::fuel(&mut store);
 		warp_runtime::engine::cap_memory(&mut store);
 		let instance = wasm_modules::instantiate(&mut store.as_context_mut(), module, c, None)?;
 		let main = warp_runtime::standalone::ENTRY_POINTS.iter().find_map(|name| instance.get_func(&mut store, name));
 		let main = main.ok_or_else(|| wasmtime::Error::msg("the module has no main nor _start"))?;
 		let mut results = vec![Val::AnyRef(None); main.ty(&store).results().len()];
 		system_signals::allow_staying();
+		let _limit = cli::limit(&mut store);
 		let outcome = main
 			.call(&mut store, &[], &mut results)
 			.and_then(|()| system_signals::stay_while_listening(&mut store, &instance));
@@ -461,6 +475,7 @@ fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance
 	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
 		eprintln!("{error:?}");
 	}
+	cli::stop_when_out_of_fuel(error);
 	let detail = instance.get_global(&mut *store, "trap_detail").map(|global| global.get(&mut *store));
 	let memory = instance.get_memory(&mut *store, "memory");
 	let detail = detail.filter(|value| !matches!(value, Val::AnyRef(None)));
@@ -502,11 +517,13 @@ fn shown(ran: Ran) -> i32 {
 
 /// A compile that failed: its Error the run's only output (the launcher's `refused` reads it there), status 1
 fn refused(message: &str) -> i32 {
+	cli::record_refusal(message);
 	println!("{}", Node::Error(message.as_bytes().to_vec()).shown());
 	1
 }
 
+/// A run that failed: its Error the run's value, printed as warp-rust prints a failed run's
 fn failed(message: &str) -> i32 {
-	eprintln!("warp-host: {message}");
+	println!("{}", Node::Error(message.as_bytes().to_vec()).shown());
 	1
 }

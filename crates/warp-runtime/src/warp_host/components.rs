@@ -40,6 +40,7 @@ pub fn load(bytes: &[u8]) -> wasmtime::Result<Loaded> {
 	let mut linker = Linker::<()>::new(engine);
 	linker.define_unknown_imports_as_traps(&component)?;
 	let mut store = Store::new(engine, ());
+	crate::cli::fuel(&mut store);
 	let instance = linker.instantiate(&mut store, &component)?;
 	let mut functions = Vec::new();
 	for (name, item) in component.component_type().exports(engine) {
