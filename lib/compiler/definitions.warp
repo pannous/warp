@@ -6,7 +6,6 @@ use "walk.warp"
 use "words.warp"
 use "phrase_blocks.warp"
 use "diagnostics.warp"
-use "class_methods.warp"
 
 is_keyword(n: Node): bool := match n {
 	Symbol(name): name in function_keywords
@@ -17,8 +16,6 @@ defined(n: Node): Node := match n {
 	List(parts, Bracket.Round, Separator.None): { if #parts == 2 then Key(parts#1, Op.Define, parts#2) else n }
 	# `def f(x): T { body }`, as the parser keeps it `f(x): (T {body})`: the result held as a T (result_held)
 	Key(head, Op.Colon, typed_body): typed_block(head, typed_body, n)
-	# `def f(x) -> T { body }`, Swift's and Rust's result arrow, the same
-	Key(head, Op.Arrow, typed_body): typed_block(head, typed_body, n)
 	_: n
 }
 typed_block(head: Node, typed_body: Node, n: Node): Node := match typed_body {
@@ -225,8 +222,7 @@ is_call(n: Node): bool := match n {
 	_: no
 }
 
-# (a class's methods first become functions of the program: class_methods.warp)
 definitions(program: Node): Node := {
 	optional_functions = optional_functions_of(program)
-	bottom_up(methods_lifted(program), definition)
+	bottom_up(program, definition)
 }
