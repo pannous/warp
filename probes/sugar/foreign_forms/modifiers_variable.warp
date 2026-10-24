@@ -1,0 +1,3 @@
+# `private x = 4`: a modifier without warp meaning before a name is skipped. Expected: 5
+private x = 4
+print x + 1

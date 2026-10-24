@@ -1,0 +1,3 @@
+# the self lane read `xs#1+xs#2` as a call after the pipe rules (card pure-pipes)
+xs = [1, 2]
+print xs#1 + xs#2

@@ -3,7 +3,7 @@
 # `name: value` as a map entry: its name a symbol, its value boxed
 def entry_code(name_code: any, value_code: any): list { keyed_code(node(Kind.Symbol, name_code), value_code) }
 def keyed_code(name_node: any, value_code: any): list { key_code(Marked.Entry, name_node, value_code) }
-def key_code(kind: int, name_node: any, value_code: any): list { [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code(gc_ops.struct_new, [gc.node]) }
+def key_code(kind: int, name_node: any, value_code: any): list { [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code(gc_ops.struct_new, [gc_type(gc.node)]) }
 # an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
 def name_node(name: any): list {
 	if name is symbol { return node(Kind.Symbol, text_bytes(name_of(name))) }
@@ -124,10 +124,10 @@ record_type(name: any, body: any): any := {
 	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
 	if name#2 == "variants" {
 		for variant in name#3[3..] { module.variants[variant#2] = yes }
-		if #name#3 > 3 { module.sum_types[declared_type_name(name)] = yes }
+		if #name#3 > 3 { module.sum_types[declared_type_name(name)] = "cases" }
 	}
 	if name#2 in base_class_layers and kind_of(name#3) == "symbol" {
-		module.sum_types[name#3#2] = yes
+		if name#3#2 not in module.sum_types { module.sum_types[name#3#2] = "subclasses" }
 		if kind_of(name#4) == "symbol" { module.parents[name#4#2] = name#3#2 }
 	}
 	record_type(name#4, body)
