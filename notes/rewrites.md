@@ -152,8 +152,24 @@ rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
 
 A run a rule made shorter is tried again where it stands, together with the statements after it, so a pairwise rule
 folds a whole run: `rewrite (add_up($a); add_up($b)) => add_up($a + $b)` turns `add_up(1); add_up(2); add_up(3)` into
-`add_up((1 + 2) + 3)`; a run as long or longer moves on, so this can't loop (F12). The sugar step (lib/sugar) matches
+`add_up(1 + (2 + 3))` (right to left, F13); a run as long or longer moves on, so this can't loop (F12). The sugar step (lib/sugar) matches
 runs of statements the same way. Tests: tests/modules/test_rewrite_zip_runs.warp, probes/rewrites/zip_runs.
+
+Runs are rewritten right to left (F13, card engine-right-to-left-runs): the run starting at the last statement is
+tried first, then the one before it, so a rule for the first statements of a run sees what follows them already
+rewritten. Clauses join from the last pair, each pair rule seeing the joined rest:
+
+```warp
+rewrite (fib($a) := $x; fib($n) := $y) => (fib($n) := if $n == $a then $x else $y) where $a is literal
+fib(0) := 0
+fib(1) := 1
+fib(n) := fib(n - 1) + fib(n - 2)   # one fib: if n == 0 then 0 else if n == 1 then 1 else fib(n - 1) + fib(n - 2)
+```
+
+A pairwise rule folds to the right: `rewrite (say($a); say($b)) => say($a - $b)` turns `say(10); say(5); say(2)`
+into `say(10 - (5 - 2))`, and a rule for an end (`(item($a); done) => last_item($a)`) reaches every pair before it
+(`(item($a); last_item($b)) => last_item($a + $b)`). Phrase runs (`keep 1 past 3`) stay left to right. Tests:
+tests/modules/test_rewrite_right_to_left_runs.warp, probes/rewrites/right_to_left_runs.
 
 ## Results rewritten again (F7)
 A rule's result is rewritten again by the rules, its parts first, until none fires, so rules build on rules:

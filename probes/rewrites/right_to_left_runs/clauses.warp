@@ -1,0 +1,6 @@
+// expected: [0 1 1 2 3 5] (F13: three clauses of fib joined pairwise from the last, each pair rule seeing the joined rest)
+rewrite (fib($a) := $x; fib($n) := $y) => (fib($n) := if $n == $a then $x else $y) where $a is literal
+fib(0) := 0
+fib(1) := 1
+fib(n) := fib(n - 1) + fib(n - 2)
+print [fib(i) for i in 0 .. 6]
