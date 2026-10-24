@@ -181,7 +181,8 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); class_defaults the values of the fields an instance may leave out, [view] each by name (an
 # optional field's is ø); member_classes the classes declaring methods or operators in their body; variants its enums'
-# bare cases; sum_types the classes with bare cases or subclasses, which `x is T` tests outside the core (card
+# bare cases; sum_types the classes with bare cases ("cases", which `x is T` tests outside the core) or subclasses
+# ("subclasses", whose tests class_methods.warp widens) (card
 # pure-lane-shape)
 # counts_fuel: the program said `use fuel`
 # aliases: the type each type alias names, `type Name = text`, by its name
