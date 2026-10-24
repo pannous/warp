@@ -38,12 +38,12 @@ in_elsewhere() { (cd "$stage/elsewhere" && "$@"); }
 
 expect "the build put compiler-self.wasm beside warp-host" 0 -- test -f "$(dirname "$host")/compiler-self.wasm"
 expect "the build put compiler.wasm beside warp-host" 0 -- test -f "$(dirname "$host")/compiler.wasm"
-expect "from another folder: the compiler beside warp-host" 49 "49" -- in_elsewhere "$stage/install/warp-host" '7*7'
-expect "through a symlinked folder" 49 "49" -- in_elsewhere "$stage/links/folder/warp-host" '7*7'
-expect "through a symlink to warp-host" 49 "49" -- in_elsewhere "$stage/links/warp-host" '7*7'
+expect "from another folder: the compiler beside warp-host" 0 "49" -- in_elsewhere "$stage/install/warp-host" '7*7'
+expect "through a symlinked folder" 0 "49" -- in_elsewhere "$stage/links/folder/warp-host" '7*7'
+expect "through a symlink to warp-host" 0 "49" -- in_elsewhere "$stage/links/warp-host" '7*7'
 # a broken compiler where a checkout keeps its own (<lib>/../data): the one beside warp-host comes first
 mkdir -p "$stage/install/data" && printf 'not a module' >"$stage/install/data/compiler-self.wasm"
-expect "beside warp-host before <lib>/../data" 49 "49" "warp-host: $stage/install/compiler-self.wasm with" \
+expect "beside warp-host before <lib>/../data" 0 "49" "warp-host: $stage/install/compiler-self.wasm with" \
 	-- in_elsewhere env WARP_HOST_DEBUG=1 "$stage/links/warp-host" '7*7'
 rm "$stage/install/compiler-self.wasm"
 expect "none beside: <lib>/../data's is the one tried" 1 "warp-host: $stage/install/lib/../data/compiler-self.wasm with" \
