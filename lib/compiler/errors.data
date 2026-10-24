@@ -11,3 +11,5 @@ no_single_variant($written, $variants)	"`{written}` fits no single variant of {v
 tied_variants($written, $variants)	"`{written}` fits no single variant of {variants}: give the arguments a type, e.g. `x as float`"	"x as float"
 # decision index-units: a count of bytes given to one of characters, or the other way (index_positions.warp)
 mixed_count_units($given, $declared)	"{a given} given to {a declared}: bytes and characters count differently; find counts characters, byte_index_of bytes"
+# `Person as Person := it`: a conversion of a type to itself (conversions.warp)
+own_type_conversion($type)	"{type} as {type}: a value is already of its own type, no conversion to define"

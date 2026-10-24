@@ -10,6 +10,48 @@ export WARP_TEST_MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-8}"
 export WARP_TEST_TIME_LIMIT="${WARP_TEST_TIME_LIMIT:-1800}"
 [ -z "$WARP_TEST_LOCKED" ] && exec "$(dirname "$0")/tests/queue.sh" "$0" "$@"
 
+# Output (token-lean, scripts/lib/quiet.sh): the run's full output always goes to data/logs/test-<time>.log; by
+# default only a summary (counts, results file, log path) and the failing tests are printed. VERBOSE=1 (or stdout
+# already a file) streams everything as before, the log still kept. The exit status is unchanged.
+#   ./test.sh -h|--help    this text
+case "${1:-}" in -h | --help) sed -n '2,/^OUTPUT_FILE=/{/^#/s/^# \{0,1\}//p;}' "$0"; exit 0 ;; esac
+if [ -z "$WARP_TEST_SH_LOGGED" ]; then
+	export WARP_TEST_SH_LOGGED=1
+	. "$(dirname "$0")/scripts/lib/quiet.sh"
+	log="${WARP_LOG_DIR:-$PWD/data/logs}/test-$(date +%Y%m%d-%H%M%S)-$$.log"
+	results_file="${1:-test_results.txt}"
+	mkdir -p "$(dirname "$log")"
+	started=$(date +%s)
+	before=$(stat -c %Y "$results_file" 2>/dev/null || stat -f %m "$results_file" 2>/dev/null || echo 0)
+	if quiet_is_verbose; then
+		"$0" "$@" 2>&1 | tee "$log"
+		status=${PIPESTATUS[0]}
+		echo "test.sh: full log $log"
+		exit "$status"
+	fi
+	echo "test.sh: running the full suite (log: $log)" >&2
+	"$0" "$@" > "$log" 2>&1
+	status=$?
+	after=$(stat -c %Y "$results_file" 2>/dev/null || stat -f %m "$results_file" 2>/dev/null || echo 0)
+	counts="" verdict=ok
+	if [ "$after" != "$before" ] && [ "$after" -ge "$started" ]; then
+		counts=$(sed -n '/^SUMMARY:/{n;p;}' "$results_file" | tail -1)
+		grep -q '^  ✗ ' "$results_file" && verdict="FAILED TESTS"
+	else
+		verdict="NO RESULTS"
+	fi
+	[ "$status" -ne 0 ] && verdict=FAIL
+	echo "test.sh: $verdict rc=$status $(($(date +%s) - started))s${counts:+ [$counts]} results=$results_file log=$log" >&2
+	note=$(quiet_signal_note "$status"); [ -n "$note" ] && echo "test.sh: $note" >&2
+	grep -m1 '^TIMING:' "$log" >&2
+	if [ "$verdict" = "FAILED TESTS" ]; then
+		grep -E '^  ✗ |^    RERUN' "$results_file" | head -n "${QUIET_ERROR_LINES:-30}" >&2
+	elif [ "$status" -ne 0 ] || [ "$verdict" = "NO RESULTS" ]; then
+		quiet_summary "test.sh" "$log" 1 0 2>&1 >/dev/null | tail -n +2 >&2
+	fi
+	exit "$status"
+fi
+
 OUTPUT_FILE="${1:-test_results.txt}"
 TEMP_FILE=$(mktemp)
 

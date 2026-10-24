@@ -110,7 +110,7 @@ type_of(value: Node, enums: any, subjects: any): any := {
 	if written != ø { return written#1 }
 	if not is_name(value) { return ø }
 	name = name_of(value)
-	if name in subjects and subjects[name] != "" then subjects[name] else ø
+	if name in subjects and subjects[name] then subjects[name] else ø
 }
 
 # the declaration as the sum type of its cases, the view Rust's sum_type gives
