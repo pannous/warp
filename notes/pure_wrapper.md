@@ -13,6 +13,7 @@ it comes to Rust's output.
 | `warp f.warp [-- args]`, `warp run f.warp [-- args]` | `warp-rust pure f.warp [-- args]` |
 | `warp <code>` (a word that is no command, file or option: `warp '6*7'`) | `warp-rust pure <code>` |
 | `warp compile --wasm f.warp` | `warp-rust compiler.wasm -- f.warp f.wasm <folder of f> <lib>`, then `compiled N bytes to f.wasm` |
+| `warp fix\|beautify [check\|yes] <file\|folder\|code>…` | `WARP_LIB=<lib> warp-rust --no-hints run <lib>/fix/command.warp -- fix\|beautify …` (lib/fix, card fix-route); warp-rust with the same words when that lib/ has no fix/command.warp |
 | anything else: `warp`, `warp x.wasm`, `version`, `help`, `test`, `rebuild`, `serve`, `dev`, `app`, `deploy`, `eval`, `lower`, `parse`, `repl`, `compile --exe/--site/…`, `build`, a plain word (`warp pi`), `fast`, `fuel n` | `warp-rust` with the same words |
 
 - Leading flags (`--no-hints`, `--strict[=level]`, `--warnings=…`, `--no-ask`, `--sandbox`, `--fuel n`) go along to
@@ -24,6 +25,12 @@ it comes to Rust's output.
   so the launcher reads inline code's output: a status equal to the Int on its last line (low 8 bits) is the value's and
   becomes 0; any other status (an error's 1, `exit(3)`) passes. A program that prints that same number last and then
   exits with it would exit 0 as well.
+- `fix` and `beautify` run the warp program lib/fix/command.warp by warp-rust (`run`, the Rust compiler, as warp-rust's
+  own route since card fix-in-lib does), its lib/ found as for `compile --wasm` from the current folder, so it works
+  from any folder of a checkout. WARP_LIB names that lib/ for the program's `use`s. `--no-hints`: the hints would be
+  about lib/fix's own source, not the user's files. `fix check` exits 1 when a file would change; plain `fix` shows the
+  diff and asks `apply? y/n` on stdin (no answer: not applied); `yes` writes without asking; code instead of files is
+  printed fixed.
 - Where lib/ comes from for `compile --wasm` (compiler.warp's fourth argument), as warp-rust finds it: WARP_LIB, else the
   nearest lib/ holding compiler/ above the source or the current folder, else the installed lib/, else the lib/ named in
   compiler.wasm's `warp.build` section if it still exists. The compiler file: `<WARP_LIB>/../data/compiler.wasm` when
@@ -62,16 +69,18 @@ pure_command() {
 	case $1 in
 		run) echo run_file ;;
 		compile) echo compile_module ;;
-		fix) echo run_tool ;;   # ← the new line: `<word>) echo <function> ;;`
+		fix | beautify) echo lib_program fix/command.warp "$1" ;;
+		# ← a new line: `<word>) echo <function> [its first words] ;;`
 	esac
 }
 ```
 
-The function, defined below it, gets the words after the command. It runs through `pure …` (the arguments of warp-rust
+The function, defined below it, gets its first words, then the words after the command. A command written as a warp
+program in lib/ is one line reusing `lib_program <program in lib/> "$1"`, which runs `warp-rust run <lib>/<program> --
+<word> <arguments>…` (as fix and beautify do). It runs through `pure …` (the arguments of warp-rust
 that run the pure pipeline: failures loud with their own status, a refusal under WARP_FALLBACK=rust passed on) and calls `pass_on` for a form it does not take,
 which hands the whole command to warp-rust. A new kind of command needs one such function; a command that is a warp
-program reuses one. Add an outcome check to tests/launcher/test_launcher.sh. `fix` and `beautify` are being written in
-warp (Warp Code 2) and have no entry yet.
+program reuses one. Add an outcome check to tests/launcher/test_launcher.sh.
 
 ## Install layout
 

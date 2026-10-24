@@ -102,5 +102,41 @@ expect "WARP_SELF_HOSTED passes through untouched" 0 "warp-rust pure hello.warp 
 expect "--self names the self compiler, flags go along" 0 "warp-rust self --no-hints hello.warp" -- \
 	stub --self --no-hints hello.warp
 
+# warp fix and warp beautify: lib/fix/command.warp, run by warp-rust with the command word and its arguments, from the
+# lib/ found as compile's is (here the nearest one above the current folder, else WARP_LIB); without it warp-rust's own
+in_folder() { (cd "$1" && shift && "$@"); }
+mkdir -p "$stage/stub/lib/fix" "$stage/stub/deeper/down" "$stage/older/lib/compiler" "$stage/fix" || exit 1
+touch "$stage/stub/lib/fix/command.warp"
+FIX_PROGRAM="run $stage/stub/lib/fix/command.warp --"
+expect "warp fix runs lib/fix/command.warp" 0 "$FIX_PROGRAM fix check a.warp" "ran by rust" -- \
+	in_folder "$stage/stub" stub fix check a.warp
+expect "warp beautify too, flags going along" 0 "--strict run $stage/stub/lib/fix/command.warp -- beautify yes a.warp" -- \
+	in_folder "$stage/stub" stub --strict beautify yes a.warp
+expect "warp fix: lib/ the nearest above the current folder" 0 "$FIX_PROGRAM fix x=1" -- \
+	in_folder "$stage/stub/deeper/down" stub fix x=1
+expect "warp fix: WARP_LIB names lib/" 0 "$FIX_PROGRAM fix a.warp" -- \
+	env WARP_LIB="$stage/stub/lib" WARP_RUST="$stub_rust" "$warp" fix a.warp
+expect "warp fix: a lib/ without fix/ leaves it to warp-rust" 0 "warp-rust fix a.warp" ! "command.warp" -- \
+	env WARP_LIB="$stage/older/lib" WARP_RUST="$stub_rust" "$warp" fix a.warp
+expect "WARP_PIPELINE=rust: warp fix goes to warp-rust" 0 "warp-rust beautify a.warp" ! "command.warp" -- \
+	in_folder "$stage/stub" env WARP_PIPELINE=rust WARP_RUST="$stub_rust" "$warp" beautify a.warp
+# the real lib/fix of this checkout, by the Rust binary under test
+messy() { printf 'x=1+2 // sum\nprint x\n' >"$stage/fix/messy.warp"; }
+fixed_file() { "$@" && grep -qx 'x = 1 + 2 # sum' "$stage/fix/messy.warp"; }
+unfixed_file() { "$@"; local status=$?; grep -qx 'x=1+2 // sum' "$stage/fix/messy.warp" && return $status; }
+messy
+expect "warp fix check lists the changes, exit 1, file kept" 1 "messy.warp:1: layout:" "1 to format" -- \
+	unfixed_file in_folder "$checkout" "$warp" fix check "$stage/fix/messy.warp"
+expect "warp beautify yes writes the fixed file" 0 "formatted $stage/fix/messy.warp" -- \
+	fixed_file in_folder "$checkout" "$warp" beautify yes "$stage/fix/messy.warp"
+expect "warp fix check of a fixed file: nothing to format" 0 "0 to format" -- \
+	in_folder "$checkout" "$warp" fix check "$stage/fix/messy.warp"
+messy
+expect "warp fix shows the diff, unanswered: not applied" 0 "+x = 1 + 2 # sum" "not applied" -- \
+	unfixed_file in_folder "$checkout" "$warp" fix "$stage/fix/messy.warp" </dev/null
+expect "warp fix answered y applies it" 0 "apply? y/n" "1 changed" -- \
+	fixed_file in_folder "$checkout" "$warp" fix "$stage/fix/messy.warp" <<<y
+expect "warp beautify <code> prints it fixed" 0 "x = 1 + 2 # sum" -- in_folder "$checkout" "$warp" beautify 'x=1+2 // sum'
+
 if [ $failed -gt 0 ]; then echo "$failed of $run failed"; exit 1; fi
 echo "✓ $run tests passed"

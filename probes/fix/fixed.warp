@@ -1,0 +1,50 @@
+# What lib/fix/fix.warp makes of code (card fix-in-lib): each case [code, fixed code]; prints a ✗ line per
+# difference and "fix: n of m cases" (run: WARP_LIB=<worktree>/lib warp run probes/fix/fixed.warp)
+use "../../lib/fix/fix.warp"
+
+cases = [
+	# the beautify CLI tests' file (tests/welcoming/test_format_cli.rs)
+	["// a note\nx=1+2\nx\n", "# a note\nx = 1 + 2\nx\n"],
+	["use script; ls // the folder", "use script; ls # the folder\n"],
+	["#!/usr/bin/env warp\n// a note\nx=1+2\nx\n", "#!/usr/bin/env warp\n# a note\nx = 1 + 2\nx\n"],
+	["/// doc\n//! kept\n//glued\n", "## doc\n//! kept\n# glued\n"],
+	# hint: a counted type's list is written count first
+	["ys = float[2]\nys\n", "ys = 2 floats\nys\n"],
+	["ys : float[2]\n", "ys : 2 floats\n"],
+	["ys = int[3]\n", "ys = 3 ints\n"],
+	["xs = [1, 2, 3]\nxs[2]\n", "xs = [1, 2, 3]\nxs[2]\n"],
+	["t = text[2]\n", "t = text[2]\n"],
+	["ys : int[]\n", "ys : int[]\n"],
+	["n = 2\nys = float[n]\n", "n = 2\nys = float[n]\n"],
+	["f(xs: float[2]) := xs\n", "f(xs: float[2]) := xs\n"],
+	["s = \"float[2]\"\n", "s = \"float[2]\"\n"],
+	# hints: another language's word, floor division (tests/parser/test_beautify_synonyms.rs, test_slash_comment_needs_space.rs)
+	["auto x = 3\nx\n", "var x = 3\nx\n"],
+	["auto x = 3 // three\nx\n", "var x = 3 # three\nx\n"],
+	["n = 7//2\nx = 9\nx//=3\nm = 7 div 2\nn + x + m\n", "n = 7 /! 2\nx = 9\nx /!= 3\nm = 7 /! 2\nn + x + m\n"],
+	["x = 7 // note\nx\n", "x = 7 # note\nx\n"],
+	["u = \"http://x.org\"\n", "u = \"http://x.org\"\n"],
+	# layout
+	["f(x) := x*2\nit = 5\nprint f it-1\n", "f(x) := x * 2\nit = 5\nprint f it-1\n"],
+	["full-name = 3\nprint full-name\n", "full-name = 3\nprint full-name\n"],
+	["x = 1   \n\n\n\ny = f( 1 ,2 )\n\n", "x = 1\n\ny = f(1, 2)\n"],
+	["p = {name:\"a\", age:3}\n", "p = {name: \"a\", age: 3}\n"],
+	["t = 12:30\nxs[1:3]\nT::x\n", "t = 12:30\nxs[1:3]\nT::x\n"],
+	["d = 2024-02-29\nt = 2024-01-31T10:30\nn = 5-3\n", "d = 2024-02-29\nt = 2024-01-31T10:30\nn = 5 - 3\n"],
+	["x=-1\ny = 1e-5 + 2e+3\nz = a -1\n", "x=-1\ny = 1e-5 + 2e+3\nz = a -1\n"],
+	["if a==b && c!=d { x+=1 }\n", "if a == b && c != d { x += 1 }\n"],
+	["s = \"a=b,c\"   # a  comment\n", "s = \"a=b,c\"   # a  comment\n"],
+	["<div id=x>hi</div>\n", "<div id=x>hi</div>\n"],
+	["x = 1\n", "x = 1\n"],
+	["", ""],
+]
+
+failed = 0
+for case in cases {
+	got = fixed(case[0])[0]
+	if got != case[1] {
+		failed += 1
+		print "✗ " + case[0] + "  gave  " + got + "  not  " + case[1]
+	}
+}
+print "fix: " + (#cases - failed) + " of " + #cases + " cases"

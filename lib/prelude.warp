@@ -171,6 +171,9 @@ sum(xs) := fold(xs, 0, +)
 // that name (`range_sum(a, b) := sum(a..b)`) would be called instead, and every lane emits its arithmetic
 rewrite sum($first to $last) => (if $last < $first then 0 else if ($last - $first + 1) % 2 == 0 then (($last - $first + 1) /! 2) * ($first + $last) else ($last - $first + 1) * (($first + $last) /! 2))
 rewrite sum($first .. $end) => (if $end <= $first then 0 else if ($end - $first) % 2 == 0 then (($end - $first) /! 2) * ($first + $end - 1) else ($end - $first) * (($first + $end - 1) /! 2))
+// `ys = 2 floats`: a list of 2 floats, as `ys = float[2]` (warp fix writes the count first, card fix-in-lib)
+rewrite $n floats => float[$n]
+rewrite $n ints => int[$n]
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
