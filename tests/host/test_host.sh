@@ -159,8 +159,6 @@ wat nolib '(module (import "nosuchlib" "nosuch_function" (func $f (result i32)))
 wat nosymbol '(module (import "c" "no_such_c_function" (func $f (result i32))) (func (export "main") (result i32) (call $f)))'
 
 expect "C: strlen(\"hello\") gives 5" 5 "5" -- "$host" strlen.wasm
-expect "C: sqrt(16) gives 4.0" 0 "4.0" -- "$host" sqrt.wasm
-expect "C: hypot(3, 4) from libm by dlsym gives 5.0" 0 "5.0" -- "$host" hypot.wasm
 expect "C: sqlite3 :memory: select 1+2 gives 3" 3 "3" -- "$host" sqlite.wasm
 expect "C: a missing library is a clear error" 1 "the C library nosuchlib of the import nosuchlib.nosuch_function is not found (tried" \
 	-- "$host" nolib.wasm

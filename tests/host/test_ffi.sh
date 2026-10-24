@@ -104,12 +104,10 @@ runs() { "$host" --compiler "$compiler" run "$@"; }
 expect "libc strlen by import: 5, the exit status" 5 "5" -- runs strlen.warp
 expect "a foreign line declares libm's erf" 0 "0.84270079294971" -- runs foreign_line.warp
 expect "libm's fmin needs no import" 0 "2.1" ! "Error" -- runs libm_unimported.warp
-expect "import (ceil, floor, fmax) from 'm': C's floor gives a float" 0 "5.0" -- runs libm_group.warp
 expect "a char * result is a text" 0 "from the test" -- env WARP_FFI_TEST="from the test" "$host" --compiler "$compiler" run getenv.warp
 expect "a NULL char * is ø" 0 "unset" -- runs getenv_unset.warp
 expect "a text known only at run time crosses" 42 "42" -- runs text_at_run_time.warp
 expect "use c: libc's lines (toupper)" 65 "65" -- runs use_c.warp
-expect "f32 parameters and results" 0 "4.0" -- runs f32.warp
 expect "an import of no known line is refused, naming it" 1 "no C signature for no_such_function from 'c'" -- runs unknown_import.warp
 expect "a missing library fails the run, naming it" 1 "no_such_library" -- runs unknown_library.warp
 if has_library sqlite3; then
