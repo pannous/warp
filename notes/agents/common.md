@@ -51,6 +51,11 @@ After a context swap, this file and your role file win over anything a handover 
   before the branch is written: send the files, functions and a 3-line reason. Supervisor checks that it isn't sugar
   or an extension in disguise and takes the large ones to the user. Small fixes (a bug in an existing case) need no
   question. Supervisor's merger bounces branches that skipped this.
+- Layout (user 2026-10-23, card compiler-to-core): core/ holds the compiler, the runtime (runtime/, runtime/extended/),
+  the sugar rules (core/sugar) and compiler extensions (core/extensions/<name>.warp). lib/ holds plain Warp modules that
+  programs import (math, units, date and time), which the compiler never depends on. Folder names never combine two
+  topics with an underscore; nest folders instead. Until the flip, existing paths are still named lib/compiler/... and
+  lib/sugar/... (core is a symlink to lib/compiler, lib/compiler/sugar one to lib/sugar).
 - New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
   declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
   when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
@@ -131,6 +136,10 @@ After a context swap, this file and your role file win over anything a handover 
   refresh with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh`, which moves the link only after a passing
   smoke test); a branch with Rust changes uses its own build. Branch self-check: `/workspace/box-slot.sh
   /workspace/selfcheck-branch.sh <branch>`.
+- Only the pure pipeline counts (user, 2026-10-23): coverage is what passes purely; the Rust compiler's results don't
+  matter. Don't cargo-build `warp` per branch: run `/workspace/box-slot.sh /workspace/cow/sol-warp-latest rebuild pure`
+  with `WARP_LIB=<tree>/lib`. Rebuild Rust only on branches that change Rust code (src/ is frozen except urgent fixes);
+  crates/warp-runtime changes need only a warp-host build. The merger refreshes the shared binary after Rust lands.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
@@ -167,6 +176,26 @@ After a context swap, this file and your role file win over anything a handover 
   needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1
   tests/queue.sh -- <filter>`. The Integrator's full suite runs in the cloud too. Warp tests (`warp test`,
   scripts/is_tests.py) run locally with the shared binary.
+- Stop isolation (user 2026-10-23, very important): an agent stops only its own helper jobs, never with a stop that
+  reaches other agents.
+- Communicate less (user 2026-10-23): message only when it really matters (Ready, blocked, a decision needed); batch
+  the rest and send FYIs without waking the agent. Git is the status: branch name, commit messages and the board
+  card. Ready means the card moved and the branch pushed, no chat needed.
+- Low effort for routine runs (user 2026-10-23): routine builds and tests (rebuilds, targeted test runs, self-checks,
+  gate runs) go to a helper at low effort with a step cap; give it the exact commands and stop when they finish.
+  Higher effort only for real debugging or design work.
+- Tiered gate, pure pipeline first (user 2026-10-23: the gate must not become a bottleneck): `scripts/gate-probes.sh
+  [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure and self, both
+  hellos (the self check, minutes). Tier 1: every probes/gate/<name>.warp in both lanes against <name>.expected
+  (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
+  Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). Tier 3,
+  Rust tests: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; the script names it, the cargo
+  gate or cloud lane runs it. On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/sol-warp-latest.
+- Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate-probes.sh --tag-good` tags it
+  `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `scripts/bisect-lane.sh [--lane
+  pure|self|both] <probe.warp> <expected> [good] [bad]` (default the newest good/* tag .. origin/main, first-parent)
+  bisects in a temporary worktree it removes: per step rebuild pure and self with the shared binary, bad only on
+  wrong output, skipped (125) on a failed rebuild or a timeout; it prints the first bad commit.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
   suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
@@ -195,6 +224,9 @@ After a context swap, this file and your role file win over anything a handover 
   Interviewer's approval only, not a new question.
 - Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
   intermediate; a test pinning one may be deleted or rewritten as one is! line.
+- Tests are result-based (user, 2026-10-23): assert what a program computes, e.g. `is! '6*7' 42`, or its printed
+  output. Don't pin incidental details such as exit codes of successful runs, internal forms, pass names, error
+  wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
 - Native-only test code: anything used only by a `#[cfg(feature = "native")]` test gets the same cfg; a whole test
   file running the CLI or std::os::unix gets it on its `mod` line, and a new `mod x;` never goes between a cfg line
   and the module it guards. Register a new test file in its folder's mod.rs before `cargo fmt` (fmt skips it).
@@ -311,6 +343,8 @@ After a context swap, this file and your role file win over anything a handover 
      conflicts, never the Integrator. Take a side of a conflicted file only after `git diff <merge-base> HEAD --
      <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check `git diff
      origin/main -- <file>` shows only your change. No need to re-run the tests after a clean update.
+     Keep merges real: one merge commit per branch, and never let a plain `git pull --rebase` flatten them (it replays
+     a merged branch's commits onto main and conflicts): `git pull --rebase=merges` or `git merge origin/main`.
   3. Push the branch, then `todo ready <card>`. It reads the tip itself and refuses a branch that is not pushed,
      differs from origin, or does not merge cleanly (naming the files); `--force` only for a branch carrying other
      branches. Several cards on one branch: ready each. First a `todo note <card>` in this fixed form: `card | branch |
