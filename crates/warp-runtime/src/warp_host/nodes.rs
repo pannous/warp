@@ -193,23 +193,32 @@ fn ratio_of(data: &Val, store: &mut StoreContextMut<'_, Host>) -> Option<(i64, i
 	}
 }
 
-/// A rational as the pure lane prints it: a decimal when it has one (5/2 is 2.5), else n/d (1/3)
+/// An exact rational as warp prints it (src/extensions/numbers.rs Number::Quotient, terminating_decimal): a
+/// terminating decimal positionally with all its digits (2.5, 0.3, 0.00000095367431640625), any other as
+/// numerator/denominator (1/3)
 fn ratio_shown(numerator: i64, denominator: i64) -> String {
-	let (sign, numerator, denominator) = match (numerator < 0) != (denominator < 0) {
-		true => ("-", i128::from(numerator).abs(), i128::from(denominator).abs()),
-		false => ("", i128::from(numerator).abs(), i128::from(denominator).abs()),
-	};
-	// the decimal digits: a power of ten the denominator divides
-	let places = (1..=18u32).find(|places| 10i128.pow(*places) % denominator == 0);
-	match places {
-		Some(places) => {
-			let scaled = numerator * (10i128.pow(places) / denominator);
-			let (whole, fraction) = (scaled / 10i128.pow(places), scaled % 10i128.pow(places));
-			let fraction = format!("{fraction:0width$}", width = places as usize);
-			format!("{sign}{whole}.{}", fraction.trim_end_matches('0'))
-		}
-		None => format!("{sign}{numerator}/{denominator}"),
+	fn gcd(a: i128, b: i128) -> i128 {
+		if b == 0 { a.abs() } else { gcd(b, a % b) }
 	}
+	let divisor = gcd(numerator.into(), denominator.into()).max(1) * i128::from(denominator.signum());
+	let (numerator, denominator) = (i128::from(numerator) / divisor, i128::from(denominator) / divisor);
+	let (mut rest, mut digits) = (denominator, 0u32);
+	for factor in [2, 5] {
+		let mut count = 0;
+		while rest % factor == 0 {
+			rest /= factor;
+			count += 1;
+		}
+		digits = digits.max(count);
+	}
+	let scaled = 10i128.checked_pow(digits).and_then(|scale| numerator.checked_mul(scale)).map(|n| n / denominator);
+	let (true, Some(scaled)) = (rest == 1, scaled) else {
+		return format!("{numerator}/{denominator}");
+	};
+	let sign = if scaled < 0 { "-" } else { "" };
+	let padded = format!("{:0>width$}", scaled.unsigned_abs(), width = digits as usize + 1);
+	let (whole, fraction) = padded.split_at(padded.len() - digits as usize);
+	if fraction.is_empty() { format!("{sign}{whole}") } else { format!("{sign}{whole}.{fraction}") }
 }
 
 /// The program's node as a host value; a main's plain result as its number
