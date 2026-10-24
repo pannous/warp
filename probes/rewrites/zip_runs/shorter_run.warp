@@ -1,0 +1,6 @@
+// expected: 6 (F12: a pairwise rule folds the whole run, one say of 1 + 2 + 3; without F12: 3, then 3)
+rewrite (say($a); say($b)) => say($a + $b)
+say(x) := print x
+say(1)
+say(2)
+say(3)

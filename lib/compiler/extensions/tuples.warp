@@ -1,0 +1,10 @@
+# Tuples (extension, card pure-tuples-destructuring): a tuple is the list of its items. `(a / b, a % b)` as a
+# function's result, a returned value or an assigned value is the list `[a / b, a % b]`; a tuple or a list of names
+# before `=` takes the value apart, `(q, r) = divmod(17, 5)` and `[a, b] = xs` assign each name the item at its
+# position, the value computed once. The bare `q, r = …` is multiple_assignments.warp's.
+rewrite ($head := ($a, $b, $rest...)) => ($head := [$a, $b, $rest...])
+rewrite (return ($a, $b, $rest...)) => (return [$a, $b, $rest...])
+rewrite ($x = ($a, $b, $rest...)) => ($x = [$a, $b, $rest...]) where $x is symbol
+rewrite (($a, $b, $rest...) = $value) => ([$a, $b, $rest...] = $value)
+rewrite ([$names...] = $value) => ($t = $value; ($n = $t#$i) for $n at $i in $names...)
+rewrite ($a, $b, $rest...) => [$a, $b, $rest...] where statement
