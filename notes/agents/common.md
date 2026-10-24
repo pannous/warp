@@ -302,6 +302,13 @@ After a context swap, this file and your role file win over anything a handover 
 - The board's mechanics (topics, sub-cards, keys, renames on take, `--keep-name`, `--title`) are in `todo --help`.
   Every card has a meaningful key: rename a poor one at once (`todo key <card> <short-name>`) and use the key in
   branch names and messages. Priority lives at the topic level (a topic card's column).
+- Every branch belongs to a card (user 2026-10-24): when you start a branch, comment the branch name on its card
+  (create the card first if there is none); when you park a branch, write a handover file and link it from the card.
+  The comment names the branch, its tip, ahead/behind main, whether it merges cleanly, its state in one sentence and
+  the next step; an issue card gets an issue comment, a draft card the same lines appended to its body. Branch
+  handovers live in the repo, one file per branch: notes/handover/<branch>.md (a `/` in the name becomes `-`), with
+  what's done, what's missing, how to test it and its known failures; whoever picks the branch up reads it first and
+  updates it. Session handovers stay in notes/box/handover/<session>.md.
 - Unrelated problems you meet go on the board: `todo add "…"` (column Next; when the board stays unreachable it says
   "CARD QUEUED" and keeps the card in ~/.cache/todo-board/pending.json5 for `todo flush`; never into todo.md).
 - Fix tiny things on the spot instead of carding them. Tiny means all of: a few minutes, one obvious fix with no
