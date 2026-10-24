@@ -80,7 +80,7 @@ declarations_used(statements: any, folder: text, seen: any, claimed: any): list 
 			inner = declarations_used(used, folder_of(file), seen, claimed)
 			seen = inner#2
 			own = used.filter(s => (is_declaration(s) or use_target(s) is symbol) and file_used(s, folder_of(file)) == ø)
-			claim_signatures(own, file.replace(folder + "/", ""), claimed)
+			claim_signatures(own, working_relative(file), claimed)
 			declarations += inner#1 + own
 		}
 	}
@@ -154,7 +154,21 @@ file_used(statement: Node, folder: text): any := {
 	path = path_in(folder, name_of(module) + module_extension)
 	if file_text(path) == ø then ø else path
 }
-path_in(folder: text, name: text): text := if name.starts_with("/") then name else folder + "/" + name
+# a file as Rust's messages name it (loader.rs relative_path): below the working folder relative to it, else as found
+working_relative(file: text): text := {
+	below = cwd + "/"
+	if file.starts_with(below) then file.replace(below, "") else file
+}
+path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
+# the path with each `folder/..` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
+# runtime/text.warp, card runtime-split)
+without_steps_up(path: text): text := {
+	kept = []
+	for part in path.split("/") {
+		if part == ".." and #kept > 0 and kept#(#kept) != ".." { kept = kept[0 ..< #kept - 1] } else { kept += [part] }
+	}
+	kept.join("/")
+}
 file_text(path: text): any := try read(path) else ø
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,

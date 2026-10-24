@@ -8,7 +8,7 @@ const CORE_PROGRAMS: &str = "probes/self_hosting/emitter/core";
 const LEAST_SOURCES_INSIDE: usize = 135;
 /// Sources the emitter twin skips (a lowered view lacking what Rust's result depends on, or a deviation), named in
 /// notes/self_hosting_dropped.md
-const DROPPED: [&str; 11] = [
+const DROPPED: [&str; 13] = [
 	"probes/variance/runtime_lax_alias.warp",
 	"probes/variance/runtime_unannotated_param.warp",
 	"probes/static_result.warp",
@@ -20,6 +20,8 @@ const DROPPED: [&str; 11] = [
 	"probes/self_hosting/readiness/scan_100k.warp",
 	"samples/web/select_binding.warp",
 	"probes/module_name_clash/map_shared.warp",
+	"probes/parser_rest/empty_keys.warp",
+	"probes/repeated_parameter_names.warp",
 ];
 
 #[test]

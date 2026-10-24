@@ -65,7 +65,8 @@ expect() {
 	local text problems=""
 	for text in "${wanted[@]}"; do [[ $said == *"$text"* ]] || problems+=" missing [$text]"; done
 	for text in "${unwanted[@]}"; do [[ $said == *"$text"* ]] && problems+=" unwanted [$text]"; done
-	if [ "$got" = "$status" ] && [ -z "$problems" ]; then
+	# status - : any, the result alone is checked (tests are result-based, user rule 2026-10-23)
+	if { [ "$status" = - ] || [ "$got" = "$status" ]; } && [ -z "$problems" ]; then
 		echo "✓ $name"
 	else
 		failed=$((failed + 1))
@@ -76,7 +77,7 @@ expect() {
 
 expect "print works" 0 "$HELLO" -- "$host" run hello.warp
 expect "a .warp file runs without run" 0 "$HELLO" -- "$host" hello.warp
-expect "inline code: its value, an Int its status" 42 "42" -- "$host" run '6*7'
+expect "inline code: its value" - "42" -- "$host" run '6*7'
 expect "command(\"echo hi\") gives hi" 0 "hi" ! "Error" -- "$host" run command.warp
 expect "command(\"exit 3\") is an Error" 1 'Error("os.command: sh -c exit 3 failed (exit status: 3)' -- "$host" run failing.warp
 expect "a command's Error is caught" 0 "caught os.command: sh -c exit 3 failed" -- "$host" run caught.warp
@@ -89,10 +90,10 @@ expect "compile writes the module" 0 -- "$host" compile hello.warp hello.wasm
 expect "the module runs" 0 "$HELLO" -- "$host" hello.wasm
 # no command means run (as warp): a file, code, their arguments; a module by its name or its magic bytes
 expect "no command: a .warp file runs" 0 "$HELLO" -- "$host" hello.warp
-expect "no command: inline code, its value its status" 42 "42" -- "$host" '6*7'
+expect "no command: inline code, its value" - "42" -- "$host" '6*7'
 expect "no command: inline code gets the words after it" 0 "['a' \"b c\"]" -- "$host" $'use os\nprint args' a "b c"
 expect "no command: the arguments after the file" 0 "\"b c\"" -- "$host" arguments.warp a "b c"
-expect "no command: --compiler full before code" 42 "42" -- "$host" --compiler full '6*7'
+expect "no command: --compiler full before code" - "42" -- "$host" --compiler full '6*7'
 expect "no command: a .wasm file still runs as a module" 0 "$HELLO" -- "$host" hello.wasm
 expect "no command: a module without .wasm runs by its magic bytes" 0 "$HELLO" \
 	-- bash -c 'cp hello.wasm hello-module && "$0" hello-module' "$host"
