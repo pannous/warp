@@ -12,6 +12,10 @@
 #   runtime or the emitter defines (`sort`) is `sum·Bag` in each class declaring it, and a call `x.sum()` the dispatcher
 #   `sum·method(x)`, which calls the function itself, sum(x), on any value not an instance of those classes: a list's
 #   `xs.sum()` still sums
+# - a method named by an operator, its glyph, its word or an alias of the word (lib/aliases.warp: `+(o)`, `add(o)`,
+#   `plus(o)`), is the operator on its instances: the dispatcher `+·operator(a, b)` calls the method of a's class (its
+#   own or an ancestor's) and gives any other value the builtin `a + b`; the emitter calls it for `a + b` of a boxed a,
+#   a value that may be an instance (emitter/operators.warp; card pure-class-operators)
 # - `x is Animal` is true of an instance of a class extending Animal too: `x is Animal or x is Dog`, and so is a
 #   dispatcher's test of each owner (widened_tests, after the methods are lifted)
 # - fields a space lists, `class person{name age: int}`, are each a field, `name; age: int` (the last takes the type)
@@ -61,9 +65,34 @@ methods_lifted(program: Node): Node := {
 		rewritten += [if name in liftable then without_methods(top_statement, view) else top_statement]
 	}
 	functions = functions_defined(top_statements)
-	routes = methods_of(classes, liftable).filter(method => method in typed_words or method in functions)
-	for name in methods_of(classes, liftable) { rewritten += functions_of(classes, liftable, name, routes) }
+	methods = methods_of(classes, liftable)
+	operator_table = operator_spellings()
+	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and taken_count(classes, liftable, method) == 1)
+	routes = methods.filter(method => method in typed_words or method in functions or method in operator_methods)
+	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
+	entry_words = []
+	for method in operator_methods {
+		word = spelled_operator(operator_table, method)#1
+		if word not in entry_words { entry_words += [word] }
+	}
 	if #routes > 0 { rewritten = rewritten.map(top_statement => routed(top_statement, classes, liftable, routes)) }
+	for name in methods.filter(method => method in routes or #owners_of(classes, liftable, method) > 1) {
+		owners = owners_of(classes, liftable, name)
+		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), name in routes, spelled_operator(operator_table, name))]
+	}
+	for word in entry_words {
+		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
+		owners = []
+		owned_spellings = []
+		for spelling in spellings {
+			for owning_class in owners_of(classes, liftable, spelling) {
+				owners += [owning_class]
+				owned_spellings += [spelling]
+			}
+		}
+		operator = spelled_operator(operator_table, spellings#1)
+		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator)]
+	}
 	if extended { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then widened_tests(top_statement, classes) else top_statement) }
 	group_like(program, rewritten)
 }
@@ -184,11 +213,12 @@ without_methods(top_statement: Node, view: any): Node := {
 	}
 }
 
-# the functions of the method `name`: the method itself when one class declares it, else each owner's and the dispatcher
+# the functions of the method `name`: the method itself when one class declares it, else each owner's (its dispatcher
+# methods_lifted adds once the program is routed)
 functions_of(classes: any, names: list, method: text, routes: list): list := {
 	owners = owners_of(classes, names, method)
 	if #owners == 1 and method not in routes { return [method_function(classes, owners#1, method, method, routes)] }
-	owners.map(owning_class => method_function(classes, owning_class, method, owned_name(method, owning_class), routes)) + [method_dispatcher(classes, owners, method, routes)]
+	owners.map(owning_class => method_function(classes, owning_class, method, owned_name(method, owning_class), routes))
 }
 owned_name(method: text, owning_class: text): text := method + "·" + owning_class
 # the class's method as the function `name(self, parameters…)` of its instance
@@ -203,21 +233,29 @@ method_function(classes: any, owning_class: text, method: text, name: text, rout
 }
 assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 
-# `name(self, parameters…)` of a method several classes declare: the call of the instance's class's own, each class
-# tested before the classes it extends, the last owner taking any other instance
-method_dispatcher(classes: any, owners: list, method: text, routes: list): Node := {
-	parameters = method_parameters(method_in(classes[owners#1], method))
+# `name(self, parameters…)` of a method several classes declare, of a routed one or of an operator: the call of the
+# instance's class's own, each class tested before the classes it extends; each owner's spelling of it (an operator's
+# `plus` in one class, `+` in another); the last owner taking any other instance, unless it falls back
+method_dispatcher(classes: any, owners: list, spellings: list, name: text, falls_back: bool, operator: any): Node := {
+	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
-	Key(call_of(called_name(method, routes), [self_node] + parameters), Op.Define, class_dispatch(deepest_first(classes, owners), method, call_arguments, method in routes))
+	called = {}
+	for i in 0..<#owners { called[owners[i]] = owned_name(spellings[i], owners[i]) }
+	operated = falls_back and operator != ø and #call_arguments == 2
+	fallback = if not falls_back then ø else if operated then Key(call_arguments#1, operator#2 as Op, call_arguments#2) else call_of(spellings#1, call_arguments)
+	# an operator's operands are any values: a number reaches the builtin, an instance its class's method
+	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [self_node] + parameters
+	Key(call_of(name, head), Op.Define, class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback))
 }
 # the call of the first owner's method on an instance of it, else of the next owner's…, the last owner's on any other;
-# of a routed one, the function itself on any value not an instance of the owners
-class_dispatch(owners: list, method: text, call_arguments: list, falls_back: bool): Node := {
-	called = call_of(owned_name(method, owners#1), call_arguments)
-	if #owners == 1 and not falls_back { return called }
-	otherwise = if #owners == 1 then call_of(method, call_arguments) else class_dispatch(owners[1..], method, call_arguments, falls_back)
+# with a fallback (a routed method's function itself, an operator's builtin), that on any value not an instance of
+# the owners
+class_dispatch(owners: list, called: map, call_arguments: list, fallback: any): Node := {
+	first_call = call_of(called[owners#1], call_arguments)
+	if #owners == 1 and fallback == ø { return first_call }
+	otherwise = if #owners == 1 then fallback else class_dispatch(owners[1..], called, call_arguments, fallback)
 	test = Key(ø, Op.If, Key(self_node, Op.Is, symbol(owners#1)))
-	Key(Key(test, Op.Then, called), Op.Else, otherwise)
+	Key(Key(test, Op.Then, first_call), Op.Else, otherwise)
 }
 
 # a call `x.sum(…)` of a routed method, the dispatcher's `sum·method(x, …)` when it passes as many
@@ -233,6 +271,21 @@ routed(n: Node, classes: any, names: list, routed_methods: list): Node := match 
 	}
 	_: children(n, part => routed(part, classes, names, routed_methods))
 }
+# the operators lib/aliases.warp names (an entry with its `operator`), by each spelling a method may take: the glyph,
+# the entry's word and its aliases, `+`, add and plus each [add, "+"]; read once per program
+operator_spellings(): any := {
+	found = {}
+	source = try read(run_library() + "/" + ALIASES_FILE) else ""
+	for row in items_of(written_tree(source)) {
+		glyph = alias_field(row#2, "operator")
+		word = spelling_text(row#1)
+		if glyph is text { for spelling in [glyph, word] + (alias_field(row#2, "aliases") ?? []) { found[spelling] = [word, glyph] } }
+	}
+	found
+}
+# the operator a method's name spells (not named operator_word: a plural reads as the function's, and lambdas.warp's
+# global operator_words would be its call), [its word, its glyph] (`plus` and `+` give [add, "+"]), else ø
+spelled_operator(operator_table: any, spelled: text): any := if spelled in operator_table then operator_table[spelled] else ø
 # how many parameters the method of that name takes (besides its instance)
 taken_count(classes: any, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
 is_field_of_any(classes: any, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
