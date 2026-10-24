@@ -172,11 +172,20 @@ rewritten_program(program: any, source: text): any := {
 	if #uses == 0 then program else separated(bracketed(uses + statements_in(program), ""), ";")
 }
 
+# `class Bag { max() := 7 }`: a type declaration; its method named like a library word binds that name in the class
+# only (class_methods.warp routes the calls), so a sugar rule of it (lib/sugar/extremes.warp's max) still reaches the
+# other values
+is_type_declaration(statement: Node): bool := match statement {
+	Key(left, op, right): left == symbol(opaque_word) and kind_of(right) == "type"
+	_: no
+}
+
 # the module rules none of whose words the program binds itself: a program's own word keeps its meaning
 unbound_rules(module_rules: list, program: Node): list := {
 	if #module_rules == 0 { return [] }
 	scope = scope_of(program)
-	module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(scope, word) or binds_as(scope, word, Meaning.Function)))
+	outside_types = scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))
+	module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(scope, word) or binds_as(if is_library_word(word) then outside_types else scope, word, Meaning.Function)))
 }
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (a program's own `push`
