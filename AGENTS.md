@@ -1,14 +1,11 @@
 ## Project Overview
 
 This is **warp**, a rust implementation of **wasp**
+The Rust implementation is done, and we are now completely switching to a new self-hosted warp implementation.
 
-Always commit work and progress, even when a task is not fully solved or tests remain failing. Record unresolved failures honestly, and push when progress is at or near the desired goal.
 
-Answering (user 2026-10-22, every agent): first give a quick answer from what you know now, then run the necessary
-tasks and investigations in the background, then give the complete answer once the information arrives.
-
-https://github.com/pannous/wasp
-https://wasp.pannous.com/
+https://github.com/pannous/warp
+https://warp.pannous.com/
 
 warp is a data format and wasm first programming language
 C++ source code locally at ~/wasp/ documentation and specification at ./wiki 
@@ -213,11 +210,9 @@ runs completely in warp; from then on only outcome tests.
 eq! is just a shortcut for assert_eq! but
 is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run / convert to Node again :
 
-the is! macro triggers the following roundtrip: 
-is!("3",3); => parse("3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 3
-via warp::wasm_emitter::eval and emit_node_main and Node::from_gc_object
+the is! function triggers the following roundtrip: 
+is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 6
 
-### soon
 
 compiletime and runtime evaluation
 ```
@@ -231,16 +226,16 @@ Don't cargo clean unless absolutely necessary!
 
 NEVER modify a README without the user's review and explicit confirmation.
 
+## worktrees
 The /probes/ folder is NOT a place to doublicate worktrees!
-Small or non-conflicting changes may go straight onto main without a worktree (notes/agents/common.md
-"Where to work"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
-(/Volumes/Worktrees/warp is cowtree's donor, never removed;
-/Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md), or work on the same branch for small changes.
-Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).
+Small or non-conflicting changes may go straight onto main without a worktree. 
+Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
+/Volumes/Worktrees/warp is cowtree's donor, never removed.
+/Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md),
+Create worktrees with `cowtree add <path> -b <branch> [<commit>]` 
 
 ## Folders
-- `probes/` = hand-written probe sources only (.warp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
-- `scratch/` = disposable, ignored temporary area, only for: temporary work folders of tests and probes, and cloned outside repos for research. Not for worktrees, repo copies or extra binary copies; logs and results go to `data/`. Deletable any time; anything older than two days gets cleared.
+- `probes/` = hand-written probe sources only 
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
 - Rust build output goes to the one shared target dir set in ~/.cargo/config.toml (`target-dir`), never into the repo; agents and exports don't set CARGO_TARGET_DIR (a per-agent dir is ~20 GB and recompiles every dependency).
 - `./test.sh` runs `probes/check_layout.sh`, which fails on tracked probes that are repo copies, too large, or of a non-source type.
