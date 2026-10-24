@@ -1,6 +1,8 @@
 # Typed arrays (notes/layers.md, sugar): `int[3]`, which the parser reads as the subscript `int#4`, is the list of 3
 # zeros of the type, zero_fill(3, 0); `float[n]` of float zeros, `text[n]` of empty texts. A program binding the type
-# word as a value indexes it.
+# word as a value indexes it. `x is a 100 element array` declares x as 100 zeros (in parentheses, the pattern reads
+# as the statement does: `x is (a 100 element array)`).
 rewrite int#$n => zero_fill($n - 1, 0)
 rewrite float#$n => zero_fill($n - 1, 0 as float)
 rewrite text#$n => zero_fill($n - 1, "")
+rewrite ($x is a $n element array) => $x = zero_fill($n, 0) where statement

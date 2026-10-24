@@ -1272,7 +1272,8 @@ def applies(p: Parser, left: Node, min_power: int): bool {
 	// `[if c then 1 else c for c in t]`: a `for` clause takes no argument of the word before it (`for:` labels one)
 	if keyword_at(p, "for") and peek(p.code, p.at + 3, p.n) != ':' { return false }
 	in_operand = min_power >= OPERAND_POWERS#1 and min_power <= OPERAND_POWERS#2 and min_power != ARGUMENT_POWER and (if p.iterable then word_ends_header(p) else not word_begins_item(p))
-	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c))
+	// a rule's hole stands where a name would: `a $n element array` of `($x is a $n element array)` as `a 100 element array`
+	(applies_otherwise(p, min_power) or in_operand) and (unnamed_at(p) or is_name_start(c) or (c == '$' and is_name_start(peek(p.code, p.at + 1, p.n))))
 }
 
 // `r = move 1 from: 10 to: 3`: a label word with a colon and a blank after it labels the argument after them, also
