@@ -84,6 +84,7 @@ Read notes/agents/common.md and notes/roles.md.
 - Reviewer (notes/agents/reviewer.md): it reviews each Ready card while you gate, never in front of you. Before a
   push, leave out a card warp-reviewer vetoed (it moves the card back to Now with a note; drop it from the batch); its
   polish comes as new Ready cards for the next batch. A missing review never holds a push.
+- Fewer failures is a merge (user 2026-10-24): a branch lands when the merged tip fails no more test cases than its base (pure `warp test` of the touched folders, new files counted on the merged side) or is net-positive; tiers 0 and 1 stay all green.
 - Push `HEAD:main` only at 0 failed and no drop in the test count (a drop must be explained, e.g. removed duplicates).
   Push exactly the hash the suite ran on (`git push origin <tested-hash>:main`), never a branch ref that may have
   moved: workers push new tips mid-run, so never re-merge `origin/<branch>` between the run and the push.
