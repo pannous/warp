@@ -1,0 +1,4 @@
+# modifiers on several lines: each statement keeps its value. Expected: 9
+private x = 4
+static y = x + 1
+print x + y

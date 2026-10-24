@@ -1,11 +1,21 @@
 # Functions (emitter.warp's part): calls and their arguments, each function's kinds and code, analyzer.warp's kinds
 def call(body: Body, f: Function, arguments: any): list {
 	parameters = f.signature.parameters
+	if parameters and parameters.last.rest { return rest_call(body, f, arguments) }
 	if #arguments > #parameters { return refuse_arguments(f, #arguments) }
 	slots = placed_arguments(taken_names(f.signature), arguments)
 	if not (slots is list) { return refuse_arguments(f, #arguments) }
 	given = range_list(#slots).map(i => if slots[i] == ø then default_value(body, f, i, #arguments) else expression_code(body, slots[i]#1))
 	call_values(f, defaulted(body, f, given, #arguments))
+}
+# `f(1, 2, 3)` of `f(a, *xs)`: the arguments after the fixed ones go as one list, a lone spread `f(1, *ys)` as ys
+def rest_call(body: Body, f: Function, arguments: any): list {
+	fixed = #f.signature.parameters - 1
+	if #arguments < fixed { return refuse_arguments(f, #arguments) }
+	extra = arguments[fixed..]
+	spread = if #extra == 1 then rest_name(extra#1) else ø
+	rest = if spread != ø then expression_code(body, symbol(spread)) else list_value(body, extra)
+	call_values(f, arguments[..fixed].map(argument => expression_code(body, argument)) + [rest])
 }
 # the values given, then the defaults of the parameters after them
 def defaulted(body: Body, f: Function, given: any, count: int): list {
@@ -221,7 +231,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	parameter_kinds = []
 	for i in 0..<#f.signature.parameters {
 		declared = f.signature.parameters[i].type_name
-		annotation = if declared == "" then ø else declared
+		annotation = if declared is empty then ø else declared
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
 		given = if argument_kinds[i] == pending then "node" else argument_kinds[i]
 		# analyzer.warp's kind, but a node stays one where it found a list: it may be a list of other brackets (`{1 2}`)
@@ -265,7 +275,8 @@ function_compiled(f: Function, argument_kinds: any): any := {
 body_code(f: Function) := {
 	scope = new_body(f)
 	value = expression_code(scope, statements_block(f.body))
-	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
+	value = [value#1, position_code(scope, f.body) + value#2]
+	f.code = if f.gives_nothing then value#2 + [ref_null, gc_type(gc.node)] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.signature.parameters)..]
 	f.local_names = scope.order
 }

@@ -1,7 +1,8 @@
 # min and max (notes/layers.md, sugar): of two values the comparison `a < b ? a : b`, each value computed once; of
 # more, the extremum of the first two against the rest; of one list literal its items; `min xs` and `max 3 7` are the
 # calls; of one list value the first item improved by every later one, an empty list the run time error
-# empty_extremum(min). A program's own min or max keeps its function. Rust twin: src/lowering/collections/min_max.rs
+# empty_extremum(min); of one number that number. A program's own min or max keeps its function. Rust twin:
+# src/lowering/collections/min_max.rs
 rewrite min($a, $b) => ($x = $a; $y = $b; $x < $y ? $x : $y)
 rewrite max($a, $b) => ($x = $a; $y = $b; $x > $y ? $x : $y)
 rewrite min($a, $b, $c, $rest...) => min(min($a, $b), $c, $rest...)
@@ -12,5 +13,7 @@ rewrite max([$a]) => $a
 rewrite max([$items...]) => max($items...)
 rewrite min $values... => min($values...)
 rewrite max $values... => max($values...)
-rewrite min($xs) => ($held = $xs; if count($held) == 0 then empty_extremum(min) else ($best = $held#1; $at = 2; while $at <= count($held) { $item = $held#$at; $best = if $item < $best then $item else $best; $at += 1 }; $best))
-rewrite max($xs) => ($held = $xs; if count($held) == 0 then empty_extremum(max) else ($best = $held#1; $at = 2; while $at <= count($held) { $item = $held#$at; $best = if $item > $best then $item else $best; $at += 1 }; $best))
+rewrite min($x: number) => $x
+rewrite max($x: number) => $x
+rewrite min($xs) => ($held = $xs; if count($held) == 0 then empty_extremum(min) else ($best = $held#1; for $item in $held { $best = if $item < $best then $item else $best }; $best))
+rewrite max($xs) => ($held = $xs; if count($held) == 0 then empty_extremum(max) else ($best = $held#1; for $item in $held { $best = if $item > $best then $item else $best }; $best))

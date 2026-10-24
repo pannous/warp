@@ -7,6 +7,8 @@ use "words.warp"
 use "phrase_blocks.warp"
 use "diagnostics.warp"
 use "class_methods.warp"
+use "scope.warp"
+use "lambdas.warp"
 
 # `f(x, y)`, `f(x: int, y)`: a name applied to parameter names, each maybe typed
 is_head(n: Node): bool := match n {
@@ -88,7 +90,7 @@ result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
 	written = name_of(result_type)
 	if not written or holds_empty(written) or is_list_type(written) or not can_answer_empty(body, optional_functions) { return result_type }
-	diagnose(call_of("optional_result", [name_of(head#1), written]))
+	diagnose(call_of("optional_result", [name_of(head#1), written]), result_type)
 	symbol(written + "?")
 }
 
@@ -106,7 +108,7 @@ with_empty_otherwise(value: Node): Node := match value {
 	}
 }
 
-# `for x in xs {…}`, `each x in xs {…}` before for_loops.warp lowers them; `while c {…}` is a `do` key already
+# `for x in xs {…}`, `each x in xs {…}` before lib/sugar/iteration.warp lowers them; `while c {…}` is a `do` key already
 loop_words = ["for", "each"]
 is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
 
@@ -191,8 +193,100 @@ is_call(n: Node): bool := match n {
 	_: no
 }
 
-# (a class's methods first become functions of the program: class_methods.warp)
+# (a class's methods first become functions of the program: class_methods.warp; its conversions too, below)
 definitions(program: Node): Node := {
 	optional_functions = optional_functions_of(program)
-	bottom_up(methods_lifted(program), definition)
+	bottom_up(conversions(methods_lifted(program)), definition)
+}
+
+# A program's conversions (decision general-conversions; Rust twin: src/lowering/types/conversions.rs): `Person as
+# text := it.name` says how a Person turns into text, and every `p as text` of the program then uses it. Each target
+# gets one function trying the program's conversions to it in the order written, the built-in one last:
+#   as·text(it) := if it is Person then it.name else it as text
+# A use is its call, `as·text(p)`; a declaration `x as text = "a"` stays one. `text(p: Person) := …` is the conversion
+# to text too, and a program converting to text shows values through it: print, str, text, an interpolation, a join.
+
+# `as·text`: the function converting to the target, a name no program can write; its parameter, which a body's `it`
+# (or the name `text(p: Person)` gives) is renamed to (lambdas.warp renamed)
+conversion_name(target: text): text := "as·" + target
+converted_value = "converted·value"
+
+# a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
+names_type(n: any, scope: any): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
+
+# [source, target, body, the body's name of the value] of `A as B := body` with A and B types, also of
+# `text(p: A) := body`, else ø
+conversion_of(n: any, scope: any): any := {
+	if not is_key(n, Op.Define) { return ø }
+	head = key_of(n)
+	if is_call(head) and #head == 2 and head#1 == symbol("text") and is_key(head#2, Op.Colon) and key_of(head#2) is symbol {
+		return if names_type(value_of(head#2), scope) then [name_of(value_of(head#2)), "text", value_of(n), name_of(key_of(head#2))] else ø
+	}
+	if not is_key(head, Op.As) { return ø }
+	if names_type(key_of(head), scope) and names_type(value_of(head), scope) then [name_of(key_of(head)), name_of(value_of(head)), value_of(n), implicit_parameter] else ø
+}
+
+# the words showing a value as text, which show it through a program's conversion to text
+showing_words = ["print", "str", "text", "text_form"]
+# x as the program's conversion to text shows it; a text as it is
+shown_converted(x: any): any := if x is text then x else call_of(conversion_name("text"), [x])
+
+# every `x as B` of a target B the program converts to as the call of its conversion; `x as B = v` and `f(x) as B := …`
+# declare and stay
+converting_uses(n: any, targets: any): any := {
+	if (is_key(n, Op.Assign) or is_key(n, Op.Define)) and is_key(key_of(n), Op.As) {
+		return Key(key_of(n), op_of(n), converting_uses(value_of(n), targets))
+	}
+	walked = children(n, x => converting_uses(x, targets))
+	if is_key(walked, Op.As) and value_of(walked) is symbol and targets.has(name_of(value_of(walked))) {
+		return call_of(conversion_name(name_of(value_of(walked))), [key_of(walked)])
+	}
+	if not targets.has("text") { return walked }
+	if is_group(walked) and #walked > 1 and walked#1 is symbol and name_of(walked#1) in showing_words and (bracket_of(walked) == "(" or bracket_of(walked) == "") {
+		return group_like(walked, [walked#1] + items_of(walked)[1 ..].map(shown_converted))
+	}
+	# `"hi " + p`: a join with a text
+	if is_key(walked, Op.Add) and (key_of(walked) is text or value_of(walked) is text) { return Key(shown_converted(key_of(walked)), Op.Add, shown_converted(value_of(walked))) }
+	walked
+}
+
+# the conversion to `target`: a typed function of each source type, `as·text·Person(p: Person) := body`, and the one
+# trying them in order by the value's type, then the built-in conversion, `as·text(it: any)`
+conversion_functions(target: text, written: list, targets: any): list := {
+	it = symbol(converted_value)
+	tried = Key(it, Op.As, symbol(target))
+	functions = []
+	for conversion in written.reverse() {
+		name = conversion_name(target) + "·" + conversion#1
+		body = converting_uses(renamed(conversion#3, conversion#4, it), targets)
+		functions += [Key(call_of(name, [Key(it, Op.Colon, symbol(conversion#1))]), Op.Define, body)]
+		tried = Key(Key(Key(ø, Op.If, Key(it, Op.Is, symbol(conversion#1))), Op.Then, call_of(name, [it])), Op.Else, tried)
+	}
+	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried)]
+}
+
+# the program with its conversions as functions, before its statements (its last one stays its value), and their uses
+# as calls
+conversions(program: any): any := {
+	scope = scope_of(program)
+	targets = {}
+	order = []
+	kept = []
+	for statement in statements_in(program) {
+		conversion = conversion_of(statement, scope)
+		if conversion == ø {
+			kept += [statement]
+		} else if conversion#1 == conversion#2 {
+			kept += [diagnose(call_of("own_type_conversion", [conversion#2]), statement)]
+		} else {
+			if not targets.has(conversion#2) {
+				targets[conversion#2] = []
+				order += [conversion#2]
+			}
+			targets[conversion#2] = targets[conversion#2] + [conversion]
+		}
+	}
+	if not order { return if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline) }
+	functions = order.map(target => conversion_functions(target, targets[target], targets)).flatten()
+	List(functions + kept.map(statement => converting_uses(statement, targets)), Bracket.None, Separator.Newline)
 }

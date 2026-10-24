@@ -1,0 +1,7 @@
+# a program defining an operator method keeps the builtin + on boxed values of any other kind (texts, lists)
+class Span { n: int; plus(o: Span): Span := Span(n + o.n) }
+joined(x: any, y: any): text := x + y
+grown(x: any): list := x + [3]
+print joined("a", "b")
+print grown([1, 2])
+print (Span(1) + Span(2)).n

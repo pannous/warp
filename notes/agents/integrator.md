@@ -47,6 +47,12 @@ Read notes/agents/common.md and notes/roles.md.
   `integrator_tools/batch_close.sh [--dry-run] [<batch file>]` closes each landed card with its merge commit, deletes
   the landed remote branches in one push and removes the landed worktrees of owners in ../integrate_retired.txt (or
   of none) when only the tweak/leftovers are uncommitted and nothing is newer than 2 h. The steps below are what they do.
+- Tiered gate (common.md "Testing"): `scripts/gate-probes.sh --base <main the batch started from> <batch tree>`,
+  tier 0 self check, tier 1 probes/gate in both lanes, tier 2 the batch's changed test files (pure), Rust tests only
+  when the batch changes Rust; stop at the first red tier, compare a red lane with origin/main's run before blaming the
+  batch. One merge commit per branch: before the push `git pull --rebase=merges` (or merge origin/main), never a plain
+  `pull --rebase`, which flattens the batch (batch B1, 2026-10-23). A batch green on main: `--tag-good` (good/<date>);
+  a lane regression: `scripts/bisect-lane.sh <probe> <expected>` from the newest good/* tag.
 - Per batch: `git -C "$W" checkout Cargo.toml Cargo.lock test_results.txt`, fetch, `merge --ff-only origin/main`,
   merge each card's tip. Conflicts in todo.md or tests/main.rs: union-merge the three stages (check the result is not
   empty and tests/main.rs has no duplicate lines). Other trivial conflicts you resolve yourself (merge or rebase):
@@ -78,6 +84,7 @@ Read notes/agents/common.md and notes/roles.md.
 - Reviewer (notes/agents/reviewer.md): it reviews each Ready card while you gate, never in front of you. Before a
   push, leave out a card warp-reviewer vetoed (it moves the card back to Now with a note; drop it from the batch); its
   polish comes as new Ready cards for the next batch. A missing review never holds a push.
+- Fewer failures is a merge (user 2026-10-24): a branch lands when the merged tip fails no more test cases than its base (pure `warp test` of the touched folders, new files counted on the merged side) or is net-positive; tiers 0 and 1 stay all green.
 - Push `HEAD:main` only at 0 failed and no drop in the test count (a drop must be explained, e.g. removed duplicates).
   Push exactly the hash the suite ran on (`git push origin <tested-hash>:main`), never a branch ref that may have
   moved: workers push new tips mid-run, so never re-merge `origin/<branch>` between the run and the push.

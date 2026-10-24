@@ -1,0 +1,4 @@
+# use os: the environment and the command line (the runner sets WARP_GATE_PROBE=gate-ok and passes no arguments)
+use os
+print env("WARP_GATE_PROBE")
+print count(args)

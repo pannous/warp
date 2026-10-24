@@ -1,18 +1,14 @@
 # Plain enums (card pure-enums; Rust twin: src/lowering/types/plain_enums.rs): `enum Color { Red, Green }` (Swift's
 # `{ case north, south }`) declares the type Color whose variants are its bare cases, `type @variants(Red Green) Color
-# {}`. A case's index, counting from 0 as C does, is `Coin.Dime as int`, also of a name holding a case; an int becomes
-# a case explicitly, `2 as Coin` or `Coin(2)`, an error when no case has that index (card enum-leftovers). `Color.Red`
-# as the case Red and `c is Coin` are rewrite rules (lib/sugar/enums.warp), which run after this pass.
+# {}`; a case of node.warp's spelled enums converts to its spelling (`op as text`) and equals it. `Color.Red` as the case
+# Red, `c is Coin`, a case's number `Coin.Dime as int` and the case at an index `2 as Coin` are rewrite rules
+# (lib/sugar/enums.warp), which run after this pass.
 use "walk.warp"
 use "phrase_blocks.warp"
 use "shapes.warp"
-use "node_matches.warp"
 use "enum_declarations.warp"
 
 variants_word = "variants"
-# the types a case converts to, each with the number its first case counts as: `Coin.Dime as int` and `as index` its
-# index 2 (from 0, as C counts), `as position` its position 3 (from 1, as `xs#p` counts)
-count_types = {int: 0, index: 0, position: 1}
 # the types a spelled case converts to its spelling, `op as text` (Rust twin: node_cases.rs TEXT_TYPES)
 text_types = ["text", "string"]
 # spelled_enums, node.warp's enums whose cases convert by their spelling (`op as text`), not by their index
@@ -114,7 +110,7 @@ type_of(value: Node, enums: any, subjects: any): any := {
 	if written != ø { return written#1 }
 	if not is_name(value) { return ø }
 	name = name_of(value)
-	if name in subjects and subjects[name] != "" then subjects[name] else ø
+	if name in subjects and subjects[name] then subjects[name] else ø
 }
 
 # the declaration as the sum type of its cases, the view Rust's sum_type gives
@@ -123,48 +119,18 @@ enum_type(name: text, cases: list): any := {
 	node_of(["type", ["attribute", variants_word, variants, ["symbol", name]], ["list", "{", ""]])
 }
 
-# `match value { arms }`, lowered as node_matches.warp lowers a written one: this pass runs after it
-match_over(value: Node, arms: list, enums: any): Node := matched(value, arms, ø, case_names_of(enums))
-
-# The number of a case counting the first as `first`: `2` of `Dime` from 0, a match over the cases for a name of the
-# enum type
-case_number(value: Node, cases: list, first: int, enums: any): Node := {
-	numbers = 1 to #cases
-	written = written_case(value, enums)
-	if written != ø { return numbers.filter(i => cases#i == written#2)#1 - 1 + first }
-	match_over(value, numbers.map(i => Key(symbol(cases#i), Op.Colon, i - 1 + first)), enums)
-}
-
-# The case at an index: `Dime` of `2`, a match over the indexes for any other value, an error past the cases
-case_at(value: Node, enum_name: text, enums: any): Node := {
-	cases = enums[enum_name]
-	no_case = " is no " + enum_name + " case"
-	if value is int {
-		return if value >= 0 and value < #cases then symbol(cases#(value + 1)) else error_node("" + value + no_case)
-	}
-	raised = List([symbol(raise_word), Key(value, Op.Add, no_case)], Bracket.None, Separator.Space)
-	arms = (1 to #cases).map(i => Key(i - 1, Op.Colon, symbol(cases#i)))
-	match_over(value, arms + [Key(symbol(other_arm), Op.Colon, raised)], enums)
-}
-
-# `Coin.Dime as int` the case's index, `as position` its position, `2 as Coin` the case at an index; `op as text` of
-# node.warp's spelled enums its spelling (node_cases.warp converted the other values to them already); other
-# conversions as they are
+# `op as text` of node.warp's spelled enums its spelling (node_cases.warp converted the other values to them already);
+# other conversions as they are (a case's number and the case at an index are lib/sugar/enums.warp's rules)
 case_conversion(value: Node, target: Node, n: Node, enums: any, subjects: any): Node := {
-	if not is_name(target) { return n }
-	target_name = name_of(target)
-	if target_name in enums { return case_at(value, target_name, enums) }
+	if not is_name(target) or name_of(target) not in text_types { return n }
 	enum_name = type_of(value, enums, subjects)
-	if enum_name != ø and enum_name in spelled_enums and target_name in text_types { return held_text(enum_name, value) }
-	if enum_name == ø or target_name not in count_types { return n }
-	case_number(value, enums[enum_name], count_types[target_name], enums)
+	if enum_name != ø and enum_name in spelled_enums then held_text(enum_name, value) else n
 }
 
 enum_node(n: Node, enums: any, subjects: any): Node := match n {
 	Key(value, Op.As, target): case_conversion(value, target, n, enums, subjects)
 	Key(left, Op.Eq, right): held_equality(left, Op.Eq, right, n, subjects)
 	Key(left, Op.Ne, right): held_equality(left, Op.Ne, right, n, subjects)
-	List(items, Bracket.Round, separator): if #items == 2 and is_name(items#1) and name_of(items#1) in enums then case_at(items#2, name_of(items#1), enums) else n
 	_: {
 		declared = declared_enum(n)
 		if declared == ø then n else enum_type(declared#1, declared#2)

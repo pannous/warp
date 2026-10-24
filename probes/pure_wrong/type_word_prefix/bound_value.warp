@@ -1,0 +1,3 @@
+// expected: a and b
+x = data a and b
+print string x
