@@ -33,8 +33,6 @@ instance_names = ["self", "this"]
 base_layers = ["extends", "inherited_from"]
 # methods with a meaning of their own, which stay in their class
 kept_methods = ["init"]
-# the words the runtime or the emitter defines (`sort`), which a call on a list or a text must still reach
-typed_words = typed_lines.map(signature_line => signature_line.name)
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
 # the function a bare call of a sibling method calls: the dispatcher of a routed one
@@ -68,7 +66,7 @@ methods_lifted(program: Node): Node := {
 	methods = methods_of(classes, liftable)
 	operator_table = operator_spellings()
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and taken_count(classes, liftable, method) == 1)
-	routes = methods.filter(method => method in typed_words or method in functions or method in operator_methods)
+	routes = methods.filter(method => is_library_word(method) or method in functions or method in operator_methods)
 	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
 	entry_words = []
 	for method in operator_methods {
@@ -243,8 +241,9 @@ method_dispatcher(classes: any, owners: list, spellings: list, name: text, falls
 	for i in 0..<#owners { called[owners[i]] = owned_name(spellings[i], owners[i]) }
 	operated = falls_back and operator != ø and #call_arguments == 2
 	fallback = if not falls_back then ø else if operated then Key(call_arguments#1, operator#2 as Op, call_arguments#2) else call_of(spellings#1, call_arguments)
-	# an operator's operands are any values: a number reaches the builtin, an instance its class's method
-	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [self_node] + parameters
+	# an operator's operands are any values: a number reaches the builtin, an instance its class's method; a routed
+	# method's instance too, so a list `[3, 1].sort()` passes none of the owners' methods its kind (their `self.n`)
+	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [if falls_back then Key(self_node, Op.Colon, symbol("any")) else self_node] + parameters
 	Key(call_of(name, head), Op.Define, class_dispatch(deepest_first(classes, owners), called, call_arguments, fallback))
 }
 # the call of the first owner's method on an instance of it, else of the next owner's…, the last owner's on any other;
