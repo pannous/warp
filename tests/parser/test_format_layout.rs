@@ -105,3 +105,11 @@ fn test_a_sign_after_a_keyword_stays() {
 	assert_eq!(formatted(signs), signs);
 	assert_eq!(formatted("y = n*2-1\n"), "y = n * 2 - 1\n");
 }
+
+/// card format-respaces: a `data { … }` block is data, its layout the author's: lib/units.warp's unit_definitions
+/// (`prefix G := 10^9`, `quantity speed m/s`) is read as written, so format leaves the block alone
+#[test]
+fn test_data_block_keeps_its_layout() {
+	let code = "units = data {\n\tprefix G := 10^9\n\tquantity speed m/s\n}\nprint 1+2\n";
+	assert_eq!(formatted(code), "units = data {\n\tprefix G := 10^9\n\tquantity speed m/s\n}\nprint 1 + 2\n");
+}

@@ -7,10 +7,12 @@ use "uses.warp"
 use "sugar.warp"
 use "kind_changes.warp"
 use "diagnostics.warp"
-use "list_methods.warp"
 use "words.warp"
 
 counting_operators = ["++", "--"]
+# the methods that change the list or map they are called on, which Rust's list_mutations.rs lowers in place (and
+# lib/sugar/method_calls.warp leaves as methods)
+in_place_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
 # the operators a changed target is reached through: `xs#i`, `p.x`, the declared `k: int`
 target_operators = ["#", ".", ":"]
 
@@ -28,8 +30,8 @@ main_globals(program: any, own_names: list): any := {
 			for name in changed_names(body) {
 				if name in main_names and name not in global_names and name not in own and name not in decided and not declares_local(body, name) {
 					decided[name] = yes
-					if first_mention(body, name) != fresh_mention { return diagnose(call_of("main_variable_change", [name])) }
-					diagnose(call_of("local_or_global", [name, defined_function]))
+					if first_mention(body, name) != fresh_mention { return diagnose(call_of("main_variable_change", [name]), function_definition) }
+					diagnose(call_of("local_or_global", [name, defined_function]), function_definition)
 				}
 			}
 		}

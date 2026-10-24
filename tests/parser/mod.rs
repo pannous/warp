@@ -25,7 +25,11 @@ mod test_guard_comment; // card else-comment-swallows
 mod test_home_paths; // card unix-words
 mod test_if_condition_words; // card parser-if-stops
 mod test_inline_comments;
+#[cfg(feature = "native")]
+mod test_installed_compilers; // card installed-compilers
 mod test_juxtaposition;
+#[cfg(feature = "native")]
+mod test_local_shadows_lib_function; // card local-shadows-lib-function
 mod test_meta;
 mod test_meta_attributes;
 mod test_named_argument_lambda; // card holder-says
@@ -72,6 +76,8 @@ mod test_self_hosted_library; // card shared-warp-build
 mod test_self_pure; // card pure-runs
 #[cfg(feature = "native")]
 mod test_self_sort; // card sort-warp
+#[cfg(feature = "native")]
+mod test_self_text_index_of; // card index-of-bytes
 #[cfg(feature = "native")] // a lib/compiler file on disk
 mod test_self_time_arithmetic; // card time-arithmetic-warp
 #[cfg(feature = "native")]
@@ -94,6 +100,8 @@ mod test_url_literal; // card add-http
 mod test_warp_format;
 #[cfg(feature = "native")]
 mod test_warp_pure; // card warp-pure
+#[cfg(feature = "native")]
+mod test_warp_wasm_alone; // card standalone
 mod test_wisp_def_params;
 mod test_wisp_malformed;
 mod test_wisp_roundtrip;

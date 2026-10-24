@@ -47,6 +47,13 @@ fn the_core_runs_pure() {
 	runs_pure("function", "f(x) := x * 2; f(4)", "8");
 }
 
+/// min and max of one number are that number (lib/sugar/extremes.warp, card test-no-refusal-asserts-2)
+#[test]
+fn the_extremum_of_one_number_runs_pure() {
+	runs_pure("max_of_one", "max(3)", "3");
+	runs_pure("min_of_one", "min(7)", "7");
+}
+
 /// `for` lowers to `while` in lib/compiler/for_loops.warp: counted ranges, `to` including its end, walked lists
 #[test]
 fn for_loops_run_pure() {
@@ -552,14 +559,14 @@ fn a_lexer_over_short_words_takes_linear_time_pure() {
 	runs_pure("lexer_short_words", &lexer, "6000");
 }
 
-/// `n times` and sleep's units are no passes of the warp compiler (card phrases-out-of-core): `n times` is refused by
-/// name until it is a library word, `sleep(seconds)` is the prelude word calling the host word sleep_ms
+/// `n times` and sleep's units are no passes of the warp compiler (card phrases-out-of-core): `n times`, `twice` and
+/// `thrice` are library words (lib/sugar/loops.warp), `sleep(seconds)` is the prelude word calling the host word sleep_ms
 #[test]
 fn phrases_out_of_the_core() {
-	let (output, _) = lane_run("pure-only", "times_pending", "a = 0; 3 times { a += 1 }; a");
-	assert!(output.contains("outside the core: pure: `n times` (library word pending)"), "{output}");
-	let (output, _) = lane_run("pure-only", "twice_pending", "n = 0; twice { n += 1 }; n");
-	assert!(output.contains("outside the core: pure: `twice …` (library word pending)"), "{output}");
+	runs_pure("times_runs", "a = 0; 3 times { a += 7 }; a", "21");
+	runs_pure("times_prints", "3 times { print \"hi\" }", "hi\nhi\nhi");
+	runs_pure("twice_runs", "n = 0; twice { n += 5 }; n", "10");
+	runs_pure("thrice_runs", "n = 0; thrice { n += 5 }; n", "15");
 	runs_pure("own_twice", "twice(x) := x * 2; twice(4)", "8");
 	let sleep = format!("{}/probes/pure_chains/sleep_seconds.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("sleep_seconds", &sleep, "yes\nwoke");
@@ -704,7 +711,6 @@ fn op_cases_run_pure() {
 /// A name holds an enum case in the function that binds it: parser.warp's own `bracket = ""` leaves view_of's matched
 /// `bracket` a Bracket case, so the pure-compiled parser reads a call with comma arguments (card self-hello)
 #[test]
-#[ignore = "fixnow: fixnow-a-call-with-comma-arguments-parses-pure: the pure passes.warp stage runs out of time after 600 s (the ø column is fixed)"]
 fn a_call_with_comma_arguments_parses_pure() {
 	let probe = format!("{}/probes/spelled_case_per_function.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("spelled_case_per_function", &probe, "[\"list\" '(' \"\" [\"symbol\" 'f'] [\"symbol\" 'a'] 2]\n2");

@@ -1,0 +1,4 @@
+// a program's own sum replaces the prelude's and runs as fast (compare probes/sum_speed_builtin.warp)
+sum(xs) := { total = 0; for x in xs { total += x }; total }
+xs = [i for i in 1 to 1000000]
+print sum(xs)

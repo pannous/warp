@@ -229,8 +229,8 @@ fn net(member: &str, arguments: &[Node]) -> Result<Node, String> {
 
 fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
-		("env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
-		("args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
+		("env", [name]) => Ok(environment_variable(&text_of(name)?).map_or(Node::Empty, Node::Text)),
+		("args", []) => Ok(texts(program_arguments())),
 		("cwd", []) => working_folder(),
 		("input", prompt) => typed_line(prompt),
 		("stdin", []) => std::io::read_to_string(std::io::stdin()).map(Node::Text).map_err(said),
@@ -251,20 +251,73 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	}
 }
 
-/// The value kept under `name` (os.keep) while warp and its lib/ stay as they are: a value the program computes the same
-/// way at every run, such as compiler.warp's lowered runtime words (card pure-warm-start)
+/// The value kept under `name` (os.keep) while warp and its lib/ stay as they are: a value a program computes the same
+/// way at every run, read by the next run of any program (card pure-warm-start); a compiler module's own (kept_by)
 #[cfg(feature = "native")]
 fn kept_value(name: &str) -> Option<Node> {
-	let key = crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {name}"))?;
+	let key = kept_key(name)?;
 	postcard::from_bytes(&crate::run::module_cache::kept_bytes(&key, KEPT_VALUE)?).ok()
 }
 
 #[cfg(feature = "native")]
 fn keep_value(name: &str, value: &Node) {
-	let key = crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {name}"));
-	if let (Some(key), Ok(bytes)) = (key, postcard::to_allocvec(value)) {
+	if let (Some(key), Ok(bytes)) = (kept_key(name), postcard::to_allocvec(value)) {
 		crate::run::module_cache::keep_bytes(&key, KEPT_VALUE, &bytes);
 	}
+}
+
+/// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs
+#[cfg(feature = "native")]
+fn kept_key(name: &str) -> Option<String> {
+	let compiler = KEEPING_COMPILER.with(|compiler| compiler.borrow().clone());
+	crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {compiler} {name}"))
+}
+
+#[cfg(feature = "native")]
+thread_local! {
+	/// The SHA-256 of the compiler module running (compiler.wasm, compiler-self.wasm), empty for any other program
+	static KEEPING_COMPILER: std::cell::RefCell<String> = Default::default();
+}
+
+/// The variable naming the lib/ a compiler run reads its std modules from (lib/compiler/parser.warp run_library)
+const LIBRARY_VARIABLE: &str = "WARP_LIB";
+
+/// A variable of the environment a run sees: the process's, but WARP_LIB the lib/ of this warp (library_folder) in a
+/// compiler's run, so compiler.wasm reads the std modules there, never from the folder it was built in (card
+/// compiler-cache-keys); any other program sees the process's environment as it is
+pub fn environment_variable(name: &str) -> Option<String> {
+	if name == LIBRARY_VARIABLE && in_compiler_run() {
+		return Some(crate::compiler::self_hosted::library().display().to_string());
+	}
+	std::env::var(name).ok()
+}
+
+/// The environment a run sees, as environment_variable gives each variable (WASI's environ of a compiler run)
+pub fn environment() -> Vec<(String, String)> {
+	let mut variables: Vec<(String, String)> = std::env::vars().filter(|(name, _)| name != LIBRARY_VARIABLE).collect();
+	variables.extend(environment_variable(LIBRARY_VARIABLE).map(|library| (LIBRARY_VARIABLE.to_string(), library)));
+	variables
+}
+
+#[cfg(feature = "native")]
+fn in_compiler_run() -> bool {
+	KEEPING_COMPILER.with(|compiler| !compiler.borrow().is_empty())
+}
+
+#[cfg(not(feature = "native"))]
+fn in_compiler_run() -> bool {
+	false
+}
+
+/// `run` of the compiler module whose SHA-256 is `owner`, keeping values of its own: compiler.wasm and
+/// compiler-self.wasm, or a compiler.wasm built from an older lib/, compute compiler.warp's lowered runtime words
+/// differently, and one read another's ('key not found'; card pure-self-stale-cache)
+#[cfg(feature = "native")]
+pub fn kept_by<R>(owner: String, run: impl FnOnce() -> R) -> R {
+	let before = KEEPING_COMPILER.with(|compiler| compiler.replace(owner));
+	let result = run();
+	KEEPING_COMPILER.with(|compiler| compiler.replace(before));
+	result
 }
 
 /// The browser keeps no values across runs: each run computes them
@@ -324,6 +377,11 @@ thread_local! {
 /// The arguments the running program gets as `args`
 pub fn set_program_arguments(arguments: Vec<String>) {
 	PROGRAM_ARGUMENTS.with(|kept| *kept.borrow_mut() = arguments);
+}
+
+/// The arguments `args` gives: WASI's command line after its first item, the program (host::native wasi_context)
+pub fn program_arguments() -> Vec<String> {
+	PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone())
 }
 
 thread_local! {

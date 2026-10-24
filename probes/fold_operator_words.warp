@@ -1,0 +1,5 @@
+// operator words as fold functions, pure lane (the Rust lane reads `or` as an undefined function)
+print fold([no, yes], no, or)
+print fold([yes, yes], yes, and)
+print fold([2, 3, 4], 1, *)
+print product([2, 3, 4])

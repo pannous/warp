@@ -2,29 +2,36 @@
 # The warp-only acceptance check (decision warp-only-acceptance): the Rust-compiled compiler.warp compiles itself and
 # that self build runs hello world. Few checks at a time on the Mac: each self build runs wasm-opt -O3 on ~2.5 cores,
 # and eight at once pushed the load past 60 (supervisor 2026-10-21); one at a time queued checks for 45 min at load 9,
-# so check_slots run at once and a further check waits for a free slot.
+# so the check runs in one of scripts/slot.sh's fleet-wide slots.
 # usage: scripts/self-check.sh [<worktree>, default the current checkout]   (exit 0 = Hello printed)
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
-warp=/Users/me/dev/bin/warp
-locks=/Users/me/dev/angles/warp/scratch/self-check
-check_slots=2
+# main's Rust binary, warp-rust beside the launcher warp (notes/pure_wrapper.md); plain warp until warp-rust is installed
+main_warp=/Users/me/dev/bin/warp-rust
+[[ -x $main_warp ]] || main_warp=/Users/me/dev/bin/warp
+main_checkout=/Users/me/dev/angles/warp
 expected="Hello"
 
-# a slot is a directory holding its check's pid; a slot whose check died is freed
-take_slot() {
-  local slot
-  mkdir -p ${locks:h}
-  while true; do
-    for slot in {1..$check_slots}; do
-      if mkdir $locks.$slot.lock 2>/dev/null; then echo $$ > $locks.$slot.lock/pid; lock=$locks.$slot.lock; return; fi
-      holder=$(cat $locks.$slot.lock/pid 2>/dev/null)
-      [[ -n $holder ]] && ! kill -0 $holder 2>/dev/null && rm -rf $locks.$slot.lock
-    done
-    sleep 5
-  done
-}
-take_slot
-trap "rm -rf $lock" EXIT
+# trees to check live on /Volumes/Worktrees (cowtree) or, for throwaway lib/ copies, /Volumes/Junk: a copy under the
+# main checkout loads fseventsd for every session watching it
+if [[ $worktree == $main_checkout/* ]]; then
+  print -u2 "self-check: $worktree is inside the main checkout; check a worktree under /Volumes/Worktrees or a copy under /Volumes/Junk"
+  exit 2
+fi
+# the core runtime (runtime.warp, lib/compiler/runtime/*.warp) never uses the extended one (lib/compiler/runtime/extended/,
+# runtime/extended.warp; decision runtime-split) nor names a word it defines: it calls the hooks runtime/bridge.warp
+# declares, whose bodies are runtime/extended.warp's. Checked first, needing no slot. Plain files only (.); the extended root and
+# runtime/durations.warp, an extended part kept in runtime/ for tests/numbers/test_duration_words.rs, count as extended
+core=($worktree/lib/compiler/runtime.warp $worktree/lib/compiler/runtime/*.warp(.))
+core=(${${core:#*/runtime/extended.warp}:#*/runtime/durations.warp})
+extended=($worktree/lib/compiler/runtime/extended/*.warp $worktree/lib/compiler/runtime/durations.warp)
+extended=(${extended:#*/hooks.warp})
+extended_words=$(grep -hv ' from runtime$' $extended | sed -n 's/^\([a-z_][a-z_0-9]*\)(.*:=.*/\1/p' | sort -u | paste -sd'|' -)
+core_uses_extended=$(grep -HnE "^use .*extended|(^|[^a-z_0-9.])($extended_words)\(" $core)
+if [[ -z $extended_words || -n $core_uses_extended ]]; then
+  echo "SELF CHECK RED: the core runtime uses the extended runtime, not through runtime/bridge.warp: $core_uses_extended"
+  exit 1
+fi
+[[ -n $WARP_SLOT ]] || exec $main_checkout/scripts/slot.sh ${0:a} $worktree
 
 cd $worktree || exit 1
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
@@ -38,16 +45,11 @@ check_lane() {
   verdict="SELF CHECK ok: $said"
 }
 # main's binary is refreshed after each pushed batch: a compiler.wasm built by the old binary and a self build by the
-# new one make a self compiler that traps on every program (card self-trap-function-param), so a check the swap
-# overlapped is no verdict and runs again
-max_attempts=3
-binary_stamp() { stat -f %m $warp }
-for attempt in {1..$max_attempts}; do
-  stamp=$(binary_stamp)
-  check_lane pure && check_lane self
-  passed=$?
-  [[ $(binary_stamp) == $stamp ]] && { echo $verdict; exit $passed; }
-  echo "SELF CHECK: $warp was replaced during the check (attempt $attempt of $max_attempts), checking again" >&2
-done
-echo "SELF CHECK RED: $warp was replaced during every attempt; last verdict: $verdict"
-exit 1
+# new one make a self compiler that traps on every program (card self-trap-function-param). The check runs its own copy
+# of the binary, taken once, so a refresh never overlaps it (retrying instead kept checks queued for hours, 2026-10-22)
+warp=$WARP_SLOT/warp
+cp $main_warp $warp || exit 1
+check_lane pure && check_lane self
+passed=$?
+echo $verdict
+exit $passed

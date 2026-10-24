@@ -5,13 +5,22 @@
 #   pure-compiled the whole file compiles in the pure lane alone (WARP_SELF_HOSTED=pure-only): no refusal, no failed stage
 #   Rust          the file compiles in the Rust lane (its module runs); one that doesn't (a runtime part, a file
 #                 missing a `use`) is no pure-lane gap and is counted apart
-#   lib/compiler/runtime/ (emitter.warp's runtime parts) is counted apart from the headline
-# usage: scripts/lib_bench.sh [warp binary, default main's shared /Users/me/dev/bin/warp] [path regex]
+#   lib/compiler/runtime/ (emitter.warp's runtime parts) and lib/compiler/emitter/ (emitter.warp's own parts) are
+#   counted apart from the headline
+# usage: scripts/lib_bench.sh [warp binary, default main's shared Rust binary /Users/me/dev/bin/warp-rust] [path regex]
 #   → data/lib_bench/<commit>.txt (<commit>-partial.txt with a regex): a line per file "<file>  parse: <verdict>  pure: <verdict>" (each the first error), the
 #     summary "parsed X/N, pure-compiled Y/N" and the first errors ranked
-set -u
-warp=${1:-/Users/me/dev/bin/warp}
+# Exit status: 0 = report written; 2 = bad arguments or no runnable warp; 1 = a parse batch was killed
+# (signal or timeout) — the report is still written and its files read "crashed".
+#   scripts/lib_bench.sh -h|--help   this text
+set -uo pipefail
+case "${1:-}" in -h | --help) sed -n '2,/^set -uo/{/^#/s/^# \{0,1\}//p;}' "$0"; exit 0 ;; -*) echo "lib_bench: unknown option '$1' (see --help)" >&2; exit 2 ;; esac
+# the Rust binary: the launcher warp would run lib_bench_parse.warp through the pure pipeline (notes/pure_wrapper.md)
+main_warp=/Users/me/dev/bin/warp-rust
+[[ -x $main_warp ]] || main_warp=/Users/me/dev/bin/warp
+warp=${1:-$main_warp}
 filter=${2:-}
+[ -x "$warp" ] || { echo "lib_bench: no runnable warp binary at $warp" >&2; exit 2; }
 root=$(cd "$(dirname "$0")/.." && pwd)
 commit=$(git -C "$root" rev-parse --short=10 HEAD)
 work=$root/scratch/lib_bench
@@ -24,6 +33,9 @@ RAN_RUST="ms  run (" # WARP_PHASE_TIMES' line of a module that ran (src/compiler
 # emitter.warp's runtime parts: they call its primitives, so no lane compiles one alone (until they declare them
 # bodiless, card bodiless-imports); listed and counted apart from the headline (card bench-runtime-apart)
 RUNTIME_PARTS=lib/compiler/runtime/
+# emitter.warp's own parts (its `use "emitter/…"` lines): they take its classes (Body, Function), so no lane compiles one
+# alone either; counted apart like the runtime parts
+EMITTER_PARTS=lib/compiler/emitter/
 rm -rf "$work" && mkdir -p "$work/pure" "$work/rust" "$(dirname "$report")"
 export WARP=$warp WORK=$work ROOT=$root TIMEOUT_SECONDS RAN_PURE RAN_RUST
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_CRASH_CARDS=0 WARP_LIB=$root/lib
@@ -31,13 +43,19 @@ export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_CRASH_CARDS=0 WARP_LIB=$root/lib
 export WARP_TIME_LIMIT=$((TIMEOUT_SECONDS * FILES_PER_PARSE))
 
 all_files=$(cd "$root" && find lib -name "*.warp" | grep -E -- "$filter" | sort)
-files=$(echo "$all_files" | grep -v "^$RUNTIME_PARTS")
+files=$(echo "$all_files" | grep -v -e "^$RUNTIME_PARTS" -e "^$EMITTER_PARTS")
 runtime_parts=$(echo "$all_files" | grep "^$RUNTIME_PARTS")
+emitter_parts=$(echo "$all_files" | grep "^$EMITTER_PARTS")
 total=$(echo "$files" | grep -c .)
 
 parse_files() { # <file>…: a "<file>\t<verdict>" line each into parse/<first file>.txt
+	local status
 	(cd "$ROOT/scripts" && timeout $((TIMEOUT_SECONDS * $#)) "$WARP" lib_bench_parse.warp "${@/#/../}" 2>/dev/null) |
 		grep $'\t' | sed 's|^\.\./||' >"$WORK/parse_$(echo "$1" | tr '/' '_').txt"
+	status=${PIPESTATUS[0]}
+	# a batch killed by a signal or its timeout: noted, its unread files show "crashed" in the report
+	[ "$status" -ge 124 ] && echo "parse batch from $1: exit $status" >>"$WORK/killed.txt"
+	return 0
 }
 pure_verdict() { # <file>: "compiled", else the refusal or the first error, into pure/<file>.txt
 	local name refusals output status
@@ -88,11 +106,17 @@ parse_of() { # <file>: its parse verdict, "crashed" when the helper died before 
 	for file in $runtime_parts; do
 		[ "$(parse_of "$file")" == parsed ] && runtime_parsed=$((runtime_parsed + 1))
 	done
+	emitter_parsed=0
+	emitter_compiled=0
+	for file in $emitter_parts; do
+		[ "$(parse_of "$file")" == parsed ] && emitter_parsed=$((emitter_parsed + 1))
+		grep -qx compiled "$work/pure/$(echo "$file" | tr '/' '_').txt" && emitter_compiled=$((emitter_compiled + 1))
+	done
 	for file in $all_files; do
 		parse=$(parse_of "$file")
 		pure=$(cat "$work/pure/$(echo "$file" | tr '/' '_').txt")
 		rust=$(cat "$work/rust/$(echo "$file" | tr '/' '_').txt")
-		if [[ "$file" != "$RUNTIME_PARTS"* ]]; then
+		if [[ "$file" != "$RUNTIME_PARTS"* && "$file" != "$EMITTER_PARTS"* ]]; then
 			[ "$parse" == parsed ] && parsed=$((parsed + 1))
 			[ "$pure" == compiled ] && compiled=$((compiled + 1))
 			[ "$rust" == compiles ] && rust_compiles=$((rust_compiles + 1))
@@ -102,6 +126,7 @@ parse_of() { # <file>: its parse verdict, "crashed" when the helper died before 
 	echo
 	echo "parsed $parsed/$total, pure-compiled $compiled/$total (of $rust_compiles that Rust compiles) (warp $("$warp" --version 2>/dev/null | head -1), lib at $commit)"
 	echo "runtime parts apart ($RUNTIME_PARTS, emitter.warp's primitives): parsed $runtime_parsed/$(echo "$runtime_parts" | grep -c .)"
+	echo "emitter parts apart ($EMITTER_PARTS, emitter.warp's own parts): parsed $emitter_parsed/$(echo "$emitter_parts" | grep -c .), pure-compiled $emitter_compiled/$(echo "$emitter_parts" | grep -c .)"
 	echo
 	echo "first parse errors, ranked:"
 	for file in $files; do parse_of "$file"; done | grep -v '^parsed$' | sed -E "s/'.'/'…'/" | sort | uniq -c | sort -rn
@@ -117,3 +142,7 @@ parse_of() { # <file>: its parse verdict, "crashed" when the helper died before 
 } >"$report"
 grep '^parsed ' "$report"
 echo "report: $report"
+if [ -s "$work/killed.txt" ]; then
+	echo "lib_bench: $(grep -c . "$work/killed.txt") parse batch(es) killed or timed out: $(head -1 "$work/killed.txt")" >&2
+	exit 1
+fi

@@ -497,6 +497,9 @@ fn run_command(args: &[String], given: &[String]) {
 		print_version();
 	} else if let Some(word) = unknown_command(args) {
 		fail(word);
+	} else if arg_string.contains('/') && std::path::Path::new(&arg_string).is_dir() {
+		// a folder is no code: `warp lib/compiler/runtime/extended` read it as `lib / compiler / …`
+		fail(format!("warp: {arg_string} is a folder; run one of its .warp files (warp test <folder> runs its tests)"));
 	} else {
 		// Default: eval and print; a page shows in a window
 		if shows_in_window(&arg_string) {
@@ -517,6 +520,7 @@ fn print_version() {
 	let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
 	let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
 	eprintln!("{profile} build {commit}{branch} · built {}", built.as_deref().unwrap_or("?"));
+	eprintln!("{}", warp::compiler::standalone::compilers_line());
 }
 
 /// The first line a successful command prints

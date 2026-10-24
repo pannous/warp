@@ -9,3 +9,5 @@ parse_error($message)	"{message}"
 # a call no variant of a function overloaded by parameter types takes, or two take equally well (arity_overloads.warp)
 no_single_variant($written, $variants)	"`{written}` fits no single variant of {variants}"
 tied_variants($written, $variants)	"`{written}` fits no single variant of {variants}: give the arguments a type, e.g. `x as float`"	"x as float"
+# decision index-units: a count of bytes given to one of characters, or the other way (index_positions.warp)
+mixed_count_units($given, $declared)	"{a given} given to {a declared}: bytes and characters count differently; find counts characters, byte_index_of bytes"

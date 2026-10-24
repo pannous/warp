@@ -1,0 +1,11 @@
+# Floor division (notes/layers.md, sugar): `a /! b` (also `a div b`, `a ÷ b`, lib/aliases.warp) is the call
+# floor_quotient(a, b), and `x /!= b` (also `x ÷= b`) the assignment `x = floor_quotient(x, b)`
+rewrite $a /! $b => floor_quotient($a, $b)
+rewrite ($a /!= $b) => $a = floor_quotient($a, $b)
+# The element-wise operators (notes/layers.md, sugar): `xs .* 2` applies `*` to each element, `xs.map(e -> e * 2)`;
+# the parser keeps the phrase [xs .* 2]. Rust twin: broadcasting.rs lower_element_wise_operators
+rewrite $xs .+ $y => $xs.map($e -> $e + $y)
+rewrite $xs .- $y => $xs.map($e -> $e - $y)
+rewrite $xs .* $y => $xs.map($e -> $e * $y)
+rewrite $xs ./ $y => $xs.map($e -> $e / $y)
+rewrite $xs .^ $y => $xs.map($e -> $e ^ $y)

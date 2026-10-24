@@ -7,6 +7,13 @@ so the ø reaches the caller unchanged, in every lane:
     warning: half can answer ø; declare `: int?`     (the fix offer adds the ?)
     half(-1)  # ø
 
+Lists differ (the list part reversed by the user): ø reaching a place declared `list`, a result or a parameter,
+becomes [] silently, and `list?` keeps ø as missing; `[] == ø` stays no. So `phrase: list` given ø is [], and a
+`phrase != ø` test on it is always yes (parser.warp prints, card own-words-miscompile: `{1, 2}` failed under warp
+self). The warp lanes do this (runtime/conversions.warp list_of_node); the frozen Rust lane still warns and keeps ø,
+marked with a banner in type_name_matching.rs. probes/self_cold_trap/list_nothing_tests.py lists lib/ functions that
+test a `list` parameter against ø.
+
 "Can answer ø", read from the body as written:
 - a bare `return`, or `return v` with a v that can be ø as below (not inside nested definitions or lambdas)
 - a last value that is ø, an `if` without `else`, a loop (`while … do`, `for`/`each … in`), a choice
@@ -16,10 +23,14 @@ so the ø reaches the caller unchanged, in every lane:
   (`x = f(); if x == ø …; x`), and without narrowing the rule would warn there falsely.
 - `T?`, `any` and `Node` hold ø already; `op.return` (a member) is no return.
 
+A list result is the exception (user 2026-10-22, "ø can autocast to []", card list-result-autocast): a function
+declared `: list` (`ints`, `list of T`) that can answer ø gives [] instead, with no warning
+(`(body as list?) ?? []` in Rust, `body ?? []` in definitions.warp result_held).
+
 An optional result of an `if` without `else` or of a loop is ø when nothing gave a value, not the kind's zero.
 `any` results never warn.
 
 Where: Rust `src/lowering/types/type_name_matching.rs` (optional_when_answering_empty, can_answer_empty, as_type);
 warp `lib/compiler/definitions.warp` (result_held), warning row `optional_result` in `lib/compiler/warnings.data`.
-emitter.warp holds a variable declared `Node?` or `Class?` as the node it is.
+emitter.warp holds a variable declared `Node?` or `Class?` as the node it is, one declared `ints` or `list of T` as a list.
 

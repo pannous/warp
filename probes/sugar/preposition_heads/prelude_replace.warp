@@ -1,0 +1,3 @@
+// out: a+b+c
+// the prelude's replace(t, old, with new) has a labelled parameter
+print replace("a-b-c", "-", "+")

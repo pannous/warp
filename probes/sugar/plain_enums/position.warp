@@ -1,0 +1,5 @@
+# sugar-plain-enums probe; expected: 1, then an error at the subtraction (pure lane, main and branch alike: Error("wasm trap: cast failure"), no position yet)
+enum Coin { Penny, Dime }
+print 1
+x = Coin.Dime - 3
+print x

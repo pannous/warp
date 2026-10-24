@@ -1,0 +1,2 @@
+// expected: 3 (a type word before its value converts it, as int(3.7) does)
+print int 3.7
