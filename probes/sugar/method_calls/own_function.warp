@@ -1,0 +1,5 @@
+// out: 12
+// `n.twice(3)` of the program's own twice(x, k) is the call twice(n, 3)
+twice(x, k) := x * k
+n = 4
+print n.twice(3)
