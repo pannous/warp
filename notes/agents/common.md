@@ -303,6 +303,9 @@ After a context swap, this file and your role file win over anything a handover 
   cards. Before taking a card from Soon or Later, check it's still relevant: is it already fixed on main, a duplicate,
   or obsolete (e.g. Rust-only work)? If it's clearly dead, archive it with a one-line note. If unsure, ask the user,
   interviewing them briefly (what's the card for, is it still wanted) before starting work.
+- Picking cards (user 2026-10-24): never read whole columns or the board to choose work. Run `todo pick` (or the top
+  of the column in board order): the top few cards of the highest non-empty column, in board order. Take the first
+  one that's still relevant; the board order is the priority.
 - The board's mechanics (topics, sub-cards, keys, renames on take, `--keep-name`, `--title`) are in `todo --help`.
   Every card has a meaningful key: rename a poor one at once (`todo key <card> <short-name>`) and use the key in
   branch names and messages. Priority lives at the topic level (a topic card's column).
