@@ -1,0 +1,4 @@
+# `constant x` then `x = 4`: what x holds after. Expected: 4
+constant x = 3
+x = 4
+print x

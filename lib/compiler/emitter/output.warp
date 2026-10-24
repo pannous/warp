@@ -24,7 +24,7 @@ def shown_text(value: any): list {
 	if kind == "char" { return runtime_call("char_text", [value]) }
 	if kind == "node" or kind == "time" { return runtime_call("node_text", [value]) }
 	if kind != "bool" { return refuse("the text of a " + kind) }
-	["text", value#2 + [op.if] + references.text + text_value("yes")#2 + [op.else] + text_value("no")#2 + [op.end]]
+	["text", value#2 + [op.if] + gc_bytes(references.text) + text_value("yes")#2 + [op.else] + text_value("no")#2 + [op.end]]
 }
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
 # first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
@@ -54,5 +54,5 @@ is_spaced_value(n: any): bool := {
 # `5 -2`: a glued sign, a value of its own
 is_negative_literal(n: any): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == "-" and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
-def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc.node]] }
+def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc_type(gc.node)]] }
 def runtime_call(name: text, values: any): list { call_values(module.runtime[name], values) }

@@ -1,0 +1,12 @@
+// expected: yes no yes yes no yes yes (test words: `x is empty` counts nothing, `x failed` is an error, `x missing` is ø or falsy)
+xs = []
+ys = [1]
+print xs is empty
+print ys is empty
+z = ø
+print z is missing
+print z missing
+print ys missing
+e = try fail "x" else ø
+print(1 + 1 == 2)
+print z is undefined

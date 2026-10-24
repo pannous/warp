@@ -1,0 +1,4 @@
+# a name a definition binds shadows the function of that name in the pipe rules (lib/sugar/calls.warp, rewrites.warp
+# locally_bound): `a or listed` of a local listed stays the or of two values
+is! 'listed(x) := 100; either(a) := { listed = no; a or listed }; either(yes)' yes
+is! 'inc(x) := x + 1; twice(n) := { inc = 0; n | inc }; twice(2)' 2

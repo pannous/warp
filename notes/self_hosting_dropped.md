@@ -233,3 +233,8 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - Not yet read (card emitter-twin): probes/self_hosting/readiness/scan_100k.warp, where warp's module traps
   ("trap detail: 0") and Rust's prints 40000 and 20000, and samples/web/select_binding.warp. Both differ on main
   f9e2a9e6ba, without the changes of branch cache-fixes (2026-10-19). Back: once the card reads and fixes them.
+- Warp right, Rust frozen (user 2026-10-22: Rust is frozen legacy, so its value is not fixed to match): the twin is
+  dropped where emitter.warp gives the decided value and Rust's does not. probes/parser_rest/empty_keys.warp:
+  `{}.keys` is [] (decision keys-of-empty), Rust's prints ø. probes/repeated_parameter_names.warp: `last_of(_, _, z)`
+  binds z to the third argument (6), Rust's binds the second `_`'s slot (4) (2026-10-22, card keys-of-empty). Back: never,
+  unless Rust is fixed; the warp lanes are checked by the suite's warp runs.

@@ -1,0 +1,3 @@
+# `constant x = 3` is `const x = 3`. Expected: 3
+constant x = 3
+print x
