@@ -113,7 +113,11 @@ fn std_io(module: &str, member: &str, arguments: Vec<Node>, host: &mut Host) -> 
 	let text = |node: &Node| node.content();
 	let path_of = shell::path_of;
 	match (module, member, arguments.as_slice()) {
-		("os", "env", [name]) => Ok(std::env::var(text(name)).map_or(Node::Empty, Node::text)),
+		("os", "env", [name]) => {
+			let name = text(name);
+			let found = cache::environment(host.keeper.as_ref()).into_iter().find(|(variable, _)| *variable == name);
+			Ok(found.map_or(Node::Empty, |(_, value)| Node::text(value)))
+		}
 		("os", "args", []) => Ok(Node::List(nodes::SQUARE_LIST, host.args.iter().skip(1).map(Node::text).collect())),
 		("os", "cwd", []) => shell::cwd(),
 		("os", "input", prompt) => typed_line(prompt.first().map(text)),

@@ -347,18 +347,18 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 	}
 }
 
-/// lib/ for compiler.warp, as warp-rust finds it: WARP_LIB, else the nearest lib/ holding compiler/ above the source or
-/// the current folder, else the one installed beside warp-host or in <prefix>/share/warp
+/// lib/ for compiler.warp: WARP_LIB, else the one installed beside warp-host or in <prefix>/share/warp (the lib/ its
+/// compilers ship with), else the nearest lib/ holding compiler/ above the source or the current folder. The compiler
+/// run gets it as WARP_LIB (environment)
 fn library_for(source: &Path) -> Option<PathBuf> {
-	if let Some(lib) = std::env::var_os("WARP_LIB") {
+	if let Some(lib) = std::env::var_os(cache::LIBRARY_VARIABLE) {
 		return Some(PathBuf::from(lib));
 	}
-	let above =
-		|start: PathBuf| start.ancestors().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
+	let has_compiler = |lib: &PathBuf| lib.join("compiler").is_dir();
+	let installed = installed_folders().into_iter().map(|folder| folder.join("lib")).find(has_compiler);
+	let above = |start: PathBuf| start.ancestors().map(|folder| folder.join("lib")).find(has_compiler);
 	let current = std::env::current_dir().ok();
-	let installed =
-		installed_folders().into_iter().map(|folder| folder.join("lib")).find(|lib| lib.join("compiler").is_dir());
-	source.parent().map(Path::to_path_buf).and_then(above).or_else(|| current.and_then(above)).or(installed)
+	installed.or_else(|| source.parent().map(Path::to_path_buf).and_then(above)).or_else(|| current.and_then(above))
 }
 
 /// The compiler module: built from that lib/ (<lib>/../data/, a checkout's), else installed beside warp-host
@@ -434,7 +434,7 @@ fn run_module(
 ) -> Ran {
 	let ran = || -> wasmtime::Result<Ran> {
 		let mut wasi = WasiCtxBuilder::new();
-		wasi.inherit_stdio().inherit_env().args(&args);
+		wasi.inherit_stdio().envs(&cache::environment(keeper.as_ref())).args(&args);
 		wasi.preopened_dir("/", "/", FsPerms::ReadWrite)?;
 		wasi.preopened_dir(".", ".", FsPerms::ReadWrite)?;
 		let host = Host {

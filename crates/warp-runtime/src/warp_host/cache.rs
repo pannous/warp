@@ -126,3 +126,19 @@ fn write(file: &Path, bytes: &[u8]) {
 		let _ = std::fs::remove_file(&partial);
 	}
 }
+
+/// The variable naming the lib/ a compiler run reads its std modules from (lib/compiler/parser.warp run_library)
+pub const LIBRARY_VARIABLE: &str = "WARP_LIB";
+
+/// The environment a run sees: this process's, with WARP_LIB the compiler run's lib/ (its keeper's) when it has one,
+/// so a compiler reads the std modules there, never from the folder it was built in (notes/compiler_rebuilds.md); any
+/// other run sees the environment as it is
+pub fn environment(keeper: Option<&Keeper>) -> Vec<(String, String)> {
+	let library = keeper.map(|keeper| keeper.library.clone()).filter(|library| !library.is_empty());
+	let mut variables: Vec<(String, String)> =
+		std::env::vars().filter(|(name, _)| library.is_none() || name != LIBRARY_VARIABLE).collect();
+	if let Some(library) = library {
+		variables.push((LIBRARY_VARIABLE.to_string(), library));
+	}
+	variables
+}
