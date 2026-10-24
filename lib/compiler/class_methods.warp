@@ -144,8 +144,10 @@ class_declared(top_statement: Node, view: any): Declared := {
 	Declared(top_statement, base_of(view#2), members.filter(member => defined_word(member) == ø).map(field_name), methods)
 }
 # a member read as the definitions pass reads a definition (`definition` of definitions.warp, which lifts the
-# methods): `def area() -> int {…}` as `area() := …`, `def area(): …` the same
-member_read(member: any): Node := colon_method(bottom_up(node_of(member), definition))
+# methods): `def area() -> int {…}` as `area() := …`, `def area(): …` the same. A class body is a type view the early
+# sugar's rules don't enter (rewrites.warp early_sugared), so a member gets it here: the function keyword or modifier
+# before it goes (`def f(): x + 1`, `public fun g() {…}`)
+member_read(member: any): Node := colon_method(bottom_up(early_sugared(node_of(member)), definition))
 # Python's brace-less `def area(): side * side`, read as `area(): side * side`: a member whose name takes parentheses
 # is a method, its body after the colon (a field has no parentheses)
 colon_method(member: Node): Node := match member {
