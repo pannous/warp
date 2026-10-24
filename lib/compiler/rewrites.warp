@@ -107,14 +107,18 @@ declaration_sugar_module_names = ["sugar/declarations"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
-# before definitions.warp (sugar/functions; the declaration words are declaration_sugar_module_names' sugar/declarations)
-early_sugar_module_names = ["sugar/functions"]
+# or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
+# sugar/declarations strips it, and the function keyword's rule rewrites the rest)
+early_sugar_module_names = ["sugar/functions", "sugar/declarations"]
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one of rule_places it rewrites only, else "", `module` the standard module declaring it, else ""; `whole` for a
 # phrase pattern that matches only a whole phrase, not its runs; `alias` for a rule marked alias
 class Rule { pattern: any; template: any; hole: any; shape: any; conditions: list; place: text; module: text; whole: bool; alias: bool }
 
+# the early sugar modules' rules once read (early_module_rules)
+global early_rules_read = no
+global early_rules = []
 # the standard modules whose rules fired during a rewrite
 global fired_modules = []
 # the fresh names made so far, numbering each one
@@ -258,8 +262,38 @@ sugar_at_place(n: any, place: text, rules: list): any := {
 	n
 }
 
-# the program with the rules of the early sugar modules applied, before the passes
-early_sugared(program: Node): Node := sugared(program, sugar_rules(program, early_sugar_module_names))
+# the program with the rules of the early sugar modules applied, before the passes; also each library definition the
+# program reaches (prelude_words.warp with_reached: math's `norm` declares `var total = 0`), whose words are its own.
+# A program starting no phrase with a rule's first word stays as it is (a rule's result may need another's, `fun` `def`)
+early_sugared(program: Node): Node := {
+	rules = early_module_rules()
+	heads = phrase_heads(program)
+	if not rules.any(rule => heads.has(needed_word(rule))) { return program }
+	sugared(program, unbound_rules(rules, program))
+}
+# the rules of the early sugar modules, read once
+early_module_rules(): list := {
+	if not early_rules_read {
+		early_rules = early_sugar_module_names.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", ""))
+		early_rules_read = yes
+	}
+	early_rules
+}
+# the words starting a phrase in the node (`var total = 0`'s var, `public static fun f() {3}`'s public)
+phrase_heads(n: any): any := {
+	found = {}
+	waiting = [n]
+	at = 1
+	while at <= #waiting {
+		part = waiting#at
+		at += 1
+		if part is key { waiting += [key_of(part), value_of(part)] } else if is_group(part) {
+			if bracket_of(part) == "" and separator_of(part) == " " and #part > 1 and part#1 is symbol { found[name_of(part#1)] = yes }
+			for item in part { waiting += [item] }
+		}
+	}
+	found
+}
 
 # the node rewritten by the first sugar rule matching it, its result rewritten again (F7); a node no rule matches stays
 # as the passes left it
@@ -1129,7 +1163,7 @@ rule_matches(pattern: any, code: any, bound: any): bool := {
 	typed = typed_hole(pattern)
 	if typed != ø { return is_hole_kind(code, typed#2) and hole_binding(typed#1, code, bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
-	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) }
+	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
 	pattern == code
 }
@@ -1152,6 +1186,15 @@ each_matches(patterns: list, items: list, bound: any): bool := {
 	for index in 0 ..< #patterns { if not rule_matches(patterns[index], items[index], bound) { return no } }
 	yes
 }
+
+# `{$b...}` matching a block of one statement, `{sum xs}` (its words the curly group's own, no statements): the rest
+# binds that block itself, so a template's `{$b...}` gives it back as one statement (is_one_statement)
+one_statement_kept(pattern: any, code: any, bound: any): bool := {
+	if is_block_of_rest(pattern) and separator_of(code) == " " and #code > 1 { bound[rest_hole_name(pattern#1)] = code }
+	yes
+}
+# a rest hole's binding that is a block of one statement (one_statement_kept)
+is_one_statement(binding: any): bool := is_curly_group(binding) and separator_of(binding) == " "
 
 hole_binding(name: text, code: any, bound: any): bool := {
 	if bound.has(name) { return bound[name] == code }
@@ -1191,6 +1234,7 @@ rule_spliced(template: any, bound: any, at: any): any := {
 		}
 	}
 	if is_phrase(template) { return placed(as_phrase(items), at) }
+	if is_block_of_rest(template) and bound.has(rest_hole_name(template#1)) and is_one_statement(bound[rest_hole_name(template#1)]) { return bound[rest_hole_name(template#1)] }
 	placed(if is_block_of_rest(template) and #items > 1 then List(items, Bracket.Curly, Separator.Semicolon) else group_like(template, items), at)
 }
 
