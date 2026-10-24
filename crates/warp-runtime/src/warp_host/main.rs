@@ -227,8 +227,16 @@ fn run_source(engine: &Engine, compiler: &str, source: &str, args: &[String]) ->
 	let _ = std::fs::remove_file(&code);
 	let module = compiled.and_then(|()| std::fs::read(&wasm).map_err(|problem| problem.to_string()));
 	let _ = std::fs::remove_file(&wasm);
+	let inline = file == code;
 	match module {
-		Ok(bytes) => shown(run_wasm(engine, &bytes, [vec![source.to_string()], args.to_vec()].concat(), None, false)),
+		Ok(bytes) => {
+			let ran = run_wasm(engine, &bytes, [vec![source.to_string()], args.to_vec()].concat(), None, false);
+			if inline {
+				shown_inline(ran)
+			} else {
+				shown(ran)
+			}
+		}
 		Err(problem) => refused(&problem),
 	}
 }
@@ -512,6 +520,18 @@ fn shown(ran: Ran) -> i32 {
 		}
 		Ran::Exited(status) => status,
 		Ran::Failed(message) | Ran::Raised(message) => failed(&message),
+	}
+}
+
+/// Inline code's value printed as a file's, its status 0 whatever the value, as warp-rust's show_and_fail_on_error: only
+/// an Error, a failed run or the program's exit(code) give another
+fn shown_inline(ran: Ran) -> i32 {
+	let value = matches!(ran, Ran::Value(ref value) if !matches!(value, Node::Error(_)));
+	let status = shown(ran);
+	if value {
+		0
+	} else {
+		status
 	}
 }
 
