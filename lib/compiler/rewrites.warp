@@ -102,6 +102,8 @@ late_sugar_module_names = ["sugar/ranges", "sugar/method_calls"]
 # the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
 # a list literal (card sugar-comprehensions)
 comprehension_sugar_module_names = ["sugar/comprehensions"]
+# the sugar of declarations (lib/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
+declaration_sugar_module_names = ["sugar/declarations"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 
@@ -152,6 +154,7 @@ rewritten_program(program: any, source: text): any := {
 			module_rules += module_rules_of(module_source, module).filter(rule => mentioned.has(needed_word(rule)))
 		}
 	}
+	for module in declaration_sugar_module_names { module_rules += module_rules_of(file_text(std_module_path(module)) ?? "", "").filter(rule => mentioned.has(needed_word(rule))) }
 	rules += unbound_rules(module_rules, program)
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
