@@ -1,220 +1,135 @@
-# Branch triage (2026-10-24)
+# Branch triage (2026-10-24, deep review)
 
-Unmerged branches on origin after the merged-branch cleanup, measured against origin/main at a8a824e44.
-Checks: `git cherry`, subject match against `git log origin/main`, `git merge-tree --write-tree` against main
-(squash equivalence), blob identity, the board (`gh project item-list`, read once: 400 of 1402 items), and main's
-merge messages. Nothing was deleted.
+All 77 unmerged branches on origin, measured against origin/main at 72e26deb7 (fetched 2026-10-24 07:53 Berlin time).
+For each branch: its commits ahead of the merge-base and diff stat, `git cherry` and a subject match against
+`git log origin/main`, the tree a `git merge-tree --write-tree origin/main <b>` merge would produce compared with main
+(what still differs after a merge), which other branches contain it, the board (one `gh project item-list` read,
+1112 items: key, branch field, notes), and the box trees under /workspace/cow/trees (all at their pushed tips).
+Nothing was merged, deleted or pushed except this file; no card moved.
 
-Counts: still-needed 81, superseded 15, stale junk 36 (total 132).
+## Summary
 
-## Still needed
+Counts: merge-ready 9, worth finishing 37, superseded 13, dead 18 (total 77).
+Kinds: `warp` = lib/, *.warp, probes, scripts only; `rust-only` = src/, crates/, *.rs, Cargo.*, build.rs, tests/*.rs
+(plus notes about them); `mixed` = both (most mixed ones are the warp-host stack: crates/warp-runtime plus lib/).
+Rust-only branches that aren't merge-ready, plus mostly-Rust ones that are superseded or dead, are listed for archiving in
+/workspace/scratch/rust-archive-list.txt on the Grok box (11 branches; the user archives them into one historic branch).
 
-| branch | last commit | reason |
-|---|---|---|
-| `arrow-result-entry` | 2026-10-22 | 2 unique commits within 7 days: chore: probe twin_walk: arrow definitions and of-phrases in  |
-| `backup/classops` | 2026-10-23 | 27 lines not in origin/classops |
-| `backup/compiler-to-core-prep` | 2026-10-23 | 8 lines not in origin/compiler-to-core-prep |
-| `backup/integrate-host` | 2026-10-23 | 12 unique commits, no origin/integrate-host |
-| `backup/libgap-as-conversions` | 2026-10-23 | 3 lines not in origin/libgap-as-conversions |
-| `backup/libgap-as-units` | 2026-10-23 | 4 lines not in origin/libgap-as-units |
-| `backup/pure-big-int-power` | 2026-10-22 | 681 lines not in origin/pure-big-int-power |
-| `backup/pure-class-methods-3` | 2026-10-23 | 108 lines not in origin/pure-class-methods-3 |
-| `backup/pure-class-methods-3b` | 2026-10-23 | 3 lines not in origin/pure-class-methods-3b |
-| `backup/pure-pipes` | 2026-10-23 | 1 unique commits within 7 days: wip: box backup of pure-pipes (2026-10-23 16:10 CEST) |
-| `cast-list` | 2026-10-21 | 4 unique commits within 7 days: refactor: conversion_kind's list arm is names_list_type's (r |
-| `classops` | 2026-10-23 | 12 unique commits within 7 days: fix: the operator table class_methods reads is a map of its  |
-| `code-empty` | 2026-10-21 | 1 unique commits within 7 days: wip: {} in code as the empty map, EMPTY_MAP_KIND (card code- |
-| `compiler-cache-keys` | 2026-10-23 | 1 unique commits within 7 days: fix(compiler): a build is judged, and the stages are kept, b |
-| `compiler-library-source` | 2026-10-23 | 2 unique commits within 7 days: test(host): an alias added to WARP_LIB's prelude.warp works  |
-| `compiler-rebuild-policy` | 2026-10-23 | 22 unique commits within 7 days: Merge remote-tracking branch 'origin/warp-host-wasm-load' in |
-| `compiler-to-core-prep` | 2026-10-23 | 2 unique commits within 7 days: refactor(layout): move lib/compiler to core and lib/sugar to |
-| `compiling-lib` | 2026-10-22 | 1 unique commits within 7 days: Merge remote-tracking branch 'origin/main' into compiling-li |
-| `engine-right-to-left-runs` | 2026-10-23 | 2 unique commits within 7 days: Merge remote-tracking branch 'origin/main' into engine-right |
-| `feat/ffi-rust-crate-adapter` | 2026-10-23 | 14 unique commits within 7 days: feat(crates): bytes parameters as pointer and length, byte a |
-| `ffi-libc` | 2026-10-23 | 30 unique commits within 7 days: test(ffi): libc checks are positive: c_errno read as a numbe |
-| `ffi-python-adapter` | 2026-10-23 | 16 unique commits within 7 days: docs(notes): python_adapter.md: measured after merging pure- |
-| `ffi-sqlite3` | 2026-10-23 | 18 unique commits within 7 days: test(ffi): sqlite checks are positive: a try around a failin |
-| `ffi-z` | 2026-10-23 | 26 unique commits within 7 days: test(ffi): zlib checks are positive: a roomy output buffer g |
-| `fix-in-lib` | 2026-10-22 | 6 unique commits within 7 days: refactor(fix): drop rust routing, launcher routes fix and be |
-| `fix-route` | 2026-10-22 | 6 unique commits within 7 days: feat(launcher): route fix and beautify to lib/fix/command.wa |
-| `function-value-read` | 2026-10-21 | 1 unique commits within 7 days: Merge remote-tracking branch 'origin/main' into function-val |
-| `gap-element-array` | 2026-10-23 | 5 unique commits within 7 days: fix(parser): back to main's applies and the ignored element  |
-| `gpu-multipass` | 2026-10-18 | 3 unique commits within 7 days: notes: gpu: render passes built natively (card gpu-multipass |
-| `gpu-multipass-web` | 2026-10-18 | 5 unique commits within 7 days: feature(minor): a paint reading an image carries the image's |
-| `gwc-proto` | 2026-10-23 | 2 unique commits within 7 days: feat(extensions): safe navigation a?.b as a rule, loaded wit |
-| `hint-makes` | 2026-10-20 | card hint-makes is in Now |
-| `host-from-warp` | 2026-10-23 | merged once (5c1adff1a), then 19 more commits from the warp-host stack |
-| `host-glue-native` | 2026-10-23 | 2 unique commits within 7 days: wip(compiler): cstr literals in an active data segment for n |
-| `keys-of-empty` | 2026-10-22 | 2 unique commits within 7 days: Merge origin/main into keys-of-empty |
-| `launcher-host-dispatch` | 2026-10-23 | 23 unique commits within 7 days: feat(launcher): with warp-host, run, pure, self, compile, in |
-| `lib-compiler` | 2026-10-22 | 5 unique commits within 7 days: Merge remote-tracking branch 'origin/main' into lib-compiler |
-| `lib-json` | 2026-10-22 | 1 unique commits within 7 days: chore: document empty-map JSON dependency |
-| `libgap-as-conversions` | 2026-10-23 | 10 unique commits within 7 days: fix(compiler): conversions rename with lambdas.warp's rename |
-| `libgap-as-units` | 2026-10-23 | 8 unique commits within 7 days: feat(compiler): `3 km as m`, `5 as ms`: a value as a unit, q |
-| `libgap-units-2` | 2026-10-23 | 6 unique commits within 7 days: wip(compiler): one unit rule, $n * $u where $u is unit, read |
-| `me` | 2026-10-23 | same tip as host-from-warp; the user's own worktree branch (never removed) |
-| `optional-helpers` | 2026-10-22 | 1 unique commits within 7 days: refactor: the compiler helpers that can answer ø declare lis |
-| `pass-owners-table` | 2026-10-23 | 14 unique commits within 7 days: feat(compiler): passes.warp names the pass order and each re |
-| `path-written` | 2026-10-21 | card path-written (Soon) |
-| `pipe-rules-locals` | 2026-10-23 | 1 unique commits within 7 days: fix: rewrites: a name a definition binds anywhere in its bod |
-| `pure-big-int-ops` | 2026-10-23 | being merged right now |
-| `pure-big-int-power` | 2026-10-23 | being merged right now |
-| `pure-c-imports` | 2026-10-23 | 13 unique commits within 7 days: fix(host): warp-host takes the compiler beside it before lib |
-| `pure-class-methods` | 2026-10-22 | 1 unique commits within 7 days: wip(compiler): lift read-only class instance methods into fu |
-| `pure-class-methods-3` | 2026-10-23 | 1 unique commits within 7 days: Merge commit '624b7d96f' into pure-class-methods-3 |
-| `pure-class-methods-3b` | 2026-10-23 | 7 unique commits within 7 days: fix: a class body listing fields with spaces before a method |
-| `pure-harness-loose-equal` | 2026-10-23 | 2 unique commits within 7 days: fix(pure-tests): Number from crate::extensions::numbers |
-| `pure-index-shadow-fix` | 2026-10-23 | 2 unique commits within 7 days: fix: arity_overloads.warp and analyzer.warp name their calle |
-| `pure-match-guard-arms` | 2026-10-23 | worktree in use at /workspace/cow/trees/pure-match-guard-arms |
-| `pure-refusal-go` | 2026-10-23 | 2 unique commits within 7 days: feat: pure lane: tasks.warp: a block of statements as a task |
-| `pure-repl` | 2026-10-23 | 21 unique commits within 7 days: chore: merge origin/warp-host-wasm-load (8d052c113) into pur |
-| `pure-wrong-type-word-prefix` | 2026-10-23 | 1 unique commits within 7 days: merge: origin/main into pure-wrong-type-word-prefix |
-| `reflection-bound` | 2026-10-21 | 1 unique commits within 7 days: fix: type(x), dir(x) and x.params of a parameter or local x  |
-| `runtime-split` | 2026-10-23 | being merged right now (card type-zoned mentions it) |
-| `scripts-off-cargo` | 2026-10-23 | 24 unique commits within 7 days: fix(scripts): box-self-check.sh puts the tree's pair beside  |
-| `sin-says` | 2026-10-21 | card sin-says (Soon) |
-| `subscripts` | 2026-10-23 | 4 unique commits within 7 days: fix: rewrites: `where $b is ø` / `is not ø` asks whether a h |
-| `sugar-declarations` | 2026-10-23 | 3 unique commits within 7 days: chore: merge sugar-definitions 0f0cb389d into sugar-declarat |
-| `sugar-definitions` | 2026-10-23 | 1 unique commits within 7 days: chore: merge origin/main into sugar-definitions: main's `def |
-| `sugar-foreign-forms` | 2026-10-23 | 4 unique commits within 7 days: Merge remote-tracking branch 'origin/main' into sugar-foreig |
-| `sugar-type-tests` | 2026-10-23 | 5 unique commits within 7 days: Merge remote-tracking branch 'origin/main' into sugar-type-t |
-| `test-words` | 2026-10-23 | 2 unique commits within 7 days: merge origin/main into test-words: sugar/test_words after ma |
-| `time-arithmetic-library` | 2026-10-23 | being merged right now |
-| `type-zoned` | 2026-10-21 | card type-zoned (Soon) |
-| `warning-positions` | 2026-10-22 | 1 unique commits within 7 days: feature(minor): warp checks' diagnostics name where they wer |
-| `warp-host-cache-key` | 2026-10-23 | 25 unique commits within 7 days: Merge remote-tracking branch 'origin/warp-host-integration'  |
-| `warp-host-cli-parity` | 2026-10-23 | 27 unique commits within 7 days: fix(warp-host): --fuel gives a store its steps when it is ma |
-| `warp-host-compiler-beside` | 2026-10-23 | 18 unique commits within 7 days: merge: origin/main into warp-host-compiler-beside |
-| `warp-host-compiler-build` | 2026-10-23 | 14 unique commits within 7 days: build(host): the host build puts compiler-self.wasm and comp |
-| `warp-host-demo` | 2026-10-23 | 19 unique commits within 7 days: merge: warp-host-aot (b91a719e0) into host-from-warp (a3c6f5 |
-| `warp-host-inline-status` | 2026-10-23 | 2 unique commits within 7 days: test(host): inline code checked by its value, not its status |
-| `warp-host-integration` | 2026-10-23 | 23 unique commits within 7 days: chore: merge origin/main (b84496b86) into warp-host-integrat |
-| `warp-host-repl-fixes` | 2026-10-23 | 20 unique commits within 7 days: test(warp-host): repl fixes checked by their results only, n |
-| `warp-host-wasm-load` | 2026-10-23 | 17 unique commits within 7 days: chore: merge origin/main (0c9660041) into warp-host-wasm-loa |
-| `wasm-commands` | 2026-10-23 | being merged right now |
+**Ready list** (merge cleanly, work complete, readied or with a merge card):
+- warp only, can land now: `sugar-foreign-forms` (card Ready), `pure-class-methods-3b` then `classops` (merge cards in Now;
+  classops contains 3b).
+- need the Rust lane (paused) or a warp-host build: `warp-host-wasm-load` first, then `warp-host-repl-fixes` and `pure-repl`
+  (both contain wasm-load; rerun tests/host/test_ffi.sh on the merged tip, as pure-c-imports failed it after a main
+  merge), `warp-host-inline-status` (card Ready), `compiler-cache-keys` (Rust, readied express), `hint-makes` (old Rust,
+  Supervisor: merge as is).
 
-## Superseded
+**Most valuable worth finishing:**
+1. `pure-c-imports`: C imports in the pure lane; it's the base of ffi-libc/ffi-z/ffi-sqlite3, pass-owners-table and the
+   warp-host-integration → cache-key / cli-parity stack, so all of them are blocked on its bug: after a main merge
+   test_ffi.sh fails 0/21 (every C call refused "outside the core").
+2. The sugar migration branches (`sugar-declarations` ⊃ `sugar-definitions`, `sugar-type-tests`, `test-words`,
+   `subscripts`): all were readied express and now conflict in parser.warp / rewrites.warp / passes.warp; main grew its
+   own `first_sugar` phase, which they should use (subscripts' `written_sugar` step has to be ported to it).
+3. `libgap-as-conversions`: pure-lane `as` conversions (`A as B := body`, `text(p: P)`, `t as number`), warp only, merges
+   cleanly; needs self-check + ready. The Quantity units plan needs it.
+4. `fix-route`: `warp fix` / `warp beautify` written in warp (lib/fix, ~860 lines), the launcher routing to it;
+   needs a main merge (prelude.warp, packaging/bin/warp). fix-in-lib is the older variant.
+5. `wasm-commands`: compiler.wasm runs warp's commands (help, version, parse, repl) under WASI; needs the main merge
+   (compiler.warp) and the std_os_input refusal fixed (Warp Code 3's plan).
+Next in line: the host/launcher scripts stack (`launcher-host-dispatch` and `scripts-off-cargo`,
+both on top of `compiler-rebuild-policy`, one scripts/self-check.sh conflict each), `compiler-library-source` (one parser.warp conflict),
+`ffi-python-adapter` and `feat/ffi-rust-crate-adapter` (ffi.rs conflict), `pure-refusal-go` (57 of 128 blocked tests).
 
-| branch | last commit | reason |
-|---|---|---|
-| `backup/--help` | 2026-10-23 | only todo.md fallback lines; main's todo.md carries them (pure-class-operators in a newer wording) |
-| `backup/compiler-core-link` | 2026-10-23 | merging it into main changes nothing (squash-equivalent, merge-tree == main) |
-| `backup/gate-probes` | 2026-10-23 | probes/gate and scripts landed on main; the one hunk left is an older line main replaced (a8a824e44) |
-| `backup/host-glue-native-notes` | 2026-10-23 | only a todo.md fallback line already in main; branch merged (dddb84990) |
-| `backup/pipe-rules-locals` | 2026-10-23 | fully contained in origin/pipe-rules-locals (merge-tree == that branch) |
-| `backup/pure-closure-cells` | 2026-10-23 | merging it into main changes nothing (squash-equivalent, merge-tree == main) |
-| `backup/sc-main-now` | 2026-10-23 | probe_tests/test_rewrite_engine.warp is byte-identical to a blob on main |
-| `backup/sc-sugar-preposition-heads` | 2026-10-23 | both probe_tests files are byte-identical to blobs on main |
-| `backup/test-no-refusal-asserts-2` | 2026-10-23 | only a todo.md fallback line already in main |
-| `backup/warp` | 2026-10-23 | only todo.md fallback lines; main's todo.md carries them (pure-class-operators in a newer wording) |
-| `batch-2` | 2026-10-22 | its content is contained in wasm-commands (being merged now); integrator batch scratch |
-| `code-patterns` | 2026-10-21 | its one commit's subject is on main; landed via compiler-code-patterns (fa0a59686), follow-up is card code-patterns-2 |
-| `rewrite-zip-runs` | 2026-10-23 | landed as rewrite-zip-runs-2 (main f3b46668b) |
-| `sugar-prefix-comparisons` | 2026-10-22 | landed as sugar-prefix-comparisons-2 (main 9b0dd0ce4, card sugar-prefix-comparisons) |
-| `wasm-commands-merge` | 2026-10-22 | all but ~5 lines are in wasm-commands (being merged now) |
+**Stacks** (A ⊂ B: B contains A, land the top one): warp-host-wasm-load ⊂ warp-host-repl-fixes, pure-repl, compiler-rebuild-policy and the integration stack;
+compiler-rebuild-policy ⊂ launcher-host-dispatch, scripts-off-cargo (two siblings);
+pure-c-imports ⊂ warp-host-compiler-build ⊂ warp-host-integration ⊂ warp-host-cache-key, warp-host-cli-parity;
+ffi-sqlite3 ⊂ ffi-z ⊂ ffi-libc, and pure-c-imports ⊂ ffi-libc; pure-class-methods-3b ⊂ classops; sugar-definitions ⊂ sugar-declarations;
+libgap-units-2 ⊂ libgap-as-units; host-from-warp = me ⊂ warp-host-demo; gpu-multipass ⊂ gpu-multipass-web;
+backup/X ⊃ X for compiler-to-core-prep, libgap-as-conversions, libgap-as-units, pure-class-methods-3.
 
-## Stale junk
+Owners: the box trees under /workspace/cow/trees hold 35 of these branches, every one at its pushed tip; uncommitted
+edits only in compiler-to-core-prep, libgap-as-conversions and libgap-as-units (todo.md lines, also saved in their
+backup/ branches) and pure-class-methods-3 (class_methods.warp, = backup/pure-class-methods-3). The owner column gives
+the tree and the board's Agent field.
 
-| branch | last commit | reason |
-|---|---|---|
-| `backup/pcm-bisect2` | 2026-10-23 | bisect scratch: deletes 224 lines from lib/compiler to bisect pcm |
-| `backup/pr-go` | 2026-10-23 | test artifacts only (task.txt "from the task", voices.wav) |
-| `backup/pr-go-base` | 2026-10-23 | test artifacts only (task.txt, voices.wav) |
-| `backup/sc-engine-guarded-call-phrase` | 2026-10-23 | self-check copy probe_tests/ of a branch merged into main |
-| `backup/sc-engine-placed-where-chain` | 2026-10-23 | self-check copy probe_tests/ of a branch merged into main |
-| `backup/sc-engine-rest-template` | 2026-10-23 | self-check copy probe_tests/ of a branch merged into main |
-| `bisect-28993dd601` | 2026-10-21 | bisect run ref from 2026-10-21 |
-| `bisect-b81fceddd8` | 2026-10-21 | bisect run ref from 2026-10-21 |
-| `bisect-c8bb9c815c` | 2026-10-21 | bisect run ref from 2026-10-21 |
-| `bisect-e117efbdff` | 2026-10-21 | bisect run ref from 2026-10-21 |
-| `cloud-jobs/batch-4-ee38fe84-08741f6e3669-1792698812-49180` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/batch-4-ee38fe84-2946cb0087fe-1792698818-49180` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/batch-4-ee38fe84-33670a979944-1792698831-49180` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/batch-4-ee38fe84-910f20ec58e9-1792698824-49180` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/batch-4-ee38fe84-c8f933d483d9-1792698838-49180` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/installed-compilers-527dc89f-3b5fb1df5b51-1792659781-80987` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/list-result-autocast-e4119de3-7ffd86edab17-1792661101-67726` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/warp-fix-offers-205901ea-7ffd86edab17-1792658161-93010` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/wasi-runtime-0e16d58a-3c00553842c0-1792674868-35693` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/wasi-runtime-416a1eb0-ac36aac11fdb-1792657387-32421` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/wasi-runtime-67dcaa84-7ffd86edab17-1792656148-31349` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/wasi-runtime-e9761055-b63bb67db90b-1792657761-60127` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/wasm-commands-3de5faae-f7be9f06b4e9-1792655352-93759` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-jobs/wasm-commands-a46aeaf2-f7be9f06b4e9-1792659916-88344` | 2026-10-22 | cloud test job ref (orphan commit, test lane scratch) |
-| `cloud-results/batch-4-ee38fe84-08741f6e3669` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `cloud-results/batch-4-ee38fe84-2946cb0087fe` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `cloud-results/batch-4-ee38fe84-33670a979944` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `cloud-results/batch-4-ee38fe84-910f20ec58e9` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `cloud-results/batch-4-ee38fe84-c8f933d483d9` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `cloud-results/list-result-autocast-e4119de3-7ffd86edab17` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `cloud-results/wasi-runtime-03c74c0f-3ebd6e536c89` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `cloud-results/wasi-runtime-03c74c0f-7ffd86edab17` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `cloud-results/wasi-runtime-0e16d58a-3c00553842c0` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `cloud-results/wasm-commands-a46aeaf2-f7be9f06b4e9` | 2026-10-22 | cloud test result ref (orphan commit, test lane scratch) |
-| `program-units` | 2026-10-15 | last commit 2026-10-15 (9 days), 6299 commits behind main, no card found; unique unit-definitions work, glance before deleting |
-| `vendor` | 2026-10-22 | automatic vendored-crates refresh (29851 files); vendor was deactivated (decision 2026-10-03, 310f4292b) |
+## Branches
 
-## Suggested bulk delete: AWAITING USER APPROVAL
-
-Not run. Superseded:
-
-```sh
-git push origin --delete \
-  backup/--help \
-  backup/compiler-core-link \
-  backup/gate-probes \
-  backup/host-glue-native-notes \
-  backup/pipe-rules-locals \
-  backup/pure-closure-cells \
-  backup/sc-main-now \
-  backup/sc-sugar-preposition-heads \
-  backup/test-no-refusal-asserts-2 \
-  backup/warp \
-  batch-2 \
-  code-patterns \
-  rewrite-zip-runs \
-  sugar-prefix-comparisons \
-  wasm-commands-merge
-```
-
-Stale junk:
-
-```sh
-git push origin --delete \
-  backup/pcm-bisect2 \
-  backup/pr-go \
-  backup/pr-go-base \
-  backup/sc-engine-guarded-call-phrase \
-  backup/sc-engine-placed-where-chain \
-  backup/sc-engine-rest-template \
-  bisect-28993dd601 \
-  bisect-b81fceddd8 \
-  bisect-c8bb9c815c \
-  bisect-e117efbdff \
-  cloud-jobs/batch-4-ee38fe84-08741f6e3669-1792698812-49180 \
-  cloud-jobs/batch-4-ee38fe84-2946cb0087fe-1792698818-49180 \
-  cloud-jobs/batch-4-ee38fe84-33670a979944-1792698831-49180 \
-  cloud-jobs/batch-4-ee38fe84-910f20ec58e9-1792698824-49180 \
-  cloud-jobs/batch-4-ee38fe84-c8f933d483d9-1792698838-49180 \
-  cloud-jobs/installed-compilers-527dc89f-3b5fb1df5b51-1792659781-80987 \
-  cloud-jobs/list-result-autocast-e4119de3-7ffd86edab17-1792661101-67726 \
-  cloud-jobs/warp-fix-offers-205901ea-7ffd86edab17-1792658161-93010 \
-  cloud-jobs/wasi-runtime-0e16d58a-3c00553842c0-1792674868-35693 \
-  cloud-jobs/wasi-runtime-416a1eb0-ac36aac11fdb-1792657387-32421 \
-  cloud-jobs/wasi-runtime-67dcaa84-7ffd86edab17-1792656148-31349 \
-  cloud-jobs/wasi-runtime-e9761055-b63bb67db90b-1792657761-60127 \
-  cloud-jobs/wasm-commands-3de5faae-f7be9f06b4e9-1792655352-93759 \
-  cloud-jobs/wasm-commands-a46aeaf2-f7be9f06b4e9-1792659916-88344 \
-  cloud-results/batch-4-ee38fe84-08741f6e3669 \
-  cloud-results/batch-4-ee38fe84-2946cb0087fe \
-  cloud-results/batch-4-ee38fe84-33670a979944 \
-  cloud-results/batch-4-ee38fe84-910f20ec58e9 \
-  cloud-results/batch-4-ee38fe84-c8f933d483d9 \
-  cloud-results/list-result-autocast-e4119de3-7ffd86edab17 \
-  cloud-results/wasi-runtime-03c74c0f-3ebd6e536c89 \
-  cloud-results/wasi-runtime-03c74c0f-7ffd86edab17 \
-  cloud-results/wasi-runtime-0e16d58a-3c00553842c0 \
-  cloud-results/wasm-commands-a46aeaf2-f7be9f06b4e9 \
-  program-units \
-  vendor
-```
+| branch | last commit | ahead/behind | merges cleanly? | kind | card | owner | verdict | what it was working on, and why this verdict |
+|---|---|---|---|---|---|---|---|---|
+| `arrow-result-entry` | 2026-10-22 `9d6048915` | +3/-1002 | no: passes.warp, welcome_forms.warp | mixed | arrow-result-entry (Later) | — | **dead** | `f(p) -> int := …` as a keyword-rewrite table entry plus the fix for `f() := sum of [1, 2]`; parked by the user after measuring (the table buys no speed); main reads result arrows itself since 01e9062f7 and ff9609ba1 |
+| `backup/classops` | 2026-10-23 `f0f240499` | +16/-149 | yes | warp | — | — | **superseded** | box backup (16:12) of the class-operator work: an older class_methods.warp and a boxed_plus probe; superseded by branch classops 1e1451c3e |
+| `backup/compiler-to-core-prep` | 2026-10-23 `b6cf6f6e3` | +4/-149 | no: RUNTIME.md, compiler.warp, README.md … | mixed | — | — | **dead** | compiler-to-core-prep plus an uncommitted todo.md fallback list (8 lines of card drafts) saved by a box backup |
+| `backup/integrate-host` | 2026-10-23 `0a923d344` | +18/-209 | yes | mixed | — | — | **dead** | an integration tip: pure-c-imports merged into the warp-host stack; no commit of its own (everything is in pure-c-imports and ffi-libc) |
+| `backup/libgap-as-conversions` | 2026-10-23 `45740739d` | +11/-185 | no: todo.md | warp | — | — | **dead** | libgap-as-conversions plus 3 todo.md lines (card drafts) from a box backup |
+| `backup/libgap-as-units` | 2026-10-23 `29d2955c6` | +11/-152 | no: rewrites.warp, todo.md | warp | — | — | **dead** | libgap-as-units plus 4 todo.md lines (card drafts) from a box backup |
+| `backup/pure-big-int-power` | 2026-10-22 `a77fd836c` | +1/-597 | no: emitter.warp, exact.warp, intrinsics.warp | warp | pure-big-int-power (Done) | — | **superseded** | exact big-integer powers in the pure and self lanes (runtime/big_ints.warp); landed as pure-big-int-power, 60801c3e6 |
+| `backup/pure-class-methods-3` | 2026-10-23 `d23dcb863` | +3/-308 | no: class_methods.warp | warp | — | — | **superseded** | uncommitted wip of methods named like library words (class_methods.warp, probes, tests); the same feature landed in pure-class-methods-3b (5239e077e, aa53cbc19) |
+| `backup/pure-class-methods-3b` | 2026-10-23 `34f5b1ba1` | +10/-149 | yes | warp | — | — | **superseded** | wip snapshot of pure-class-methods-3b; the branch's final tip 905d92367 has it |
+| `backup/pure-pipes` | 2026-10-23 `f0af29847` | +1/-148 | yes | warp | — | — | **worth finishing** | one test file, tests/operators/test_pipe_functions.warp (`3 | inc`, `f = inc | dbl` in the pure lane), not on main; missing: run it with the shared binary and land it |
+| `cast-list` | 2026-10-21 `5bb0dad9a` | +7/-2124 | yes | rust-only | cast-list (Soon) | warp-dispatch | **dead** | `[1, 2] as floats`, `xs = [] as list of int`: casts to list types; once merged, only the Rust part (src/lowering, src/analyzer, src/wasm_emitter casts) still differs, and src/ is frozen |
+| `classops` | 2026-10-23 `1e1451c3e` | +17/-149 | yes | warp | pure-class-operators (Soon) | tree classops | **merge-ready** | instance operators call the class's method in the pure lane (`a + b` → plus/add/+ method, boxed-left dispatch in the emitter); contains pure-class-methods-3b; merge card 'merge: classops 1e1451c3e' (rebuild pure+self green on the box) |
+| `code-empty` | 2026-10-21 `75ca57a96` | +1/-1558 | yes | rust-only | code-empty (Soon) | warp-parsing | **dead** | `{}` in code as the empty map (EMPTY_MAP_KIND) in the Rust emitter; wip, never built or tested, and src/ is frozen |
+| `compiler-cache-keys` | 2026-10-23 `bcc91ca36` | +1/-185 | yes | rust-only | compiler-cache-keys (Now) | tree compiler-cache-keys, grok-warp-wrapper | **merge-ready** | Rust: a compiler build is judged by its inputs (lib/compiler and the modules it embeds), not every file in lib/; a worktree reuses the delivered pair. Readied express, box tests 2/2; waits for the Rust lane |
+| `compiler-library-source` | 2026-10-23 `cdaa8fe25` | +2/-191 | no: parser.warp | warp | compiler-library-source (Now) | tree compiler-library-source, grok-warp-wrapper | **worth finishing** | prelude, math, list and regex are read from the run's lib/ (library_source), so editing them needs no compiler rebuild; missing: resolve the parser.warp conflict (main changed run_library's neighbourhood) and ready it again |
+| `compiler-rebuild-policy` | 2026-10-23 `1f0233744` | +32/-148 | no: self-check.sh | mixed | compiler-rebuild-policy (Now) | tree rebuild-policy, grok-warp-wrapper | **worth finishing** | compiler pairs stored by inputs hash (compiler-inputs.sh, rebuild.sh, self-check.sh) on top of the warp-host stack; missing: resolve the one scripts/self-check.sh conflict (contained in launcher-host-dispatch and scripts-off-cargo) |
+| `compiler-to-core-prep` | 2026-10-23 `351a21d45` | +3/-149 | no: RUNTIME.md, compiler.warp, README.md … | mixed | compiler-to-core (Next) | tree compiler-to-core-prep | **worth finishing** | the core/ layout flip: scripts/move-compiler-to-core.sh and a dry-run move of lib/compiler → core (345 files); the symlink step is on main already; missing: rerun the script on the main of the day, as one sweep (card compiler-to-core); the branch itself can't be merged |
+| `compiling-lib` | 2026-10-22 `2a3d838b8` | +2/-668 | no: parser.warp | warp | compiling-lib (Soon) | — | **worth finishing** | lib/compiler compiles without its own local-or-global warnings and indexing hints (used_module_sources' locals renamed, word#1 for word[0]); 8 lines; missing: redo on main (parser.warp conflict) and self-check |
+| `engine-right-to-left-runs` | 2026-10-23 `1873b3df7` | +6/-141 | yes | warp | engine-right-to-left-runs (Later) | tree engine-right-to-left-runs | **worth finishing** | rewrite engine F13: runs of statements rewritten right to left, so a rule for the first clauses sees what follows (clause-style definitions `fib(0) := 0; fib(n) := …`); merges cleanly; parked by the user as an advanced feature; missing: unpark, self-check, ready |
+| `feat/ffi-rust-crate-adapter` | 2026-10-23 `e48d45083` | +18/-367 | no: ffi.rs | mixed | ffi-rust-crate-adapter (Now) | grok-warp-crates | **worth finishing** | call Rust crates from warp (`use crate "regex@1"`, generated shims, bytes as pointer+length; regex, sha2, crc32fast; test_crates 20/20); parked 2026-10-23; missing: merge main (crates/warp-runtime ffi.rs conflict), take ffi-z's byte lists, on-demand builds |
+| `ffi-libc` | 2026-10-23 `02a9f22f4` | +41/-185 | yes | mixed | ffi-libraries-roadmap (Soon) | tree ffi-libc | **worth finishing** | libc in pure warp over FFI (memory, files, process, time, c_errno, strerror) on top of ffi-z and ffi-sqlite3 and pure-c-imports; merges cleanly; missing: pure-c-imports' bug (every C call refused after a main merge) fixed, then test_ffi on the merged tip |
+| `ffi-python-adapter` | 2026-10-23 `71bb36d34` | +21/-367 | no: ffi.rs | mixed | ffi-python-adapter (Now) | grok-warp-python | **worth finishing** | call Python from warp through libpython (math.sqrt, str methods, json.dumps, exceptions; tests/host/test_python.sh, notes/python_adapter.md); parked 2026-10-23; missing: resolve ffi.rs conflict, rerun test_python |
+| `ffi-sqlite3` | 2026-10-23 `cdddd6d51` | +24/-260 | yes | mixed | ffi-libraries-roadmap (Soon) | tree ffi-sqlite3 | **worth finishing** | sqlite3 in pure warp under warp-host (open_v2, exec, binds of every type, query_maps, errors); contained in ffi-z and ffi-libc, land those |
+| `ffi-z` | 2026-10-23 `06b1a8852` | +34/-260 | yes | mixed | ffi-libraries-roadmap (Soon) | tree ffi-z | **worth finishing** | zlib in pure warp over FFI with byte lists of any size (vectored list builder; 1 MiB round trips); contains ffi-sqlite3, contained in ffi-libc |
+| `fix-in-lib` | 2026-10-22 `b161aa32a` | +6/-596 | no: prelude.warp, native.rs | mixed | fix-in-lib (Soon) | grok-warp-code-2 | **superseded** | `warp fix` / `warp beautify` pipeline written in warp (lib/fix: hint replacements, layout, command line), routed through Rust; the same lib/fix commits live on in fix-route, which routes through the launcher instead |
+| `fix-route` | 2026-10-22 `be75257fd` | +7/-517 | no: prelude.warp, warp | mixed | fix-route (Soon) | tree fix-route, grok-warp-code-2 | **worth finishing** | `warp fix` and `warp beautify` in warp (lib/fix/fix.warp, command.warp, ~860 lines), the launcher routes to it; missing: merge main (lib/prelude.warp, packaging/bin/warp conflicts), probes/fix and the launcher test rerun |
+| `function-value-read` | 2026-10-21 `54b067d87` | +3/-1206 | no: cleanup.md, notes.md | rust-only | function-value-read (Soon) | — | **dead** | Rust lowering: nested function-list reads stay callable; agent gone, src/ frozen |
+| `gap-element-array` | 2026-10-23 `58aa46837` | +6/-119 | yes | warp | gap-element-array (Now) | tree gap-element-array, grok-warp-code | **worth finishing** | `x is a 100 element array` declares 100 zeros, as a rule in lib/sugar/lists.warp plus a test; the last commit reverted the parser change that made the rule fire, so it likely doesn't fire yet; missing: a rule shape the parser reads (or a parser case with Supervisor's OK) |
+| `gpu-multipass` | 2026-10-18 `30febbd2e` | +3/-4011 | no: test_paint_function.rs | mixed | gpu-multipass (Soon) | warp-ocean | **dead** | native GPU render passes: `render(f, w, h)` draws f into an image another shader reads (src/graphics, Rust host); contained in gpu-multipass-web; parked until GPU work resumes, conflicts |
+| `gpu-multipass-web` | 2026-10-18 `aa910f90b` | +5/-4011 | no: test_paint_function.rs | mixed | — | — | **dead** | gpu-multipass plus the browser GPU host drawing render's images first; mostly Rust, 4000 commits behind, conflicts; parked until GPU work resumes |
+| `gwc-proto` | 2026-10-23 `d4560ae90` | +2/-148 | no: parser.warp, rewrites.warp | warp | pure-safe-navigation (Done) | grok-warp-code | **superseded** | prototype of `a?.b` as an extension rule and `f(x?)` as `f(x = ø)`; landed in another form as 937c4644e, 802d01e73 (pure-safe-navigation) and b94c448b1 (pure-optional-params) |
+| `hint-makes` | 2026-10-20 `c065da3c0` | +2/-2939 | yes | rust-only | hint-makes (Now) | codex | **merge-ready** | Rust: the hint explains which `add` definition handles a list; Supervisor: merge as is, waits for the Rust lane (old Rust work) |
+| `host-from-warp` | 2026-10-23 `a3c6f5641` | +28/-338 | no: ffi.rs, main.rs, host_from_warp_eval.md | mixed | host-from-warp (Now) | grok-merger | **worth finishing** | evaluation of the warp host written in warp: a driver that passes test_host.sh 86/86, plus run_wasm passing a module's Error through, one-letter texts, soname search; missing: resolve ffi.rs/main.rs/notes conflicts (most host commits also ride in warp-host-wasm-load) |
+| `host-glue-native` | 2026-10-23 `a6a48d8fc` | +2/-147 | no: emitter.warp, literals.warp, module_layout.warp … | warp | host-glue-native (Later) | tree glue-linear | **dead** | GC-free print words and a cstr type for a native-glue route (wasm → wasm2c → C); wip, untested; the route is parked (card Later), its notes landed as dddb84990 |
+| `keys-of-empty` | 2026-10-22 `9561a80a2` | +3/-736 | no: emitter.warp | mixed | keys-of-empty (Soon) | — | **worth finishing** | emitter.warp: an untyped parameter widens to the kinds passed to it (keys of {}), and the twin drops two probes where warp is right; decision confirmed by the user; missing: the widening broke the self build (fold); land the probe part alone, fix the widening |
+| `launcher-host-dispatch` | 2026-10-23 `d99fde44b` | +33/-148 | no: self-check.sh | mixed | launcher-host-dispatch (Now) | tree launcher-host-dispatch, grok-warp-wrapper | **worth finishing** | the launcher sends run, pure, self, compile, inline code and .wasm to warp-host (rebuild to scripts/rebuild.sh); top of compiler-rebuild-policy; missing: resolve scripts/self-check.sh conflict, and check it against decision launcher-not-yet |
+| `lib-compiler` | 2026-10-22 `b17879384` | +17/-597 | no: analyzer.warp, builtin_signatures.warp, emitter.warp … | warp | lib-compiler (Soon) | — | **worth finishing** | lib/compiler tests emptiness with `is empty` / plain `if x` (rule empty-is-not-missing) plus the and/or condition fix (one commit landed as fa09d9c2b); missing: the rewrite broke the self build (bisect notes on the card); redo by halves on main |
+| `lib-json` | 2026-10-22 `ae5696551` | +1/-942 | yes | rust-only | lib-json (Soon) | — | **dead** | notes only: to_json({}) gives null until `{}` is a runtime map (code-empty, dead) |
+| `libgap-as-conversions` | 2026-10-23 `aefe652be` | +10/-185 | yes | warp | pure-as-conversions (Now) | tree libgap-as-conversions, grok-warp-lib-gap | **worth finishing** | pure-lane conversions: a program's `A as B := body`, `text(p: P)`, `t as number`, `v as list of T`; warp only, merges cleanly; missing: self-check, test run and todo ready (card pure-as-conversions); also needed by the Quantity units plan |
+| `libgap-as-units` | 2026-10-23 `aaec4aa36` | +10/-152 | no: rewrites.warp | warp | pure-as-conversions (Now) | tree libgap-as-units, grok-warp-lib-gap | **dead** | `3 km as m` through compiler-side quantity_as and unit-literal rules; the user chose units as a Quantity class in lib/ with no analyzer/emitter/parser additions; the conversions part is in libgap-as-conversions |
+| `libgap-units-2` | 2026-10-23 `50addcb2a` | +6/-257 | no: rewrites.warp | warp | pure-unit-literals (Soon) | tree libgap-units-2, grok-warp-lib-gap | **dead** | unit literals as one sugar rule `$n * $u where $u is unit` plus analyzer/emitter quantity support; the user decided it does not land and stays as reference (Quantity class instead) |
+| `me` | 2026-10-23 `a3c6f5641` | +28/-338 | no: ffi.rs, main.rs, host_from_warp_eval.md | mixed | host-from-warp (Now) | grok-merger | **superseded** | the user's own worktree branch; same tip as host-from-warp (a3c6f5641). Never delete or archive |
+| `optional-helpers` | 2026-10-22 `9376e3bb7` | +1/-1394 | no: parser.warp | warp | — | — | **worth finishing** | compiler helpers that can answer ø declare `list?` instead of `any` (decision optional-result, beautiful types); 5 lines; missing: redo on main (parser.warp conflict) |
+| `pass-owners-table` | 2026-10-23 `36c13bceb` | +20/-185 | yes | mixed | — | tree pass-owners-table | **worth finishing** | passes.warp names the pass order and each refused form's owner (pass_owners, owned_refusal) with a host test; on top of pure-c-imports; missing: Supervisor's OK (passes.warp change), pure-c-imports first |
+| `path-written` | 2026-10-21 `5731b5b4c` | +2/-1558 | yes | rust-only | path-written (Soon) | warp-types-back | **dead** | Rust: a path written without quotes stays a Path through parameters and results (option A); the user chose option B, path as its own type (decision path-type) |
+| `program-units` | 2026-10-15 `b200a7435` | +3/-6338 | no: units_runtime.md, compile_context.rs, implicit_modules.rs … | mixed | program-units (Later) | — | **superseded** | a plain `furlong := 201.168 m` defined a unit (Rust units, Oct 15); replaced on main by `unit` lines: a598aee3b, eb8a126b6, 3648ca299. Nothing left worth porting |
+| `pure-c-imports` | 2026-10-23 `3d9802b7c` | +19/-185 | yes | mixed | pure-c-imports (Soon) | tree pure-c-imports | **worth finishing** | C imports in the pure lane: libc/libm/sqlite lines in lib/native, bool C types, a bytes foreign type, warp's own words (floor, abs) kept over libm; base of ffi-libc and of the warp-host-compiler-build stack; missing: after a main merge test_ffi.sh failed 0/21 (every C call refused 'outside the core'); fix, re-Ready |
+| `pure-class-methods` | 2026-10-22 `33f4ae728` | +1/-427 | no: class_methods.warp, passes.warp | warp | pure-class-methods (Done) | tree pcm2, grok-merger | **superseded** | stage 1 wip: read-only class instance methods lifted into functions; landed in the later design as 44f47d779 (pure-class-methods-2) |
+| `pure-class-methods-3` | 2026-10-23 `1eae6d0ff` | +2/-308 | yes | warp | pure-class-methods-2 (Now) | tree pure-class-methods-3, grok-warp-classes | **superseded** | renames closing_ends_of's countdown index → lowest_at; moot per Supervisor (main builds without it); the class work it was for landed via pure-class-methods-3b. Tree has an uncommitted class_methods.warp edit (= backup/pure-class-methods-3) |
+| `pure-class-methods-3b` | 2026-10-23 `905d92367` | +9/-149 | yes | warp | pure-class-methods-2 (Now) | tree pure-class-methods-3b, grok-warp-classes | **merge-ready** | class methods stage 3: fields listed with spaces `class person{name age: int}`, Python-style `def area():` methods, `x is Parent` for subclasses, methods named like library words; merge card 'merge: pure-class-methods-3b 905d92367' (rebuild pure+self green); land before classops |
+| `pure-harness-loose-equal` | 2026-10-23 `f78a5e673` | +2/-185 | yes | rust-only | pure-harness-loose-equal (Now) | grok-warp-code-2 | **worth finishing** | Rust test infrastructure: pure_tests.rs compares results as is! did (2 == 2.0, 'a' == "a"), removing ~196 false failures; Supervisor-approved; missing: a test run and todo ready (waits for the Rust lane) |
+| `pure-index-shadow-fix` | 2026-10-23 `4d1985c81` | +3/-191 | yes | warp | pure-index-shadow-fix (Now) | tree pure-index-shadow-fix, grok-warp-classes | **dead** | renames compiler locals (callee_name, argument_at) so the Rust lane stops reading them as library functions; Supervisor: moot, main builds; local-shadows-lib-function (5bbe82c43, 4116625b4) fixed the general rule |
+| `pure-match-guard-arms` | 2026-10-23 `658c010a6` | +1/-148 | yes | warp | — | tree pure-match-guard-arms | **worth finishing** | node matches in the pure lane take guard arms and bare-name binding arms (node_matches.warp, +36 lines); merges cleanly; missing: a card, a result test and self-check |
+| `pure-refusal-go` | 2026-10-23 `553cfc43e` | +2/-224 | no: rewrites.warp | warp | pure-refusal-go (Soon) | — | **worth finishing** | go/await as lib/sugar/tasks.warp rules (task run at once, await within, stop, cancel): 57 of 128 blocked tests pass; wip; missing: rewrites.warp conflict, go in call arguments and loops, `await … within`; on hold for pure-class-operators |
+| `pure-repl` | 2026-10-23 `3787a8d02` | +31/-148 | yes | mixed | pure-repl (Now) | tree pure-repl, grok-warp-repl | **merge-ready** | the pure warp console lib/repl.warp on warp-host: entries compiled with the session's kept ones, libedit line editing, bare warp-host starts it; readied 3787a8d02 (test_repl 17/17); needs warp-host build and the Rust lane; contains warp-host-wasm-load |
+| `pure-wrong-type-word-prefix` | 2026-10-23 `6fa54c4ca` | +2/-148 | yes | warp | pure-wrong-type-word-prefix (Now) | grok-warp-code-2 | **worth finishing** | `int 3.7` is int(3.7) in the pure lane, as a sugar rule in lib/sugar/calls.warp plus probes; merges cleanly; missing: self-check and todo ready (the card also lists `random [7,7]`) |
+| `reflection-bound` | 2026-10-21 `878da5e29` | +1/-1972 | no: test_bare_function_type_test.rs | rust-only | reflection-bound (Soon) | — | **superseded** | Rust: type(x), dir(x), x.params of a local named like a function read the variable; covered on main by local-named-like (46be24416) |
+| `scripts-off-cargo` | 2026-10-23 `f6c5a69fc` | +34/-148 | no: self-check.sh | mixed | scripts-off-cargo (Now) | tree scripts-off-cargo, grok-warp-wrapper | **worth finishing** | self-checks, rebuild.sh and the host/launcher tests use the shared warp, warp-host and compiler store, no per-tree cargo build; on top of compiler-rebuild-policy, sibling of launcher-host-dispatch; missing: scripts/self-check.sh conflict |
+| `sin-says` | 2026-10-21 `cb8008197` | +1/-1474 | no: cleanup.md, notes.md | rust-only | sin-says (Soon) | — | **dead** | Rust test pinning the diagnostic for assigning a libm word (sin = …); agent gone, src/ frozen |
+| `subscripts` | 2026-10-23 `b980d4c91` | +4/-257 | no: passes.warp, rewrites.warp | warp | retire-hybrid-lane (Done) | warp-layers | **worth finishing** | `xs[i]` and slices as rules in lib/sugar/subscripts.warp, run in a new written_sugar step; main has since added its own first_sugar phase; missing: port the rules onto first_sugar (passes.warp, rewrites.warp conflicts) |
+| `sugar-declarations` | 2026-10-23 `53fd74273` | +9/-308 | no: parser.warp, rewrites.warp, rewrites.md | warp | sugar-declarations (Now) | tree sdecl, grok-warp-code | **worth finishing** | var/let/const/final/val as early sugar rules in lib/sugar/declarations.warp (contains sugar-definitions); suite 626/0; missing: merge main (parser.warp, rewrites.warp conflicts) onto main's first_sugar, self-check |
+| `sugar-definitions` | 2026-10-23 `0f0cb389d` | +6/-308 | no: parser.warp, rewrites.warp, rewrites.md | warp | sugar-definitions (Now) | tree sugar-definitions, grok-merger | **worth finishing** | the function keywords (def, fun, fn …) as early sugar rules in lib/sugar/functions.warp; readied express, now conflicts (parser.warp, rewrites.warp); land through sugar-declarations |
+| `sugar-foreign-forms` | 2026-10-23 `8bd26ddc3` | +6/-146 | yes | warp | sugar-foreign-forms (Ready) | tree sugar-foreign-forms, grok-warp-code-3 | **merge-ready** | foreign declaration modifiers (public, private, protected, static, extern …) and `constant` as one rewrite rule per word in a new lib/sugar/declarations.warp; probes assert values only; card Ready, merges cleanly (sugar-declarations adds the same file: land this first) |
+| `sugar-type-tests` | 2026-10-23 `1f5d81da0` | +13/-344 | no: passes.warp, rewrites.warp, layers.md … | warp | sugar-type-tests (Now) | grok-merger | **worth finishing** | `x is T` type tests as rewrite rules in lib/sugar/types.warp (type_tests pass retired); readied express, now conflicts in passes.warp, rewrites.warp, layers.md, test_rewrite_engine.warp; missing: merge main, self-check |
+| `test-words` | 2026-10-23 `d9abe2d78` | +3/-209 | no: rewrites.warp | warp | test-words (Now) | — | **worth finishing** | test words `x is empty`, `x failed`, `x missing` as rules in lib/sugar/test_words.warp; readied express, now a rewrites.warp conflict; missing: merge main, self-check |
+| `type-zoned` | 2026-10-21 `f59c127e1` | +2/-1615 | no: emitter.warp, durations.warp, times.warp | mixed | type-zoned (Soon) | — | **worth finishing** | a time's negative amounts (zones west of UTC, durations back in time) keep their kind; was waiting for runtime-split, which landed (fee7fcf51); missing: redo on main's runtime/extended files, tests |
+| `warning-positions` | 2026-10-22 `585fa3f51` | +1/-668 | no: definitions.warp, diagnostics.warp, kind_changes.warp … | mixed | front-warning-positions (Soon) | — | **superseded** | warp checks' diagnostics name line and column (diagnose(fact, at)); landed in another form as 88122b18f (diagnose(fact, about)) |
+| `warp-host-cache-key` | 2026-10-23 `893d32b07` | +42/-146 | yes | mixed | warp-host-cache-key (Now) | tree warp-host-cache-key, grok-warp-wrapper | **worth finishing** | warp-host keys its kept compiler values by what the compile reads from lib/; top of the warp-host-integration stack, merges cleanly; carries pure-c-imports, so blocked on its test_ffi failure; then the Rust lane |
+| `warp-host-cli-parity` | 2026-10-23 `5651b154e` | +44/-146 | yes | mixed | warp-host-cli-parity (Now) | tree warp-host-cli-parity, grok-warp-wrapper | **worth finishing** | warp-host's command line matches warp's (--fuel, WARP_TIME_LIMIT, Error(…) on stdout, WARP_EMIT_REFUSALS, rationals shown as warp does); top of the stack, merges cleanly; carries pure-c-imports (blocked), and 3 host test lines pinning 4.0/5.0 need the user's OK |
+| `warp-host-compiler-beside` | 2026-10-23 `5acf3e59c` | +26/-185 | yes | mixed | warp-host-compiler-beside (Now) | — | **superseded** | warp-host finds compiler.wasm/compiler-self.wasm beside itself first; the card's branch is now warp-host-compiler-build (2efcab3f4), which redoes it inside the integration stack |
+| `warp-host-compiler-build` | 2026-10-23 `2efcab3f4` | +20/-185 | yes | mixed | warp-host-compiler-beside (Now) | — | **worth finishing** | the host build puts both compilers beside warp-host and warp-host prefers them over lib/../data; inside warp-host-integration, cache-key, cli-parity; carries pure-c-imports (blocked) |
+| `warp-host-demo` | 2026-10-23 `7191015d8` | +29/-335 | no: host_from_warp_eval.md | mixed | host-from-warp (Now) | grok-merger | **dead** | host-from-warp plus merges, no commit of its own |
+| `warp-host-inline-status` | 2026-10-23 `9afb59910` | +2/-148 | yes | mixed | warp-host-inline-status (Ready) | tree warp-host-inline-status, grok-warp-wrapper | **merge-ready** | warp-host: inline code exits 0 whatever its value (as warp-rust), only an Error, a failed run or exit(code) set the status; tests check values; card Ready (user decision); needs the Rust lane |
+| `warp-host-integration` | 2026-10-23 `9af177982` | +39/-146 | yes | mixed | warp-host-integration (Now) | tree warp-host-integration, grok-warp-wrapper | **worth finishing** | integration of the warp-host branches (compiler beside, C imports, run_wasm args); inside cache-key and cli-parity; carries pure-c-imports (blocked) |
+| `warp-host-repl-fixes` | 2026-10-23 `992cb65be` | +29/-148 | yes | mixed | warp-host-repl-fixes (Now) | tree warp-host-repl-fixes, grok-warp-wrapper | **merge-ready** | warp-host: exact rationals from run_wasm, LC_CTYPE at startup, owned_text C results; readied 992cb65be, merges cleanly; contains warp-host-wasm-load; needs the Rust lane (rerun test_ffi on the merged tip) |
+| `warp-host-wasm-load` | 2026-10-23 `8d052c113` | +26/-148 | yes | mixed | warp-host-wasm-load (Now) | tree warp-host-wasm-load | **merge-ready** | base of the warp-host stack: run_wasm(bytes, args), a module's Error passed through, one-letter texts, soname search (libz.so.1, SDL2), lib/native lines for SDL2/raylib/zlib; readied, merges cleanly; needs the Rust lane (rerun test_ffi on the merged tip) |
+| `wasm-commands` | 2026-10-23 `54756a917` | +11/-185 | no: compiler.warp | mixed | wasm-commands (Now) | tree wasm-commands, grok-warp-code-3 | **worth finishing** | compiler.wasm runs warp's commands under WASI (help, version, parse, repl) and emitter.warp repeats texts ("ab" * 3); 4 new tests failed in the cloud (rebuild self refused std_os_input); missing: merge main (compiler.warp conflict), fix, re-Ready (Warp Code 3's plan) |
