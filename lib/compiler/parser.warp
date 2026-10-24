@@ -144,7 +144,7 @@ def bang_word_at(p: Parser): int {
 BLOCK_COLON_WORDS = ["then", "else", "do"]
 def word_names_key(p: Parser, word: text): bool {
 	after = p.at + word.length
-	word != "" and not BLOCK_COLON_WORDS.contains(word) and is_at(p.code, after, ':', p.n) and not is_at(p.code, after + 1, ':', p.n) and not is_at(p.code, after + 1, '=', p.n)
+	not (word is empty) and not BLOCK_COLON_WORDS.contains(word) and is_at(p.code, after, ':', p.n) and not is_at(p.code, after + 1, ':', p.n) and not is_at(p.code, after + 1, '=', p.n)
 }
 
 // The blank-separated words of the statement at the parser's position
@@ -320,7 +320,7 @@ def longest_spelled_at(p: Parser, candidates: list): any {
 def aliased_operator_at(p: Parser): list {
 	alias = alias_at(p)
 	canonical = if alias.length == 0 then "" else canonical_operator(alias#2)
-	if canonical == "" or (is_name_start(alias#1#1) and opens_block(p, alias#1.length)) then [] else [alias#1, canonical]
+	if canonical is empty or (is_name_start(alias#1#1) and opens_block(p, alias#1.length)) then [] else [alias#1, canonical]
 }
 // A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `sqrt`)
 // Rust twin: spellings.rs table_operator, PREFIX_OPERATOR_WORDS
@@ -347,7 +347,7 @@ def declared_type_names(source: text): list {
 	for line in code_only(source).split("\n") {
 		previous = ""
 		for word_written in line.replace("\t", " ").split(" ") {
-			if word_written == "" { continue }
+			if word_written is empty { continue }
 			if TYPE_SCAN_WORDS.contains(previous) {
 				end = symbol_end(word_written, 0, word_written.length)
 				if end > 0 and (end == word_written.length or "({<[:;".contains(word_written[end])) { type_names += [word_written[0 .. end]] }
@@ -692,7 +692,7 @@ def grouped(pairs: list, bracket: text): Node := {
 	if loosest < 0 { return phrase(bracket, [pair#1 for pair in pairs]) }
 	split = ""
 	for pair in pairs {
-		if split == "" and precedence(pair#2) == loosest { split = pair#2 }
+		if split is empty and precedence(pair#2) == loosest { split = pair#2 }
 	}
 	groups = []
 	group = []
@@ -866,7 +866,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			p.at = p.at + membership#1.length
 			skip_blanks(p)
 			left = membership_test(left, membership#2, expression(p, MEMBERSHIP_POWERS#2))
-		} else if negated_at(p) != "" {
+		} else if negated_at(p) {
 			// `x is not 4`, `x not in xs`, `a nand b`: `not (x is 4)`, `not (x in xs)`, `not (a and b)`
 			written = negated_at(p)
 			positive = NEGATED_SPELLINGS[written]
@@ -1549,7 +1549,7 @@ def declared_operator(kind: text, words: list): text {
 // Rust twin: aliases.rs alias_line
 
 // The blank-separated words of a statement
-def blank_words(statement: text): list := statement.replace("\t", " ").split(" ").filter(word => word != "")
+def blank_words(statement: text): list := statement.replace("\t", " ").split(" ").filter(word => word)
 
 // The [glyph, kind, level] of each operator a source declares: `[prefix|suffix|infix]
 // operator ⊕ := …` and the pattern `a ⊕ b := …` (infix), at the level a precedence declaration gives it
@@ -1567,7 +1567,7 @@ def declared_operators(source: text): list {
 	for statement in statements {
 		if not statement.contains("precedence") { continue }
 		ranked = precedence_declaration(blank_words(statement), found)
-		if ranked == [] { continue }
+		if ranked is empty { continue }
 		found = found.map(operator => if operator#1 == ranked#1 then [operator#1, operator#2, ranked#2] else operator)
 	}
 	found
@@ -1637,13 +1637,13 @@ def precedence_declaration(words: list, declared: list): list {
 	direction = words#5
 	if direction != "above" and direction != "below" { return [] }
 	other = if words.length == 7 and words#6 == "operator" then words#7 else if words.length == 6 then words#6 else ""
-	if other == "" { return [] }
+	if other is empty { return [] }
 	glyph = words#2
 	if declared_level(declared, glyph) < 0 { raise "operator $(glyph) is built in: only a declared operator gets a precedence (`infix operator $(glyph) := …` first)" }
 	reference = declared_level(declared, other)
 	if reference < 0 {
 		canonical = canonical_operator(other)
-		if canonical == "" { raise "unknown operator $(other) in `operator $(glyph) has precedence $(direction) $(other)`" }
+		if canonical is empty { raise "unknown operator $(other) in `operator $(glyph) has precedence $(direction) $(other)`" }
 		reference = binding_powers(canonical)#1
 	}
 	[glyph, if direction == "above" then reference + PRECEDENCE_STEP else reference - PRECEDENCE_STEP]
@@ -1659,7 +1659,7 @@ def operator_declared(words: list): list {
 	if words.length == 0 { return [] }
 	kind = operator_kind_word(words#1)
 	rest = words[1 .. words.length]
-	glyph = if kind == "" then "" else declared_operator(kind, rest)
+	glyph = if kind is empty then "" else declared_operator(kind, rest)
 	if glyph != "" and operator_alias(words).length == 0 { return [glyph, kind, OPERATOR_LEVELS[kind]] }
 	if words.length > 3 and words#4 == ":=" and is_operator_glyph(words#2) and is_plain_name(words#1) and is_plain_name(words#3) { return [words#2, "infix", OPERATOR_LEVELS["infix"]] }
 	[]
@@ -1686,7 +1686,7 @@ def holds_top_level_comma(code: text, at: int, n: int): bool {
 		c = code[at]
 		if escaped {
 			escaped = false
-		} else if quote != "" {
+		} else if quote {
 			if c == '\\' { escaped = true } else if "" + c == quote { quote = "" }
 		} else if c == '"' or c == '\'' {
 			quote = "" + c
@@ -1834,13 +1834,13 @@ def guarded(p: Parser, word: text): Node := {
 	guarded_part = guarded_phrase(p)
 	written_part = p.code[start .. p.at].trim()
 	skip_spaces(p)
-	if fallback_word_ahead(p) != "" {
+	if fallback_word_ahead(p) {
 		// `except A: a except B: b`: an Error A does not catch passes on to the next one; an `else` after the
 		// fallback is an enclosing `if`'s
 		guard = guarded_part
 		first = yes
 		fallback_word = fallback_word_ahead(p)
-		while fallback_word != "" and (first or fallback_word != "else") {
+		while fallback_word and (first or fallback_word != "else") {
 			first = no
 			p.at = p.resumes[p.at] + fallback_word.length
 			skip_spaces(p)
@@ -1870,10 +1870,10 @@ def guarded_by(marker: text, guarded_part: Node, fallback: Node, caught: list): 
 	parts = [symbol(marker), guarded_part, fallback]
 	name = caught#1
 	caught_class = caught#2
-	if caught_class != "" {
-		bound = if name == "" then CAUGHT_ERROR else name
+	if caught_class {
+		bound = if name is empty then CAUGHT_ERROR else name
 		parts = parts + [keyed(":", symbol(bound), symbol(caught_class))]
-	} else if name != "" and reads_name(fallback, name) {
+	} else if name and reads_name(fallback, name) {
 		parts = parts + [symbol(name)]
 	}
 	listed("(", "", parts)
@@ -1927,7 +1927,7 @@ def guarded_phrase(p: Parser): Node := {
 	phrase_parts = [expression(p, 0)]
 	while true {
 		skip_spaces(p)
-		if fallback_word_ahead(p) != "" or keyword_at(p, "finally") or not starts_atom(p) { break }
+		if fallback_word_ahead(p) or keyword_at(p, "finally") or not starts_atom(p) { break }
 		phrase_parts = phrase_parts + [expression(p, 0)]
 	}
 	p.in_branch = outer
@@ -1966,7 +1966,7 @@ def prefixed(p: Parser): Node := {
 	if word == "operator" or word == "circumfix" or OPERATOR_KINDS.contains(word) {
 		words = statement_words_at(p)
 		// the pre-scans applied both: declared_operators, operator_aliases
-		if precedence_declaration(words, p.operators) != [] or operator_alias(words).length > 0 or circumfix_alias(words).length > 0 { return skip_statement(p) }
+		if precedence_declaration(words, p.operators) or operator_alias(words).length > 0 or circumfix_alias(words).length > 0 { return skip_statement(p) }
 		declaration = operator_declaration(p, word)
 		if declaration != ø { return declaration }
 		method = operator_method_definition(p, word)
@@ -3211,13 +3211,13 @@ def closing_brace(code: text, at: int, n: int): int {
 // Rust twin: literals/text.rs without_common_indentation
 def dedented(source: text): text {
 	lines = source.split("\n")
-	written = [line for line in lines if line.trim() != ""]
+	written = [line for line in lines if line.trim()]
 	if #written == 0 { return "" }
 	common = min(written.map(indent_width))
 	first = 1
-	while lines#first.trim() == "" { first = first + 1 }
+	while lines#first.trim() is empty { first = first + 1 }
 	last = #lines
-	while lines#last.trim() == "" { last = last - 1 }
+	while lines#last.trim() is empty { last = last - 1 }
 	kept = []
 	for index in first .. last + 1 {
 		line = lines#index
@@ -3491,12 +3491,12 @@ def raised_terms(p: Parser): list {
 			end = end + 1
 		}
 		value = 0
-		while letters == "" and end < p.n and position_in(SUPERSCRIPT_DIGITS, p.code[end]) < 10 {
+		while letters is empty and end < p.n and position_in(SUPERSCRIPT_DIGITS, p.code[end]) < 10 {
 			value = value * 10 + position_in(SUPERSCRIPT_DIGITS, p.code[end])
 			end = end + 1
 		}
 		if end == start { return terms }
-		terms += [[sign, if letters == "" then value else symbol(letters), end]]
+		terms += [[sign, if letters is empty then value else symbol(letters), end]]
 		at = end
 	}
 	terms

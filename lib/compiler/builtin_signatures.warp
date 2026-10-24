@@ -42,7 +42,7 @@ typed_line(line: text, library: text): any := {
 	tail = head[1..].join("(").split(")")
 	if #tail < 2 { return ø }
 	written = tail[0 ..< #tail - 1].join(")").trim()
-	parameters = if written == "" then [] else written.split(",").map(part => written_parameter(part))
+	parameters = if written is empty then [] else written.split(",").map(part => written_parameter(part))
 	result = tail#(#tail).trim().remove_prefix(":").trim()
 	Builtin(name: head#1, signature: Signature(parameters: parameters, result: result))
 }

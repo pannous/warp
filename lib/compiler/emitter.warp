@@ -393,6 +393,15 @@ def condition(value: any): list {
 	if kind != "bool" and kind != pending { refuse("a " + kind + " as a condition") }
 	value#2
 }
+# the test of an if or a loop read inside `blocks` more blocks: in `if name and …` each side is tested by its own kind
+# (a text by its emptiness), the right one only when the left leaves the answer open
+def condition_of(body: Body, test: any, blocks: int): list {
+	if not (type(test) is key and op_of(test) in logical_words) { return condition(nested(body, test, blocks)) }
+	a = condition_of(body, key_of(test), blocks)
+	b = condition_of(body, value_of(test), blocks + 1)
+	if logical_words[op_of(test)] == "and" { return a + [op.if, type_bytes.bool] + b + [op.else, op.i32_const, 0, op.end] }
+	a + [op.if, type_bytes.bool, op.i32_const, 1, op.else] + b + [op.end]
+}
 
 def number_value(n: any): list {
 	if n is float and exact_decimal(n) != ø { return exact_decimal(n) }

@@ -90,7 +90,7 @@ first_mention(n: any, name: text): text := {
 	if n == symbol(name) { return read_mention }
 	for part in parts_of(n) {
 		mention = first_mention(part, name)
-		if mention != "" { return mention }
+		if mention { return mention }
 	}
 	""
 }
