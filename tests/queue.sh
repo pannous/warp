@@ -15,6 +15,12 @@
 # by rename (git does, mv does), never by writing into it: bash reads a running script from the file as it goes.
 # Targeted runs are niced so the user's apps stay responsive and use at most TARGETED_TEST_THREADS threads
 # (RUST_TEST_THREADS); the full suite keeps normal priority, because its task-overlap tests measure wall clock.
+# Output (token-lean, scripts/lib/quiet.sh): a targeted run writes its full output to data/logs/queue-<time>-<pid>.log
+# and prints one summary line (ok/FAIL, rc, seconds, passed/failed/ignored, log path) plus the failing lines on
+# failure. Full output as before: VERBOSE=1, --nocapture/--show-output among the arguments, stdout already a file
+# (`> x.log`), and the full ./test.sh run. The exit status is the run's own (a kill by signal is 128+N, named).
+#   tests/queue.sh -h|--help              this text
+case "$1" in -h | --help) sed -n '2,/^[^#]/{/^#/s/^# \{0,1\}//p;}' "$0"; exit 0 ;; esac
 LOCK="${WARP_TEST_LOCK:-$HOME/.cargo/warp-tests.lock}"
 QUEUE="$LOCK.queue"
 TARGETED_SLOTS=3 # one slot left the 10-core Mac at load 7 with 37 runs queued (card test-queue-slots)
@@ -101,8 +107,11 @@ prebuild_command() {
 	[[ " ${before[*]} " == *" test "* ]] || return 1
 	prebuild=("${before[@]}" --no-run)
 }
+. "$(dirname "$0")/../scripts/lib/quiet.sh"
+log_dir="${WARP_LOG_DIR:-$(cd "$(dirname "$0")/.." && pwd)/data/logs}"
 if prebuild_command; then
-	nice -n "$niceness" "${prebuild[@]}" || exit $?
+	quiet_run "test queue build" "$log_dir/queue-build-$(date +%Y%m%d-%H%M%S)-$$.log" nice -n "$niceness" "${prebuild[@]}" ||
+		exit $?
 fi
 
 mkdir -p "$QUEUE"
@@ -231,6 +240,13 @@ export WARP_TEST_LOCKED=1
 export WARP_NO_WINDOW=1 # a painting program writes PNGs, never a window during tests (src/graphics/paint.rs)
 hold_slots=()
 for slot in "${slots[@]}"; do hold_slots+=("${hold_lock[@]}" "$slot"); done
-exec "${hold_slots[@]}" bash -c 'pid=$1 queue=$2 slots=$3; shift 3; rm -f "$queue"/*-"$pid"
+queued_run=("${hold_slots[@]}" bash -c 'pid=$1 queue=$2 slots=$3; shift 3; rm -f "$queue"/*-"$pid"
 	for slot in $slots; do echo "$pid $PWD $*" > "$slot.owner"; done; exec "$@"' \
-	queue-run "$$" "$QUEUE" "${slots[*]}" nice -n "$niceness" "${run[@]}"
+	queue-run "$$" "$QUEUE" "${slots[*]}" nice -n "$niceness" "${run[@]}")
+# the full suite (its consumers read the whole output) and runs asking for test output stream as before
+[[ -n "$exclusive" || " ${run[*]} " == *" --nocapture "* || " ${run[*]} " == *" --show-output "* ]] && VERBOSE=1
+quiet_is_verbose && exec "${queued_run[@]}"
+# not exec'd: our PID stays alive for the ticket, the slots' owner files and watch_run, as with exec
+log="$log_dir/queue-$(date +%Y%m%d-%H%M%S)-$$.log"
+echo "test queue: running ${run[*]} (log: $log)" >&2
+quiet_run "test queue" "$log" "${queued_run[@]}"

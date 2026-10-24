@@ -1,0 +1,4 @@
+# a tuple result taken apart by a tuple of names. Expected: 3.4 2
+divmod(a, b) := (a / b, a % b)
+(q, r) = divmod(17, 5)
+print "$(q) $(r)"

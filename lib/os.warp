@@ -17,6 +17,8 @@ run(command: any) := std_io("os", "run", [command])
 // imports as a program, its main's value; a trap is an Error. compile_wasm(code) gives the bytes of a program of the
 // current folder, so `run_wasm(compile_wasm("6*7"))` evaluates code. warp-host runs them (notes/warp_host.md)
 run_wasm(bytes: any) := std_io("os", "run_wasm", [bytes])
+// `run_wasm(bytes, ["a", "b"])`: the module sees those arguments as its args, not the program's
+run_wasm(bytes: any, arguments: any) := std_io("os", "run_wasm", [bytes, arguments])
 compile_wasm(code: any) := std_io("os", "compile_wasm", [code])
 // The scripting words (decision use-script, all of them in `use script`):
 

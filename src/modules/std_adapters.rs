@@ -229,7 +229,7 @@ fn net(member: &str, arguments: &[Node]) -> Result<Node, String> {
 
 fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
-		("env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
+		("env", [name]) => Ok(environment_variable(&text_of(name)?).map_or(Node::Empty, Node::Text)),
 		("args", []) => Ok(texts(program_arguments())),
 		("cwd", []) => working_folder(),
 		("input", prompt) => typed_line(prompt),
@@ -277,6 +277,36 @@ fn kept_key(name: &str) -> Option<String> {
 thread_local! {
 	/// The SHA-256 of the compiler module running (compiler.wasm, compiler-self.wasm), empty for any other program
 	static KEEPING_COMPILER: std::cell::RefCell<String> = Default::default();
+}
+
+/// The variable naming the lib/ a compiler run reads its std modules from (lib/compiler/parser.warp run_library)
+const LIBRARY_VARIABLE: &str = "WARP_LIB";
+
+/// A variable of the environment a run sees: the process's, but WARP_LIB the lib/ of this warp (library_folder) in a
+/// compiler's run, so compiler.wasm reads the std modules there, never from the folder it was built in (card
+/// compiler-cache-keys); any other program sees the process's environment as it is
+pub fn environment_variable(name: &str) -> Option<String> {
+	if name == LIBRARY_VARIABLE && in_compiler_run() {
+		return Some(crate::compiler::self_hosted::library().display().to_string());
+	}
+	std::env::var(name).ok()
+}
+
+/// The environment a run sees, as environment_variable gives each variable (WASI's environ of a compiler run)
+pub fn environment() -> Vec<(String, String)> {
+	let mut variables: Vec<(String, String)> = std::env::vars().filter(|(name, _)| name != LIBRARY_VARIABLE).collect();
+	variables.extend(environment_variable(LIBRARY_VARIABLE).map(|library| (LIBRARY_VARIABLE.to_string(), library)));
+	variables
+}
+
+#[cfg(feature = "native")]
+fn in_compiler_run() -> bool {
+	KEEPING_COMPILER.with(|compiler| !compiler.borrow().is_empty())
+}
+
+#[cfg(not(feature = "native"))]
+fn in_compiler_run() -> bool {
+	false
 }
 
 /// `run` of the compiler module whose SHA-256 is `owner`, keeping values of its own: compiler.wasm and

@@ -80,7 +80,7 @@ places_named(owners: list, name: text): list := (1 to #owners).filter(j => owner
 
 merged(parts: list): list := {
 	owners = parts.map(definition_name)
-	single = i => owners#i == "" or #places_named(owners, owners#i) == 1
+	single = i => owners#i is empty or #places_named(owners, owners#i) == 1
 	kept = (1 to #parts).filter(i => single(i) or places_named(owners, owners#i)#1 == i)
 	kept.map(i => if single(i) then parts#i else merged_function(owners#i, places_named(owners, owners#i).map(j => clause_of(parts#j))))
 }

@@ -1,0 +1,22 @@
+// SDL2 through its C library (card pure-c-imports): `use SDL2` (or `use sdl`), or `import SDL_Init from 'SDL2'`,
+// declares these functions; warp-host loads libSDL2 (libSDL2.dylib, libSDL2-2.0.so.0) and calls them. Windows and
+// renderers are handles.
+SDL_Init(flags: i32): i32 from 'SDL2'
+SDL_Quit(): void from 'SDL2'
+SDL_GetError(): text from 'SDL2'
+SDL_GetTicks(): i32 from 'SDL2'
+SDL_Delay(milliseconds: i32): void from 'SDL2'
+SDL_CreateWindow(title: text, x: i32, y: i32, width: i32, height: i32, flags: i32): handle from 'SDL2'
+SDL_DestroyWindow(window: handle): void from 'SDL2'
+SDL_CreateRenderer(window: handle, index: i32, flags: i32): handle from 'SDL2'
+SDL_DestroyRenderer(renderer: handle): void from 'SDL2'
+SDL_SetRenderDrawColor(renderer: handle, red: i32, green: i32, blue: i32, alpha: i32): i32 from 'SDL2'
+SDL_RenderClear(renderer: handle): i32 from 'SDL2'
+SDL_RenderDrawLine(renderer: handle, x1: i32, y1: i32, x2: i32, y2: i32): i32 from 'SDL2'
+SDL_RenderDrawPoint(renderer: handle, x: i32, y: i32): i32 from 'SDL2'
+SDL_RenderPresent(renderer: handle): void from 'SDL2'
+
+SDL_INIT_TIMER = 0x00000001
+SDL_INIT_VIDEO = 0x00000020
+SDL_WINDOW_SHOWN = 0x00000004
+SDL_WINDOWPOS_CENTERED = 0x2FFF0000

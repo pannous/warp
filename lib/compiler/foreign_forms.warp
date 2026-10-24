@@ -1,10 +1,11 @@
-// Other languages' ways of writing a declaration (card pure-class-forms): the modifiers `public static fun f()`,
-// `private x = 4`, `static k = 3` (P78), and the forms `new Point(1, 2)`, `constant x`, Ruby's `attr_accessor :x`,
-// Kotlin's `enum class` and `data class`, `mixin Name {…}`, read as the warp form they mean
+// Other languages' ways of writing a declaration (card pure-class-forms) that decide what the parser reads next: a run
+// of modifiers mixing warp's (`public export fun f()`), and the forms `new Point(1, 2)`, Ruby's `attr_accessor :x`,
+// Kotlin's `enum class` and `data class`, `mixin Name {…}`, read as the warp form they mean. Modifiers without warp
+// meaning alone (`public static fun f()`, `private x = 4`) and `constant x` are rewrite rules: lib/sugar/declarations.warp
 // Rust twin: src/warp_parser/definitions/foreign.rs
 // A part of parser.warp, which uses it: it reads with the parser's expression and atom, so it compiles only with it
 
-// Modifiers of other languages with no meaning in warp: skipped (user decision P78); `static` marks the statement
+// Modifiers of other languages with no meaning in warp (user decision P78); `static` marks the statement
 // Rust twin: foreign.rs FOREIGN_MODIFIERS
 FOREIGN_MODIFIERS = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline", "local", "virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"]
 // Modifiers with a warp meaning that change nothing before a function definition (a function is global and constant)
@@ -29,17 +30,13 @@ def foreign_form(p: Parser, word: text): Node := {
 		if skipped != ø { return skipped }
 	}
 	keyword = class_keyword_after(p, word)
-	if keyword != "" and CLASS_MODIFIERS.contains(word) {
+	if keyword and CLASS_MODIFIERS.contains(word) {
 		p.at = blank_end(p, p.at + word.length)
 		return type_declaration(p, keyword)
 	}
 	if word == "new" and p.types.contains(name_after_blanks(p, word)) {
 		p.at = blank_end(p, p.at + word.length)
 		return atom(p)
-	}
-	if word == "constant" and name_after_blanks(p, word) != "" {
-		p.at = p.at + word.length
-		return symbol("const")
 	}
 	if word == "enum" and keyword == "class" {
 		p.at = blank_end(p, p.at + word.length) + keyword.length
@@ -58,8 +55,8 @@ def starts_statement(p: Parser): bool {
 	at < 0 or "\n;{".contains(p.code[at])
 }
 
-// `public static fun f(){…}`, `private x = 4` (P78): a run of modifiers that ends before a function definition, or of
-// modifiers without warp meaning before a name, is skipped; the statement after it, marked @static after `static`
+// `public export fun f(){…}` (P78): a run of modifiers with one of warp's that ends before a function definition is
+// skipped; the statement after it, marked @static after `static`. A run without warp's is lib/sugar/declarations.warp's
 // Rust twin: foreign.rs skip_foreign_modifiers
 def without_foreign_modifiers(p: Parser, first: text): Node := {
 	if not is_modifier(first) { return ø }
@@ -73,7 +70,7 @@ def without_foreign_modifiers(p: Parser, first: text): Node := {
 		next = p.code[start .. at]
 		if not is_modifier(next) {
 			foreign_only = words.all(word => FOREIGN_MODIFIERS.contains(word))
-			if next == "" or not (function_keywords.contains(next) or foreign_only) { return ø }
+			if foreign_only or not function_keywords.contains(next) { return ø }
 			p.at = start
 			statement = expression(p, 0)
 			return if words.contains(STATIC_WORD) then attributed(STATIC_WORD, true, statement) else statement
@@ -106,7 +103,7 @@ def ruby_fields(p: Parser, word: text): Node := {
 	end = start
 	while end < p.n and not "\n;}".contains(p.code[end]) { end = end + 1 }
 	names = p.code[start .. end].split(",").map(name => without_colon(name.trim()))
-	if not names.all(name => name != "" and name_end(name, 0, name.length) == name.length) { return ø }
+	if not names.all(name => name and name_end(name, 0, name.length) == name.length) { return ø }
 	p.at = end
 	listed("", ";", names.map(name => symbol(name)))
 }
@@ -117,5 +114,5 @@ def without_colon(name: text): text := if starts_at(name, ":", 0) then name[1 ..
 // Rust twin: scanning.rs name_and_block_follow
 def block_after_name(p: Parser, word: text): bool {
 	name = name_after_blanks(p, word)
-	name != "" and is_at(p.code, spaces_end(p, spaces_end(p, p.at + word.length) + name.length), '{', p.n)
+	not (name is empty) and is_at(p.code, spaces_end(p, spaces_end(p, p.at + word.length) + name.length), '{', p.n)
 }

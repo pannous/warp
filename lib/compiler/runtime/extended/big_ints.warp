@@ -1,0 +1,231 @@
+## integers beyond 64 bits, as a power gives them (Rust's twin src/wasm_emitter/numbers/big_int): an Int node of a sign
+## and a magnitude of base 2^32 limbs, little-endian, no leading zero one (intrinsics big_int_of, limb, set_limb).
+## Extended (decision runtime-split): exact_pow and exact.warp's words reach these, the core through the bridge's hooks
+use "../intrinsics.warp"
+use "../instructions.warp"
+use "../arithmetic.warp"
+use "../../byte_codes.warp"
+limb_base(): int := 4294967296
+# a limb times a limb is taken in halves of a limb, so that no sum leaves 64 bits
+half_limb_base(): int := 65536
+# a limb of a big int's text: nine decimal digits, below 2^32 so that a rest times limb_base stays within 64 bits
+digit_chunk(): int := 1000000000
+digit_chunk_length(): int := 9
+# |x| as a magnitude, the smallest int's too
+magnitude_of(x: int): Node := {
+	count = 0
+	rest = x
+	while rest != 0 {
+		rest = int_quotient(rest, limb_base())
+		count += 1
+	}
+	out = big_int_of(no, count)
+	for i in 0..count {
+		part = int_remainder(x, limb_base())
+		set_limb(out, i, if part < 0 then 0 - part else part)
+		x = int_quotient(x, limb_base())
+	}
+	out
+}
+# the first count limbs of n with that sign
+signed_limbs(n: Node, count: int, negative: bool): Node := {
+	out = big_int_of(negative, count)
+	for i in 0..count { set_limb(out, i, limb(n, i)) }
+	out
+}
+# a magnitude without its leading zero limbs
+trimmed_magnitude(n: Node): Node := {
+	count = limb_count(n)
+	while count > 0 and limb(n, count - 1) == 0 { count -= 1 }
+	if count == limb_count(n) { return n }
+	signed_limbs(n, count, no)
+}
+# a · b of two magnitudes, limb by limb
+magnitude_product(a: Node, b: Node): Node := {
+	out = big_int_of(no, limb_count(a) + limb_count(b))
+	for i in 0..limb_count(a) {
+		low = int_remainder(limb(a, i), half_limb_base())
+		high = int_quotient(limb(a, i), half_limb_base())
+		carry = 0
+		for j in 0..limb_count(b) {
+			sum = low * limb(b, j) + limb(out, i + j) + carry
+			upper = int_quotient(sum, half_limb_base()) + high * limb(b, j)
+			set_limb(out, i + j, int_remainder(sum, half_limb_base()) + int_remainder(upper, half_limb_base()) * half_limb_base())
+			carry = int_quotient(upper, half_limb_base())
+		}
+		set_limb(out, i + limb_count(b), carry)
+	}
+	trimmed_magnitude(out)
+}
+# |base| ^ exponent by squaring, exponent at least 0
+magnitude_power(base: int, exponent: int): Node := {
+	result = magnitude_of(1)
+	square = magnitude_of(base)
+	while exponent > 0 {
+		if int_remainder(exponent, 2) == 1 { result = magnitude_product(result, square) }
+		exponent = int_quotient(exponent, 2)
+		if exponent > 0 { square = magnitude_product(square, square) }
+	}
+	result
+}
+# whether a magnitude, negated when negative, is an int: below 2^63, or -2^63
+fits_int(n: Node, negative: bool): bool := {
+	if limb_count(n) < 2 { return yes }
+	if limb_count(n) > 2 { return no }
+	limb(n, 1) < 2147483648 or (negative and limb(n, 1) == 2147483648 and limb(n, 0) == 0)
+}
+# the int of a magnitude of at most two limbs, negated when negative
+int_of_magnitude(n: Node, negative: bool): int := {
+	low = if limb_count(n) > 0 then limb(n, 0) else 0
+	high = if limb_count(n) > 1 then limb(n, 1) else 0
+	if negative then (0 - high) * limb_base() - low else high * limb_base() + low
+}
+# base ^ exponent of an int, exponent at least 0, unbounded (Rust's int_pow in big_int/slow_paths.rs): an int while
+# it fits 64 bits, else a big int
+big_int_power(base: int, exponent: int): Node := {
+	negative = base < 0 and int_remainder(exponent, 2) == 1
+	magnitude = magnitude_power(base, exponent)
+	if fits_int(magnitude, negative) { return int_of_magnitude(magnitude, negative) }
+	signed_limbs(magnitude, limb_count(magnitude), negative)
+}
+# how many bits |x| takes
+bit_length(x: int): int := {
+	bits = 0
+	while x != 0 {
+		x = int_quotient(x, 2)
+		bits += 1
+	}
+	bits
+}
+# a big int's decimal digits: its magnitude divided by 10^9 until nothing is left, each rest nine digits (the last its
+# own); a limb has fewer than ten digits
+big_int_text(n: Node): text := {
+	work = signed_limbs(n, limb_count(n), no)
+	top = limb_count(n)
+	digits = new_text(10 * top)
+	at = byte_count(digits)
+	while top > 0 {
+		rest = 0
+		i = top
+		while i > 0 {
+			i -= 1
+			current = rest * limb_base() + limb(work, i)
+			set_limb(work, i, int_quotient(current, digit_chunk()))
+			rest = int_remainder(current, digit_chunk())
+		}
+		while top > 0 and limb(work, top - 1) == 0 { top -= 1 }
+		written = 0
+		while written < digit_chunk_length() and (top > 0 or rest > 0) {
+			at -= 1
+			set_byte(digits, at, Ascii.Zero + int_remainder(rest, 10))
+			rest = int_quotient(rest, 10)
+			written += 1
+		}
+	}
+	sign = if big_int_negative(n) then 1 else 0
+	out = new_text(sign + byte_count(digits) - at)
+	if sign == 1 { set_byte(out, 0, Ascii.Minus) }
+	copy_text(out, sign, digits, at, byte_count(digits) - at)
+	out
+}
+## big ints in sums, differences, products, ordering and floats (card pure-big-int-ops; Rust's twin
+## src/wasm_emitter/numbers/big_int): exact.warp hands an Int that is neither plain nor a ratio here, through the late
+## intrinsics big_sum, big_difference, big_product, big_order and big_float, the other operand a plain int or a big int.
+## A result that fits 64 bits is a plain int again, as Rust's
+# a plain int or a big int as a big int: its sign and magnitude
+as_big_int(n: Node): Node := {
+	if not is_plain_int(n) { return n }
+	x = unboxed_int(n)
+	magnitude = magnitude_of(x)
+	signed_limbs(magnitude, limb_count(magnitude), x < 0)
+}
+# a magnitude with a sign as Rust keeps it: a plain int when it fits 64 bits, else a big int, -0 as 0
+normalized_big_int(magnitude: Node, negative: bool): Node := {
+	trimmed = trimmed_magnitude(magnitude)
+	if limb_count(trimmed) == 0 { return 0 }
+	if fits_int(trimmed, negative) { return int_of_magnitude(trimmed, negative) }
+	signed_limbs(trimmed, limb_count(trimmed), negative)
+}
+# -1, 0 or 1 as the magnitude a is below, equal to or above b, both trimmed
+magnitude_order(a: Node, b: Node): int := {
+	if limb_count(a) != limb_count(b) { return if limb_count(a) < limb_count(b) then -1 else 1 }
+	i = limb_count(a)
+	while i > 0 {
+		i -= 1
+		if limb(a, i) != limb(b, i) { return if limb(a, i) < limb(b, i) then -1 else 1 }
+	}
+	0
+}
+# a + b of two magnitudes
+magnitude_sum(a: Node, b: Node): Node := {
+	count = max_int(limb_count(a), limb_count(b))
+	out = big_int_of(no, count + 1)
+	carry = 0
+	for i in 0..count {
+		sum = carry + (if i < limb_count(a) then limb(a, i) else 0) + (if i < limb_count(b) then limb(b, i) else 0)
+		set_limb(out, i, int_remainder(sum, limb_base()))
+		carry = int_quotient(sum, limb_base())
+	}
+	set_limb(out, count, carry)
+	out
+}
+# a - b of two magnitudes, a at least b
+magnitude_difference(a: Node, b: Node): Node := {
+	out = big_int_of(no, limb_count(a))
+	borrow = 0
+	for i in 0..limb_count(a) {
+		difference = limb(a, i) - borrow - (if i < limb_count(b) then limb(b, i) else 0)
+		borrow = 0
+		if difference < 0 {
+			difference += limb_base()
+			borrow = 1
+		}
+		set_limb(out, i, difference)
+	}
+	out
+}
+# a + b of two signed magnitudes
+signed_sum(a: Node, a_negative: bool, b: Node, b_negative: bool): Node := {
+	if a_negative == b_negative { return normalized_big_int(magnitude_sum(a, b), a_negative) }
+	if magnitude_order(a, b) >= 0 { return normalized_big_int(magnitude_difference(a, b), a_negative) }
+	normalized_big_int(magnitude_difference(b, a), b_negative)
+}
+# a + b, a - b, a · b of plain or big ints
+big_int_sum(a: Node, b: Node): Node := {
+	x = as_big_int(a)
+	y = as_big_int(b)
+	signed_sum(trimmed_magnitude(x), big_int_negative(x), trimmed_magnitude(y), big_int_negative(y))
+}
+big_int_difference(a: Node, b: Node): Node := {
+	x = as_big_int(a)
+	y = as_big_int(b)
+	signed_sum(trimmed_magnitude(x), big_int_negative(x), trimmed_magnitude(y), not big_int_negative(y))
+}
+big_int_product(a: Node, b: Node): Node := {
+	x = as_big_int(a)
+	y = as_big_int(b)
+	normalized_big_int(magnitude_product(trimmed_magnitude(x), trimmed_magnitude(y)), big_int_negative(x) != big_int_negative(y))
+}
+# -1, 0 or 1 as a is below, equal to or above b, plain or big ints
+big_int_order(a: Node, b: Node): int := {
+	x = as_big_int(a)
+	y = as_big_int(b)
+	mx = trimmed_magnitude(x)
+	my = trimmed_magnitude(y)
+	x_negative = big_int_negative(x) and limb_count(mx) > 0
+	y_negative = big_int_negative(y) and limb_count(my) > 0
+	if x_negative != y_negative { return if x_negative then -1 else 1 }
+	order = magnitude_order(mx, my)
+	if x_negative then 0 - order else order
+}
+# a big int as the nearest float, its limbs from the top
+big_int_float(n: Node): float := {
+	x = as_big_int(n)
+	out = 0.0
+	i = limb_count(x)
+	while i > 0 {
+		i -= 1
+		out = out * 4294967296.0 + float(limb(x, i))
+	}
+	if big_int_negative(x) then 0.0 - out else out
+}

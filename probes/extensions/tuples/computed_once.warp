@@ -1,0 +1,8 @@
+# the value is computed once. Expected: 1 2 1
+global calls = 0
+pair() := {
+	calls += 1
+	(1, 2)
+}
+(x, y) = pair()
+print "$(x) $(y) $(calls)"

@@ -1,0 +1,3 @@
+# `public static fun f()`: modifiers of other languages before a function definition are skipped. Expected: 3
+public static fun f() := 3
+print f()

@@ -1,0 +1,3 @@
+# a C# method head with modifiers. Expected: 1.5 (warp pure and self don't reach it today)
+public static double Half(double x) => x / 2
+print Half(3)

@@ -28,7 +28,7 @@ closure_number(name: text, captured: int): int := {
 	#module.closures - 1
 }
 # the item i of a closure's list: 0 its number, then its captured values
-def closure_item(closure: any, i: int): list { ["node", payload(closure, gc.list) + gc_code(gc_ops.struct_get, [gc.list, 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc.items])] }
+def closure_item(closure: any, i: int): list { ["node", payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)])] }
 captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
 def closure_call(body: Body, arity: int, arguments: any): list {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
@@ -48,7 +48,7 @@ made_late(name: text, result: text, parameters: list): any := {
 }
 # for each closure: if the closure's number is its own, the text it shows; another value shows "function"
 closure_text_code(f: Function): any := {
-	number = unboxed(closure_item([op.local_get, 0], 0)#2, gc.int_box)
+	number = unboxed(closure_item([op.local_get, 0], 0)#2, gc_type(gc.int_box))
 	f.code = text_bytes("function")
 	for k in 0..<#module.closures {
 		shown = text_bytes(closure_shown(module.closures[k]#1, module.closures[k]#2))
@@ -76,7 +76,7 @@ function_name(target: text): text := {
 dispatcher_code(f: Function): any := {
 	arity = #f.kinds - 1
 	closure = [op.local_get, 0]
-	number = unboxed(closure_item(closure, 0)#2, gc.int_box)
+	number = unboxed(closure_item(closure, 0)#2, gc_type(gc.int_box))
 	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
 	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]

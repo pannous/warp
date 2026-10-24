@@ -107,7 +107,7 @@ node_from(view: any, keeps_maps: bool): any := {
 	if kind == "list" { return List(view[3..].map(item => part(item)), view#2 as Bracket, view#3 as Separator) }
 	if kind == "at" { return positioned(part(view#4), view#2, view#3) }
 	if kind == "attribute" { return Key(symbol(attribute_word), Op.Colon, [view#2, part(view#3), part(view#4)]) }
-	if kind == "" { return view }
+	if kind is empty { return view }
 	Key(symbol(opaque_word), Op.Colon, view)
 }
 

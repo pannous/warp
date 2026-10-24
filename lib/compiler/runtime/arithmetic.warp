@@ -2,7 +2,7 @@
 use "intrinsics.warp"
 use "../kinds.warp"
 use "conversions.warp"
-use "exact.warp"
+use "bridge.warp"
 use "lists.warp"
 use "show.warp"
 use "types.warp"
@@ -15,8 +15,9 @@ node_add(a: Node, b: Node): Node := {
 	if not is_null(a) and kind_code(a) == Kind.List { return list_join(unboxed_list(a), appended_items(b)) }
 	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }
 	if is_null(a) or is_null(b) { fail() }
-	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_ratio(a) or is_ratio(b)) { return exact_add(a, b) }
-	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return checked_add(unboxed_int(a), unboxed_int(b)) }
+	# two plain ints add here; a ratio or a big int on either side goes to the extended runtime
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return checked_add(unboxed_int(a), unboxed_int(b)) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_sum(a, b) }
 	float_of_node(a) + float_of_node(b)
 }
 # a + b, a - b, a * b of ints; past i64 the ints of Rust grow unbounded, here they trap

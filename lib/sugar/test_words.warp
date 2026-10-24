@@ -1,0 +1,15 @@
+# Test words (notes/layers.md, sugar; Rust twin: conditions.rs try_parse_test_word): `x failed` is is_error(x), `x is
+# empty` counts nothing, `count(x) == 0` (ø, "", [] and {} alike), the other words ask `not x`. The parser keeps the
+# phrase as written, `empty` there no ø.
+rewrite $x failed => is_error($x)
+rewrite $x is failed => is_error($x)
+rewrite $x is empty => count($x) == 0
+rewrite $x empty => not $x
+rewrite $x missing => not $x
+rewrite $x is missing => not $x
+rewrite $x absent => not $x
+rewrite $x is absent => not $x
+rewrite $x unknown => not $x
+rewrite $x is unknown => not $x
+rewrite $x undefined => not $x
+rewrite $x is undefined => not $x

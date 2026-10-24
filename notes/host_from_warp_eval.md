@@ -127,3 +127,121 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
 - Not covered by the driver yet: `--compiler full` (compile_wasm uses the compiler warp-host started with), stderr
   (no word: the driver's failures go to stdout), and in-process compiles of a .warp file as code of the current folder.
   The driver itself needs no C imports. Programs' C imports unblock with pure-c-imports.
+
+## Native glue route (parked, 2026-10-23)
+Question: can the thin stub's own Rust glue (crates/warp-runtime/src/warp_host, feature `host`) also become Warp, written
+in a Warp subset that compiles to plain wasm (no GC, no exceptions), then wasm2c/w2c2 → C → native, linked against
+wasmtime's C API? Answer: **not yet**. Only number-only programs compile to non-GC wasm today. Every text, list or
+boxed number brings in GC types and instructions. The route waits for a plain-memory emitter mode for basic types
+(roadmap, lib/compiler, not ours). It is parked and can be resumed from this section. Labels as above: [M] measured on the
+box today, [I] inferred.
+
+### Measurements [M]
+Setup: /tmp/hfw-c/warp-host (7,429,400 B, sha1 042dc1b8e247…) with compiler-self.wasm 1,544,202 B (sha1 6269c5f5…) and
+`WARP_LIB=/workspace/cow/trees/host-from-warp/lib`. Then `wasm-opt -all --closed-world --remove-unused-module-elements
+--remove-unused-types` (binaryen version_124; without --closed-world the pass refuses with "RemoveUnusedTypes requires
+--closed-world"). Then `wasm-tools validate --features mvp,mutable-global,saturating-float-to-int,sign-extension,multi-value,
+bulk-memory,reference-types` (wasm-tools 1.262.0). Valid modules go through `wasm2c` (wabt 1.0.42; 1.0.37's build needs
+libcrypto.so.1.1, which this Debian 13 box lacks) and `cc -O2` with wasm-rt-impl.c and wasm-rt-mem-impl.c, then run.
+Probe sources and the script: /workspace/hfw-tools/glue-probes/{*.warp, run_a.c, measure.sh} (box, not in the repo).
+
+| probe | source | wasm | stripped | non-GC valid? | GC instructions left in the stripped module | wasm2c → native |
+|---|---|---|---|---|---|---|
+| a | `6*7` | 792 | 162 | ✓ | none | 23,552 B binary, prints 42 |
+| i | `1+2` | 764 | 149 | ✓ | none | 23,552 B, prints 3 |
+| g | `i=0; while i<5 {i=i+1}; if i>3 {1} else {2}` | 810 | 189 | ✓ | none | 23,552 B, prints 1 |
+| h | `def sq(x){x*x}; sq(7)` | 819 | 180 | ✓ | none | 23,592 B, prints 49 |
+| b | `print "hello"` | 1,092 | 385 | ✗ array type | array.new_data, array.len×3, array.get_u, ref.null | – |
+| j | `print 42` | 1,500 | 618 | ✗ array type | array.new_default, array.set×2, array.len×3, array.get_u | – |
+| n | `x=2; if x>1 {print "big"}` | 1,111 | 401 | ✗ array type | array.new_data, array.len×3, array.get_u, ref.null×2 | – |
+| m | `"ab" + "cd"` | 823 | 251 | ✗ array type | array.new_data×2, array.copy×2, array.len×5, ref.eq×2, struct.new | – |
+| f | `s = "ab" + "cd"; print s` | 1,265 | 531 | ✗ array type | array.new_data×2, array.copy×2, array.len×8, ref.eq×2 | – |
+| k | `x=3.5; x*2` | 1,806 | 824 | ✗ subtypes | struct.new×16, struct.get×21, ref.cast×21, ref.test×4 | – |
+| l | `xs=[1,2,3]; xs[1]` | 1,034 | 328 | ✗ subtypes | struct.new×15, struct.get×3, array.new_fixed×2, array.get | – |
+| c | `xs=[1,2,3]; print xs` | 21,943 | 14,896 | ✗ array type | struct.new×154, struct.get×245, ref.cast×194, array.new_data×102, ref.i31×41, … | – |
+| d | `use os; os.run("echo hi")` | refused: "outside the core: a call of run with 2 arguments" | | | | |
+| e | `f := (n) => n*2; print f(21)` | refused: "outside the core: the call f(…)" | | | | |
+
+- The unstripped modules all fail non-GC validation, even `6*7`. The runtime prelude always declares $text, $items, $list,
+  $Node, $i64box, $f64box, $Ratio and $MetaNode, plus 15 `(ref null $text)` globals for the text walkers. In number-only
+  programs nothing uses them, so stripping removes them. The code of `6*7` is plain i64 arithmetic with an overflow check
+  (f64 estimate → `unreachable`).
+- wasm2c rejects GC modules outright: "unexpected type form (got 0x5e)", which is the array type, on a.wasm unstripped and
+  on b stripped.
+- No probe module has exceptions: try_table, throw and tag counts are 0 in all of them. EH is only in compiler-self and
+  in programs that use raise/try (not probed here).
+- What forces GC:
+  - **Texts** are `(array (mut i8))`. Every string literal is `array.new_data`, so print, concat and int-to-text
+    (`print 42`) all need GC.
+  - **Lists** are `$list {length, (ref $items)}` over `(array anyref)`, with elements boxed.
+  - **Non-int numbers** go through the generic number path, which uses `$Node` (a sub type), $i64box, $f64box and $Ratio
+    with ref.cast and ref.test. `3.5*2` is not plain f64.
+  - **Printing a list** builds Nodes (struct.new×154).
+  - Closures and lambdas were not reachable: the pure compiler refuses `f := (n) => …` calls.
+  - Plain ints, bools, while, if and `def` functions on ints stay GC-free.
+- Imports: every probe that prints imports only `wasi_snapshot_preview1.fd_write`. wasm2c brings no WASI, so it would need
+  uvwasi or a small fd_write shim. w2c2 ships a WASI implementation [I, w2c2 README].
+- wasmtime C API release tarball (dev, x86_64-linux-c-api): 16,056,784 B .tar.xz [M, GitHub API]. Not downloaded or linked.
+
+### Inventory of the native surface [M line counts, classification I]
+Tree: boxtree host-from-warp at a3c6f5641 (the 86/86 state; main's warp_host has aot.rs and lacks components.rs and
+wasm_modules.rs: main 484, words 239, nodes 380, shell 255, cache 128, ffi 132, aot 92 lines).
+
+| group | files (lines) | what it does | into Warp now (on the stub)? |
+|---|---|---|---|
+| wasmtime setup / main | main.rs 389 (engine, Linker, Store, WASI ctx, on_own_stack, run_wasm, compiled_code, program_linker); shared engine.rs 260 | engine config, linking, instantiation, traps, the run | **stays native**: the CLI and policy part of main.rs (command, is_module, compile_file, library_for, compiler_file, installed_folders, failure/shown/refused) is already in probes/host_from_warp/driver.warp |
+| os words | words.rs 250 (std_io dispatch), shell.rs 255 (list, glob, mkdir, copy, move, touch, remove, find, size, info, cd, which, open) | os.env/args/cwd/input/stdin/command/exec/run, file.read/write/append/exists/read_bytes/write_bytes, Unix commands | **partly**: file.*, most of shell.rs (readdir, mkdir, rename, unlink, filestat) and os.env/args can be Warp over WASI p1 [I]. The glob matcher, `which` (a PATH walk) and `~` expansion are pure logic. Process spawn (command/exec/run), trash and open, a real cwd (WASI has no chdir) and stdin prompts stay native or need new primitives |
+| FFI | ffi.rs 148 (C imports linked by dlopen/dlsym, `warp.c_functions` custom-section reader); shared c_calls.rs 649, c_signatures.rs 223, c_structs.rs 226, libm.rs 41 | C calls and their marshalling | **split**: section parsing (uleb, the 9-field signature lines) and struct layout rules could be Warp. dlopen/dlsym and the call itself stay native. In C that means trampolines: 0–6 args × {i64,f64} × {i64,f64} = 254 shapes, 12,030 B .text (gcc -Os, measured in the main evaluation above, a scratch C file, not in the repo). f32/struct args would need libffi or more shapes |
+| wasm-load words | wasm_modules.rs 446, components.rs 395 | load_wasm, wasm_call, file imports, WIT components | **mostly native**: instantiation, linking and the component model are engine calls. Handle bookkeeping, name matching (stats_of ↔ stats-of) and the value-crossing rules are logic [I] |
+| kept-values cache | cache.rs 128 | cache folder, fingerprints, .cwasm machine code, os.keep/os.kept | **split**: keep/kept (a file plus encode/decode of a node) could be Warp over file words. Serializing machine code is engine work and stays native |
+| other (values) | nodes.rs 388; shared gc_values.rs 448, host_words.rs 287 | GC Node ↔ host value conversion for every std_io call and the run's printed value | goes away only if the words move into Warp. As long as native words answer Nodes it stays native (or C via exported builder functions, as gc_values' Builders already does) |
+| total | warp_host 2,399 lines / 102,782 B; plus shared modules used: c_calls, c_signatures, engine, gc_values, host_words, libm, standalone, system_signals | | |
+
+### What the native glue route would need
+1. **Plain-memory emitter mode for basic types** (roadmap item; lib/compiler, owned by the Claude workers). Ints, floats,
+   bools, texts as (ptr, len) in linear memory, and fixed records and arrays in memory. No $Node, no boxes, no GC type
+   declarations in the prelude unless used. Gate: probes b, j, m, n, f, k and l validate non-GC.
+2. **Exception-free mode** (status returns instead of try_table/throw), the "later option" in Decisions above. The glue
+   must report failures, and wasm2c only supports legacy EH.
+3. **The ABI to wasmtime's C API.** A wasm32 module cannot hold native pointers. Either (a) wasm32 plus a native C shim:
+   the glue imports `wasmtime.*` and `c.*` functions that take i64 handles and linear-memory offsets, and a generated C
+   adapter maps them to wasmtime_* calls (memory base + offset for buffers). Or (b) memory64, which wasm2c supports and
+   which still does not make host pointers [I]. (a) is the realistic one. The shim must also stay native for: wasmtime
+   host callbacks (`wasmtime_func_callback_t` into wasm2c functions, one adapter per callback signature), the dlsym call
+   trampolines, setjmp/trap handling, and reading the program's GC Nodes (the C API has no struct.get; use exported
+   builder and reader functions as gc_values.rs does) [I].
+4. **WASI for the glue itself**: uvwasi with wasm2c, or w2c2's own WASI.
+5. Compare against the Rust stub on size, startup and test_host.sh.
+
+### Resume steps
+1. Re-measure: `WARP_LIB=<tree>/lib /workspace/hfw-tools/glue-probes/measure.sh /tmp/glue-out` (tools in
+   /workspace/hfw-tools: wasm-tools-1.262.0, binaryen-version_124, wabt-1.0.42). Add probes for raise/try and for closures
+   once the pure compiler accepts them.
+2. When the plain-memory mode lands: check that b/j/m/n/f become non-GC valid, then wasm2c + cc them with an fd_write shim.
+3. Write one glue word as a spike: os.env in the Warp subset, then plain wasm, wasm2c, and C linked with the wasmtime
+   C API (libwasmtime.a from the c-api release). Compare its output with warp-host's.
+4. Choose wasm2c or w2c2 (WASI included, MVP-oriented). Then write the C shim generator (callback adapters plus the 254
+   dlsym shapes).
+5. Move the other words in the order of the inventory: file/shell over WASI first, then cache keep/kept, FFI section
+   parsing, and the wasm-load bookkeeping. The engine setup, callbacks and trampolines stay native C.
+
+### Related open items (recorded here in case board cards get lost)
+- **C-import follow-up for the driver**: once pure-c-imports (origin/pure-c-imports 836b8e9a4, not on main yet) merges,
+  re-run the driver's checks with programs that declare C imports (`strlen(s: text): i64 from "c"`). Check that
+  driver.warp's in-process run_wasm links them as warp-host does (ffi.rs). The driver itself needs no C imports.
+- **stderr-word gap**: the driver prints an uncaught raise as `Error("bad")` on stdout. warp-host prints `warp-host: bad`
+  on stderr. Both exit with status 1. There is no stderr word (os.stderr / print to fd 2) to close it, and test_host.sh
+  does not check it.
+- **pure-exit-miscompile**: in compiler-self (2026-10-22), `try 42 catch e { exit(1) }`, and an if with an inline exit()
+  branch, yield ø when nothing fails. Repro: `use os; c(code) := try compile_wasm(code) catch e { exit(1) }; count(c("6*7"))`
+  gives 0. The driver works around it by marking failures as texts and exiting in functions of its own.
+- **Exception-free / plain-memory emitter mode**: a later option, not planned. It is the prerequisite of this route
+  (items 1–2 above) and would also open WAMR and wasm2c for whole programs.
+
+### Proposed Later card
+- Title: host-glue-native: warp-host's remaining Rust glue in Warp, via plain wasm → wasm2c → C against wasmtime's C API
+- Description: Parked until lib/compiler has a plain-memory (no GC, no EH) emitter mode for basic types. Today only number-only programs
+  (`6*7`, while/if, int functions) strip to valid non-GC wasm and run through wasm2c. Texts, lists and floats need GC
+  (notes/host_from_warp_eval.md "Native glue route (parked)", measure.sh). Then do the spike with os.env through a
+  C shim to the wasmtime C API, and move the file/shell/cache/FFI-parsing words. Engine setup, callbacks and dlsym
+  trampolines stay native.

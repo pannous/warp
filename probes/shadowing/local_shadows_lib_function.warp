@@ -1,0 +1,20 @@
+// card local-shadows-lib-function: a local or parameter named like a lib function is the variable where it is bound,
+// beside the program's call of the function (list.warp's index(xs, x)); expected lines: 1 10 0 8
+use list
+print(index([4, 5, 6], 5))
+f(max: int) := max * 2
+print(f(5))
+g(xs: list): int := {
+	index = xs.length - 1
+	while index > 0 {
+		xs[index - 1] = min(xs[index - 1], xs[index])
+		index = index - 1
+	}
+	index
+}
+print(g([5, 3, 4]))
+k(): int := {
+	print = 7
+	print + 1
+}
+print(k())

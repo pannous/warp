@@ -34,11 +34,11 @@ def time_call(body: Body, name: text, arguments: any): list {
 }
 def time_node(info: any, position: any): list {
 	kind = info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(Kind.Time) + [shift_ops.i64_or]
-	kind + position + gc_code(gc_ops.struct_new, [gc.int_box]) + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.node])
+	kind + position + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)]) + [ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
 }
 # the kind word of a time node shifted right by `shift` bits, arithmetic (`signed`) or logical
 def kind_word_shifted(code: any, shift: int, signed: bool): list {
-	shifted = as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(shift)
+	shifted = as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(shift)
 	shift_op = if signed then shift_ops.i64_shr_s else shift_ops.i64_shr_u
 	shifted + [shift_op]
 }
@@ -46,12 +46,12 @@ def masked(code: any, mask: int): list { code + [op.i64_const] + sleb(mask) + [o
 def time_intrinsic(body: Body, name: text, arguments: any): list {
 	t = expression_code(body, arguments#1)#2
 	if name == "time_form" { return ["int", masked(kind_word_shifted(t, kind_bits, no), form_mask)] }
-	if name == "time_position" { return ["int", unboxed(t, gc.int_box)] }
+	if name == "time_position" { return ["int", unboxed(t, gc_type(gc.int_box))] }
 	if name == "duration_months" { return ["int", kind_word_shifted(t, kind_bits + months_shift, yes)] }
 	# the 32 days bits, sign-extended: shifted to the top of the word, then down again
 	if name == "duration_days" {
 		top = 64 - kind_bits - months_shift
-		days = as_node(t) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(top) + [shift_ops.i64_shl]
+		days = as_node(t) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(top) + [shift_ops.i64_shl]
 		return ["int", days + [op.i64_const] + sleb(32) + [shift_ops.i64_shr_s]]
 	}
 	if name == "zone_index" { return ["int", masked(kind_word_shifted(t, kind_bits + form_bits, no), zone_mask)] }

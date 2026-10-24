@@ -1,0 +1,54 @@
+# A program's conversions in the pure lane (card pure-as-conversions, decision general-conversions): `A as B := body`,
+# and `text(p: P)`, which also shows a P
+
+# a_program_converts_its_class_to_text
+is! 'class Person{name:text}
+Person as text := it.name
+p = Person{name:"Ann"}
+p as text' 'Ann'
+is! 'class Person{name:text}
+Person as text := "P:" + it.name
+ps = [Person{name:"A"}, Person{name:"B"}]
+ps.map(p => p as text)[1]' 'P:B'
+is! 'class Person{name:text}
+Person as text := it.name
+show(p: Person) := (p as text) + "?"
+show(Person{name:"Ann"})' 'Ann?'
+
+# other_values_convert_the_built_in_way
+is! 'class Person{name:text}
+Person as text := it.name
+(3 as text) + "!"' '3!'
+is! 'class Person{name:text}
+Person as int := it.name.length
+(Person{name:"Ann"} as int) + ("7" as int)' 10
+is! 'class Person{name:text}
+Person as text := it.name
+x as text = "a"
+x' 'a'
+
+# a_program_converts_into_its_class
+is! 'class Person{name:text}
+text as Person := Person{name: it}
+q = "Bob" as Person
+q.name' 'Bob'
+
+# a_text_function_shows_its_class
+is! 'class Person { name: text }
+text(p: Person) := "Person " + p.name
+p = Person("Ann")
+p as text' 'Person Ann'
+is! 'class Person { name: text }
+text(p: Person) := "Person " + p.name
+p = Person("Ann")
+"who: \(p)"' 'who: Person Ann'
+is! 'class Person { name: text }
+text(p: Person) := "Person " + p.name
+p = Person("Ann")
+str(p)' 'Person Ann'
+
+# a_list_converts_each_item
+is! 'ys = [1, 2] as list of text
+ys#1 + "!"' '1!'
+is! 'ys = ["1", "2"] as list of int
+ys#1 + ys#2' 3

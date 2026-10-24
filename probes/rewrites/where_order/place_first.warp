@@ -1,0 +1,8 @@
+// out: [5, 0]
+// a place word first among the conditions, `where value and $p is literal`: the parser joins the conditions by `and`
+// with the `where` inside its left side, `($p where value) and ($p is literal)`; both stay conditions
+rewrite keep $p => $p where value and $p is literal
+rewrite keep $p => 0 where $p is not literal
+y = 2
+m = {a: keep 5, b: keep y}
+print [m.a, m.b]

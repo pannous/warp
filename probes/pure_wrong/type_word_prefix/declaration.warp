@@ -1,0 +1,3 @@
+// expected: 4 (int x = 3 still declares x)
+int x = 3
+print x + 1

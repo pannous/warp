@@ -70,10 +70,11 @@ is_spaced_definition(parts: any): bool := {
 	no
 }
 
-# `list of int`, `x: list of int`: the word before `of` names a collection type
+# `list of int`, `x: list of int`, `v as list of int`: the word before `of` names a collection type
 is_type_head(n: Node): bool := match n {
 	Symbol(name): is_collection_head(name)
 	Key(name, Op.Colon, kind): yes
+	Key(value, Op.As, kind): is_type_head(kind)
 	_: no
 }
 

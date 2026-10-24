@@ -136,12 +136,18 @@ refusals() {
 
 local_run() {
 	mkdir -p "$REPORTS"
-	local log=$REPORTS/local.log local_refusals=$REPORTS/local-refusals.txt
+	local log=$REPORTS/local.log local_refusals=$REPORTS/local-refusals.txt status=0
 	rm -f "$local_refusals"
-	env "${SWITCHES[@]}" WARP_EMIT_REFUSALS="$local_refusals" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
+	env "${SWITCHES[@]}" WARP_EMIT_REFUSALS="$local_refusals" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1 ||
+		status=$?
 	rank "$log"
 	refusals "$local_refusals"
 	echo "(log: $log)"
+	# failing tests are the survey's data; a run killed by a signal or one that never reported (a build error) is not
+	if [ "$status" -gt 128 ] || ! grep -q '^test result:' "$log"; then
+		echo "self-hosted-suite: the local run did not finish (exit $status), see $log" >&2
+		return $((status ? status : 1))
+	fi
 }
 
 # The failed tests of a run's logs, sorted
@@ -250,6 +256,7 @@ case "${1:-}" in
 		done
 		if [ "${1:-}" = --local ]; then shift; local_run "$@"; else cloud_run "$@"; fi ;;
 	--local) shift; local_run "$@" ;;
+	-h | --help) sed -n '2,/^set -uo/p' "$0" | sed '$d'; exit 0 ;;
 	--*) sed -n '2,/^set -uo/p' "$0" | sed '$d'; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac

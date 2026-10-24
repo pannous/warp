@@ -1,0 +1,25 @@
+# big ints in sums, differences, products, ordering, equality and conversions (card pure-big-int-ops), the same on
+# the Rust, pure and self lanes; results that fit 64 bits are plain ints again
+big = 2 ^ 100
+print big + 1
+print 2 ^ 64 + 0
+print 2 ^ 64 - 1
+print 1 + 2 ^ 64
+print big - big + 5
+print 2 ^ 64 - 2 ^ 64 + 5
+print (2 ^ 70) * (2 ^ 30)
+print (2 ^ 70) * 3
+print -1 * 2 ^ 65
+print 2 ^ 64 * -1 + 2 ^ 64
+print big > 2 ^ 99
+print 2 ^ 99 < big
+print big == 2 ^ 100
+print big == 2 ^ 99
+print big != 5
+print 5 < big
+print (-2) ^ 65 < 0
+print (-2) ^ 65 + 2 ^ 65
+print big as float
+print big as text
+print (2 ^ 64 - 1) as text
+print [big - 1, 7]

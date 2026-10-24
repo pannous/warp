@@ -1,0 +1,3 @@
+# a modifier word used as a name stays a name. Expected: 4
+public = 3
+print public + 1

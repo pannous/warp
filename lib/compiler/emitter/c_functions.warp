@@ -1,0 +1,26 @@
+# C functions (emitter.warp's part, card pure-c-imports): a host word with a fourth item is a C function
+# (c_imports.warp); its import is `library.name` as any host word's, and the module describes it for the host in the
+# custom section warp.c_functions, one crates/warp-runtime/src/c_signatures.rs line each
+c_functions_section = "warp.c_functions"
+# the warp.c_functions lines of the C functions the module imports
+def c_function_lines(): list {
+	lines = []
+	for entry in module.imports {
+		name = entry#2
+		if name in module.host {
+			signature = module.host[name]
+			if #signature > 3 and signature#3 == entry#1 { lines += [signature#4] }
+		}
+	}
+	lines
+}
+# a module calling C exports text_heap: where the host writes a C function's text before new_text copies it
+def c_function_globals() {
+	if #c_function_lines() > 0 { declared_global(text_heap_name, "char") }
+}
+# the custom section of the C functions, none without one
+def c_functions_custom_section(): list {
+	lines = c_function_lines()
+	if #lines == 0 { return [] }
+	section(section_ids.custom, name_bytes(c_functions_section) + lines.join("\n").bytes)
+}

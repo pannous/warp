@@ -1,0 +1,54 @@
+// raylib through its C library (card pure-c-imports): `use raylib`, or `import DrawCircle from "raylib"`, declares these
+// functions; warp-host loads libraylib (Homebrew's libraylib.dylib, libraylib.so) and calls them. A Color is its four
+// bytes as one i32, 0xAABBGGRR, which is how C passes the struct by value on arm64 and x86-64.
+InitWindow(width: i32, height: i32, title: text): void from 'raylib'
+CloseWindow(): void from 'raylib'
+WindowShouldClose(): bool from 'raylib'
+IsWindowReady(): bool from 'raylib'
+SetTargetFPS(fps: i32): void from 'raylib'
+SetTraceLogLevel(level: i32): void from 'raylib'
+GetFrameTime(): f32 from 'raylib'
+GetTime(): f64 from 'raylib'
+GetFPS(): i32 from 'raylib'
+GetScreenWidth(): i32 from 'raylib'
+GetScreenHeight(): i32 from 'raylib'
+BeginDrawing(): void from 'raylib'
+EndDrawing(): void from 'raylib'
+ClearBackground(color: i32): void from 'raylib'
+DrawPixel(x: i32, y: i32, color: i32): void from 'raylib'
+DrawLine(startX: i32, startY: i32, endX: i32, endY: i32, color: i32): void from 'raylib'
+DrawCircle(centerX: i32, centerY: i32, radius: f32, color: i32): void from 'raylib'
+DrawCircleLines(centerX: i32, centerY: i32, radius: f32, color: i32): void from 'raylib'
+DrawRectangle(x: i32, y: i32, width: i32, height: i32, color: i32): void from 'raylib'
+DrawRectangleLines(x: i32, y: i32, width: i32, height: i32, color: i32): void from 'raylib'
+DrawText(text: text, x: i32, y: i32, fontSize: i32, color: i32): void from 'raylib'
+DrawFPS(x: i32, y: i32): void from 'raylib'
+MeasureText(text: text, fontSize: i32): i32 from 'raylib'
+TextToInteger(text: text): i32 from 'raylib'
+GetRandomValue(min: i32, max: i32): i32 from 'raylib'
+GetMouseX(): i32 from 'raylib'
+GetMouseY(): i32 from 'raylib'
+SetMouseOffset(offsetX: i32, offsetY: i32): void from 'raylib'
+IsMouseButtonDown(button: i32): bool from 'raylib'
+IsKeyPressed(key: i32): bool from 'raylib'
+IsKeyDown(key: i32): bool from 'raylib'
+GetKeyPressed(): i32 from 'raylib'
+
+// raylib's colors as one i32 each
+LIGHTGRAY = 0xFFC8C8C8
+GRAY = 0xFF828282
+DARKGRAY = 0xFF505050
+YELLOW = 0xFF00F9FD
+GOLD = 0xFF00CBFF
+ORANGE = 0xFF00A1FF
+RED = 0xFF3729E6
+MAROON = 0xFF3721BE
+GREEN = 0xFF30E400
+LIME = 0xFF2F9E00
+BLUE = 0xFFF17900
+DARKBLUE = 0xFFAC5200
+PURPLE = 0xFFFF7AC8
+WHITE = 0xFFFFFFFF
+BLACK = 0xFF000000
+BLANK = 0x00000000
+RAYWHITE = 0xFFF5F5F5

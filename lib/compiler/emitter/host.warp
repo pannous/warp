@@ -5,7 +5,11 @@ def host_import(name: text): list {
 	signature = module.host[name]
 	[if #signature > 2 then signature#3 else host_module, name, [function_type_byte] + vector(signature#1.map(host_type)) + vector(signature#2.map(host_type))]
 }
-def host_type(kind: text): list { if kind == "i32" then [type_bytes.char] else value_type(kind) }
+# f32: a C float (c_imports.warp), the wasm f32 a float is demoted to and promoted from
+f32_type = 125
+f32_demote = 182
+f64_promote = 187
+def host_type(kind: text): list { if kind == "i32" then [type_bytes.char] else if kind == "f32" then [f32_type] else value_type(kind) }
 
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
@@ -19,6 +23,7 @@ def host_call(body: Body, name: text, arguments: any): list {
 	if #signature#2 == 0 { return [no_kind, code] }
 	result = signature#2#1
 	if result == "i32" { return ["int", code + [op.i64_extend_i32_s]] }
+	if result == "f32" { return ["float", code + [f64_promote]] }
 	[result, code]
 }
 # the constructors a host word builds nodes with, as Rust's module exports them (src/host/tasks/values.rs
@@ -64,6 +69,7 @@ exported_function(name: text, kinds: list, result: text): any := {
 }
 def host_argument(value: any, kind: text): list {
 	if kind == "i32" { return host_int(value) + [op.i32_wrap_i64] }
+	if kind == "f32" { return converted(value, "float") + [f32_demote] }
 	if kind == "int" { return host_int(value) }
 	converted(value, kind)
 }
@@ -81,7 +87,7 @@ def host_int(value: any): list {
 }
 
 # `global name = 0`, `= ""` or `= []` at the top of runtime.warp: a module variable of that kind its words share, from
-# the kind's zero (ø for a text, an empty list)
+# the kind's zero (ø for a text, an empty list); `[]` is held behind the opaque word (is_empty_list)
 runtime_global(n: any): any := {
 	if not (type(n) is key and op_of(n) == ":" and key_of(n) == symbol("global")) { return ø }
 	name = name_of(key_of(value_of(n)))
@@ -89,7 +95,7 @@ runtime_global(n: any): any := {
 	# of the runtime: the program keeps its own `Kind` (card constants-exist)
 	if name in constant_tables { return ø }
 	value = value_of(value_of(n))
-	module.globals[name] = [#module.global_order, if value is number then "int" else if type(value) is list then "list" else "text"]
+	module.globals[name] = [#module.global_order, if value is number then "int" else if type(value) is list or is_empty_list(value) then "list" else "text"]
 	module.runtime_globals += [name]
 	module.global_order += [name]
 }

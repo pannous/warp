@@ -11,12 +11,20 @@ class Parameter { name: text; type_name: text = ""; defaulted_to: any = ø; rest
 # the parameters in order and the declared result, "" when undeclared
 class Signature { parameters: list = []; result: text = "" }
 
-# `x`, `x: T`, `x = 1`, `x: T = 1`, `with new x` (label words before the name, Rust parameter_head)
+# `x`, `x: T`, `x = 1`, `x: T = 1`, `with new x` (label words before the name, Rust parameter_head); `*xs` the rest
 parameter_of(written: any): Parameter := {
+	if rest_name(written) != ø { return Parameter(name: rest_name(written), rest: yes) }
 	declared = if is_key(written, Op.Assign) then key_of(written) else written
 	defaulted_to = if is_key(written, Op.Assign) then [value_of(written)] else ø
 	if not is_key(declared, Op.Colon) { return Parameter(name: parameter_name(declared), defaulted_to: defaulted_to) }
 	Parameter(name: parameter_name(key_of(declared)), type_name: type_text(value_of(declared)), defaulted_to: defaulted_to)
+}
+# the name of a rest parameter or a spread argument, `*xs` (the parser's `...xs`, `vararg xs` too) and `xs...` (read
+# as `xs to ø`), else ø
+rest_name(written: any): any := {
+	if written is symbol and #name_of(written) > 1 and name_of(written).starts_with("*") and not name_of(written).starts_with("**") { return name_of(written)[1..] }
+	if is_key(written, Op.To) and key_of(written) is symbol and value_of(written) == ø { return name_of(key_of(written)) }
+	ø
 }
 # symbol first: `type(symbol("key")) is key` (card type-symbol)
 parameter_name(named: any): text := {

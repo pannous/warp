@@ -1,0 +1,18 @@
+# tuples and their destructuring as the rules of lib/compiler/extensions/tuples.warp (card pure-tuples-destructuring)
+
+# a tuple as a function's result is the list of its items
+is! 'divmod(a, b) := (a - b, a + b); r = divmod(17, 5); r#1 * 100 + r#2' 1222
+is! 'f(n) := { return (n, n * 2) }; t = f(4); t#1 * 10 + t#2' 48
+is! 'f(n) := { if n > 9 { return (0, 0) }; (n, n * 2) }; f(4)' [4 8]
+is! 'h = 1; t = (h + 1, 2); t#1 * 10 + t#2' 22
+
+# a tuple of names before `=` takes the value apart
+is! 'divmod(a, b) := (a - b, a + b); (q, r) = divmod(17, 5); q * 100 + r' 1222
+is! '(x, y) = (1, 2); x * 10 + y' 12
+
+# a list of names before `=` takes a list apart, item by item
+is! '[a, b, c] = [1, 2, 3]; a * 100 + b * 10 + c' 123
+is! 'xs = [5, 6, 7]; [p, q, s] = xs; p * 100 + q * 10 + s' 567
+
+# a call keeps its arguments: the comma of a tuple is no call's
+is! 'add(a, b) := a + b; k = (a, b) => a * b; add(2, 3) * 100 + k(3, 4)' 512

@@ -21,8 +21,8 @@ exact_decimal(n: float): any := {
 	divisor = gcd(numerator, denominator)
 	if divisor < 0 { divisor = -divisor }
 	if divisor == denominator { return number_value(numerator / divisor) }
-	box = x => [op.i64_const] + sleb(x) + gc_code(gc_ops.struct_new, [gc.int_box])
-	["node", node(Kind.Int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc.ratio]))]
+	box = x => [op.i64_const] + sleb(x) + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])
+	["node", node(Kind.Int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))]
 }
 
 # the offset of a text's bytes in the data segment, each text stored once
@@ -39,4 +39,4 @@ def text_value(t: text): list {
 	if one_code_point(t) { return ["char", [op.i32_const] + sleb(ord(t))] }
 	["text", text_bytes(t)]
 }
-def text_bytes(t: text): list { [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code(gc_ops.array_new_data, [gc.text, 0]) }
+def text_bytes(t: text): list { [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code(gc_ops.array_new_data, [gc_type(gc.text), 0]) }

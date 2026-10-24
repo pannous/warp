@@ -4,6 +4,8 @@ mod test_agent_types; // card int-let
 mod test_case_table_module; // card case-table-warp
 #[cfg(feature = "native")] // another checkout's lib/ on disk and file times: not in the browser build
 mod test_checkout_std_lib; // card local-lib
+#[cfg(feature = "native")] // lib/ files on disk
+mod test_compiler_inputs; // card compiler-cache-keys
 mod test_dir;
 mod test_dir_any_value;
 mod test_dir_builtin_members; // card dir-lists

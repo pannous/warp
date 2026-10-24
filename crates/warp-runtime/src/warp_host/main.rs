@@ -5,18 +5,20 @@
 //!   warp-host [--compiler self|full] compile [--aot] <file.warp> [<file.wasm>]   --aot: also its machine code, .cwasm
 //!   warp-host [--compiler self|full] build <file.warp | file.wasm> [-o <app>]   a standalone executable (aot.rs)
 //!   warp-host <file.wasm | file.wat | file.cwasm> [args…]   a module; its C imports loaded from their libraries (ffi.rs)
-//! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`
+//! As warp itself: no command means run, so `warp-host f.warp` and `warp-host '6*7'` are `warp-host run …`; nothing at
+//! all on a terminal is the console (lib/repl.warp)
 mod aot;
 mod cache;
+mod components;
 mod ffi;
 mod nodes;
 mod shell;
+mod wasm_modules;
 mod words;
 
 use nodes::Node;
 use std::path::{Path, PathBuf};
 use warp_runtime::c_calls::{CHandles, CallsC};
-use warp_runtime::c_signatures::CFunction;
 use warp_runtime::system_signals;
 use wasmtime::{Engine, Instance, Linker, Module, Store, Val};
 use wasmtime_wasi::p1::WasiP1Ctx;
@@ -47,6 +49,8 @@ pub struct Host {
 	keeper: Option<cache::Keeper>,
 	/// the engine of the run, for the modules it runs itself (os.run_wasm) and the code it compiles (os.compile_wasm)
 	engine: Engine,
+	/// the modules and components it loaded (wasm_modules.rs): by `use wasm`, and those its imports name
+	wasm: wasm_modules::Loaded,
 }
 
 impl CallsC for Host {
@@ -62,10 +66,14 @@ static COMPILER: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
 enum Ran {
 	Value(Node),
 	Exited(i32),
+	/// a trap of the machine's own (`wasm trap: …`), or a module that could not run
 	Failed(String),
+	/// an uncaught Warp error: a raise, or a runtime error such as index out of range (its message)
+	Raised(String),
 }
 
 fn main() {
+	with_users_ctype();
 	let mut args = std::env::args();
 	let name = args.next().unwrap_or_default();
 	let args = args.collect();
@@ -76,6 +84,17 @@ fn main() {
 	};
 	let worker = std::thread::Builder::new().stack_size(THREAD_STACK).spawn(run);
 	std::process::exit(worker.map_or(1, |worker| worker.join().unwrap_or(1)))
+}
+
+/// The character type of the user's locale (LC_ALL, LC_CTYPE, LANG), as a C program sets it first: the C libraries a
+/// program calls read UTF-8 then (libedit's readline crashes on a prompt of non-ASCII letters in the C locale). Only
+/// LC_CTYPE: numbers keep printing with a point
+fn with_users_ctype() {
+	#[cfg(unix)]
+	// SAFETY: before any other thread runs; the empty name asks for the environment's locale
+	unsafe {
+		libc::setlocale(libc::LC_CTYPE, c"".as_ptr());
+	}
 }
 
 fn command(given: Vec<String>) -> i32 {
@@ -120,7 +139,13 @@ fn command(given: Vec<String>) -> i32 {
 		}
 		[file, ..] if aot::is_machine_code(file) => match std::fs::read(file) {
 			Ok(machine_code) => match aot::load(&engine, &machine_code, file) {
-				Ok((module, functions)) => shown(run_module(&engine, &module, &functions, args.clone(), None)),
+				Ok((module, functions)) => shown(run_module(
+					&engine,
+					&module,
+					&ffi::CImports { described: functions, ..Default::default() },
+					args.clone(),
+					None,
+				)),
 				Err(problem) => failed(&problem),
 			},
 			Err(problem) => failed(&format!("{file}: {problem}")),
@@ -129,6 +154,11 @@ fn command(given: Vec<String>) -> i32 {
 			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None, false)),
 			Err(problem) => failed(&format!("{file}: {problem}")),
 		},
+		// nothing on a terminal: the console, lib/repl.warp in pure warp (card pure-repl)
+		[] if console_wanted() => match console_file() {
+			Some(console) => run_source(&engine, compiler, &console.display().to_string(), &[]),
+			None => failed("no lib/repl.warp for the console beside warp-host nor in lib/: WARP_LIB names one"),
+		},
 		// no command: run, as `warp f.warp` and `warp '6*7'` run
 		[source, ..] if !COMMANDS.contains(source) => run_source(&engine, compiler, source, &args[1..]),
 		_ => {
@@ -136,6 +166,19 @@ fn command(given: Vec<String>) -> i32 {
 			2
 		}
 	}
+}
+
+/// The console only for a person: standard input and output both a terminal, so a script or a pipe still gets the usage
+fn console_wanted() -> bool {
+	use std::io::IsTerminal;
+	std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
+}
+
+/// The console's program: lib/repl.warp installed beside warp-host, else in the lib/ the compiler uses
+fn console_file() -> Option<PathBuf> {
+	let installed = installed_folders().into_iter().map(|folder| folder.join("lib"));
+	let library = library_for(Path::new("repl.warp"));
+	installed.chain(library).map(|lib| lib.join("repl.warp")).find(|file| file.is_file())
 }
 
 /// A module to run: a .wasm or .wat file by its name, else a file starting with wasm's magic bytes (`\0asm`)
@@ -190,8 +233,16 @@ fn run_source(engine: &Engine, compiler: &str, source: &str, args: &[String]) ->
 	let _ = std::fs::remove_file(&code);
 	let module = compiled.and_then(|()| std::fs::read(&wasm).map_err(|problem| problem.to_string()));
 	let _ = std::fs::remove_file(&wasm);
+	let inline = file == code;
 	match module {
-		Ok(bytes) => shown(run_wasm(engine, &bytes, [vec![source.to_string()], args.to_vec()].concat(), None, false)),
+		Ok(bytes) => {
+			let ran = run_wasm(engine, &bytes, [vec![source.to_string()], args.to_vec()].concat(), None, false);
+			if inline {
+				shown_inline(ran)
+			} else {
+				shown(ran)
+			}
+		}
 		Err(problem) => refused(&problem),
 	}
 }
@@ -254,7 +305,13 @@ fn run_carried(machine_code: &[u8], args: Vec<String>) -> i32 {
 		Err(problem) => return failed(&format!("{problem:#}")),
 	};
 	match aot::load(&engine, machine_code, &args[0]) {
-		Ok((module, functions)) => shown(run_module(&engine, &module, &functions, args, None)),
+		Ok((module, functions)) => shown(run_module(
+			&engine,
+			&module,
+			&ffi::CImports { described: functions, ..Default::default() },
+			args,
+			None,
+		)),
 		Err(problem) => failed(&problem),
 	}
 }
@@ -284,7 +341,7 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 	let keeper = cache::Keeper { key: keeper, library: argv[4].clone() };
 	match run_wasm(engine, &bytes, argv.to_vec(), Some(keeper), true) {
 		Ran::Value(Node::Error(message)) => Err(String::from_utf8_lossy(&message).into_owned()),
-		Ran::Failed(message) => Err(message),
+		Ran::Failed(message) | Ran::Raised(message) => Err(message),
 		Ran::Exited(status) if status != 0 => Err(format!("the compiler exited with status {status}")),
 		_ => Ok(()),
 	}
@@ -317,13 +374,15 @@ fn installed_folders() -> Vec<PathBuf> {
 
 /// `run_wasm(bytes)` (os.run_wasm): a module run in this process with the same engine and imports as a program, its
 /// machine code cached by its bytes, in a store of its own on a thread of its own (its own deep stack); its main's
-/// value, else the trap's or the exit status's reason
+/// value, else the trap's or the exit status's reason; an uncaught Warp error is that Error, passed through as the
+/// module's value, a trap a failure of its own
 pub fn ran_module(engine: &Engine, bytes: Vec<u8>, args: Vec<String>) -> Result<Node, String> {
 	let engine = engine.clone();
 	match on_own_stack(move || run_wasm(&engine, &bytes, args, None, true))? {
 		Ran::Value(value) => Ok(value),
 		Ran::Exited(0) => Ok(Node::Empty),
 		Ran::Exited(status) => Err(format!("the module exited with status {status}")),
+		Ran::Raised(message) => Ok(Node::Error(message.into_bytes())),
 		Ran::Failed(message) => Err(message),
 	}
 }
@@ -355,21 +414,21 @@ fn on_own_stack<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) ->
 /// Run a module's main (else _start) with WASI (stdio, environment, the file system at / and .) and the host's words;
 /// `cached`: its machine code from the cache (cache::module)
 fn run_wasm(engine: &Engine, bytes: &[u8], args: Vec<String>, keeper: Option<cache::Keeper>, cached: bool) -> Ran {
-	let loaded = || -> wasmtime::Result<(Module, Vec<CFunction>)> {
+	let loaded = || -> wasmtime::Result<(Module, ffi::CImports)> {
 		let module = if cached { cache::module(engine, bytes)? } else { Module::new(engine, bytes)? };
-		Ok((module, ffi::described(bytes)?))
+		Ok((module, ffi::CImports::of(bytes)?))
 	};
 	match loaded() {
-		Ok((module, functions)) => run_module(engine, &module, &functions, args, keeper),
+		Ok((module, c)) => run_module(engine, &module, &c, args, keeper),
 		Err(problem) => Ran::Failed(format!("{problem:#}")),
 	}
 }
 
-/// Run a compiled module (run_wasm), the C functions `functions` describes linked with its other C imports
+/// Run a compiled module (run_wasm), the C functions `c` describes linked with its other C imports
 fn run_module(
 	engine: &Engine,
 	module: &Module,
-	functions: &[CFunction],
+	c: &ffi::CImports,
 	args: Vec<String>,
 	keeper: Option<cache::Keeper>,
 ) -> Ran {
@@ -385,18 +444,11 @@ fn run_module(
 			args: args.clone(),
 			keeper,
 			engine: engine.clone(),
+			wasm: Default::default(),
 		};
-		let mut linker = Linker::new(engine);
-		wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host: &mut Host| &mut host.wasi)?;
-		warp_runtime::host_words::link_host_words(&mut linker)?;
-		warp_runtime::libm::link_libm(&mut linker)?;
-		warp_runtime::c_calls::link_libc_functions(&mut linker)?;
-		words::link(&mut linker)?;
 		let mut store = Store::new(engine, host);
-		ffi::link_c_imports(&mut linker, &mut store, module, functions)?;
-		linker.define_unknown_imports_as_traps(module)?;
 		warp_runtime::engine::cap_memory(&mut store);
-		let instance = linker.instantiate(&mut store, module)?;
+		let instance = wasm_modules::instantiate(&mut store.as_context_mut(), module, c, None)?;
 		let main = warp_runtime::standalone::ENTRY_POINTS.iter().find_map(|name| instance.get_func(&mut store, name));
 		let main = main.ok_or_else(|| wasmtime::Error::msg("the module has no main nor _start"))?;
 		let mut results = vec![Val::AnyRef(None); main.ty(&store).results().len()];
@@ -417,7 +469,7 @@ fn run_module(
 			Ok(None) => Ran::Exited(system_signals::take_exit_code().unwrap_or(0)),
 			Err(error) => match error.downcast_ref::<wasmtime_wasi::I32Exit>() {
 				Some(exit) => Ran::Exited(exit.0),
-				None => Ran::Failed(failure(&error, &mut store, &instance)),
+				None => failure(&error, &mut store, &instance),
 			},
 		})
 	};
@@ -426,9 +478,20 @@ fn run_module(
 
 use wasmtime::AsContextMut;
 
+/// The imports every module of a run gets: WASI p1, warp-runtime's host words, libm, libc, std_io
+pub fn program_linker(engine: &Engine) -> wasmtime::Result<Linker<Host>> {
+	let mut linker = Linker::new(engine);
+	wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |host: &mut Host| &mut host.wasi)?;
+	warp_runtime::host_words::link_host_words(&mut linker)?;
+	warp_runtime::libm::link_libm(&mut linker)?;
+	warp_runtime::c_calls::link_libc_functions(&mut linker)?;
+	words::link(&mut linker)?;
+	Ok(linker)
+}
+
 /// A failed run's message: a runtime error fails inside a function of its name (index_out_of_range, …), the global
 /// trap_detail holding the value it names; a raise's message is that value (lib/compiler/runtime/errors.warp)
-fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance) -> String {
+fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance) -> Ran {
 	// WARP_HOST_DEBUG=1: the failure with its wasm backtrace too
 	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
 		eprintln!("{error:?}");
@@ -444,14 +507,14 @@ fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance
 			.find_map(|frame| frame.func_name().map(|name| name.split('·').next().unwrap_or(name).replace('_', " ")))
 	});
 	match (frame.as_deref(), detail) {
-		(Some("returned error") | None, Some(detail)) => detail.content(),
-		(Some(name), Some(detail)) => format!("{name}: {}", detail.shown()),
-		(Some(name), None) if !name.starts_with("wasm") => name.to_string(),
+		(Some("returned error") | None, Some(detail)) => Ran::Raised(detail.content()),
+		(Some(name), Some(detail)) => Ran::Raised(format!("{name}: {}", detail.shown())),
+		(Some(name), None) if !name.starts_with("wasm") => Ran::Raised(name.to_string()),
 		// a trap of the machine's own, without the backtrace: `wasm trap: wasm `unreachable` instruction executed`
-		_ => match error.downcast_ref::<wasmtime::Trap>() {
+		_ => Ran::Failed(match error.downcast_ref::<wasmtime::Trap>() {
 			Some(trap) => trap.to_string(),
 			None => format!("{:#}", error),
-		},
+		}),
 	}
 }
 
@@ -468,7 +531,19 @@ fn shown(ran: Ran) -> i32 {
 			}
 		}
 		Ran::Exited(status) => status,
-		Ran::Failed(message) => failed(&message),
+		Ran::Failed(message) | Ran::Raised(message) => failed(&message),
+	}
+}
+
+/// Inline code's value printed as a file's, its status 0 whatever the value, as warp-rust's show_and_fail_on_error: only
+/// an Error, a failed run or the program's exit(code) give another
+fn shown_inline(ran: Ran) -> i32 {
+	let value = matches!(ran, Ran::Value(ref value) if !matches!(value, Node::Error(_)));
+	let status = shown(ran);
+	if value {
+		0
+	} else {
+		status
 	}
 }
 

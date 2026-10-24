@@ -1,0 +1,9 @@
+# ratios, big ints and plain ints printed side by side (card pure-big-int-power): core show prints a plain int itself and
+# hands a ratio or a big int to the extended runtime; expected 1/3, [0.5 1180591620717411303424 5],
+# x=36472996377170786403, 7 and -36893488147419103232 on the Rust, pure and self lanes
+print 1/3
+print [1/2, 2^70, 5]
+x = 3 ^ 41
+print "x=" + x
+print 7
+print (-2) ^ 65

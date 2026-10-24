@@ -1,5 +1,7 @@
 # Agent roles in warp
 
+Grok Bot agents work a little differently (box, pre-approved plans, status in git): see notes/agents/grok.md.
+
 Startup prompts and the spawn script for every role: notes/agents/ (README.md says how to start the team).
 ListAgents shows the current sessions; each is named `warp-<role>`.
 

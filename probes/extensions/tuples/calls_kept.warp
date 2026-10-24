@@ -1,0 +1,4 @@
+# calls keep their arguments, lambdas their parameters. Expected: 5 12
+add(a, b) := a + b
+k = (a, b) => a * b
+print "$(add(2, 3)) $(k(3, 4))"

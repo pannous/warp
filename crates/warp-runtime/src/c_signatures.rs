@@ -14,6 +14,8 @@ const LIST_SEPARATOR: char = ',';
 pub enum CPointer {
 	/// `char *`, `const unsigned char *`: a warp text (a parameter its NUL-terminated letters in linear memory)
 	Text,
+	/// a `char *` result the caller owns (strdup's, readline's): copied into a warp text, then given to free()
+	OwnedText,
 	/// `void *`, `int *`: a parameter points into linear memory; a result is a handle
 	Memory,
 	/// `sqlite3 *`, `FILE *`: an id into the run's handle table (CHandles), 0 is NULL
@@ -106,9 +108,10 @@ const RET_NAMES: [(RetType, &str); 6] = [
 	(RetType::Bool, "bool"),
 ];
 /// The pointers a result crosses as; a number result is "number"
-const RESULT_NAMES: [(Option<CPointer>, &str); 4] = [
+const RESULT_NAMES: [(Option<CPointer>, &str); 5] = [
 	(None, "number"),
 	(Some(CPointer::Text), "text"),
+	(Some(CPointer::OwnedText), "owned_text"),
 	(Some(CPointer::Handle), "handle"),
 	(Some(CPointer::Struct), "struct"),
 ];

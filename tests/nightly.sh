@@ -39,3 +39,4 @@ if (( result != 0 )); then
 	todo add "nightly tests failed on $commit: ${failed[*]:-the run (exit $result)}; log $log" ||
 		echo "nightly: todo add failed"
 fi
+exit $result
