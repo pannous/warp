@@ -1,0 +1,4 @@
+// expected: 7
+f(x) := x * 2
+job = go f(3)
+print job + 1

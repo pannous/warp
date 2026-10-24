@@ -1,0 +1,3 @@
+// expected: 7
+job = go { 7 }
+print await job within 1000 ms or 0
