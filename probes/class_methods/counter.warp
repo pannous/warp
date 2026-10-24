@@ -1,0 +1,4 @@
+class Counter { count: int = 0; bump() := { count += 1 }; twice() := { bump(); bump() } }
+c = Counter()
+c.twice(); c.bump()
+print c.count

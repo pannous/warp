@@ -1,0 +1,9 @@
+# Typed arrays (notes/layers.md, sugar): `int[3]`, which the parser reads as the subscript `int#4`, is the list of 3
+# zeros of the type, zero_fill(3, 0); `float[n]` of float zeros, `text[n]` of empty texts. A program binding the type
+# word as a value indexes it.
+rewrite int#$n => zero_fill($n - 1, 0)
+rewrite float#$n => zero_fill($n - 1, 0 as float)
+rewrite text#$n => zero_fill($n - 1, "")
+
+# A conversion to a list of a type (card pure-as-conversions): `["1", "2"] as list of int` converts each item, [1, 2]
+rewrite $v as list of $t => $v.map($x => $x as $t)

@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+// card own-words-miscompile: a declared bool answering `a and accepts(x)` whose left is no (scope.warp
+// is_declaration_word): the left counts as 0 beside a value known only at run time, and the bool result read it as a
+// trap; prints no
+held(view: any, accepts: function): bool := view is list and accepts(view)
+print held(3, x => yes)

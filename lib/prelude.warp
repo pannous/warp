@@ -81,10 +81,10 @@ int(x): int from emitter
 float(x): float from emitter
 symbol(name): symbol from emitter
 // the emitter's text builtins
-trim(t): text from emitter
-starts_with(t, part): bool from emitter
-ends_with(t, part): bool from emitter
-byte_slice(t, start, end): text from emitter
+trim(t: text): text from emitter
+starts_with(t: text, part): bool from emitter
+ends_with(t: text, part): bool from emitter
+byte_slice(t: text, start, end): text from emitter
 chr(code): codepoint from emitter
 read(path): text from emitter
 warning(message): text from emitter
@@ -116,11 +116,6 @@ alias includes = collection_contains
 alias get = map_get_or
 // P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 alias index_of = collection_position
-// decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
-// (characters from 1, like t#p), `"a👍🏽b".byte_index_of "b"` the offset 9 (bytes from 0); a missing part is an error
-find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
-byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
-present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
 // card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:
 // `t.graphemes`, `t.codepoints` are the lists
 alias characters = chars
@@ -149,6 +144,11 @@ alias is_whitespace = is_space
 alias isspace = is_space
 first(xs) := xs#1
 last(xs) := xs#(count(xs))
+// decision byte-index-of: a text names the unit it counts a part's place in: `"a👍🏽b".find "b"` is the position 3
+// (characters from 1, like t#p), `"a👍🏽b".byte_index_of "b"` the offset 9 (bytes from 0); a missing part is an error
+find(t: text, part: text) := count(split(t, present_part(t, part))#1) + 1
+byte_index_of(t: text, part: text) := byte_size(split(t, present_part(t, part))#1)
+present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \"" + part + "\" is not in \"" + t + "\"" }; part }
 // Python's `list(x)`: the list itself, a text's characters
 as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
@@ -166,16 +166,14 @@ operator_laws = {"+": {associative: yes, identity: 0}, "*": {associative: yes, i
 // the sum of the items, a fold like any other: a program's own sum replaces it (the Rust compiler still expands its
 // own sum: src/lowering/words/library_words.rs)
 sum(xs) := fold(xs, 0, +)
-// a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small
-rewrite sum($first to $last) => range_sum($first, $last)
-rewrite sum($first .. $end) => range_sum($first, $end - 1)
+// a range's sum in closed form, Gauss's count · (first + last) / 2, the even factor halved first so the product stays small.
+// The template names no helper word (card after-sum): it lands in the program's code, where a program's own word of
+// that name (`range_sum(a, b) := sum(a..b)`) would be called instead, and every lane emits its arithmetic
+rewrite sum($first to $last) => (if $last < $first then 0 else if ($last - $first + 1) % 2 == 0 then (($last - $first + 1) /! 2) * ($first + $last) else ($last - $first + 1) * (($first + $last) /! 2))
+rewrite sum($first .. $end) => (if $end <= $first then 0 else if ($end - $first) % 2 == 0 then (($end - $first) /! 2) * ($first + $end - 1) else ($end - $first) * (($first + $end - 1) /! 2))
 // `ys = 2 floats`: a list of 2 floats, as `ys = float[2]` (warp fix writes the count first, card fix-in-lib)
 rewrite $n floats => float[$n]
 rewrite $n ints => int[$n]
-range_sum(first, last) := {
-	n = last - first + 1
-	if n <= 0 then 0 else if n % 2 == 0 then (n /! 2) * (first + last) else n * ((first + last) /! 2)
-}
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
 // the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)

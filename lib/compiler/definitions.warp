@@ -6,6 +6,9 @@ use "walk.warp"
 use "words.warp"
 use "phrase_blocks.warp"
 use "diagnostics.warp"
+use "class_methods.warp"
+use "scope.warp"
+use "lambdas.warp"
 
 is_keyword(n: Node): bool := match n {
 	Symbol(name): name in function_keywords
@@ -16,6 +19,8 @@ defined(n: Node): Node := match n {
 	List(parts, Bracket.Round, Separator.None): { if #parts == 2 then Key(parts#1, Op.Define, parts#2) else n }
 	# `def f(x): T { body }`, as the parser keeps it `f(x): (T {body})`: the result held as a T (result_held)
 	Key(head, Op.Colon, typed_body): typed_block(head, typed_body, n)
+	# `def f(x) -> T { body }`, Swift's and Rust's result arrow, the same
+	Key(head, Op.Arrow, typed_body): typed_block(head, typed_body, n)
 	_: n
 }
 typed_block(head: Node, typed_body: Node, n: Node): Node := match typed_body {
@@ -35,28 +40,68 @@ is_declaration_word(n: Node): bool := match n {
 	_: no
 }
 
-# `f(x, y)`: a name applied to parameter names
+# `f(x, y)`, `f(x: int, y)`: a name applied to parameter names, each maybe typed
 is_head(n: Node): bool := match n {
-	List(call, Bracket.Round, Separator.None): #call > 0 and call.all(is_name)
+	List(call, Bracket.Round, Separator.None): #call > 0 and is_name(call#1) and call[1..].all(is_parameter)
 	_: no
+}
+is_parameter(n: Node): bool := match n {
+	Key(name, Op.Colon, _): is_name(name)
+	_: is_name(n)
 }
 
 definition(n: Node): Node := if is_runtime_declaration(n) then Node.Empty else match n {
 	List(parts, Bracket.None, Separator.Space): {
 		if #parts == 2 and is_keyword(parts#1) { return defined(parts#2) }
 		if #parts == 2 and is_declaration_word(parts#1) { return parts#2 }
-		n
+		typed_definition_held(n)
 	}
-	Key(head, Op.Assign, body): { if is_head(head) or is_function_block(head, body) then Key(head, Op.Define, body) else n }
-	Key(annotated, Op.Define, body): result_held(annotated, body, n)
+	Key(head, Op.Assign, body): { if is_head(head) or is_function_block(head, body) then Key(head, Op.Define, body) else typed_definition_held(n) }
+	Key(_, Op.Define, _): typed_definition_held(n)
 	_: n
 }
 
+# A definition with a declared result type, its result held as that type (result_held), else n as it is
+typed_definition_held(n: Node): Node := {
+	typed = declared_result_form(n)
+	if typed == ø { return n }
+	result_held(key_of(typed), value_of(typed), n)
+}
+
+# The ways to declare a function's result type, as the one form `f(x): T := e` (Rust twin: type_name_matching.rs
+# typed_parts, function_heads.rs result_typed_head): `f(x): T = e`, `f(x) as T := e` or `= e`, and C's result type
+# before the name, `T f(x) = e` or `T f(x) := e`; ø for any other statement. `f(x): T := e` itself may name any T, the
+# other forms a type word, collection, class or any (`f(x): y = e` assigns y)
+declared_result_form(n: Node): any := match n {
+	Key(target, Op.Define, body): if is_key(target, Op.Colon) then n else typed_by_word(target, body)
+	Key(target, Op.Assign, body): typed_by_word(target, body)
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts != 2 or not is_result_type(parts#1) or name_of(parts#1) in function_keywords { return ø }
+		named = parts#2
+		if not (is_key(named, Op.Define) or is_key(named, Op.Assign)) or not is_call(key_of(named)) { return ø }
+		Key(Key(key_of(named), Op.Colon, parts#1), Op.Define, value_of(named))
+	}
+	_: ø
+}
+typed_by_word(target: Node, body: Node): any := match target {
+	Key(head, Op.Colon, result_type): if is_call(head) and is_result_type(result_type) then Key(target, Op.Define, body) else ø
+	Key(head, Op.As, result_type): if is_call(head) and is_result_type(result_type) then Key(Key(head, Op.Colon, result_type), Op.Define, body) else ø
+	_: ø
+}
+
+# a word naming a result type: a built-in type, a collection, a class, or any, each also optional, `int?` (Rust twin:
+# function_heads.rs is_result_type)
+is_result_type(n: Node): bool := n is symbol and names_result_type(required_type(name_of(n)))
+names_result_type(word: text): bool := is_type_word_or_any(word) or word in collection_words or is_capitalized(word)
+
 # `is_null(x: any): bool from runtime` (decision bodiless-imports): an intrinsic the emitter supplies, declared only;
-# the line goes (Rust twin: lowering/foreign/foreign_lines.rs runtime_line, whose Rust lane traps when it is called)
+# the line goes (Rust twin: lowering/foreign/foreign_lines.rs runtime_line, whose Rust lane traps when it is called).
+# So do `floor(x: number): int from warp` and `count(xs: list): int from emitter` (decision foreign-signature): words
+# the compiler supplies itself, whose signatures it reads from the prelude (builtin_signatures.warp)
+compiler_libraries = ["runtime", "warp", "emitter"]
 is_runtime_declaration(n: Node): bool := {
 	words = if is_key(n, Op.Colon) and is_group(value_of(n)) then value_of(n) else n
-	separator_of(words) == " " and #words == 3 and words#2 == symbol("from") and words#3 == symbol("runtime")
+	separator_of(words) == " " and #words == 3 and words#2 == symbol("from") and words#3 is symbol and name_of(words#3) in compiler_libraries
 }
 
 # `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
@@ -79,7 +124,7 @@ result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 optional_when_answering_empty(head: Node, body: Node, result_type: Node): Node := {
 	written = name_of(result_type)
 	if not written or holds_empty(written) or is_list_type(written) or not can_answer_empty(body, optional_functions) { return result_type }
-	diagnose(call_of("optional_result", [name_of(head#1), written]))
+	diagnose(call_of("optional_result", [name_of(head#1), written]), result_type)
 	symbol(written + "?")
 }
 
@@ -97,7 +142,7 @@ with_empty_otherwise(value: Node): Node := match value {
 	}
 }
 
-# `for x in xs {…}`, `each x in xs {…}` before for_loops.warp lowers them; `while c {…}` is a `do` key already
+# `for x in xs {…}`, `each x in xs {…}` before lib/sugar/iteration.warp lowers them; `while c {…}` is a `do` key already
 loop_words = ["for", "each"]
 is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
 
@@ -136,7 +181,7 @@ holds_empty(written: text): bool := written.ends_with("?") or written in ["any",
 # each definition with a declared result in n, `def f(x): T {…}` and `f(x): T := e`: its name, its type and its body
 typed_definitions(n: Node): list := {
 	inner = parts_of(n).flat_map(typed_definitions)
-	typed = typed_definition(n)
+	typed = typed_definition(declared_result_form(n) ?? n)
 	if typed then [typed] + inner else inner
 }
 typed_definition(n: Node): any := match n {
@@ -182,7 +227,100 @@ is_call(n: Node): bool := match n {
 	_: no
 }
 
+# (a class's methods first become functions of the program: class_methods.warp; its conversions too, below)
 definitions(program: Node): Node := {
 	optional_functions = optional_functions_of(program)
-	bottom_up(program, definition)
+	bottom_up(conversions(methods_lifted(program)), definition)
+}
+
+# A program's conversions (decision general-conversions; Rust twin: src/lowering/types/conversions.rs): `Person as
+# text := it.name` says how a Person turns into text, and every `p as text` of the program then uses it. Each target
+# gets one function trying the program's conversions to it in the order written, the built-in one last:
+#   as·text(it) := if it is Person then it.name else it as text
+# A use is its call, `as·text(p)`; a declaration `x as text = "a"` stays one. `text(p: Person) := …` is the conversion
+# to text too, and a program converting to text shows values through it: print, str, text, an interpolation, a join.
+
+# `as·text`: the function converting to the target, a name no program can write; its parameter, which a body's `it`
+# (or the name `text(p: Person)` gives) is renamed to (lambdas.warp renamed)
+conversion_name(target: text): text := "as·" + target
+converted_value = "converted·value"
+
+# a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
+names_type(n: any, scope: any): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
+
+# [source, target, body, the body's name of the value] of `A as B := body` with A and B types, also of
+# `text(p: A) := body`, else ø
+conversion_of(n: any, scope: any): any := {
+	if not is_key(n, Op.Define) { return ø }
+	head = key_of(n)
+	if is_call(head) and #head == 2 and head#1 == symbol("text") and is_key(head#2, Op.Colon) and key_of(head#2) is symbol {
+		return if names_type(value_of(head#2), scope) then [name_of(value_of(head#2)), "text", value_of(n), name_of(key_of(head#2))] else ø
+	}
+	if not is_key(head, Op.As) { return ø }
+	if names_type(key_of(head), scope) and names_type(value_of(head), scope) then [name_of(key_of(head)), name_of(value_of(head)), value_of(n), implicit_parameter] else ø
+}
+
+# the words showing a value as text, which show it through a program's conversion to text
+showing_words = ["print", "str", "text", "text_form"]
+# x as the program's conversion to text shows it; a text as it is
+shown_converted(x: any): any := if x is text then x else call_of(conversion_name("text"), [x])
+
+# every `x as B` of a target B the program converts to as the call of its conversion; `x as B = v` and `f(x) as B := …`
+# declare and stay
+converting_uses(n: any, targets: any): any := {
+	if (is_key(n, Op.Assign) or is_key(n, Op.Define)) and is_key(key_of(n), Op.As) {
+		return Key(key_of(n), op_of(n), converting_uses(value_of(n), targets))
+	}
+	walked = children(n, x => converting_uses(x, targets))
+	if is_key(walked, Op.As) and value_of(walked) is symbol and targets.has(name_of(value_of(walked))) {
+		return call_of(conversion_name(name_of(value_of(walked))), [key_of(walked)])
+	}
+	if not targets.has("text") { return walked }
+	if is_group(walked) and #walked > 1 and walked#1 is symbol and name_of(walked#1) in showing_words and (bracket_of(walked) == "(" or bracket_of(walked) == "") {
+		return group_like(walked, [walked#1] + items_of(walked)[1 ..].map(shown_converted))
+	}
+	# `"hi " + p`: a join with a text
+	if is_key(walked, Op.Add) and (key_of(walked) is text or value_of(walked) is text) { return Key(shown_converted(key_of(walked)), Op.Add, shown_converted(value_of(walked))) }
+	walked
+}
+
+# the conversion to `target`: a typed function of each source type, `as·text·Person(p: Person) := body`, and the one
+# trying them in order by the value's type, then the built-in conversion, `as·text(it: any)`
+conversion_functions(target: text, written: list, targets: any): list := {
+	it = symbol(converted_value)
+	tried = Key(it, Op.As, symbol(target))
+	functions = []
+	for conversion in written.reverse() {
+		name = conversion_name(target) + "·" + conversion#1
+		body = converting_uses(renamed(conversion#3, conversion#4, it), targets)
+		functions += [Key(call_of(name, [Key(it, Op.Colon, symbol(conversion#1))]), Op.Define, body)]
+		tried = Key(Key(Key(ø, Op.If, Key(it, Op.Is, symbol(conversion#1))), Op.Then, call_of(name, [it])), Op.Else, tried)
+	}
+	functions + [Key(call_of(conversion_name(target), [Key(it, Op.Colon, symbol(any_word))]), Op.Define, tried)]
+}
+
+# the program with its conversions as functions, before its statements (its last one stays its value), and their uses
+# as calls
+conversions(program: any): any := {
+	scope = scope_of(program)
+	targets = {}
+	order = []
+	kept = []
+	for statement in statements_in(program) {
+		conversion = conversion_of(statement, scope)
+		if conversion == ø {
+			kept += [statement]
+		} else if conversion#1 == conversion#2 {
+			kept += [diagnose(call_of("own_type_conversion", [conversion#2]), statement)]
+		} else {
+			if not targets.has(conversion#2) {
+				targets[conversion#2] = []
+				order += [conversion#2]
+			}
+			targets[conversion#2] = targets[conversion#2] + [conversion]
+		}
+	}
+	if not order { return if #kept == #statements_in(program) then program else List(kept, Bracket.None, Separator.Newline) }
+	functions = order.map(target => conversion_functions(target, targets[target], targets)).flatten()
+	List(functions + kept.map(statement => converting_uses(statement, targets)), Bracket.None, Separator.Newline)
 }

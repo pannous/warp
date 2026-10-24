@@ -52,10 +52,10 @@ lambda_of(n: Node): Node := match n {
 	_: n
 }
 
-# `x`, `(a, b)`, `x: int` of a lambda's head: its parameters as written
+# `x`, `(a, b)`, `x: int` of a lambda's head: its parameters as written; `()`, which reaches the passes as ø, none
 written_parameters(signature: Node): list := match signature {
 	List(names, Bracket.Round, separator): items_of(signature)
-	_: [signature]
+	_: if signature == ø then [] else [signature]
 }
 
 arrow_parameters(n: Node): Node := match lambda_of(n) {
@@ -184,7 +184,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: any; lambdas_lifted: any; inlined: any = {} }
+class Lowering { arities: any; lambdas_lifted: any; inlined: any = {}; callable_fields: any = {} }
 
 ## the walk
 
@@ -201,7 +201,7 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): any := {
 	if is_lambda(n) { return lifted(lambda_of(n), locals, lowering) }
 	match n {
 		Symbol(name): function_value(name, n, locals, lowering)
-		Key(left, Op.Dot, right): Key(lowered_lambdas(left, locals, lowering), Op.Dot, lowered_method(right, locals, lowering))
+		Key(left, Op.Dot, right): dotted_lowered(left, right, locals, lowering)
 		Key(left, Op.Colon, right): Key(left, Op.Colon, lowered_lambdas(right, locals, lowering))
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
@@ -231,6 +231,45 @@ lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := {
 	if #words == 0 or not (words#1 is symbol) { return group_like(n, words.map(word => lowered_lambdas(word, locals, lowering))) }
 	group_like(n, [words#1] + arguments_of(words).map(word => lowered_lambdas(word, locals, lowering)))
+}
+
+# `x.f(a)`: of a field the program gives a function value (callable_fields), the function it holds called,
+# `closure_call_1(x.f, a)` (Rust twin: closures.rs, card lambda-held); else a method call, its name kept
+dotted_lowered(left: Node, right: Node, locals: list, lowering: Lowering): Node := {
+	receiver = lowered_lambdas(left, locals, lowering)
+	if not is_round(right) { return Key(receiver, Op.Dot, lowered_method(right, locals, lowering)) }
+	called = items_of(right)
+	if not (#called > 0 and called#1 is symbol and lowering.callable_fields.has(name_of(called#1))) {
+		return Key(receiver, Op.Dot, lowered_method(right, locals, lowering))
+	}
+	arguments = arguments_of(called).map(argument => lowered_lambdas(argument, locals, lowering))
+	call_node(symbol(closure_call_word + #arguments), [Key(receiver, Op.Dot, called#1)] + arguments)
+}
+
+# the fields the program gives a function value, named unlike any of its functions: `{answer: answer}` of a parameter
+# `answer: function`, `{d: x => x + 1}`, `{f: square}` of a function with parameters
+callable_fields_of(program: Node, arities: any, function_parameters: any): any := {
+	fields = {}
+	for n in nodes_in(program) {
+		if is_key(n, Op.Colon) and key_of(n) is symbol and not arities.has(name_of(key_of(n))) and gives_function(value_of(n), arities, function_parameters) { fields[name_of(key_of(n))] = yes }
+	}
+	fields
+}
+gives_function(value: Node, arities: any, function_parameters: any): bool := {
+	if is_lambda(value) { return yes }
+	if not (value is symbol) { return no }
+	function_parameters.has(name_of(value)) or (arities.has(name_of(value)) and arities[name_of(value)] > 0)
+}
+# the parameters declared functions, `answer: function`, of the program's definitions
+function_parameters_of(written: list): any := {
+	found = {}
+	for statement in written {
+		parts = definition_of(statement)
+		if parts != ø {
+			for parameter in parts#2 { if is_key(parameter, Op.Colon) and key_of(parameter) is symbol and value_of(parameter) == symbol("function") { found[name_of(key_of(parameter))] = yes } }
+		}
+	}
+	found
 }
 
 # the method call after a `.`: its name kept
@@ -343,6 +382,7 @@ lambdas(program: Node): Node := {
 		if parts != ø { arities[parts#1] = #(parts#2) }
 	}
 	lowering = Lowering{arities: arities, lambdas_lifted: []}
+	lowering.callable_fields = callable_fields_of(program, arities, function_parameters_of(written))
 	for statement in written {
 		parts = definition_of(statement)
 		function = if parts == ø then ø else iteration_function(parts)

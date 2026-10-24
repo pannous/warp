@@ -29,13 +29,13 @@ fn test_dimension_errors_are_compile_errors() {
 }
 
 #[test]
-fn test_unsupported_uses_stay_loud() {
+fn test_a_quantity_sum_over_a_grown_list_shows_its_unit() {
 	// print since stage 3, list elements since stage 4, a whole list since stage 5, a list grown at run time since stage 6
 	assert_eq!(shown("total = 0 m; for i in 1..3 { total += 5 m }; xs = [total]; xs.add(1 m); sum(xs)"), "11m");
 }
 
 #[test]
-fn test_compiling_a_quantity_result_is_refused_until_output_is_supported() {
+fn test_a_quantity_result_compiles() {
 	// stage 5: the unit travels in the module's `warp.units` section (test_static_units_compiled.rs)
 	let compiled = warp::pipeline::compile("total = 0 m; for i in 1..3 { total += 5 m }; total");
 	assert!(compiled.is_ok());

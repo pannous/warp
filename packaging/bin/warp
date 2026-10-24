@@ -6,6 +6,8 @@
 #   WARP_FALLBACK=rust            a program the pure pipeline refuses runs again through warp-rust, said loudly
 #   WARP_COMPILER=self or --self  compiler-self.wasm (compiler.warp compiled by itself) instead of compiler.wasm (pure)
 #   WARP_RUST=<binary>            the Rust binary; else warp-rust beside this script (links followed), else on PATH
+#   WARP_HOST=<binary>|none       the native host warp-host compiles and runs programs instead of warp-rust's pure lane
+#                                 (notes/warp_host.md); else warp-host beside this script when there is one
 
 # The commands written in warp, one line each: `<word>) echo <function> [its first words] ;;`. The function gets those
 # words, then the words after the command, and hands a command it cannot run to warp-rust (pass_on). Every other
@@ -21,21 +23,25 @@ pure_command() {
 # warp f.warp [-- args], warp run f.warp: compiled by compiler.wasm, run by warp-rust
 run_file() {
 	[[ ${1-} == *.warp ]] || pass_on
-	pure "$compiler" "${options[@]}" "$@"
+	pure "${runner[@]}" "${options[@]}" "$@"
 }
 
 # warp <code>: inline code, compiled as a program of the current folder; its value printed, exit status 0
 run_code() {
 	inline=1
-	pure "$compiler" "${options[@]}" "$@"
+	pure "${runner[@]}" "${options[@]}" "$@"
 }
 
 # warp compile --wasm f.warp: f.wasm written by compiler.wasm; other compiles (--exe, --site, …) are warp-rust's
 compile_module() {
 	[ $# -eq 2 ] && [ "$1" = --wasm ] && [[ $2 == *.warp ]] || pass_on
 	local source=$2 module=${2%.warp}.wasm lib
-	lib=$(library_for "$source") || fail "no lib/ with compiler/ found for $source: WARP_LIB names one"
-	pure "$(compiler_file)" "${options[@]}" -- "$source" "$module" "$(dirname "$source")" "$lib"
+	if [ -n "$HOST" ]; then
+		pure "$HOST" "${host_options[@]}" compile "$source" "$module"
+	else
+		lib=$(library_for "$source") || fail "no lib/ with compiler/ found for $source: WARP_LIB names one"
+		pure "$RUST" "$(compiler_file)" "${options[@]}" -- "$source" "$module" "$(dirname "$source")" "$lib"
+	fi
 	echo "compiled $(wc -c <"$module" | tr -d ' ') bytes to $module"
 }
 
@@ -48,14 +54,14 @@ lib_program() {
 	WARP_LIB=$lib exec "$RUST" --no-hints "${options[@]}" run "$lib/$1" -- "${@:2}"
 }
 
-# A run of the pure pipeline, its failure exiting with its own status. Its output is looked at only when it must be:
+# A run of the pure pipeline (the command given: warp-host's or warp-rust's), its failure exiting with its own status. Its output is looked at only when it must be:
 # under WARP_FALLBACK=rust a refusal passes the command on to warp-rust, said loudly; inline code exits 0 after its
 # value (warp-rust gives an Int value as the exit status, as for a file)
 pure() {
-	if [ -z "$inline" ] && [ "${WARP_FALLBACK-}" != rust ]; then "$RUST" "$@" || exit; return; fi
+	if [ -z "$inline" ] && [ "${WARP_FALLBACK-}" != rust ]; then "$@" || exit; return; fi
 	local said status
 	said=$(mktemp "${TMPDIR:-/tmp}/warp-said.XXXXXX") || exit 1
-	"$RUST" "$@" | tee "$said"
+	"$@" | tee "$said"
 	status=${PIPESTATUS[0]}
 	if [ "${WARP_FALLBACK-}" = rust ] && refused "$status" "$said"; then
 		rm -f "$said"
@@ -106,6 +112,15 @@ find_rust() {
 	if [ -n "${WARP_RUST-}" ]; then echo "$WARP_RUST"
 	elif [ -x "$beside" ]; then echo "$beside"
 	else command -v warp-rust || fail "no warp-rust beside $0 nor on PATH (WARP_RUST names it)"
+	fi
+}
+
+# warp-host: WARP_HOST (none: no host), else warp-host beside this script, else none
+find_host() {
+	local beside
+	beside=$(dirname "$(resolved "$0")")/warp-host
+	if [ -n "${WARP_HOST-}" ]; then [ "$WARP_HOST" = none ] || echo "$WARP_HOST"
+	elif [ -x "$beside" ]; then echo "$beside"
 	fi
 }
 
@@ -165,6 +180,12 @@ main() {
 		shift
 	done
 	command_line=("${options[@]}" "$@")
+	# the pure pipeline's command: warp-host's run (compiler-self.wasm; WARP_COMPILER=pure: compiler.wasm), else
+	# warp-rust's pure or self
+	HOST=$(find_host)
+	host_options=()
+	[ "${WARP_COMPILER-}" = pure ] && host_options=(--compiler full)
+	if [ -n "$HOST" ]; then runner=("$HOST" "${host_options[@]}" run); else runner=("$RUST" "$compiler"); fi
 	local command
 	command=$(pure_command "${1-}")
 	if [ -n "$command" ]; then shift; $command "$@" # the function and its first words

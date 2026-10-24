@@ -1,0 +1,12 @@
+# a parameter declared a map is walked by its keys, a list of the same name elsewhere by its items. Expected: ab 6
+keys_of(found: map) := {
+	s = ""
+	for k in found { s += k }
+	s
+}
+total(found: list) := {
+	t = 0
+	for x in found { t += x }
+	t
+}
+print "$(keys_of({a: 1, b: 2})) $(total([1, 2, 3]))"

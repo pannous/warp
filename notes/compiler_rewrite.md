@@ -32,8 +32,16 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
   to a fixpoint: all on main, with tests (tests/modules/test_rewrite_engine.warp).
 - **Kernel decided** by the user (with `match`); `n times` decided as the library function
   `infix times(n: number, b: block)`, no rewrite.
-- **First sugar modules:** lib/sugar/arithmetic.warp (floor division `/!`, `/!=`, `div` alias) and
-  lib/sugar/methods.warp (list mutation methods, membership): branch layers (sugar-migration-2), landing now.
+- **First pass gone:** coalesce (`a ?? b`) is a rule now, its pass file deleted (sugar-coalesce, Grok Warp Code).
+- **First parser sugar modules on main** (warp-layers, 98a92c975c): lib/sugar/arithmetic.warp (floor division `/!`,
+  `/!=`, `div` alias) and lib/sugar/methods.warp (list mutation methods, membership); one `sugared` step loads every
+  lib/sugar module. **alias-mechanism** on main (915192565d): word alternatives are aliases in a table, not parser
+  branches (migration step 1).
+- **The parser's sugar was overcounted** (warp-layers' accounting, notes/layers.md "What became of the 1417 sugar
+  lines"): read closely, almost all of the 1417 is notation (finding a form's words and extent); only the meaning moves.
+  Movable from parser.warp: ~10 lines now, ~50 once the hybrid lane retires, ~250 with F4/F5 (as warp passes).
+  parser.warp: 4272 → ~4346 (−66 sugar, +104 alias reader). The real shrink is in the pass files (~2448 lines) and
+  in notation design, not in parser sugar.
 - **Not rule-ready yet** (found by warp-layers): of_lookups and number_words (twin stages Rust drives), parse_words'
   eval (needs scoped shadowing), test/emit/unit phrases and `n times` (parser grouping).
 - **Around it:** emitter.warp split into 14 files under lib/compiler/emitter/ (bb97b383e7); node patterns and
@@ -42,7 +50,7 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
 - **Honest count:** the sugar passes are all still there and parser.warp is about its old size (4272 lines); about
   1–3 % of the ~3900 sugar lines have moved. The engine was the first half of the work; the moving starts now.
 
-## Next
+## Next (user 2026-10-22 late: finish it fast, decision finish-migration)
 
 1. **F5 name building, high priority** (user 2026-10-22 evening, card rewrite-templates, decision name-glue):
    `square·$a` → square_a_number, `$i·end`; unblocks for_loops, English `To …:` definitions, accessors per field.

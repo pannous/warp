@@ -31,6 +31,12 @@
 # CLOUD_TEST_MODEL=<model>: the session's model (default haiku: it only repeats one command); a reused session gets it as
 # `/model` before each job (`--model` on a follow-up message doesn't switch it). Fast mode applies to new sessions only.
 set -uo pipefail
+case "${1:-}" in -h | --help) sed -n '2,/^set -uo pipefail/{/^#/s/^# \{0,1\}//p;}' "$0"; exit 0 ;; esac
+CLOUD_PAUSED=$HOME/.config/warp/cloud-paused   # on the Mac only: while it exists no job starts (user 2026-10-22)
+if [ -f "$CLOUD_PAUSED" ]; then
+	echo "cloud-test: the cloud lane is paused ($CLOUD_PAUSED: $(cat "$CLOUD_PAUSED")); remove the file to resume" >&2
+	exit 3
+fi
 MODEL=${CLOUD_TEST_MODEL:-haiku}
 THIS_SCRIPT=$0                 # sent along with each job
 SLOW_TESTS=""                  # sent along with each --full shard's job: the tests it leaves out (SLOW_TESTS_LIST)
@@ -871,7 +877,7 @@ main() {
 			--slow) slow_only=1; shift ;;
 			--optimized) optimized=1; shift ;;
 			--gate) gate=1; shift ;;
-			*) break ;;
+			*) echo "cloud-test: unknown option '$1'" >&2; sed -n '2,20p' "$0" >&2; exit 2 ;;
 		esac
 	done
 	[ $# -ge 2 ] || { sed -n '2,20p' "$0"; exit 2; }

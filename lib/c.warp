@@ -1,0 +1,59 @@
+// C functions a program calls through the native host warp-host (notes/warp_host.md): one line each, the C function's
+// own shape, `name(parameter: type…): result from 'library'` as lib/math.warp writes them. The pure emitter makes each a
+// wasm import of the module 'library' and describes it in the warp.c_functions section (card pure-c-imports); warp-host
+// loads the library (c: the process, m: libm, sqlite3: libsqlite3.so.0 or libsqlite3.dylib) and calls the function.
+// `import strlen from "c"` takes one line of here, `use c` all of them (lib/compiler/c_imports.warp).
+// The types are those of a warp.c_functions line (crates/warp-runtime/src/c_signatures.rs):
+//   i32 i64 f32 f64   a number of that width
+//   text              a warp text, the host's NUL-terminated copy (a `const char *`); as a result, a `char *` read back
+//   handle            a C pointer the program holds as an id (`sqlite3 *`, `sqlite3_stmt *`)
+//   out               an out-pointer the call fills (`sqlite3 **`): no argument; the first one's pointer is the result
+//   void              no result
+
+// libc
+strlen(s: text): i64 from 'c'
+atoi(s: text): i32 from 'c'
+getenv(name: text): text from 'c'
+abs(x: i32): i32 from 'c'
+
+// libm
+sqrt(x: f64): f64 from 'm'
+pow(x: f64, y: f64): f64 from 'm'
+hypot(x: f64, y: f64): f64 from 'm'
+
+// libc, more
+atol(s: text): i64 from 'c'
+atof(s: text): f64 from 'c'
+strcmp(a: text, b: text): i32 from 'c'
+strncmp(a: text, b: text, n: i64): i32 from 'c'
+toupper(c: i32): i32 from 'c'
+tolower(c: i32): i32 from 'c'
+isdigit(c: i32): i32 from 'c'
+isalpha(c: i32): i32 from 'c'
+isspace(c: i32): i32 from 'c'
+rand(): i32 from 'c'
+srand(seed: i32): void from 'c'
+labs(x: i64): i64 from 'c'
+getpid(): i32 from 'c'
+fopen(path: text, mode: text): handle from 'c'
+fclose(file: handle): i32 from 'c'
+fputs(s: text, file: handle): i32 from 'c'
+fflush(file: handle): i32 from 'c'
+puts(s: text): i32 from 'c'
+system(command: text): i32 from 'c'
+setenv(name: text, value: text, overwrite: i32): i32 from 'c'
+unsetenv(name: text): i32 from 'c'
+strerror(code: i32): text from 'c'
+strstr(haystack: text, needle: text): handle from 'c'
+
+strtol(s: text, end: out, base: i32): i64 from 'c'
+strtod(s: text, end: out): f64 from 'c'
+
+// libm's float (f32) functions
+sqrtf(x: f32): f32 from 'm'
+fabsf(x: f32): f32 from 'm'
+ldexpf(x: f32, exponent: i32): f32 from 'm'
+ldexp(x: f64, exponent: i32): f64 from 'm'
+cbrt(x: f64): f64 from 'm'
+
+// SQLite's functions are in lib/native/sqlite3.warp (`use sqlite3`), other libraries' in lib/native/<library>.warp

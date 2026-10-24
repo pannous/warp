@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+// card self-cold-trap: a function parameter handed on to another function from inside a lambda (scope.warp
+// has_own_word, card self-trap-function-param); prints yes
+accepted(x: int, accepts: function): bool := accepts(x)
+any_accepted(xs: list, accepts: function): bool := xs.any(x => accepted(x, accepts))
+print any_accepted([1, 2], x => x > 1)

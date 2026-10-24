@@ -6,6 +6,7 @@
 use "words.warp"
 use "walk.warp"
 use "signatures.warp"
+use "parser.warp"
 use "host_words.warp"
 
 # a builtin word as a typed line of lib/prelude.warp declares it
@@ -41,7 +42,7 @@ typed_line(line: text, library: text): any := {
 	tail = head[1..].join("(").split(")")
 	if #tail < 2 { return ø }
 	written = tail[0 ..< #tail - 1].join(")").trim()
-	parameters = if written == "" then [] else written.split(",").map(part => written_parameter(part))
+	parameters = if written is empty then [] else written.split(",").map(part => written_parameter(part))
 	result = tail#(#tail).trim().remove_prefix(":").trim()
 	Builtin(name: head#1, signature: Signature(parameters: parameters, result: result))
 }
@@ -90,7 +91,10 @@ typed_lines = runtime_lines + emitter_lines
 # `alias size = count` → ["size", "count"]
 alias_pairs = prelude_text.split("\n").filter(line => line.starts_with(alias_start)).map(line => line.remove_prefix(alias_start).split("=").map(word => word.trim()))
 
-unaliased(word: text): text := {
+# the library word a word names: its canonical word (lib/aliases.warp: `size` is count), through the prelude's
+# `alias keys = map_keys` lines
+unaliased(written: text): text := {
+	word = canonical_word(written) ?? written
 	for pair in alias_pairs { if pair#1 == word { return pair#2 } }
 	word
 }
@@ -198,4 +202,36 @@ declared_call_kind(word: text, arguments: int): any := {
 		return declared_result_kind(results#1)
 	}
 	if host_words.has(word) { host_result_kind(host_words[word]#2) } else { ø }
+}
+
+# the libraries of the typed lines: warp's runtime, the emitter's expansions, libm
+typed_libraries = ["warp", "emitter", "'m'"]
+
+# word → its typed lines of lib/prelude.warp and lib/math.warp, the first written first
+global typed_word_lines = ø
+word_lines(): any := {
+	if typed_word_lines != ø { return typed_word_lines }
+	typed_word_lines = {}
+	for line in (prelude_text + "\n" + module_source("math")).split("\n") {
+		for library in typed_libraries {
+			typed = typed_line(line, library)
+			if typed != ø {
+				if not typed_word_lines.has(typed.name) { typed_word_lines[typed.name] = [] }
+				typed_word_lines[typed.name] = typed_word_lines[typed.name] + [typed]
+			}
+		}
+	}
+	typed_word_lines
+}
+
+# a word of the runtime, the emitter or a typed line of the library (lib/math.warp's `max`), which a class's method of
+# that name must not hide from the other values (class_methods.warp routes it, rewrites.warp keeps its sugar rules)
+is_library_word(word: text): bool := typed_lines.any(line => line.name == word) or word_lines().has(word)
+
+# whether the word's first line takes exactly one value, typed
+takes_one_typed_value(word: text): bool := {
+	lines = word_lines()
+	if not lines.has(word) { return no }
+	parameters = lines[word]#1.signature.parameters
+	#parameters == 1 and parameters#1.type_name != "" and not parameters#1.rest
 }

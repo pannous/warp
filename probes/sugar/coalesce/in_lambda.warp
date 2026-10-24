@@ -1,0 +1,3 @@
+# inside a function literal. Expected: [0 2]
+xs = [ø, 2]
+print xs.map(x => x ?? 0)
