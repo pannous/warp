@@ -984,7 +984,11 @@ fn wasi_context() -> wasmtime_wasi::p1::WasiP1Ctx {
 	use std::path::PathBuf;
 	use wasmtime_wasi::FsPerms::{ReadOnly, ReadWrite};
 	let mut context = wasmtime_wasi::WasiCtxBuilder::new();
-	context.inherit_stderr().inherit_env();
+	context.inherit_stderr();
+	// the process environment, WARP_LIB a compiler run's lib/ (std_adapters::environment)
+	for (name, value) in crate::modules::std_adapters::environment() {
+		context.env(&name, &value);
+	}
 	context.arg(WASI_PROGRAM_NAME).args(&crate::modules::std_adapters::program_arguments());
 	let working_folder = crate::modules::working_folder().unwrap_or_else(|| PathBuf::from("."));
 	let preopens = match crate::host::sandbox::is_sandboxed() {

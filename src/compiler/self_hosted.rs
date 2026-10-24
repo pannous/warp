@@ -658,7 +658,7 @@ fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Nod
 #[cfg(feature = "native")]
 fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Node> {
 	use crate::run::program_cache::{keep_under, kept_under};
-	let key = stage_key(program);
+	let key = Some(compiled_stage_key(program));
 	if let Some(module) = key.as_deref().and_then(kept_under) {
 		return Ok(module);
 	}
@@ -700,13 +700,71 @@ pub(crate) fn stage_key(program: &str) -> Option<String> {
 	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
-/// The fingerprint of lib/: every file with its path inside lib/, the same for an identical lib/ elsewhere
+/// The cache key of a compiled stage (lib/compiler's passes, analysis, emitter compiled by this binary): the sources
+/// warp was built from, the program, the WARP_ settings and the compiler's inputs alone (compiler_inputs), not every
+/// file of lib/: a std module, a sugar file or a test edited leaves the stages kept (card compiler-cache-keys: the
+/// stages compiled again after every lib/ edit made each self build long and memory-hungry)
 #[cfg(feature = "native")]
-pub(crate) fn library_fingerprint() -> String {
+fn compiled_stage_key(program: &str) -> String {
+	use sha2::{Digest, Sha256};
+	let library = library();
+	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
+	let mut settings = crate::run::program_cache::warp_settings();
+	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
+	let mut hasher = Sha256::new();
+	hasher.update(format!("{}\n{settings:?}\n{program}\n", env!("WARP_SOURCE")));
+	for (file, bytes) in compiler_input_files(&STAGE_MODULES) {
+		hasher.update(format!("{file}\n"));
+		hasher.update(bytes);
+	}
+	crate::extensions::hex_text(&hasher.finalize())
+}
+
+/// The std modules whose text the compiler embeds when it is built (`module_source("math")`): its inputs until
+/// lib/compiler reads them from the run's lib/ (card compiler-library-source)
+#[cfg(feature = "native")]
+const EMBEDDED_MODULES: [&str; 4] = ["prelude", "math", "list", "regex"];
+/// What a stage compiled by Rust reads besides lib/compiler: the embedded modules, and the std modules its sources use
+/// (`use os`, `use file`) or reach as type modules, which the Rust lane reads from lib/ when they were edited
+#[cfg(feature = "native")]
+const STAGE_MODULES: [&str; 9] = ["prelude", "math", "list", "regex", "os", "file", "map", "text", "time"];
+
+/// [path inside lib/, contents] of each compiler input: the files below lib/compiler (dot files left out), sorted,
+/// then lib/<module>.warp of each module there is
+#[cfg(feature = "native")]
+fn compiler_input_files(modules: &[&str]) -> Vec<(String, Vec<u8>)> {
+	let library = library();
+	let relative = |file: &Path| file.strip_prefix(library).unwrap_or(file).display().to_string();
+	let mut inputs: Vec<(String, Vec<u8>)> = files_below(library.join(crate::modules::COMPILER_FOLDER))
+		.into_iter()
+		.filter(|file| !file.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with('.')))
+		.map(|file| (relative(&file), std::fs::read(&file).unwrap_or_default()))
+		.collect();
+	inputs.sort();
+	for module in modules {
+		let file = library.join(format!("{module}.warp"));
+		if let Ok(bytes) = std::fs::read(&file) {
+			inputs.push((relative(&file), bytes));
+		}
+	}
+	inputs
+}
+
+/// The inputs hash of the compiler pair built from lib/ by this binary, as scripts/compiler-inputs.sh computes it
+/// (16 hex digits): lib/compiler, the embedded modules and WARP_SOURCE; the key of the shared compiler store
+/// (notes/compiler_rebuilds.md)
+#[cfg(feature = "native")]
+pub fn compiler_inputs_hash() -> String {
 	use sha2::{Digest, Sha256};
 	let mut hasher = Sha256::new();
-	hash_library(&mut hasher);
-	crate::extensions::hex_text(&hasher.finalize())
+	hasher.update(format!("rust {}\n", env!("WARP_SOURCE")));
+	for (file, bytes) in compiler_input_files(&EMBEDDED_MODULES) {
+		hasher.update(file.as_bytes());
+		hasher.update([0u8]);
+		hasher.update(bytes);
+		hasher.update([0u8]);
+	}
+	crate::extensions::hex_text(&hasher.finalize())[..16].to_string()
 }
 
 #[cfg(feature = "native")]
