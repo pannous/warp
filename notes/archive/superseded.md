@@ -1,0 +1,26 @@
+# archive/superseded
+
+Superseded and dead branches (warp and mixed), folded here so their commits stay reachable (user, 2026-10-24). Verdicts from notes/agents/branch-triage.md (acba7a8b1). Each was merged with -s ours: the tree is main's; view a branch with `git log <tip>`. Old Rust-only branches are in archive/rust-history.
+
+| branch | tip | verdict and purpose |
+|---|---|---|
+| arrow-result-entry | 9d6048915b39037dc5e80fbd260d218896f37bb7 | [dead] `f(p) -> int := …` as a keyword-rewrite table entry plus the fix for `f() := sum of [1, 2]`; parked by the user after measuring (the table buys no speed); main reads result arrows itself since 01e9062f7 and ff9609ba1  |
+| backup/classops | f0f240499ba1e909d30586e321e0df658667b8ff | [superseded] box backup (16:12) of the class-operator work: an older class_methods.warp and a boxed_plus probe; superseded by branch classops 1e1451c3e  |
+| backup/compiler-to-core-prep | b6cf6f6e34df78d14e2a3933401dc883e1c15aa7 | [dead] compiler-to-core-prep plus an uncommitted todo.md fallback list (8 lines of card drafts) saved by a box backup  |
+| backup/integrate-host | 0a923d3446ef73a03b165c9efae303aeb7e93c36 | [dead] an integration tip: pure-c-imports merged into the warp-host stack; no commit of its own (everything is in pure-c-imports and ffi-libc)  |
+| backup/libgap-as-conversions | 45740739d63d1a7c43fe5b0281457ba5dd32b93a | [dead] libgap-as-conversions plus 3 todo.md lines (card drafts) from a box backup  |
+| backup/libgap-as-units | 29d2955c67f9ed2e605b8ddb5d8c3011eb0feb47 | [dead] libgap-as-units plus 4 todo.md lines (card drafts) from a box backup  |
+| backup/pure-big-int-power | a77fd836c52c92814ec4d833dbc55759c5823031 | [superseded] exact big-integer powers in the pure and self lanes (runtime/big_ints.warp); landed as pure-big-int-power, 60801c3e6  |
+| backup/pure-class-methods-3 | d23dcb863f18b4eb8c97270731d629f0d7e5010a | [superseded] uncommitted wip of methods named like library words (class_methods.warp, probes, tests); the same feature landed in pure-class-methods-3b (5239e077e, aa53cbc19)  |
+| backup/pure-class-methods-3b | 34f5b1ba1412a57d5d894d426bf64da469e449da | [superseded] wip snapshot of pure-class-methods-3b; the branch's final tip 905d92367 has it  |
+| fix-in-lib | b161aa32a9aa81a01e01dcbdf7c7b314a0307704 | [superseded] `warp fix` / `warp beautify` pipeline written in warp (lib/fix: hint replacements, layout, command line), routed through Rust; the same lib/fix commits live on in fix-route, which routes through the launcher instead  |
+| gwc-proto | d4560ae9052be3256034ce5f579dc688fb609d57 | [superseded] prototype of `a?.b` as an extension rule and `f(x?)` as `f(x = ø)`; landed in another form as 937c4644e, 802d01e73 (pure-safe-navigation) and b94c448b1 (pure-optional-params)  |
+| host-glue-native | a6a48d8fc388ff1d4a0eeb3911bb1936d2ec3d66 | [dead] GC-free print words and a cstr type for a native-glue route (wasm → wasm2c → C); wip, untested; the route is parked (card Later), its notes landed as dddb84990  |
+| libgap-as-units | aaec4aa3635428052a4bdc09e4dcb4574946a9e3 | [dead] `3 km as m` through compiler-side quantity_as and unit-literal rules; the user chose units as a Quantity class in lib/ with no analyzer/emitter/parser additions; the conversions part is in libgap-as-conversions  |
+| libgap-units-2 | 50addcb2a016911f351e8ae4faa6311f6fdb671d | [dead] unit literals as one sugar rule `$n * $u where $u is unit` plus analyzer/emitter quantity support; the user decided it does not land and stays as reference (Quantity class instead)  |
+| pure-class-methods | 33f4ae7280e29ef54292171d4affb44e1d3652e2 | [superseded] stage 1 wip: read-only class instance methods lifted into functions; landed in the later design as 44f47d779 (pure-class-methods-2)  |
+| pure-class-methods-3 | 1eae6d0ff423f0b4cf707ac01d5df82fb933224f | [superseded] renames closing_ends_of's countdown index → lowest_at; moot per Supervisor (main builds without it); the class work it was for landed via pure-class-methods-3b. Tree has an uncommitted class_methods.warp edit (= backup/pure-class-methods-3)  |
+| pure-index-shadow-fix | 4d1985c81ca2f26cd748834b29dd3a313fdfdf88 | [dead] renames compiler locals (callee_name, argument_at) so the Rust lane stops reading them as library functions; Supervisor: moot, main builds; local-shadows-lib-function (5bbe82c43, 4116625b4) fixed the general rule  |
+| warning-positions | 585fa3f5160f254dfbe0d1f6cbe93911e083645a | [superseded] warp checks' diagnostics name line and column (diagnose(fact, at)); landed in another form as 88122b18f (diagnose(fact, about))  |
+| warp-host-compiler-beside | 5acf3e59c054732163479a552ab84ab9f2e229f0 | [superseded] warp-host finds compiler.wasm/compiler-self.wasm beside itself first; the card's branch is now warp-host-compiler-build (2efcab3f4), which redoes it inside the integration stack  |
+| warp-host-demo | 7191015d8a019fa4024e32fd8dc0ae43074daaa8 | [dead] host-from-warp plus merges, no commit of its own  |
