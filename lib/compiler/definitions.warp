@@ -311,7 +311,7 @@ conversions(program: any): any := {
 		if conversion == ø {
 			kept += [statement]
 		} else if conversion#1 == conversion#2 {
-			kept += [diagnose(call_of("own_type_conversion", [conversion#2]))]
+			kept += [diagnose(call_of("own_type_conversion", [conversion#2]), statement)]
 		} else {
 			if not targets.has(conversion#2) {
 				targets[conversion#2] = []
