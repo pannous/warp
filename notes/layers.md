@@ -236,7 +236,9 @@ Sugar passes, with the rule each would become:
    Status (warp-layers, 2026-10-22): the C-style head is a lib/sugar/loops.warp rule onto while (the parser only groups
    it). Trailing guards and `if no xs` stay: the parser must find the guard word and the condition context anyway
    (grouping), what is left is guarded_statement's four lines onto the kernel if/while and `no` as `not`'s alias in a
-   condition, while moving them costs the hybrid lane all their tests.
+   condition. With the hybrid lane gone (2026-10-23, decision pure-fallback) they still stay (supervisor): the guard is
+   found in two places (statement level, and guarded_command regrouping a command's words, `print it if it%2`, `do {…}
+   while c`), so moving the four lines onto the kernel would leave all the grouping in the parser and add rules.
 6. **Notation generalizations** replacing parser branches (~300 lines): word brackets (`do … end`, `fi`), raw-text
    block words (shader, wgsl), compound names. Each is one table, never a keyword branch.
 7. **F4–F7, last**: clauses, preposition heads, English `To …:` definitions (~310 lines). These may stay

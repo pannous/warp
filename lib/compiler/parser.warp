@@ -1307,12 +1307,9 @@ def test_word_at(p: Parser, min_power: int): list {
 	ends = not operand_follows_at(p, end) or next == '{' or next == ':' or word_operators().any(op => op#1 == following)
 	if ends then [end, word, after_is] else []
 }
-// `x failed` is `is_error(x)`, `x is empty` `count(x) == 0` (ø, "", [] and {} alike), the other words `not x`
-def tested(left: Node, word: text, after_is: bool): Node := {
-	if word == "failed" { return listed("(", "", [symbol("is_error"), left]) }
-	if after_is and word == "empty" { return keyed("==", listed("(", "", [symbol("count"), left]), 0) }
-	Key(ø, Op.Not, left)
-}
+// `x is empty`, `x failed` as their phrase, the test word kept as written (`empty` alone reads as ø): its meaning is
+// lib/sugar/test_words.warp's rules
+def tested(left: Node, word: text, after_is: bool): Node := listed("", " ", [left] + (if after_is then [symbol("is")] else []) + [symbol(word)])
 
 // The word here begins what follows the operand: a loop clause, a block's `end`, a key (`_: 0`) or an element (`p{m}`)
 // Rust twin: suffixes.rs word_begins_item
