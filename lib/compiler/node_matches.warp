@@ -89,7 +89,7 @@ is_type_pattern(pattern: Node): bool := match pattern {
 
 # `n if n > 5 => e` (parsed as `if n > 5 then n`): the pattern and its guard, else ø (Rust twin: switch.rs split_guard)
 guard_of(pattern: Node): any := match pattern {
-	Key(Key(ø, Op.If, guard), Op.Then, guarded): guard
+	Key(Key(ø, Op.If, guard), Op.Then, _): guard
 	_: ø
 }
 
