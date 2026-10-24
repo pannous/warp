@@ -24,3 +24,6 @@ Superseded and dead branches (warp and mixed), folded here so their commits stay
 | warning-positions | 585fa3f5160f254dfbe0d1f6cbe93911e083645a | [superseded] warp checks' diagnostics name line and column (diagnose(fact, at)); landed in another form as 88122b18f (diagnose(fact, about))  |
 | warp-host-compiler-beside | 5acf3e59c054732163479a552ab84ab9f2e229f0 | [superseded] warp-host finds compiler.wasm/compiler-self.wasm beside itself first; the card's branch is now warp-host-compiler-build (2efcab3f4), which redoes it inside the integration stack  |
 | warp-host-demo | 7191015d8a019fa4024e32fd8dc0ae43074daaa8 | [dead] host-from-warp plus merges, no commit of its own  |
+| backup/mac-integrate2 | cb9337dec06d1db6ed5f17eec1148aa8efde6ed4 | [dead] Mac worktree integrate2's uncommitted Cargo.toml version suffix (-integrate2, the build tweak) on main d9490fc59; no work of its own  |
+| backup/mac-lib-compiler | b306c8c1c020693e94e10eed437f3b73796fdb9a | [dead] Mac worktree lib-compiler's uncommitted Cargo.toml version suffix (the build tweak) on lib-compiler b17879384; the branch's own commits stay on origin/lib-compiler  |
+| backup/mac-main-binary | 01bcfeac2df18b6d07ea744235d0536890742863 | [dead] Mac worktree main-binary's uncommitted Cargo.toml/Cargo.lock version suffix (the build tweak) on main ad4ce2aec; no work of its own  |
