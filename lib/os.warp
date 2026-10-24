@@ -10,6 +10,16 @@ keep(name: any, value: any) := std_io("os", "keep", [name, value])
 // `exec sh "crontab -l"`: the command (a sh template, its argument vector) run without a shell, what it printed; natively
 // only, the browser runs no processes
 exec(command: any) := std_io("os", "exec", [command])
+// `run(["sh" "-c" "make"])`: the command run without a shell, its {status, out, err} (trailing newlines dropped); a
+// failing command is no error, its status says so. warp-host runs it (notes/warp_host.md), warp-rust not yet
+run(command: any) := std_io("os", "run", [command])
+// `run_wasm(read_bytes("m.wasm"))`: a module's bytes (a list of bytes, or a text) run in this process with the same
+// imports as a program, its main's value; a trap is an Error. compile_wasm(code) gives the bytes of a program of the
+// current folder, so `run_wasm(compile_wasm("6*7"))` evaluates code. warp-host runs them (notes/warp_host.md)
+run_wasm(bytes: any) := std_io("os", "run_wasm", [bytes])
+// `run_wasm(bytes, ["a", "b"])`: the module sees those arguments as its args, not the program's
+run_wasm(bytes: any, arguments: any) := std_io("os", "run_wasm", [bytes, arguments])
+compile_wasm(code: any) := std_io("os", "compile_wasm", [code])
 // The scripting words (decision use-script, all of them in `use script`):
 
 // the command line arguments, as args gives them

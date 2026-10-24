@@ -99,7 +99,8 @@ jobs:
         cargo rustc --test tests --all-features -- -D warnings
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
     - id: tests
-      run: cargo test --verbose --no-fail-fast
+      # the playground tests are paused (user 2026-10-22, scripts/paused-tests.txt)
+      run: cargo test --verbose --no-fail-fast -- $(grep -v '^#' scripts/paused-tests.txt | sed 's/^/--skip /')
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
     # Clippy is denied everywhere: src/, the binary and tests/
     - id: clippy

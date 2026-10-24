@@ -1,0 +1,45 @@
+# Quoted code (emitter.warp's part): `data e` as a node, the fields of a code view (line, column, comment)
+# `data e`, glued `data(e)`: e as written, a node (Rust's blocks.rs as_data, written_quote); `parse("a + 1")` is
+# `as_code(data a + 1)`
+is_quote(n: any): bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == symbol(quote_word)
+is_spaced(n: any): bool := bracket_of(n) == "" and separator_of(n) == " "
+# `print data (a + 1)`, `as_code(data (a + 1))`: a `data` after the head of a line or call quotes the item after it;
+# its place, else 0
+inline_quote_at(n: any): int := {
+	if not ((bracket_of(n) == "" and separator_of(n) == " ") or (bracket_of(n) == "(" and separator_of(n) == "")) { return 0 }
+	for i in 2..<#n { if n#i == symbol(quote_word) { return i } }
+	0
+}
+quote_folded(n: any, at: int): any := {
+	quote = separated(bracketed([n#at, n#(at + 1)], ""), " ")
+	separated(bracketed(items_of(n)[..(at - 1)] + [quote] + items_of(n)[(at + 1)..], bracket_of(n)), separator_of(n))
+}
+# `code.line`, `code.column`, `e.comment` (Rust's view: `code#("line" + 1)`): the views carry no positions or comments
+position_fields = ["line", "column", "comment"]
+# the field a key reads, `x.name`, also as Rust's analysis view writes it, `x#("name" + 1)`; ø of another key
+read_field(n: any): any := {
+	if op_of(n) == "." and value_of(n) is symbol { return name_of(value_of(n)) }
+	field = value_of(n)
+	if op_of(n) == "#" and type(field) is key and op_of(field) == "+" and key_of(field) is text and value_of(field) == 1 { return key_of(field) }
+	ø
+}
+reads_position(n: any): bool := {
+	if type(n) is key and read_field(n) in position_fields { return yes }
+	if type(n) is key { return reads_position(key_of(n)) or reads_position(value_of(n)) }
+	is_group(n) and n.any(reads_position)
+}
+def quoted_code(body: Body, e: any): list {
+	if module.reads_positions { return refuse("quoted code whose position or comment is read") }
+	if e is symbol { return node(Kind.Symbol, text_bytes(name_of(e))) }
+	if type(e) is key {
+		parts = [["node", quoted_code(body, key_of(e))], text_value(op_of(e)), ["node", quoted_code(body, value_of(e))]]
+		return runtime_call("key_node", parts)#2
+	}
+	if is_group(e) {
+		if #e == 0 { return [ref_null, gc_type(gc.node)] }
+		items = ["node", node(Marked.SquareList, vector_code(e.map(item => quoted_code(body, item))))]
+		bracketed = ["node", runtime_call("bracketed_node", [items, text_value(bracket_of(e))])#2]
+		return runtime_call("separated_node", [bracketed, text_value(separator_of(e))])#2
+	}
+	boxed(expression_code(body, e))
+}

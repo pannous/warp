@@ -2,11 +2,13 @@
 # overloads.rs lower_arity_overloads): `twice(n) := …` and `twice(a, b) := …` are the functions twice·1 and twice·2,
 # and every call names the one its argument count fits, `x.twice(y)` counting its receiver; passed as a value,
 # `bottom_up(n, twice)`, it is the one the called function calls that parameter with. Definitions of one count stay
-# one function, whose clauses clauses.warp merges.
+# one function, whose clauses clauses.warp merges, unless their parameter types tell them apart (typed_overloads).
 use "walk.warp"
+use "diagnostics.warp"
 use "phrase_blocks.warp"
 use "scope.warp"
 use "signatures.warp"
+use "clauses.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
 target_call(target: Node): any := match target {
@@ -153,5 +155,234 @@ resolved(n: Node, overloaded: any, called: any): any := {
 
 arity_overloads(program: Node): Node := {
 	overloaded = overloaded_arities(program)
-	if #overloaded == 0 then program else resolved(program, overloaded, called_parameters(program))
+	typed_overloads(if #overloaded == 0 then program else resolved(program, overloaded, called_parameters(program)))
+}
+
+# --- by parameter types (card pure-lane-refuses; Rust: overloads.rs lower_parameter_overloads) ---
+# `f(a: int) := 1; f(a: text) := 2` are the variants f·int and f·text, in a program or across the files it uses; a
+# call takes the variant its arguments fit best (an exact type before an int widened to a float, any last), and where
+# only the run time knows an argument's type, the first variant whose test it passes
+
+# how well a value fits `any`: worse than every typed fit; a list of known elements fits a plain `list` worse than a
+# list of its elements
+any_fit = 100
+list_fit = 2
+# the kind each type word an overload tells apart stands for
+overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", float: "float", double: "float",
+	f64: "float", f32: "float", real: "float", number: "number", text: "text", str: "text", string: "text",
+	codepoint: "codepoint", char: "codepoint", character: "codepoint", bool: "bool", boolean: "bool"}
+
+# the element type of a list type: int of `[int]`, `ints`, `list of int`; ø of another type
+element_of(type: text): any := {
+	if type.starts_with("[") { return type.replace("[", "").replace("]", "").trim() }
+	if type.starts_with("list of ") { return type.replace("list of ", "") }
+	singular = type[0 ..< #type - 1]
+	if type.ends_with("s") and singular in overload_kinds then singular else ø
+}
+
+# the kind of value a parameter type takes: list, map or one of overload_kinds; ø of `any` and of another type
+overload_kind(type: text): any := {
+	if type == "list" or element_of(type) != ø { return "list" }
+	if type == "map" { return "map" }
+	if type in overload_kinds then overload_kinds[type] else ø
+}
+
+is_overload_type(type: text): bool := type == any_word or overload_kind(type) != ø
+
+# `x: int` → "int", an untyped parameter "any"
+parameter_types(call: Node): list := signature_of(items_of(call)).parameters.map(p => if p.type_name == "" then any_word else p.type_name)
+
+# `f·list_of_int·text`: one word
+typed_variant(name: text, types: list): text := name + types.map(t => "·" + (if element_of(t) != ø then "list_of_" + element_of(t) else t)).join("")
+
+# name → the parameter types of each of its definitions, for each name defined with several, all different, all of
+# the types above and some typed (a class's parameters dispatch through its methods instead)
+overloaded_types(program: Node): any := {
+	signatures = {}
+	# nodes_in walks the last part first: reversed, the definitions come in declaration order
+	for n in nodes_in(program).reverse() {
+		call = definition_call(n)
+		if call != ø {
+			name = name_of(call#1)
+			if name not in signatures { signatures[name] = [] }
+			signatures[name] = signatures[name] + [parameter_types(call)]
+		}
+	}
+	overloaded = {}
+	for name in signatures.keys {
+		variants = signatures[name]
+		typed = variants.any(types => types.any(t => t != any_word))
+		if #variants > 1 and typed and all_different(variants) and variants.all(types => types.all(is_overload_type)) { overloaded[name] = variants }
+	}
+	overloaded
+}
+
+all_different(variants: list): bool := {
+	seen = []
+	for types in variants {
+		if types in seen { return no }
+		seen += [types]
+	}
+	yes
+}
+
+# [kind, element kind or ø] of an argument whose type the compile knows, a literal; ø for one only the run time knows
+static_kind(n: any): any := {
+	if n is bool { return ["bool", ø] }
+	if n is int { return ["int", ø] }
+	if n is float { return ["float", ø] }
+	if n is codepoint { return ["codepoint", ø] }
+	if n is text { return ["text", ø] }
+	if is_group(n) and bracket_of(n) == "[" { return ["list", element_kind(items_of(n))] }
+	ø
+}
+
+# variable → the static_kind of the values assigned to it, [] where they differ: by name across the program, as Rust's
+# agreeing_kinds, so an `xs` of other values in another function leaves both to the run-time test
+assigned_kinds(program: Node): any := {
+	kinds = {}
+	for n in nodes_in(program) {
+		if is_key(n, Op.Assign) and key_of(n) is symbol {
+			name = name_of(key_of(n))
+			kind = static_kind(value_of(n))
+			kinds[name] = if kind == ø or (name in kinds and kinds[name] != kind) then [] else kind
+		}
+	}
+	kinds
+}
+
+# the static_kind of an argument, also of a variable assigned values of one kind
+known_kind(n: any, variables: any): any := {
+	if n is symbol and name_of(n) in variables and variables[name_of(n)] { return variables[name_of(n)] }
+	static_kind(n)
+}
+
+# the kind all the items share, ø when they differ, are lists or are not known
+element_kind(items: list): any := {
+	if not items { return ø }
+	kinds = items.map(static_kind)
+	first = kinds#1
+	if first != ø and first#1 != "list" and kinds.all(kind => kind == first) then first#1 else ø
+}
+
+# how well a value of `kind` fits a parameter of `type`: 0 exactly, 1 widened (an int to a float, a number to number,
+# a codepoint to a text); ø when it does not
+fit(kind: text, type: text): any := {
+	if type == any_word { return any_fit }
+	if type == "number" { return if kind == "int" or kind == "float" then 1 else ø }
+	wanted = overload_kind(type)
+	if kind == wanted { return 0 }
+	if (kind == "int" and wanted == "float") or (kind == "codepoint" and wanted == "text") then 1 else ø
+}
+
+# how well a list of `element`s fits a parameter of `type`; a list of untold elements fits every list type
+element_fit(element: any, type: text): any := {
+	wanted = element_of(type)
+	if wanted == ø {
+		if type == any_word { return any_fit }
+		if overload_kind(type) != "list" { return ø }
+		return if element == ø then 0 else list_fit
+	}
+	if element == ø then 0 else fit(element, wanted)
+}
+
+# an argument the run time tells fits every type for now
+argument_fit(kind: any, type: text): any := {
+	if kind == ø { return 0 }
+	if kind#1 == "list" then element_fit(kind#2, type) else fit(kind#1, type)
+}
+
+# the sum of the arguments' fits, ø when one does not fit
+variant_fit(kinds: list, types: list): any := {
+	total = 0
+	for at in 1 to #types {
+		one = argument_fit(kinds#at, types#at)
+		if one == ø { return ø }
+		total += one
+	}
+	total
+}
+
+# `float` and `number` take any number, as fit() widens an int: at run time `1.5` may be exact
+takes_widened(type: text): bool := type == "float" or type == "number"
+
+# the run-time test of an argument for a parameter type; of a list type also of its first item, as a list keeps no
+# item type at run time (an empty list fits every list type)
+run_time_test(argument: Node, type: text): Node := {
+	element = element_of(type)
+	if element == ø { return call_of("is_type", [argument, if takes_widened(type) then "number" else type]) }
+	no_items = Key(call_of("count", [argument]), Op.Eq, 0)
+	first_item = run_time_test(Key(argument, Op.Hash, 1), element)
+	Key(call_of("is_type", [argument, "list"]), Op.And, Key(no_items, Op.Or, first_item))
+}
+
+# the places of the arguments a variant tests at run time: those of untold kind it takes no `any` for
+tested_places(kinds: list, types: list): list := (1 to #types).filter(at => kinds#at == ø and types#at != any_word)
+
+# the candidates testing more arguments first, of those the one widening fewer first, else in declaration order
+in_test_order(candidates: list, kinds: list): list := {
+	ordered = []
+	for tested in (0 to #kinds).reverse() {
+		for widened in 0 to #kinds {
+			ordered += candidates.filter(types => #tested_places(kinds, types) == tested and #tested_places(kinds, types).filter(at => takes_widened(types#at)) == widened)
+		}
+	}
+	ordered
+}
+
+# `f(g(), 1)`: `(overload·1 = g(); if is_type(overload·1, "text") then f·text·int(overload·1, 1) else if … else raise
+# "… fits no single variant …")`, each argument evaluated once
+dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: text): Node := {
+	bindings = []
+	passed = []
+	for at in 1 to #arguments {
+		argument = arguments#at
+		if kinds#at == ø and (argument is key or is_group(argument)) {
+			held = symbol("overload·" + at)
+			bindings += [Key(held, Op.Assign, argument)]
+			argument = held
+		}
+		passed += [argument]
+	}
+	chain = call_of(raise_word, [refusal])
+	for types in in_test_order(candidates, kinds).reverse() {
+		variant = call_of(typed_variant(name, types), passed)
+		tests = tested_places(kinds, types).map(at => run_time_test(passed#at, types#at))
+		chain = if not tests then variant else Key(Key(Key(ø, Op.If, joined(tests)), Op.Then, variant), Op.Else, chain)
+	}
+	if not bindings then chain else List(bindings + [chain], Bracket.Round, Separator.Semicolon)
+}
+
+# `f(1.5)`: the call of the variant its arguments fit best; a call of a name not overloaded by type as it is
+typed_call(n: Node, overloaded: any, variables: any): any := {
+	if not (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 1 and n#1 is symbol) { return n }
+	name = name_of(n#1)
+	if name not in overloaded { return n }
+	arguments = items_of(n)[1 ..]
+	variants = overloaded[name].filter(types => #types == #arguments)
+	kinds = arguments.map(argument => known_kind(argument, variables))
+	fitting = variants.filter(types => variant_fit(kinds, types) != ø)
+	written = "${n}"
+	listed = variants.map(types => name + "(" + types.join(", ") + ")").join(", ")
+	if not kinds.all(kind => kind != ø) and #fitting > 1 {
+		return dispatched(name, fitting, kinds, arguments, "`" + written + "` fits no single variant of " + listed)
+	}
+	if not fitting { return diagnose(call_of("no_single_variant", [written, listed]), n) }
+	chosen = fitting.filter(types => fitting.all(other => variant_fit(kinds, other) >= variant_fit(kinds, types)))
+	if #chosen != 1 { return diagnose(call_of("tied_variants", [written, listed]), n) }
+	call_of(typed_variant(name, chosen#1), arguments)
+}
+
+# top-down, so a definition is renamed by its own parameter types
+typed_resolved(n: Node, overloaded: any, variables: any): any := {
+	call = definition_call(n)
+	if call != ø and name_of(call#1) in overloaded {
+		return Key(renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))), Op.Define, typed_resolved(value_of(n), overloaded, variables))
+	}
+	children(typed_call(n, overloaded, variables), x => typed_resolved(x, overloaded, variables))
+}
+
+typed_overloads(program: Node): Node := {
+	overloaded = overloaded_types(program)
+	if #overloaded == 0 then program else typed_resolved(program, overloaded, assigned_kinds(program))
 }

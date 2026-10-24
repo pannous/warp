@@ -1,0 +1,11 @@
+// expected: 3 3 3 3
+a = 0
+for (i=0;i<3;i++) { a += 1 }
+b = 0
+for (i=0;i<3;i++): b += 1
+c = 0
+for (i=0;i<3;i++) do c += 1
+d = 0
+for (i=0;i<3;i++)
+	d += 1
+print "$(a) $(b) $(c) $(d)"

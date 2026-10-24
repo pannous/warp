@@ -7,6 +7,7 @@
 use "parser.warp"
 use "walk.warp"
 use "uses.warp"
+use "builtin_signatures.warp"
 
 # [name, text] of each function definition in source: a line starting with a name and its parameters, with the
 # indented or closing lines below it
@@ -73,8 +74,9 @@ symbol_words(n: Node): list := {
 # loader places them: a used module's in front of the program, the prelude's after it
 with_reached(program: Node, module: text, in_front: bool): Node := {
 	own_names = statements_in(program).map(declared_name)
-	aliases = module_aliases(module)
-	program = aliased(program, aliases, own_heads(program))
+	own = own_heads(program)
+	aliases = with_call_forms(module_aliases(module), definition_slices(module).map(slice => slice#1) + own.keys)
+	program = aliased(program, aliases, own)
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
 	# numbers' ↑), any other definition replaces the module's
 	slices = definition_slices(module).filter(slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
@@ -113,6 +115,15 @@ module_aliases(source: text): any := {
 	}
 	aliases
 }
+# aliases with the call form of each word operator the names define: `divides(3, 12)` calls operator_divides unless
+# a function divides is defined (Rust twin: word_operators.rs lower_call_forms)
+with_call_forms(aliases: any, names: list): any := {
+	for name in names {
+		word = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else ""
+		if word != "" and is_name_start(word[0]) and word not in names { aliases[word] = name }
+	}
+	aliases
+}
 # `keys(m)` as `map_keys(m)`: a call of an alias calls the word unless the program defines that name, as a variable
 # or a function taking as many arguments (shadowing is per arity, Rust's library_words.rs word_for_unless: a program's
 # `index_of(source, part, from, n)` leaves `"abc".index_of(c)` to the library); top-down, so a method call
@@ -125,8 +136,17 @@ aliased(n: Node, aliases: any, own: any): any := match n {
 aliased_call(n: Node, aliases: any, own: any, receivers: int): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
-	if called not in aliases or shadows(own, called, #n - 1 + receivers) { return n }
-	group_like(n, [symbol(aliases[called])] + items_of(n)[1 ..])
+	count = #n - 1 + receivers
+	word = if called in aliases then aliases[called] else arity_variant(called, count)
+	if word == ø or shadows(own, called, count) { return n }
+	group_like(n, [symbol(word)] + items_of(n)[1 ..])
+}
+# words that mean another word with that many arguments, the receiver counted: `round(x, 3)` is round_to,
+# `xs.first(3)` first_items (Rust twin: library_words.rs ARITY_VARIANTS)
+arity_variants = [["round", 2, "round_to"], ["first", 2, "first_items"], ["last", 2, "last_items"], ["list", 1, "as_list"], ["tuple", 1, "as_list"]]
+arity_variant(name: text, count: int): any := {
+	for variant in arity_variants { if variant#1 == name and variant#2 == count { return variant#3 } }
+	ø
 }
 
 # whether the program's own `name` hides the library word from a call of `count` arguments: a variable always, a
@@ -169,7 +189,7 @@ with_type_module_uses(program: Node): Node := {
 	providers = type_module_providers()
 	wanted = {}
 	for word in called_words(program) {
-		if word in providers and word not in own and word not in call_kinds { wanted[providers[word]] = yes }
+		if word in providers and word not in own and not is_declared_word(word) { wanted[providers[word]] = yes }
 	}
 	# in the order of type_modules, Rust's sorted one
 	modules = type_modules.filter(module => module in wanted and module not in used)

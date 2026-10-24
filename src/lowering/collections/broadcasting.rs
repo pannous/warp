@@ -9,6 +9,7 @@
 use super::nodes::{any_part, call, called_name, children_rewritten, is_colon_pair, key, word_headed, Counter};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
+use crate::lowering::keyword_rewrites::KeywordRewrite;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::InstanceTypes;
@@ -115,7 +116,11 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	for word in crate::wasm_emitter::OUTPUT_WORDS {
 		arities.entry(word.to_string()).or_insert(Arity::library(1, 1, FirstParameter::Any));
 	}
-	nest_prefix_calls(program, &arities)
+	// `first = ["a"]; first contains "a"`: a variable of the top level is its value there, as a function's are inside it
+	let functions: HashSet<&str> = found.iter().map(|definition| definition.name.as_str()).collect();
+	let variables =
+		crate::program_names::outer_variables(&program).into_iter().filter(|name| !functions.contains(name.as_str()));
+	nest_prefix_calls(program, &with_values(&arities, variables))
 }
 
 /// `square all xs` (wiki/all.md): `all` splices the list into its items, the function applies to each
@@ -183,11 +188,17 @@ struct Arity {
 	converts: bool,
 	/// A word of the language, not the program's own function
 	library: bool,
+	/// A name the scope binds as a value (a variable, a parameter): no call, whatever word it spells
+	value: bool,
 }
 
 impl Arity {
 	fn library(fewest: usize, most: usize, first: FirstParameter) -> Arity {
-		Arity { fewest, most, first, converts: false, library: true }
+		Arity { fewest, most, first, converts: false, library: true, value: false }
+	}
+
+	fn value() -> Arity {
+		Arity { library: false, value: true, ..Arity::library(0, 0, FirstParameter::Any) }
 	}
 }
 
@@ -265,7 +276,7 @@ fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
 }
 
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
-	node.symbol_name().and_then(|name| arities.get(name).copied())
+	node.symbol_name().and_then(|name| arities.get(name).copied()).filter(|takes| !takes.value)
 }
 
 /// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading; in a
@@ -294,10 +305,9 @@ fn spaced(node: &Node, first: &dyn Fn(&Node) -> String) -> String {
 }
 
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
-	if let Some((head, body, rebuild)) = crate::lowering::type_tests::function_definition(&node) {
-		if let Some(inner) = without_bound(&node, arities) {
-			return rebuild(head, nest_prefix_calls(body, &inner));
-		}
+	if let Some(scoped) = scoped_definition(&node, |body, bound| nest_prefix_calls(body, &with_values(arities, bound)))
+	{
+		return scoped;
 	}
 	// `print g 3, 4`, `f(max 3, 4)`: the call's arguments, a comma list, of which one is a braceless call
 	if let Node::List(items, Bracket::Round, Separator::None) = &node {
@@ -451,16 +461,20 @@ fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
 	}
 }
 
-/// In a function's body the names it binds (parameters, locals, loop variables: program_names.rs, the one scope rule)
-/// are values, no functions of the same name: `f(name) := contains(name, "-")` beside a class's name() method,
-/// `digits = t; slice digits 1 ø` beside a used file's digits(…)
-fn without_bound(definition: &Node, arities: &HashMap<String, Arity>) -> Option<HashMap<String, Arity>> {
-	let bound = crate::program_names::bound_inside(definition)?;
-	let unbound = arities.iter().filter(|(name, _)| !bound.contains(*name));
-	bound
-		.iter()
-		.any(|name| arities.contains_key(name))
-		.then(|| unbound.map(|(name, arity)| (name.clone(), *arity)).collect())
+/// A definition's body lowered knowing the names it binds (parameters, locals, loop variables: program_names.rs, the
+/// one scope rule), which are values there, no functions of the same name: `f(name) := contains(name, "-")` beside a
+/// class's name() method, `digits = t; slice digits 1 ø` beside a used file's digits(…). Every definition form, a
+/// result-typed head `g(words: any): bool := …` too
+fn scoped_definition(node: &Node, lower: impl FnOnce(Node, HashSet<String>) -> Node) -> Option<Node> {
+	let (head, body, rebuild) = crate::memoization::definition_parts(node)?;
+	let bound = crate::program_names::bound_inside(node)?;
+	Some(rebuild(head, lower(body, bound)))
+}
+
+fn with_values(arities: &HashMap<String, Arity>, names: impl IntoIterator<Item = String>) -> HashMap<String, Arity> {
+	let mut scope = arities.clone();
+	scope.extend(names.into_iter().map(|name| (name, Arity::value())));
+	scope
 }
 
 /// `1, add 2, 3` → `1, add 2 3`: the first braceless call short of arguments takes the items after its comma, wherever
@@ -506,6 +520,10 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 
 /// `f 1 2 3` → `f [1 2 3]` of the functions `single`
 fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -> Node {
+	let unbound = |bound: HashSet<String>| single.difference(&bound).cloned().collect();
+	if let Some(scoped) = scoped_definition(&node, |body, bound| gather_arguments(body, &unbound(bound), gathered)) {
+		return scoped;
+	}
 	match node {
 		Node::List(items, Bracket::None, Separator::Space)
 			if items.len() > 2 && items[0].symbol_name().is_some_and(|name| single.contains(name)) =>
@@ -1222,6 +1240,7 @@ impl Broadcast {
 		named_by(self.paired.next_number().to_string())
 	}
 
+	// ⚠ WARP DOES THIS DIFFERENTLY: map-fold fusion for any fold, not sum by name → lib/compiler/lambdas.warp
 	/// `sum(xs .op ys)`, `sum(xs .op k)`: one loop adding the items, the element-wise list never built
 	fn fused_sum(&self, items: &[Node], bracket: &Bracket) -> Option<Node> {
 		let [head, argument] = items else { return None };
@@ -1388,9 +1407,15 @@ pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
 	key(list, Op::Dot, call("map", vec![lambda]))
 }
 
-/// `xs .* 2` as the parser keeps it, the phrase [xs .* 2]: the operator applied to each element (element_wise)
-pub fn lower_element_wise_operators(node: Node) -> Node {
-	let node = node.map_children(lower_element_wise_operators);
+/// `xs .* 2` as the parser keeps it, the phrase [xs .* 2]: the operator applied to each element (element_wise); the
+/// keyword rewrite of an element-wise operator, an entry of src/pipeline.rs SUGAR_PHRASES
+pub const ELEMENT_WISE: KeywordRewrite = KeywordRewrite {
+	triggered_by: |word| crate::operators::element_wise_operator(word).is_some(),
+	rewrite: |node, _| element_wise_phrase(node),
+	reads_bindings: false,
+};
+
+fn element_wise_phrase(node: Node) -> Node {
 	let Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() else {
 		return node;
 	};

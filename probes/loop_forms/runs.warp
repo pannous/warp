@@ -1,0 +1,10 @@
+# the trailing and odd loop forms, as the self-hosted parser reads them (card parser-loop-forms)
+i = 0
+i++ until i >= 3
+print i
+j = 0
+do { j = j + 1 } while j < 5
+print j
+x = do{ 7 }
+print x
+print 2 unless 0

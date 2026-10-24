@@ -56,3 +56,22 @@ fn test_a_parameter_may_be_named_like_a_type() {
 	is!("f(int x) := x+1; f(2)", 3);
 	is!("byte=3; byte+1", 4);
 }
+
+// card unsigned-int: C's type names of several words are the fixed width C means (ffi/struct_layouts.rs), with a
+// got-it note naming warp's word, wherever a type stands
+#[test]
+fn c_type_names_of_several_words_are_fixed_widths() {
+	is!("x: unsigned int = 3; x", 3);
+	is!("x: long long = 3; x + 1", 4);
+	is!("unsigned long long y = 3; y", 3);
+	is!("x: unsigned short = 7; x", 7);
+	is!("f(n: unsigned int) := n + 1; f(2)", 3);
+	fails_with("x: unsigned int = -1; x", "uint32 overflow");
+}
+
+#[test]
+fn a_c_type_name_says_its_warp_word() {
+	warp::normalize::clear_shown_hints();
+	let (_, hints) = warp::normalize::capture_hints(|| eval("x: unsigned int = 3; x"));
+	assert!(hints.iter().any(|hint| hint.original == "unsigned int" && hint.canonical == "uint32"), "{hints:?}");
+}

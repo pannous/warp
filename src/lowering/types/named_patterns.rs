@@ -9,7 +9,7 @@ use super::nodes::{assign, children_rewritten, key};
 use super::switch::{is_list_pattern, is_map_pattern, is_switch_head, map_field, rest_pattern, split_switch, WILDCARD};
 use super::tree_walks::{FIND_WORD, REPLACE_WORD};
 use crate::errors::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 
@@ -35,7 +35,7 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// `pattern Pair = [_, _]`: the name and its pattern
-fn pattern_definition(statement: &Node) -> Option<(String, Node)> {
+pub(crate) fn pattern_definition(statement: &Node) -> Option<(String, Node)> {
 	let Node::List(parts, _, _) = statement.drop_meta() else {
 		return None;
 	};
@@ -94,7 +94,16 @@ fn literal_items(literal: &Node) -> &[Node] {
 fn substituted(node: Node, patterns: &Patterns) -> Node {
 	let node = children_rewritten(node, |child| substituted(child, patterns));
 	match node {
-		Node::Key(subject, Op::Eq, pattern) => Node::Key(subject, Op::Eq, Box::new(resolved(*pattern, patterns))),
+		Node::Key(subject, Op::Eq, pattern) => {
+			match pattern_named(&pattern, patterns).filter(|named| is_case_pattern(named)) {
+				Some(named) => case_test(*subject, named.clone()),
+				None => Node::Key(subject, Op::Eq, Box::new(resolved(*pattern, patterns))),
+			}
+		}
+		// `d: Definition`: a pattern's name as a type holds any node (decision node-refinements)
+		Node::Key(subject, Op::Colon, kind) if pattern_named(&kind, patterns).is_some() => {
+			Node::Key(subject, Op::Colon, Box::new(Node::symbol(crate::words::ANY_TYPE)))
+		}
 		Node::Key(subject, Op::As, target) => match pattern_named(&target, patterns).and_then(schema_fields) {
 			Some(fields) => cast_to_schema(*subject, &target.name(), &fields),
 			None => Node::Key(subject, Op::As, target),
@@ -118,6 +127,24 @@ fn substituted(node: Node, patterns: &Patterns) -> Node {
 		},
 		other => other,
 	}
+}
+
+/// `Key(head, Op.Define, body)`: a pattern of the built-in node's case (node_cases.rs)
+fn is_case_pattern(pattern: &Node) -> bool {
+	match pattern.drop_meta() {
+		Node::List(parts, Bracket::Round, _) => {
+			parts.first().and_then(|head| super::node_cases::node_case(head.drop_meta().symbol_name()?)).is_some()
+		}
+		_ => false,
+	}
+}
+
+/// `n is Definition` of a node case's pattern, an equality by now: `match n { Key(head, Op.Define, body): yes, _: no }`,
+/// the arm destructuring.rs takes apart (switch.rs is_pattern knows list, map and code patterns only)
+fn case_test(subject: Node, pattern: Node) -> Node {
+	let arms = vec![key(pattern, Op::Colon, Node::True), key(Node::symbol(WILDCARD), Op::Colon, Node::False)];
+	let arms = Node::List(arms, Bracket::Curly, Separator::Semicolon);
+	Node::List(vec![Node::symbol(crate::words::MATCH_WORD), subject, arms], Bracket::None, Separator::Space)
 }
 
 /// `page find Image`, `xs replace Pair with …`: the pattern after the word find or replace

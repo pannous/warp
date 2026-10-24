@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+# a warning names its file: warp probes/error_names/warning.warp (card error-names)
+x = 0
+for i in 1 upto 4 { x += i }
+print x

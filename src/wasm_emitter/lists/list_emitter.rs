@@ -51,6 +51,7 @@ const BUILTIN_CALLS: [&str; 23] = [
 	crate::switch::NO_CASE_CALL,
 	crate::filled_lists::ZERO_FILL_CALL,
 	crate::list_mutations::INSERT_EITHER_CALL,
+	// ⚠ WARP DOES THIS DIFFERENTLY: list_sum is no runtime word; sum is the prelude's fold → lib/prelude.warp
 	crate::library_words::LIST_SUM,
 	crate::words::INSTANCE_OF,
 	crate::list_mutations::REMOVED_VALUE_CALL,
@@ -474,6 +475,7 @@ impl WasmGcEmitter {
 			return;
 		}
 
+		// ⚠ WARP DOES THIS DIFFERENTLY: the typed-list sum path keyed by name; warp folds are one loop for any operator → lib/compiler/lambdas.warp
 		if let Some((list, sum_loop)) = super::super::lists::list_dispatch::list_sum_call(items) {
 			return self.emit_list_sum(func, list, sum_loop, super::super::lists::list_dispatch::Wanted::Node);
 		}
@@ -1077,7 +1079,15 @@ impl WasmGcEmitter {
 			items.iter().filter(|item| !matches!(item.drop_meta(), Node::Type { .. })).cloned().collect();
 		match rest.as_slice() {
 			[] => self.emit_call(func, "new_empty"),
-			[only] => self.emit_node_instructions(func, only),
+			[only] => {
+				// the one statement next to a class (`class Point {…}` then `Point{…}.x`): its runtime error names its
+				// own position, as a statement of a sequence does (card error-field)
+				if let Some(position) = crate::errors::diagnostic::line_info(only) {
+					self.statement_position = Some(position);
+					self.emit_trap_position(func);
+				}
+				self.emit_node_instructions(func, only)
+			}
 			_ => self.emit_list_node(func, &rest, bracket, separator),
 		}
 	}

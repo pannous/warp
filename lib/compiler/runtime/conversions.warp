@@ -1,15 +1,17 @@
 # Conversions and casts of values known only at run time: `as`, typed variables, truthiness, int and char texts
 use "intrinsics.warp"
+use "../kinds.warp"
 use "errors.warp"
-use "exact.warp"
+use "bridge.warp"
 use "instructions.warp"
 use "lists.warp"
 use "text_numbers.warp"
 use "types.warp"
+use "../byte_codes.warp"
 # a boxed int (kind code 1), exact rational or float as a float
 float_of_node(n: Node): float := {
 	if kind_code(n) != Kind.Int { return unboxed_float(n) }
-	float(exact_numerator(n)) / float(exact_denominator(n))
+	if is_plain_int(n) then float(unboxed_int(n)) else extended_float(n)
 }
 # `x.bytecount`: the bytes of a text's or character's UTF-8, 8 an item of a list or map; an error has none
 node_bytes(n: Node): int := {
@@ -54,8 +56,10 @@ text_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Text and kind_code(n) != Kind.Codepoint) { returned_error("not a text") }
 	n
 }
+# a yes/no, or 0 or 1, which a bool holds as no and yes (Rust: `f(): bool := x == 1 and 0` gives no)
+holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
 bool_checked(n: Node): Node := {
-	if is_null(n) or not (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1)) { returned_error("not a bool") }
+	if not holds_bool(n) { returned_error("not a bool") }
 	n
 }
 float_checked(n: Node): Node := {
@@ -78,7 +82,7 @@ text_of_node(n: Node): text := {
 	""
 }
 bool_of_node(n: Node): bool := {
-	if is_null(n) or marked_kind(n) != Marked.Bool { fail() }
+	if not holds_bool(n) { fail() }
 	unboxed_int(n) != 0
 }
 char_of_node(n: Node): char := {
@@ -103,7 +107,7 @@ spells(t: text, word: text): bool := {
 	if byte_count(t) != byte_count(word) { return no }
 	for i in 0..<byte_count(t) {
 		b = byte_at(t, i)
-		if (if b >= 65 and b <= 90 then b + 32 else b) != byte_at(word, i) { return no }
+		if (if b >= Ascii.UpperA and b <= Ascii.UpperZ then b + Ascii.CaseShift else b) != byte_at(word, i) { return no }
 	}
 	yes
 }
@@ -126,7 +130,7 @@ truncated_int(n: Node): int := {
 	if textual_node(n) { return text_as_int(text_of_node(n)) }
 	if not is_null(n) and kind_code(n) == Kind.Float { return truncated(unboxed_float(n)) }
 	if is_null(n) or kind_code(n) != Kind.Int { fail() }
-	int_quotient(exact_numerator(n), exact_denominator(n))
+	if is_ratio(n) then extended_truncated(n) else unboxed_int(n)
 }
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
 int_text(n: int): text := {
@@ -138,12 +142,12 @@ int_text(n: int): text := {
 		digits += 1
 	}
 	out = new_text(sign + digits)
-	if n < 0 { set_byte(out, 0, 45) }
+	if n < 0 { set_byte(out, 0, Ascii.Minus) }
 	left = n
 	for i in sign + digits - 1 down to sign {
 		digit = int_remainder(left, 10)
 		if digit < 0 { digit = -digit }
-		set_byte(out, i, 48 + digit)
+		set_byte(out, i, Ascii.Zero + digit)
 		left = int_quotient(left, 10)
 	}
 	out
@@ -152,13 +156,13 @@ char_text(c: char): text := code_point_text(code_of(c))
 # a code point's UTF-8 bytes: 6 bits in each continuation byte 10xxxxxx, the rest in the lead byte
 code_point_text(code: int): text := {
 	n = code
-	count = if n < 128 then 1 else if n < 2048 then 2 else if n < 65536 then 3 else 4
+	count = if n < Utf8.TwoBytesFrom then 1 else if n < Utf8.ThreeBytesFrom then 2 else if n < Utf8.FourBytesFrom then 3 else 4
 	out = new_text(count)
 	for i in count - 1 down to 1 {
-		set_byte(out, i, 128 + int_remainder(n, 64))
-		n = int_quotient(n, 64)
+		set_byte(out, i, Utf8.Continuation + int_remainder(n, Utf8.ContinuationUnit))
+		n = int_quotient(n, Utf8.ContinuationUnit)
 	}
-	lead = if count == 1 then 0 else if count == 2 then 192 else if count == 3 then 224 else 240
+	lead = if count == 1 then 0 else if count == 2 then Utf8.TwoByte else if count == 3 then Utf8.ThreeByte else Utf8.FourByte
 	set_byte(out, 0, lead + n)
 	out
 }

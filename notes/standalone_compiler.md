@@ -1,5 +1,7 @@
 # The standalone compiler: one warp program, source in, wasm out
 
+How to run it under plain wasmtime: notes/standalone.md.
+
 User decision standalone-compiler (2026-10-20): "we are no longer interested in Rust. Everything we try directly with
 warp. No more conversion to and fro. Of course, we need the Rust compiler to compile our compiler. But then the
 compiler should be completely independent."
@@ -77,11 +79,13 @@ pass with it (the count self vs Rust-compiled goes to the supervisor first: `scr
 warp-self` runs every test pair both ways, ~35 min a lane, and ends with the parity line; decision
 self-compiled-parity: self may pass 5 % fewer, reported, no gate yet). It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
-Build files (decision compiler-build, card compiler-wasm): compiler.wasm and compiler-self.wasm lie next to the binary
-for the lib/ they record (custom section `warp.build`: lib/'s path, its fingerprint, the binary's WARP_SOURCE from
-build.rs); a run with any other lib/ (WARP_LIB, a worktree) uses <lib>/../data/. A missing file is built at its first
-run; an existing one only by `warp rebuild [pure|self]`, never because lib/ changed: a run on one built from another
-lib/ or warp build prints one line naming `warp rebuild`. main's binary refresh runs `warp rebuild pure` with the new
+Build files (decision compiler-build, cards compiler-wasm, installed-compilers): compiler.wasm and compiler-self.wasm
+next to the binary are the delivered pair (a release's, or main's from the Integrator), used as they are: never
+compared with the checkout's lib/, no notice (custom section `warp.build`: lib/'s path, its fingerprint, the binary's
+WARP_SOURCE from build.rs, then the commit of lib/'s checkout, the stamp `warp version` shows). Only a lib/ named by
+WARP_LIB that the pair is not for (a worktree) uses <lib>/../data/, where a run on one built from another lib/ or warp
+build prints one line naming `warp rebuild`. Only `warp rebuild [pure|self]` builds one; a missing one is an error
+naming it (user 2026-10-22: no rebuild on demand anywhere). main's binary refresh runs `warp rebuild pure` with the new
 binary before installing it next to ~/dev/bin/warp. probes/speed/compiler_build.sh checks the whole cycle.
 Cold start (card pure-cold-start, empty module cache): the pure lane's try at compiler.warp (passes stage compiled ~44
 s, analysis ~6 s, emit ~21 s, then their runs) and Rust's compile of it (~90 s) ran one after the other: 166 s. Now
@@ -91,8 +95,22 @@ Warm start (card pure-warm-start): 2.9 s, of which ~97% was compiler.warp loweri
 (WARP_PROFILE: 590 of 613 samples). compiler.warp now keeps them, `kept(name) ?? keep(name, value)` of use os (a
 value in the module cache under stage_key: binary + lib/): warm hello 0.07 s, a new program ~0.1–0.2 s. The kept
 Node crosses to Rust and back (postcard); 38 samples give the same results with and without it.
+Computing that kept value takes ~50 s CPU in compiler-self.wasm on the Mac (more on a 4-core cloud VM): inside a
+program's first run it blew the 60 s turn limit (card cloud-lane-narrow), so a build (`warp rebuild`, or a missing
+build file) runs the new compiler once on `0` to keep it (standalone.rs `warm`).
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
 list on card file-own-words, to undo once that rule lands).
+Card under-pure (2026-10-21): print([1, 2]) failed only here, not in the stage lane, because compiler.warp runs the
+WARP passes on the runtime words: runtime show.warp's match arm ø (node_matches.warp; main took True/False), and
+emitter.warp refusing a `the result: text` given a kind guessed from a call still compiling (node_text ↔ list_shown
+cycle; admitted() now holds it as the declared kind, the reread fixes the code). A refusal is now the compile's
+error, not "not a list at 23:2". Holding only a typed block's last statement as the result (definitions.warp
+result_held) is no longer needed with admitted() and made `warp rebuild self` refuse ("the operator # on int"), so
+it was dropped. Debug recipe: copy lib to scratch/upN, add prints (`print "CF " + f.name` in compile_function), run
+`WARP_LIB=<copy>/lib warp lib/compiler/compiler.warp p.warp p.wasm <dir> <copy>/lib` to keep the wasm for
+`wasm-tools validate --features all`. A self-build refusal reproduces in ~4 min with `WARP_SELF_HOSTED=pure-only
+WARP_LIB=<copy>/lib warp <copy>/lib/compiler/compiler.warp`; bisect it by copying main's lib and swapping one changed
+file in at a time. Remaining ladder gaps: card under-pure-2.
 
 ### WARP_SELF_HOSTED=pure (alias pure-only)
 pure and pure-only become one lane with no fallback; `pure-only` stays as an alias with a note.
@@ -201,9 +219,10 @@ Open question (warp-interviewer): running the compiled program inside the same w
 host (instantiate is no WASI call) or an evaluator in warp; default until answered: warp.wasm compiles to a .wasm and
 prints how to run it.
 
-### Float pow without libm (parked 2026-10-21, branch wasi-runtime 69c3d3ac12)
-- lib/compiler/runtime/pow.warp ports musl's pow (src/math/pow.c, the Arm optimized-routines one glibc also has) on
-  its non-fma path (wasm has no fma); pow_tables.warp holds pow_data.c / exp_data.c as the ints of the doubles' bits.
+### Float pow without libm (runtime/extended/pow.warp, card standalone)
+- lib/compiler/runtime/extended/pow.warp ports musl's pow (src/math/pow.c, the Arm optimized-routines one glibc also has) on
+  its non-fma path (wasm has no fma); pow_tables.warp holds pow_data.c / exp_data.c as the doubles' bits, 16 hex digits each,
+  read in place by hex_entry (no table list, no global).
   C's uint64_t compares go through unsigned_below (add 2^63 to both sides), shifts through shifted_right/_signed.
 - Bitwise oracle: fetch pow.c pow_data.c pow_data.h exp_data.c exp_data.h from
   https://git.musl-libc.org/cgit/musl/plain/src/math/, add a libm.h shim (asuint64/asdouble via memcpy,
@@ -211,5 +230,5 @@ prints how to run it.
   issignaling_inline 0, __math_oflow/uflow/invalid as in musl) and a features.h defining `hidden` empty; rename pow to
   musl_pow and build with `clang -O2 -ffp-contract=off` next to a driver reading hex bit pairs from stdin. Compare
   against the system pow too: Apple's libm is no musl, a rare last-bit difference there is no bug.
-- Open: `global pow_log_ints = []` then assigning table_ints(…) to it refuses in emitter.warp ("a list where a text
-  is needed"), so the tables are parsed on every call without the cache.
+- A runtime word's global list cache refuses in emitter.warp (card emitter-refuses-runtime); the fixed-width hex
+  tables need none.

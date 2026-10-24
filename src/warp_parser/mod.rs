@@ -304,6 +304,8 @@ pub struct WarpParser {
 	user_operators: Vec<UserOperator>,
 	/// Operator aliases the program declares (`operator ⊕ := +`), found by a pre-scan of the source (operators/aliases.rs)
 	source_aliases: Vec<crate::operators::OperatorAlias>,
+	/// Circumfix operators the program declares (`circumfix operator ⟦ ⟧ := round`), found by the same pre-scan
+	source_circumfixes: Vec<crate::operators::CircumfixAlias>,
 	/// Types the program declares (`class point{…}`), found by a pre-scan of the source: `point{x:1}` constructs one (D4)
 	declared_types: std::collections::HashSet<String>,
 	/// The words of the declared types of several words (`class full name {…}`), longest first: read as one name `full-name`
@@ -336,6 +338,8 @@ impl WarpParser {
 		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
 		let source_aliases =
 			if options == ParserOptions::default() { crate::operators::source_aliases(&input) } else { Vec::new() };
+		let source_circumfixes =
+			if options == ParserOptions::default() { crate::operators::source_circumfixes(&input) } else { Vec::new() };
 		let (declared_types, multi_word_types, program_functions) = if options == ParserOptions::default() {
 			(scan_declared_types(&input), scan_multi_word_types(&input), scan_function_names(&input))
 		} else {
@@ -349,6 +353,7 @@ impl WarpParser {
 			closing_ends: Default::default(),
 			user_operators,
 			source_aliases,
+			source_circumfixes,
 			declared_types,
 			multi_word_types,
 			phrase_definitions: Default::default(),

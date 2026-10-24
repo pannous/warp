@@ -1,12 +1,13 @@
 # Values as they print: the text of any value known only at run time
 use "intrinsics.warp"
+use "../kinds.warp"
 use "conversions.warp"
-use "exact.warp"
+use "bridge.warp"
 use "floats.warp"
 use "nodes.warp"
 use "text.warp"
-use "times.warp"
 use "types.warp"
+use "../byte_codes.warp"
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
 # a type value `int` prints `class int`; ahead of the match, as `Symbol(_)` tests it as the type it names. Only the
 # empty value prints ø: a `ø:` case would take an empty list too, which prints [] (it equals ø, as in Rust)
@@ -20,14 +21,20 @@ node_text(n: Node): text := if is_null(n) then char_text("ø") else if names_a_t
 	False: "no"
 	_: collection_text(n)
 }
-number_text(n: Node): text := if kind_code(n) == Kind.Int then exact_text(n) else float_text(unboxed_float(n))
+number_text(n: Node): text := {
+	if kind_code(n) != Kind.Int { return float_text(unboxed_float(n)) }
+	# an Int not in an $i64box is an extended one, a ratio or a big int: a plain int's printing names no extended type
+	if is_plain_int(n) then int_text(unboxed_int(n)) else extended_text(n)
+}
 # a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
 collection_text(n: Node): text := {
 	if kind_code(n) == Kind.List { return list_shown(n) }
 	if node_is_error(n) { return unboxed_text(n) }
-	if kind_code(n) == Kind.Time { return time_text(n) }
+	if kind_code(n) == Kind.Time { return extended_text(n) }
 	# a closure: its lambda as written (emitter.warp closure_text_code)
 	if kind_code(n) == Kind.Function { return closure_text(n) }
+	# a type declaration as written, `type P {x:type int ø}` as Rust's serialization.rs shows it
+	if kind_code(n) == Kind.TypeDef { return "type " + node_text(entry_key(n)) + " " + node_text(key_value(n)) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
@@ -41,24 +48,24 @@ text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else 
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
 quoted_text(t: text): text := {
 	escapes = 0
-	for i in 0..byte_count(t) { escapes += escaped_byte(byte_at(t, i)) }
+	for i in 0..byte_count(t) { if is_escaped_byte(byte_at(t, i)) { escapes += 1 } }
 	out = new_text(byte_count(t) + escapes + 2)
-	set_byte(out, 0, 34)
+	set_byte(out, 0, Ascii.Quote)
 	at = 1
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
-		if escaped_byte(b) == 1 {
-			set_byte(out, at, 92)
+		if is_escaped_byte(b) {
+			set_byte(out, at, Ascii.Backslash)
 			at += 1
 		}
 		set_byte(out, at, b)
 		at += 1
 	}
-	set_byte(out, at, 34)
+	set_byte(out, at, Ascii.Quote)
 	out
 }
-# 1 for the bytes of `"` and `\`, which a quoted text escapes
-escaped_byte(b: int): int := if b == 34 or b == 92 then 1 else 0
+# the bytes of `"` and `\`, which a quoted text escapes
+is_escaped_byte(b: int): bool := b == Ascii.Quote or b == Ascii.Backslash
 list_text(xs: list): text := "[" + items_text(xs) + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
 items_text(xs: list): text := joined_items(xs, " ")
@@ -80,4 +87,4 @@ key_text(entry: Node): text := {
 	spaced = if is_letter_byte(byte_at(operator, 0)) then " " + operator + " " else operator
 	node_code(entry_key(entry)) + spaced + node_code(value)
 }
-is_letter_byte(b: int): bool := b >= 97 and b <= 122
+is_letter_byte(b: int): bool := b >= Ascii.LowerA and b <= Ascii.LowerZ

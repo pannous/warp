@@ -48,10 +48,6 @@ are error nodes; `3 times: print it` runs the whole rest of the line.
 
 ## Passes: dropped forms
 Per form: the form, the sources showing it, why it is left out, how to bring it back.
-- sql and sh templates: `sql "SELECT … $name"`, `exec sh "ls"` as parameterized calls (src/text/injection.rs
-  lower_templates, run first by interpolation.rs lower_program). Sources: probes/docs_sync/sandbox_exec.warp,
-  probes/sandbox/escape.warp, probes/sandbox/exec.warp, samples/system/crontab.warp. Left out for now: a library
-  feature, not text building. Back: port lower_templates in front of lib/compiler/interpolation.warp.
 - Rust Option forms: `if let Some(v) = o { A } else { B }`, `match o { Some(v) => A, None => B }`, `o.unwrap_or(d)`,
   `o.expect(m)`, `o.is_some()`. Sources: probes/rust_reading/option.warp. Left out: warp's own forms say it
   (`if o != ø`, `o ?? d`, `o ?? raise(m)`). The Rust compiler dropped it too (decision rust-cleanup-drops). Back:
@@ -210,6 +206,11 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   its one entry), Rust's `div:divv:"hi"` (the block dropped around its item). The rendered HTML is the same
   (`<div>{divv:&quot;hi&quot;}</div>`). Source: probes/unknown_tag.warp (accepted by the Integrator with --flaky,
   2026-10-19). Back: the lowered view marks a block that holds one item as that item, as Rust's eval reads it.
+- A map given to a function that changes it: `g(m: any, k: text) := { m[k] = 1 }; m = {}; g(m, "a"); "a" in m` is
+  yes in Rust's module and in every lane of emitter.warp (`warp pure`, `warp self`, WARP_SELF_HOSTED=1), no in the
+  twin's: the twin calls `wasm_module`, which gives typed_wasm_module no analyzer kinds (`{}`), while the pipeline
+  gives it `emitter_kinds(program)`. Source: probes/module_name_clash/map_shared.warp (accepted by the Integrator as
+  flaky, 2026-10-22). Back: the twin runs analyzer.warp and passes its kinds, as compiler.warp's compile does.
 - Case beyond ASCII: `"ÄB".lower()` fails in warp's module ("non ascii text", runtime.warp ascii_case), gives "äb" in
   Rust's, whose case table comes from Rust's char tables at emit time. Back: card unicode-case, the table as warp data.
 - A symbol named like a type word: `type(symbol("key")) is key` gives no in warp's module (symbol(…) is the runtime
@@ -219,7 +220,8 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - Big ints (card emitter-big-ints): an int is an i64 in emitter.warp's modules, and an int beyond 64 bits fails in
   runtime.warp int_overflow ("trap detail: 0"), where Rust's promotes it to a BigInt (`x = 2^62; x * 4`, factorial 25,
   Catalan numbers past the 35th). Sources: samples/golf/catalan-numbers.short.warp and
-  samples/golf/catalan-numbers.warp (inside the core since a body ending in a statement gives ø, 2026-10-19). Back: runtime.warp ports src/wasm_emitter/numbers/big_int.rs (fixnums and
+  samples/golf/catalan-numbers.warp (inside the core since a body ending in a statement gives ø, 2026-10-19),
+  probes/ratio_text.warp (`2^70 + 1`; inside the core since abs(x) emits, 2026-10-20). Back: runtime.warp ports src/wasm_emitter/numbers/big_int.rs (fixnums and
   handles into a big-number heap).
 - Sorting (card sort-warp): runtime.warp's node_order compares texts, characters and numbers only; instances (the
   Comparable witness), times and uncertain values trap there, where Rust's node_order orders them. A sorted list is a

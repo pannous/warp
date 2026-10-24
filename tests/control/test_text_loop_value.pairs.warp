@@ -13,6 +13,12 @@
 # a_text_loop_that_never_ran_is_empty
 'for c in [] { "x" }'	ø
 
+# a_text_loop_whose_every_pass_skips_is_empty
+'for n in ["a"] { if n == "a" { continue }; n }'	ø
+'for n in ["a"] { if n == "a" { break }; n }'	ø
+'f() := { for n in ["a"] { if n == "a" { continue } } }; f(); 1'	1
+'for n in ["a" "b"] { if n == "b" { continue }; n }'	'a'
+
 # numeric_loops_keep_their_values
 'for i in 1..3 { i * 2 }'	4
 'n = 0; for c in "ab" { n += 1 }; n'	2

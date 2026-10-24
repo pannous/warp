@@ -134,6 +134,9 @@ mod test_operation_type; // card parse-type
 mod test_optional_casts;
 mod test_optional_list_items;
 mod test_optional_number_fields;
+mod test_optional_result_body;
+mod test_optional_result_variable;
+mod test_optional_result_warning;
 mod test_param_named_like_global; // card param-named-like-global
 mod test_param_named_like_library_word; // card word-param-list
 mod test_parameter_text; // card param-text
@@ -216,6 +219,7 @@ mod test_type_test_is_only;
 mod test_type_tests;
 mod test_type_tests_anywhere;
 mod test_type_upgrading;
+mod test_type_value_name; // card pure-lane-holds
 mod test_type_values; // card type-values
 mod test_type_word_scopes;
 mod test_type_word_user_function;
@@ -224,6 +228,7 @@ mod test_typed_arrays;
 mod test_typed_builtins; // card typed-builtins
 mod test_typed_list_annotations; // card typed-list-annotations
 mod test_typed_list_elements; // card typed-list-elements
+mod test_typed_param_phrases;
 mod test_types;
 mod test_types_scope;
 mod test_union_returns;
@@ -235,4 +240,4 @@ mod test_user_counting_word; // card user-defined-size
 mod test_value_constructor;
 mod test_variant_equality; // card variant-left
 mod test_variant_payloads;
-mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body` // card element-field-like-function
+mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body` // card element-field-like-function // card pure-typed-params

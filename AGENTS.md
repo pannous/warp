@@ -4,6 +4,9 @@ This is **warp**, a rust implementation of **wasp**
 
 Always commit work and progress, even when a task is not fully solved or tests remain failing. Record unresolved failures honestly, and push when progress is at or near the desired goal.
 
+Answering (user 2026-10-22, every agent): first give a quick answer from what you know now, then run the necessary
+tasks and investigations in the background, then give the complete answer once the information arrives.
+
 https://github.com/pannous/wasp
 https://wasp.pannous.com/
 
@@ -222,6 +225,20 @@ is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> Node -> eval() == 6
 is!("def square:=it*it; square(3)",9); 
 is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
 ```
+
+## Pre-approved plans, no approval ping-pong (user 2026-10-23, very important)
+Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
+A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
+When in doubt, ask the user directly, not Supervisor. This replaces per-change OKs (pass ban, lib/compiler size
+limits) for work inside a plan.
+Ready goes through the board, not chat: when a branch is finished and pushed, run
+`todo add "merge: <branch> <sha>" Now -b "<one-line summary, tests run>"`. The Integrator merges the `merge:` cards
+in Now and closes them with `todo done`.
+
+## Commit everything (user 2026-10-23)
+Commit and push all meaningful progress all the time, including notes, handovers and WIP: a box or session can
+disappear at any moment and anything only on disk is lost. Unfinished work goes to its branch as a `wip:` commit.
+Pushing a work branch is always fine, so push it after every commit or two; only main goes through the Integrator.
 
 # Important
 Don't cargo clean unless absolutely necessary!

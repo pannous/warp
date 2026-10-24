@@ -1,0 +1,3 @@
+# `new P(1)`: new before a class name builds it. Expected: 1
+class P{x:int}
+print new P(1).x

@@ -169,11 +169,12 @@ fn multi_word_types_in_line(line: &str) -> Vec<Vec<String>> {
 		}
 		let mut name = vec![];
 		for word in &words[at + 1..] {
-			let (word_part, glued_body) = match word.strip_suffix('{') {
-				Some(glued) => (glued, true),
+			// `name{`, `{given:text}`, `name{given:text}`: the body begins at the word's brace
+			let (word_part, body_begins) = match word.split_once('{') {
+				Some((before_body, _)) => (before_body, true),
 				None => (*word, false),
 			};
-			if *word == "{" || glued_body {
+			if body_begins {
 				if !word_part.is_empty() && is_name_word(word_part) {
 					name.push(word_part.to_string());
 				}

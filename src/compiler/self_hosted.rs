@@ -46,8 +46,14 @@ const EMIT_PROGRAM: &str = concat!(
 const LIBRARY_MARK: &str = "{lib}";
 /// The runtime words emitter.warp compiles into a module, lowered like a program, in the compiler's folder
 const RUNTIME_WORDS: &str = "runtime.warp";
+/// The extended runtime words, which the core (runtime.warp and its parts) never uses: lib/compiler/runtime/extended/
+/// named by this file's `use` lines, joined after the core's (decision runtime-split; compiler.warp RUNTIME_ROOTS)
+const EXTENDED_RUNTIME_WORDS: &str = "runtime/extended.warp";
 /// The module the host words are imported from
 const HOST_MODULE: &str = "host";
+/// The file of the table of words a module may import (the host's and WASI's), and the variable it assigns
+const HOST_WORDS_FILE: &str = "host_words.warp";
+const HOST_WORDS_NAME: &str = "host_words";
 /// The levels of lib/compiler/diagnostics.warp's message files beside a warning: errors.data, hints.data
 const ERROR_LEVEL: &str = "error";
 const HINT_LEVEL: &str = "hint";
@@ -91,20 +97,19 @@ const STAGE_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(600
 
 type Pass = fn(Node) -> Node;
 /// Each Rust pass with a warp twin and the twin's index in passes.warp `passes` (counted from 1, as warp's `#`)
-const TWINNED_PASSES: [(Pass, usize); 8] = [
+const TWINNED_PASSES: [(Pass, usize); 5] = [
 	(crate::text::interpolation::lower_program, 1),
 	(crate::lowering::welcome_forms::lower_match_arms, 2),
 	(crate::lowering::welcome_forms::lower_arrow_result_types, 3),
-	(crate::lowering::of_lookups::lower, 4),
-	(crate::lowering::grouped_receivers::lower, 5),
-	(crate::lowering::times_phrases::lower, 6),
-	(crate::lowering::broadcasting::lower_element_wise_operators, 7),
-	(crate::lowering::number_words::lower, 8),
+	(crate::pipeline::sugar_phrases, 4),
+	(crate::lowering::number_words::lower, 5),
 ];
 
 thread_local! {
 	/// Set in a worker: the stage program itself compiles with the Rust parser and passes
 	static IN_WORKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// Set while a program the pure lane refused compiles fully on Rust (after_pure)
+	static ON_RUST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// One request to a worker: its JSON, and where the result's view goes as JSON
@@ -161,7 +166,27 @@ fn compiler_folder() -> PathBuf {
 fn switch() -> Option<&'static str> {
 	static VALUE: OnceLock<Option<String>> = OnceLock::new();
 	let value = VALUE.get_or_init(|| crate::setting(SWITCH)).as_deref();
-	value.filter(|_| !IN_WORKER.with(|inside| inside.get()))
+	value.filter(|_| !IN_WORKER.with(|inside| inside.get()) && !ON_RUST.with(|on| on.get()))
+}
+
+// ⚠ WARP DOES THIS DIFFERENTLY: a program the pure lane refuses runs fully on Rust, never on the hybrid mix of
+// parser.warp, the twinned passes and Rust's other passes (decision pure-fallback, notes/hybrid_lane.md): the sugar
+// moved into lib/sugar no longer has to keep the shapes Rust's passes read → lib/sugar/*.warp
+/// `compile`, the usual compile after pure_module gave none: under WARP_SELF_HOSTED=pure, where that means the pure
+/// lane refused the program, with the switch off, so all of it runs on Rust
+pub fn after_pure<T>(compile: impl FnOnce() -> T) -> T {
+	if switch() != Some(PURE) {
+		return compile();
+	}
+	struct Restored;
+	impl Drop for Restored {
+		fn drop(&mut self) {
+			ON_RUST.with(|on| on.set(false));
+		}
+	}
+	ON_RUST.with(|on| on.set(true));
+	let _restored = Restored;
+	compile()
 }
 
 fn enabled() -> bool {
@@ -387,21 +412,37 @@ fn module_of(answer: &str) -> Result<Vec<u8>, String> {
 	}
 }
 
-/// The words a module imports from the host (src/host.rs), as JSON: {name: [[parameter kind…], [result kind…]]}, a kind
-/// as emitter.warp names it (an anyref is a "node")
+/// The words a module may import, as JSON: the table lib/compiler/host_words.warp assigns to HOST_WORDS_NAME, {name:
+/// [[parameter kind…], [result kind…], module when not the host's]}, the one compiler.warp reads too
 fn host_words() -> Result<String, Node> {
-	use wasm_encoder::ValType;
-	let kind = |value_type: &ValType| match value_type {
-		ValType::I64 => "int",
-		ValType::F64 => "float",
-		ValType::I32 => "i32",
-		_ => "node",
-	};
-	let kinds = |types: &[ValType]| types.iter().map(kind).collect::<Vec<_>>();
-	let words = crate::host::HOST_WORD_SIGNATURES
-		.iter()
-		.map(|(name, parameters, results)| (name.to_string(), serde_json::json!([kinds(parameters), kinds(results)])));
-	Ok(serde_json::Value::Object(words.collect()).to_string())
+	let file = compiler_folder().join(HOST_WORDS_FILE);
+	let source = std::fs::read_to_string(&file)
+		.map_err(|reason| crate::node::error(&format!("the host words {}: {reason}", file.display())))?;
+	let program = crate::warp_parser::parse(&source);
+	// a file of one statement parses as that statement, not as a list of it
+	let program = program.drop_meta();
+	let statements = if let Node::List(items, _, _) = program { items.clone() } else { vec![program.clone()] };
+	let table = statements.iter().find_map(|statement| match statement.drop_meta() {
+		Node::Key(name, crate::operators::Op::Assign, table) if name.drop_meta().name() == HOST_WORDS_NAME => {
+			Some(table.as_ref().clone())
+		}
+		_ => None,
+	});
+	let table = table.ok_or_else(|| crate::node::error(&format!("{} assigns no {HOST_WORDS_NAME}", file.display())))?;
+	without_meta(&table).to_json_compact().map_err(|reason| crate::node::error(&reason.to_string()))
+}
+
+/// The node without its comments and positions, at every depth: plain data
+fn without_meta(node: &Node) -> Node {
+	match node.drop_meta() {
+		Node::List(items, bracket, separator) => {
+			Node::List(items.iter().map(without_meta).collect(), bracket.clone(), separator.clone())
+		}
+		Node::Key(left, op, right) => {
+			Node::Key(Box::new(without_meta(left)), op.clone(), Box::new(without_meta(right)))
+		}
+		plain => plain.clone(),
+	}
 }
 
 /// The prelude's source, whose definitions a pure program reaches (lib/compiler/prelude_words.warp)
@@ -428,9 +469,9 @@ fn runtime_words() -> Result<String, Node> {
 /// declarations of emitter.warp's intrinsics (`is_null(x: any): bool from runtime`) stay out, left to emitter.warp as
 /// definitions.warp drops them
 pub fn runtime_source() -> std::io::Result<String> {
-	let first = compiler_folder().join(RUNTIME_WORDS);
-	let mut joined = HashSet::from([first.clone()]);
-	let mut waiting = VecDeque::from([first]);
+	let roots = [RUNTIME_WORDS, EXTENDED_RUNTIME_WORDS].map(|root| compiler_folder().join(root));
+	let mut joined = HashSet::from(roots.clone());
+	let mut waiting = VecDeque::from(roots);
 	let mut source = String::new();
 	while let Some(file) = waiting.pop_front() {
 		let folder = file.parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -458,7 +499,8 @@ fn is_intrinsic_declaration(line: &str) -> bool {
 /// The file of a `use` line: a quoted path beside the using file, else a module of lib
 fn used_file(folder: &Path, name: &str) -> PathBuf {
 	match name.strip_prefix('"').and_then(|quoted| quoted.strip_suffix('"')) {
-		Some(path) => folder.join(path),
+		// one file however it is reached (runtime/extended/../text.warp is runtime/text.warp)
+		Some(path) => folder.join(path).canonicalize().unwrap_or_else(|_| folder.join(path)),
 		None => library().join(format!("{name}.warp")),
 	}
 }
@@ -616,7 +658,7 @@ fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Nod
 #[cfg(feature = "native")]
 fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Node> {
 	use crate::run::program_cache::{keep_under, kept_under};
-	let key = stage_key(program);
+	let key = Some(compiled_stage_key(program));
 	if let Some(module) = key.as_deref().and_then(kept_under) {
 		return Ok(module);
 	}
@@ -658,13 +700,71 @@ pub(crate) fn stage_key(program: &str) -> Option<String> {
 	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
-/// The fingerprint of lib/: every file with its path inside lib/, the same for an identical lib/ elsewhere
+/// The cache key of a compiled stage (lib/compiler's passes, analysis, emitter compiled by this binary): the sources
+/// warp was built from, the program, the WARP_ settings and the compiler's inputs alone (compiler_inputs), not every
+/// file of lib/: a std module, a sugar file or a test edited leaves the stages kept (card compiler-cache-keys: the
+/// stages compiled again after every lib/ edit made each self build long and memory-hungry)
 #[cfg(feature = "native")]
-pub(crate) fn library_fingerprint() -> String {
+fn compiled_stage_key(program: &str) -> String {
+	use sha2::{Digest, Sha256};
+	let library = library();
+	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
+	let mut settings = crate::run::program_cache::warp_settings();
+	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
+	let mut hasher = Sha256::new();
+	hasher.update(format!("{}\n{settings:?}\n{program}\n", env!("WARP_SOURCE")));
+	for (file, bytes) in compiler_input_files(&STAGE_MODULES) {
+		hasher.update(format!("{file}\n"));
+		hasher.update(bytes);
+	}
+	crate::extensions::hex_text(&hasher.finalize())
+}
+
+/// The std modules whose text the compiler embeds when it is built (`module_source("math")`): its inputs until
+/// lib/compiler reads them from the run's lib/ (card compiler-library-source)
+#[cfg(feature = "native")]
+const EMBEDDED_MODULES: [&str; 4] = ["prelude", "math", "list", "regex"];
+/// What a stage compiled by Rust reads besides lib/compiler: the embedded modules, and the std modules its sources use
+/// (`use os`, `use file`) or reach as type modules, which the Rust lane reads from lib/ when they were edited
+#[cfg(feature = "native")]
+const STAGE_MODULES: [&str; 9] = ["prelude", "math", "list", "regex", "os", "file", "map", "text", "time"];
+
+/// [path inside lib/, contents] of each compiler input: the files below lib/compiler (dot files left out), sorted,
+/// then lib/<module>.warp of each module there is
+#[cfg(feature = "native")]
+fn compiler_input_files(modules: &[&str]) -> Vec<(String, Vec<u8>)> {
+	let library = library();
+	let relative = |file: &Path| file.strip_prefix(library).unwrap_or(file).display().to_string();
+	let mut inputs: Vec<(String, Vec<u8>)> = files_below(library.join(crate::modules::COMPILER_FOLDER))
+		.into_iter()
+		.filter(|file| !file.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with('.')))
+		.map(|file| (relative(&file), std::fs::read(&file).unwrap_or_default()))
+		.collect();
+	inputs.sort();
+	for module in modules {
+		let file = library.join(format!("{module}.warp"));
+		if let Ok(bytes) = std::fs::read(&file) {
+			inputs.push((relative(&file), bytes));
+		}
+	}
+	inputs
+}
+
+/// The inputs hash of the compiler pair built from lib/ by this binary, as scripts/compiler-inputs.sh computes it
+/// (16 hex digits): lib/compiler, the embedded modules and WARP_SOURCE; the key of the shared compiler store
+/// (notes/compiler_rebuilds.md)
+#[cfg(feature = "native")]
+pub fn compiler_inputs_hash() -> String {
 	use sha2::{Digest, Sha256};
 	let mut hasher = Sha256::new();
-	hash_library(&mut hasher);
-	crate::extensions::hex_text(&hasher.finalize())
+	hasher.update(format!("rust {}\n", env!("WARP_SOURCE")));
+	for (file, bytes) in compiler_input_files(&EMBEDDED_MODULES) {
+		hasher.update(file.as_bytes());
+		hasher.update([0u8]);
+		hasher.update(bytes);
+		hasher.update([0u8]);
+	}
+	crate::extensions::hex_text(&hasher.finalize())[..16].to_string()
 }
 
 #[cfg(feature = "native")]

@@ -1,0 +1,13 @@
+# List comprehensions (notes/layers.md, sugar; card sugar-comprehensions): `[x * x for x in xs]` is the list a loop
+# builds, `(l = []; for x in xs { l += [x * x] }; l)`, before for_loops.warp lowers the loop. A filter `if c` (also
+# `where c`) guards the append; a second clause, `[a + b for a in xs for b in ys]` or `… if a > 1 for b in ys`, is the
+# comprehension of the rest appended for each item of the first, which these rules rewrite again (F7). An element of
+# several words, `[f x for x in xs]`, is their phrase. Python's generator argument `sum(x * x for x in xs)` is the call
+# of that list. Rust twin: src/lowering/collections/comprehensions.rs lower
+rewrite [$e for $x in $xs] => ($l = []; for $x in $xs { $l += [$e] }; $l)
+rewrite [$e for $x in $xs if $c $rest...] => ($l = []; for $x in $xs { if $c { $l += [$e $rest...] } }; $l)
+rewrite [$e for $x in $xs where $c $rest...] => [$e for $x in $xs if $c $rest...]
+rewrite [$e for $x in $xs $clause $rest...] => ($l = []; for $x in $xs { $l += [$e $clause $rest...] }; $l)
+rewrite [$e... for $x in $xs $clause] => [$e for $x in $xs $clause]
+rewrite [$e... for $x in $xs if $c] => [$e for $x in $xs if $c]
+rewrite $f($e for $x in $xs $clause $rest...) => $f([$e for $x in $xs $clause $rest...])

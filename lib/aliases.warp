@@ -1,0 +1,44 @@
+# The aliases of warp (card alias-mechanism, notes/aliases.md, wiki/alias.md): one entry per canonical word, the
+# form format and print show, with the other spellings that mean the same.
+#   operator: the infix operator the word names; prefix-operator: its prefix operator; an entry named by an operator
+#   is that operator
+#   symbol: the operation, an Op of lib/compiler/node.warp
+#   aliases: the other spellings, a symbol one spells the operator, a word one the word
+#   infix: yes when the word and its word aliases are written between operands too (`7 mod 2`), but
+#   name a block written right after them (`div {…}` is the html tag)
+# Keywords, operator words and constants are quoted: written bare, the parser reads them already.
+# A library keeps the aliases of its own words (lib/math.warp: sin and sine, log₂ …).
+
+# arithmetic
+add { operator: "+", symbol: Op.Add, aliases: [plus] }
+subtract { operator: "-", symbol: Op.Sub, aliases: [minus, "‐", "‑", "‒", "–", "—", "―"] }
+multiply { operator: "*", symbol: Op.Mul, aliases: [times, "×", "⋅"] }
+divide { operator: "/", symbol: Op.Div }
+div { operator: "/!", symbol: Op.FloorDiv, aliases: ["÷"], infix: yes }
+"/!=" { symbol: Op.FloorDivAssign, aliases: ["÷="] }
+modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes }
+power { operator: "^", symbol: Op.Pow, aliases: ["**"] }
+"^=" { symbol: Op.PowAssign, aliases: ["**="] }
+count { prefix-operator: "#", symbol: Op.Hash, aliases: [size, len, length] }
+
+# comparison and logic
+"<=" { symbol: Op.Le, aliases: ["≤"] }
+">=" { symbol: Op.Ge, aliases: ["≥"] }
+"!=" { symbol: Op.Ne, aliases: ["≠"] }
+"~" { symbol: Op.Rough, aliases: ["~~"] }
+"and" { symbol: Op.And, aliases: ["&&", "&"] }
+"or" { symbol: Op.Or, aliases: ["||", "|"] }
+"not" { symbol: Op.Not, aliases: ["!", "¬"] }
+contains { aliases: [has, includes] }
+
+# ranges and arrows
+"to" { symbol: Op.To, aliases: ["...", "..=", "…"] }
+upto { operator: "..", symbol: Op.Range, aliases: ["..<"], infix: yes }
+"->" { symbol: Op.Arrow, aliases: ["=>"] }
+
+# keywords and constants
+"else if" { aliases: [elif, elsif, elseif] }
+"yes" { aliases: ["true"] }
+"no" { aliases: ["false"] }
+"ø" { aliases: ["null", "nul", "none", "nil", "nill", "nix", "nada", "nothing", "void"] }
+warning { aliases: [warn] }

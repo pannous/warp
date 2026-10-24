@@ -181,9 +181,35 @@ fn test_files(args: &[String]) -> Option<&[String]> {
 	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(paths)
 }
 
+/// `warp test [--self] [--each] [folder…]`: the folders whose test files run through `warp pure`
+/// (src/compiler/pure_tests.rs), tests/ when none is named and it exists; the words after `test`, flags kept
+fn test_folders(args: &[String]) -> Option<Vec<String>> {
+	use warp::compiler::pure_tests::{DEFAULT_FOLDER, FLAGS};
+	if args.get(1).is_none_or(|word| TEST_WORD != word) {
+		return None;
+	}
+	let words = args.get(2..).unwrap_or_default();
+	let (flags, folders): (Vec<&String>, Vec<&String>) = words.iter().partition(|word| FLAGS.contains(&word.as_str()));
+	if folders.is_empty() {
+		let default = std::path::Path::new(DEFAULT_FOLDER).is_dir().then(|| DEFAULT_FOLDER.to_string())?;
+		return Some(flags.into_iter().cloned().chain([default]).collect());
+	}
+	folders.iter().all(|folder| std::path::Path::new(folder).is_dir()).then(|| words.to_vec())
+}
+
+/// `warp test --case <pure|self> <file> <index>`: one test of a file, run by a child of `warp test [folder…]`
+fn test_case(args: &[String]) -> Option<&[String; 3]> {
+	match args {
+		[_, word, flag, rest @ ..] if TEST_WORD == word && flag == warp::compiler::pure_tests::CASE_FLAG => {
+			rest.try_into().ok()
+		}
+		_ => None,
+	}
+}
+
 /// The tests of one file run, its summary printed: (tests run, failed)
 fn run_tests_of(path: &str) -> (usize, usize) {
-	diagnostic::show_lines_of(&source_of(path));
+	diagnostic::show_lines_of(&source_of(path), Some(path));
 	let result = warp::pipeline::for_tests(|| eval(path));
 	let summary = match result.drop_meta() {
 		Node::Text(summary) => summary.clone(),
@@ -349,6 +375,10 @@ fn run_command(args: &[String], given: &[String]) {
 				Err(failure) => fail(format!("warp build: {failure}")),
 			}
 		}
+	} else if let Some([by, file, index]) = test_case(args) {
+		std::process::exit(if warp::compiler::pure_tests::run_child_case(by, file, index) { 0 } else { 1 });
+	} else if let Some(folders) = test_folders(args) {
+		std::process::exit(if warp::compiler::pure_tests::run_folders(&folders) { 0 } else { 1 });
 	} else if let Some(paths) = test_files(args) {
 		// P209, P210: the files' `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero;
 		// several files each print their summary under their name, and the total last
@@ -369,12 +399,18 @@ fn run_command(args: &[String], given: &[String]) {
 		std::process::exit(if failed > 0 { 1 } else { 0 });
 	} else if args[1] == REBUILD_COMMAND {
 		rebuild_compilers(args.get(2).map(String::as_str));
-	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str())
-		&& args.get(2).is_some_and(|path| has_warp_extension(path))
-	{
-		use warp::compiler::standalone::{run, Compiler};
+	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
+		use warp::compiler::standalone::{run, run_code, Compiler};
 		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
-		print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
+		// `warp pure <file.warp> [arguments…]`, or inline code as plain `warp <code>` takes it, `use` reading from the
+		// current folder
+		if has_warp_extension(&args[2]) {
+			diagnostic::show_lines_of(&source_of(&args[2]), Some(&args[2]));
+			print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
+		}
+		let code = args[2..].join(" ");
+		diagnostic::show_lines_of(&code, None);
+		print_and_exit(run_code(&code, &env::current_dir().unwrap_or_default(), by));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments([program_arguments, given].concat());
@@ -390,7 +426,7 @@ fn run_command(args: &[String], given: &[String]) {
 			show_in_webview(path, false);
 			return;
 		}
-		diagnostic::show_lines_of(&source_of(path));
+		diagnostic::show_lines_of(&source_of(path), Some(path));
 		warp::run::program_cache::enable(); // its next run starts without compiling (card cache-compiled-shader)
 		let result = eval(path); // a file: its folder is in scope (D15)
 		if !only_run && wants_executable() && !matches!(result, Node::Error(_)) {
@@ -416,12 +452,14 @@ fn run_command(args: &[String], given: &[String]) {
 		}
 		print_and_exit(run::wasmtime_runner::run(module));
 	} else if arg_string == "test" || arg_string == "tests" {
-		println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
+		println!(
+			"warp test <file.warp> runs the tests of a program, warp test [folder…] the test files under the folders"
+		);
 	} else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
 		println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
 		warp::web::dev_server::open_in_browser("https://github.com/pannous/warp/");
 	} else if let Some(code) = command_argument(&arg_string, "eval") {
-		diagnostic::show_lines_of(code);
+		diagnostic::show_lines_of(code, None);
 		show_and_fail_on_error(&eval(code), RESULT_MARK);
 	} else if let Some(code) = command_argument(&arg_string, LOWER_JSON_COMMAND) {
 		match warp::pipeline::lower(code) {
@@ -459,6 +497,9 @@ fn run_command(args: &[String], given: &[String]) {
 		print_version();
 	} else if let Some(word) = unknown_command(args) {
 		fail(word);
+	} else if arg_string.contains('/') && std::path::Path::new(&arg_string).is_dir() {
+		// a folder is no code: `warp lib/compiler/runtime/extended` read it as `lib / compiler / …`
+		fail(format!("warp: {arg_string} is a folder; run one of its .warp files (warp test <folder> runs its tests)"));
 	} else {
 		// Default: eval and print; a page shows in a window
 		if shows_in_window(&arg_string) {
@@ -479,6 +520,7 @@ fn print_version() {
 	let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
 	let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
 	eprintln!("{profile} build {commit}{branch} · built {}", built.as_deref().unwrap_or("?"));
+	eprintln!("{}", warp::compiler::standalone::compilers_line());
 }
 
 /// The first line a successful command prints

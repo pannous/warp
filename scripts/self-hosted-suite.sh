@@ -76,7 +76,7 @@ rank() {
 	for log in "$@"; do
 		if [[ "$log" == *.gz ]]; then gunzip -c "$log"; else cat "$log"; fi
 	done | LC_ALL=C awk -v listed="${LISTED:-}" -v shown=$SHOWN_CAUSES -v width=$CAUSE_WIDTH -v family_least=$FAMILY_LEAST '
-		match($0, /(^|[^ ])test [^ ]+ \.\.\. (ok|FAILED)$/) { result($0) }
+		match($0, /(^|[^ ])test [^ ]+ \.\.\. (ok|FAILED)( <[0-9.]+s>)?$/) { result($0) }
 		/^cloud-test: KILLED/ { killed++ }
 		/^---- [^ ]+ stdout ----$/ { current = $2; state = 1; next }
 		state == 1 && / panicked at / { state = (current in caused) ? 0 : 2; caused[current]; next }
@@ -85,7 +85,7 @@ rank() {
 		# a test that ran in two parts counts once, failed if it failed in either
 		function result(line,   name) {
 			sub(/^.*test /, "", line); name = line; sub(/ .*$/, "", name)
-			if (line ~ /FAILED$/) outcome[name] = "FAILED"
+			if (line ~ /FAILED( <[0-9.]+s>)?$/) outcome[name] = "FAILED"
 			else if (!(name in outcome)) outcome[name] = "ok"
 		}
 		# the message itself: an error value or a text of one unwrapped, its quotes unescaped
@@ -136,18 +136,24 @@ refusals() {
 
 local_run() {
 	mkdir -p "$REPORTS"
-	local log=$REPORTS/local.log local_refusals=$REPORTS/local-refusals.txt
+	local log=$REPORTS/local.log local_refusals=$REPORTS/local-refusals.txt status=0
 	rm -f "$local_refusals"
-	env "${SWITCHES[@]}" WARP_EMIT_REFUSALS="$local_refusals" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
+	env "${SWITCHES[@]}" WARP_EMIT_REFUSALS="$local_refusals" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1 ||
+		status=$?
 	rank "$log"
 	refusals "$local_refusals"
 	echo "(log: $log)"
+	# failing tests are the survey's data; a run killed by a signal or one that never reported (a build error) is not
+	if [ "$status" -gt 128 ] || ! grep -q '^test result:' "$log"; then
+		echo "self-hosted-suite: the local run did not finish (exit $status), see $log" >&2
+		return $((status ? status : 1))
+	fi
 }
 
 # The failed tests of a run's logs, sorted
 failed_tests() {
 	local log
-	for log in "$@"; do gunzip -c "$log"; done | sed -n 's/^.*test \([^ ]*\) \.\.\. FAILED$/\1/p' | LC_ALL=C sort -u
+	for log in "$@"; do gunzip -c "$log"; done | sed -n 's/^.*test \([^ ]*\) \.\.\. FAILED\( <[0-9.]*s>\)\{0,1\}$/\1/p' | LC_ALL=C sort -u
 }
 
 # --stage <name>=<VAR>[=<value>]: the run's name grows by the stage, VAR is set (again) to the value
@@ -250,6 +256,7 @@ case "${1:-}" in
 		done
 		if [ "${1:-}" = --local ]; then shift; local_run "$@"; else cloud_run "$@"; fi ;;
 	--local) shift; local_run "$@" ;;
+	-h | --help) sed -n '2,/^set -uo/p' "$0" | sed '$d'; exit 0 ;;
 	--*) sed -n '2,/^set -uo/p' "$0" | sed '$d'; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac

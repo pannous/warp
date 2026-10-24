@@ -9,8 +9,28 @@ const FOREIGN_LIST_HEADS: [&str; 6] = ["Vec", "vector", "Vector", "array", "Arra
 /// `left: ref Node?`: WebAssembly's reference type word before a field's type
 const REF_TYPE_WORD: &str = "ref";
 
-/// Two words naming one built-in type (user 2026-10-16, card fast-scope): `x: fast int` is i64, `fast float` f64
-const COMPOUND_TYPES: [(&str, &str, &str); 2] = [("fast", "int", "i64"), ("fast", "float", "f64")];
+/// Words naming one built-in type: warp's `x: fast int` is i64, `fast float` f64 (user 2026-10-16, card fast-scope); C's
+/// names of several words the fixed width they mean there (card unsigned-int, as ffi/struct_layouts.rs reads headers),
+/// `unsigned int` uint32, with a note naming warp's word. The longest first.
+// ⚠ WARP DOES THIS DIFFERENTLY: `byte index`, `byte position` are count types of bytes (decision index-units)
+// → lib/compiler/parser.warp COMPOUND_TYPES, lib/compiler/index_positions.warp
+const COMPOUND_TYPES: [(&[&str], &str); 13] = [
+	(&["unsigned", "long", "long"], "uint64"),
+	(&["long", "long", "int"], "int64"),
+	(&["unsigned", "long"], "uint64"),
+	(&["long", "long"], "int64"),
+	(&["long", "int"], "int64"),
+	(&["unsigned", "int"], "uint32"),
+	(&["signed", "int"], "int32"),
+	(&["unsigned", "short"], "uint16"),
+	(&["short", "int"], "int16"),
+	(&["unsigned", "char"], "byte"),
+	(&["signed", "char"], "int8"),
+	(&["fast", "int"], "i64"),
+	(&["fast", "float"], "f64"),
+];
+/// The first word of warp's own compound types, which need no note
+const FAST_WORD: &str = "fast";
 /// The heads of an optional type `option<int>`, `Option<i32>`
 const OPTION_HEADS: [&str; 2] = ["option", "Option"];
 
@@ -64,14 +84,17 @@ impl WarpParser {
 
 	/// `full name` of a declared `class full name {…}` is the one name `full-name`, any other word itself
 	pub(crate) fn joined_type_name(&mut self, word: String) -> String {
-		let built_in = COMPOUND_TYPES.iter().find_map(|(first, second, name)| {
-			(*first == word)
-				.then(|| self.words_ahead_length(&[second.to_string()]))
+		let built_in = COMPOUND_TYPES.iter().find_map(|(words, name)| {
+			(words[0] == word)
+				.then(|| self.words_ahead_length(&words[1..]))
 				.flatten()
-				.map(|length| (*name, length))
+				.map(|length| (words, *name, length))
 		});
-		if let Some((name, length)) = built_in {
+		if let Some((words, name, length)) = built_in {
 			self.advance_by(length);
+			if word != FAST_WORD {
+				crate::errors::diagnostic::note_alias(&words.join(" "), name);
+			}
 			return name.to_string();
 		}
 		let found = self.multi_word_types.iter().find_map(|words| {
@@ -90,9 +113,9 @@ impl WarpParser {
 	}
 
 	/// The length of the blanks and `words` right ahead, each a whole word: ` name` of `full name`
-	fn words_ahead_length(&self, words: &[String]) -> Option<usize> {
+	fn words_ahead_length(&self, words: &[impl AsRef<str>]) -> Option<usize> {
 		let mut offset = 0;
-		for word in words {
+		for word in words.iter().map(AsRef::as_ref) {
 			let blanks = self.blanks_at(offset);
 			if blanks == 0 {
 				return None;

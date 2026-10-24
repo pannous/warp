@@ -1,0 +1,21 @@
+#!/usr/bin/env warp
+# a `: list` result held in a variable that can be ø gives [] silently (decision optional-result, list part reversed);
+# an `: int` result that can be ø, held or from a call, warns "can answer ø; declare `: int?`" and gives ø
+# expected: [] [2] ø 2 ø 3 ø, warnings for g, first and outer (cards pure-lane-declared, optional-result-flow)
+def f(x: int): list {
+	found = ø
+	if x > 0 { found = [x] }
+	found
+}
+print(f(0))
+print(f(2))
+def g(x: int): int { a = ø; b = a; if x > 0 { b = x }; b }
+print(g(0))
+def h(x: int): int { a = x; a = a + 1; a }
+print(h(1))
+def find(x: int): int? { if x > 0 { return x }; ø }
+def first(x: int): int { find(x) }
+print(first(0))
+print(first(3))
+def outer(x: int): int { first(x) }
+print(outer(0))

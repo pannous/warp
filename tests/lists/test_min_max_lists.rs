@@ -33,8 +33,10 @@ fn test_extremum_of_an_empty_list_is_an_error() {
 }
 
 #[test]
-fn test_a_single_number_is_still_refused() {
-	fails_with("max(3)", "max takes at least 2");
+#[ignore = "card gap-max-one-number"]
+fn test_the_extremum_of_a_single_number_is_that_number() {
+	is!("max(3)", 3);
+	is!("min(7)", 7);
 }
 
 #[test]

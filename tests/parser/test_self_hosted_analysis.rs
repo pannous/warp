@@ -18,6 +18,7 @@ fn self_analyzed_run(switch: &str, code: &str) -> (String, String) {
 /// WARP_SELF_ANALYSIS beside the switch: analyzer.warp analyzes each lowered program as well, and the program runs as
 /// before (card pipeline-runs)
 #[test]
+#[ignore = "redundant: covered by parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values"]
 fn a_program_the_analyses_agree_on_runs_self_analyzed() {
 	let (value, errors) = self_analyzed_run("front", "square(x: int) := x * x; y = square(3); y + 1");
 	assert!(value.contains("10"), "{value} {errors}");

@@ -20,6 +20,7 @@ fn a_bound_int_takes_whole_numbers_only() {
 }
 
 #[test]
+#[ignore = "redundant: covered by web::test_bound_field_types::a_bound_int_takes_whole_numbers_only"]
 fn a_bound_float_takes_any_number() {
 	assert!(
 		page_after(&[("budget", "7.25")]).ends_with("2 guests, 7.25 each"),

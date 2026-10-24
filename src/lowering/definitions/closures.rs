@@ -178,7 +178,7 @@ pub fn lower(program: Node) -> Node {
 fn with_builtin_wrappers(program: Node) -> Node {
 	// a nested `outer·floor` is written `floor`; the prelude's `prelude·replace` is the built-in itself
 	let prelude = format!("{}·", crate::modules::PRELUDE_MODULE);
-	let defined: HashSet<String> = crate::analyzer::function_context(&program)
+	let defined: HashSet<String> = crate::analyzer::function_definitions(&program)
 		.user_functions
 		.keys()
 		.filter(|name| !name.starts_with(&prelude))
@@ -309,7 +309,8 @@ fn for_loop_parts(node: &Node) -> Option<(&str, &Node)> {
 	(keyword.is_symbol(FOR_WORD) && in_word.is_symbol(IN_WORD)).then_some((variable, list))
 }
 
-/// What may hold a function value in the program, settled
+/// What may hold a function value in the program, settled; it reads the functions' names, parameters and bodies only,
+/// so its context is function_definitions, no analysis of the program as it stands
 fn settled_function_values(program: &Node, context: &Context) -> FunctionValues {
 	// `g = x => x`: the parameter a function hands back, so `g(y => y*2)(4)` calls what it was given
 	let passing_through: HashMap<String, usize> = context
@@ -339,7 +340,7 @@ fn settled_function_values(program: &Node, context: &Context) -> FunctionValues 
 
 /// The fields the program gives a function value: `h.d` of `h = Holder(x => x + 1)` (card untyped-field)
 pub(crate) fn function_holding_fields(program: &Node) -> HashSet<String> {
-	let context = crate::analyzer::function_context(program);
+	let context = crate::analyzer::function_definitions(program);
 	let variables = settled_function_values(program, &context).variables.into_iter();
 	variables.map(|path| unscoped(&path).to_string()).filter(|path| path.contains('.')).collect()
 }
@@ -393,7 +394,7 @@ fn defined_function(node: &Node, functions: &HashSet<String>, enclosing: &[Strin
 }
 
 fn lift_closures(program: Node) -> Node {
-	let context = crate::analyzer::function_context(&program);
+	let context = crate::analyzer::function_definitions(&program);
 	let variables = captured_variables_of(&program);
 	let values = settled_function_values(&program, &context);
 	let callable_fields = values.callable_fields(&program, &context);

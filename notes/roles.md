@@ -1,5 +1,7 @@
 # Agent roles in warp
 
+Grok Bot agents work a little differently (box, pre-approved plans, status in git): see notes/agents/grok.md.
+
 Startup prompts and the spawn script for every role: notes/agents/ (README.md says how to start the team).
 ListAgents shows the current sessions; each is named `warp-<role>`.
 
@@ -8,9 +10,10 @@ session doing merge → test → push has no handoff. Split a separate Tester of
 bottleneck: it would take targeted-check requests and flaky-test hunts, the Integrator would keep merging.
 
 ## Supervisor
-High-level only: talks to the user, turns decisions into tasks (notes/open_decisions.md, the board via
-~/dev/bin/todo), spawns and assigns workers, watches load. No merging, no test runs, no decision questions to the user
-(those go to the Interviewer).
+Owns the project's progress (user 2026-10-21): talks to the user, turns decisions into tasks (notes/open_decisions.md,
+the board via ~/dev/bin/todo), spawns and assigns workers, watches load and metrics. Makes technical and process
+decisions itself and may bend a rule that blocks progress, naming it (notes/agents/supervisor.md); language questions
+go to the user via the Interviewer.
 
 ## Interviewer
 User decisions never block. The Interviewer is the only session that asks the user decision questions (multiple

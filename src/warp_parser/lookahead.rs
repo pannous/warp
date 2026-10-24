@@ -356,7 +356,6 @@ impl WarpParser {
 			dash if glyph_operator(dash) == Some(Op::Sub) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
-			'‖' => Some((Op::Abs, 1)),
 			'#' => self.css_color_length().is_none().then_some((Op::Hash, 1)), // prefix # means count/length
 			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the
 			// subject; a glued `<tag` stays a bracket
@@ -431,6 +430,19 @@ impl WarpParser {
 			_ => false,
 		};
 		blanks > 0 && if name == 0 { assigns(start) } else { is_type && assigns(after_name) }
+	}
+
+	/// `def f(x: int): list? {…}`: the word before the `?` here follows a signature's `):` and blanks and a `{` follow
+	/// after `width` characters, so it is an optional result type before the body, no ternary (decision optional-result)
+	pub(super) fn result_body_follows(&self, width: usize) -> bool {
+		let blanks = self.blanks_at(width);
+		let before = &self.chars[..self.pos];
+		let word_start = before.iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
+		let mut written = before[..word_start].iter().rev().filter(|ch| !ch.is_whitespace());
+		blanks > 0
+			&& self.peek_char(width + blanks) == '{'
+			&& written.next() == Some(&':')
+			&& written.next() == Some(&')')
 	}
 
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on

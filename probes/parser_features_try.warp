@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# Try line for parser.warp (the self-hosted front end): each loops, C-style for, optional fields, function-typed parameters
+class Person { name: text; age?: int }
+p = Person{name: "Ada"}
+print p.name
+for (i = 0; i < 3; i++) { print i }
+each n in [10, 20] { print n }
+twice(f: (int) -> int, x: int) := f(f(x))
+print twice(n => n + 1, 5)

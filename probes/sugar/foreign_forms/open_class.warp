@@ -1,0 +1,4 @@
+# `open class` and `abstract class`. Expected: 5
+open class P {x:int}
+abstract class Shape {n:int}
+print P(2).x + Shape(3).n
