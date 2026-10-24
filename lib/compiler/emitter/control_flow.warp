@@ -33,7 +33,7 @@ def runtime_error_message(name: text): text {
 # `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
 # has_else: `else ø` is a branch giving ø, no missing one
 def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else: bool): list {
-	c = condition(expression_code(body, test))
+	c = condition_of(body, test, 0)
 	a = nested(body, statements_block(yes_branch), 1)
 	if not has_else { return unmatched(c, a, yes_branch is number) }
 	b = nested(body, statements_block(no_branch), 1)
@@ -49,7 +49,7 @@ def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else
 def unmatched(c: any, a: any, numeric: bool): list {
 	if a#1 == no_kind { return [no_kind, c + [op.if, no_value] + a#2 + [op.end]] }
 	if a#1 == "int" or a#1 == pending { return ["int", c + [op.if] + value_type("int") + converted(a, "int") + [op.else, op.i64_const, 0, op.end]] }
-	otherwise = if numeric or a#1 == "float" or a#1 == "bool" then boxed(number_value(0)) else [ref_null, gc.node]
+	otherwise = if numeric or a#1 == "float" or a#1 == "bool" then boxed(number_value(0)) else [ref_null, gc_type(gc.node)]
 	["node", c + [op.if] + value_type("node") + boxed(a) + [op.else] + otherwise + [op.end]]
 }
 # `while c do body`: block { loop { exit unless c; block { body }; step; again } }; a `break` in body branches to the
@@ -64,7 +64,7 @@ def loop_of(body: Body, test: any, block: any): list {
 }
 # the code of a loop; each run of its body sets the local `last` to its value, or, with last -1, runs it for its effect
 def loop_code(body: Body, test: any, block: any, last: int): list {
-	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
+	exit_unless = condition_of(body, test, 2) + [op.i32_eqz, op.br_if, 1]
 	parts = block_statements(block)
 	has_step = #parts > 0 and is_loop_step(parts.last)
 	again = if has_step then dropped(nested(body, value_of(parts.last), 2)) + [op.br, 0] else [op.br, 0]
@@ -100,10 +100,10 @@ def effect(body: Body, n: any): list {
 	operator = op_of(n)
 	left = key_of(n)
 	if operator == "then" and type(left) is key and op_of(left) == "if" {
-		return condition(expression_code(body, right_of_if(left))) + [op.if, no_value] + nested_effect(body, value_of(n), 1) + [op.end]
+		return condition_of(body, right_of_if(left), 0) + [op.if, no_value] + nested_effect(body, value_of(n), 1) + [op.end]
 	}
 	if operator == "else" and type(left) is key and op_of(left) == "then" and type(key_of(left)) is key and op_of(key_of(left)) == "if" {
-		c = condition(expression_code(body, right_of_if(key_of(left))))
+		c = condition_of(body, right_of_if(key_of(left)), 0)
 		return c + [op.if, no_value] + nested_effect(body, value_of(left), 1) + [op.else] + nested_effect(body, value_of(n), 1) + [op.end]
 	}
 	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_code(body, value_of(left), value_of(n), -1) }
@@ -154,6 +154,15 @@ def field_or_word(body: Body, value: any, name: text, word: any): list {
 	read = boxed(runtime_call("map_get", [receiver, text_value_of(name)]))
 	["node", value#2 + [op.local_set] + held + has_it + [op.if] + value_type("node") + read + [op.else] + boxed(word(receiver)) + [op.end]]
 }
+# the program's statement n about to run, its position in trap_position: a runtime error names it, as Rust's
+# (emit_trap_position); a runtime word's statements leave it
+def position_code(body: Body, n: any): list {
+	at = if body.intrinsics then ø else written_at(n)
+	if not at { return [] }
+	line: int = at#1
+	column: int = min(at#2, columns_per_line - 1)
+	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + uleb(declared_global("trap_position", "i32")#1)
+}
 def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
 
 # `xs += e`: e's items appended to the list xs holds, in place, so every alias sees them; ø when xs holds no list
@@ -182,6 +191,7 @@ def statement(body: Body, n: any): list {
 	for name in body.unshared { if appends_only(n, name) { kept += [name] } }
 	body.unshared = kept
 	value = expression_code(body, n)
+	value = [value#1, position_code(body, n) + value#2]
 	after = []
 	for name in body.unshared { if name in kept { after += [name] } }
 	made = fresh_list_name(n)

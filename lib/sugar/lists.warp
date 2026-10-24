@@ -4,3 +4,6 @@
 rewrite int#$n => zero_fill($n - 1, 0)
 rewrite float#$n => zero_fill($n - 1, 0 as float)
 rewrite text#$n => zero_fill($n - 1, "")
+
+# A conversion to a list of a type (card pure-as-conversions): `["1", "2"] as list of int` converts each item, [1, 2]
+rewrite $v as list of $t => $v.map($x => $x as $t)
