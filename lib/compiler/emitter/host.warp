@@ -89,7 +89,7 @@ runtime_global(n: any): any := {
 	# of the runtime: the program keeps its own `Kind` (card constants-exist)
 	if name in constant_tables { return ø }
 	value = value_of(value_of(n))
-	module.globals[name] = [#module.global_order, if value is number then "int" else if type(value) is list then "list" else "text"]
+	module.globals[name] = [#module.global_order, if value is number then "int" else if value == ø or type(value) is list then "list" else "text"]
 	module.runtime_globals += [name]
 	module.global_order += [name]
 }
