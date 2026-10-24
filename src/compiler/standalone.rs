@@ -159,7 +159,10 @@ fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
 		)));
 	};
 	if !is_delivered(&path) && !same_inputs(&bytes) {
-		eprintln!("{} was built from other compiler inputs or warp build: `warp rebuild` builds it anew", path.display());
+		eprintln!(
+			"{} was built from other compiler inputs or warp build: `warp rebuild` builds it anew",
+			path.display()
+		);
 	}
 	Ok(module_of_bytes(bytes))
 }
