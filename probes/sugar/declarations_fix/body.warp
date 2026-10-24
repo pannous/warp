@@ -1,0 +1,2 @@
+def total(xs){sum xs}
+print total([1,2,3])

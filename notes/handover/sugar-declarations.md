@@ -22,3 +22,9 @@ Unknown after a main merge.
 
 ## Next step
 Merge main, self-check, Ready (lands sugar-definitions too).
+
+## Progress (box worker w1, 2026-10-24 18:20 CEST)
+- 2af83a522 (pushed): early sugar = sugar/functions + sugar/declarations, also applied to each library definition a program reaches (prelude_words with_reached); `{$b...}` of a one-statement block (`{sum xs}`) binds the block whole. `rebuild pure` + pure hello OK, `rebuild self` + self hello OK, probes/sugar/{definitions,declarations} same in both lanes.
+- Quick run of the 10 files that failed at e851ec181: branch 147 / main 151 of 535, 0 new failures, 4 fixed.
+- Full comparison running: /workspace/cow/w1-cmp.sh output /workspace/cow/w1-sugar.out, logs /workspace/cow/w1-cmp-w1-sugar-w1-tests-sugar{,--self}.log; compare with `python3 /workspace/cow/w1-diff.py <branch log> /workspace/cow/w1-cmp-w1-main-w1-tests-sugar.log`.
+- The WIP patches /workspace/cow/w1-sugar-wip*.patch are superseded by 2af83a522.
