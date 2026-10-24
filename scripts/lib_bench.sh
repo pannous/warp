@@ -10,12 +10,17 @@
 # usage: scripts/lib_bench.sh [warp binary, default main's shared Rust binary /Users/me/dev/bin/warp-rust] [path regex]
 #   → data/lib_bench/<commit>.txt (<commit>-partial.txt with a regex): a line per file "<file>  parse: <verdict>  pure: <verdict>" (each the first error), the
 #     summary "parsed X/N, pure-compiled Y/N" and the first errors ranked
-set -u
+# Exit status: 0 = report written; 2 = bad arguments or no runnable warp; 1 = a parse batch was killed
+# (signal or timeout) — the report is still written and its files read "crashed".
+#   scripts/lib_bench.sh -h|--help   this text
+set -uo pipefail
+case "${1:-}" in -h | --help) sed -n '2,/^set -uo/{/^#/s/^# \{0,1\}//p;}' "$0"; exit 0 ;; -*) echo "lib_bench: unknown option '$1' (see --help)" >&2; exit 2 ;; esac
 # the Rust binary: the launcher warp would run lib_bench_parse.warp through the pure pipeline (notes/pure_wrapper.md)
 main_warp=/Users/me/dev/bin/warp-rust
 [[ -x $main_warp ]] || main_warp=/Users/me/dev/bin/warp
 warp=${1:-$main_warp}
 filter=${2:-}
+[ -x "$warp" ] || { echo "lib_bench: no runnable warp binary at $warp" >&2; exit 2; }
 root=$(cd "$(dirname "$0")/.." && pwd)
 commit=$(git -C "$root" rev-parse --short=10 HEAD)
 work=$root/scratch/lib_bench
@@ -44,8 +49,13 @@ emitter_parts=$(echo "$all_files" | grep "^$EMITTER_PARTS")
 total=$(echo "$files" | grep -c .)
 
 parse_files() { # <file>…: a "<file>\t<verdict>" line each into parse/<first file>.txt
+	local status
 	(cd "$ROOT/scripts" && timeout $((TIMEOUT_SECONDS * $#)) "$WARP" lib_bench_parse.warp "${@/#/../}" 2>/dev/null) |
 		grep $'\t' | sed 's|^\.\./||' >"$WORK/parse_$(echo "$1" | tr '/' '_').txt"
+	status=${PIPESTATUS[0]}
+	# a batch killed by a signal or its timeout: noted, its unread files show "crashed" in the report
+	[ "$status" -ge 124 ] && echo "parse batch from $1: exit $status" >>"$WORK/killed.txt"
+	return 0
 }
 pure_verdict() { # <file>: "compiled", else the refusal or the first error, into pure/<file>.txt
 	local name refusals output status
@@ -132,3 +142,7 @@ parse_of() { # <file>: its parse verdict, "crashed" when the helper died before 
 } >"$report"
 grep '^parsed ' "$report"
 echo "report: $report"
+if [ -s "$work/killed.txt" ]; then
+	echo "lib_bench: $(grep -c . "$work/killed.txt") parse batch(es) killed or timed out: $(head -1 "$work/killed.txt")" >&2
+	exit 1
+fi

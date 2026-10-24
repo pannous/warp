@@ -20,6 +20,10 @@ def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	if structured and symbol in equalities { return equality(body, symbol, a, b) }
 	# `"ab" * 2.5`: Rust says how a text repeats, a trap could not
 	if textual and (a#1 == "node" or b#1 == "node") and symbol not in comparisons { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
+	# a boxed left operand may be an instance whose class defines the operator: its dispatcher (class_methods.warp's
+	# `+·operator`, the operator a codepoint) calls the method or, on any other value, this builtin, which its own body keeps
+	dispatcher = "${symbol}·operator"
+	if a#1 == "node" and dispatcher in module.functions and body.function.name != dispatcher { return call_values(module.functions[dispatcher], [a, ["node", boxed(b)]]) }
 	if a#1 == "node" or b#1 == "node" { return node_operation(body, symbol, boxed(a), boxed(b)) }
 	# `"ab" * 3`, `3 * " "`: the text repeated, as `3 times "ab"`
 	if symbol == "*" and a#1 in characters and b#1 == "int" { return runtime_call("repeated_text", [b, ["node", boxed(a)]]) }
@@ -47,7 +51,7 @@ def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	[result, converted(a, kind) + converted(b, kind) + [ops[symbol]]]
 }
 
-# base ^ exponent of floats: the runtime word float_pow (runtime/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
+# base ^ exponent of floats: the runtime word float_pow (runtime/extended/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
 def float_power(body: Body, base: list, exponent: list): list {
 	held = uleb(fresh_local(body, "float"))
 	code = runtime_call("float_pow", [["float", base], ["float", exponent]])#2 + [op.local_tee] + held + [op.local_get] + held
@@ -64,11 +68,12 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	if symbol in bit_operators { return operation_code(body, symbol, ["int", converted(["node", a], "int")], ["int", converted(["node", b], "int")]) }
 	left = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	right = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
-	ints = operation_code(body, symbol, ["int", unboxed(left#2, gc.int_box)], ["int", unboxed(right#2, gc.int_box)])
+	ints = operation_code(body, symbol, ["int", unboxed(left#2, gc_type(gc.int_box))], ["int", unboxed(right#2, gc_type(gc.int_box))])
 	floats = operation_code(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
 	kind = if ints#1 == "bool" then "bool" else "node"
 	exact = exact_operation(body, symbol, left, right, floats)
-	integers = ratio_test(left#2) + ratio_test(right#2) + [op.i32_or] + if_else_code(kind, exact, ints)
+	# two Ints in $i64boxes stay ints; a ratio or a big int on either side takes the exact word
+	integers = plain_int_test(left#2) + plain_int_test(right#2) + [op.i32_and] + if_else_code(kind, ints, exact)
 	numbers = both_of_kind(left#2, right#2, Kind.Int) + if_else_code(kind, [kind, integers], floats)
 	code = a + [op.local_set] + left#2[1..] + b + [op.local_set] + right#2[1..]
 	if symbol not in comparisons { return [kind, code + numbers] }

@@ -17,18 +17,18 @@ definition_slices(source: text): list := {
 	written = ""
 	for line in source.split("\n") {
 		started = name_defined_in(line)
-		if started != "" {
-			if name != "" { slices += [[name, written]] }
+		if started {
+			if name { slices += [[name, written]] }
 			name = started
 			written = line
-		} else if name != "" and continues(line) {
+		} else if name and continues(line) {
 			written = written + "\n" + line
-		} else if name != "" {
+		} else if name {
 			slices += [[name, written]]
 			name = ""
 		}
 	}
-	if name != "" { slices += [[name, written]] }
+	if name { slices += [[name, written]] }
 	slices
 }
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
@@ -40,7 +40,7 @@ name_defined_in(line: text): text := {
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1 }
 	leading = leading_name(line)
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
-	if leading == "" { return "" }
+	if leading is empty { return "" }
 	following = line[#leading ..].trim()
 	is_function = following.starts_with("(") and line.contains(":=")
 	is_value = following.starts_with(":=") or (following.starts_with("=") and not following.starts_with("=="))
@@ -120,7 +120,7 @@ module_aliases(source: text): any := {
 with_call_forms(aliases: any, names: list): any := {
 	for name in names {
 		word = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else ""
-		if word != "" and is_name_start(word[0]) and word not in names { aliases[word] = name }
+		if word and is_name_start(word#1) and word not in names { aliases[word] = name }
 	}
 	aliases
 }
@@ -237,10 +237,10 @@ with_used_modules(program: Node, folder: text): Node := {
 used_module_sources(statements: any, folder: text, seen: any): list := {
 	sources = []
 	for statement in statements {
-		module = use_target(statement)
-		if module is symbol and file_used(statement, folder) == ø and name_of(module) not in seen {
-			seen += [name_of(module)]
-			source = file_text(std_module_path(name_of(module)))
+		used = use_target(statement)
+		if used is symbol and file_used(statement, folder) == ø and name_of(used) not in seen {
+			seen += [name_of(used)]
+			source = file_text(std_module_path(name_of(used)))
 			if source != ø {
 				inner = used_module_sources(statements_in(plain_node(parsed(source))), folder, seen)
 				sources += inner#1 + [source]
