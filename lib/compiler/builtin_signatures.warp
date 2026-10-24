@@ -224,6 +224,10 @@ word_lines(): any := {
 	typed_word_lines
 }
 
+# a word of the runtime, the emitter or a typed line of the library (lib/math.warp's `max`), which a class's method of
+# that name must not hide from the other values (class_methods.warp routes it, rewrites.warp keeps its sugar rules)
+is_library_word(word: text): bool := typed_lines.any(line => line.name == word) or word_lines().has(word)
+
 # whether the word's first line takes exactly one value, typed
 takes_one_typed_value(word: text): bool := {
 	lines = word_lines()
