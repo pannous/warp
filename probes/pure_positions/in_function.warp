@@ -1,0 +1,3 @@
+# an error inside a function names the statement there: Error("divide by zero at …in_function.warp:2:9")
+f(n) := 10 % n
+f(0)

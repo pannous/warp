@@ -1,0 +1,1 @@
+print max(x * 2 for x in 1..4)

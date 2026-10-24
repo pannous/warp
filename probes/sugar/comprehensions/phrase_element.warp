@@ -1,0 +1,3 @@
+f(x) := x + 1
+xs = [1, 2]
+print [f x for x in xs]
