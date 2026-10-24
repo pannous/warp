@@ -22,3 +22,15 @@ Merged onto main d665c3937 (Integrator, 2026-10-24 10:01 CEST): `warp rebuild pu
 
 ## Next step
 Pass the statement as `about` in the conversion diagnostics, rebuild pure+self, run tests/types, Ready.
+
+## Update 2026-10-24 (Worker 1, card hDLe74)
+- Merged origin/main in (merge, clean), then d0901b141: the own-type conversion diagnostic passes its statement as
+  `about` (main's diagnose(fact, about)). `warp rebuild pure` and `self` pass, hellos too.
+- Measured with the gate (`scripts/gate-probes.sh --base origin/main --folders`): tiers 0 and 1 green. Tier 2 (pure,
+  whole tests/types) has 915 of 1833 failing, against 941 of 1821 on main c196fc916 run the same way: 39 cases newly
+  pass (`t as number`, `'1/3' as number`, `as hex`, `as binary`, test_number_field, test_text_as_number), 13 newly fail.
+- Known failures: every case of the branch's own tests/types/test_pure_conversions.warp fails (12 cases). 10 of them,
+  every `Person as text` / `text(p: Person)` conversion, trap with "call stack exhausted"; :51 and :53 (`as list of T`)
+  give "the operator . on int". tests/types/test_printable.warp:6 (`text(x)` of a class with `text(p: person)`) passed
+  on main and now traps the same way. Next: find the recursion in a program's text conversion (probably
+  `"P " + p.name` shown through the conversion itself), then make test_pure_conversions pass.

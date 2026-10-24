@@ -22,3 +22,10 @@ Conflict in parser.warp only.
 
 ## Next step
 Redo on main as a fresh small branch; planner assigns.
+
+## Update 2026-10-24 (Worker 1, card hDLe74)
+- Merged origin/main in. The parser.warp conflict: main already declares user_operator_at `list?`
+  (longest_spelled_at), so main's version is kept; time_unit_at takes main's body with `list?`. The branch's diff on
+  main is now 4 signatures: time_unit_at, code_escape (parser.warp), group_parts (shapes.warp), slice_bounds (sugar.warp).
+- rebuild pure + self, hellos ok. The tests of those helpers (time units, escapes, operator aliases, infix operands,
+  slices, node lists; 11 files, 130 cases) fail 35 in both lanes, the same 35 as main c196fc916.

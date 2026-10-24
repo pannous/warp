@@ -22,3 +22,14 @@ Self build broken by the widening (fold).
 
 ## Next step
 Split: probes first, then a fixed widening; planner assigns.
+
+## Update 2026-10-24 (Worker 1, card hDLe74)
+- Merged origin/main in. The emitter.warp conflict: main split the emitter (lib/compiler/emitter/functions.warp) and
+  already widens an unannotated parameter that is passed a node (`passed`), so main's emitter is kept and f85bd641b's
+  emitter change is dropped. probes/self_hosting/emitter/untyped_parameter_widens.warp prints 0.5 in both lanes.
+- What's left on the branch: the probe, notes/self_hosting_dropped.md, and tests/parser/test_self_emitter.rs DROPPED +2
+  (empty_keys.warp, repeated_parameter_names.warp), the supervisor-approved edit to an existing test. That's Rust, so tier 3
+  (cargo) is the Integrator's.
+- rebuild pure + self, hellos ok; empty_keys `[]|[]`, repeated_parameter_names `2|6` in both lanes (main the same).
+  The widening tests (test_widened_list_views, test_upcast_fields, test_any_into_annotated, ...; 22 cases) fail 10 in
+  both lanes, the same as main.
