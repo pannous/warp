@@ -28,6 +28,8 @@ mod test_inline_comments;
 #[cfg(feature = "native")]
 mod test_installed_compilers; // card installed-compilers
 mod test_juxtaposition;
+#[cfg(feature = "native")]
+mod test_local_shadows_lib_function; // card local-shadows-lib-function
 mod test_meta;
 mod test_meta_attributes;
 mod test_named_argument_lambda; // card holder-says

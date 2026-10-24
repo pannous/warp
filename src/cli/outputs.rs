@@ -11,8 +11,9 @@ pub(crate) const SPIN_MANIFEST_EXTENSION: &str = "spin.toml";
 /// `warp build`: the WebAssembly module next to the program file (out.wasm for inline code), with `--aot` its machine
 /// code too; under WARP_SELF_HOSTED=pure or pure-only the warp compiler's module, as `warp <file>` runs it
 pub(crate) fn write_module(code: &str, target: &str, ahead_of_time: bool) {
-	let compiled = warp::compiler::self_hosted::pure_module(code)
-		.unwrap_or_else(|| warp::pipeline::for_any_host(|| wasm_emitter::compile(code)));
+	let compiled = warp::compiler::self_hosted::pure_module(code).unwrap_or_else(|| {
+		warp::compiler::self_hosted::after_pure(|| warp::pipeline::for_any_host(|| wasm_emitter::compile(code)))
+	});
 	match compiled {
 		Ok(module) => {
 			let output_path = compiled_output_path(target);

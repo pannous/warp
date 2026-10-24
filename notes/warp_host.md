@@ -6,8 +6,9 @@ It is no warp-rust: there is no interpreter or Rust compiler in it, and it doesn
 count.
 
     warp-host [--compiler self|full] [run] <file.warp | code> [args…]   compile and run; the run's value printed
-    warp-host [--compiler self|full] compile <file.warp> [<file.wasm>]
-    warp-host <file.wasm | file.wat> [args…]
+    warp-host [--compiler self|full] compile [--aot] <file.warp> [<file.wasm>]
+    warp-host [--compiler self|full] build <file.warp | file.wasm> [-o <app>]
+    warp-host <file.wasm | file.wat | file.cwasm> [args…]
     warp-host help | --help | -h                                         the usage, status 0
 
 - No command means run, as with warp: the first word after the flags decides.
@@ -91,10 +92,17 @@ count.
   - The same engine, and the same imports as a top-level module: WASI with the same stdout, std_io, C calls. A store
     and instance of its own, on a thread of its own with the full wasm stack. The args are the program's.
   - Machine code from the cache, keyed by the bytes: a second run is warm (in memory, else the .cwasm).
-  - A trap is an Error, `os.run_wasm: wasm trap: wasm `unreachable` instruction executed`, catchable with try. A
+  - `run_wasm(bytes, ["a", "b"])`: the module's own arguments (its `args`), not the program's.
+  - An uncaught Warp error of the module (a raise, a runtime error such as index out of range) is that Error, passed
+    through unchanged: `try run_wasm(compile_wasm("raise \"bad\"")) catch e` gives `bad`.
+  - A trap is an Error of its own, `os.run_wasm: wasm trap: wasm `unreachable` instruction executed`, catchable with try. A
     nonzero exit is an Error too, `the module exited with status 3`; exit 0 gives ø.
   - The value is copied out of the module's store (nodes.rs); a function or big integer comes back as warp-host's
     Other, as with any run.
+  - An exact rational (the pure lane's `2.5`, `1/3`: an Int node holding a $Ratio of two $i64box) comes back exact,
+    nodes.rs Node::Ratio: it prints as the program does (2.5, 1/3) and crosses back into the calling program as the
+    same structs, made by the host of the program's structural types (card host-run-wasm-float; it had failed
+    `run wasm: 0`).
 - `compile_wasm(code)`: the code, a program of the current folder, compiled in-process by warp-host's compiler
   (compiler-self, or compiler.wasm with `--compiler full`); its bytes, or the refusal as an Error.
   - `run_wasm(compile_wasm("6*7"))` gives 42: an eval.
@@ -108,6 +116,71 @@ count.
   - `run_wasm(compile_wasm("6*7"))`: ~0.85 s in all, of which compile_wasm is the bulk, as `warp-host run '6*7'`
     (0.12 s) plus `use os`
 
+## use wasm: other modules and components (card warp-host-wasm-load)
+
+`use wasm` (lib/wasm.warp), served by std_io module `wasm` (warp_host/wasm_modules.rs, components.rs):
+
+    m = load_wasm("calc.wasm")          // a handle {wasm:1 path:"calc.wasm" kind:"module"}
+    wasm_call(m, "twice", [21])         // 42; m may be the path too: wasm_call("calc.wasm", "twice", [21])
+    wasm_exports(m)                     // {twice:"func(i64) -> i64" divmod:"func(i64, i64) -> (i64, i64)" …}
+    c = load_wasm("rust_demo.wasm")     // a component, told by its header
+    wasm_call(c, "stats_of", ["hello big world"])   // {words:3 letters:13}
+
+- What load_wasm takes:
+  - A path, loaded once per run: the same file is the same instance, so its globals and memory last the run.
+  - Bytes (read_bytes, compile_wasm): a fresh instance each time.
+  - A handle.
+- Core modules:
+  - Instantiated in the program's own store with the same engine and imports as a program: WASI, host words, std_io,
+    C, other modules.
+  - Values go by the export's own types:
+    - Int/Bool to i32/i64 (an i32 takes the signed and unsigned range), Float/Int to f32/f64.
+    - Results come back as Int or Float, several as a list, none as ø.
+    - A reference result that is a warp node is read out of the callee's store with its own memory (a warp module's
+      texts may live in its linear memory), so `wasm_call(load_wasm(compile_wasm("[1, 2]")), "main", [])` gives the
+      list.
+    - A reference argument is the program's own ref, passed as it is (copied through the callee's constructors when
+      it exports them).
+- Failures are Errors, catchable with try: a trap (`wasm.call: calc.wasm's boom failed: wasm trap: …`), a missing
+  function (it names those there are), a wrong argument count or type.
+- Imports: an import whose module names a .wasm or .wat file, `(import "deps/lib.wasm" "f" …)`, or a bare name with
+  name.wasm/name.wat in reach (before C libraries), is linked to that module's exports.
+  - The module is instantiated in the same store, once per run, whoever imports it. Its own imports are linked the
+    same way.
+  - Paths are relative to the working folder, then to the importing module's folder: the old pipeline's convention
+    (notes/wasm_modules.md), so `import x.wasm` programs warp-rust emits run here too.
+  - A missing module or an import cycle fails the run before it starts:
+    `the import module nosuch.wasm: no module nosuch.wasm (looked in the working folder)`,
+    `the modules import each other in a cycle: cycle_b.wasm → cycle_a.wasm → cycle_b.wasm`.
+- Components: an engine of their own with the component model on (programs' engines are core-only), a store each,
+  kept for the run.
+  - Values go by the WIT types, through wasmtime's canonical ABI:
+    - bool, s8 to u64 (range-checked), f32/f64, char (codepoint), string
+    - list and tuple (a list), record (a map `{x: 3, y: -4}`), option (ø or the value)
+    - enum (its name), variant (its name or {case: value}), flags (a list of names)
+    - result: the ok value; the err is an Error
+  - Names: `stats_of` finds `stats-of`, and `checked_sqrt` or `text_tools.checked_sqrt` finds a function of an
+    exported interface.
+  - Not yet: resources (handles), and WASI p2. A component's imports trap when called; rust_demo.wasm, built for
+    wasm32-wasip2, still runs its pure functions.
+- Size: wasmtime's component-model feature was already compiled in (feature compiler), but nothing used its runtime.
+  Measured on the box with profile host:
+  - before this card: 6,510,696 B
+  - with core modules and imports: 6,674,280 B (+164 KB)
+  - with components: 7,351,304 B (+677 KB more, +841 KB in all, +12.9 %)
+- Compiler side, not done here:
+  - `m.f(x)` for a handle (a sugar or lowering to wasm_call)
+  - `import x.wasm` with its exports' types read at compile time
+  - Foreign lines `twice(x: i64): i64 from 'calc.wasm'`, which the pure-c-imports emitter turns into the import this
+    host already links.
+  - A compiled warp module exports only main, so functions of other warp modules can't be called yet.
+
+## Locale
+
+warp-host sets LC_CTYPE from the environment at startup (`setlocale(LC_CTYPE, "")`, main.rs with_users_ctype), as a C
+program would: the C libraries a program calls read UTF-8 then (libedit's readline crashed on a UTF-8 prompt in the C
+locale). Only the character type: numbers keep printing with a point.
+
 ## C calls (M2)
 
 An import whose module isn't `host` or WASI is a C function: `name` from the library `module`.
@@ -115,6 +188,9 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   - `c` is the process itself (libc, macOS libSystem).
   - Other names go through c_calls.rs library_paths. Linux tries /usr/lib, /usr/local/lib, then lib<name>.so,
     .so.0 and .so.6 (libm.so.6, libsqlite3.so.0). macOS tries Homebrew, /usr/local/lib, then lib<name>.dylib.
+  - Linux also finds a library by any versioned soname in WARP_LIBRARY_PATH and the system's library folders
+    (version_named_sonames): libedit.so.2 and libreadline.so.8 load without their -dev packages' lib<name>.so links
+    (tests/host/test_host_repl_fixes.sh).
   - The library is loaded with dlopen and the function found with dlsym.
 - How each parameter and the result cross:
   - The module's `warp.c_functions` custom section gives one c_signatures.rs CFunction line per function, with nine
@@ -130,6 +206,12 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   for the call (c_calls.rs native_arguments), and ø passes NULL. An i32 `ptr` is still an address in linear memory.
 - Results:
   - Handles cross as ids into the run's CHandles.
+  - `owned_text` (card warp-host-repl-fixes): a `char *` the caller owns, strdup's or readline's, is copied into a
+    text like `text` and then given to free(); NULL is ø, freed never. Spelled:
+    - in a foreign line, a result type only: `readline(prompt: text): owned_text from 'edit'`
+      (lib/compiler/c_imports.warp)
+    - in warp.c_functions, the result field `owned_text` (c_signatures.rs CPointer::OwnedText)
+    - in warp.c_calls, the result letters `ft`, "free the text", beside `t` and `ot` (ffi.rs OWNED_TEXT_LETTERS)
   - A `text` result is built with the module's new_text and needs its text_heap; pure modules don't export text_heap
     yet (M3).
 - c_calls.rs marshals the call (link_c_function_as, with the import's wasm type).
@@ -264,13 +346,62 @@ unique_lines, find_files, file_size, info, which, glob, list_files. tests/host/t
 Not yet, for reasons outside warp-host:
 - `pwd`/`cwd` after `cd` still give the start folder. The pure compiler computes a definition without parameters
   (`cwd := std_io(…)`, `pwd := cwd`) once, where warp-rust runs it at every read; and `f() := …` has no bare `f`.
-- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (lib/compiler/runtime/wasi.warp), not
+- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (lib/compiler/runtime/extended/wasi.warp), not
   std_io. So they take no `~`, and a relative path stays in the start folder (WASI's preopened `.`) after `cd`.
 - `ls("nosuch")` traps (`node length`): the comprehension takes list_files's Error as a list. `list_files("nosuch")`
   itself is a catchable Error.
 - `grep`: the compiler refuses `matches(…)` (use regex). `sort_lines`: `sort(file_lines(…))` resolves to shell.warp's
   `sort(file:Path)` and traps with `no field name`.
 - `print ls` without parentheses prints the symbol ls: the pure compiler calls no function by its bare name.
+
+## Ahead of time (card warp-host-aot)
+
+Adopted from warp-rust's `compile --aot` and `build` (notes/aot.md), in crates/warp-runtime/src/warp_host/aot.rs.
+- `warp-host compile --aot f.warp [f.wasm]` writes the module and beside it f.cwasm, its machine code for this machine
+  from the engine warp-host runs with (engine.precompile_module). `compile --aot m.wasm` writes only m.cwasm.
+- `warp-host f.cwasm [args…]` runs it through Module::deserialize. Machine code is recognized by its .cwasm name, else
+  by how it starts (wasmtime's ELF image, or the C table below).
+  - Machine code of another wasmtime version, other engine settings or another target is refused before it runs:
+    `warp-host: f.cwasm was compiled by another warp-host or for another machine (Module was compiled with incompatible
+    version '48'): compile it again with `warp-host compile --aot``.
+  - A file that is no machine code: `f.cwasm is no machine code of a module`.
+  - Trust: a .cwasm is native code, so running one is like running an executable.
+- C calls: machine code keeps no custom sections, so the module's warp.c_functions lines travel in front of it in the
+  table warp build uses (c_signatures.rs with_c_functions, `WRPCcfun`). The libraries are dlopened when it starts.
+- `warp-host build f.warp [-o app]` writes the standalone executable f (f.exe on Windows), or a module's with
+  `build m.wasm`. It is a copy of this warp-host with the machine code appended, behind warp's executable trailer
+  (standalone.rs with_machine_code: deflated, its u64 length, `WRPCwasm`, padded to 16).
+  - On start warp-host reads its own end (std::env::current_exe, standalone::embedded_machine_code: the load commands
+    and the last 32 bytes). When it carries a program it runs that with all its arguments, so `app --help` is the
+    program's, and prints the value as `warp-host f.warp` does. It needs no compiler, lib/ or cache.
+  - It is one binary: WASI, std_io (shell words, commands, run_wasm) and C calls work as in warp-host. compile_wasm
+    still needs a compiler-self.wasm to be found.
+  - macOS: appending after the signature breaks it. Instead, the signature is dropped, the program goes inside
+    __LINKEDIT (macho.rs), and the file is signed ad hoc with `codesign --sign - --force`.
+    `codesign --verify --strict` passes (tested on the Mac, arm64).
+  - Building again over an executable replaces its program. build never writes over its source (`build script` of an
+    extensionless file needs -o).
+- Tests: `tests/queue.sh tests/host/test_host_aot.sh`, with the same settings as test_host.sh. 34 checks: box 33 (no
+  codesign check), Mac 34.
+- Measured 2026-10-23 with hello.warp. Both machines were heavily loaded (box load ~50 on 8 cores, Mac ~60), so the
+  times are upper bounds:
+
+  | | box, Linux x86_64 | Mac, arm64 |
+  |---|---|---|
+  | warp-host (profile host) | 6,598,344 B | 4,042,576 B |
+  | hello.cwasm (hello.wasm 1,685 B) | 19,712 B | 52,488 B |
+  | executable `hello` | 6,603,328 B (+5 KB) | 4,024,336 B |
+  | executable of a `use os` program | 6,666,320 B | 4,084,256 B |
+  | `./hello` (executable) | 4 ms | 12.9 ms ± 3.2 |
+  | `warp-host hello.cwasm` | 6 ms | 17.2 ms ± 6.8 |
+  | `warp-host hello.wasm` (Cranelift each run) | 35 ms | 24.6 ms ± 11 |
+  | `warp-host hello.warp`, warm cache | 333 ms | 482 ms ± 78 |
+  | `warp-host hello.warp`, cold (empty cache, none shipped) | minutes (loaded box) | 43.3 s |
+
+  The executable is warp-host plus the deflated machine code. On the Mac it came out smaller than warp-host itself:
+  the linker's signature is replaced by codesign's.
+- The optional precompiled compiler-self.cwasm already exists as the shipped host-cache's .cwasm (18–19 MB per
+  target, see Size). It is opt-in through packaging (packaging/host_cache.sh), so no second mechanism was added.
 
 ## Next
 

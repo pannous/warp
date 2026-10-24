@@ -35,6 +35,7 @@ fn a_char_pointer_pointer_parameter_is_left_out() {
 }
 
 #[test]
-fn a_long_double_function_is_refused_by_name() {
-	crate::common::fails_with(&with_c("sqrtl(4)"), "sqrtl is a C function using long double");
+#[ignore = "card gap-long-double-ffi"]
+fn a_long_double_function_gives_its_value() {
+	is!(&with_c("sqrtl(4)"), 2);
 }

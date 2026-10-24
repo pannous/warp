@@ -189,8 +189,46 @@ rewrite pick $e $c => "case" where $c is case of $e
 rewrite pick $e $c => "not"
 [pick Metal Penny, pick Metal Dime, pick Coin Dime]' ["case", "not", "case"]
 
-# a_hole_in_a_templates_text_is_the_word_it_bound
-is! 'rewrite named $x => "<$x>"
-twice(n) := 2 * n
-y = 3
-[named y, named twice, named zed]' ["<y>", "<twice>", "<zed>"]
+# a_bare_rest_template_rebuilds_the_phrase
+is! 'rewrite loudly $s... => $s...
+rewrite gently $s... => $s...
+loudly gently f() := 3
+loudly f()' 3
+
+# a_rest_template_of_one_word_is_that_word
+is! 'rewrite marked $a $b... => $a $b...
+marked 5' 5
+
+# a_rule_ending_in_a_rest_keeps_the_next_line
+is! 'rewrite marked $a $b... => $a $b...
+n = marked 5
+n' 5
+
+# placed_rules_chain_on_their_own_result
+is! 'rewrite loudly $s... => $s... where statement
+rewrite gently $s... => $s... where statement
+gently loudly gently f() := 3
+f()' 3
+
+# one_placed_rule_fires_on_its_result_again
+is! 'rewrite loudly $s... => $s... where statement
+loudly loudly h() := 5
+h()' 5
+
+# a_guarded_call_pattern_matches_the_call
+is! 'rewrite build $t($a...) => $t($a...) where $t is type
+class P { x: int }
+p = build P(4)
+p.x' 4
+
+# a_call_pattern_binds_one_argument
+is! 'rewrite build $t($a) => $t($a) where $t is type
+class P { x: int }
+p = build P(5)
+p.x' 5
+
+# a_guarded_call_pattern_leaves_a_function_call
+is! 'rewrite build $t($a...) => $t($a...) where $t is type
+build(n: int) := n * 10
+f(n: int) := n
+build f(2)' 20

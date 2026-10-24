@@ -140,7 +140,7 @@ nodes_kept(top: Node, kept: function): list := {
 remember(scope: any, pairs: list): any := {
 	for pair in pairs {
 		name = pair#1
-		if name != ø and name != "" {
+		if name {
 			if not scope.has(name) { scope[name] = [] }
 			scope[name] = scope[name] + [pair#2]
 		}

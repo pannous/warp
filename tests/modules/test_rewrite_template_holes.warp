@@ -1,0 +1,7 @@
+# A hole in a template's text is the word it bound (lib/compiler/rewrites.warp text_spliced, card sugar-type-tests)
+
+# a_hole_in_a_templates_text_is_the_word_it_bound
+is! 'rewrite named $x => "<$x>"
+twice(n) := 2 * n
+y = 3
+[named y, named twice, named zed]' ["<y>", "<twice>", "<zed>"]
