@@ -9,14 +9,12 @@ use "multiple_assignments.warp"
 use "clauses.warp"
 use "phrase_blocks.warp"
 use "loop_heads.warp"
-use "list_methods.warp"
 use "node_matches.warp"
 use "node_cases.warp"
 use "type_tests.warp"
 use "number_keys.warp"
 use "tries.warp"
 use "prelude_words.warp"
-use "preposition_heads.warp"
 use "plain_enums.warp"
 use "uses.warp"
 use "prefix_calls.warp"
@@ -43,7 +41,7 @@ passes = [interpolation, unchanged, unchanged, sugar_phrases, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {

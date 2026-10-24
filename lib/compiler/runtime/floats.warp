@@ -1,7 +1,7 @@
 # Floats: rounding, their shortest text and digits
 use "intrinsics.warp"
 use "conversions.warp"
-use "exact.warp"
+use "bridge.warp"
 use "instructions.warp"
 use "library_words.warp"
 # `round(x)`: the nearest int, half to even as wasm rounds (f64.nearest)
@@ -25,9 +25,9 @@ positive_float_text(x: float): text := {
 		rest = if count > 1 then "." + bytes_between(digits, 1, count) else ""
 		return bytes_between(digits, 0, 1) + rest + "e" + int_text(exponent)
 	}
-	if exponent >= count - 1 { return digits + zeros(exponent - count + 1) }
+	if exponent >= count - 1 { return digits + extended_zeros(exponent - count + 1) }
 	if exponent >= 0 { return bytes_between(digits, 0, exponent + 1) + "." + bytes_between(digits, exponent + 1, count) }
-	"0." + zeros(-1 - exponent) + digits
+	"0." + extended_zeros(-1 - exponent) + digits
 }
 # [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
 # digits, and the whole numbers between the halfways to its neighbours read back as x (the halfways too when x's last

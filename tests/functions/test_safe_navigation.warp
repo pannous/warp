@@ -1,0 +1,13 @@
+# safe navigation `a?.b` as the rule of lib/compiler/extensions/safe_navigation.warp (card pure-safe-navigation)
+
+# a present value: its member
+is! 'p = {a: 1, b: 2}; p?.b' 2
+is! 'f() := {a: 5}; f()?.a + 1' 6
+
+# a missing value: ø, the member never read
+is! 'x = ø; x?.a' ø
+is! 'x = ø; y = x?.a; if y == ø then 7 else 0' 7
+
+# a chain stops at the first missing value
+is! 'p = {a: {b: 3}}; p?.a?.b' 3
+is! 'p = ø; p?.a?.b' ø
