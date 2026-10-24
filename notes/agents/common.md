@@ -299,6 +299,10 @@ After a context swap, this file and your role file win over anything a handover 
   loose Next cards; then Soon. Within that, prefer fresh, easy cards related to your current task, and pick a topic's
   cards together: `todo list Next --by-topic` groups them, `todo take --topic <topic> [-n 3]` takes its waiting cards
   at once.
+- Backlog cards (user 2026-10-24): Soon and Later mix the user's own ideas and bugs with auto-generated and parked
+  cards. Before taking a card from Soon or Later, check it's still relevant: is it already fixed on main, a duplicate,
+  or obsolete (e.g. Rust-only work)? If it's clearly dead, archive it with a one-line note. If unsure, ask the user,
+  interviewing them briefly (what's the card for, is it still wanted) before starting work.
 - The board's mechanics (topics, sub-cards, keys, renames on take, `--keep-name`, `--title`) are in `todo --help`.
   Every card has a meaningful key: rename a poor one at once (`todo key <card> <short-name>`) and use the key in
   branch names and messages. Priority lives at the topic level (a topic card's column).
