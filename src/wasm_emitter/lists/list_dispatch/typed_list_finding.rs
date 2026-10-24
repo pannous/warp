@@ -1,6 +1,7 @@
 //! Which list variables can be typed arrays: their sources, appends, aliases and the element type every source agrees on
 use super::*;
 
+// ⚠ WARP DOES THIS DIFFERENTLY: no list_sum by name; folds are found by their operator → lib/compiler/lambdas.warp
 /// The list and the loop of `list_sum(list, loop)`, what `sum xs` lowers to (library_words.rs)
 pub(in crate::wasm_emitter) fn list_sum_parts(node: &Node) -> Option<(&Node, &Node)> {
 	match node.drop_meta() {

@@ -56,3 +56,179 @@ rewrite apply $f to $x => "untyped" where not $f takes value
 sq(n: int) := n * n
 any_of(n) := n
 [apply sq to 3, apply any_of to 3, apply floor to 2.5]' [9, "untyped", 2]
+
+# a_rule_of_a_statement
+is! 'rewrite $s except_if $c => if not $c then $s where statement
+n = 0
+n += 1 except_if yes
+n += 2 except_if no
+n' 2
+
+# a_rule_of_a_condition
+is! 'rewrite lacking $x => count($x) == 0 where condition
+xs = []
+if lacking xs then "none" else "some"' "none"
+
+# a_rule_of_a_value_leaves_the_key
+is! 'rewrite big => 100 where value
+m = {big: big}
+m.big' 100
+
+# a_rule_of_a_key
+is! 'rewrite who => name where key
+p = {who: "Al"}
+p.name' "Al"
+
+# a_rule_of_a_class_member
+is! 'rewrite field $n => $n: int where member
+class P { field a; field b }
+P(1, 2).b' 2
+
+# a_template_for_each_item_of_a_rest_hole
+is! 'rewrite squares $xs... => [$x * $x for $x in $xs...]
+squares 1 2 3' [1, 4, 9]
+
+# statements_for_each_item
+is! 'rewrite bump_all $vs... => ($v += 1 for $v in $vs...)
+a = 1
+b = 5
+bump_all a b
+[a, b]' [2, 6]
+
+# keys_for_each_item
+is! 'rewrite flags $ns... => {($n: yes) for $n in $ns...}
+m = flags red green
+m.green' yes
+
+
+# a_rule_of_several_statements
+is! 'rewrite (log_start; log_end) => count += 10
+global count = 0
+log_start
+log_end
+count' 10
+
+# statements_holes_bind_across_the_run
+is! 'rewrite ($a = $x; $b = $a) => ($a = $x; $b = $x + 1)
+p = 4
+q = p
+[p, q]' [4, 5]
+
+# a_result_is_rewritten_again
+is! 'rewrite double $x => $x * 2
+rewrite quadruple $x => double (double $x)
+quadruple 3' 12
+
+# glue_a_hole_to_a_word
+is! 'rewrite count_up $i till $b => ($i = 1; $i·end = $b; n = 0; while $i <= $i·end { n += $i; $i += 1 })
+count_up k till 4
+[n, k_end]' [10, 4]
+
+# a_name_built_of_a_word_and_a_hole
+is! 'rewrite define_square $a => (square·$a = 9)
+define_square side
+square_side' 9
+
+# a_hole_of_several_words_glues_each
+is! 'rewrite made $f $ws... => ($f·$ws = 4)
+made square a number
+square_a_number' 4
+
+# a_built_name_defines_a_function
+is! 'rewrite doubled $f => (twice·$f(x) := 2 * $f(x))
+sq(n) := n * n
+doubled sq
+twice_sq(3)' 18
+
+# a_name_built_for_each_item
+is! 'rewrite flags_named $ns... => ($n·flag = yes for $n in $ns...)
+flags_named red green
+green_flag' yes
+
+# words_glue_into_a_name
+is! 'rewrite speed_unit => km·per·hour
+km_per_hour = 5
+speed_unit' 5
+
+# a_number_beside_glue_multiplies
+is! 'rewrite scaled $x => $x·2
+rewrite tenfold $n => $n·ten
+ten = 10
+[scaled 4, tenfold 3]' [8, 30]
+
+# star_and_middle_dot_outside_templates_multiply
+is! 'rewrite mul $a $b => $a * $b
+x = 3
+y = 4
+[mul x y, x·y]' [12, 12]
+
+# where_an_enum
+is! 'enum Coin { Penny, Dime }
+rewrite kind $t => "enum" where $t is enum
+rewrite kind $t => "other"
+x = 1
+[kind Coin, kind x]' ["enum", "other"]
+
+# where_a_case_of_the_one_enum_declaring_it
+is! 'enum Coin { Penny, Dime }
+enum Metal { Gold, Penny }
+rewrite owns $c => "one" where $c is case
+rewrite owns $c => "none"
+[owns Dime, owns Penny, owns 3]' ["one", "none", "none"]
+
+# the_cases_of_the_enum_a_case_binds
+is! 'enum Coin { Penny, Nickel, Dime }
+rewrite size_of $c => #[cases of $e] where $c is case of $e
+rewrite size_of $c => 0
+[size_of Dime, size_of 7]' [3, 0]
+
+# a_case_of_a_named_enum
+is! 'enum Coin { Penny, Dime }
+enum Metal { Gold, Penny }
+rewrite pick $e $c => "case" where $c is case of $e
+rewrite pick $e $c => "not"
+[pick Metal Penny, pick Metal Dime, pick Coin Dime]' ["case", "not", "case"]
+
+# a_bare_rest_template_rebuilds_the_phrase
+is! 'rewrite loudly $s... => $s...
+rewrite gently $s... => $s...
+loudly gently f() := 3
+loudly f()' 3
+
+# a_rest_template_of_one_word_is_that_word
+is! 'rewrite marked $a $b... => $a $b...
+marked 5' 5
+
+# a_rule_ending_in_a_rest_keeps_the_next_line
+is! 'rewrite marked $a $b... => $a $b...
+n = marked 5
+n' 5
+
+# placed_rules_chain_on_their_own_result
+is! 'rewrite loudly $s... => $s... where statement
+rewrite gently $s... => $s... where statement
+gently loudly gently f() := 3
+f()' 3
+
+# one_placed_rule_fires_on_its_result_again
+is! 'rewrite loudly $s... => $s... where statement
+loudly loudly h() := 5
+h()' 5
+
+# a_guarded_call_pattern_matches_the_call
+is! 'rewrite build $t($a...) => $t($a...) where $t is type
+class P { x: int }
+p = build P(4)
+p.x' 4
+
+# a_call_pattern_binds_one_argument
+is! 'rewrite build $t($a) => $t($a) where $t is type
+class P { x: int }
+p = build P(5)
+p.x' 5
+
+# a_guarded_call_pattern_leaves_a_function_call
+is! 'rewrite build $t($a...) => $t($a...) where $t is type
+build(n: int) := n * 10
+f(n: int) := n
+build f(2)' 20

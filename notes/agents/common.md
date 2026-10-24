@@ -38,6 +38,24 @@ After a context swap, this file and your role file win over anything a handover 
 - No new passes (user 2026-10-21): avoid the proliferation of lowering/analysis passes. A feature extends or
   generalizes an existing pass; a new pass needs a reason no existing one can carry, named in the commit. Simplify
   or merge passes whenever their work overlaps.
+  Soft ban (user 2026-10-23): the core passes compile the compiler, so new work is one of two kinds, neither a pass.
+  Sugar (new spellings of what the kernel already does) goes straight into lib/sugar/*.warp as rules. Compiler
+  extensions (new capabilities such as tuples, varargs, optional parameters, `?.`, signals, threads, channels) go
+  into core/extensions/ as one file each (core/extensions/tuples.warp); only a big topic gets its own subfolder
+  (core/extensions/concurrency/). The compiler itself moves from lib/compiler to core/ (card compiler-to-core, one
+  scripted sweep by Warp Wrapper); until then use lib/compiler/extensions/, which the sweep moves along. Plain
+  library code written in Warp (e.g. the units Quantity class) stays in lib/. Neither sugar nor extensions needs a
+  question. A new pass, a new entry in passes.warp's pass lists or a new lib/compiler/*.warp file needs the user's
+  yes, asked through Supervisor before the branch is written. Bigger changes to existing lib/compiler/*.warp files
+  (more than ~40 changed lines there, or a new lowering case, special case or refusal path) need Supervisor's OK
+  before the branch is written: send the files, functions and a 3-line reason. Supervisor checks that it isn't sugar
+  or an extension in disguise and takes the large ones to the user. Small fixes (a bug in an existing case) need no
+  question. Supervisor's merger bounces branches that skipped this.
+- Layout (user 2026-10-23, card compiler-to-core): core/ holds the compiler, the runtime (runtime/, runtime/extended/),
+  the sugar rules (core/sugar) and compiler extensions (core/extensions/<name>.warp). lib/ holds plain Warp modules that
+  programs import (math, units, date and time), which the compiler never depends on. Folder names never combine two
+  topics with an underscore; nest folders instead. Until the flip, existing paths are still named lib/compiler/... and
+  lib/sugar/... (core is a symlink to lib/compiler, lib/compiler/sugar one to lib/sugar).
 - New syntax by layer (user 2026-10-22, notes/layers.md): notation, kernel, sugar. New syntax is a table row or a
   declaration (operator, alias) first, else a `rewrite` line in lib/sugar/*.warp; a parser branch or a pass only
   when its commit names the rewrite-engine feature it is missing (notes/layers.md F1–F8). The kernel list is the
@@ -72,6 +90,8 @@ After a context swap, this file and your role file win over anything a handover 
   confirmations a safety rule wants from the user directly (permission or hook changes, anything you won't do on a
   peer's word): send them to the Interviewer with the exact action and work on everything else meanwhile. The
   Interviewer relays the user's answer verbatim; that relayed answer is the user's confirmation.
+- Run commands yourself, proactively: never hand the user commands to copy-paste into a shell. If something needs
+  their machine, run it there (with approval if required) and report the result.
 - Suspected non-issues go through the Interviewer: when a small bug you found may not matter (the same value shown
   another way, `96px/inch` vs `96dpi`), SendMessage warp-interviewer before carding or fixing it. A confirmed
   non-issue gets no work: its card, if any, goes to Later with the verdict as a `todo note`.
@@ -85,6 +105,11 @@ After a context swap, this file and your role file win over anything a handover 
   never notify it.
 
 ## Where to work
+- Quota wind-down (user 2026-10-22, ~10 % of the weekly Claude quota left until the reset): every Claude worker
+  finishes and lands the card it is on, writes its handover into the card (`todo release`), then retires. No new
+  cards. Only warp-integrator and warp-layers keep running. The sugar passes outside parser.warp belong to the user's
+  Grok Bot coders (instructions: scratch/grok-cards.md; they report in scratch/grok-reports.md); warp-layers keeps
+  parser.warp only.
 - Beautiful types (decision beautiful-types): every lib/ declaration a migration or cleanup branch touches leaves it
   fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
   adds the shallow subclasses; don't invent parallel ones in your branch.
@@ -101,7 +126,20 @@ After a context swap, this file and your role file win over anything a handover 
   main. A new root .warp data file (components.warp …): tell the Integrator the commit, tests read it.
 - Anything in src/, crates/, tests/, Cargo.* or build.rs keeps its worktree, however small (a half-done edit there
   breaks every build of the main checkout): `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main` on the
-  Worktrees volume (never touch /Volumes/Worktrees/warp, cowtree's donor, nor /Volumes/Worktrees/integrator).
+  Worktrees volume (never touch /Volumes/Worktrees/warp, cowtree's donor, /Volumes/Worktrees/integrator, nor the
+  user's own /Volumes/Worktrees/me, which prune-worktrees.sh never removes). A new worktree's files get their last
+  commit's time (~/.git-hooks/post-checkout runs ~/dev/bin/restore-mtimes), not the checkout time.
+- On the Grok box (Debian, /workspace) worktrees come from `boxtree <branch> [base]` (default origin/main): a
+  copy-on-write copy of /workspace/cow/warp, target/ build cache included, at /workspace/cow/trees/<branch> on a new
+  branch <branch>. Remove your own with `boxtree rm <branch>` after landing. Never work in /workspace/cow/warp itself.
+  Run compilers with `WARP_LIB=<tree>/lib`. The shared box binary is /workspace/cow/sol-warp-latest (built from main;
+  refresh with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh`, which moves the link only after a passing
+  smoke test); a branch with Rust changes uses its own build. Branch self-check: `/workspace/box-slot.sh
+  /workspace/selfcheck-branch.sh <branch>`.
+- Only the pure pipeline counts (user, 2026-10-23): coverage is what passes purely; the Rust compiler's results don't
+  matter. Don't cargo-build `warp` per branch: run `/workspace/box-slot.sh /workspace/cow/sol-warp-latest rebuild pure`
+  with `WARP_LIB=<tree>/lib`. Rebuild Rust only on branches that change Rust code (src/ is frozen except urgent fixes);
+  crates/warp-runtime changes need only a warp-host build. The merger refreshes the shared binary after Rust lands.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
@@ -128,11 +166,36 @@ After a context swap, this file and your role file win over anything a handover 
   `&&`-chained commit silently doesn't happen. Check `git show --stat HEAD` after committing.
 
 ## Testing
+- PAUSED (user 2026-10-22 21:58: "stop all the Cloud pipelines and stop respawning scripts"): no cloud runs
+  (scripts/cloud-test.sh refuses while ~/.config/warp/cloud-paused exists), GitHub workflows disabled, the context-swap
+  hook swaps nobody (~/.claude/swap/swap_tokens = 1e9), crons urgent-card-watch, codex_worker.sh and nightly.sh
+  commented out (#PAUSED-by-user). Until the user lifts it, only warp-only branches land (self-check), Rust branches
+  wait.
 - Rust tests run in the cloud (user 2026-10-20: "From now on, run the Rust test suite completely in the cloud"):
   commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs (a hook blocks them), except tests
   needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1
   tests/queue.sh -- <filter>`. The Integrator's full suite runs in the cloud too. Warp tests (`warp test`,
   scripts/is_tests.py) run locally with the shared binary.
+- Stop isolation (user 2026-10-23, very important): an agent stops only its own helper jobs, never with a stop that
+  reaches other agents.
+- Communicate less (user 2026-10-23): message only when it really matters (Ready, blocked, a decision needed); batch
+  the rest and send FYIs without waking the agent. Git is the status: branch name, commit messages and the board
+  card. Ready means the card moved and the branch pushed, no chat needed.
+- Low effort for routine runs (user 2026-10-23): routine builds and tests (rebuilds, targeted test runs, self-checks,
+  gate runs) go to a helper at low effort with a step cap; give it the exact commands and stop when they finish.
+  Higher effort only for real debugging or design work.
+- Tiered gate, pure pipeline first (user 2026-10-23: the gate must not become a bottleneck): `scripts/gate-probes.sh
+  [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure and self, both
+  hellos (the self check, minutes). Tier 1: every probes/gate/<name>.warp in both lanes against <name>.expected
+  (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
+  Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). Tier 3,
+  Rust tests: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; the script names it, the cargo
+  gate or cloud lane runs it. On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/sol-warp-latest.
+- Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate-probes.sh --tag-good` tags it
+  `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `scripts/bisect-lane.sh [--lane
+  pure|self|both] <probe.warp> <expected> [good] [bad]` (default the newest good/* tag .. origin/main, first-parent)
+  bisects in a temporary worktree it removes: per step rebuild pure and self with the shared binary, bad only on
+  wrong output, skipped (125) on a failed rebuild or a timeout; it prints the first bad commit.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
   suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
@@ -161,6 +224,9 @@ After a context swap, this file and your role file win over anything a handover 
   Interviewer's approval only, not a new question.
 - Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
   intermediate; a test pinning one may be deleted or rewritten as one is! line.
+- Tests are result-based (user, 2026-10-23): assert what a program computes, e.g. `is! '6*7' 42`, or its printed
+  output. Don't pin incidental details such as exit codes of successful runs, internal forms, pass names, error
+  wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
 - Native-only test code: anything used only by a `#[cfg(feature = "native")]` test gets the same cfg; a whole test
   file running the CLI or std::os::unix gets it on its `mod` line, and a new `mod x;` never goes between a cfg line
   and the module it guards. Register a new test file in its folder's mod.rs before `cargo fmt` (fmt skips it).
@@ -184,6 +250,16 @@ After a context swap, this file and your role file win over anything a handover 
   queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
   replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
   emitter.warp refuses there is fixed or carded, never left for main to find.
+  Fleet-wide at most 2 heavy warp runs at once (user 2026-10-22, load 522): every self build, `warp rebuild`, `warp
+  pure` of a compiler file and every test sweep (is_tests, is_pairs, probe series) runs inside `scripts/slot.sh <cmd>`
+  (slots on /Volumes/Build/self-check; self-check.sh takes one itself; the Integrator's gate included). A sweep runs
+  its programs serially inside one slot, never N parallel warps. The Integrator's gate runs with WARP_SLOT_GATE=1 in
+  a reserved slot of its own, so it never waits behind workers. The Grok box (Debian, 8 cores, 15 GB) has 3 heavy
+  slots of its own: every heavy box run goes through `/workspace/box-slot.sh <cmd>` (slots 2-3 open only with >= 4 GB
+  free); Mac sessions hand box runs to the Supervisor (grok-msg). The tree it checks
+  is a cowtree worktree under /Volumes/Worktrees or a throwaway lib/ copy under /Volumes/Junk, never inside the main
+  checkout (scratch/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
+  cold module caches) go to Grok Warp Code 3's Linux box.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,
@@ -226,6 +302,13 @@ After a context swap, this file and your role file win over anything a handover 
 - The board's mechanics (topics, sub-cards, keys, renames on take, `--keep-name`, `--title`) are in `todo --help`.
   Every card has a meaningful key: rename a poor one at once (`todo key <card> <short-name>`) and use the key in
   branch names and messages. Priority lives at the topic level (a topic card's column).
+- Every branch belongs to a card (user 2026-10-24): when you start a branch, comment the branch name on its card
+  (create the card first if there is none); when you park a branch, write a handover file and link it from the card.
+  The comment names the branch, its tip, ahead/behind main, whether it merges cleanly, its state in one sentence and
+  the next step; an issue card gets an issue comment, a draft card the same lines appended to its body. Branch
+  handovers live in the repo, one file per branch: notes/handover/<branch>.md (a `/` in the name becomes `-`), with
+  what's done, what's missing, how to test it and its known failures; whoever picks the branch up reads it first and
+  updates it. Session handovers stay in notes/box/handover/<session>.md.
 - Unrelated problems you meet go on the board: `todo add "…"` (column Next; when the board stays unreachable it says
   "CARD QUEUED" and keeps the card in ~/.cache/todo-board/pending.json5 for `todo flush`; never into todo.md).
 - Fix tiny things on the spot instead of carding them. Tiny means all of: a few minutes, one obvious fix with no
@@ -267,6 +350,8 @@ After a context swap, this file and your role file win over anything a handover 
      conflicts, never the Integrator. Take a side of a conflicted file only after `git diff <merge-base> HEAD --
      <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check `git diff
      origin/main -- <file>` shows only your change. No need to re-run the tests after a clean update.
+     Keep merges real: one merge commit per branch, and never let a plain `git pull --rebase` flatten them (it replays
+     a merged branch's commits onto main and conflicts): `git pull --rebase=merges` or `git merge origin/main`.
   3. Push the branch, then `todo ready <card>`. It reads the tip itself and refuses a branch that is not pushed,
      differs from origin, or does not merge cleanly (naming the files); `--force` only for a branch carrying other
      branches. Several cards on one branch: ready each. First a `todo note <card>` in this fixed form: `card | branch |

@@ -70,7 +70,7 @@ pub fn check_write(path: &str) -> Result<(), String> {
 }
 
 /// The folder a sandboxed program writes in, resolved
-fn state_folder() -> Result<PathBuf, String> {
+pub fn state_folder() -> Result<PathBuf, String> {
 	let folder = std::env::var_os(STATE_FOLDER_VARIABLE).map_or_else(std::env::current_dir, |folder| Ok(folder.into()));
 	folder.and_then(|folder| folder.canonicalize()).map_err(|problem| format!("no state folder: {problem}"))
 }

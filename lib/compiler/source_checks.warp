@@ -10,6 +10,7 @@ use "lints.warp"
 # words whose result is a changed copy of their argument: dropping it changes nothing (Rust COPY_WORDS)
 copy_words = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"]
 sleep_word = "sleep"
+index_of_word = "index_of"
 error_word = "error"
 fail_word = "fail"
 
@@ -20,6 +21,7 @@ source_checks(program: any, prelude: text): any := {
 		located_error(n)
 		spelled_number_join(n)
 		bare_sleep(n)
+		text_index_of(n, program)
 		assigned_mutation(n, aliases)
 		lints_of(without_mark(n))
 		if is_group(n) and separator_of(n) in statement_separators {
@@ -32,7 +34,7 @@ source_checks(program: any, prelude: text): any := {
 
 # an error the parser leaves in the tree (a negative index), the program's value
 located_error(n: any): any := {
-	if n is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2])) }
+	if n is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2]), n) }
 	ø
 }
 
@@ -52,7 +54,7 @@ spelled_number_join(n: any): any := {
 	written = sum_written(left, right, spelled, "")
 	as_sum = sum_written(left, right, conversion + "(" + spelled + ")", "")
 	as_text = sum_written(left, right, spelled, "str")
-	diagnose(call_of("spelled_number_join", [written, spelled, as_sum, as_text]))
+	diagnose(call_of("spelled_number_join", [written, spelled, as_sum, as_text]), n)
 }
 # `left + right` with the text side written `spelling`, the number side as a numeral, inside `converter(…)` if any
 sum_written(left: any, right: any, spelling: text, converter: text): text := operand_form(left, spelling, converter) + " + " + operand_form(right, spelling, converter)
@@ -76,8 +78,30 @@ is_numeral(t: text): bool := {
 # --- `sleep(1)` needs a unit (user issue #17; a bare number is seconds, decision sleep-seconds) ---
 
 bare_sleep(n: any): any := {
-	if is_group(n) and #n == 2 and n#1 == symbol(sleep_word) and n#2 is number { diagnose(call_of("bare_sleep", ["${n#2}"])) }
+	if is_group(n) and #n == 2 and n#1 == symbol(sleep_word) and n#2 is number { diagnose(call_of("bare_sleep", ["${n#2}"]), n#2) }
 	ø
+}
+
+# --- a text's index_of names no unit (decision byte-index-of): it counts characters from 1, as find does ---
+
+text_index_of(n: any, program: any): any := {
+	receiver = index_of_receiver(without_mark(n))
+	if receiver != ø and is_evident_text(receiver, program) { diagnose(call_of("text_index_of", []), n) }
+	ø
+}
+# t of `t.index_of(x)`, `t.index_of x` and `index_of(t, x)`, else ø
+index_of_receiver(n: any): any := {
+	if is_operator(n, ".") and is_index_of_call(value_of(n), 1) { return key_of(n) }
+	if is_index_of_call(n, 2) { return n#2 }
+	ø
+}
+is_index_of_call(n: any, receiver_place: int): bool := is_group(n) and #n > receiver_place and n#1 == symbol(index_of_word)
+# a text written as one, or a name the program assigns only such texts
+is_evident_text(n: any, program: any): bool := {
+	if n is text { return yes }
+	if not (n is symbol) { return no }
+	given = assigned_values(program, name_of(n))
+	#given > 0 and given.all(value => value is text)
 }
 
 # --- values a statement drops (wiki/mutable.md) ---
@@ -85,8 +109,8 @@ bare_sleep(n: any): any := {
 # `uppercase x;` drops the copy; a dropped `error "…"` makes an error value nothing raises (card error-if)
 dropped_value(statement: any, aliases: any): any := {
 	call = copy_call(statement, aliases)
-	if call != ø { diagnose(call_of("dropped_copy", call)) }
-	for dropped in dropped_errors(statement) { diagnose(call_of("dropped_error", ["\"" + dropped + "\""])) }
+	if call != ø { diagnose(call_of("dropped_copy", call), statement) }
+	for dropped in dropped_errors(statement) { diagnose(call_of("dropped_error", ["\"" + dropped + "\""]), statement) }
 	ø
 }
 
@@ -94,7 +118,7 @@ dropped_value(statement: any, aliases: any): any := {
 assigned_mutation(n: any, aliases: any): any := {
 	if not (is_operator(n, "=") or is_operator(n, ":=")) { return ø }
 	variable = marked_copy_variable(value_of(n), aliases)
-	if variable != ø { diagnose(call_of("assigned_mutation", ["${without_mark(key_of(n))}", variable])) }
+	if variable != ø { diagnose(call_of("assigned_mutation", ["${without_mark(key_of(n))}", variable]), n) }
 	ø
 }
 

@@ -36,14 +36,14 @@ fn eval_source(code: &str) -> Node {
 		Some(Err(refusal)) => return refusal,
 		None => {}
 	}
-	match lawful_program(code) {
+	crate::compiler::self_hosted::after_pure(|| match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);
 			let result = crate::graphics::shader_errors::relocated(eval_parsed(program, code), code);
 			explain_runtime_error(result, exclusive_range)
 		}
 		Err(violation) => violation,
-	}
+	})
 }
 
 /// Parse the source and check its laws; `Err` is the violation.
@@ -281,6 +281,9 @@ const MODULE_PASSES: &[Pass] = &[
 	// `count(x) := 7`: the program's count·any for the values the library's count is not for (typed_library_words.rs)
 	crate::lowering::typed_library_words::lower,
 	crate::modules::resolve,
+	// again, once resolve joined the used modules' functions: a local named like one of them (parser.warp's `index`
+	// beside list.warp's index(xs, x)) is the local in its function too (card local-shadows-lib-function)
+	crate::lowering::shadowing_bindings::lower,
 	// `play(xs: list of int)`: one parameter `xs:"list of int"` (declaration_forms.rs), the library's heads too, before
 	// any pass reads a head (function_types, shared_arrays)
 	crate::lowering::declaration_forms::lower_list_parameters,

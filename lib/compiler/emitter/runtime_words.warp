@@ -1,0 +1,248 @@
+# The runtime words a program links (emitter.warp's part): wasm intrinsics, library words, type tests on boxed values
+# `name(a: float): float := wasm f64.floor`: the parameters in order, then the instruction, which leaves the result
+def wasm_instruction(body: Body, name: text): list {
+	if name not in wasm_instructions { return refuse("wasm " + name) }
+	code = []
+	for i in 0..<#body.function.signature.parameters { code += [op.local_get] + uleb(i) }
+	[if name.starts_with("i64") then "int" else "float", code + [wasm_instructions[name]]]
+}
+# a word runtime.warp's own functions call: theirs, even where the program defines a function of that name
+# (shapes.warp's keyed(op, left, right) is no intrinsic keyed(kind, left, right))
+def is_runtime_word(body: Body, name: text): bool {
+	body.intrinsics and (name in intrinsics or name in time_intrinsics or name in module.runtime)
+}
+# a call of a function of the program that takes its arguments, not of a runtime word: a call it can't take is a form
+# of the parser's or the lowering's of that name (`wasm f64.floor`, `try x`; emitter.warp compiling itself defines each)
+def is_program_call(body: Body, name: text, arguments: any): bool {
+	name in module.functions and not is_runtime_word(body, name) and takes_arguments(module.functions[name], arguments)
+}
+# whether f takes these arguments: no more than its parameters (any more after a rest one), a name given once, each
+# place left out defaulted
+def takes_arguments(f: Function, arguments: any): bool {
+	if f.signature.parameters.any(parameter => parameter.rest) { return takes(f.signature, #arguments) }
+	slots = placed_arguments(taken_names(f.signature), arguments)
+	parameters = f.signature.parameters
+	slots is list and range_list(#parameters).all(i => (i < #slots and slots[i] != ø) or parameters[i].defaulted_to != ø)
+}
+# the words the runtime is written in, each one or two instructions
+def intrinsic(body: Body, name: text, arguments: any): list {
+	if name in big_int_cases { return big_int_case(body, big_int_cases[name], arguments) }
+	values = arguments.map(a => expression_code(body, a))
+	match name {
+		"new_text": ["text", index_code(values#1) + gc_code(gc_ops.array_new_default, [gc_type(gc.text)])]
+		"byte_count": ["int", converted(values#1, "text") + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
+		"byte_at": ["int", converted(values#1, "text") + index_code(values#2) + gc_code(gc_ops.array_get_u, [gc_type(gc.text)]) + [op.i64_extend_i32_u]]
+		"kind_code": ["int", kind_code_of(values#1#2)]
+		"unboxed_int": ["int", unboxed(values#1#2, gc_type(gc.int_box))]
+		"marked_kind": ["int", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0])]
+		"unboxed_list": ["list", payload(values#1#2, gc_type(gc.list))]
+		"unboxed_text": ["text", payload(values#1#2, gc_type(gc.text))]
+		"unboxed_char": ["char", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [i31_type]) + gc_code(gc_ops.i31_get_u, [])]
+		"char_of": ["char", index_code(values#1)]
+		"new_list": {
+			count = [op.local_get] + uleb(fresh_local(body, "int"))
+			code = converted(values#1, "int") + [op.local_set] + count[1..] + count + [op.i32_wrap_i64] + count + [op.i32_wrap_i64]
+			["list", code + gc_code(gc_ops.array_new_default, [gc_type(gc.items)]) + gc_code(gc_ops.struct_new, [gc_type(gc.list)])]
+		}
+		"copy_items": {
+			items = x => x + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1])
+			code = items(values#1#2) + index_code(values#2) + items(values#3#2) + index_code(values#4) + index_code(values#5)
+			[no_kind, code + gc_code(gc_ops.array_copy, [gc_type(gc.items), gc_type(gc.items)])]
+		}
+		# adopt_items(to, from): to takes from's length and items
+		"adopt_items": {
+			to = [op.local_get] + uleb(fresh_local(body, "list"))
+			from = [op.local_get] + uleb(fresh_local(body, "list"))
+			code = values#1#2 + [op.local_set] + to[1..] + values#2#2 + [op.local_set] + from[1..]
+			taken = field => to + from + gc_code(gc_ops.struct_get, [gc_type(gc.list), field]) + gc_code(gc_ops.struct_set, [gc_type(gc.list), field])
+			[no_kind, code + taken(0) + taken(1)]
+		}
+		# an entry's name, a symbol, text or character (name_node), as a text
+		"key_name": ["text", runtime_call("node_text", [["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1])]])#2]
+		"key_value": ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 2])]
+		"map_of": ["node", node(Marked.Map, values#1#2)]
+		"new_key": ["node", entry_code(values#1#2, values#2#2)]
+		# item_room(list): the items its array holds, its length and the spare room after it; set_count(list, n)
+		"item_room": ["int", values#1#2 + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
+		"set_count": [no_kind, values#1#2 + index_code(values#2) + gc_code(gc_ops.struct_set, [gc_type(gc.list), 0])]
+		# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
+		# with_kind(n, kind): n's data and value in a $Node of that whole kind field
+		"with_kind": {
+			held = [op.local_get] + uleb(fresh_local(body, "node"))
+			part = i => as_node(held) + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
+			["node", values#1#2 + [op.local_set] + held[1..] + converted(values#2, "int") + part(1) + part(2) + gc_code(gc_ops.struct_new, [gc_type(gc.node)])]
+		}
+		"keyed": ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code(gc_ops.struct_new, [gc_type(gc.node)])]
+		"entry_key": ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)])]
+		"symbol_of": ["node", node(Kind.Symbol, values#1#2)]
+		# error_of(t): the Error of the message t, of no class (Rust's text_builtins.rs error_of)
+		"error_of": ["node", node(Kind.Error, values#1#2)]
+		# list_node(kind, list): a list's $Node of that whole kind field, its bracket and separator in it
+		"list_node": ["node", node_code(converted(values#1, "int"), values#2#2)]
+		# meta_node(n, line, column): n's kind, data and value in a $MetaNode at that position, no comment
+		"meta_node": {
+			held = [op.local_get] + uleb(fresh_local(body, "node"))
+			part = i => as_node(held) + gc_code(gc_ops.struct_get, [gc_type(gc.node), i])
+			code = values#1#2 + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, "int") + converted(values#3, "int")
+			["node", code + [ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.meta_node)])]
+		}
+		"is_meta": ["bool", values#1#2 + gc_code(gc_ops.ref_test, [gc_type(gc.meta_node)])]
+		"meta_line": ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 3])]
+		"meta_column": ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 4])]
+		"closure_text": call_values(made_late(closure_text_name, "text", ["closure"]), values)
+		"shown_big_int": call_values(made_late(shown_big_int_name, "text", ["n"]), values)
+		"is_null": ["bool", values#1#2 + [op.ref_is_null]]
+		"same_text": ["bool", values#1#2 + values#2#2 + [op.ref_eq]]
+		# the error is the word's: a variant of it by arity is named `word·arity`
+		"fail": [pending, error_throw(body.function.name.split("·")#1) + [op.unreachable]]
+		"is_ratio": ["bool", ratio_test(values#1#2)]
+		"is_plain_int": ["bool", plain_int_test(values#1#2)]
+		"ratio_of": {
+			box = v => converted(v, "int") + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])
+			["node", node(Kind.Int, box(values#1) + box(values#2) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))]
+		}
+		"ratio_numerator": ["int", ratio_part(values#1#2, 0)]
+		"ratio_denominator": ["int", ratio_part(values#1#2, 1)]
+		# big_int_of(negative, count): an Int $Node of a $BigInt of count zero limbs; limb(n, i), set_limb(n, i, v) one
+		# limb as an int from 0 to 2^32 - 1 (runtime/extended/big_ints.warp)
+		"big_int_of": ["node", node(Kind.Int, converted(values#1, "bool") + index_code(values#2) + gc_code(gc_ops.array_new_default, [gc_type(gc.limbs)]) + gc_code(gc_ops.struct_new, [gc_type(gc.big_int)]))]
+		"is_big_int": ["bool", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.big_int)])]
+		"big_int_negative": ["bool", payload(values#1#2, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 0])]
+		"limb_count": ["int", limbs_of(values#1#2) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
+		"limb": ["int", limbs_of(values#1#2) + index_code(values#2) + gc_code(gc_ops.array_get, [gc_type(gc.limbs)]) + [op.i64_extend_i32_u]]
+		"set_limb": [no_kind, limbs_of(values#1#2) + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc_type(gc.limbs)])]
+		"unboxed_float": ["float", unboxed(values#1#2, gc_type(gc.float_box))]
+		"code_of": ["int", values#1#2 + [op.i64_extend_i32_u]]
+		"set_byte": [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc_type(gc.text)])]
+		"output_byte": [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)]
+		"write_output": ["int", write_output(index_code(values#1))]
+		# the address of the output bytes, where runtime/extended/wasi.warp lays out what WASI's calls read and write
+		"output_address": ["int", [op.i64_const] + sleb(output_address)]
+		"memory_byte": ["int", index_code(values#1) + [op.i32_load8_u, 0, 0, op.i64_extend_i32_u]]
+		# the value written, as `x = v` is v
+		"memory_set_byte": {
+			written = uleb(fresh_local(body, "int"))
+			["int", index_code(values#1) + converted(values#2, "int") + [op.local_tee] + written + [op.i32_wrap_i64, op.i32_store8, 0, 0, op.local_get] + written]
+		}
+		# copy_text(to, at, from, start, count)
+		_: [no_kind, values#1#2 + index_code(values#2) + values#3#2 + index_code(values#4) + index_code(values#5) + gc_code(gc_ops.array_copy, [gc_type(gc.text), gc_type(gc.text)])]
+	}
+}
+# the intrinsics a program calls too, as Rust's text builtins byte_at(text, offset), memory_byte(address) and
+# memory_set_byte(address, value)
+program_intrinsics = ["byte_at", "memory_byte", "memory_set_byte"]
+intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
+	output_byte: 2, write_output: 1, output_address: 0, memory_byte: 1, memory_set_byte: 2, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
+	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, big_sum_case: 2, big_difference_case: 2, big_product_case: 2, big_order_case: 2, big_float_case: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
+	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, closure_text: 1}
+# the words a program calls that runtime.warp gives, by the runtime word's name
+library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
+	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", list_pop: "list_pop",
+	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
+	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
+	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
+	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
+	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
+	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", byte_at: "text_byte", float_bits: "bits_of_float", wasi_environment: "wasi_environment"}
+# node_order knows no user compare: a program ordering instances by its own sorts outside the core
+sort_words = ["sorted_node", "sorted_node_by"]
+# a `compare(a: T, b: T)` of the program (its witness compare·T once Rust's traits.rs named it): the order of T's
+# instances
+def orders_instances(): bool { module.functions.keys.any(name => name == "compare" or name.starts_with("compare·")) }
+# `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
+# canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
+core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
+	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
+	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
+	bool: "bool", boolean: "bool", list: "list", key: "key", pair: "key", symbol: "symbol", map: "map", error: "error", code: "code"}
+# the kinds of a value known only at run time each type passes, as Rust's BUILTIN_TYPES masks take them: an int is a
+# rational and a number, a float too, a character a text, a block a list; `code` none, it is a mark (runtime
+# types.warp node_is_type, held_kind_bit)
+passing_kinds = {int: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Float], float: [Kind.Float],
+	number: [Kind.Int, HeldBit.Rational, Kind.Float], text: [Kind.Text, Kind.Codepoint], char: [Kind.Codepoint],
+	bool: [HeldBit.Bool], list: [Kind.List, Kind.Block], key: [Kind.Key], symbol: [Kind.Symbol], map: [HeldBit.Map],
+	error: [Kind.Error], code: []}
+covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
+	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: [], code: []}
+kind_bit(kind: int): int := 1 << kind
+def type_test_code(body: Body, subject: any, spec: text): list {
+	# a parent's subclasses are tested by class_methods.warp's widened_tests (`x is Animal or x is Dog`): only cases refuse
+	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
+	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
+	if spec not in core_type_words { return refuse("a test of the type " + spec) }
+	type = core_type_words[spec]
+	value = expression_code(body, subject)
+	if value#1 == "node" { return node_type_test(body, value, type) }
+	["bool", [op.i32_const, if value#1 in covered_kinds[type] then 1 else 0]]
+}
+# `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline, as
+# Rust's kind masks; a type value (`int is number`) and `is code` ask runtime node_is_type
+def node_type_test(body: Body, value: any, type: text): list {
+	kinds = 0
+	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }
+	if kinds == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
+	held = [op.local_get] + uleb(fresh_local(body, "node"))
+	bits = [op.local_get] + uleb(fresh_local(body, "int"))
+	read = value#2 + [op.local_set] + held[1..] + held_kind_bit_code(body, held) + [op.local_tee] + bits[1..]
+	type_value = read + [op.i64_const] + sleb(kind_bit(HeldBit.TypeValue)) + [op.i64_and, op.i64_eqz, op.i32_eqz]
+	passes = ["bool", bits + [op.i64_const] + sleb(kinds) + [op.i64_and, op.i64_eqz, op.i32_eqz]]
+	["bool", type_value + if_else_code("bool", runtime_call("node_is_type", [["node", held], text_value(type), number_value(kinds)]), passes)]
+}
+# the held kind of the node `held` as one bit, as runtime held_kind_bit places it: 1 << its Kind, a yes/no, type value,
+# map or exact rational the bit of its HeldBit place, ø a list; no call, each mark picked by a select
+def held_kind_bit_code(body: Body, held: list): list {
+	field = [op.local_get] + uleb(fresh_local(body, "int"))
+	kind = field + [op.i64_const] + sleb(kind_mask) + [op.i64_and]
+	is_field = marked => field + [op.i64_const] + sleb(marked) + [op.i64_eq]
+	ratio = kind + [op.i64_const] + sleb(Kind.Int) + [op.i64_eq] + ratio_test(held) + [op.i32_and]
+	marked = as_node(held) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.local_set] + field[1..] + [op.i64_const, 1] + kind + [shift_ops.i64_shl]
+	marked += unless_held(HeldBit.Bool, is_field(Marked.Bool)) + unless_held(HeldBit.TypeValue, is_field(Marked.TypeValue))
+	marked += unless_held(HeldBit.Map, is_field(Marked.Map)) + unless_held(HeldBit.Rational, ratio)
+	held + [op.ref_is_null, op.if] + value_type("int") + held_bit(Kind.List) + [op.else] + marked + [op.end]
+}
+def held_bit(place: int): list { [op.i64_const] + sleb(kind_bit(place)) }
+# the bit on the stack, or the place's bit when the test holds
+def unless_held(place: int, test: list): list { held_bit(place) + test + [op.i32_eqz, op.select] }
+# a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
+def as_node(code: any): list { code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) }
+def kind_code_of(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
+def payload(code: any, held: int): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
+def unboxed(code: any, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
+# whether an Int $Node holds a $Ratio (an i32); the numerator (0) or denominator (1) of one
+# whether an Int $Node holds its number in an $i64box (an i32), neither a ratio nor a big int
+def plain_int_test(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
+def ratio_test(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
+def ratio_part(code: any, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
+# the $Limbs array of an Int $Node holding a $BigInt
+def limbs_of(code: any): list { payload(code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 1]) }
+# `shown_big_int(n)`: a big int's text, a function made at its first call whose code is written last (as closure_text):
+# big_ints.warp's big_int_text when the program makes big ints, that is big_int_power was compiled, else a trap, so
+# that a program printing only plain ints carries neither big_int_text nor the $Limbs and $BigInt types
+shown_big_int_name = "shown_big_int"
+shown_big_int_code(f: Function): any := {
+	f.code = [op.unreachable]
+	if module.runtime["big_int_power"].kinds != ø { f.code = call_values(module.runtime["big_int_text"], [["node", [op.local_get, 0]]])#2 }
+}
+# `big_sum_case(a, b)` … in exact.warp: once the program makes big ints (module.makes_big_ints), the return of
+# big_ints.warp's word of the operands where one holds a big int; before that nothing, so a plain-int program's exact
+# words stay as they were. Its function is noted (module.big_int_sites) and read again once every function is
+# compiled, when big_int_power was (module_compiled)
+big_int_cases = {big_sum_case: "big_int_sum", big_difference_case: "big_int_difference", big_product_case: "big_int_product",
+	big_order_case: "big_int_order", big_float_case: "big_int_float"}
+def big_int_case(body: Body, word_name: text, arguments: any): list {
+	if not module.makes_big_ints {
+		if not module.big_int_sites.any(f => f.name == body.function.name) { module.big_int_sites += [body.function] }
+		return [no_kind, []]
+	}
+	word = module.runtime[word_name]
+	values = arguments.map(a => expression_code(body, a))
+	test = []
+	for i in 0..<#values {
+		test += condition(call_values(module.runtime["holds_big_int"], [values[i]]))
+		if i > 0 { test += [op.i32_or] }
+	}
+	called = return_value(body, call_values(word, values))
+	[no_kind, test + [op.if, no_value] + called#2 + [op.end]]
+}

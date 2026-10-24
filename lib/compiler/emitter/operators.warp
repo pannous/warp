@@ -1,0 +1,151 @@
+# Operators (emitter.warp's part): arithmetic and comparisons on numbers and on boxed values, equality, ø tests
+def operation_code(body: Body, symbol: text, a: any, b: any): list {
+	# an element of a recursive call's result the first reading does not know yet: its index says nothing of its kind
+	if symbol == "#" and a#1 == pending { return element(body, ["node", a#2], b) }
+	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
+	if a#1 == pending and b#1 != pending { a = [b#1, a#2] }
+	if b#1 == pending and a#1 != pending { b = [a#1, b#2] }
+	kind = joint_kind(a#1, b#1)
+	# two results not known yet: computed as ints, but of a kind still pending, so `f(x) + g(x) + [y]` reads again
+	unknown = kind == pending
+	if unknown { kind = "int" }
+	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(body, a, b) }
+	if symbol == "#" and a#1 == "text" { return runtime_call("text_char", [a, whole_index(b)]) }
+	if symbol == "+" and a#1 == "list" and b#1 == "list" { return runtime_call("list_join", [a, b]) }
+	# a list takes any other value as its last item: `[1] + "a"` is [1 'a'] (runtime arithmetic.warp node_add)
+	if symbol == "+" and a#1 == "list" and b#1 != "node" { return runtime_call("list_join", [a, ["list", vector_code([boxed(b)])]]) }
+	textual = a#1 in characters or b#1 in characters
+	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
+	structured = a#1 == "list" or b#1 == "list" or a#1 == "node" or b#1 == "node"
+	if structured and symbol in equalities { return equality(body, symbol, a, b) }
+	# `"ab" * 2.5`: Rust says how a text repeats, a trap could not
+	if textual and (a#1 == "node" or b#1 == "node") and symbol not in comparisons { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
+	# a boxed left operand may be an instance whose class defines the operator: its dispatcher (class_methods.warp's
+	# `+·operator`, the operator a codepoint) calls the method or, on any other value, this builtin, which its own body keeps
+	dispatcher = "${symbol}·operator"
+	if a#1 == "node" and dispatcher in module.functions and body.function.name != dispatcher { return call_values(module.functions[dispatcher], [a, ["node", boxed(b)]]) }
+	if a#1 == "node" or b#1 == "node" { return node_operation(body, symbol, boxed(a), boxed(b)) }
+	if symbol in comparisons and a#1 == "char" and b#1 == "char" { return operation_code(body, symbol, code_point(a), code_point(b)) }
+	if symbol in comparisons and textual and a#1 in characters and b#1 in characters {
+		return operation_code(body, symbol, runtime_call("text_order", [shown_text(a), shown_text(b)]), number_value(0))
+	}
+	if kind == "bool" and symbol in bool_ops { return ["bool", a#2 + b#2 + [bool_ops[symbol]]] }
+	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
+	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
+	if symbol == "%" { return runtime_call("float_mod", [["float", converted(a, kind)], ["float", converted(b, kind)]]) }
+	if symbol == "rem" and kind == "float" { return float_remainder(body, converted(a, kind), converted(b, kind)) }
+	if symbol == "/" and kind == "int" { return runtime_call("exact_ratio", [a, b]) }
+	# a negative exponent gives an exact rational, so the power is a boxed value
+	if symbol == "^" and kind == "int" { return runtime_call("exact_pow", [["node", boxed(a)], ["node", boxed(b)]]) }
+	if symbol == "^" { return float_power(body, converted(a, kind), converted(b, kind)) }
+	ops = if kind == "float" then float_ops else int_ops
+	if symbol not in ops { return refuse("the operator " + symbol + " on " + kind) }
+	if kind == "int" and symbol in checked_words and not body.intrinsics {
+		checked = runtime_call(checked_words[symbol], [["int", converted(a, kind)], ["int", converted(b, kind)]])
+		return [if unknown then pending else checked#1, checked#2]
+	}
+	result = if symbol in comparisons then "bool" else if unknown then pending else kind
+	[result, converted(a, kind) + converted(b, kind) + [ops[symbol]]]
+}
+
+# base ^ exponent of floats: the runtime word float_pow (runtime/extended/pow.warp, musl's pow); a NaN (a negative base to a fraction) fails as invalid_number, as in Rust
+def float_power(body: Body, base: list, exponent: list): list {
+	held = uleb(fresh_local(body, "float"))
+	code = runtime_call("float_pow", [["float", base], ["float", exponent]])#2 + [op.local_tee] + held + [op.local_get] + held
+	checked = [op.f64_ne, op.if, no_value] + dropped(runtime_call("invalid_number", [])) + [op.end]
+	["float", code + checked + [op.local_get] + held]
+}
+
+# an operator on boxed values, by the kinds they hold at run time: `+` is the runtime word node_add; a comparison
+# between two texts or characters orders them as texts; two ints stay ints; an exact rational with an int or another
+# stays exact; any other two are floats
+def node_operation(body: Body, symbol: text, a: any, b: any): list {
+	if symbol == "+" { return runtime_call("node_add", [["node", a], ["node", b]]) }
+	# a bit operator takes ints only: `1 << place` of a value known only at run time reads it as an int
+	if symbol in bit_operators { return operation_code(body, symbol, ["int", converted(["node", a], "int")], ["int", converted(["node", b], "int")]) }
+	left = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
+	right = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
+	ints = operation_code(body, symbol, ["int", unboxed(left#2, gc_type(gc.int_box))], ["int", unboxed(right#2, gc_type(gc.int_box))])
+	floats = operation_code(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
+	kind = if ints#1 == "bool" then "bool" else "node"
+	exact = exact_operation(body, symbol, left, right, floats)
+	# two Ints in $i64boxes stay ints; a ratio or a big int on either side takes the exact word
+	integers = plain_int_test(left#2) + plain_int_test(right#2) + [op.i32_and] + if_else_code(kind, ints, exact)
+	numbers = both_of_kind(left#2, right#2, Kind.Int) + if_else_code(kind, [kind, integers], floats)
+	code = a + [op.local_set] + left#2[1..] + b + [op.local_set] + right#2[1..]
+	if symbol not in comparisons { return [kind, code + numbers] }
+	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
+	textual = x => condition(runtime_call("textual_node", [x]))
+	[kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, [kind, numbers])]
+}
+# `x == ø`, `x === ø` and their negations (a match's `ø:` case): x is ø itself, missing; an empty list, text or map
+# is a value (decision empty-is-not-missing)
+def identity_with_nothing(body: Body, symbol: text, n: any): list {
+	tested_as(symbol, ["bool", boxed(expression_code(body, n)) + [op.ref_is_null]])
+}
+# `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
+def equality(body: Body, symbol: text, a: any, b: any): list {
+	tested_as(symbol, runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]]))
+}
+# the bool test as `==`, `===` ask it, negated for `!=`, `!==`
+def tested_as(symbol: text, test: list): list := if symbol.starts_with("!") then ["bool", condition(test) + [op.i32_eqz]] else test
+# an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
+# operators without one take the floats
+exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod"}
+def exact_operation(body: Body, symbol: text, left: any, right: any, floats: any): list {
+	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
+	if symbol in comparisons { return operation_code(body, symbol, runtime_call("exact_order", [left, right]), number_value(0)) }
+	floats
+}
+# `floor x`: an int itself, a float's floor as an int, a boxed number by the runtime word floored_node (exact for a
+# ratio, as Rust's exact_floor)
+# `type(x)`: the type value of x's kind, of a value known only at run time the one its kind names there (a list's
+# items unknown here, Rust's `list of int`, outside the core)
+static_type_words = {int: "int", float: "float", text: "text", char: "codepoint", bool: "bool"}
+def type_value_of(body: Body, value: any): list {
+	if value#1 == "node" { return runtime_call("node_type_name", [value, list_value(body, module.classes.keys)]) }
+	if value#1 in static_type_words { return ["node", node(Marked.TypeValue, text_bytes(static_type_words[value#1]))] }
+	refuse("the type of a " + value#1)
+}
+# ord(c): the code point of a character, of a text its first; chr(n) the character of the code point n
+def code_point(value: any): list {
+	if value#1 == "text" { return runtime_call("code_point_at", [value, ["int", [op.i64_const] + sleb(0)]]) }
+	["int", converted(value, "char") + [op.i64_extend_i32_u]]
+}
+# float_bits(x): the IEEE 754 bits of a float as an int; bits_float(n): the float of those bits
+bit_casts = {float_bits: ["float", "int", "i64.reinterpret_f64"], bits_float: ["int", "float", "f64.reinterpret_i64"]}
+def bit_cast(value: any, cast: list): list { [cast#2, converted(value, cast#1) + [wasm_instructions[cast#3]]] }
+def floored(value: any): list {
+	if value#1 == "int" { return value }
+	if value#1 == "float" { return ["int", value#2 + [op.f64_floor, op.i64_trunc_f64_s]] }
+	if value#1 == "node" { return runtime_call("floored_node", [value]) }
+	refuse("floor of a " + value#1)
+}
+# `if` on the condition just computed: yes gives a, no gives b, both as kind
+def if_else_code(kind: text, a: any, b: any): list { [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end] }
+def both_of_kind(a: any, b: any, code: int): list {
+	test = x => kind_code_of(x) + [op.i64_const] + sleb(code) + [op.i64_eq]
+	test(a) + test(b) + [op.i32_and]
+}
+
+# `‖x‖`, abs(x): -x when x < 0, else x
+def absolute_value(body: Body, value: any): list {
+	if value#1 == "float" { return ["float", value#2 + [op.f64_abs]] }
+	if value#1 != "int" and value#1 != "node" { return refuse("the absolute value of a " + value#1) }
+	local = uleb(fresh_local(body, value#1))
+	saved = [value#1, [op.local_get] + local]
+	below_zero = condition(operation_code(body, "<", saved, number_value(0)))
+	[value#1, value#2 + [op.local_set] + local + below_zero + [op.if] + value_type(value#1) + negation(body, saved)#2 + [op.else] + saved#2 + [op.end]]
+}
+
+# a % b as in mathematics: never below 0, r + |b| for a negative truncated remainder r
+def euclidean_remainder(body: Body, a: any, b: any): list {
+	divisor = uleb(fresh_local(body, "int"))
+	rest = uleb(fresh_local(body, "int"))
+	get_divisor = [op.local_get] + divisor
+	get_rest = [op.local_get] + rest
+	zero = [op.i64_const, 0]
+	absolute = zero + get_divisor + [op.i64_sub] + get_divisor + get_divisor + zero + [op.i64_lt_s, op.select]
+	code = a#2 + b#2 + [op.local_tee] + divisor + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [op.i64_lt_s]
+	["int", code + [op.if, type_bytes.int] + get_rest + absolute + [op.i64_add, op.else] + get_rest + [op.end]]
+}

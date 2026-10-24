@@ -147,6 +147,13 @@ fn typed_return(type_name: &Node, definition: &Node, optional: &[String]) -> Opt
 		Ok(type_name) => type_name,
 		Err(warning_failed) => return Some(warning_failed),
 	};
+	let written = type_name.name();
+	// a list result gives [] for ø, with no warning (user 2026-10-22, card list-result-autocast: "ø can autocast to []")
+	if crate::analyzer::names_list_type(&written) && can_answer_empty(body, optional) {
+		// held as any list or ø: `list of int?` names no type
+		let held = converted(body, &symbol(&format!("{}?", crate::words::LIST_WORD)));
+		return Some(key(head.clone(), op, key(parens(vec![held]), Op::Coalesce, Node::empty_list())));
+	}
 	Some(key(head.clone(), op, converted(body, &type_name)))
 }
 
@@ -212,6 +219,9 @@ fn typed_definitions(node: &Node, typed: &mut Vec<(String, String, Node)>) {
 /// The "got it" topic of the warning, whose fix `warp fix` applies (formatting/synonyms.rs)
 pub(crate) const OPTIONAL_RESULT_TOPIC: &str = "optional-result";
 
+// ⚠ WARP DOES THIS DIFFERENTLY: ø reaching a place declared `list` (a result or a parameter) becomes [] silently, no
+// warning, `list?` keeps ø (decision optional-result, list part reversed by the user); Rust still warns and keeps ø
+// here, and a `list` parameter given ø holds ø → lib/compiler/runtime/conversions.warp list_of_node
 /// A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
 /// the `?` as its fix and reads its result as `list?`, so the ø reaches the caller unchanged
 fn optional_when_answering_empty(
@@ -221,7 +231,7 @@ fn optional_when_answering_empty(
 	optional: &[String],
 ) -> Result<Node, Node> {
 	let written = type_name.name();
-	if holds_empty(&written) || !can_answer_empty(body, optional) {
+	if holds_empty(&written) || crate::analyzer::names_list_type(&written) || !can_answer_empty(body, optional) {
 		return Ok(type_name.drop_meta().clone());
 	}
 	let function = function_name(head);

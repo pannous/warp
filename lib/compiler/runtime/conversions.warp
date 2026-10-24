@@ -2,7 +2,7 @@
 use "intrinsics.warp"
 use "../kinds.warp"
 use "errors.warp"
-use "exact.warp"
+use "bridge.warp"
 use "instructions.warp"
 use "lists.warp"
 use "text_numbers.warp"
@@ -11,7 +11,7 @@ use "../byte_codes.warp"
 # a boxed int (kind code 1), exact rational or float as a float
 float_of_node(n: Node): float := {
 	if kind_code(n) != Kind.Int { return unboxed_float(n) }
-	float(exact_numerator(n)) / float(exact_denominator(n))
+	if is_plain_int(n) then float(unboxed_int(n)) else extended_float(n)
 }
 # `x.bytecount`: the bytes of a text's or character's UTF-8, 8 an item of a list or map; an error has none
 node_bytes(n: Node): int := {
@@ -56,8 +56,10 @@ text_checked(n: Node): Node := {
 	if is_null(n) or (kind_code(n) != Kind.Text and kind_code(n) != Kind.Codepoint) { returned_error("not a text") }
 	n
 }
+# a yes/no, or 0 or 1, which a bool holds as no and yes (Rust: `f(): bool := x == 1 and 0` gives no)
+holds_bool(n: Node): bool := not is_null(n) and (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1))
 bool_checked(n: Node): Node := {
-	if is_null(n) or not (marked_kind(n) == Marked.Bool or (kind_code(n) == Kind.Int and not is_ratio(n) and unboxed_int(n) >= 0 and unboxed_int(n) <= 1)) { returned_error("not a bool") }
+	if not holds_bool(n) { returned_error("not a bool") }
 	n
 }
 float_checked(n: Node): Node := {
@@ -80,7 +82,7 @@ text_of_node(n: Node): text := {
 	""
 }
 bool_of_node(n: Node): bool := {
-	if is_null(n) or marked_kind(n) != Marked.Bool { fail() }
+	if not holds_bool(n) { fail() }
 	unboxed_int(n) != 0
 }
 char_of_node(n: Node): char := {
@@ -128,7 +130,7 @@ truncated_int(n: Node): int := {
 	if textual_node(n) { return text_as_int(text_of_node(n)) }
 	if not is_null(n) and kind_code(n) == Kind.Float { return truncated(unboxed_float(n)) }
 	if is_null(n) or kind_code(n) != Kind.Int { fail() }
-	int_quotient(exact_numerator(n), exact_denominator(n))
+	if is_ratio(n) then extended_truncated(n) else unboxed_int(n)
 }
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
 int_text(n: int): text := {

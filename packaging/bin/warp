@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# warp: programs run through the warp compiler written in warp (compiler.wasm, as `warp-rust pure` runs it), every other
+# command through the Rust binary warp-rust, unchanged (notes/pure_wrapper.md). Plain bash 3.2, macOS's /bin/bash.
+#   WARP_PIPELINE=rust            every command as warp-rust runs it
+#   WARP_FALLBACK=rust            a program the pure pipeline refuses runs again through warp-rust, said loudly
+#   WARP_COMPILER=self or --self  compiler-self.wasm (compiler.warp compiled by itself) instead of compiler.wasm (pure)
+#   WARP_RUST=<binary>            the Rust binary; else warp-rust beside this script (links followed), else on PATH
+#   WARP_HOST=<binary>|none       the native host warp-host compiles and runs programs instead of warp-rust's pure lane
+#                                 (notes/warp_host.md); else warp-host beside this script when there is one
+
+# The commands the pure pipeline runs, one line each: `<word>) echo <function> ;;`. The function gets the words after
+# the command and hands a command it cannot run to warp-rust (pass_on). Every other command is warp-rust's.
+pure_command() {
+	case $1 in
+		run) echo run_file ;;           # warp run f.warp [-- args]
+		compile) echo compile_module ;; # warp compile --wasm f.warp
+		# fix) echo run_tool ;;         # a command written in warp (fix and beautify: Warp Code 2's, not yet)
+	esac
+}
+
+# warp f.warp [-- args], warp run f.warp: compiled by compiler.wasm, run by warp-rust
+run_file() {
+	[[ ${1-} == *.warp ]] || pass_on
+	pure "${runner[@]}" "${options[@]}" "$@"
+}
+
+# warp <code>: inline code, compiled as a program of the current folder; its value printed, exit status 0
+run_code() {
+	inline=1
+	pure "${runner[@]}" "${options[@]}" "$@"
+}
+
+# warp compile --wasm f.warp: f.wasm written by compiler.wasm; other compiles (--exe, --site, …) are warp-rust's
+compile_module() {
+	[ $# -eq 2 ] && [ "$1" = --wasm ] && [[ $2 == *.warp ]] || pass_on
+	local source=$2 module=${2%.warp}.wasm lib
+	if [ -n "$HOST" ]; then
+		pure "$HOST" "${host_options[@]}" compile "$source" "$module"
+	else
+		lib=$(library_for "$source") || fail "no lib/ with compiler/ found for $source: WARP_LIB names one"
+		pure "$RUST" "$(compiler_file)" "${options[@]}" -- "$source" "$module" "$(dirname "$source")" "$lib"
+	fi
+	echo "compiled $(wc -c <"$module" | tr -d ' ') bytes to $module"
+}
+
+# A run of the pure pipeline (the command given: warp-host's or warp-rust's), its failure exiting with its own status. Its output is looked at only when it must be:
+# under WARP_FALLBACK=rust a refusal passes the command on to warp-rust, said loudly; inline code exits 0 after its
+# value (warp-rust gives an Int value as the exit status, as for a file)
+pure() {
+	if [ -z "$inline" ] && [ "${WARP_FALLBACK-}" != rust ]; then "$@" || exit; return; fi
+	local said status
+	said=$(mktemp "${TMPDIR:-/tmp}/warp-said.XXXXXX") || exit 1
+	"$@" | tee "$said"
+	status=${PIPESTATUS[0]}
+	if [ "${WARP_FALLBACK-}" = rust ] && refused "$status" "$said"; then
+		rm -f "$said"
+		echo "warp: ⚠️  WARP_FALLBACK=rust: THE PURE PIPELINE REFUSED THIS PROGRAM, RUNNING IT THROUGH RUST INSTEAD" >&2
+		pass_on
+	fi
+	[ -n "$inline" ] && is_value_status "$status" "$said" && status=0
+	rm -f "$said"
+	[ "$status" = 0 ] || exit "$status"
+}
+
+# A refusal: compiler.warp raises "outside the core: …" before the program runs, so warp-rust prints that Error as the
+# run's only output line and exits 1 (src/compiler/standalone.rs, src/cli/display.rs); it has no exit status of its own
+refused() {
+	[ "$1" = 1 ] && [ "$(wc -l <"$2")" -le 1 ] && grep -q '^Error("outside the core: ' "$2"
+}
+
+# The status is the printed value's: an Int as the last line, the status its low 8 bits
+is_value_status() {
+	local value
+	value=$(tail -n 1 "$2")
+	[[ $value =~ ^-?[0-9]{1,18}$ ]] && [ $((value & 255)) = "$1" ]
+}
+
+# the whole command, as given, to warp-rust
+pass_on() {
+	exec "$RUST" "${command_line[@]}"
+}
+
+fail() {
+	echo "warp: $*" >&2
+	exit 1
+}
+
+# the file a path names, links followed
+resolved() {
+	local path=$1 link
+	while link=$(readlink "$path"); do
+		[[ $link == /* ]] && path=$link || path=$(dirname "$path")/$link
+	done
+	echo "$path"
+}
+
+# the Rust binary: WARP_RUST, else warp-rust beside this script, else on PATH
+find_rust() {
+	local beside
+	beside=$(dirname "$(resolved "$0")")/warp-rust
+	if [ -n "${WARP_RUST-}" ]; then echo "$WARP_RUST"
+	elif [ -x "$beside" ]; then echo "$beside"
+	else command -v warp-rust || fail "no warp-rust beside $0 nor on PATH (WARP_RUST names it)"
+	fi
+}
+
+# warp-host: WARP_HOST (none: no host), else warp-host beside this script, else none
+find_host() {
+	local beside
+	beside=$(dirname "$(resolved "$0")")/warp-host
+	if [ -n "${WARP_HOST-}" ]; then [ "$WARP_HOST" = none ] || echo "$WARP_HOST"
+	elif [ -x "$beside" ]; then echo "$beside"
+	fi
+}
+
+# Where warp-rust keeps its compilers and lib/: beside it, else <prefix>/share/warp (src/modules/program_file.rs)
+installed_folder() {
+	local folder
+	folder=$(dirname "$(resolved "$(command -v "$RUST")")")
+	if ! holds_warp "$folder" && holds_warp "$folder/../share/warp"; then folder=$folder/../share/warp; fi
+	echo "$folder"
+}
+
+holds_warp() {
+	[ -e "$1/compiler.wasm" ] || [ -d "$1/lib/compiler" ]
+}
+
+# The compiler's build file, as warp-rust finds it: a worktree's (WARP_LIB) in <lib>/../data/, else the installed one
+compiler_file() {
+	local name=compiler.wasm
+	[ "$compiler" = self ] && name=compiler-self.wasm
+	[ -f "${WARP_LIB:-/nonexistent}/../data/$name" ] && echo "$WARP_LIB/../data/$name" || echo "$(installed_folder)/$name"
+}
+
+# lib/ for compiler.warp, as warp-rust finds it: WARP_LIB, else the nearest lib/ holding compiler/ above the source or
+# the current folder, else the installed one, else the lib/ the compiler was built from (its warp.build section)
+library_for() {
+	[ -n "${WARP_LIB-}" ] && { echo "$WARP_LIB"; return; }
+	local folder
+	for folder in "$(cd "$(dirname "$1")" && pwd)" "$PWD"; do
+		while [ ! -d "$folder/lib/compiler" ] && [ "$folder" != / ]; do folder=$(dirname "$folder"); done
+		[ -d "$folder/lib/compiler" ] && { echo "$folder/lib"; return; }
+	done
+	folder=$(installed_folder)
+	[ -d "$folder/lib/compiler" ] && { echo "$folder/lib"; return; }
+	folder=$(LC_ALL=C sed -n 's/.*warp\.build[^/]*\(\/[^[:cntrl:]]*\).*/\1/p' "$(compiler_file)" | head -1)
+	[ -d "$folder/compiler" ] && echo "$folder"
+}
+
+# inline code (`warp '6*7'`): neither a command, a file nor an option; a plain word stays warp-rust's (`warp pi`)
+is_code() {
+	[[ -n $1 && $1 != -* && ! -e $1 && ! $1 =~ ^[A-Za-z-]+$ && ! $1 =~ \.(wasm|cwasm|wat|wast|html?)$ ]]
+}
+
+main() {
+	RUST=$(find_rust) || exit 1
+	[ "${WARP_PIPELINE-}" = rust ] && exec "$RUST" "$@"
+	compiler=${WARP_COMPILER:-pure}
+	[[ $compiler == pure || $compiler == self ]] || fail "WARP_COMPILER is pure or self, not $compiler"
+	inline=
+	options=()      # leading flags (--no-hints, --strict, --fuel n …), which warp-rust takes wherever they stand
+	command_line=() # the command without --self, as warp-rust gets it
+	while [[ ${1-} == -?* && $1 != -- ]]; do
+		case $1 in
+			--self) compiler=self ;;
+			--fuel) options+=("$1" "${2-}"); shift ;;
+			*) options+=("$1") ;;
+		esac
+		shift
+	done
+	command_line=("${options[@]}" "$@")
+	# the pure pipeline's command: warp-host's run (compiler-self.wasm; WARP_COMPILER=pure: compiler.wasm), else
+	# warp-rust's pure or self
+	HOST=$(find_host)
+	host_options=()
+	[ "${WARP_COMPILER-}" = pure ] && host_options=(--compiler full)
+	if [ -n "$HOST" ]; then runner=("$HOST" "${host_options[@]}" run); else runner=("$RUST" "$compiler"); fi
+	local command
+	command=$(pure_command "${1-}")
+	if [ -n "$command" ]; then shift; "$command" "$@"
+	elif [[ ${1-} == *.warp ]]; then run_file "$@"
+	elif is_code "${1-}"; then run_code "$@"
+	else pass_on
+	fi
+}
+
+main "$@"
