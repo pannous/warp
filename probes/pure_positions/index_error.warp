@@ -1,0 +1,4 @@
+# warp pure names where a runtime error happened, as Rust: Error("index out of range: 5 not in 1…2 at …index_error.warp:4:1")
+x = 1
+y = [1, 2]
+y#5

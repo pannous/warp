@@ -28,9 +28,10 @@ def parsed(source: text): Node := {
 ENTITY_MARK = "\\:"
 // `name TAB characters` lines, the table Rust include_str!s
 ENTITY_FILE = "entities.tsv"
-// The lib/ a run uses: WARP_LIB, else the one above this file. A compiled stage is kept for every identical lib/ and
-// runs from wherever that is now, so nothing reads the folder it was compiled in (card pure-lane-nondeterministic)
-def run_library(): text := env("WARP_LIB") ?? folder_of(module_directory)
+// The lib/ a run uses: WARP_LIB, else the one above this file, or beside it when the file was reached as core/ (card
+// compiler-core-link). A compiled stage is kept for every identical lib/ and runs from wherever that is now, so nothing
+// reads the folder it was compiled in (card pure-lane-nondeterministic)
+def run_library(): text := env("WARP_LIB") ?? (if module_directory.ends_with("/core") then folder_of(module_directory) + "/lib" else folder_of(module_directory))
 global entity_table = ø
 def entities(): any {
 	if entity_table == ø {
@@ -1427,7 +1428,7 @@ INDEX_POWER = 170
 // The operators written with symbols, longest first, each with its canonical name; alias_spellings() adds their other
 // spellings (lib/aliases.warp)
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = {"===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
+SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `xs .* 2` maps `*` over the elements, binding as `*`
 // does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (lib/sugar/fallbacks.warp)
 PHRASE_OPERATORS = [".+", ".-", ".*", "./", ".^", "?:"]
@@ -1470,10 +1471,11 @@ def word_operator_at(p: Parser, c: any): list {
 	[]
 }
 // The operator symbol at the parser's position as [written, canonical], the longest, else []
+// (`c ?.5 : 1` keeps its ternary: `?.` before a digit is `?` and the number .5)
 def symbol_operator_at(p: Parser, c: any): list {
 	for pair in symbol_operators() {
 		written = pair#1
-		if written#1 == c and starts_at(p.code, written, p.at) and (written != ">>" or operand_follows(p, 2)) { return pair }
+		if written#1 == c and starts_at(p.code, written, p.at) and (written != ">>" or operand_follows(p, 2)) and (written != "?." or not is_digit(peek(p.code, p.at + 2, p.n))) { return pair }
 	}
 	[]
 }
@@ -2146,10 +2148,12 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		return prefixed(p)
 	}
 	if (c == '-' or DASH_GLYPHS.contains(c)) and next != '>' and next != '-' {
+		sign = p.at
 		p.at = p.at + 1
 		skip_spaces(p)
 		operand = expression(p, 155)
-		if operand is number { return 0 - operand }
+		// `-7` is the number, written where its sign is
+		if operand is number { return placed_at(p, 0 - operand, sign) }
 		return keyed("-", ø, operand)
 	}
 	if c == '!' or c == '¬' {
@@ -2898,8 +2902,13 @@ def atom(p: Parser): Node := {
 	start = p.at
 	found = bare_atom(p)
 	if found === ø { return found }
+	placed_at(p, found, start)
+}
+
+// The node, written at the source's offset `start`: its line and column
+def placed_at(p: Parser, n: Node, start: int): Node := {
 	line = line_at(p, start)
-	positioned(found, line, start - p.line_starts[line - 1] + 1)
+	positioned(n, line, start - p.line_starts[line - 1] + 1)
 }
 
 // Where each line of the source starts
@@ -3812,6 +3821,8 @@ def typed_parameters(arguments: Node): Node := {
 // Rust twin: definitions/functions.rs typed_parameter
 def typed_parameter(argument: Node): Node := {
 	parts = group_parts(argument)
+	if parts != ø and parts#1 == "(" and #parts#3 == 1 and is_optional_name(parts#3#1) { return listed("(", parts#2, [optional_parameter(parts#3#1)]) }
+	if is_optional_name(argument) { return optional_parameter(argument) }
 	if parts == ø or parts#2 != " " or parts#1 == "[" or #parts#3 == 0 { return argument }
 	words = parts#3
 	first = words#1
@@ -3834,6 +3845,11 @@ def rest_parameter(last: Node, argument: Node): Node := match last {
 	Key(name, Op.Colon, kind): { if name is symbol then symbol("*" + name_of(name)) else argument }
 	_: argument
 }
+
+// `f(x?)`: the optional parameter x, ø where a call leaves it out, as `f(x = ø)`. A parser case, not a rule: the parser
+// reads `x?` as the one name `x?`, and no rule pattern takes a name apart (F5 glues names in templates only)
+def optional_parameter(argument: Node): Node := if is_optional_name(argument) then Key(symbol(name_of(argument).remove_suffix("?")), Op.Assign, ø) else argument
+def is_optional_name(argument: Node): bool := is_symbol(argument) and name_of(argument).length > 1 and name_of(argument).ends_with("?")
 
 // `int b = 2` as b:int = 2
 def typed_default(last: Node, kind: Node, argument: Node): Node := match last {

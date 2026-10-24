@@ -4,4 +4,4 @@
 #   probes/fd_limit.sh [filter]     default filter text::
 OPEN_FILES_LIMIT=256
 ulimit -n $OPEN_FILES_LIMIT
-cd "$(dirname "$0")/.." && tests/queue.sh -- "${1:-text::}" 2>&1 | grep -E "^test result|Too many open files"
+cd "$(dirname "$0")/.." && VERBOSE=1 tests/queue.sh -- "${1:-text::}" 2>&1 | grep -E "^test result|Too many open files"

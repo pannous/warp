@@ -36,7 +36,7 @@ def quoted_code(body: Body, e: any): list {
 		return runtime_call("key_node", parts)#2
 	}
 	if is_group(e) {
-		if #e == 0 { return [ref_null, gc.node] }
+		if #e == 0 { return [ref_null, gc_type(gc.node)] }
 		items = ["node", node(Marked.SquareList, vector_code(e.map(item => quoted_code(body, item))))]
 		bracketed = ["node", runtime_call("bracketed_node", [items, text_value(bracket_of(e))])#2]
 		return runtime_call("separated_node", [bracketed, text_value(separator_of(e))])#2
