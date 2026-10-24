@@ -4,8 +4,9 @@
 #   match n { Key(left, Op.Colon, right): e; _: d }
 #   → if is_type(n, "key") and op_of(n) == Op.Colon then (left = key_of(n); right = value_of(n); e) else d
 # A part of Op, Bracket or Separator binds the case, `op = Op·case(op_of(n))` (node_cases.warp spells the cases). A
-# subject other than a name is evaluated once, into match·subject. A match with an arm of another form (a bare name, a
-# list pattern, a guard) stays as written: refused downstream.
+# subject other than a name is evaluated once, into match·subject. A guard `n if n > 5 => e` tests its pattern and then its
+# condition, the pattern's names bound; a bare name `n => e` binds the subject. A match with an arm of another form (a
+# list pattern) stays as written: refused downstream.
 use "walk.warp"
 use "phrase_blocks.warp"
 use "enum_declarations.warp"
@@ -86,9 +87,20 @@ is_type_pattern(pattern: Node): bool := match pattern {
 	_: no
 }
 
+# `n if n > 5 => e` (parsed as `if n > 5 then n`): the pattern and its guard, else ø (Rust twin: switch.rs split_guard)
+guard_of(pattern: Node): any := match pattern {
+	Key(Key(ø, Op.If, guard), Op.Then, arm_body): guard
+	_: ø
+}
+
+guarded_pattern(pattern: Node): Node := if guard_of(pattern) == ø then pattern else pattern#2
+
+# `n => "hi " + n`: a bare name its result mentions binds the subject (switch.rs is_binding_name), a guard's name too
+is_name_arm(pattern: Node, result: Node, variants: any): bool := is_name(pattern) and not is_other_arm(pattern) and not is_type_pattern(pattern) and not is_value_pattern(pattern, variants) and mentions(result, name_of(pattern))
+
 is_case_arm(arm: Node, variants: any): bool := {
-	pattern = arm_pattern(arm)
-	is_other_arm(pattern) or is_value_pattern(pattern, variants) or is_type_pattern(pattern) or case_pattern(pattern) != ø
+	pattern = guarded_pattern(arm_pattern(arm))
+	is_name(pattern) or is_value_pattern(pattern, variants) or is_type_pattern(pattern) or case_pattern(pattern) != ø
 }
 
 kind_test(case_name: text, subject: Node): Node := {
@@ -142,7 +154,11 @@ part_bindings(pattern: list, subject: Node): list := {
 # the arms from the last back: an arm's test chooses its value, else what the arms after it give
 arm_chain(arms: list, subject: Node, variants: any): Node := {
 	if #arms == 0 { return applied("switch_no_case", subject) }
+	guard = guard_of(arm_pattern(arms#1))
+	if guard != ø or is_name_arm(arm_pattern(arms#1), arm_result(arms#1), variants) { return guarded_arm(arms, subject, variants, guard) }
 	pattern = arm_pattern(arms#1)
+	# an unbound bare name its result does not use is the value it names
+	if is_name(pattern) and not is_other_arm(pattern) and not is_type_pattern(pattern) { return chosen(value_test(subject, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
 	if is_other_arm(pattern) { return arm_result(arms#1) }
 	if is_value_pattern(pattern, variants) { return chosen(value_test(subject, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
 	if is_type_pattern(pattern) {
@@ -151,6 +167,22 @@ arm_chain(arms: list, subject: Node, variants: any): Node := {
 	}
 	case_parts = case_pattern(pattern)
 	chosen(arm_test(case_parts, subject), arm_value(case_parts, subject, arm_result(arms#1)), arm_chain(arms[1..], subject, variants))
+}
+
+# a guarded or binding arm: the pattern's test and its bindings, then the guard with them in sight, and the result with them
+guarded_arm(arms: list, subject: Node, variants: any, guard: any): Node := {
+	pattern = guarded_pattern(arm_pattern(arms#1))
+	result = arm_result(arms#1)
+	test = yes
+	bound = []
+	if is_name(pattern) and not is_other_arm(pattern) and (guard != ø or is_name_arm(pattern, result, variants)) { bound = [Key(pattern, Op.Assign, subject)] }
+	else if is_value_pattern(pattern, variants) { test = value_test(subject, pattern) }
+	else if is_type_pattern(pattern) { test = List([symbol("is_type"), subject, name_of(pattern)], Bracket.Round, Separator.None) }
+	else if case_pattern(pattern) != ø { test = arm_test(case_pattern(pattern), subject); bound = part_bindings(case_pattern(pattern), subject) }
+	if guard != ø { test = if test == yes then List(bound + [guard], Bracket.Round, Separator.Semicolon) else Key(test, Op.And, List(bound + [guard], Bracket.Round, Separator.Semicolon)) }
+	value = if #bound == 0 then result else List(bound + [result], Bracket.Round, Separator.Semicolon)
+	if test == yes { return value }
+	chosen(test, value, arm_chain(arms[1..], subject, variants))
 }
 
 chosen(test: Node, value: Node, otherwise: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, value), Op.Else, otherwise)
