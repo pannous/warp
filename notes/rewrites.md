@@ -62,6 +62,7 @@ After `where`, conditions joined by `and` ask about what the holes bound:
 | `$x is value`, `$f is function` | a word the program binds as a value, as a function |
 | `$x is literal` | a number or text written as such |
 | `$x is missing` | ø, also an operand not written (the end of `rest...`) |
+| `$w is label` | a word labelling a parameter: a phrase preposition or `as` (words.warp label_words), F10 |
 | `$x is text` (any hole kind) | code of that kind |
 | `$n < 0` (`> <= >= == !=`) | a number literal, `-1` and `(-1)` too, so compared |
 | `$f takes value`, `$f takes int` | a function of the program or a typed library word whose first parameter is typed (not yes/no), or typed int |
@@ -69,6 +70,30 @@ After `where`, conditions joined by `and` ask about what the holes bound:
 `not` negates any of them except the origin (`where not $f takes value`; `$t is not type` reads the same). Rules try
 in order, so a later rule without conditions is the fallback. The `where` may stand after a template the parser
 continued into it (`=> $c + $n where …`).
+
+Three more ask about a word list and where the matched code stands (card engine-rule-conditions):
+
+| condition | holds when |
+|---|---|
+| `$x in [add, push]` (also `$x is in […]`) | the hole bound one of the words listed, a name or a text naming it (`"push"`) |
+| `method` | the matched code is the method part of `x.f(…)` or `x.f`: `f(…)`, `f`, the right of `.` |
+| `shadowed` | a definition around the matched code binds the word it starts with: a parameter, or a name its body declares (`f(t) := { parse = x => 7; parse(t) }`, notes/dispatch.md: shadowing is scoped) |
+
+Each is negated as the others: `where $f not in [add, push]`, `where not method and not shadowed`:
+
+```warp
+rewrite evaluate($t) => interpret(parse($t)) where not method and not shadowed
+rewrite $x.$f($a) => $f($x, $a) where $f not in [add, append, push, insert, pop, remove, delete, clear]
+```
+
+The engine walks the program keeping where the node it tries stands (rewrites.warp bottom_up_placed): the method part
+of the `.` it is in, the names the definitions around it bind. `shadowed` asks only the definitions around the code; a
+word the program binds at its top level keeps the module and sugar rules away already (a program's own word keeps its
+meaning), and `$x is unbound` asks it of a hole. A run of statements (F6) has no matched code of its own, so neither
+holds there. Open: a lambda's parameter (`plus => plus(1)`) and a class's method bodies don't shadow yet, and a
+result rewritten again (F7) is walked without them.
+
+Tests: tests/modules/test_rule_conditions.warp; probes/rewrites/rule_conditions.
 
 ## Places (F1)
 A place word among the `where` conditions lets a rule rewrite code only standing there:
@@ -170,6 +195,20 @@ rewrite is_type($v, $e) => collection_contains([cases of $e], $v) where $e is en
 
 The rules of lib/sugar/enums.warp use them. Not built: a case's index in a template (`Coin.Dime as int` → 2) and
 `cases of $e` as the source of `T for $x in …` (F4); the conversions stay in plain_enums.warp.
+
+## Parameters (F10)
+The place word `parameter` lets a rule rewrite only a parameter of a definition's head, `f(a, with b) := …` (also
+`f(a): T := …`), in the program's own rules and in the sugar step alike; `$w is label` asks for a word that labels a
+parameter. lib/sugar/parameters.warp drops the label, as Swift passes argument labels:
+
+```warp
+rewrite $word $p => $p where $word is label and parameter   # replace(t, old, with new) := … takes new
+```
+
+Write the place word last: with it first, `where parameter and $w is label`, the rule rewrote the head wrongly
+(`scaled(x, by factor) := x * factor` lost `x`, so the body's `x` was unknown). The sugar step applies a rule of a
+place only there (before F10 it ignored places). Tests:
+tests/modules/test_rewrite_parameters.warp.
 
 ## Rest templates
 A template that is a rest hole alone, `$s...`, is the words the hole bound, rebuilt as a phrase; a phrase template

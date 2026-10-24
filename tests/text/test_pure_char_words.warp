@@ -1,0 +1,17 @@
+# card pure-compiles-compiler: characters in the pure lane, as lib/compiler/prelude_words.warp's is_name_part(c: char)
+# meets them when the pure-built compiler compiles itself
+# (`warp test tests/text` runs them through warp pure)
+
+# a_result_declared_char
+is! "g(): char := 'a'
+[g() == 'a', g() + \"b\"]" [yes, "ab"]
+
+# a_char_parameter_given_an_item_of_a_text
+is! "is_name_part(c: char): bool := (c >= 'a' and c <= 'z') or c == '_'
+leading(line: text): text := { stop = 0; while stop < #line and is_name_part(line#(stop + 1)) { stop += 1 }; line[0 ..< stop] }
+leading(\"ab_c = 2\")" "ab_c"
+
+# the_length_of_a_character
+is! "#\"\\u{1F600}\"" 1
+is! "c = 'x'
+#c" 1
