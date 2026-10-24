@@ -139,7 +139,13 @@ fn command(given: Vec<String>) -> i32 {
 		}
 		[file, ..] if aot::is_machine_code(file) => match std::fs::read(file) {
 			Ok(machine_code) => match aot::load(&engine, &machine_code, file) {
-				Ok((module, functions)) => shown(run_module(&engine, &module, &ffi::CImports { described: functions, ..Default::default() }, args.clone(), None)),
+				Ok((module, functions)) => shown(run_module(
+					&engine,
+					&module,
+					&ffi::CImports { described: functions, ..Default::default() },
+					args.clone(),
+					None,
+				)),
 				Err(problem) => failed(&problem),
 			},
 			Err(problem) => failed(&format!("{file}: {problem}")),
@@ -299,7 +305,13 @@ fn run_carried(machine_code: &[u8], args: Vec<String>) -> i32 {
 		Err(problem) => return failed(&format!("{problem:#}")),
 	};
 	match aot::load(&engine, machine_code, &args[0]) {
-		Ok((module, functions)) => shown(run_module(&engine, &module, &ffi::CImports { described: functions, ..Default::default() }, args, None)),
+		Ok((module, functions)) => shown(run_module(
+			&engine,
+			&module,
+			&ffi::CImports { described: functions, ..Default::default() },
+			args,
+			None,
+		)),
 		Err(problem) => failed(&problem),
 	}
 }
