@@ -168,7 +168,9 @@ Machinery, no layer: emitter 2651, analyzer 991, lexer 461 (notation), rewrites 
 prelude_words 251, scope 215, uses 193 (kernel `use`), serializer 138, builtin_signatures 113, words 107, diagnostics
 101, host_words 74, compiler 48, passes 88, shapes 52, signatures 41, node 39, runtime 33, kinds 20, positions 10,
 types 10, byte_codes 9. Checks, no layer: kind_changes 187, source_checks 140, main_globals 94, lints 69.
-time_arithmetic 158 and injection 217 are library (runtime words, typed templates), not syntax.
+time_arithmetic 158 and injection 217 are library (runtime words, typed templates), not syntax; time_arithmetic
+is now a class library, lib/time_arithmetic.warp, which the compiler never loads (card time-arithmetic-library), a
+link at its old path.
 
 Kernel passes (analysis a rewrite can't carry): node_matches 214 and node_cases 178 (match, kernel by decision), lambdas 283 (closures), arity_overloads 388 (overloads by count),
 number_keys 152 and data_items 150 (map key typing, writes through references), tries 91 (try lowering),
@@ -182,7 +184,7 @@ Sugar passes, with the rule each would become:
 | 163 | of_lookups | `rewrite $a of $b => $b.$a`: phrase rule works today; type phrases `list of int` need F2 |
 | 137 | for_loops | done (card sugar-for-loops): lib/sugar/iteration.warp lowers every `for` (F3, F7, hidden glue); a map's keys by `where $m is map` (sugar-places); loop_heads.warp keeps what a rule cannot write yet: `for k, v in m` (two names), a type word as the variable; `is map` sees a function's own maps over the program's, and a parameter of another type (`found: list`) is no map (probes/sugar/for_loops/map_parameter.warp) |
 | 121 | welcome_forms | match-arm spellings onto one: rows of rules, F4 for arms |
-| 121 | foreign_forms | `rewrite public $d... => $d...`, `rewrite new $c => $c`: F1 (statement head); `attr_accessor` F1 (class body) |
+| 121 | foreign_forms | partly done (card sugar-foreign-forms): modifiers without warp meaning are lib/sugar/declarations.warp, one rest-template rule per word (`rewrite public $s... => $s...`; C only before a free word), `constant x` one more; stay parser-side: mixed runs with warp modifiers (`public export fun`), class modifiers, `enum class`, `attr_accessor`, `mixin` (they decide what the parser reads next), and `new P(…)` (a guarded call pattern `new $t($a...) where $t is type` doesn't match a phrase operand) |
 | 116 | min_max | done (card min-max-sugar): lib/sugar/extremes.warp, twelve rules; the pass file is gone. The prelude function stays a later step (lib/extrema.warp, once measured as fast) |
 | 97 | library_calls | `rewrite reverse $x => reverse($x)` per typed prelude word: F2 (typed signature), unbound already handled |
 | 91 | clauses | `fib(0) := 0; fib(1) := 1` → one kernel match: F6 |
@@ -197,7 +199,7 @@ Sugar passes, with the rule each would become:
 | 36 | ranges | range value → loop: F3 |
 | 35 | filled_lists | done: lib/sugar/lists.warp (card sugar-filled-lists) |
 | 32 | broadcasting | `rewrite $xs .* $y => $xs.map(e => e * $y)`: F3 (hygienic e) |
-| 30 | preposition_heads | `play(tone, for duration)` → drop the preposition per parameter: F4 |
+| 30 | preposition_heads | done: `rewrite $word $p => $p where parameter and $word is label` (lib/sugar/parameters.warp, F10 place `parameter`; card sugar-preposition-heads) |
 | 24 | grouped_receivers | `rewrite ($p).$a => $p.$a`: F2 (p bound to a value) |
 | 18 | phrase_blocks | not sugar: `{print "big"}` as one statement is the notation's grouping; belongs in the reader |
 | 15 | coalesce | done: lib/sugar/fallbacks.warp (card sugar-coalesce) |

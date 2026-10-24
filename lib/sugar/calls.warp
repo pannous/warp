@@ -5,3 +5,31 @@
 rewrite ($f $x) => $f($x) where $f takes one
 # before several words it takes the phrase they make: `reverse sort xs` is `reverse(sort xs)`, then `reverse(sort(xs))`
 rewrite ($f $x $more...) => $f(($x $more...)) where $f takes one
+# A type word before its value converts it, as its call does: `int 3.7` is int(3.7), `text int 3.7` text(int(3.7))
+# (braceless and braced calls take one path). Its line takes any value, `int(x): int from emitter`, so `takes one`
+# (one typed value) leaves it out. Not a name nothing binds: `int x = 3` declares x; before several words it takes
+# the phrase they make, `int float 3` is int(float(3))
+rewrite (int $x) => int($x) where $x is not unbound
+rewrite (float $x) => float($x) where $x is not unbound
+rewrite (double $x) => double($x) where $x is not unbound
+rewrite (long $x) => long($x) where $x is not unbound
+rewrite (string $x) => string($x) where $x is not unbound
+rewrite (text $x) => text($x) where $x is not unbound
+rewrite (char $x) => char($x) where $x is not unbound
+rewrite (type $x) => type($x) where $x is not unbound
+rewrite (int $x $more...) => int(($x $more...))
+rewrite (float $x $more...) => float(($x $more...))
+rewrite (double $x $more...) => double(($x $more...))
+rewrite (long $x $more...) => long(($x $more...))
+rewrite (string $x $more...) => string(($x $more...))
+rewrite (text $x $more...) => text(($x $more...))
+rewrite (char $x $more...) => char(($x $more...))
+rewrite (type $x $more...) => type(($x $more...))
+
+# Pipes (wiki/pipe.md, decision D6): `x | f` is the call f(x) of a function of the program or a library word of one
+# value, `3 | inc | dbl` is dbl(inc(3)); between two functions `|` composes them, `inc | dbl` is `x => x | inc | dbl`,
+# and a composition piped on composes, `inc | dbl | square`; between values `|` stays the logical or. Rust twin: pipes.rs
+rewrite ($it => $body) | $g => $it => $body | $g where $g is function
+rewrite $f | $g => $it => $it | $f | $g where $f is function and $g is function
+rewrite $x | $f => $f($x) where $f is function
+rewrite $x | $f => $f($x) where $f takes one

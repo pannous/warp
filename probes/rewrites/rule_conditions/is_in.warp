@@ -1,0 +1,5 @@
+// out: [1, 2]
+// `where $w is in […]` reads as `$w in […]`
+rewrite tag($w) => 1 where $w is in [red, green]
+rewrite tag($w) => 2
+print [tag(red), tag(blue)]

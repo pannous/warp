@@ -585,6 +585,13 @@ joined_name(n: Node, joined: function): Name := {
 	""
 }
 
+# the arguments of a call that flow into the parameters: into a rest parameter only a lone spread, ys of `f(1, *ys)`,
+# the list it passes; the items a rest gathers flow nowhere one by one (the emitter makes their list)
+flowing_arguments(arguments: list, parameters: list): list := {
+	if not parameters or not parameters.last.rest { return arguments }
+	spread = if #arguments == #parameters then rest_name(arguments.last) else ø
+	arguments[..min(#parameters - 1, #arguments)] + (if spread != ø then [symbol(spread)] else [])
+}
 # every call of a defined function in n, outside nested definitions: [name, arguments]
 calls(n: Node, found: list): list := {
 	if is_definition(n) { return found }
@@ -684,7 +691,7 @@ gather(n: Node, context: Name, flows: list): list := {
 		return flows
 	}
 	if is_group(n) and head_name(n) in defined_functions {
-		arguments = n[1..]
+		arguments = flowing_arguments(n[1..], function_parameters(name_of(n#1)))
 		for index in 0..<min(#arguments, #function_parameters(name_of(n#1))) { flows += [Flow(FlowWay.Parameter, context, name_of(n#1), arguments[index], index)] }
 	}
 	# `closure_new(f, a, b)`: the captured values flow into the first parameters of f
