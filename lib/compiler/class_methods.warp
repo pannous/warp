@@ -16,6 +16,12 @@
 #   `plus(o)`), is the operator on its instances: the dispatcher `+·operator(a, b)` calls the method of a's class (its
 #   own or an ancestor's) and gives any other value the builtin `a + b`; the emitter calls it for `a + b` of a boxed a,
 #   a value that may be an instance (emitter/operators.warp; card pure-class-operators)
+# - a class ordering its instances by `compare(o)` (a number below, at or above 0, as Rust's lane reads it) orders them
+#   under <, <=, > and >=: the dispatcher `<·operator(a, b)` is compare(a, b) < 0 on its instances, the builtin on any
+#   other value
+# - a class showing its instances by `text()` shows them so wherever a value shows (print, `"at " + x`): the
+#   dispatcher `text·shown(x)` gives an instance its class's text, any other value the builtin's (str); the emitter
+#   shows a value that may be an instance through it (emitter/output.warp shown_text)
 # - `x is Animal` is true of an instance of a class extending Animal too: `x is Animal or x is Dog`, and so is a
 #   dispatcher's test of each owner (widened_tests, after the methods are lifted)
 # - fields a space lists, `class person{name age: int}`, are each a field, `name; age: int` (the last takes the type)
@@ -33,6 +39,12 @@ instance_names = ["self", "this"]
 base_layers = ["extends", "inherited_from"]
 # methods with a meaning of their own, which stay in their class
 kept_methods = ["init"]
+# the method ordering a class's instances, and the operators it gives them
+ordering_method = "compare"
+ordering_operators = ["<", "<=", ">", ">="]
+# the method a class's instances show by, and its dispatcher (emitter/output.warp reads the name)
+showing_method = "text"
+showing_dispatcher = "text·shown"
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
 # the function a bare call of a sibling method calls: the dispatcher of a routed one
@@ -91,9 +103,41 @@ methods_lifted(program: Node): Node := {
 		operator = spelled_operator(operator_table, spellings#1)
 		rewritten += [method_dispatcher(classes, owners, owned_spellings, operator#2 + "·operator", yes, operator)]
 	}
+	rewritten += derived_dispatchers(classes, liftable, routes)
 	if extended { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then widened_tests(top_statement, classes) else top_statement) }
 	group_like(program, rewritten)
 }
+# the dispatchers a class's compare(o) and text() give: its instances ordered by <, <=, >, >=, and shown by their text
+derived_dispatchers(classes: any, names: list, routes: list): list := {
+	made = []
+	other = symbol("other")
+	orderers = owners_of(classes, names, ordering_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], ordering_method)) == 1)
+	if #orderers > 0 {
+		called = {}
+		for owning_class in orderers { called[owning_class] = lifted_name(classes, names, ordering_method, owning_class, routes) }
+		for glyph in ordering_operators {
+			ordered = {}
+			for owning_class in orderers { ordered[owning_class] = Key(call_of(called[owning_class], [self_node, other]), glyph as Op, 0) }
+			head = [Key(self_node, Op.Colon, symbol("any")), Key(other, Op.Colon, symbol("any"))]
+			made += [Key(call_of(glyph + "·operator", head), Op.Define, value_dispatch(deepest_first(classes, orderers), ordered, Key(self_node, glyph as Op, other)))]
+		}
+	}
+	showers = owners_of(classes, names, showing_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], showing_method)) == 0)
+	if #showers > 0 {
+		shown = {}
+		for owning_class in showers { shown[owning_class] = call_of(lifted_name(classes, names, showing_method, owning_class, routes), [self_node]) }
+		made += [Key(call_of(showing_dispatcher, [Key(self_node, Op.Colon, symbol("any"))]), Op.Define, value_dispatch(deepest_first(classes, showers), shown, call_of("str", [self_node])))]
+	}
+	made
+}
+# the value of the first owner's on an instance of it, else of the next owner's…, the fallback on any other value
+value_dispatch(owners: list, values: map, fallback: any): Node := {
+	otherwise = if #owners == 1 then fallback else value_dispatch(owners[1..], values, fallback)
+	test = Key(ø, Op.If, Key(self_node, Op.Is, symbol(owners#1)))
+	Key(Key(test, Op.Then, values[owners#1]), Op.Else, otherwise)
+}
+# the function a class's method was lifted to: its own name when one class declares it and it is not routed
+lifted_name(classes: any, names: list, method: text, owning_class: text, routes: list): text := if #owners_of(classes, names, method) == 1 and method not in routes then method else owned_name(method, owning_class)
 
 # the class declaration with each field its own member: `name age: int` as `name; age: int`
 fields_spelled(top_statement: Node): Node := {
