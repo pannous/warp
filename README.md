@@ -81,6 +81,7 @@ cargo build --release && cargo build --release -p warp-runtime   # binaries in t
 ```
 
 `warp-runtime` is the small runtime that standalone executables are made from; it belongs in the same folder as `warp`.
+`warp rebuild pure` then builds `compiler.wasm`, the compiler written in Warp (lib/compiler/), which `warp pure` runs.
 
 ## Run
 
@@ -89,6 +90,8 @@ warp               # interactive console "repl"
 warp help                         # all commands
 warp sample.warp   # run a file, server, webapp our gui
 warp build sample.warp # the standalone executable (aot native and .wasm)
+warp pure sample.warp  # compiled by the compiler written in Warp (not every form yet)
+warp test              # the tests under tests/, through that compiler
 ```
 
 `samples/` contains classics (game of life, Dijkstra, Levenshtein, a JSON parser, a neural net) in both a
@@ -110,29 +113,33 @@ to_hex(mix(from_hex("#ff0000"), from_hex("#0000ff"), 0.5))   # "#800080"
 let alice = Person { name: "Alice".into(), age: 30 };
 is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
 ```
-`is!` parses, compiles, runs the module in wasmtime and reads the GC object back. The compiler emits:
+`is!` parses, compiles, runs the module in wasmtime and reads the GC object back. The compiler emits
+(`warp compile --wasm`, simplified):
 ```wat
-(type $String (struct (field $ptr i32) (field $len i32)))
-(type $Person (struct (field $name (ref $String)) (field $age i64)))
+(type $Text (array (mut i8)))
+(type $Person (struct (field $name (ref $Text)) (field $age i64)))
 (func $main (result (ref $Person))
-  i32.const 0  i32.const 5  struct.new $String
+  i32.const 0  i32.const 5  array.new_data $Text 0   ;; "Alice" from the data segment
   i64.const 30
   struct.new $Person)
-(data (i32.const 0) "Alice")
+(data "Alice")
 ```
+Texts are GC byte arrays; linear memory is used only to hand bytes to the host or C.
 Declare the Rust side with `wasm_struct! { Person { name: String, age: i64 } }`, or inline:
 `wasm_object! { Person { name: String = "Alice", age: i64 = 30 } }`.
 
 Untyped data travels as one universal GC type, `$Node {kind: i64, data: anyref, value: (ref null $Node)}`. It mirrors
-the host enum `Node` (`Text`, `Symbol`, `Number`, `Key`, `List`, `Type`, `Meta`, `Data`) in
-[src/node.rs](src/node.rs).
+the host enum `Node` (`Text`, `Symbol`, `Number`, `Char`, `Key`, `List`, `Type`, `Meta`, `Data`, `Error`) in
+[src/node/mod.rs](src/node/mod.rs).
 
 ## Status
 
-Experimental and moving fast. 2036 tests pass (`cargo test`). The language spec lives in the
-[wiki](https://github.com/pannous/warp/wiki), and parts of it are not implemented yet. Warp is a Rust rewrite of
+Experimental and moving fast. Tests live in tests/: Warp files run by `warp test` through the Warp-written compiler,
+and the older Rust suite (`cargo test`). The language spec lives in the
+[wiki](https://github.com/pannous/warp/wiki), and parts of it are not implemented yet. Warp began as a Rust rewrite of
 [Wasp](https://github.com/pannous/wasp) (C++), which follows the Python experiments
-[Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script).
+[Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script); its compiler
+is now written in Warp itself ([lib/compiler](lib/compiler)), with Rust as the bootstrap and native host.
 
 Feedback, issues and especially "this surprised me" reports are welcome.
 

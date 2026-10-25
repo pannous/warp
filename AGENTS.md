@@ -1,7 +1,9 @@
 ## Project Overview
 
-This is **warp**, a rust implementation of **wasp**
-The Rust implementation is done, and we are now completely switching to a new self-hosted warp implementation.
+This is **warp**, the successor of **wasp** (C++). It began as a Rust implementation; the compiler is now self-hosted
+in warp (lib/compiler/*.warp, notes/self_hosting.md). The Rust code in src/ and crates/ is frozen legacy: the bootstrap
+that first compiles compiler.warp, the native host (wasmtime, host words, FFI) and the runtime (notes/agents/common.md
+"Principles").
 
 
 https://github.com/pannous/warp
@@ -32,17 +34,32 @@ Person {
 It is similar to JSON5 / ECMA Script but much simplified yet with a richer syntax and more precise and flexible data model.
 
 
+### The warp compiler (`lib/compiler/`, `core/` links to it)
+
+`compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
+parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
+whose runtime words are warp too (runtime.warp, runtime/*.warp). lib/compiler/node.warp declares the Node enum case for
+case as src/node/mod.rs has it.
+- `warp pure <file|code>`: runs compiler.wasm, compiler.warp compiled by the Rust compiler
+- `warp self <file|code>`: runs compiler-self.wasm, compiler.warp compiled by itself
+- `warp rebuild [pure|self]`: builds them anew from lib/ (nothing rebuilds them automatically); a worktree's pair lives
+  in <worktree>/data/ (`WARP_LIB=<worktree>/lib`), main's beside the binary
+- A form outside emitter.warp's core is refused loudly (`outside the core: …`)
+
+Plain `warp <file>` still compiles with the Rust pipeline below.
+
 ### Node AST (the enum in `src/node/mod.rs`)
 
 The central data structure is `Node`, an enum representing all AST node types:
 
-- **Empty, Number, Text, Codepoint, Symbol** - Atomic values
-- **Key** - Binary structures (Pair, Tag)
-- **List/Block** - Collection of nodes with separator and grouping via `Grouper` (parentheses, brackets, braces)
-- **Data** - Generic container using `Dada` for arbitrary Rust types with `CloneAny` trait
-- **Meta** - Node wrapper that adds `Meta` (comments, line/column positions)
+- **Empty, True, False, Number, Char, Text, Symbol** - Atomic values
+- **Key** - Binary structures (Pair, Tag), with an `Op`
+- **List** - Collection of nodes with a `Bracket` (curly, square, round …) and a `Separator`
+- **Data** - Generic container (`DataValue`) for arbitrary Rust types with the `CloneAny` trait
+- **Meta** - Node wrapper that adds metadata (comments, line/column positions)
+- **Error, Type** - an error; a type definition (name + body)
 
-### Parser (`src/warp_parser/`)
+### Rust parser (`src/warp_parser/`, the bootstrap)
 
 Recursive descent parser that converts text input to Node AST:
 
@@ -50,7 +67,7 @@ Recursive descent parser that converts text input to Node AST:
 - Handles comments (`//` line and `/* */` block) attached as metadata
 - Parses literals (numbers, strings, symbols), groups ((), [], {}), and structures
 
-### Pipeline (`src/pipeline.rs`: `compile`, `eval`, `lower`)
+### Rust pipeline (`src/pipeline.rs`: `compile`, `eval`, `lower`)
 
 parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such as `mutation.rs`, `lambdas.rs`,
 `library_words.rs`, `switch.rs`, plus `analyzer/`) → analysis and diagnostics → WASM GC emitter → run.
@@ -58,7 +75,7 @@ parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such 
 ### Emitters
 
 0. **Text**: `Node::serialize` (`src/node/serialization.rs`), warp notation similar to json5; `src/formats/wisp_parser.rs` reads and writes Wisp
-1. **WASM GC Emitter** (`src/wasm_emitter/`)
+1. **Rust WASM GC Emitter** (`src/wasm_emitter/`; emitter.warp is its warp successor)
     - Generates WASM GC bytecode using the `wasm-encoder` crate; `mod.rs` emits programs, the other files the runtime
       functions (texts, lists, maps, unbounded ints, exact numbers, equality, WASI, FFI)
     - `function_builder.rs`: `runtime_function` / `exported_function` emit a whole function in one call
@@ -73,10 +90,12 @@ parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such 
 
 ### Building
 
+The `warp` binary (the Rust host and bootstrap) is built by cargo; the warp compiler it runs by `warp rebuild`:
 ```bash
 cargo build                    # Debug build
 cargo build --release          # Release build
 cargo build --offline          # Offline mode (uses the local registry cache)
+warp rebuild pure              # compiler.wasm from lib/ (`warp rebuild self`: compiler-self.wasm)
 ```
 
 ### Testing
@@ -88,17 +107,24 @@ Several agent sessions share this Mac, so test runs are rationed (roles and rule
 - Only the Integrator session runs the full suite (`./test.sh`, which queues itself) and pushes code to main. Workers
   hand it "branch, tip, filters" and fix what it reports.
 
-The underlying cargo commands (what tests/queue.sh runs):
+Warp tests run locally with the shared binary, through the warp compiler (src/compiler/pure_tests.rs,
+notes/is_tests.md):
 ```bash
-cargo test                     # Run all tests
+warp test                      # all of tests/: each *.pairs.warp pair, each is! line of test_*.warp, via warp pure
+warp test tests/numbers        # only these folders; --self: via `warp self`
+```
+
+The Rust tests' cargo commands (what the cloud lane and tests/queue.sh run):
+```bash
+cargo test                     # the whole Rust suite
 cargo test <test_name>         # Run specific test by name
 cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs are modules of ONE test crate (tests/main.rs); add a new file as `mod x;` in its folder's mod.rs
 ```
 
 #### Important Test Files
 
-- `tests/parser/test_parser.rs` - warp data notation read into values
-- `tests/wasm/test_wasm.rs` - programs compiled to WASM GC and run (is!)
+- `tests/parser/test_parser.rs`, `test_parser.pairs.warp` - warp data notation read into values
+- `tests/wasm/test_wasm.rs`, `test_wasm.pairs.warp`, `test_wasm.warp` - programs compiled to WASM GC and run (is!)
 
 ## WASM GC Reading Patterns
 
@@ -122,15 +148,17 @@ local registry cache. Use `--offline` flag when building.
 
 ### Test File Locations
 
-Tests are in `tests/<topic>/` folders (not `src/`). Each test file is named `test_*.rs`, tests a specific module or
-feature, and is declared in its folder's `mod.rs`; tests/main.rs declares the folders as modules of the one test crate.
+Tests are in `tests/<topic>/` folders (not `src/`). Warp tests are `test_*.pairs.warp` (code ⇥ expected, one a line)
+and `test_*.warp` (is! lines), beside the Rust file of the same name (notes/is_tests.md). Each Rust test file is named
+`test_*.rs`, tests a specific module or feature, and is declared in its folder's `mod.rs`; tests/main.rs declares the
+folders as modules of the one test crate.
 Folder plan and condensing rules: notes/tests_layout.md.
 
 ### Extension Utilities
 
-The `src/extensions/` directory provides Rust standard library extensions:
+The `src/extensions/` directory provides Rust standard library extensions (for the Rust side):
 
-- `numbers.rs` - Extended number types (Complex, Quotient, etc.)
+- `numbers.rs`, `reals.rs` - Extended number types (Complex, Quotient, etc.)
 - `strings.rs` - String manipulation helpers
 - `lists.rs` - Collection utilities
 - `utils.rs` - General utilities (download, file I/O)
@@ -141,34 +169,43 @@ These are reexported in `lib.rs` for test access via `use warp::*`.
 ## Development Workflow
 
 0. **Check state** - git log, git status
-1. **Modify parser or emitter** - `.warp` changes under lib/ run at once with the one shared build:
-   `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` (no local cargo builds besides main's)
+1. **Modify parser or emitter** - in lib/compiler/*.warp (src/ is frozen), checked with the one shared build:
+   `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` (no local cargo builds
+   besides main's)
 2. **Add tests** - Create or update tests in `tests/`
-3. **Run tests** - in the cloud: `scripts/cloud-test.sh --card <card> <branch> <tip> <filters>`
+3. **Run tests** - Warp tests locally: `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp test <folders>`; Rust tests
+   in the cloud: `scripts/cloud-test.sh --card <card> <branch> <tip> <filters>`
 
 ## Serialization
 
 === Node Serialization Workflow (Current Spec) ===
 
-Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/constructors.rs`.
+Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/constructors.rs` (Rust emitter), and for
+emitter.warp in notes/self_hosting.md "Value layout".
 
 1. Core GC types emitted to WASM:
 
-   (type $String (struct
-     (field $ptr i32)
-     (field $len i32)))
+   (type $Text (array (mut i8)))      ;; type 0: a text's UTF-8 bytes
 
    (type $Node (struct
      (field $kind i64)            ;; Kind tag + extra info in high bits
-     (field $data anyref)         ;; payload (boxed number, string, i31ref, or node)
+     (field $data anyref)         ;; payload (boxed number, $Text, i31ref, list or node)
      (field $value (ref null $Node)))) ;; secondary payload (node or null)
 
    (type $i64box (struct (field $value i64)))
    (type $f64box (struct (field $value f64)))
 
+   Text literals come from one passive data segment via array.new_data (`src/wasm_emitter/string_table.rs`).
+   Linear memory holds a text only at the host/FFI edge, as (ptr, len): `text_address` copies a $Text there for a host
+   or C call, `text_from_memory` copies host bytes into a new $Text (`new_text(ptr, len)` makes a Text node so).
+   Readers (`src/gc_traits/gc_string.rs`, `src/run/wasm_reader.rs`, `crates/warp-runtime/src/gc_values.rs`) still also
+   accept the old `$String (struct (field $ptr i32) (field $len i32))`.
+   Lists held as arrays: `$IntList`, `$FloatList`, `$NodeList` (length, items array), maps `$NodeMap`; a program that
+   quotes code gets `$MetaNode`, a $Node subtype with line, column and comment.
+
 2. Kind encoding (see `src/type_kinds.rs`):
 
-   - Lower 8 bits are `Kind` (Empty=0, Int=1, Float=2, Text=3, Codepoint=4, Symbol=5, Key=6, Block=7, List=8, Data=9, Meta=10, Error=11, TypeDef=12, ...)
+   - Lower 8 bits are `Kind` (Empty=0, Int=1, Float=2, Text=3, Codepoint=4, Symbol=5, Key=6, Block=7, List=8, Data=9, Meta=10, Error=11, TypeDef=12, ... Time=18)
    - For Key and List, extra info is stored in the high bits:
      - key: `kind = (op_info << 8) | Kind::Key`
      - list: `kind = (bracket_info << 8) | Kind::List`
@@ -180,10 +217,10 @@ Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/c
    - Int: `data = ref $i64box(value)`, `value = null`
    - Float: `data = ref $f64box(value)`, `value = null`
    - Codepoint: `data = i31ref(char)`, `value = null`
-   - Text/Symbol: `data = ref $String(ptr,len)`, `value = null`
-     - strings live in linear memory via the string table (ptr/len)
+   - Text/Symbol: `data = ref $Text`, `value = null`
    - Key: `data = left node`, `value = right node`
-   - List/Block: `data = first node`, `value = rest list node` (cons cells)
+   - List/Block: Rust emitter: `data = first node`, `value = rest list node` (cons cells); emitter.warp: `data = $list`
+     vector (length, items array); readers tell them apart by the first field
    - TypeDef: `data = name node`, `value = body node`
    - True/False: a bool, the Int 1/0 marked BOOL_INFO above the kind bits (kind = BOOL_KIND); prints yes/no (notes/bool_type.md)
    - Meta is dropped during emission; Error currently emits the inner node
@@ -208,7 +245,8 @@ runs completely in warp; from then on only outcome tests.
 ## complete roundtrip test
 
 eq! is just a shortcut for assert_eq! but
-is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run / convert to Node again :
+is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run / convert to Node again
+(in warp tests `is!` is lib/prelude.warp's `eval(warp) == expected`, notes/is_tests.md):
 
 the is! function triggers the following roundtrip: 
 is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 6
