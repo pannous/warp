@@ -202,7 +202,8 @@ with_type_module_uses(program: Node): Node := {
 	used = statements_in(program).map(use_target).filter(target => target is symbol).map(name_of)
 	providers = type_module_providers()
 	wanted = {}
-	for word in called_words(program) {
+	# a function taking nothing is called bare too: `now` as `now()`
+	for word in called_words(program) + bare_calls(program, providers) {
 		if word in providers and word not in own and not is_declared_word(word) { wanted[providers[word]] = yes }
 	}
 	# in the order of type_modules, Rust's sorted one
@@ -210,6 +211,15 @@ with_type_module_uses(program: Node): Node := {
 	if #modules == 0 { return program }
 	use_statements = modules.map(module => plain_node(parsed("use " + module)))
 	separated(bracketed(use_statements + statements_in(program), ""), ";")
+}
+# the words the program names bare that a type module defines as a function taking nothing, `now() := …`
+bare_calls(program: Node, providers: any): list := {
+	nullary = {}
+	for module in type_modules {
+		source = file_text(std_module_path(module)) ?? ""
+		for slice in definition_slices(source) { if slice#2.starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
+	}
+	symbol_words(program).filter(word => word in nullary and providers[word] != "")
 }
 # word → the type module defining it, "" for a word two of them define
 type_module_providers(): any := {
