@@ -1,0 +1,6 @@
+// numpy from warp (needs python3-numpy): an array, its product with itself, its determinant
+use python
+np = python_import("numpy")
+a = python_call(np, "array", [[[1, 2], [3, 4]]])
+print python_call(python_call(a, "dot", [a]), "tolist", [])
+print python_call(python_get(np, "linalg"), "det", [a])

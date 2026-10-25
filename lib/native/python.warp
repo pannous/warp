@@ -1,0 +1,313 @@
+// Python through its C library libpython (card ffi-python-adapter, notes/python_adapter.md): `use python` declares
+// these functions of the Python C API for the program and brings the warp words below. warp-host loads libpython
+// (Linux: the newest libpython3.X.so.1.0 of the library folders; elsewhere see the notes) and calls them; nothing of
+// Python is in the host. The types are lib/c.warp's: a PyObject * is a handle, a C pointer held as an id.
+//   math = python_import("math")
+//   python_call(math, "sqrt", [16])               4.0
+//   python_call("hello", "upper", [])             "HELLO": a warp value is the target of its Python twin's method
+//   python_get(math, "pi")                        3.141592653589793
+//   python_call(python_import("json"), "dumps", [[1, "a", {b: 2.5}]])  "[1, \"a\", {\"b\": 2.5}]"
+//   python_eval("2 ** 100")                       an Int, if it fits 64 bits
+//   python_exec("import sys")                     runs statements in __main__
+// Values cross by value: ø None, yes/no True/False, an Int int, a float float, a text str, a list list, a map dict,
+// and back (a tuple too becomes a list). Any other Python object comes back as a reference, the map
+// {python: <handle>, type: "<its type name>"}, which python_call and python_get take as a target or an argument.
+// A Python exception is a warp Error: `python ZeroDivisionError: division by zero`, catchable with try.
+// Needs Python 3.13 or newer (Py_GetConstant).
+Py_InitializeEx(signals: i32): void from 'python'
+Py_IsInitialized(): i32 from 'python'
+Py_GetConstant(constant: i32): handle from 'python'
+PyImport_ImportModule(name: text): handle from 'python'
+PyObject_GetAttrString(target: handle, name: text): handle from 'python'
+PyObject_Call(callable: handle, arguments: handle, keywords: handle): handle from 'python'
+PyObject_Str(target: handle): handle from 'python'
+PyObject_Type(target: handle): handle from 'python'
+PyObject_IsTrue(target: handle): i32 from 'python'
+PyObject_IsInstance(target: handle, kind: handle): i32 from 'python'
+PyObject_Size(target: handle): i64 from 'python'
+PySequence_GetItem(sequence: handle, index: i64): handle from 'python'
+PyTuple_New(size: i64): handle from 'python'
+PyTuple_SetItem(tuple: handle, position: i64, item: handle): i32 from 'python'
+PyList_New(size: i64): handle from 'python'
+PyList_Append(sequence: handle, item: handle): i32 from 'python'
+PyDict_New(): handle from 'python'
+PyDict_SetItem(mapping: handle, key: handle, value: handle): i32 from 'python'
+PyDict_Items(mapping: handle): handle from 'python'
+PyLong_FromLongLong(value: i64): handle from 'python'
+PyLong_AsLongLong(target: handle): i64 from 'python'
+PyFloat_FromDouble(value: f64): handle from 'python'
+PyFloat_AsDouble(target: handle): f64 from 'python'
+PyBool_FromLong(value: i64): handle from 'python'
+PyUnicode_FromString(value: text): handle from 'python'
+PyUnicode_AsUTF8(target: handle): text from 'python'
+PyErr_Occurred(): handle from 'python'
+PyErr_GetRaisedException(): handle from 'python'
+Py_IncRef(target: handle): void from 'python'
+Py_DecRef(target: handle): void from 'python'
+// libc's dlopen, found through libpython's own dependencies
+dlopen(file: text, flags: i32): handle from 'python'
+
+// Py_GetConstant's None
+PY_CONSTANT_NONE = 0
+// dlopen's RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD (Linux): the loaded library's symbols made global
+RTLD_GLOBAL_AGAIN = 262
+
+// starts the interpreter once, without its signal handlers; its print lines reach the output as they are printed
+python_start() := {
+	if Py_IsInitialized() == 0 {
+		Py_InitializeEx(0)
+		sys = PyImport_ImportModule("sys")
+		python_share_symbols(sys)
+		out = PyObject_GetAttrString(sys, "stdout")
+		python_call_handle(out, "reconfigure", [], {line_buffering: yes})
+		Py_DecRef(out)
+		Py_DecRef(sys)
+	}
+	yes
+}
+
+// the extension modules of lib-dynload (_contextvars, _decimal, numpy's) find the C API among the process's global
+// symbols, but warp-host loads libpython with its symbols local: loaded again by its soname, they become global
+python_share_symbols(sys: int) := {
+	said = PyObject_GetAttrString(sys, "version")
+	numbers = PyUnicode_AsUTF8(said).split(" ")#1.split(".")
+	Py_DecRef(said)
+	soname = "libpython" + numbers#1 + "." + numbers#2 + ".so.1.0"
+	if dlopen(soname, RTLD_GLOBAL_AGAIN) == 0 { dlopen("libpython" + numbers#1 + "." + numbers#2 + ".so", RTLD_GLOBAL_AGAIN) }
+	yes
+}
+
+// the pending Python exception as a warp Error: `python ValueError: math domain error`
+python_fail() := {
+	exception = PyErr_GetRaisedException()
+	if exception == 0 { raise "python: a call failed without an exception" }
+	kind = python_type(exception)
+	said = PyObject_Str(exception)
+	message = PyUnicode_AsUTF8(said)
+	Py_DecRef(said)
+	Py_DecRef(exception)
+	raise "python " + kind + ": " + message
+}
+
+// the handle, an Error for NULL (the Python call raised)
+python_checked(target: int): int := {
+	if target == 0 { python_fail() }
+	target
+}
+
+// the name of a Python object's type: "int", "str", "module"
+python_type(target: int): text := {
+	kind = PyObject_Type(target)
+	name = PyObject_GetAttrString(kind, "__name__")
+	found = PyUnicode_AsUTF8(name)
+	Py_DecRef(name)
+	Py_DecRef(kind)
+	found
+}
+
+// whether a warp value is a reference to a Python object: {python: <handle>, type: …}
+python_is_reference(value: any): bool := value is map and value.has("python")
+
+// a new Python object of the warp value: ø None, yes/no, an Int, a float, a text, a list, a map; a reference its object
+python_object(value: any): int := {
+	if value == ø { return Py_GetConstant(PY_CONSTANT_NONE) }
+	if python_is_reference(value) {
+		Py_IncRef(value.get("python"))
+		return value.get("python")
+	}
+	if value is bool { return PyBool_FromLong(if value then 1 else 0) }
+	if value is int { return python_checked(PyLong_FromLongLong(value)) }
+	if value is number { return python_checked(PyFloat_FromDouble(value)) }
+	if value is text { return python_checked(PyUnicode_FromString(value)) }
+	if value is map {
+		table = PyDict_New()
+		for key in keys(value) {
+			k = python_object(key)
+			v = python_object(value.get(key))
+			PyDict_SetItem(table, k, v)
+			Py_DecRef(k)
+			Py_DecRef(v)
+		}
+		return table
+	}
+	if value is list {
+		created = PyList_New(0)
+		for item in value {
+			o = python_object(item)
+			PyList_Append(created, o)
+			Py_DecRef(o)
+		}
+		return created
+	}
+	raise "python: no Python value for " + str(value)
+}
+
+// the warp value of a Python object (which stays the caller's): None ø, bool, int, float, str, list and tuple a list,
+// dict a map; any other object a reference to it
+python_value(target: int): any := {
+	kind = python_type(target)
+	if kind == "NoneType" { return ø }
+	if kind == "bool" { return PyObject_IsTrue(target) == 1 }
+	if kind == "int" {
+		whole = PyLong_AsLongLong(target)
+		if PyErr_Occurred() != 0 { python_fail() }
+		return whole
+	}
+	if kind == "float" { return PyFloat_AsDouble(target) }
+	if kind == "str" { return PyUnicode_AsUTF8(target) }
+	if kind == "list" or kind == "tuple" {
+		items = []
+		size = PyObject_Size(target)
+		i = 0
+		while i < size {
+			item = PySequence_GetItem(target, i)
+			items += [python_value(item)]
+			Py_DecRef(item)
+			i += 1
+		}
+		return items
+	}
+	if kind == "dict" {
+		found = {}
+		pairs = PyDict_Items(target)
+		size = PyObject_Size(pairs)
+		i = 0
+		while i < size {
+			pair = PySequence_GetItem(pairs, i)
+			k = PySequence_GetItem(pair, 0)
+			v = PySequence_GetItem(pair, 1)
+			found[python_value(k)] = python_value(v)
+			Py_DecRef(v)
+			Py_DecRef(k)
+			Py_DecRef(pair)
+			i += 1
+		}
+		Py_DecRef(pairs)
+		return found
+	}
+	// a subclass of float, int or str (numpy.float64, an IntEnum) as its value
+	if python_instance(target, "float") { return PyFloat_AsDouble(target) }
+	if python_instance(target, "int") { return PyLong_AsLongLong(target) }
+	if python_instance(target, "str") { return PyUnicode_AsUTF8(target) }
+	Py_IncRef(target)
+	{python: target, type: kind}
+}
+
+// whether the target is an instance of the builtin type `name`
+python_instance(target: int, name: text): bool := {
+	builtins = python_checked(PyImport_ImportModule("builtins"))
+	kind = python_checked(PyObject_GetAttrString(builtins, name))
+	found = PyObject_IsInstance(target, kind)
+	Py_DecRef(kind)
+	Py_DecRef(builtins)
+	found == 1
+}
+
+// the warp value of a new Python object, which is released; an Error for NULL
+python_result(target: int): any := {
+	python_checked(target)
+	value = python_value(target)
+	Py_DecRef(target)
+	value
+}
+
+// calls the method `name` of the Python object `target` with the arguments and keyword arguments (a map, {} for none):
+// a new object
+python_call_handle(target: int, name: text, arguments: list, keywords: any): int := {
+	method = python_checked(PyObject_GetAttrString(target, name))
+	tuple = PyTuple_New(#arguments)
+	i = 0
+	while i < #arguments {
+		PyTuple_SetItem(tuple, i, python_object(arguments[i]))
+		i += 1
+	}
+	table = if #keys(keywords) == 0 then 0 else python_object(keywords)
+	result = PyObject_Call(method, tuple, table)
+	if table != 0 { Py_DecRef(table) }
+	Py_DecRef(tuple)
+	Py_DecRef(method)
+	python_checked(result)
+}
+
+// the Python object of a call's target, and whether it is a new one to release: a reference's object, else the
+// Python twin of the warp value
+python_target(target: any): list := {
+	if python_is_reference(target) { return [target.get("python"), no] }
+	[python_object(target), yes]
+}
+
+// the module `name`, imported: a reference
+python_import(name: text): any := {
+	python_start()
+	python_result(PyImport_ImportModule(name))
+}
+
+// the attribute `name` of the target (a reference or a warp value) as a warp value
+python_get(target: any, name: text): any := {
+	python_start()
+	held = python_target(target)
+	found = PyObject_GetAttrString(held#1, name)
+	if held#2 { Py_DecRef(held#1) }
+	python_result(found)
+}
+
+// calls the method `name` of the target (a reference or a warp value) with the arguments: its result as a warp value
+python_call(target: any, name: text, arguments: list): any := {
+	python_start()
+	held = python_target(target)
+	result = python_call_handle(held#1, name, arguments, {})
+	if held#2 { Py_DecRef(held#1) }
+	python_result(result)
+}
+
+// python_call with keyword arguments: python_call_with(json, "dumps", [data], {indent: 2})
+python_call_with(target: any, name: text, arguments: list, keywords: any): any := {
+	python_start()
+	held = python_target(target)
+	result = python_call_handle(held#1, name, arguments, keywords)
+	if held#2 { Py_DecRef(held#1) }
+	python_result(result)
+}
+
+// the value of a Python expression, evaluated in __main__
+python_eval(expression: text): any := {
+	python_start()
+	main = python_checked(PyImport_ImportModule("__main__"))
+	scope = python_checked(PyObject_GetAttrString(main, "__dict__"))
+	builtins = python_checked(PyImport_ImportModule("builtins"))
+	result = python_call_handle(builtins, "eval", [expression, {python: scope, type: "dict"}], {})
+	Py_DecRef(builtins)
+	Py_DecRef(scope)
+	Py_DecRef(main)
+	python_result(result)
+}
+
+// runs Python statements in __main__, whose names python_eval then sees
+python_exec(code: text): any := {
+	python_start()
+	main = python_checked(PyImport_ImportModule("__main__"))
+	scope = python_checked(PyObject_GetAttrString(main, "__dict__"))
+	builtins = python_checked(PyImport_ImportModule("builtins"))
+	result = python_call_handle(builtins, "exec", [code, {python: scope, type: "dict"}], {})
+	Py_DecRef(builtins)
+	Py_DecRef(scope)
+	Py_DecRef(main)
+	python_result(result)
+}
+
+// releases a reference's Python object
+python_release(reference: any) := {
+	if python_is_reference(reference) { Py_DecRef(reference.get("python")) }
+	ø
+}
+
+// the target's str(): python_text(python_call(fractions, "Fraction", [3, 4])) is "3/4"
+python_text(target: any): text := {
+	python_start()
+	held = python_target(target)
+	said = python_checked(PyObject_Str(held#1))
+	if held#2 { Py_DecRef(held#1) }
+	found = PyUnicode_AsUTF8(said)
+	Py_DecRef(said)
+	found
+}

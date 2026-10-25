@@ -1,0 +1,17 @@
+// Python's modules from warp: warp-host loads libpython, lib/native/python.warp is the glue (notes/python_adapter.md)
+// run: warp-host run samples/python/python_modules.warp
+use python
+math = python_import("math")
+print python_call(math, "sqrt", [16])
+print python_call("hello", "upper", [])
+json = python_import("json")
+print python_call(json, "dumps", [[1, "two", 3.5, yes, ø]])
+print python_call(json, "dumps", [{name: "Alice", age: 30}])
+print python_get(math, "pi")
+print python_eval("sorted([3, 1, 2])")
+print try python_call(math, "sqrt", [-1]) else "caught the ValueError"
+counter = python_call(python_import("collections"), "Counter", ["banana"])
+print python_call(counter, "most_common", [2])
+print python_text(python_call(python_import("fractions"), "Fraction", [3, 4]))
+python_exec("def square(x): return x * x")
+print python_eval("square(12)")
