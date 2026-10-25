@@ -3249,7 +3249,9 @@ def without_trailing_blanks(line: text): text {
 HOLE_ALIASES = {"mouse_x": "mouse.x", "mouse_y": "mouse.y", "u_time": "time", "u_resolution": "size", "u_mouse": "mouse", "wheel": "mouse_wheel"}
 def shader_text(wgsl: text): Node := {
 	names = []
-	text = ""
+	// the pieces between holes are copied whole, joined once: one `+` per character copied the text each time
+	parts = []
+	copied = 0
 	at = 0
 	n = #wgsl
 	while at < n {
@@ -3259,17 +3261,18 @@ def shader_text(wgsl: text): Node := {
 			while end < n and (is_alphanumeric(wgsl[end]) or wgsl[end] == '_') { end = end + 1 }
 		}
 		if end == at + 1 or is_digit(wgsl[at + 1]) {
-			text = text + c
 			at = at + 1
 		} else {
 			written_name = wgsl[at + 1 .. end]
 			read = if HOLE_ALIASES.contains(written_name) then HOLE_ALIASES[written_name] else written_name
-			text = text + "values." + read
+			parts += [wgsl[copied .. at], "values." + read]
 			hole_name = read.split(".")#1
 			if not names.contains(hole_name) { names += [hole_name] }
 			at = end
+			copied = at
 		}
 	}
+	text = join(parts + [wgsl[copied .. n]], "")
 	if #names == 0 { return text }
 	attributed("shader_hole_names", listed("[", " ", [symbol(hole_name) for hole_name in names]), text)
 }
@@ -3616,13 +3619,11 @@ def type_application_length(p: Parser, start: int): int {
 	if not is_at(p.code, start, '<', p.n) { return 0 }
 	depth = 0
 	words = []
-	word = ""
+	// a word is the slice since the last other character, not built a character at a time
+	word_start = start
 	for at in start ..< p.n {
 		c = p.code[at]
-		if is_alphanumeric(c) or c == '_' or c == '?' {
-			word = word + c
-			continue
-		}
+		if is_alphanumeric(c) or c == '_' or c == '?' { continue }
 		if c == '<' {
 			depth = depth + 1
 		} else if c == '>' {
@@ -3630,10 +3631,8 @@ def type_application_length(p: Parser, start: int): int {
 		} else if not ", ()".contains(c) {
 			return 0
 		}
-		if word {
-			words += [word]
-			word = ""
-		}
+		if at > word_start { words += [p.code[word_start .. at]] }
+		word_start = at + 1
 		if depth == 0 { return if at > start + 1 and words.all(is_type_argument) then at - start + 1 else 0 }
 	}
 	0
@@ -4283,17 +4282,20 @@ def decimal_number(p: Parser): text {
 }
 
 def digits_read(p: Parser): text {
-	written = ""
+	// the runs of digits between `_` separators are copied whole and joined once
+	parts = []
+	copied = p.at
 	while p.at < p.n {
 		c = p.code[p.at]
-		if is_digit(c) {
-			written = written + c
-		} else if not (c == '_' and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(peek(p.code, p.at + 1, p.n))) {
-			return written
+		if c == '_' and p.at > 0 and is_digit(p.code[p.at - 1]) and is_digit(peek(p.code, p.at + 1, p.n)) {
+			parts += [p.code[copied .. p.at]]
+			copied = p.at + 1
+		} else if not is_digit(c) {
+			return join(parts + [p.code[copied .. p.at]], "")
 		}
 		p.at = p.at + 1
 	}
-	written
+	join(parts + [p.code[copied .. p.at]], "")
 }
 
 // A quote opening a text: `"…"`, `'…'`, `«…»` (lexer.warp closing_of closes each)
@@ -4320,7 +4322,10 @@ def quoted(p: Parser): Node := {
 // dollar makes a template too: it is never a hole
 // Rust twin: literals/text.rs read_text
 def template(written: text) {
-	read = ""
+	// the plain runs are copied whole and the pieces joined once, only for a template: one `+` per character copied
+	// the text each time, for every text literal
+	parts = []
+	copied = 0
 	holed = no
 	at = 0
 	n = written.length
@@ -4329,31 +4334,35 @@ def template(written: text) {
 		next = peek(written, at + 1, n)
 		if (c == '\\' or c == '$') and (next == '(' or next == '{') {
 			end = hole_end(written, at + 2, next, closing_of(next), n)
-			read = read + "\${" + written[at + 2 .. end - 1] + "}"
+			parts += [written[copied .. at], "\${" + written[at + 2 .. end - 1] + "}"]
 			holed = yes
 			at = end
+			copied = at
 		} else if c == '\\' and at + 1 < n and next == ':' and at + 2 < n and is_alpha(written[at + 2]) {
 			entity = entity_read(written, at, n)
-			read = read + entity#1
+			parts += [written[copied .. at], entity#1]
 			at = at + entity#2
+			copied = at
 		} else if c == '\\' and code_escape(written, at, n) != ø {
 			coded = code_escape(written, at, n)
-			read = read + coded#1
+			parts += [written[copied .. at], coded#1]
 			at = at + coded#2
+			copied = at
 		} else if c == '\\' and at + 1 < n {
 			literal = escape_character(next)
 			holed = holed or literal == '$'
-			read = read + (if literal == '$' then "$$" else literal)
+			parts += [written[copied .. at], if literal == '$' then "$$" else literal]
 			at = at + 2
+			copied = at
 		} else if c == '$' {
-			read = read + (if is_alpha(next) or next == '_' then "$" else "$$")
+			parts += [written[copied .. at], if is_alpha(next) or next == '_' then "$" else "$$"]
 			at = at + 1
+			copied = at
 		} else {
-			read = read + c
 			at = at + 1
 		}
 	}
-	if holed then read else ø
+	if holed then join(parts + [written[copied .. n]], "") else ø
 }
 
 // A text's escapes read: `\n` `\t` `\r` `\e` as their characters, `\"` `\\` and the like as the character itself;
@@ -4361,28 +4370,32 @@ def template(written: text) {
 // Rust twin: literals/text.rs read_text
 def unescaped(content: text, interpolates: bool): text {
 	if not content.contains("\\") { return content }
-	read = ""
+	// the plain runs are copied whole and the pieces joined once: one `+` per character copied the text each time
+	parts = []
+	copied = 0
 	at = 0
 	while at < content.length {
 		c = content[at]
 		escaped = if at + 1 < content.length then content[at + 1] else ' '
 		if c != '\\' or at + 1 >= content.length {
-			read = read + c
 			at = at + 1
 		} else if interpolates and escaped == ':' and at + 2 < content.length and is_alpha(content[at + 2]) {
 			entity = entity_read(content, at, content.length)
-			read = read + entity#1
+			parts += [content[copied .. at], entity#1]
 			at = at + entity#2
+			copied = at
 		} else if code_escape(content, at, content.length) != ø {
 			coded = code_escape(content, at, content.length)
-			read = read + coded#1
+			parts += [content[copied .. at], coded#1]
 			at = at + coded#2
+			copied = at
 		} else {
-			read = read + escape_character(escaped)
+			parts += [content[copied .. at], escape_character(escaped)]
 			at = at + 2
+			copied = at
 		}
 	}
-	read
+	join(parts + [content[copied .. content.length]], "")
 }
 
 // `\x41`, `\u{1b}` at the backslash `at`: [the character, the length read], else ø

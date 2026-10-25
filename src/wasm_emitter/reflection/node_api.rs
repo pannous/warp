@@ -153,13 +153,12 @@ impl WasmGcEmitter {
 		}
 		match name {
 			SYMBOL_WORD => {
+				// the symbol holds the text's own bytes: a copy through linear memory (get_text_ptr, new_symbol) took
+				// fresh heap that nothing ever frees, 1.5 GB in emitter.warp's run of `warp rebuild self`
 				self.emit_call(func, TEXT_OF);
-				let text = self.node_scratch();
-				func.instruction(&I::LocalTee(text));
-				self.emit_call(func, "get_text_ptr");
-				func.instruction(&I::LocalGet(text));
-				self.emit_call(func, "get_text_len");
-				self.emit_call(func, "new_symbol");
+				func.instruction(&I::RefAsNonNull);
+				self.emit_call(func, crate::wasm_emitter::TEXT_FLAT);
+				self.emit_call(func, crate::wasm_emitter::NEW_SYMBOL_OF);
 			}
 			KEY => {
 				// list_text writes the op as written: the op given, any when only the run time knows it
