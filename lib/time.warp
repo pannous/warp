@@ -1,18 +1,36 @@
 // The standard library module time (notes/stdlib.md): `use time`, the calendar over clock() (milliseconds since 1970, UTC)
 
-// `now`, a word the program leaves unbound: the instant the run reads the wall clock (Rust twin: src/time/mod.rs
-// now_call, instant_at(clock())), through WASI's clock_time_get (lib/compiler/host_words.warp), to the millisecond as
-// Rust's. The rule brings this module along to every program mentioning `now`, no `use` needed
-rewrite now => instant_now()
-// clock_time_get of the wall clock (CLOCK_REALTIME, 0), a millisecond's precision asked for: it writes the u64
-// nanoseconds since 1970 into linear memory's first 8 bytes (the scratch fd_write takes only within its call), read
-// back little-endian, then the instant of their milliseconds
-instant_now() := {
+// `now`, a word the program leaves unbound: the Instant the run reads the wall clock (Rust twin: src/time/mod.rs
+// now_call). The rule brings this module along to every program mentioning `now`, no `use` needed
+rewrite now => Instant(wall_clock_ms())
+// the one hook into the host: WASI's clock_time_get (lib/compiler/host_words.warp) of the wall clock
+// (CLOCK_REALTIME, 0), a millisecond's precision asked for. It writes the u64 nanoseconds since 1970 into linear
+// memory's first 8 bytes (the scratch fd_write takes only within its call), read back little-endian
+wall_clock_ms() := {
 	nanos_per_milli = 1000000
 	clock_time_get(0, nanos_per_milli, 0)
 	nanos = 0
 	for i in 0..<8 { nanos = nanos * 256 + memory_byte(7 - i) }
-	instant_at(nanos /! nanos_per_milli)
+	nanos /! nanos_per_milli
+}
+
+// a point in time: milliseconds since 1970-01-01T00:00:00Z. Everything on it is plain warp: ordering through
+// compare (<, <=, >, >=), equality structural, the difference of two instants in milliseconds, a duration in
+// milliseconds added or taken away, and its text in RFC 3339 (print, `"at " + now`)
+class Instant {
+	ms: int
+	compare(other) := ms - other.ms
+	minus(other) := if other is Instant then ms - other.ms else Instant(ms - other)
+	plus(duration) := Instant(ms + duration)
+	// RFC 3339 in UTC, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z
+	text() := format_date(ms) + "T" + format_time(ms) + millis_fraction(ms % 1000) + "Z"
+}
+// ".692", ".69", ".5", or nothing on a whole second
+millis_fraction(millis) := {
+	if millis == 0 then return ""
+	if millis % 100 == 0 then return "." + millis /! 100
+	if millis % 10 == 0 then return "." + two_digits(millis /! 10)
+	"." + two_digits(millis /! 10) + millis % 10
 }
 
 day_number(ms) := ms /! 86400000
