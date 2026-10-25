@@ -23,6 +23,12 @@ duration_of(months: int, days: int, nanos: int): Node := {
 	unsigned_days = if days < 0 then days + TimeInfoUnit.DayRange else days
 	time_of(TimeFormCode.Duration + unsigned_days * TimeInfoUnit.Days + months * TimeInfoUnit.Months, nanos)
 }
+# the order of two times of one form (equal info bits, as equality.warp compares them), by their positions: -1, 0 or
+# 1; times of two forms, an instant and a date, have none
+time_order(a: Node, b: Node): int := {
+	if marked_kind(a) != marked_kind(b) { fail() }
+	if time_position(a) < time_position(b) then -1 else if time_position(a) > time_position(b) then 1 else 0
+}
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
 local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), millisecond_nanos()))
 

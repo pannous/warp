@@ -16,6 +16,12 @@ def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	if symbol == "+" and a#1 == "list" and b#1 != "node" { return runtime_call("list_join", [a, ["list", vector_code([boxed(b)])]]) }
 	textual = a#1 in characters or b#1 in characters
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
+	# two times: equal as equality.warp tells, else ordered by their positions when of one form (Rust: calendar.rs, the
+	# order of Time); `b >= a` of two instants
+	if a#1 == "time" and b#1 == "time" and symbol in comparisons {
+		if symbol in equalities { return equality(body, symbol, a, b) }
+		return operation_code(body, symbol, runtime_call("time_order", [a, b]), number_value(0))
+	}
 	structured = a#1 == "list" or b#1 == "list" or a#1 == "node" or b#1 == "node"
 	if structured and symbol in equalities { return equality(body, symbol, a, b) }
 	# `"ab" * 2.5`: Rust says how a text repeats, a trap could not
