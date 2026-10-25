@@ -64,10 +64,10 @@ global kept_comprehension_sugar = []
 # (the rewrite rules first, as Rust's lowering runs them before any pass: a fired module's `use` brings its words;
 # after interpolation, so that a rule sees the code in a text's holes, `"$(2 in xs)"`; declared counts before the
 # prelude is reached, so the words index_positions answers with, `byte_index_of` for a `byte index b = t.find(part)`,
-# bring their definitions; the source tells a rule's `·` from `*`). The sugar rules the program keeps are chosen here,
+# bring their definitions; the source tells a rule's `·` from `*`; the early sugar before all of them, the function keywords gone). The sugar rules the program keeps are chosen here,
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
-	own = interpolation(with_uses(program, folder))
+	own = early_sugared(interpolation(with_uses(program, folder)))
 	kept_first_sugar = sugar_rules(own, first_sugar_module_names)
 	kept_sugar = sugar_rules(own, sugar_module_names)
 	kept_iteration_sugar = sugar_rules(own, iteration_sugar_module_names)

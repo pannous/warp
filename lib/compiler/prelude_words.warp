@@ -102,7 +102,7 @@ with_reached(program: Node, module: text, in_front: bool): Node := {
 		wanted = wanted[1 ..]
 		for slice in slices {
 			if slice#1 == word and slice#2 not in reached {
-				slice_node = plain_node(parsed(slice#2))
+				slice_node = early_sugared(plain_node(parsed(slice#2)))
 				reached[slice#2] = statements_in(slice_node)
 				wanted += words_within(slice_node)
 			}

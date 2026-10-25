@@ -26,5 +26,11 @@ rewrite synchronized $s... => $s...
 rewrite transient $s... => $s...
 rewrite native $s... => $s...
 
-# `constant x = 3` declares the constant x as `const x = 3` does
-rewrite constant $a => const $a
+# A declaration word (card sugar-declarations): `var x = 1`, and `let`, `const` and the other constant words (Rust
+# twin: words.rs CONSTANT_KEYWORDS), are the assignment `x = 1`; that a constant binds once is the checks' to say
+rewrite (var $d) => $d
+rewrite (let $d) => $d
+rewrite (const $d) => $d
+rewrite (constant $d) => $d
+rewrite (final $d) => $d
+rewrite (val $d) => $d

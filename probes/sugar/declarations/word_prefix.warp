@@ -1,0 +1,4 @@
+# a name merely called var_count stays a name
+var_count = 5
+let total = var_count + 1
+total

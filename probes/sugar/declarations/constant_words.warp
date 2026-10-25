@@ -1,0 +1,6 @@
+# `const`, `constant`, `final`, `val`: the assignment as well
+const a = 1
+constant b = 2
+final c = 3
+val d = 4
+a + b + c + d

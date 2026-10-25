@@ -1,0 +1,6 @@
+# `function f(x) { … }` over several lines, a nested keyword definition inside
+function score(x) {
+	def bonus(y) := y * 10
+	x + bonus(x)
+}
+score(2)

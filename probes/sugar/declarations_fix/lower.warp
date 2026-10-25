@@ -1,0 +1,8 @@
+# lowers a program (args#1) with the pure lane's passes in the Rust lane, so an error there has a place
+use "../../../lib/compiler/passes.warp"
+use os
+use file
+lib = env("WARP_LIB")
+source = read(args#1)
+n = lowered_program(source, lib + "/compiler", read(lib + "/prelude.warp"))
+print "lowered"

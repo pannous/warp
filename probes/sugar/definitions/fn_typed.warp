@@ -1,0 +1,3 @@
+# `fn f(x: text): text { … }`, another keyword, a text result
+fn greet(name: text): text { "hi " + name }
+greet("bo")
