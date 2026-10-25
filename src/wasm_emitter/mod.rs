@@ -122,10 +122,10 @@ enum ArithmeticWrap {
 
 /// Compact 3-field Node struct for WASM GC:
 /// ```wat
-/// (type $String (struct (field $ptr i32) (field $len i32)))
+/// (type $Text (array (mut i8)))     ;; a text's UTF-8 bytes; (ptr, len) in linear memory only for the host or C
 /// (type $Node (struct
 ///   (field $kind i64)              ;; Type tag (0=Empty,1=Int,2=Float,3=Text,...)
-///   (field $data (ref null any))   ;; Payload: i31ref, (ref $String), (ref $Node), boxed numbers
+///   (field $data (ref null any))   ;; Payload: i31ref, (ref $Text), (ref $Node), boxed numbers
 ///   (field $value (ref null $Node)) ;; Child/value node (for Key, Pair, List, etc.)
 /// ))
 /// ```
