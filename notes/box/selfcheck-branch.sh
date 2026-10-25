@@ -2,7 +2,7 @@
 # usage: /workspace/box-slot.sh /workspace/selfcheck-branch.sh <branch>
 # Fetches origin/<branch> into /workspace/cow/trees/sc-<branch> and runs the pure+self self-check.
 # Always run it through box-slot.sh (3 heavy slots); it takes no lock of its own, so
-# different branches can check in parallel. Uses /workspace/cow/sol-warp-latest (refresh: /workspace/box-slot.sh /workspace/build-fresh-warp.sh).
+# different branches can check in parallel. Uses /workspace/cow/warp-rust-latest (refresh: /workspace/box-slot.sh /workspace/build-fresh-warp.sh).
 br=$1; [ -z "$br" ] && { echo "usage: $0 <branch>"; exit 2; }
 repo=/workspace/wt-main
 wt=/workspace/cow/trees/sc-$br

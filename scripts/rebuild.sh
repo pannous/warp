@@ -8,7 +8,7 @@
 #   3. else, unless --check, `warp rebuild` in a heavy slot (scripts/slot.sh on the Mac, /workspace/box-slot.sh on the
 #      box), the result published to the store; the store's `main` link moves to it only for a build of origin/main
 # --check: steps 1 and 2 only, exit 3 on a miss. --force: step 3 whatever the hash says.
-# The warp binary building: WARP_BINARY, else the shared one (main's: /workspace/cow/sol-warp-latest on the box). Its Rust fingerprint:
+# The warp binary building: WARP_BINARY, else the shared one (main's: /workspace/cow/warp-rust-latest on the box). Its Rust fingerprint:
 # WARP_RUST_FINGERPRINT, else the warp.build section of the compiler.wasm beside it (the pair that binary built).
 # warp-host takes the compiler beside it first, then lib/../data, then <prefix>/share/warp (card pure-c-imports): so the
 # pair, once in data/, is also copied beside the tree's warp-host (target/{debug,host,release}/), where an older one
@@ -32,7 +32,7 @@ if [ "$(uname)" = Darwin ]; then
 	[ -x "$main_warp" ] || main_warp=/Users/me/dev/bin/warp
 	slot=("$scripts/slot.sh")
 else
-	store=${WARP_COMPILER_STORE:-/workspace/cow/compilers} main_warp=/workspace/cow/sol-warp-latest
+	store=${WARP_COMPILER_STORE:-/workspace/cow/compilers} main_warp=/workspace/cow/warp-rust-latest
 	slot=(/workspace/box-slot.sh)
 fi
 [ -n "${WARP_SLOT-}" ] && slot=()  # inside a slot already (self-check.sh)

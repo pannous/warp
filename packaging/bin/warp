@@ -9,7 +9,7 @@
 #   WARP_FALLBACK=rust            a program the pure pipeline refuses runs again through warp-rust, said loudly
 #   WARP_COMPILER=self or --self  compiler-self.wasm (compiler.warp compiled by itself) instead of compiler.wasm (pure)
 #   WARP_RUST=<binary>            the Rust binary; else warp-rust beside this script (links followed), else on PATH,
-#                                 else the shared one: /workspace/cow/sol-warp-latest on the box, ~/dev/bin/warp on the Mac
+#                                 else the shared one: /workspace/cow/warp-rust-latest on the box, ~/dev/bin/warp on the Mac
 #   WARP_HOST=<binary>|none       the native host warp-host compiles and runs programs instead of warp-rust's pure lane
 #                                 (notes/warp_host.md); else warp-host beside this script when there is one
 #   WARP_TEST_RUNNER=<command>    `warp test …` runs `<command> …`; else warp-rust's test
@@ -177,11 +177,11 @@ find_rust() {
 	fi
 }
 
-# The shared Rust binary every agent runs: /workspace/cow/sol-warp-latest on the box, ~/dev/bin/warp on the Mac, when
+# The shared Rust binary every agent runs: /workspace/cow/warp-rust-latest on the box, ~/dev/bin/warp on the Mac, when
 # it is no launcher (this script installed as warp)
 shared_rust() {
 	local shared
-	for shared in /workspace/cow/sol-warp-latest "${HOME-}/dev/bin/warp"; do
+	for shared in /workspace/cow/warp-rust-latest "${HOME-}/dev/bin/warp"; do
 		[ -x "$shared" ] && ! head -c 2 "$(resolved "$shared")" | grep -q '#!' && { echo "$shared"; return; }
 	done
 	return 1

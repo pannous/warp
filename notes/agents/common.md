@@ -132,12 +132,12 @@ After a context swap, this file and your role file win over anything a handover 
 - On the Grok box (Debian, /workspace) worktrees come from `boxtree <branch> [base]` (default origin/main): a
   copy-on-write copy of /workspace/cow/warp, target/ build cache included, at /workspace/cow/trees/<branch> on a new
   branch <branch>. Remove your own with `boxtree rm <branch>` after landing. Never work in /workspace/cow/warp itself.
-  Run compilers with `WARP_LIB=<tree>/lib`. The shared box binary is /workspace/cow/sol-warp-latest (built from main;
+  Run compilers with `WARP_LIB=<tree>/lib`. The shared box binary is /workspace/cow/warp-rust-latest (built from main;
   refresh with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh`, which moves the link only after a passing
   smoke test); a branch with Rust changes uses its own build. Branch self-check: `/workspace/box-slot.sh
   /workspace/selfcheck-branch.sh <branch>`.
 - Only the pure pipeline counts (user, 2026-10-23): coverage is what passes purely; the Rust compiler's results don't
-  matter. Don't cargo-build `warp` per branch: run `/workspace/box-slot.sh /workspace/cow/sol-warp-latest rebuild pure`
+  matter. Don't cargo-build `warp` per branch: run `/workspace/box-slot.sh /workspace/cow/warp-rust-latest rebuild pure`
   with `WARP_LIB=<tree>/lib`. Rebuild Rust only on branches that change Rust code (src/ is frozen except urgent fixes);
   crates/warp-runtime changes need only a warp-host build. The merger refreshes the shared binary after Rust lands.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
@@ -190,7 +190,7 @@ After a context swap, this file and your role file win over anything a handover 
   (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
   Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). Tier 3,
   Rust tests: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; the script names it, the cargo
-  gate or cloud lane runs it. On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/sol-warp-latest.
+  gate or cloud lane runs it. On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/warp-rust-latest (the old sol-warp-* names stay as links for old scripts).
 - Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate-probes.sh --tag-good` tags it
   `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `scripts/bisect-lane.sh [--lane
   pure|self|both] <probe.warp> <expected> [good] [bad]` (default the newest good/* tag .. origin/main, first-parent)

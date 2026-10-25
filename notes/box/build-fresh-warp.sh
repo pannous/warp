@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build current origin/main into /workspace/target-main, install /workspace/cow/sol-warp-<hash>, point
-# sol-warp-latest at it (only after a passing smoke `rebuild pure`).
+# Build current origin/main into /workspace/target-main, install /workspace/cow/warp-rust-<hash>, point
+# warp-rust-latest at it (only after a passing smoke `rebuild pure`).
 # usage: /workspace/box-slot.sh /workspace/build-fresh-warp.sh      (-h/--help: this text)
 # Output (quiet by default): the steps' full output goes to a log (/tmp/warp-logs/build-fresh-warp-<time>.log, or
 # $BFW_LOG); you see one line per step and, on failure, the error lines (error:/panic/failed/…) with context.
@@ -41,7 +41,7 @@ say "main $h $(date +%T) (log: $log)"
 t0=$SECONDS
 step "cargo build --release" env CARGO_TARGET_DIR="$target" nice -n 5 cargo build --release || exit
 say "built in $((SECONDS - t0))s"
-dst=$dest/sol-warp-$h
+dst=$dest/warp-rust-$h
 step "install $dst" bash -c "cp '$target/release/warp' '$dst.tmp' && chmod +x '$dst.tmp' && mv '$dst.tmp' '$dst'" || exit
 say "INSTALLED $dst $(date +%T)"
 export PATH=/workspace/tools/binaryen-version_133/bin:$PATH WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$tree/lib
@@ -49,7 +49,7 @@ t0=$SECONDS
 step "smoke rebuild pure" env WARP_MODULE_CACHE=off "$dst" rebuild pure; rc=$?
 git -C "$tree" checkout -q -- data 2>/dev/null
 dirty=$(git -C "$tree" status --short | head -5); [ -n "$dirty" ] && say "note: $tree is dirty: $(echo $dirty)"
-[ $rc -eq 0 ] || { echo "SMOKE FAILED, sol-warp-latest unchanged"; exit $rc; }
+[ $rc -eq 0 ] || { echo "SMOKE FAILED, warp-rust-latest unchanged"; exit $rc; }
 say "smoke rebuild pure ok $((SECONDS - t0))s"
-ln -sfn "$dst" "$dest/sol-warp-latest.tmp" && mv -T "$dest/sol-warp-latest.tmp" "$dest/sol-warp-latest" || exit 1
-say "LATEST -> $(readlink "$dest/sol-warp-latest")"
+ln -sfn "$dst" "$dest/warp-rust-latest.tmp" && mv -T "$dest/warp-rust-latest.tmp" "$dest/warp-rust-latest" || exit 1
+say "LATEST -> $(readlink "$dest/warp-rust-latest")"

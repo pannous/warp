@@ -5,7 +5,7 @@
 #   --lane  which lane's output is judged (default both: wrong in either is bad)
 #   --all   bisect into merged branches too (default --first-parent: main's own commits and merges, the units it bounces)
 # Each step: a fresh module cache, `warp rebuild pure` and `warp rebuild self` with the shared binary
-# (/workspace/cow/sol-warp-latest, or WARP_GATE_BINARY) and WARP_LIB=<step tree>/lib, then the probe run inside the tree
+# (/workspace/cow/warp-rust-latest, or WARP_GATE_BINARY) and WARP_LIB=<step tree>/lib, then the probe run inside the tree
 # (data/bisect-probe.warp, so `use` finds the tree's lib/). Wrong output marks the step bad; a failed rebuild, a probe
 # that times out or a step that cannot run is skipped (exit 125), never bad. Trace: <repo>/data/bisect-lane/trace.log.
 # Heavy (two rebuilds per step, ~10 min each on the box): run it through /workspace/box-slot.sh.
@@ -26,7 +26,7 @@ git -C "$repo" fetch -q origin main --tags || exit 1
 good=${args[2]:-$(git -C "$repo" tag -l 'good/*' --sort=-creatordate | head -1)}
 bad=${args[3]:-origin/main}
 [[ -n $good ]] || { echo "bisect-lane: no good/* tag yet: name a good commit" >&2; exit 2; }
-binary=${WARP_GATE_BINARY:-/workspace/cow/sol-warp-latest}
+binary=${WARP_GATE_BINARY:-/workspace/cow/warp-rust-latest}
 out=$repo/data/bisect-lane; mkdir -p "$out"
 wt=$(mktemp -d "${TMPDIR:-/tmp}/bisect-lane.XXXXXX") && rmdir "$wt"
 git -C "$repo" worktree add -q --detach "$wt" "$bad" || exit 1
