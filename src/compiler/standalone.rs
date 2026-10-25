@@ -67,7 +67,7 @@ pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 }
 
 /// The module compiler.warp makes of `code`, compiled as a program file of `folder` would be
-fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
+pub fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let file = std::env::temp_dir().join(format!("warp-inline-{}.warp", std::process::id()));
 	std::fs::write(&file, format!("{code}\n")).map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let module = compiled_in(&file, folder, by).map_err(|failure| inline_positions(&failure, &file));

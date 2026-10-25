@@ -102,6 +102,28 @@ pub fn std_module_names() -> impl Iterator<Item = &'static str> {
 	STD_MODULES.iter().map(|(module, _)| *module)
 }
 
+/// `module_source("aliases")`, `module_source("compiler/errors.data")`: the text a compile writes into the program in
+/// place of the call (library_words.rs), so a compiled compiler reads none of its own data from files when it runs
+/// (user 2026-10-25: "These should all be built in"): lib/<name>.warp, or the file within lib/ a name with an extension
+/// names, of the compile's lib/ (library_folder: `warp rebuild` builds in lib/ as it is then), else the standard module
+/// the binary embeds
+pub fn compile_time_source(name: &str) -> Option<String> {
+	#[cfg(feature = "native")]
+	{
+		let has_extension = std::path::Path::new(name).extension().is_some();
+		let file = if has_extension { name.to_string() } else { format!("{}.warp", std_module_name(name)) };
+		if let Ok(text) = std::fs::read_to_string(library_folder().join(file)) {
+			reads_beyond_folders(MODULE_SOURCE_READ);
+			return Some(text);
+		}
+	}
+	std_module(name).map(str::to_string)
+}
+
+/// What a compile reading a module_source file from lib/ reads beyond the program's folders (program_cache.rs)
+#[cfg(feature = "native")]
+const MODULE_SOURCE_READ: &str = "module_source";
+
 /// A standard module's source as the binary embeds it: `module_source("prelude")`, which the warp compiler reads its
 /// typed builtin lines from
 pub fn std_module(name: &str) -> Option<&'static str> {

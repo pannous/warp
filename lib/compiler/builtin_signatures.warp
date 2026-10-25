@@ -12,7 +12,7 @@ use "host_words.warp"
 # a builtin word as a typed line of lib/prelude.warp declares it
 class Builtin { name: text; signature: Signature }
 
-prelude_text = library_source("prelude", module_source("prelude"))
+prelude_text = module_source("prelude")
 runtime_library = "warp"
 emitter_library = "emitter"
 alias_start = "alias "
@@ -156,7 +156,7 @@ type_word_kind(word: text): any := type_kinds.get(word)
 
 # libm's functions as lib/math.warp's foreign lines declare them, `floor(x: float): float from 'm'`: what a call of
 # floor compiles to, so its result is the call's
-foreign_math_lines = library_source("math", module_source("math")).split("\n").map(line => typed_line(line, "'m'")).filter(line => line != ø)
+foreign_math_lines = module_source("math").split("\n").map(line => typed_line(line, "'m'")).filter(line => line != ø)
 
 # the kind a declared result is held as: `nothing` and `any` a node of run-time kind, a yes/no an int, a type of
 # values its kind, any other type (`time`, `signal`) an object; ø for `number`, decided where the value is made
@@ -212,7 +212,7 @@ global typed_word_lines = ø
 word_lines(): any := {
 	if typed_word_lines != ø { return typed_word_lines }
 	typed_word_lines = {}
-	for line in (prelude_text + "\n" + library_source("math", module_source("math"))).split("\n") {
+	for line in (prelude_text + "\n" + module_source("math")).split("\n") {
 		for library in typed_libraries {
 			typed = typed_line(line, library)
 			if typed != ø {

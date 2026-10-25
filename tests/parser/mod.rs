@@ -101,6 +101,8 @@ mod test_warp_format;
 #[cfg(feature = "native")]
 mod test_warp_pure; // card warp-pure
 #[cfg(feature = "native")]
+mod test_warp_pure_build; // warp pure|self build <code|file> (user 2026-10-25)
+#[cfg(feature = "native")]
 mod test_warp_wasm_alone; // card standalone
 mod test_wisp_def_params;
 mod test_wisp_malformed;
