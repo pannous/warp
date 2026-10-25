@@ -400,17 +400,9 @@ fn run_command(args: &[String], given: &[String]) {
 	} else if args[1] == REBUILD_COMMAND {
 		rebuild_compilers(args.get(2).map(String::as_str));
 	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
-		use warp::compiler::standalone::{run, run_code, Compiler};
+		use warp::compiler::standalone::Compiler;
 		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
-		// `warp pure <file.warp> [arguments…]`, or inline code as plain `warp <code>` takes it, `use` reading from the
-		// current folder
-		if has_warp_extension(&args[2]) {
-			diagnostic::show_lines_of(&source_of(&args[2]), Some(&args[2]));
-			print_and_exit(run(std::path::Path::new(&args[2]), args[3..].to_vec(), by));
-		}
-		let code = args[2..].join(" ");
-		diagnostic::show_lines_of(&code, None);
-		print_and_exit(run_code(&code, &env::current_dir().unwrap_or_default(), by));
+		run_by_compiler(&args[2..], by);
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments([program_arguments, given].concat());
@@ -579,6 +571,61 @@ fn unknown_command(args: &[String]) -> Option<String> {
 	Some(format!("warp: unknown command {word}{suggestion} (warp help lists the commands)"))
 }
 
+/// `warp pure|self [run|eval|build|compile|link] <file.warp|code> [arguments…]`: the command as plain `warp` takes it,
+/// the program compiled by compiler.warp (`by`): `run`/`eval` run it, `build` writes its module as `warp build --wasm`
+/// does (out.wasm for inline code); with no command word a .warp file or inline code runs. Any other command word is
+/// an error naming the forms, never compiled as code (`warp pure build x` compiled `build x`)
+#[cfg(not(test))]
+fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -> ! {
+	use warp::compiler::standalone::{compiled, compiled_code, run, run_code};
+	let command = words[0].as_str();
+	let rest = if words.len() > 1 { &words[1..] } else { words };
+	if COMPILE_COMMANDS.contains(&command) && words.len() > 1 {
+		let (flags, target) = leading_flags(rest.join(" "));
+		let module = if has_warp_extension(&target) && file_exists(&target) {
+			diagnostic::show_lines_of(&source_of(&target), Some(&target));
+			compiled(std::path::Path::new(&target), by)
+		} else {
+			diagnostic::show_lines_of(&target, None);
+			compiled_code(&target, &env::current_dir().unwrap_or_default(), by)
+		};
+		let module = module.unwrap_or_else(|failure| print_and_exit(failure));
+		let output_path = compiled_output_path(&target);
+		fs::write(&output_path, &module.bytes).unwrap_or_else(|failure| fail(format!("{output_path}: {failure}")));
+		println!("compiled {} bytes to {}", module.bytes.len(), output_path);
+		if flags.contains(&AOT_FLAG) {
+			write_machine_code(&module.bytes, &output_path);
+		}
+		if let Some(other) = flags.iter().find(|flag| ![AOT_FLAG, WASM_FLAG].contains(*flag)) {
+			let pure = by.command();
+			eprintln!("note: warp {pure} build {other}: compiler.warp builds only the module yet; warp build {other} makes it");
+		} else if !flags.contains(&WASM_FLAG) && !flags.contains(&AOT_FLAG) {
+			eprintln!(
+				"note: warp {} build writes the module; warp build makes the standalone executable",
+				by.command()
+			);
+		}
+		std::process::exit(0);
+	}
+	let runs = ["run", "eval"].contains(&command) && words.len() > 1;
+	if !runs && COMMAND_WORDS.contains(&command) && words.len() > 1 {
+		fail(format!(
+			"warp {0} {command}: not a command of warp {0}; it takes warp {0} [run|eval|build] <file.warp|code> [arguments…]",
+			by.command()
+		));
+	}
+	let program = if runs { rest } else { words };
+	// a .warp file with its arguments, or inline code as plain `warp <code>` takes it, `use` reading from the current
+	// folder
+	if has_warp_extension(&program[0]) {
+		diagnostic::show_lines_of(&source_of(&program[0]), Some(&program[0]));
+		print_and_exit(run(std::path::Path::new(&program[0]), program[1..].to_vec(), by));
+	}
+	let code = program.join(" ");
+	diagnostic::show_lines_of(&code, None);
+	print_and_exit(run_code(&code, &env::current_dir().unwrap_or_default(), by));
+}
+
 /// The text of the file `target` names, else `target` itself as code
 fn source_of(target: &str) -> String {
 	if file_exists(target) {
@@ -594,6 +641,7 @@ fn usage() {
 	println!("  warp run <file.warp> Run a warp file, never an executable");
 	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (lib/compiler/compiler.warp)");
 	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by Rust");
+	println!("  warp pure build <file.warp|code> Its module (out.wasm for code) made by compiler.warp; also run, eval");
 	println!("  warp rebuild [pure|self] Build compiler.wasm / compiler-self.wasm, their compilers, anew from lib/");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
