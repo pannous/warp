@@ -271,15 +271,12 @@ with_c_functions(host: any, functions: any): any := {
 	all
 }
 
-# the emitter's refusal of a call, `outside the core: the call strlen(…)`, naming the form and the pass that owns it
-# when that is a C function: c_imports declared it (`functions`) and yet no host word took it, or a foreign line of
-# lib/ declares it and the program neither imports nor uses its library; any other refusal as it is
-c_refusal_owned(refusal: text, functions: any, library_folder: text): text := {
+# the form of the emitter's refusal `outside the core: the call strlen(…)` when that is a C function, one of
+# passes.warp pass_owners: c_imports declared it (`functions`) or a foreign line of lib/ does; ø for another refusal
+c_refused_form(refusal: text, functions: any, library_folder: text): any := {
 	start = outside_the_core + "the call "
-	if not refusal.starts_with(start) { return refusal }
+	if not refusal.starts_with(start) { return ø }
 	name = refusal.remove_prefix(start).split("(")#1
-	if functions.has(name) { return refusal + " (foreign C call; owner c_imports declared it, but no host word took it)" }
-	declared = c_catalog(library_folder, []).filter(d => d#1 == name)
-	if #declared > 0 { return refusal + " (foreign C call; owner c_imports did not claim it: `import " + name + " from '" + declared#1#2 + "'`)" }
-	refusal
+	if functions.has(name) or c_catalog(library_folder, []).any(d => d#1 == name) { return "foreign C call" }
+	ø
 }
