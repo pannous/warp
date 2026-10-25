@@ -17,3 +17,7 @@ is! "'at ' + Instant(1761392620500)" "at 2025-10-25T11:43:40.5Z"
 is! "'at ' + Instant(1761392620050)" "at 2025-10-25T11:43:40.05Z"
 is! "'at ' + Instant(1761392620000)" "at 2025-10-25T11:43:40Z"
 is! "('at ' + now).ends_with('Z')" yes
+
+# now_is_a_plain_library_function_called_bare_or_with_parentheses
+is! "now() <= now" yes
+is! "now = 5; now + 1" 6
