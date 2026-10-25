@@ -69,6 +69,20 @@ symbol_words(n: Node): list := {
 	found.keys
 }
 
+# the words a slice mentions, those inside a class's methods too (the opaque view of `class Instant { … text() :=
+# format_date(ms) }` holds its body as nodes, parts_within): a module's class brings the functions its methods call
+words_within(n: Node): list := {
+	found = {}
+	waiting = [n]
+	at = 1
+	while at <= #waiting {
+		part = waiting#at
+		at += 1
+		if part is symbol { found[name_of(part)] = yes } else { waiting += parts_within(part) }
+	}
+	found.keys
+}
+
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
 # loader places them: a used module's in front of the program, the prelude's after it
@@ -90,7 +104,7 @@ with_reached(program: Node, module: text, in_front: bool): Node := {
 			if slice#1 == word and slice#2 not in reached {
 				slice_node = plain_node(parsed(slice#2))
 				reached[slice#2] = statements_in(slice_node)
-				wanted += symbol_words(slice_node)
+				wanted += words_within(slice_node)
 			}
 		}
 	}
