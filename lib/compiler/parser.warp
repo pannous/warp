@@ -2566,10 +2566,10 @@ def phrase_redefinition(p: Parser, name: text, parameters: list): text {
 	at = 1
 	while at <= #parameters {
 		before = earlier#at
-		now = parameters#at
-		if before != now {
-			if not (before is symbol and now is symbol) { return "" }
-			classes += ["class " + name_of(before), "class " + name_of(now)]
+		current = parameters#at
+		if before != current {
+			if not (before is symbol and current is symbol) { return "" }
+			classes += ["class " + name_of(before), "class " + name_of(current)]
 		}
 		at = at + 1
 	}

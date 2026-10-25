@@ -104,11 +104,11 @@ given_kind_of(value: any, results: any): text := {
 	evident_kind(value, results)
 }
 
-# the kind a variable that was `was` holds after it is given `now`, "" when they do not mix
-mixed_kind(was: text, now: text): text := {
-	if was == now { return was }
-	if was in number_kinds and now == bool_kind { return was }
-	if was in number_kinds and now in number_kinds { return "Float" }
+# the kind a variable that was `was` holds after it is given `becomes`, "" when they do not mix
+mixed_kind(was: text, becomes: text): text := {
+	if was == becomes { return was }
+	if was in number_kinds and becomes == bool_kind { return was }
+	if was in number_kinds and becomes in number_kinds { return "Float" }
 	""
 }
 
