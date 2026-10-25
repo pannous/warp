@@ -34,8 +34,6 @@ struct Rule {
 }
 
 type Bindings = HashMap<String, Node>;
-/// The words whose standard module rule the Rust lane leaves to its own lowering (lower)
-const RUST_OWN_WORDS: [&str; 1] = [crate::time::NOW_WORD];
 
 /// The program rewritten by its own rules and those of the standard modules it mentions, its own rules taken out
 pub fn lower(program: Node) -> Node {
@@ -46,9 +44,6 @@ pub fn lower(program: Node) -> Node {
 			rules.extend(standard_rules(module).into_iter().filter(|rule| mentioned.contains(needed_word(rule))));
 		}
 	}
-	// ⚠ WARP DOES THIS DIFFERENTLY: `now` is lib/time.warp's rule there (instant_now through WASI's clock_time_get,
-	// which the Rust lane does not import); Rust keeps its own `now`, time::now_call → lib/time.warp
-	rules.retain(|rule| rule.module.is_none() || !RUST_OWN_WORDS.contains(&needed_word(rule)));
 	if rules.iter().any(|rule| rule.module.is_some()) {
 		let bound = crate::program_names::Bindings::of(&program).bound();
 		rules.retain(|rule| {
