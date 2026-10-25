@@ -274,8 +274,7 @@ routed(n: Node, classes: any, names: list, routed_methods: list): Node := match 
 # the entry's word and its aliases, `+`, add and plus each [add, "+"]; read once per program
 operator_spellings(): any := {
 	found = {}
-	source = try read(run_library() + "/" + ALIASES_FILE) else ""
-	for row in items_of(written_tree(source)) {
+	for row in items_of(written_tree(ALIAS_TABLE)) {
 		glyph = alias_field(row#2, "operator")
 		word = spelling_text(row#1)
 		if glyph is text { for spelling in [glyph, word] + (alias_field(row#2, "aliases") ?? []) { found[spelling] = [word, glyph] } }

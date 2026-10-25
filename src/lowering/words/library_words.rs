@@ -961,10 +961,11 @@ impl Lowering {
 				return Some(self.word_call(call_items, call_bracket, call_separator).unwrap_or(call));
 			}
 		}
-		// `module_source("prelude")`: a standard module's text, written out at compile time, so it is read from anywhere
+		// `module_source("prelude")`, `module_source("compiler/errors.data")`: the text of a file of lib/, written out at
+		// compile time, so the compiled program reads it from nowhere (compile_time_source)
 		if let (MODULE_SOURCE_WORD, [_, name]) = (head, items) {
-			if let Some(source) = name.text_value().as_deref().and_then(crate::modules::std_module) {
-				return Some(Node::Text(source.to_string()));
+			if let Some(source) = name.text_value().as_deref().and_then(crate::modules::compile_time_source) {
+				return Some(Node::Text(source));
 			}
 		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time

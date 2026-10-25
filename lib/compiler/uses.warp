@@ -61,12 +61,16 @@ aliased(n: any, aliases: list): any := {
 }
 
 # `module_source("prelude")`: lib/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
-# writes it out (the std modules are lib/<name>.warp)
+# writes it out (the std modules are lib/<name>.warp); `module_source("compiler/errors.data")`, a name with an
+# extension, that file of lib/. A compiled compiler reads its own data from nowhere (user 2026-10-25: "These should
+# all be built in")
 module_text(n: Node): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
-	source = file_text(std_module_path(n#2))
+	source = file_text(module_source_path(n#2))
 	if source == ø then n else source
 }
+# the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
+module_source_path(name: text): text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
 
 # [the declarations, the files read]: those of each file the statements use, not yet among `seen`; each file's own
 # declarations claim their signatures in `claimed` (claim_signatures)

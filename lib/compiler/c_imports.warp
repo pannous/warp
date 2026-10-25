@@ -117,10 +117,9 @@ c_crate_use(statement: text): any := {
 }
 # the names the typed lines of lib/math.warp and lib/prelude.warp give warp words of its own: libm's of those names
 # need an import (`floor` is warp's, `fmin` libm's)
-warp_word_names(library_folder: text): any := {
+warp_word_names(): any := {
 	names = {}
-	for file in ["math.warp", "prelude.warp"] {
-		content = try read(library_folder + "/" + file) else ""
+	for content in [module_source("math"), module_source("prelude")] {
 		for line in content.split("\n") {
 			trimmed = line.trim()
 			if trimmed.ends_with(" from warp") or trimmed.ends_with(" from emitter") {
@@ -187,7 +186,7 @@ c_functions_of(source: text, library_folder: text): list := {
 	}
 	catalog = c_catalog(library_folder, native.map(n => n#2))
 	# warp's own floor stays warp's when libm is imported or used (c_warps)
-	own = warp_word_names(library_folder)
+	own = warp_word_names()
 	missing = []
 	# the imports every name of which is a C function: left out as the foreign lines are, so that no name of theirs
 	# reaches the emitter uncalled (an import the host would have to link); one naming warp's own words stays for them

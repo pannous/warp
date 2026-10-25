@@ -4,11 +4,11 @@
 # the same hash wherever they lie (paths are hashed relative to <lib>). -v lists the files on stderr.
 # The inputs: lib/compiler/**, the Rust build compiling the stages (WARP_SOURCE, the third line of a build file's
 # warp.build section: scripts/rebuild.sh finds it), and the std modules the compiler still embeds as text at build time
-# through module_source(…) (prelude, math, list, regex). Once those are read from the run's lib/ (card
-# compiler-library-source) they leave this list and the hash is lib/compiler's alone. Any other change of lib/ (a std
+# through module_source(…) (aliases, prelude, math, list, regex; user 2026-10-25: the compiler's own data is built in,
+# never read at run time). Any other change of lib/ (a std
 # module, a new host verb in os.warp, sugar) never changes the hash: the compiler reads those at run time.
 set -euo pipefail
-EMBEDDED_MODULES=(prelude math list regex)
+EMBEDDED_MODULES=(aliases prelude math list regex)
 lib=$(cd "${1:?usage: scripts/compiler-inputs.sh <lib> [<rust fingerprint>] [-v]}" && pwd)
 rust=${2-}
 [ -d "$lib/compiler" ] || { echo "compiler-inputs.sh: no compiler/ in $lib" >&2; exit 1; }

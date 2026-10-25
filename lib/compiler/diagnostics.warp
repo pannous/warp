@@ -8,8 +8,9 @@
 use "parser.warp"
 use "words.warp"
 
-# the message files in the order a fact is looked up, each with the level of its messages
-message_files = [["errors.data", "error"], ["warnings.data", "warning"], ["hints.data", "hint"]]
+# the message files in the order a fact is looked up, each with the level of its messages and its text, built into the
+# compiler when it is compiled, never read from a lib/ when it runs (user 2026-10-25: "These should all be built in")
+message_files = [["errors.data", "error", module_source("compiler/errors.data")], ["warnings.data", "warning", module_source("compiler/warnings.data")], ["hints.data", "hint", module_source("compiler/hints.data")]]
 quoting_word = "data"
 hole_mark = "$"
 
@@ -18,14 +19,6 @@ hole_mark = "$"
 global diagnosed = []
 # [level, pattern, message] of every row of the message files, read at the first fact
 global message_rows = ø
-# the folder of the message files: the run's lib/compiler (parser.warp run_library), or the one `messages_from` names
-global message_folder = run_library() + "/compiler"
-
-# the message files read from this folder from now on
-def messages_from(folder: text) {
-	message_folder = folder
-	message_rows = ø
-}
 
 # the node a check looks at: a key of the operator
 is_operator(n: any, op: text): bool := n is key and op_of(n) == op
@@ -47,14 +40,13 @@ said_fact(fact: any): list := {
 }
 
 rows(): list := {
-	if message_rows == ø { message_rows = message_files.map(file => rows_of(file#1, file#2)).flatten() }
+	if message_rows == ø { message_rows = message_files.map(file => rows_of(file#3, file#2)).flatten() }
 	message_rows
 }
 
-# the rows of a message file as plain warp data: a list of lines, each a tab-separated [pattern, message] with an
-# optional fix and topic@expression after it, as [level, pattern, message, fix, topic@expression]
-rows_of(file: text, level: text): list := {
-	source = try read(message_folder + "/" + file) else ""
+# the rows of a message file's text as plain warp data: a list of lines, each a tab-separated [pattern, message] with
+# an optional fix and topic@expression after it, as [level, pattern, message, fix, topic@expression]
+rows_of(source: text, level: text): list := {
 	lines = statements_in(plain_node(parsed(source)))
 	lines.filter(line => line != ø).map(line => [level, unquoted(line#1), line#2, column(line, 3), column(line, 4)])
 }

@@ -11,14 +11,14 @@ use file
 
 # lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the folder above this file's
 library_folder = if #args > 3 then args#4 else run_library()
-# the messages of the diagnostics from that lib/, not from the folder this compiler was built in
-messages_from(library_folder + "/compiler")
+# the parser's and the uses' standard modules from that lib/ too, never the folder this compiler was built in
+use_library(library_folder)
 
 # the name the lowered runtime words are kept under
 RUNTIME_WORDS = "compiler.warp's lowered runtime words of " + library_folder
 
-# the prelude's text, whose definitions a program reaches (prelude_words.warp)
-prelude_source = read(library_folder + "/prelude.warp")
+# the prelude's text, whose definitions a program reaches (prelude_words.warp), built in as the compiler's other data
+prelude_source = module_source("prelude")
 
 # the files of the runtime words, each with the files its `use` lines name: the core and, never used by it, the
 # extended runtime (decision runtime-split)

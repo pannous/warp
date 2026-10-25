@@ -723,11 +723,11 @@ fn compiled_stage_key(program: &str) -> String {
 /// The std modules whose text the compiler embeds when it is built (`module_source("math")`): its inputs until
 /// lib/compiler reads them from the run's lib/ (card compiler-library-source)
 #[cfg(feature = "native")]
-const EMBEDDED_MODULES: [&str; 4] = ["prelude", "math", "list", "regex"];
+const EMBEDDED_MODULES: [&str; 5] = ["aliases", "prelude", "math", "list", "regex"];
 /// What a stage compiled by Rust reads besides lib/compiler: the embedded modules, and the std modules its sources use
 /// (`use os`, `use file`) or reach as type modules, which the Rust lane reads from lib/ when they were edited
 #[cfg(feature = "native")]
-const STAGE_MODULES: [&str; 9] = ["prelude", "math", "list", "regex", "os", "file", "map", "text", "time"];
+const STAGE_MODULES: [&str; 10] = ["aliases", "prelude", "math", "list", "regex", "os", "file", "map", "text", "time"];
 
 /// [path inside lib/, contents] of each compiler input: the files below lib/compiler (dot files left out), sorted,
 /// then lib/<module>.warp of each module there is
