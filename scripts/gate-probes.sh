@@ -6,7 +6,7 @@
 #   tier 3  Rust: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; not run here, only named
 #           (scripts/cloud-test.sh, or the Integrator's cargo gate)
 # usage: scripts/gate-probes.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
-#                               [<tree>, default this checkout] [<binary>, default /workspace/cow/sol-warp-latest]
+#                               [<tree>, default this checkout] [<binary>, default /workspace/cow/warp-rust-latest]
 #   --no-rebuild  tier 0 only runs hello with the tree's built pair (data/compiler.wasm, data/compiler-self.wasm)
 #   --base        what tier 2 diffs against (default origin/main; a batch merged on main: the main it started from)
 #   --folders     tier 2 runs the whole folders of the changed test files (many fail today: compare with the base's run)
@@ -28,7 +28,7 @@ while (($#)); do
 	esac
 done
 tree=$(cd "${args[0]:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
-binary=${args[1]:-${WARP_GATE_BINARY:-/workspace/cow/sol-warp-latest}}
+binary=${args[1]:-${WARP_GATE_BINARY:-/workspace/cow/warp-rust-latest}}
 wants() { # wants <tier>: the tier is in --tiers (a range a-b or a list a,b)
 	local t
 	for t in ${tiers//,/ }; do

@@ -2,7 +2,7 @@
 wt=/workspace/wt-parser2
 mkdir -p /workspace/selfcheck-lock
 warp=/workspace/selfcheck-lock/warp
-cp -L /workspace/cow/sol-warp-latest $warp || exit 1
+cp -L /workspace/cow/warp-rust-latest $warp || exit 1
 export PATH=/workspace/tools/binaryen-version_133/bin:$PATH
 cd $wt || exit 1
 # a tree with scripts/box-self-check.sh: the store's pair and the shared binary, no rebuild (card scripts-off-cargo)

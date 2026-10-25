@@ -2,7 +2,7 @@
 while pgrep -f 'CARGO_TARGET_DIR=/workspace/target-main cargo build' >/dev/null; do sleep 15; done
 tail -1 /workspace/build-main.log | grep -q 'EXIT 0' || { echo "BUILD FAILED"; tail -20 /workspace/build-main.log; exit 1; }
 h=$(git -C /workspace/wt-main rev-parse --short=9 HEAD)
-dst=/workspace/cow/sol-warp-$h
+dst=/workspace/cow/warp-rust-$h
 cp /workspace/target-main/release/warp $dst && chmod +x $dst
 echo "INSTALLED $dst"
 cd /workspace/wt-main

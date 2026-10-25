@@ -2,7 +2,7 @@
 # scripts/shared-warp.sh [<worktree>]: the path of the shared Rust warp, staged with the worktree's compiler pair beside
 # it, for the tests that take the pair from beside the binary (tests/host, tests/launcher): no per-tree cargo build
 # (card scripts-off-cargo; Rust src/ is frozen, so the shared binary is every tree's).
-# The binary: WARP_RUST, else /workspace/cow/sol-warp-latest on the box, ~/dev/bin/warp-rust else ~/dev/bin/warp on the
+# The binary: WARP_RUST, else /workspace/cow/warp-rust-latest on the box, ~/dev/bin/warp-rust else ~/dev/bin/warp on the
 # Mac (a launcher script there is skipped). The pair: data/'s, which scripts/rebuild.sh --check first fills from the
 # shared compiler store for the tree's compiler inputs (never a build), else the store's main pair, said. Both are copied to <worktree>/scratch/shared-warp/,
 # so a refresh of the shared binary never changes it under a running test. Prints the staged binary's path.
@@ -10,7 +10,7 @@ set -uo pipefail
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 1
 binary() {
 	local candidate
-	for candidate in "${WARP_RUST-}" /workspace/cow/sol-warp-latest "${HOME-}/dev/bin/warp-rust" "${HOME-}/dev/bin/warp"; do
+	for candidate in "${WARP_RUST-}" /workspace/cow/warp-rust-latest "${HOME-}/dev/bin/warp-rust" "${HOME-}/dev/bin/warp"; do
 		[ -n "$candidate" ] && [ -x "$candidate" ] || continue
 		head -c 2 "$candidate" | grep -q '#!' && continue
 		echo "$candidate"
