@@ -219,7 +219,34 @@ bare_calls(program: Node, providers: any): list := {
 		source = file_text(std_module_path(module)) ?? ""
 		for slice in definition_slices(source) { if slice#2.starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
 	}
-	symbol_words(program).filter(word => word in nullary and providers[word] != "")
+	bound = bound_names(program)
+	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
+}
+# the names the program binds anywhere, a variable `now = …` or a parameter `f(was, now)`: such a word names its own
+# value, no module's function
+bound_names(n: Node): any := {
+	found = {}
+	waiting = [n]
+	at = 1
+	while at <= #waiting {
+		part = waiting#at
+		at += 1
+		if part is key {
+			left = key_of(part)
+			if is_key(part, Op.Assign) or is_key(part, Op.Define) {
+				while left is key { left = key_of(left) }
+				if left is symbol { found[name_of(left)] = yes }
+				if is_group(left) { for item in left { found[name_of(leftmost_symbol(item))] = yes } }
+			}
+			waiting += [key_of(part), value_of(part)]
+		} else if is_group(part) { for item in part { waiting += [item] } }
+	}
+	found
+}
+# `x` of a parameter `x`, `x: int`, `x = 1`
+leftmost_symbol(n: Node): Node := {
+	while n is key { n = key_of(n) }
+	if n is symbol then n else symbol("")
 }
 # word → the type module defining it, "" for a word two of them define
 type_module_providers(): any := {
