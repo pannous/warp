@@ -1,0 +1,6 @@
+# a function taking nothing, named bare, is its call, as in the Rust lane (`warp test tests/functions` runs these
+# through warp pure, `warp test --self tests/functions` through warp self)
+
+# a_bare_name_calls_a_function_taking_nothing
+is! "f() := 42; f + 1" 43
+is! "f() := 42; f" 42

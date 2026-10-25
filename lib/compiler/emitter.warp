@@ -469,6 +469,9 @@ def local_value(body: Body, n: any): list {
 	# a type's name, unbound, is the type value: `k = int` (Rust: names_a_type_value)
 	if name not in body.names and names_a_type_value(name) { return ["node", node(Marked.TypeValue, text_bytes(name))] }
 	if name not in body.names and system_value_kinds.has(name) { return system_value_read(name) }
+	# a function taking nothing, named bare, is its call: `f() := 42; f + 1`, a library's `now` (Rust: a bare word
+	# naming a zero-parameter function calls it)
+	if name not in body.names and name in module.functions and #module.functions[name].signature.parameters == 0 { return call(body, module.functions[name], []) }
 	if name not in body.names { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]

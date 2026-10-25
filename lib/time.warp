@@ -1,8 +1,7 @@
 // The standard library module time (notes/stdlib.md): `use time`, the calendar over clock() (milliseconds since 1970, UTC)
 
-// `now`, a word the program leaves unbound: the Instant the run reads the wall clock (Rust twin: src/time/mod.rs
-// now_call). The rule brings this module along to every program mentioning `now`, no `use` needed
-rewrite now => Instant(wall_clock_ms())
+// `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it)
+now() := Instant(wall_clock_ms())
 // the one hook into the host: WASI's clock_time_get (lib/compiler/host_words.warp) of the wall clock
 // (CLOCK_REALTIME, 0), a millisecond's precision asked for. It writes the u64 nanoseconds since 1970 into linear
 // memory's first 8 bytes (the scratch fd_write takes only within its call), read back little-endian
