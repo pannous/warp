@@ -1,0 +1,10 @@
+// Rust crates from warp (notes/crate_adapter.md): build the shims once with
+//   scripts/warp-crate build lib/crates/regex.warp lib/crates/sha2.warp
+// then run it under warp-host, which finds them in ~/.cache/warp/crates
+use crate "regex@1"
+use crate "sha2@0.10"
+words = find_all("the quick brown fox", "[a-z]{5}")
+print words
+print sha256("hello")
+print replace_all("2026-10-23", "-", "/")
+print sha256([104, 0, 105])

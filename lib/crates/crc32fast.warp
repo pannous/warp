@@ -1,0 +1,5 @@
+// Rust's crc32fast crate as a C library (card ffi-rust-crate-adapter): `scripts/warp-crate build
+// lib/crates/crc32fast.warp`, then `use rs_crc32fast`; crc32 of a text's UTF-8 bytes, a number
+crate: "crc32fast@1"
+
+crc32(data: bytes): i64 from 'rs_crc32fast' = crc32fast::hash
