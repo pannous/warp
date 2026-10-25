@@ -219,12 +219,12 @@ bare_calls(program: Node, providers: any): list := {
 		source = file_text(std_module_path(module)) ?? ""
 		for slice in definition_slices(source) { if slice#2.starts_with(slice#1 + "()") { nullary[slice#1] = yes } }
 	}
-	bound = bound_names(program)
+	bound = names_bound_in(program)
 	symbol_words(program).filter(word => word in nullary and providers[word] != "" and word not in bound)
 }
 # the names the program binds anywhere, a variable `now = …` or a parameter `f(was, now)`: such a word names its own
 # value, no module's function
-bound_names(n: Node): any := {
+names_bound_in(n: Node): any := {
 	found = {}
 	waiting = [n]
 	at = 1
