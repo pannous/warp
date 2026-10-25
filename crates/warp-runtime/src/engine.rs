@@ -5,8 +5,9 @@ use std::time::Duration;
 use wasmtime::{Config, Engine, Module, Store};
 
 /// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every
-/// frame of a deep recursion) at each of its many small growths
-const GC_HEAP_INITIAL_BYTES: u64 = 1 << 30;
+/// frame of a deep recursion) at each of its many small growths. 256 MB, not 1 GB: the copying collector keeps both
+/// halves of a heap it has used, so `warp rebuild self` held the whole gigabyte per stage run
+const GC_HEAP_INITIAL_BYTES: u64 = 256 << 20;
 /// The main thread's stack kept for the host when wasm gets the rest (`give_main_stack_to_wasm`): the compiler and host
 /// words run below the wasm frames
 const HOST_STACK_BYTES: usize = 16 << 20;
