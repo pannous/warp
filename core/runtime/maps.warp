@@ -35,7 +35,7 @@ index_least(): int := 16
 map_table(entries: list): list := {
 	slot = index_slot(entries)
 	if slot == 0 {
-		slot = cheapest_slot()
+		slot = least_recent_slot()
 		hold_index(slot, entries, 0, new_list(4 * #entries))
 	}
 	table = slot_table(slot)
@@ -51,13 +51,17 @@ map_table(entries: list): list := {
 	hold_index(slot, entries, covered, table)
 	table
 }
-# the slot a new map's index takes: a free one, else the one covering the fewest entries, so the big maps looked up
-# again and again (the emitter's texts, its functions) keep their index and a small one is what gets made anew
-cheapest_slot(): int := {
+# the slot a new map's index takes: a free one, else the one looked up least recently, so the maps looked up again and
+# again (the emitter's texts, its functions) keep their index while one no longer used gives its slot up (taking turns
+# instead let a fifth map evict the emitter's texts map every few lookups)
+least_recent_slot(): int := {
 	slot = 1
-	for candidate in 2 to 4 { if slot_covered(candidate) < slot_covered(slot) { slot = candidate } }
+	for candidate in 2 to 4 {
+		if slot_covered(slot) >= 0 and (slot_covered(candidate) < 0 or slot_used(candidate) < slot_used(slot)) { slot = candidate }
+	}
 	slot
 }
+slot_used(slot: int): int := if slot == 1 then used_1 else if slot == 2 then used_2 else if slot == 3 then used_3 else used_4
 index_slot(entries: list): int := {
 	if covered_1 >= 0 and same_list(indexed_1, entries) { return 1 }
 	if covered_2 >= 0 and same_list(indexed_2, entries) { return 2 }
@@ -68,6 +72,11 @@ index_slot(entries: list): int := {
 slot_table(slot: int): list := if slot == 1 then table_1 else if slot == 2 then table_2 else if slot == 3 then table_3 else table_4
 slot_covered(slot: int): int := if slot == 1 then covered_1 else if slot == 2 then covered_2 else if slot == 3 then covered_3 else covered_4
 hold_index(slot: int, entries: list, covered: int, table: list): int := {
+	index_clock += 1
+	if slot == 1 { used_1 = index_clock }
+	if slot == 2 { used_2 = index_clock }
+	if slot == 3 { used_3 = index_clock }
+	if slot == 4 { used_4 = index_clock }
 	if slot == 1 {
 		indexed_1 = entries
 		covered_1 = covered
