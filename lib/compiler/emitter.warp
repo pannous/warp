@@ -299,19 +299,19 @@ shared_names(statements: any) := {
 	for s in statements {
 		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol { assigned[name_of(key_of(s))] = yes }
 	}
-	read = {}
+	read_free = {}
 	if assigned {
 		functions = module.functions.keys.map(f_name => module.functions[f_name])
 		for f in functions {
 			mentioned = Mentions(assigned, {})
 			gather_mentions(f.body, mentioned)
 			for name in mentioned.found.keys {
-				if name not in read and not assigns(f.body, name) and name not in taken_names(f.signature) { read[name] = yes }
+				if name not in read_free and not assigns(f.body, name) and name not in taken_names(f.signature) { read_free[name] = yes }
 			}
 		}
 	}
 	shared = {}
-	for name in assigned.keys { if name in read { shared[name] = yes } }
+	for name in assigned.keys { if name in read_free { shared[name] = yes } }
 	shared
 }
 # the names among `wanted` a walk found symbols of, each once, as mentions finds one
