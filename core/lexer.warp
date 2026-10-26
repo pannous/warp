@@ -56,7 +56,7 @@ def quoted_end(source: any, from: int, quote: text, n: int): int {
 // Where `part` first starts in the source from `from` on, else the source's length
 def index_of(source: any, part: text, from: int, n: int): int {
 	at = from
-	while at < n and not starts_at(source, part, at) { at = at + 1 }
+	while at < n and not starts_at(source, part, at, n) { at = at + 1 }
 	at
 }
 
@@ -66,10 +66,14 @@ def after(source: any, part: text, from: int, n: int): int {
 	if at < n then at + part.length else n
 }
 
-def starts_at(source: any, part: text, at: int): bool {
+// `part` at `at` of a source of length `n`, the caller's: a text's length counts its characters, so asking
+// source.length here walked the whole source at every test (85% of a rebuild was the parser's keyword tests)
+def starts_at(source: any, part: text, at: int, n: int): bool {
+	wanted = part.length
+	room = n - at
 	i = 0
-	while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }
-	i == part.length
+	while i < wanted and i < room and source[at + i] == part[i] { i = i + 1 }
+	i == wanted
 }
 
 // Where the numbers of a source start: [[line, column], …], both from 1
@@ -91,7 +95,7 @@ def positions(source: any, kind: text): list {
 	n = source.length
 	style_end = 0
 	while at < n {
-		if starts_at(source, "style{", at) and (at == 0 or not is_name_char(source[at - 1])) {
+		if starts_at(source, "style{", at, n) and (at == 0 or not is_name_char(source[at - 1])) {
 			style_end = block_end(source, at + 6, n)
 		}
 		end = skipped_end(source, at, n)
@@ -216,7 +220,7 @@ def text_starts(source: any, at: int, n: int): bool {
 def shader_brace(source: any, at: int, n: int): int {
 	if at > 0 and is_name_char(source[at - 1]) { return at }
 	for word in ["shader", "wgsl"] {
-		if starts_at(source, word, at) {
+		if starts_at(source, word, at, n) {
 			brace = at + word.length
 			if brace < n and is_name_char(source[brace]) { return at }
 			while brace < n and (source[brace] == ' ' or source[brace] == '\t') { brace = brace + 1 }
@@ -325,7 +329,7 @@ def hash_comment(source: any, at: int, n: int): bool {
 
 // Whether one of `words` is exactly the `width` items at `at` (the source a text or its code points)
 def any_word_at(source: any, at: int, width: int, words: list): bool {
-	for word in words { if word.length == width and starts_at(source, word, at) { return true } }
+	for word in words { if word.length == width and starts_at(source, word, at, at + width) { return true } }
 	false
 }
 

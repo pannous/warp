@@ -45,8 +45,8 @@ before asking a question). After a context swap, this file and your role file be
 - Run commands yourself; never hand the user commands to paste.
 - A wrong value that another reading could make right, or a bug that may not matter, goes to warp-interviewer with
   code, value and expectation before anyone fixes code or test.
-- Communicate less: message only for Ready, blocked or a decision needed. Git (branch, commits, card) is the status.
-  warp-integrator gets only requests it must act on; the card is the merge request.
+- Communicate less: message only for landed, blocked or a decision needed. Git (branch, commits, card) is the status.
+  warp-integrator gets only requests it must act on.
 
 ## Where to work
 - Notes, docs, wiki, scripts, samples: straight onto main in /Users/me/dev/angles/warp; commit your own paths
@@ -58,7 +58,7 @@ before asking a question). After a context swap, this file and your role file be
 - Absolute paths and `git -C <worktree>`; in zsh `${var}:path`. Files named `*_local*` are globally git-ignored.
 
 ## Testing
-- Start from the clean baseline: don't rebuild or retest main before your change; the Integrator keeps main green.
+- Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
 - Only the pure pipeline counts. Check .warp changes with the shared binary from your worktree:
   `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` / `warp test <folders>`.
   Never rebuild in the main checkout. A core change also runs `scripts/self-check.sh <worktree>`.
@@ -73,16 +73,21 @@ before asking a question). After a context swap, this file and your role file be
 - `todo pick` shows the next cards in board order; `todo take <card> <session>`; before taking check nobody has a
   branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
 - Every branch has a card: comment branch, tip and state on it; a parked branch gets notes/handover/<branch>.md.
+- No Ready column, no merge queue (user 2026-10-26): workers land their own branches ("Done"). A finished branch
+  whose session retires unlanded stays in Now with `todo note <card> "land: <branch> <tip>"`; the Integrator lands
+  those (`todo landing`).
 - Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - A card is closed only with a commit: `todo done <card> <commit>`. Mechanics: `todo --help`.
 
 ## Done
 - A major feature ships with samples/<topic>.warp (chmod +x) and its wiki page updated in the same task.
-- Before Ready: `scratch/warp format` on the .warp files you wrote. Merge origin/main into the branch (real merges, you resolve conflicts), push,
-  `todo note <card> "card | branch | tip | tests | result"`, `todo ready <card>` (`--express` when asked for speed or
-  for a crash fix). The smoke test passing is enough to merge (core/ changes: smoke + fixpoint, no test
-  folders, AGENTS.md "Testing"); the full suite runs only at rare intervals.
+- Landing, by the worker itself (no Integrator gate; user 2026-10-26): `scratch/warp format` on the .warp files you
+  wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
+  change; on that merge run the smoke test (core/ changes: smoke + `scripts/self-check.sh`, AGENTS.md "Testing");
+  `git push origin HEAD:main` (fast-forward only). Rejected because main moved: merge origin/main again; rerun the
+  smoke test only if the new commits touch core/ or lib/; push. Then `todo done <card> <commit>`. The full suite runs
+  only at rare intervals, in the background.
 - Results the user can try get a try line (`/Users/me/dev/bin/warp <full path>`) to warp-interviewer.
-- Never retire holding a card: done, Ready, or `todo release <card> "done: …; left: …; branch: …"`.
-- After the merge remove your worktree and branches (local and remote). Deleting merged/stale things needs no
+- Never retire holding a card: done, or `todo release <card> "done: …; left: …; branch: …"`.
+- After the push remove your worktree and branches (local and remote). Deleting merged/stale things needs no
   confirmation, except files the user touched.

@@ -8,9 +8,9 @@
 #   2. local and remote branches origin/main holds the same way, with no worktree checked out and a tip older than
 #      IDLE_HOURS
 #   3. loose files in the worktrees folder (logs, patches, dumps) older than LEFTOVER_DAYS: moved to data/
-#   4. unmerged branches nobody moves (a branch only merges once its card is Ready): remote ones `todo ready --stray`
-#      lists and local ones never pushed, with a tip older than STALE_HOURS, are typed to the supervisor (tmux
-#      SUPERVISOR_TMUX) to ready, merge or discard. The cloud lanes' result branches (RESULT_BRANCHES) are skipped there
+#   4. unmerged branches nobody moves: remote ones `todo stray` lists and local ones never pushed, with a tip older
+#      than STALE_HOURS, are typed to the supervisor (tmux SUPERVISOR_TMUX) to land, note for the Integrator or
+#      discard. The cloud lanes' result branches (RESULT_BRANCHES) are skipped there
 #   5. the cloud lane's cloud-jobs/ and cloud-results/ branches older than LEFTOVER_DAYS: deleted
 # Detached worktrees (integrate, main-binary …) are never removed; DONOR, which cowtree clones new worktrees from on
 # the Worktrees volume (notes/churn_volume.md), is moved to origin/main when clean. Skips for untracked files are listed.
@@ -92,7 +92,7 @@ if [[ -d $DONOR && -z $(git -C $DONOR status --porcelain --untracked-files=no 2>
 fi
 
 stale=()
-stray=$(cd $WARP && $TODO ready --stray 2>&1) || stale+=("todo ready --stray failed: ${stray:0:200}")
+stray=$(cd $WARP && $TODO stray 2>&1) || stale+=("todo stray failed: ${stray:0:200}")
 print -r -- $stray | awk '/^## unmerged/{on=1; next} /^##/{on=0} on && NF' |
 while read -r branch card; do
   [[ $branch =~ $RESULT_BRANCHES ]] || ! older_than $STALE_HOURS origin/$branch || stale+=("$branch ($card)")
@@ -102,7 +102,7 @@ for branch in $($git for-each-ref --format='%(refname:short)' refs/heads); do
     ! older_than $STALE_HOURS $branch || stale+=("$branch (local only, never pushed)")
 done
 if (( $#stale )); then
-  notice="[prune-worktrees] ${#stale} unmerged branches older than ${STALE_HOURS} h without a Ready card: ${(j:; :)stale}. Ready, merge or discard each (ask its owner)."
+  notice="[prune-worktrees] ${#stale} unmerged branches older than ${STALE_HOURS} h: ${(j:; :)stale}. Land, note 'land: <branch> <tip>' on its card, or discard each (ask its owner)."
   echo "$(date '+%F %T') $notice"
   [[ -z $dry_run ]] && tmux has-session -t "=$SUPERVISOR_TMUX" 2>/dev/null &&
     tmux send-keys -t "=$SUPERVISOR_TMUX:" -l "$notice" && tmux send-keys -t "=$SUPERVISOR_TMUX:" Enter
