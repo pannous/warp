@@ -8,6 +8,14 @@ use wasmtime::{Config, Engine, Module, Store};
 /// frame of a deep recursion) at each of its many small growths. 256 MB, not 1 GB: the copying collector keeps both
 /// halves of a heap it has used, so `warp rebuild self` held the whole gigabyte per stage run
 const GC_HEAP_INITIAL_BYTES: u64 = 256 << 20;
+/// Environment variable that overrides GC_HEAP_INITIAL_BYTES, in MB (sizing experiments, card speed-gc-heap)
+pub const GC_HEAP_VARIABLE: &str = "WARP_GC_HEAP_MB";
+
+/// The GC heap a run starts with: `WARP_GC_HEAP_MB` if it is set to a number, else GC_HEAP_INITIAL_BYTES
+fn gc_heap_initial_bytes() -> u64 {
+	let megabytes: Option<u64> = std::env::var(GC_HEAP_VARIABLE).ok().and_then(|value| value.trim().parse().ok());
+	megabytes.map_or(GC_HEAP_INITIAL_BYTES, |megabytes| megabytes << 20)
+}
 /// The main thread's stack kept for the host when wasm gets the rest (`give_main_stack_to_wasm`): the compiler and host
 /// words run below the wasm frames
 const HOST_STACK_BYTES: usize = 16 << 20;
@@ -23,7 +31,7 @@ pub fn deterministic_config() -> Config {
 	let mut config = Config::new();
 	config.wasm_gc(true);
 	config.wasm_function_references(true);
-	config.gc_heap_initial_size(GC_HEAP_INITIAL_BYTES);
+	config.gc_heap_initial_size(gc_heap_initial_bytes());
 	// warp runs core modules, no components: the machine code then also loads into a runtime built without the
 	// component model (the warp-runtime stub), where it is off anyway
 	#[cfg(feature = "compiler")]
