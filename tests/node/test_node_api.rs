@@ -44,3 +44,14 @@ fn rebuilt_lists_equal_the_written_ones() {
 	is!("separated(bracketed([1, 2, 3], \"(\"), \" \") == (1 2 3)", true);
 	is!("bracketed([1, 2], \"(\") == [1, 2]", false);
 }
+
+/// `symbol("word")` of a literal is one symbol per word and module (card speed-symbol-calls): made again and again it
+/// stays equal to itself and to the symbol of the word made at run time
+#[test]
+fn literal_symbols_are_made_once() {
+	is!("f(n: Node): bool := n == symbol(\"print\"); f(symbol(\"print\"))", true);
+	is!("f(n: Node): bool := n == symbol(\"print\"); f(symbol(\"other\"))", false);
+	is!("f(n: Node): bool := n == symbol(\"print\"); f(data print)", true);
+	is!("w = \"pr\" + \"int\"; n = 0; for i in 0..3 { if symbol(w) == symbol(\"print\") { n += 1 } }; n", 3);
+	is!("s = symbol(\"x\"); t = symbol(\"x\"); [s.name, t.name]", warp::parse("[\"x\" \"x\"]"));
+}
