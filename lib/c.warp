@@ -10,7 +10,7 @@
 //   out               an out-pointer the call fills (`sqlite3 **`): no argument; the first one's pointer is the result
 //   void              no result
 
-# TODO:  SORT entries:
+# TODO:  SORT entries:  (card c-entries-sort)
 # Which one is only here for demonstration purposes and is useless And can be removed 
 #  Which one is redundant with existing WASM / Warp functionality? (sqrt) math.warp !? And can be removed 
 # Which one can be implemented in Warp? 

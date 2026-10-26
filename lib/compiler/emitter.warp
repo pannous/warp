@@ -400,7 +400,7 @@ def converted(value: any, to: text): list {
 }
 # `text(x)`, `string(x)`: x as shown (Rust's TEXT_TYPES)
 text_words = ["text", "string"]
-# (type $Text (array (mut i8)))   TODO differentiate with linear memory type:
+# (type $Text (array (mut i8)))   TODO differentiate with linear memory type:  (card text-type-memory)
 # (type $String (struct (field $ptr i32) (field $len i32)))  # ONLY use at boundary (ffi) or for extreme speed algorithms / tasks
 
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
