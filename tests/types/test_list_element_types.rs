@@ -10,6 +10,7 @@ fn declared_lists_keep_fitting_items() {
 	is!("names: list of text = [\"hi\"]; names = names + [\"yo\"]; #names", 2);
 	is!("xs: numbers = [1 2.5]; xs.add(3); #xs", 3);
 	is!("xs: floats = [1]; xs#1", 1);
+	is!("xs: list[int] = [1, 2]; xs[1]", 2); // list[int] is ints
 	is!("names: texts = []; names.add(\"a\"); #names", 1);
 }
 

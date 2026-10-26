@@ -83,6 +83,9 @@ pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 		Node::Key(name, Op::Colon, type_name) => (name.drop_meta().clone(), type_name.drop_meta().clone()),
 		prefixed => number_type_prefix(prefixed)?,
 	};
+	// `x: list[int]` declares the list type `[int]`
+	let listed = crate::declaration_forms::list_subscript_type(&type_name, &std::collections::HashSet::new());
+	let type_name = listed.unwrap_or(type_name);
 	match (name, type_name) {
 		(Node::Symbol(name), Node::Symbol(type_name)) => Some((name, type_name)),
 		// `xs: [int]` is `xs: list of int`, `xs: [int or error]` a list of `int or error`, no union itself

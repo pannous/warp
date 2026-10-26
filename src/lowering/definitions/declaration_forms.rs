@@ -479,6 +479,15 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 	};
 	match node {
 		phrase if let Some(rephrased) = rephrased(&phrase, variables) => lower(rephrased),
+		// `x: list[int]` is `x: [int]`, the list type `ints`
+		Node::Key(name, Op::Colon, type_node) if let Some(listed) = list_subscript_type(&type_node, &names.values) => {
+			lower(Node::Key(name, Op::Colon, Box::new(listed)))
+		}
+		Node::Key(target, op @ (Op::Assign | Op::Define), value)
+			if let Some(listed) = list_typed_target(&target, &names.values) =>
+		{
+			lower(Node::Key(Box::new(listed), op, value))
+		}
 		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
 		declaration if let Some((name, zeros)) = typed_array_declaration(&declaration, &names.values) => {
 			assign(name, zeros)
@@ -854,6 +863,27 @@ pub(crate) fn bracketed_list_type(type_node: &Node) -> Option<Node> {
 	let word = bracketed_element(type_node)?;
 	type_word_kind(&word).or_else(|| union_parts(&word).map(|_| Kind::Empty))?;
 	Some(Node::Symbol(format!("list of {word}")))
+}
+
+/// `list[int]`, parsed as the subscript `list#(int+1)`, as the list type `[int]`, unless list is a variable
+pub(crate) fn list_subscript_type(type_node: &Node, variables: &HashSet<String>) -> Option<Node> {
+	let Node::Key(list, Op::Hash, one_based) = type_node.drop_meta() else {
+		return None;
+	};
+	if list.symbol_name() != Some(LIST_WORD) || variables.contains(LIST_WORD) {
+		return None;
+	}
+	let element = crate::warp_parser::subscript_key(one_based)?;
+	type_word_kind(element.symbol_name()?)?;
+	Some(Node::List(vec![element.drop_meta().clone()], Bracket::Square, Separator::None))
+}
+
+/// The target `x: list[int]` of `x: list[int] = v` as `x: [int]`
+fn list_typed_target(target: &Node, variables: &HashSet<String>) -> Option<Node> {
+	let Node::Key(name, Op::Colon, type_node) = target.drop_meta() else {
+		return None;
+	};
+	Some(key(name.drop_meta().clone(), Op::Colon, list_subscript_type(type_node, variables)?))
 }
 
 /// The element type of `[word]` and of `[int or error]`
