@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Python's modules from warp: warp-host loads libpython, lib/native/python.warp is the glue (notes/python_adapter.md)
 // run: warp-host run samples/python/python_modules.warp
 use python

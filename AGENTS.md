@@ -309,6 +309,9 @@ nothing to commit
 
 cargo fix runs in the Integrator's gate for every batch (integrator_tools/gate.sh); workers need not run it.
 
+### Associated projects
+~/Library/Application Support/Sublime Text 3/Packages/Warp
+
 ## To-dos
 This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
 every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next) todo.md as fallback

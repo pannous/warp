@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // numpy from warp (needs python3-numpy): an array, its product with itself, its determinant
 use python
 np = python_import("numpy")
