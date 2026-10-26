@@ -13,7 +13,6 @@ use warp::{
 	wasm_emitter, web::markup,
 };
 use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
-use wasm_emitter::eval;
 
 mod cli;
 use cli::*;
@@ -208,10 +207,23 @@ fn test_case(args: &[String]) -> Option<&[String; 3]> {
 	}
 }
 
+/// A program file or code, compiled by compiler.wasm (the warp compiler, `warp pure`'s) and run: plain `warp <file>`,
+/// `warp run`, `warp eval`, piped code and the console run no Rust pipeline (card rust-bootstrap, branch pure). A file's
+/// folder is in scope (D15), code's the working directory; the program's arguments are those set for it
+fn eval(code: &str) -> Node {
+	use warp::compiler::standalone::{run, run_code, Compiler};
+	if !code.contains('\n') && has_warp_extension(code) && file_exists(code) {
+		let arguments = warp::modules::std_adapters::program_arguments();
+		return run(std::path::Path::new(code), arguments, Compiler::RustCompiled);
+	}
+	run_code(code, &env::current_dir().unwrap_or_default(), Compiler::RustCompiled)
+}
+
+// ⚠ WARP DOES THIS DIFFERENTLY: a file's `test` blocks still run through the Rust pipeline here → lib/compiler (later)
 /// The tests of one file run, its summary printed: (tests run, failed)
 fn run_tests_of(path: &str) -> (usize, usize) {
 	diagnostic::show_lines_of(&source_of(path), Some(path));
-	let result = warp::pipeline::for_tests(|| eval(path));
+	let result = warp::pipeline::for_tests(|| wasm_emitter::eval(path));
 	let summary = match result.drop_meta() {
 		Node::Text(summary) => summary.clone(),
 		Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => summary.drop_meta().name(),
