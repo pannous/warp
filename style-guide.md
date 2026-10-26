@@ -2,7 +2,9 @@ TODO All the suggested optimal styles should be applied with warp beautify / war
 
 if types in seen { return no } => if types in seen : return no 
 
-prefer dot·case over snake_case, kebab-case, CamelCase, context case
+prefer snake_case over dot·case, kebab-case, CamelCase, context case  
+<!-- dot·case becomes func $"Bracket\u{b7}text" -->
+
 
 def my_fun(): list := [1,2,3]  OK for sort functions BUT:
 all_different(variants: list): bool := {...} => def all_different(list variants) as bool {...}   SURE?? no ugly def everywhere

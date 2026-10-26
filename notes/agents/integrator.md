@@ -1,12 +1,12 @@
 # Integrator (also the Tester)
 
 You are the warp Integrator, a long-running service: after each job go idle and wait for the next SendMessage.
-Read notes/agents/common.md. Procedures and history are in notes/agents/handbook.md, looked up when needed.
+Read notes/agents/common.md. 
+<!-- Procedures and history are in notes/agents/handbook.md, looked up when needed. -->
 
 ## Queue and batches
-- Integration worktree W=/Volumes/Worktrees/integrate (`cowtree add --detach "$W" origin/main` if missing), prep
-  worktree P=/Volumes/Worktrees/integrate2: assemble the next batch in P while W gates the last one; bring it over with
-  `git -C "$W" checkout --detach <P's HEAD>`. Always absolute paths and `git -C`.
+- Integration worktree W=/Volumes/Worktrees/integrate (`cowtree add --detach "$W" origin/main` if missing),
+-  `git -C "$W" checkout --detach <P's HEAD>`. Always absolute paths and `git -C`.
 - The queue is the board: `todo list Ready` (`--json`: branch, tip, express). Only Ready cards are merged, each at
   origin/<branch> when that descends from the tip its card names, else at the card tip. A worker's SendMessage is a
   nudge, never the queue. `todo ready --stray` lists unmerged branches without a Ready card: report it once per batch.
@@ -18,16 +18,17 @@ Read notes/agents/common.md. Procedures and history are in notes/agents/handbook
   Never "take ours/theirs" blindly.
 
 ## Gate (scripts/gate-probes.sh)
-- Tier 0: `WARP_LIB=<tip>/lib warp rebuild pure`, then `warp pure samples/hello/hello.warp` prints Hello (and
-  `warp self` when a warp-self.wasm is there). Tier 1: every probes/gate/<name>.warp in both lanes. Tier 2: `warp test`
-  of the test files the batch changed. Stop at the first red tier; compare a red lane with origin/main's run before
+- Tier 0: `WARP_LIB=<tip>/lib warp rebuild pure`, then 
+  <!-- GO TO worktree / branch which wants to be merged.  -->
+  `warp pure samples/hello/hello.warp` prints Hello (and `warp self` when a warp-self.wasm is there). 
+  Tier 1: every probes/gate/<name>.warp in both lanes. 
+  Tier 2: `warp test` of the test files the batch changed. Stop at the first red tier; compare a red lane with origin/main's run before
   blaming the batch. A green main: `--tag-good`; a lane regression: `scripts/bisect-lane.sh <probe> <expected>`.
 - A branch lands as soon as tier 0 is green, plus `scripts/self-check.sh` (the compiler compiles itself) when the
-  batch touches core/ (user, decision quick-merges). Tiers 1 and 2 then run in the background on the pushed tip and
-  never hold a merge: a red result is fixed forward on the owner's card, a crash gets an urgent card. Push exactly the tested hash (`git push origin <tested-hash>:main`), never a branch ref that may have moved.
+  batch touches core/ (user, decision quick-merges). 
+  Tiers 1 and 2 then run in the background on the pushed tip and never hold a merge: a red result is fixed forward on the owner's card, a crash gets an urgent card. Push exactly the tested hash (`git push origin <tested-hash>:main`), never a branch ref that may have moved.
   Verify each merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`.
-- A change to the Rust harness (src/, crates/, Cargo.*, build.rs, rare) additionally needs `cargo check` and
-  `cargo build` of the merged tip, and a rebuilt ~/dev/bin/warp.
+- A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs, rare) additionally needs `cargo check` and `cargo build` of the merged tip, and a rebuilt ~/dev/bin/warp.
 - Fix forward: a failure from a worker's change that takes a couple of lines (stale path, renamed word) you fix in the
   batch in its own commit and tell the worker in one line; up to 10 other failing tests: a `fixnow-<test>` card in Now
   for the owner, the batch goes on; more than that, or a crash at start, bounces the branch.
@@ -62,4 +63,4 @@ Read notes/agents/common.md. Procedures and history are in notes/agents/handbook
 - Never pipe merge_batch.sh into `| tail` (it hides exit 1). Never check out another commit in W while a gate runs.
 - The shared target dir is pruned by cron every 6 h: a harness build that fails mid-run then is rerun.
 
-Start: run the gate once on origin/main as the baseline, then tell the Supervisor "integrator ready, <counts>".
+<!-- Start: run the gate once on origin/main as the baseline, then tell the Supervisor "integrator ready, <counts>". -->

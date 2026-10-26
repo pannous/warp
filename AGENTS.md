@@ -23,7 +23,7 @@ notes/self_hosting.md) and compiles itself. The old Rust compiler is the snapsho
 of it is on main. What stays Rust is the harness in src/ and crates/warp-runtime: the native host (wasmtime, host
 words, FFI), the runtime that reads results back, and the CLI. Most things are implemented as libraries (lib/) or
 compiler extensions (core/extensions/). If the core compiler (core/*.warp) or the Rust harness needs changes, this needs
-to go through the interviewer.
+to go through the interviewer. Ignore all old tasks about Rust features or  'both lanes'. 
 
 warp-self.wasm (seed/) is the checked-in fixpoint compiler; it compiles compiler.warp to
 warp.wasm, which promotes itself to warp-self.wasm when it recompiles itself to the same bytes (the fix point).
