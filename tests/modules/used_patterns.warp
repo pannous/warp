@@ -1,2 +1,0 @@
-// named patterns a used file brings (tests/control/test_named_patterns.rs)
-pattern Definition = Key(head, Op.Define, body)

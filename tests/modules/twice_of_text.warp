@@ -1,1 +1,0 @@
-def twice(x: text) := x + x

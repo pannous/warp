@@ -23,12 +23,8 @@ keywords = ["wasm", "webassembly", "language", "compiler", "notation"]
 categories = ["compilers", "wasm", "command-line-utilities"]
 # the published crate: the sources and the files they include_str! (lib/, the playground's host scripts), not the tests or wiki
 include = ["src/**", "build.rs", "packages.warp", "web/playground/foreign_python.py", "web/playground/*.js", "lib/**", "README.md", "LICENSE"]
-# One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
+# No cargo test crate on `pure`: the warp tests in test/ run with `warp test` (user 2026-10-26, card rust-bootstrap)
 autotests = false
-
-[[test]]
-name = "tests"
-path = "tests/main.rs"
 
 [[bin]]
 name = "warp"

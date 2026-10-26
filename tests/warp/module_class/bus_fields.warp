@@ -1,3 +1,0 @@
-use buses
-room = Bus{id:7, effects:[1,2]}
-room.id + count(room.effects)

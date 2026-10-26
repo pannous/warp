@@ -1,3 +1,0 @@
-// Test FFI fmin function from libm
-import fmin from 'm'
-fmin(3.5, 2.1);

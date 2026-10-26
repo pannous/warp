@@ -1,2 +1,0 @@
-import fmin from 'm'
-fmin(100.0, 50.0);

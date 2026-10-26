@@ -1,5 +1,5 @@
 //! `warp test [folder…]` (card warp-test-runner, decision warp-is-tests, notes/is_tests.md): the test files under the
-//! folders (default tests/), `*.pairs.warp` and the `is!` lines of `test_*.warp`, run by the installed binary through
+//! folders (default test/), `*.pairs.warp` and the `is!` lines of `test_*.warp`, run by the installed binary through
 //! `warp pure` (`--self`: `warp self`), no cargo. Each test runs as its own program in a child process,
 //! `warp test --case <pure|self> <file> <index>`, so a hang, trap or crash fails only its own test; the children run in
 //! parallel, their verdicts print in file order (`--each`: a line for every test, to diff two compilers' runs).
@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-pub const DEFAULT_FOLDER: &str = "tests";
+pub const DEFAULT_FOLDER: &str = "test";
 /// The hidden command a child runs: `warp test --case <pure|self> <file> <index>`
 pub const CASE_FLAG: &str = "--case";
 /// `warp test --self`: the tests compiled by compiler-self.wasm, as `warp self` runs programs

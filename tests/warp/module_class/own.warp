@@ -1,3 +1,0 @@
-use boxes
-class Box { n = 7 }
-Box().n

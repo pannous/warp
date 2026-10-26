@@ -1,6 +1,0 @@
-# optional parameters `f(x?)`: x is ø where a call leaves it out, as `f(x = ø)` (card pure-optional-params)
-
-is! 'f(x?) := x; f()' ø
-is! 'f(x?) := if x == ø then 0 else x; f() * 10 + f(5)' 5
-is! 'def g(a, b?) { if b == ø { return a }; a + b }; g(1) * 10 + g(1, 2)' 13
-is! 'h(a, b?, c?) := a + (b ?? 10) + (c ?? 100); h(1) + h(1, 2, 3)' 117

@@ -1,2 +1,0 @@
-import SDL_Init from 'SDL2'
-SDL_Init(0x00000001);

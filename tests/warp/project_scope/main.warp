@@ -1,3 +1,0 @@
-// `use project`: every file below the project root (the folder holding .git)
-use project
-project_scope_marker(1)
