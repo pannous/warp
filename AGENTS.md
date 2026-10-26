@@ -19,7 +19,7 @@ The specification is not fully implemented yet
 # self hosted
 
 It began as a Rust implementation; the compiler is now self-hosted
-in warp (lib/compiler/*.warp, notes/self_hosting.md). The Rust code in src/ and crates/ is frozen legacy: the bootstrap
+in warp (core/*.warp, notes/self_hosting.md). The Rust code in src/ and crates/ is frozen legacy: the bootstrap
 that first compiles compiler.warp, the native host (wasmtime, host words, FFI) and the runtime (notes/agents/common.md
 "Principles"). 
 
@@ -45,17 +45,21 @@ Person {
 
 It is similar to JSON5 / ECMA Script but much simplified yet with a richer syntax and more precise and flexible data model.
 
-### The warp compiler (`lib/compiler/`, `core/` links to it)
+### The warp compiler (`core/`; `lib/compiler` links to it for a transition)
 
 `compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
 parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
-whose runtime words are warp too (runtime.warp, runtime/*.warp). lib/compiler/node.warp declares the Node enum case for
+whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp declares the Node enum case for
 case as src/node/mod.rs has it.
-- `warp pure <file|code>`: runs compiler.wasm, compiler.warp compiled by the seed (seed/compiler-self.wasm, a fixpoint
+- `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a fixpoint
   compiler checked in; scripts/refresh-seed.sh refreshes it). No Rust-compiled stage builds either compiler
-- `warp self <file|code>`: runs compiler-self.wasm, compiler.warp compiled by itself (by compiler.wasm)
-- `warp rebuild [pure|self]`: builds them anew from lib/ (nothing rebuilds them automatically); a worktree's pair lives
-  in <worktree>/data/ (`WARP_LIB=<worktree>/lib`), main's beside the binary
+- `warp self <file|code>`: runs warp-self.wasm, a copy of warp.wasm promoted only when warp.wasm passes the fixpoint
+  test (it compiles compiler.warp to its own bytes, stage N+1 == N)
+- `warp rebuild` / `warp rebuild pure`: builds warp.wasm anew from lib/ (nothing rebuilds it automatically); the gate
+  needs only warp.wasm. `warp rebuild self` runs the fixpoint test and promotes; `scripts/promote-self.sh
+  [--background] [<tree>]` does that every once in a while, in parallel, and never fails its caller. A worktree's
+  compilers live in <worktree>/data/ (`WARP_LIB=<worktree>/lib`), main's beside the binary. Until 2026-10-26 they were
+  named compiler.wasm and compiler-self.wasm; those names are still read when the new ones are missing
 - A form outside emitter.warp's core is refused loudly (`outside the core: …`)
 
 Plain `warp <file>` still compiles with the Rust pipeline below.
@@ -113,7 +117,8 @@ The `warp` binary (the Rust host and bootstrap) is built by cargo; the warp comp
 cargo build                    # Debug build
 cargo build --release          # Release build
 cargo build --offline          # Offline mode (uses the local registry cache)
-warp rebuild pure              # compiler.wasm from lib/ by the seed (`warp rebuild self`: compiler-self.wasm by compiler.wasm)
+warp rebuild pure              # warp.wasm from lib/ by the seed
+scripts/promote-self.sh        # warp.wasm -> warp-self.wasm only at a fixpoint (`warp rebuild self`); never fails
 ```
 
 
@@ -134,6 +139,8 @@ When implementing gaps that the old Rust legacy implementation had, but are not 
 Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
 A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
 <!-- `todo add "merge: <branch> <sha>" Ready -b "<one-line summary, tests run>"`.  -->
+Main moved again in the meantime?
+If the minimal smoke test (Compiling Hello World) passes its task is done, and it can go fully to the integrator.
 Then `todo ready <card> [branch]`
 The Integrator merges and closes them with `todo done`.
 The Git commit message Merge branch MUST Also include a summary of the changes (TODO via todo tool?)
@@ -141,7 +148,6 @@ The Git commit message Merge branch MUST Also include a summary of the changes (
 ### Testing
 
 Several agent sessions share this Mac, so test runs are rationed (roles and rules: notes/roles.md):
-- Rust tests Should only be run irregularly in the rare cases that modifications to the legacy Bootstrap Rust are needed 
 -  run in the cloud : workers run targeted tests only, with `scripts/cloud-test.sh`;
   tests/queue.sh only for the Mac-only tests (scripts/cloud-test-environmental.txt). A hook blocks direct
   `cargo test` / `cargo browser-test` runs.
@@ -155,73 +161,31 @@ warp test                      # all of tests/: each *.pairs.warp pair, each is!
 warp test tests/numbers        # only these folders; --self: via `warp self`
 ```
 
-The Rust tests' cargo commands (what the cloud lane and tests/queue.sh run):
-```bash
-cargo test                     # the whole Rust suite
-cargo test <test_name>         # Run specific test by name
-cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs are modules of ONE test crate (tests/main.rs); add a new file as `mod x;` in its folder's mod.rs
-```
-
 #### Important Test Files
 
 - `tests/parser/test_parser.rs`, `test_parser.pairs.warp` - warp data notation read into values
 - `tests/wasm/test_wasm.rs`, `test_wasm.pairs.warp`, `test_wasm.warp` - programs compiled to WASM GC and run (is!)
 
-<!-- ## WASM GC Reading Patterns -->
-
-<!-- The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection -->
-<!-- (`src/gc_traits/`): -->
-<!-- 
-- Loading WAT modules with GC types enabled
-- Reading GC struct fields by index
-- Type-safe wrappers with `gc_struct!` macro
-- Ergonomic `GcObject` wrapper hiding store management
-- Creating GC objects from Rust
- -->
-## Important Notes
-
-Use WASM names excessively! Wasm provides custom sections for names, use ALL of them!
-
-### Offline Development
-Legacy Rust:
-The project is configured for **offline-first** development to avoid compilation delays: dependencies come from the
-local registry cache. Use `--offline` flag when building.
-
 ### Test File Locations
 
-Tests are in `tests/<topic>/` folders (not `src/`). Warp tests are `test_*.pairs.warp` (code ⇥ expected, one a line)
-and `test_*.warp` (is! lines), beside the Rust file of the same name (notes/is_tests.md). Each Rust test file is named
-`test_*.rs`, tests a specific module or feature, and is declared in its folder's `mod.rs`; tests/main.rs declares the
-folders as modules of the one test crate.
-Folder plan and condensing rules: notes/tests_layout.md.
-
-### Extension Utilities
-
-The `src/extensions/` directory provides Rust standard library extensions (for the Rust side):
-
-- `numbers.rs`, `reals.rs` - Extended number types (Complex, Quotient, etc.)
-- `strings.rs` - String manipulation helpers
-- `lists.rs` - Collection utilities
-- `utils.rs` - General utilities (download, file I/O)
-- more on demand
-
-These are reexported in `lib.rs` for test access via `use warp::*`.
+Tests are in `test/<topic>/` folders. 
+Warp tests are `test_*.pairs.warp` (code ⇥ expected, one a line)
+Folder plan and condensing rules: notes/tests_layout.md notes/is_tests.md 
 
 ## Development Workflow
 
 0. **Check state** - git log, git status
-1. **Modify parser or emitter** - in lib/compiler/*.warp (src/ is frozen), checked with the one shared build:
-   `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` (no local cargo builds
-   besides main's)
-2. **Add tests** - Create or update tests in `tests/`
-3. **Run tests** - Warp tests locally: `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp test <folders>`; Rust tests
-   in the cloud: `scripts/cloud-test.sh --card <card> <branch> <tip> <filters>`
+1. Develop new features preferably in library /lib/
+2. Only in rare cases touch core/parser.warp or emitter.warp 
+   /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` 
+3. **Add probes** - Create or update quick tests in `probes/`
+4. **Add tests** - Create or update clean short functional tests in `test/`
+5. **Run tests** - warp test <folders>`
 
 ## Serialization
 
 === Node Serialization Workflow (Current Spec) ===
-
-Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/constructors.rs` (Rust emitter), and for
+node.warp via
 emitter.warp in notes/self_hosting.md "Value layout".
 
 1. Core GC types emitted to WASM:
@@ -236,13 +200,15 @@ emitter.warp in notes/self_hosting.md "Value layout".
    (type $i64box (struct (field $value i64)))
    (type $f64box (struct (field $value f64)))
 
-   Text literals come from one passive data segment via array.new_data (`src/wasm_emitter/string_table.rs`).
-   Linear memory holds a text only at the host/FFI edge, as (ptr, len): `text_address` copies a $Text there for a host
+   Text literals come from one passive data segment via array.new_data 
+   Linear memory holds a text only at the host/FFI edge, or in optimized algorithms, as 
+   (type $String (;0;) (struct (field $ptr i32) (field $len i32))) 
+   <!-- `text_address` copies a $Text there for a host
    or C call, `text_from_memory` copies host bytes into a new $Text (`new_text(ptr, len)` makes a Text node so).
    Readers (`src/gc_traits/gc_string.rs`, `src/run/wasm_reader.rs`, `crates/warp-runtime/src/gc_values.rs`) still also
    accept the old `$String (struct (field $ptr i32) (field $len i32))`.
    Lists held as arrays: `$IntList`, `$FloatList`, `$NodeList` (length, items array), maps `$NodeMap`; a program that
-   quotes code gets `$MetaNode`, a $Node subtype with line, column and comment.
+   quotes code gets `$MetaNode`, a $Node subtype with line, column and comment. -->
 
 2. Kind encoding (see `src/type_kinds.rs`):
 
@@ -267,82 +233,69 @@ emitter.warp in notes/self_hosting.md "Value layout".
    - Meta is dropped during emission; Error currently emits the inner node
    - Data nodes currently serialize as `Symbol(type_name)` in the emitter
 
-4. Verification pointers:
+<!-- 4. Verification pointers:
 
    - `tests/wasm/test_wasm_emitter.rs` covers `test_wasm_roundtrip_via_is`
+ -->
+5. Round-trip:
 
-5. Round-trip remains:
+   code -> parse -> Node -> wasm emitter -> WASM GC object -> Node -> value
 
-   parse -> Node -> wasm emitter -> WASM GC object -> Node
-
-## Outcome tests only
-
-A test gives warp code and checks what it produces: the value (is!), printed output, error, effect or CLI output.
-No tests of intermediates: parse tree shapes, node views, pass outputs, analyzer kind tables, wasm bytes, module or GC
-layouts, internal Rust APIs. Parsing warp data notation to a value is an outcome. The remaining twins that compare
-warp-written compiler parts with Rust (emitter and analyzer, judged by the program's value) go once the first pipeline
-runs completely in warp; from then on only outcome tests.
 
 ## complete roundtrip test
 
-eq! is just a shortcut for assert_eq! but
+is! <code> <value>   in lib/prelude.warp
+
 is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run / convert to Node again
-in warp tests `is!` is lib/prelude.warp's `eval(warp) == expected`, notes/is_tests.md:
 
-the is! function triggers the following roundtrip: 
 is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 6
-
-
-compiletime and runtime evaluation
 ```
-is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> Node -> eval() == 6
-is!("def square:=it*it; square(3)",9); 
 is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
 ```
+
+## Outcome tests only
+
+A test gives warp code and checks what it produces: the value, printed output, error, effect or CLI output.
+
+No tests of intermediates: parse tree shapes, node views, pass outputs, analyzer kind tables, wasm bytes, module or GC
+layouts, internal APIs. 
+
 
 ## Commit everything
 Commit and push all meaningful progress all the time, including notes, handovers and WIP: a box or session can
 disappear
 
 # Important
-Don't cargo clean unless absolutely necessary!
-
 NEVER modify a README without the user's review and explicit confirmation.
 
 ## worktrees
-The /probes/ folder is NOT a place to doublicate worktrees!
 Small or non-conflicting changes may go straight onto main without a worktree. 
 Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
 /Volumes/Worktrees/warp is cowtree's donor, never removed.
 /Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md),
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` 
+The probes/ folder is NOT a place to doublicate worktrees!
 
 ## Folders
 - `probes/` = hand-written probe sources only 
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
-- Rust build output goes to the one shared target dir set in ~/.cargo/config.toml (`target-dir`), never into the repo; agents and exports don't set CARGO_TARGET_DIR (a per-agent dir is ~20 GB and recompiles every dependency).
-- `./test.sh` runs `probes/check_layout.sh`, which fails on tracked probes that are repo copies, too large, or of a non-source type.
 
-Workers: before and after each task, run `git status` and the tests that cover your change (cloud lane:
-`scripts/cloud-test.sh`). Do NOT run `./test.sh` (the full suite): only the Integrator runs it, after merging
-your branch (notes/roles.md).
-If previously passing test fail after the task as seen via git diff test_results.txt
-try to fix failing tests and if it doesn't work roll back
+Workers: before and after each task, run `git status` and the tests that cover your change 
+<!-- (cloud lane: `scripts/cloud-test.sh`).  -->
+Do NOT run `./test.sh` (the full suite): only the Integrator runs it, after merging your branch (notes/roles.md).
+If previously passing test fail after the task as seen via git diff test_results.txt try to fix failing tests and if it doesn't work roll back
 
-When fixing a problem do not modify the test itself without consulting!
-A test may be upgraded without asking when the code now does better than the test pinned: an
+When fixing a problem NEVER modify the test itself without consulting!
+A test may be upgraded without asking when the code now does better 
+<!-- when the code now does better than the test pinned: an
 expected error, refusal or "not supported yet" becomes the working value, an ignored test that passes is un-ignored,
 a weaker assertion becomes the stronger one.
-
+ -->
 git status before and after each task should show
 Your branch is up to date with 'origin/main'.
 nothing to commit
 
-cargo fix runs in the Integrator's gate for every batch (integrator_tools/gate.sh); workers need not run it.
-
-### Associated projects
+<!-- ### Associated projects
 ~/Library/Application Support/Sublime Text 3/Packages/Warp
-
-Builds go to the shared target-dir from ~/.cargo/config.toml (sccache is on). 
-Never create a local target/ or *_target dir. 
+ -->
 Remove worktrees and branches when done!
