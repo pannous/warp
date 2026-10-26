@@ -25,11 +25,12 @@ exact_decimal(n: float): any := {
 	["node", node(Kind.Int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))]
 }
 
-# the offset of a text's bytes in the data segment, each text stored once
+# the offset of a text's bytes in the data segment, each text stored once; counted, not measured: a long list's
+# count walks it, and module_bytes joins the bytes once (data_bytes)
 text_offset(t: text): int := {
 	if t not in module.texts {
-		module.texts[t] = #module.bytes
-		module.bytes += t.bytes
+		module.texts[t] = module.text_size
+		module.text_size += #t.bytes
 	}
 	module.texts[t]
 }
