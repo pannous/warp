@@ -8,6 +8,8 @@ use "../builders.warp"
 use "../library_words.warp"
 use "../text_words.warp"
 use "exact.warp"
+use "../text.warp"
+use "../arithmetic.warp"
 
 # WASI's words, imported from wasi_snapshot_preview1 (host_words.warp names the module); each gives its error code
 args_sizes_get(count_at: int, size_at: int): int from runtime
@@ -33,6 +35,7 @@ wasi_chunk(): int := 32768
 wasi_follow_links(): int := 1
 wasi_create_new(): int := 9
 wasi_file_rights(): int := 70
+wasi_stdin(): int := 0
 wasi_stderr(): int := 2
 wasi_first_preopen(): int := 3
 wasi_no_entry(): int := 44
@@ -147,6 +150,20 @@ std_os_env(name: Node): Node := {
 	}
 	ø
 }
+# `use os; input(prompt)`: the prompt written, then a line of stdin without its newline; ø at the end of the input. A
+# byte a read, so no byte of the next line is taken. `input()` gives no prompt: os.warp's input() calls this with none
+std_os_input(prompt: Node = ø): Node := {
+	if prompt is text { print_text(prompt) }
+	line = ""
+	while yes {
+		store_scratch_word(scratch_iovec(), output_address() + scratch_bytes())
+		store_scratch_word(scratch_iovec() + 4, 1)
+		fd_read(wasi_stdin(), output_address() + scratch_iovec(), 1, output_address() + scratch_count())
+		if scratch_word(scratch_count()) == 0 { return if line then line else ø }
+		if memory_byte(output_address() + scratch_bytes()) == Ascii.Newline { return line }
+		line = line + scratch_text(scratch_bytes(), 1)
+	}
+}
 
 # the first count scratch bytes, written to the open file
 written_bytes(fd: int, count: int) := {
@@ -168,19 +185,24 @@ warned(message: Node): Node := {
 }
 # `use file; write_bytes(path, bytes)`: the file made anew of the bytes (ints 0 to 255); ø, or the Error of why not
 std_file_write_bytes(path: Node, bytes: Node): Node := {
-	t = text_of_textual(path)
-	fd = opened_file(t, wasi_create_new())
-	if fd < 0 { return file_failure("write", t, 0 - fd) }
-	filled = 0
-	for b in unboxed_list(bytes) {
-		output_byte(scratch_bytes() + filled, unboxed_int(b))
-		filled += 1
-		if filled == wasi_chunk() {
-			written_bytes(fd, filled)
-			filled = 0
-		}
+	items = unboxed_list(bytes)
+	content = new_text(#items)
+	for i in 0..<#items { set_byte(content, i, unboxed_int(items#(i + 1))) }
+	written_file(text_of_textual(path), content)
+}
+# `use file; write(path, text)`: the file made anew of the text; ø, or the Error of why not
+std_file_write(path: Node, content: Node): Node := written_file(text_of_textual(path), text_of_textual(content))
+# the file at path made anew of the bytes of content, a chunk a call
+written_file(path: text, content: text): Node := {
+	fd = opened_file(path, wasi_create_new())
+	if fd < 0 { return file_failure("write", path, 0 - fd) }
+	start = 0
+	while start < byte_count(content) {
+		count = min_int(wasi_chunk(), byte_count(content) - start)
+		for i in 0..<count { output_byte(scratch_bytes() + i, byte_at(content, start + i)) }
+		written_bytes(fd, count)
+		start += count
 	}
-	written_bytes(fd, filled)
 	fd_close(fd)
 	ø
 }

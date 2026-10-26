@@ -1,0 +1,4 @@
+# emitter core: a text or a character times an int, either way round, is the text repeated
+# "ab   |---"
+width = 5
+"ab" + " " * (width - 2) + "|" + 3 * "-"

@@ -12,6 +12,9 @@ use crate::node::{error, Node};
 use crate::compiled_module::CompiledModule;
 use std::path::{Path, PathBuf};
 
+/// compiler.warp's command compiling one REPL line (lib/compiler/compiler.warp repl_step)
+const REPL_STEP: &str = "repl-step";
+
 const COMPILER_FILE: &str = "compiler/compiler.warp";
 /// The custom section of a build file naming what it was built from: lib/, lib/'s fingerprint, the warp build
 const BUILD_SECTION: &str = "warp.build";
@@ -124,6 +127,27 @@ pub fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<Compiled
 	let module = compiled_in(&file, folder, by).map_err(|failure| inline_positions(&failure, &file));
 	let _ = std::fs::remove_file(&file);
 	module
+}
+
+/// `warp pure <command> …` (card wasm-commands): compiler.warp's own command (lib/compiler/commands.warp), the command
+/// line its arguments
+pub fn command(arguments: Vec<String>, by: Compiler) -> Node {
+	ran(compiler(by), arguments)
+}
+
+/// One line of `warp pure repl`: compiler.warp's repl-step compiles it after the lines kept in `state` and decides which
+/// stay; its module runs here, where plain WASI could not run it
+pub fn repl_line(line: &str, state: &Path, by: Compiler) -> Node {
+	let module = state.with_extension("wasm");
+	let step = [REPL_STEP, &state.display().to_string(), line, &module.display().to_string()].map(String::from);
+	let stepped = command(step.to_vec(), by);
+	if let Node::Error(_) = stepped.drop_meta() {
+		return stepped;
+	}
+	match std::fs::read(&module) {
+		Ok(bytes) => crate::pipeline::run_module(module_of_bytes(bytes)),
+		Err(failure) => error(&format!("repl-step wrote no module {}: {failure}", module.display())),
+	}
 }
 
 /// A failure of inline code: a position in the file it was written to is one in the code (`at 1:5`)

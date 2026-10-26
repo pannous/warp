@@ -134,6 +134,8 @@ When implementing gaps that the old Rust legacy implementation had, but are not 
 Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
 A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
 <!-- `todo add "merge: <branch> <sha>" Ready -b "<one-line summary, tests run>"`.  -->
+Main moved again in the meantime?
+If the minimal smoke test (Compiling Hello World) passes its task is done, and it can go fully to the integrator.
 Then `todo ready <card> [branch]`
 The Integrator merges and closes them with `todo done`.
 The Git commit message Merge branch MUST Also include a summary of the changes (TODO via todo tool?)

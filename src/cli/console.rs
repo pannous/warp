@@ -71,6 +71,24 @@ pub(crate) fn console_state_line(node: &Node) -> bool {
 }
 
 pub(crate) fn console() {
+	console_evaluating(|session, input| {
+		let value = eval(&session.source_with(input));
+		session.remember(input, &value);
+		value
+	});
+}
+
+/// `warp pure repl`, `warp self repl` (card wasm-commands): each line through compiler.warp's repl-step, which keeps
+/// the lines that stay in its state file, and the module it made run here
+pub(crate) fn pure_console(by: warp::compiler::standalone::Compiler) {
+	let state = std::env::temp_dir().join(format!("warp-repl-{}.warp", std::process::id()));
+	let _ = std::fs::write(&state, "");
+	console_evaluating(|_, input| warp::compiler::standalone::repl_line(input, &state, by));
+	let _ = std::fs::remove_file(&state);
+}
+
+/// The console: lines read with history and member completion, each one's value from `evaluate` shown
+fn console_evaluating(mut evaluate: impl FnMut(&mut ConsoleSession, &str) -> Node) {
 	use rustyline::error::ReadlineError;
 	use rustyline::{CompletionType, Config, Editor};
 
@@ -112,9 +130,7 @@ pub(crate) fn console() {
 				}
 				let _ = rl.add_history_entry(input);
 				let session = rl.helper_mut().expect("the console's helper is set above");
-				let value = eval(&session.source_with(input));
-				session.remember(input, &value);
-				show(&value, RESULT_MARK);
+				show(&evaluate(session, input), RESULT_MARK);
 			}
 			Err(ReadlineError::Eof) => break,
 			Err(e) => {
