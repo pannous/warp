@@ -1,5 +1,5 @@
 //! Card packages (user): a registry entry is as short as it can be. `name/repo` and `github:name/repo` are GitHub
-//! repositories, a bare name the default registry's folder (user 2026-10-17, test_package_registry.rs);
+//! repositories, a bare name the default registry's folder ;
 //! `version: latest`, or no version, follows the default branch.
 
 use warp::modules::{package_in, registry_entries, DEFAULT_REGISTRY, PACKAGE_REGISTRY};

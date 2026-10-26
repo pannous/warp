@@ -75,7 +75,7 @@ is_numeral(t: text): bool := {
 	#parts <= 2 and #digits > #parts - 1 and parts.all(part => part.chars().all(c => "0123456789".contains(c)))
 }
 
-# --- `sleep(1)` needs a unit (user issue #17; a bare number is seconds, decision sleep-seconds) ---
+# --- `sleep(1)` needs a unit  ---
 
 bare_sleep(n: any): any := {
 	if is_group(n) and #n == 2 and n#1 == symbol(sleep_word) and n#2 is number { diagnose(call_of("bare_sleep", ["${n#2}"]), n#2) }

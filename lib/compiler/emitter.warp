@@ -151,7 +151,7 @@ byte_count_words = {bytecount: yes, byte_size: yes}
 def byte_size_code(value: any): list { runtime_call("node_bytes", [["node", boxed(value)]]) }
 # the kinds `+` joins as texts
 characters = {text: yes, char: yes}
-comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
+comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo yes?? 
 equalities = {"==": yes, "!=": yes}
 identities = {"===": yes, "!==": yes}
 compiled_compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
@@ -183,7 +183,8 @@ survey_setting = "WARP_EMIT_SURVEY"
 # a function as written, its name, signature and body; compiling it gives the rest: kinds its parameters' kinds, result
 # its result's kind
 class Function { name: text; signature: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no }
-# runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
+# runtime: the runtime words by name; texts: the offset of each text's bytes in the module's data segment, which
+# holds the texts in the order first used, text_size bytes so far; placed: the functions in order so far
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
@@ -202,7 +203,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; parents: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widened_now: any = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: any = []; gc_indices: map = {}; gc_order: list = []; program_file: text = ""; emitting_at: text = "" }
+class Module { functions: any; order: any; placed: int = 0; runtime: any = {}; texts: any = {}; text_size: int = 0; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; parents: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widened_now: any = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: any = []; gc_indices: map = {}; gc_order: list = []; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
@@ -291,20 +292,47 @@ def collect_functions(program: any, functions: any): list {
 	kept
 }
 # the main-level variables a function reads and neither assigns nor takes (`limit = 3; f(x) := x > limit`): module
-# globals, main's assignment declaring each, as Rust's late_binding makes them
+# globals, main's assignment declaring each, as Rust's late_binding makes them; one walk of each function's body finds
+# the ones it mentions (a walk for each name and function was quadratic)
 shared_names(statements: any) := {
-	shared = {}
+	assigned = {}
 	for s in statements {
-		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol {
-			name = name_of(key_of(s))
-			for f_name in module.functions.keys { if reads_free(module.functions[f_name], name) { shared[name] = yes } }
+		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol { assigned[name_of(key_of(s))] = yes }
+	}
+	read_free = {}
+	if assigned {
+		functions = module.functions.keys.map(f_name => module.functions[f_name])
+		for f in functions {
+			mentioned = Mentions(assigned, {})
+			gather_mentions(f.body, mentioned)
+			for name in mentioned.found.keys {
+				if name not in read_free and not assigns(f.body, name) and name not in taken_names(f.signature) { read_free[name] = yes }
+			}
 		}
 	}
+	shared = {}
+	for name in assigned.keys { if name in read_free { shared[name] = yes } }
 	shared
 }
-reads_free(f: Function, name: text) := {
-	if not mentions(f.body, name) or assigns(f.body, name) { return no }
-	name not in taken_names(f.signature)
+# the names among `wanted` a walk found symbols of, each once, as mentions finds one
+class Mentions { wanted: any; found: any = {} }
+gather_mentions(n: Node, mentioned: Mentions) := match n {
+	Symbol(name): { if name in mentioned.wanted { mentioned.found[name] = yes } }
+	Key(left, _, right): {
+		if left == symbol(opaque_word) { gather_view_mentions(right, mentioned) } else {
+			gather_mentions(left, mentioned)
+			gather_mentions(right, mentioned)
+		}
+	}
+	List(items, _, _): { for item in items { gather_mentions(item, mentioned) } }
+	_: ø
+}
+# inside an opaque layer: each ["symbol", name] part of the view, as mentions' view_has finds one
+gather_view_mentions(view: any, mentioned: Mentions) := {
+	if view is list {
+		if #view == 2 and view#1 == "symbol" and view#2 in mentioned.wanted { mentioned.found[view#2] = yes }
+		for part in view { gather_view_mentions(part, mentioned) }
+	}
 }
 # whether n assigns the symbol `name` anywhere
 assigns(n: any, name: text) := {
@@ -366,11 +394,15 @@ def converted(value: any, to: text): list {
 	if from == "node" and to in node_readers { return runtime_call(node_readers[to], [value])#2 }
 	if from == "char" and to == "text" { return runtime_call("char_text", [value])#2 }
 	# (a local holding a call still compiling, in a first reading of a cycle, whose code is not kept)
+	# todo Plug in the general convert mechanism that calls convert on any two types IF it is defined (dynamic lookup at runtime?)
 	if from != to and from != pending and to != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
 # `text(x)`, `string(x)`: x as shown (Rust's TEXT_TYPES)
 text_words = ["text", "string"]
+# (type $Text (array (mut i8)))   TODO differentiate with linear memory type:
+# (type $String (struct (field $ptr i32) (field $len i32)))  # ONLY use at boundary (ffi) or for extreme speed algorithms / tasks
+
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
 text_readers = {int: "text_as_int", float: "text_as_float"}
 node_casts = {int: "truncated_int", float: "float_cast"}
@@ -448,7 +480,7 @@ def boxed(value: any): list {
 }
 # `[a, b, c]`: a vector of its items, boxed, read in order
 # `{1, 2}` as a value is a curly list of its values, as Rust builds the list structure; `{a; b}` and the spaced `{3 4}`
-# run as statements (user 2026-10-20: `hi := {3 4}; hi()` giving 4 is reasonable), and a body or branch runs its block
+# run as statements ` giving 4 is reasonable), and a body or branch runs its block
 is_curly_list(n: any): bool := bracket_of(n) == "{" and separator_of(n) == ","
 def curly_list_value(body: Body, items: any): list { ["node", node(Marked.Map, vector_code(items.map(item => boxed(expression_code(body, item)))))] }
 # a body or branch `{a, b}` runs its statements, as Rust unwraps a block there
@@ -1139,6 +1171,7 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	module.widened_now = {}
 	module.functions = {}
 	module.order = []
+	module.placed = 0
 	module.runtime = {}
 	module.globals = {}
 	module.runtime_globals = []
@@ -1149,7 +1182,7 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 		declared_global(failed_in_name, "text")
 	}
 	module.texts = {}
-	module.bytes = []
+	module.text_size = 0
 	# the host words, but those the program defines itself: its own `notify(x) := …` is its own
 	module.host = {}
 	defined = defined_names(program)

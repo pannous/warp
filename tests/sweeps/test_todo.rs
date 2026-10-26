@@ -79,7 +79,7 @@ fn test_array_constructor() {
 // === Still pending (requires major features) ===
 #[test]
 fn test_polymorphic_dispatch() {
-	// square lives in the math module (user decision P191)
+	// square lives in the math module 
 	is!("use math; square(3.0)", 9.);
 }
 

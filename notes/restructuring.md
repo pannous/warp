@@ -36,7 +36,7 @@ warp_parser/
   math_notation.rs   superscript powers, |x| norm bars
   annotations.rs     @name, @name(value), Ruby @x
   control/           conditions, if_else, loops, switch, guards (try/catch/finally/fallback), jumps (return, await, emit)
-  definitions/       functions, lambdas, variables (global/nonlocal/constants/<-), foreign, operators (user operators)
+  definitions/       functions, lambdas, variables (global/nonlocal/constants/<-), foreign, operators 
   types/             declarations (class/struct/enum/sum types), expressions (type applications, list<T>, T[])
   collections/       lists, subscripts, ranges
   literals/          mod.rs (parse_value), numbers, units, text, shaders, constants, paths (paths, URLs, versions), data

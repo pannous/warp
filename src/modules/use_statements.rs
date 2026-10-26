@@ -23,7 +23,7 @@ pub(crate) const USE_KEYWORD: &str = "use";
 /// `from list import zip, unique`: only those words of the module
 pub(crate) const IMPORT_KEYWORD: &str = "import";
 
-/// `fast` alone as the first statement of a program or module (user 2026-10-16, card fast-scope): the program's sin cos
+/// `fast` alone as the first statement of a program or module : the program's sin cos
 /// exp pow atan2 are lib/fast_math.warp's polynomials, its Ints machine i64s that wrap, its `/` of Ints a float
 pub(crate) fn is_fast_pragma(statement: &Node) -> bool {
 	statement.drop_meta().is_symbol(crate::words::FAST_WORD)

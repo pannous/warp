@@ -205,7 +205,7 @@ fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -> bool, nam
 	match node.drop_meta() {
 		Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
 			collect_called_words(receiver, is_module_name, names);
-			// `xs.product` is `xs.product()` (user 2026-10-14, card type-module); method_call reads a field of that name
+			// `xs.product` is `xs.product()` ; method_call reads a field of that name
 			// first (`p.center` of an object)
 			match member.drop_meta() {
 				Node::List(call, _, _) => {

@@ -27,7 +27,7 @@ const NEAREST: &str = "nearest";
 const NEAREST_KIND: &str = "rational";
 const NEAREST_WITHIN: &str = "within";
 const NEAREST_LIMIT: &str = "limit";
-/// Python's limit_denominator default (user decision, card nearest-default-limit); lib/prelude.warp's `limit = 1000000`
+/// Python's limit_denominator default ; lib/prelude.warp's `limit = 1000000`
 const NEAREST_DEFAULT_LIMIT: u32 = 1_000_000;
 
 /// Largest integer exponent computed exactly; beyond it the power is approximated

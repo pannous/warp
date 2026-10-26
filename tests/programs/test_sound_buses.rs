@@ -186,7 +186,7 @@ fn a_compressor_ducks_both_channels_together() {
 	assert!((right / left - 0.05 / 0.9).abs() < 0.001, "the same gain on both: {left} {right}");
 }
 
-// card shared-buses stage 2, bus API A (user 2026-10-15): a signal piped into a bus, a note naming its bus
+// card shared-buses stage 2, bus API A : a signal piped into a bus, a note naming its bus
 #[test]
 fn a_signal_piped_into_a_bus_echoes() {
 	let samples = rendered_samples("room = bus() |> delay(0.3, 0.5, 1)\nosc(A4, 0.1s) |> room", "piped");
@@ -201,7 +201,7 @@ fn a_note_played_on_a_bus_echoes_and_the_next_stays_dry() {
 	assert!(loudest(&samples, 0.42, 0.49) < QUIET, "the next note sounds dry: no echo of it");
 }
 
-/// lib's list effects are the bus DSP too (user 2026-10-15, one DSP in Rust): a delay rings until -60 dB as a bus does,
+/// lib's list effects are the bus DSP too : a delay rings until -60 dB as a bus does,
 /// a filter keeps the signal's length
 #[test]
 fn list_effects_run_the_bus_dsp() {

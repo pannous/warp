@@ -2,7 +2,7 @@
 //! (`xs[i]`), a position from 1 (`xs#p`). `xs.index_of(x)` gives a position, `argmax(xs)` and `argmin(xs)` an index,
 //! `xs.insert(v, at: i)` takes an index, and a variable may be declared either (`p: position`, `i: index`).
 //! Where one meets the other's brackets it converts: `xs[p]` is `xs#p`, `xs#i` is `xs[i]`, `at: p` is `at: p - 1`.
-//! Arithmetic keeps the dimension (user decision), as size_t or a pointer does: `p + 1` is the next position, `i - 1`
+//! Arithmetic keeps the dimension , as size_t or a pointer does: `p + 1` is the next position, `i - 1`
 //! the index before; `q - p` of two positions is a plain count, and adding two of them is an error. Printing is the
 //! plain number.
 //! A name counts as a position (an index) when it is declared one, or when every value assigned to it is one.

@@ -1,5 +1,8 @@
 // Linear memory by its bytes (samples/wasm/wasm_interop.warp): `memory.slice(ptr, end)` reads the bytes ptr…end-1,
 // `memory.copy(bytes, ptr)` writes them from ptr on; addresses are 0-based byte offsets
+
+# todo Expose basic WASM primitives as small built-in functions peek poke
+
 def slice(start, end) {
 	bytes = []
 	for address in start until end { bytes = bytes + [memory_byte(address)] }

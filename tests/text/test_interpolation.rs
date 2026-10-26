@@ -1,4 +1,4 @@
-//! D1 (user decisions 2026-10-03): double-quoted text interpolates Swift `"\(expr)"` and `"${expr}"`; a bare `"$x"`
+//! D1 : double-quoted text interpolates Swift `"\(expr)"` and `"${expr}"`; a bare `"$x"`
 //! is text ("only the one with the curly braces must interpolate the other is text like dollar money").
 //! `\(…)` is the canonical form the normalizer hints. Single quotes stay literal; `$` holes in sql/sh templates and
 //! `$0` arguments keep working; `$` before a digit or a space stays a dollar sign.

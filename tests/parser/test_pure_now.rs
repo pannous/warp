@@ -1,5 +1,5 @@
 //! `now` through compiler.warp: lib/time.warp's rule, the instant WASI's clock_time_get reads, to the millisecond as
-//! the Rust lane's (user 2026-10-25)
+//! the Rust lane's 
 use super::test_warp_pure::lane;
 
 /// Two readings of the clock are ordered, and `now` shows as an RFC 3339 instant, `2026-10-25T11:43:40.692Z`

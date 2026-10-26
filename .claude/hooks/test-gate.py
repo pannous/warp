@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: Rust tests run in the cloud (user 2026-10-20), never on this Mac.
+"""PreToolUse hook: Rust tests run in the cloud , never on this Mac.
 
 Blocks a Bash command with a segment that starts a test run: `cargo … test`, `cargo browser-test`, a compiled test
 binary (`…/deps/tests-<hash>`), `tests/queue.sh` or `./test.sh`. `cargo test --no-run` (a build) passes, and so does
@@ -17,7 +17,7 @@ DIRECT_TEST_RUN = re.compile(r"^(?:\S+=\S+\s+)*(?:timeout\s+\d+\s+|nice\s+(?:-n\
                              r"|\S*tests/queue\.sh\b|(?:\S*/)?test\.sh\b)")
 BUILD_ONLY = "--no-run"
 MAC_ONLY = "MAC_ONLY_TESTS=1"
-FIX = ("Rust tests run in the cloud (user 2026-10-20): scripts/cloud-test.sh --card <card> <branch> <tip> <filters>. "
+FIX = ("Rust tests run in the cloud : scripts/cloud-test.sh --card <card> <branch> <tip> <filters>. "
        "Only the Mac-only tests of scripts/cloud-test-environmental.txt run here: MAC_ONLY_TESTS=1 tests/queue.sh -- <filter>")
 
 

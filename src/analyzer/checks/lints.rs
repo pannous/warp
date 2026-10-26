@@ -95,7 +95,7 @@ pub(in crate::analyzer) fn uses_it_outside_loops(node: &Node) -> bool {
 /// The name the fix of a hidden `it` gives the function's `it`, so the loop can read it
 pub(in crate::analyzer) const FUNCTION_IT: &str = "outer_it";
 
-/// The loops in a function with an implicit `it` whose own `it` hides the function's (user decision #23: kept, warned)
+/// The loops in a function with an implicit `it` whose own `it` hides the function's 
 pub(in crate::analyzer) fn hidden_function_it(body: &Node, warnings: &mut Vec<Diagnostic>) {
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {

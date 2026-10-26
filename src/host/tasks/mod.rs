@@ -1,4 +1,4 @@
-//! Real threads for `go` (user decision P33, notes/threads.md): `go f(x)` runs f in a new instance of the same module on
+//! Real threads for `go` : `go f(x)` runs f in a new instance of the same module on
 //! a fixed worker pool; `await job` waits for it. Values are copied: the arguments go in, the result comes out (a TaskValue
 //! between the threads, rebuilt in each instance through its exported constructors); the task never changes the
 //! caller's variables. The program calls the host words (declarations::resolve_tasks):

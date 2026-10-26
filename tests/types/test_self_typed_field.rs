@@ -1,4 +1,4 @@
-//! card empty-field (user decision (b), strict): a field of the class's own type without `?` could never be filled,
+//! card empty-field , strict): a field of the class's own type without `?` could never be filled,
 //! every Tree needing a Tree first, so it is a compile error at the class; `left: Tree?` holds ø or a Tree
 use crate::common::fails_with;
 use crate::is;

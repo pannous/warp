@@ -8,7 +8,7 @@ uncertainty; every generic function computes with it, the uncertainty propagates
   Tolerance (integers, printed as written).
 - `≈` (notes/approximately.md): numbers within 1e-9 relative (`tolerance`), field by field for objects.
 
-## Meaning (user decisions P217–P220, notes/decisions.md)
+## Meaning
 - P217 an interval, worst-case bounds, not Measurements.jl's Gaussian: `(5 ± 1) + (2 ± 1)` is `7 ± 2`, `x - x` is
   `0 ± 2` (no correlation), functions map the endpoints: `sqrt(4 ± 1)` is √3..√5, shown `2.00 ± 0.27`. Gaussian later
   through an explicit form such as `5 ± 1σ` (card plus-minus-gaussian).

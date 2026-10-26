@@ -1,4 +1,4 @@
-// card event-handlers (user 2026-10-06: the listeners of alarm as a list to delete from arbitrarily): `listeners of
+// card event-handlers : `listeners of
 // alarm` is the list of its handlers still listening, each by its place among alarm's handlers (1, 2 …, a named
 // handler h is its place too), and any of them is removed by it, also an unnamed one
 use crate::common::fails_with;

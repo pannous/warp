@@ -1,4 +1,4 @@
-// `image like photo` (user decision, notes/open_decisions.md 2026-10-03, a central philosophy): a value of unknown type
+// `image like photo` : a value of unknown type
 // passed for a typed parameter is duck typed, judged by its uses; a value of a known different type is an error that
 // teaches `like`; after `image like photo` an image is usable wherever a photo is expected, still judged by its uses
 use crate::common::fails_with;

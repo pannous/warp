@@ -361,7 +361,7 @@ fn keep_their_values(cases: &[(&str, &str)]) {
 
 #[test]
 fn linq_methods_work_with_a_note_naming_warps_word() {
-	// the alias rule (user 2026-10-06): a different word for the same meaning works and the note names warp's word
+	// the alias rule : a different word for the same meaning works and the note names warp's word
 	let (value, hints) =
 		warp::normalize::capture_hints(|| shown("xs = [1, 2, 3]; xs.Select(x => x * 2).Where(x => x > 2)"));
 	assert_eq!(value, "[4 6]");

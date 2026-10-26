@@ -1,6 +1,6 @@
 #!/bin/bash
 # The Playground workflow's browser checks (.github/workflows/pages.yml), dry run on pannous.com over SSH: no browser
-# starts on the Mac (user 2026-10-09) and trial runs no longer mail "Run failed" (user 2026-10-15, notes/ci.md).
+# starts on the Mac  and trial runs no longer mail "Run failed" .
 # Builds here exactly as the workflow does, copies the result to the server and runs the same commands there:
 #   scripts/browser-dry-run.sh                    tour-chrome, tour-firefox and the browser suite (the whole workflow)
 #   scripts/browser-dry-run.sh --tours [name…]    both tours, only those examples when named (as the Safari job names them)
@@ -9,7 +9,7 @@
 #   scripts/browser-dry-run.sh --again --chrome …  no build, no copy: the server checks what the last run copied
 # Run it in the checkout or worktree to check; it checks the files as they are, committed or not. Exit code 0 when
 # every chosen check passed. Safari has no server: it stays in the workflow (macos runner).
-# The server side (user browsercheck, /srv/browser-checks: Chrome of agent-browser, Mozilla's Firefox) is set up as
+# The server side  is set up as
 # notes/ci.md "Browser dry run on pannous.com" describes; runs take turns by a lock, niced and in a memory-capped scope,
 # so the sites the server hosts stay responsive.
 set -euo pipefail

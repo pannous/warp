@@ -114,7 +114,7 @@ pub(crate) fn is_type_word(name: &str) -> bool {
 }
 
 /// `double := it*2`, `double(x) := …` or `hex(x) := …`: a type word names a type, never a function, a conversion word
-/// too (user decisions P20, type-words-reserved)
+/// too 
 pub(crate) fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, program);

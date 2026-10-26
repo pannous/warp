@@ -1,5 +1,5 @@
 // floor, ceil, round and √ are wasm instructions giving exact Ints (√ a float), never libm calls, also under `use m`
-// or `import floor from 'm'` (user 2026-10-10: "floor(v) should be int, upgradable to float"). libm's f64 floor made
+// or `import floor from 'm'`  should be int, upgradable to float"). libm's f64 floor made
 // lib/draw.warp's cell fail ("floor is a float where an exact Int is expected") when draw was a local file
 use crate::is;
 

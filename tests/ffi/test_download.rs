@@ -1,4 +1,4 @@
-//! #14e (user decision 2026-10-03): `download <url>` is an alias of `fetch`
+//! #14e : `download <url>` is an alias of `fetch`
 
 use crate::common::{fails_with, serve};
 use crate::is;

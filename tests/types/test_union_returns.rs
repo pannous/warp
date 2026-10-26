@@ -1,4 +1,4 @@
-//! Card union-return (user 2026-10-12: `or` spells a union in every position, return types too): `as int or text`
+//! Card union-return : `as int or text`
 //! and `f(x): int | text := …` check each returned value as a variable declared of the union is checked; a union
 //! converts nothing, unlike `as int`. `as` is the canonical result type spelling, `->` works with a hint (return-as)
 use crate::common::fails_with;

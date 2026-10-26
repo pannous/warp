@@ -43,7 +43,7 @@ extern "C" {
 }
 
 /// libm functions linked under the import module "m".
-/// Deliberately hand-linked FFI examples (user decision 2026-10-03, kept as marked examples): the explicit form of what
+/// Deliberately hand-linked FFI examples : the explicit form of what
 /// the header-driven path (get_signatures_from_headers + link_dynamic_library) does by reflection; keep the table.
 /// link_libm uses it only when the headers declare nothing for "m" (glibc's __MATHCALL macros): headers first.
 const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 21] = [
@@ -94,7 +94,7 @@ pub fn libm_header_signatures() -> Vec<FfiHeaderSignature> {
 		.collect()
 }
 
-/// libm from its headers first; the hand-linked table only when they declare nothing for "m" (user decision 2026-10-03)
+/// libm from its headers first; the hand-linked table only when they declare nothing for "m" 
 pub fn link_libm(
 	linker: &mut Linker<FfiState>,
 	engine: &Engine,

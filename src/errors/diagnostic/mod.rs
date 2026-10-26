@@ -218,7 +218,7 @@ impl WarningMode {
 	}
 }
 
-/// What `use strict` and `--strict` make errors: normal and severe warnings (user default, 2026-10-13)
+/// What `use strict` and `--strict` make errors: normal and severe warnings 
 pub const STRICT_LEVEL: Level = Level::Normal;
 
 /// The lowest level printed, process-wide (Hint: everything); lower ones are still recorded for hosts and tests

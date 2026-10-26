@@ -1,4 +1,4 @@
-//! cards type-module, abc-chars (user 2026-10-14: "s.capitalize without () it's always exactly the same. Do not have
+//! cards type-module, abc-chars  it's always exactly the same. Do not have
 //! special logic for the same code path"; "\"abc\".chars should give ['a','b','c']"): `x.word` is `x.word()`, for the
 //! words of the type modules (lib/list.warp, text.warp) as for the builtins, and `x.chars` is the characters, not their count
 use crate::is;

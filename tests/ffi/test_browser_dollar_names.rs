@@ -1,4 +1,4 @@
-//! `$Math`, `$document` and `$xyz.member` of card browser-interaction: since card page-ids (user 2026-10-15) the old
+//! `$Math`, `$document` and `$xyz.member` of card browser-interaction: since card page-ids  the old
 //! forms keep working one release, with a hint naming the new one (`document.title`, `element("xyz").innerHTML`)
 use crate::is;
 

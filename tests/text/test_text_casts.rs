@@ -1,4 +1,4 @@
-//! #35 (user decision 2026-10-03): an int list `as string` joins to "[1 2]" also at runtime;
+//! #35 : an int list `as string` joins to "[1 2]" also at runtime;
 //! `"x" as float` is a loud error with a hint, only single-quote codepoints convert to numbers.
 
 use crate::common::fails_with;

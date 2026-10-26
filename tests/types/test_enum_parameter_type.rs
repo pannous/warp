@@ -1,5 +1,5 @@
 // card enum-parameter-type: an enum names the type of its cases, `f(c: Coin)`; a case is its own value of that type
-// (user decision enum-case B, test_plain_enum.rs)
+// 
 use crate::is;
 use warp::symbol;
 

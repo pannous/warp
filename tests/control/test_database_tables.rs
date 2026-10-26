@@ -180,7 +180,7 @@ fn stored_registers_a_table_of_the_same_name() {
 	is!(&program("people", "people#1.name"), "Di");
 }
 
-// `save p` writes p's row and is p; field changes are written through already (user default, 2026-10-08)
+// `save p` writes p's row and is p; field changes are written through already 
 #[test]
 fn save_writes_the_row_and_is_the_instance() {
 	let saved =

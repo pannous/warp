@@ -73,7 +73,7 @@ mod test_self_hosted_cache; // card End-end
 #[cfg(feature = "native")]
 mod test_self_hosted_library; // card shared-warp-build
 #[cfg(feature = "native")]
-mod test_pure_now; // now through WASI in the pure lane (user 2026-10-25)
+mod test_pure_now; // now through WASI in the pure lane 
 #[cfg(feature = "native")]
 mod test_self_pure; // card pure-runs
 #[cfg(feature = "native")]
@@ -103,7 +103,7 @@ mod test_warp_format;
 #[cfg(feature = "native")]
 mod test_warp_pure; // card warp-pure
 #[cfg(feature = "native")]
-mod test_warp_pure_build; // warp pure|self build <code|file> (user 2026-10-25)
+mod test_warp_pure_build; // warp pure|self build <code|file> 
 #[cfg(feature = "native")]
 mod test_warp_wasm_alone; // card standalone
 mod test_wisp_def_params;

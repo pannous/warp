@@ -1,4 +1,4 @@
-// `linear xs = int[n]` / `float[n]`: an explicit array in linear memory, one block [count][cells] (user 2026-10-06);
+// `linear xs = int[n]` / `float[n]`: an explicit array in linear memory, one block [count][cells] ;
 // discouraged with a hint, since the compiler picks where number lists live by itself (notes/linear_arrays.md)
 use crate::common::fails_with;
 use crate::is;

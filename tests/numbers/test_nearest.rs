@@ -1,5 +1,5 @@
 // card nearest-helper: `nearest(x, rational, limit)` is the fraction closest to x whose denominator is at most limit, as
-// Python's Fraction.limit_denominator, with its default 1000000 (user decision 2026-10-14, card nearest-default-limit);
+// Python's Fraction.limit_denominator, with its default 1000000 ;
 // `within: ε` the first convergent that close; limit 0 the first convergent that is the same float. An exact √2 or π
 // expands exactly (src/numbers/real.rs), a float at run time by lib/prelude.warp
 use crate::common::fails_with;
@@ -7,7 +7,7 @@ use crate::is;
 
 #[test]
 fn nearest_fraction() {
-	is!("nearest(sqrt(2), rational) == 941664/665857", true); // limit 1000000 by default (user decision)
+	is!("nearest(sqrt(2), rational) == 941664/665857", true); // limit 1000000 by default 
 	is!("nearest(sqrt(2), rational, 1000) == 1393/985", true);
 	is!("nearest(pi, rational, 100) == 311/99", true);
 	is!("type(nearest(sqrt(2), rational))", "rational");

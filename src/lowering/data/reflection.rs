@@ -269,7 +269,7 @@ fn function_named(subject: &Node) -> Option<&str> {
 	}
 }
 
-/// `type(gcd)`: `function: (a, b) -> int`, the kind and the signature (user decision on card module-methods)
+/// `type(gcd)`: `function: (a, b) -> int`, the kind and the signature 
 pub(crate) fn function_type(signature: &str) -> Node {
 	Node::Text(format!("{}: {signature}", crate::type_kinds::Kind::Function))
 }

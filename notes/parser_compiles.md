@@ -1,6 +1,6 @@
 # warp compiles parser.warp: refusal roots and owners
 
-Goal (user 2026-10-19): the self-hosted pipeline compiles lib/compiler/parser.warp. One owner per root cause:
+Goal : the self-hosted pipeline compiles lib/compiler/parser.warp. One owner per root cause:
 claim a line here (commit straight to main) BEFORE you start, mark it done with the commit, add new roots you find.
 Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-structures, 2026-10-19 evening:
 28 functions refused, down from 124).

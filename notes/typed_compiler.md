@@ -1,6 +1,6 @@
 # The typed compiler (card typed-compiler: types-front, types-back)
 
-Every parameter, field and result in lib/compiler is typed (user 2026-10-20), with small domain types instead of any
+Every parameter, field and result in lib/compiler is typed , with small domain types instead of any
 or plain text.
 
 ## Shared types: lib/compiler/types.warp

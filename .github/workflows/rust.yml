@@ -1,7 +1,7 @@
 # .github/workflows/rust.yml
 name: Rust CI
 
-# The tests do not run on every push to main (user decision 2026-10-03: the failure mails were noise). They run
+# The tests do not run on every push to main . They run
 # nightly when main changed, by hand (`gh workflow run "Rust CI" -R pannous/warp [--ref <branch>]`), on a version tag
 # (v*), and on a push whose head commit message contains [ci]. claude/* branches (cloud agents) always run.
 on:
@@ -99,7 +99,7 @@ jobs:
         cargo rustc --test tests --all-features -- -D warnings
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
     - id: tests
-      # the playground tests are paused (user 2026-10-22, scripts/paused-tests.txt)
+      # the playground tests are paused 
       run: cargo test --verbose --no-fail-fast -- $(grep -v '^#' scripts/paused-tests.txt | sed 's/^/--skip /')
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
     # Clippy is denied everywhere: src/, the binary and tests/

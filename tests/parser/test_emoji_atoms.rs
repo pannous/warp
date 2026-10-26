@@ -1,5 +1,5 @@
 // An emoji in code (outside a text) is an atom like other non-ASCII characters (card emoji-code): one code point is a
-// codepoint, a sequence of several (flags, skin tones, ZWJ sequences) is a text (user decision): equal to its quoted form
+// codepoint, a sequence of several (flags, skin tones, ZWJ sequences) is a text : equal to its quoted form
 use crate::is;
 
 #[test]

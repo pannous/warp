@@ -9,7 +9,7 @@ const FOREIGN_LIST_HEADS: [&str; 6] = ["Vec", "vector", "Vector", "array", "Arra
 /// `left: ref Node?`: WebAssembly's reference type word before a field's type
 const REF_TYPE_WORD: &str = "ref";
 
-/// Words naming one built-in type: warp's `x: fast int` is i64, `fast float` f64 (user 2026-10-16, card fast-scope); C's
+/// Words naming one built-in type: warp's `x: fast int` is i64, `fast float` f64 ; C's
 /// names of several words the fixed width they mean there (card unsigned-int, as ffi/struct_layouts.rs reads headers),
 /// `unsigned int` uint32, with a note naming warp's word. The longest first.
 // ⚠ WARP DOES THIS DIFFERENTLY: `byte index`, `byte position` are count types of bytes (decision index-units)
