@@ -82,7 +82,7 @@ check_host() {
 }
 # the self lane only when there is a promoted warp-self.wasm (`warp version` names a missing one)
 self_lane() {
-  if [[ ! -f $worktree/data/warp-self.wasm && ! -f $scratch/warp-self.wasm ]]; then
+  if [[ ! -f $worktree/lib/warp-self.wasm && ! -f $scratch/warp-self.wasm ]]; then
     print -r -- "self-check: no warp-self.wasm: self lane skipped (scripts/promote-self.sh)"; return 0
   fi
   check_lane self
