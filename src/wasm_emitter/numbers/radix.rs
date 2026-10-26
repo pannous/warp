@@ -41,11 +41,6 @@ impl Radix {
 	pub const fn kind(&self) -> i64 {
 		(self.info << type_kinds::KIND_BITS) | Kind::Int as i64
 	}
-
-	/// The literal an Int shown in this radix reads as: 0xFF, -0x1, 0b101
-	pub fn literal(&self, value: i64) -> String {
-		crate::abi::marked_literal(self.info, value).expect("a radix's own mark")
-	}
 }
 
 /// `hex`, `binary`, `bin`: the radix the word names
