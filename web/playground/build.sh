@@ -65,7 +65,7 @@ build_debug() {
 build_components() {
 	mkdir -p "$page/components"
 	for component in "${COMPONENTS[@]}"; do
-		local name transpiled="$repository/scratch/components/$(basename "$component" .wasm)"
+		local name transpiled="$repository/data/components/$(basename "$component" .wasm)"
 		name=$(basename "$component" .wasm)
 		jco transpile "$component" --instantiation sync --no-namespaced-exports --quiet -o "$transpiled"
 		wasm-tools component wit --json "$component" > "$transpiled/wit.json"

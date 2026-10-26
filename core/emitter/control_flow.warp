@@ -80,7 +80,7 @@ def loop_code(body: Body, test: any, block: any, last: int): list {
 	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + kept + [op.end] + again + [op.end, op.end]
 }
 is_endless(test: any, block: any): bool := test == yes and not mentions(block, "break")
-is_loop_step(n: any): bool := type(n) is key and op_of(n) == ":" and key_of(n) == symbol("loop·step")
+is_loop_step(n: any): bool := is_key(n, Op.Colon) and key_of(n) == symbol("loop·step")
 # whether a continue may skip the loop's last statement: not when it assigns a name the test reads, the shape of a
 # lowered `for`'s step that came unmarked (Rust's iterator loops: `x = x·iterator.next()`)
 step_operators = ["=", "+=", "-=", "++", "--"]
@@ -99,14 +99,14 @@ def effect(body: Body, n: any): list {
 	if not (type(n) is key) { return dropped(statement(body, n)) }
 	operator = op_of(n)
 	left = key_of(n)
-	if operator == "then" and type(left) is key and op_of(left) == "if" {
+	if operator == Op.Then and is_key(left, Op.If) {
 		return condition_of(body, right_of_if(left), 0) + [op.if, no_value] + nested_effect(body, value_of(n), 1) + [op.end]
 	}
-	if operator == "else" and type(left) is key and op_of(left) == "then" and type(key_of(left)) is key and op_of(key_of(left)) == "if" {
+	if operator == Op.Else and is_key(left, Op.Then) and is_key(key_of(left), Op.If) {
 		c = condition_of(body, right_of_if(key_of(left)), 0)
 		return c + [op.if, no_value] + nested_effect(body, value_of(left), 1) + [op.else] + nested_effect(body, value_of(n), 1) + [op.end]
 	}
-	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_code(body, value_of(left), value_of(n), -1) }
+	if operator == Op.Do and is_key(left, Op.While) { return loop_code(body, value_of(left), value_of(n), -1) }
 	dropped(statement(body, n))
 }
 def effects(body: Body, items: any): list {
@@ -201,7 +201,7 @@ def statement(body: Body, n: any): list {
 }
 # `xs = []`, `xs = ø`, `xs = [a, b]`: the local name holds a list made right here
 fresh_list_name(n: any): any := {
-	if not (type(n) is key and op_of(n) == "=" and key_of(n) is symbol) { return ø }
+	if not (is_key(n, Op.Assign) and key_of(n) is symbol) { return ø }
 	if value_of(n) is ø or bracket_of(value_of(n)) == "[" { return name_of(key_of(n)) }
 	ø
 }
@@ -210,8 +210,8 @@ self_append_name(n: any): any := {
 	if not (type(n) is key and key_of(n) is symbol) { return ø }
 	name = name_of(key_of(n))
 	sum = value_of(n)
-	if op_of(n) == "+=" and not mentions(sum, name) { return name }
-	if op_of(n) != "=" or not (type(sum) is key and op_of(sum) == "+" and key_of(sum) == key_of(n)) { return ø }
+	if op_of(n) == Op.AddAssign and not mentions(sum, name) { return name }
+	if op_of(n) != Op.Assign or not (is_key(sum, Op.Add) and key_of(sum) == key_of(n)) { return ø }
 	if mentions(value_of(sum), name) { return ø }
 	name
 }

@@ -2,7 +2,7 @@
 // wrangler dev, deploys samples/servers/hosting.warp by `warp deploy --hosted` as warp-hosting-test and by the playground's
 // ☁ Deploy button (headless agent-browser, the GitHub session already stored) as warp-hosting-ui-test, reads their
 // live routes on workers.dev, removes them.
-// node web/hosting/test_hosting.mjs   needs: scratch/warp (scripts/own-warp.sh), web/playground/build.sh built,
+// node web/hosting/test_hosting.mjs   needs: data/warp (scripts/own-warp.sh), web/playground/build.sh built,
 // wrangler logged in, gh logged in, agent-browser.
 // CLOUDFLARE_API_TOKEN defaults to wrangler's own OAuth token.
 import { execFileSync, spawn } from "node:child_process";
@@ -18,7 +18,7 @@ if (!process.env.CI) {
 }
 
 const ROOT = resolve(import.meta.dirname, "../..");
-const WORK = join(ROOT, "scratch/hosting_test");
+const WORK = join(ROOT, "data/hosting_test");
 const PORT = Number(process.env.WARP_HOSTING_TEST_PORT ?? 8899); // outside the test suite's 87xx ports
 const INSPECTOR_PORT = 9331; // not wrangler's default 9229, which another wrangler dev may hold
 const HOSTING = `http://localhost:${PORT}`;
@@ -44,7 +44,7 @@ function cloudflareToken() {
 function deployedSample(token) {
 	const source = join(WORK, `${NAME}.warp`);
 	copyFileSync(SAMPLE, source);
-	const output = execFileSync(join(ROOT, "scratch/warp"), ["deploy", "--hosted", source],
+	const output = execFileSync(join(ROOT, "data/warp"), ["deploy", "--hosted", source],
 		{ env: { ...process.env, WARP_HOSTING: HOSTING, WARP_HOSTING_TOKEN: token } }).toString();
 	return output.match(/deployed: (\S+)/)?.[1] ?? assert.fail(output);
 }

@@ -5,7 +5,7 @@ set -e
 version=${1:?usage: update_formula.sh <version>}
 formula=${0:A:h}/Formula/warp.rb
 tap=$(brew --repository pannous/tap 2>/dev/null)/Formula/warp.rb
-download=${0:A:h}/../../scratch/release-v$version
+download=${0:A:h}/../../data/release-v$version
 
 mkdir -p $download
 gh release download v$version -R pannous/warp -p 'warp-*.tar.gz' -D $download --clobber

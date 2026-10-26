@@ -105,7 +105,7 @@ emitter.warp refusing a `the result: text` given a kind guessed from a call stil
 cycle; admitted() now holds it as the declared kind, the reread fixes the code). A refusal is now the compile's
 error, not "not a list at 23:2". Holding only a typed block's last statement as the result (definitions.warp
 result_held) is no longer needed with admitted() and made `warp rebuild self` refuse ("the operator # on int"), so
-it was dropped. Debug recipe: copy lib to scratch/upN, add prints (`print "CF " + f.name` in compile_function), run
+it was dropped. Debug recipe: copy lib to data/upN, add prints (`print "CF " + f.name` in compile_function), run
 `WARP_LIB=<copy>/lib warp core/compiler.warp p.warp p.wasm <dir> <copy>/lib` to keep the wasm for
 `wasm-tools validate --features all`. A self-build refusal reproduces in ~4 min with `WARP_SELF_HOSTED=pure-only
 WARP_LIB=<copy>/lib warp <copy>/lib/compiler/compiler.warp`; bisect it by copying main's lib and swapping one changed
@@ -155,7 +155,7 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
   (closure analysis), lambda captures, prefix calls (`call#1`) and nested lambdas. Plus: a text's member looked up by
   name (`line.length` beside a map with a key length) was typed a text.
 - Step 3 written: core/compiler.warp and host_words.warp. Not yet through: the next probe needs the scope fixes
-  in the shared build. Probe: `cd scratch/sc && WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp ../../core/compiler.warp app.warp app.wasm`.
+  in the shared build. Probe: `cd data/sc && WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp ../../core/compiler.warp app.warp app.wasm`.
 - Blocked on compile time (card analyzer-settle): compiler.warp does not finish compiling (>30 min CPU); even
   `use passes+emitter; print(1)` takes >45 min, while each stage alone compiles in ~30 s. A 23-min sample of the
   whole warp-debug run (probes/sample_inclusive.py) put 98% of it in one caller: run_time_blocks::data_holders ran

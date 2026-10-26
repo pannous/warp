@@ -56,7 +56,7 @@ is_spaced_value(n: any): bool := {
 	(key_of(n) == ø or is_spaced_value(key_of(n))) and (value_of(n) == ø or is_spaced_value(value_of(n)))
 }
 # `5 -2`: a glued sign, a value of its own
-is_negative_literal(n: any): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == "-" and key_of(n) == ø)
+is_negative_literal(n: any): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
 def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc_type(gc.node)]] }
 def runtime_call(name: text, values: any): list { call_values(module.runtime[name], values) }

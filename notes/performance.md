@@ -93,7 +93,7 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   look for the callers that call it so often (profile_self_time.py <file> <rows> <function>).
 
 ## Timing the self-hosted stages
-- Time against a frozen copy of lib/ (`cp -R lib scratch/speed/lib_frozen`, `WARP_LIB=` it, run in its compiler/):
+- Time against a frozen copy of lib/ (`cp -R lib data/speed/lib_frozen`, `WARP_LIB=` it, run in its compiler/):
   every push to core by another session recompiles the four stage programs (~40 s) in the middle of an A/B,
   which once made a 15% swing look like a result. Discard the first run of each binary (it compiles the stages).
 - A lib change is timed as two fresh copies of main's lib, one with the change reverted, on one binary: a frozen lib

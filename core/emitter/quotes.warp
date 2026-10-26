@@ -18,9 +18,9 @@ quote_folded(n: any, at: int): any := {
 position_fields = ["line", "column", "comment"]
 # the field a key reads, `x.name`, also as Rust's analysis view writes it, `x#("name" + 1)`; ø of another key
 read_field(n: any): any := {
-	if op_of(n) == "." and value_of(n) is symbol { return name_of(value_of(n)) }
+	if op_of(n) == Op.Dot and value_of(n) is symbol { return name_of(value_of(n)) }
 	field = value_of(n)
-	if op_of(n) == "#" and type(field) is key and op_of(field) == "+" and key_of(field) is text and value_of(field) == 1 { return key_of(field) }
+	if op_of(n) == Op.Hash and is_key(field, Op.Add) and key_of(field) is text and value_of(field) == 1 { return key_of(field) }
 	ø
 }
 reads_position(n: any): bool := {

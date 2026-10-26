@@ -9,7 +9,7 @@ are refused before compiling. Revisit only when Wasmer's `Value`/type layer gain
 decision wasm-standalone's two-step route (warp.wasm writes file.wasm, then `wasmtime file.wasm`) stays the answer.
 A WASIX one-command compile-and-run stays a Later idea.
 
-## 1. Proposal support, probed (probes/wasmer/features.sh, outputs in scratch/wasmer-probes)
+## 1. Proposal support, probed (probes/wasmer/features.sh, outputs in data/wasmer-probes)
 Homebrew's wasmer 7.5.0 has only Cranelift. The official release tarball
 ([v7.5.0](https://github.com/wasmerio/wasmer/releases/tag/v7.5.0), `wasmer --version -v`: "runtimes: Singlepass,
 Cranelift, LLVM, V8") has all four; `WASMER=<it> probes/wasmer/features.sh` runs every backend.

@@ -39,7 +39,7 @@ Running ~/dev/netbase's arm64 binary (2023) locally:
   `sudo sysctl -w kern.sysv.shmmax=4294967296 kern.sysv.shmall=1048576` (the user's sudo; not persistent);
 - the file mmap mode (`USE_MMAP=1` in netbase.config) only loads an existing import ("WRONG IMPORT" on fresh files)
   and never grows its files on macOS (file_allocate is a no-op there: SIGBUS on 0-byte maps);
-- the binary puts its data in `<binary dir>/data/` whatever data_path says: run a copy (scratch/netbase/netbase);
+- the binary puts its data in `<binary dir>/data/` whatever data_path says: run a copy (data/netbase/netbase);
 - Docker (netbase.docker/) would need a Linux build of the C++ sources.
 Next step for (b): the sysctl line once, then `./netbase :import cities` and `./netbase :server` from a copy in
-scratch/netbase with a small netbase.config (SERVER_PORT=8181, maxNodes=2000000).
+data/netbase with a small netbase.config (SERVER_PORT=8181, maxNodes=2000000).

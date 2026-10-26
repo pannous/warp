@@ -1,6 +1,6 @@
 # card pure-inherited-fields: a subclass's instance takes its parent's fields and defaults first, then its own (a chain
 # of parents, declared in any order); an optional field left out, `b?` or `b: text?`, is ø
-# (run-time instances: `warp test tests/types` runs them through warp pure, `warp test --self tests/types` through
+# (run-time instances: `warp test tests/types` , `warp test --self tests/types` through
 # warp self)
 
 # a_subclass_instance_takes_its_parents_fields
