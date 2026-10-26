@@ -12,3 +12,6 @@ the result headless (needs python modules regex + yaml and syntect's syntest exa
   checkout, checks, commits + pushes when the lists changed. On failure: macOS notification and one `todo add` card per
   distinct failure (~/.cache/sublime-words.last-failure).
 - update_words.py also fails when wiki/keyword.md misses a keyword warp has: the fix is usually a wiki row.
+- F12 (goto_definition) is Sublime's symbol index over the syntax's entity.name.function / entity.name.type scopes:
+  a definition head the syntax doesn't scope isn't found. syntest for check_syntax.py: clone at ~/dev/syntect
+  (outside ~/dev/script/rust, whose workspace swallows it), `cargo build --release --example syntest`.
