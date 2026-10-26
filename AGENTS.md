@@ -257,7 +257,7 @@ NEVER modify a README without the user's review and explicit confirmation.
 Small or non-conflicting changes may go straight onto main without a worktree. 
 Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
 /Volumes/Worktrees/warp is cowtree's donor, never removed.
-/Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md),
+/Volumes/Worktrees/integrate and integrate2 are the Integrator's (tools: scripts/integrate/, notes/agents/integrator.md).
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` 
 Before removing a worktree: `git status --short -uall` (untracked files are hidden on this Mac) + files changed in 2 h.
 
