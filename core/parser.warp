@@ -47,14 +47,15 @@ def use_library(folder: text) { given_library = folder }
 // lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
 UNBUNDLED_FOLDERS = ["compiler", "data"]
 LIBRARY_FILES = library_sources()
-def library_sources(): any := library_texts(run_library(), "")
+// (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
+def library_sources(within: text = ""): any := library_texts(run_library(), within)
 // the .warp files of lib/<within> and its folders, by their paths within lib/
 def library_texts(library: text, within: text): any {
 	found = {}
-	listed = try list_files(library + "/" + within) else []
+	entry_names = try list_files(library + "/" + within) else []
 	# a compiler without the runtime's own listing (one an older seed built) lists nothing: it reads lib/ where it runs
-	if not (type(listed) is list) { return found }
-	for name in listed.sort() {
+	if not (type(entry_names) is list) { return found }
+	for name in entry_names.sort() {
 		path = within + name
 		if name.ends_with(".warp") {
 			found[path] = try read(library + "/" + path) else ""
@@ -65,19 +66,14 @@ def library_texts(library: text, within: text): any {
 	}
 	found
 }
-// A source file's text: a file of lib/ from the bundle, or from WARP_LIB when that is set and has the file (a module
-// changed after the build, per module); any other file from the disk; ø for none
-def source_file(path: text): any {
+// A source file's text: a bundled module of lib/ from the bundle, unless WARP_LIB is set and has the file (a module
+// changed after the build, per module); any other file (the program's own, core reached as lib/compiler) from the disk;
+// ø for none
+def file_source(path: text): any {
 	library = run_library() + "/"
-	if not path.starts_with(library) { return try read(path) else ø }
-	if env("WARP_LIB") != ø {
-		changed = try read(path) else ø
-		if changed != ø { return changed }
-	}
-	bundled = LIBRARY_FILES.get(path[library.length .. path.length])
-	if bundled != ø or LIBRARY_FILES { return bundled }
-	# no bundle: a compiler built by one that could list no lib/ yet reads lib/ where it runs
-	try read(path) else ø
+	bundled = if path.starts_with(library) then LIBRARY_FILES.get(path[library.length .. path.length]) else ø
+	if bundled != ø and env("WARP_LIB") == ø { return bundled }
+	(try read(path) else ø) ?? bundled
 }
 global entity_table = ø
 def entities(): any {
@@ -1660,7 +1656,7 @@ def used_module_sources(source: text): list {
 	for statement in code_statements(source) {
 		words = blank_words(statement)
 		if words.length == 2 and USE_KEYWORDS.contains(words#1) {
-			module_source = source_file(run_library() + "/" + words#2 + ".warp") ?? ""
+			module_source = file_source(run_library() + "/" + words#2 + ".warp") ?? ""
 			if module_source { sources += [module_source] }
 		}
 	}

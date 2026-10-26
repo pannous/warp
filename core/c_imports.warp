@@ -85,7 +85,7 @@ c_declarations_in(content: text): list := content.split("\n").map(line => c_decl
 c_catalog(library_folder: text, native_paths: list): list := {
 	found = []
 	for path in c_catalog_files.map(file => library_folder + "/" + file) + native_paths {
-		content = source_file(path) ?? ""
+		content = file_source(path) ?? ""
 		found += c_declarations_in(content)
 	}
 	found
@@ -101,7 +101,7 @@ crates_cache(): text := env("WARP_CRATES_CACHE") ?? ((env("HOME") ?? "") + crate
 native_path(library_folder: text, library: text): any := {
 	for folder in [library_folder, crates_cache()] {
 		path = folder + "/" + native_file(library)
-		if (source_file(path) ?? "") != "" { return path }
+		if (file_source(path) ?? "") != "" { return path }
 	}
 	ø
 }
