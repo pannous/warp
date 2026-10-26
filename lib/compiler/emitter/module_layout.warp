@@ -77,13 +77,16 @@ def module_bytes(functions: any): list {
 	exported = section(section_ids.export, vector(exports))
 	# the texts' bytes: one passive segment, which array.new_data reads
 	segments = section(section_ids.data_count, uleb(1))
-	texts = section(section_ids.data, vector([[passive_segment] + uleb(#module.bytes) + module.bytes]))
+	data = data_bytes()
+	texts = section(section_ids.data, vector([[passive_segment] + uleb(#data) + data]))
 	tags = []
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#module.gc_order + #module.imports + #functions)])) }
 	parts = [types, imported, declared, memory, tags, globals, exported, segments, codes, texts]
 	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
 	wasm_header + concatenated(parts) + names_section(functions) + marks + c_functions_custom_section()
 }
+# the data segment: each text's bytes once, in the order text_offset gave them their offsets
+def data_bytes(): list { concatenated(module.texts.keys.map(t => t.bytes)) }
 def import_entry(i: int): list {
 	entry = module.imports#(i + 1)
 	name_bytes(entry#1) + name_bytes(entry#2) + [import_function_byte] + uleb(#module.gc_order + i)
