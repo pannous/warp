@@ -251,7 +251,7 @@ def keyed_assignment(body: Body, target: any, object: any, key: any, value: any)
 # the code of a put into the map node a place target holds (a variable, or a field or element of one: `p.b.c = 4`),
 # which takes its result (ø becomes a map), else the put with its result dropped (a local named map reads as the word
 # map: card local-named); a main-level variable a function changes an entry of is changed for every function, as a
-# reference is in Rust's (`module.texts[t] = …`), not a new local of the function
+# reference is in Rust's (`module.functions[name] = …`), not a new local of the function
 def put_back(body: Body, target: any, object: any, put: any): list {
 	if target is symbol and object#1 == "node" and is_global(body, name_of(target)) { return dropped(global_assignment(name_of(target), put)) }
 	if is_place(target) and object#1 == "node" then dropped(assignment(body, target, put)) else dropped(put)

@@ -77,7 +77,7 @@ def module_bytes(functions: any): list {
 	exported = section(section_ids.export, vector(exports))
 	# the texts' bytes: one passive segment, which array.new_data reads
 	segments = section(section_ids.data_count, uleb(1))
-	texts = section(section_ids.data, vector([[passive_segment] + uleb(#module.bytes) + module.bytes]))
+	texts = section(section_ids.data, vector([[passive_segment] + uleb(#data_bytes) + data_bytes]))
 	tags = []
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#module.gc_order + #module.imports + #functions)])) }
 	parts = [types, imported, declared, memory, tags, globals, exported, segments, codes, texts]
