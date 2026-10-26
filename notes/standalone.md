@@ -1,18 +1,18 @@
 # Running the warp compiler under plain wasmtime
 
-The self-compiled compiler, compiler-self.wasm, is an ordinary WASI preview 1 command: wasmtime runs it with no warp
+The self-compiled compiler, warp-self.wasm, is an ordinary WASI preview 1 command: wasmtime runs it with no warp
 host, it compiles a .warp file to a .wasm file, and that module runs under wasmtime too (card standalone, decision
 wasm-standalone; design: notes/standalone_compiler.md).
 
 ## How to
 
 ```bash
-# 1. build compiler-self.wasm (prints `built <path>`: next to the warp binary, or <checkout>/data/ for a worktree)
+# 1. build warp-self.wasm (prints `built <path>`: next to the warp binary, or <checkout>/data/ for a worktree)
 /Users/me/dev/bin/warp rebuild self
 
 # 2. compile: <source> <output> <folder of the source's uses> <lib folder>
 wasmtime run -W gc=y,function-references=y,exceptions=y,unknown-imports-default=y --dir / --dir .::. \
-  /Users/me/dev/bin/compiler-self.wasm hello.warp hello.wasm . /Users/me/dev/angles/warp/lib
+  /Users/me/dev/bin/warp-self.wasm hello.warp hello.wasm . /Users/me/dev/angles/warp/lib
 
 # 3. run what it wrote
 wasmtime run -W gc=y,function-references=y,exceptions=y hello.wasm
@@ -35,7 +35,7 @@ The same compiler answers warp's commands (core/commands.warp, card wasm-command
 as `warp pure <command>` / `warp self <command>`:
 
 ```bash
-W="wasmtime run -W gc=y,function-references=y,exceptions=y --dir / --dir .::. /Users/me/dev/bin/compiler-self.wasm"
+W="wasmtime run -W gc=y,function-references=y,exceptions=y --dir / --dir .::. /Users/me/dev/bin/warp-self.wasm"
 $W help                  # the commands it has
 $W parse "1+2*x"         # (+ 1 (* 2 x)), as `warp parse` shows it
 $W lower "x=3;x+1"       # the program after the lowering passes
@@ -48,5 +48,5 @@ warp self repl           # the same REPL, each line's module run by the native w
 - Commands needing a host (serve, fetch, app, lsp …) and those not yet written in warp (format, lint, types, verify)
   refuse naming the native warp.
 
-Outcome tests: tests/parser/test_warp_commands.rs; tests/parser/test_warp_wasm_alone.rs (ignored as slow, it builds compiler-self.wasm; run it with
+Outcome tests: tests/parser/test_warp_commands.rs; tests/parser/test_warp_wasm_alone.rs (ignored as slow, it builds warp-self.wasm; run it with
 `--ignored` at opt-level 2: `scripts/cloud-test.sh --optimized <branch> <tip> -- compiler_wasm_runs_under_plain_wasmtime --ignored`).

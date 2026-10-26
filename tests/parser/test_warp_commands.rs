@@ -1,5 +1,5 @@
 //! `warp pure <command>` and `warp self <command>`: warp's commands written in warp (core/commands.warp), the
-//! same ones `wasmtime compiler-self.wasm <command>` runs (card wasm-commands, notes/standalone.md)
+//! same ones `wasmtime warp-self.wasm <command>` runs (card wasm-commands, notes/standalone.md)
 use super::test_warp_pure::lane;
 use std::io::Write;
 

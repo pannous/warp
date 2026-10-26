@@ -84,16 +84,21 @@ Principles and Talking live only in common.md.
   gate runs) go to a helper at low effort with a step cap; give it the exact commands and stop when they finish.
   Higher effort only for real debugging or design work.
 - Tiered gate, pure pipeline first : `scripts/gate-probes.sh
-  [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure and self, both
-  hellos (the self check, minutes). Tier 1: every probes/gate/<name>.warp in both lanes against <name>.expected
+  [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure (warp.wasm) and
+  the hellos (minutes; self only when data/ has a promoted warp-self.wasm). Tier 1: every probes/gate/<name>.warp in
+  those lanes against <name>.expected
   (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
   Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). Tier 3,
   Rust tests: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; the script names it, the cargo
   gate or cloud lane runs it. On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/warp-rust-latest (the old sol-warp-* names stay as links for old scripts).
+- warp-self.wasm (`warp self`'s compiler) is no gate build: `scripts/promote-self.sh [--background] [<tree>]` copies
+  warp.wasm to it only when warp.wasm compiles compiler.warp to its own bytes (the fixpoint), every once in a while,
+  in parallel; it never fails its caller. Install a compiler pair as warp.wasm + warp-self.wasm (the old names
+  compiler.wasm / compiler-self.wasm are still read when the new ones are missing).
 - Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate-probes.sh --tag-good` tags it
   `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `scripts/bisect-lane.sh [--lane
   pure|self|both] <probe.warp> <expected> [good] [bad]` (default the newest good/* tag .. origin/main, first-parent)
-  bisects in a temporary worktree it removes: per step rebuild pure and self with the shared binary, bad only on
+  bisects in a temporary worktree it removes: per step rebuild pure (and the self promotion) with the shared binary, bad only on
   wrong output, skipped (125) on a failed rebuild or a timeout; it prints the first bad commit.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
@@ -175,7 +180,7 @@ Principles and Talking live only in common.md.
   and wrong values in seconds. `WARP_EMIT_REFUSALS=/dev/stderr` shows whether emitter.warp refused the program
   (`outside the core: …`, then the Rust emitter emitted it); `WARP_HINTS=0` hides hints (the stage programs' own
   warnings still show: card cli-show). Then the targeted tests in the cloud lane.
-- `warp pure` / `warp self` run compiler.warp's build files compiler.wasm / compiler-self.wasm (decision
+- `warp pure` / `warp self` run compiler.warp's build files warp.wasm / warp-self.wasm (decision
   compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
   (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never build one : a missing one is an error
   naming `warp rebuild`; a worktree's stale one in data/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user 2026-10-22: "we don't want automatic

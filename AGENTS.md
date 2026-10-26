@@ -51,11 +51,15 @@ It is similar to JSON5 / ECMA Script but much simplified yet with a richer synta
 parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
 whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp declares the Node enum case for
 case as src/node/mod.rs has it.
-- `warp pure <file|code>`: runs compiler.wasm, compiler.warp compiled by the seed (seed/compiler-self.wasm, a fixpoint
+- `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a fixpoint
   compiler checked in; scripts/refresh-seed.sh refreshes it). No Rust-compiled stage builds either compiler
-- `warp self <file|code>`: runs compiler-self.wasm, compiler.warp compiled by itself (by compiler.wasm)
-- `warp rebuild [pure|self]`: builds them anew from lib/ (nothing rebuilds them automatically); a worktree's pair lives
-  in <worktree>/data/ (`WARP_LIB=<worktree>/lib`), main's beside the binary
+- `warp self <file|code>`: runs warp-self.wasm, a copy of warp.wasm promoted only when warp.wasm passes the fixpoint
+  test (it compiles compiler.warp to its own bytes, stage N+1 == N)
+- `warp rebuild` / `warp rebuild pure`: builds warp.wasm anew from lib/ (nothing rebuilds it automatically); the gate
+  needs only warp.wasm. `warp rebuild self` runs the fixpoint test and promotes; `scripts/promote-self.sh
+  [--background] [<tree>]` does that every once in a while, in parallel, and never fails its caller. A worktree's
+  compilers live in <worktree>/data/ (`WARP_LIB=<worktree>/lib`), main's beside the binary. Until 2026-10-26 they were
+  named compiler.wasm and compiler-self.wasm; those names are still read when the new ones are missing
 - A form outside emitter.warp's core is refused loudly (`outside the core: …`)
 
 Plain `warp <file>` still compiles with the Rust pipeline below.
@@ -113,7 +117,8 @@ The `warp` binary (the Rust host and bootstrap) is built by cargo; the warp comp
 cargo build                    # Debug build
 cargo build --release          # Release build
 cargo build --offline          # Offline mode (uses the local registry cache)
-warp rebuild pure              # compiler.wasm from lib/ by the seed (`warp rebuild self`: compiler-self.wasm by compiler.wasm)
+warp rebuild pure              # warp.wasm from lib/ by the seed
+scripts/promote-self.sh        # warp.wasm -> warp-self.wasm only at a fixpoint (`warp rebuild self`); never fails
 ```
 
 

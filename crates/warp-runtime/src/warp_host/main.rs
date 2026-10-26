@@ -1,5 +1,5 @@
 //! warp-host: the small native host of pure warp programs (notes/warp_host.md). It compiles a program with the warp
-//! compiler written in warp (compiler-self.wasm, or compiler.wasm with `--compiler full`) and runs the module with WASI
+//! compiler written in warp (warp-self.wasm, or warp.wasm with `--compiler full`) and runs the module with WASI
 //! and what wasm cannot do itself: shell commands (os.command, os.exec, os.run), C calls, the host words.
 //!   warp-host [--compiler self|full] [run] <file.warp | code> [args…]   compile and run; the run's value printed
 //!   warp-host [--compiler self|full] compile [--aot] <file.warp> [<file.wasm>]   --aot: also its machine code, .cwasm
@@ -62,7 +62,7 @@ impl CallsC for Host {
 	}
 }
 
-/// The compiler module of this warp-host's runs: compiler-self.wasm, or compiler.wasm with `--compiler full`
+/// The compiler module of this warp-host's runs: warp-self.wasm, or warp.wasm with `--compiler full`
 static COMPILER: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
 
 /// How a run ended
@@ -126,7 +126,7 @@ fn command(given: Vec<String>) -> i32 {
 		Ok(engine) => engine,
 		Err(problem) => return failed(&format!("{problem:#}")),
 	};
-	let compiler = if full { "compiler.wasm" } else { "compiler-self.wasm" };
+	let compiler = if full { "warp.wasm" } else { "warp-self.wasm" };
 	let _ = COMPILER.set(compiler);
 	match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
 		["run", source, ..] => run_source(&engine, compiler, source, &args[2..]),
@@ -375,12 +375,25 @@ fn library_for(source: &Path) -> Option<PathBuf> {
 
 /// The compiler module: built from that lib/ (<lib>/../data/, a checkout's), else installed beside warp-host
 /// The compiler beside warp-host comes first: the one a harness staged there or `warp rebuild` wrote into target/, not
-/// a checkout's data/ one, which may be older than its lib/ (a data/compiler-self.wasm without C imports refused every
-/// C call as "outside the core"); then lib/../data, then <prefix>/share/warp
+/// a checkout's data/ one, which may be older than its lib/ (a data/warp-self.wasm without C imports refused every
+/// C call as "outside the core"); then lib/../data, then <prefix>/share/warp. In each folder the file of the old name
+/// (compiler.wasm, compiler-self.wasm) when only that is there (transition)
 fn compiler_file(lib: &Path, name: &str) -> Option<PathBuf> {
 	let beside = installed_folders().pop().into_iter().collect::<Vec<_>>();
 	let folders = [beside, vec![lib.join("../data")], installed_folders()].concat();
-	folders.into_iter().map(|folder| folder.join(name)).find(|file| file.is_file())
+	let legacy = legacy_compiler_name(name);
+	let in_folder =
+		|folder: &PathBuf| [folder.join(name), folder.join(legacy)].into_iter().find(|file: &PathBuf| file.is_file());
+	folders.iter().find_map(in_folder)
+}
+
+/// A compiler file's name before the rename (warp.wasm was compiler.wasm, warp-self.wasm compiler-self.wasm)
+fn legacy_compiler_name(name: &str) -> &str {
+	match name {
+		"warp.wasm" => "compiler.wasm",
+		"warp-self.wasm" => "compiler-self.wasm",
+		other => other,
+	}
 }
 
 fn installed_folders() -> Vec<PathBuf> {
@@ -412,7 +425,7 @@ pub fn compiled_code(engine: &Engine, code: String) -> Result<Vec<u8>, String> {
 	let (source, wasm) = (scratch.with_extension("warp"), scratch.with_extension("wasm"));
 	std::fs::write(&source, code).map_err(|problem| format!("{}: {problem}", source.display()))?;
 	let engine = engine.clone();
-	let compiler = COMPILER.get().copied().unwrap_or("compiler-self.wasm");
+	let compiler = COMPILER.get().copied().unwrap_or("warp-self.wasm");
 	let (from, to) = (source.clone(), wasm.clone());
 	let compiled = on_own_stack(move || compile(&engine, compiler, &from, &to, std::env::current_dir().ok()));
 	let bytes = compiled.and_then(|compiled| compiled).and_then(|()| std::fs::read(&wasm).map_err(|e| e.to_string()));

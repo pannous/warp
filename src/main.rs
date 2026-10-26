@@ -70,15 +70,15 @@ const LOWER_JSON_COMMAND: &str = "lower --json";
 /// `warp pure <file> [arguments…]`: the program compiled by core/compiler.warp, the warp compiler as one warp
 /// program, compiled by Rust, and run (src/compiler/standalone.rs)
 const PURE_COMMAND: &str = "pure";
-/// `warp self <file> [arguments…]`: as `warp pure`, with compiler.warp compiled by itself (by compiler.wasm)
+/// `warp self <file> [arguments…]`: as `warp pure`, with warp-self.wasm, warp.wasm promoted at a fixpoint
 const SELF_COMMAND: &str = "self";
 /// `warp pure repl`: the console with each line compiled by compiler.warp (card wasm-commands)
 const REPL_COMMAND: &str = "repl";
 /// `warp pure run <file|code>`, `warp pure eval <code>`: the same as without the word, the program run here
 const PURE_RUNNING_WORDS: [&str; 2] = ["run", "eval"];
-/// `warp rebuild [pure|self]`: compiler.wasm and compiler-self.wasm, the compilers of `warp pure` and `warp self`, built
-/// anew from lib/: compiler.wasm by the seed (seed/compiler-self.wasm), compiler-self.wasm by compiler.wasm (decision
-/// compiler-build, card rust-bootstrap; src/compiler/standalone.rs)
+/// `warp rebuild [pure|self]`: warp.wasm, the compiler of `warp pure`, built anew from lib/ by the seed
+/// (seed/warp-self.wasm); `self`: warp.wasm promoted to warp-self.wasm, `warp self`'s, when it compiles compiler.warp
+/// to its own bytes (decision compiler-build, card rust-bootstrap; src/compiler/standalone.rs)
 const REBUILD_COMMAND: &str = "rebuild";
 /// The first words the command line takes as commands, for unknown_command's suggestion
 const COMMAND_WORDS: [&str; 33] = [
@@ -211,7 +211,7 @@ fn test_case(args: &[String]) -> Option<&[String; 3]> {
 	}
 }
 
-/// A program file or code, compiled by compiler.wasm (the warp compiler, `warp pure`'s) and run: plain `warp <file>`,
+/// A program file or code, compiled by warp.wasm (the warp compiler, `warp pure`'s) and run: plain `warp <file>`,
 /// `warp run`, `warp eval`, piped code and the console run no Rust pipeline (card rust-bootstrap, branch pure). A file's
 /// folder is in scope (D15), code's the working directory; the program's arguments are those set for it
 fn eval(code: &str) -> Node {
@@ -539,11 +539,12 @@ fn command_line(program: &str, arguments: &[&str]) -> Option<String> {
 	String::from_utf8_lossy(&output.stdout).lines().next().map(str::to_string)
 }
 
-/// `warp rebuild [pure|self]`: the named compiler's build file, or both, built anew; status 1 when one failed
+/// `warp rebuild [pure|self]`: warp.wasm built anew (plain `warp rebuild` too), or warp.wasm promoted to warp-self.wasm
+/// when it passes the fixpoint test (`self`); status 1 when that failed
 fn rebuild_compilers(command: Option<&str>) {
 	use warp::compiler::standalone::{rebuild, Compiler};
-	let chosen: Vec<Compiler> =
-		Compiler::ALL.into_iter().filter(|by| command.is_none_or(|word| word == by.command())).collect();
+	let word = command.unwrap_or(Compiler::RustCompiled.command());
+	let chosen: Vec<Compiler> = Compiler::ALL.into_iter().filter(|by| word == by.command()).collect();
 	if chosen.is_empty() {
 		fail(format!(
 			"warp rebuild: no compiler {:?}; say `warp rebuild`, `warp rebuild pure` or `warp rebuild self`",
@@ -663,7 +664,7 @@ fn usage() {
 	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (core/compiler.warp)");
 	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by the seed");
 	println!("  warp pure build <file.warp|code> Its module (out.wasm for code) made by compiler.warp; also run, eval");
-	println!("  warp rebuild [pure|self] Build compiler.wasm (by seed/compiler-self.wasm) / compiler-self.wasm (by compiler.wasm) anew from lib/");
+	println!("  warp rebuild [pure|self] Build warp.wasm (by seed/warp-self.wasm) anew from lib/ / promote it to warp-self.wasm at a fixpoint (its compiler runs: no 60 s limit, 2 h, env WARP_REBUILD_TIME_LIMIT)");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
 	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");

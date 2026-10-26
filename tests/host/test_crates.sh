@@ -5,16 +5,16 @@
 # installed in the crates cache (~/.cache/warp/crates, or WARP_CRATES_CACHE: lib/ and native/), where warp-host and
 # core/c_imports.warp find them, and programs say `use crate "regex@1"` or `use rs_regex`. Nothing of a crate is
 # in warp-host. Run it through the queue: tests/queue.sh tests/host/test_crates.sh
-# Needs cargo (the first build fetches and compiles the crates, ~1 min each), and a warp-host and compiler.wasm built
+# Needs cargo (the first build fetches and compiles the crates, ~1 min each), and a warp-host and warp.wasm built
 # from pure-c-imports 57f273b59 or later (the crates cache lookup, `use crate`, the bytes type): WARP_HOST_BINARY
-# (default as tests/host/test_host.sh finds it), the compiler module WARP_CRATES_COMPILER_FILE (default compiler.wasm
+# (default as tests/host/test_host.sh finds it), the compiler module WARP_CRATES_COMPILER_FILE (default warp.wasm
 # beside WARP_LAUNCHER_RUST), and WARP_CRATES_LIB, the lib folder it compiles with (default the checkout's lib).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
 [ -x "$host" ] || host=$checkout/target/debug/warp-host
 rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
-compiler_path=${WARP_CRATES_COMPILER_FILE:-$(dirname "$rust")/compiler.wasm}
+compiler_path=${WARP_CRATES_COMPILER_FILE:-$(dirname "$rust")/warp.wasm}
 library=${WARP_CRATES_LIB:-$checkout/lib}
 stage=$checkout/scratch/crates-test
 crate_tool=$checkout/scripts/warp-crate
@@ -26,7 +26,7 @@ export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=
 command -v cargo >/dev/null || { echo "✗ no cargo: warp-crate builds the shims with it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" || exit 1
 ln -f "$host" "$stage/bin/warp-host" 2>/dev/null || cp "$host" "$stage/bin/warp-host" || exit 1
-cp "$compiler_path" "$stage/bin/compiler.wasm" || exit 1
+cp "$compiler_path" "$stage/bin/warp.wasm" || exit 1
 host=$stage/bin/warp-host
 
 run=0 failed=0

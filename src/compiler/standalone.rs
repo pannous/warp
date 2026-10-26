@@ -1,8 +1,10 @@
 //! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): core/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
-//! build output (decision compiler-build): compiler.wasm, compiler.warp compiled by the seed (seed/compiler-self.wasm, a
-//! fixpoint compiler checked in; card rust-bootstrap), for `warp pure`; compiler-self.wasm, compiler.warp compiled by
-//! compiler.wasm, that is by itself, for `warp self`. No Rust-compiled stage takes part in either build. The pair next to the binary is the delivered
+//! build output (decision compiler-build): warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a
+//! fixpoint compiler checked in; card rust-bootstrap), for `warp pure`; warp-self.wasm, for `warp self`, is no build of
+//! its own: a copy of warp.wasm, promoted only when warp.wasm compiles compiler.warp to its own bytes (the fixpoint,
+//! `warp rebuild self`, scripts/promote-self.sh). The old names compiler.wasm and compiler-self.wasm are still read when
+//! the new ones are missing (transition). No Rust-compiled stage takes part. The pair next to the binary is the delivered
 //! one (a release's, or main's, stamped with the commit it was built from) and is used as it is, whatever lib/ beside
 //! it says (card installed-compilers); a lib/ named by WARP_LIB that the pair is not for keeps its own in
 //! <lib>/../data/, where a run on one built from another lib/ or warp build says so in one line. Only `warp rebuild`
@@ -32,13 +34,20 @@ const LIBRARY_VARIABLE: &str = "WARP_LIB";
 const WARMING_PROGRAM: &str = "0";
 /// The seed compiler, beside lib/ in a checkout (or in the installed folder): compiler.warp compiled by itself at a
 /// fixpoint, what every build starts from (seed/README.md, scripts/refresh-seed.sh)
-const SEED_FILE: &str = "seed/compiler-self.wasm";
+const SEED_FILE: &str = "seed/warp-self.wasm";
+/// The seed's old name, read when SEED_FILE is missing (transition)
+const LEGACY_SEED_FILE: &str = "seed/compiler-self.wasm";
 /// Names another seed file (a candidate seed tried before it is checked in)
 const SEED_VARIABLE: &str = "WARP_SEED";
 /// The ending of an output compiler.warp writes parser.warp's view to, as JSON, instead of a module (its VIEW_SUFFIX)
 const VIEW_EXTENSION: &str = "view.json";
+/// Computing time of the compiler runs of `warp rebuild` (compiling compiler.warp, then warming the new build): the seed
+/// compiling compiler.warp takes minutes on a small VM, no runaway, so a program's 60 s (WARP_TIME_LIMIT) does not apply
+const REBUILD_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(2 * 60 * 60);
+/// Overrides REBUILD_TIME_LIMIT, in seconds
+const REBUILD_TIME_LIMIT_VARIABLE: &str = "WARP_REBUILD_TIME_LIMIT";
 
-/// Who builds compiler.warp's module: for `warp pure` the seed, for `warp self` compiler.wasm, compiler.warp itself
+/// Who builds compiler.warp's module: for `warp pure` the seed; `warp self`'s is warp.wasm itself, promoted at a fixpoint
 // ⚠ RustCompiled keeps its name until the Rust compiler leaves main (card rust-bootstrap): the seed builds it now
 #[derive(Clone, Copy)]
 pub enum Compiler {
@@ -52,8 +61,28 @@ impl Compiler {
 	/// The build file's name
 	fn file_name(self) -> &'static str {
 		match self {
+			Compiler::RustCompiled => "warp.wasm",
+			Compiler::SelfCompiled => "warp-self.wasm",
+		}
+	}
+
+	/// The build file's old name, read when there is no file of the new name (transition: installs and data/ folders
+	/// of before the rename, e.g. ~/dev/bin/main-builds/*/compiler.wasm)
+	fn legacy_file_name(self) -> &'static str {
+		match self {
 			Compiler::RustCompiled => "compiler.wasm",
 			Compiler::SelfCompiled => "compiler-self.wasm",
+		}
+	}
+
+	/// The build file in `folder`: of the new name, else of the old one when only that is there
+	fn file_in(self, folder: &Path) -> PathBuf {
+		let file = folder.join(self.file_name());
+		let legacy = folder.join(self.legacy_file_name());
+		if !file.exists() && legacy.exists() {
+			legacy
+		} else {
+			file
 		}
 	}
 
@@ -76,10 +105,10 @@ pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 	ran(compiled_code(code, folder, by), Vec::new())
 }
 
-/// The node parser.warp reads `code` as: compiler.wasm, the compiler of `warp pure`, writes its view as JSON
+/// The node parser.warp reads `code` as: warp.wasm, the compiler of `warp pure`, writes its view as JSON
 /// (compiler.warp's view mode), read back with node_views (card rust-bootstrap: the host reads warp text without a
 /// Rust parser: a channel's message, a console line, a test file, `warp data`, `warp parse`). An error when there is
-/// no compiler.wasm or it fails
+/// no warp.wasm or it fails
 pub fn parsed(code: &str) -> Node {
 	match parsed_view(code) {
 		Ok(json) => match serde_json::from_str(&json) {
@@ -90,7 +119,7 @@ pub fn parsed(code: &str) -> Node {
 	}
 }
 
-/// The view JSON compiler.wasm writes of `code`, kept by the code and the compiler: the children of `warp test` read
+/// The view JSON warp.wasm writes of `code`, kept by the code and the compiler: the children of `warp test` read
 /// their file's view, not their file again
 fn parsed_view(code: &str) -> Result<String, Node> {
 	use crate::run::module_cache::{keep_bytes, kept_bytes};
@@ -220,11 +249,82 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 	said
 }
 
-/// `warp rebuild`: the build file of each compiler built anew from the current lib/, its path, or why it failed
+/// `warp rebuild [pure]`: warp.wasm built anew from the current lib/, its path, or why it failed. `warp rebuild self`:
+/// warp.wasm (built first when there is none of these compiler inputs) promoted to warp-self.wasm when it passes the
+/// fixpoint test, else why not, warp-self.wasm left as it was
 pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	let path = build_path(by);
-	build(by, &path)?;
+	crate::util::with_time_limit(rebuild_time_limit(), || match by {
+		Compiler::RustCompiled => build(by, &path),
+		Compiler::SelfCompiled => promote(&path),
+	})?;
 	Ok(path)
+}
+
+/// The time limit of a rebuild's compiler runs: WARP_REBUILD_TIME_LIMIT seconds when positive, else REBUILD_TIME_LIMIT
+fn rebuild_time_limit() -> std::time::Duration {
+	let seconds =
+		std::env::var(REBUILD_TIME_LIMIT_VARIABLE).ok().and_then(|seconds| seconds.trim().parse::<f64>().ok());
+	seconds.filter(|seconds| *seconds > 0.0).map_or(REBUILD_TIME_LIMIT, std::time::Duration::from_secs_f64)
+}
+
+/// The fixpoint test of warp.wasm (stage N): it compiles core/compiler.warp again (stage N+1), and only output
+/// byte-identical to its own module (its bytes without the build section) copies warp.wasm to `path`, warp-self.wasm.
+/// A warp.wasm of other compiler inputs is built anew first
+fn promote(path: &Path) -> Result<CompiledModule, Node> {
+	let pure = Compiler::RustCompiled;
+	let (warp_file, warp_bytes) = match current_build_file(pure) {
+		Some(found) => found,
+		None => {
+			eprintln!("no {} of these compiler inputs: building it first", pure.file_name());
+			let built = build_path(pure);
+			build(pure, &built)?;
+			let bytes = std::fs::read(&built).map_err(|failure| error(&format!("{}: {failure}", built.display())))?;
+			(built, bytes)
+		}
+	};
+	let file = library().join(COMPILER_FILE);
+	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
+	let folder = file.parent().unwrap_or(library()).to_path_buf();
+	let next =
+		compiled_with(&file, &folder, module_of_bytes(warp_bytes.clone()), kept_scope(pure)).map_err(|failure| {
+			error(&format!("compiler.warp compiled by {}: {}", warp_file.display(), failure.serialize()))
+		})?;
+	if !is_module_with_build_section(&warp_bytes, &next.bytes) {
+		return Err(error(&format!(
+			"no fixpoint: {} ({} B) compiles compiler.warp to other bytes ({} B); {} stays as it was",
+			warp_file.display(),
+			warp_bytes.len(),
+			next.bytes.len(),
+			path.display()
+		)));
+	}
+	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| write_new(path, &warp_bytes));
+	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
+	eprintln!(
+		"fixpoint: {} compiles compiler.warp to its own bytes, promoted to {}",
+		warp_file.display(),
+		path.display()
+	);
+	warm(Compiler::SelfCompiled)?;
+	Ok(next)
+}
+
+/// Whether `file` is `module` followed by one custom section (the build section `build` appends) and nothing else
+fn is_module_with_build_section(file: &[u8], module: &[u8]) -> bool {
+	let Some(rest) = file.strip_prefix(module) else { return false };
+	let Some((&0, sized)) = rest.split_first() else { return rest.is_empty() };
+	// the section's size, unsigned LEB128, then exactly that many bytes
+	let (mut size, mut shift, mut read) = (0usize, 0u32, 0usize);
+	for &byte in sized.iter().take(5) {
+		size |= ((byte & 0x7f) as usize) << shift;
+		read += 1;
+		shift += 7;
+		if byte & 0x80 == 0 {
+			return sized.len() == read + size;
+		}
+	}
+	false
 }
 
 /// The compiler's build file there, or the error naming `warp rebuild`: before many runs start at once
@@ -238,17 +338,22 @@ pub fn prepare(by: Compiler) -> Result<(), Node> {
 /// when a worktree's build in data/ was built from other compiler inputs or warp build; the delivered pair next to the
 /// binary is used as it is
 fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
-	let path = build_path(by);
-	let delivered = binary_folder().map(|folder| folder.join(by.file_name())).filter(|file| *file != path);
+	let path = found_path(by);
+	let delivered = binary_folder().map(|folder| by.file_in(&folder)).filter(|file| *file != path);
 	let same_inputs = |bytes: &Vec<u8>| built_from(bytes)[1..BUILD_PARTS_JUDGED] == judged_build()[1..];
 	let found = std::fs::read(&path).ok().map(|bytes| (path.clone(), bytes)).or_else(|| {
 		let file = delivered?;
 		std::fs::read(&file).ok().filter(same_inputs).map(|bytes| (file, bytes))
 	});
 	let Some((path, bytes)) = found else {
-		let rebuild = format!("warp {REBUILD_WORD} {}", by.command());
+		let rebuild = match by {
+			Compiler::RustCompiled => format!("`warp {REBUILD_WORD} pure` builds it"),
+			Compiler::SelfCompiled => format!(
+				"`warp {REBUILD_WORD} self` (scripts/promote-self.sh) promotes warp.wasm to it when warp.wasm passes the fixpoint test"
+			),
+		};
 		return Err(error(&format!(
-			"no {} at {}: `{rebuild}` builds it, scripts/rebuild.sh copies the shared pair for its inputs",
+			"no {} at {}: {rebuild}, scripts/rebuild.sh copies the shared pair for its inputs",
 			by.file_name(),
 			path.display()
 		)));
@@ -272,7 +377,7 @@ fn is_delivered(path: &Path) -> bool {
 	binary_folder().is_some_and(|folder| path.parent() == Some(folder.as_path()))
 }
 
-/// compiler.warp compiled for `by` (by the seed, or by compiler.wasm: builder), written to `path` with the build section
+/// compiler.warp compiled for `by` (by the seed: builder), written to `path` with the build section
 fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let file = library().join(COMPILER_FILE);
 	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
@@ -292,18 +397,9 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	Ok(module)
 }
 
-/// Who builds compiler.warp for `by`, named, and its module: compiler.wasm for `warp self` when there is one of these
-/// compiler inputs (`warp rebuild` builds compiler.wasm first), else the seed; with the scope of its kept values
-/// (kept_scope). No Rust-compiled stage (card rust-bootstrap)
-fn builder(by: Compiler) -> Result<(String, CompiledModule, Option<String>), Node> {
-	if let Compiler::SelfCompiled = by {
-		if let Some((path, bytes)) = current_build_file(Compiler::RustCompiled) {
-			return Ok((path.display().to_string(), module_of_bytes(bytes), kept_scope(Compiler::RustCompiled)));
-		}
-		eprintln!(
-			"no compiler.wasm of these compiler inputs: the seed builds compiler-self.wasm (`warp {REBUILD_WORD}` builds both, compiler-self.wasm by compiler.wasm)"
-		);
-	}
+/// Who builds compiler.warp's warp.wasm, named, and its module: the seed, with the scope of its kept values (kept_scope:
+/// its own). No Rust-compiled stage (card rust-bootstrap); warp-self.wasm is never built, only promoted (promote)
+fn builder(_by: Compiler) -> Result<(String, CompiledModule, Option<String>), Node> {
 	let seed = seed_file();
 	let bytes = std::fs::read(&seed).map_err(|failure| {
 		error(&format!(
@@ -314,10 +410,10 @@ fn builder(by: Compiler) -> Result<(String, CompiledModule, Option<String>), Nod
 	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes), None))
 }
 
-/// Where a compiler's run keeps the values its makers made (os.keep_of; std_adapters kept_by): compiler.wasm, which the
+/// Where a compiler's run keeps the values its makers made (os.keep_of; std_adapters kept_by): warp.wasm, which the
 /// seed compiled, under the makers' files of core and the seed, so an edit of core outside them keeps
 /// them (card speed-module-cache: a used file's parse survives a compiler edit beyond the parser); None for
-/// compiler-self.wasm and the seed, which all of core compiled (a seed of its time), whose values stay their own
+/// warp-self.wasm and the seed, which all of core compiled (a seed of its time), whose values stay their own
 fn kept_scope(by: Compiler) -> Option<String> {
 	match by {
 		Compiler::RustCompiled => std::fs::read(seed_file()).ok().map(|seed| crate::extensions::sha256_hex(&seed)),
@@ -325,25 +421,24 @@ fn kept_scope(by: Compiler) -> Option<String> {
 	}
 }
 
-/// The seed: WARP_SEED, else seed/compiler-self.wasm beside lib/ (a checkout's), else in the installed folder
+/// The seed: WARP_SEED, else seed/warp-self.wasm beside lib/ (a checkout's), else in the installed folder; at each
+/// place seed/compiler-self.wasm, the old name, when only that is there
 fn seed_file() -> PathBuf {
 	if let Some(file) = std::env::var_os(SEED_VARIABLE) {
 		return PathBuf::from(file);
 	}
-	let beside_library = library().parent().unwrap_or(library()).join(SEED_FILE);
-	let installed = binary_folder().map(|folder| folder.join(SEED_FILE)).filter(|file| file.exists());
-	if beside_library.exists() {
-		beside_library
-	} else {
-		installed.unwrap_or(beside_library)
-	}
+	let checkout = library().parent().unwrap_or(library()).to_path_buf();
+	let places = std::iter::once(checkout.clone()).chain(binary_folder());
+	let found =
+		places.flat_map(|folder| [folder.join(SEED_FILE), folder.join(LEGACY_SEED_FILE)]).find(|file| file.exists());
+	found.unwrap_or_else(|| checkout.join(SEED_FILE))
 }
 
 /// The build file of `by` for these compiler inputs, and its bytes: the build path's, else the delivered one; None when
 /// neither was built from them
 fn current_build_file(by: Compiler) -> Option<(PathBuf, Vec<u8>)> {
-	let path = build_path(by);
-	let delivered = binary_folder().map(|folder| folder.join(by.file_name()));
+	let path = found_path(by);
+	let delivered = binary_folder().map(|folder| by.file_in(&folder));
 	let same_inputs = |bytes: &Vec<u8>| built_from(bytes)[1..BUILD_PARTS_JUDGED] == judged_build()[1..];
 	std::iter::once(path)
 		.chain(delivered)
@@ -388,10 +483,10 @@ fn library_commit() -> String {
 		.unwrap_or_default()
 }
 
-/// `warp version`'s line of the compilers in use: `compiler.wasm of <commit>, compiler-self.wasm missing`
+/// `warp version`'s line of the compilers in use: `warp.wasm of <commit>, warp-self.wasm missing`
 pub fn compilers_line() -> String {
 	let stamp = |by: Compiler| {
-		let path = build_path(by);
+		let path = found_path(by);
 		match std::fs::read(&path) {
 			Ok(bytes) => match &built_from(&bytes)[BUILD_PARTS_JUDGED] {
 				commit if commit.is_empty() => format!("{} of no commit", by.file_name()),
@@ -410,9 +505,15 @@ fn built_from(bytes: &[u8]) -> Vec<String> {
 	parts
 }
 
+/// The build file as build_path names it, or the file of the old name in its folder when only that is there
+fn found_path(by: Compiler) -> PathBuf {
+	let path = build_path(by);
+	path.parent().map_or(path.clone(), |folder| by.file_in(folder))
+}
+
 /// The build file: next to the binary, unless WARP_LIB names a lib/ the pair there is not for, whose build files lie
 /// beside it. A missing one is judged by its siblings there (none: yes), so a worktree's `warp self` never puts its
-/// compiler-self.wasm next to main's compiler.wasm (card build-path-missing)
+/// warp-self.wasm next to main's warp.wasm (card build-path-missing)
 fn build_path(by: Compiler) -> PathBuf {
 	let binary_folder = binary_folder();
 	if std::env::var_os(LIBRARY_VARIABLE).is_none() {
@@ -422,7 +523,7 @@ fn build_path(by: Compiler) -> PathBuf {
 	}
 	let library_path = library().display().to_string();
 	let for_this_library = |folder: &PathBuf| {
-		let read = |file: Compiler| std::fs::read(folder.join(file.file_name())).ok();
+		let read = |file: Compiler| std::fs::read(file.file_in(folder)).ok();
 		let judged: Vec<Vec<u8>> = match read(by) {
 			Some(bytes) => vec![bytes],
 			None => Compiler::ALL.into_iter().filter_map(read).collect(),

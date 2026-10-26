@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# scripts/compiler-inputs.sh <lib> [<rust fingerprint>] [-v]: the inputs hash of the compiler pair (compiler.wasm,
-# compiler-self.wasm) built from <lib> (notes/compiler_rebuilds.md): 16 hex digits. Two trees with the same inputs give
+# scripts/compiler-inputs.sh <lib> [<rust fingerprint>] [-v]: the inputs hash of the compiler pair (warp.wasm,
+# warp-self.wasm) built from <lib> (notes/compiler_rebuilds.md): 16 hex digits. Two trees with the same inputs give
 # the same hash wherever they lie (paths are hashed relative to <lib>). -v lists the files on stderr.
 # The inputs: core/**, the Rust build compiling the stages (WARP_SOURCE, the third line of a build file's
 # warp.build section: scripts/rebuild.sh finds it), and the std modules the compiler still embeds as text at build time
