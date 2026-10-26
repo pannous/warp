@@ -40,6 +40,8 @@ install_compilers() {
 	cp "$data/warp.wasm" "$folder/warp.wasm.new" && mv "$folder/warp.wasm.new" "$folder/warp.wasm"
 	if [ -f "$data/warp-self.wasm" ] && [ "$(cut -d' ' -f1 "$data/warp-self.wasm.inputs" 2>/dev/null)" = "$inputs" ]; then
 		cp "$data/warp-self.wasm" "$folder/warp-self.wasm.new" && mv "$folder/warp-self.wasm.new" "$folder/warp-self.wasm"
+	else
+		rm -f "$folder/warp-self.wasm"  # an older pair's: `warp self` says it is missing instead of running it
 	fi
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
