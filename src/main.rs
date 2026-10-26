@@ -73,6 +73,10 @@ const LOWER_JSON_COMMAND: &str = "lower --json";
 const PURE_COMMAND: &str = "pure";
 /// `warp self <file> [arguments…]`: as `warp pure`, with compiler.warp compiled by itself (the pure lane)
 const SELF_COMMAND: &str = "self";
+/// `warp pure repl`: the console with each line compiled by compiler.warp (card wasm-commands)
+const REPL_COMMAND: &str = "repl";
+/// `warp pure run <file|code>`, `warp pure eval <code>`: the same as without the word, the program run here
+const PURE_RUNNING_WORDS: [&str; 2] = ["run", "eval"];
 /// `warp rebuild [pure|self]`: compiler.wasm and compiler-self.wasm, the compilers of `warp pure` and `warp self`, built
 /// anew from lib/ (decision compiler-build; src/compiler/standalone.rs)
 const REBUILD_COMMAND: &str = "rebuild";
@@ -574,7 +578,8 @@ fn unknown_command(args: &[String]) -> Option<String> {
 /// `warp pure|self [run|eval|build|compile|link] <file.warp|code> [arguments…]`: the command as plain `warp` takes it,
 /// the program compiled by compiler.warp (`by`): `run`/`eval` run it, `build` writes its module as `warp build --wasm`
 /// does (out.wasm for inline code); with no command word a .warp file or inline code runs. Any other command word is
-/// an error naming the forms, never compiled as code (`warp pure build x` compiled `build x`)
+/// compiler.warp's own command (lib/compiler/commands.warp: help, version, parse, data, lower, repl; the others refuse
+/// naming the native warp), never compiled as code (`warp pure build x` compiled `build x`)
 #[cfg(not(test))]
 fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -> ! {
 	use warp::compiler::standalone::{compiled, compiled_code, run, run_code};
@@ -607,12 +612,15 @@ fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -
 		}
 		std::process::exit(0);
 	}
-	let runs = ["run", "eval"].contains(&command) && words.len() > 1;
-	if !runs && COMMAND_WORDS.contains(&command) && words.len() > 1 {
-		fail(format!(
-			"warp {0} {command}: not a command of warp {0}; it takes warp {0} [run|eval|build] <file.warp|code> [arguments…]",
-			by.command()
-		));
+	let runs = PURE_RUNNING_WORDS.contains(&command) && words.len() > 1;
+	// `warp pure <command> …`: the command of compiler.warp itself, written in warp (card wasm-commands); the REPL's
+	// lines run here, which plain WASI cannot
+	if !runs && COMMAND_WORDS.contains(&command) && !file_exists(command) {
+		if command == REPL_COMMAND {
+			pure_console(by);
+			std::process::exit(0);
+		}
+		print_and_exit(warp::compiler::standalone::command(words.to_vec(), by));
 	}
 	let program = if runs { rest } else { words };
 	// a .warp file with its arguments, or inline code as plain `warp <code>` takes it, `use` reading from the current

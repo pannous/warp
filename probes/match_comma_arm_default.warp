@@ -1,0 +1,33 @@
+args = ["help"]
+command = "help"
+library_folder = "x"
+prelude_source = ""
+show_help() := print "H"
+version_text(l: text): text := "v"
+plain_node(x: any): any := x
+parsed(x: text): any := x
+lowered_program(a: text, b: text, c: text): text := a
+compile_file(a: text, b: text, c: text) := print a
+folder_of(a: text): text := a
+repl() := print 1
+repl_step(a: text, b: text, c: text) := print 2
+running_commands = ["run"]
+refuse_running(c: text) := print c
+refuse_native(c: text) := print c
+source_of(t: text): text := t
+source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
+show_version() := print 1
+show_parsed() := print 2
+show_lowered() := print 3
+match command {
+	"": compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
+	"help": show_help()
+	"version": show_version()
+	"parse", "data": show_parsed()
+	"lower": show_lowered()
+	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
+	"build": compile_file(args#2, args#2 + ".wasm", folder_of(args#2))
+	"repl": repl()
+	"repl-step": repl_step(args#2, args#3, args#4)
+	_: if command in running_commands then refuse_running(command) else refuse_native(command)
+}

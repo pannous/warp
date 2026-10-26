@@ -5,12 +5,16 @@ use "passes.warp"
 use "analyzer.warp"
 use "emitter.warp"
 use "host_words.warp"
+use "commands.warp"
 use "c_imports.warp"
 use os
 use file
 
-# lib/: the fourth argument (`warp pure` gives it), else WARP_LIB, else the folder above this file's
-library_folder = if #args > 3 then args#4 else run_library()
+# a command (commands.warp), else the source file of a compile
+command = if #args > 0 and is_command(args#1) then args#1 else ""
+
+# lib/: the fourth argument of a compile (`warp pure` gives it), else WARP_LIB, else the folder above this file's
+library_folder = if not command and #args > 3 then args#4 else run_library()
 # the parser's and the uses' standard modules from that lib/ too, never the folder this compiler was built in
 use_library(library_folder)
 
@@ -34,7 +38,7 @@ root_text(file: text): text := {
 
 # the runtime words lowered and kept; keep's answer unused, so a host without the module cache (plain wasmtime answering
 # its imports with defaults) still gets the words
-lowered_runtime_words(): Node := {
+fresh_runtime_words(): Node := {
 	# the counters numbering the names the passes make (item·3, t·2, closure_lambda_5) as they were: a program then gets
 	# the same names whether its compiler lowered the runtime words in this run or took them kept, so a cold and a warm
 	# module cache give the same bytes (card fixpoint-check)
@@ -49,8 +53,8 @@ lowered_runtime_words(): Node := {
 	words
 }
 # the runtime words, lowered by the same passes as a program; the same at every run while lib/ stays as it is, so kept
-# across runs and lowered once (card pure-warm-start)
-runtime_words = kept(RUNTIME_WORDS) ?? lowered_runtime_words()
+# across runs and lowered once (card pure-warm-start); lowered at the first compile, so `help` needs none
+lowered_runtime_words(): Node := kept(RUNTIME_WORDS) ?? fresh_runtime_words()
 
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core
 compile(source: text, folder: text): any := {
@@ -65,7 +69,7 @@ compile(source: text, folder: text): any := {
 	failing = first_error(found, module.program_file)
 	if failing { throw failing }
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
-	made = typed_wasm_module(program, runtime_words, with_c_functions(host_words, foreign#2), emitter_kinds(program))
+	made = typed_wasm_module(program, lowered_runtime_words(), with_c_functions(host_words, foreign#2), emitter_kinds(program))
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
 	if made is text { throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder)) }
 	# the warnings once the module is made, as Rust's pure lane says them
@@ -73,12 +77,62 @@ compile(source: text, folder: text): any := {
 	made
 }
 
-# todo wrap in main
-# warp compiler.warp <source file> <wasm file> [<folder of the source's uses> [<lib folder>]]
-source_file = args#1
-folder = if #args > 2 then args#3 else folder_of(source_file)
-emitting_file(working_relative(source_file))
-compiled = compile(read(source_file), folder)
-# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
-if compiled is text { raise compiled }
-write_bytes(args#2, compiled)
+# the module of the source file written to the wasm file, the source's uses found in folder
+compile_file(source_file: text, wasm_file: text, folder: text) := {
+	emitting_file(working_relative(source_file))
+	compiled = compile(read(source_file), folder)
+	# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
+	if compiled is text { raise compiled }
+	write_bytes(wasm_file, compiled)
+}
+
+# the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
+REPL_STATE = ".warp-repl-state.warp"
+staying_lines(line: text): text := {
+	statements = statements_in(plain_node(parsed(line)))
+	staying = statements.filter(statement => is_declaration(statement) or is_import(statement))
+	staying.map(statement => "${statement}").join("\n")
+}
+# one line of the REPL: its module written to wasm_file, compiled after the state file's lines; the line's
+# declarations added to the state once it compiled
+repl_step(state_file: text, line: text, wasm_file: text) := {
+	state = try read(state_file) else ""
+	compiled = compile(state + "\n" + line, ".")
+	if compiled is text { raise compiled }
+	write_bytes(wasm_file, compiled)
+	staying = staying_lines(line)
+	if staying { write(state_file, state + "\n" + staying) }
+}
+# `warp repl` under plain WASI: each line compiled, its declarations kept; running it needs the native warp
+repl() := {
+	write(REPL_STATE, "")
+	line = input(REPL_PROMPT)
+	while line != ø {
+		if line.trim() {
+			try {
+				repl_step(REPL_STATE, line, ".warp-repl-line.wasm")
+				print "compiled; running it needs the native warp (plain WASI has no instantiate): warp repl or warp pure repl"
+			} catch failure { print failure }
+		}
+		line = input(REPL_PROMPT)
+	}
+}
+
+source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
+show_version() := print version_text(library_folder)
+show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
+show_data() := print plain_node(parsed(source_or_code(1)))
+show_lowered() := print lowered_program(source_or_code(1), ".", prelude_source)
+match command {
+	"": compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
+	"help": show_help()
+	"version": show_version()
+	"parse": show_parsed()
+	"data": show_data()
+	"lower": show_lowered()
+	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
+	"build": compile_file(args#2, args#2 + ".wasm", folder_of(args#2))
+	"repl": repl()
+	"repl-step": repl_step(args#2, args#3, args#4)
+	_: if command in running_commands then refuse_running(command) else refuse_native(command)
+}
