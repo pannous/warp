@@ -1,4 +1,4 @@
-# The rewrite engine's features (lib/compiler/rewrites.warp, notes/rewrites.md), written in warp: no Rust twin
+# The rewrite engine's features (core/rewrites.warp, notes/rewrites.md), written in warp: no Rust twin
 
 # fresh_names_compute_an_operand_once
 is! 'rewrite $a otherwise $b => ($t = $a; if $t then $t else $b)

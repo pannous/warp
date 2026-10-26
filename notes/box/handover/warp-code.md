@@ -6,12 +6,12 @@ All work is committed and pushed, and no helper jobs are running. Git and the bo
 | Card / branch | Tip | Notes |
 |---|---|---|
 | pure-compiles-compiler | e3c9dd0a4 | 3 one-line fixes: emitter/host.warp runtime_global accepts an empty list (`is_empty_list`); emitter/lists.warp length_code handles a char; emitter.warp declared_kinds gains char. Tests: tests/text/test_pure_case_words.warp 5/5, test_pure_char_words.warp 4/4. Full compile with ALL fixes not rerun yet: `/workspace/box-slot.sh /workspace/pcc/full.sh` (compiler in /workspace/pcc/h). If it finishes, try the output as compiler-self, then the fixpoint. Notes: /workspace/cow/scratch/pcc-notes.md. Error file:line is unreliable (runtime code has no positions). |
-| pure-tuples-destructuring | 1639a7084a | lib/compiler/extensions/tuples.warp, plus the loader list `extension_module_names` (rewrites.warp, in front of first_sugar_module_names) and the 2-line tuple_fits fix. 9/9. |
+| pure-tuples-destructuring | 1639a7084a | core/extensions/tuples.warp, plus the loader list `extension_module_names` (rewrites.warp, in front of first_sugar_module_names) and the 2-line tuple_fits fix. 9/9. |
 | pure-safe-navigation | 82c93dee7e | STACKED on tuples (land after it). 2-line parser fix (`?.` in SYMBOL_OPERATORS, ternary guard) + extensions/safe_navigation.warp. 6/6. |
 | pure-varargs | e53683e25f | ~30 lines (the approval was for ~17): signatures, emitter/functions, emitter/runtime_words (2), analyzer.warp (7; fixes a wasm trap). 9/9. Open: calls without parentheses, spreading into fixed params, spreads in list literals. |
 | pure-optional-params | 757e07508e | 7-line parser case: `x?` parses as one name and a rule can't split a name. 4/4. |
 | engine-rule-conditions | df6b5dfad | condition-order fix, queued |
-| sugar-list-methods | d87e06858 | after df6b5dfad; deletes lib/compiler/list_methods.warp |
+| sugar-list-methods | d87e06858 | after df6b5dfad; deletes core/list_methods.warp |
 | sugar-comprehensions | 1fe8d4ae0 | re-readied after a bounce |
 | test-no-refusal-asserts | 0a025d88e | |
 | test-no-refusal-asserts-2 | 88b13d1a8 | ignored .rs tests on the gap cards |

@@ -25,7 +25,7 @@ const FOREIGN_SOURCES: [&str; 3] = ["/rustc/", "/.cargo/", "/.rustup/"];
 const UNWIND_FRAME: &str = "rust_begin_unwind";
 /// The commit this warp was built from (build.rs)
 const BUILT_COMMIT: Option<&str> = option_env!("WARP_COMMIT");
-/// What a warp binary is made of: compiled in from src/, read at run time from lib/ (lib/compiler/*.warp)
+/// What a warp binary is made of: compiled in from src/, read at run time from lib/ (core/*.warp)
 const BUILD_SOURCES: [&str; 2] = ["src", "lib"];
 
 /// One card per run: a panic while panicking ("panic in a function that cannot unwind") tells nothing new
@@ -91,7 +91,7 @@ fn file_card(info: &PanicHookInfo) {
 }
 
 /// The checkout's HEAD when its src/ or lib/ differ from the commit this warp was built from: a crash of such a stale
-/// build may be fixed already, or come from lib/compiler files newer than its parser (card crash-4)
+/// build may be fixed already, or come from core files newer than its parser (card crash-4)
 fn newer_checkout(checkout: &Path) -> Option<String> {
 	let built = BUILT_COMMIT?;
 	let head = git(checkout, &["rev-parse", "--short=9", "HEAD"])?;

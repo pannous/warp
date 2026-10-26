@@ -31,7 +31,7 @@ compiler-self.wasm built at 19:41–19:48 CEST from another agent's tree (main-c
   libm this way.
 - Hand-linked libc (warp's own variants: strcmp and strncmp take (ptr,len) pairs): src/ffi/mod.rs:19-32,
   crates/warp-runtime/src/c_signatures.rs:8 `HAND_LINKED_LIBC`, c_calls.rs:46 `link_libc_functions`.
-- `extern`, `native`, `C` and `inline` are only skipped as foreign modifiers (lib/compiler/foreign_forms.warp:9).
+- `extern`, `native`, `C` and `inline` are only skipped as foreign modifiers (core/foreign_forms.warp:9).
   `extern int abs(int x)` is no declaration: on pure it gives "the unknown name x" [M].
 
 ### What reaches the wasm (Rust emitter)
@@ -90,7 +90,7 @@ run is cold (it lowers runtime.warp anew each time).
 
 ## 2. The pure pipeline and FFI
 - Imports in the emitter: `module.imports = if "print" in reached then [fd_write_import] else []`. After that only
-  the host words of lib/compiler/host_words.warp that the program reaches (emitter.warp:1100-1103; type encoding as
+  the host words of core/host_words.warp that the program reaches (emitter.warp:1100-1103; type encoding as
   raw bytes, :47). There is **no path for a library import**. `is_import` statements are dropped
   (emitter.warp:251-252: "the Rust pipeline brought the module in already").
 - builtin_signatures.warp:153 reads lib/math.warp's `from 'm'` lines only for result kinds. library_calls.warp:13
@@ -251,7 +251,7 @@ only adds to it.
   libffi path for variadics and callbacks.
 - packaging/bin/warp + notes/pure_wrapper.md: WARP_HOST, routing to warp-host.
 - lib/c.warp (new, warp): foreign lines for common libc. Not Claude-owned.
-- **Claude-owned (hand over, do not edit):** lib/compiler/emitter.warp to emit imports for `import f from lib` and
+- **Claude-owned (hand over, do not edit):** core/emitter.warp to emit imports for `import f from lib` and
   foreign lines, plus the `warp.c_functions` section. The import table already takes `[module, name, type]`.
 
 ### Milestones

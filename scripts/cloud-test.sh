@@ -13,7 +13,7 @@
 #       scripts/slow-tests.txt, to which it adds each test that took 10 s or more
 #       --slow: only the tests of scripts/slow-tests.txt, with the --full flags (a few times a day, not per batch)
 #       every run keeps each test's seconds in data/cloud/<run>/timings.tsv, slowest first
-#       --warp-test [folder…]: no cargo test: the release binary builds compiler.wasm and runs `warp test [folder…]`,
+#       --warp-test [folder…]: no cargo test: the release binary builds warp.wasm and runs `warp test [folder…]`,
 #       every pairs and is! line under the folders (default tests/) through `warp pure` (card warp-test-runner)
 #       waits for the result (run it in the background), prints it, keeps it in data/cloud/<run>/ and, with --card,
 #       adds it to the card (`todo note`); --no-wait only launches: fetch later with --result;
@@ -136,15 +136,15 @@ make_room() {
 	echo "$free GB free, $(free_gb) GB after dropping target/"
 }
 
-# compiler.wasm and compiler-self.wasm (warp pure / warp self, src/compiler/standalone.rs) built by an earlier job from
+# warp.wasm and warp-self.wasm (warp pure / warp self, src/compiler/standalone.rs) built by an earlier job from
 # another lib/ or warp build: the tests ran on them with only a notice, so a verdict could be the earlier branch's
 # (card cloud-stale-compiler: "unknown name Ascii" from a compiler built before byte_codes.warp). Kept while lib/ and
-# the Rust sources are those they were built from (compiler.wasm takes ~540 s); prints what it did
+# the Rust sources are those they were built from (warp.wasm takes ~540 s); prints what it did
 drop_stale_compilers() {
 	local stamp=$HERE_ROOT/compiler-sources sources dropped
 	sources=$(git rev-parse HEAD:lib HEAD:src HEAD:crates HEAD:build.rs HEAD:Cargo.lock 2>/dev/null | tr '\n' ' ')
 	[ "$sources" = "$(cat "$stamp" 2>/dev/null)" ] && return
-	dropped=$(find target data \( -name compiler.wasm -o -name compiler-self.wasm \) -print -delete 2>/dev/null | wc -l)
+	dropped=$(find target data \( -name warp.wasm -o -name warp-self.wasm -o -name compiler.wasm -o -name compiler-self.wasm \) -print -delete 2>/dev/null | wc -l)
 	echo "$sources" > "$stamp"
 	echo "cloud-test: lib/ or the Rust sources differ from the last job's: dropped $((dropped)) compiler build files"
 }
@@ -401,7 +401,7 @@ cargo_target_dir() {
 	cargo metadata --format-version 1 --no-deps 2>/dev/null | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p'
 }
 
-# --warp-test: compiler.wasm built by the new binary, then `warp test [folder…]` (src/compiler/pure_tests.rs): every
+# --warp-test: warp.wasm built by the new binary, then `warp test [folder…]` (src/compiler/pure_tests.rs): every
 # pairs line and is! line through `warp pure`, each in a child with its own time limit, so no stall watchdog
 run_warp_test() {
 	local log=$1 warp=$2; shift 2

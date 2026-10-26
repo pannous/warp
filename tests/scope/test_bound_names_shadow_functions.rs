@@ -1,5 +1,5 @@
 //! A name a function's body assigns is its local there, whichever function of that name the program also has: its
-//! own, or a used file's (card local-variable-named, found composing lib/compiler's stages into one program)
+//! own, or a used file's (card local-variable-named, found composing core's stages into one program)
 use crate::is;
 
 #[test]

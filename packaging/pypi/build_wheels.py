@@ -57,7 +57,8 @@ def read_files(archive: Path) -> dict[str, bytes]:
 
 
 def is_binary(name: str) -> bool:
-    return "/" not in name and name.startswith(BINARY_PREFIX)
+    # the compilers warp.wasm and warp-self.wasm share the prefix but are shared data
+    return "/" not in name and name.startswith(BINARY_PREFIX) and not name.endswith(".wasm")
 
 
 def metadata(version: str, readme: str) -> str:

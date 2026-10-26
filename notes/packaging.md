@@ -45,7 +45,7 @@ formula and release build set CARGO_NET_OFFLINE=false.
 ## At a release
 1. Bump `version` in Cargo.toml, commit, push main.
 2. `git tag v<version> && git push origin v<version>`: the Release workflow builds the binaries, then (job
-   `compilers`, by the linux binary from the tag's lib/) the warp-written compiler compiler.wasm and compiler-self.wasm
+   `compilers`, by the linux binary from the tag's lib/) the warp-written compiler warp.wasm and warp-self.wasm
    (the bootstrap seed, user 2026-10-22; also release assets), then (job `tarballs`) one tarball per platform holding
    the binaries, both compilers and lib/ side by side; Rust CI tests the tag. An installed warp finds lib/ and the
    compilers next to its binary or in <prefix>/share/warp (Homebrew's pkgshare, deb/rpm's /usr/share/warp, the wheel's

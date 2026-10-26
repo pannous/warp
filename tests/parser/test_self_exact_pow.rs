@@ -1,4 +1,4 @@
-//! card exact-pow-warp: int `^` in lib/compiler/emitter.warp is runtime.warp's exact_pow over int_pow, and the module
+//! card exact-pow-warp: int `^` in core/emitter.warp is runtime.warp's exact_pow over int_pow, and the module
 //! gives Rust's values: powers by squaring, a negative exponent an exact rational
 use crate::common::twins::emitter_differential;
 use std::path::PathBuf;

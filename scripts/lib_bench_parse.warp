@@ -1,7 +1,7 @@
 // scripts/lib_bench.sh's parse level: whether parser.warp reads each file the arguments name without an error view, a
 // line each: "<path>\tparsed" or "<path>\tparse error: <message>" (one process for many files: compiling parser.warp
 // takes seconds)
-use "../lib/compiler/parser.warp"
+use "../core/parser.warp"
 use os
 
 // the message of the first error view in a view, else ø

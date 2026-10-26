@@ -42,7 +42,7 @@ instance.store_id > 0";
 	is!(source, true);
 }
 
-/// The module lib/compiler/emitter.warp emits (the self-hosted compile) runs through lib/wasmtime.warp too
+/// The module core/emitter.warp emits (the self-hosted compile) runs through lib/wasmtime.warp too
 #[test]
 fn a_module_emitter_warp_emitted_runs_through_libwasmtime() {
 	if !libwasmtime_installed() {

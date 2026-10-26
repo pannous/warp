@@ -13,7 +13,7 @@ origin/main at handover: 4116625b4.
 |---|---|---|
 | pure-harness-loose-equal | f78a5e6731 | src/compiler/pure_tests.rs +40/-2. Compares cases the way `is!` did: an int equals a float of the same value, a 1-char text equals its char. Rust test infrastructure, cleared by Supervisor. NOT measured, NOT readied: needs a box build (CARGO_TARGET_DIR=/workspace/target-harness via box-slot), before/after pure-suite counts (expected about 196 cases: /workspace/harness196.json, /workspace/harness-cases), then `todo ready` WITHOUT --express. |
 | pure-wrong-type-word-prefix | 6fa54c4cac | lib/sugar/calls.warp, about 19 rule lines plus 5 probes (`int 3.7` == `int(3.7)`), merged with main at 11:40. Supervisor OK'd it as a small fix. Needs the box self-check and the 40-test before/after (/workspace/tw_tests.txt; tw-base/tw-branch jobs were killed), then `todo ready ... --express`. |
-| pure-match-guard-arms | 658c010a66 | Match step A: lib/compiler/node_matches.warp +36/-4, guard arms `p if c` and bare-name binding arms. UNTESTED (never got a rebuild slot). Probes: /workspace/probes-mg/. Known gap: no scope info, so an already-bound name used in the body binds instead of comparing. Risk: `guarded_arm` uses a `test == yes` marker. Card note was never posted (the board token lacks addProjectV2DraftIssue): /workspace/pure-match-guard-arms-todo.diff. |
+| pure-match-guard-arms | 658c010a66 | Match step A: core/node_matches.warp +36/-4, guard arms `p if c` and bare-name binding arms. UNTESTED (never got a rebuild slot). Probes: /workspace/probes-mg/. Known gap: no scope info, so an already-bound name used in the body binds instead of comparing. Risk: `guarded_arm` uses a `test == yes` marker. Card note was never posted (the board token lacks addProjectV2DraftIssue): /workspace/pure-match-guard-arms-todo.diff. |
 | fix-in-lib | b161aa32a9 | warp fix/beautify in lib/fix. No src/ diff; waits on launcher routing. |
 
 ## Match plan (approved; Supervisor plus the user for C)
@@ -28,7 +28,7 @@ Root cause: `matched` in node_matches.warp lowers a match only if EVERY arm is a
 ## Other notes
 - The 104 "a data" pure refusals are time/date/duration values (compiler.warp:44). They belong to pure-time-arithmetic-wiring (Warp Code 3); that card still needs a note with the count.
 - Handed off: on/go to Warp Signals; function values and closure cells to Warp Idioms (now shut down, so they went back to my queue: pure-call-function-values, pure-closure-cells [plan to Supervisor first], pure-text-case-words). Unowned again.
-- User rules (common.md 928b79021, 9563462da): no new pass or lib/compiler file without the user's yes; lib/compiler edits over about 40 lines or new cases need Supervisor's OK first.
+- User rules (common.md 928b79021, 9563462da): no new pass or core file without the user's yes; core edits over about 40 lines or new cases need Supervisor's OK first.
 - Box tools: /workspace/selfcheck-branch.sh <branch> (via /workspace/box-slot.sh; per-branch lock and binary copy; uses /workspace/cow/sol-warp-latest). /workspace/build-fresh-warp.sh rebuilds that binary from main (smoke test runs with WARP_MODULE_CACHE=off). sol-warp-latest -> sol-warp-d21817966, which can't rebuild main with the cache off (`index needs a value for parameter x`; Warp Classes / local-shadows-lib-function).
 - Reports: /workspace/pure-refusals-6b7abc92de.md, /workspace/pure-wrong-values-6b7abc92de.md.
 - No `cowtree` on the box; git worktrees are in /workspace/cow/trees/.
