@@ -1,0 +1,10 @@
+# main-level variables the functions read (module globals) and texts kept once in the data segment
+limit = 3
+greeting = "hi"
+over(x) := x > limit
+shout(name) := greeting + " " + name + "!"
+own(limit) := limit * 2
+print over(5)
+print shout("ann")
+print shout("bob") + " " + "hi"
+print own(4)

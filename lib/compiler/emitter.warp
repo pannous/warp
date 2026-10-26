@@ -292,20 +292,47 @@ def collect_functions(program: any, functions: any): list {
 	kept
 }
 # the main-level variables a function reads and neither assigns nor takes (`limit = 3; f(x) := x > limit`): module
-# globals, main's assignment declaring each, as Rust's late_binding makes them
+# globals, main's assignment declaring each, as Rust's late_binding makes them; one walk of each function's body finds
+# the ones it mentions (a walk for each name and function was quadratic)
 shared_names(statements: any) := {
-	shared = {}
+	assigned = {}
 	for s in statements {
-		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol {
-			name = name_of(key_of(s))
-			for f_name in module.functions.keys { if reads_free(module.functions[f_name], name) { shared[name] = yes } }
+		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol { assigned[name_of(key_of(s))] = yes }
+	}
+	read = {}
+	if assigned {
+		functions = module.functions.keys.map(f_name => module.functions[f_name])
+		for f in functions {
+			mentioned = Mentions(assigned, {})
+			gather_mentions(f.body, mentioned)
+			for name in mentioned.found.keys {
+				if name not in read and not assigns(f.body, name) and name not in taken_names(f.signature) { read[name] = yes }
+			}
 		}
 	}
+	shared = {}
+	for name in assigned.keys { if name in read { shared[name] = yes } }
 	shared
 }
-reads_free(f: Function, name: text) := {
-	if not mentions(f.body, name) or assigns(f.body, name) { return no }
-	name not in taken_names(f.signature)
+# the names among `wanted` a walk found symbols of, each once, as mentions finds one
+class Mentions { wanted: any; found: any = {} }
+gather_mentions(n: Node, mentioned: Mentions) := match n {
+	Symbol(name): { if name in mentioned.wanted { mentioned.found[name] = yes } }
+	Key(left, _, right): {
+		if left == symbol(opaque_word) { gather_view_mentions(right, mentioned) } else {
+			gather_mentions(left, mentioned)
+			gather_mentions(right, mentioned)
+		}
+	}
+	List(items, _, _): { for item in items { gather_mentions(item, mentioned) } }
+	_: ø
+}
+# inside an opaque layer: each ["symbol", name] part of the view, as mentions' view_has finds one
+gather_view_mentions(view: any, mentioned: Mentions) := {
+	if view is list {
+		if #view == 2 and view#1 == "symbol" and view#2 in mentioned.wanted { mentioned.found[view#2] = yes }
+		for part in view { gather_view_mentions(part, mentioned) }
+	}
 }
 # whether n assigns the symbol `name` anywhere
 assigns(n: any, name: text) := {
