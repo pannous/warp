@@ -1,5 +1,5 @@
 # Operators (emitter.warp's part): arithmetic and comparisons on numbers and on boxed values, equality, ø tests
-def operation_code(body: Body, symbol: text, a: any, b: any): list {
+def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): list {
 	# an element of a recursive call's result the first reading does not know yet: its index says nothing of its kind
 	if symbol == "#" and a#1 == pending { return element(body, ["node", a#2], b) }
 	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
@@ -62,7 +62,7 @@ def float_power(body: Body, base: list, exponent: list): list {
 # an operator on boxed values, by the kinds they hold at run time: `+` is the runtime word node_add; a comparison
 # between two texts or characters orders them as texts; two ints stay ints; an exact rational with an int or another
 # stays exact; any other two are floats
-def node_operation(body: Body, symbol: text, a: any, b: any): list {
+def node_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode): list {
 	if symbol == "+" { return runtime_call("node_add", [["node", a], ["node", b]]) }
 	# a bit operator takes ints only: `1 << place` of a value known only at run time reads it as an int
 	if symbol in bit_operators { return operation_code(body, symbol, ["int", converted(["node", a], "int")], ["int", converted(["node", b], "int")]) }
@@ -83,11 +83,11 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 }
 # `x == ø`, `x === ø` and their negations (a match's `ø:` case): x is ø itself, missing; an empty list, text or map
 # is a value (decision empty-is-not-missing)
-def identity_with_nothing(body: Body, symbol: text, n: any): list {
+def identity_with_nothing(body: Body, symbol: text, n: Node): list {
 	tested_as(symbol, ["bool", boxed(expression_code(body, n)) + [op.ref_is_null]])
 }
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
-def equality(body: Body, symbol: text, a: any, b: any): list {
+def equality(body: Body, symbol: text, a: TypedCode, b: TypedCode): list {
 	tested_as(symbol, runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]]))
 }
 # the bool test as `==`, `===` ask it, negated for `!=`, `!==`
@@ -95,7 +95,7 @@ def tested_as(symbol: text, test: list): list := if symbol.starts_with("!") then
 # an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
 # operators without one take the floats
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod"}
-def exact_operation(body: Body, symbol: text, left: any, right: any, floats: any): list {
+def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): list {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
 	if symbol in comparisons { return operation_code(body, symbol, runtime_call("exact_order", [left, right]), number_value(0)) }
 	floats
@@ -105,34 +105,34 @@ def exact_operation(body: Body, symbol: text, left: any, right: any, floats: any
 # `type(x)`: the type value of x's kind, of a value known only at run time the one its kind names there (a list's
 # items unknown here, Rust's `list of int`, outside the core)
 static_type_words = {int: "int", float: "float", text: "text", char: "codepoint", bool: "bool"}
-def type_value_of(body: Body, value: any): list {
+def type_value_of(body: Body, value: TypedCode): list {
 	if value#1 == "node" { return runtime_call("node_type_name", [value, list_value(body, module.classes.keys)]) }
 	if value#1 in static_type_words { return ["node", node(Marked.TypeValue, text_bytes(static_type_words[value#1]))] }
 	refuse("the type of a " + value#1)
 }
 # ord(c): the code point of a character, of a text its first; chr(n) the character of the code point n
-def code_point(value: any): list {
+def code_point(value: TypedCode): list {
 	if value#1 == "text" { return runtime_call("code_point_at", [value, ["int", [op.i64_const] + sleb(0)]]) }
 	["int", converted(value, "char") + [op.i64_extend_i32_u]]
 }
 # float_bits(x): the IEEE 754 bits of a float as an int; bits_float(n): the float of those bits
 bit_casts = {float_bits: ["float", "int", "i64.reinterpret_f64"], bits_float: ["int", "float", "f64.reinterpret_i64"]}
-def bit_cast(value: any, cast: list): list { [cast#2, converted(value, cast#1) + [wasm_instructions[cast#3]]] }
-def floored(value: any): list {
+def bit_cast(value: TypedCode, cast: list): list { [cast#2, converted(value, cast#1) + [wasm_instructions[cast#3]]] }
+def floored(value: TypedCode): list {
 	if value#1 == "int" { return value }
 	if value#1 == "float" { return ["int", value#2 + [op.f64_floor, op.i64_trunc_f64_s]] }
 	if value#1 == "node" { return runtime_call("floored_node", [value]) }
 	refuse("floor of a " + value#1)
 }
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
-def if_else_code(kind: text, a: any, b: any): list { [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end] }
-def both_of_kind(a: any, b: any, code: int): list {
+def if_else_code(kind: text, a: TypedCode, b: TypedCode): list { [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end] }
+def both_of_kind(a: TypedCode, b: TypedCode, code: int): list {
 	test = x => kind_code_of(x) + [op.i64_const] + sleb(code) + [op.i64_eq]
 	test(a) + test(b) + [op.i32_and]
 }
 
 # `‖x‖`, abs(x): -x when x < 0, else x
-def absolute_value(body: Body, value: any): list {
+def absolute_value(body: Body, value: TypedCode): list {
 	if value#1 == "float" { return ["float", value#2 + [op.f64_abs]] }
 	if value#1 != "int" and value#1 != "node" { return refuse("the absolute value of a " + value#1) }
 	local = uleb(fresh_local(body, value#1))
@@ -142,7 +142,7 @@ def absolute_value(body: Body, value: any): list {
 }
 
 # a % b as in mathematics: never below 0, r + |b| for a negative truncated remainder r
-def euclidean_remainder(body: Body, a: any, b: any): list {
+def euclidean_remainder(body: Body, a: TypedCode, b: TypedCode): list {
 	divisor = uleb(fresh_local(body, "int"))
 	rest = uleb(fresh_local(body, "int"))
 	get_divisor = [op.local_get] + divisor

@@ -13,19 +13,19 @@ def is_runtime_word(body: Body, name: text): bool {
 }
 # a call of a function of the program that takes its arguments, not of a runtime word: a call it can't take is a form
 # of the parser's or the lowering's of that name (`wasm f64.floor`, `try x`; emitter.warp compiling itself defines each)
-def is_program_call(body: Body, name: text, arguments: any): bool {
+def is_program_call(body: Body, name: text, arguments: list): bool {
 	name in module.functions and not is_runtime_word(body, name) and takes_arguments(module.functions[name], arguments)
 }
 # whether f takes these arguments: no more than its parameters (any more after a rest one), a name given once, each
 # place left out defaulted
-def takes_arguments(f: Function, arguments: any): bool {
+def takes_arguments(f: Function, arguments: list): bool {
 	if f.signature.parameters.any(parameter => parameter.rest) { return takes(f.signature, #arguments) }
 	slots = placed_arguments(taken_names(f.signature), arguments)
 	parameters = f.signature.parameters
 	slots is list and range_list(#parameters).all(i => (i < #slots and slots[i] != ø) or parameters[i].defaulted_to != ø)
 }
 # the words the runtime is written in, each one or two instructions
-def intrinsic(body: Body, name: text, arguments: any): list {
+def intrinsic(body: Body, name: text, arguments: list): list {
 	if name in big_int_cases { return big_int_case(body, big_int_cases[name], arguments) }
 	values = arguments.map(a => expression_code(body, a))
 	match name {
@@ -169,7 +169,7 @@ passing_kinds = {int: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Fl
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
 	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: [], code: []}
 kind_bit(kind: int): int := 1 << kind
-def type_test_code(body: Body, subject: any, spec: text): list {
+def type_test_code(body: Body, subject: Node, spec: text): list {
 	# a parent's subclasses are tested by class_methods.warp's widened_tests (`x is Animal or x is Dog`): only cases refuse
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
@@ -181,7 +181,7 @@ def type_test_code(body: Body, subject: any, spec: text): list {
 }
 # `x is type` of a value known only at run time: its held kind bit against the kinds passing the type, inline, as
 # Rust's kind masks; a type value (`int is number`) and `is code` ask runtime node_is_type
-def node_type_test(body: Body, value: any, type: text): list {
+def node_type_test(body: Body, value: TypedCode, type: text): list {
 	kinds = 0
 	for kind in passing_kinds[type] { kinds = bit_or(kinds, kind_bit(kind)) }
 	if kinds == 0 { return runtime_call("node_is_type", [value, text_value(type), number_value(kinds)]) }
@@ -208,17 +208,17 @@ def held_bit(place: int): list { [op.i64_const] + sleb(kind_bit(place)) }
 # the bit on the stack, or the place's bit when the test holds
 def unless_held(place: int, test: list): list { held_bit(place) + test + [op.i32_eqz, op.select] }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
-def as_node(code: any): list { code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) }
-def kind_code_of(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
-def payload(code: any, held: int): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
-def unboxed(code: any, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
+def as_node(code: list): list { code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.node)]) }
+def kind_code_of(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and] }
+def payload(code: list, held: int): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
+def unboxed(code: list, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
 # whether an Int $Node holds a $Ratio (an i32); the numerator (0) or denominator (1) of one
 # whether an Int $Node holds its number in an $i64box (an i32), neither a ratio nor a big int
-def plain_int_test(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
-def ratio_test(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
-def ratio_part(code: any, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
+def plain_int_test(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
+def ratio_test(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
+def ratio_part(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
 # the $Limbs array of an Int $Node holding a $BigInt
-def limbs_of(code: any): list { payload(code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 1]) }
+def limbs_of(code: list): list { payload(code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 1]) }
 # `shown_big_int(n)`: a big int's text, a function made at its first call whose code is written last (as closure_text):
 # big_ints.warp's big_int_text when the program makes big ints, that is big_int_power was compiled, else a trap, so
 # that a program printing only plain ints carries neither big_int_text nor the $Limbs and $BigInt types
@@ -233,7 +233,7 @@ shown_big_int_code(f: Function): any := {
 # compiled, when big_int_power was (module_compiled)
 big_int_cases = {big_sum_case: "big_int_sum", big_difference_case: "big_int_difference", big_product_case: "big_int_product",
 	big_order_case: "big_int_order", big_float_case: "big_int_float"}
-def big_int_case(body: Body, word_name: text, arguments: any): list {
+def big_int_case(body: Body, word_name: text, arguments: list): list {
 	if not module.makes_big_ints {
 		if not module.big_int_sites.any(f => f.name == body.function.name) { module.big_int_sites += [body.function] }
 		return [no_kind, []]
