@@ -92,13 +92,14 @@ declarations_used(statements: any, folder: text, seen: any, claimed: any): list 
 }
 
 # a used file's parse, kept by its text (card speed-module-cache): a rebuild parses again only the files that changed;
-# the running compiler keys what it keeps by itself (os.keep), so a changed parser parses them all again
+# kept by the files that parse (os.keep_of), so an edit of lib/compiler beyond them keeps the parses
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { return plain_node(parsed(source)) }
 	name = "the parse of " + source
-	kept(name) ?? keep(name, plain_node(parsed(source)))
+	kept_of(name, parse_makers) ?? keep_of(name, plain_node(parsed(source)), parse_makers)
 }
+parse_makers = ["parser.warp", "walk.warp"]
 
 # A used file's declarations claim their signatures: another file declaring one already, differently, is the error
 # naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in
