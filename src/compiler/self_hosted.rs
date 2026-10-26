@@ -754,7 +754,7 @@ pub(crate) fn made_by_key(name: &str, makers: &[String]) -> String {
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
 	let mut hasher = Sha256::new();
-	hasher.update(format!("{}\n{settings:?}\n{name}\n", env!("WARP_SOURCE")));
+	hasher.update(format!("{}\n{settings:?}\nmade by {makers:?}\n{name}\n", env!("WARP_SOURCE")));
 	let mut files = files_below(library.to_path_buf());
 	files.sort();
 	for file in files.iter().filter(|file| !unreached(file)) {
