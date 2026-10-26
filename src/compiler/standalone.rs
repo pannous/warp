@@ -37,6 +37,11 @@ const SEED_FILE: &str = "seed/compiler-self.wasm";
 const SEED_VARIABLE: &str = "WARP_SEED";
 /// The ending of an output compiler.warp writes parser.warp's view to, as JSON, instead of a module (its VIEW_SUFFIX)
 const VIEW_EXTENSION: &str = "view.json";
+/// Computing time of the compiler runs of `warp rebuild` (compiling compiler.warp, then warming the new build): the seed
+/// compiling compiler.warp takes minutes on a small VM, no runaway, so a program's 60 s (WARP_TIME_LIMIT) does not apply
+const REBUILD_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(2 * 60 * 60);
+/// Overrides REBUILD_TIME_LIMIT, in seconds
+const REBUILD_TIME_LIMIT_VARIABLE: &str = "WARP_REBUILD_TIME_LIMIT";
 
 /// Who builds compiler.warp's module: for `warp pure` the seed, for `warp self` compiler.wasm, compiler.warp itself
 // ⚠ RustCompiled keeps its name until the Rust compiler leaves main (card rust-bootstrap): the seed builds it now
@@ -219,8 +224,15 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 /// `warp rebuild`: the build file of each compiler built anew from the current lib/, its path, or why it failed
 pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	let path = build_path(by);
-	build(by, &path)?;
+	crate::util::with_time_limit(rebuild_time_limit(), || build(by, &path))?;
 	Ok(path)
+}
+
+/// The time limit of a rebuild's compiler runs: WARP_REBUILD_TIME_LIMIT seconds when positive, else REBUILD_TIME_LIMIT
+fn rebuild_time_limit() -> std::time::Duration {
+	let seconds =
+		std::env::var(REBUILD_TIME_LIMIT_VARIABLE).ok().and_then(|seconds| seconds.trim().parse::<f64>().ok());
+	seconds.filter(|seconds| *seconds > 0.0).map_or(REBUILD_TIME_LIMIT, std::time::Duration::from_secs_f64)
 }
 
 /// The compiler's build file there, or the error naming `warp rebuild`: before many runs start at once
