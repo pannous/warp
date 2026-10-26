@@ -375,6 +375,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - cleanup-cuts: dropped compile-time lambdas, generators/yield, type-name parameters `fib int i`, scoped handlers `on … in {…}`, the defined-twice diagnostic, all phrase calls (until prepositions-call: `move x from: a to: b`). Kept: return-type overloads, tuple returns, list element checks, instance destructuring, object-shaped parameters, dispatch by class, version literals (rebuilt small). Traits are a thin alias of classes with default methods; ORM keeps only `stored people: [Person]`; `a of b` ≡ `b.a`.
 
 ## Lists, maps and indexing
+- to-inclusive (user): `a to b` always includes b, also when b is a length: walking 0-based indexes is `1 ..< #a` or `1 to #a - 1` (samples/lists/sorting.warp).
 - #4/P40 `size` = count; bytes via `byte_size` / `number of bytes`; `len(x)` counts with a hint `#x`.
 - P43 lists do not grow past the end: setting past it is a catchable `index out of range`.
 - P34 a number subscript on an empty `{}` keys it as a map. map-subscript-runtime: the same holds at run time: `m[1]` on a value that is a map when the program runs keys it (`f(m) := m[1] + 1; f({1: 5, 2: 6})` → 6), on a list or text it stays a position (`f([5, 6])` → 7) (Interviewer's decision). single-entry: `{a:1}` stays a pair and becomes a one-entry map where a map is needed.
