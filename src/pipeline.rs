@@ -15,7 +15,8 @@ use crate::errors::run_time::{explain_runtime_error, has_exclusive_range};
 #[cfg(feature = "native")]
 use crate::run::wasm_reader::read_bytes;
 #[cfg(feature = "native")]
-use crate::wasm_emitter::{failed_run, run_raw_struct};
+use crate::wasm_emitter::run_raw_struct;
+use crate::run::failures::failed_run;
 
 /// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {

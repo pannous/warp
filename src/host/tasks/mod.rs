@@ -614,9 +614,9 @@ fn task_name(function: &str) -> String {
 	crate::go_blocks::written_name(function.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX).unwrap_or(function))
 }
 
-/// What went wrong in a task, in the words a failure of the main program gets (wasm_emitter::failed_run)
+/// What went wrong in a task, in the words a failure of the main program gets (run/failures.rs failed_run)
 pub(crate) fn failure_message(failure: anyhow::Error) -> String {
-	match crate::wasm_emitter::failed_run(failure) {
+	match crate::run::failures::failed_run(failure) {
 		crate::node::Node::Error(message) => message.drop_meta().to_string(),
 		other => other.serialize(),
 	}

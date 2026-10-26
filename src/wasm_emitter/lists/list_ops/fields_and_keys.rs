@@ -3,13 +3,8 @@ use super::*;
 use crate::node::Bracket;
 use crate::words::MAP_KEYS;
 
-/// The runtime error of a missing constant field is a function `no_field_<name>`; eval reports it as `no field <name>`
-pub const NO_FIELD_PREFIX: &str = "no_field_";
-/// How a missing field's error begins: `no field title`
-pub const NO_FIELD_MESSAGE: &str = "no field ";
-/// The runtime error of a missing field whose name is known only at run time (lib/compiler/runtime.warp map_get):
-/// the trap detail holds the name
-pub const MISSING_FIELD: &str = "missing_field";
+pub use crate::abi::traps::NO_FIELD_PREFIX;
+pub use crate::abi::traps::NO_FIELD_MESSAGE;
 /// struct_body(node): the field list of an instance of a declared type, else the node itself
 pub(in crate::wasm_emitter) const STRUCT_BODY: &str = "struct_body";
 /// instance_field(fields, name_ptr, name_len): the value of the field whose name is that very string of the string

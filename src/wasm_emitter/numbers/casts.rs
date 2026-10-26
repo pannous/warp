@@ -14,8 +14,7 @@ pub const TEXT_AS_NUMBER: &str = "text_as_number";
 /// `x as i64`: the whole number wrapped to 64 bits, not the unbounded int the other int words convert to
 pub(in crate::wasm_emitter) const WRAPPING_INT_WORDS: [&str; 2] = ["i64", "int64"];
 const RATIO_SLASH: i32 = '/' as i32;
-/// `n as codepoint` of a number no character has: below 0, above U+10FFFF or a UTF-16 surrogate
-pub const INVALID_CODE_POINT: &str = "invalid_code_point";
+pub use crate::abi::traps::INVALID_CODE_POINT;
 const LAST_CODE_POINT: i64 = 0x10FFFF;
 const FIRST_SURROGATE: i64 = 0xD800;
 const SURROGATE_COUNT: i64 = 0x800;

@@ -104,7 +104,7 @@ impl Route {
 	}
 
 	fn lookup_status(&self, message: &str) -> u16 {
-		let found_nothing = message.ends_with(crate::wasm_emitter::EMPTY_RANGE) || failure_status(message) == NOT_FOUND;
+		let found_nothing = message.ends_with(crate::abi::traps::EMPTY_RANGE) || failure_status(message) == NOT_FOUND;
 		if found_nothing && self.path.contains(crate::routes::PARAMETER_MARK) {
 			NOT_FOUND
 		} else {

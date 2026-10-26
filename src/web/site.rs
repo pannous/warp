@@ -106,7 +106,7 @@ impl Renderer {
 			crate::run::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names)
 		});
 		let failed =
-			|failure| format!("the page of {path} failed: {}", message_of(&crate::wasm_emitter::failed_run(failure)));
+			|failure| format!("the page of {path} failed: {}", message_of(&crate::run::failures::failed_run(failure)));
 		let [html, requests, values]: [Node; 3] = read.map_err(failed)?.try_into().expect("three exports");
 		let replies = replies_script(&requests.as_items(), &values.as_items());
 		Ok(self.layout.page(&self.title, page_html_text(&html)?, &replies, root))

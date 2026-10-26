@@ -263,7 +263,7 @@ pub(super) const LIST_MARK: &str = "list_mark";
 pub(super) const LIST_ITEM_CHECK: &str = "list_item_check";
 /// list_items_check(list, items): list_item_check of each item of the list `items`
 pub(super) const LIST_ITEMS_CHECK: &str = "list_items_check";
-pub(super) const LIST_CANNOT_HOLD: &str = "list_cannot_hold_this_item";
+pub(super) use crate::abi::traps::LIST_CANNOT_HOLD;
 /// The in-place writers of a list, which check their items against its element mark
 const MARK_CHECKING_WRITERS: [&str; 3] =
 	[super::lists::list_ops::LIST_EXTEND, crate::list_mutations::LIST_BECOME, "node_with_at"];

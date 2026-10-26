@@ -234,7 +234,7 @@ mod native {
 	use crate::node::{Bracket, Node, Separator};
 	use crate::pipeline::CompiledModule;
 	use crate::run::wasm_reader::{run_main_kept, val_to_node, with_trap_detail, Imports};
-	use crate::wasm_emitter::failed_run;
+	use crate::run::failures::failed_run;
 	use serde_json::Value;
 	use wasmtime::{AsContextMut, Instance, Store, Val};
 

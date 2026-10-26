@@ -21,8 +21,7 @@ use Instruction as I;
 pub const UNCERTAIN_NEW: &str = "uncertain_new";
 /// gaussian_new(value: f64, deviation: f64) -> node: a Gaussian `value ± deviationσ`
 pub const GAUSSIAN_NEW: &str = "gaussian_new";
-/// `(5 ± 1σ) + (2 ± 1)`: which of the two the result would be is unclear, so it fails
-pub(in crate::wasm_emitter) const INTERVAL_AND_GAUSSIAN: &str = "an_interval_and_a_gaussian_do_not_mix";
+pub(in crate::wasm_emitter) use crate::abi::traps::INTERVAL_AND_GAUSSIAN;
 /// gaussian_combine(value, a parts, ∂a, b parts, ∂b) -> node
 const GAUSSIAN_COMBINE: &str = "gaussian_combine";
 /// node_add and its siblings with a Gaussian operand, in NODE_ARITHMETIC's order
@@ -47,8 +46,7 @@ enum CertaintyMode {
 	Possibly,
 	Bare,
 }
-/// `5 ± -1`
-pub(in crate::wasm_emitter) const NEGATIVE_UNCERTAINTY: &str = "an_uncertainty_must_not_be_negative";
+pub(in crate::wasm_emitter) use crate::abi::traps::NEGATIVE_UNCERTAINTY;
 /// The arithmetic of node_add, node_sub, node_mul, node_div with an uncertain operand, in NODE_ARITHMETIC's order
 pub const UNCERTAIN_ARITHMETIC: [&str; 4] = ["uncertain_add", "uncertain_sub", "uncertain_mul", "uncertain_div"];
 /// uncertain_field(node, field) -> node or null: one of UNCERTAIN_FIELDS as a float

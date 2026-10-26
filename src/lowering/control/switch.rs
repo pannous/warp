@@ -43,7 +43,7 @@ const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,
 /// which eval reports as `no case for <label> = <value>`
 pub const NO_CASE_CALL: &str = "switch_no_case";
-pub const NO_CASE_PREFIX: &str = "no_case_";
+pub use crate::abi::traps::NO_CASE_PREFIX;
 const UNNAMED_SUBJECT: &str = "value";
 /// In an arm: the whole matched value, of the innermost match (user, card match-binding-arm)
 const VALUE_WORD: &str = "value";

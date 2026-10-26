@@ -8,8 +8,7 @@ use crate::tuples::{destructuring, returned_values, unstarred};
 use crate::type_kinds::Kind;
 use wasm_encoder::{Function, Instruction as I, ValType};
 
-/// `a, b = [1, 2, 3]`: the runtime error of unpacking another number of items than names
-pub(in crate::wasm_emitter) const WRONG_NUMBER_OF_VALUES: &str = "wrong_number_of_values";
+pub(in crate::wasm_emitter) use crate::abi::traps::WRONG_NUMBER_OF_VALUES;
 const LIST_BRACKET_INFO: i64 = 1; // `[a b]`, as emit_list_structure writes Bracket::Square
 
 /// How the statement's own value is read afterwards: emit_numeric_value, emit_node_instructions or emit_float_value

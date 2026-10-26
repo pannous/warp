@@ -2,16 +2,10 @@
 use super::*;
 use crate::lowering::data_items::Place;
 
-/// Runtime errors trap inside a function of that name; eval reports the name as an error value
-pub(super) const INDEX_NOT_INTEGRAL: &str = "index_must_be_an_integer";
-/// `y times "ab"` with y = 2.5 held in a variable (a literal fraction is a compile-time type error)
-pub(super) const COUNT_NOT_INTEGRAL: &str = "count_must_be_an_integer";
-/// `x:int = 3; x += 0.5`: a declared int (variable or field) given a fraction at run time; a literal one is a type error
-pub(in crate::wasm_emitter) const INT_NOT_WHOLE: &str = "an_int_must_be_a_whole_number";
-/// `m.a * 2` with a text in m.a, where the kinds are known only at run time (NODE_ARITHMETIC)
-pub(in crate::wasm_emitter) const NOT_A_NUMBER: &str = "not_a_number";
-/// `t = ø; t += "a"` with ø held at run time: ø + text fails as ø + 1 does (decision empty-plus-text)
-pub(in crate::wasm_emitter) const EMPTY_PLUS_TEXT: &str = "ø_plus_a_text";
+pub(super) use crate::abi::traps::INDEX_NOT_INTEGRAL;
+pub(in crate::wasm_emitter) use crate::abi::traps::INT_NOT_WHOLE;
+pub(in crate::wasm_emitter) use crate::abi::traps::NOT_A_NUMBER;
+pub(in crate::wasm_emitter) use crate::abi::traps::EMPTY_PLUS_TEXT;
 /// P65: arithmetic a text can't do on a character fails; its code point is ord(c)
 pub(in crate::wasm_emitter) const CHARACTER_IS_NO_NUMBER: &str =
 	"a character is not a number in arithmetic: codepoint(c) gives its code point";
@@ -29,119 +23,27 @@ pub(super) fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 	}
 }
 
-/// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
-pub(super) const WHOLE_NUMBER_FIX: &str = "fix: compute it with /! (floor division) or `… as int`";
-pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 9] = [
-	(
-		super::super::super::numbers::casts::INVALID_CODE_POINT,
-		"a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF",
-	),
-	(NOT_A_MAP, "keys, values and entries are a map's; a list's positions are 1..count(xs)"),
-	(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX),
-	(COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX),
-	(INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
-	(super::super::super::declared_values::LIST_CANNOT_HOLD, "its declared element type does not admit it (P215)"),
-	(ERROR_IN_DATA, ERROR_IN_DATA_FIX),
-	(ERROR_IN_FIELD, ERROR_IN_DATA_FIX),
-	(EMPTY_PLUS_TEXT, "fix: start a text with `t = \"\"`, a list with `t = []`"),
-];
 
-/// The class of a caught runtime error, Python's name for it (decision error-classes): each a subclass of Error in
-/// lib/prelude.warp, which `except IndexError` tests
-pub fn runtime_error_class(name: &str) -> &'static str {
-	use super::super::super::numbers;
-	match name {
-		"index_out_of_range" => "IndexError",
-		"key_not_found" => "KeyError",
-		DIVIDE_BY_ZERO => "ZeroDivisionError",
-		"out_of_memory" => "MemoryError",
-		"invalid_number"
-		| "min_of_an_empty_list"
-		| "max_of_an_empty_list"
-		| "reduce_of_an_empty_list"
-		| "empty_separator"
-		| "non_ascii_text"
-		| NOT_A_NUMBER
-		| numbers::casts::INVALID_CODE_POINT
-		| numbers::float_text::NOT_FINITE
-		| numbers::uncertain::NEGATIVE_UNCERTAINTY
-		| numbers::uncertain::INTERVAL_AND_GAUSSIAN => "ValueError",
-		"float_out_of_int_range" => "OverflowError",
-		name if crate::numbers::fixed_width::FIXED_WIDTHS.iter().any(|width| width.trap == name) => "OverflowError",
-		name if name.starts_with(crate::switch::NO_CASE_PREFIX) => "ValueError",
-		_ => "TypeError",
-	}
-}
+pub use crate::abi::traps::runtime_error_class;
 
-/// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
-pub fn runtime_error_message(name: &str) -> String {
-	let words = name.replace('_', " ");
-	match RUNTIME_ERROR_FIXES.iter().find(|(error, _)| *error == name) {
-		Some((_, fix)) => format!("{words}; {fix}"),
-		None => words,
-	}
-}
+pub use crate::abi::traps::runtime_error_message;
 
-/// index_out_of_range_of(index, count): index_out_of_range with the index and the list's count as the trap detail, which
-/// trap_error turns into "index out of range: 7 not in 1…3" (card index-range)
-pub const INDEX_OUT_OF_RANGE_OF: &str = "index_out_of_range_of";
+pub use crate::abi::traps::INDEX_OUT_OF_RANGE_OF;
 /// index_out_of_range_in(list, index): index_out_of_range_of a cons list, counting its cells
 pub(super) const INDEX_OUT_OF_RANGE_IN: &str = "index_out_of_range_in";
 
 pub use crate::abi::RETURNED_ERROR;
 
-/// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
-pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
+pub use crate::abi::traps::DIVIDE_BY_ZERO;
 
-/// `print [f]`, `join`: an item that is no text, number or other value with a text form; the item is the trap detail
-pub(in crate::wasm_emitter) const NOT_JOINABLE: &str = "not_a_joinable_item";
+pub(in crate::wasm_emitter) use crate::abi::traps::NOT_JOINABLE;
 
-/// `[e 2]` of an Error e: data holds no error (decision error-optional); the Error is the trap detail
-pub(in crate::wasm_emitter) const ERROR_IN_DATA: &str = "a_list_item_holds_no_error";
-/// `q.k = e`, `{k: e}`, `pt(e)` of an Error e
-pub(in crate::wasm_emitter) const ERROR_IN_FIELD: &str = "a_field_holds_no_error";
-const ERROR_IN_DATA_FIX: &str = "handle it with try … else, or declare `or error`";
+pub(in crate::wasm_emitter) use crate::abi::traps::ERROR_IN_DATA;
+pub(in crate::wasm_emitter) use crate::abi::traps::ERROR_IN_FIELD;
 
-/// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
-pub(super) const NOT_A_MAP: &str = "not_a_map";
+pub(super) use crate::abi::traps::NOT_A_MAP;
 
-pub const RUNTIME_ERRORS: [&str; 35] = [
-	"index_out_of_range",
-	INDEX_NOT_INTEGRAL,
-	"invalid_number",
-	"out_of_memory",
-	"key_not_found",
-	"float_out_of_int_range",
-	"min_of_an_empty_list",
-	"max_of_an_empty_list",
-	"reduce_of_an_empty_list",
-	"not_a_list",
-	"not_a_text",
-	"not_an_int",
-	"non_ascii_text",
-	NOT_JOINABLE,
-	"empty_separator",
-	"not_an_object",
-	"not_comparable",
-	super::super::super::functions::closures::NOT_A_FUNCTION,
-	super::super::super::functions::closures::WRONG_ARGUMENT_COUNT,
-	super::super::super::lists::tuple_emitter::WRONG_NUMBER_OF_VALUES,
-	RETURNED_ERROR,
-	"not_a_character",
-	COUNT_NOT_INTEGRAL,
-	NOT_A_NUMBER,
-	DIVIDE_BY_ZERO,
-	INT_NOT_WHOLE,
-	super::super::super::declared_values::LIST_CANNOT_HOLD,
-	super::super::super::numbers::uncertain::NEGATIVE_UNCERTAINTY,
-	super::super::super::numbers::uncertain::INTERVAL_AND_GAUSSIAN,
-	NOT_A_MAP,
-	super::super::super::numbers::casts::INVALID_CODE_POINT,
-	super::super::super::numbers::float_text::NOT_FINITE,
-	ERROR_IN_DATA,
-	ERROR_IN_FIELD,
-	EMPTY_PLUS_TEXT,
-];
+pub use crate::abi::traps::RUNTIME_ERRORS;
 
 impl WasmGcEmitter {
 	/// The runtime error functions in id order: the fixed ones, a missing switch case per label, the fixed-width overflows

@@ -107,9 +107,8 @@ enum Miss {
 	Null,
 }
 
-/// Runtime errors of a closure call: the value called is no closure, or a closure of another arity
-pub(in crate::wasm_emitter) const NOT_A_FUNCTION: &str = "not_a_function";
-pub(in crate::wasm_emitter) const WRONG_ARGUMENT_COUNT: &str = "wrong_number_of_arguments";
+pub(in crate::wasm_emitter) use crate::abi::traps::NOT_A_FUNCTION;
+pub(in crate::wasm_emitter) use crate::abi::traps::WRONG_ARGUMENT_COUNT;
 const ENTRY_FIELD: u32 = 0;
 /// The name a capture global is read by while a nested function's closure is made (nested_captures_now)
 const CAPTURE_VALUE_PREFIX: &str = "·capture·";

@@ -217,7 +217,7 @@ pub fn run_outcome(outcome: &Value) -> Node {
 		if let Some(line) = position.and_then(crate::wasm_emitter::trap_position_line) {
 			trace.push_str(&format!("\n{line}"));
 		}
-		return crate::wasm_emitter::trap_error(&trace, engine_words(message));
+		return crate::abi::traps::trap_error(&trace, engine_words(message));
 	}
 	if let Some(message) = outcome.get("error").and_then(Value::as_str) {
 		return crate::node::error(message); // a host word failed with its own message (run_block)

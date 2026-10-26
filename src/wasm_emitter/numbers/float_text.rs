@@ -21,8 +21,7 @@ const SPLITTER: f64 = 134217729.0;
 pub const FLOAT_DIGITS: &str = "float_digits";
 /// float_as_exact(x): `x as rational` of a run-time float
 pub const FLOAT_AS_EXACT: &str = "float_as_exact";
-/// The runtime error of float_as_exact for ∞ and NaN
-pub const NOT_FINITE: &str = "not_a_finite_number";
+pub use crate::abi::traps::NOT_FINITE;
 /// Powers of ten up to 10^22 are exact floats: float_scaled scales by one a step
 const EXACT_POWER: i32 = 22;
 /// A mantissa in [1, 10) times 10^MANTISSA_SHIFT is a whole number with 17 digits, from FEWEST_17 up to MOST_17

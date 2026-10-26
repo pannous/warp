@@ -5,6 +5,20 @@
 use crate::node::{Bracket, Node, Separator};
 use wasm_encoder::ValType;
 
+pub mod traps;
+
+/// A value written as warp text (a map, a list, a serialized value) read back as a Node: by compiler.wasm's view mode in
+/// the native host (card rust-bootstrap), by the data parser in the browser build, which has no compiler.wasm
+#[cfg(feature = "native")]
+pub fn value_of_text(text: &str) -> Node {
+	crate::compiler::standalone::parsed(text)
+}
+
+#[cfg(not(feature = "native"))]
+pub fn value_of_text(text: &str) -> Node {
+	crate::normalize::without_hints(|| crate::warp_parser::parse_data(text))
+}
+
 pub const NEW_BOOL: &str = "new_bool";
 
 /// new_type(name, body): a type declaration in code, `class P {x: int}` (Kind::TypeDef)

@@ -1,3 +1,4 @@
+pub mod failures;
 pub mod function_cache;
 pub mod module_cache;
 pub mod program_cache;

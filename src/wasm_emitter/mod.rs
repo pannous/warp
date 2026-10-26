@@ -63,8 +63,6 @@ enum Need {
 const DEBUG_MODULE: &str = ".cache/warp/last.wasm";
 /// The texts `as bool` reads as false
 const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "none"];
-/// wasmtime's words for an integer division or remainder by zero
-const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
 /// Node locals every function has after its Int scratch: node_scratch and container_scratch (globals.rs)
 const NODE_SCRATCH_LOCALS: u32 = 2;
 /// The name section's name of the start function, which installs witness tables and late calls in each instance
