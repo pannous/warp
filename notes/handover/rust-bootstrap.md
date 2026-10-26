@@ -123,8 +123,31 @@ Harness → compiler edges, as found on rust-bootstrap-cut 567ce244f (each must 
   of the fix program), serve.rs (wasm_emitter::eval). formatting/ and law/ are compiler-side and go.
 - compiler/self_hosted.rs: the WARP_SELF_HOSTED lanes (pipeline::compile, lower, warp_parser) go; what standalone.rs
   still uses from it (module_of_bytes, WORKER_STACK, view_of_json) moves into standalone.rs.
-- tests/ (cargo test crate, 1807 files, `is!` over the Rust pipeline): stays on rust-bootstrap; on `pure` the
-  [[test]] target can only go with the compiler with the user's OK (rule: never delete tests); warp tests stay.
+- tests/ (cargo test crate, `is!` over the Rust pipeline): stays on rust-bootstrap. USER DECISION 2026-10-26 16:04:
+  drop the cargo tests/ crate (Rust test files and the [[test]] target) on `pure` as its own commit (one revert:
+  c956aaa012), keep the warp tests. 16:06: trust main's test/ (761d6f9ab), no diff or copy; `warp test` and the
+  pure_tests driver default to test/.
+
+## Done on rust-bootstrap-cut (merged into `pure`, not main, not Ready)
+- 0660eeb25 src/abi.rs (the host/module ABI); d22bff3e7 abi::marked_literal the one radix writer.
+- 20c879814a step 1: abi/traps.rs (trap names, RUNTIME_ERRORS, trap_error), run/failures.rs (failed_run),
+  abi::value_of_text (standalone::parsed natively).
+- da2b1c45aa step 2: compiled_module.rs (CompiledModule, run_module), compiler/compiler_files.rs (library, keys,
+  module_of_bytes, use_closure, view_of_json).
+- b500ea913c step 3: host aliases into lowering, TEMPORARY_SEPARATOR / WARP_CALL / OPTIONAL_MARK into abi.rs.
+- 47e727ba59 merge origin/main (test/, lib/compiler/commands.warp); c956aaa012 drop tests/ (decision above).
+- 475d65f8c7 step 5: the Rust compiler deleted (462 files, -137k lines; analyzer, lowering, wasm_emitter,
+  warp_parser, pipeline, normalize, law, formatting, units, real, text, compile-side modules/ and web/). Runtime
+  pieces moved: pure_tests test_cases/skipped_pairs, web/route_paths.rs, modules/foreign.rs, graphics/shader_holes.rs,
+  names into abi.rs, time_node in time/mod.rs, slim compile_context. cargo check: 0 errors, 0 warnings (native).
+  Hello in the three lanes passed (plain 29 s, pure 1 s, self 28 s; index trap message right; eval 6*7 = 42).
+- Not in the self lane yet on `pure` (they say so): verify, types, fetch, tool, deploy, dev, lower, lower-json,
+  format/lint (beautify/fix run lib/fix/command.warp), build --wit/--component/--wagi/--site, compile --page,
+  standalone executables and web view apps (a run leaves no executable), the web view, run_block, wasm components,
+  unit columns, `warp fast`. `warp serve` runs the program (it serves as it says); `warp build` writes compiler.wasm's
+  module. The browser (non-native) build is not kept on `pure`.
+- Follow-ups: Cargo.toml still lists compile-only dependencies (binaryen, wit-component, …): prune; `warp test` over
+  test/ not run yet on `pure`.
 
 ## Open
 - fixpoint-fixes (analyzer.warp binding, parser.warp min-int, walk.warp names_made) landing on main: then refresh the
