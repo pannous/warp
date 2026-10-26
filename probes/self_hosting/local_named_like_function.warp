@@ -1,0 +1,9 @@
+# a local named like a top-level function is the local (card local-variable-named)
+digits(a: any, b: int, c: int, d: int): bool := yes
+trimmed(text: text): text := {
+	digits = text
+	while digits.starts_with("0") { digits = digits[1..] }
+	digits
+}
+print trimmed("007")
+// out: 7

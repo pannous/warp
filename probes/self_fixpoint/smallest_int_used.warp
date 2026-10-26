@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# -9223372036854775808 in a used file: the int -2^63, and the file's declarations all arrive (the self-compiled compiler
+# trapped negating it, and the used file lost every declaration, as emitter.warp's smallest_int did)
+use "smallest_int.warp"
+print(smallest)
+print(in_range(-1))
+x = -9223372036854775808
+print(x)
+print(- -3)

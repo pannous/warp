@@ -2154,7 +2154,8 @@ def prefixed_by_symbol(p: Parser, c: text): Node := {
 		skip_spaces(p)
 		operand = expression(p, 155)
 		// `-7` is the number, written where its sign is
-		if operand is number { return placed_at(p, 0 - operand, sign) }
+		// 9223372036854775808 reads as the int -2^63 where ints are 64 bits: `-9223372036854775808` is that int itself
+		if operand is number { return placed_at(p, if operand is int and operand == -9223372036854775807 - 1 then operand else 0 - operand, sign) }
 		return keyed("-", ø, operand)
 	}
 	if c == '!' or c == '¬' {
