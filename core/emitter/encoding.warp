@@ -25,11 +25,11 @@ def le64(n: int): list {
 	for i in 0..8 { out += [bit_and(n >> (8 * i), 255)] }
 	out
 }
-def concatenated(parts: any): list {
+def concatenated(parts: list): list {
 	out = []
 	for part in parts { out += part }
 	out
 }
-def vector(parts: any): list { uleb(#parts) + concatenated(parts) }
+def vector(parts: list): list { uleb(#parts) + concatenated(parts) }
 def name_bytes(name: text): list { vector(name.bytes.map(b => [b])) }
-def section(id: int, content: any): list { [id] + uleb(#content) + content }
+def section(id: int, content: list): list { [id] + uleb(#content) + content }

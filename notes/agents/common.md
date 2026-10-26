@@ -86,7 +86,7 @@ before asking a question). After a context swap, this file and your role file be
 - A major feature ships with samples/<topic>.warp (chmod +x) and its wiki page updated in the same task.
 - Landing, by the worker itself (no Integrator gate; user 2026-10-26): `data/warp format` on the .warp files you
   wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
-  change; on that merge run the smoke test (core/ changes: smoke + `scripts/self-check.sh`, AGENTS.md "Testing");
+  change; on that merge run the smoke test (core/ changes: smoke + `scripts/self-check.sh` + the gate probes, `scripts/gate.sh --tiers 1 <worktree>`, seconds; AGENTS.md "Testing");
   `git push origin HEAD:main` (fast-forward only). Rejected because main moved: merge origin/main again; rerun the
   smoke test only if the new commits touch core/ or lib/; push. At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
   compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches

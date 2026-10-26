@@ -8,3 +8,5 @@ type Name = text
 type KindName = text
 # a type word, one naming the elements of a list or map as well: `int`, `list of int`, `map of text`
 type TypeWord = text
+# a value's code in the emitter: [its KindName, its wasm bytes], `["int", [op.i64_const, 7]]`
+type TypedCode = list

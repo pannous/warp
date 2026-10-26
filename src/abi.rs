@@ -103,6 +103,14 @@ pub fn trap_detail_line(detail: &Node) -> String {
 	format!("{TRAP_DETAIL_PREFIX}{}", shown.replace('\\', "\\\\").replace('\n', "\\n"))
 }
 
+/// The exported global where a program leaves the name of the runtime word a runtime error fails in (`index_out_of_range`,
+/// `returned_error` …): trap_error reads the error by that name, which a trace no longer shows once Cranelift has inlined
+/// the word into its caller
+pub const TRAP_NAME: &str = "trap_name";
+
+/// How a trapped run carries that name into its error: `trap name: <word>`
+pub const TRAP_NAME_PREFIX: &str = "trap name: ";
+
 /// The exported global where a program leaves the source position of the statement it runs, for its runtime errors
 pub const TRAP_POSITION: &str = "trap_position";
 
