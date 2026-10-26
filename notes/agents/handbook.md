@@ -32,10 +32,10 @@ Principles and Talking live only in common.md.
   copy-on-write copy of /workspace/cow/warp, target/ build cache included, at /workspace/cow/trees/<branch> on a new
   branch <branch>. Remove your own with `boxtree rm <branch>` after landing. Never work in /workspace/cow/warp itself.
   Run compilers with `WARP_LIB=<tree>/lib`. The shared box binary is /workspace/cow/warp-rust-latest (built from main;
-  refresh with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh`, which moves the link only after a passing
-  smoke test); a branch with Rust changes uses its own build. Branch self-check: `/workspace/box-slot.sh
-  /workspace/selfcheck-branch.sh <branch>`.
-- Don't cargo-build `warp` per branch: run `/workspace/box-slot.sh /workspace/cow/warp-rust-latest rebuild pure` with
+  refresh with `/workspace/build-fresh-warp.sh`, which moves the link only after a passing
+  smoke test); a branch with Rust changes uses its own build. Branch self-check: `/workspace/selfcheck-branch.sh
+  <branch>`.
+- Don't cargo-build `warp` per branch: run `/workspace/cow/warp-rust-latest rebuild pure` with
   `WARP_LIB=<tree>/lib`. The Rust harness changes rarely; a branch that changes it uses its own build, the merger
   refreshes the shared binary after it lands.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
@@ -67,21 +67,20 @@ Principles and Talking live only in common.md.
 - Low effort for routine runs : routine builds and tests (rebuilds, targeted test runs, self-checks,
   gate runs) go to a helper at low effort with a step cap; give it the exact commands and stop when they finish.
   Higher effort only for real debugging or design work.
-- Tiered gate, pure pipeline first : `scripts/gate-probes.sh
+- Tiered gate, pure pipeline first : `scripts/gate.sh
   [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure (warp.wasm) and
   the hellos (minutes; self only when data/ has a promoted warp-self.wasm). Tier 1: every test/gate/<name>.warp in
   those lanes against <name>.expected
   (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
-  Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/warp-rust-latest (the old sol-warp-* names stay as links for old scripts).
+  Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). On the box: shared binary /workspace/cow/warp-rust-latest (the old sol-warp-* names stay as links for old scripts).
 - warp-self.wasm (`warp self`'s compiler) is no gate build: `scripts/promote-self.sh [--background] [<tree>]` copies
   warp.wasm to it only when warp.wasm compiles compiler.warp to its own bytes (the fixpoint), every once in a while,
   in parallel; it never fails its caller. Install a compiler pair as warp.wasm + warp-self.wasm (the old names
   compiler.wasm / compiler-self.wasm are still read when the new ones are missing).
-- Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate-probes.sh --tag-good` tags it
-  `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `scripts/bisect-lane.sh [--lane
-  pure|self|both] <probe.warp> <expected> [good] [bad]` (default the newest good/* tag .. origin/main, first-parent)
-  bisects in a temporary worktree it removes: per step rebuild pure (and the self promotion) with the shared binary, bad only on
-  wrong output, skipped (125) on a failed rebuild or a timeout; it prints the first bad commit.
+- Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate.sh --tag-good` tags it
+  `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `git bisect start origin/main <good tag>` and `git
+  bisect run` a line that rebuilds pure (`WARP_LIB=$PWD/lib warp rebuild pure`, exit 125 when that fails) and compares
+  `warp pure <program>` with the expected output.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep test/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders: the Integrator runs the full suite. Never pkill by
   pattern (it matches session prompts; kill by PID).
@@ -110,21 +109,15 @@ Principles and Talking live only in common.md.
   wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
 - Acceptance (decision warp-only-acceptance): a branch is accepted when warp.wasm compiles
   compiler.warp itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's
-  binary; it queues behind a running check, one at a time on the Mac: never run `warp rebuild self` in parallel). Mark it
+  binary). Mark it
   `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. While
   main's own self build is red (its owner fixes it), a branch passes when its pure lane is green and its self check
   fails no worse than main's (the same error): a red main never blocks the queue.
-  A change to core/ also checks the self build before Ready: `scripts/self-check.sh <worktree>` (it rebuilds both
-  compilers in a queue slot; a bare `warp rebuild self` skips the queue: three at once pushed the load to 288).
+  A change to core/ also checks the self build before Ready: `scripts/self-check.sh <worktree>` (with --rebuild it
+  builds a missing compiler pair).
   Never rebuild in the main checkout: that replaces main's delivered pair under every running check; only the
   Integrator's push installs it; a form emitter.warp refuses there is fixed or carded, never left for main to find.
-  Fleet-wide at most 2 heavy warp runs at once : every self build, `warp rebuild`, `warp
-  pure` of a compiler file and every test sweep (is_tests, is_pairs, test series) runs inside `scripts/slot.sh <cmd>`
-  (slots on /Volumes/Build/self-check; self-check.sh takes one itself; the Integrator's gate included). A sweep runs
-  its programs serially inside one slot, never N parallel warps. The Integrator's gate runs with WARP_SLOT_GATE=1 in
-  a reserved slot of its own, so it never waits behind workers. The Grok box (Debian, 8 cores, 15 GB) has 3 heavy
-  slots of its own: every heavy box run goes through `/workspace/box-slot.sh <cmd>` (slots 2-3 open only with >= 4 GB
-  free); Mac sessions hand box runs to the Supervisor (grok-msg). The tree it checks
+  Commands run directly, no slots or queues (decision no-slots). The tree it checks
   is a cowtree worktree under /Volumes/Worktrees or a throwaway lib/ copy under /Volumes/Junk, never inside the main
   checkout (scratch/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
   cold module caches) go to Grok Warp Code 3's Linux box.
@@ -210,8 +203,7 @@ Principles and Talking live only in common.md.
   it back: the Integrator ignores them onto your card and you fix forward. Only a branch that doesn't build or
   breaks other areas' tests is bounced. More than ~20 ignored tests of yours: fix those before new work.
 - Before `todo ready`: `scratch/warp format <files>` on the .warp files you wrote or changed (notes/warp_format.md),
-  then `scripts/style_lint.py --fix` (the style rules, notes/style_lint.md) and commit what it moved. Style nits are the
-  linter's, not hand polish. A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
+  and commit what it moved. A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
 - Done = the card is the handoff (the board's Ready column is the merge queue):
   1. Targeted tests, commit, formatted.
   2. Make sure the branch merges cleanly: `git fetch origin && git merge --autostash origin/main`. You resolve
