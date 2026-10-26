@@ -77,13 +77,13 @@ def passed(f: Function, i: int, value: any): list {
 	} catch refusal {
 		joint = parameter_joint(f.kinds[i], value#1)
 		if slot not in module.unannotated or not (joint in type_bytes or joint in references) { throw refusal }
-		if module.later_kinds.get(slot) == joint {
-			if slot not in module.widened_now { throw refusal }
-			return value#2
+		known = module.later_kinds.get(slot) == joint
+		if known and slot not in module.widened_now { throw refusal }
+		if not known {
+			module.later_kinds[slot] = joint
+			module.widened_now[slot] = yes
+			module.widenings += 1
 		}
-		module.later_kinds[slot] = joint
-		module.widened_now[slot] = yes
-		module.widenings += 1
 		value#2
 	}
 }

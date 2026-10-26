@@ -1226,9 +1226,10 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 		start = added_function(wasi_start, [], no_kind, [])
 		start.code = [op.call] + uleb(main.index) + [op.drop]
 		# a reading that widened a parameter is read again: its bytes would be dropped
-		if module.widened_now { return ø }
-		if #module.refusals > 0 { throw module.refusals.join("\n") }
-		module_bytes(module.order)
+		if module.widened_now { ø } else {
+			if #module.refusals > 0 { throw module.refusals.join("\n") }
+			module_bytes(module.order)
+		}
 	} catch refusal {
 		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
 		text = "" + refusal
