@@ -1,0 +1,1 @@
+is_word(n: int, accepts: function): bool := accepts(n) and n > 0

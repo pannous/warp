@@ -49,7 +49,7 @@ node_parts(n: Node): list := match n {
 is_empty(n: Node): bool := n == ø
 head_name(n: Node): Name := if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ""
 # a local, else a global the scope sees
-binding(scope: Scope, name: Name): KindName? := if name in scope.kinds then scope.kinds[name] else scope.globals.get(name)
+binding(scope: Scope, name: Name): KindName? := if name in scope.kinds then scope.kinds[name] else if "" in scopes then scopes[""].kinds.get(name) else scope.globals.get(name)
 is_ref(kind: KindName): bool := kind not in primitive_kinds
 all_of(xs: list, f: function): bool := #xs.filter(f) == #xs
 any_of(xs: list, f: function): bool := #xs.filter(f) > 0
