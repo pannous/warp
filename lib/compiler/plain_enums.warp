@@ -81,7 +81,10 @@ held_spelled(value: Node, subjects: any): any := {
 held_equality(left: Node, op: Node, right: Node, n: Node, subjects: any): Node := {
 	enum_name = held_spelled(left, subjects) ?? held_spelled(right, subjects)
 	if enum_name == ø { return n }
-	Key(held_text(enum_name, left), op, held_text(enum_name, right))
+	if not is_name(left) or not is_name(right) { return Key(held_text(enum_name, left), op, held_text(enum_name, right)) }
+	# two names, `written == op`: Op·same(written, op) compares two cases as they are (node_cases.warp comparing_functions)
+	same = call_of(spelled_function(enum_name, "same"), [left, right])
+	if op == Op.Ne then Key(ø, Op.Not, same) else same
 }
 
 # the enum having a case of that name, when only one has it, else ø

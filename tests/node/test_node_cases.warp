@@ -21,3 +21,10 @@ match p { P(Color.Red, n): 1, P(Green, n): n, _: 0 }' 2
 
 # a_patterns_op_is_spelled_as_text
 is! 'n = parse("(a)"); match n { List(items, bracket, s): bracket as text, _: 0 }' '('
+
+# cases_compare_as_they_are
+is! 'same(n: Node, o: Op): list := match n { Key(l, w, r): [w == o, w != o, w == Op.Define, w != Op.Add], _: [] }
+same(parse("a := 1"), Op.Define) == [yes, no, yes, yes]' true
+is! 'same(n: Node, o: Op): list := match n { Key(l, w, r): [w == o, w != o, w == Op.Define, w != Op.Add], _: [] }
+same(parse("a + 1"), Op.Define) == [no, yes, no, no]' true
+is! 'colon(o: Op): bool := o == Op.Colon; colon(Op.Colon) and not colon(Op.Dot)' true

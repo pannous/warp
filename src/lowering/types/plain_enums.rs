@@ -132,6 +132,31 @@ fn spelled_text(enum_name: &str, value: Node) -> Node {
 	}
 }
 
+/// `a == b` of spelled cases (decision enum-case): a name and a case, `op == Op.Define`, is `Op·is(op, Define, ":=")`;
+/// two names `Op·same(a, b)`: two cases compare as they are, without `Op·text`'s match over every case (a tenth of the
+/// passes' time in `warp rebuild self`); anything else as spellings, `Op·text(a) == "+"`
+fn spelled_equality(enum_name: &str, left: Node, operator: Op, right: Node) -> Node {
+	let spelling = |side: &Node| side.drop_meta().symbol_name().and_then(|case| node_cases::spelling(enum_name, case));
+	let is_name = |side: &Node| side.drop_meta().symbol_name().is_some() && spelling(side).is_none();
+	let compared = match (spelling(&left), spelling(&right)) {
+		(None, Some(spelled)) if is_name(&left) => {
+			Some(node_cases::case_test(enum_name, left.clone(), right.clone(), spelled))
+		}
+		(Some(spelled), None) if is_name(&right) => {
+			Some(node_cases::case_test(enum_name, right.clone(), left.clone(), spelled))
+		}
+		(None, None) if is_name(&left) && is_name(&right) => {
+			Some(node_cases::same_cases(enum_name, left.clone(), right.clone()))
+		}
+		_ => None,
+	};
+	match (compared, operator) {
+		(Some(test), Op::Ne) => key(Node::Empty, Op::Not, test),
+		(Some(test), _) => test,
+		(None, _) => key(spelled_text(enum_name, left), operator, spelled_text(enum_name, right)),
+	}
+}
+
 /// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
 fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let [word, name, cases] = items else { return None };
@@ -167,8 +192,8 @@ fn rewritten(node: Node, enums: &Enums) -> Node {
 	// a case of Op, Bracket or Separator and its spelling are synonyms (decision enum-case): `Op.Add == "+"`
 	if let Node::Key(left, operator @ (Op::Eq | Op::Ne), right) = node.drop_meta() {
 		if let Some(enum_name) = enums.spelled_enum_of(left).or_else(|| enums.spelled_enum_of(right)) {
-			let spelled = |side: &Node| spelled_text(&enum_name, rewritten(side.clone(), enums));
-			return key(spelled(left), *operator, spelled(right));
+			let (left, right) = (rewritten((**left).clone(), enums), rewritten((**right).clone(), enums));
+			return spelled_equality(&enum_name, left, *operator, right);
 		}
 	}
 	match node.map_children(|child| rewritten(child, enums)) {
