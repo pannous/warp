@@ -106,7 +106,7 @@ fn parsed_view(code: &str) -> Result<String, Node> {
 	let source = folder.join(format!("warp-parse-{}-{parse}.warp", std::process::id()));
 	let output = source.with_extension(VIEW_EXTENSION);
 	std::fs::write(&source, code).map_err(|failure| error(&format!("{}: {failure}", source.display())))?;
-	let said = run_compiler(&source, &output, &folder, compiler);
+	let said = run_compiler(&source, &output, &folder, compiler, kept_scope(Compiler::RustCompiled));
 	let json = std::fs::read_to_string(&output);
 	let _ = std::fs::remove_file(&source);
 	let _ = std::fs::remove_file(&output);
@@ -181,14 +181,19 @@ pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 
 /// The module compiler.warp makes of the program file with `folder` in scope: `compiler.warp <source> <wasm> <folder> <lib>`
 fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
-	compiled_with(program, folder, compiler(by)?)
+	compiled_with(program, folder, compiler(by)?, kept_scope(by))
 }
 
 /// The module `compiler` (a module of compiler.warp) makes of the program file with `folder` in scope
-fn compiled_with(program: &Path, folder: &Path, compiler: CompiledModule) -> Result<CompiledModule, Node> {
+fn compiled_with(
+	program: &Path,
+	folder: &Path,
+	compiler: CompiledModule,
+	scope: Option<String>,
+) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
-	let said = run_compiler(program, &output, folder, compiler);
+	let said = run_compiler(program, &output, folder, compiler, scope);
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
@@ -201,17 +206,16 @@ fn compiled_with(program: &Path, folder: &Path, compiler: CompiledModule) -> Res
 
 /// What the run of `compiler` (a module of compiler.warp) said, writing `output` of the program file with `folder` in
 /// scope: `compiler.warp <source> <output> <folder> <lib>`, a module, or parser.warp's view when `output` ends in
-/// VIEW_EXTENSION. The arguments of the program running, if any (a host word parses in its run), stay its own
-fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: CompiledModule) -> Node {
+/// VIEW_EXTENSION, its kept values in `scope` (kept_scope). The arguments of the program running, if any (a host word
+/// parses in its run), stay its own
+fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: CompiledModule, scope: Option<String>) -> Node {
 	let running = crate::modules::std_adapters::program_arguments();
 	let arguments = [program, output, folder, library()];
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
 	let owner = crate::extensions::sha256_hex(&compiler.bytes);
-	// both compilers are compiled by lib/compiler now (by the seed or by compiler.wasm): their kept values stay their
-	// own, never keyed by the makers' files alone (std_adapters kept_key)
-	let said = crate::modules::std_adapters::kept_by(owner, true, || crate::pipeline::run_module(compiler));
+	let said = crate::modules::std_adapters::kept_by(owner, scope, || crate::pipeline::run_module(compiler));
 	crate::modules::std_adapters::set_program_arguments(running);
 	said
 }
@@ -273,8 +277,8 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let file = library().join(COMPILER_FILE);
 	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let folder = file.parent().unwrap_or(library()).to_path_buf();
-	let (builder, compiler) = builder(by)?;
-	let module = compiled_with(&file, &folder, compiler)
+	let (builder, compiler, scope) = builder(by)?;
+	let module = compiled_with(&file, &folder, compiler, scope)
 		.map_err(|failure| error(&format!("compiler.warp compiled by {builder}: {}", failure.serialize())))?;
 	let mut bytes = module.bytes.clone();
 	let section = current_build().join(BUILD_SEPARATOR);
@@ -289,11 +293,12 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 }
 
 /// Who builds compiler.warp for `by`, named, and its module: compiler.wasm for `warp self` when there is one of these
-/// compiler inputs (`warp rebuild` builds compiler.wasm first), else the seed. No Rust-compiled stage (card rust-bootstrap)
-fn builder(by: Compiler) -> Result<(String, CompiledModule), Node> {
+/// compiler inputs (`warp rebuild` builds compiler.wasm first), else the seed; with the scope of its kept values
+/// (kept_scope). No Rust-compiled stage (card rust-bootstrap)
+fn builder(by: Compiler) -> Result<(String, CompiledModule, Option<String>), Node> {
 	if let Compiler::SelfCompiled = by {
 		if let Some((path, bytes)) = current_build_file(Compiler::RustCompiled) {
-			return Ok((path.display().to_string(), module_of_bytes(bytes)));
+			return Ok((path.display().to_string(), module_of_bytes(bytes), kept_scope(Compiler::RustCompiled)));
 		}
 		eprintln!(
 			"no compiler.wasm of these compiler inputs: the seed builds compiler-self.wasm (`warp {REBUILD_WORD}` builds both, compiler-self.wasm by compiler.wasm)"
@@ -306,7 +311,18 @@ fn builder(by: Compiler) -> Result<(String, CompiledModule), Node> {
 			seed.display()
 		))
 	})?;
-	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes)))
+	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes), None))
+}
+
+/// Where a compiler's run keeps the values its makers made (os.keep_of; std_adapters kept_by): compiler.wasm, which the
+/// seed compiled, under the makers' files of lib/compiler and the seed, so an edit of lib/compiler outside them keeps
+/// them (card speed-module-cache: a used file's parse survives a compiler edit beyond the parser); None for
+/// compiler-self.wasm and the seed, which all of lib/compiler compiled (a seed of its time), whose values stay their own
+fn kept_scope(by: Compiler) -> Option<String> {
+	match by {
+		Compiler::RustCompiled => std::fs::read(seed_file()).ok().map(|seed| crate::extensions::sha256_hex(&seed)),
+		Compiler::SelfCompiled => None,
+	}
 }
 
 /// The seed: WARP_SEED, else seed/compiler-self.wasm beside lib/ (a checkout's), else in the installed folder
