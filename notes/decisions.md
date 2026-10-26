@@ -499,3 +499,4 @@ exact-decimals. #40 → list-sign. dimension-bridges → pixel-lengths. dollar-e
 P85, P87, P93, P95, P96, P98, P99, P101, P137, P144, P181, P53, P59, P79, P80, P9, P10, P16, P19, #2, #14b–d, #15–20,
 the original questions 1–41: test edits and housekeeping done.
 - to-inclusive (user): `to` stays inclusive; for 0-based index loops use `1 ..< #a` or `1 to #a - 1` (2026-10-26)
+- fixity-operators-only (user): the parser's Fixity enum covers operators only, no Function case; core-types-parser chunks 2-4 approved (2026-10-26)
