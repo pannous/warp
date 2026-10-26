@@ -10,7 +10,7 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
   as one line in notes/decisions.md. A bent rule is named, with the reason, in the message or commit. Only questions
   of the language's meaning go to the user, via the Interviewer.
 - High-level only: talk to the user, turn requests into cards and tasks, assign workers, watch load (`uptime`, 10
-  cores shared with the user's apps), metrics (`warp test` and `warp test --self` pass counts, scripts/lib_bench.sh)
+  cores shared with the user's apps), metrics (`warp test` and `warp test --self` pass counts)
   and the merge flow. When something stalls (gate, lane, stuck worker, Ready piling up), act at once; merge or run a
   check yourself if the Integrator is down.
 - Procedure changes are persisted before they are announced (common.md "Talking").
