@@ -1,5 +1,5 @@
 // Hints are shown by default and end with one line on hiding them; `--no-hints` or WARP_HINTS=0 hide them; warnings
-// stay (user 2026-10-09, card hints-toggle)
+// stay 
 #![cfg(feature = "native")]
 
 const HINTED: &str = "2 ** 3";

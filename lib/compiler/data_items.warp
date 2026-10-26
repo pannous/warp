@@ -1,7 +1,10 @@
 /*
-Data stays clean (decision error-optional; Rust twin src/lowering/collections/data_items.rs): an item written into a
-list or field, but a literal, is shown `data·item: e` or `data·field: e`, as Rust's analysis view shows its mark
-(node_views.rs SHOWN_LIST_ITEM), and emitter.warp fails where it holds an Error ("a list item holds no error").
+Data stays clean: •/wiki/data.md 
+
+**Data** is unevaluated content never meant to run (vocabulary: [[charged]]): a data file, `data e` in a program,
+and plain words ([[symbol]]s). 
+
+an item written into a list or field, but a literal, is shown `data·item: e` or `data·field: e`,
 The writes shown: the items of a list literal `[e 2]`, `xs#1 = e`, `xs.add(e)`, `xs.insert(1, e)`, `q.k = e`,
 `m["k"] = e`, the values of a map literal `q = {k: e}`, the items of a tuple literal `t = (e, 2)`. A place declared
 to admit an Error stays unmarked: a variable of the scope `xs: [int or error] = …`, a parameter `f(xs: [int?])`.

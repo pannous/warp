@@ -23,7 +23,7 @@ test a `list` parameter against ø.
   (`x = f(); if x == ø …; x`), and without narrowing the rule would warn there falsely.
 - `T?`, `any` and `Node` hold ø already; `op.return` (a member) is no return.
 
-A list result is the exception (user 2026-10-22, "ø can autocast to []", card list-result-autocast): a function
+A list result is the exception : a function
 declared `: list` (`ints`, `list of T`) that can answer ø gives [] instead, with no warning
 (`(body as list?) ?? []` in Rust, `body ?? []` in definitions.warp result_held).
 

@@ -1,0 +1,6 @@
+# a local named like a function of another used file (lexing.warp digits)
+trimmed(text: text): text := {
+	digits = text
+	while digits.starts_with("0") { digits = digits[1..] }
+	digits
+}

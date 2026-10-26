@@ -1,0 +1,4 @@
+// twice needs plus from shapes.warp: siblings see each other too
+twice(x) := plus(x, x)
+// also defined in shapes.warp, but nothing uses it: no ambiguity
+unused_name := 2

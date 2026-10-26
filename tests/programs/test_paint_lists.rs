@@ -49,7 +49,7 @@ fn paint_of_too_few_ints_fails() {
 }
 
 // card show-use: show() before canvas(width, height) used to panic in the PNG writer (chunks of width 0); it paints the
-// default canvas (user 2026-10-10: defaults, no errors)
+// default canvas 
 #[test]
 fn show_before_canvas_paints_the_default_canvas() {
 	let run = crate::common::warp_command().args(["--no-ask", "eval", "use draw; show()"]).output().unwrap();

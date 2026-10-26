@@ -44,7 +44,7 @@ fn is_result_type(result_type: &Node) -> bool {
 }
 
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`
-/// spells canonically (user 2026-10-12, return-as)
+/// spells canonically 
 fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
 	let Node::Key(left, Op::Or, rest) = definition.drop_meta() else {
 		return None;
@@ -56,7 +56,7 @@ fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
 	Some((head, key(first, Op::Or, rest.as_ref().clone())))
 }
 
-/// `def f(x) -> int` keeps working; warp writes a result type with `as`, unions too (user 2026-10-12, return-as)
+/// `def f(x) -> int` keeps working; warp writes a result type with `as`, unions too 
 pub(super) fn hint_as_result(definition: &Node, result_type: &Node) {
 	crate::normalize::set_position_of(definition);
 	let written = result_type.serialize();

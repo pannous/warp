@@ -14,7 +14,7 @@ The user asked whether to separate the core parser from the core language and th
 Measured: parser.warp is today ~50 % notation (2102 lines), ~16 % kernel (686), ~34 % sugar (1417); 26 of the 62
 other compiler files (2448 of their 10841 lines) are sugar passes. Sugar in all: ~3900 lines.
 
-## The kernel (user decision 2026-10-22: this list plus `match`, "match stays in the kernel 100%")
+## The kernel
 
 | # | form | why it can't be a rewrite |
 |---|------|---------------------------|
@@ -120,7 +120,7 @@ Sugar (1417), each with the rule it would become:
 | 28 | `/!`, `div`, `÷`, `/!=` | already a math.warp alias (`operator ÷ := /!`): the parser branch duplicates it; `operator div := /!` |
 | 23 | emit words `emit stop{…}` (send, fire, trigger, signal, ask) | `rewrite emit $e... => emit($e...)`, aliases for the others |
 | 22 | test words `x empty`, `x is missing`, `x failed` | `rewrite $x is empty => count($x) == 0` phrase rule, works today |
-| 21 | `n times {…}` | done: `rewrite $n times $body => for $i in 1 to $n $body where $body is block` (lib/sugar/loops.warp); later the prelude function `infix times(n: number, b: block)` (user 2026-10-22, card times-prelude) |
+| 21 | `n times {…}` | done: `rewrite $n times $body => for $i in 1 to $n $body where $body is block` (lib/sugar/loops.warp); later the prelude function `infix times(n: number, b: block)`  |
 | 15 | `a ?: b` | done (card non-name): a non-name left side is `rewrite $a ?: $b => ($t = $a; $t ? $t : $b)` (lib/sugar/fallbacks.warp); a name's stays the parser's ternary `a ? a : b`, the one shape Rust's type and pattern readers know as the optional field `email?: text` (type_kinds.rs optional_field), and pure-lane classes outside the core fall back to the hybrid lane. Sugar rules never reach a class body (card lib-sugar) |
 | 14 | `function f` reference | `rewrite function $f => &$f` |
 | 12 | `if no xs` | `rewrite no $x => not $x`: needs F1 (condition position) |

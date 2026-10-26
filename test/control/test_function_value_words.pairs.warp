@@ -1,0 +1,5 @@
+# from test_function_value_words.rs: edit the Rust test, then run the script again
+
+# a_library_words_return_type_comes_from_its_signature
+'floor.return_type'	'int'
+'sqrt.returns'	'number'

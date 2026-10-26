@@ -1,0 +1,2 @@
+# a function of four parameters, whose name another used file takes for a local (card local-variable-named)
+digits(source: any, at: int, count: int, n: int): bool := yes

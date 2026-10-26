@@ -25,18 +25,14 @@ exact_decimal(n: float): any := {
 	["node", node(Kind.Int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))]
 }
 
-# the module's data segment, and the offset of each text's bytes in it: globals, not Module fields, so the Rust lane
-# keeps them as a hash map and a list grown in place (as fields, each new text copied the whole segment and rebuilt
-# the map's index: a third of the emitter's time in `warp rebuild self`)
-global data_bytes = []
-global text_offsets = {}
-# the offset of a text's bytes in the data segment, each text stored once
+# the offset of a text's bytes in the data segment, each text stored once; counted, not measured: a long list's
+# count walks it, and module_bytes joins the bytes once (data_bytes)
 text_offset(t: text): int := {
-	if t not in text_offsets {
-		text_offsets[t] = #data_bytes
-		data_bytes += t.bytes
+	if t not in module.texts {
+		module.texts[t] = module.text_size
+		module.text_size += #t.bytes
 	}
-	text_offsets[t]
+	module.texts[t]
 }
 # a text as its bytes; one code point as its codepoint, as warp holds a literal "a" (a grapheme of more, "👍🏽", is a text)
 one_code_point(t: text): bool := #t == 1 and #codepoints(t) == 1

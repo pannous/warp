@@ -695,7 +695,7 @@ fn keyword_form(items: &[Node]) -> Option<(&Node, Node, Option<Node>)> {
 		[keyword, head, rest] if curried_definition(head, rest).is_some() => {
 			(keyword, curried_definition(head, rest).expect("guarded"), None)
 		}
-		// `def f(x) as int { … }`: the result type before a block body, read as `-> int { … }` is (user 2026-10-12, return-as)
+		// `def f(x) as int { … }`: the result type before a block body, read as `-> int { … }` is 
 		[keyword, head, body]
 			if let Node::Key(head, Op::As, result_type) = head.drop_meta()
 				&& body.is_block() =>

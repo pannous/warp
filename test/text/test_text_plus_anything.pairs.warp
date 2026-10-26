@@ -1,0 +1,4 @@
+# from test_text_plus_anything.rs: edit the Rust test, then run the script again
+
+# a_text_spelling_a_number_plus_a_number_warns
+'"a"+3'	'a3'

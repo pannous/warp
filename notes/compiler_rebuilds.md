@@ -3,7 +3,7 @@
 A self build takes 5-11 minutes and has been killed for lack of memory on the box. Most builds were not needed:
 the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the box.
 
-## Rules (user 2026-10-23)
+## Rules
 
 - Nothing rebuilds the compilers automatically because lib/ changed: no hook, watcher or test triggers a build, and no
   user-facing binary (warp-host, a built executable) rebuilds a compiler or the runtime at run time. A stale pair

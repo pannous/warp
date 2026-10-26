@@ -1,0 +1,9 @@
+# from test_match_binding_alternatives.rs: edit the Rust test, then run the script again
+
+# alternatives_bind_the_same_names
+is! 'factor(n) := match n { data($x * 1) | data(1 * $x) => x; _ => 0 }
+factor(data(y * 1))' 'y'
+is! 'factor(n) := match n { data($x * 1) | data(1 * $x) => x; _ => 0 }
+factor(data(1 * y))' 'y'
+is! 'factor(n) := match n { data($x * 1) | data(1 * $x) => x; _ => 0 }
+factor(data(y * 3))' 0

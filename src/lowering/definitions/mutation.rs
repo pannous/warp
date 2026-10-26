@@ -1,4 +1,4 @@
-//! `fn!` mutates in place (user decision D2 2026-10-03, "by position", wiki/mutable.md): a `!` after a function or method
+//! `fn!` mutates in place : a `!` after a function or method
 //! assigns its result back to the variable it was called on. `x.upper!`, `x.upper()!` and `upper(x)!` become
 //! `x = x.upper` in the parser; in `upper x!` the parser only sees `x!`, so it marks x and `lower` turns the call into
 //! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating, as does `x!` after an output word (`print friends!`).

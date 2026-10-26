@@ -2,7 +2,7 @@
 
 The Rust tests' `is!("code", expected)` assertions also live as warp files beside their Rust file, two kinds, never
 mixed: a pairs file of pure data with the short tests (tests/numbers/test_math.rs → tests/numbers/test_math.pairs.warp),
-one test a line, tab separated: code ⇥ expected ⇥ an optional note (user decision, supervisor 2026-10-19):
+one test a line, tab separated: code ⇥ expected ⇥ an optional note :
 
 ```
 '2+3*4'	14

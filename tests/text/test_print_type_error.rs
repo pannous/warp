@@ -1,4 +1,4 @@
-// `print x` where x is a type error reports x's own error, not "print of an Error"; text * int repeats (user decision 2026-10-03)
+// `print x` where x is a type error reports x's own error, not "print of an Error"; text * int repeats 
 use crate::common::fails_with;
 
 #[test]

@@ -44,7 +44,7 @@ impl WarpParser {
 		})
 	}
 
-	/// `[3, 4] cm`: a unit after a list is each element's, the list times the unit (user 2026-10-15, dimensions-units Q3)
+	/// `[3, 4] cm`: a unit after a list is each element's, the list times the unit 
 	pub(crate) fn with_unit_after_list(&mut self, list: Node) -> Node {
 		let is_unit =
 			self.spaced_word().is_some_and(|word| word != crate::numbers::uncertain::SIGMA) && self.at_spaced_unit();
@@ -57,7 +57,7 @@ impl WarpParser {
 		Node::Key(Box::new(list), Op::Mul, Box::new(unit))
 	}
 
-	/// `3 km` reads as `3km`, the form units are written in (user 2026-10-09: a soft hint)
+	/// `3 km` reads as `3km`, the form units are written in 
 	fn hint_glued_unit(&self, number: &Node) {
 		let Some(unit) = self.spaced_word().filter(|word| word != crate::numbers::uncertain::SIGMA) else {
 			return;

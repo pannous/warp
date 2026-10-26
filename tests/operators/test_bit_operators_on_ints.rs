@@ -1,4 +1,4 @@
-// card operator-shall (user 2026-10-13): `&` and `|` are polymorphic, bitwise on two whole numbers and the logical
+// card operator-shall : `&` and `|` are polymorphic, bitwise on two whole numbers and the logical
 // and/or on truth values; `&&`, `||`, `and` and `or` stay logical on numbers too (2 and 3 is 3)
 use crate::common;
 use crate::is;

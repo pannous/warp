@@ -214,7 +214,7 @@ pub fn json_key(key: &Node) -> String {
 	}
 }
 
-/// The first part JSON cannot express (user 2026-10-15: never a silent loss): ∞, NaN, a complex number
+/// The first part JSON cannot express : ∞, NaN, a complex number
 pub fn inexpressible_in_json(node: &Node) -> Option<Node> {
 	first_number_part(node, |number| match number {
 		Number::Float(x) => !x.is_finite(),

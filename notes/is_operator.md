@@ -1,6 +1,6 @@
 # `is` is its own operator (card is-operator)
 
-Only `is` tests a type (user decision #30): `3 is int` is yes, `3 == int` compares 3 with the type value int (no).
+Only `is` tests a type : `3 is int` is yes, `3 == int` compares 3 with the type value int (no).
 
 - Both parsers read `is` as `Op::Is` (Rust spellings.rs "is", parser.warp WORD_OPERATORS), never as `==`.
 - Rust: `Op::Is` lives only while parsing. parse() (warp_parser/sugar.rs read_equality) makes `x is v` the unmarked

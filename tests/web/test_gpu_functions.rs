@@ -1,7 +1,7 @@
 // card gpu-functions (notes/gpu.md "Warp functions on the GPU"): a map's kernel may call the program's own functions,
 // which become WGSL functions beside it: their local variables, if/else, for over a range, while and returns; a
 // function WGSL cannot compute (a text, recursion) keeps the map on the CPU. Mass work goes to the GPU in f32 by itself
-// as P240 says (user 2026-10-13), small maps stay exact
+// as P240 says , small maps stay exact
 use warp::wasm_emitter::eval;
 
 const AUTO_COUNT: usize = warp::gpu_maps::GPU_AUTO_MIN_COUNT as usize;

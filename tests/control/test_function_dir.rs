@@ -21,7 +21,7 @@ fn a_later_dir_leaves_an_earlier_line_alone() {
 
 #[test]
 fn the_type_of_a_function_is_function() {
-	// the kind and the signature (user decision on card module-methods)
+	// the kind and the signature 
 	is!(&format!("{AREA}\ntype(area)"), "function: (width: int, height: int) -> int");
 	is!(&format!("{AREA}\ntype(&area)"), "function: (width: int, height: int) -> int");
 }

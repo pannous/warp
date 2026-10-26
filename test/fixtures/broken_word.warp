@@ -1,0 +1,5 @@
+// a module whose function calls a word nobody defines
+
+def shout(text){
+	yell_loudly(text)
+}

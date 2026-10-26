@@ -1,0 +1,2 @@
+// the package's own module marks the package folder
+unit := 1

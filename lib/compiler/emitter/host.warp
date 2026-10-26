@@ -45,9 +45,11 @@ def exported_builders(): any {
 	f = exported_function("returned_error", [], no_kind)
 	f.code = error_throw("returned_error") + [op.unreachable]
 }
-# f at the module's next function index (results `any`: a declared Function result fails, card class-result-type)
+# f at the module's next function index (results `any`: a declared Function result fails, card class-result-type),
+# the functions counted as placed, not measured: a long list's count walks it
 placed(f: Function): any := {
-	f.index = #module.imports + #module.order
+	f.index = #module.imports + module.placed
+	module.placed += 1
 	module.order += [f]
 	f
 }

@@ -28,7 +28,7 @@ const MONTH_NAMES: [&str; 12] = [
 /// now's local date (calendar::Time::part)
 const NOW_DATE: &str = "now.date";
 const NOW_MONTH: &str = "now.month";
-/// `time.now`, the current time of day (user decision time-now)
+/// `time.now`, the current time of day 
 const NOW_TIME_OF_DAY: &str = "now.time";
 
 pub fn lower(program: Node) -> Node {

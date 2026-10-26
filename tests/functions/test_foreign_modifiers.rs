@@ -1,4 +1,4 @@
-//! P78 (user 2026-10-05): modifier words of other languages without warp meaning (`public`, `static`, `virtual` …) are
+//! P78 : modifier words of other languages without warp meaning (`public`, `static`, `virtual` …) are
 //! skipped with the note "public has no meaning in warp"; `global` and `const` keep their meaning
 use crate::is;
 use warp::errors::diagnostic::take_warnings;

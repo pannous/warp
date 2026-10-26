@@ -1,0 +1,4 @@
+# from test_unhandled_emits.rs: edit the Rust test, then run the script again
+
+# an_emit_nobody_handles_warns
+'emit nobody listens; 5'	5

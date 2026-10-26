@@ -1,0 +1,5 @@
+# from test_bare_operator_block.rs: edit the Rust test, then run the script again
+
+# operators_with_operands_in_blocks_still_work
+'map [1,2,3] {it+1}'	[2, 3, 4]
+'x=1; {x++}; x'	2

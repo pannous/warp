@@ -31,6 +31,10 @@ guarded_try(value: Node, fallback: Node, binding: any, number: int): Node := {
 	try_statements([ran, chosen_branch(succeeded, braced(result), otherwise)])
 }
 
+is_division(op: any): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
+
+# To do give one-line summaries to all functions where the meaning is not immediately clear from the context and name 
+# todo number: int  Generalize to other numbers 
 divided(dividend: Node, op: any, divisor: Node, fallback: Node, number: int): Node := {
 	held = try_name("divisor", number)
 	quotient = guarded_try(Key(dividend, op, held), fallback, ø, number)
@@ -43,14 +47,13 @@ is_written_list(n: Node): bool := match n {
 	_: no
 }
 
+# TODO this doesn't seem to belong to tries but to index.warp Which doesn't exist yet but should collect all the a[index] a#position syntax?  (card index-syntax-module)
 indexed(written: Node, index: Node, fallback: Node, number: int): Node := {
 	held = try_name("list", number)
 	at = try_name("index", number)
 	within = Key(Key(at, Op.Ge, 1), Op.And, Key(at, Op.Le, applied_to("count", [held])))
 	try_statements([try_assigned(held, written), try_assigned(at, index), chosen_branch(within, braced(Key(held, Op.Hash, at)), braced(fallback))])
 }
-
-is_division(op: any): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
 
 # the value under try, its fallback, the catch binding or ø
 lowered_try(value: Node, fallback: Node, binding: any): Node := {

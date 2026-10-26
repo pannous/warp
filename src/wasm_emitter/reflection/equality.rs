@@ -183,7 +183,7 @@ impl WasmGcEmitter {
 		Some(Node::Key(left.clone(), equality, right.clone()))
 	}
 
-	/// `3 == int`: a value never equals a type, only `is` tests one (user decision #30); `type(x) == int` and a type held
+	/// `3 == int`: a value never equals a type, only `is` tests one ; `type(x) == int` and a type held
 	/// in a variable compare as types
 	fn hint_value_compared_with_type(&self, left: &Node, right: &Node) {
 		let holds_no_type = !matches!(self.get_type(left), Kind::Symbol | Kind::Data | Kind::Empty);
@@ -269,7 +269,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `if 8 & 4` tests the bits 8 and 4 share (none: false), never whether both are truthy (user 2026-10-13)
+	/// `if 8 & 4` tests the bits 8 and 4 share (none: false), never whether both are truthy 
 	fn warn_bits_as_truth(&mut self, condition: &Node) {
 		let Node::Key(left, op, right) = condition.drop_meta() else {
 			return;
@@ -337,7 +337,7 @@ impl WasmGcEmitter {
 	}
 
 	/// is_meta_entry(entry: anyref) -> i32: 1 for a meta entry `@name:value`, which is never a field, not counted and
-	/// ignored by == (user decision "Meta information on objects")
+	/// ignored by == 
 	pub(crate) fn emit_is_meta_entry(&mut self) {
 		let (node, string) = (self.type_manager.node_type, self.type_manager.text_type);
 		let string_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(string) });

@@ -109,7 +109,7 @@ mod tests {
 
 	#[test]
 	fn test_style_swap() {
-		// Default leaves the cast spelling open (user #13: str(x) is fine)
+		// Default leaves the cast spelling open  is fine)
 		let s = style();
 		assert_eq!(s.cast, CastStyle::Any);
 

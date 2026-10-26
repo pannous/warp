@@ -2,7 +2,7 @@
 // paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: rgb, hsv, the named colors, with_alpha
 use math
 // the canvas until canvas(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
-// natively 640×480 (user 2026-10-10: defaults, no errors)
+// natively 640×480 
 global canvas_width = view_width
 global canvas_height = view_height
 // natively in a window the shapes are drawn on the GPU (src/graphics/gpu_canvas.rs; WARP_DRAW=cpu or gpu chooses): no pixels

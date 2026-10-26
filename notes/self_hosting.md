@@ -10,7 +10,7 @@ Milestones:
   (decisions compiler-high-level, no-primitive-rewrites).
 
 ## Growing the pure lane (card pure-runs)
-Loop (user via supervisor, 2026-10-19): `probes/self_hosting/refusals.sh --pure <own warp binary>` runs the ladder
+Loop : `probes/self_hosting/refusals.sh --pure <own warp binary>` runs the ladder
 probes/self_hosting/pure/*.warp (simplest first, expected output in `// out:` lines) and the samples with
 WARP_SELF_HOSTED=pure; it counts the programs that ran pure ("pure: ran" lines in WARP_EMIT_REFUSALS) and how many of
 them were right, names the first rung not right and ranks the lane's own refusals → data/self_hosting/pure.txt.
@@ -191,7 +191,7 @@ checks (match_exhaustive, switch unit names, index_positions, check_unit_names: 
 - New ports go toward the target: the word-phrase pass and the scope pass (with warp-parsing: parser-scope-pass,
   parser-keyword-table); broadcasting minimal; the structural keepers of the SUGAR_PASSES triage.
 
-## Back-end focus (user 2026-10-18 night, decisions self-hosting-back-end, compiler-typed, compiler-high-level)
+## Back-end focus
 Goal: WARP_SELF_HOSTED runs parser → passes → analyzer → emitter → runtime all in warp; the suite count per stage
 shows the progress. Every compiler function typed (generic ones generically), written with classes, enums and match.
 Emitter rule (2026-10-19, after emitter-structures cost 57 + emitter tests the gate didn't see): a form enters
@@ -413,7 +413,7 @@ arithmetic links ratio_new, so its printer) stays, `as decimal`'s decimal_text m
 Speed is the main risk: ratio_new, contains and min/max are hot; each move measures against the builtin first (as the
 text search words above).
 
-## Speed of a warp-written compiler (user discussion, 2026-10-17)
+## Speed of a warp-written compiler
 No fundamental reason for "several times slower". Measured: warp `find` 1.7x the hand-emitted builtin (both wasm),
 parser.warp tree of 100 KB ~0.6 s. The only fixed cost is wasm vs native: Cranelift optimizes less than LLVM, GC
 objects cost more than Rust's stack values; typically 1.2-2x, less for allocation-heavy tree walking (a compiler);

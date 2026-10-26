@@ -1,5 +1,5 @@
 //! Texts as Unicode: `upper` and `lower` with the case mapping of Rust's `char::to_uppercase` / `to_lowercase` for every
-//! code point (user decision #26), `reverse` of a text by code points, and `chars` (the list of characters, a grapheme
+//! code point , `reverse` of a text by code points, and `chars` (the list of characters, a grapheme
 //! cluster each) with its twin by code points.
 //!
 //! The case mapping is a table in linear memory of ranges, sorted by their first code point and binary searched (card

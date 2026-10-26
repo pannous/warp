@@ -22,7 +22,7 @@ enum Node {
 # `Op.Add as text` is "+", `"+" as Op` is Add
 enum Op {
 	Colon, Dot, SafeDot, Coalesce, Scope, Define, Assign, Arrow, ArrowUp, ArrowDown
-	Add, Sub, Mul, Div, FloorDiv, Mod, Rem, Pow, LogBase, LogOf, Shl, Shr
+	Add, Sub, Mul, Div, FloorDiv, Mod, Rem /*todo map Remainder to mod at alias level and get rid of it*/, Pow, LogBase, LogOf, Shl, Shr
 	AddAssign, SubAssign, MulAssign, DivAssign, FloorDivAssign, ModAssign, PowAssign, AndAssign, OrAssign, XorAssign
 	Lt, Gt, Le, Ge, Eq, Is, Ne, Identical, NotIdentical, Similar, Rough
 	And, Or, Xor, Not, BitAnd, BitOr

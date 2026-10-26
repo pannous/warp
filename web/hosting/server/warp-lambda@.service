@@ -1,5 +1,5 @@
 # One hosted warp program (warp_lambda.py deploys it): `warp --sandbox serve` on 127.0.0.2:$PORT, reachable only through
-# the daemon's proxy. Sandboxed (user decision 2026-10-09): its own throwaway user, its files and SQLite only in its state
+# the daemon's proxy. Sandboxed : its own throwaway user, its files and SQLite only in its state
 # folder, no other program's source, no localhost or private network (the ssh gateway, the daemon), 192 MB, half a core.
 [Unit]
 Description=warp program %i (warp-lambda)

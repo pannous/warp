@@ -1,7 +1,7 @@
 // The sugar of parser.warp (card parser-desugar-pass, notes/self_hosting.md "Parser restructuring"): the written form
 // `xs[i]` becomes the tree the passes read as the parser builds it (subscript),
 // a class body's fields get their types (card parser-typed-fields). The count words `twice {…}` are library words, no
-// sugar (user 2026-10-20, card phrases-out-of-core).
+// sugar .
 use "shapes.warp"
 
 // `name: value` of the program, no opaque view or attribute layer

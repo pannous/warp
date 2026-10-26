@@ -1090,7 +1090,7 @@ impl Lowering {
 		if receiver.symbol_name() == Some(DICT_WORD) && name == FROMKEYS {
 			return Some(self.call(FROMKEYS, word_node, arguments, false));
 		}
-		// `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list (user 2026-10-14, card abc-chars)
+		// `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list 
 		let is_bare = !matches!(method.drop_meta(), Node::List(..));
 		let meaning = self.word_meaning(receiver, name, word_node, &arguments, is_bare);
 		let field = || Some(field_lookup(receiver, name, word_node));

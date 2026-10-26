@@ -1,5 +1,5 @@
 // under WARP_NO_WINDOW a library's window opener (raylib InitWindow, SDL_CreateWindow) is refused at link time: no test
-// or agent run pops a window on the user's screen (user 2026-10-18), and the run says why instead of hanging
+// or agent run pops a window on the user's screen , and the run says why instead of hanging
 use warp::formats::ffi_parser::find_library_headers;
 
 #[test]

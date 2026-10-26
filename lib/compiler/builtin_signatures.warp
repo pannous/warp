@@ -51,9 +51,9 @@ library_lines(library: text): list := prelude_text.split("\n").map(line => typed
 
 runtime_lines = library_lines(runtime_library)
 # the words only the compiler's passes write, which no program calls (closures, cells and signals, memos, linear
-# arrays, the switch and extremum errors, times, Uniscript; `ran·without·error`, a name the prelude's parser would read
-# as a product), declared as the prelude declares the words programs call
+# arrays, the switch and extremum errors, times, Uniscript; ran·without·error, declared as the prelude declares the words programs call
 compiler_lines = [
+# Todo bring all of these for discussion And explanation to the interviewer 
 	"ran·without·error(statement): bool from emitter",
 	"positioned(n, line, column): any from emitter",
 	"closure_new(values...): function from emitter",
@@ -79,6 +79,7 @@ compiler_lines = [
 	"instance_of(x, class_name): bool from emitter",
 	"caught_error(finished, value): error from emitter",
 	"byte_at(t, offset): int from emitter",
+	# todo Can we move all the uniscript to a later extension pass because the core compiler does not use any uniscript
 	"uniscript_error(values...): int from emitter",
 	"uniscript_warnings(values...): int from emitter",
 	"uniscript_to_unicode(values...): int from emitter",

@@ -1,4 +1,4 @@
-//! Fixed-width integer types for FFI (user decision D16, 2026-10-03): `byte` (unsigned 8 bit), `int8 … int64`,
+//! Fixed-width integer types for FFI : `byte` (unsigned 8 bit), `int8 … int64`,
 //! `uint8 … uint64`. Int stays unbounded; a variable declared with one of these types traps when an assignment or
 //! an arithmetic result leaves its range. There is no `overflow` value.
 

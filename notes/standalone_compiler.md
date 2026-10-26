@@ -85,7 +85,7 @@ compared with the checkout's lib/, no notice (custom section `warp.build`: lib/'
 WARP_SOURCE from build.rs, then the commit of lib/'s checkout, the stamp `warp version` shows). Only a lib/ named by
 WARP_LIB that the pair is not for (a worktree) uses <lib>/../data/, where a run on one built from another lib/ or warp
 build prints one line naming `warp rebuild`. Only `warp rebuild [pure|self]` builds one; a missing one is an error
-naming it (user 2026-10-22: no rebuild on demand anywhere). main's binary refresh runs `warp rebuild pure` with the new
+naming it . main's binary refresh runs `warp rebuild pure` with the new
 binary before installing it next to ~/dev/bin/warp. probes/speed/compiler_build.sh checks the whole cycle.
 Cold start (card pure-cold-start, empty module cache): the pure lane's try at compiler.warp (passes stage compiled ~44
 s, analysis ~6 s, emit ~21 s, then their runs) and Rust's compile of it (~90 s) ran one after the other: 166 s. Now

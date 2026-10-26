@@ -1,0 +1,9 @@
+// a program serving its own page with routes (card serve-route, tests/web/test_web_server.rs): any path is its one
+// page, whose router shows the route of that path
+users = ["Ann", "Bo"]
+serve 18441 {
+	get "/api/users" { users }
+}
+route "/" { h1{ "Users" } }
+route "/users/:id:int" { p{ "User " + users#id } }
+route "*" { p{ "no such page" } }

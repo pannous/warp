@@ -1,4 +1,4 @@
-//! Card parameter-named-number (user decision B): `f x as T` casts the argument, f(x as T), wherever it stands, as
+//! Card parameter-named-number : `f x as T` casts the argument, f(x as T), wherever it stands, as
 //! `f 2 + 1` is f(2 + 1); a cast of the result is written `(f x) as T`
 use crate::is;
 

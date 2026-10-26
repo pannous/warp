@@ -1,5 +1,5 @@
 //! The operations a declared type defines for itself, used where an instance of it is known (InstanceTypes):
-//! Printable (user decision P31): `text(p:person) := …` gives the text of a person, the one function a type word may
+//! Printable : `text(p:person) := …` gives the text of a person, the one function a type word may
 //! name; `x as text`, `str(x)`, `text(x)`, `print x` and an interpolation hole `"\(x)"` call it.
 //! Iterable (wiki/trait.md): `iterate(b:bag) := …` gives what a bag holds; `for x in b` walks it and `x in b` searches it.
 //! Each definition becomes its witness (`text·person`, `iterate·bag`); every other value keeps its own text and items.

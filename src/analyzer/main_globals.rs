@@ -76,7 +76,7 @@ pub(super) fn without_block_bodies(node: Node, blocks: &HashSet<String>) -> Node
 	}
 }
 
-/// A block captures the outer variables by value (user decision D7): its assignment changes the block's own copy,
+/// A block captures the outer variables by value : its assignment changes the block's own copy,
 /// so `x=1; inc:={x=x+1}; do inc; x` stays 1. Educate toward the forms that change x: `global x`, or returning the value.
 pub(super) fn educate_block_assignment(assignment: &Node, name: &str, block: &str, main_assignment: Option<&Node>) {
 	crate::normalize::set_position_of(assignment);

@@ -1,4 +1,4 @@
-//! Meta information on objects (user decision 2026-10-03, notes/open_decisions.md "Meta information on objects"):
+//! Meta information on objects :
 //! `@key:value` inside a literal, `x.@key` read and write, glued `x@key` in code, attributes survive emission,
 //! and `x.key` falls back to the meta key `@key` when x has no field `key`.
 
@@ -65,7 +65,7 @@ fn test_field_first_then_meta_fallback() {
 	fails_with(&with_point("p = point{x:1 y:2}; p.source"), "no field source");
 }
 
-// Round 3 (user decision "Skip @ keys"): iteration, keys, values, entries and every count ignore meta entries
+// Round 3 : iteration, keys, values, entries and every count ignore meta entries
 
 const WITH_META: &str = "p = {x:1 y:2 @s:30}; ";
 

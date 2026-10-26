@@ -1,4 +1,4 @@
-// Card exe-foreign (user decision 2026-10-12, notes/aot.md): an executable using python or js starts python3 or node from
+// Card exe-foreign : an executable using python or js starts python3 or node from
 // PATH when it runs, as warp does, and fails loudly naming a missing interpreter
 #![cfg(feature = "native")]
 use std::path::PathBuf;

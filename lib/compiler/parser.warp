@@ -217,7 +217,7 @@ ALIAS_TARGET_NAMES = {"approximately": "≈", "+-": "±", "<-": "="}
 // The parser's spellings: its own operators and keyword forms, with lib/aliases.warp's (card alias-mechanism,
 // notes/aliases.md: one entry per canonical word, `add { operator: "+", aliases: [plus] }`), made the first time a
 // parse asks; reading the table sees the parser's own spellings only. The table is built into the compiler when it is
-// compiled (module_source), never read from a lib/ when it runs (user 2026-10-25: "These should all be built in")
+// compiled (module_source), never read from a lib/ when it runs 
 ALIAS_TABLE = module_source("aliases")
 // operator symbols and words: [spelling, operator] pairs, the symbols longest first; forms: keyword_form's; canonical:
 // each alias with its entry's word (`plus` → add); infix words: the table's (`mod`, `upto`)
@@ -1147,7 +1147,7 @@ def condition_has_branch(p: Parser, at: int): bool {
 }
 
 // `x if c` is `if c then x`, `x unless c` is `if not c then x`, `x while c` is `while c do x`, `x until c` is `while
-// not c do x`; a trailing `while` tests before the first round like the leading one (user decision #22)
+// not c do x`; a trailing `while` tests before the first round like the leading one 
 // Rust twin: conditions.rs guarded_statement
 def guarded_statement(statement: Node, word: text, condition: Node): Node := {
 	guard = control_condition(word, condition)

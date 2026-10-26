@@ -50,7 +50,7 @@ fn range_end_fixes() {
 #[test]
 fn signed_operand_fixes() {
 	assert_fix("1 -1", "the list", "1 -1"); // `1 (-1)`: a list without brackets prints so
-	assert!(diagnostics("[1 -1 2]").is_empty()); // list-sign (user 2026-10-12): inside a list literal no question
+	assert!(diagnostics("[1 -1 2]").is_empty()); // list-sign : inside a list literal no question
 	assert_fix("1 -1", "arithmetic", "0");
 }
 
@@ -261,7 +261,7 @@ fn unused_copy_fix() {
 
 #[test]
 fn missing_kebab_field_fix() {
-	// field-or-minus (user 2026-10-12): "I meant: p.phone - number"
+	// field-or-minus : "I meant: p.phone - number"
 	assert_fix("p = {phone: 7}; number = 2; p.phone-number", "subtraction", "5");
 }
 

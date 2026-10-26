@@ -1,4 +1,4 @@
-//! `value as string` is the serialized text of a literal; an int list known only at runtime joins to "[1 2]" (user decision #35)
+//! `value as string` is the serialized text of a literal; an int list known only at runtime joins to "[1 2]" 
 
 use crate::is;
 

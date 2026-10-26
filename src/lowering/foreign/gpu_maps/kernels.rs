@@ -323,7 +323,7 @@ impl Translation {
 				self.call_without_arguments(name)
 			}
 			Node::Symbol(name) => self.program_variable(name),
-			// every number is an f32 on the GPU (user 2026-10-13: precision does not matter there)
+			// every number is an f32 on the GPU 
 			Node::Key(value, Op::As, _) => self.typed(value),
 			Node::Number(number) if !matches!(number, crate::extensions::numbers::Number::Complex(..)) => {
 				scalar(float_literal(f64::from(*number)))

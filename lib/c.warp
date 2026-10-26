@@ -10,6 +10,13 @@
 //   out               an out-pointer the call fills (`sqlite3 **`): no argument; the first one's pointer is the result
 //   void              no result
 
+# TODO:  SORT entries:  (card c-entries-sort)
+# Which one is only here for demonstration purposes and is useless And can be removed 
+#  Which one is redundant with existing WASM / Warp functionality? (sqrt) math.warp !? And can be removed 
+# Which one can be implemented in Warp? 
+# Which one is really WASI builtin host function?
+# Is anything left? If so, can it be put into a samples demonstration? 
+
 // libc
 strlen(s: text): i64 from 'c'
 atoi(s: text): i32 from 'c'

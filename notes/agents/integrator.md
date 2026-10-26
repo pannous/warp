@@ -21,7 +21,7 @@ Read notes/agents/common.md and notes/roles.md.
   `integrator_tools/express.sh [<card>…]` pushes them untested at once (merge, cargo fmt committed, push, close,
   no Playground deploy while it is paused; ~15 s; supervisor 2026-10-20: main stays formatted between batches), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
-- Warp-only branches land at once, before any Rust batch (user 2026-10-21): a branch that changes no Rust (nothing in
+- Warp-only branches land at once, before any Rust batch : a branch that changes no Rust (nothing in
   src/, crates/, tests/**/*.rs, Cargo.*, build.rs) needs no cloud run and no batch, only the self check on the merged
   tip: `WARP_LIB=<tip>/lib /Users/me/dev/bin/warp rebuild self`, then `warp self samples/hello/hello.warp` prints
   Hello → push (`integrator_tools/express.sh --warp-only` lands the Ready ones: together, one by one when the check is red).
@@ -66,7 +66,7 @@ Read notes/agents/common.md and notes/roles.md.
   (re-adds moved code, reverts decisions): commit the rest, make the cheapest working fix and mention it once.
 - Build tweak (version "<v>-integrate"), `cd "$W" && ./test.sh > ../integrate_test.log 2>&1` (cargo builds the cwd's checkout, so cd first) (it queues
   itself with priority), restore Cargo.toml/Cargo.lock/test_results.txt.
-- PLAYGROUND PAUSED (user 2026-10-22, until the warp compiler is ready to replace it; supervisor a83a023365): no
+- PLAYGROUND PAUSED : no
   Playground deploys (`gh workflow run Playground`/pages.yml, skip_checks), no browser suite, no tours (tour_at.sh), no
   runner checks of web branches, no playground native tests (test_web_playground test_served test_playground; prefixes
   in scripts/paused-tests.txt are left out of cloud --full). The bullets below on the browser suite, tours, the
@@ -84,7 +84,7 @@ Read notes/agents/common.md and notes/roles.md.
 - Reviewer (notes/agents/reviewer.md): it reviews each Ready card while you gate, never in front of you. Before a
   push, leave out a card warp-reviewer vetoed (it moves the card back to Now with a note; drop it from the batch); its
   polish comes as new Ready cards for the next batch. A missing review never holds a push.
-- Fewer failures is a merge (user 2026-10-24): a branch lands when the merged tip fails no more test cases than its base (pure `warp test` of the touched folders, new files counted on the merged side) or is net-positive; tiers 0 and 1 stay all green.
+- Fewer failures is a merge : a branch lands when the merged tip fails no more test cases than its base (pure `warp test` of the touched folders, new files counted on the merged side) or is net-positive; tiers 0 and 1 stay all green.
 - Push `HEAD:main` only at 0 failed and no drop in the test count (a drop must be explained, e.g. removed duplicates).
   Push exactly the hash the suite ran on (`git push origin <tested-hash>:main`), never a branch ref that may have
   moved: workers push new tips mid-run, so never re-merge `origin/<branch>` between the run and the push.
@@ -143,7 +143,7 @@ Read notes/agents/common.md and notes/roles.md.
 - Every landing gets a try line: the merge report names each user-visible branch to its owner, who sends
   warp-interviewer the try line; for an owner that has retired, send it yourself.
 - Every push to main with Rust (gated, express) starts `integrator_tools/refresh_main_binary.sh` in the background
-  (user 2026-10-20: "pre-compile warp-debug whenever you merge into main"; order user 2026-10-21): it builds and
+  : it builds and
   installs the quick-release ~/dev/bin/warp first, together with its compilers (below); an identical binary stays as
   it is; ~/dev/bin/warp-debug is built last. The last 10 distinct main builds stay runnable as
   ~/dev/bin/warp-<commit> (links into ~/dev/bin/main-builds/<commit>/, the binary with its compiler.wasm; card
@@ -170,7 +170,7 @@ Read notes/agents/common.md and notes/roles.md.
   printed hello), else main's binary (~2.5 min cold, seconds cached). It runs with WARP_COMPILER_WARNINGS=1 and reports
   the warning lines ("PURE CHAIN WARNINGS"), not blocking until card compiling-lib reaches zero. It also runs
   `warp self samples/hello/hello.warp` (the self-compiled compiler.warp, "PURE SELF"), which never holds a batch
-  (user 2026-10-21 21:30): when it is red, bisect by the branches' lib/compiler/ changes (usually one branch touches
+  : when it is red, bisect by the branches' lib/compiler/ changes (usually one branch touches
   them), drop the culprit from the batch, bounce it to its owner with the error and merge the rest at once. No culprit
   within one try: merge anyway and add an urgent card self-hello-red for the author of the newest lib/compiler change.
   The `warp self` test lane may pass up to 5 % fewer tests than `warp pure`, as long as the main tests pass (user, 52b6ac43be). Its Rust test

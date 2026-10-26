@@ -1,4 +1,4 @@
-// #23 (user 2026-10-03, "Warn on `it` shadowing"): a loop's `it` inside a function with an implicit `it` hides it, warned.
+// #23 : a loop's `it` inside a function with an implicit `it` hides it, warned.
 use crate::common::fails_with;
 use crate::is;
 use warp::errors::diagnostic::{with_warning_mode, WarningMode};

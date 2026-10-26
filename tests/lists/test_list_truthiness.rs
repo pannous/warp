@@ -1,4 +1,4 @@
-// #38 (user 2026-10-03, "Truthy"): a non-empty list is truthy, also one holding only ø.
+// #38 : a non-empty list is truthy, also one holding only ø.
 use crate::is;
 
 #[test]

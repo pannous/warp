@@ -32,7 +32,7 @@ impl WarpParser {
 	}
 
 	/// `{a*a}!` and `f!` at the end of a statement evaluate the block or name, which a block does on the spot anyway.
-	/// After a function or method the `!` mutates in place (user decision D2, by position): `x.upper!` and `upper(x)!`
+	/// After a function or method the `!` mutates in place : `x.upper!` and `upper(x)!`
 	/// assign the result back to x; in `upper x!` the name is marked for crate::mutation to do the same.
 	pub(super) fn try_parse_evaluate_bang(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		// `xs#2!` runs xs#2, not the index 2: the suffix binds looser than `#`, tighter than arithmetic (`x!+1`)

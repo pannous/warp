@@ -1,4 +1,4 @@
-//! card implicit-self (user 2026-10-15): self and this are needed only where a field clashes with another name; every
+//! card implicit-self : self and this are needed only where a field clashes with another name; every
 //! clash case between fields, parameters and globals
 use crate::is;
 use warp::normalize::{capture_hints, clear_shown_hints};

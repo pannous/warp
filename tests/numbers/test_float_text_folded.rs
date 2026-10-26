@@ -1,5 +1,5 @@
 //! A float the compiler knows prints as the run-time float_text writes it (test_float_text):
-//! one way, the shortest digits that read back (user decision float-text), positional from 1e-5 up to 1e15, else with an exponent
+//! one way, the shortest digits that read back , positional from 1e-5 up to 1e15, else with an exponent
 use crate::is;
 
 const FLOAT_TEXTS: [(&str, &str); 6] = [
