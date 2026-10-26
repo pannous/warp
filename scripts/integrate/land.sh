@@ -2,7 +2,7 @@
 # scripts/integrate/land.sh [--tree <worktree>]: step 2 of the Integrator's batch, after merge.sh's tier 0 went green.
 # Pushes exactly the tested hash to main, closes each merged card with its merge commit and deletes its remote branch,
 # installs the tree's compilers beside the shared warp binary, brings the user's checkout up to date, and starts the
-# slow tiers (gate-probes.sh tiers 1-2, promote-self.sh) in the background: they never hold a merge.
+# slow tiers (gate.sh tiers 1-2, promote-self.sh) in the background: they never hold a merge.
 set -uo pipefail
 MAIN_WARP=/Users/me/dev/bin/warp
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
@@ -58,7 +58,7 @@ git -C "$SLOW_TREE" checkout -q --detach "$tested" || { say "no slow-tier tree a
 slow=$tree/data/integrate/slow-${tested:0:10}.log
 slow_tiers() {
 	"$scripts/rebuild.sh" pure "$SLOW_TREE" &&
-		"$scripts/slot.sh" "$scripts/gate-probes.sh" --no-rebuild --tiers 1-2 --base "$base" --tag-good "$SLOW_TREE" "$MAIN_WARP"
+		"$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$base" --tag-good "$SLOW_TREE" "$MAIN_WARP"
 }
 slow_tiers >"$slow" 2>&1 </dev/null &
 disown

@@ -37,7 +37,7 @@ trap 'rm -rf "$lock"' EXIT
 started=$(date +%s)
 echo "promote-self: $(date '+%Y-%m-%d %H:%M:%S %Z') fixpoint test of $tree/data/warp.wasm"
 # a compile of compiler.warp runs for minutes: an exported short limit must not cut it
-said=$(BOX_SLOT_VERBOSE=1 WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} "$scripts/rebuild.sh" self "$tree" 2>&1)
+said=$(WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} "$scripts/rebuild.sh" self "$tree" 2>&1)
 status=$?
 took=$(($(date +%s) - started))
 sha() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-16; }
