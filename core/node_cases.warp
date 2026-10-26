@@ -13,7 +13,9 @@ use "definitions.warp"
 use "words.warp"
 
 node_type = "Node"
-spelled_enums = ["Op", "Bracket", "Separator"]
+# the enums whose cases convert to their spellings: node.warp's, then those of the program at hand (node_cases)
+node_spelled_enums = ["Op", "Bracket", "Separator"]
+global spelled_enums = node_spelled_enums
 # a node of that case where its name is written as a type, `left: Key`, `items: List?` (decision node-refinements),
 # held as any node, the case not checked yet; Symbol, Text, Number, Char and Error are type words already (Rust twin:
 # node_cases.rs NODE_CASE_TYPES)
@@ -24,7 +26,7 @@ valued_cases = {"True": yes, "False": no, "Empty": ø}
 spelled_value = "spelled"
 
 # node.warp's cases in its order, each with the text a node carries for it (node_cases.rs spelling)
-spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??", "Scope": "::", "Define": ":=",
+node_spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??", "Scope": "::", "Define": ":=",
 	"Assign": "=", "Arrow": "->", "ArrowUp": "↑", "ArrowDown": "↓", "Add": "+", "Sub": "-", "Mul": "*", "Div": "/",
 	"FloorDiv": "/!", "Mod": "%", "Rem": "rem", "Pow": "^", "LogBase": "⌞", "LogOf": "⌟", "Shl": "<<", "Shr": ">>",
 	"AddAssign": "+=", "SubAssign": "-=", "MulAssign": "*=", "DivAssign": "/=", "FloorDivAssign": "/!=",
@@ -36,6 +38,8 @@ spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??",
 	"PlusMinus": "±", "None": ""},
 	"Bracket": {"Curly": "{", "Square": "[", "Round": "(", "Less": "<", "None": ""},
 	"Separator": {"Space": " ", "Comma": ",", "Semicolon": ";", "Newline": "\n", "Tab": "\t", "None": ""}}
+# those and the program's own spelled enums, each case with its spelling
+global spellings = node_spellings
 
 # the text a node carries for a case, `+` of Add, a text even of one character
 spelling(enum_name: text, case: text): text := "" + spellings[enum_name][case]
@@ -187,16 +191,54 @@ is_spelling_needed(n: any, enum_name: text, declared: any): bool := match n {
 	_: no
 }
 
-# node.warp's spelled enums and their spelling functions in front of a program naming them
+# `enum HiddenWord { LoopStep = "loop·step", Other }` (decision enum-raw-values): [its name, its cases each with its
+# spelling], a case without one spelled by its own name as in Swift; ø of an enum none of whose cases is spelled
+spelled_cases(n: Node): any := match n {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts != 3 or parts#1 != symbol(enum_word) or not is_name(parts#2) or not is_curly_group(parts#3) { return ø }
+		rows = enum_rows(items_of(parts#3))
+		if not rows.any(is_spelled_case) { return ø }
+		cases = {}
+		for row in rows {
+			name = if is_spelled_case(row) then name_of(key_of(row)) else enum_case_name(row)
+			if name == ø { return ø }
+			cases[name] = if is_spelled_case(row) then "" + value_of(row) else name
+		}
+		[name_of(parts#2), cases]
+	}
+	_: ø
+}
+is_spelled_case(row: Node): bool := is_key(row, Op.Assign) and is_name(key_of(row)) and value_of(row) is text
+
+# the spelled enums the program declares, by name
+spelled_declarations(n: Node, found: map): map := {
+	declared = spelled_cases(n)
+	if declared != ø { found[declared#1] = declared#2 } else if is_group(n) { for part in items_of(n) { spelled_declarations(part, found) } }
+	found
+}
+
+# node.warp's spelled enums and the program's own, their spellings taken in; the program's declarations go, as
+# with_spelled_enums declares each spelled enum again with its spelling functions
+taking_spelled_enums(program: Node): Node := {
+	own = spelled_declarations(program, {})
+	spelled_enums = node_spelled_enums + own.keys
+	spellings = {}
+	for enum_name in node_spelled_enums { spellings[enum_name] = node_spellings[enum_name] }
+	for enum_name in own.keys { spellings[enum_name] = own[enum_name] }
+	if #own == 0 then program else bottom_up(program, n => if spelled_cases(n) == ø then n else ø)
+}
+
+# the spelled enums and their spelling functions in front of a program naming them, the program's own always
 with_spelled_enums(program: any, declared: any): any := {
 	declarations = []
 	for enum_name in spelled_enums {
-		if enum_name not in declared and is_spelling_needed(program, enum_name, declared) { declarations += [spelled_declaration(enum_name)] + spelling_functions(enum_name) }
+		if enum_name not in declared and (enum_name not in node_spelled_enums or is_spelling_needed(program, enum_name, declared)) { declarations += [spelled_declaration(enum_name)] + spelling_functions(enum_name) }
 	}
 	if #declarations == 0 then program else separated(bracketed(declarations + statements_in(program), ""), ";")
 }
 
 node_cases(program: Node): Node := {
+	program = taking_spelled_enums(program)
 	scope = scope_of(program)
 	builds = {}
 	for case in ["Key", "List"] { if not (binds_value(scope, case) or binds_as(scope, case, Meaning.Function)) { builds[case] = yes } }
