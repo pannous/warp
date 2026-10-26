@@ -500,3 +500,4 @@ P85, P87, P93, P95, P96, P98, P99, P101, P137, P144, P181, P53, P59, P79, P80, P
 the original questions 1–41: test edits and housekeeping done.
 - typed-signatures (user): "in general, less anys": core/ parameters get real types wherever one exists (example: `continued_safely(test: any, parts: any)`); any stays only for values that really are anything. The type workers do it after their current chunks (2026-10-26)
 - night-watch (user): the Supervisor runs an hourly watch round (session cron, :17) through the night: unblock workers, hand out the next cards (performance → compiler quality → sample gaps), decide each time what's next; idle when nothing is due (2026-10-26)
+- codex-library-cards (user): the timed Codex worker (cron 02/07/12/17/22:35) runs gpt-6.1-terra on cards the Supervisor lists in notes/agents/codex_cards.txt: library work (lib/, samples, tests, wiki), never core/ or the harness; it lands its own cards and reports to warp-supervisor (2026-10-26)
