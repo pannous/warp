@@ -35,10 +35,10 @@ fn a_local_named_like_a_function_returned_is_no_function_value() {
 }
 
 /// A lambda reads a local of its function also when a function elsewhere has the local's name (card standalone:
-/// analyzer.warp's `w => w in numbers` beside lexer.warp's numbers(text))
+/// analyzer.warp's `w => w in numbers` beside a function of that name)
 #[test]
 fn a_lambda_captures_a_local_named_like_a_function() {
-	is!("numbers(t: text): list := [t]\nwide(words: list): bool := { numbers = {\"int\": 1}; words.all(w => w in numbers) }\nwide([\"int\"])", true);
+	is!("tallies(t: text): list := [t]\nwide(words: list): bool := { tallies = {\"int\": 1}; words.all(w => w in tallies) }\nwide([\"int\"])", true);
 }
 
 /// A loop variable named like a function is the loop's item: `call#1` reads its first element, no call of call(#1)

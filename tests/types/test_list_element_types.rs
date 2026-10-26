@@ -31,7 +31,7 @@ fn declared_list_refuses_another_type_later() {
 #[test]
 fn declared_list_checks_run_time_items_at_the_store() {
 	fails_with("same(y) := y; names: texts = [\"hi\"]; names.add(same(420)); names", DECLARED);
-	fails_with("numbers() := [1 2]; names: texts = numbers(); names", DECLARED);
+	fails_with("digits() := [1 2]; names: texts = digits(); names", DECLARED);
 	is!("same(y) := y; names: texts = [\"hi\"]; names.add(same(\"yo\")); #names", 2);
 }
 
@@ -59,9 +59,9 @@ fn list_fields_check_run_time_items() {
 
 #[test]
 fn declared_list_checks_the_items_of_another_list() {
-	let numbers = "numbers() := [1 2]; other = numbers(); names: texts = [\"hi\"]; ";
+	let numbers = "digits() := [1 2]; other = digits(); names: texts = [\"hi\"]; ";
 	fails_with(&format!("{numbers}names = other + [\"yo\"]; names"), DECLARED);
-	fails_with("numbers() := [1 2]; names: texts = numbers() + [\"yo\"]; names", DECLARED);
+	fails_with("digits() := [1 2]; names: texts = digits() + [\"yo\"]; names", DECLARED);
 	is!("words() := [\"a\" \"b\"]; names: texts = words() + [\"c\"]; #names", 3);
 	is!("names: texts = [\"hi\"]; more: texts = [\"yo\"]; names = more + [\"ok\"]; #names", 2);
 }
@@ -79,7 +79,7 @@ fn list_fields_check_items_of_instances_of_unknown_class() {
 #[test]
 fn list_fields_check_a_whole_assigned_list() {
 	let program = "class bag { items: texts }; b = bag([\"hi\"]); ";
-	fails_with(&format!("numbers() := [1 2]; {program}b.items = numbers(); b.items"), "items of bag is declared texts");
+	fails_with(&format!("digits() := [1 2]; {program}b.items = digits(); b.items"), "items of bag is declared texts");
 	is!(&format!("words() := [\"a\" \"b\"]; {program}b.items = words(); #b.items"), 2);
 	is!(&format!("{program}b.items = b.items + [\"yo\"]; #b.items"), 2);
 }

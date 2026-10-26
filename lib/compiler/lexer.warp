@@ -74,11 +74,11 @@ def starts_at(source: any, part: text, at: int): bool {
 
 // Where the numbers of a source start: [[line, column], …], both from 1
 // Rust twin: read_atoms, the number atoms the parser reads
-def numbers(text: text): list := atoms(text, "number")
+def number_starts(text: text): list := atoms(text, "number")
 
 // Where the texts of a source start: [[line, column], …], both from 1
 // Rust twin: read_atoms, the text atoms the parser reads
-def texts(text: text): list := atoms(text, "text")
+def text_starts(text: text): list := atoms(text, "text")
 
 def atoms(text: text, kind: text): list := if one_point_each(text) then positions(text, kind) else positions(code_points(text), kind)
 

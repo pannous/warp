@@ -495,10 +495,11 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 			Node::Key(name, Op::Colon, Box::new(list_type))
 		}
 		range if let Some(list) = range_list(&range, lower, &names.ranges) => list,
-		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
-		// `double(x) := x+x` and `double x := x+x` stay function definitions
-		Node::Key(target, Op::Assign, value) if let Some((type_name, name)) = number_type_prefix(&target) => {
-			lower(Node::Key(Box::new(key(name, Op::Colon, type_name)), Op::Assign, value))
+		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`
+		Node::Key(target, op @ (Op::Assign | Op::Define), value)
+			if let Some((type_name, name)) = number_type_prefix(&target) =>
+		{
+			lower(Node::Key(Box::new(key(name, Op::Colon, type_name)), op, value))
 		}
 		Node::List(items, bracket, separator)
 			if items.windows(2).any(|pair| paired_declaration(&pair[0], &pair[1]).is_some()) =>
@@ -893,9 +894,8 @@ pub(crate) fn is_declaration_type(node: &Node) -> bool {
 /// `(fast x)` as the target of `fast x=v`: the type and the name
 pub(crate) fn number_type_prefix(target: &Node) -> Option<(Node, Node)> {
 	match target.drop_meta() {
-		Node::List(items, bracket, _)
-			if *bracket != Bracket::Round
-				&& items.len() == 2
+		Node::List(items, _, _)
+			if items.len() == 2
 				&& is_declaration_type(&items[0])
 				&& matches!(items[1].drop_meta(), Node::Symbol(_)) =>
 		{
