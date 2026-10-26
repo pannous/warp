@@ -7,7 +7,7 @@ fn an_item_ends_at_its_closing_brace() {
 	is!("struct P { x: i32, y: i32 } let p = P { x: 3, y: 4 }; p.x", 3);
 	is!("class P { x: int } let p = P { x: 5 }; p.x", 5);
 	is!("enum C { Red, Green } let c = C::Green; match c { C::Red => 1, C::Green => 2 }", 2);
-	is!("struct P { x: i32 } impl P { fn double(&self) -> i32 { self.x * 2 } } let p = P { x: 3 }; p.double()", 6);
+	is!("struct P { x: i32 } impl P { fn doubled(&self) -> i32 { self.x * 2 } } let p = P { x: 3 }; p.doubled()", 6);
 	is!("fn three() -> i32 { 3 } let x = three(); x + 1", 4);
 }
 

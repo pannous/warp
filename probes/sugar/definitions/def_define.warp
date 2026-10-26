@@ -1,3 +1,3 @@
 # `def f(x) := e`: the keyword before a definition
-def double(x) := x * 2
-double(3)
+def doubled(x) := x * 2
+doubled(3)

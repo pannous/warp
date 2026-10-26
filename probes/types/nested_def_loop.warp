@@ -1,7 +1,7 @@
 def total(xs) {
-  def double(k): int { k * 2 }
+  def doubled(k): int { k * 2 }
   sum = 0
-  for x in xs { sum += double(x) }
+  for x in xs { sum += doubled(x) }
   sum
 }
 print total([1, 2, 3])

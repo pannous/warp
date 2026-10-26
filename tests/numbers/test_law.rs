@@ -71,9 +71,9 @@ fn test_law_lean_export_unfolds_only_the_functions_the_law_reaches() {
 		lawful.laws.iter().map(|law| lean::export(&lawful.functions, law, &["grind"]).unwrap()).collect();
 	assert!(sources[0].contains("simp only [square]\n"), "{}", sources[0]);
 	assert!(sources[1].contains("simp only [add]\n"), "{}", sources[1]);
-	let lawful = separate_laws(parse("double(x) := x+x\nquad(x) := double(double(x))\nlaw quad(x) == 4*x"));
+	let lawful = separate_laws(parse("doubled(x) := x+x\nquad(x) := doubled(doubled(x))\nlaw quad(x) == 4*x"));
 	let source = lean::export(&lawful.functions, &lawful.laws[0], &["grind"]).unwrap();
-	assert!(source.contains("simp only [double, quad]\n"), "{source}");
+	assert!(source.contains("simp only [doubled, quad]\n"), "{source}");
 }
 
 #[test]

@@ -1,5 +1,5 @@
 # F4: a template once for each item of a rest hole; F7: a rule's result rewritten again
 rewrite squares $xs... => [$x * $x for $x in $xs...]
-rewrite double $x => $x * 2
-rewrite quadruple $x => double (double $x)
+rewrite doubled $x => $x * 2
+rewrite quadruple $x => doubled (doubled $x)
 [squares 1 2 3, quadruple 3]

@@ -12,7 +12,7 @@ fn hint_reasons(code: &str) -> (String, Vec<String>) {
 
 #[test]
 fn a_bare_field_reads_the_receiver() {
-	is!("class P { x: int; def double() := x * 2 }\nP(3).double()", 6);
+	is!("class P { x: int; def doubled() := x * 2 }\nP(3).doubled()", 6);
 	is!("class P { x: int; def inc() { x = x + 1 } }\np = P(3)\np.inc()\np.x", 4);
 }
 

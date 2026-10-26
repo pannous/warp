@@ -47,9 +47,9 @@ fn test_use_math_stays_builtin() {
 
 #[test]
 fn test_module_statements_are_not_imported() {
-	let directory = module_directory("statements", &[("noisy.warp", "double(x):=x*2\n99")]);
+	let directory = module_directory("statements", &[("noisy.warp", "doubled(x):=x*2\n99")]);
 	let resolved = resolved_text("use noisy;1", &directory);
-	assert!(resolved.contains("double"), "definition imported: {resolved}");
+	assert!(resolved.contains("doubled"), "definition imported: {resolved}");
 	assert!(!resolved.contains("99"), "the module's own expression must not run: {resolved}");
 }
 

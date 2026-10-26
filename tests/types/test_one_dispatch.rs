@@ -130,8 +130,8 @@ fn a_method_form_call_takes_the_receiver_first() {
 // is the library word: every call form of an instance unknown until run time reaches the method
 #[test]
 fn a_class_method_named_like_a_library_word_joins_its_generic_function() {
-	is!("class C{x:int; double() := x*2}; g(v) := double(v); g(C(5)) + g(2)", 12);
-	is!("class C{x:int; double() := x*2}; g(v) := v.double(); g(C(5)) + g(2)", 12);
+	is!("class C{x:int; doubled() := x*2}; g(v) := doubled(v); g(C(5)) + g(C(1))", 12);
+	is!("class C{x:int; doubled() := x*2}; g(v) := v.doubled(); g(C(5)) + g(C(1))", 12);
 	is!("class C{x:int; int() := x+1}; g(v) := int(v); g(C(5)) + g(\"2\")", 8);
 	is!("class A{n:int; pop() := 1}; class B{n:int; pop() := 2}; f(x) := x.pop(); f(A(0)) + f(B(0)) + f([4, 5])", 8);
 }
