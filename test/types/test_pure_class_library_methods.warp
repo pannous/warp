@@ -1,6 +1,6 @@
 # card pure-class-methods (stage 2): a method named like a function of the program or a word of the library (sum, max,
 # round) is called on the instances of its classes, and any other value still reaches the function itself
-# (run-time instances: `warp test tests/types` runs them through warp pure, `warp test --self tests/types` through
+# (run-time instances: `warp test tests/types` , `warp test --self tests/types` through
 # warp self)
 
 # a_method_named_like_a_library_word_is_the_instances

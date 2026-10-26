@@ -1,7 +1,7 @@
 # card pure-class-methods: a class's methods are functions of the instance they are called on, its fields read and
 # written bare (or as self.x, this.x), a sibling method called bare; a method several classes declare calls the
 # instance's own class's, a subclass's override before its parent's
-# (run-time instances: `warp test tests/types` runs them through warp pure, `warp test --self tests/types` through
+# (run-time instances: `warp test tests/types` , `warp test --self tests/types` through
 # warp self)
 
 # a_method_reads_the_fields_of_its_instance

@@ -21,16 +21,17 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
   lookup (warp, warp-host, rebuild.sh, the launcher) still reads a file of the old name when the new one is missing;
   installs should write the new names.
 - To get them, run `scripts/rebuild.sh [pure|self|both] [<worktree>]` (pure by default; both: warp-self.wasm only from
-  data/ or the store, never promoted there). It keeps the file in data/ when
-  data/<compiler>.wasm.inputs names the current inputs hash. Otherwise it copies the shared store's pair of that hash.
+  lib/ or the store, never promoted there). It keeps the file in lib/ when
+  lib/<compiler>.wasm.inputs names the current inputs hash. Otherwise it copies the shared store's pair of that hash.
   Only when neither has one does it build and publish the result. `--check` never builds and exits 3 on a miss.
 - Where warp-host finds the pair (its lookup, card pure-c-imports, not repeated in the scripts): beside the binary
-  first, then lib/../data, then <prefix>/share/warp. So a pair only in data/ loses to an older one beside the binary.
-  rebuild.sh therefore copies the pair from data/ beside the tree's warp-host (target/{debug,host,release}/) as well.
+  first, then the lib/ folder itself (user 2026-10-26: a lib/ keeps its compilers in itself, no longer in
+  lib/../data), then <prefix>/share/warp. So a pair only in lib/ loses to an older one beside the binary.
+  rebuild.sh therefore copies the pair from lib/ beside the tree's warp-host (target/{debug,host,release}/) as well.
   It does not copy beside a lone warp binary, because before card compiler-cache-keys, warp-rust judges its own
   target/debug/ build by the lib/ path baked in it.
   A store entry is only ever a source: no lookup reads the store directly.
-- `scripts/self-check.sh` checks the pair for the branch's inputs, taken from data/ or the store. On a miss it says
+- `scripts/self-check.sh` checks the pair for the branch's inputs, taken from lib/ or the store. On a miss it says
   "REBUILD NEEDED" and checks the existing pair. `--rebuild` builds the missing pair.
 
 ## The inputs hash (scripts/compiler-inputs.sh <lib> [<rust fingerprint>])

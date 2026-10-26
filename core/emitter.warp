@@ -185,7 +185,7 @@ survey_setting = "WARP_EMIT_SURVEY"
 ## the program's functions
 # a function as written, its name, signature and body; compiling it gives the rest: kinds its parameters' kinds, result
 # its result's kind
-class Function { name: text; signature: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no }
+class Function { name: text; signature: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: map = {}; sums: map = {}; gives_nothing: bool = no }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in the module's data segment, which
 # holds the texts in the order first used, text_size bytes so far; placed: the functions in order so far
 # globals: [index, kind] of each `global` variable by name, global_order their names
@@ -206,7 +206,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: any; order: any; placed: int = 0; runtime: any = {}; texts: any = {}; text_size: int = 0; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; parents: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widened_now: any = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: any = []; gc_indices: map = {}; gc_order: list = []; program_file: text = ""; emitting_at: text = "" }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; runtime_globals: list = []; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: list = []; gc_indices: map = {}; gc_order: list = []; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
@@ -250,7 +250,7 @@ bare_function(name: text): any := Function(name, Signature(), ø)
 # `(name params…) := body` at the program's top level, its head; `name := body` reading `it` is a function of `it`, and
 # `name := { statements }` one of none (Rust's defined_function); `x := 5` is a value (assignment_operators)
 function_head(n: any): any := {
-	if not (type(n) is key and op_of(n) == ":=") { return ø }
+	if not is_key(n, Op.Define) { return ø }
 	left = key_of(n)
 	if bracket_of(left) == "(" and #left > 0 and left#1 is symbol { return left }
 	if not (left is symbol) { return ø }
@@ -318,7 +318,7 @@ shared_names(statements: any) := {
 	shared
 }
 # the names among `wanted` a walk found symbols of, each once, as mentions finds one
-class Mentions { wanted: any; found: any = {} }
+class Mentions { wanted: any; found: map = {} }
 gather_mentions(n: Node, mentioned: Mentions) := match n {
 	Symbol(name): { if name in mentioned.wanted { mentioned.found[name] = yes } }
 	Key(left, _, right): {
@@ -361,7 +361,7 @@ def defined_names(program: any): list {
 # continuable: whether each takes a continue (continued_safely)
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; continuable: any; unshared: any; globals: any }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map }
 
 local_index(body: Body, name: text, kind: text): int := {
 	if name in body.names { return body.names[name] }
@@ -541,11 +541,11 @@ def float_remainder(body: Body, a: list, b: list): list {
 }
 
 def assignment(body: Body, target: any, value: any): list {
-	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and subscript_name(value_of(target)) != ø {
+	if is_key(target, Op.Hash) and key_of(target) != ø and subscript_name(value_of(target)) != ø {
 		return map_assignment(body, key_of(target), subscript_name(value_of(target)), value)
 	}
 	# `m[k] = v`, lowered `m#(k+1) = v`: a text k names an entry; a k known only at run time may be either
-	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and is_shifted_index(value_of(target)) {
+	if is_key(target, Op.Hash) and key_of(target) != ø and is_shifted_index(value_of(target)) {
 		subscript = expression_code(body, key_of(value_of(target)))
 		if subscript#1 == "text" or subscript#1 == "char" { return entry_assignment(body, key_of(target), subscript, value) }
 		# a value known only at run time takes an int k as its item k+1, any other k as the entry named so
@@ -555,13 +555,13 @@ def assignment(body: Body, target: any, value: any): list {
 		if held#1 == "list" and subscript#1 == "node" { return keyed_assignment(body, ø, ["node", boxed(held)], subscript, value) }
 		if subscript#1 == "node" { return refuse("a write by a key known only at run time, an index or a name") }
 	}
-	if type(target) is key and op_of(target) == "." and value_of(target) is symbol {
+	if is_key(target, Op.Dot) and value_of(target) is symbol {
 		return map_assignment(body, key_of(target), name_of(value_of(target)), value)
 	}
-	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
+	if is_key(target, Op.Hash) and key_of(target) != ø {
 		return element_assignment(body, expression_code(body, key_of(target)), expression_code(body, value_of(target)), value)
 	}
-	if type(target) is key and op_of(target) == ":" and key_of(target) is symbol and value_of(target) is symbol {
+	if is_key(target, Op.Colon) and key_of(target) is symbol and value_of(target) is symbol {
 		return declaration(body, name_of(key_of(target)), name_of(value_of(target)), value)
 	}
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
@@ -668,7 +668,7 @@ def global_declaration_code(body: Body, declaration: any): list {
 		if body.intrinsics and name_of(declaration) not in module.runtime_globals { module.runtime_globals += [name_of(declaration)] }
 		return [entry#2, [op.global_get] + uleb(entry#1)]
 	}
-	if not (type(declaration) is key and op_of(declaration) == "=" and key_of(declaration) is symbol) {
+	if not (is_key(declaration, Op.Assign) and key_of(declaration) is symbol) {
 		return refuse("the declaration global " + form_of(declaration))
 	}
 	body.globals[name_of(key_of(declaration))] = yes
@@ -907,20 +907,20 @@ def key_expression(body: Body, n: any): list {
 	if is_empty_map(n) { return ["node", node(Marked.Map, vector_code([]))] }
 	# `[]`, held behind the opaque word as Rust's parser builds it: a list of no items
 	if is_empty_list(n) { return list_value(body, []) }
-	if operator == ":" and left is symbol and name_of(left) in data_item_checks { return data_item(body, name_of(left), right) }
-	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right, yes) }
-	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø, no) }
+	if operator == Op.Colon and left is symbol and name_of(left) in data_item_checks { return data_item(body, name_of(left), right) }
+	if operator == Op.Else and is_key(left, Op.Then) { return conditional(body, value_of(key_of(left)), value_of(left), right, yes) }
+	if operator == Op.Then and is_key(left, Op.If) { return conditional(body, right_of_if(left), right, ø, no) }
 	# `c ? a : b`: the keys ?(c, :(a, b))
-	if operator == "?" and type(right) is key and op_of(right) == ":" { return conditional(body, left, key_of(right), value_of(right), yes) }
-	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
-	if operator == "=" and left is symbol and name_of(left) in body.unshared and self_append_name(n) != ø {
+	if operator == Op.Question and is_key(right, Op.Colon) { return conditional(body, left, key_of(right), value_of(right), yes) }
+	if operator == Op.Do and is_key(left, Op.While) { return loop_of(body, value_of(left), right) }
+	if operator == Op.Assign and left is symbol and name_of(left) in body.unshared and self_append_name(n) != ø {
 		grown = appended(body, left, value_of(right))
 		if grown != ø { return grown }
 	}
 	# a type alias names its type for the annotations, which collect_types read
 	if is_type_alias(n) { return [no_kind, []] }
 	if operator in assignment_operators { return assignment(body, left, expression_code(body, right)) }
-	if operator == ":" and left == symbol("global") { return global_declaration_code(body, right) }
+	if operator == Op.Colon and left == symbol("global") { return global_declaration_code(body, right) }
 	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
 	if is_loop_step(n) { return expression_code(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
@@ -928,8 +928,8 @@ def key_expression(body: Body, n: any): list {
 	if left == opaque_symbol { return refuse(opaque_form(right)) }
 	# the key of `Point{x: 1}` has no operator as parser.warp reads it, `:` as Rust's analysis view shows it
 	# `P{}`: every field its default (an empty group reads as ø, or as the opaque `{}`)
-	if operator == "" and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
-	if (operator == ":" or operator == "") and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_map_entry) {
+	if operator == Op.None and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
+	if (operator == Op.Colon or operator == Op.None) and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_map_entry) {
 		# `div{ a: 1 }` of no class is Rust's `div:a:1`: a block of one entry is that entry
 		if #right == 1 and name_of(left) not in module.classes {
 			return ["node", keyed_code(name_node(left), boxed(expression_code(body, right#1)))]
@@ -938,12 +938,12 @@ def key_expression(body: Body, n: any): list {
 	}
 	# a function value as an operand: Rust's type error `1 + (x => x)`, its reflection `f.name` read as `(closure_new f)#("name"+1)`
 	if operator not in closure_comparisons and (is_closure_value(left) or is_closure_value(right)) { return refuse("a function value in " + operator) }
-	if operator == "#" and left != ø and subscript_name(right) != ø { return field_read(body, expression_code(body, left), subscript_name(right)) }
-	if operator == "#" and left != ø and is_shifted_index(right) {
+	if operator == Op.Hash and left != ø and subscript_name(right) != ø { return field_read(body, expression_code(body, left), subscript_name(right)) }
+	if operator == Op.Hash and left != ø and is_shifted_index(right) {
 		target = expression_code(body, left)
 		if target#1 == "node" { return runtime_call("node_get", [target, ["node", boxed(expression_code(body, key_of(right)))]]) }
 	}
-	if operator == "+=" {
+	if operator == Op.AddAssign {
 		target = expression_code(body, left)
 		added = expression_code(body, right)
 		# Rust's `s += "ab"` on a number is its type error, though `s = s + "ab"` joins
@@ -958,31 +958,31 @@ def key_expression(body: Body, n: any): list {
 		grown = appended(body, left, right)
 		if grown != ø { return grown }
 	}
-	if operator == "/=" and left is symbol and name_of(left) in body.declared and body.declared[name_of(left)] == "int" {
+	if operator == Op.DivAssign and left is symbol and name_of(left) in body.declared and body.declared[name_of(left)] == "int" {
 		return assignment(body, left, runtime_call("floor_quotient", [expression_code(body, left), whole(expression_code(body, right))]))
 	}
 	if operator in compiled_compound_ops { return assignment(body, left, operation_code(body, compiled_compound_ops[operator], expression_code(body, left), expression_code(body, right))) }
 	if operator in steps and right == ø { return assignment(body, left, operation_code(body, steps[operator], expression_code(body, left), number_value(1))) }
-	if operator == "-" and left == ø { return negation(body, expression_code(body, right)) }
-	if operator == "‖" and left == ø { return absolute_value(body, expression_code(body, right)) }
+	if operator == Op.Neg and left == ø { return negation(body, expression_code(body, right)) }
+	if operator == Op.Abs and left == ø { return absolute_value(body, expression_code(body, right)) }
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator in bit_words { return bitwise(body, operator, left, right) }
-	if operator == "#" and left == ø { return length_code(expression_code(body, right)) }
-	if operator == "." and right is symbol and name_of(right) in counting_properties {
+	if operator == Op.Hash and left == ø { return length_code(expression_code(body, right)) }
+	if operator == Op.Dot and right is symbol and name_of(right) in counting_properties {
 		return field_or_word(body, expression_code(body, left), name_of(right), length_code)
 	}
 	# `type(x).name`
-	if operator == "." and right == symbol("name") and is_type_call(left) { return ["text", payload(type_value_of(body, expression_code(body, left#2))#2, gc_type(gc.text))] }
-	if operator == "." and right is symbol and member_word(name_of(right)) != ø {
+	if operator == Op.Dot and right == symbol("name") and is_type_call(left) { return ["text", payload(type_value_of(body, expression_code(body, left#2))#2, gc_type(gc.text))] }
+	if operator == Op.Dot and right is symbol and member_word(name_of(right)) != ø {
 		word = member_word(name_of(right))
 		value = expression_code(body, left)
 		if holds_entry(body, left, name_of(right)) { return field_read(body, value, name_of(right)) }
 		if keeps_word(name_of(right), word) { return runtime_call(word, [value]) }
 		return field_or_word(body, value, name_of(right), receiver => runtime_call(word, [receiver]))
 	}
-	if operator == "." and right is symbol and name_of(right) in byte_count_words { return byte_size_code(expression_code(body, left)) }
+	if operator == Op.Dot and right is symbol and name_of(right) in byte_count_words { return byte_size_code(expression_code(body, left)) }
 	# `m.a`: the entry a of the map (or instance) m, as Rust lowers it to `m#("a"+1)`
-	if operator == "." and right is symbol {
+	if operator == Op.Dot and right is symbol {
 		value = expression_code(body, left)
 		# `n.sq`, `parts.last`: a member naming a function of the program that takes the value is its call (a node's
 		# entry of that name first)
@@ -993,13 +993,13 @@ def key_expression(body: Body, n: any): list {
 		return field_of(body, value, name_of(right))
 	}
 	# (only `rational`: a float `as real` or `as exact` stays a float in Rust, type_tests.rs is_exact_fraction_type)
-	if operator == "as" and right is symbol and name_of(right) == "rational" {
+	if operator == Op.As and right is symbol and name_of(right) == "rational" {
 		return as_rational(expression_code(body, left))
 	}
 	# `t as codepoint`, `x as integer`: a type word's other names are its kind's; `255 as byte`, `5 as hex` an int's
 	target = if not (right is symbol) then ø else if name_of(right) in core_type_words then core_type_words[name_of(right)] else if name_of(right) in int_spellings then "int" else name_of(right)
-	if operator == "as" and target == "number" { return as_number(expression_code(body, left)) }
-	if operator == "as" and (target in type_bytes or target in references) {
+	if operator == Op.As and target == "number" { return as_number(expression_code(body, left)) }
+	if operator == Op.As and (target in type_bytes or target in references) {
 		value = expression_code(body, left)
 		if target in text_readers { return cast(value, target) }
 		if target == "text" { return shown_text(value) }
@@ -1010,15 +1010,15 @@ def key_expression(body: Body, n: any): list {
 		if target == "bool" and (value#1 == "node" or value#1 == "text") { return runtime_call("bool_cast", [["node", boxed(value)]]) }
 		return [target, converted(value, target)]
 	}
-	if operator == "not" and left == ø { return ["bool", condition(expression_code(body, right)) + [op.i32_eqz]] }
+	if operator == Op.Not and left == ø { return ["bool", condition(expression_code(body, right)) + [op.i32_eqz]] }
 	# `√x`: the float root, as Rust's emitter gives it
-	if operator == "√" and left == ø { return ["float", converted(expression_code(body, right), "float") + [wasm_instructions["f64.sqrt"]]] }
+	if operator == Op.Sqrt and left == ø { return ["float", converted(expression_code(body, right), "float") + [wasm_instructions["f64.sqrt"]]] }
 	if left === ø or right === ø {
 		other = if left === ø then right else left
 		if operator in identities or operator in equalities { return identity_with_nothing(body, operator, other) }
 		return refuse("the operator " + operator + " with nothing " + (if left === ø then "before" else "after") + " it")
 	}
-	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }
+	if operator == Op.Hash and left is symbol { return analyzed_element(body, left, right) }
 	operation_code(body, operator, expression_code(body, left), expression_code(body, right))
 }
 # `xs#i` of a list whose elements analyzer.warp knows: the element as that kind, else as a node
@@ -1123,7 +1123,7 @@ def collect_referred_outside(word: Function, found: any) {
 # the names a body assigns, `x = …`
 def collect_assigned(n: any, found: any) {
 	if type(n) is key {
-		if op_of(n) == "=" and key_of(n) is symbol { found[name_of(key_of(n))] = yes }
+		if op_of(n) == Op.Assign and key_of(n) is symbol { found[name_of(key_of(n))] = yes }
 		collect_assigned(value_of(n), found)
 	}
 	if is_group(n) { for item in n { collect_assigned(item, found) } }

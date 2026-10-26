@@ -341,7 +341,7 @@ def main():
         send({"method": "initialized"})
         thread = request(
             "thread/start",
-            {"cwd": cwd, "approvalPolicy": "never", "sandbox": "danger-full-access"},
+            {"cwd": cwd, "approvalPolicy": "never", "sandbox": "danger-full-access", "model": os.environ.get("CODEX_MODEL")},
         )["thread"]
         run_result["threadId"] = thread["id"]
         run_result["projectId"] = thread.get("projectId")

@@ -184,7 +184,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: any; lambdas_lifted: any; inlined: any = {}; callable_fields: any = {} }
+class Lowering { arities: any; lambdas_lifted: any; inlined: map = {}; callable_fields: map = {} }
 
 ## the walk
 

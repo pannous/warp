@@ -1,6 +1,6 @@
 # card pure-nil-in-any-map (issue #3119): ø names no entry of a map, so `ø in m` is no, also where the map is held as
 # any inside a function (it trapped on the null node in pure-built code)
-# (`warp test tests/control` runs them through warp pure)
+# (`warp test tests/control` )
 
 # nil_is_in_no_map
 is! "f(m: any): bool := { p: any = ø
