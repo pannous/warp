@@ -8,12 +8,13 @@ Workers land their own branches: they merge origin/main, smoke-test that merge (
 and push it (common.md "Done", user decision self-landing). You repeat no test. You watch main.
 
 ## Watching main
-- After each push to main (a worker's message, or `git fetch` shows a new tip):
-  `scripts/integrate/after-push.sh` in the background (`run_in_background`). In /Volumes/Worktrees/integrate2 at
-  main's tip it takes the compilers of its lib (`scripts/rebuild.sh both`: the pusher's build of the same inputs is
-  reused), checks hello, moves warp.wasm and warp-self.wasm (only when promoted from the same inputs) beside
-  ~/dev/bin/warp, pulls the user's checkout, then runs promote-self.sh and tiers 1-2 (`scripts/gate.sh`) of what
-  changed since the last tip it watched. Several pushes in a row: one run for the newest tip covers them all.
+- The pusher runs `scripts/integrate/after-push.sh` in the background right after its push (common.md "Done"), and a
+  cron runs it with `--if-moved` every 2 minutes (log ~/warp/after-push.log) as the safety net: main and the compilers
+  beside ~/dev/bin/warp stay in step (user). In /Volumes/Worktrees/integrate2 at main's tip it takes the compilers of
+  its lib (`scripts/rebuild.sh both`: the pusher's smoke build of the same inputs is reused from the store), checks
+  hello, moves warp.wasm and warp-self.wasm (only when promoted from the same inputs) beside the binary and pulls the
+  user's checkout first; promote-self.sh and tiers 1-2 (`scripts/gate.sh`) follow. One run at a time: a second one
+  returns, the running one loops while main moved past what it handled, installing the newest tip first.
 - What goes red becomes a card in Now naming the commits pushed since; the pusher fixes it forward. A red smoke test
   (hello) on main is urgent, and revert first, bisect after (user, standing): when the suspect push is known,
   `git revert` it at once, name the decision revert-first in the commit, push, tell the owner and the Supervisor; the
