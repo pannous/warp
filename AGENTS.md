@@ -127,7 +127,6 @@ When implementing gaps that the old Rust legacy implementation had, but are not 
 ## Pre-approved plans
 Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
 A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
-<!-- `todo add "merge: <branch> <sha>" Ready -b "<one-line summary, tests run>"`.  -->
 Main moved again in the meantime?
 AVOID full rebuild for small changes! If the minimal smoke test (Compiling Hello World) passes on the branch merged
 with origin/main, the worker pushes it to main itself and closes the card with `todo done <card> <commit>`

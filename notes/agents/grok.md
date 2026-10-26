@@ -17,8 +17,8 @@ few things differently. Where this file and the role files disagree, Grok agents
 
 ## Status lives in git
 - The status is the branch name, the commit messages and the board card, not chat.
-- Ready: `todo ready <card> [branch]`: checks that the branch is pushed and merges cleanly into origin/main, records
-  branch + tip on the card and moves it to Ready. The box `todo` has it too.
+- Landing: merge origin/main into the branch, smoke-test that merge, `git push origin HEAD:main`, then `todo done
+  <card> <commit>` (common.md "Done"). A branch left unlanded gets the card note `land: <branch> <tip>`.
 - Messages only for blocked or a decision; FYIs go out without waking the agent. The user hands out work between
   agents; agents keep messages to each other to a minimum.
 - An agent stops only its own helper jobs, never with a stop that reaches other agents.
@@ -44,6 +44,6 @@ Grok Bot's Supervisor runs the agents Warp Code, Warp Code 2, Warp Issues; SendM
 repo); it replies in your tmux pane or via scratch/grok-cards.md. Its agents are our workers (user: "freely
 send them cards"): first ask it whether they're busy and how many cards each can take, then `todo take <card>
 grok-warp-code` / `grok-warp-code-2` / `grok-warp-issues`, write the task into scratch/grok-cards.md and ping with
-grok-msg; they `todo ready`, the Integrator merges. Capacity: at most 1 active + 1 queued card per Grok coder; heavy
+grok-msg; they land their branches themselves. Capacity: at most 1 active + 1 queued card per Grok coder; heavy
 builds go to Warp Code 3's Linux box. Unexplained direct pushes to main with the user's identity (g-* cards) may be
 Grok Bot: ask the user.

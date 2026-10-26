@@ -15,8 +15,8 @@ Principles and Talking live only in common.md.
 - The sugar migration  keeps one line of history: warp-layers alone removes sugar
   from core/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
   origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
-  express the same day. Other branches touching parser.warp or a pass on the migration list stay small and land
-  express; one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
+  the same day. Other branches touching parser.warp or a pass on the migration list stay small and land at once;
+  one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
   lambdas.warp's fusion) are warp-folds' until its cards land; migration 3 skips them. Aliases are warp-signatures'
   lib/aliases.warp.
 - Small changes on main: only what nothing compiles (notes, docs, wiki, scripts, samples, playground text)
@@ -61,9 +61,9 @@ Principles and Talking live only in common.md.
   Integrator's rare intervals (nightly), never in a gate.
 - Stop isolation : an agent stops only its own helper jobs, never with a stop that
   reaches other agents.
-- Communicate less : message only when it really matters (Ready, blocked, a decision needed); batch
+- Communicate less : message only when it really matters (landed, blocked, a decision needed); batch
   the rest and send FYIs without waking the agent. Git is the status: branch name, commit messages and the board
-  card. Ready means the card moved and the branch pushed, no chat needed.
+  card. Landed means on main and the card Done, no chat needed.
 - Low effort for routine runs : routine builds and tests (rebuilds, targeted test runs, self-checks,
   gate runs) go to a helper at low effort with a step cap; give it the exact commands and stop when they finish.
   Higher effort only for real debugging or design work.
@@ -109,14 +109,13 @@ Principles and Talking live only in common.md.
   wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
 - Acceptance (decision warp-only-acceptance): a branch is accepted when warp.wasm compiles
   compiler.warp itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's
-  binary). Mark it
-  `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. While
+  binary), run on the branch merged with origin/main; then the worker pushes it to main itself ("Done" below). While
   main's own self build is red (its owner fixes it), a branch passes when its pure lane is green and its self check
-  fails no worse than main's (the same error): a red main never blocks the queue.
-  A change to core/ also checks the self build before Ready: `scripts/self-check.sh <worktree>` (with --rebuild it
+  fails no worse than main's (the same error): a red main never blocks a landing.
+  A change to core/ checks the self build before landing: `scripts/self-check.sh <worktree>` (with --rebuild it
   builds a missing compiler pair).
   Never rebuild in the main checkout: that replaces main's delivered pair under every running check; only the
-  Integrator's push installs it; a form emitter.warp refuses there is fixed or carded, never left for main to find.
+  Integrator's after-push step installs it; a form emitter.warp refuses there is fixed or carded, never left for main to find.
   Commands run directly, no slots or queues (decision no-slots). The tree it checks
   is a cowtree worktree under /Volumes/Worktrees or a throwaway lib/ copy under /Volumes/Junk, never inside the main
   checkout (scratch/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
@@ -178,10 +177,10 @@ Principles and Talking live only in common.md.
 - Fix tiny things on the spot instead of carding them. Tiny means all of: a few minutes, one obvious fix with no
   choice to make (a missing .gitignore line, a typo, a wrong path, a stale comment, a leaked temp file), no change to
   what a user sees or what a test asserts, and outside files another session is working on. Its own commit on your
-  current branch (`fix:`/`chore:`), named in your `todo ready` note. Anything else, or any doubt, becomes a card.
+  current branch (`fix:`/`chore:`), named in your merge message. Anything else, or any doubt, becomes a card.
 - Crash cards: a panic of a warp built from a checkout files a card in Now (src/errors/crash_card.rs) naming its
   fingerprint and branch. urgent-card-watch folds a repeated crash into its open card, gives a worktree build's crash
-  to the session on that branch and spawns warp-<card key> for a crash of a main build. Crash fixes are express.
+  to the session on that branch and spawns warp-<card key> for a crash of a main build. Crash fixes land first.
 - A card is closed only with a commit linked: `todo done <card> <commit>` (a commit URL for wiki changes), never `gh
   issue close`; `todo move <card> Done` refuses without a link.
 
@@ -197,47 +196,40 @@ Principles and Talking live only in common.md.
   disagree on meaning or notation go to warp-interviewer. warp-docs sweeps for what slipped through.
 - Wiki (`wiki/` in the main checkout, its own repo pannous/warp.wiki, branch master only: `git push origin
   HEAD:master`): commit only your pages by name, never `-a` (other sessions leave edits there); a refused pull is
-  someone else's work. Write a branch's doc changes only with its merge (hand the text to warp-integrator with the
-  merge request), never leave them lying in wiki/ to be published early.
-- Forward crunch: send a branch once it builds and its quick check works; tests failing in its own area don't hold
-  it back: the Integrator ignores them onto your card and you fix forward. Only a branch that doesn't build or
-  breaks other areas' tests is bounced. More than ~20 ignored tests of yours: fix those before new work.
-- Before `todo ready`: `scratch/warp format <files>` on the .warp files you wrote or changed (notes/warp_format.md),
+  someone else's work. Write a branch's doc changes only with its landing, never leave them lying in wiki/ to be
+  published early.
+- Forward crunch: land a branch once it builds and its smoke test passes; tests failing in its own area don't hold
+  it back: the Integrator's background tiers card them and you fix forward. More than ~20 failing tests of yours:
+  fix those before new work.
+- Before landing: `scratch/warp format <files>` on the .warp files you wrote or changed (notes/warp_format.md),
   and commit what it moved. A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
-- Done = the card is the handoff (the board's Ready column is the merge queue):
+- Landing (self-landing, user 2026-10-26: no merge queue, no Ready column; common.md "Done"):
   1. Targeted tests, commit, formatted.
-  2. Make sure the branch merges cleanly: `git fetch origin && git merge --autostash origin/main`. You resolve
-     conflicts, never the Integrator. Take a side of a conflicted file only after `git diff <merge-base> HEAD --
-     <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check `git diff
-     origin/main -- <file>` shows only your change. No need to re-run the tests after a clean update.
+  2. Merge origin/main into the branch: `git fetch origin && git merge --autostash origin/main`, with a merge
+     message summing up the change. You resolve conflicts. Take a side of a conflicted file only after `git diff
+     <merge-base> HEAD -- <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check
+     `git diff origin/main -- <file>` shows only your change.
      Keep merges real: one merge commit per branch, and never let a plain `git pull --rebase` flatten them (it replays
      a merged branch's commits onto main and conflicts): `git pull --rebase=merges` or `git merge origin/main`.
-  3. Push the branch, then `todo ready <card>`. It reads the tip itself and refuses a branch that is not pushed,
-     differs from origin, or does not merge cleanly (naming the files); `--force` only for a branch carrying other
-     branches. Several cards on one branch: ready each. First a `todo note <card>` in this fixed form: `card | branch |
-     tip (full sha) | filters | passed/failed`, then new tests, "docs: <page>"
-     and the sample. Express (the user or the Supervisor asked for your result fast, a crash fix, and every card of
-     warp-speed, the standing speed worker): `todo ready <card>
-     --express`; the Integrator pushes it to main untested at once, the gate follows. When the user says "express" or
-     "quickly", they expect about a minute: one targeted test or none, give the user a try line with
-     `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp` , ready it express.
-  4. Optional: one line to warp-reviewer ("<card> ready"); it reads `todo list Ready` anyway. Report one line to the
-     Supervisor.
-  The Integrator merges only Ready cards and closes them. A bounce (failing test, semantic conflict, reviewer veto)
-  is your card back in Now with a note: fix, push, `todo ready` again. A sent branch is never rebased or force-pushed:
-  merge origin/main into it and ready the new tip.
-- Post-hoc changes don't block: a readied tip lands as gated. A small reviewer point or polish is a follow-up commit
-  readied with its own card, never "hold my branch". Only real breakage (a veto, a failing test, a tip wrong as it
-  stands) holds a branch.
-- Try lines: a result the user can see or use gets `todo done <card> <commit> --try "…"` once the Integrator closed
-  the card: one concrete line with the exact command or URL, always `/Users/me/dev/bin/warp <full path>` (main's
+  3. Smoke test on that merge (core/ changes: smoke + `scripts/self-check.sh`), then `git push origin HEAD:main`
+     (fast-forward only; rejected: merge origin/main again, rerun the smoke test only if the new commits touch core/
+     or lib/). Then `todo done <card> <commit>`, with a `todo note` naming new tests, "docs: <page>" and the sample.
+     When the user says "quickly", they expect about a minute: one targeted test or none, give the user a try line
+     with `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp`, land it right after.
+  4. Report one line to the Supervisor.
+  A finished branch whose session retires before landing stays in Now with the note `land: <branch> <tip>` for the
+  Integrator. Something the background tiers find red comes back as a card: fix forward, never revert-and-wait.
+  A pushed branch is never rebased or force-pushed.
+- Post-hoc changes don't block: a small reviewer point or polish is a follow-up commit with its own card, never
+  "hold my branch". Only real breakage (a veto, a failing test) holds a branch.
+- Try lines: a result the user can see or use gets `todo done <card> <commit> --try "…"` once it is on main: one concrete line with the exact command or URL, always `/Users/me/dev/bin/warp <full path>` (main's
   optimized build, refreshed a few minutes after each pushed batch; plain `warp` is the older brew release;
   /Users/me/dev/bin/warp-debug is main's debug build). A program with quotes goes into a committed file (samples/ or its test/<topic>/),
   not inline. Run the exact line yourself first. Early try: once the feature's targeted test passes on your branch,
   SendMessage warp-interviewer a try line with your scratch/warp path and the expected output. Every landing the user
   can see, hear or run gets a fresh try line to warp-interviewer the moment you learn it merged. Time performance
   only with an optimized build.
-- Never retire with a card still yours: every card you took is `todo done`, in Ready, or released with `todo release
+- Never retire with a card still yours: every card you took is `todo done`, noted `land: <branch> <tip>`, or released with `todo release
   <card> "done: …; left: …; branch: …"` (back to Next, no agent); unmerged partial work is pushed first. This applies
   to Codex runs too. Once your handover is written you take no new work, not even cards assigned afterwards.
 - Clean up after the merge: remove your own worktree and branch, nobody else will: `git -C /Users/me/dev/angles/warp
