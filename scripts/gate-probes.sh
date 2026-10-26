@@ -49,9 +49,9 @@ red() { echo "gate: RED at tier $1 ($(git rev-parse --short HEAD), $(since $star
 # the first line worth showing of a run: its stdout, else its first error line without the source gutter
 said() { local text; text=$(grep -v '^ *[0-9]* |\|^ *|' "$1" | head -1); echo "${text:0:160}"; }
 
-# the lanes judged: pure, and self when the binary finds a promoted warp-self.wasm (`warp version` names a missing one)
+# the lanes judged: pure, and self when the binary finds a promoted warp-self.wasm (`warp version` names a missing one, on stderr)
 lanes=pure
-if ! "$warp" version 2>/dev/null | grep -q 'warp-self.wasm missing'; then lanes="pure self"
+if ! "$warp" version 2>&1 | grep -q 'warp-self.wasm missing'; then lanes="pure self"
 else echo "gate: no warp-self.wasm: self lane skipped (scripts/promote-self.sh promotes warp.wasm at a fixpoint)"; fi
 
 if wants 0; then
