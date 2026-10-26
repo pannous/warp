@@ -101,7 +101,7 @@ fn is_test_file(path: &Path) -> bool {
 }
 
 fn cases_of(file: &Path, source: &str) -> Vec<Case> {
-	let program = crate::warp_parser::parse(source);
+	let program = crate::compiler::standalone::parsed(source);
 	test_cases(&program)
 		.into_iter()
 		.enumerate()
@@ -197,7 +197,7 @@ pub fn run_child_case(command: &str, file: &str, index: &str) -> bool {
 	let by = if command == Compiler::SelfCompiled.command() { Compiler::SelfCompiled } else { Compiler::RustCompiled };
 	let file = Path::new(file).canonicalize().unwrap_or_else(|_| PathBuf::from(file));
 	let source = std::fs::read_to_string(&file).unwrap_or_default();
-	let cases = test_cases(&crate::warp_parser::parse(&source));
+	let cases = test_cases(&crate::compiler::standalone::parsed(&source));
 	let Some((_, code, expected)) = index.parse::<usize>().ok().and_then(|index| cases.into_iter().nth(index)) else {
 		println!("{GOT}{}", error(&format!("no test {index} in {}", file.display())).serialize());
 		return false;

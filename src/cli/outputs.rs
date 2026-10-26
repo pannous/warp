@@ -68,7 +68,7 @@ pub(crate) fn feature_of(module: &str, name: &str) -> String {
 /// `warp build --wit`: the component's WIT world next to the program file (out.wit for inline code)
 pub(crate) fn write_wit(code: &str, target: &str) {
 	let path = std::path::Path::new(&compiled_output_path(target)).with_extension(WIT_EXTENSION);
-	match warp::component_worlds::world_wit(&warp_parser::parse(code)) {
+	match warp::component_worlds::world_wit(&warp::compiler::standalone::parsed(code)) {
 		Ok(wit) => {
 			fs::write(&path, wit).expect("could not write the WIT world");
 			println!("wrote {}", path.display());

@@ -130,7 +130,12 @@ pub fn foreign_line<'a>(line: &'a str, library: &str) -> Option<ForeignLine<'a>>
 	let (name, rest) = signature.split_once('(')?;
 	let (parameters, result) = rest.rsplit_once(')')?;
 	let result = result.trim().strip_prefix(':').unwrap_or_default().trim();
-	crate::warp_parser::is_plain_name(name).then_some(ForeignLine { name, parameters, result })
+	is_plain_name(name).then_some(ForeignLine { name, parameters, result })
+}
+
+/// `atan2`, `log_10`: a foreign function's name, letters, digits and underscores
+fn is_plain_name(word: &str) -> bool {
+	!word.is_empty() && word.chars().all(|character| character.is_alphanumeric() || character == '_')
 }
 
 /// FFI function signature descriptor

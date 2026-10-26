@@ -77,13 +77,22 @@ compile(source: text, folder: text): any := {
 	made
 }
 
-# the module of the source file written to the wasm file, the source's uses found in folder
+# an output ending so gets parser.warp's view of the source as JSON, no module: how the host reads warp text into a
+# node without a Rust parser (a channel's message, a console line, a test file; card rust-bootstrap)
+VIEW_SUFFIX = ".view.json"
+
+# the module of the source file written to the wasm file, the source's uses found in folder; parser.warp's view of it
+# when the output ends in VIEW_SUFFIX
 compile_file(source_file: text, wasm_file: text, folder: text) := {
-	emitting_file(working_relative(source_file))
-	compiled = compile(read(source_file), folder)
-	# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
-	if compiled is text { raise compiled }
-	write_bytes(wasm_file, compiled)
+	if wasm_file.ends_with(VIEW_SUFFIX) {
+		write(wasm_file, view_json(bridged(stage_view(parsed(read(source_file))))))
+	} else {
+		emitting_file(working_relative(source_file))
+		compiled = compile(read(source_file), folder)
+		# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
+		if compiled is text { raise compiled }
+		write_bytes(wasm_file, compiled)
+	}
 }
 
 # the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text

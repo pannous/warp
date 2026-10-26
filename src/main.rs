@@ -9,7 +9,7 @@ use warp::node;
 use warp::run::module_cache::COMPILED_EXTENSION;
 use warp::util::{dirs_home, extract_after, file_exists, load_file};
 use warp::{
-	errors::diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser,
+	errors::diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util,
 	wasm_emitter, web::markup,
 };
 use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
@@ -345,7 +345,7 @@ fn run_command(args: &[String], given: &[String]) {
 	} else if let Some(target) = command_argument(&arg_string, "data") {
 		// `warp data file.warp` prints the file as data
 		let text = source_of(target);
-		println!("{}", warp_parser::parse_data(&text).serialize());
+		println!("{}", warp::compiler::standalone::parsed(&text).serialize());
 	} else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
 		let target = extract_after(&arg_string, " ");
 		let (flags, target) = leading_flags(target);
@@ -469,7 +469,7 @@ fn run_command(args: &[String], given: &[String]) {
 			Err(final_value) => println!("no module needed: {}", final_value.serialize()),
 		}
 	} else if let Some(code) = command_argument(&arg_string, "parse") {
-		println!("{}", structure(&warp_parser::parse(code)));
+		println!("{}", structure(&warp::compiler::standalone::parsed(code)));
 	} else if matches!(arg_string.as_str(), "repl" | "console" | "start" | "run") {
 		console();
 	} else if matches!(arg_string.as_str(), "2D" | "2d" | "SDL" | "sdl") {
