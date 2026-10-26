@@ -81,7 +81,7 @@ cargo build --release && cargo build --release -p warp-runtime   # binaries in t
 ```
 
 `warp-runtime` is the small runtime that standalone executables are made from; it belongs in the same folder as `warp`.
-`warp rebuild pure` then builds `warp.wasm`, the compiler written in Warp (lib/compiler/), which `warp pure` runs.
+`warp rebuild pure` then builds `warp.wasm`, the compiler written in Warp (core/), which `warp pure` runs.
 
 ## Run
 
@@ -134,12 +134,12 @@ the host enum `Node` (`Text`, `Symbol`, `Number`, `Char`, `Key`, `List`, `Type`,
 
 ## Status
 
-Experimental and moving fast. Tests live in tests/: Warp files run by `warp test` through the Warp-written compiler,
-and the older Rust suite (`cargo test`). The language spec lives in the
+Experimental and moving fast. Tests live in test/: Warp files run by `warp test` through the Warp-written compiler. The language spec lives in the
 [wiki](https://github.com/pannous/warp/wiki), and parts of it are not implemented yet. Warp began as a Rust rewrite of
 [Wasp](https://github.com/pannous/wasp) (C++), which follows the Python experiments
 [Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script); its compiler
-is now written in Warp itself ([lib/compiler](lib/compiler)), with Rust as the bootstrap and native host.
+is now written in Warp itself ([core](core)); Rust remains only as the native host (wasmtime, FFI). The old Rust compiler is
+preserved on the branch [rust-bootstrap](https://github.com/pannous/warp/tree/rust-bootstrap).
 
 Feedback, issues and especially "this surprised me" reports are welcome.
 
