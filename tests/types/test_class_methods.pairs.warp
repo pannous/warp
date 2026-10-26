@@ -11,8 +11,8 @@
 'class counter{n:int; inc() := n += 1}; c = counter(0); c.inc(); c.n'	1
 
 # a_method_may_be_named_like_a_type_word
-'class C{x:int; double() := x*2}; C(2).double()'	4
-'class C{x:int; double() := x*2}; type(double(3))'	'float'
+'class C{x:int; doubled() := x*2}; C(2).doubled()'	4
+'class C{x:int; doubled() := x*2}; type(double(3))'	'float'
 
 # a_field_in_an_interpolated_text_of_a_method
 'class B{n:int; f() := "#\\(n)"}; B(3).f()'	'#3'

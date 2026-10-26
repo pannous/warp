@@ -77,7 +77,7 @@ fn a_def_without_parameters_over_constants_gets_a_note() {
 		"{hints:?}"
 	);
 	assert!(hints_of("def t(): clock(); t()").iter().all(|(_, reason)| !reason.contains("never changes")));
-	assert!(hints_of("def double(x): x*2; double(2)").iter().all(|(_, reason)| !reason.contains("never changes")));
+	assert!(hints_of("def doubled(x): x*2; doubled(2)").iter().all(|(_, reason)| !reason.contains("never changes")));
 }
 
 // Card g-qUrk: a function defined in a function body reads the enclosing function's parameters and variables at call

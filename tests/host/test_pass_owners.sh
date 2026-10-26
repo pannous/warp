@@ -17,7 +17,7 @@ program match_form 'x = 2' 'print(match x { 1: "one"; 2: "two"; _: "many" })'
 program arm 'x = 3' 'print(match x { 1, 2 => "small"; _ => "big" })'
 program enum_form 'enum Coin { Penny, Dime }' 'c = Coin.Dime' 'print(if c == Coin.Dime then "dime" else "other")'
 program comprehension 'print [x * x for x in [1, 2, 3]]'
-program lambda 'double = x => x * 2' 'print double(21)'
+program lambda 'doubled = x => x * 2' 'print doubled(21)'
 program number_word 'print two + three'
 program fallback 'name = ø' 'print(name ?: "anonymous")'
 

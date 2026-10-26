@@ -4,7 +4,7 @@ use crate::is;
 
 #[test]
 fn a_program_rewrites_its_own_phrases() {
-	is!("rewrite double $x => $x * 2\ndouble 21", 42);
+	is!("rewrite doubled $x => $x * 2\ndoubled 21", 42);
 	is!("rewrite total $xs... => sum([$xs...])\ntotal 1 2 3", 6);
 }
 

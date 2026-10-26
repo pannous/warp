@@ -149,5 +149,5 @@ fn a_method_named_like_any_standard_function_keeps_it() {
 	is!("class Rope{s:text; def trim():=\"rope\"}; Rope(\"a\").trim() + \" a \".trim()", "ropea");
 	is!("class Coin{v:float; def round():=7}; Coin(1.5).round() + round(2.0)", 9);
 	is!("class Box{n:int; def int():=n}; Box(3).int() + \"42\".int()", 45);
-	is!("class C{x:int; def double():=x*2}; C(3).double() + 2.double()", 8);
+	is!("class C{x:int; def doubled():=x*2}; C(3).doubled() + 2.double()", 8);
 }

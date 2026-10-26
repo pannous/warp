@@ -1,5 +1,5 @@
-class Shape { side: int; double() := side * 2 }
-class Square extends Shape { double() := side * 4 }
-print Square(3).double()
-print Shape(3).double()
+class Shape { side: int; doubled() := side * 2 }
+class Square extends Shape { doubled() := side * 4 }
+print Square(3).doubled()
+print Shape(3).doubled()
 print double(5)

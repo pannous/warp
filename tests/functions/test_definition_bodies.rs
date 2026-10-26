@@ -21,7 +21,7 @@ fn of_phrase_as_a_value() {
 fn ruby_def_indented_by_tabs() {
 	is!("def f(x)\n\tx * 2\nend\nf(3)", 6);
 	is!("def f(x)\n\ty = x * 2\n\ty + 1\nend\nf(3)", 7);
-	is!("class Point\n\tdef initialize(x)\n\t\t@x = x\n\tend\n\tdef double\n\t\t@x * 2\n\tend\nend\nPoint.new(4).double", 8);
+	is!("class Point\n\tdef initialize(x)\n\t\t@x = x\n\tend\n\tdef doubled\n\t\t@x * 2\n\tend\nend\nPoint.new(4).doubled", 8);
 }
 
 /// card lowering-drops: after `def foo:` the rest of the line is the body, an assignment too (wiki/result.md)

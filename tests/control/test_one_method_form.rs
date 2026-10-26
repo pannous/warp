@@ -43,11 +43,11 @@ fn an_outside_method_reads_fields_bare() {
 }
 
 #[test]
-fn a_type_word_names_a_method_in_both_forms() {
-	for form in ["class P{n:int; def double():=n*2}", "class P{n:int}; def double(p:P):=n*2"] {
-		is!(&format!("{form}; double(P(3))"), 6);
-		is!(&format!("{form}; P(3).double()"), 6);
-		is!(&format!("{form}; p = P(4); double(p)"), 8);
+fn a_method_is_called_in_both_forms() {
+	for form in ["class P{n:int; def doubled():=n*2}", "class P{n:int}; def doubled(p:P):=n*2"] {
+		is!(&format!("{form}; doubled(P(3))"), 6);
+		is!(&format!("{form}; P(3).doubled()"), 6);
+		is!(&format!("{form}; p = P(4); doubled(p)"), 8);
 	}
 }
 

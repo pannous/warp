@@ -2,13 +2,13 @@
 # other pass lowers a function): `class Animal { name: text; speak() := name + " makes a sound" }` gives the function
 # `speak(self) := self.name + " makes a sound"`, which `a.speak()`, the call speak(a), calls on the instance.
 # - a field read or written bare is the instance's, `self.name` (`this.name` too); a sibling method read or called
-#   bare is called on it, `double()` is double(self); a method changes its instance in place, `count += 1` is
+#   bare is called on it, `doubled()` is doubled(self); a method changes its instance in place, `count += 1` is
 #   `self.count += 1`
 # - a property `area := side * side` is a method of no parameters, read with or without parentheses
 # - a method one class declares keeps its name, its subclasses inheriting it; a method several classes declare is
 #   `speak·Dog` in each, and `speak` the dispatcher on the instance's class, a subclass tested before its parent:
 #   `speak(self) := if self is Dog then speak·Dog(self) else speak·Animal(self)`
-# - a method named like a function of the program (the library's `sum`, `max`, `double` it reaches) or a word the
+# - a method named like a function of the program (the library's `sum`, `max` it reaches) or a word the
 #   runtime or the emitter defines (`sort`) is `sum·Bag` in each class declaring it, and a call `x.sum()` the dispatcher
 #   `sum·method(x)`, which calls the function itself, sum(x), on any value not an instance of those classes: a list's
 #   `xs.sum()` still sums

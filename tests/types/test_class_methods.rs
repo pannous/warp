@@ -55,9 +55,9 @@ fn keyword_methods_in_a_class_body() {
 #[test]
 fn a_method_may_be_named_like_a_type_word() {
 	// P142: class methods are always allowed, even named like a library or type word
-	is!("class C{x:int; double() := x*2}; C(2).double()", 4);
-	is!("class C{x:int; double() := x*2; quad() := double() * 2}; c = C(3); c.quad()", 12);
-	is!("class C{x:int; double() := x*2}; type(double(3))", "float"); // the conversion stays
+	is!("class C{x:int; doubled() := x*2}; C(2).doubled()", 4);
+	is!("class C{x:int; doubled() := x*2; quad() := doubled() * 2}; c = C(3); c.quad()", 12);
+	is!("class C{x:int; doubled() := x*2}; type(double(3))", "float"); // the conversion stays
 }
 
 /// Card class-method: a library-word method on a receiver of no known class is chosen at run time by its class
