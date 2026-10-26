@@ -137,7 +137,7 @@ with origin/main, the worker pushes it to main itself and closes the card with `
 
 Several agent sessions share this Mac and the full suite is slow, so run the cheapest check that covers the change
 (roles: notes/roles.md):
-- Smoke test (minutes), every branch: `WARP_LIB=<worktree>/lib warp rebuild pure`, then
+- Smoke test (minutes), every branch: `scripts/rebuild.sh pure <worktree>`, then `WARP_LIB=<worktree>/lib`
   `warp pure samples/hello/hello.warp` prints Hello.
 - Self test, only for parser/compiler changes (core/): `scripts/self-check.sh <worktree>`, the compiler compiles
   itself and that build prints Hello. For core/ changes smoke + self test is the whole check: no test folders.

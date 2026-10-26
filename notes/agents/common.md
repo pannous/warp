@@ -62,7 +62,8 @@ before asking a question). After a context swap, this file and your role file be
 ## Testing
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
 - Only the pure pipeline counts. Check .warp changes with the shared binary from your worktree:
-  `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` / `warp test <folders>`.
+  `scripts/rebuild.sh pure <worktree>` (it publishes the build to the shared store, so the install after your push
+  reuses it), then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp pure <program>` / `warp test <folders>`.
   Never rebuild in the main checkout. A core change also runs `scripts/self-check.sh <worktree>`.
 - Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never `pkill -f`, and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
@@ -83,11 +84,13 @@ before asking a question). After a context swap, this file and your role file be
 
 ## Done
 - A major feature ships with samples/<topic>.warp (chmod +x) and its wiki page updated in the same task.
-- Landing, by the worker itself (no Integrator gate; user 2026-10-26): `scratch/warp format` on the .warp files you
+- Landing, by the worker itself (no Integrator gate; user 2026-10-26): `data/warp format` on the .warp files you
   wrote; merge origin/main into the branch (real merges, you resolve conflicts) with a merge message summing up the
   change; on that merge run the smoke test (core/ changes: smoke + `scripts/self-check.sh`, AGENTS.md "Testing");
   `git push origin HEAD:main` (fast-forward only). Rejected because main moved: merge origin/main again; rerun the
-  smoke test only if the new commits touch core/ or lib/; push. Then `todo done <card> <commit>`. The full suite runs
+  smoke test only if the new commits touch core/ or lib/; push. At once `scripts/integrate/after-push.sh` with run_in_background: it installs the
+  compilers of the pushed tip beside ~/dev/bin/warp from your build in the store (seconds), so the user's warp matches
+  main right away (user 2026-10-26). Then `todo done <card> <commit>`. The full suite runs
   only at rare intervals, in the background.
 - Results the user can try get a try line (`/Users/me/dev/bin/warp <full path>`) to warp-interviewer.
 - Never retire holding a card: done, or `todo release <card> "done: …; left: …; branch: …"`.
