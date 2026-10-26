@@ -13,7 +13,7 @@ use "types.warp"
 node_equal(a: Node, b: Node): bool := {
 	if is_null(a) or is_null(b) { return is_null(a) == is_null(b) }
 	if kind_code(a) == Kind.Key or kind_code(b) == Kind.Key {
-		return code_free_kind(a) == code_free_kind(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
+		return code_free_kind(a) == code_free_kind(b) and same_bytes(key_name(a), key_name(b)) and node_equal(key_value(a), key_value(b))
 	}
 	if kind_code(a) == Kind.TypeDef or kind_code(b) == Kind.TypeDef {
 		return kind_code(a) == kind_code(b) and node_equal(entry_key(a), entry_key(b)) and node_equal(key_value(a), key_value(b))
@@ -21,7 +21,7 @@ node_equal(a: Node, b: Node): bool := {
 	if marked_kind(a) == Marked.Map and marked_kind(b) == Marked.Map { return map_equal(a, b) }
 	if kind_code(a) == Kind.List or kind_code(b) == Kind.List { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == Kind.Function or kind_code(b) == Kind.Function { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
-	if kind_code(a) == Kind.Symbol or kind_code(b) == Kind.Symbol { return kind_code(a) == kind_code(b) and text_order(unboxed_text(a), unboxed_text(b)) == 0 }
+	if kind_code(a) == Kind.Symbol or kind_code(b) == Kind.Symbol { return kind_code(a) == kind_code(b) and same_bytes(unboxed_text(a), unboxed_text(b)) }
 	if textual_node(a) or textual_node(b) { return textual_node(a) == textual_node(b) and textual_equal(a, b) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return unboxed_int(a) == unboxed_int(b) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_order(a, b) == 0 }
@@ -33,7 +33,7 @@ node_equal(a: Node, b: Node): bool := {
 # two texts or characters equal as texts: two characters by their code points, no text made of either
 textual_equal(a: Node, b: Node): bool := {
 	if kind_code(a) == Kind.Codepoint and kind_code(b) == Kind.Codepoint { return unboxed_char(a) == unboxed_char(b) }
-	text_order(textual_text(a), textual_text(b)) == 0
+	same_bytes(textual_text(a), textual_text(b))
 }
 textual_text(n: Node): text := if kind_code(n) == Kind.Codepoint then char_text(unboxed_char(n)) else unboxed_text(n)
 list_equal(a: list, b: list): bool := {
@@ -49,7 +49,7 @@ map_equal(a: Node, b: Node): bool := {
 	for entry in unboxed_list(a) {
 		found = no
 		for other in unboxed_list(b) {
-			if text_order(key_name(entry), key_name(other)) == 0 {
+			if same_bytes(key_name(entry), key_name(other)) {
 				if not node_equal(key_value(entry), key_value(other)) { return no }
 				found = yes
 			}
