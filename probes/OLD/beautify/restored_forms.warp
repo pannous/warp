@@ -1,0 +1,8 @@
+# the forms beautify-round restores in emitter.warp, in both lanes: `n is key` beside a local named key, `x not in xs`,
+# `xs.last`, "$(value)", a trailing `?` dropped by one word
+probe(n: any): any := {
+	key = "k"
+	if n is key { "a key" } else { "no key " + key }
+}
+xs = [1, 2, 3]
+[probe(node_of({a: 1})#1), probe(3), 4 not in xs, xs.last, "$(7)", "int?".remove_suffix("?")]

@@ -1,0 +1,6 @@
+age = 15; match age { 0 to 12 => "child"; 13 to 19 => "teen"; other => "adult" } ⇒ teen
+day = Sunday; match day { Saturday | Sunday => "weekend"; other => "workday" } ⇒ weekend
+match [1, 2] { [a, b] => a + b; other => 0 } ⇒ 3
+match 2 { 1 | 2 => "small"; 3 to 9 => "medium"; n if n < 0 => "negative"; other => "big" } ⇒ small
+r = {status: 200, data: {user: {name: "Ann"}}}; match r { {status: 200, data: {user: {name}}} => name; _ => "?" } ⇒ Ann
+enum Coin { Penny, Nickel, Dime }; cents(c: Coin) := match c { Penny: 1; Nickel: 5; Dime: 10 }; cents(Dime) ⇒ 10

@@ -1,0 +1,15 @@
+class pdf{body:text}; to render text as pdf: return pdf("%PDF " + text); r = render "hello"; r.body ⇒ %PDF hello
+5 ‐ 3 ⇒ 2
+5 – 3 ⇒ 2
+5 ― 3 ⇒ 2
+twice:=it*2; twice 3 ⇒ 6
+√1+2 ⇒ 3
+√(1+2) ⇒ 1.7320508075688772
+x=1; 2^x+1 ⇒ 3
+xs = [1,2,3]; xs.append(4); xs ⇒ [1 2 3 4]
+"abc".upper() ⇒ ABC
+square := it * it; square 3 ⇒ 9
+square a number := number times number; square 3 ⇒ 9
+to square a number { return number times number }; square 3 ⇒ 9
+def square(number x): x * x; square 3 ⇒ 9
+(def square (number x) (times x x)); square 3 ⇒ 9

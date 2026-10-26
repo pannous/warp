@@ -1,0 +1,12 @@
+1e-20 ≈ 0 ⇒ yes
+make(n) := (x => x + n); make(1) == make(2) ⇒ no
+m = {a:1}; m.count ⇒ 1
+[3 1 1 2].unique() ⇒ [3 1 2]
+n=3; k=0; for i in 0..n { n = 10; k += 1 }; k ⇒ 3
+type(0) is number ⇒ yes
+3 == int ⇒ no
+v: Vec<int> = [1, 2]; v ⇒ [1 2]
+add(a, b) := a + b; inc := add(1, _); inc 5 ⇒ 6
+cat{x=1 y=2} ⇒ cat{x:1 y:2}
+1/3 as decimal ⇒ 0.3̅
+0.3̅ * 3 ⇒ 1

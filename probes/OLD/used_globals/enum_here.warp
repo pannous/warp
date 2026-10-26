@@ -1,0 +1,3 @@
+enum Meaning { Variable, Loop }
+kinds = [Meaning.Variable]
+#kinds

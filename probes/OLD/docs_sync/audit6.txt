@@ -1,0 +1,15 @@
+p = person{ age:{2026 - 1996} }; p.age ⇒ 30
+p = person{ age:get{2026 - 1996} }; p.age ⇒ 30
+square x = x*x; square.pure? ⇒ yes
+purely square x = x*x; square 3 ⇒ 9
+time := now; time.input? ⇒ yes
+purely f(n) := fib_cache[n]=n ⇒ !pure
+person = [Ann Bo Cy]; peter = person#2; peter ⇒ Bo
+to calculate number a, number b as real: return a + b * 2.0; calculate 1, 2 ⇒ 5.0
+real calculate(int a, real b){ return a + b * 2.0 }; calculate(1, 2) ⇒ 5.0
+fun calculate(a: int, b: real) -> real { return a + b * 2.0 }; calculate(1, 2) ⇒ 5.0
+fun calculate(a as int, b as real) as real { return a + b * 2.0 }; calculate(1, 2) ⇒ 5.0
+fun calculate(a: int, b: real) : real { return a + b * 2.0 }; calculate(1, 2) ⇒ 5.0
+friend = "Bo"; "Hello \(friend)" ⇒ Hello Bo
+time = 5; start = 2; "It took ${time - start} milliseconds" ⇒ It took 3 milliseconds
+friend = "Bo"; "costs $5, not $friend" ⇒ costs $5, not $friend

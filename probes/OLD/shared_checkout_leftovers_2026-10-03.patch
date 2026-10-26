@@ -1,0 +1,638 @@
+diff --git a/notes/library_words.md b/notes/library_words.md
+index 699aa476..22af6e6e 100644
+--- a/notes/library_words.md
++++ b/notes/library_words.md
+@@ -17,8 +17,8 @@ data: property access is row 7 of wiki_features.md.
+ ## Known gaps
+ 
+ - `sum` of a list of decimals or floats: the `for` loop over such a list traps (`for i in [1.5 2] {i}` → cast failure). Fix the loop, not `sum`.
+-- `first [10, 5]` (prefix word, then a comma list) is read as the subscript `first[10, 5]` (a space before `[` still subscripts,
+-  Decided: `[1] [2]` is a subscript). Write `first([10, 5])`. Lists with spaces (`first [10 5]`) work.
++- A space before `[` never indexes (decided 2026-10-03): `first [10, 5]` and `reduce [7] (a b)->a+b` pass the list
++  (tests/test_surface_syntax.rs). Still open: `x = reduce xs (a b)->a+b` and `print first [10, 5]` (see TODO.md).
+ - `upper`/`lower` beyond ASCII need Unicode case tables. `reverse` and `first`/`last` of a text: `first`/`last` work (graphemes), `reverse` of a text is an error.
+ - `sort` compares ints only (no floats, texts, mixed): the comparison of two Nodes is not a runtime function yet.
+ - `x.upper!` (in-place, inventions.md) is not implemented: `x.upper` returns a new text, value semantics.
+@@ -121,7 +121,7 @@ Same compile-time way as `map` (`lambdas::ITERATIONS`, one loop template per wor
+ (the value is the body of the last item, 0 for an empty list). The function is a literal block/lambda or a defined function; a wrong
+ number of parameters is `reduce takes a function of two arguments`, anything else `functions are not first-class values yet`.
+ Body `a-b` of a lambda with parameters a and b is the difference (kebab rule). Parser quirks that bite: `{it<k}` reads `it<k}` as a type
+-application (write `it < k`), and `reduce [7] (a b)->…` reads `reduce [7]` as a subscript (bind the list first).
++application (write `it < k`).
+ 
+ # First-class functions (compile-time)
+ 
+diff --git a/src/analyzer.rs b/src/analyzer.rs
+index 11dcb5ee..845d9f56 100644
+--- a/src/analyzer.rs
++++ b/src/analyzer.rs
+@@ -2782,6 +2782,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
+ 				if fn_name == crate::switch::NO_CASE_CALL {
+ 					ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));
+ 				}
++				if fn_name == crate::wasm_emitter::text_builtins::TEXT_FORM {
++					ctx.required_functions.insert("list_join");
++				}
+ 				if fn_name == crate::library_words::FIELD_WITH {
+ 					ctx.required_functions.extend([crate::library_words::FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL]);
+ 				}
+diff --git a/src/lib.rs b/src/lib.rs
+index b227dce2..df6ebb23 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -37,6 +37,7 @@ pub mod law;
+ pub mod function_equality;
+ pub mod effects;
+ pub mod injection;
++pub mod interpolation;
+ pub mod diagnostic;
+ pub mod time;
+ pub mod real;
+diff --git a/src/library_words.rs b/src/library_words.rs
+index b96c4c4d..51223297 100644
+--- a/src/library_words.rs
++++ b/src/library_words.rs
+@@ -76,6 +76,12 @@ const INDEX_PLACEHOLDER: &str = "try_placeholder_index";
+ const DIVIDEND_PLACEHOLDER: &str = "try_placeholder_dividend";
+ const DIVISOR_PLACEHOLDER: &str = "try_placeholder_divisor";
+ const ASSERT_CONDITION_PLACEHOLDER: &str = "assert_placeholder_condition";
++const SIMILAR_LEFT_PLACEHOLDER: &str = "similar_placeholder_left";
++const SIMILAR_RIGHT_PLACEHOLDER: &str = "similar_placeholder_right";
++const SIMILAR_TEMPORARY: &str = "similar_tmp";
++/// `a ≈ b` holds when |a-b| ≤ tolerance·max(|a|, |b|); a program that assigns `tolerance` sets it
++const TOLERANCE_VARIABLE: &str = "tolerance";
++const DEFAULT_RELATIVE_TOLERANCE: &str = "1e-9";
+ const RECEIVER_PLACEHOLDER: &str = "word_argument";
+ const LOOKUP_PLACEHOLDER: &str = "word_lookup";
+ const TEMPORARY: &str = "word_tmp";
+@@ -238,12 +244,38 @@ impl Lowering {
+ 				let (receiver, word) = (self.expand(*left), *right);
+ 				self.safe_lookup(receiver, word)
+ 			}
++			Node::Key(left, Op::Similar, right) => self.lower_similar(self.expand(*left), self.expand(*right)),
+ 			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
+ 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
+ 			other => other,
+ 		}
+ 	}
+ 
++	/// `a ≈ b`, `a ~ b`, `a circa b`: compared within the relative tolerance; a side that is more than a plain value or
++	/// arithmetic is computed once into a temporary
++	fn lower_similar(&self, left: Node, right: Node) -> Node {
++		let tolerance = if self.shadowed.contains(TOLERANCE_VARIABLE) { TOLERANCE_VARIABLE } else { DEFAULT_RELATIVE_TOLERANCE };
++		let mut bindings = vec![];
++		let [left, right] = [left, right].map(|operand| self.bound_once(operand, &mut bindings));
++		let (l, r) = (SIMILAR_LEFT_PLACEHOLDER, SIMILAR_RIGHT_PLACEHOLDER);
++		let comparison = self.from_template(
++			&format!("abs({l} - {r}) <= {tolerance} * abs({l}) or abs({l} - {r}) <= {tolerance} * abs({r})"),
++			&[(l, &left), (r, &right)],
++		);
++		crate::min_max::with_bindings(bindings, comparison)
++	}
++
++	fn bound_once(&self, operand: Node, bindings: &mut Vec<Node>) -> Node {
++		if crate::min_max::is_plain(&operand) {
++			return operand;
++		}
++		let number = self.temporaries.get();
++		self.temporaries.set(number + 1);
++		let temporary = Node::Symbol(format!("{SIMILAR_TEMPORARY}_{number}"));
++		bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(operand)));
++		temporary
++	}
++
+ 	/// The word after a dot, `word` or `word(arguments)`: only the arguments are expanded, the word is not a call of its own
+ 	fn expand_method(&self, method: Node) -> Node {
+ 		match method {
+diff --git a/src/main.rs b/src/main.rs
+index 4f029958..f6718e27 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -29,6 +29,7 @@ pub mod function_equality;
+ pub mod effects;
+ pub mod diagnostic;
+ pub mod injection;
++pub mod interpolation;
+ pub mod time;
+ pub mod real;
+ pub mod units;
+diff --git a/src/min_max.rs b/src/min_max.rs
+index 233d3bb7..bcf50aaa 100644
+--- a/src/min_max.rs
++++ b/src/min_max.rs
+@@ -96,7 +96,7 @@ impl Lowering<'_> {
+ }
+ 
+ /// `(t1 = a; t2 = b; value)`, or just the value without bindings
+-fn with_bindings(mut bindings: Vec<Node>, value: Node) -> Node {
++pub(crate) fn with_bindings(mut bindings: Vec<Node>, value: Node) -> Node {
+ 	if bindings.is_empty() {
+ 		return value;
+ 	}
+@@ -124,7 +124,7 @@ fn fold_list_at_runtime(name: &str, list: &str, better: &Op) -> Node {
+ }
+ 
+ /// A value or arithmetic on values: cheap and side-effect free to repeat in the comparisons
+-fn is_plain(node: &Node) -> bool {
++pub(crate) fn is_plain(node: &Node) -> bool {
+ 	match node.drop_meta() {
+ 		Node::Number(_) | Node::Symbol(_) | Node::True | Node::False | Node::Empty => true,
+ 		Node::Key(left, op, right) => {
+diff --git a/src/normalize.rs b/src/normalize.rs
+index 879c8fa7..c518c6e9 100644
+--- a/src/normalize.rs
++++ b/src/normalize.rs
+@@ -392,6 +392,11 @@ pub mod hints {
+         }
+     }
+ 
++    /// A dollar hole `${expr}` / `$x` in interpolated text: the Swift hole `\(expr)` is canonical (decision D1)
++    pub fn interpolation(written: &str, expression: &str) {
++        hint(written, &format!("\\({expression})"), "canonical interpolation hole");
++    }
++
+     /// The operator as written in the source; `is_prefix` tells `!x` from an infix use
+     pub fn operator(written: &str, is_prefix: bool) {
+         let mut characters = written.chars();
+diff --git a/src/operators.rs b/src/operators.rs
+index 9a3bc7da..21d5907b 100644
+--- a/src/operators.rs
++++ b/src/operators.rs
+@@ -82,6 +82,7 @@ pub enum Op {
+ 	Ge,  // >=  ≥
+ 	Eq,  // ==
+ 	Ne,  // !=  ≠
++	Similar, // ≈  ~  circa  approximately: equal within the relative `tolerance` (default 1e-9)
+ 
+ 	// Logical operators
+ 	And, // and  &&  ∧
+@@ -169,7 +170,7 @@ impl Op {
+ 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
+ 
+ 			// Equality binds weaker and never chains: a<b == c<d compares the two results, a==b==c is ambiguous
+-			Op::Eq | Op::Ne => (115, 116),
++			Op::Eq | Op::Ne | Op::Similar => (115, 116),
+ 
+ 			// Logical not binds weaker than comparison: not a==b → not (a==b)
+ 			Op::Not => (0, 105),
+@@ -255,6 +256,7 @@ impl Op {
+ 			Op::Ge => ">=",
+ 			Op::Eq => "==",
+ 			Op::Ne => "!=",
++			Op::Similar => "≈",
+ 
+ 			// Logical
+ 			Op::And => "and",
+diff --git a/src/wasm_emitter/mod.rs b/src/wasm_emitter/mod.rs
+index ea4498fb..642a08f3 100644
+--- a/src/wasm_emitter/mod.rs
++++ b/src/wasm_emitter/mod.rs
+@@ -792,6 +792,11 @@ impl WasmGcEmitter {
+ 		found
+ 	}
+ 
++	/// A name that is no variable, global, function or `$n` parameter here
++	fn is_unbound(&self, name: &str) -> bool {
++		!name.starts_with('$') && self.scope.lookup(name).is_none() && !self.ctx.user_globals.contains_key(name) && !self.ctx.user_functions.contains_key(name)
++	}
++
+ 	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
+ 		self.emit_type_error(func, format!("undefined variable: {name}"));
+ 	}
+@@ -2213,7 +2218,12 @@ impl WasmGcEmitter {
+ 		let kind = self.get_type(value);
+ 		let node = match kind {
+ 			Kind::Int | Kind::Text | Kind::Codepoint => join_call(one_item_list(value.clone()), ""),
+-			// a list variable stays a loud error: tests/test_cast_to_string.rs pins it until the decision on a runtime serializer
++			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
++			Kind::List => {
++				let text = |text: &str| Box::new(Node::Text(text.to_string()));
++				let items = Node::Key(Box::new(join_call(value.clone(), " ")), Op::Add, text("]"));
++				Node::Key(text("["), Op::Add, Box::new(items))
++			}
+ 			_ => {
+ 				self.emit_type_error(func, format!("cannot cast {kind} to string: `{} as string` has no runtime text yet", value.serialize()));
+ 				return;
+@@ -3577,7 +3587,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
+ 	if let Some(error) = node.first_error() {
+ 		return Err(error.clone());
+ 	}
+-	let node = crate::injection::lower_templates(node)?;
++	let node = crate::interpolation::lower(crate::injection::lower_templates(node)?);
+ 	let node = crate::function_equality::decide_comparisons(node);
+ 	if let Node::Error(_) = node {
+ 		return Err(node);
+diff --git a/src/wasm_emitter/text_builtins.rs b/src/wasm_emitter/text_builtins.rs
+index 5a78e514..09a2c2cc 100644
+--- a/src/wasm_emitter/text_builtins.rs
++++ b/src/wasm_emitter/text_builtins.rs
+@@ -29,11 +29,13 @@ const HOST_WARN: &str = "host_warn";
+ /// text_with_char_at encodes a code point as UTF-8; it is emitted with node_with_at
+ const CHARACTER_ENCODER: &str = "node_with_at";
+ const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
++/// `text_form(x)`: the text of a value, what an interpolation hole `"\(x)"` becomes (interpolation.rs)
++pub const TEXT_FORM: &str = "text_form";
+ 
+ /// name, number of arguments, result kind
+-const TEXT_BUILTINS: [(&str, usize, Kind); 6] = [
++const TEXT_BUILTINS: [(&str, usize, Kind); 7] = [
+ 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
+-	(WARNING, 1, Kind::Text),
++	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text),
+ ];
+ 
+ pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
+@@ -123,6 +125,11 @@ impl WasmGcEmitter {
+ 				self.emit_node_instructions(func, message);
+ 				self.emit_call(func, ERROR_OF);
+ 			}
++			// a hole names a variable: a word that names nothing is loud, never its own spelling
++			(TEXT_FORM, [value]) => match value.drop_meta() {
++				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
++				_ => self.emit_runtime_text_cast(func, value),
++			},
+ 			(BYTE_AT | IS_ERROR, _) => {
+ 				self.emit_integer_text_builtin(func, name, arguments);
+ 				self.emit_call(func, "new_int");
+diff --git a/src/wasp_parser.rs b/src/wasp_parser.rs
+index 4096b75d..658f3d11 100644
+--- a/src/wasp_parser.rs
++++ b/src/wasp_parser.rs
+@@ -34,6 +34,8 @@ const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
+ const RECORD_WORD: &str = "record";
+ /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
+ const UPTO: &str = "upto";
++/// Word spellings of `≈` (wiki/operator.md): equal within the relative `tolerance`
++const SIMILARITY_WORDS: [&str; 2] = ["circa", "approximately"];
+ const EXCLUSIVE_DOTS: &str = "..";
+ /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
+ const KOTLIN_RANGE: &str = "kotlin-range";
+@@ -841,6 +843,9 @@ impl WaspParser {
+ 			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
+ 		}
+ 
++		if let Some(word) = SIMILARITY_WORDS.iter().find(|word| self.matches_keyword(word)) {
++			return Some((Op::Similar, word.len()));
++		}
+ 		// Keywords (4-char)
+ 		if self.matches_keyword("then") { return Some((Op::Then, 4)); }
+ 		if self.matches_keyword("else") { return Some((Op::Else, 4)); }
+@@ -865,6 +870,7 @@ impl WaspParser {
+ 			('a', 's') if !c3.is_alphanumeric() => return Some((Op::As, 2)),
+ 			('?', '.') if c3.is_alphabetic() || c3 == '_' => return Some((Op::SafeDot, 2)), // `x?.name`; `x ?.5 : 1` is a ternary
+ 			(':', '=') => return Some((Op::Define, 2)),
++			('~', '~') => return Some((Op::Similar, 2)),
+ 			(':', ':') => return Some((Op::Scope, 2)),
+ 			('-', '>') => return Some((Op::Arrow, 2)),
+ 			('=', '>') => return Some((Op::FatArrow, 2)),
+@@ -893,6 +899,7 @@ impl WaspParser {
+ 		// Keywords (2-char)
+ 		if self.matches_keyword("or") { return Some((Op::Or, 2)); }
+ 		if self.matches_keyword("is") { return Some((Op::Eq, 2)); } // wiki/equality.md: `is` compares by value like ==
++		if self.matches_keyword("be") { return Some((Op::Define, 2)); } // wiki/be.md
+ 		if self.matches_keyword("if") { return Some((Op::If, 2)); }
+ 		if self.matches_keyword("do") { return Some((Op::Do, 2)); }
+ 		if self.matches_keyword("to") { return Some((Op::To, 2)); }
+@@ -922,6 +929,7 @@ impl WaspParser {
+ 			'≤' => Some((Op::Le, 1)),
+ 			'≥' => Some((Op::Ge, 1)),
+ 			'≠' => Some((Op::Ne, 1)),
++			'≈' | '⋍' | '~' => Some((Op::Similar, 1)),
+ 			'!' => Some((Op::Not, 1)),
+ 			'¬' => Some((Op::Not, 1)),
+ 			'&' if self.starts_function_reference() && self.prev_char().is_whitespace() => None, // `map &square xs`
+@@ -2280,7 +2288,11 @@ impl WaspParser {
+ 		let (quote_line, quote_column) = self.get_position();
+ 		self.advance(); // skip opening quote
+ 
++		let interpolates = quote == '"' && !self.options.data_mode && !self.options.xml_mode && !self.options.wit_mode;
+ 		let mut s = String::new();
++		// the same literal in injection::parts syntax (holes `${expr}`, literal dollars `$$`), kept while it has a hole
++		let mut template = String::new();
++		let mut is_template = false;
+ 		loop {
+ 			let ch = self.current_char();
+ 			if ch == '\0' {
+@@ -2288,6 +2300,9 @@ impl WaspParser {
+ 			}
+ 			if ch == quote {
+ 				self.advance(); // skip closing quote
++				if is_template {
++					return crate::interpolation::template_text(&template);
++				}
+ 				// a one-character string is a Codepoint whichever quote is used, so only longer strings have a canonical quote
+ 				if s.chars().count() > 1 {
+ 					set_hint_position(quote_line, quote_column);
+@@ -2302,22 +2317,97 @@ impl WaspParser {
+ 				}
+ 				return Node::text(&s);
+ 			}
+-			if ch == '\\' {
+-				self.advance();
+-				match self.current_char() {
+-					'n' => s.push('\n'),
+-					't' => s.push('\t'),
+-					'r' => s.push('\r'),
+-					c => s.push(c),
++			let hole = match ch {
++				'$' if interpolates => self.parse_dollar_hole(),
++				'\\' if interpolates && self.peek_char(1) == '(' => self.parse_swift_hole().map(Some),
++				_ => Ok(None),
++			};
++			match hole {
++				Err(message) => return error(&message),
++				Ok(Some(expression)) => {
++					template.push_str(&format!("${{{expression}}}"));
++					is_template = true;
++					continue;
+ 				}
++				Ok(None) => {}
++			}
++			let literal = if ch == '\\' {
+ 				self.advance();
++				let escaped = self.current_char();
++				is_template |= interpolates && escaped == '$'; // an escaped dollar is never a hole, also in sql/sh
++				match escaped {
++					'n' => '\n',
++					't' => '\t',
++					'r' => '\r',
++					c => c,
++				}
+ 			} else {
+-				s.push(ch);
+-				self.advance();
++				ch
++			};
++			self.advance();
++			s.push(literal);
++			match literal {
++				'$' => template.push_str("$$"),
++				c => template.push(c),
+ 			}
+ 		}
+ 	}
+ 
++	/// `$name` or `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$ `)
++	fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
++		let (line, column) = self.get_position();
++		let next = self.peek_char(1);
++		let expression = if next == '{' {
++			self.advance_by(2);
++			let expression = self.text_until_closing('{', '}')?;
++			set_hint_position(line, column);
++			norm::interpolation(&format!("${{{expression}}}"), &expression);
++			expression
++		} else if next.is_alphabetic() || next == '_' {
++			self.advance();
++			let name: String = self.chars[self.pos..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
++			self.advance_by(name.chars().count());
++			set_hint_position(line, column);
++			norm::interpolation(&format!("${name}"), &name);
++			name
++		} else {
++			return Ok(None);
++		};
++		Ok(Some(expression))
++	}
++
++	/// `\(expr)` inside interpolated text, the canonical hole: its expression
++	fn parse_swift_hole(&mut self) -> Result<String, String> {
++		self.advance_by(2);
++		self.text_until_closing('(', ')')
++	}
++
++	/// The source up to the bracket closing an already opened `open`, skipping quoted text; consumes the closing bracket
++	fn text_until_closing(&mut self, open: char, close: char) -> Result<String, String> {
++		let start = self.pos;
++		let mut depth = 1;
++		let mut quote: Option<char> = None;
++		loop {
++			let ch = self.current_char();
++			match (ch, quote) {
++				('\0', _) => return Err(format!("unterminated interpolation hole: missing `{close}`")),
++				('\\', Some(_)) => self.advance(),
++				(c, Some(q)) if c == q => quote = None,
++				('"' | '\'', None) => quote = Some(ch),
++				(c, None) if c == open => depth += 1,
++				(c, None) if c == close => {
++					depth -= 1;
++					if depth == 0 {
++						let expression: String = self.chars[start..self.pos].iter().collect();
++						self.advance();
++						return if expression.trim().is_empty() { Err("empty interpolation hole".into()) } else { Ok(expression) };
++					}
++				}
++				_ => {}
++			}
++			self.advance();
++		}
++	}
+ 	fn parse_number(&mut self) -> Node {
+ 		let start = self.pos;
+ 		let number = self.parse_number_value();
+diff --git a/test_results.txt b/test_results.txt
+index 95621442..fb063ede 100644
+--- a/test_results.txt
++++ b/test_results.txt
+@@ -618,7 +618,6 @@ PASSED:
+   ✓ test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
+   ✓ test_math::test_abs_alias
+   ✓ test_math::test_absolute_value_arithmetic
+-  ✓ test_math::test_arithmetic
+   ✓ test_math::test_compound_assignment
+   ✓ test_math::test_eval
+   ✓ test_math::test_fraction_multiplication
+@@ -649,6 +648,7 @@ PASSED:
+   ✓ test_meta::test_parent
+   ✓ test_meta::test_parent_context
+   ✓ test_method_words::test_first_and_last
++  ✓ test_method_words::test_join
+   ✓ test_method_words::test_join_and_split_edge_cases
+   ✓ test_method_words::test_known_words_and_data_stay_data
+   ✓ test_method_words::test_library_words_refuse_what_they_cannot_do
+diff --git a/tests/common/mod.rs b/tests/common/mod.rs
+index c646190d..67f142e1 100644
+--- a/tests/common/mod.rs
++++ b/tests/common/mod.rs
+@@ -7,3 +7,19 @@ pub fn fails_with(code: &str, needle: &str) {
+ 		other => panic!("expected an error containing {needle:?} for {code}, got {other:?}"),
+ 	}
+ }
++
++/// Local HTTP stub answering every request with `status` and `body`: fetch tests need no network
++pub fn serve(status: &'static str, body: &'static str) -> String {
++	use std::io::{Read, Write};
++	let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++	let address = listener.local_addr().unwrap();
++	std::thread::spawn(move || {
++		for mut stream in listener.incoming().flatten() {
++			let mut request = [0u8; 4096];
++			let _ = stream.read(&mut request);
++			let response = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
++			let _ = stream.write_all(response.as_bytes());
++		}
++	});
++	format!("http://{address}/data")
++}
+diff --git a/tests/main.rs b/tests/main.rs
+index 51a16f51..f638ff6f 100644
+--- a/tests/main.rs
++++ b/tests/main.rs
+@@ -42,6 +42,7 @@ mod test_decimal_list_elements;
+ mod test_declared_float_exact_reals;
+ mod test_do_block;
+ mod test_dollar_names;
++mod test_download;
+ mod test_effects;
+ mod test_emitter;
+ mod test_empty_block_binding;
+@@ -73,6 +74,7 @@ mod test_host;
+ mod test_if_call_condition;
+ mod test_include;
+ mod test_inline_comments;
++mod test_interpolation;
+ mod test_iteration_words;
+ mod test_json;
+ mod test_juxtaposition;
+@@ -81,6 +83,7 @@ mod test_kitchensink;
+ mod test_lambdas;
+ mod test_law;
+ mod test_less_than_compare;
++mod test_library_unicode;
+ mod test_list_arithmetic;
+ mod test_list_number_comparison;
+ mod test_list_parameters;
+@@ -130,6 +133,7 @@ mod test_size_count;
+ mod test_size_property_word;
+ mod test_statement_sequence;
+ mod test_statement_terminators;
++mod test_surface_syntax;
+ mod test_statements_after_type;
+ mod test_string;
+ mod test_struct_field_of_constructor;
+@@ -142,6 +146,7 @@ mod test_switch_match;
+ mod test_switch_value;
+ mod test_symbol_hyphen;
+ mod test_text_bytes;
++mod test_text_casts;
+ mod test_text_concat;
+ mod test_text_functions;
+ mod test_text_getters;
+diff --git a/tests/test_method_words.rs b/tests/test_method_words.rs
+index 89a4a06e..e8ae729c 100644
+--- a/tests/test_method_words.rs
++++ b/tests/test_method_words.rs
+@@ -5,13 +5,13 @@ use crate::common::fails_with;
+ 
+ /// The printed result with double quotes, whichever quote the printer uses
+ fn printed(code: &str) -> String {
+-	eval(code).serialize().replace('\'', "\"")
++	eval(code).serialize().replace('\'', "'")
+ }
+ 
+ #[test]
+ fn test_unknown_method_word_is_an_error() {
+-	fails_with("x=\"hello\"; x.shout", "undefined function: shout");
+-	fails_with("x=\"hello\"; x.shout()", "undefined function: shout");
++	fails_with("x='hello'; x.shout", "undefined function: shout");
++	fails_with("x='hello'; x.shout()", "undefined function: shout");
+ 	fails_with("x=[1 2 3]; x.frobnicate", "undefined function: frobnicate");
+ }
+ 
+@@ -37,8 +37,8 @@ fn test_first_and_last() {
+ 	is!("x=[1 2 3]; x.last", 3);
+ 	is!("x=[4 5 6]; first(x)", 4);
+ 	is!("x=[4 5 6]; last(x)", 6);
+-	is!("x=\"hello\"; x.first", "h");
+-	is!("x=\"hello\"; x.last", "o");
++	is!("x='hello'; x.first", "h");
++	is!("x='hello'; x.last", "o");
+ }
+ 
+ #[test]
+@@ -67,49 +67,49 @@ fn test_sort() {
+ #[test]
+ fn test_upper_and_lower() {
+ 	for word in ["upper", "uppercase"] {
+-		assert_eq!(printed(&format!("x=\"hello\"; x.{word}")), "\"HELLO\"");
+-		assert_eq!(printed(&format!("x=\"hello\"; x.{word}()")), "\"HELLO\"");
+-		assert_eq!(printed(&format!("x=\"hello\"; {word} x")), "\"HELLO\"");
+-		assert_eq!(printed(&format!("{word}(\"hello\")")), "\"HELLO\"");
++		assert_eq!(printed(&format!("x='hello'; x.{word}")), "'HELLO'");
++		assert_eq!(printed(&format!("x='hello'; x.{word}()")), "'HELLO'");
++		assert_eq!(printed(&format!("x='hello'; {word} x")), "'HELLO'");
++		assert_eq!(printed(&format!("{word}('hello')")), "'HELLO'");
+ 	}
+ 	for word in ["lower", "lowercase"] {
+-		assert_eq!(printed(&format!("x=\"HeLLo\"; x.{word}")), "\"hello\"");
+-		assert_eq!(printed(&format!("{word} \"HeLLo\"")), "\"hello\"");
++		assert_eq!(printed(&format!("x='HeLLo'; x.{word}")), "'hello'");
++		assert_eq!(printed(&format!("{word} 'HeLLo'")), "'hello'");
+ 	}
+-	assert_eq!(printed("\"hello\".upper"), "\"HELLO\"");
++	assert_eq!(printed("'hello'.upper"), "'HELLO'");
+ }
+ 
+ #[test]
+ fn test_split() {
+-	assert_eq!(printed("\"a,b\".split(\",\")"), "[\"a\" \"b\"]");
+-	assert_eq!(printed("x=\"a,b,c\"; x.split(\",\")"), "[\"a\" \"b\" \"c\"]");
+-	assert_eq!(printed("split(\"a b\", \" \")"), "[\"a\" \"b\"]");
++	assert_eq!(printed("'a,b'.split(',')"), "['a' 'b']");
++	assert_eq!(printed("x='a,b,c'; x.split(',')"), "['a' 'b' 'c']");
++	assert_eq!(printed("split('a b', ' ')"), "['a' 'b']");
+ }
+ 
+ #[test]
+ fn test_join() {
+-	assert_eq!(printed("join [1 2] \",\""), "\"1,2\"");
+-	assert_eq!(printed("x=[\"a\" \"b\"]; x.join(\"-\")"), "\"a-b\"");
+-	assert_eq!(printed("join([1 2 3], \"\")"), "\"123\"");
++	assert_eq!(printed("join [1 2] ','"), "'1,2'");
++	assert_eq!(printed("x=['a' 'b']; x.join('-')"), "'a-b'");
++	assert_eq!(printed("join([1 2 3], '')"), "'123'");
+ }
+ 
+ #[test]
+ fn test_join_and_split_edge_cases() {
+-	assert_eq!(printed("join([10, -5, 300], \" \")"), "\"10 -5 300\"");
+-	assert_eq!(printed("join([\"x\", 7, \"yz\"], \"\")"), "\"x7yz\"");
+-	assert_eq!(printed("join [\"ab\" \"cd\"] \", \""), "\"ab, cd\"");
+-	assert_eq!(printed("\"a--b--c\".split(\"--\")"), "[\"a\" \"b\" \"c\"]");
+-	assert_eq!(printed("\"a,,b\".split(\",\")"), "[\"a\" \"\" \"b\"]");
+-	assert_eq!(printed("\"abc\".split(\",\")"), "[\"abc\"]");
++	assert_eq!(printed("join([10, -5, 300], ' ')"), "'10 -5 300'");
++	assert_eq!(printed("join(['x', 7, 'yz'], '')"), "'x7yz'");
++	assert_eq!(printed("join ['ab' 'cd'] ', '"), "'ab, cd'");
++	assert_eq!(printed("'a--b--c'.split('--')"), "['a' 'b' 'c']");
++	assert_eq!(printed("'a,,b'.split(',')"), "['a' '' 'b']");
++	assert_eq!(printed("'abc'.split(',')"), "['abc']");
+ }
+ 
+ #[test]
+ fn test_library_words_refuse_what_they_cannot_do() {
+-	fails_with("split(\"a\", \"\")", "empty separator");
+-	assert_eq!(printed("upper(\"é\")"), "\"É\"");
+-	fails_with("sort [\"b\" \"a\"]", "not an int");
++	fails_with("split('a', '')", "empty separator");
++	assert_eq!(printed("upper('é')"), "'É'");
++	fails_with("sort ['b' 'a']", "not an int");
+ 	fails_with("reverse 5", "not a list");
+-	fails_with("join([[1], [2]], \",\")", "not a joinable item");
++	fails_with("join([[1], [2]], ',')", "not a joinable item");
+ 	fails_with("first(1, 2)", "first takes 1 argument, got 2");
+ 	fails_with("x=[1 2]; x.first(3)", "first takes 1 argument, got 2");
+ 	fails_with("join([1 2])", "join takes 2 arguments, got 1");
+diff --git a/todo.md b/todo.md
+index efeece7c..08fcfae5 100644
+--- a/todo.md
++++ b/todo.md
+@@ -18,3 +18,8 @@
+ - DONE: `print` handles literal numbers and texts only: `print(x)` of a runtime value and `print("c")` (a one-character text parses as a codepoint) are "literal numbers and text only so far" errors. (2026-10-02)
+ - `print` of a list, a float or a map has no runtime text yet ("print of a List has no runtime text yet"), like `xs as string`; a runtime serializer is undecided (tests/test_cast_to_string.rs). (fix-print 2026-10-02)
+ - `x=1; x+=sqrt(2)` gives the f64 2.414… while `x=1; x=sqrt(2)` keeps the exact real √2: compound assignment skips the exact-real lowering. (fix-print 2026-10-02)
++- A statement sequence as the left operand of `or`/`and` at the top level is wrong: `(x=0; x) or 5` gives 0, `(x=0; x) and 5` gives 5; assigned (`z=(x=0; x) or 5`) it is right. `a ≈ b` with a call operand lowers to such a sequence (`f() ≈ 1 or …`). (impl-surface 2026-10-03)
++- `print first [10, 5]` and `print(upper "a")` print nothing and give ø: print of a prefix word call; `print first([10, 5])` works. (impl-surface 2026-10-03)
++- `x = reduce xs (a b)->a+b` is "functions are not first-class values yet" / "cannot extract a numeric value": the lambda after a prefix word does not stay inside the assigned value; `reduce xs (a b)->a+b` alone works. (impl-surface 2026-10-03)
++- `double := it*2; double 4` gives 4: `double` is a type word, so the definition is shadowed silently instead of a loud clash. (impl-surface 2026-10-03)
++- `l=π; d=abs(l-3.14); d <= 1e-9*abs(l)` is "l is a float where an exact Int is expected"; inline (`abs(l-3.14) <= 1e-9*abs(l)`) works. (impl-surface 2026-10-03)

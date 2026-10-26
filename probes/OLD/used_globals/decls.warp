@@ -1,0 +1,2 @@
+enum Meaning { Variable, Loop }
+class Box { w: int }

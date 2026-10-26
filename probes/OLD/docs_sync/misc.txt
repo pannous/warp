@@ -1,0 +1,8 @@
+2 in [5 2] ⇒ yes
+3 in [5 2] ⇒ no
+[5 2].index_of(2) ⇒ 2
+"ell" in "hello" ⇒ yes
+xs = [10, 20, 30]; xs#(xs.index_of(20)) ⇒ 20
+xs = [10, 20, 30]; xs.has(20) ⇒ yes
+print chars in "hello" ⇒ [h e l l o]
+name in peter{name="James"} ⇒ James

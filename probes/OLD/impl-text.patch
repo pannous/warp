@@ -1,0 +1,255 @@
+diff --git a/src/analyzer.rs b/src/analyzer.rs
+index 11dcb5ee..845d9f56 100644
+--- a/src/analyzer.rs
++++ b/src/analyzer.rs
+@@ -2784,2 +2784,5 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
+ 				}
++				if fn_name == crate::wasm_emitter::text_builtins::TEXT_FORM {
++					ctx.required_functions.insert("list_join");
++				}
+ 				if fn_name == crate::library_words::FIELD_WITH {
+diff --git a/src/lib.rs b/src/lib.rs
+index b227dce2..df6ebb23 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -39,2 +39,3 @@ pub mod effects;
+ pub mod injection;
++pub mod interpolation;
+ pub mod diagnostic;
+diff --git a/src/main.rs b/src/main.rs
+index 4f029958..f6718e27 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -31,2 +31,3 @@ pub mod diagnostic;
+ pub mod injection;
++pub mod interpolation;
+ pub mod time;
+diff --git a/src/normalize.rs b/src/normalize.rs
+index 879c8fa7..c518c6e9 100644
+--- a/src/normalize.rs
++++ b/src/normalize.rs
+@@ -394,2 +394,7 @@ pub mod hints {
+ 
++    /// A dollar hole `${expr}` / `$x` in interpolated text: the Swift hole `\(expr)` is canonical (decision D1)
++    pub fn interpolation(written: &str, expression: &str) {
++        hint(written, &format!("\\({expression})"), "canonical interpolation hole");
++    }
++
+     /// The operator as written in the source; `is_prefix` tells `!x` from an infix use
+diff --git a/src/wasm_emitter/mod.rs b/src/wasm_emitter/mod.rs
+index ea4498fb..9132cb6c 100644
+--- a/src/wasm_emitter/mod.rs
++++ b/src/wasm_emitter/mod.rs
+@@ -794,2 +794,7 @@ impl WasmGcEmitter {
+ 
++	/// A name that is no variable, global, function or `$n` parameter here
++	fn is_unbound(&self, name: &str) -> bool {
++		!name.starts_with('$') && self.scope.lookup(name).is_none() && !self.ctx.user_globals.contains_key(name) && !self.ctx.user_functions.contains_key(name)
++	}
++
+ 	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
+@@ -2215,3 +2233,8 @@ impl WasmGcEmitter {
+ 			Kind::Int | Kind::Text | Kind::Codepoint => join_call(one_item_list(value.clone()), ""),
+-			// a list variable stays a loud error: tests/test_cast_to_string.rs pins it until the decision on a runtime serializer
++			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
++			Kind::List => {
++				let text = |text: &str| Box::new(Node::Text(text.to_string()));
++				let items = Node::Key(Box::new(join_call(value.clone(), " ")), Op::Add, text("]"));
++				Node::Key(text("["), Op::Add, Box::new(items))
++			}
+ 			_ => {
+@@ -3579,3 +3602,3 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
+ 	}
+-	let node = crate::injection::lower_templates(node)?;
++	let node = crate::interpolation::lower(crate::injection::lower_templates(node)?);
+ 	let node = crate::function_equality::decide_comparisons(node);
+diff --git a/src/wasm_emitter/text_builtins.rs b/src/wasm_emitter/text_builtins.rs
+index 5a78e514..09a2c2cc 100644
+--- a/src/wasm_emitter/text_builtins.rs
++++ b/src/wasm_emitter/text_builtins.rs
+@@ -31,7 +31,9 @@ const CHARACTER_ENCODER: &str = "node_with_at";
+ const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
++/// `text_form(x)`: the text of a value, what an interpolation hole `"\(x)"` becomes (interpolation.rs)
++pub const TEXT_FORM: &str = "text_form";
+ 
+ /// name, number of arguments, result kind
+-const TEXT_BUILTINS: [(&str, usize, Kind); 6] = [
++const TEXT_BUILTINS: [(&str, usize, Kind); 7] = [
+ 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
+-	(WARNING, 1, Kind::Text),
++	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text),
+ ];
+@@ -125,2 +127,7 @@ impl WasmGcEmitter {
+ 			}
++			// a hole names a variable: a word that names nothing is loud, never its own spelling
++			(TEXT_FORM, [value]) => match value.drop_meta() {
++				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
++				_ => self.emit_runtime_text_cast(func, value),
++			},
+ 			(BYTE_AT | IS_ERROR, _) => {
+diff --git a/src/wasp_parser.rs b/src/wasp_parser.rs
+index 4096b75d..34ce3e1e 100644
+--- a/src/wasp_parser.rs
++++ b/src/wasp_parser.rs
+@@ -2282,3 +2311,7 @@ impl WaspParser {
+ 
++		let interpolates = quote == '"' && !self.options.data_mode && !self.options.xml_mode && !self.options.wit_mode;
+ 		let mut s = String::new();
++		// the same literal in injection::parts syntax (holes `${expr}`, literal dollars `$$`), kept while it has a hole
++		let mut template = String::new();
++		let mut is_template = false;
+ 		loop {
+@@ -2290,2 +2323,5 @@ impl WaspParser {
+ 				self.advance(); // skip closing quote
++				if is_template {
++					return crate::interpolation::template_text(&template);
++				}
+ 				// a one-character string is a Codepoint whichever quote is used, so only longer strings have a canonical quote
+@@ -2304,14 +2340,34 @@ impl WaspParser {
+ 			}
+-			if ch == '\\' {
+-				self.advance();
+-				match self.current_char() {
+-					'n' => s.push('\n'),
+-					't' => s.push('\t'),
+-					'r' => s.push('\r'),
+-					c => s.push(c),
++			let hole = match ch {
++				'$' if interpolates => self.parse_dollar_hole(),
++				'\\' if interpolates && self.peek_char(1) == '(' => self.parse_swift_hole().map(Some),
++				_ => Ok(None),
++			};
++			match hole {
++				Err(message) => return error(&message),
++				Ok(Some(expression)) => {
++					template.push_str(&format!("${{{expression}}}"));
++					is_template = true;
++					continue;
+ 				}
++				Ok(None) => {}
++			}
++			let literal = if ch == '\\' {
+ 				self.advance();
++				let escaped = self.current_char();
++				is_template |= interpolates && escaped == '$'; // an escaped dollar is never a hole, also in sql/sh
++				match escaped {
++					'n' => '\n',
++					't' => '\t',
++					'r' => '\r',
++					c => c,
++				}
+ 			} else {
+-				s.push(ch);
+-				self.advance();
++				ch
++			};
++			self.advance();
++			s.push(literal);
++			match literal {
++				'$' => template.push_str("$$"),
++				c => template.push(c),
+ 			}
+@@ -2320,2 +2376,57 @@ impl WaspParser {
+ 
++	/// `$name` or `${expr}` inside interpolated text: the hole's expression, `None` for a plain dollar (`$5`, `$ `)
++	fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
++		let (line, column) = self.get_position();
++		let next = self.peek_char(1);
++		let expression = if next == '{' {
++			self.advance_by(2);
++			let expression = self.text_until_closing('{', '}')?;
++			set_hint_position(line, column);
++			norm::interpolation(&format!("${{{expression}}}"), &expression);
++			expression
++		} else if next.is_alphabetic() || next == '_' {
++			self.advance();
++			let name: String = self.chars[self.pos..].iter().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
++			self.advance_by(name.chars().count());
++			set_hint_position(line, column);
++			norm::interpolation(&format!("${name}"), &name);
++			name
++		} else {
++			return Ok(None);
++		};
++		Ok(Some(expression))
++	}
++
++	/// `\(expr)` inside interpolated text, the canonical hole: its expression
++	fn parse_swift_hole(&mut self) -> Result<String, String> {
++		self.advance_by(2);
++		self.text_until_closing('(', ')')
++	}
++
++	/// The source up to the bracket closing an already opened `open`, skipping quoted text; consumes the closing bracket
++	fn text_until_closing(&mut self, open: char, close: char) -> Result<String, String> {
++		let start = self.pos;
++		let mut depth = 1;
++		let mut quote: Option<char> = None;
++		loop {
++			let ch = self.current_char();
++			match (ch, quote) {
++				('\0', _) => return Err(format!("unterminated interpolation hole: missing `{close}`")),
++				('\\', Some(_)) => self.advance(),
++				(c, Some(q)) if c == q => quote = None,
++				('"' | '\'', None) => quote = Some(ch),
++				(c, None) if c == open => depth += 1,
++				(c, None) if c == close => {
++					depth -= 1;
++					if depth == 0 {
++						let expression: String = self.chars[start..self.pos].iter().collect();
++						self.advance();
++						return if expression.trim().is_empty() { Err("empty interpolation hole".into()) } else { Ok(expression) };
++					}
++				}
++				_ => {}
++			}
++			self.advance();
++		}
++	}
+ 	fn parse_number(&mut self) -> Node {
+diff --git a/tests/common/mod.rs b/tests/common/mod.rs
+index c646190d..67f142e1 100644
+--- a/tests/common/mod.rs
++++ b/tests/common/mod.rs
+@@ -9 +9,17 @@ pub fn fails_with(code: &str, needle: &str) {
+ }
++
++/// Local HTTP stub answering every request with `status` and `body`: fetch tests need no network
++pub fn serve(status: &'static str, body: &'static str) -> String {
++	use std::io::{Read, Write};
++	let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++	let address = listener.local_addr().unwrap();
++	std::thread::spawn(move || {
++		for mut stream in listener.incoming().flatten() {
++			let mut request = [0u8; 4096];
++			let _ = stream.read(&mut request);
++			let response = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
++			let _ = stream.write_all(response.as_bytes());
++		}
++	});
++	format!("http://{address}/data")
++}
+diff --git a/tests/main.rs b/tests/main.rs
+index 51a16f51..17363e2c 100644
+--- a/tests/main.rs
++++ b/tests/main.rs
+@@ -44,2 +45,3 @@ mod test_do_block;
+ mod test_dollar_names;
++mod test_download;
+ mod test_effects;
+@@ -73,4 +75,7 @@ mod test_host;
+ mod test_if_call_condition;
++mod test_in_position;
+ mod test_include;
+ mod test_inline_comments;
++mod test_interpolation;
++mod test_it_shadow_warning;
+ mod test_iteration_words;
+@@ -83,2 +88,3 @@ mod test_law;
+ mod test_less_than_compare;
++mod test_library_unicode;
+ mod test_list_arithmetic;
+@@ -144,2 +153,3 @@ mod test_symbol_hyphen;
+ mod test_text_bytes;
++mod test_text_casts;
+ mod test_text_concat;

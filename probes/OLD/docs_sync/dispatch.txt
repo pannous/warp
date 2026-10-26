@@ -1,0 +1,14 @@
+class Deck { cards:int }; sort(d:Deck) := "shuffled " + d.cards + " cards"; Deck(3).sort() ⇒ shuffled 3 cards
+class Deck { cards:int }; sort(d:Deck) := d.cards; [3, 1, 2].sort() ⇒ [1 2 3]
+class Deck { cards:int; take(k) := cards - k }; Deck(5).take(2) == take(Deck(5), 2) ⇒ yes
+class Animal { name }; class Dog extends Animal {}; speak(a:Animal) := a.name + " makes a sound"; speak(d:Dog) := d.name + " barks"; speak(Dog("Rex")) ⇒ Rex barks
+class Ship{}; class Rock{}; collide(a:Ship, b:Rock) := "crash"; collide(a:Ship, b:Ship) := "bump"; collide(Ship(), Rock()) ⇒ crash
+class Ship{}; class Rock{}; collide(a:Ship, b:Rock) := "crash"; collide(a:Ship, b:Ship) := "bump"; collide(Ship(), Ship()) ⇒ bump
+class Animal{}; class Dog extends Animal{}; meet(a:Dog, b:Animal) := 1; meet(a:Animal, b:Dog) := 2; meet(Dog(), Dog()) ⇒ !ambiguous
+class square{s}; class rect{w}; class circle{r}; area(s:square) := 1; area(r:rect) := 2; area(circle(1)) ⇒ !no method
+foo of int = it + it; foo of text = its length; foo(3) ⇒ 6
+foo(x:int) := x + x; foo(x:text) := x.length; foo(x) := 1; foo("abc") ⇒ 3
+foo(x:int) := x + x; foo(x:text) := x.length; foo(x) := 1; foo(2.5) ⇒ 1
+class pdf{body}; class docx{body}; render(t):pdf := pdf("%PDF " + t); render(t):docx := docx("<w:t>" + t); x = render "hi" as docx; x.body ⇒ <w:t>hi
+class pdf{body}; class docx{body}; render(t):pdf := pdf("%PDF " + t); render(t):docx := docx("<w:t>" + t); docx d = render "hi"; d.body ⇒ <w:t>hi
+class Box{size:int}; size(b:Box) := b.size * 2; Box(3).size ⇒ 3

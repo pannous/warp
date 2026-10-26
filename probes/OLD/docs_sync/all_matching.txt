@@ -1,0 +1,68 @@
+match 2 { 1 | 2 => "small"; _ => "big" } ⇒ small
+match 2 { 1 or 2 => "small"; _ => "big" } ⇒ small
+match 2 { 1, 2 => "small"; _ => "big" } ⇒ small
+match [1] { [a] | [a, _] => a; _ => 0 } ⇒ !alternatives bind no names
+match 3 { 1 => "one"; other => "many" } ⇒ many
+match 3 { 1 => "one"; else => "many" } ⇒ many
+switch 3 { 1: "one"; default: "many" } ⇒ many
+match 15 { 13 to 19 => "teen"; _ => "other" } ⇒ teen
+match 15 { 13..20 => "teen"; _ => "other" } ⇒ teen
+match 20 { 13..20 => "teen"; _ => "other" } ⇒ other
+match 13 { 13...19 => "teen"; _ => "other" } ⇒ teen
+match 70 { 65.. => "senior"; _ => "other" } ⇒ senior
+match 7 { 1 to 3 | 6 to 9 => "in"; _ => "out" } ⇒ in
+match (3, 4) { (a, b) => a + b } ⇒ 7
+match (1, 2) { (1, t) => t; _ => 0 } ⇒ 2
+xs = [1, 2]; xs is [_, 2] ⇒ yes
+xs = [1, 2]; if xs is [a, b] then b else 0 ⇒ 2
+x = 3; x is (int or text) ⇒ yes
+kind(v) := match v { int => "number"; text => "words" }; kind("a") ⇒ words
+describe(v) := match v { i: int => i + 1; t: text => t + "!" }; describe(3) ⇒ 4
+class Circle{r:int}; class Square{s:int}; name(v) := match v { Circle => "circle"; Square => "square" }; name(Square(2)) ⇒ square
+f(v) := match v { 0 or text => "zero or text"; _ => "other" }; f("a") ⇒ zero or text
+match "bob" { "alice" => "hi Al"; name => "hi " + name } ⇒ hi bob
+xs = [1, 2]; match xs { [a, b] => xs.length } ⇒ 2
+match [4, 5, 6] { [a, ...rest] => value.length } ⇒ 3
+match {name: "Ann", age: 3} { {name: n} => n } ⇒ Ann
+match {name: "Ann", age: 3} { {age} => age + 1 } ⇒ 4
+x = {name: "Ann", age: 3}; if x is {age} then age else 0 ⇒ 3
+match {status: 200, body: {user: {name: "Ann"}}} { {status: 200, body: {user: {name}}} => name; _ => "?" } ⇒ Ann
+match -3 { n if n < 0 => "negative"; _ => "other" } ⇒ negative
+match -3 { -3 => "minus three"; _ => "other" } ⇒ minus three
+total(xs) := match xs { [] => 0; [first, ...rest] => first + total(rest) }; total([1, 2, 3]) ⇒ 6
+fib(0) := 0; fib(n) := n ⇒ !defined twice
+enum Coin { Penny, Nickel, Dime }; Coin.Dime ⇒ Dime
+enum Coin { Penny, Nickel, Dime }; Dime is Coin ⇒ yes
+enum Coin { Penny, Nickel, Dime }; Coin.Dime as int ⇒ 2
+enum Coin { Penny, Nickel, Dime }; Coin.Dime as index ⇒ 2
+enum Coin { Penny, Nickel, Dime }; Coin.Dime as position ⇒ 3
+enum Coin { Penny, Nickel, Dime }; 2 as Coin ⇒ Dime
+enum Coin { Penny, Nickel, Dime }; Coin(2) ⇒ Dime
+enum Coin { Penny, Nickel, Dime }; 9 as Coin ⇒ !9 is no Coin case
+enum Coin { Penny, Nickel, Dime }; f(c: Coin) := c; f(1) ⇒ !1 as Coin
+enum Coin { Penny, Nickel, Dime }; cents(c: Coin) := match c { Penny: 1; Nickel: 5 }; cents(Dime) ⇒ !misses Dime
+enum Coin { Penny, Nickel, Dime }; cents(c: Coin) := match c { Penny: 1; Nickel: 5; Dime: 10 }; cents(Coin.Dime) ⇒ 10
+enum Coin { Penny, Nickel, Dime }; cents(c: Coin) := match c { Penny: 1; other: 0 }; cents(Dime) ⇒ 0
+enum Coin { Penny, Nickel, Dime }; Coin::Dime ⇒ Dime
+enum Shape { Circle(r), Dot }; area(s) := match s { Circle(r) => r * r; Dot => 0 }; area(Circle(2)) ⇒ 4
+enum Shape { Circle(r), Dot }; area(s:Shape) := match s { Circle(r) => r * r }; area(Dot) ⇒ !misses Dot
+pattern Adult = {age: >= 18}; {age: 20} is Adult ⇒ yes
+class contact{name:text; image:text}; to assign a photo to a contact: contact.image = photo; c = contact("Ann", ""); assign "me.png" to c; c.image ⇒ me.png
+fibonacci number = if number<2 : number else fibonacci(number - 1) + fibonacci(number - 2); fibonacci 10 ⇒ 55
+fib := if it<2 : it else fib(it-1) + fib(it-2); fib 10 ⇒ 55
+color = red; switch color { green: "woods!"; red: "fire!" } ⇒ fire!
+color = blue; switch color { green: "woods!"; red: "fire!"; default: "sky" } ⇒ sky
+action = {green: "woods!", red: "fire!"}; action[red] ⇒ fire!
+enum Coin { Penny, Nickel, Dime, Quarter }; to get value of coin in cents: match coin { Penny: 1; Nickel: 5; Dime: 10; Quarter: 25 }; value of Dime in cents ⇒ 10
+enum Coin { Penny, Nickel, Dime, Quarter }; cents(coin: Coin) := match coin { Penny: 1; Nickel: 5; Dime: 10; Quarter: 25 }; cents(Quarter) ⇒ 25
+enum Shape { Circle(r), Dot }; area(s) := match s { Circle(r): r * r; Dot: 0 }; area(Circle(3)) ⇒ 9
+match ["", "x", ""] { ["", middle, ""] => middle + "!"; _ => "never mind" } ⇒ x!
+match [1, [2, [3]]] { [outer, [middle, [inner]]] => outer + middle + inner; _ => 0 } ⇒ 6
+f(n) := match n { 0 => "zero"; n if n < 0 => "negative"; _ => "positive" }; f(-5) ⇒ negative
+age = 15; match age { 0 to 12 => "child"; 13 to 19 => "teen"; other => "adult" } ⇒ teen
+fib(n) := match n { 0 => 0; 1 => 1; _ => fib(n - 1) + fib(n - 2) }; fib(10) ⇒ 55
+class Point{x:int; y:int}; p = Point(3, 4); match p { Point{x, ..} => x } ⇒ 3
+match [1, 2, 3] { [.., last] => last } ⇒ 3
+total(xs) := match xs { [] => 0; [*rest] => 1 }; total([1]) ⇒ 1
+response = {status: 200, body: {user: {name: "Ann"}}}; match response { {status: 200, body: {user: {name}}} => name; _ => "?" } ⇒ Ann
+match {name: "Ann"} { {name: "Ann"} => 1; _ => 2 } ⇒ 1

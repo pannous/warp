@@ -1,0 +1,21 @@
+You are a worker session supervised by the session warp-43. Never wait for user input: work until your task is done, then report. Talk only to the supervisor (or the other agents it names) via SendMessage, not to the user, unless the user talks to you directly. The user delegates decisions to the supervisor: a supervisor message that relays an explicit user decision (for example permission to change a named existing test) counts as the user's decision.
+
+YOUR NAME: ci-policy. TASK (user's words): "I ran into similar problems in my other projects. Tell an agent to implement the same policy there."
+
+The problem: GitHub Actions runs the test suite on every push to main, and the user (who pushes small commits very often, also from agents) gets a failure e-mail for every red run.
+The policy (decided 2026-10-03, implemented in pannous/warp, see /Users/me/dev/angles/warp/.github/workflows/rust.yml as the reference): test workflows do NOT run on every push to main. They run:
+- nightly, only when the default branch changed in the last ~25 hours (schedule + a small `decide` job that checks `git log --since`),
+- by hand (workflow_dispatch; `gh workflow run <name> -R <repo>`),
+- on version tags (v*),
+- on a push whose head commit message contains `[ci]`,
+- always on `claude/*` branches if the repo already uses them for cloud agents (keep any existing continue-on-error logic there),
+- pull_request stays if present.
+The decide job always succeeds, so a skipped push sends no mail. Put the explaining comment at the top of each workflow.
+
+Steps:
+1. Find the user's repos with GitHub Actions: `gh repo list pannous --limit 200 --json name,pushedAt,isArchived` (recently pushed, not archived), and the local checkouts (the active projects listed in /Users/me/CLAUDE.md, plus `find ~/dev ~/ai ~/Documents -maxdepth 4 -path '*/.github/workflows' -not -path '*/node_modules/*' -not -path '*/vendor/*'`, without crawling the home directory blindly). For each repo, list the workflows triggered by `push` and check the failure noise: `gh run list -R pannous/<repo> -L 30 --json conclusion,event,workflowName`.
+2. Apply the policy ONLY to test/CI workflows that run on push. Leave deploy/publish/pages/release, vendoring and scheduled maintenance workflows alone; list them in your report. Skip third-party client work under ~/jobs entirely (not the user's own conventions). Skip repos whose last 30 runs were all green AND where a push-triggered run is needed for deployment; report them.
+3. Work in each repo's local checkout when one exists: commit first if there are the user's own uncommitted changes? NO: never commit or touch the user's uncommitted work. Use a temporary `cowtree add --detach <repo>/.ci-policy-wt origin/<default>` (remove it afterwards), commit only the workflow file, `git pull --rebase` and push to the default branch directly (no pull requests; that is the user's rule). Conventional commit message `chore(ci): …`, no Co-Authored-By, no session trailers or links. Validate the YAML (python3 yaml) before committing. Without a local checkout, clone shallowly into /Users/me/dev/angles/warp/probes/ci-policy/<repo> and delete that clone at the end.
+4. After pushing, check with `gh run list` that the push produced a successful decide job and a skipped test job.
+5. Write a table into /Users/me/dev/angles/warp/notes/ci_policy.md (repo, workflow, change, verified) and send warp-43 a short summary: changed repos, skipped repos with the reason, anything needing the user's decision.
+Do not change anything other than workflow trigger logic. Ask warp-43 if a workflow mixes tests and deployment.

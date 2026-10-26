@@ -1,0 +1,11 @@
+enum Coin { Penny, Nickel, Dime }; Coin.Dime ⇒ Dime
+enum Coin { Penny, Nickel, Dime }; Dime is Coin ⇒ yes
+enum Coin { Penny, Nickel, Dime }; Coin.Dime is Coin ⇒ yes
+enum Coin { Penny, Nickel, Dime }; Coin.Dime as index ⇒ 2
+enum Coin { Penny, Nickel, Dime }; Coin.Dime as position ⇒ 3
+enum Coin { Penny, Nickel, Dime }; 2 as Coin ⇒ Dime
+enum Coin { Penny, Nickel, Dime }; Coin(2) ⇒ Dime
+enum Coin { Penny, Nickel, Dime }; 9 as Coin ⇒ !no Coin
+enum Coin { Penny, Nickel, Dime }; cents(c: Coin) := match c { Penny: 1; Nickel: 5; Dime: 10 }; cents(Coin.Dime) ⇒ 10
+class Ship{x:int}; class Rock{x:int}; collide(a:Ship, b:Rock) := "ship hits rock"; collide(a:Rock, b:Ship) := "rock hits ship"; collide(Ship(1), Rock(2)) ⇒ ship hits rock
+twice := it*2; twice(3) ⇒ 6

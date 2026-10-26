@@ -1,0 +1,7 @@
+// card gpu-visualizer-mp3: how long loading mozart.mp3 takes and what it holds
+use sound
+started = clock()
+clip = sample("mozart.mp3")
+print(clock() - started)
+print([clip.rate, clip.channels, count(clip.frames)])
+print(clip.frames[100000..100008])

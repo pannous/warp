@@ -1,0 +1,6 @@
+New working rules from the user (2026-10-03), effective now. Details: notes/roles.md on origin/main.
+1. The supervisor is now named BOSS-cheeky-shannon (it was warp-43). Send reports there.
+2. The Integrator is warp-6c. It is the only session that runs the full suite and pushes code to main. When your branch is ready, SendMessage warp-6c "branch, tip, new tests, filters" and fix what it reports. Delegate all verification checks to it: no whole-binary runs and no export copies.
+3. While developing, run only targeted tests, and only through the queue: `tests/queue.sh -- <filter>`. It holds one machine-wide lock, so only one test binary runs at a time. A hook now blocks direct `cargo test` / `cargo browser-test` / deps/tests-* runs; `cargo test --no-run` is allowed.
+4. Branches are official and live in git worktrees OUTSIDE the repo: `cowtree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name> origin/main` (uncommitted build tweak `version = "0.1.1-<name>"` + `crate-type = ["rlib"]`). Move your current work there when convenient, and delete your probes/*_work copy once your branch is pushed. Never edit /Users/me/dev/angles/warp itself.
+If you supervise sub-workers, forward this to them.

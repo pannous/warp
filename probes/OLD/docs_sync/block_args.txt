@@ -1,0 +1,2 @@
+repeats(n: int, body:block) := { for i in 1...n { body! } }; c = 0; repeats 3 { c += 2 }; c ⇒ 6
+repeats(n: int, block) := { for i in 1...n { block() } }; c = 0; repeats 3 { c += 2 }; c ⇒ 6

@@ -1,0 +1,3 @@
+use "decls.warp"
+kinds = [Meaning.Variable]
+#kinds + Box(3).w

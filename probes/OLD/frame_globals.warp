@@ -1,0 +1,9 @@
+// does a frame/timer handler's assignment reach the program's variable? (finger_paint gaps, card register-fingers)
+n = 0
+was = false
+on every 10 ms {
+	n = n + 1
+	print "n " + n + " was " + was
+	was = true
+	if n == 3: exit()
+}

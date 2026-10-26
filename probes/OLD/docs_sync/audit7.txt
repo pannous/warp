@@ -1,0 +1,10 @@
+'' == false ⇒ yes
+"" == false ⇒ yes
+0.0 == false ⇒ yes
+nil == false ⇒ yes
+{} == false ⇒ yes
+[] == false ⇒ yes
+class cat{}; cat{} == false ⇒ yes
+if "" then 1 else 2 ⇒ 2
+if [] then 1 else 2 ⇒ 2
+namespace test; class Foo; int bar (){ 42 }; bar() ⇒ 42
