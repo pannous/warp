@@ -1,20 +1,20 @@
 #!/bin/bash
 # The tiered gate of a tree (a merged batch, a branch, main), pure pipeline first, stopping at the first red tier:
-#   tier 0  rebuild pure (warp.wasm) + pure hello, + self hello when the tree has a warp-self.wasm   (minutes, the rebuild)
+#   tier 0  rebuild pure (warp.wasm, scripts/rebuild.sh: a build of the same inputs is reused) + pure hello, + self hello when the tree has a warp-self.wasm   (minutes, the rebuild)
 #   tier 1  every test/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout against <name>.expected
 #           (seconds). warp-self.wasm is no gate build: scripts/promote-self.sh promotes warp.wasm at a fixpoint, apart
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
 #   tier 3  Rust harness: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; not run here, only named
 #           (`cargo check`)
-# usage: scripts/gate-probes.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
+# usage: scripts/gate.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
 #                               [<tree>, default this checkout] [<binary>, default /workspace/cow/warp-rust-latest]
-#   --no-rebuild  tier 0 only runs hello with the tree's built compilers (data/warp.wasm, data/warp-self.wasm if there)
+#   --no-rebuild  the probes run with the tree's built compilers (data/warp.wasm, data/warp-self.wasm if there)
 #   --base        what tier 2 diffs against (default origin/main; a batch merged on main: the main it started from)
 #   --folders     tier 2 runs the whole folders of the changed test files (many fail today: compare with the base's run)
 #   --tag-good    when every tier run is green and the tree's HEAD is on origin/main: tag good/<YYYY-MM-DD-HHMM>
-#                 (Europe/Berlin) and push the tag; scripts/bisect-lane.sh starts from the newest good/* tag
+#                 (Europe/Berlin) and push the tag; a `git bisect run` starts from the newest good/* tag
 # Output: one line per tier (time), one per probe and lane (ok, or FAIL got … want …), logs in <tree>/data/gate/.
-# Exit: 0 green, 1 a red tier, 2 usage. Heavy (the rebuilds): on the Grok box run it through /workspace/box-slot.sh.
+# Exit: 0 green, 1 a red tier, 2 usage.
 tiers=0-2 rebuild=1 base=origin/main folders=0 tag=0 args=()
 while (($#)); do
 	case $1 in
@@ -49,6 +49,16 @@ red() { echo "gate: RED at tier $1 ($(git rev-parse --short HEAD), $(since $star
 # the first line worth showing of a run: its stdout, else its first error line without the source gutter
 said() { local text; text=$(grep -v '^ *[0-9]* |\|^ *|' "$1" | head -1); echo "${text:0:160}"; }
 
+# the compilers of the tree's lib in its data/ (scripts/rebuild.sh: built only when no build of these inputs exists),
+# then beside the binary copy, which takes the compiler beside it first: a stale one there never runs the probes
+if ((rebuild)) && wants 0; then
+	WARP_BINARY=$binary "$(dirname "$0")/rebuild.sh" pure "$tree" > "$logs/rebuild-pure.log" 2>&1 || { echo "FAIL rebuild pure: $(grep -i 'error\|refus' "$logs/rebuild-pure.log" | head -1 | cut -c1-160) (log $logs/rebuild-pure.log)"; red 0; }
+fi
+for compiler in warp warp-self; do
+	rm -f "$logs/$compiler.wasm"
+	[ -f "$tree/data/$compiler.wasm" ] && cp -c "$tree/data/$compiler.wasm" "$logs/$compiler.wasm"
+done
+
 # the lanes judged: pure, and self when the binary finds a promoted warp-self.wasm (`warp version` names a missing one, on stderr)
 lanes=pure
 if ! "$warp" version 2>&1 | grep -q 'warp-self.wasm missing'; then lanes="pure self"
@@ -57,9 +67,6 @@ else echo "gate: no warp-self.wasm: self lane skipped (scripts/promote-self.sh p
 if wants 0; then
 	t0=$(date +%s) ok=1
 	for lane in $lanes; do
-		if ((rebuild)) && [[ $lane == pure ]]; then
-			"$warp" rebuild $lane > "$logs/rebuild-$lane.log" 2>&1 || { echo "FAIL rebuild $lane: $(grep -i 'error\|refus' "$logs/rebuild-$lane.log" | head -1 | cut -c1-160) (log $logs/rebuild-$lane.log)"; red 0; }
-		fi
 		got=$(timeout 300 "$warp" $lane samples/hello/hello.warp 2>&1 | tail -1)
 		[[ $got == *Hello* ]] || { echo "FAIL $lane hello: got ${got:0:160}"; red 0; }
 	done

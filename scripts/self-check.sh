@@ -1,11 +1,9 @@
 #!/bin/zsh
 # The warp-only acceptance check (decision warp-only-acceptance): the Rust-compiled compiler.warp compiles itself and
-# that self build runs hello world. Few checks at a time on the Mac: each self build runs wasm-opt -O3 on ~2.5 cores,
-# and eight at once pushed the load past 60 (supervisor 2026-10-21); one at a time queued checks for 45 min at load 9,
-# so the check runs in one of scripts/slot.sh's fleet-wide slots.
+# that self build runs hello world.
 # The pair checked is the one for the branch's compiler inputs (scripts/rebuild.sh, notes/compiler_rebuilds.md): data/'s
 # or the shared store's. A miss is said ("REBUILD NEEDED") and the existing pair is checked: the check builds only when
-# asked to, with --rebuild (then in a slot). Nothing rebuilds the compilers because lib/ changed .
+# asked to, with --rebuild. Nothing rebuilds the compilers because lib/ changed .
 # usage: scripts/self-check.sh [--rebuild] [<worktree>, default the current checkout]   (exit 0 = Hello printed)
 rebuild=
 [[ ${1-} == --rebuild ]] && { rebuild=1; shift; }
@@ -24,7 +22,7 @@ if [[ $worktree == $main_checkout/* ]]; then
 fi
 # the core runtime (runtime.warp, core/runtime/*.warp) never uses the extended one (core/runtime/extended/,
 # runtime/extended.warp; decision runtime-split) nor names a word it defines: it calls the hooks runtime/bridge.warp
-# declares, whose bodies are runtime/extended.warp's. Checked first, needing no slot. Plain files only (.); the extended root and
+# declares, whose bodies are runtime/extended.warp's. Checked first. Plain files only (.); the extended root and
 # runtime/durations.warp, an extended part kept in runtime/ for tests/numbers/test_duration_words.rs, count as extended
 core=($worktree/core/runtime.warp $worktree/core/runtime/*.warp(.))
 core=(${${core:#*/runtime/extended.warp}:#*/runtime/durations.warp})
@@ -36,7 +34,6 @@ if [[ -z $extended_words || -n $core_uses_extended ]]; then
   echo "SELF CHECK RED: the core runtime uses the extended runtime, not through runtime/bridge.warp: $core_uses_extended"
   exit 1
 fi
-[[ -n $rebuild && -z $WARP_SLOT ]] && exec $main_checkout/scripts/slot.sh ${0:a} --rebuild $worktree
 
 cd $worktree || exit 1
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
@@ -51,8 +48,7 @@ check_lane() {
 # main's binary is refreshed after each pushed batch: a warp.wasm built by the old binary and a self build by the
 # new one make a self compiler that traps on every program (card self-trap-function-param). The check runs its own copy
 # of the binary, taken once, so a refresh never overlaps it (retrying instead kept checks queued for hours, 2026-10-22)
-scratch=$WARP_SLOT
-[[ -n $scratch ]] || { scratch=$(mktemp -d /tmp/self-check.XXXXXX) && trap "rm -rf $scratch" EXIT; }
+scratch=$(mktemp -d /tmp/self-check.XXXXXX) && trap "rm -rf $scratch" EXIT
 warp=$scratch/warp
 cp $main_warp $warp || exit 1
 # the pair for these inputs: data/'s, else the store's; built by the copy only with --rebuild. The Rust fingerprint is

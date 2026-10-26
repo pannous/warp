@@ -145,7 +145,7 @@ Several agent sessions share this Mac and the full suite is slow, so run the che
   feature touches is feedback for the worker, run in the background, never a merge condition.
 - Full suite (`warp test`): only the Integrator, at rare intervals (nightly, before a release), never per branch.
 We always want the very quick feedback loop and quick merges: anything slower than smoke + fixpoint runs in the
-background (`run_in_background`, scripts/slot.sh) and never holds a merge; what it finds is fixed forward on a card.
+background (`run_in_background`) and never holds a merge; what it finds is fixed forward on a card.
 A worker marks its card Ready with a note naming branch, tip commit and the checks it ran; the Integrator merges after
 its gate (smoke, test/gate, the changed test files) and sends what fails back to the card's owner, who fixes it.
 
@@ -257,7 +257,7 @@ NEVER modify a README without the user's review and explicit confirmation.
 Small or non-conflicting changes may go straight onto main without a worktree. 
 Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
 /Volumes/Worktrees/warp is cowtree's donor, never removed.
-/Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md),
+/Volumes/Worktrees/integrate and integrate2 are the Integrator's (tools: scripts/integrate/, notes/agents/integrator.md).
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` 
 Before removing a worktree: `git status --short -uall` (untracked files are hidden on this Mac) + files changed in 2 h.
 
