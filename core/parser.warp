@@ -51,8 +51,10 @@ def library_sources(): any := library_texts(run_library(), "")
 // the .warp files of lib/<within> and its folders, by their paths within lib/
 def library_texts(library: text, within: text): any {
 	found = {}
-	names = try list_files(library + "/" + within) else []
-	for name in names {
+	listed = try list_files(library + "/" + within) else []
+	# a compiler without the runtime's own listing (one an older seed built) lists nothing: it reads lib/ where it runs
+	if not (type(listed) is list) { return found }
+	for name in listed.sort() {
 		path = within + name
 		if name.ends_with(".warp") {
 			found[path] = try read(library + "/" + path) else ""
@@ -72,7 +74,10 @@ def source_file(path: text): any {
 		changed = try read(path) else ø
 		if changed != ø { return changed }
 	}
-	LIBRARY_FILES.get(path[library.length .. path.length])
+	bundled = LIBRARY_FILES.get(path[library.length .. path.length])
+	if bundled != ø or LIBRARY_FILES { return bundled }
+	# no bundle: a compiler built by one that could list no lib/ yet reads lib/ where it runs
+	try read(path) else ø
 }
 global entity_table = ø
 def entities(): any {

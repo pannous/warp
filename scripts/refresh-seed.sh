@@ -1,13 +1,14 @@
 #!/bin/bash
 # Refresh the seed compiler (seed/warp-self.wasm, card rust-bootstrap): the seed compiles core/compiler.warp
-# (stage A), stage A compiles it again (stage B), and only when B compiles it to the same bytes as itself (stage C == B,
-# the fixpoint; or A == B at once) does B replace the seed. The seed is what `warp rebuild` builds warp.wasm with; no
+# (stage A), stage A compiles it again (stage B), and so on (up to D) until a stage compiles it to its own bytes (the
+# fixpoint): only that stage replaces the seed. The seed is what `warp rebuild` builds warp.wasm with; no
 # Rust-compiled stage takes part. (scripts/promote-self.sh is the light check of warp.wasm alone: N+1 == N.)
 # usage: scripts/refresh-seed.sh [--check] [<tree>, default this checkout]   (--check: run the stages, replace nothing)
 # WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~17-20 min on the Mac: run it
 # through scripts/slot.sh, in the background. The bytes depend on where lib/ lies (compiler.warp keeps its folder), so
 # the fixpoint holds per tree, and a seed refreshed in another tree differs in that path alone.
 set -u
+STAGES="A B C D"
 check=
 [ "${1-}" = --check ] && { check=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
@@ -39,15 +40,16 @@ stage() {
   mv "$built" "$2"
   echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $((SECONDS - start)) s, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
 }
-stage "$seed" "$scratch/A.wasm"
-stage "$scratch/A.wasm" "$scratch/B.wasm"
-if cmp -s "$scratch/A.wasm" "$scratch/B.wasm"; then
-  fixpoint=$scratch/B.wasm
-else
-  stage "$scratch/B.wasm" "$scratch/C.wasm"
-  cmp -s "$scratch/B.wasm" "$scratch/C.wasm" || { echo "refresh-seed: NO FIXPOINT: stage C differs from stage B; the seed stays" >&2; exit 1; }
-  fixpoint=$scratch/C.wasm
-fi
+# each stage compiles compiler.warp with the one before, until two in a row are the same bytes: a feature the compiler
+# uses on itself (a runtime word, a bundled lib/) reaches it a stage after the stage that brings it
+previous=$seed
+fixpoint=
+for name in $STAGES; do
+  stage "$previous" "$scratch/$name.wasm"
+  [ "$previous" != "$seed" ] && cmp -s "$previous" "$scratch/$name.wasm" && { fixpoint=$scratch/$name.wasm; break; }
+  previous=$scratch/$name.wasm
+done
+[ -n "$fixpoint" ] || { echo "refresh-seed: NO FIXPOINT within the stages $STAGES; the seed stays" >&2; exit 1; }
 echo "refresh-seed: FIXPOINT $(wc -c <"$fixpoint" | tr -d ' ') B sha256 $(shasum -a 256 "$fixpoint" | cut -d' ' -f1)"
 if [ -n "$check" ]; then
   cmp -s "$fixpoint" "$seed" && echo "refresh-seed: the seed is the fixpoint" || echo "refresh-seed: the seed differs from the fixpoint (--check: kept)"
