@@ -35,8 +35,16 @@ root_text(file: text): text := {
 # the runtime words lowered and kept; keep's answer unused, so a host without the module cache (plain wasmtime answering
 # its imports with defaults) still gets the words
 lowered_runtime_words(): Node := {
+	# the counters numbering the names the passes make (item·3, t·2, closure_lambda_5) as they were: a program then gets
+	# the same names whether its compiler lowered the runtime words in this run or took them kept, so a cold and a warm
+	# module cache give the same bytes (card fixpoint-check)
+	global names_made
+	global fresh_names
+	counted = [names_made, fresh_names]
 	roots = RUNTIME_ROOTS.map(file => root_text(file))
 	words = lowered_program(roots.join("\n"), library_folder + "/compiler", prelude_source)
+	names_made = counted#1
+	fresh_names = counted#2
 	keep(RUNTIME_WORDS, words)
 	words
 }
