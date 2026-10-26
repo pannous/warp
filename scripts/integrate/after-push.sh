@@ -14,6 +14,7 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 TREE=/Volumes/Worktrees/integrate2
 EXPECTED=Hello
 HARNESS_PATHS=(src crates Cargo.toml Cargo.lock build.rs)
+SEED=$(dirname "$MAIN_WARP")/warp-seed.wasm  # the seed refresh-seed.sh installs beside the shared binary
 BUILDS=/Users/me/dev/bin/main-builds  # one folder: the installed harness and its compilers, no other builds or links
 CARGO_BINARY=/Volumes/Build/target/release/warp  # ~/.cargo/config.toml's target-dir
 
@@ -65,13 +66,14 @@ harness_current() {
 # the harness of $tip built and installed: its folder in $BUILDS with warp.wasm built by it, hello, then ~/dev/bin/warp
 # links there and every older folder goes (user: no stale builds, no warp-<hash> links)
 install_harness() {
-	local folder=$BUILDS/${tip:0:9} got
+	local folder=$BUILDS/${tip:0:9} got built
 	say "harness of ${tip:0:10} changed: cargo build --release"
 	(cd "$TREE" && cargo build --release -q) || { red "harness: cargo build --release failed" --urgent; return 1; }
 	mkdir -p "$folder" && cp "$CARGO_BINARY" "$folder/warp" || return 1
-	(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib "$folder/warp" rebuild pure >/dev/null 2>&1)
+	# the seed lies beside ~/dev/bin/warp, which the new binary, run from its own folder, does not see
+	built=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib WARP_SEED=$SEED "$folder/warp" rebuild pure 2>&1 | tail -1)
 	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$folder/warp" pure samples/hello/hello.warp 2>&1 | tail -1)
-	[[ $got == *$EXPECTED* ]] || { red "harness: hello with the new binary got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
+	[[ $got == *$EXPECTED* ]] || { red "harness: hello with the new binary got ${got:0:120} (its rebuild said: ${built:0:120})" --urgent; rm -rf "$folder"; return 1; }
 	ln -sfn "${folder#"$(dirname "$MAIN_WARP")/"}/warp" "$MAIN_WARP"
 	find "$BUILDS" -mindepth 1 -maxdepth 1 ! -name "${tip:0:9}" -exec rm -rf {} +
 	say "harness of ${tip:0:10} installed: $MAIN_WARP -> $folder/warp"
