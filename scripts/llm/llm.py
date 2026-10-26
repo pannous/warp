@@ -20,7 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 MAIN_CHECKOUT = os.path.dirname(os.path.abspath(subprocess.run(
     ["git", "-C", ROOT, "rev-parse", "--git-common-dir"], capture_output=True, text=True).stdout.strip()))
 DATA = os.path.join(ROOT, "data", "llm")
-SCRATCH = os.path.join(ROOT, "scratch", "llm")
+SCRATCH = os.path.join(ROOT, "data", "llm")
 COST_FILE = os.path.join(DATA, "cost.json5")
 BUDGET_DOLLARS = 150.0  # user, 2026-10-10: stop at $150 of the ~$200 credit
 KEYS_FILE = os.path.expanduser("~/.keys")

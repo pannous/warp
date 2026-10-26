@@ -24,7 +24,7 @@ WORKFLOW=.github/workflows/pages.yml
 
 repository=$(git rev-parse --show-toplevel)
 cd "$repository"
-local_dir="$repository/scratch/browser-dry-run"
+local_dir="$repository/data/browser-dry-run"
 branch=$({ git symbolic-ref --short -q HEAD || git rev-parse --short HEAD; } | tr '/' '-')
 run_dir="$SERVER_HOME/runs/$branch"
 

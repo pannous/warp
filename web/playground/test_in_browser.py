@@ -295,14 +295,14 @@ def serve(binary, root=REPOSITORY):
 			self.wfile.write(body)
 
 		def do_POST(self):
-			"""tests.html posts its summary here: scratch/browser_tests_<browser>.json, e.g. from a Firefox tab"""
+			"""tests.html posts its summary here: data/browser_tests_<browser>.json, e.g. from a Firefox tab"""
 			if urllib.parse.urlsplit(self.path).path == STUB_PATH:
 				return self.echo()
 			if self.path != RESULTS_PATH:
 				return self.send_error(404)
 			summary = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-			os.makedirs(os.path.join(REPOSITORY, "scratch"), exist_ok=True)
-			with open(os.path.join(REPOSITORY, "scratch", f"browser_tests_{summary.get('browser', 'unknown')}.json"), "w") as file:
+			os.makedirs(os.path.join(REPOSITORY, "data"), exist_ok=True)
+			with open(os.path.join(REPOSITORY, "data", f"browser_tests_{summary.get('browser', 'unknown')}.json"), "w") as file:
 				json.dump(summary, file, indent=1)
 			self.send_response(204)
 			self.end_headers()

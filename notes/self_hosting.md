@@ -260,7 +260,7 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
 
 ### Bootstrap gap (card bootstrap-gap)
-`SURVEY=1 FOLDERS=core probes/self_hosting/refusals.sh scratch/warp` → data/self_hosting/bootstrap_gap.txt:
+`SURVEY=1 FOLDERS=core probes/self_hosting/refusals.sh data/warp` → data/self_hosting/bootstrap_gap.txt:
 every refused function of core once, by the first form refused (a fixed family uncovers the next one behind
 it; totals vary between runs under load, compare runs on one state). 2026-10-19: 262 refused functions, 8 of 22 files
 inside the core; after `x == ø` / `x != ø` and main-level variables read by functions as module globals: 185, 9 inside.

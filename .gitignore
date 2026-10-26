@@ -19,11 +19,10 @@ out
 notes/session
 
 
-# disposable copies, worktrees, cargo homes, private index files, temp builds
-scratch/
-/scratch
-# kept but not committed: logs, test results, patches, dumps, benchmark data
+# a checkout's own output, never committed: logs, test results, dumps, copies, temp builds (the main checkout's is
+# a symlink to /Volumes/Junk/warp/data, notes/churn_volume.md)
 data/
+/data
 !src/lowering/data/
 
 # packages fetched by `use <name>`, see packages.warp

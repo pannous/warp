@@ -10,8 +10,8 @@ host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
 [ -x "$host" ] || host=$checkout/target/debug/warp-host
 rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
-stage=$checkout/scratch/host-lists-test
-export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=0
+stage=$checkout/data/host-lists-test
+export WARP_HOST_CACHE=$checkout/data/host-cache WARP_NO_WINDOW=1 WARP_HINTS=0
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }

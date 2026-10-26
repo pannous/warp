@@ -272,7 +272,7 @@ modules of that lib/. How agents get a compiler pair without building it: notes/
 - WARP_HOST_BINARY names the host (default target/host/warp-host, else target/release/, else target/debug/).
 - The C modules are assembled by WARP_WAT2WASM, else target/release/wat2wasm, else wabt's wat2wasm on PATH.
 - The compilers come from beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`).
-- The cache is scratch/host-cache/. The first run computes it (~30 s); later runs take ~15 s.
+- The cache is data/host-cache/. The first run computes it (~30 s); later runs take ~15 s.
 
 After M2 (C calls, the wat crate, origin/main merged) the release binary is 12,441,720 B.
 

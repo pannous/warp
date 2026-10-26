@@ -3,15 +3,15 @@
 # machine code f.cwasm, `warp-host f.cwasm` runs it, `build` writes a standalone executable carrying it, which runs with
 # WASI, std_io and C calls as warp-host does. Run it with bash test/host/test_host_aot.sh
 # The host and compilers are found as in test/host/test_host.sh (WARP_HOST_BINARY, WARP_LAUNCHER_RUST, WARP_WAT2WASM);
-# staged in scratch/host-aot-test/. Kept values and machine code go to scratch/host-cache/, shared with test_host.sh.
+# staged in data/host-aot-test/. Kept values and machine code go to data/host-cache/, shared with test_host.sh.
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
 [ -x "$host" ] || host=$checkout/target/debug/warp-host
 rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
-stage=$checkout/scratch/host-aot-test
+stage=$checkout/data/host-aot-test
 HELLO='"Hello 🌍2026"'
-export WARP_HOST_CACHE=${WARP_HOST_CACHE:-$checkout/scratch/host-cache} WARP_NO_WINDOW=1 WARP_HINTS=0
+export WARP_HOST_CACHE=${WARP_HOST_CACHE:-$checkout/data/host-cache} WARP_NO_WINDOW=1 WARP_HINTS=0
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }

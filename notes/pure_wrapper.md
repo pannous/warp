@@ -140,7 +140,7 @@ lowers compiler.warp's runtime words once: 8–14 s here (debug), `warp rebuild`
 
 tests/launcher/test_launcher.sh (outcome checks, expected output and exit status), through the queue:
 `tests/queue.sh tests/launcher/test_launcher.sh`. WARP_LAUNCHER_RUST names the Rust binary under test (default the
-checkout's target/debug/warp), warp.wasm and warp-self.wasm beside it; staged in scratch/launcher-test/.
+checkout's target/debug/warp), warp.wasm and warp-self.wasm beside it; staged in data/launcher-test/.
 
 Pure-pipeline coverage: `tests/queue.sh <warp-rust> test tests` (or `--self`) runs every test of tests/ through the
 pure pipeline and prints `m of n failed`; n − m is the number going green.
