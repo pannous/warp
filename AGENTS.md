@@ -90,6 +90,7 @@ WASI, FFI) in warp; the value layout and the `Kind` enum are in notes/self_hosti
 Runs the compiled modules and nothing else: `src/run/` (wasmtime), `src/host/` and `src/host.rs` (host words, sandbox,
 channels, database), `src/ffi/`, `src/gc_traits/` (reads GC objects back into Nodes), `src/node/` (printing results),
 `src/cli/`, `src/compiler/standalone.rs` and `pure_tests.rs` (run warp.wasm, `warp test`).
+This harness should barely ever be rebuilt, and if so, independent of the warp files, and all tests should be completely parallel and non-blocking.
 
 ## Build and Test Commands
 
