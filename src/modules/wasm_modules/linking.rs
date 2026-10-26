@@ -19,7 +19,7 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 		let role = exports(&path).get(&name).map_or(Role::Function, |export| export.role);
 		linker.func_new(import.module(), import.name(), function_type, move |mut caller, arguments, results| {
 			let instance = instance_of(&mut caller, &path)?;
-			let global_name = name.strip_prefix(SETTER_PREFIX).unwrap_or(&name);
+			let global_name = name.strip_prefix("set ").unwrap_or(&name);
 			let global = |caller: &mut Caller<'_>| {
 				instance
 					.get_global(caller, global_name)
@@ -321,7 +321,7 @@ fn instance_memory(
 	caller: &mut Caller<'_>,
 	instance: Option<wasmtime::Instance>,
 ) -> wasmtime::Result<wasmtime::Memory> {
-	export_of(caller, instance, crate::wasm_emitter::MEMORY_ENTITY)
+	export_of(caller, instance, crate::abi::MEMORY_ENTITY)
 		.and_then(wasmtime::Extern::into_memory)
 		.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))
 }

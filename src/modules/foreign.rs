@@ -27,13 +27,13 @@ pub fn call(
 		Node::List(items, _, _) => Value::Array(items.iter().map(json_of).collect()),
 		single => Value::Array(vec![json_of(single)]),
 	};
-	if runtime == crate::foreign_modules::COMPONENT_RUNTIME {
+	if runtime == "wasm" {
 		return component_call(module, member, &arguments);
 	}
 	if !warp_runtime::foreign::is_interpreted(runtime) {
 		return Err(format!(
 			"no foreign runtime {runtime}: known are {}",
-			crate::foreign_modules::FOREIGN_RUNTIMES.join(", ")
+			["python", "js", "wasm"].join(", ")
 		));
 	}
 	let (module, module_json) = match module.drop_meta() {
@@ -57,11 +57,8 @@ fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node
 	let Value::Array(arguments) = arguments else {
 		return Err(format!("wasm {receiver}: {member} is a function of the component, call it: {member}(…)"));
 	};
-	let result = match module.drop_meta() {
-		Node::Text(path) | Node::Symbol(path) => crate::modules::components::call(path, member, arguments),
-		handle => crate::modules::components::call_method(&json_of(handle), member, arguments),
-	};
-	result.map(|value| node_of(&value)).map_err(|failure| format!("{}: {failure}", component_name(&receiver)))
+	let _ = arguments;
+	Err(format!("{}: wasm components are not in the self lane yet (card rust-bootstrap)", component_name(&receiver)))
 }
 
 /// `semver` of the cached component ~/.cache/warp/crates/…/semver@1.0.28.wasm: what the program calls it

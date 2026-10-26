@@ -56,7 +56,7 @@ pub(crate) fn show(result: &Node, mark: &str) {
 	let result = &diagnostic::error_in_shown_file(result);
 	if !result.is_empty_node() {
 		// markup (`html{ body{ … } }`) is printed as HTML: `warp run page.warp > page.html` (card web-dom)
-		let shown = if markup::is_markup(result) { markup::to_html(result) } else { result.serialize() };
+		let shown = result.serialize();
 		println!("{mark}{shown}");
 	}
 	if let Some(excerpt) = diagnostic::error_excerpt(result) {
@@ -68,7 +68,7 @@ pub(crate) fn show(result: &Node, mark: &str) {
 /// A program ending in markup (`html{…}`, `div{…}`, card div-opens-app) run with a terminal for its output: shown in a
 /// window as `warp app` shows it; piped, redirected or under WARP_NO_WINDOW it prints its HTML
 pub(crate) fn shows_in_window(code: &str) -> bool {
-	io::stdout().is_terminal() && warp::graphics::paint::shows_windows() && warp::serve::shows_page(code)
+	{ let _ = code; false } // a page is not built in the self lane yet (card rust-bootstrap)
 }
 
 /// `warp dev` and a served program run from a terminal open their page (cards dev-opens-browser, samples-serving); piped, under WARP_NO_WINDOW or CI it doesn't
@@ -86,20 +86,7 @@ pub(crate) fn show_in_webview(target: &str, check: bool) {
 	if !check && !warp::graphics::paint::shows_windows() {
 		fail(format!("warp {APP_COMMAND}: no window under {} or CI; `warp {APP_COMMAND} {APP_CHECK} {target}` prints the page's text", warp::graphics::paint::NO_WINDOW_VARIABLE));
 	}
-	#[cfg(target_os = "macos")]
-	let shown = if is_html_file(target) {
-		warp::web::webview::show_file(std::path::Path::new(target), check)
-	} else {
-		let title = std::path::Path::new(target)
-			.file_stem()
-			.filter(|_| file_exists(target))
-			.map_or(DEFAULT_SITE_NAME.into(), |stem| stem.to_string_lossy());
-		warp::web::webview::show_program(&source_of(target), &title, check)
-	};
-	#[cfg(not(target_os = "macos"))]
-	let shown: Result<(), String> = Err(format!(
-		"warp is compiled without a web view here (macOS only for now); `warp build --site {target}` writes the page"
-	));
+	let shown: Result<(), String> = Err(not_in_self_lane("the web view of", target));
 	if let Err(failure) = shown {
 		fail(format!("warp {APP_COMMAND}: {failure}"));
 	}

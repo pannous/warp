@@ -157,7 +157,7 @@ pub fn page(
 		.replace("{{scripts}}", &scripts)
 		.replace("{{worker}}", &worker)
 		.replace("{{base}}", &base)
-		.replace("{{title}}", &crate::web::markup::escaped(title))
+		.replace("{{title}}", &title.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;"))
 		.replace("{{replies}}", replies)
 		.replace("{{body}}", body)
 }

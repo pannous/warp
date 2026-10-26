@@ -197,10 +197,7 @@ fn codec<T: Serialize + serde::de::DeserializeOwned + Clone + PartialEq + 'stati
 static KEPT_PAYLOADS: std::sync::LazyLock<Vec<PayloadCodec>> = std::sync::LazyLock::new(|| {
 	vec![
 		codec::<LineInfo>(),
-		codec::<crate::warp_parser::SpacedMinus>(),
-		codec::<crate::warp_parser::WrittenIndex>(),
-		codec::<crate::warp_parser::SubscriptOffset>(),
-		codec::<crate::warp_parser::PathLiteral>(),
+		codec::<crate::compiler::node_views::WrittenIndex>(),
 	]
 });
 

@@ -336,7 +336,7 @@ pub fn with_warning_mode<R>(mode: WarningMode, body: impl FnOnce() -> R) -> R {
 /// Run `body` saying nothing (no warnings, hints or "got it?"): the compile of the executable a run leaves repeats the
 /// run's compile, which said it all (card cli-running)
 pub fn quietly<R>(body: impl FnOnce() -> R) -> R {
-	with_warning_mode(WarningMode::Quiet, || crate::normalize::without_hints(body))
+	with_warning_mode(WarningMode::Quiet, body)
 }
 
 fn is_quiet() -> bool {
@@ -444,8 +444,7 @@ fn said_before(diagnostic: &Diagnostic) -> bool {
 		(Some(written), Some(preferred)) => format!("{written}|{preferred}"),
 		_ => format!("{}@{}:{}", diagnostic.message, diagnostic.line, diagnostic.column),
 	};
-	crate::normalize::hint_mode() == crate::normalize::HintMode::Once
-		&& !diagnostics(|diagnostics| diagnostics.shown_hints.insert(key))
+	!diagnostics(|diagnostics| diagnostics.shown_hints.insert(key))
 }
 
 /// Clear shown hints (useful for testing)
@@ -635,10 +634,8 @@ pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
 
 /// Run `body` without hints when the program says `use relaxed`
 fn relaxed_if<R>(relaxed: bool, body: impl FnOnce() -> R) -> R {
-	match relaxed {
-		true => crate::normalize::without_hints(body),
-		false => body(),
-	}
+	let _ = relaxed;
+	body()
 }
 
 /// The program without its top-level `use relaxed` statements (or an alias), and whether it had one

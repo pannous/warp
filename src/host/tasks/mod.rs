@@ -493,7 +493,7 @@ impl TaskTable {
 		let values: Vec<Val> = match signature.params().next() {
 			// a wrapper of values (declarations::with_node_wrappers): the one argument list
 			Some(ValType::Ref(_))
-				if signature.params().len() == 1 && function.ends_with(crate::declarations::NODE_WRAPPER_SUFFIX) =>
+				if signature.params().len() == 1 && function.ends_with(crate::abi::NODE_WRAPPER_SUFFIX) =>
 			{
 				vec![builders.build(
 					&TaskValue::List(arguments.to_vec(), crate::abi::bracket_info(&Bracket::Square)),
@@ -611,7 +611,13 @@ fn host_error(failure: anyhow::Error) -> wasmtime::Error {
 
 /// The task's function as the program wrote it: `f`, not its wrapper `f·node`; a go block as `go block 1`
 fn task_name(function: &str) -> String {
-	crate::go_blocks::written_name(function.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX).unwrap_or(function))
+	{
+		let function = function.strip_suffix(crate::abi::NODE_WRAPPER_SUFFIX).unwrap_or(function);
+		match function.strip_prefix("go·block·") {
+			Some(number) => format!("go block {number}"),
+			None => function.to_string(),
+		}
+	}
 }
 
 /// What went wrong in a task, in the words a failure of the main program gets (run/failures.rs failed_run)

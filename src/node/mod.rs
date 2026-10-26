@@ -988,10 +988,6 @@ impl fmt::Display for Node {
 				write!(f, "{}", bracket.closing())
 			}
 			Meta { node, .. } => write!(f, "{}", node),
-			Data(data) => match crate::numbers::units::describe(data) {
-				Some(text) => write!(f, "{}", text),
-				None => write!(f, "{:?}", self),
-			},
 			_ => write!(f, "{:?}", self),
 		}
 	}
@@ -1067,11 +1063,6 @@ pub fn call(function: &str, arguments: Vec<Node>) -> Node {
 	Node::List([vec![symbol(function)], arguments].concat(), Bracket::Round, Separator::None)
 }
 
-/// A call of a prelude word as library_words writes it, `prelude·word(arguments…)`: a program's own word of that name
-/// never meets it
-pub fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
-	call(&crate::modules::prelude_name(word).unwrap_or_else(|| word.to_string()), arguments)
-}
 
 /// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
 /// metadata; any other node as it is. Unlike Node::map_children it leaves a class body (Node::Type) alone

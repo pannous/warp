@@ -68,7 +68,7 @@ impl Viewer {
 			Node::Data(data) => tagged(
 				"data",
 				[self.handle(node).unwrap_or_else(|| {
-					Node::text(&crate::numbers::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")))
+					Node::text(&format!("Data({data:?})"))
 				})],
 			),
 			Node::Meta { node: inner, .. } => match node.get_lineinfo() {
@@ -98,9 +98,6 @@ impl Viewer {
 
 	/// A source literal (`01234`, `1.10`) and an annotation (`@name(value)`) survive, comments go
 	fn meta_view(&self, node: &Node, inner: &Node) -> Node {
-		if let Some(template) = crate::text::interpolation::template_of(node) {
-			return tagged("template", [Node::text(template)]);
-		}
 		if let Some(literal) = node.source_literal() {
 			return tagged("literal", [Node::text(literal), self.view(inner)]);
 		}
@@ -126,11 +123,25 @@ impl Viewer {
 /// The attribute layer parser.warp keeps a subscript's written number in (walk.warp written_index_mark)
 const WRITTEN_INDEX_MARK: &str = "written_index";
 
+/// The number a subscript was written with (`d[1]`), on its shifted index `d#2` (was warp_parser::WrittenIndex)
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct WrittenIndex(pub Number);
+
+/// A number or data the view writes as text: an Int, a Float, else the text as a symbol
+fn written_number(text: &str) -> Node {
+	let digits = text.replace('_', "");
+	match (digits.parse::<i64>(), digits.parse::<f64>()) {
+		(Ok(int), _) => Node::Number(Number::Int(int)),
+		(_, Ok(float)) => Node::Number(Number::Float(float)),
+		_ => Node::Symbol(text.to_string()),
+	}
+}
+
 /// The number `d[1]` was written with, on its shifted index `d#2`
 fn written_index(node: &Node) -> Option<Number> {
 	match node {
 		Node::Meta { data, .. } => match data.as_ref() {
-			Node::Data(dada) => dada.downcast_ref::<crate::warp_parser::WrittenIndex>().map(|written| written.0),
+			Node::Data(dada) => dada.downcast_ref::<WrittenIndex>().map(|written| written.0),
 			_ => None,
 		},
 		_ => None,
@@ -142,11 +153,11 @@ fn written_index(node: &Node) -> Option<Number> {
 /// reflection.rs and doc_strings.rs make before number_words' twin runs, and the type word compared with == (only `is`
 /// tests a type)
 const BRIDGED_MARKS: [&str; 5] = [
-	crate::mutation::MUTATED_MARK,
-	crate::type_tests::EQUALITY_OPERAND,
-	crate::closures::FUNCTION_REFERENCE_MARK,
-	crate::lowering::doc_strings::DOC_KEY,
-	crate::lowering::doc_strings::WRITTEN_AT_KEY,
+	"mutated",
+	"equality operand",
+	"function_reference",
+	"doc",
+	"written_at",
 ];
 
 /// The bridged mark a Meta layer's data is, with its value
@@ -211,10 +222,6 @@ pub fn plain_view(node: &Node) -> Node {
 	plain(node_view(node))
 }
 
-/// The plain view the analysis reads: each declared type and each loop step shown in it
-pub fn analysis_view(program: &Node) -> Node {
-	plain_view(&declared_types_shown(program.clone()))
-}
 
 /// What a loop's step shows as in the analysis view, `loop·step: i++`, the way Rust's split_step tells it by its mark
 pub const SHOWN_STEP: &str = "loop·step";
@@ -223,33 +230,7 @@ pub const SHOWN_LIST_ITEM: &str = "data·item";
 /// What a value written into a field shows as in the analysis view, `data·field: e`
 pub const SHOWN_FIELD: &str = "data·field";
 
-/// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`;
-/// the step a `for` lowering appends to its loop body is marked as metadata too: shown as `loop·step: i++`, and so is
-/// an item written into a list or field (lowering data_items): shown as `data·item: e`, `data·field: e`
-fn declared_types_shown(node: Node) -> Node {
-	use crate::lowering::data_items::{marked_item, Place};
-	use crate::operators::Op;
-	if crate::wasm_emitter::is_step(&node) {
-		return shown_as(SHOWN_STEP, node.drop_meta().clone());
-	}
-	if let Some((item, place)) = marked_item(&node) {
-		let shown = if place == Place::Field { SHOWN_FIELD } else { SHOWN_LIST_ITEM };
-		return shown_as(shown, declared_types_shown(item.clone()));
-	}
-	match node {
-		Node::Key(target, Op::Assign, value)
-			if let Node::Meta { node: name, data } = *target.clone()
-				&& matches!(*data, Node::Symbol(_)) =>
-		{
-			Node::Key(Box::new(Node::Key(name, Op::Colon, data)), Op::Assign, Box::new(declared_types_shown(*value)))
-		}
-		other => other.map_children(declared_types_shown),
-	}
-}
 
-fn shown_as(mark: &str, node: Node) -> Node {
-	Node::Key(Box::new(Node::Symbol(mark.into())), crate::operators::Op::Colon, Box::new(node))
-}
 
 fn plain(view: Node) -> Node {
 	without_layers(view, &["literal", "attribute"])
@@ -309,7 +290,7 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		"number" | "data" if let Some(handle) = text(1)?.strip_prefix(HANDLE_MARK) => {
 			handle.parse::<usize>().ok().and_then(|index| handles.get(index)).cloned().ok_or_else(unreadable)?
 		}
-		"number" | "data" => crate::warp_parser::parse(&text(1)?).drop_meta().clone(),
+		"number" | "data" => written_number(&text(1)?),
 		"key" => {
 			let op = crate::operators::op_named(&text(1)?).ok_or_else(unreadable)?;
 			let left = node(2)?;
@@ -335,7 +316,7 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		}
 		// `d[1]` read by parser.warp: the shifted index `d#2` keeps the number written, as the Rust parser marks it
 		"attribute" if text(1).ok().as_deref() == Some(WRITTEN_INDEX_MARK) => match node(2)?.drop_meta() {
-			Node::Number(written) => Node::meta(node(3)?, Node::data(crate::warp_parser::WrittenIndex(*written))),
+			Node::Number(written) => Node::meta(node(3)?, Node::data(WrittenIndex(*written))),
 			_ => return Err(unreadable()),
 		},
 		"attribute" => node(3)?.with_attribute(&text(1)?, node(2)?),
@@ -349,7 +330,7 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 			node(3)?.with_meta_data(crate::compiler::meta::LineInfo::at(line, column, ""))
 		}
 		"literal" => node(parts.len() - 1)?,
-		"template" => crate::text::interpolation::template_text(&text(1)?),
+		"template" => Node::Text(text(1)?),
 		_ => return Err(unreadable()),
 	})
 }

@@ -414,9 +414,9 @@ thread_local! {
 /// sessionStorage), the session's, inline code's database; none for a store file
 fn unfiled_store(file: &str) -> Option<&'static str> {
 	match file {
-		"" | crate::stored_values::DEV_STORE => Some(""),
-		crate::stored_values::SESSION_STORE => Some(crate::stored_values::SESSION_STORE),
-		crate::stored_values::DATABASE_STORE => Some(crate::stored_values::DATABASE_STORE),
+		"" | crate::abi::DEV_STORE => Some(""),
+		crate::abi::SESSION_STORE => Some(crate::abi::SESSION_STORE),
+		crate::abi::DATABASE_STORE => Some(crate::abi::DATABASE_STORE),
 		_ => None,
 	}
 }

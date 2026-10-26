@@ -196,16 +196,7 @@ pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, Ff
 
 /// The error of a call nothing resolves at `call`; a word of a standard module offers to add its `use` line
 pub fn undefined_function_diagnostic(call: &crate::node::Node, name: &str) -> crate::errors::diagnostic::Diagnostic {
-	let diagnostic = crate::errors::diagnostic::Diagnostic::at(call, undefined_function_message(name));
-	match crate::modules::std_module_defining(name)
-		.filter(|module| crate::modules::module_file_shadowing(module).is_none())
-	{
-		Some(module) => diagnostic.offering(crate::errors::fixits::added_first_line(
-			format!("{name} from the standard module {module}"),
-			format!("use {module}"),
-		)),
-		None => diagnostic,
-	}
+	crate::errors::diagnostic::Diagnostic::at(call, undefined_function_message(name))
 }
 
 /// The error of a call of `import name from 'library'` whose headers are missing or do not declare it
@@ -235,8 +226,8 @@ pub fn undefined_function_message(name: &str) -> String {
 }
 
 fn where_undefined_function_is(name: &str) -> Option<String> {
-	if let Some(module) = crate::modules::std_module_defining(name) {
-		if let Some(file) = crate::modules::module_file_shadowing(module) {
+	if let Some(module) = None::<&str> {
+		if let Some(file) = None::<std::path::PathBuf> {
 			return Some(format!("{name} is in the standard module {module}, but `use {module}` finds the file {} first, which has no {name}: rename that file", file.display()));
 		}
 		return Some(format!("{name} is in the standard module {module}: write `use {module}`"));

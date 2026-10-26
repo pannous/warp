@@ -3,8 +3,7 @@
 //! global reads as its value. The program imports them from the module's path (import module name), the runner links
 //! each import to the module instantiated once per run (notes/wasm_modules.md).
 use crate::ffi::FfiSignature;
-use crate::node::{call, Bracket, Node};
-use crate::operators::Op;
+use crate::node::Node;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -18,5 +17,3 @@ pub use exports::*;
 mod linking;
 #[cfg(feature = "native")]
 pub use linking::*;
-mod program_uses;
-pub use program_uses::*;

@@ -36,7 +36,7 @@ impl rustyline::completion::Completer for ConsoleSession {
 			return Ok((position, vec![]));
 		};
 		let prefix = &typed[word_start..];
-		let names = warp::members::member_names(&self.source_with(receiver));
+		let names: Vec<String> = { let _ = self.source_with(receiver); vec![] }; // member names were the Rust analyzer's (card rust-bootstrap)
 		Ok((word_start, names.into_iter().filter(|name| name.starts_with(prefix)).collect()))
 	}
 }

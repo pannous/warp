@@ -47,6 +47,27 @@ pub const FIXNUM_MIN: i128 = -((1 << 62) - 1);
 pub const FIXNUM_MAX: i128 = 1 << 62;
 
 /// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
+/// The store of the values a `warp dev` page keeps across reloads (in memory natively; dev.js, site.js)
+pub const DEV_STORE: &str = "warp-dev";
+/// The store of `session[k]` (in memory natively, std_adapters.rs; sessionStorage in the browser)
+pub const SESSION_STORE: &str = "warp-session";
+/// `database[k]`: the store whose file ends in this, `app.warp`'s is `app.database.json`
+pub const DATABASE_STORE: &str = "database.json";
+
+/// The keeping bits of a GPU map (gpu_maps): keep the result on the GPU, the source is kept there, the compiler chose it
+pub const GPU_KEEP_RESULT: i64 = 1;
+pub const GPU_SOURCE_KEPT: i64 = 2;
+pub const GPU_AUTOMATIC: i64 = 4;
+pub const GPU_AUTOMATIC_NOTICE: &str = "ran on the GPU by itself (f32, imprecise by design; write @cpu for exact f64)";
+/// A channel's event names its channel and event: `channel/event`
+pub const EVENT_SEPARATOR: char = '/';
+/// The prefix of a closure's function standing for a builtin word
+pub const CLOSURE_NEW: &str = "closure_new";
+/// A task wrapper's suffix: `total·node` takes the argument list
+pub const NODE_WRAPPER_SUFFIX: &str = "·node";
+/// Without a server, a form of the page asks the program's own routes
+pub const PAGE_SUBMITTED: &str = "page·submitted";
+
 pub const MEMORY_ENTITY: &str = "memory";
 
 /// The exported linear_new and kernel prefix the host calls to split a map (tasks.rs split_map)

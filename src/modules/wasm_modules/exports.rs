@@ -166,7 +166,7 @@ pub fn exports(path: &str) -> &'static HashMap<String, Export> {
 pub(crate) fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, String> {
 	let sections = module_sections(path, bytes)?;
 	// a warp module names its functions' parameters in warp.meta, other modules may in the name section
-	let functions_meta = crate::formats::meta_section::entry(bytes, crate::lowering::reflection::META_FUNCTIONS);
+	let functions_meta = crate::formats::meta_section::entry(bytes, "functions");
 	let library: &'static str = Box::leak(path.to_string().into_boxed_str());
 	let mut exports = HashMap::new();
 	for (name, kind, index) in &sections.exported {
@@ -286,7 +286,10 @@ fn function_export(
 	let names = sections.local_names.get(&(index as u32));
 	let named = functions_meta
 		.map(|functions| {
-			crate::lowering::reflection::entry_names(&functions[name][crate::lowering::reflection::PARAMS_WORDS[0]])
+			match functions[name]["params"].drop_meta() {
+				Node::List(items, _, _) => items.iter().map(Node::text_or_name).collect(),
+				_ => vec![],
+			}
 		})
 		.filter(|names| names.len() == params.len());
 	let parameters = named.unwrap_or_else(|| {
@@ -312,7 +315,7 @@ fn global_exports(sections: &ModuleSections, library: &'static str, name: &str, 
 	if !global.mutable {
 		return vec![getter];
 	}
-	let setter_name = format!("{SETTER_PREFIX}{name}");
+	let setter_name = format!("set {name}");
 	let setter =
 		export(library, &setter_name, value_type.clone(), value_type, Role::Setter, vec![name.to_string()], None);
 	vec![(setter_name, setter), getter]
@@ -440,7 +443,7 @@ pub(crate) fn node_result(function: &Node) -> Option<crate::type_kinds::Kind> {
 		return None;
 	};
 	let result = signature.rsplit_once("-> ").map(|(_, result)| result.trim()).unwrap_or_default();
-	Some(crate::analyzer::type_word_kind(result).unwrap_or(crate::type_kinds::Kind::Empty))
+	Some(crate::type_kinds::Kind::from_type_word(result).unwrap_or(crate::type_kinds::Kind::Empty))
 }
 
 /// The types of a warp function's parameters or results: its numbers, a value (a Node of the module) as anyref

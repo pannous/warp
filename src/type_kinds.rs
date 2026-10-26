@@ -1,8 +1,6 @@
 use crate::type_kinds;
-use crate::wasm_emitter::WasmGcEmitter;
 use crate::words::ANY_TYPE;
-use wasm_encoder::ValType::Ref;
-use wasm_encoder::{AbstractHeapType, HeapType, RefType, ValType};
+use wasm_encoder::{AbstractHeapType, HeapType};
 
 /// A node's kind field holds the `Kind` in its low KIND_BITS bits and extra info above them:
 /// the bracket of a list (Curly=0, Square=1, Round=2 …) or the operator of a key
@@ -97,7 +95,27 @@ pub enum Kind {
 }
 const _: () = assert!(Kind::ALL.len() == Kind::Time as usize + 1, "Kind::ALL lists every Kind in tag order");
 
+/// The collection type words a field may be declared with: held as a Node
+const COLLECTION_WORDS: [&str; 6] = ["list", "array", "map", "dict", "set", "vector"];
+
 impl Kind {
+	/// The kind a builtin type word names (`int`, `float`, `text`, …); None for a class name
+	pub fn from_type_word(word: &str) -> Option<Kind> {
+		match word.trim_end_matches('?').to_lowercase().as_str() {
+			"int" | "integer" | "long" | "i64" | "number" | "byte" | "short" | "u8" | "u16" | "u32" | "u64" | "i8" | "i16" => Some(Kind::Int),
+			"float" | "double" | "f64" | "real" => Some(Kind::Float),
+			"i32" => Some(Kind::Int32),
+			"f32" => Some(Kind::Float32),
+			"text" | "string" | "str" => Some(Kind::Text),
+			"char" | "codepoint" => Some(Kind::Codepoint),
+			"symbol" => Some(Kind::Symbol),
+			"list" => Some(Kind::List),
+			"function" => Some(Kind::Function),
+			"time" | "instant" | "date" | "duration" => Some(Kind::Time),
+			_ => None,
+		}
+	}
+
 	const ALL: [Kind; 19] = [
 		Kind::Empty,
 		Kind::Int,
@@ -378,7 +396,7 @@ impl TypeRegistry {
 				return None;
 			}
 			let type_name = Self::written_name(name)?;
-			let marks = [crate::warp_parser::EXTENDS_KEYWORD, crate::class_methods::inheritance::INHERITED_FROM];
+			let marks = ["extends", "inherited_from"];
 			if let Some(parent) = marks.iter().find_map(|mark| name.attribute(mark)) {
 				self.parents.insert(type_name.clone(), parent.drop_meta().name());
 			}
@@ -433,7 +451,7 @@ impl TypeRegistry {
 					// a text is a default (`name = ""`, `name: "x"`), never the name of the field's type
 					Node::Text(_) => None,
 					// `size: int | text`: the union's name, `int or text`
-					written => Self::written_name(written).or_else(|| crate::analyzer::union_type_name(written)), // none for a default value `x=0` or `x:0`
+					written => Self::written_name(written), // none for a default value `x=0` or `x:0`
 				};
 				let type_name = type_name.unwrap_or_else(|| ANY_TYPE.to_string());
 				Some(FieldDef { name, type_name })
@@ -479,10 +497,10 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 		"f32" | "float" => FieldStorage::F32,
 		"Text" | "String" | "string" | "text" => FieldStorage::Text,
 		"Node" | ANY_TYPE => FieldStorage::Node,
-		_ if crate::analyzer::union_parts(word).is_some() => FieldStorage::Node,
-		_ if crate::analyzer::type_word_kind(word).is_some()
-			|| crate::analyzer::plural_element_type(word).is_some()
-			|| crate::lowering::declarations::is_collection_type_word(collection_head(word)) =>
+		_ if word.contains(" or ") || word.contains('|') => FieldStorage::Node,
+		_ if Kind::from_type_word(word).is_some()
+			|| word.strip_suffix('s').is_some_and(|singular| Kind::from_type_word(singular).is_some())
+			|| COLLECTION_WORDS.contains(&collection_head(word)) =>
 		{
 			FieldStorage::Node
 		}
@@ -497,22 +515,6 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 	}
 }
 
-/// Convert FieldDef to ValType for function parameters
-pub fn field_def_to_val_type(field: &FieldDef, emitter: &WasmGcEmitter) -> ValType {
-	let reference = |heap_type| Ref(RefType { nullable: true, heap_type });
-	match field_storage(&field.type_name) {
-		FieldStorage::I64 => ValType::I64,
-		FieldStorage::F64 => ValType::F64,
-		FieldStorage::I32 => ValType::I32,
-		FieldStorage::F32 => ValType::F32,
-		FieldStorage::Text => reference(HeapType::Concrete(emitter.type_manager.text_type)),
-		FieldStorage::Node => reference(HeapType::Concrete(emitter.type_manager.node_type)),
-		FieldStorage::Named => match emitter.ctx.user_type_indices.get(named_field_type(&field.type_name)) {
-			Some(&type_idx) => reference(HeapType::Concrete(type_idx)),
-			None => reference(any_heap_type()),
-		},
-	}
-}
 
 /// Helper to create abstract heap type refs
 pub fn any_heap_type() -> HeapType {

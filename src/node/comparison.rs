@@ -107,9 +107,6 @@ impl PartialEq<i64> for Node {
 			True => *other == 1,
 			False => *other == 0,
 			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
-			Data(data) => data
-				.downcast_ref::<crate::numbers::units::Quantity>()
-				.is_some_and(|quantity| quantity.is_amount(*other)),
 			_ => false,
 		}
 	}

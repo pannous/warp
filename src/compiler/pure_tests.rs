@@ -4,8 +4,7 @@
 //! `warp test --case <pure|self> <file> <index>`, so a hang, trap or crash fails only its own test; the children run in
 //! parallel, their verdicts print in file order (`--each`: a line for every test, to diff two compilers' runs).
 use crate::compiler::standalone::{prepare, run_code, Compiler};
-use crate::lowering::test_blocks::{skipped_pairs, test_cases};
-use crate::node::{error, Node};
+use crate::node::{error, Bracket, Node, Separator};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -258,4 +257,85 @@ mod tests {
 		assert!(!as_is_compares(&text(""), &Node::Char('b')));
 		assert!(!as_is_compares(&Node::Number(Int(1)), &Node::True));
 	}
+}
+
+// The test cases of a test file (moved from lowering/control/test_blocks.rs, card rust-bootstrap)
+
+/// Words whose top-level calls count as tests under `warp test` and print their own ✗ line (lib/prelude.warp `is!`)
+pub(crate) const CHECK_WORDS: [&str; 1] = ["is!"];
+
+/// A pair's code and expected value; its note is a remark
+pub(crate) fn pair_parts(pair: &Node) -> Option<(String, Node)> {
+	let Node::List(items, Bracket::None, Separator::Tab) = pair.drop_meta() else {
+		return None; // a text alone is a program, no pair
+	};
+	match items.as_slice() {
+		[code, expected] | [code, expected, _] => Some((code_text(code)?, expected.clone())),
+		_ => None,
+	}
+}
+
+pub(crate) fn code_text(code: &Node) -> Option<String> {
+	match code.drop_meta() {
+		Node::Text(code) => Some(code.clone()),
+		Node::Char(code) => Some(code.to_string()),
+		_ => None,
+	}
+}
+
+/// The tests of a test file as (statement, code, expected): its pairs (`'1+1'⇥2`), or its top-level `is! '1+1' 2`
+pub fn test_cases(program: &Node) -> Vec<(Node, String, Node)> {
+	program
+		.body_statements()
+		.into_iter()
+		.filter_map(|statement| {
+			let (code, expected) = pair_parts(&statement).or_else(|| check_parts(&statement))?;
+			Some((statement, code, expected))
+		})
+		.collect()
+}
+
+/// `is! '3+3' 6` or `is!('3+3', 6)`: its code and expected value
+pub(crate) fn check_parts(statement: &Node) -> Option<(String, Node)> {
+	if !is_check(statement) {
+		return None;
+	}
+	let Node::List(items, ..) = statement.drop_meta() else {
+		return None;
+	};
+	let arguments = match &items[1..] {
+		[Node::List(arguments, Bracket::Round, _)] => arguments.as_slice(),
+		arguments => arguments,
+	};
+	match arguments {
+		[code, expected] => Some((code_text(code)?, expected.clone())),
+		_ => None,
+	}
+}
+
+/// The commented-out pairs of a pairs file, `// "fib 10"⇥55⇥card fib-memo: regression`, as the lines `warp test`
+/// reports skipped: `"fib 10" 55: card fib-memo: regression`
+pub fn skipped_pairs(source: &str) -> Vec<String> {
+	source
+		.lines()
+		.filter_map(|line| line.trim_start().strip_prefix("//").or_else(|| line.trim_start().strip_prefix('#')))
+		.filter(|commented| commented.contains('\t'))
+		.filter_map(|commented| {
+			let (code, expected) = pair_parts(&crate::compiler::standalone::parsed(commented))?;
+			let pair = format!("{} {}", Node::Text(code).serialize(), expected.serialize());
+			// the note as written: a remark, no data
+			Some(match commented.split('\t').nth(2).map(str::trim) {
+				Some(note) => format!("{pair}: {note}"),
+				None => pair,
+			})
+		})
+		.collect()
+}
+
+/// `is! "3+3" 6`, `is!("3+3", 6)`: a call of a check word
+pub(crate) fn is_check(statement: &Node) -> bool {
+	let Node::List(items, Bracket::None | Bracket::Round, _) = statement.drop_meta() else {
+		return false;
+	};
+	items.first().is_some_and(|head| CHECK_WORDS.iter().any(|word| head.is_symbol(word)))
 }

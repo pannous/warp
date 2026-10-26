@@ -544,11 +544,8 @@ fn run_block_or_failure(
 	let mut store = caller.as_context_mut();
 	let [block, names, values, definitions] = [block, names, values, definitions]
 		.map(|value| crate::run::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
-	let result =
-		crate::compiler::run_time_blocks::eval_block(block, &names, &values, &definitions).map_err(task_failure)?;
-	let value = TaskValue::of(&result)
-		.map_err(|_| task_failure(crate::compiler::run_time_blocks::cannot_hand_back(&result)))?;
-	build_in_program(caller, &value, &task_failure)
+	let _ = (block, names, values, definitions, TaskValue::of);
+	Err(task_failure("run_block: evaluating a block at run time is not in the self lane yet (card rust-bootstrap)".to_string()))
 }
 
 /// The host side of parse_code: the code of a text, or the parse failure the program's `try` catches
@@ -560,7 +557,7 @@ fn parse_code(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Re
 	match code_of(&source) {
 		// code the program can't hold yet fails as its error, which `try` catches, not as a trap
 		Ok(code) => {
-			let built = built_in_program(&mut caller, &crate::compiler::run_time_blocks::held_code(code), PARSE_CODE);
+			let built = built_in_program(&mut caller, &code, PARSE_CODE);
 			raised(&mut caller, built)
 		}
 		Err(failure) => error_in_program(&mut caller, &failure),
@@ -712,7 +709,7 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 	let site = served_site(port);
 	serve(port, &routes, &site, |route, request| {
 		caller.data_mut().answer_headers.clear();
-		match route_value(&mut caller, crate::serve::PAGE_SUBMITTED, &request) {
+		match route_value(&mut caller, crate::abi::PAGE_SUBMITTED, &request) {
 			Ok(value) => {
 				Ok(route.answer_of(&value).with_headers(std::mem::take(&mut caller.data_mut().answer_headers)))
 			}
@@ -807,20 +804,9 @@ fn route_failure(
 
 /// The site of the program file being run, which a program whose last line shows a page serves at / (src/web/site.rs); a
 /// page that fails to build is said, and the routes are served without it
-fn served_site(port: u16) -> crate::web::site::ServedSite {
-	let Some(file) = crate::modules::program_file() else {
-		return Default::default();
-	};
-	let title = crate::web::site::program_stem(&file);
-	let rendered = std::fs::read_to_string(&file)
-		.map_err(|failure| failure.to_string())
-		.and_then(|code| crate::web::site::served_files(&code, &title));
-	rendered
-		.unwrap_or_else(|failure| {
-			eprintln!("warning: serve {port} serves no page: {failure}");
-			None
-		})
-		.unwrap_or_default()
+/// Building that page is not in the self lane yet (card rust-bootstrap): the routes are served without it
+fn served_site(_port: u16) -> crate::web::web_server::ServedSite {
+	Default::default()
 }
 
 /// The value of a route's function called with the request (if it takes one), as a Node

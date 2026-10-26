@@ -32,14 +32,14 @@ pub(crate) fn served_program(arguments: &[String]) -> Result<(&str, u16), String
 #[cfg(not(test))]
 pub(crate) fn serve_file(path: &str, port: u16, reason: &str, open: bool) -> ! {
 	let code = source_of(path);
-	if !warp::serve::serves_itself(&code) {
+	{
 		println!("serving http://localhost:{port} ({reason}`warp run {path}` runs it once without serving)");
 	}
 	diagnostic::show_lines_of(&code, Some(path));
 	if open && opens_browser() {
 		warp::web::web_server::when_listening(|address| {
-			warp::web::dev_server::open_in_browser(address);
+			warp::web::open_in_browser(address);
 		});
 	}
-	print_and_exit(warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(path)))
+	print_and_exit(eval(path)) // its routes serve as the program says (`serve 8080`): compiler.warp has no serving_at yet
 }

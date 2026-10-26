@@ -83,7 +83,9 @@ fn keep(_: &str, _: &[u8]) {}
 fn key(library: &str, headers: &[String]) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	let mut hasher = Sha256::new();
-	hasher.update(crate::modules::binary_stamp()?);
+	let binary = std::env::current_exe().ok()?;
+	let stamp = std::fs::metadata(&binary).ok()?;
+	hasher.update(format!("{}\n{}\n{:?}\n", binary.display(), stamp.len(), stamp.modified().ok()?));
 	hasher.update(format!("{library}\n"));
 	for header in headers {
 		let metadata = std::fs::metadata(header).ok()?;

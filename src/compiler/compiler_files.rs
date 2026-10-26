@@ -1,12 +1,16 @@
 //! The compiler pair's files and keys, as the harness needs them without the Rust compiler (card rust-bootstrap): where
 //! lib/ is, the inputs hash of a compiler pair (the shared store's key), the keys of values compiler.warp keeps
 //! (os.keep_of), the module of the bytes compiler.wasm made, and the JSON views it writes read back
-#[cfg(feature = "native")]
-use super::self_hosted::{ANALYSIS_SWITCH, REFUSALS_FILE, SURVEY_SETTING, SWITCH};
 use crate::node::Node;
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
+
+/// The settings of the Rust compiler's self-hosted lanes, kept by name so a compiler pair's key still names them
+pub(crate) const SWITCH: &str = "WARP_SELF_HOSTED";
+pub(crate) const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
+pub(crate) const REFUSALS_FILE: &str = "WARP_EMIT_REFUSALS";
+pub(crate) const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
 
 /// Where a stage program names lib/, the folder library() resolves
 pub(crate) const LIBRARY_MARK: &str = "{lib}";
@@ -42,10 +46,10 @@ pub(crate) fn compiler_folder() -> PathBuf {
 
 /// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word, libm when it
 /// imports pow (a float raised to a power)
-pub(crate) fn module_of_bytes(bytes: Vec<u8>) -> crate::pipeline::CompiledModule {
+pub(crate) fn module_of_bytes(bytes: Vec<u8>) -> crate::compiled_module::CompiledModule {
 	let needs_host = imports_from(&bytes, HOST_MODULE);
 	let needs_ffi = imports_from(&bytes, crate::ffi::LIBM);
-	crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi }
+	crate::compiled_module::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi }
 }
 
 /// Does the module import a function of `module`

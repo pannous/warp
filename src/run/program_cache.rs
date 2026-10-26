@@ -154,12 +154,10 @@ fn key(code: &str) -> Option<String> {
 	let settings = warp_settings();
 	let mut hasher = Sha256::new();
 	hasher.update(binary);
-	let fast_math = crate::pipeline::fast_math();
-	hasher.update(format!("{}\n{}\n{settings:?}\n{fast_math}\n", program.display(), working.display()));
+	hasher.update(format!("{}\n{}\n{settings:?}\n", program.display(), working.display()));
 	for folder in searched_folders(&program, &working) {
 		hasher.update(format!("{}\n{:?}\n", folder.display(), listing(&folder)));
 	}
-	hasher.update(crate::compiler::self_hosted::compiler_key().unwrap_or_default());
 	hasher.update(code);
 	Some(crate::extensions::hex_text(&hasher.finalize()))
 }

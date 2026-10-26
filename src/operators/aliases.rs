@@ -63,7 +63,7 @@ pub fn source_circumfixes(source: &str) -> Vec<CircumfixAlias> {
 }
 
 fn declared_in<T>(source: &str, declaration: fn(&str) -> Option<T>) -> Vec<T> {
-	let code = crate::warp_parser::code_only(source);
+	let code = source;
 	code.lines().flat_map(|line| line.split(STATEMENT_END)).filter_map(declaration).collect()
 }
 
@@ -96,7 +96,7 @@ pub fn alias_line(statement: &str) -> Option<OperatorAlias> {
 	let op = match position {
 		AliasPosition::Infix => super::table_operator(target)?,
 		AliasPosition::Prefix => {
-			crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| word == target)?.1
+			[("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("not", Op::Not)].into_iter().find(|(word, _)| word == target)?.1
 		}
 	};
 	Some(OperatorAlias { spelling: spelling.to_string(), target: target.to_string(), op, position })

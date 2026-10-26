@@ -5,7 +5,7 @@
 //! listeners are forgotten), a broadcast sends one datagram to each socket in it and removes those nobody reads any more.
 //! A listener keeps what arrived until the program asks: channel_pending(id) reads the socket without waiting,
 //! channel_next(id) gives the oldest message.
-use crate::system_signals::EVENT_SEPARATOR;
+use crate::abi::EVENT_SEPARATOR;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;

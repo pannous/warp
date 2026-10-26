@@ -50,7 +50,7 @@ pub(crate) fn apply_flags(args: &mut Vec<String>) {
 	// `warp fast <file|code|command …>`: an option word (decision cli-words), only before something to run
 	if args.len() > 2 && args[1] == FAST_WORD {
 		args.remove(1);
-		warp::pipeline::set_fast_math(true);
+		eprintln!("note: warp fast is not in the self lane yet; running at full precision (card rust-bootstrap)");
 	}
 
 	// `--strict[=level]`: warnings of that level and up are errors (as `use strict` in the program)

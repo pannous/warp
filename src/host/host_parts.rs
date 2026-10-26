@@ -10,7 +10,6 @@ use crate::host::{
 	PARSE_CODE, RUN_BLOCK, SAVE_PICTURE, SIGNAL_SEND, SOUND, STD_IO, STD_MODULES_SECTION, STD_MODULES_SEPARATOR,
 	STD_PURE, TEXT_COVERAGE,
 };
-use crate::node::Node;
 use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_LISTEN};
 
 /// A script's file name and text
@@ -228,26 +227,8 @@ impl Deployable {
 
 /// What Deploy makes of `code`: its site when it uses the browser, else the Worker answering its routes
 pub fn deployable(code: &str) -> Result<Deployable, String> {
-	let compiled = |build: &dyn Fn() -> Result<crate::pipeline::CompiledModule, Node>| {
-		build().map(|module| module.bytes).map_err(|failure| compile_failure(code, &failure))
-	};
-	// the reflection getters the JavaScript host reads values with
-	let module = compiled(&|| {
-		crate::pipeline::for_hosting(|| crate::pipeline::for_any_host(|| crate::pipeline::compile(code)))
-	})?;
-	if uses_the_browser(&module)? {
-		if crate::serve::has_server_parts(code) {
-			return Err(SERVER_AND_BROWSER.into());
-		}
-		let module = compiled(&|| crate::pipeline::for_a_page(|| crate::pipeline::compile(code)))?;
-		let layout = page_layout(&module, false)?;
-		return Ok(Deployable::Site { module, layout });
-	}
-	if !exports(&module, crate::lowering::serve::PAGE_SUBMITTED) {
-		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
-	}
-	let scripts = host_scripts_of(&module)?;
-	Ok(Deployable::Server { module, scripts })
+	let _ = (code, SERVER_AND_BROWSER, uses_the_browser, page_layout, exports, host_scripts_of);
+	Err("deploy compiles the program for a host, which is not in the self lane yet (card rust-bootstrap)".into())
 }
 
 /// Does the module need a browser page (a canvas, the GPU, sound, page events like `on frame`, the clipboard), which a
@@ -261,32 +242,5 @@ fn uses_the_browser(module: &[u8]) -> Result<bool, String> {
 	Ok(imports_of(module)?.iter().any(|(library, name)| library == HOST_LIBRARY && browser_word(name)))
 }
 
-/// Why `code` gave no module: its error with the excerpt, as the CLI says it; a program whose value is all it has
-/// (no error) has nothing to compile
-pub(crate) fn compile_failure(code: &str, failure: &Node) -> String {
-	let message = with_excerpt(code, message_of(failure));
-	match failure.drop_meta() {
-		Node::Error(_) => message,
-		_ => format!("nothing to compile: {message}"),
-	}
-}
 
-/// The text of an error, else the value written out
-pub(crate) fn message_of(failure: &Node) -> String {
-	match failure.drop_meta() {
-		Node::Error(message) => super::text_or_written(message.drop_meta().clone()),
-		other => other.serialize(),
-	}
-}
 
-/// A failure's message and, when it names a position, the source line there (a module's, when it names the module's file)
-pub(crate) fn with_excerpt(code: &str, message: String) -> String {
-	let excerpt = match crate::errors::diagnostic::message_file_position(&message) {
-		Some((file, line, column)) => std::fs::read_to_string(file)
-			.ok()
-			.and_then(|module| crate::errors::diagnostic::excerpt(&module, line, column)),
-		None => crate::errors::diagnostic::message_position(&message)
-			.and_then(|(line, column)| crate::errors::diagnostic::excerpt(code, line, column)),
-	};
-	[message].into_iter().chain(excerpt).collect::<Vec<_>>().join("\n")
-}

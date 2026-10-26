@@ -47,7 +47,7 @@ fn read_payload<T>(store: &mut wasmtime::StoreContextMut<'_, T>, data_val: &Val)
 
 /// Load WASM bytes and return Node
 pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
-	read_main_result(bytes).map(|result| crate::numbers::units::static_units::with_module_units(bytes, result))
+	read_main_result(bytes)
 }
 
 fn read_main_result(bytes: &[u8]) -> Result<Node> {
@@ -137,13 +137,6 @@ fn define_imported_entities<S>(linker: &mut Linker<S>, store: &mut Store<S>, mod
 	Ok(())
 }
 
-/// Instantiates `bytes` with the import families it needs and runs `main`, keeping the instance for later calls of its
-/// exports (headless.rs: a page's handlers)
-pub(crate) fn run_main_kept(bytes: &[u8], imports: Imports) -> Result<(Val, Store<crate::host::HostState>, Instance)> {
-	run_main(bytes, crate::host::HostState::new(), |linker, engine, module| {
-		link_imports(linker, engine, module, imports)
-	})
-}
 
 /// Load WASM bytes with host function support and return Node
 /// Use this for modules that import host.fetch or host.run
@@ -233,7 +226,6 @@ fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<c
 pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	let (result, mut store, instance) = run_main_with_tasks(bytes, imports)?;
 	val_to_node(&result, &mut store, &instance)
-		.map(|result| crate::numbers::units::static_units::with_module_units(bytes, result))
 }
 
 /// Run main with every import it needs, its tasks finished after it (finish_tasks)
@@ -426,7 +418,7 @@ fn struct_node<T>(
 		// a closure reads as the name of its function
 		Some(Kind::Function) => match child.unwrap_anyref() {
 			Some(_) => match node(&child) {
-				Node::Symbol(name) => Node::Symbol(crate::closures::builtin_word(&name).unwrap_or(&name).to_string()),
+				Node::Symbol(name) => Node::Symbol(name.strip_prefix("builtin·").unwrap_or(&name).to_string()),
 				other => other,
 			},
 			None => Node::Symbol("function".to_string()),

@@ -189,7 +189,7 @@ fn gpu_kernel_linear_or_failure<const REDUCES: bool>(
 ) -> wasmtime::Result<i64> {
 	pub(super) static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 	let failure = gpu_failure(if REDUCES { GPU_REDUCE_LINEAR } else { GPU_MAP_LINEAR });
-	let automatic = keeping & crate::gpu_maps::AUTOMATIC != 0;
+	let automatic = keeping & crate::abi::GPU_AUTOMATIC != 0;
 	if let Err(problem) = crate::graphics::gpu::available() {
 		// a map the compiler switched says nothing: the program did not ask for the GPU
 		if !automatic && !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
@@ -199,7 +199,7 @@ fn gpu_kernel_linear_or_failure<const REDUCES: bool>(
 	}
 	let shader = given_shader(caller, shader, &failure)?;
 	let kept =
-		(keeping & crate::gpu_maps::SOURCE_KEPT != 0).then(|| crate::graphics::gpu::kept_count(source)).flatten();
+		(keeping & crate::abi::GPU_SOURCE_KEPT != 0).then(|| crate::graphics::gpu::kept_count(source)).flatten();
 	let mut floats = if kept.is_some() { vec![] } else { linear_floats(caller, source, &failure)? };
 	let items = kept.unwrap_or(floats.len());
 	for value in given_node(caller, values)?.iter() {
@@ -215,7 +215,7 @@ fn gpu_kernel_linear_or_failure<const REDUCES: bool>(
 	}
 	let keeping = crate::graphics::gpu::Keeping {
 		source: kept.map(|_| source),
-		result: (keeping & crate::gpu_maps::KEEP_RESULT != 0).then_some((target, items)),
+		result: (keeping & crate::abi::GPU_KEEP_RESULT != 0).then_some((target, items)),
 	};
 	let left =
 		crate::graphics::gpu::compute_kept(&shader, &floats, workgroups, if REDUCES { partials } else { 0 }, keeping)
@@ -223,7 +223,7 @@ fn gpu_kernel_linear_or_failure<const REDUCES: bool>(
 	write_linear_floats(caller, target, &left, &failure)?;
 	if automatic {
 		crate::errors::diagnostic::report_runtime_warning_once(
-			crate::gpu_maps::AUTOMATIC_NOTICE,
+			crate::abi::GPU_AUTOMATIC_NOTICE,
 			&format!("{} of {items} items", if REDUCES { "a reduction" } else { "a map" }),
 		);
 	}

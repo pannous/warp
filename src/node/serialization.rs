@@ -8,7 +8,7 @@ pub const NO: &str = "no";
 
 /// A text in quotes, a quote or `\` in it escaped by a `\` so it reads back, as the runtime prints it (P126)
 fn quoted(text: &str) -> String {
-	quoted_by(text, crate::normalize::text_quote())
+	quoted_by(text, '"')
 }
 
 fn quoted_by(text: &str, quote: char) -> String {
@@ -148,9 +148,7 @@ impl Node {
 				}
 			}
 			Type { name, body } => format!("type {} {}", name.serialize_recurse(meta), body.serialize_recurse(meta)),
-			Data(d) => crate::numbers::units::describe(d)
-				.or_else(|| crate::lowering::blocks::sealed_text(d))
-				.unwrap_or_else(|| format!("Data({:?})", d)),
+			Data(d) => format!("Data({:?})", d),
 			// _ => format!("{:?}", self),
 		}
 	}

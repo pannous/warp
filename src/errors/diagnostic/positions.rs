@@ -190,8 +190,8 @@ pub fn error_excerpt(result: &Node) -> Option<String> {
 pub fn written_text(node: &Node) -> String {
 	let serialized = node.serialize().trim().to_string();
 	// a temporary `x·1` or the item `loop_item_1` of an inlined lambda: the program wrote another name (card map-odd-errors)
-	let is_generated = serialized.contains(crate::analyzer::TEMPORARY_SEPARATOR)
-		|| serialized.split(|c: char| !c.is_alphanumeric() && c != '_').any(crate::lambdas::is_inlined_loop_variable);
+	let is_generated = serialized.contains(crate::abi::TEMPORARY_SEPARATOR)
+		|| serialized.split(|c: char| !c.is_alphanumeric() && c != '_').any(|name| name.strip_prefix("loop_item_").is_some_and(|number| number.parse::<usize>().is_ok()));
 	if !is_generated {
 		return serialized;
 	}

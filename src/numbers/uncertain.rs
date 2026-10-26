@@ -1,11 +1,8 @@
 //! `x ± r` at run time (card plus-minus, notes/plus_minus.md, decision P217): an interval with its value, flowing
 //! through arithmetic with worst-case bounds. The run-time form is wasm_emitter/uncertain.rs; this is the value read back
 
-use crate::errors::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node};
 use crate::operators::Op;
-use crate::words::NUMBER_WORD;
-use std::collections::HashSet;
 use std::fmt;
 
 /// Significant digits of a shown ± part; the value is shown to the same decimal place (decision P219)
@@ -155,61 +152,8 @@ pub fn gaussian_spread(right: &Node) -> Option<&Node> {
 	}
 }
 
-/// `y certainly < x` is `certainly(y < x)`, and `possibly` likewise: the builtins of wasm_emitter/uncertain.rs. The
-/// parser reads it `(y certainly) < x` as a value and `y (certainly < x)` as a statement
-pub fn lower_certainty(node: Node) -> Node {
-	if !node.mentions_any(&CERTAINTY_WORDS) {
-		return node;
-	}
-	let node = node.map_children(lower_certainty);
-	let said = |word: &Node| CERTAINTY_WORDS.contains(&word.drop_meta().name().as_str());
-	let (word, compared, op, right) = match node.drop_meta() {
-		Node::Key(left, op, right) if op.is_ordering() => match left.drop_meta() {
-			Node::List(items, Bracket::None, _) if matches!(items.as_slice(), [_, word] if said(word)) => {
-				(&items[1], &items[0], op, right)
-			}
-			_ => return node,
-		},
-		// in parentheses as an `if` condition: `if (y certainly < x) then …`
-		Node::List(items, Bracket::None | Bracket::Round, _) => match items.as_slice() {
-			[compared, ordering] => match ordering.drop_meta() {
-				Node::Key(word, op, right) if op.is_ordering() && said(word) => (word.as_ref(), compared, op, right),
-				_ => return node,
-			},
-			_ => return node,
-		},
-		_ => return node,
-	};
-	let comparison = Node::Key(Box::new(compared.clone()), *op, right.clone());
-	Node::List(vec![Node::Symbol(word.drop_meta().name()), comparison], Bracket::None, Separator::Space)
-		.with_meta_of(&node)
-}
 
-/// `lo(a:number) := a.low; lo(5 ± 1)`: in a program that makes ± values each `number` parameter takes one (card
-/// number-param)
-pub fn lower_interval_parameters(program: Node) -> Node {
-	if !makes_intervals(&program) {
-		return program;
-	}
-	with_interval_parameters(program)
-}
 
-fn with_interval_parameters(node: Node) -> Node {
-	match node {
-		Node::Key(head, op @ (Op::Define | Op::Assign), body)
-			if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) =>
-		{
-			let head = head.map_children(|parameter| match parameter.drop_meta() {
-				Node::Key(name, Op::Colon, type_node) if type_node.drop_meta().name() == NUMBER_WORD => {
-					Node::Key(name.clone(), Op::Colon, Box::new(crate::analyzer::number_as_node(type_node)))
-				}
-				_ => parameter,
-			});
-			Node::Key(Box::new(head), op, Box::new(with_interval_parameters(*body)))
-		}
-		other => other.map_children(with_interval_parameters),
-	}
-}
 
 /// The word and the ordering of a lowered `certainly(y < x)`
 pub fn certainty_parts(node: &Node) -> Option<(&str, &Node)> {
@@ -227,107 +171,13 @@ pub fn certainty_parts(node: &Node) -> Option<(&str, &Node)> {
 	}
 }
 
-/// P224b: `<`, `>`, `<=`, `>=` on a value the compiler knows to be ± must say how it compares; data read at run time
-/// compares certainly (wasm_emitter/uncertain.rs)
-pub fn check_orderings(program: &Node) -> Option<Diagnostic> {
-	if !makes_intervals(program) {
-		return None;
-	}
-	first_unsaid_ordering(program, &interval_names(program))
-}
 
-/// The first ordering of a known ± that is not said `certainly` or `possibly`
-fn first_unsaid_ordering(node: &Node, intervals: &HashSet<String>) -> Option<Diagnostic> {
-	match node.drop_meta() {
-		Node::List(items, _, _) if matches!(items.first().map(|word| word.drop_meta().name()), Some(word) if CERTAINTY_WORDS.contains(&word.as_str())) => {
-			None
-		}
-		Node::Key(left, op, right)
-			if op.is_ordering() && [left, right].iter().any(|side| is_interval(side, intervals)) =>
-		{
-			Some(unsaid_ordering(node, left, *op, right))
-		}
-		Node::Key(head, Op::Define | Op::Assign, body)
-			if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) =>
-		{
-			let outer = intervals.difference(&parameter_names(head)).cloned().collect();
-			first_unsaid_ordering(body, &outer)
-		}
-		Node::Key(left, _, right) => {
-			first_unsaid_ordering(left, intervals).or_else(|| first_unsaid_ordering(right, intervals))
-		}
-		Node::List(items, _, _) => items.iter().find_map(|item| first_unsaid_ordering(item, intervals)),
-		_ => None,
-	}
-}
 
-/// The parameters of a definition head `f(x, y: float)`: inside its body they shadow outer ± variables of that name
-fn parameter_names(head: &Node) -> HashSet<String> {
-	let Node::List(parameters, _, _) = head.drop_meta() else {
-		return HashSet::new();
-	};
-	parameters.iter().filter_map(crate::lowering::nodes::parameter_name).collect()
-}
 
-fn makes_intervals(program: &Node) -> bool {
-	let mut found = false;
-	program.visit(&mut |node| found |= matches!(node, Node::Key(_, Op::PlusMinus, _)));
-	found
-}
 
-/// A program that makes ± values and orders values: an overlap may warn at run time
-pub fn may_order_intervals(program: &Node) -> bool {
-	let mut orders = false;
-	program.visit(&mut |node| orders |= matches!(node, Node::Key(_, op, _) if op.is_ordering()));
-	orders && makes_intervals(program)
-}
 
-/// The variables given a ± value, `y = 6 ± 1` or `y = x + 1` of such an x, until no more are found
-fn interval_names(program: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
-	loop {
-		let known = names.len();
-		program.visit(&mut |node| {
-			if let Node::Key(target, Op::Assign | Op::Define, value) = node {
-				if let Node::Symbol(name) = target.drop_meta() {
-					if is_interval(value, &names) {
-						names.insert(name.clone());
-					}
-				}
-			}
-		});
-		if names.len() == known {
-			return names;
-		}
-	}
-}
 
-/// Known to be ± here: `6 ± 1`, a variable given one, arithmetic or a negation with one
-fn is_interval(node: &Node, names: &HashSet<String>) -> bool {
-	match node.ungrouped() {
-		Node::Key(_, Op::PlusMinus, _) => true,
-		Node::Symbol(name) => names.contains(name),
-		Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Neg, right) => {
-			is_interval(left, names) || is_interval(right, names)
-		}
-		_ => false,
-	}
-}
 
-fn unsaid_ordering(node: &Node, left: &Node, op: Op, right: &Node) -> Diagnostic {
-	let (left, right) = (left.serialize(), right.serialize());
-	let written = format!("{left} {op} {right}");
-	let readings = [CERTAINLY, POSSIBLY].map(|word| format!("{left} {word} {op} {right}"));
-	let by_value = format!("{left}.value {op} {right}");
-	Diagnostic::at(node, format!("{written} compares a ± value: an overlap is neither yes nor no"))
-		.fix(format!(
-			"write `{}` (the whole interval), `{}` (some of it) or `{by_value}` (its value)",
-			readings[0], readings[1]
-		))
-		.offer("the whole interval", &written, &readings[0])
-		.offer("some of the interval", &written, &readings[1])
-		.offer("its value", &written, &by_value)
-}
 
 /// The warning of a bare ordering whose operands turn out to overlap at run time (the compiler knew no ±)
 pub fn overlap_warning(left: &Node, op: Op, right: &Node) -> String {

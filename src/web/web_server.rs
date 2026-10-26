@@ -8,7 +8,6 @@
 
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
-use crate::web::site::ServedSite;
 use std::cell::Cell;
 
 const JSON_TYPE: &str = "application/json";
@@ -105,7 +104,7 @@ impl Route {
 
 	fn lookup_status(&self, message: &str) -> u16 {
 		let found_nothing = message.ends_with(crate::abi::traps::EMPTY_RANGE) || failure_status(message) == NOT_FOUND;
-		if found_nothing && self.path.contains(crate::routes::PARAMETER_MARK) {
+		if found_nothing && self.path.contains(crate::web::route_paths::PARAMETER_MARK) {
 			NOT_FOUND
 		} else {
 			FAILED
@@ -117,7 +116,7 @@ impl Route {
 	fn failure_answer(&self, failure: &RouteFailure, request: &Node) -> Answer {
 		let missing = failure
 			.message
-			.strip_prefix(crate::wasm_emitter::lists::list_ops::NO_FIELD_MESSAGE)
+			.strip_prefix(crate::abi::traps::NO_FIELD_MESSAGE)
 			.and_then(|rest| rest.split_whitespace().next()) // the field, without the ` at line:column` of the program
 			.filter(|field| !has_field(request, field));
 		match missing {
@@ -179,7 +178,7 @@ impl Answer {
 	/// A page with `message` shown at its top, as an alert: the first thing after <body>, else before the whole page
 	fn with_message(self, message: &str) -> Answer {
 		let page = String::from_utf8_lossy(&self.body).to_string();
-		let alert = format!("<p role=\"alert\">{}</p>", crate::web::markup::escaped(message));
+		let alert = format!("<p role=\"alert\">{}</p>", message.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;"));
 		let at = page.find(PAGE_BODY_TAG).map_or(0, |start| start + PAGE_BODY_TAG.len());
 		Answer { body: format!("{}{alert}{}", &page[..at], &page[at..]).into_bytes(), ..self }
 	}
@@ -246,7 +245,7 @@ pub fn routes_of(routes: &Node) -> Vec<Route> {
 			Node::List(parts, _, _) if (2..=3).contains(&parts.len()) => Some(Route {
 				method: parts[0].text_or_name(),
 				path: parts[1].text_or_name(),
-				lists: parts.get(2).is_some_and(|mark| mark.text_or_name() == crate::serve::LIST_ANSWER),
+				lists: parts.get(2).is_some_and(|mark| mark.text_or_name() == "list"),
 			}),
 			_ => None,
 		})
@@ -342,7 +341,24 @@ fn route_at<'a>(routes: &'a [Route], method: &str, path: &str) -> Option<&'a Rou
 	let of_method = || routes.iter().filter(|route| route.method == method);
 	of_method()
 		.find(|route| route.path == path)
-		.or_else(|| of_method().find(|route| crate::routes::path_matches(&route.path, path)))
+		.or_else(|| of_method().find(|route| crate::web::route_paths::path_matches(&route.path, path)))
+}
+
+/// The files a served program's page adds (src/web/site.rs before card rust-bootstrap): a page is not built in the self
+/// lane yet, so a program's routes are served without one
+#[derive(Default)]
+pub struct ServedSite {
+	pub files: Vec<warp_runtime::site_files::SiteFile>,
+}
+
+impl ServedSite {
+	fn matches_no_route_at(&self, _path: &str) -> bool {
+		false
+	}
+
+	fn file_at(&self, path: &str) -> Option<Result<warp_runtime::site_files::SiteFile, String>> {
+		warp_runtime::site_files::file_at(&self.files, path).map(|file| Ok(file.clone()))
+	}
 }
 
 /// `GET /` is the site's page, `GET /app.wasm` its module and so on; the page at a path none of its routes matches is
@@ -354,7 +370,7 @@ fn site_file(site: &ServedSite, method: &str, path: &str) -> Option<Answer> {
 	let status = if site.matches_no_route_at(path) { NOT_FOUND } else { 200 };
 	Some(match site.file_at(path)? {
 		Ok((name, body)) => {
-			Answer { status, content_type: crate::web::site::content_type(&name), body, headers: vec![] }
+			Answer { status, content_type: warp_runtime::site_files::content_type(&name), body, headers: vec![] }
 		}
 		Err(failure) => Answer::failed(&failure),
 	})

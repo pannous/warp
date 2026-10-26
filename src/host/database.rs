@@ -433,8 +433,9 @@ fn conversion_factor(table: &str, name: &str, stored_type: &str, column_type: &s
 	let (base, unit) = split_unit(column_type);
 	let widening = |sql_type: &str| LOSSLESS_ORDER.iter().position(|known| known.eq_ignore_ascii_case(sql_type));
 	let lossless = matches!((widening(stored_base), widening(base)), (Some(from), Some(to)) if from <= to);
-	let quantity = |unit: &str| {
-		crate::numbers::units::static_units::unit_type(unit).ok_or_else(|| format!("{column}: {unit} is no unit"))
+	// units left with the Rust compiler (card rust-bootstrap): a unit column is not converted on `pure`
+	let quantity = |unit: &str| -> Result<(String, f64), String> {
+		Err(format!("{column}: the unit {unit} is not in the self lane yet"))
 	};
 	match (stored_unit, unit) {
 		(Some(stored_unit), Some(unit)) => {
@@ -454,6 +455,18 @@ fn conversion_factor(table: &str, name: &str, stored_type: &str, column_type: &s
 		(Some(_), None) => Err(format!("{column}: the unit would be lost, so it is not converted")),
 		(None, None) if lossless && stored_base != base => Ok(1.0),
 		_ => Err(format!("{column}: its values would lose data, so it is not converted")),
+	}
+}
+
+/// A field's type word as its column reads it: the spellings of a built-in type as that type
+fn canonical_type_word(word: &str) -> &str {
+	match word {
+		"integer" | "long" | "i64" | "i32" | "byte" | "short" => "int",
+		"boolean" => "bool",
+		"double" | "f64" | "f32" | "real" => "float",
+		"string" | "str" => "text",
+		"char" | "character" => "codepoint",
+		other => other,
 	}
 }
 
@@ -478,13 +491,11 @@ fn column_of(field: &Node) -> Result<(String, String, String), String> {
 	let field_type = field_type.drop_meta().name();
 	// `email: text?`: a nullable column, its rows default to NULL (ø)
 	let optional = field_type.ends_with(OPTIONAL_MARK);
-	let column_type = match crate::type_tests::canonical_spec_word(field_type.trim_end_matches(OPTIONAL_MARK)) {
+	let column_type = match canonical_type_word(field_type.trim_end_matches(OPTIONAL_MARK)) {
 		"int" | "bool" => "INTEGER".to_string(),
 		"float" | "number" => "REAL".to_string(),
 		"text" | "codepoint" => "TEXT".to_string(),
 		"" => String::new(),
-		// a unit field (`distance: km`) holds SI amounts; its column keeps the unit for migrations
-		unit if crate::numbers::units::static_units::unit_type(unit).is_some() => format!("{UNIT_COLUMN} {unit}"),
 		other => return Err(format!("a field of type {other} is no column yet (notes/orm.md step 4: foreign keys)")),
 	};
 	let default = match (default.drop_meta(), split_unit(&column_type).0) {
@@ -528,7 +539,7 @@ fn list(items: Vec<Node>) -> Node {
 /// The connection to the file's database, opened once per thread
 fn connection(file: &str) -> Result<Handle, String> {
 	let path = match file {
-		crate::database_tables::TABLES_FILE => IN_MEMORY.to_string(),
+		"database.sqlite" => IN_MEMORY.to_string(),
 		file => {
 			crate::host::sandbox::check_write(file)?;
 			test_thread_copy(file).unwrap_or_else(|| file.to_string())

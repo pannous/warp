@@ -1,4 +1,6 @@
 //! Standalone executables: the warp-runtime stub with the program appended, app bundles, building the stub
+// the stub machinery waits for compiler.warp to compile a program printing its value (card rust-bootstrap)
+#![allow(dead_code)]
 use super::*;
 
 /// WARP_EXECUTABLE=1 (or true/yes/on): `warp <file>` also leaves the standalone executable next to the file, off by
@@ -33,6 +35,10 @@ pub(crate) fn wants_executable() -> bool {
 /// P103 (with WARP_EXECUTABLE): the executable next to a program file that ran, unless one newer than the file is there already; a program
 /// the runtime cannot carry (it fetches, say) gets a note on stderr instead
 pub(crate) fn leave_executable(path: &str) {
+	// not in the self lane yet (write_standalone_executable): a run leaves no executable and says nothing about it
+	if cfg!(not(test)) {
+		return;
+	}
 	let modified = |file: &std::path::Path| fs::metadata(file).and_then(|metadata| metadata.modified()).ok();
 	let executable = standalone_output_path(path);
 	if modified(&executable).zip(modified(std::path::Path::new(path))).is_some_and(|(built, written)| built >= written)
@@ -74,48 +80,8 @@ pub(crate) fn standalone_note_marker(program: &std::path::Path) -> Option<std::p
 /// The program, printing its value, compiled to machine code and appended to a copy of the compiler-less `warp-runtime`
 /// stub (crates/warp-runtime, notes/aot.md); Ok is the report of what was written
 pub(crate) fn write_standalone_executable(code: &str, target: &str) -> Result<String, String> {
-	let program = wasm_emitter::compile_printing_result(code)
-		.map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
-	let foreign_call = (HOST_LIBRARY.to_string(), FOREIGN_CALL.to_string());
-	let imports = warp::host::host_parts::imports_of(&program.bytes)?;
-	let c_functions = carried_c_functions(&imports);
-	// a C text result is built in the program as foreign answers are
-	let builds_texts = c_functions.iter().any(|function| function.result == Some(warp::ffi::CPointer::Text));
-	let kept_exports = if imports.contains(&foreign_call) || builds_texts {
-		warp_runtime::standalone::stub_calls_export_with_foreign_calls
-	} else {
-		warp_runtime::standalone::stub_calls_export
-	};
-	let bytes = warp::compiler::dead_functions::keeping_exports(&program.bytes, kept_exports)?;
-	let engine = warp_runtime::standalone::standalone_engine().map_err(|failure| failure.to_string())?;
-	let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
-	let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
-	let mut missing: Vec<String> = vec![];
-	let carried = |module: &str, name: &str| c_functions.iter().any(|f| f.module == module && f.name == name);
-	for import in module.imports().filter(|import| {
-		!provided.contains(&(import.module(), import.name())) && !carried(import.module(), import.name())
-	}) {
-		let feature = feature_of(import.module(), import.name());
-		if !missing.contains(&feature) {
-			missing.push(feature);
-		}
-	}
-	if !missing.is_empty() {
-		return Err(format!("{} used runtime.", missing.join(", ")));
-	}
-	let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
-	let (stub, runtime) = runtime_stub(&PROGRAM_STUB)?;
-	let output = standalone_output_path(target);
-	let carried = warp_runtime::c_signatures::with_c_functions(&c_functions, &machine_code);
-	let executable = warp_runtime::standalone::with_machine_code(&runtime, &carried);
-	write_executable(&executable, &output)?;
-	Ok(format!(
-		"wrote {} ({} bytes: runtime {}, machine code {})",
-		output.display(),
-		executable.len(),
-		stub.display(),
-		machine_code.len()
-	))
+	let _ = (code, carried_c_functions, &PROGRAM_STUB, standalone_output_path(target));
+	Err("a standalone executable needs the program compiled to print its value, which compiler.warp does not do yet (card rust-bootstrap)".to_string())
 }
 
 /// The C functions among `imports` the stub doesn't link itself, as their library's headers declare them: the
@@ -135,22 +101,12 @@ fn carried_c_functions(imports: &[(String, String)]) -> Vec<warp::ffi::CFunction
 /// `warp build page.warp` of a program showing a page, as `warp page.warp` opens it in a window: an app, the stub
 /// carrying the page's site, which it shows in the system's web view (card build-links); macOS only for now
 pub(crate) fn builds_an_app(code: &str) -> bool {
-	cfg!(target_os = "macos") && warp::serve::shows_page(code)
+	{ let _ = code; false }
 }
 
 pub(crate) fn write_web_view_app(code: &str, target: &str) -> Result<String, String> {
-	let output = standalone_output_path(target);
-	let title = output.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
-	let site = warp::web::site::files(code, &title, false)?;
-	let (stub, runtime) = runtime_stub(&PAGE_STUB)?;
-	let executable = warp_runtime::standalone::with_site(&runtime, &site);
-	write_executable(&executable, &output)?;
-	Ok(format!(
-		"wrote {} ({} bytes: runtime {}, the page in a web view window)",
-		output.display(),
-		executable.len(),
-		stub.display()
-	))
+	let _ = (code, &PAGE_STUB);
+	Err(not_in_self_lane("warp build", target))
 }
 
 /// The runtime stub's path and bytes

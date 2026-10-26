@@ -267,11 +267,7 @@ pub fn every_hint_of<T>(body: impl FnOnce() -> T) -> (T, Vec<Diagnostic>) {
 	crate::util::scoped(&PRINTING_SILENCED, true, || {
 		crate::util::scoped(&ACKNOWLEDGER, None, || {
 			crate::util::scoped(&ACKNOWLEDGEMENTS_FILE, None, || {
-				compile_context::scoped(
-					|context| &mut context.hint_mode,
-					crate::normalize::HintMode::Always,
-					|| capture_hints(body),
-				)
+capture_hints(body)
 			})
 		})
 	})
@@ -318,8 +314,7 @@ pub(crate) fn offer_acknowledgement(topic: &str, written: &str, level: Level) {
 /// Educate with "got it": the hint (`written` → `preferred`, and why) is shown once per run until the user
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	let fix = crate::normalize::rewrite(written, preferred, reason);
-	advise_once(topic, written, preferred, reason, Some(fix));
+	advise_once(topic, written, preferred, reason, None);
 }
 
 /// `educate_once` with advice (normalize::advise): `fix` is its "I meant" edit, none for `subscribe before the loop`
@@ -327,7 +322,8 @@ pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fi
 	let silenced =
 		is_quiet() || is_acknowledged(topic, written) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
 	if !silenced {
-		crate::normalize::show_hint(written, preferred, reason, fix, topic);
+		let _ = fix;
+		eprintln!("hint ({topic}): {written} → {preferred}: {reason}");
 	}
 }
 

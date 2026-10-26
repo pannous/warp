@@ -126,7 +126,7 @@ const LIVE_LOOP_WORD: &str = "live_loop";
 pub fn live_loop_names(program: &Node) -> std::collections::BTreeSet<String> {
 	use crate::abi::TEMPORARY_SEPARATOR;
 	let function_named = |cycle: &Node| match cycle.call_parts() {
-		Some((crate::closures::CLOSURE_NEW, [function])) => function.symbol_name().map(str::to_string),
+		Some((crate::abi::CLOSURE_NEW, [function])) => function.symbol_name().map(str::to_string),
 		_ => cycle.symbol_name().map(str::to_string),
 	};
 	let mut names = std::collections::BTreeSet::new();

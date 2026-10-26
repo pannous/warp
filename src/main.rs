@@ -4,15 +4,11 @@ use node::Node;
 use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
-use warp::compiler::node_views;
 use warp::node;
 use warp::run::module_cache::COMPILED_EXTENSION;
 use warp::util::{dirs_home, extract_after, file_exists, load_file};
-use warp::{
-	errors::diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util,
-	wasm_emitter, web::markup,
-};
-use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
+use warp::{errors::diagnostic, extensions, run, run::wasm_reader, util};
+use warp_runtime::host_words::HOST_LIBRARY;
 
 mod cli;
 use cli::*;
@@ -35,8 +31,6 @@ const SITE_FLAG: &str = "--site";
 /// `warp compile --page app.warp`: app.wasm for a page of its own, its path imports named page:modules/<file> and those
 /// modules written to modules/ beside it, as a site ships them (web/uniscript/build.sh, card imports-wasm)
 const PAGE_FLAG: &str = "--page";
-/// The site of inline code
-const DEFAULT_SITE_NAME: &str = "site";
 /// `warp build --wit app.warp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
 const WIT_FLAG: &str = "--wit";
 /// `warp build --component app.warp`: app.component.wasm, the component of that world (src/modules/component_builder.rs)
@@ -112,7 +106,7 @@ fn main() {
 		Some(flag) => {
 			args.remove(flag);
 			warp::host::sandbox::confine_process();
-			warp::pipeline::sandboxed(|| run_command(&args, &given))
+			warp::compiler::compile_context::scoped(|context| &mut context.sandboxed, true, || run_command(&args, &given))
 		}
 		None => run_command(&args, &given),
 	}
@@ -227,7 +221,7 @@ fn eval(code: &str) -> Node {
 /// The tests of one file run, its summary printed: (tests run, failed)
 fn run_tests_of(path: &str) -> (usize, usize) {
 	diagnostic::show_lines_of(&source_of(path), Some(path));
-	let result = warp::pipeline::for_tests(|| wasm_emitter::eval(path));
+	let result = eval(path);
 	let summary = match result.drop_meta() {
 		Node::Text(summary) => summary.clone(),
 		Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => summary.drop_meta().name(),
@@ -238,11 +232,25 @@ fn run_tests_of(path: &str) -> (usize, usize) {
 			return (failed, failed);
 		}
 	};
-	for skipped in warp::lowering::test_blocks::skipped_pairs(&source_of(path)) {
+	for skipped in warp::compiler::pure_tests::skipped_pairs(&source_of(path)) {
 		println!("⊘ skipped {skipped}");
 	}
 	println!("{summary}");
 	test_counts(&summary).unwrap_or((1, 1))
+}
+
+/// The error of a command that compiles with the Rust compiler, which `pure` no longer has (card rust-bootstrap):
+/// compiler.warp does not do it yet
+fn not_in_self_lane(command: &str, target: &str) -> String {
+	format!("{command} {target}: not in the self lane yet; this build has no Rust compiler (card rust-bootstrap, branch pure)")
+}
+
+/// A program answering requests, `get "/" { … }` or `serve 8080`: served while it runs. Without the Rust compiler's
+/// serve analysis a line starting with a route method or `serve` counts
+fn serves(code: &str) -> bool {
+	code.lines().map(str::trim_start).any(|line| {
+		["get \"", "post \"", "put \"", "delete \"", "patch \""].iter().any(|start| line.starts_with(start))
+	})
 }
 
 /// "✓ 3 tests passed" → (3, 0), "2 of 4 failed" → (4, 2)
@@ -290,37 +298,13 @@ fn run_command(args: &[String], given: &[String]) {
 	} else if is_format_command(&args[1]) {
 		std::process::exit(format_command(&args[1], &args[2..]));
 	} else if let Some(target) = command_argument(&arg_string, "verify") {
-		let code = source_of(target);
-		let reports = law::verify(&code);
-		reports.iter().for_each(|report| println!("{}", report));
-		let all_proofs_check =
-			reports.iter().all(|report| report.assurance == law::Assurance::Proved && !report.failed());
-		println!("{}", if all_proofs_check { "ALL PROOFS CHECK" } else { "SOME PROOFS FAIL" });
-		std::process::exit((!all_proofs_check) as i32);
+		fail(not_in_self_lane("warp verify", target));
 	} else if let Some(target) = command_argument(&arg_string, "types") {
-		println!("{}", law::type_model::report(&source_of(target)));
+		fail(not_in_self_lane("warp types", target));
 	} else if args[1] == FETCH_COMMAND {
-		let mut failed = false;
-		for (name, fetched) in warp::modules::fetch_packages(&args[2..]) {
-			match fetched {
-				Ok(directory) => println!("{name} → {}", directory.display()),
-				Err(failure) => {
-					eprintln!("{failure}");
-					failed = true;
-				}
-			}
-		}
-		std::process::exit(failed as i32);
+		fail(not_in_self_lane("warp fetch", &args[2..].join(" ")));
 	} else if args[1] == TOOL_COMMAND && args.len() >= 3 {
-		let arguments: Vec<&str> = args[3..].iter().chain(given).map(String::as_str).collect();
-		match package_tools::run_package_tool(&args[2], &arguments) {
-			Ok(run) => {
-				print!("{}", run.stdout);
-				eprint!("{}", run.stderr);
-				std::process::exit(run.status);
-			}
-			Err(failure) => fail(failure),
-		}
+		fail(not_in_self_lane("warp tool", &args[2]));
 	} else if args[1] == warp::graphics::paint_window::COMMAND {
 		if let Err(failure) = warp::graphics::paint_window::run(
 			args.get(2).is_some_and(|flag| flag == warp::graphics::paint_window::CHECK),
@@ -333,27 +317,9 @@ fn run_command(args: &[String], given: &[String]) {
 			Err(failure) => fail(format!("warp serve: {failure}")),
 		}
 	} else if args[1] == DEPLOY_COMMAND && args.len() >= 3 {
-		use warp::web::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG, HOSTED_FLAG};
-		let deployment = match args[2].as_str() {
-			DEV_FLAG => Deployment::Local,
-			DRY_RUN_FLAG => Deployment::DryRun,
-			HOSTED_FLAG => Deployment::Hosted,
-			_ => Deployment::Cloud,
-		};
-		let Some(program) = args.get(if deployment == Deployment::Cloud { 2 } else { 3 }) else {
-			fail(format!("warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}|{HOSTED_FLAG}] app.warp"));
-		};
-		if let Err(failure) = warp::web::deploy::deploy(std::path::Path::new(program), deployment) {
-			fail(format!("warp deploy: {failure}"));
-		}
+		fail(not_in_self_lane("warp deploy", &args[2..].join(" ")));
 	} else if args[1] == DEV_COMMAND && args.len() >= 3 {
-		let port = args.get(3).map_or(Ok(warp::web::dev_server::DEV_PORT), |port| port.parse::<u16>());
-		let served = port.map_err(|_| format!("warp dev: the port is a number, not {}", args[3])).and_then(|port| {
-			warp::web::dev_server::serve_and_open(std::path::Path::new(&args[2]), port, opens_browser())
-		});
-		if let Err(failure) = served {
-			fail(failure);
-		}
+		fail(not_in_self_lane("warp dev", &args[2]));
 	} else if let Some(target) = command_argument(&arg_string, "data") {
 		// `warp data file.warp` prints the file as data
 		let text = source_of(target);
@@ -427,7 +393,7 @@ fn run_command(args: &[String], given: &[String]) {
 			eprintln!("Error: Could not read file '{}'", path);
 		}
 		warp_runtime::system_signals::allow_staying(); // a program with a live timer stays after main
-		if !only_run && warp::serve::serves(&source_of(path)) {
+		if !only_run && serves(&source_of(path)) {
 			serve_file(path, SERVE_PORT, "routes found; ", true);
 		}
 		// a page shows in a window, as `warp app` shows it; piped or redirected it prints its HTML
@@ -466,20 +432,14 @@ fn run_command(args: &[String], given: &[String]) {
 		);
 	} else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
 		println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
-		warp::web::dev_server::open_in_browser("https://github.com/pannous/warp/");
+		warp::web::open_in_browser("https://github.com/pannous/warp/");
 	} else if let Some(code) = command_argument(&arg_string, "eval") {
 		diagnostic::show_lines_of(code, None);
 		show_and_fail_on_error(&eval(code), RESULT_MARK);
 	} else if let Some(code) = command_argument(&arg_string, LOWER_JSON_COMMAND) {
-		match warp::pipeline::lower(code) {
-			Ok(lowered) => println!("{}", node_views::view_json(&node_views::plain_view(&lowered))),
-			Err(final_value) => println!("no module needed: {}", final_value.serialize()),
-		}
+		fail(not_in_self_lane("warp lower-json", code));
 	} else if let Some(code) = command_argument(&arg_string, "lower") {
-		match wasm_emitter::lower(code) {
-			Ok(lowered) => println!("{}", lowered.serialize()),
-			Err(final_value) => println!("no module needed: {}", final_value.serialize()),
-		}
+		fail(not_in_self_lane("warp lower", code));
 	} else if let Some(code) = command_argument(&arg_string, "parse") {
 		println!("{}", structure(&warp::compiler::standalone::parsed(code)));
 	} else if matches!(arg_string.as_str(), "repl" | "console" | "start" | "run") {
@@ -576,7 +536,7 @@ fn unknown_command(args: &[String]) -> Option<String> {
 	let word = args[1].as_str();
 	let plain_word = word.chars().all(|c| c.is_ascii_alphabetic() || c == '-');
 	let names_a_file = args[2..].iter().any(|argument| std::path::Path::new(argument).exists());
-	let known = COMMAND_WORDS.contains(&word) || warp::lowering::library_words::is_calling_word(word);
+	let known = COMMAND_WORDS.contains(&word);
 	if !plain_word || !names_a_file || known {
 		return None;
 	}

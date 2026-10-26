@@ -8,8 +8,14 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::type_constructor::entry_name;
 use std::collections::{HashMap, HashSet};
+
+fn entry_name(entry: &Node) -> Option<String> {
+	match entry.drop_meta() {
+		Node::Key(field, Op::Colon | Op::Assign, _) => Some(field.name()),
+		_ => None,
+	}
+}
 
 /// The attribute of a shader text listing its holes' names
 pub const HOLES_ATTRIBUTE: &str = "shader_holes";
@@ -110,7 +116,7 @@ fn hint_aliases(wgsl: &str) {
 	for (alias, dotted, reason) in HOLE_ALIASES {
 		let written = format!("${alias}");
 		if mentions(wgsl, &written) {
-			crate::normalize::hint(&written, &format!("${dotted}"), reason);
+			eprintln!("hint: {written} → ${dotted}: {reason}");
 		}
 	}
 }

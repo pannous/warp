@@ -145,7 +145,7 @@ pub fn repl_line(line: &str, state: &Path, by: Compiler) -> Node {
 		return stepped;
 	}
 	match std::fs::read(&module) {
-		Ok(bytes) => crate::pipeline::run_module(module_of_bytes(bytes)),
+		Ok(bytes) => crate::compiled_module::run_module(module_of_bytes(bytes)),
 		Err(failure) => error(&format!("repl-step wrote no module {}: {failure}", module.display())),
 	}
 }
