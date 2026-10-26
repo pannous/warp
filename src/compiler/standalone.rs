@@ -1,12 +1,13 @@
 //! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): lib/compiler/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
-//! build output (decision compiler-build): compiler.wasm, built by the Rust pipeline, for `warp pure`; compiler-self.wasm,
-//! compiler.warp compiled by itself through the pure lane, for `warp self`. The pair next to the binary is the delivered
+//! build output (decision compiler-build): compiler.wasm, compiler.warp compiled by the seed (seed/compiler-self.wasm, a
+//! fixpoint compiler checked in; card rust-bootstrap), for `warp pure`; compiler-self.wasm, compiler.warp compiled by
+//! compiler.wasm, that is by itself, for `warp self`. No Rust-compiled stage takes part in either build. The pair next to the binary is the delivered
 //! one (a release's, or main's, stamped with the commit it was built from) and is used as it is, whatever lib/ beside
 //! it says (card installed-compilers); a lib/ named by WARP_LIB that the pair is not for keeps its own in
 //! <lib>/../data/, where a run on one built from another lib/ or warp build says so in one line. Only `warp rebuild`
 //! builds one: a missing one is an error naming it.
-use crate::compiler::self_hosted::{compiler_inputs_hash, library, module_of_bytes, pure_bytes, WORKER_STACK};
+use crate::compiler::self_hosted::{compiler_inputs_hash, library, module_of_bytes};
 use crate::node::{error, Node};
 use crate::pipeline::CompiledModule;
 use std::path::{Path, PathBuf};
@@ -29,10 +30,14 @@ const OTHER_LIBRARY_FOLDER: &str = "data";
 const LIBRARY_VARIABLE: &str = "WARP_LIB";
 /// What a new build compiles once to compute its kept values
 const WARMING_PROGRAM: &str = "0";
-/// Set to 1: the warnings and hints of compiling compiler.warp itself are shown
-const COMPILER_WARNINGS: &str = "WARP_COMPILER_WARNINGS";
+/// The seed compiler, beside lib/ in a checkout (or in the installed folder): compiler.warp compiled by itself at a
+/// fixpoint, what every build starts from (seed/README.md, scripts/refresh-seed.sh)
+const SEED_FILE: &str = "seed/compiler-self.wasm";
+/// Names another seed file (a candidate seed tried before it is checked in)
+const SEED_VARIABLE: &str = "WARP_SEED";
 
-/// Who compiles compiler.warp: `warp pure` the Rust pipeline, `warp self` the pure lane, compiler.warp itself
+/// Who builds compiler.warp's module: for `warp pure` the seed, for `warp self` compiler.wasm, compiler.warp itself
+// ⚠ RustCompiled keeps its name until the Rust compiler leaves main (card rust-bootstrap): the seed builds it now
 #[derive(Clone, Copy)]
 pub enum Compiler {
 	RustCompiled,
@@ -130,10 +135,14 @@ pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 
 /// The module compiler.warp makes of the program file with `folder` in scope: `compiler.warp <source> <wasm> <folder> <lib>`
 fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
+	compiled_with(program, folder, compiler(by)?)
+}
+
+/// The module `compiler` (a module of compiler.warp) makes of the program file with `folder` in scope
+fn compiled_with(program: &Path, folder: &Path, compiler: CompiledModule) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
 	let arguments = [program, output.as_path(), folder, library()];
-	let compiler = compiler(by)?;
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
@@ -203,21 +212,14 @@ fn is_delivered(path: &Path) -> bool {
 	binary_folder().is_some_and(|folder| path.parent() == Some(folder.as_path()))
 }
 
-/// compiler.warp compiled by `by`, written to `path` with the build section
+/// compiler.warp compiled for `by` (by the seed, or by compiler.wasm: builder), written to `path` with the build section
 fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let file = library().join(COMPILER_FILE);
-	let source = std::fs::read_to_string(&file).map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
-	let module = match by {
-		Compiler::SelfCompiled => pure_compiled(&file, source).map_err(|refusal| {
-			error(&format!("compiler.warp compiled by itself: the pure lane refuses it: {refusal}"))
-		})?,
-		Compiler::RustCompiled => {
-			// a Node stays on its thread: the failure crosses as its text
-			let compiled =
-				on_big_stack(file, move || crate::pipeline::compile(&source).map_err(|failed| failed.serialize()));
-			compiled.map_err(|failed| error(&failed))?
-		}
-	};
+	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
+	let folder = file.parent().unwrap_or(library()).to_path_buf();
+	let (builder, compiler) = builder(by)?;
+	let module = compiled_with(&file, &folder, compiler)
+		.map_err(|failure| error(&format!("compiler.warp compiled by {builder}: {}", failure.serialize())))?;
 	let mut bytes = module.bytes.clone();
 	let section = current_build().join(BUILD_SEPARATOR);
 	wasm_encoder::Section::append_to(
@@ -228,6 +230,52 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	warm(by)?;
 	Ok(module)
+}
+
+/// Who builds compiler.warp for `by`, named, and its module: compiler.wasm for `warp self` when there is one of these
+/// compiler inputs (`warp rebuild` builds compiler.wasm first), else the seed. No Rust-compiled stage (card rust-bootstrap)
+fn builder(by: Compiler) -> Result<(String, CompiledModule), Node> {
+	if let Compiler::SelfCompiled = by {
+		if let Some((path, bytes)) = current_build_file(Compiler::RustCompiled) {
+			return Ok((path.display().to_string(), module_of_bytes(bytes)));
+		}
+		eprintln!(
+			"no compiler.wasm of these compiler inputs: the seed builds compiler-self.wasm (`warp {REBUILD_WORD}` builds both, compiler-self.wasm by compiler.wasm)"
+		);
+	}
+	let seed = seed_file();
+	let bytes = std::fs::read(&seed).map_err(|failure| {
+		error(&format!(
+			"no seed compiler at {} ({failure}): {SEED_VARIABLE} names one, scripts/refresh-seed.sh makes one",
+			seed.display()
+		))
+	})?;
+	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes)))
+}
+
+/// The seed: WARP_SEED, else seed/compiler-self.wasm beside lib/ (a checkout's), else in the installed folder
+fn seed_file() -> PathBuf {
+	if let Some(file) = std::env::var_os(SEED_VARIABLE) {
+		return PathBuf::from(file);
+	}
+	let beside_library = library().parent().unwrap_or(library()).join(SEED_FILE);
+	let installed = binary_folder().map(|folder| folder.join(SEED_FILE)).filter(|file| file.exists());
+	if beside_library.exists() {
+		beside_library
+	} else {
+		installed.unwrap_or(beside_library)
+	}
+}
+
+/// The build file of `by` for these compiler inputs, and its bytes: the build path's, else the delivered one; None when
+/// neither was built from them
+fn current_build_file(by: Compiler) -> Option<(PathBuf, Vec<u8>)> {
+	let path = build_path(by);
+	let delivered = binary_folder().map(|folder| folder.join(by.file_name()));
+	let same_inputs = |bytes: &Vec<u8>| built_from(bytes)[1..BUILD_PARTS_JUDGED] == judged_build()[1..];
+	std::iter::once(path)
+		.chain(delivered)
+		.find_map(|file| std::fs::read(&file).ok().filter(same_inputs).map(|bytes| (file, bytes)))
 }
 
 /// The new build run once on a small program: the values compiler.warp keeps for every run (`kept(…) ?? keep(…)`, its
@@ -313,34 +361,4 @@ fn build_path(by: Compiler) -> PathBuf {
 		Some(folder) => folder.join(by.file_name()),
 		None => library().parent().unwrap_or(library()).join(OTHER_LIBRARY_FOLDER).join(by.file_name()),
 	}
-}
-
-/// compiler.warp compiled by the pure lane (parser.warp, the warp passes, analyzer.warp, emitter.warp), else the refusal
-fn pure_compiled(file: &Path, source: String) -> Result<CompiledModule, String> {
-	on_big_stack(file.to_path_buf(), move || match pure_bytes(&source) {
-		Ok(Ok(bytes)) => Ok(bytes),
-		Ok(Err(diagnosed)) => Err(diagnosed.serialize()),
-		Err(refusal) => Err(refusal),
-	})
-	.map(module_of_bytes)
-}
-
-/// `compile` as the program of `file`, in a thread with a stack deep enough for a compile of the compiler; quietly: the
-/// compiler's own warnings and hints are no news to the user of `warp pure` (card prefix-count-warning), but they are
-/// to whoever works on lib/compiler: WARP_COMPILER_WARNINGS=1 shows them (the Integrator's pure-chain check)
-fn on_big_stack<T: Send + 'static>(file: PathBuf, compile: impl FnOnce() -> T + Send + 'static) -> T {
-	let work = move || {
-		let compile = || crate::modules::with_program_file(&file, compile);
-		if std::env::var(COMPILER_WARNINGS).is_ok_and(|shown| shown == "1") {
-			compile()
-		} else {
-			crate::errors::diagnostic::quietly(compile)
-		}
-	};
-	std::thread::Builder::new()
-		.stack_size(WORKER_STACK)
-		.spawn(work)
-		.expect("a compiler thread")
-		.join()
-		.expect("the compile")
 }
