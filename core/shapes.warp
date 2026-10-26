@@ -4,10 +4,16 @@
 use "words.warp"
 use "walk.warp"
 
-def listed(bracket: text, separator: text, nodes: list): Node := {
-	if #nodes == 0 { return opaque(["list", bracket, separator]) }
-	List(nodes, bracket as Bracket, separator as Separator)
+def listed(bracket: Bracket, separator: Separator, nodes: list): Node := {
+	if #nodes == 0 { return opaque(["list", bracket as text, separator as text]) }
+	List(nodes, bracket, separator)
 }
+
+// `f(a, b)` as the node (f a b) that calls f
+def call_of(nodes: list): Node := listed(Bracket.Round, Separator.None, nodes)
+
+// Words side by side without brackets: `print x`
+def spaced(nodes: list): Node := listed(Bracket.None, Separator.Space, nodes)
 
 // The key of an operator given by its spelling: `keyed("+", a, b)` is a+b
 def keyed(op: text, left: Node, right: Node): Node := Key(left, op as Op, right)
@@ -30,13 +36,13 @@ def group_parts(node: Node): list? := match node {
 // Rust twin: pipes.rs piped
 def piped(operand: Node, receiver: Node): Node := {
 	parts = group_parts(operand)
-	if parts != ø and parts#1 == "" and parts#2 == " " { operand = listed("(", "", [operand]) }
+	if parts != ø and parts#1 == "" and parts#2 == " " { operand = call_of([operand]) }
 	receiver_parts = group_parts(receiver)
 	if receiver_parts != ø and receiver_parts#1 == "(" and receiver_parts#2 == "" and #receiver_parts#3 > 0 and receiver_parts#3#1 is symbol {
 		items = receiver_parts#3
-		return listed("(", "", [items#1, operand] + items[1 .. #items])
+		return call_of([items#1, operand] + items[1 .. #items])
 	}
-	listed("(", "", [receiver, operand])
+	call_of([receiver, operand])
 }
 
 def is_list_of(node: Node, bracket: text): bool {
