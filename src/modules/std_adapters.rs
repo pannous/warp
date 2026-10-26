@@ -46,6 +46,11 @@ pub(crate) fn text_of(node: &Node) -> Result<String, String> {
 	node.text_value().ok_or_else(|| format!("needs a text, got {}", spelled(node)))
 }
 
+/// The texts of a list of texts
+fn texts_of(node: &Node) -> Result<Vec<String>, String> {
+	node.as_items().iter().map(text_of).collect()
+}
+
 #[cfg(feature = "native")]
 pub(crate) fn number_of(node: &Node) -> Result<f64, String> {
 	match node.drop_meta() {
@@ -234,9 +239,14 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		("cwd", []) => working_folder(),
 		("input", prompt) => typed_line(prompt),
 		("stdin", []) => std::io::read_to_string(std::io::stdin()).map(Node::Text).map_err(said),
-		("kept", [name]) => Ok(kept_value(&text_of(name)?).unwrap_or(Node::Empty)),
+		("kept", [name]) => Ok(kept_value(&text_of(name)?, &[]).unwrap_or(Node::Empty)),
 		("keep", [name, value]) => {
-			keep_value(&text_of(name)?, value);
+			keep_value(&text_of(name)?, &[], value);
+			Ok(value.clone())
+		}
+		("kept", [name, makers]) => Ok(kept_value(&text_of(name)?, &texts_of(makers)?).unwrap_or(Node::Empty)),
+		("keep", [name, value, makers]) => {
+			keep_value(&text_of(name)?, &texts_of(makers)?, value);
 			Ok(value.clone())
 		}
 		// `command("ls | wc -l")`: the line run by sh, the explicit opt-in to text as shell (decision use-script)
@@ -254,21 +264,27 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 /// The value kept under `name` (os.keep) while warp and its lib/ stay as they are: a value a program computes the same
 /// way at every run, read by the next run of any program (card pure-warm-start); a compiler module's own (kept_by)
 #[cfg(feature = "native")]
-fn kept_value(name: &str) -> Option<Node> {
-	let key = kept_key(name)?;
+fn kept_value(name: &str, makers: &[String]) -> Option<Node> {
+	let key = kept_key(name, makers)?;
 	postcard::from_bytes(&crate::run::module_cache::kept_bytes(&key, KEPT_VALUE)?).ok()
 }
 
 #[cfg(feature = "native")]
-fn keep_value(name: &str, value: &Node) {
-	if let (Some(key), Ok(bytes)) = (kept_key(name), postcard::to_allocvec(value)) {
+fn keep_value(name: &str, makers: &[String], value: &Node) {
+	if let (Some(key), Ok(bytes)) = (kept_key(name, makers), postcard::to_allocvec(value)) {
 		crate::run::module_cache::keep_bytes(&key, KEPT_VALUE, &bytes);
 	}
 }
 
-/// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs
+/// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs; a
+/// value its `makers` made (os.keep_of, lib/compiler files) by theirs alone, when this binary compiled them: an edit of
+/// lib/compiler they do not reach keeps it (card speed-module-cache). compiler-self.wasm was compiled by all of
+/// lib/compiler, so its values stay its own
 #[cfg(feature = "native")]
-fn kept_key(name: &str) -> Option<String> {
+fn kept_key(name: &str, makers: &[String]) -> Option<String> {
+	if !makers.is_empty() && !KEEPING_SELF_COMPILED.with(std::cell::Cell::get) {
+		return Some(crate::compiler::self_hosted::made_by_key(&format!("{KEPT_VALUE} {name}"), makers));
+	}
 	let compiler = KEEPING_COMPILER.with(|compiler| compiler.borrow().clone());
 	crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {compiler} {name}"))
 }
@@ -277,6 +293,8 @@ fn kept_key(name: &str) -> Option<String> {
 thread_local! {
 	/// The SHA-256 of the compiler module running (compiler.wasm, compiler-self.wasm), empty for any other program
 	static KEEPING_COMPILER: std::cell::RefCell<String> = Default::default();
+	/// Whether the compiler running is compiler-self.wasm, which lib/compiler compiled (kept_key)
+	static KEEPING_SELF_COMPILED: std::cell::Cell<bool> = Default::default();
 }
 
 /// The variable naming the lib/ a compiler run reads its std modules from (lib/compiler/parser.warp run_library)
@@ -313,21 +331,23 @@ fn in_compiler_run() -> bool {
 /// compiler-self.wasm, or a compiler.wasm built from an older lib/, compute compiler.warp's lowered runtime words
 /// differently, and one read another's ('key not found'; card pure-self-stale-cache)
 #[cfg(feature = "native")]
-pub fn kept_by<R>(owner: String, run: impl FnOnce() -> R) -> R {
+pub fn kept_by<R>(owner: String, self_compiled: bool, run: impl FnOnce() -> R) -> R {
 	let before = KEEPING_COMPILER.with(|compiler| compiler.replace(owner));
+	let was_self_compiled = KEEPING_SELF_COMPILED.with(|compiled| compiled.replace(self_compiled));
 	let result = run();
 	KEEPING_COMPILER.with(|compiler| compiler.replace(before));
+	KEEPING_SELF_COMPILED.with(|compiled| compiled.replace(was_self_compiled));
 	result
 }
 
 /// The browser keeps no values across runs: each run computes them
 #[cfg(not(feature = "native"))]
-fn kept_value(_: &str) -> Option<Node> {
+fn kept_value(_: &str, _: &[String]) -> Option<Node> {
 	None
 }
 
 #[cfg(not(feature = "native"))]
-fn keep_value(_: &str, _: &Node) {}
+fn keep_value(_: &str, _: &[String], _: &Node) {}
 
 /// The module cache's extension of a kept value, and its key's prefix
 const KEPT_VALUE: &str = "kept-value";

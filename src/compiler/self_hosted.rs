@@ -470,26 +470,38 @@ fn runtime_words() -> Result<String, Node> {
 /// definitions.warp drops them
 pub fn runtime_source() -> std::io::Result<String> {
 	let roots = [RUNTIME_WORDS, EXTENDED_RUNTIME_WORDS].map(|root| compiler_folder().join(root));
-	let mut joined = HashSet::from(roots.clone());
-	let mut waiting = VecDeque::from(roots);
 	let mut source = String::new();
-	while let Some(file) = waiting.pop_front() {
-		let folder = file.parent().unwrap_or(Path::new(".")).to_path_buf();
-		for line in std::fs::read_to_string(&file)?.lines() {
-			match line.strip_prefix("use ").map(str::trim) {
-				Some(name) => {
-					let path = used_file(&folder, name);
-					if joined.insert(path.clone()) {
-						waiting.push_back(path);
-					}
-				}
-				None if is_intrinsic_declaration(line) => {}
-				None => source += line,
+	for (_, text) in use_closure(&roots)? {
+		for line in text.lines() {
+			if !line.starts_with(USE_LINE) && !is_intrinsic_declaration(line) {
+				source += line;
 			}
 			source.push('\n');
 		}
 	}
 	Ok(source)
+}
+
+/// How a line names a file or module it uses
+const USE_LINE: &str = "use ";
+
+/// The files `roots` name with the files their `use` lines name, each file once, breadth first: [file, its text]
+fn use_closure(roots: &[PathBuf]) -> std::io::Result<Vec<(PathBuf, String)>> {
+	let mut joined: HashSet<PathBuf> = roots.iter().cloned().collect();
+	let mut waiting: VecDeque<PathBuf> = roots.iter().cloned().collect();
+	let mut files = Vec::new();
+	while let Some(file) = waiting.pop_front() {
+		let text = std::fs::read_to_string(&file)?;
+		let folder = file.parent().unwrap_or(Path::new(".")).to_path_buf();
+		for name in text.lines().filter_map(|line| line.strip_prefix(USE_LINE)).map(str::trim) {
+			let path = used_file(&folder, name);
+			if joined.insert(path.clone()) {
+				waiting.push_back(path);
+			}
+		}
+		files.push((file, text));
+	}
+	Ok(files)
 }
 
 fn is_intrinsic_declaration(line: &str) -> bool {
@@ -716,6 +728,38 @@ fn compiled_stage_key(program: &str) -> String {
 	for (file, bytes) in compiler_input_files(&STAGE_MODULES) {
 		hasher.update(format!("{file}\n"));
 		hasher.update(bytes);
+	}
+	crate::extensions::hex_text(&hasher.finalize())
+}
+
+/// The key of the value `name` that the lib/compiler files `makers` made, run as this binary compiles them (os.keep_of):
+/// the sources warp was built from, the WARP_ settings and every file of lib/ but the warp files of lib/compiler the
+/// makers' `use` lines do not reach, so an edit of lib/compiler elsewhere keeps the value (card speed-module-cache:
+/// uses.warp keeps each used file's parse by parser.warp's files); every file when a maker cannot be read
+#[cfg(feature = "native")]
+pub(crate) fn made_by_key(name: &str, makers: &[String]) -> String {
+	use sha2::{Digest, Sha256};
+	let library = library();
+	let real = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+	let roots: Vec<PathBuf> = makers.iter().map(|maker| compiler_folder().join(maker)).collect();
+	let reached: Option<HashSet<PathBuf>> =
+		use_closure(&roots).ok().map(|files| files.iter().map(|(file, _)| real(file)).collect());
+	let compiler = real(&compiler_folder());
+	let unreached = |file: &Path| {
+		let file = real(file);
+		file.extension().is_some_and(|extension| extension == "warp")
+			&& file.starts_with(&compiler)
+			&& reached.as_ref().is_some_and(|reached| !reached.contains(&file))
+	};
+	let mut settings = crate::run::program_cache::warp_settings();
+	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
+	let mut hasher = Sha256::new();
+	hasher.update(format!("{}\n{settings:?}\nmade by {makers:?}\n{name}\n", env!("WARP_SOURCE")));
+	let mut files = files_below(library.to_path_buf());
+	files.sort();
+	for file in files.iter().filter(|file| !unreached(file)) {
+		hasher.update(format!("{}\n", file.strip_prefix(library).unwrap_or(file).display()));
+		hasher.update(std::fs::read(file).unwrap_or_default());
 	}
 	crate::extensions::hex_text(&hasher.finalize())
 }
