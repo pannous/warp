@@ -5,7 +5,7 @@
 # Rust-compiled stage takes part. (scripts/promote-self.sh is the light check of warp.wasm alone: N+1 == N.)
 # usage: scripts/refresh-seed.sh [--check] [<tree>, default this checkout]   (--check: run the stages, replace nothing)
 # WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~17-20 min on the Mac: run it
-# through scripts/slot.sh, in the background. The bytes depend on where lib/ lies (compiler.warp keeps its folder), so
+# in the background. The bytes depend on where lib/ lies (compiler.warp keeps its folder), so
 # the fixpoint holds per tree, and a seed refreshed in another tree differs in that path alone.
 set -u
 STAGES="A B C D"

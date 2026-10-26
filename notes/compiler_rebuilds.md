@@ -21,7 +21,7 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
 - To get them, run `scripts/rebuild.sh [pure|self|both] [<worktree>]` (pure by default; both: warp-self.wasm only from
   data/ or the store, never promoted there). It keeps the file in data/ when
   data/<compiler>.wasm.inputs names the current inputs hash. Otherwise it copies the shared store's pair of that hash.
-  Only when neither has one does it build in a heavy slot and publish the result. `--check` never builds and exits 3 on a miss.
+  Only when neither has one does it build and publish the result. `--check` never builds and exits 3 on a miss.
 - Where warp-host finds the pair (its lookup, card pure-c-imports, not repeated in the scripts): beside the binary
   first, then lib/../data, then <prefix>/share/warp. So a pair only in data/ loses to an older one beside the binary.
   rebuild.sh therefore copies the pair from data/ beside the tree's warp-host (target/{debug,host,release}/) as well.
@@ -29,7 +29,7 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
   target/debug/ build by the lib/ path baked in it.
   A store entry is only ever a source: no lookup reads the store directly.
 - `scripts/self-check.sh` checks the pair for the branch's inputs, taken from data/ or the store. On a miss it says
-  "REBUILD NEEDED" and checks the existing pair. `--rebuild` builds the missing pair, in a slot.
+  "REBUILD NEEDED" and checks the existing pair. `--rebuild` builds the missing pair.
 
 ## The inputs hash (scripts/compiler-inputs.sh <lib> [<rust fingerprint>])
 
@@ -49,7 +49,7 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
 - `main` in each store links to the hash of origin/main's last good pair. rebuild.sh moves it only after building a tree
   whose HEAD is origin/main with core unchanged.
 - The directories are write-once: a published file is never overwritten.
-- <store>/rebuilds.log gets one line per rebuild.sh hit or miss and per scripts/slot.sh run: time, tree, hash, result.
+- <store>/rebuilds.log gets one line per rebuild.sh hit or miss: time, tree, hash, result.
 - Seeded 2026-10-23 with the pair of warp-host-wasm-load 4e3808b76 (compiler-self sha1 6269c5f5…).
 
 ## Why a copied pair now works anywhere

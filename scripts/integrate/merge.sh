@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# scripts/integrate/merge.sh [--tree <worktree>] [--tip <commit>] [<card>…]: the Integrator's batch, step 1 of 2
-# (step 2: land.sh). --tip: a merged tip handed over (a carrier branch), checked out in the tree for tier 0 alone.
+# scripts/integrate/merge.sh [--tree <worktree>] [--tip <commit>] [<card>…]: landing the branches of retired sessions,
+# step 1 of 2 (step 2: land.sh). --tip: a merged tip handed over (a carrier branch), checked out in the tree for tier 0 alone.
 # Else it merges the Ready cards (default: all of `todo list Ready`) onto origin/main in the tree, one merge commit each,
 # then runs tier 0 on the result: the compiler of the merged lib (scripts/rebuild.sh pure: taken from data/ or the
 # store when its inputs were built before, so a tip already built is never built twice), hello through it, and

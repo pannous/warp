@@ -1,4 +1,4 @@
-# Gate probes (tier 1 of scripts/gate-probes.sh)
+# Gate probes (tier 1 of scripts/gate.sh)
 
 One tiny program per probe, `<name>.warp`, and what it prints, `<name>.expected` (stdout, exact). Every probe runs in
 both lanes, `warp pure` and `warp self`, in seconds once the tree's compilers are built. The expected output is the

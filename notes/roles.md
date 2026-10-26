@@ -46,11 +46,10 @@ After each batch of questions, and whenever idle, `todo try --new` lists finishe
   who built it; untouched ones stay in `todo try`.
 
 ## Integrator (also the Tester)
-The only session that runs the full suite and the only one that pushes code to main. Its queue is the board's Ready
-column (`todo ready <card>`); it merges batches of at most ~8 Ready cards in /Volumes/Worktrees/integrate, runs the
-gate, pushes at 0 failed (fix forward: up to 10 failures are ignored as `fixnow` onto the owner's card), closes the
-cards and bounces the rest to Now with a note. Express cards and crash fixes go live untested at once. How:
-notes/agents/integrator.md.
+Workers push their own tested merges to main (common.md "Done"); the Integrator repeats no test. It watches main:
+installs the compilers beside ~/dev/bin/warp from main's tip, runs tiers 1-2 and promote-self in the background and
+the full suite at rare intervals, and turns what goes red into a card for the pusher (a red smoke test on main:
+urgent). It also lands branches whose session retired. How: notes/agents/integrator.md.
 
 ## Reviewer
 Makes sure everything is sound and beautiful according to standards. It reads each Ready card's diff in parallel
@@ -74,7 +73,7 @@ functions, and folds special cases into the general machinery. Every chunk goes 
 stating its net src/ delta. Feature cuts go to the Interviewer. Prompt: notes/agents/refactorer.md.
 
 ## Workers
-One task, one branch, one worktree; targeted tests (`warp test`); done = `todo ready <card>`. Every rule:
+One task, one branch, one worktree; targeted tests (`warp test`); done = pushed to main and `todo done <card> <commit>`. Every rule:
 notes/agents/common.md (role prompts: worker.md, fixer.md, implementer.md).
 
 ## Enforcement
