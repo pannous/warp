@@ -95,11 +95,16 @@ spelled_case(value: Node, enum_name: text, n: Node): Node := {
 	applied(spelled_function(enum_name, "case"), value)
 }
 
-# `Op.Add == x` → "+" == Op·text(x): a case equals its spelling
+# `Op.Add == x` → "+" == Op·text(x): a case equals its spelling; of a name, `op == Op.Define` → Op·is(op, Op.Define, ":="),
+# which compares a case as it is, not through Op·text's match over every case (Rust twin: plain_enums.rs spelled_equality)
 spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: any): Node := {
 	enum_name = spelled_enum_of(left, declared) ?? spelled_enum_of(right, declared)
 	if enum_name == ø { return n }
-	Key(spelled_text(enum_name, left, declared), op, spelled_text(enum_name, right, declared))
+	case_side = if spelled_enum_of(right, declared) == enum_name then right else left
+	other_side = if case_side == right then left else right
+	if not is_name(other_side) { return Key(spelled_text(enum_name, left, declared), op, spelled_text(enum_name, right, declared)) }
+	tested = call_of(spelled_function(enum_name, "is"), [other_side, case_side, spelled_text(enum_name, case_side, declared)])
+	if op == Op.Ne then Key(ø, Op.Not, tested) else tested
 }
 
 # the annotations that hold any value, unless the program declares that type itself: Node and its cases (also
@@ -150,12 +155,26 @@ spelling_functions(enum_name: text): list := {
 	to_text = matched(value, cases.map(case => Key(symbol(case), Op.Colon, spelling(enum_name, case))) + [other], ø, cases)
 	is_spelling = Key(type_test(value, "text"), Op.Or, type_test(value, "codepoint"))
 	to_case = matched(value, cases.map(case => Key(spelling(enum_name, case), Op.Colon, symbol(case))) + [other], ø, cases)
-	[spelling_function(enum_name, "text", "text", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)]
+	[spelling_function(enum_name, "text", "text", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + comparing_functions(enum_name)
+}
+
+# `Op·is(spelled, case_written, case_spelled)`, `Op·same(spelled, other_spelled)`: two cases compare as they are, a case
+# and a text as spellings (Rust twin: node_cases.rs spelling_functions)
+comparing_functions(enum_name: text): list := {
+	value = symbol(spelled_value)
+	case_written = symbol("case_written")
+	other = symbol("other_spelled")
+	text_of = spelled_function(enum_name, "text")
+	is_case = chosen(type_test(value, "symbol"), Key(value, Op.Eq, case_written), Key(applied(text_of, value), Op.Eq, symbol("case_spelled")))
+	both_cases = Key(type_test(value, "symbol"), Op.And, type_test(other, "symbol"))
+	same = chosen(both_cases, Key(value, Op.Eq, other), Key(applied(text_of, value), Op.Eq, applied(text_of, other)))
+	[Key(call_of(spelled_function(enum_name, "is"), [value, case_written, symbol("case_spelled")]), Op.Define, is_case),
+		Key(call_of(spelled_function(enum_name, "same"), [value, other]), Op.Define, same)]
 }
 
 # whether a case of the enum, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n
 is_spelling_needed(n: any, enum_name: text, declared: any): bool := match n {
-	Symbol(name): name == spelled_function(enum_name, "text") or name == spelled_function(enum_name, "case")
+	Symbol(name): name in ["text", "case", "is", "same"].map(word => spelled_function(enum_name, word))
 	Key(left, op, right): {
 		if left == opaque_symbol { return no }
 		if spelled_enum_of(n, declared) == enum_name { return yes }
