@@ -1,13 +1,13 @@
 # Quoted code (emitter.warp's part): `data e` as a node, the fields of a code view (line, column, comment)
 # `data e`, glued `data(e)`: e as written, a node (Rust's blocks.rs as_data, written_quote); `parse("a + 1")` is
 # `as_code(data a + 1)`
-is_quote(n: any): bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == symbol(quote_word)
+is_quote(n: any): bool := (is_spaced(n) or (bracket_of(n) == "(" and separator_of(n) == "")) and #n == 2 and n#1 == quote_symbol
 is_spaced(n: any): bool := bracket_of(n) == "" and separator_of(n) == " "
 # `print data (a + 1)`, `as_code(data (a + 1))`: a `data` after the head of a line or call quotes the item after it;
 # its place, else 0
 inline_quote_at(n: any): int := {
 	if not ((bracket_of(n) == "" and separator_of(n) == " ") or (bracket_of(n) == "(" and separator_of(n) == "")) { return 0 }
-	for i in 2..<#n { if n#i == symbol(quote_word) { return i } }
+	for i in 2..<#n { if n#i == quote_symbol { return i } }
 	0
 }
 quote_folded(n: any, at: int): any := {

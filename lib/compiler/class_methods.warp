@@ -179,7 +179,7 @@ is_field_part(part: Node): bool := match part {
 
 # the view ["type", name, body] of a class declaration, else ø
 class_view(top_statement: Node): any := match top_statement {
-	Key(left, key_op, right): { if left == symbol(opaque_word) and kind_of(right) == "type" and kind_of(right#3) == "list" and declared_type_name(right#2) != ø then right else ø }
+	Key(left, key_op, right): { if left == opaque_symbol and kind_of(right) == "type" and kind_of(right#3) == "list" and declared_type_name(right#2) != ø then right else ø }
 	_: ø
 }
 class_declared(top_statement: Node, view: any): Declared := {
