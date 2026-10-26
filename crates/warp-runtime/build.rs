@@ -1,9 +1,11 @@
 //! warp-host's compilers beside it (card warp-host-compiler-beside): a build with the feature `host` copies
-//! compiler-self.wasm and compiler.wasm next to the binary (target/<profile>/warp-host), where warp-host looks first.
-//! They come from WARP_HOST_COMPILERS (a folder), else the checkout's data/ (`warp rebuild` writes them there).
+//! warp-self.wasm and warp.wasm next to the binary (target/<profile>/warp-host), where warp-host looks first.
+//! They come from WARP_HOST_COMPILERS (a folder), else the checkout's data/ (`warp rebuild` writes them there); a file of
+//! the old name (compiler-self.wasm, compiler.wasm) there is copied under the new one (transition).
 use std::path::{Path, PathBuf};
 
-const COMPILERS: [&str; 2] = ["compiler-self.wasm", "compiler.wasm"];
+/// Each compiler's name, and its old name read when the new one is missing
+const COMPILERS: [(&str, &str); 2] = [("warp-self.wasm", "compiler-self.wasm"), ("warp.wasm", "compiler.wasm")];
 
 fn main() {
 	println!("cargo:rerun-if-env-changed=WARP_HOST_COMPILERS");
@@ -18,9 +20,10 @@ fn main() {
 	// OUT_DIR is <target>/<profile>/build/warp-runtime-<hash>/out: the binaries are in <target>/<profile>
 	let out = PathBuf::from(std::env::var("OUT_DIR").unwrap_or_default());
 	let Some(profile) = out.ancestors().nth(3).map(Path::to_path_buf) else { return };
-	for name in COMPILERS {
+	for (name, legacy) in COMPILERS {
 		let from = source.join(name);
 		println!("cargo:rerun-if-changed={}", from.display());
+		let from = if from.is_file() { from } else { source.join(legacy) };
 		if !from.is_file() {
 			println!("cargo:warning=no {} to put beside warp-host: `warp rebuild` writes it to data/, or set WARP_HOST_COMPILERS", from.display());
 			continue;

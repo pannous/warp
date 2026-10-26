@@ -148,7 +148,7 @@ pub fn record_refusal(message: &str) {
 }
 
 /// `warp-host version`: the host, and the compilers a program of the current folder compiles with, as `warp version`
-/// names them (`compiler.wasm of <commit>, compiler-self.wasm missing`)
+/// names them (`warp.wasm of <commit>, warp-self.wasm missing`)
 pub fn version() -> i32 {
 	println!("🌀 warp-host {}", env!("CARGO_PKG_VERSION"));
 	let here = std::env::current_dir().unwrap_or_default().join("program.warp");
@@ -161,10 +161,10 @@ pub fn version() -> i32 {
 				commit if commit.is_empty() => format!("{name} of no commit"),
 				commit => format!("{name} of {}", &commit[..commit.len().min(SHOWN_COMMIT_LENGTH)]),
 			},
-			None => format!("{name} missing (warp rebuild {})", if name == "compiler.wasm" { "pure" } else { "self" }),
+			None => format!("{name} missing (warp rebuild {})", if name == "warp.wasm" { "pure" } else { "self" }),
 		}
 	};
-	println!("{}, {}", stamp("compiler.wasm"), stamp("compiler-self.wasm"));
+	println!("{}, {}", stamp("warp.wasm"), stamp("warp-self.wasm"));
 	0
 }
 

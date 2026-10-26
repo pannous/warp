@@ -1,6 +1,6 @@
 # Speed of the self-compiled compiler (card self-speed, 2026-10-22)
 
-`warp self` (compiler-self.wasm, emitted by emitter.warp) against `warp pure` (compiler.wasm, emitted by Rust),
+`warp self` (warp-self.wasm, emitted by emitter.warp) against `warp pure` (warp.wasm, emitted by Rust),
 compiling samples/functions/fibonacci.warp. Measured with `WARP_PROFILE=<file>` (guest sampler, 10 ms epochs), 8 runs
 each, summed with `probes/parser_speed/profile_top.py <files…> --top N [--callers NAME]`. Wall times were useless
 (load 70–280), the profiled compiler run is the number.
@@ -34,7 +34,7 @@ each, summed with `probes/parser_speed/profile_top.py <files…> --top N [--call
   spends the same absolute time (~0.13 s over 8 runs), so it is no gap between the two compilers; a real fix is
   host-side (keeping the lowered runtime as wasm data instead of a rebuilt tree).
 - The lexer walks texts by code point (code_point_width/at/text, character_end, ~4–8 %): card lexer-walks (Later).
-- Statically compiler-self.wasm still re-allocates text literals per use (array.new_data), boxes many ints and casts
+- Statically warp-self.wasm still re-allocates text literals per use (array.new_data), boxes many ints and casts
   more (ref.cast) than Rust's output, but none of these showed as a hot spot of 10 % or more.
 
 Related: a cold module cache (no kept runtime words) makes `warp self` trap in lowered_program, on main too (cards

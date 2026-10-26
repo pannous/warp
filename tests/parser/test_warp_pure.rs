@@ -1,18 +1,18 @@
 //! `warp pure <file>`: lib/compiler/compiler.warp, the warp compiler as one warp program, compiles the program and its
 //! module runs (card warp-pure, src/compiler/standalone.rs)
 const HELLO: &str = "print(\"hello world\")\n";
-/// Time for building compiler-self.wasm: ~60 s on the Mac, more on a cloud VM, past one turn's 60 s default
+/// Time for building warp-self.wasm: ~60 s on the Mac, more on a cloud VM, past one turn's 60 s default
 pub(crate) const SELF_BUILD_TIME_LIMIT_SECONDS: &str = "900";
 
 /// `warp <command>` (pure or self), ready for a program; no run builds a missing compiler (card installed-compilers).
-/// `warp self` gets its compiler built anew once per test run: a warm cloud VM keeps compiler-self.wasm of an earlier
+/// `warp self` gets its compiler built anew once per test run: a warm cloud VM keeps warp-self.wasm of an earlier
 /// job's lib/ in target/tmp (card cloud-lane-warm), and building it inside the first program's run took more than that
-/// run's 60 s (card self-build-time-limit). compiler.wasm of `warp pure` is built only when missing next to the test's
+/// run's 60 s (card self-build-time-limit). warp.wasm of `warp pure` is built only when missing next to the test's
 /// binary: that takes ~540 s (warp_pure_runs_hello_world)
 pub(crate) fn lane(command: &str) -> std::process::Command {
 	static BUILT: [std::sync::OnceLock<()>; 2] = [std::sync::OnceLock::new(), std::sync::OnceLock::new()];
 	let mut lane = crate::common::warp_command();
-	let delivered = std::path::Path::new(lane.get_program()).with_file_name("compiler.wasm");
+	let delivered = std::path::Path::new(lane.get_program()).with_file_name("warp.wasm");
 	if command == "self" || !delivered.exists() {
 		BUILT[(command == "self") as usize].get_or_init(|| build_compiler(command));
 	}

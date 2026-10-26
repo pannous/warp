@@ -278,7 +278,7 @@ fn keep_value(name: &str, makers: &[String], value: &Node) {
 
 /// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs; a
 /// value its `makers` made (os.keep_of, lib/compiler files) by theirs alone, when this binary compiled them: an edit of
-/// lib/compiler they do not reach keeps it (card speed-module-cache). compiler-self.wasm was compiled by all of
+/// lib/compiler they do not reach keeps it (card speed-module-cache). warp-self.wasm was compiled by all of
 /// lib/compiler, so its values stay its own
 #[cfg(feature = "native")]
 fn kept_key(name: &str, makers: &[String]) -> Option<String> {
@@ -291,9 +291,9 @@ fn kept_key(name: &str, makers: &[String]) -> Option<String> {
 
 #[cfg(feature = "native")]
 thread_local! {
-	/// The SHA-256 of the compiler module running (compiler.wasm, compiler-self.wasm), empty for any other program
+	/// The SHA-256 of the compiler module running (warp.wasm, warp-self.wasm), empty for any other program
 	static KEEPING_COMPILER: std::cell::RefCell<String> = Default::default();
-	/// Whether the compiler running is compiler-self.wasm, which lib/compiler compiled (kept_key)
+	/// Whether the compiler running is warp-self.wasm, which lib/compiler compiled (kept_key)
 	static KEEPING_SELF_COMPILED: std::cell::Cell<bool> = Default::default();
 }
 
@@ -301,7 +301,7 @@ thread_local! {
 const LIBRARY_VARIABLE: &str = "WARP_LIB";
 
 /// A variable of the environment a run sees: the process's, but WARP_LIB the lib/ of this warp (library_folder) in a
-/// compiler's run, so compiler.wasm reads the std modules there, never from the folder it was built in (card
+/// compiler's run, so warp.wasm reads the std modules there, never from the folder it was built in (card
 /// compiler-cache-keys); any other program sees the process's environment as it is
 pub fn environment_variable(name: &str) -> Option<String> {
 	if name == LIBRARY_VARIABLE && in_compiler_run() {
@@ -327,8 +327,8 @@ fn in_compiler_run() -> bool {
 	false
 }
 
-/// `run` of the compiler module whose SHA-256 is `owner`, keeping values of its own: compiler.wasm and
-/// compiler-self.wasm, or a compiler.wasm built from an older lib/, compute compiler.warp's lowered runtime words
+/// `run` of the compiler module whose SHA-256 is `owner`, keeping values of its own: warp.wasm and
+/// warp-self.wasm, or a warp.wasm built from an older lib/, compute compiler.warp's lowered runtime words
 /// differently, and one read another's ('key not found'; card pure-self-stale-cache)
 #[cfg(feature = "native")]
 pub fn kept_by<R>(owner: String, self_compiled: bool, run: impl FnOnce() -> R) -> R {

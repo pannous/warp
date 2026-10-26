@@ -40,14 +40,15 @@ fi
 
 cd $worktree || exit 1
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
-# both compilers of the branch's lib/: compiler.wasm (`warp pure`, built by Rust) and compiler-self.wasm (`warp self`,
-# built by itself); a lib/ that passed self alone broke main's `warp rebuild pure` twice on 2026-10-22
+# the compilers of the branch's lib/: warp.wasm (`warp pure`, built by the seed) and, when promoted, warp-self.wasm
+# (`warp self`, warp.wasm at a fixpoint: scripts/promote-self.sh, no part of this check); a lib/ that passed self alone
+# broke main's `warp rebuild pure` twice on 2026-10-22
 check_lane() {
   said=$($warp $1 samples/hello/hello.warp 2>&1 | tail -1)
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp $1 hello said: $said"; return 1; }
   verdict="SELF CHECK ok: $said"
 }
-# main's binary is refreshed after each pushed batch: a compiler.wasm built by the old binary and a self build by the
+# main's binary is refreshed after each pushed batch: a warp.wasm built by the old binary and a self build by the
 # new one make a self compiler that traps on every program (card self-trap-function-param). The check runs its own copy
 # of the binary, taken once, so a refresh never overlaps it (retrying instead kept checks queued for hours, 2026-10-22)
 scratch=$WARP_SLOT
@@ -56,7 +57,9 @@ warp=$scratch/warp
 cp $main_warp $warp || exit 1
 # the pair for these inputs: data/'s, else the store's; built by the copy only with --rebuild. The Rust fingerprint is
 # that of main's binary, read from the pair beside it (the copy has none beside it)
-export WARP_RUST_FINGERPRINT=$(LC_ALL=C tr '\0' '\n' <${main_warp:h}/compiler.wasm 2>/dev/null | LC_ALL=C sed -n '/warp\.build/{n;n;p;q;}' | LC_ALL=C grep -ao '^[0-9a-f]\{16\}' | head -1)
+beside=${main_warp:h}/warp.wasm
+[[ -f $beside ]] || beside=${main_warp:h}/compiler.wasm  # the old name (transition)
+export WARP_RUST_FINGERPRINT=$(LC_ALL=C tr '\0' '\n' <$beside 2>/dev/null | LC_ALL=C sed -n '/warp\.build/{n;n;p;q;}' | LC_ALL=C grep -ao '^[0-9a-f]\{16\}' | head -1)
 if [[ -n $rebuild ]]; then
   pair=$(WARP_BINARY=$warp $worktree/scripts/rebuild.sh both $worktree 2>&1)
 else
@@ -76,7 +79,14 @@ check_host() {
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp-host $* hello said: $said"; return 1; }
   verdict="SELF CHECK ok: $said"
 }
-check_lane pure && check_lane self && { [[ ! -x $host ]] || { check_host --compiler full run && check_host run; }; }
+# the self lane only when there is a promoted warp-self.wasm (`warp version` names a missing one)
+self_lane() {
+  if $warp version 2>/dev/null | grep -q 'warp-self.wasm missing'; then
+    print -r -- "self-check: no warp-self.wasm: self lane skipped (scripts/promote-self.sh)"; return 0
+  fi
+  check_lane self
+}
+check_lane pure && self_lane && { [[ ! -x $host ]] || { check_host --compiler full run && check_host run; }; }
 passed=$?
 echo $verdict
 exit $passed

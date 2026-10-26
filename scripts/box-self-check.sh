@@ -31,7 +31,7 @@ case $? in
 esac
 echo "$pair"
 # the pair beside the copy too: the shared binary takes the compilers beside it first (its own installed pair)
-for name in compiler compiler-self; do
+for name in warp warp-self; do
 	[ -f "$tree/data/$name.wasm" ] && cp "$tree/data/$name.wasm" "$scratch/"
 done
 verdict= passed=0
@@ -42,10 +42,13 @@ lane() { # lane <name> <command…>: the command prints Hello as its last line
 	if [[ $said == *Hello* ]]; then echo "$name: $said"; else verdict+=" $name said: $said;"; passed=1; fi
 }
 lane "warp pure" "$warp" pure
-lane "warp self" "$warp" self
+# the self lane only with a promoted warp-self.wasm (scripts/promote-self.sh; the old name too, transition)
+has_self=
+[ -f "$tree/data/warp-self.wasm" ] || [ -f "$tree/data/compiler-self.wasm" ] && has_self=1
+[ -n "$has_self" ] && lane "warp self" "$warp" self || echo "no data/warp-self.wasm: self lanes skipped (scripts/promote-self.sh)"
 if [ -n "$host" ]; then
 	lane "warp-host pure" "$host" --compiler full run
-	lane "warp-host self" "$host" run
+	[ -n "$has_self" ] && lane "warp-host self" "$host" run
 fi
 if [ $passed = 0 ]; then echo "SELF CHECK ok"; else echo "SELF CHECK RED:$verdict"; fi
 exit $passed

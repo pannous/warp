@@ -1,4 +1,4 @@
-# warp's commands in warp (card wasm-commands, notes/standalone.md): `wasmtime compiler-self.wasm <command> …`, `warp
+# warp's commands in warp (card wasm-commands, notes/standalone.md): `wasmtime warp-self.wasm <command> …`, `warp
 # pure <command> …` and `warp self <command> …` all come here through compiler.warp. Plain WASI runs no module the
 # compiler makes, so the commands that run code say so and name the native warp; those that need a host (a server,
 # a window, the network) refuse naming it too
