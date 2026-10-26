@@ -20,7 +20,101 @@ fields_of(m: Node): Node := {
 # the place of m's entry named `name`, counted from 1; 0 when it has none
 map_index(m: Node, name: text): int := {
 	entries = unboxed_list(fields_of(m))
-	for i in 1 to #entries { if kind_code(entries#i) == Kind.Key and same_bytes(entry_name(entries#i), name) { return i } }
+	if #entries < index_least() {
+		for i in 1 to #entries { if kind_code(entries#i) == Kind.Key and same_bytes(entry_name(entries#i), name) { return i } }
+		return 0
+	}
+	hashed_place(entries, map_table(entries), name)
+}
+# A map with fewer entries is walked: an object like `{x: 1, y: 2}` read field by field needs no index (Rust's
+# MIN_INDEXED_ENTRIES); a bigger one is looked up through its index (lists.warp indexed_1 …), so `b[k] = a[k]` in a
+# loop over a's keys takes linear time, not quadratic
+index_least(): int := 16
+# the table of the entries' index, brought up to their count: the slot holding it, else the next slot in turn; a table
+# kept at most half full, made anew when the entries outgrew it or fewer are left than it covers
+map_table(entries: list): list := {
+	slot = index_slot(entries)
+	if slot == 0 {
+		slot = next_index_slot
+		next_index_slot = int_remainder(slot, 4) + 1
+		hold_index(slot, entries, 0, new_list(4 * #entries))
+	}
+	table = slot_table(slot)
+	covered = slot_covered(slot)
+	if covered > #entries or 2 * #entries > #table {
+		table = new_list(4 * #entries)
+		covered = 0
+	}
+	while covered < #entries {
+		covered += 1
+		add_place(entries, table, covered)
+	}
+	hold_index(slot, entries, covered, table)
+	table
+}
+index_slot(entries: list): int := {
+	if covered_1 >= 0 and same_list(indexed_1, entries) { return 1 }
+	if covered_2 >= 0 and same_list(indexed_2, entries) { return 2 }
+	if covered_3 >= 0 and same_list(indexed_3, entries) { return 3 }
+	if covered_4 >= 0 and same_list(indexed_4, entries) { return 4 }
+	0
+}
+slot_table(slot: int): list := if slot == 1 then table_1 else if slot == 2 then table_2 else if slot == 3 then table_3 else table_4
+slot_covered(slot: int): int := if slot == 1 then covered_1 else if slot == 2 then covered_2 else if slot == 3 then covered_3 else covered_4
+hold_index(slot: int, entries: list, covered: int, table: list): int := {
+	if slot == 1 {
+		indexed_1 = entries
+		covered_1 = covered
+		table_1 = table
+	}
+	if slot == 2 {
+		indexed_2 = entries
+		covered_2 = covered
+		table_2 = table
+	}
+	if slot == 3 {
+		indexed_3 = entries
+		covered_3 = covered
+		table_3 = table
+	}
+	if slot == 4 {
+		indexed_4 = entries
+		covered_4 = covered
+		table_4 = table
+	}
+	0
+}
+# where a name's probe starts in a table: the hash of its bytes
+name_hash(name: text, size: int): int := {
+	h = 5381
+	i = 0
+	while i < byte_count(name) {
+		h = int_remainder(h * 33 + byte_at(name, i), 1000000007)
+		i += 1
+	}
+	int_remainder(h, size)
+}
+# the entry at place goes in the table, unless it is no key or an earlier entry has its name (map_index finds the first)
+add_place(entries: list, table: list, place: int): int := {
+	entry = entries#place
+	if kind_code(entry) != Kind.Key { return 0 }
+	name = entry_name(entry)
+	at = name_hash(name, #table)
+	while not is_null(table#(at + 1)) {
+		if same_bytes(entry_name(entries#unboxed_int(table#(at + 1))), name) { return 0 }
+		at = int_remainder(at + 1, #table)
+	}
+	table#(at + 1) = place
+	0
+}
+# the place of the entry named name by the table, 0 when it has none
+hashed_place(entries: list, table: list, name: text): int := {
+	at = name_hash(name, #table)
+	while not is_null(table#(at + 1)) {
+		place = unboxed_int(table#(at + 1))
+		if same_bytes(entry_name(entries#place), name) { return place }
+		at = int_remainder(at + 1, #table)
+	}
 	0
 }
 # an entry's name as a text: a symbol's or a text's own, without node_text's match over every kind (map_index runs it
@@ -106,6 +200,7 @@ map_without(c: Node, key: Node): Node := {
 	at = if marked_kind(c) == Marked.Map then map_index(c, name_text(key)) else collection_position(c, key)
 	if at == 0 { return c }
 	items = unboxed_list(fields_of(c))
+	forget_map_indexes()
 	copy_items(items, at - 1, items, at, #items - at)
 	set_count(items, #items - 1)
 	c
