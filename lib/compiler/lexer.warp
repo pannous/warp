@@ -67,9 +67,12 @@ def after(source: any, part: text, from: int, n: int): int {
 }
 
 def starts_at(source: any, part: text, at: int): bool {
+	// the lengths counted once, not at each character compared (a text's length counts its characters)
+	wanted = part.length
+	room = source.length - at
 	i = 0
-	while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }
-	i == part.length
+	while i < wanted and i < room and source[at + i] == part[i] { i = i + 1 }
+	i == wanted
 }
 
 // Where the numbers of a source start: [[line, column], …], both from 1
