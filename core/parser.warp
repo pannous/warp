@@ -7,6 +7,7 @@ use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
 use os
+use file
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; bracket: text; closing_ends: any; stops_at_end: bool; word_types: list; line_starts: list }
 
@@ -39,6 +40,40 @@ global given_library = ""
 def run_library(): text := if given_library != "" then given_library else (env("WARP_LIB") ?? (if module_directory.ends_with("/core") then folder_of(module_directory) + "/lib" else folder_of(module_directory)))
 // The lib/ the run was given, which run_library answers from now on
 def use_library(folder: text) { given_library = folder }
+// Every module of lib/ by its path within lib/ ("prelude.warp", "sugar/lists.warp", "native/z.warp"), bundled into the
+// built compiler: uses.warp's module_text writes them in where library_sources() stands when it compiles the compiler,
+// so a compiler needs no lib/ on any disk (decision built-in-lib). A compiler built by one that bundles none yet (an
+// older seed) calls library_sources below and reads them where it runs
+LIBRARY_FILES = library_sources()
+// lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
+UNBUNDLED_FOLDERS = ["compiler", "data"]
+def library_sources(): any := library_texts(run_library(), "")
+// the .warp files of lib/<within> and its folders, by their paths within lib/
+def library_texts(library: text, within: text): any {
+	found = {}
+	names = try list_files(library + "/" + within) else []
+	for name in names {
+		path = within + name
+		if name.ends_with(".warp") {
+			found[path] = try read(library + "/" + path) else ""
+		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
+			inner = library_texts(library, path + "/")
+			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
+		}
+	}
+	found
+}
+// A source file's text: a file of lib/ from the bundle, or from WARP_LIB when that is set and has the file (a module
+// changed after the build, per module); any other file from the disk; ø for none
+def source_file(path: text): any {
+	library = run_library() + "/"
+	if not path.starts_with(library) { return try read(path) else ø }
+	if env("WARP_LIB") != ø {
+		changed = try read(path) else ø
+		if changed != ø { return changed }
+	}
+	LIBRARY_FILES.get(path[library.length .. path.length])
+}
 global entity_table = ø
 def entities(): any {
 	if entity_table == ø {
@@ -1620,7 +1655,7 @@ def used_module_sources(source: text): list {
 	for statement in code_statements(source) {
 		words = blank_words(statement)
 		if words.length == 2 and USE_KEYWORDS.contains(words#1) {
-			module_source = try read(run_library() + "/" + words#2 + ".warp") else ""
+			module_source = source_file(run_library() + "/" + words#2 + ".warp") ?? ""
 			if module_source { sources += [module_source] }
 		}
 	}

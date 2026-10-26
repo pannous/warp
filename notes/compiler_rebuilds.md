@@ -37,12 +37,10 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
 - core/**
 - the Rust fingerprint: WARP_SOURCE of the warp binary that builds, the third line of a build file's warp.build
   section. rebuild.sh reads it from the warp.wasm beside that binary, or from WARP_RUST_FINGERPRINT.
-- until card compiler-library-source lands: lib/prelude.warp, math, list and regex. The compiler still embeds their
-  text at build time through `module_source(…)`. Once that card reads them from the run's lib/, they leave the
-  hash and it is core's and the Rust fingerprint's alone.
-
-Everything else under lib/ is read at run time and never changes the hash. That includes the std modules (`use os`, `use wasm`, new
-std_io verbs and their arities), sugar files, aliases and lib/native.
+- every .warp module of lib/ outside compiler/ and data/: the std modules, sugar, aliases, lib/native, lib/crates.
+  The compiler bundles them (parser.warp LIBRARY_FILES, decision built-in-lib), so a built compiler reads no lib/
+  from any disk. With WARP_LIB set, a module file found there wins over its bundled copy, per module: a worktree's
+  lib/ edit takes effect without a rebuild, and the next rebuild bundles it.
 
 ## The shared store
 
