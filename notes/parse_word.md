@@ -22,7 +22,7 @@ Code patterns (notes/matching.md "Tree patterns", step 7) match quoted code and 
   browser run_block's compiler instance answers a `{parse: text}` request (web.rs eval_block_report,
   host-compiler.js). A parse failure is an Error that `try` catches. A method `x.parse(…)` is never rewritten.
   `parse_word::code_of` never reads a file, so `parse("a.warp")` is code.
-- The self-parser (lib/compiler/parser.warp) is a differential twin of the Rust parser.
+- The self-parser (core/parser.warp) is a differential twin of the Rust parser.
 
 ## Operators in data
 - Operators stay Keys. `&`/`|` are decided at parse time (Op::BitAnd/BitOr for operands that may be ints, else

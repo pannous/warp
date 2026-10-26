@@ -1,4 +1,4 @@
-# Enums instead of magic words in lib/compiler (card compiler-enums)
+# Enums instead of magic words in core (card compiler-enums)
 
 User (2026-10-20): "the warp compiler code has many magic strings, can we replace them all with enums?"
 User decision relayed the same day: the compiler is independent of Rust, no conversion to and fro: the stages pass
@@ -67,7 +67,7 @@ Needs, probes/compiler_enums/f_type_values*.warp, f_type_match.warp (2026-10-20)
 
 ## Declarations (superseded for Kind and Held by the section above)
 
-lib/compiler/kinds.warp, used by every stage that names a kind (words, signatures, analyzer, emitter, serializer):
+core/kinds.warp, used by every stage that names a kind (words, signatures, analyzer, emitter, serializer):
 
 ```warp
 # the kind of a value as the analyzer infers it
@@ -79,7 +79,7 @@ held(k: Kind): Held := match k { Kind.Int: Held.Int; Kind.Float: Held.Float; …
 spelled(k: Kind): text := (k as text).lower()
 ```
 
-Op, Bracket and Separator stay where they are (built in, declared in lib/compiler/node.warp). Enums used by one
+Op, Bracket and Separator stay where they are (built in, declared in core/node.warp). Enums used by one
 stage only are declared in that stage's file.
 
 Writing style: cases are written qualified where a case shares a type's name (`Kind.Int`, `Held.Text`), bare where

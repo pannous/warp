@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 pub const DEFAULT_FOLDER: &str = "test";
 /// The hidden command a child runs: `warp test --case <pure|self> <file> <index>`
 pub const CASE_FLAG: &str = "--case";
-/// `warp test --self`: the tests compiled by compiler-self.wasm, as `warp self` runs programs
+/// `warp test --self`: the tests compiled by warp-self.wasm, as `warp self` runs programs
 const SELF_FLAG: &str = "--self";
 /// `warp test --each`: a ✓ line for each passed test too
 const EACH_FLAG: &str = "--each";

@@ -88,7 +88,7 @@ one_word = "one"
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
 # making or reading the forms its rules take, the iteration sugar lowering the `for` loops once loop_heads.warp read
 # their heads, and the late sugar after it took the loops a range counts: a range left is a value (sugar/ranges)
-# the compiler extensions (notes/agents/common.md: new capabilities, one file each in lib/compiler/extensions/), applied
+# the compiler extensions (notes/agents/common.md: new capabilities, one file each in core/extensions/), applied
 # with the first sugar, ahead of it: data_items reads the names in `[a, b]` before the later sugar steps could see them.
 # A new extension adds its line here.
 extension_module_names = [
@@ -188,16 +188,15 @@ is_type_declaration(statement: Node): bool := match statement {
 }
 
 # the module rules none of whose words the program binds itself: a program's own word keeps its meaning
-unbound_rules(module_rules: list, program: Node): list := {
-	if #module_rules == 0 { return [] }
-	scope = scope_of(program)
-	outside_types = scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))
-	module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(scope, word) or binds_as(if is_library_word(word) then outside_types else scope, word, Meaning.Function)))
-}
+unbound_rules(module_rules: list, program: Node): list := if #module_rules == 0 then [] else rules_unbound_by(module_rules, rule_bindings(program))
+# [the program's scope, its scope outside its type declarations]: the bindings unbound_rules reads, worked out once for
+# all the sugar steps of a program (card speed-module-cache)
+rule_bindings(program: Node): list := [scope_of(program), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
+rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(if is_library_word(word) then bindings#2 else bindings#1, word, Meaning.Function)))
 
-# the rules of the sugar modules that the program keeps, chosen by the program's own bindings (a program's own `push`
-# keeps its own), before the definitions it reaches from the prelude and the modules join it
-sugar_rules(program: Node, modules: list): list := unbound_rules(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), program)
+# the rules of the sugar modules that the program keeps, chosen by the program's own bindings (rule_bindings: a
+# program's own `push` keeps its own), before the definitions it reaches from the prelude and the modules join it
+sugar_rules(bindings: list, modules: list): list := rules_unbound_by(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), bindings)
 
 # the program as it is, the enums it declares kept for the sugar rules: a pass right before plain_enums.warp lowers
 # their declarations, after node_cases.warp declared node.warp's Op, Bracket and Separator for a program naming them
@@ -213,7 +212,45 @@ sugared(program: Node, rules: list): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_case_holders = case_holders_of(program)
-	placed_map_scoped(program, n => sugared_node(n, rules), map_names_of(program))
+	maps = map_names_of(program)
+	if not is_statement_sequence(program) { return placed_map_scoped(program, n => sugared_node(n, rules), maps) }
+	# each statement walked with the rules that can fire in it (rules_reaching), the program's runs with them all
+	needs = rules.map(rule => required_words(rule.pattern))
+	results = rules.map(rule => words_within(rule.template))
+	walked = children(program, statement => sugared_statement(statement, rules_reaching(rules, needs, results, statement), maps))
+	rule_maps = maps
+	sugared_node(walked, rules)
+}
+sugared_statement(statement: any, rules: list, maps: any): any := placed_map_scoped(statement, n => sugared_node(n, rules), maps)
+
+# the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
+# result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
+# with these alone gives what all the rules give, without trying the others at each node
+rules_reaching(rules: list, needs: list, results: list, statement: any): list := {
+	mentioned = word_set(words_within(statement))
+	picked = []
+	grew = yes
+	while grew {
+		grew = no
+		for index in 0 ..< #rules {
+			if index not in picked and needs[index].all(word => mentioned.has(word)) {
+				picked += [index]
+				for word in results[index] { mentioned[word] = yes }
+				grew = yes
+			}
+		}
+	}
+	reaching = []
+	for index in 0 ..< #rules { if index in picked { reaching += [rules[index]] } }
+	reaching
+}
+
+# the words code must hold for the pattern to match it (rule_matches): its words outside holes
+required_words(pattern: any): list := {
+	if rule_hole(pattern) != ø or typed_hole(pattern) != ø or rest_hole_name(pattern) != ø { return [] }
+	if pattern is symbol { return [name_of(pattern)] }
+	if pattern is key { return required_words(key_of(pattern)) + required_words(value_of(pattern)) }
+	if is_group(pattern) then items_of(pattern).flat_map(item => required_words(item)) else []
 }
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)

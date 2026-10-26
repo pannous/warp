@@ -1,4 +1,4 @@
-# The rewrite engine's features (lib/compiler/rewrites.warp, notes/rewrites.md), written in warp: no Rust twin
+# The rewrite engine's features (core/rewrites.warp, notes/rewrites.md), written in warp: no Rust twin
 
 # fresh_names_compute_an_operand_once
 is! 'rewrite $a otherwise $b => ($t = $a; if $t then $t else $b)
@@ -115,8 +115,8 @@ q = p
 [p, q]' [4, 5]
 
 # a_result_is_rewritten_again
-is! 'rewrite double $x => $x * 2
-rewrite quadruple $x => double (double $x)
+is! 'rewrite doubled $x => $x * 2
+rewrite quadruple $x => doubled (doubled $x)
 quadruple 3' 12
 
 # glue_a_hole_to_a_word

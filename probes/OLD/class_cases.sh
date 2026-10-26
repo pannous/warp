@@ -13,8 +13,8 @@ cases=(
 	# Kotlin/C# property getter without parens
 	'class square{side:int; area := side * side}; square(5).area|25'
 	# method calling another method of the same class
-	'class rect{w:int; h:int; area() := w * h; double() := 2 * area()}; rect(3, 4).double()|24'
-	'class rect{w:int; h:int; area() := w * h; double() := 2 * self.area()}; rect(3, 4).double()|24'
+	'class rect{w:int; h:int; area() := w * h; doubled() := 2 * area()}; rect(3, 4).doubled()|24'
+	'class rect{w:int; h:int; area() := w * h; doubled() := 2 * self.area()}; rect(3, 4).doubled()|24'
 	# method with arguments
 	'class account{balance:int; after(amount:int) := balance + amount}; account(10).after(5)|15'
 	# Java super: call the parent method from the override

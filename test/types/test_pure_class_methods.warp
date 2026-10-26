@@ -18,7 +18,7 @@ is! "class person { name; age: int; older(years) := age + years }
 person(\"Ann\", 40).older(2)" 42
 
 # a_method_calls_a_sibling_method
-is! "class C { x: int; double() := x * 2; quad() := double() * 2 }
+is! "class C { x: int; doubled() := x * 2; quad() := doubled() * 2 }
 C(3).quad()" 12
 
 # a_property_is_read_with_or_without_parentheses

@@ -96,11 +96,12 @@ global kept_comprehension_sugar = []
 # by its own bindings, before the definitions it reaches join it.
 with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	own = early_sugared(interpolation(with_uses(program, folder)))
-	kept_first_sugar = sugar_rules(own, first_sugar_module_names)
-	kept_sugar = sugar_rules(own, sugar_module_names)
-	kept_iteration_sugar = sugar_rules(own, iteration_sugar_module_names)
-	kept_late_sugar = sugar_rules(own, late_sugar_module_names)
-	kept_comprehension_sugar = sugar_rules(own, comprehension_sugar_module_names)
+	bindings = rule_bindings(own)
+	kept_first_sugar = sugar_rules(bindings, first_sugar_module_names)
+	kept_sugar = sugar_rules(bindings, sugar_module_names)
+	kept_iteration_sugar = sugar_rules(bindings, iteration_sugar_module_names)
+	kept_late_sugar = sugar_rules(bindings, late_sugar_module_names)
+	kept_comprehension_sugar = sugar_rules(bindings, comprehension_sugar_module_names)
 	with_reached(with_used_modules(with_type_module_uses(property_accessors(index_positions(rewritten_program(own, source)))), folder), prelude, no)
 }
 

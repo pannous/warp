@@ -1,5 +1,5 @@
 // The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as nodes
-// (lib/compiler/shapes.warp), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs),
+// (core/shapes.warp), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs),
 // which compares its view (tests/common/twins.rs node_view)
 use "lexer.warp"
 use "shapes.warp"
@@ -59,19 +59,19 @@ def expanded_entities(source: text): text {
 	parts = []
 	copied = 0
 	at = 0
+	// each point read before the ones after it: a list of points is walked on from the point read last, so reading
+	// one back (span_end's lookahead, then entity_name_at at the same point) walked it from its head at every point,
+	// quadratic: most of the passes' list reads in `warp rebuild self` (card speed-symbol-calls). An entity starts at a
+	// backslash, a text or comment never does, so the entity is looked for first
 	while at < n {
-		skipped = span_end(points, at, n)
-		if skipped > at {
-			at = skipped
-			continue
-		}
 		name = entity_name_at(points, at, n)
-		if name == "" {
-			at = at + 1
-		} else {
+		if name != "" {
 			parts += [text_between(points, copied, at), entities()[name]]
 			at = at + 2 + name.length
 			copied = at
+		} else {
+			skipped = span_end(points, at, n)
+			at = if skipped > at then skipped else at + 1
 		}
 	}
 	join(parts + [text_between(points, copied, n)], "")
@@ -1600,7 +1600,7 @@ def library_glyph_operators(): list {
 // The words of a statement that uses a module: `use regex`, `require regex`, `import regex`
 // Rust twin: use_statements.rs USE_KEYWORDS
 USE_KEYWORDS = ["use", "require", "import"]
-// The folder holding the file of a path: lib/compiler of lib/compiler/parser.warp
+// The folder holding the file of a path: core of core/parser.warp
 def folder_of(path: text): text {
 	parts = path.split("/")
 	parts[0 ..< #parts - 1].join("/")
