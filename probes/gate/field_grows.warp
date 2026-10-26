@@ -1,0 +1,12 @@
+# a field's list grown by += is the list every holder sees (P200b), as a variable's; + makes a new one
+class Bag { items: list; total: int }
+bag = Bag([1], 0)
+seen = bag.items
+bag.items += [2, 3]
+bag.total += 5
+copied = bag.items
+bag.items = bag.items + [4]
+print(count(seen))
+print(count(copied))
+print(count(bag.items))
+print(bag.total)
