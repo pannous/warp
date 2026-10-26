@@ -62,7 +62,7 @@ fn running_a_whole_run_time_block_is_the_eval_effect_alone() {
 
 #[test]
 fn a_run_time_block_gets_no_capabilities() {
-	// P88 (user 2026-10-05): every capability is granted for now, a block run at run time prints
+	// P88 : every capability is granted for now, a block run at run time prints
 	crate::is!("y = data print(\"hi\"); interpret y", warp::Node::Empty); // it prints; print gives nothing (issue #18)
 }
 

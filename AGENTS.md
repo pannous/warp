@@ -105,18 +105,26 @@ warp rebuild pure              # compiler.wasm from lib/ (`warp rebuild self`: c
 This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
 every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next) todo.md as fallback
 `todo list`, `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). 
-Picking a card is `todo take <card> <session name>`
+Picking a card is `todo take <card> <session name>` The branch will and must be named identical to the card. 
 
 When encountering a TODO without corresponding card in my main checkout ~/dev/angles/warp/lib/ Create a card for that to do and mark the card name behind the todo and commit 
 
 <!-- un-ignore every #[ignore = "next"] or even #[ignore = "soon"]  once it passes  -->
 
 
+## Pre-approved plans
+Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
+A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
+<!-- `todo add "merge: <branch> <sha>" Ready -b "<one-line summary, tests run>"`.  -->
+Then `todo ready <card> [branch]`
+The Integrator merges and closes them with `todo done`.
+The Git commit message Merge branch MUST Also include a summary of the changes (TODO via todo tool?)
+
 ### Testing
 
 Several agent sessions share this Mac, so test runs are rationed (roles and rules: notes/roles.md):
 - Rust tests Should only be run irregularly in the rare cases that modifications to the legacy Bootstrap Rust are needed 
--  run in the cloud (user 2026-10-20): workers run targeted tests only, with `scripts/cloud-test.sh`;
+-  run in the cloud : workers run targeted tests only, with `scripts/cloud-test.sh`;
   tests/queue.sh only for the Mac-only tests (scripts/cloud-test-environmental.txt). A hook blocks direct
   `cargo test` / `cargo browser-test` runs.
 - Only the Integrator session runs the full suite (`./test.sh`, which queues itself) and pushes code to main. Workers
@@ -249,7 +257,7 @@ emitter.warp in notes/self_hosting.md "Value layout".
 
    parse -> Node -> wasm emitter -> WASM GC object -> Node
 
-## Outcome tests only (user 2026-10-19, decision outcome-tests-only)
+## Outcome tests only
 
 A test gives warp code and checks what it produces: the value (is!), printed output, error, effect or CLI output.
 No tests of intermediates: parse tree shapes, node views, pass outputs, analyzer kind tables, wasm bytes, module or GC
@@ -273,13 +281,6 @@ is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> Node -> eval() == 6
 is!("def square:=it*it; square(3)",9); 
 is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
 ```
-
-## Pre-approved plans
-Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
-A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
-<!-- `todo add "merge: <branch> <sha>" Ready -b "<one-line summary, tests run>"`.  -->
-Then `todo ready <card> [branch]`
-The Integrator merges and closes them with `todo done`.
 
 ## Commit everything
 Commit and push all meaningful progress all the time, including notes, handovers and WIP: a box or session can

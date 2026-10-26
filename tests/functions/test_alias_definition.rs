@@ -20,7 +20,7 @@ fn an_assigned_bare_name_stays_the_error() {
 	fails_with("doubled(x) := x*2; twice = doubled; twice(3)", "fix: function doubled");
 }
 
-// partial application needs the explicit hole (user 2026-10-10, option C): `inc := add(1, _)`
+// partial application needs the explicit hole : `inc := add(1, _)`
 #[test]
 fn a_partial_definition_names_its_hole() {
 	is!("add(a, b) := a + b; inc := add(1, _); inc 5", 6);

@@ -1,4 +1,4 @@
-// card nearest-default-limit (user decision 2026-10-14): nearest caps the denominator at 1000000 as Python's
+// card nearest-default-limit : nearest caps the denominator at 1000000 as Python's
 // limit_denominator does, limit 0 asks for the exact fraction, and a precision replaces the default limit
 use crate::is;
 

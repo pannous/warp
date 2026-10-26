@@ -1,4 +1,4 @@
-// card prepositions-call (user 2026-10-14) and play-tone: a parameter written after a preposition, `f(x, for y)`, is
+// card prepositions-call  and play-tone: a parameter written after a preposition, `f(x, for y)`, is
 // passed by that word, also in a call without brackets; elsewhere the words keep their meaning (P52: `to` a range).
 // src/lowering/definitions/preposition_calls.rs
 use crate::common::fails_with;
@@ -91,7 +91,7 @@ fn play_and_melody_take_their_durations_after_for_and_each() {
 	assert_eq!(seconds("signal", "hum(t) := sin(t * 440 * tau)\nplay hum for: 0.3s"), "0.3");
 }
 
-/// decision labels-calls (user 2026-10-15): a label in a call always takes its colon; the bare word in a call of a
+/// decision labels-calls : a label in a call always takes its colon; the bare word in a call of a
 /// function taking it is an error naming the colon form, also where the call is an operand or an assigned value
 #[test]
 fn a_label_without_its_colon_is_an_error() {

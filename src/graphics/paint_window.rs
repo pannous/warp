@@ -736,7 +736,7 @@ impl Screen {
 		}
 		if self.frame_size == (0, 0) {
 			// before the pointer moves over the window it is in the middle of the first frame, where a brush following
-			// $mouse shows (user 2026-10-12, card shader-brush), not under the window's rounded corner
+			// $mouse shows , not under the window's rounded corner
 			self.pointer = (f64::from(size.0) / 2.0, f64::from(size.1) / 2.0);
 			self.tell_input();
 		}

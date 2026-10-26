@@ -37,7 +37,7 @@ fn written_form(node: Node, types: &HashSet<String>) -> Node {
 			Node::Key(left, Op::Assign, Box::new(quotient))
 		}
 		// `=>` reads as in JS while parsing (Op::FatArrow: its binding, a lambda's body, a field holding a lambda);
-		// the program has one arrow, `->` (user 2026-10-14: "equal for us, but not for others")
+		// the program has one arrow, `->` 
 		Node::Key(parameters, Op::FatArrow, body) => Node::Key(parameters, Op::Arrow, body),
 		other => read_equality(other, types),
 	}

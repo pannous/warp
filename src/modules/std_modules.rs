@@ -104,7 +104,7 @@ pub fn std_module_names() -> impl Iterator<Item = &'static str> {
 
 /// `module_source("aliases")`, `module_source("compiler/errors.data")`: the text a compile writes into the program in
 /// place of the call (library_words.rs), so a compiled compiler reads none of its own data from files when it runs
-/// (user 2026-10-25: "These should all be built in"): lib/<name>.warp, or the file within lib/ a name with an extension
+/// : lib/<name>.warp, or the file within lib/ a name with an extension
 /// names, of the compile's lib/ (library_folder: `warp rebuild` builds in lib/ as it is then), else the standard module
 /// the binary embeds
 pub fn compile_time_source(name: &str) -> Option<String> {

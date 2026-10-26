@@ -1,4 +1,4 @@
-//! Card lossy-return (user 2026-10-12): a declared result converts only when nothing is lost; a fraction reaching an
+//! Card lossy-return : a declared result converts only when nothing is lost; a fraction reaching an
 //! int result is an error, and `as int` truncates on purpose
 use crate::common::fails_with;
 use crate::is;

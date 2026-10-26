@@ -284,7 +284,7 @@ pub struct WarpParser {
 	generic_names: Option<(String, Vec<String>)>,
 	/// The next `{…}` is the block of a named tag (`ul{…}`, `ul {…}`): a repeated `key: value` there is a child, as
 	/// repeated elements in XML/HTML (`ul{ li: "a" li: "b" }`), no duplicate key; a plain `{…}` is a map that reports
-	/// one (user decision P176, card g-_bGo). Taken by the list it opens, so blocks inside it are not tag blocks
+	/// one . Taken by the list it opens, so blocks inside it are not tag blocks
 	tag_block: bool,
 	/// A comment between two statements: it belongs to the next one (parse_value attaches it)
 	pending_comment: Option<String>,

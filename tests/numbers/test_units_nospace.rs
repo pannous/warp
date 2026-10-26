@@ -1,4 +1,4 @@
-//! Quantities show without a space between amount and unit (user 2026-10-08, card units-nospace): 500m, 9.81m/s², 3km.
+//! Quantities show without a space between amount and unit : 500m, 9.81m/s², 3km.
 //! The shown form reads back as the same quantity: a finite decimal amount shows as the decimal, any other fraction in
 //! parentheses, `(23/18)m/s`
 use warp::wasm_emitter::eval;

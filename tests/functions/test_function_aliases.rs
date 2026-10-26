@@ -1,4 +1,4 @@
-//! P83 (user 2026-10-05): an alias names the function explicitly, `g = function add` or `g = &add`; a bare `g = add`
+//! P83 : an alias names the function explicitly, `g = function add` or `g = &add`; a bare `g = add`
 //! is P82's "add needs 1 argument" with the fix; a function-taking parameter keeps the bare argument `apply(add, 3)`
 use crate::common::fails_with;
 use crate::is;

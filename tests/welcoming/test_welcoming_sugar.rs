@@ -83,7 +83,7 @@ fn insert_never_guesses_the_argument_order() {
 
 #[test]
 fn an_answered_ask_compiles_the_chosen_reading() {
-	// no remembered answers (user 2026-10-03): each reading is written in its explicit form
+	// no remembered answers : each reading is written in its explicit form
 	is!("[1 2].map(x => x*3)", ints(vec![3, 6]));
 	is!("xs=[1 2]; xs.insert(0, at: 4); xs", ints(vec![1, 2, 0]));
 }
@@ -125,7 +125,7 @@ fn a_glued_hash_name_statement_counts() {
 fn the_let_note_is_shown_until_acknowledged() {
 	use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
-	warp::normalize::set_style(warp::normalize::Style::canonical()); // the default leaves let and := open (user #12)
+	warp::normalize::set_style(warp::normalize::Style::canonical()); // the default leaves let and := open 
 	let let_hints = || {
 		capture_hints(|| warp::wasm_emitter::eval("let x = 3; x"))
 			.1

@@ -1,4 +1,4 @@
-//! P82 (user 2026-10-05): a function reference is explicit, `function add` or `&add` (wiki/function-pointer.md); a bare
+//! P82 : a function reference is explicit, `function add` or `&add` (wiki/function-pointer.md); a bare
 //! name that needs arguments is "add needs 1 argument" everywhere, a body's last value too, fix: function add
 use crate::common::fails_with;
 use crate::is;

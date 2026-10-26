@@ -9,7 +9,7 @@ use "parser.warp"
 use "words.warp"
 
 # the message files in the order a fact is looked up, each with the level of its messages and its text, built into the
-# compiler when it is compiled, never read from a lib/ when it runs (user 2026-10-25: "These should all be built in")
+# compiler when it is compiled, never read from a lib/ when it runs 
 message_files = [["errors.data", "error", module_source("compiler/errors.data")], ["warnings.data", "warning", module_source("compiler/warnings.data")], ["hints.data", "hint", module_source("compiler/hints.data")]]
 quoting_word = "data"
 hole_mark = "$"

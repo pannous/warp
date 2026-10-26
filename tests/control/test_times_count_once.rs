@@ -1,4 +1,4 @@
-// #22 (user 2026-10-03, "N once, keep rest"): `N times {…}` evaluates N once; a trailing `i++ while c` stays a plain
+// #22 : `N times {…}` evaluates N once; a trailing `i++ while c` stays a plain
 // while (with a hint), `a = 2 if c` guards the whole assignment.
 use crate::is;
 use warp::normalize::capture_hints;

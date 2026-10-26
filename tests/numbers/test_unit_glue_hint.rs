@@ -1,5 +1,5 @@
 // card unit-glue: a unit is written directly on its number, `3km`; written apart, `3 km` still works with a soft hint
-// (user 2026-10-09: "units should be written directly to the numbers, but that's a soft hint")
+// 
 use warp::normalize::{capture_hints, clear_shown_hints, CapturedHint};
 use warp::wasm_emitter::eval;
 

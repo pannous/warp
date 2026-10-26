@@ -93,7 +93,7 @@ pub fn lower(node: Node) -> Node {
 	lambda_calls(node, &lambda_names)
 }
 
-/// The words warp gives a meaning a program cannot rebind (user 2026-10-16, decision implicit-words-reserved), with that
+/// The words warp gives a meaning a program cannot rebind , with that
 /// meaning
 const RESERVED_NAMES: [(&str, &str); 3] = [
 	(IMPLICIT_PARAMETER, "the parameter of a function that names none (`square := it * it`)"),

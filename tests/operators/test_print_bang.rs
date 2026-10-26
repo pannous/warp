@@ -1,4 +1,4 @@
-// print-bang (user 2026-10-15, wiki/partial-evaluation.md): a function that gives nothing never takes D2's in-place
+// print-bang : a function that gives nothing never takes D2's in-place
 // bang: `print friends!` prints the forced friends and friends stays; `sort xs!` still sorts in place
 use crate::is;
 

@@ -1,5 +1,5 @@
 // Ask: an ambiguity takes its default with a "got it" warning or is an error naming the explicit forms; it never asks
-// and never remembers a reading (user 2026-10-03: no context-sensitive execution)
+// and never remembers a reading 
 use crate::is;
 use warp::errors::diagnostic::{
 	ask, reading, take_warnings, use_acknowledgements_file, with_acknowledger, with_warning_mode, Acknowledging, Ask,

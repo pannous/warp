@@ -14,7 +14,7 @@ use crate::type_name_matching::{is_label_word, AS_LABEL, PREPOSITIONS};
 use std::collections::{HashMap, HashSet};
 
 /// The labels whose bare form after a call's argument means nothing else: `play C4 for 1s` is read as `for: 1s` with a
-/// warning naming the colon (user 2026-10-15). `to` is a range, `in` a membership, `as` a cast, `of` a field, and
+/// warning naming the colon . `to` is a range, `in` a membership, `as` a cast, `of` a field, and
 /// with/from/into/by get a meaning of their own soon (decision labels-calls): those stay errors
 const UNAMBIGUOUS_LABELS: [&str; 2] = ["for", "each"];
 

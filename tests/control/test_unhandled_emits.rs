@@ -1,4 +1,4 @@
-// P202 (user 2026-10-08): an emit that no handler anywhere receives gives a got-it warning "no handler for event X"; it
+// P202 : an emit that no handler anywhere receives gives a got-it warning "no handler for event X"; it
 // still does nothing (P163) and is no error
 use crate::is;
 

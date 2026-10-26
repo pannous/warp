@@ -1,4 +1,4 @@
-// card match-exhaustive (user decision match-exhaustive, notes/decisions.md): a match on a known enum or sum type
+// card match-exhaustive : a match on a known enum or sum type
 // without a catch-all that misses a case is the compile error "match on Coin misses Dime"; a subject of unknown type
 // keeps the run-time error
 use crate::common::fails_with;

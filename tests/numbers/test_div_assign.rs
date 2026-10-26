@@ -1,5 +1,5 @@
 // `x /= y` is exactly `x = x / y`; floor division is `x /!= y`; a variable declared `x:int` keeps a whole number
-// (user decision 2026-10-08, card div-assign)
+// 
 use crate::is;
 use warp::wasm_emitter::eval;
 

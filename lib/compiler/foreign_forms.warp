@@ -5,7 +5,7 @@
 // Rust twin: src/warp_parser/definitions/foreign.rs
 // A part of parser.warp, which uses it: it reads with the parser's expression and atom, so it compiles only with it
 
-// Modifiers of other languages with no meaning in warp (user decision P78); `static` marks the statement
+// Modifiers of other languages with no meaning in warp ; `static` marks the statement
 // Rust twin: foreign.rs FOREIGN_MODIFIERS
 FOREIGN_MODIFIERS = ["public", "private", "protected", "internal", "static", "extern", "external", "C", "inline", "local", "virtual", "override", "abstract", "constexpr", "volatile", "thread_local", "synchronized", "transient", "native"]
 // Modifiers with a warp meaning that change nothing before a function definition (a function is global and constant)

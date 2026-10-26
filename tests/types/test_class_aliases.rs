@@ -1,4 +1,4 @@
-// Class words of other languages are aliases (user 2026-10-06, the alias mechanism): they work, with a got-it note
+// Class words of other languages are aliases : they work, with a got-it note
 // naming the warp word and an "I meant: <warp word>" fix
 use crate::is;
 

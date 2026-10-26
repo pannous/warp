@@ -1,4 +1,4 @@
-//! Named arguments (user decision P37): `f(b=1, a=5)` and `f(b:1, a:5)` pass a by name, and a name that is no parameter
+//! Named arguments : `f(b=1, a=5)` and `f(b:1, a:5)` pass a by name, and a name that is no parameter
 //! but a free variable of the body sets it: `f y := y*y+v; f(y=2, v=3)` is 7, `fun={x*y}; fun(x:2 y:3)` is 6. Such a
 //! variable becomes an extra parameter of the function; a call that does not name it passes the variable of that name
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing

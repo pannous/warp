@@ -1,6 +1,6 @@
 // `//` always starts a comment; floor division is `/!`. Where `//` was clearly meant as floor division (glued between
 // operands, `7//2`, or `x //= 3`) a severe warning names `/!` and `warp fix` rewrites it
-// (user decision floor-division 2026-10-16, notes/decisions.md; it replaced the 2026-10-08 rule "glued divides")
+// 
 use crate::is;
 use warp::errors::diagnostic::{take_warnings, Level};
 

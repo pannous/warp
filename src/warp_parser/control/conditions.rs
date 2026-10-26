@@ -17,7 +17,7 @@ const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
 /// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`
 pub(crate) fn guarded_statement(statement: Node, guard: Op, word: &str, condition: Node) -> Node {
 	if guard == Op::While {
-		// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
+		// a trailing `while` tests before the first round like the leading one; it is no do-while 
 		let (statement, test) =
 			(crate::normalize::operand_text(&statement), crate::normalize::operand_text(&condition));
 		crate::normalize::hint(

@@ -1,7 +1,7 @@
 //! The emitter and analyzer twins (notes/self_hosting.md): a warp-written compiler part in lib/compiler/ runs over
 //! every sample and probe, judged by the program's value next to Rust's, until the pipeline runs completely in warp
 //! (AGENTS.md "Outcome tests only"); the first file where the two differ fails the test. The gate checks every GATE_SHARE-th source (a different
-//! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
+//! share each day), the nightly run (tests/nightly.sh) all of them .
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
 pub use warp::compiler::node_views::{analysis_view, plain_view, view_json};

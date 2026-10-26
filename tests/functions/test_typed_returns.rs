@@ -1,5 +1,5 @@
 //! A declared return type converts the function's result when nothing is lost, and an int result refuses a fraction
-//! (user 2026-10-12, card lossy-return; it truncated before, user todo.md): `int square(x) = x*x` of `square 3.1`
+//! : `int square(x) = x*x` of `square 3.1`
 //! fails with "an int must be a whole number", and `def square(x) : float = …` / `def square(x) as float = …` declare
 //! the return type after the parameters.
 

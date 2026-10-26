@@ -1,4 +1,4 @@
-// card plain-enum (user decision enum-case B): a case of a plain enum is its own value of the enum's type, as a
+// card plain-enum : a case of a plain enum is its own value of the enum's type, as a
 // data-less variant of a tagged union is: `Coin.Dime` is Dime, `Dime is Coin`; its position from 0 is `Coin.Dime as
 // int`, and an int becomes a case explicitly, `2 as Coin` or `Coin(2)`
 use crate::common::fails_with;

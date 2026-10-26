@@ -1,4 +1,4 @@
-//! `try X else Y` catches a runtime error however deep inside X it happens (user decision #34), with the wasm
+//! `try X else Y` catches a runtime error however deep inside X it happens , with the wasm
 //! exception-handling proposal: every runtime error function (`index_out_of_range`, …) throws the tag `warp_error`
 //! with its error id while a `try` is running, and traps as before otherwise, so an uncaught error keeps its message.
 //! `ran·without·error{statement}` runs the statement inside a `try_table` catching that tag: 1 when it finished, 0 when

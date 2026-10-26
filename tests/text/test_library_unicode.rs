@@ -1,4 +1,4 @@
-//! #26 (user decision 2026-10-03, "Extend all"): upper/lower map all of Unicode's simple case pairs, sort orders any
+//! #26 : upper/lower map all of Unicode's simple case pairs, sort orders any
 //! comparable values (ints, floats, texts), reverse works on text by code points.
 
 use crate::is;

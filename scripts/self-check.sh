@@ -5,7 +5,7 @@
 # so the check runs in one of scripts/slot.sh's fleet-wide slots.
 # The pair checked is the one for the branch's compiler inputs (scripts/rebuild.sh, notes/compiler_rebuilds.md): data/'s
 # or the shared store's. A miss is said ("REBUILD NEEDED") and the existing pair is checked: the check builds only when
-# asked to, with --rebuild (then in a slot). Nothing rebuilds the compilers because lib/ changed (user 2026-10-23).
+# asked to, with --rebuild (then in a slot). Nothing rebuilds the compilers because lib/ changed .
 # usage: scripts/self-check.sh [--rebuild] [<worktree>, default the current checkout]   (exit 0 = Hello printed)
 rebuild=
 [[ ${1-} == --rebuild ]] && { rebuild=1; shift; }

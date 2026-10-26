@@ -1,4 +1,4 @@
-// card hint-map (user 2026-10-15): a named function of one value maps over a list by itself (wiki/Broadcasting.md),
+// card hint-map : a named function of one value maps over a list by itself (wiki/Broadcasting.md),
 // so `map` of it hints the broadcast form in every spelling; a word taking the list whole or a lambda gets no hint
 use warp::normalize::capture_hints;
 use warp::wasm_emitter::eval;

@@ -3,7 +3,7 @@
 use super::*;
 use crate::warp_parser::atoms::note_alias_at;
 
-/// Modifiers of other languages with no meaning in warp: skipped with a note (user decision P78)
+/// Modifiers of other languages with no meaning in warp: skipped with a note 
 const FOREIGN_MODIFIERS: [&str; 19] = [
 	"public",
 	"private",

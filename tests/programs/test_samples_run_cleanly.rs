@@ -1,7 +1,7 @@
 // Every sample runs to a value or to an error of the program, never to an error of the compiler (invalid WASM, a cast
 // trap, a panic); the graphics samples (raylib, SDL) need a window and are left out. The browser suite runs it too.
 // The samples of the playground menu are left to test_playground_samples, whose check (no error at all) is stricter:
-// each sample is run once (user 2026-10-16, notes/test_speed.md)
+// each sample is run once 
 use super::test_playground_samples::playground_menu;
 use crate::common::{sample_files, sample_name};
 use std::panic::{catch_unwind, AssertUnwindSafe};

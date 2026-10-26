@@ -68,7 +68,7 @@ main = 11aa8cbbf (nothing pushed by grok-merger yet)
 - 2026-10-23 08:49 supervisor: more Ready (unclaimed): sugar-for-loops 2be30a7815; libgap-exit-never 89807a321 (pure-exit-miscompile); libgap-nil-in-map 579d524ed (pure-nil-in-any-map); pure-class-methods-box-build c9a88a2ce. Runtime-split-based branches need that branch's own binary for self lane until it merges.
 - 2026-10-23 09:09 supervisor: sugar-comprehensions re-Ready 1fe8d4ae0 (replaces bounced f54fa9021). Main fails test_self_pure::phrases_out_of_the_core (`3 times {}` now runs, test expects refusal); asked user about updating the test.
 - 2026-10-23 09:22 supervisor: rewrite-zip-runs-2 5f3dee2498 Ready (merge THIS, not old rewrite-zip-runs, which contains unmerged preposition-heads). sugar-preposition-heads still NOT ready.
-## 09:40 resumed (user approved pushes 09:20)
+## 09:40 resumed
 - F2 = Mac grok-pc 9f3a9a2c4: main 7921cb49d + engine-rest-template 6a24cc3e4 + placed-where-chain 7d7641a8a + guarded-call-phrase 9f3a9a2c4 (Rule(...,no) + each_clauses kept). check /Volumes/Build/grok-f2.log
 - H = Mac grok-merge f121fbb8a: F2 + engine-rule-conditions@f12a888a4 bc14ed149 (bottom_up_placed + case_holders) + sugar-type-tests f121fbb8a (scoped_sugar kept, its function-body walk uses bottom_up_placed, rule_maps/case_holders kept; use diagnostics+builtin_signatures, type_tests.warp dropped). probe diff vs main: /Volumes/Build/probes-main.txt vs probes-h.txt
 - I = Mac grok-cm 524f79847: F2 + canvas-props 9ca8073f3 + exit-never eedbc49e1 + nil-in-map 524f79847 (clean). check /Volumes/Build/grok-i.log

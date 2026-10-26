@@ -114,7 +114,7 @@ fn test_stacked_lambdas() {
 
 #[test]
 fn test_modifiers() {
-	// P78 (user 2026-10-05): modifiers without warp meaning are skipped with a note; a lone definition stays ø, so call it
+	// P78 : modifiers without warp meaning are skipped with a note; a lone definition stays ø, so call it
 	is!("public fun ignore(){3}; ignore()", 3);
 	is!("public static export import extern external C global inline virtual override final abstract private protected internal const constexpr volatile mutable thread_local synchronized transient native fun ignore(){3}; ignore()",3);
 }

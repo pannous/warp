@@ -10,7 +10,7 @@ fn an_unbracketed_list_assignment_asks_list_or_statements() {
 	fails_with("a=1,2,3; a", "`a=[1, 2, 3]` for a list");
 }
 
-/// reconsider-spaced (user 2026-10-15): spaced values are a list, after `=` and on a line of their own; a glued sign
+/// reconsider-spaced : spaced values are a list, after `=` and on a line of their own; a glued sign
 /// (`x = 5 -2`) still asks
 #[test]
 fn spaced_values_are_a_list() {

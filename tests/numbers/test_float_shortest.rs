@@ -1,4 +1,4 @@
-//! A float prints its shortest digits that read back, as JavaScript and Python write it (user decision float-text):
+//! A float prints its shortest digits that read back, as JavaScript and Python write it :
 //! at run time and folded alike, in print, `str(x)` and `"a" + x`
 use crate::is;
 

@@ -1,7 +1,7 @@
 // card time-day-value (the user's example `if time < 24h : print ("There's still some time left today.")`): `now`
 // compared with a duration is the local time of day, a duration since midnight (as `on every day at 9am` reads the
 // clock); a comparison of constant quantities is decided when compiled, so it works in a condition and with a variable.
-// A bare `time` is the type (user decision print-time, which changed these from `time` to `now`)
+// A bare `time` is the type 
 use crate::common::fails_with;
 use crate::is;
 

@@ -1,4 +1,4 @@
-// P221 (user 2026-10-08, "both from your single line"): a route whose block reads server data (a database table) asks
+// P221 : a route whose block reads server data (a database table) asks
 // the server for what it shows: the page build sends the path to POST /rpc/route·data·N, which gives the value the
 // block displays for that path (users#id for that id), so neither the table nor its other rows ship in app.wasm
 use std::time::Duration;

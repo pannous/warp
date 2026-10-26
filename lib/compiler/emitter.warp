@@ -480,7 +480,7 @@ def boxed(value: any): list {
 }
 # `[a, b, c]`: a vector of its items, boxed, read in order
 # `{1, 2}` as a value is a curly list of its values, as Rust builds the list structure; `{a; b}` and the spaced `{3 4}`
-# run as statements (user 2026-10-20: `hi := {3 4}; hi()` giving 4 is reasonable), and a body or branch runs its block
+# run as statements ` giving 4 is reasonable), and a body or branch runs its block
 is_curly_list(n: any): bool := bracket_of(n) == "{" and separator_of(n) == ","
 def curly_list_value(body: Body, items: any): list { ["node", node(Marked.Map, vector_code(items.map(item => boxed(expression_code(body, item)))))] }
 # a body or branch `{a, b}` runs its statements, as Rust unwraps a block there

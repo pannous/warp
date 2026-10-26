@@ -124,7 +124,7 @@ fract(x) := x - floor(x)
 step(edge, x) := if x < edge then 0 else 1
 smoothstep(low, high, x) := { var t = clamp((x - low) / (high - low), 0, 1); t * t * (3 - 2 * t) }
 // `norm x`, `‖x‖`: a number's absolute value, a list's Euclidean length (decision S3: `count`/`length` stay the number
-// of items); magnitude is its other name (card compile-shaders); here since `use math` brings it (user decision library-own-words)
+// of items); magnitude is its other name (card compile-shaders); here since `use math` brings it 
 norm(x: any) := if x is list then { var total = 0; for i in 1 to count(x) { total = total + x#i * x#i }; sqrt(total) } else abs(x)
 magnitude(x: any) := norm(x)
 // vectors are lists of numbers: their distance, the vector of length 1 along v, the cross product of two 3-vectors and

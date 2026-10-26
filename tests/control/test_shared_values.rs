@@ -1,4 +1,4 @@
-// Shared values (user decision P106, 2026-10-06): `shared done = false` is one value every task of the run reaches, as
+// Shared values : `shared done = false` is one value every task of the run reaches, as
 // P44's shared arrays; everything else stays a copy per task (P33)
 use crate::is;
 

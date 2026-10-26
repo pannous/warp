@@ -140,7 +140,7 @@ fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node
 		// left would be taken for a definition written with `is` (P61); two variants compare by name
 		Node::Key(variant, Op::Eq, other) if is_bare_variant(&variant, sum_types) => {
 			let other = with_variant_tests(*other, sum_types);
-			// `Dot == Shape`: a value never equals a type, only `is` tests one (user decision #30)
+			// `Dot == Shape`: a value never equals a type, only `is` tests one 
 			if crate::type_tests::is_equality_operand(&other) {
 				return Node::False;
 			}

@@ -1,4 +1,4 @@
-// `class b extends a` (user decision P117, notes/classes.md step 3): b gets a's fields and methods, its own definitions
+// `class b extends a` : b gets a's fields and methods, its own definitions
 // override a's; a b can be used where an a is wanted
 use crate::is;
 

@@ -92,7 +92,7 @@ fn long_names() -> &'static [(&'static str, &'static str)] {
 
 // `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
 /// `now` compared with a duration is its local time of day, unless the program names something so (card time-day-value);
-/// a bare `time` is the type (user decision print-time), so `time < 12h` fails with the fix `now < 12h`
+/// a bare `time` is the type , so `time < 12h` fails with the fix `now < 12h`
 use crate::time::{NOW_WORD, TIME_WORD};
 use crate::words::IN_WORD;
 
@@ -790,7 +790,7 @@ pub(crate) fn amount_text(amount: &Rational) -> String {
 	amount.decimal_text().unwrap_or_else(|| format!("({amount})"))
 }
 
-/// The units as they follow an amount, right after it (user 2026-10-08: no space): m, m/s², and /m for 1/m (3/m)
+/// The units as they follow an amount, right after it : m, m/s², and /m for 1/m (3/m)
 pub(crate) fn unit_suffix(factors: &[Factor]) -> String {
 	let units = units_text(factors);
 	match units.strip_prefix("1/") {

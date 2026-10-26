@@ -1,4 +1,4 @@
-// D2 round 3 (user 2026-10-03, "By position"): `fn!` after a function or method name mutates in place:
+// D2 round 3 : `fn!` after a function or method name mutates in place:
 // `x.upper!` and `upper x!` assign the result back to x. `{…}!` and a lone `x!` keep evaluating.
 use crate::is;
 

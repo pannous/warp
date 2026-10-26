@@ -201,7 +201,7 @@ def placeDigits (digits : String) (exponent : Int) : String :=
   else if exponent >= 0 then before (exponent + 1) ++ "." ++ after (exponent + 1)
   else "0." ++ zeroText (-1 - exponent) ++ digits
 
-/-- a float as warp's float_text writes it (user decision float-text): its shortest digits that read back, as
+/-- a float as warp's float_text writes it : its shortest digits that read back, as
 JavaScript and Python write floats (`0.1`, `0.30000000000000004`, `1.5e-7`) -/
 def floatText (f : Float) : String :=
   if f.isNaN then "NaN" else if f.isInf then (if f > 0 then "∞" else "-∞") else if f == 0 then "0" else

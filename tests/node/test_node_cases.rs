@@ -85,7 +85,7 @@ fn a_patterns_op_is_spelled_as_text() {
 	is!("n = parse(\"(a)\"); match n { List(items, bracket, s): bracket as text, _: 0 }", "(");
 }
 
-// decision enum-case (user 2026-10-20): an operator case and its spelling are synonyms; printed, a case shows its name
+// decision enum-case : an operator case and its spelling are synonyms; printed, a case shows its name
 #[test]
 fn an_operator_case_and_its_spelling_are_synonyms() {
 	is!("Op.Add == \"+\"", true);
