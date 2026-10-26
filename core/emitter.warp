@@ -177,7 +177,7 @@ def ended_code(value: any): list { value#2 + [op.unreachable] }
 # the names of the helpers Rust's lowering adds to a program (prelude·round_to)
 prelude_prefix = "prelude·"
 # WARP_EMIT_SURVEY set: a refused function is recorded and taken as giving a node, the others compiled on, and the
-# refusal names each refused function's first refused form, a line each (probes/self_hosting/bootstrap_gap.sh)
+# refusal names each refused function's first refused form, a line each
 survey_setting = "WARP_EMIT_SURVEY"
 
 ## the program's functions

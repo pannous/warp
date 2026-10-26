@@ -59,7 +59,7 @@ const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 /// `warp lower --json <code>`: the lowered program as the JSON node view core reads with `node_of(json(…))`,
-/// lossless where the serialized text is not (probes/self_hosting/emitter/emit_lowered.sh)
+/// lossless where the serialized text is not
 const LOWER_JSON_COMMAND: &str = "lower --json";
 /// `warp pure <file> [arguments…]`: the program compiled by core/compiler.warp, the warp compiler as one warp
 /// program, compiled by Rust, and run (src/compiler/standalone.rs)

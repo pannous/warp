@@ -1,7 +1,7 @@
 //! A page in a window of the system's web view (WKWebView through wry), its files answered from memory under
 //! warp://localhost/: `warp app` and `warp page.html` (src/web/webview.rs in warp), and an app `warp build` made, the stub
 //! carrying a page's site (standalone.rs, card build-links). `check` loads the page in a hidden window and prints its
-//! text instead, then ends (probes and tests: no window on the user's screen).
+//! text instead, then ends (tests: no window on the user's screen).
 
 use std::borrow::Cow;
 use winit::application::ApplicationHandler;
