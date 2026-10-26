@@ -1,4 +1,4 @@
-// The tree parser.warp builds and the sugar pass reads: nodes of lib/compiler/node.warp. A type declaration, an error,
+// The tree parser.warp builds and the sugar pass reads: nodes of core/node.warp. A type declaration, an error,
 // a template and an empty group have no node warp builds yet (card node-more-cases): each travels as walk.warp's opaque
 // view, an attribute layer as its attribute key; view_of gives the view node_view writes (tests/common/twins.rs)
 use "words.warp"

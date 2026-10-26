@@ -25,7 +25,7 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
   `$WARP_CRATES_CACHE/native`: the manifest with the `= rust` parts cut and settings commented out.
 - Both folders are where pure-c-imports (57f273b59 or later) looks, so no environment setup is needed:
   - warp-host searches the cache's lib/ and native/ after WARP_LIBRARY_PATH
-  - lib/compiler/c_imports.warp reads `<lib>/native/<name>.warp`, else the cache's native/<name>.warp
+  - core/c_imports.warp reads `<lib>/native/<name>.warp`, else the cache's native/<name>.warp
   - `use crate "regex@1"` is `use rs_regex`
   - The compiler turns the lines into imports of module `rs_regex` with a warp.c_functions section, and warp-host
     dlopens `librs_regex.so`. Nothing about a crate is in warp-host.
@@ -89,14 +89,14 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
 - regex 1.12, sha2 0.10.9 and crc32fast 1 build into shims:
   - first build ~1-8 min on the loaded box; a manifest change rebuilds in ~9 s (shared target dir)
   - a cache hit takes no build
-- Run through warp-host and compiler.wasm built from this branch merged with pure-c-imports 57f273b59 (2026-10-23):
+- Run through warp-host and warp.wasm built from this branch merged with pure-c-imports 57f273b59 (2026-10-23):
   - sha256 by a foreign line
   - `use crate "regex@1"`, and `use rs_regex` with is_match / first_match / find_all / replace_all / find_start / free
   - sha256 of [97, 0, 98] (a zero byte), sha256_bytes as 32 raw bytes, crc32 of bytes with a zero byte
 - `warp-crate scan semver@1` drafts 19 lines (constructors, parse, VersionReq::matches, as_str, free lines). They
   build unedited, and a warp program then checks version requirements (`versionreq_matches(req, version_parse("1.4.0"))`).
   scan on regex builds too.
-- tests/host/test_crates.sh: 20/20 (2026-10-23, box). It needs a warp-host and compiler.wasm from pure-c-imports
+- tests/host/test_crates.sh: 20/20 (2026-10-23, box). It needs a warp-host and warp.wasm from pure-c-imports
   57f273b59 or later, which this branch includes.
 
 ## Open

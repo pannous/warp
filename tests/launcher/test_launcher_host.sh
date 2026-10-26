@@ -36,8 +36,8 @@ is() {
 
 is "a program file: warp-host" "host run six.warp" -- "$warp" six.warp
 is "run: warp-host" "host run six.warp" -- "$warp" run six.warp
-is "pure: warp-host with compiler.wasm" "host --compiler full run six.warp" -- "$warp" pure six.warp
-is "self: warp-host with compiler-self.wasm" "host run six.warp" -- "$warp" self six.warp
+is "pure: warp-host with warp.wasm" "host --compiler full run six.warp" -- "$warp" pure six.warp
+is "self: warp-host with warp-self.wasm" "host run six.warp" -- "$warp" self six.warp
 is "--fuel goes to warp-host" "host run --fuel 99 six.warp" -- "$warp" --fuel 99 six.warp
 is "inline code: warp-host" "host run 6*7" -- "$warp" '6*7'
 line=head is "compile --wasm: warp-host" "host compile six.warp six.wasm" -- "$warp" compile --wasm six.warp
@@ -54,7 +54,7 @@ is "WARP_HOST=none: pure is warp-rust's" "rust pure six.warp" -- env WARP_HOST=n
 if [ -n "${WARP_HOST_BINARY-}" ]; then
 	compilers=${WARP_HOST_COMPILERS:-$checkout/data}
 	mkdir -p "$stage/real" && cp "$WARP_HOST_BINARY" "$stage/real/warp-host" && cp "$checkout/packaging/bin/warp" "$stage/real/" &&
-		cp "$compilers"/compiler.wasm "$compilers"/compiler-self.wasm "$stage/real/" || exit 1
+		cp "$compilers"/warp.wasm "$compilers"/warp-self.wasm "$stage/real/" || exit 1
 	export WARP_LIB=$checkout/lib WARP_RUST=$stage/bin/warp-rust WARP_HOST_CACHE=$checkout/scratch/host-cache
 	is "pure through the real warp-host" 42 -- "$stage/real/warp" pure six.warp
 	is "self through the real warp-host" 42 -- "$stage/real/warp" self six.warp

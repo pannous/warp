@@ -475,7 +475,7 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// ⚠ WARP DOES THIS DIFFERENTLY: the typed-list sum path keyed by name; warp folds are one loop for any operator → lib/compiler/lambdas.warp
+		// ⚠ WARP DOES THIS DIFFERENTLY: the typed-list sum path keyed by name; warp folds are one loop for any operator → core/lambdas.warp
 		if let Some((list, sum_loop)) = super::super::lists::list_dispatch::list_sum_call(items) {
 			return self.emit_list_sum(func, list, sum_loop, super::super::lists::list_dispatch::Wanted::Node);
 		}

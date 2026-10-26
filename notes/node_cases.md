@@ -1,6 +1,6 @@
 # The built-in node's cases (card node-enum, decision compiler-node-enum)
 
-lib/compiler/node.warp is the one warp declaration of the built-in node: `enum Node` case for case as src/node/mod.rs,
+core/node.warp is the one warp declaration of the built-in node: `enum Node` case for case as src/node/mod.rs,
 and the enums Op, Bracket, Separator. It is the definition, not a copy: no class is made of Node, its cases are the
 kinds of the $Node the runtime already has (src/lowering/types/node_cases.rs).
 

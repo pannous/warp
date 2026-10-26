@@ -28,7 +28,7 @@ Line numbers are origin/main at bac59bd016 unless a branch is named. Every form 
 - Known: plain_enums.warp subjects_in reworded around rust-lane-local (a5459772ce); already being restored.
 
 ## Duplicates (merge into one shared function)
-- **min/max twice**: pure-field-slice adds lib/compiler/extrema.warp, pure-parser-rest adds lib/compiler/min_max.warp,
+- **min/max twice**: pure-field-slice adds core/extrema.warp, pure-parser-rest adds core/min_max.warp,
   both twins of min_max.rs and both by warp-pure-lambdas. Keep one. min_max.warp's `plain_operators` lists Op cases;
   extrema.warp spells them as texts (`(op as text) in plain_operators`).
 - Fresh-name counters, five copies: lambdas.warp fresh_number/fresh_name, comprehensions.warp comprehensions_made,

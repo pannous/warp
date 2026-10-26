@@ -13,7 +13,7 @@ few things differently. Where this file and the role files disagree, Grok agents
 
 ## Plans and approvals (AGENTS.md)
 - Every worker gets a plan, and everything in it is pre-approved. A worker's own idea is fine if it can be undone.
-- No approval ping-pong: the per-change OKs (pass ban, lib/compiler size limits) don't apply inside a plan.
+- No approval ping-pong: the per-change OKs (pass ban, core size limits) don't apply inside a plan.
 
 ## Status lives in git
 - The status is the branch name, the commit messages and the board card, not chat.
