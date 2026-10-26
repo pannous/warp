@@ -1,0 +1,17 @@
+# a map big enough for the hashed index (runtime/maps.warp map_index): lookups, a replaced and a removed entry, a copy
+m = {}
+for i in 1 to 100 { m["k$(i)"] = i * 2 }
+print(m["k1"] + m["k50"] + m["k100"])
+print("k77" in m)
+print("k101" in m)
+m["k50"] = 7
+print(m["k50"])
+m.remove("k3")
+print("k3" in m)
+print(m["k4"])
+m["k3"] = 33
+print(m["k3"] + m["k100"])
+b = {}
+for name in m.keys { b[name] = m[name] }
+print(#b.keys)
+print(b["k99"])
