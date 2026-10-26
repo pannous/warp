@@ -41,5 +41,5 @@ pub(crate) fn serve_file(path: &str, port: u16, reason: &str, open: bool) -> ! {
 			warp::web::dev_server::open_in_browser(address);
 		});
 	}
-	print_and_exit(warp::pipeline::serving_at(port, || eval(path)))
+	print_and_exit(warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(path)))
 }
