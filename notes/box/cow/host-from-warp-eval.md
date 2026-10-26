@@ -2,7 +2,7 @@
 
 Labels: [M] = measured this session on the box; [N] = from repo notes, measured by others; [I] = inferred or estimated.
 Scratch (ignored, uncommitted): /workspace/cow/trees/host-from-warp/scratch/hfw (box) (tools/, mods/, ffi/). The worktree is boxtree
-`host-from-warp` on origin/warp-host-run-wasm 1aec4ee9f. Nothing was committed. src/ and lib/compiler were not touched.
+`host-from-warp` on origin/warp-host-run-wasm 1aec4ee9f. Nothing was committed. src/ and core were not touched.
 
 ## Verdict
 - **Fully native host with no Rust and no wasmtime: not feasible now.** No wasm→C or wasm→native tool takes our real modules.
@@ -66,8 +66,8 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
 ## Approaches
 | approach | missing | effort | blockers / outside our areas |
 |---|---|---|---|
-| (a) host.warp → wasm → wasm2c/wamrc + C runtime | GC+EH in the tool; still needs an engine for run_wasm | large; blocked | upstream WAMR/wabt; or lib/compiler emitter EH lowering (Wrapper's or the compiler owner's call) |
-| (b) Warp emits C or LLVM IR | a whole backend: GC (Boehm or own), EH (setjmp), FFI | weeks–months [I] | lib/compiler (not ours); still needs an engine for `run` |
+| (a) host.warp → wasm → wasm2c/wamrc + C runtime | GC+EH in the tool; still needs an engine for run_wasm | large; blocked | upstream WAMR/wabt; or core emitter EH lowering (Wrapper's or the compiler owner's call) |
+| (b) Warp emits C or LLVM IR | a whole backend: GC (Boehm or own), EH (setjmp), FFI | weeks–months [I] | core (not ours); still needs an engine for `run` |
 | (c) host.warp → .cwasm inside a prebuilt Rust stub that exposes primitives | stub variant with Cranelift + std_io + run_wasm; host.warp; a compiler-self that accepts os/file words | days [I] | crates/warp-runtime stub feature (allowed, Rust), compiler-self rebuild with os words |
 | (c') host.warp on a WasmEdge-based C shim | measure the AOT run; a C shim for std_io and FFI | ~1 week [I] | 64 MB library; C++ toolchain to build it |
 
@@ -90,7 +90,7 @@ WasmEdge (64 MB, C++/LLVM) cover GC+EH today. A smaller interpreter would be WAM
 - Warp Wrapper: since compiler-self runs under plain `wasmtime run` with a null host stub, could the wrapper skip the custom
   host for compiling and keep warp-host only for os/FFI words and kept values?
 - Warp Wrapper: should the emitter offer an EH-free mode (status flag returns instead of 8 try_table and 5,441 throw)? That
-  would open WAMR (0.6 MB interp, AOT) and wasm2c-legacy-EH routes. It is an emitter change in lib/compiler.
+  would open WAMR (0.6 MB interp, AOT) and wasm2c-legacy-EH routes. It is an emitter change in core.
 - Supervisor: is ~6.5 MB with Cranelift acceptable long-term? Answered yes (Decisions below).
 - (Cancelled 2026-10-23 by the user decision below: the WasmEdge AOT retry.)
 
@@ -158,7 +158,7 @@ Question: can the thin stub's own Rust glue (crates/warp-runtime/src/warp_host, 
 in a Warp subset that compiles to plain wasm (no GC, no exceptions), then wasm2c/w2c2 → C → native, linked against
 wasmtime's C API? Answer: **not yet**. Only number-only programs compile to non-GC wasm today. Every text, list or
 boxed number brings in GC types and instructions. The route waits for a plain-memory emitter mode for basic types
-(roadmap, lib/compiler, not ours). It is parked and can be resumed from this section. Labels as above: [M] measured on the
+(roadmap, core, not ours). It is parked and can be resumed from this section. Labels as above: [M] measured on the
 box today, [I] inferred.
 
 ### Measurements [M]
@@ -223,7 +223,7 @@ wasm_modules.rs: main 484, words 239, nodes 380, shell 255, cache 128, ffi 132, 
 | total | warp_host 2,399 lines / 102,782 B; plus shared modules used: c_calls, c_signatures, engine, gc_values, host_words, libm, standalone, system_signals | | |
 
 ### What the native glue route would need
-1. **Plain-memory emitter mode for basic types** (roadmap item; lib/compiler, owned by the Claude workers). Ints, floats,
+1. **Plain-memory emitter mode for basic types** (roadmap item; core, owned by the Claude workers). Ints, floats,
    bools, texts as (ptr, len) in linear memory, and fixed records and arrays in memory. No $Node, no boxes, no GC type
    declarations in the prelude unless used. Gate: probes b, j, m, n, f, k and l validate non-GC.
 2. **Exception-free mode** (status returns instead of try_table/throw), the "later option" in Decisions above. The glue
@@ -265,7 +265,7 @@ wasm_modules.rs: main 484, words 239, nodes 380, shell 255, cache 128, ffi 132, 
 
 ### Proposed Later card
 - Title: host-glue-native: warp-host's remaining Rust glue in Warp, via plain wasm → wasm2c → C against wasmtime's C API
-- Description: Parked until lib/compiler has a plain-memory (no GC, no EH) emitter mode for basic types. Today only number-only programs
+- Description: Parked until core has a plain-memory (no GC, no EH) emitter mode for basic types. Today only number-only programs
   (`6*7`, while/if, int functions) strip to valid non-GC wasm and run through wasm2c. Texts, lists and floats need GC
   (notes/host_from_warp_eval.md "Native glue route (parked)", measure.sh). Then do the spike with os.env through a
   C shim to the wasmtime C API, and move the file/shell/cache/FFI-parsing words. Engine setup, callbacks and dlsym

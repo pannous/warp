@@ -375,7 +375,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// text_as_float as lib/compiler/runtime/text_numbers.warp reads it: the first SIGNIFICANT_DIGITS digits as an exact
+	/// text_as_float as core/runtime/text_numbers.warp reads it: the first SIGNIFICANT_DIGITS digits as an exact
 	/// i64, the double-double hi + lo of it scaled by exact powers of ten (Dekker's products), one rounding at the end,
 	/// so more digits than a double holds read to the nearest float, not rounded digit by digit
 	pub(in crate::wasm_emitter) fn emit_text_as_float(&mut self) {

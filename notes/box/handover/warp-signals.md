@@ -12,11 +12,11 @@ awaiting Supervisor's `todo import`), next to pure-units-quantity-sum.
   pass-level version (routed every operator key; broke `rebuild self`), a502bfcf5 pulled that back to the emitter guard,
   dd4744878 fix (the operator symbol is a codepoint: dispatcher name "${symbol}·operator").
 - Design (Supervisor-approved emitter-guard variant):
-  - lib/compiler/class_methods.warp (+65/-15 vs 3b): a method named by an operator (glyph, entry word or word alias of
+  - core/class_methods.warp (+65/-15 vs 3b): a method named by an operator (glyph, entry word or word alias of
     an lib/aliases.warp entry with `operator:`, read via operator_word) is a routed method; one dispatcher per operator,
     `+·operator(self: any, o: any)`, tests each owner (deepest first, so inherited through lineage) and falls back to
     the builtin `self + o`. routed() is back to 3b's.
-  - lib/compiler/emitter/operators.warp (+4/-0): in operation_code, a boxed ("node") left operand with
+  - core/emitter/operators.warp (+4/-0): in operation_code, a boxed ("node") left operand with
     `+·operator` in module.functions calls it; skipped inside the dispatcher itself (its fallback stays builtin).
 - Scratch: /workspace/classops-probe/ (STATUS.md, cases.py harness, gates.sh/gates.log, base/ = 3b 38bf42369 lib with
   its data/compiler.wasm, perf/ programs).
@@ -60,6 +60,6 @@ Tip pushed: dd4744878 (WIP, NOT ready).
   which came from the pass-level routing boxing every `+` of compiler.warp (Span.plus in time_arithmetic.warp).
 
 ## on / go / channels plan (on hold until classes and operators work)
-- Goes in lib/compiler/extensions/concurrency/, written in Warp, no passes.
+- Goes in core/extensions/concurrency/, written in Warp, no passes.
 - Coverage: `on` in 159 tests, `go` in 111.
 - Card order: on (folding hAkytI), hBlrU8, hBeBpI + hBlnt4, hBS72c, hBeDT8.

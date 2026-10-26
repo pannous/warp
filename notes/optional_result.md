@@ -31,6 +31,6 @@ An optional result of an `if` without `else` or of a loop is ø when nothing gav
 `any` results never warn.
 
 Where: Rust `src/lowering/types/type_name_matching.rs` (optional_when_answering_empty, can_answer_empty, as_type);
-warp `lib/compiler/definitions.warp` (result_held), warning row `optional_result` in `lib/compiler/warnings.data`.
+warp `core/definitions.warp` (result_held), warning row `optional_result` in `core/warnings.data`.
 emitter.warp holds a variable declared `Node?` or `Class?` as the node it is, one declared `ints` or `list of T` as a list.
 

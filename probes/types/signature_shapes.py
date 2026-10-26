@@ -1,4 +1,4 @@
-# The lib/compiler parameters typed Node or any whose body already knows their shape (card beautiful-types):
+# The core parameters typed Node or any whose body already knows their shape (card beautiful-types):
 # run from the repo root, `python3 probes/types/signature_shapes.py`; "match-only" parameters with a `_` arm stay Node
 
 import re, glob, collections
@@ -34,7 +34,7 @@ def shape(parameter, body):
 	return None
 
 
-for path in sorted(glob.glob('lib/compiler/*.warp')):
+for path in sorted(glob.glob('core/*.warp')):
 	lines = open(path).read().split('\n')
 	for i, line in enumerate(lines):
 		match = SIGNATURE.match(line)

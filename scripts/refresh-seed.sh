@@ -1,5 +1,5 @@
 #!/bin/bash
-# Refresh the seed compiler (seed/warp-self.wasm, card rust-bootstrap): the seed compiles lib/compiler/compiler.warp
+# Refresh the seed compiler (seed/warp-self.wasm, card rust-bootstrap): the seed compiles core/compiler.warp
 # (stage A), stage A compiles it again (stage B), and only when B compiles it to the same bytes as itself (stage C == B,
 # the fixpoint; or A == B at once) does B replace the seed. The seed is what `warp rebuild` builds warp.wasm with; no
 # Rust-compiled stage takes part. (scripts/promote-self.sh is the light check of warp.wasm alone: N+1 == N.)
@@ -14,7 +14,7 @@ tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 warp=${WARP_BINARY:-warp}
 seed=$tree/seed/warp-self.wasm
 data=$tree/data
-built=$tree/lib/compiler/compiler.wasm  # where `warp self build --wasm lib/compiler/compiler.warp` writes
+built=$tree/core/compiler.wasm  # where `warp self build --wasm core/compiler.warp` writes
 [ -f "$seed" ] || [ ! -f "$tree/seed/compiler-self.wasm" ] || seed=$tree/seed/compiler-self.wasm  # the old name (transition)
 [ -f "$seed" ] || { echo "refresh-seed: no seed at $seed" >&2; exit 2; }
 # a self build of the compiler runs for minutes: an exported short limit (600 s) must not cut it
@@ -34,7 +34,7 @@ stage() {
   cp "$1" "$data/warp-self.wasm" || exit 1
   rm -f "$built"
   local start=$SECONDS
-  (cd "$tree" && "$warp" self build --wasm lib/compiler/compiler.warp) 2>&1 | tail -5
+  (cd "$tree" && "$warp" self build --wasm core/compiler.warp) 2>&1 | tail -5
   [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: compiled by $(basename "$1") wrote no module" >&2; exit 1; }
   mv "$built" "$2"
   echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $((SECONDS - start)) s, sha256 $(shasum -a 256 "$2" | cut -c1-16)"

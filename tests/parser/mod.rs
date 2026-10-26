@@ -80,7 +80,7 @@ mod test_self_pure; // card pure-runs
 mod test_self_sort; // card sort-warp
 #[cfg(feature = "native")]
 mod test_self_text_index_of; // card index-of-bytes
-#[cfg(feature = "native")] // a lib/compiler file on disk
+#[cfg(feature = "native")] // a core file on disk
 mod test_self_time_arithmetic; // card time-arithmetic-warp
 #[cfg(feature = "native")]
 mod test_self_time_text; // card time-text-warp

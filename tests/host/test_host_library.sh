@@ -20,9 +20,9 @@ compiler=$(dirname "$rust")/warp-self.wasm
 [ -f "$compiler" ] || { echo "✗ no warp-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/installed" "$stage/stub" "$stage/work" || exit 1
 # lib/ copied into the stage (two places, one content: the kept values are shared), with a word no other lib/ has
-cp -R "${WARP_TEST_LIB:-$checkout/lib}" "$stage/lib" || exit 1
+cp -RL "${WARP_TEST_LIB:-$checkout/lib}" "$stage/lib" || exit 1
 printf '\n%s\n' 'word_of_the_temporary_lib() := 42' >>"$stage/lib/os.warp"
-cp -R "$stage/lib" "$stage/installed/lib" || exit 1
+cp -RL "$stage/lib" "$stage/installed/lib" || exit 1
 for folder in bin installed; do
 	cp "$host" "$stage/$folder/warp-host" && cp "$compiler" "$stage/$folder/" || exit 1
 done

@@ -1,10 +1,10 @@
-//! card time-arithmetic-warp: the run-time arithmetic of times and durations in lib/compiler/time_arithmetic.warp
+//! card time-arithmetic-warp: the run-time arithmetic of times and durations in core/time_arithmetic.warp
 //! (Rust twin: src/wasm_emitter/time/time_arithmetic.rs) over plain integers, before card time-primitives connects it
 //! to run-time time nodes
 use crate::is;
 
 fn arithmetic(code: &str) -> String {
-	format!("use \"lib/compiler/time_arithmetic.warp\"\n{code}")
+	format!("use \"core/time_arithmetic.warp\"\n{code}")
 }
 
 fn date(code: &str) -> String {
