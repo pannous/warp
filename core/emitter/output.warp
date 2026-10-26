@@ -14,7 +14,7 @@ import_index(entry: any): int := {
 	index
 }
 # the dispatcher of the program's classes showing their instances by text() (class_methods.warp showing_dispatcher)
-instance_text_word = "text·shown"
+instance_text_word = HiddenWord.TextShown
 # a value as the text `+` joins it with and print writes
 def shown_text(value: any): list {
 	kind = value#1
