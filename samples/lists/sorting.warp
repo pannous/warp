@@ -3,7 +3,7 @@
 
 fun insertion_sort(items) {
 	var a = items.copy()
-	for i in 1 to #a {
+	for i in 1 ..< #a {
 		key = a[i]
 		j = i - 1
 		while j >= 0 and a[j] > key {
