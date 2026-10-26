@@ -53,5 +53,5 @@ Your queue is the merges new on main (see above); the card named in the merge me
   them for the worker to fix in its next commit. The style-linter card lints .warp source; lint rules for warp code go to its worker, warp-style-linter.
 
 ## Rhythm
-Be fast: a review normally ends before the gate does (minutes). Keep a short log in data/reviews/<date>.md (branch,
+Be fast: a review normally ends before the gate does (minutes). Keep a short log in ~/Library/Logs/warp/reviews/<date>.md (branch,
 verdict, one line). Idle when main holds no merge you haven't read. Swap to a fresh session when your context fills, as workers do.
