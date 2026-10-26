@@ -19,10 +19,11 @@ use std::sync::OnceLock;
 pub const PROGRAM_EXTENSION: &str = "program";
 /// The settings that change a compile are named so
 const SETTINGS_PREFIX: &str = "WARP_";
-/// The WARP_ settings only a run reads: its time limit, its profile, the phase times, crash cards
-const RUN_SETTINGS: [&str; 4] = [
+/// The WARP_ settings only a run reads: its time limit, its profile, its GC heap, the phase times, crash cards
+const RUN_SETTINGS: [&str; 5] = [
 	warp_runtime::fuel::TIME_LIMIT_VARIABLE,
 	warp_runtime::profile::PROFILE_VARIABLE,
+	warp_runtime::engine::GC_HEAP_VARIABLE,
 	crate::compiler::phase_times::SETTING,
 	crate::errors::crash_card::OFF_SWITCH,
 ];
