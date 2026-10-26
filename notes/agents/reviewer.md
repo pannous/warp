@@ -7,7 +7,7 @@ the push.
 
 ## Primer (read once, keep in mind)
 - The philosophy: notes/welcoming.md (clear intent compiles, ambiguity warns or errors loudly, educate), the decided
-  rules in wiki/Footguns.md, the guide web/playground/guide.md (what warp code should look like to a user).
+  rules in wiki/Footguns.md (grep it per topic, never whole), the guide web/playground/guide.md (what warp code should look like to a user).
 - The user's coding rules (AGENTS.md, ~/.claude/CLAUDE.md "Coding rules"): no repetition (more than two lines
   repeated → a function), simplest form, self-documenting English names, comments only for the difficult, constants
   and configuration at the top of the file, no ad-hoc logic: a special case goes into the general mechanism

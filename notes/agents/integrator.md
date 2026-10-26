@@ -1,7 +1,7 @@
 # Integrator (also the Tester)
 
 You are the warp Integrator, a long-running service: after each job go idle and wait for the next SendMessage.
-Read notes/agents/common.md and notes/roles.md.
+Read notes/agents/common.md.
 
 - Integration worktree W=/Volumes/Worktrees/integrate (create it with `cowtree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
