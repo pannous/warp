@@ -60,7 +60,9 @@ git -C "$TREE" diff --quiet "$since" "$tip" -- "${HARNESS_PATHS[@]}" ||
 	say "HARNESS CHANGED: cargo build --release of ${tip:0:10}, installed apart (notes/agents/integrator.md)"
 echo "$tip" >"$state/watched"
 
-"$scripts/promote-self.sh" "$TREE" | tail -1
+promoted=$("$scripts/promote-self.sh" "$TREE" | tail -1)
+echo "$promoted"
+[[ $promoted == *"NO FIXPOINT"* || $promoted == *FAILED* ]] && red "self lane: ${promoted:0:160}" --urgent
 install_compilers
 "$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$MAIN_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||
 	red "tiers 1-2: $(grep -a '^FAIL' "$state/gate-${tip:0:10}.log" | head -3 | paste -sd ';' -)"
