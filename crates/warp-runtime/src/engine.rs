@@ -5,9 +5,9 @@ use std::time::Duration;
 use wasmtime::{Config, Engine, Module, Store};
 
 /// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every
-/// frame of a deep recursion) at each of its many small growths. 256 MB, not 1 GB: the copying collector keeps both
-/// halves of a heap it has used, so `warp rebuild self` held the whole gigabyte per stage run
-const GC_HEAP_INITIAL_BYTES: u64 = 256 << 20;
+/// frame of a deep recursion) at each of its many small growths. 512 MB: `warp rebuild self` 6:59 -> 5:33 warm against
+/// 256 MB (peak 1.2 -> 1.8 GB), 1 GB no faster at 2.6 GB, as the copying collector keeps both halves of a heap it used
+const GC_HEAP_INITIAL_BYTES: u64 = 512 << 20;
 /// Environment variable that overrides GC_HEAP_INITIAL_BYTES, in MB (sizing experiments, card speed-gc-heap)
 pub const GC_HEAP_VARIABLE: &str = "WARP_GC_HEAP_MB";
 
