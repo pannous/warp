@@ -81,7 +81,8 @@ before asking a question). After a context swap, this file and your role file be
 - A major feature ships with samples/<topic>.warp (chmod +x) and its wiki page updated in the same task.
 - Before Ready: `scratch/warp format` and `scripts/style_lint.py --fix` on what you wrote . Merge origin/main into the branch (real merges, you resolve conflicts), push,
   `todo note <card> "card | branch | tip | tests | result"`, `todo ready <card>` (`--express` when asked for speed or
-  for a crash fix). The quick check passing is enough to merge; the full suite follows at the Integrator.
+  for a crash fix). The smoke test passing is enough to merge (core/ changes: smoke + fixpoint, no test
+  folders, AGENTS.md "Testing"); the full suite runs only at rare intervals.
 - Results the user can try get a try line (`/Users/me/dev/bin/warp <full path>`) to warp-interviewer.
 - Never retire holding a card: done, Ready, or `todo release <card> "done: …; left: …; branch: …"`.
 - After the merge remove your worktree and branches (local and remote). Deleting merged/stale things needs no

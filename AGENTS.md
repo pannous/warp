@@ -99,8 +99,8 @@ This harness should barely ever be rebuilt, and if so, independent of the warp f
 Agents must inherit a clean baseline and start working from there. 
 Agents must not rebuild and retest the baseline, this will save many rebuilds.
 The integrator must make sure that the main branch is always clean, functional, and up to date.
-As soon as a branch passes the quick fix test, that's signal enough to be worthy of merging.
-A full suite test can be done in parallel or later or batched.
+As soon as a branch passes the smoke test (see Testing), that's signal enough to be worthy of merging.
+The full suite runs only at rare intervals, never per branch or batch.
 
 The `warp` binary (the Rust harness) is built by cargo; the warp compiler it runs by `warp rebuild`:
 ```bash
@@ -128,16 +128,25 @@ Every worker gets a plan from Supervisor, and everything in it is pre-approved: 
 A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
 <!-- `todo add "merge: <branch> <sha>" Ready -b "<one-line summary, tests run>"`.  -->
 Main moved again in the meantime?
-If the minimal smoke test (Compiling Hello World) passes its task is done, and it can go fully to the integrator.
+AVOID full rebuild for small changes! If the minimal smoke test (Compiling Hello World) passes the task is done, and it can go fully to the integrator.
 Then `todo ready <card> [branch]`
 The Integrator merges and closes them with `todo done`.
 The Git commit message Merge branch MUST Also include a summary of the changes (TODO via todo tool?)
 
 ### Testing
 
-Several agent sessions share this Mac, so test runs are rationed (roles and rules: notes/roles.md):
-- Workers run the tests that cover their change (`warp test <folders>`); only the Integrator session runs the
-  whole suite and pushes code to main. Workers hand it "branch, tip, filters" and fix what it reports.
+Several agent sessions share this Mac and the full suite is slow, so run the cheapest check that covers the change
+(roles: notes/roles.md):
+- Smoke test (minutes), every branch: `WARP_LIB=<worktree>/lib warp rebuild pure`, then
+  `warp pure samples/hello/hello.warp` prints Hello.
+- Fixpoint test, only for parser/compiler changes (core/): `scripts/self-check.sh <worktree>`, the compiler compiles
+  itself and that build prints Hello. For core/ changes smoke + fixpoint is the whole check: no test folders.
+- Folder tests, for lib/ features only: `warp test <folders>` of the few test files the change touches.
+- Full suite (`warp test`): only the Integrator, at rare intervals (nightly, before a release), never per branch.
+We always want the very quick feedback loop and quick merges: anything slower than smoke + fixpoint runs in the
+background (`run_in_background`, scripts/slot.sh) and never holds a merge; what it finds is fixed forward on a card.
+A worker marks its card Ready with a note naming branch, tip commit and the checks it ran; the Integrator merges after
+its gate (smoke, probes/gate, the changed test files) and sends what fails back to the card's owner, who fixes it.
 
 Warp tests run locally with the shared binary, through the warp compiler (src/compiler/pure_tests.rs,
 notes/is_tests.md):
@@ -258,7 +267,7 @@ Before removing a worktree: `git status --short -uall` (untracked files are hidd
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
 
 Workers: before and after each task, run `git status` and the tests that cover your change.
-Do NOT run the full suite: only the Integrator runs it, after merging your branch (notes/roles.md).
+Do NOT run the full suite: only the Integrator runs it, at rare intervals (Testing above).
 If previously passing test fail after the task as seen via git diff test_results.txt try to fix failing tests and if it doesn't work roll back
 
 When fixing a problem NEVER modify the test itself without consulting!

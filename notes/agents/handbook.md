@@ -57,8 +57,8 @@ Principles and Talking live only in common.md.
   `&&`-chained commit silently doesn't happen. Check `git show --stat HEAD` after committing.
 
 ## Testing
-- Warp tests (`warp test`) run locally with the shared binary; the whole suite only in the
-  Integrator's gate.
+- Warp tests (`warp test`) run locally with the shared binary; the whole suite only at the
+  Integrator's rare intervals (nightly), never in a gate.
 - Stop isolation : an agent stops only its own helper jobs, never with a stop that
   reaches other agents.
 - Communicate less : message only when it really matters (Ready, blocked, a decision needed); batch

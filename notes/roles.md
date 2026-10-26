@@ -61,7 +61,7 @@ findings become cards for the Refactorer. Prompt: notes/agents/reviewer.md; a de
 
 ## Steward (warp-steward, the warp compiler's test owner)
 Owns "the warp-written compiler passes its own tests", orthogonal to the Integrator, who keeps merging everything.
-After each merge batch that touches core or the pipeline (and nightly), it runs the warp-pipeline-suite, records the pass count over time (data/self_hosting/suite_counts.txt), groups the failures by cause and
+At rare intervals (nightly, never per merge batch: the suite is slow), it runs the warp-pipeline-suite, records the pass count over time (data/self_hosting/suite_counts.txt), groups the failures by cause and
 turns the biggest groups into cards for the self-hosting workers, reporting the count and the top groups to the
 Supervisor. It merges nothing and writes no compiler code beyond the runner itself. Started once the
 warp-pipeline-suite runner is on main.
