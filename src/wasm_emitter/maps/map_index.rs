@@ -14,8 +14,12 @@ pub(in crate::wasm_emitter) const MAP_INDEX_ENTRY: &str = "map_index_entry";
 pub(in crate::wasm_emitter) const MAP_INDEX_GROW: &str = "map_index_grow";
 const MAP_INDEX_OF: &str = "map_index_of";
 const MAP_INDEX_ADD: &str = "map_index_add";
-/// Maps indexed at once: a loop copying one map into another (`b[k] = a[k]`) keeps both
-const MAP_INDEXES: u32 = 2;
+/// Maps indexed at once, the one used last first: a loop copying one map into another (`b[k] = a[k]`) keeps both, and
+/// a compiler reading an object's fields between lookups in a few tables keeps them all (with 2 the emit stage of
+/// `warp rebuild self` rebuilt the index of its text table at nearly every lookup, card speed-gc-heap)
+const MAP_INDEXES: u32 = 8;
+/// The parts of a slot that move with its map; Seen belongs to slots 0 and 1 alone, the two maps walked last
+const SLOT_PARTS: [IndexPart; 3] = [IndexPart::Owner, IndexPart::Index, IndexPart::Tail];
 /// A map with fewer entries is walked: objects like `{x:1 y:2}` read field by field need no index
 const MIN_INDEXED_ENTRIES: i32 = 16;
 /// The globals of an index slot: the map (its first cell), its index, its last cell (null when it has meta entries,
@@ -80,16 +84,28 @@ impl WasmGcEmitter {
 		};
 		let [owner, index, tail, seen] = [IndexPart::Owner, IndexPart::Index, IndexPart::Tail, IndexPart::Seen]
 			.map(|part| self.map_index_part(0, part));
-		let [other_owner, _, _, other_seen] = [IndexPart::Owner, IndexPart::Index, IndexPart::Tail, IndexPart::Seen]
-			.map(|part| self.map_index_part(1, part));
-		// slot 0 and 1 trade places, the newest first
-		let swap: Vec<I> = INDEX_PARTS
-			.iter()
-			.flat_map(|&(part, _)| {
-				let (first, second) = (self.map_index_part(0, part), self.map_index_part(1, part));
-				[I::GlobalGet(first), I::GlobalGet(second), I::GlobalSet(first), I::GlobalSet(second)]
-			})
-			.collect();
+		let other_seen = self.map_index_part(1, IndexPart::Seen);
+		let owners: Vec<u32> = (0..MAP_INDEXES).map(|slot| self.map_index_part(slot, IndexPart::Owner)).collect();
+		let first_global = self.map_index_global.expect("map index globals");
+		let part_global =
+			move |slot: u32, part: IndexPart| first_global + slot * INDEX_PARTS.len() as u32 + part as u32;
+		// the slots before `slot` move down one place, over it
+		let shift_down = |slot: u32| -> Vec<I<'static>> {
+			let mut moves = vec![];
+			for later in (1..=slot).rev() {
+				for part in SLOT_PARTS {
+					moves.push(I::GlobalGet(part_global(later - 1, part)));
+					moves.push(I::GlobalSet(part_global(later, part)));
+				}
+			}
+			moves
+		};
+		// slot `slot` moves to the front: its parts held on the stack while the newer slots move down
+		let promote = |slot: u32| -> Vec<I<'static>> {
+			let held = SLOT_PARTS.iter().map(|&part| I::GlobalGet(part_global(slot, part)));
+			let placed = SLOT_PARTS.iter().rev().map(|&part| I::GlobalSet(part_global(0, part)));
+			held.chain(shift_down(slot)).chain(placed).collect()
+		};
 
 		// map_index_add(index, item): an entry `name:value` found by its name, unless an earlier one has that name
 		self.runtime_function(
@@ -146,12 +162,15 @@ impl WasmGcEmitter {
 				};
 				Self::emit_list(f, &[I::LocalGet(fields), I::GlobalGet(owner), I::RefEq]);
 				return_when(f, 1);
-				Self::emit_list(
-					f,
-					&[I::LocalGet(fields), I::GlobalGet(other_owner), I::RefEq, I::If(BlockType::Empty)],
-				);
-				Self::emit_list(f, &swap);
-				Self::emit_list(f, &[I::I32Const(1), I::Return, I::End, I::LocalGet(fields)]);
+				for slot in 1..MAP_INDEXES {
+					Self::emit_list(
+						f,
+						&[I::LocalGet(fields), I::GlobalGet(owners[slot as usize]), I::RefEq, I::If(BlockType::Empty)],
+					);
+					Self::emit_list(f, &promote(slot));
+					Self::emit_list(f, &[I::I32Const(1), I::Return, I::End]);
+				}
+				f.instruction(&I::LocalGet(fields));
 				kind_of(f);
 				Self::emit_list(f, &[I::I64Const(Kind::List as i64), I::I64Ne]);
 				return_when(f, 0);
@@ -175,13 +194,8 @@ impl WasmGcEmitter {
 				});
 				Self::emit_list(f, &[I::LocalGet(count), I::I32Const(MIN_INDEXED_ENTRIES), I::I32LtU]);
 				return_when(f, 0);
-				// the older index moves to slot 1, the new one goes in slot 0
-				for part in [IndexPart::Owner, IndexPart::Index, IndexPart::Tail] {
-					Self::emit_list(
-						f,
-						&[I::GlobalGet(s.map_index_part(0, part)), I::GlobalSet(s.map_index_part(1, part))],
-					);
-				}
+				// the older indexes move down one, the oldest is dropped, the new one goes in slot 0
+				Self::emit_list(f, &shift_down(MAP_INDEXES - 1));
 				Self::emit_list(f, &[I::LocalGet(fields), I::GlobalSet(owner)]);
 				s.call(f, super::super::maps::map_backend::NODE_MAP_NEW);
 				Self::emit_list(f, &[I::GlobalSet(index), I::LocalGet(fields), I::LocalSet(cell)]);
@@ -243,16 +257,18 @@ impl WasmGcEmitter {
 		self.runtime_function(MAP_INDEX_GROW, vec![node_ref, node_ref], vec![ValType::I32], vec![nullable], |s, f| {
 			let (fields, entry, made) = (0, 1, 2);
 			let tail_cell = [I::GlobalGet(tail), I::RefAsNonNull];
+			// an index of the map in an older slot misses the new field: forgotten
+			for &other_owner in &owners[1..] {
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(fields), I::GlobalGet(other_owner), I::RefEq, I::If(BlockType::Empty),
+						null_node.clone(), I::GlobalSet(other_owner),
+					I::End,
+				]);
+			}
 			Self::emit_list(
 				f,
 				&[
-					I::LocalGet(fields),
-					I::GlobalGet(other_owner),
-					I::RefEq,
-					I::If(BlockType::Empty),
-					null_node.clone(),
-					I::GlobalSet(other_owner),
-					I::End,
 					I::LocalGet(fields),
 					I::GlobalGet(owner),
 					I::RefEq,
