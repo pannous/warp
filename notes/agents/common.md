@@ -45,8 +45,8 @@ before asking a question). After a context swap, this file and your role file be
 - Run commands yourself; never hand the user commands to paste.
 - A wrong value that another reading could make right, or a bug that may not matter, goes to warp-interviewer with
   code, value and expectation before anyone fixes code or test.
-- Communicate less: message only for Ready, blocked or a decision needed. Git (branch, commits, card) is the status.
-  warp-integrator gets only requests it must act on; the card is the merge request.
+- Communicate less: message only for landed, blocked or a decision needed. Git (branch, commits, card) is the status.
+  warp-integrator gets only requests it must act on.
 
 ## Where to work
 - Notes, docs, wiki, scripts, samples: straight onto main in /Users/me/dev/angles/warp; commit your own paths
@@ -73,6 +73,9 @@ before asking a question). After a context swap, this file and your role file be
 - `todo pick` shows the next cards in board order; `todo take <card> <session>`; before taking check nobody has a
   branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
 - Every branch has a card: comment branch, tip and state on it; a parked branch gets notes/handover/<branch>.md.
+- No Ready column, no merge queue (user 2026-10-26): workers land their own branches ("Done"). A finished branch
+  whose session retires unlanded stays in Now with `todo note <card> "land: <branch> <tip>"`; the Integrator lands
+  those (`todo landing`).
 - Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - A card is closed only with a commit: `todo done <card> <commit>`. Mechanics: `todo --help`.
 

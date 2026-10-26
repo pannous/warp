@@ -36,7 +36,8 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
   changed constant a complaint; each becomes a card or a question for the Interviewer.
 
 ## Branches of retired sessions
-- `todo ready --stray` and Ready cards whose session retired: you land them, in /Volumes/Worktrees/integrate.
+- Now cards noted `land: <branch> <tip>` (`todo landing`; `todo stray` lists every unmerged branch): their session
+  retired, you land them, in /Volumes/Worktrees/integrate.
   `scripts/integrate/merge.sh [<card>…]` merges them onto origin/main, one merge commit per branch with the summary of
   its commits, leaves conflicting cards out and names them, then runs the smoke test
   <!-- GO TO worktree / branch which wants to be merged.  -->
