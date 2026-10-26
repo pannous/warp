@@ -147,6 +147,11 @@ impl WasmGcEmitter {
 			self.emit_call(func, NODE_AT);
 			return;
 		}
+		if let (SYMBOL_WORD, [written]) = (name, arguments) {
+			if let Node::Text(word) = written.drop_meta() {
+				return self.emit_interned_symbol(func, word);
+			}
+		}
 		for argument in arguments {
 			self.emit_node_instructions(func, argument);
 			func.instruction(&I::RefAsNonNull);
@@ -183,6 +188,23 @@ impl WasmGcEmitter {
 				Self::emit_list(func, &[I::Else, I::LocalGet(read), I::RefAsNonNull, I::End]);
 			}
 		}
+	}
+
+	/// `symbol("word")`: one symbol per word and module, made at its first use and kept in a global named
+	/// `symbol·word` (card speed-symbol-calls: the compiler's `n#1 == symbol("print")` made one per comparison)
+	fn emit_interned_symbol(&mut self, func: &mut Function, word: &str) {
+		let global = match self.interned_symbols.get(word) {
+			Some(&global) => global,
+			None => {
+				let empty = ConstExpr::ref_null(HeapType::Concrete(self.type_manager.node_type));
+				let global = self.declare_named_global(Ref(self.node_ref(true)), empty, format!("symbol·{word}"));
+				self.interned_symbols.insert(word.to_string(), global);
+				global
+			}
+		};
+		Self::emit_list(func, &[I::Block(BlockType::Result(Ref(self.node_ref(false)))), I::GlobalGet(global), I::BrOnNonNull(0)]);
+		self.emit_symbol_node(func, word);
+		Self::emit_list(func, &[I::GlobalSet(global), I::GlobalGet(global), I::RefAsNonNull, I::End]);
 	}
 
 	pub(in crate::wasm_emitter) fn emit_node_api(&mut self) {
