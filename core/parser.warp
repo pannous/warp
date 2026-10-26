@@ -44,9 +44,9 @@ def use_library(folder: text) { given_library = folder }
 // built compiler: uses.warp's module_text writes them in where library_sources() stands when it compiles the compiler,
 // so a compiler needs no lib/ on any disk (decision built-in-lib). A compiler built by one that bundles none yet (an
 // older seed) calls library_sources below and reads them where it runs
-LIBRARY_FILES = library_sources()
 // lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
 UNBUNDLED_FOLDERS = ["compiler", "data"]
+LIBRARY_FILES = library_sources()
 def library_sources(): any := library_texts(run_library(), "")
 // the .warp files of lib/<within> and its folders, by their paths within lib/
 def library_texts(library: text, within: text): any {
