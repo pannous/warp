@@ -45,15 +45,17 @@ before asking a question). After a context swap, this file and your role file be
 - Run commands yourself; never hand the user commands to paste.
 - A wrong value that another reading could make right, or a bug that may not matter, goes to warp-interviewer with
   code, value and expectation before anyone fixes code or test.
-- Communicate less: message only for Ready, blocked or a decision needed. Git (branch, commits, card) is the status.
-  warp-integrator gets only requests it must act on; the card is the merge request.
+- Communicate less: message only for landed, blocked or a decision needed. Git (branch, commits, card) is the status.
+  warp-integrator gets only requests it must act on.
 
 ## Where to work
 - Notes, docs, wiki, scripts, samples: straight onto main in /Users/me/dev/angles/warp; commit your own paths
   by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push. Never leave unpushed commits on main.
 - Anything compiled (core/, the harness in src/, Cargo.*): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
-  /Volumes/Worktrees/warp, /integrator or /me.
+  /Volumes/Worktrees/warp or /integrator.
+- Output (logs, dumps, builds, scratch) goes in your own worktree's data/ and goes with it; never into the main
+  checkout's data/. Logs that must outlive your session: ~/Library/Logs/warp/<role or card>/.
 - The user's uncommitted edits are integrated at once by whoever meets them: complete, run, commit as "(user)", push.
 - Absolute paths and `git -C <worktree>`; in zsh `${var}:path`. Files named `*_local*` are globally git-ignored.
 
@@ -73,6 +75,9 @@ before asking a question). After a context swap, this file and your role file be
 - `todo pick` shows the next cards in board order; `todo take <card> <session>`; before taking check nobody has a
   branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
 - Every branch has a card: comment branch, tip and state on it; a parked branch gets notes/handover/<branch>.md.
+- No Ready column, no merge queue (user 2026-10-26): workers land their own branches ("Done"). A finished branch
+  whose session retires unlanded stays in Now with `todo note <card> "land: <branch> <tip>"`; the Integrator lands
+  those (`todo landing`).
 - Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - A card is closed only with a commit: `todo done <card> <commit>`. Mechanics: `todo --help`.
 

@@ -40,6 +40,8 @@ install_compilers() {
 	cp "$data/warp.wasm" "$folder/warp.wasm.new" && mv "$folder/warp.wasm.new" "$folder/warp.wasm"
 	if [ -f "$data/warp-self.wasm" ] && [ "$(cut -d' ' -f1 "$data/warp-self.wasm.inputs" 2>/dev/null)" = "$inputs" ]; then
 		cp "$data/warp-self.wasm" "$folder/warp-self.wasm.new" && mv "$folder/warp-self.wasm.new" "$folder/warp-self.wasm"
+	else
+		rm -f "$folder/warp-self.wasm"  # an older pair's: `warp self` says it is missing instead of running it
 	fi
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
@@ -58,7 +60,9 @@ git -C "$TREE" diff --quiet "$since" "$tip" -- "${HARNESS_PATHS[@]}" ||
 	say "HARNESS CHANGED: cargo build --release of ${tip:0:10}, installed apart (notes/agents/integrator.md)"
 echo "$tip" >"$state/watched"
 
-"$scripts/promote-self.sh" "$TREE" | tail -1
+promoted=$("$scripts/promote-self.sh" "$TREE" | tail -1)
+echo "$promoted"
+[[ $promoted == *"NO FIXPOINT"* || $promoted == *FAILED* ]] && red "self lane: ${promoted:0:160}" --urgent
 install_compilers
 "$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$MAIN_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||
 	red "tiers 1-2: $(grep -a '^FAIL' "$state/gate-${tip:0:10}.log" | head -3 | paste -sd ';' -)"

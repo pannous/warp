@@ -25,8 +25,9 @@ words, FFI), the runtime that reads results back, and the CLI. Most things are i
 compiler extensions (core/extensions/). If the core compiler (core/*.warp) or the Rust harness needs changes, this needs
 to go through the interviewer. Ignore all old tasks about Rust features or  'both lanes'. 
 
-warp-self.wasm (seed/) is the checked-in fixpoint compiler; it compiles compiler.warp to
-warp.wasm, which promotes itself to warp-self.wasm when it recompiles itself to the same bytes (the fix point).
+warp-self.wasm (seed/) is the checked-in seed compiler; it compiles compiler.warp to
+warp.wasm, which promotes itself to warp-self.wasm when it compiles itself once more (no fixed point needed, user
+2026-10-26).
 
 ## Core Architecture
 
@@ -48,12 +49,12 @@ It is similar to JSON5 / ECMA Script but much simplified yet with a richer synta
 `compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
 parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
 whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp declares the Node enum.
-- `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a fixpoint
-  compiler checked in; scripts/refresh-seed.sh refreshes it). No Rust-compiled stage builds either compiler
-- `warp self <file|code>`: runs warp-self.wasm, a copy of warp.wasm promoted only when warp.wasm passes the fixpoint
-  test (it compiles compiler.warp to its own bytes, stage N+1 == N)
+- `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a
+  compiler checked in that compiles itself; scripts/refresh-seed.sh refreshes it). No Rust-compiled stage builds either compiler
+- `warp self <file|code>`: runs warp-self.wasm, a copy of warp.wasm promoted when warp.wasm compiles
+  compiler.warp once more (a fixpoint, stage N+1 == N, is only reported)
 - `warp rebuild` / `warp rebuild pure`: builds warp.wasm anew from lib/ (nothing rebuilds it automatically); the gate
-  needs only warp.wasm. `warp rebuild self` runs the fixpoint test and promotes; `scripts/promote-self.sh
+  needs only warp.wasm. `warp rebuild self` runs that self test and promotes; `scripts/promote-self.sh
   [--background] [<tree>]` does that every once in a while, in parallel, and never fails its caller. A worktree's
   compilers live in <worktree>/data/ (`WARP_LIB=<worktree>/lib`), main's beside the binary. Until 2026-10-26 they were
   named compiler.wasm and compiler-self.wasm; those names are still read when the new ones are missing
@@ -108,7 +109,7 @@ cargo build                    # Debug build
 cargo build --release          # Release build
 cargo build --offline          # Offline mode (uses the local registry cache)
 warp rebuild pure              # warp.wasm from lib/ by the seed
-scripts/promote-self.sh        # warp.wasm -> warp-self.wasm only at a fixpoint (`warp rebuild self`); never fails
+scripts/promote-self.sh        # warp.wasm -> warp-self.wasm once it compiles itself (`warp rebuild self`); never fails
 ```
 
 
@@ -126,7 +127,6 @@ When implementing gaps that the old Rust legacy implementation had, but are not 
 ## Pre-approved plans
 Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
 A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
-<!-- `todo add "merge: <branch> <sha>" Ready -b "<one-line summary, tests run>"`.  -->
 Main moved again in the meantime?
 AVOID full rebuild for small changes! If the minimal smoke test (Compiling Hello World) passes on the branch merged
 with origin/main, the worker pushes it to main itself and closes the card with `todo done <card> <commit>`
@@ -138,12 +138,12 @@ Several agent sessions share this Mac and the full suite is slow, so run the che
 (roles: notes/roles.md):
 - Smoke test (minutes), every branch: `WARP_LIB=<worktree>/lib warp rebuild pure`, then
   `warp pure samples/hello/hello.warp` prints Hello.
-- Fixpoint test, only for parser/compiler changes (core/): `scripts/self-check.sh <worktree>`, the compiler compiles
-  itself and that build prints Hello. For core/ changes smoke + fixpoint is the whole check: no test folders.
+- Self test, only for parser/compiler changes (core/): `scripts/self-check.sh <worktree>`, the compiler compiles
+  itself and that build prints Hello. For core/ changes smoke + self test is the whole check: no test folders.
 - Changes outside core/: the smoke test is enough to merge. `warp test <folders>` of the few test files a lib/
   feature touches is feedback for the worker, run in the background, never a merge condition.
 - Full suite (`warp test`): only the Integrator, at rare intervals (nightly, before a release), never per branch.
-We always want the very quick feedback loop and quick merges: anything slower than smoke + fixpoint runs in the
+We always want the very quick feedback loop and quick merges: anything slower than smoke + self test runs in the
 background (`run_in_background`) and never holds a merge; what it finds is fixed forward on a card.
 Workers merge origin/main into their branch, run the smoke test on that merge and push it to main themselves; nobody
 repeats their test. The Integrator runs the slower tiers in the background on main and sends what fails back to the

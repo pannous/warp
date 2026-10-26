@@ -8,7 +8,7 @@ pub const TIME_LIMIT_VARIABLE: &str = "WARP_TIME_LIMIT";
 
 /// Fuel for a run that asks for fuel instead of a time limit (`use fuel`, `warp fuel <steps>`, `WARP_FUEL`): wasmtime
 /// burns about one unit per executed WASM instruction, so this is roughly a hundred billion steps before a run stops
-/// with `out of fuel after N steps`. Counting steps makes calls about four times slower (probes/fast_int/fuel_cost.sh),
+/// with `out of fuel after N steps`. Counting steps makes calls about four times slower,
 /// so only such runs count them.
 pub const DEFAULT_FUEL: u64 = 100_000_000_000;
 /// Environment variable that asks for fuel, its value the steps (overrides `DEFAULT_FUEL`)

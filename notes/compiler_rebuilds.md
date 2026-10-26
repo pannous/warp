@@ -11,8 +11,9 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
   only with `--rebuild`.
 - warp.wasm (`warp pure`) is the one build: the seed (seed/warp-self.wasm) compiles core/compiler.warp.
   warp-self.wasm (`warp self`) is no build of its own: `warp rebuild self` lets warp.wasm compile compiler.warp again
-  and copies warp.wasm to warp-self.wasm only when that output is byte-identical to warp.wasm's module (the fixpoint);
-  otherwise warp-self.wasm stays as it was. `scripts/promote-self.sh [--background] [<tree>]` runs it (through
+  and copies warp.wasm to warp-self.wasm when it does (user 2026-10-26: "If the compiler can compile itself once more,
+  we don't need the fixed point"; whether the output is byte-identical is only said); otherwise warp-self.wasm stays as
+  it was. `scripts/promote-self.sh [--background] [<tree>]` runs it (through
   rebuild.sh self, so the store's promoted warp-self.wasm of these inputs is reused) every once in a while, in
   parallel, and never fails its caller. The gate and the normal rebuild need only warp.wasm.
 - Names: until 2026-10-26 the files were compiler.wasm and compiler-self.wasm (and seed/compiler-self.wasm). Every

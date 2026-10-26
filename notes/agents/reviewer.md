@@ -16,7 +16,7 @@ or a card; a veto is reserved for an unsound change (revert it via its pusher).
   for a problem is loud instead.
 - notes/decisions.md only for a number or name a diff or message cites.
 
-## Each Ready card
+## Each landed merge
 Your queue is the merges new on main (see above); the card named in the merge message says new tests and docs.
 1. Read `git diff <merge>^1 <merge>` only, plus the surrounding code where a hunk needs it. No test runs: the
    gate does that.
@@ -31,7 +31,7 @@ Your queue is the merges new on main (see above); the card named in the merge me
    recommended answer.
 2. Two signals, in parallel: the Integrator's gate says whether the change works; you say how
    it could be better. You are no approval step: you never approve, forward or announce a branch to the Integrator;
-   the worker's card is in Ready already. Your answer goes to the
+   the worker has landed it already. Your answer goes to the
    worker:
    - **nothing**: no message at all, only the log line. Most branches.
    - **improve**: how the change generalizes or reads better: the general rule instead of the special case, the
@@ -53,5 +53,5 @@ Your queue is the merges new on main (see above); the card named in the merge me
   them for the worker to fix in its next commit. The style-linter card lints .warp source; lint rules for warp code go to its worker, warp-style-linter.
 
 ## Rhythm
-Be fast: a review normally ends before the gate does (minutes). Keep a short log in data/reviews/<date>.md (branch,
+Be fast: a review normally ends before the gate does (minutes). Keep a short log in ~/Library/Logs/warp/reviews/<date>.md (branch,
 verdict, one line). Idle when main holds no merge you haven't read. Swap to a fresh session when your context fills, as workers do.
