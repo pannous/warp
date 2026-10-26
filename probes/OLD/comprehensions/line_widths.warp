@@ -1,2 +1,2 @@
-use "../../lib/compiler/positions.warp"
+use "../../core/positions.warp"
 print(line_widths("ab\ncde"))

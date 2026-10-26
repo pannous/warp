@@ -1,4 +1,4 @@
-# The rewrite engine's place `parameter` (lib/compiler/rewrites.warp F10, notes/rewrites.md), written in warp: no Rust twin
+# The rewrite engine's place `parameter` (core/rewrites.warp F10, notes/rewrites.md), written in warp: no Rust twin
 
 # a_rule_of_a_parameter_rewrites_a_definitions_head
 is! 'rewrite given $p => $p where parameter

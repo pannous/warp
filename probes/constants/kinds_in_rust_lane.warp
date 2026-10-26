@@ -1,4 +1,4 @@
-use "../../lib/compiler/kinds.warp"
+use "../../core/kinds.warp"
 f(k: int): int := k
 g(n: any): int := f(KindUnit.Info * 2 + Kind.Key)
 print g(1)

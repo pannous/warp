@@ -17,7 +17,7 @@ stage=$(cd "$(mktemp -d)" && pwd -P) || exit 1  # symlinks resolved, as warp-hos
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/install" "$stage/elsewhere" "$stage/links" || exit 1
 # an installed layout: warp-host, its compilers and lib/ in one folder, nothing of the checkout in reach
-cp "$host" "$compilers/warp-self.wasm" "$stage/install/" && cp -R "$checkout/lib" "$stage/install/lib" || exit 1
+cp "$host" "$compilers/warp-self.wasm" "$stage/install/" && cp -RL "$checkout/lib" "$stage/install/lib" || exit 1
 ln -s "$stage/install" "$stage/links/folder" && ln -s "$stage/install/warp-host" "$stage/links/warp-host" || exit 1
 
 run=0 failed=0

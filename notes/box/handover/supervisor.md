@@ -22,8 +22,8 @@ Pending user question: should these become rules for all agents? (1) never use a
 - Every widget gets an "I don't care" option and allowCustom.
 - Kill processes by PID only, never pkill -f on the shared box.
 - Pure only: only `warp rebuild pure` on the shared binary /workspace/cow/sol-warp-latest. No per-branch cargo builds unless a branch changes Rust. The old Rust compiler is frozen except for urgent fixes.
-- Soft pass ban: a new pass, a pass-list entry or a new lib/compiler/*.warp file needs the user's yes. Exception already approved: module_imports.warp.
-- A lib/compiler edit over ~40 lines, a new lowering case or a special case needs Supervisor's OK; large ones go to the user. Sugar goes into rules (core/sugar); extensions go in core/extensions/ as single files (subfolder only for a big topic).
+- Soft pass ban: a new pass, a pass-list entry or a new core/*.warp file needs the user's yes. Exception already approved: module_imports.warp.
+- A core edit over ~40 lines, a new lowering case or a special case needs Supervisor's OK; large ones go to the user. Sugar goes into rules (core/sugar); extensions go in core/extensions/ as single files (subfolder only for a big topic).
 - Layout: core/ holds the compiler, runtime (runtime/, runtime/extended/), sugar and extensions. lib/ holds only plain importable modules (math, units, time). Nested folders, never underscore names. `core -> lib/compiler` symlink now; the real move happens later under a freeze you call.
 - Units and time are class libraries in lib/ that wait for pure class operators. `·` stays multiplication. `match` is core. on/go are on hold until classes and operators work in pure.
 - Approved for Warp Code (14:00): extension loader entries in first_sugar_module_names; `?.` SYMBOL_OPERATORS fix; `x?` as a sugar rule if it parses, else ~7 parser lines; varargs (~17 lines in signatures and emitter call()).
@@ -53,7 +53,7 @@ Check origin/main first so nothing merges twice. Order:
 9. compiler-library-source cdaa8fe25, compiler-cache-keys bcc91ca36, compiler-rebuild-policy 1f0233744.
 10. sugar-comprehensions, sugar-preposition-heads, pure-error-positions d07ade09d, type-word-prefix 9066fac982, sugar-foreign-forms 8bd26ddc3.
 11. Low priority: ffi-python-adapter 71bb36d34, host-glue-native-notes 05386b158, host-from-warp a3c6f5641, feat/ffi-rust-crate-adapter e48d45083.
-HOLD: the runtime-split stack until Warp Code 3 re-readies it. Bounce branches with pinned or refusal tests, or ones that skipped the lib/compiler OK.
+HOLD: the runtime-split stack until Warp Code 3 re-readies it. Bounce branches with pinned or refusal tests, or ones that skipped the core OK.
 
 ## Other open items
 - When class operators land: wake Warp Lib Gap's successor (units, handover there) and Warp Code 3 (time).

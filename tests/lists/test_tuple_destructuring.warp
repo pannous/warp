@@ -1,4 +1,4 @@
-# tuples and their destructuring as the rules of lib/compiler/extensions/tuples.warp (card pure-tuples-destructuring)
+# tuples and their destructuring as the rules of core/extensions/tuples.warp (card pure-tuples-destructuring)
 
 # a tuple as a function's result is the list of its items
 is! 'divmod(a, b) := (a - b, a + b); r = divmod(17, 5); r#1 * 100 + r#2' 1222

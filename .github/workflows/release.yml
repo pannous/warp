@@ -114,7 +114,7 @@ jobs:
       # warp-self's kept values, made once in a tarball's layout and shipped in every one (the same on every
       # platform), so an installed warp-host's first run takes ~4 s, not ~26 s; no machine code (card warp-host-size)
       run: |
-        mkdir -p stage && cp bin/warp-host bin/warp-self.wasm stage/ && cp -R lib stage/lib
+        mkdir -p stage && cp bin/warp-host bin/warp-self.wasm stage/ && cp -RL lib stage/lib
         packaging/host_cache.sh stage
         mv stage/host-cache bin/host-cache
     - uses: actions/upload-artifact@v7
@@ -155,7 +155,7 @@ jobs:
         ARCHIVE: warp-${{ env.TAG }}-${{ matrix.target }}.tar.gz
       run: |
         chmod +x dist/warp dist/warp-runtime dist/warp-page-runtime dist/warp-host
-        cp -R lib dist/lib
+        cp -RL lib dist/lib
         tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime warp-host warp.wasm warp-self.wasm lib host-cache
         gh release upload "$TAG" "$ARCHIVE" --clobber
 

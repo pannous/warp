@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 # A def written `f(…): Node { … }` (block body, no :=) whose for loop returns early: Rust lane fails
 # 'undefined variable: entry·index'; the same with `: Node := {` or `: any {` prints {a:b}
-use "../../lib/compiler/shapes.warp"
+use "../../core/shapes.warp"
 def shaped(parameter: Node, glued: list): Node {
 	for entry in glued {
 		if entry#1 == "a" { return Key(parameter, Op.Colon, entry#2) }

@@ -1,4 +1,4 @@
-# The rewrite engine (lib/compiler/rewrites.warp, card rewrite-engine)
+# The rewrite engine (core/rewrites.warp, card rewrite-engine)
 
 `rewrite PATTERN => TEMPLATE [where …]` rules carry the sugar layer (notes/layers.md). The engine gains the features
 the migration needs one at a time, each landed on its own before warp-layers moves the modules it unblocks.

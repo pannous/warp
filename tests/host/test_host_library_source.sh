@@ -18,7 +18,7 @@ unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WAR
 compiler=$(dirname "$rust")/warp-self.wasm
 [ -f "$compiler" ] || { echo "✗ no warp-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/work" || exit 1
-cp -R "$checkout/lib" "$stage/lib" || exit 1
+cp -RL "$checkout/lib" "$stage/lib" || exit 1
 # an alias no lib/ has, in a module the compiler used to read only from its build-time copy
 printf '\n%s\n' 'alias howmany = count' >>"$stage/lib/prelude.warp"
 cp "$host" "$stage/bin/warp-host" && cp "$compiler" "$stage/bin/" || exit 1

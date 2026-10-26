@@ -19,7 +19,7 @@ The specification is not fully implemented yet
 # self hosted
 
 It began as a Rust implementation; the compiler is now self-hosted
-in warp (lib/compiler/*.warp, notes/self_hosting.md). The Rust code in src/ and crates/ is frozen legacy: the bootstrap
+in warp (core/*.warp, notes/self_hosting.md). The Rust code in src/ and crates/ is frozen legacy: the bootstrap
 that first compiles compiler.warp, the native host (wasmtime, host words, FFI) and the runtime (notes/agents/common.md
 "Principles"). 
 
@@ -45,11 +45,11 @@ Person {
 
 It is similar to JSON5 / ECMA Script but much simplified yet with a richer syntax and more precise and flexible data model.
 
-### The warp compiler (`lib/compiler/`, `core/` links to it)
+### The warp compiler (`core/`; `lib/compiler` links to it for a transition)
 
 `compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
 parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
-whose runtime words are warp too (runtime.warp, runtime/*.warp). lib/compiler/node.warp declares the Node enum case for
+whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp declares the Node enum case for
 case as src/node/mod.rs has it.
 - `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a fixpoint
   compiler checked in; scripts/refresh-seed.sh refreshes it). No Rust-compiled stage builds either compiler
@@ -217,7 +217,7 @@ These are reexported in `lib.rs` for test access via `use warp::*`.
 ## Development Workflow
 
 0. **Check state** - git log, git status
-1. **Modify parser or emitter** - in lib/compiler/*.warp (src/ is frozen), checked with the one shared build:
+1. **Modify parser or emitter** - in core/*.warp (src/ is frozen), checked with the one shared build:
    `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` (no local cargo builds
    besides main's)
 2. **Add tests** - Create or update tests in `tests/`

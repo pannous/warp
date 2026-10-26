@@ -1,4 +1,4 @@
-//! card time-primitives: lib/compiler/emitter.warp makes the time nodes of a lowered program's time_of calls, Kind::Time
+//! card time-primitives: core/emitter.warp makes the time nodes of a lowered program's time_of calls, Kind::Time
 //! with the info bits of src/time/mod.rs TimeForm, read back as Rust's module gives them (the intrinsics runtime.warp
 //! reads them with, time_form … zone_offset, wait for the runtime words of the time cards)
 use crate::common::twins::{emitter_differential, sources};

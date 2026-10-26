@@ -213,7 +213,7 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   - `owned_text` (card warp-host-repl-fixes): a `char *` the caller owns, strdup's or readline's, is copied into a
     text like `text` and then given to free(); NULL is ø, freed never. Spelled:
     - in a foreign line, a result type only: `readline(prompt: text): owned_text from 'edit'`
-      (lib/compiler/c_imports.warp)
+      (core/c_imports.warp)
     - in warp.c_functions, the result field `owned_text` (c_signatures.rs CPointer::OwnedText)
     - in warp.c_calls, the result letters `ft`, "free the text", beside `t` and `ot` (ffi.rs OWNED_TEXT_LETTERS)
   - A `text` result is built with the module's new_text and needs its text_heap; pure modules don't export text_heap
@@ -356,7 +356,7 @@ unique_lines, find_files, file_size, info, which, glob, list_files. tests/host/t
 Not yet, for reasons outside warp-host:
 - `pwd`/`cwd` after `cd` still give the start folder. The pure compiler computes a definition without parameters
   (`cwd := std_io(…)`, `pwd := cwd`) once, where warp-rust runs it at every read; and `f() := …` has no bare `f`.
-- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (lib/compiler/runtime/extended/wasi.warp), not
+- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (core/runtime/extended/wasi.warp), not
   std_io. So they take no `~`, and a relative path stays in the start folder (WASI's preopened `.`) after `cd`.
 - `ls("nosuch")` traps (`node length`): the comprehension takes list_files's Error as a list. `list_files("nosuch")`
   itself is a catchable Error.

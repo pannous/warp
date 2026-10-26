@@ -42,7 +42,7 @@ print try python_call(math, "sqrt", [-1]) else "caught"             // caught
   exits 1.
 
 Design decision: functions over the module (`python_call(math, "sqrt", [16])`), not `math.sqrt(16)`. Warp resolves
-calls at compile time; a dynamic `m.sqrt` would need a dispatch hook in the compiler (lib/compiler, owned by others).
+calls at compile time; a dynamic `m.sqrt` would need a dispatch hook in the compiler (core, owned by others).
 `import sqrt from python "math"` could later be compile-time sugar for `python_call(python_import("math"), "sqrt", …)`.
 
 ## How it works
@@ -111,7 +111,7 @@ samples/python/numpy_matrix.warp: `[[7 10] [15 22]]` and `-2.0000000000000004`.
 
 tests/host/test_python.sh: 15/15 passed with this branch's host (2m53s); 15/15 before with pure-c-imports' host and a
 `libpython.so` symlink in WARP_LIBRARY_PATH (6m34s, heavier load). warp-self.wasm was not built here, so the
-default `--compiler self` lane is untested [I: it shares lib/compiler/c_imports.warp].
+default `--compiler self` lane is untested [I: it shares core/c_imports.warp].
 
 ## Open
 
