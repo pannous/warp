@@ -14,11 +14,11 @@ export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=
 unset WARP_TIME_LIMIT WARP_FUEL WARP_EMIT_REFUSALS
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
-for compiler in compiler.wasm compiler-self.wasm; do
+for compiler in warp.wasm warp-self.wasm; do
 	[ -f "$compilers/$compiler" ] || { echo "✗ no $compiler in $compilers: scripts/rebuild.sh copies the pair"; exit 1; }
 done
 rm -rf "$stage" && mkdir -p "$stage/bin" || exit 1
-cp "$host" "$stage/bin/warp-host" && cp "$compilers"/compiler.wasm "$compilers"/compiler-self.wasm "$stage/bin/" || exit 1
+cp "$host" "$stage/bin/warp-host" && cp "$compilers"/warp.wasm "$compilers"/warp-self.wasm "$stage/bin/" || exit 1
 host=$stage/bin/warp-host
 cd "$stage" || exit 1
 program() { # program <name> <source lines…>: <name>.warp in the stage
@@ -69,10 +69,10 @@ program raises 'raise "boom"'
 is "a raised error is the run's printed value" 'Error("boom")' -- "$host" raises.warp
 
 # the words of warp's commands
-is "pure: compiler.wasm" '"Hello 🌍2026"' -- "$host" pure hello.warp
-is "self: compiler-self.wasm" '"Hello 🌍2026"' -- "$host" self hello.warp
-holds "version names compiler.wasm" "compiler.wasm of" -- "$host" version
-holds "version names compiler-self.wasm" "compiler-self.wasm of" -- "$host" version
+is "pure: warp.wasm" '"Hello 🌍2026"' -- "$host" pure hello.warp
+is "self: warp-self.wasm" '"Hello 🌍2026"' -- "$host" self hello.warp
+holds "version names warp.wasm" "warp.wasm of" -- "$host" version
+holds "version names warp-self.wasm" "warp-self.wasm of" -- "$host" version
 
 # limits: a run that never stops ends with an Error
 program forever 'while true { 1 }'

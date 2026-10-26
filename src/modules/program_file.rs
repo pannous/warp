@@ -7,8 +7,9 @@ pub(crate) const LIBRARY_SETTING: &str = "WARP_LIB";
 pub const COMPILER_FOLDER: &str = "compiler";
 /// An installed warp's lib/ and compilers when not next to the binary: <prefix>/share/warp for <prefix>/bin/warp
 const INSTALLED_SHARE_FOLDER: &str = "../share/warp";
-/// The compiler file whose presence marks an installed folder (src/compiler/standalone.rs)
-const INSTALLED_COMPILER: &str = "compiler.wasm";
+/// The compiler files whose presence marks an installed folder (src/compiler/standalone.rs): warp.wasm, or its old
+/// name compiler.wasm (transition)
+const INSTALLED_COMPILERS: [&str; 2] = ["warp.wasm", "compiler.wasm"];
 
 /// `path` as written in the program: a relative path is next to the program's file, or in the working directory for
 /// inline code
@@ -97,7 +98,8 @@ pub fn installed_folder() -> Option<PathBuf> {
 	let folder = binary.parent()?.to_path_buf();
 	let shared = folder.join(INSTALLED_SHARE_FOLDER);
 	let holds_warp = |candidate: &PathBuf| {
-		candidate.join(INSTALLED_COMPILER).exists() || candidate.join(STD_FOLDER).join(COMPILER_FOLDER).is_dir()
+		INSTALLED_COMPILERS.iter().any(|name| candidate.join(name).exists())
+			|| candidate.join(STD_FOLDER).join(COMPILER_FOLDER).is_dir()
 	};
 	Some(if !holds_warp(&folder) && holds_warp(&shared) { shared } else { folder })
 }

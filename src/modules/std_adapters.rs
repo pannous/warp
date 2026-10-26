@@ -278,8 +278,8 @@ fn keep_value(name: &str, makers: &[String], value: &Node) {
 
 /// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs; a
 /// value its `makers` made (os.keep_of, lib/compiler files) by theirs alone and who compiled them (KEEPING_SCOPE: this
-/// binary, or the seed for compiler.wasm): an edit of lib/compiler they do not reach keeps it (card
-/// speed-module-cache). compiler-self.wasm was compiled by all of lib/compiler, so its values stay its own
+/// binary, or the seed for warp.wasm): an edit of lib/compiler they do not reach keeps it (card
+/// speed-module-cache). warp-self.wasm was compiled by all of lib/compiler, so its values stay its own
 #[cfg(feature = "native")]
 fn kept_key(name: &str, makers: &[String]) -> Option<String> {
 	if let (false, Some(scope)) = (makers.is_empty(), KEEPING_SCOPE.with(|scope| scope.borrow().clone())) {
@@ -291,10 +291,10 @@ fn kept_key(name: &str, makers: &[String]) -> Option<String> {
 
 #[cfg(feature = "native")]
 thread_local! {
-	/// The SHA-256 of the compiler module running (compiler.wasm, compiler-self.wasm), empty for any other program
+	/// The SHA-256 of the compiler module running (warp.wasm, warp-self.wasm), empty for any other program
 	static KEEPING_COMPILER: std::cell::RefCell<String> = Default::default();
 	/// Where the program running keeps the values its makers made (kept_key): "" for a program this warp compiled,
-	/// "seed:<hash> " for compiler.wasm; None for a compiler all of lib/compiler compiled (standalone.rs kept_scope),
+	/// "seed:<hash> " for warp.wasm; None for a compiler all of lib/compiler compiled (standalone.rs kept_scope),
 	/// whose values stay its own
 	static KEEPING_SCOPE: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(Some(String::new()));
 }
@@ -303,7 +303,7 @@ thread_local! {
 const LIBRARY_VARIABLE: &str = "WARP_LIB";
 
 /// A variable of the environment a run sees: the process's, but WARP_LIB the lib/ of this warp (library_folder) in a
-/// compiler's run, so compiler.wasm reads the std modules there, never from the folder it was built in (card
+/// compiler's run, so warp.wasm reads the std modules there, never from the folder it was built in (card
 /// compiler-cache-keys); any other program sees the process's environment as it is
 pub fn environment_variable(name: &str) -> Option<String> {
 	if name == LIBRARY_VARIABLE && in_compiler_run() {
@@ -329,8 +329,8 @@ fn in_compiler_run() -> bool {
 	false
 }
 
-/// `run` of the compiler module whose SHA-256 is `owner`, keeping values of its own: compiler.wasm and
-/// compiler-self.wasm, or a compiler.wasm built from an older lib/, compute compiler.warp's lowered runtime words
+/// `run` of the compiler module whose SHA-256 is `owner`, keeping values of its own: warp.wasm and
+/// warp-self.wasm, or a warp.wasm built from an older lib/, compute compiler.warp's lowered runtime words
 /// differently, and one read another's ('key not found'; card pure-self-stale-cache). `scope`: the hash of the seed
 /// that compiled it, whose values its makers made are kept by their files (kept_key); None keeps them all its own
 #[cfg(feature = "native")]

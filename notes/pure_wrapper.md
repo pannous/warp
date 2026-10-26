@@ -1,7 +1,7 @@
 # The `warp` launcher: programs through the pure pipeline (cards warp-launcher, warp-rust-install)
 
 `warp` is a bash script, packaging/bin/warp. It runs programs through the warp compiler written in warp
-(lib/compiler/compiler.warp built as compiler.wasm, run as `warp-rust pure` runs it) and hands every other command to the
+(lib/compiler/compiler.warp built as warp.wasm, run as `warp-rust pure` runs it) and hands every other command to the
 Rust binary, installed as `warp-rust`, unchanged (`exec`: same arguments, stdio and exit status). Plan A of the
 investigation of 2026-10-22; no Rust changed. Progress is how many tests pass through the pure pipeline, not how close
 it comes to Rust's output.
@@ -12,7 +12,7 @@ it comes to Rust's output.
 |---|---|
 | `warp f.warp [-- args]`, `warp run f.warp [-- args]` | `warp-rust pure f.warp [-- args]` |
 | `warp <code>` (a word that is no command, file or option: `warp '6*7'`) | `warp-rust pure <code>` |
-| `warp compile --wasm f.warp` | `warp-rust compiler.wasm -- f.warp f.wasm <folder of f> <lib>`, then `compiled N bytes to f.wasm` |
+| `warp compile --wasm f.warp` | `warp-rust warp.wasm -- f.warp f.wasm <folder of f> <lib>`, then `compiled N bytes to f.wasm` |
 | `warp fix\|beautify [check\|yes] <file\|folder\|code>…` | `WARP_LIB=<lib> warp-rust --no-hints run <lib>/fix/command.warp -- fix\|beautify …` (lib/fix, card fix-route); warp-rust with the same words when that lib/ has no fix/command.warp |
 | anything else: `warp`, `warp x.wasm`, `version`, `help`, `test`, `rebuild`, `serve`, `dev`, `app`, `deploy`, `eval`, `lower`, `parse`, `repl`, `compile --exe/--site/…`, `build`, a plain word (`warp pi`), `fast`, `fuel n` | `warp-rust` with the same words |
 
@@ -33,8 +33,8 @@ it comes to Rust's output.
   printed fixed.
 - Where lib/ comes from for `compile --wasm` (compiler.warp's fourth argument), as warp-rust finds it: WARP_LIB, else the
   nearest lib/ holding compiler/ above the source or the current folder, else the installed lib/, else the lib/ named in
-  compiler.wasm's `warp.build` section if it still exists. The compiler file: `<WARP_LIB>/../data/compiler.wasm` when
-  it exists, else the installed one (`compiler-self.wasm` for self). Installed: beside warp-rust, else
+  warp.wasm's `warp.build` section if it still exists. The compiler file: `<WARP_LIB>/../data/warp.wasm` when
+  it exists, else the installed one (`warp-self.wasm` for self). Installed: beside warp-rust, else
   `<prefix>/share/warp` (src/modules/program_file.rs `installed_folder`, card installed-compilers).
 
 ## Refusals
@@ -54,10 +54,10 @@ WARP_FALLBACK=rust (and for inline code) is stdout read, through `tee`: stdout i
 |---|---|
 | `WARP_PIPELINE=rust` | every command goes to warp-rust as it is: the old Rust path, environment untouched |
 | `WARP_FALLBACK=rust` | when the pure pipeline refuses the program (Refusals above), the launcher prints `warp: ⚠️  WARP_FALLBACK=rust: THE PURE PIPELINE REFUSED THIS PROGRAM, RUNNING IT THROUGH RUST INSTEAD` on stderr and runs the whole command through warp-rust. Off by default. Any other failure and exit status passes as it is |
-| `WARP_COMPILER=pure\|self` (default pure), or the flag `--self` | `self`: compiler-self.wasm (compiler.warp compiled by itself, `warp-rust self`) instead of compiler.wasm. Another value is an error |
+| `WARP_COMPILER=pure\|self` (default pure), or the flag `--self` | `self`: warp-self.wasm (compiler.warp compiled by itself, `warp-rust self`) instead of warp.wasm. Another value is an error |
 | `WARP_SELF_HOSTED` | warp-rust's own (src/compiler/self_hosted.rs: front, emit, pure, pure-only), passed through untouched |
 | `WARP_RUST=<binary>` | the Rust binary; else `warp-rust` beside the script (links followed, as Homebrew links bin/warp), else on PATH |
-| `WARP_HOST=<binary>\|none` | the native host warp-host (notes/warp_host.md) compiles and runs programs (`run`, inline code, `compile --wasm`) instead of warp-rust's pure lane; else `warp-host` beside the script when there is one; `none`: warp-rust's pure lane. With it, compiler-self.wasm is the default and `WARP_COMPILER=pure` asks for compiler.wasm (`--compiler full`) |
+| `WARP_HOST=<binary>\|none` | the native host warp-host (notes/warp_host.md) compiles and runs programs (`run`, inline code, `compile --wasm`) instead of warp-rust's pure lane; else `warp-host` beside the script when there is one; `none`: warp-rust's pure lane. With it, warp-self.wasm is the default and `WARP_COMPILER=pure` asks for warp.wasm (`--compiler full`) |
 | WARP_LIB, WARP_HINTS, WARP_NO_WINDOW, WARP_EMIT_REFUSALS, … | warp-rust's, unchanged |
 
 ## Adding a command
@@ -87,8 +87,8 @@ program reuses one. Add an outcome check to tests/launcher/test_launcher.sh.
 ```
 ~/dev/bin/warp               packaging/bin/warp (the launcher)
 ~/dev/bin/warp-rust          the Rust binary (quick-release build of main)
-~/dev/bin/compiler.wasm      beside warp-rust: standalone.rs finds them next to its own (canonical) path
-~/dev/bin/compiler-self.wasm
+~/dev/bin/warp.wasm      beside warp-rust: standalone.rs finds them next to its own (canonical) path
+~/dev/bin/warp-self.wasm
 ```
 
 In the repo: scripts/self-check.sh and scripts/lib_bench.sh run /Users/me/dev/bin/warp-rust, plain warp while warp-rust
@@ -100,7 +100,7 @@ lanes). Nothing in ~/dev/bin was installed or swapped by this branch.
 - refresh_main_binary.sh `build_and_install`: install `$target/$profile/warp` as `$bin/warp-rust` (binaries list:
   `warp` → `warp-rust` as the destination name), then the launcher: `install_binary $worktree/packaging/bin/warp
   $bin/warp`. The version line reads `$bin/warp-rust --version`.
-- refresh_main_binary.sh `keep_main_build`: keep `$bin/warp-rust` (with compiler.wasm) in main-builds/<commit>/ and
+- refresh_main_binary.sh `keep_main_build`: keep `$bin/warp-rust` (with warp.wasm) in main-builds/<commit>/ and
   link `$bin/warp-<commit>` to it (as now, a Rust binary finding its compilers through the link); `cmp` against
   warp-rust. `rebuild_worktree_compilers`: `$bin/warp-rust rebuild pure`.
 - express.sh l.81: `install_compilers.sh /Users/me/dev/bin/warp-rust $PWD` (it copies the binary it is given and runs
@@ -111,7 +111,7 @@ lanes). Nothing in ~/dev/bin was installed or swapped by this branch.
 
 ## Packaging that must follow later (not changed)
 
-Since card installed-compilers the packages ship compiler.wasm, compiler-self.wasm and lib/ in `<prefix>/share/warp`,
+Since card installed-compilers the packages ship warp.wasm, warp-self.wasm and lib/ in `<prefix>/share/warp`,
 where both warp-rust and the launcher find them; the Rust binary is still installed as `warp`. Left to do:
 - the release archives: the Rust binary as `warp-rust` plus packaging/bin/warp as `warp`.
 - packaging/homebrew/Formula/warp.rb: `bin.install` warp-rust and the launcher; its test `warp pure '6*7'` passes
@@ -133,18 +133,18 @@ where both warp-rust and the launcher find them; the Rust binary is still instal
 | `warp version` / `warp-rust version` | 0.013 s / 0.008 s |
 
 The launcher adds 5–10 ms; the pure pipeline costs ~0.23 s per program over Rust's, the compiler module itself running.
-The investigation measured warm pure hello at 0.24–0.31 s vs Rust 0.04–0.05 s. A first run after a new compiler.wasm
+The investigation measured warm pure hello at 0.24–0.31 s vs Rust 0.04–0.05 s. A first run after a new warp.wasm
 lowers compiler.warp's runtime words once: 8–14 s here (debug), `warp rebuild` warms it.
 
 ## Tests
 
 tests/launcher/test_launcher.sh (outcome checks, expected output and exit status), through the queue:
 `tests/queue.sh tests/launcher/test_launcher.sh`. WARP_LAUNCHER_RUST names the Rust binary under test (default the
-checkout's target/debug/warp), compiler.wasm and compiler-self.wasm beside it; staged in scratch/launcher-test/.
+checkout's target/debug/warp), warp.wasm and warp-self.wasm beside it; staged in scratch/launcher-test/.
 
 Pure-pipeline coverage: `tests/queue.sh <warp-rust> test tests` (or `--self`) runs every test of tests/ through the
 pure pipeline and prints `m of n failed`; n − m is the number going green.
 
-Measured 2026-10-22 on the box (tests at 0445edb5e, debug warp-rust bf03df01c, compiler.wasm of 9fc81b9241; one targeted
+Measured 2026-10-22 on the box (tests at 0445edb5e, debug warp-rust bf03df01c, warp.wasm of 9fc81b9241; one targeted
 queue run, 20 min wall, 8 children): `6006 of 10701 failed in 1630 files`, so **4695 of 10701 tests (44 %) pass
 through the pure pipeline**; 5131 of the failures are refusals ("outside the core").

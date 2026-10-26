@@ -91,7 +91,7 @@ calls at compile time; a dynamic `m.sqrt` would need a dispatch hook in the comp
 ## Measured (box, 2026-10-23 00:40–01:05 CEST, box load 8–50)
 
 warp-host of this branch (`cargo build --profile host -p warp-runtime --features host --bin warp-host`, 20m53s under
-load), compiler.wasm of the pure-c-imports worktree (`--compiler full`), no WARP_LIBRARY_PATH: `python` found by
+load), warp.wasm of the pure-c-imports worktree (`--compiler full`), no WARP_LIBRARY_PATH: `python` found by
 version_named_sonames. Each sample ~8.8 s wall, the compile included.
 
 samples/python/python_modules.warp (`--compiler full`):
@@ -110,7 +110,7 @@ caught the ValueError
 samples/python/numpy_matrix.warp: `[[7 10] [15 22]]` and `-2.0000000000000004`.
 
 tests/host/test_python.sh: 15/15 passed with this branch's host (2m53s); 15/15 before with pure-c-imports' host and a
-`libpython.so` symlink in WARP_LIBRARY_PATH (6m34s, heavier load). compiler-self.wasm was not built here, so the
+`libpython.so` symlink in WARP_LIBRARY_PATH (6m34s, heavier load). warp-self.wasm was not built here, so the
 default `--compiler self` lane is untested [I: it shares lib/compiler/c_imports.warp].
 
 ## Open
