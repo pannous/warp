@@ -17,7 +17,8 @@ few things differently. Where this file and the role files disagree, Grok agents
 
 ## Status lives in git
 - The status is the branch name, the commit messages and the board card, not chat.
-- Ready: `todo add "merge: <branch> <sha>" Now -b "<summary, tests run>"`. The box `todo` has no `ready` command.
+- Ready: `todo ready <card> [branch]`: checks that the branch is pushed and merges cleanly into origin/main, records
+  branch + tip on the card and moves it to Ready. The box `todo` has it too.
 - Messages only for blocked or a decision; FYIs go out without waking the agent. The user hands out work between
   agents; agents keep messages to each other to a minimum.
 - An agent stops only its own helper jobs, never with a stop that reaches other agents.
