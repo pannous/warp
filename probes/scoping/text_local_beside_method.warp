@@ -1,0 +1,11 @@
+class Stamp {
+	ms: int
+	text() := "stamp " + ms
+}
+said_text(said: list, extra: text): text := {
+	text = said#2 + extra
+	if said#3 then text + "; fix: " + said#3 else text
+}
+print said_text(["e", "boom", "it"], "!")
+print said_text(["e", "boom", ""], "?")
+print Stamp(3).text()

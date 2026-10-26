@@ -66,6 +66,8 @@ regional_indicator(c: int): bool := within(c, 127462, 127487)
 # the byte after the character (grapheme cluster) starting at byte `at` of t (src/extensions/strings.rs
 # grapheme_clusters): controls stand alone but CR LF, a flag pairs two regional indicators
 character_end(t: text, at: int): int := {
+	# an ASCII byte but CR before another ASCII byte (or the end) is a character of its own: no code point to decode
+	if byte_at(t, at) < Utf8.Continuation and byte_at(t, at) != Ascii.Return and (at + 1 == byte_count(t) or byte_at(t, at + 1) < Utf8.Continuation) { return at + 1 }
 	previous = code_point_at(t, at)
 	end = at + code_point_width(byte_at(t, at))
 	if previous == Ascii.Return and end < byte_count(t) and byte_at(t, end) == Ascii.Newline { return end + 1 }

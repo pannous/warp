@@ -6,6 +6,7 @@ use "shapes.warp"
 use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
+use os
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; bracket: text; closing_ends: any; stops_at_end: bool; word_types: list; line_starts: list }
 
@@ -231,13 +232,16 @@ def alias_spellings(): Spellings := {
 	}
 	spelling_tables
 }
+// the alias table's parse, kept across runs (os.kept): the table is the compiler's own, so is its parse; parsing it at
+// every run was a sixth of a small program's compile (card speed-module-rules)
+def alias_table_tree(): Node := kept("the alias table parse " + ALIAS_TABLE) ?? keep("the alias table parse " + ALIAS_TABLE, written_tree(ALIAS_TABLE))
 def own_spellings(): Spellings := {
 	symbols = pairs_of(SYMBOL_OPERATORS)
 	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: []}
 }
 def aliased_spellings(): Spellings := {
 	tables = own_spellings()
-	for row in items_of(written_tree(ALIAS_TABLE)) { add_alias_entry(tables, spelling_text(row#1), row#2) }
+	for row in items_of(alias_table_tree()) { add_alias_entry(tables, spelling_text(row#1), row#2) }
 	tables.operator_symbols = longest_first(tables.operator_symbols)
 	tables
 }
@@ -1592,8 +1596,10 @@ def scanned_operators(source: text): list {
 global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
-		declared = declared_operators(module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex"))
-		library_operators = declared.filter(operator => not is_name_start(operator#1#1))
+		sources = module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex")
+		// kept across runs (os.kept) as the alias table's parse is: the sources are the compiler's own
+		name = "the library glyph operators of " + sources
+		library_operators = kept(name) ?? keep(name, declared_operators(sources).filter(operator => not is_name_start(operator#1#1)))
 	}
 	library_operators
 }
