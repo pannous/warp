@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # The compiler run reads the std modules from the lib/ warp-host resolved, never from the folder the compiler was built
-# in (notes/compiler_rebuilds.md, card compiler-rebuild-policy): a compiler-self.wasm built in another tree sees a word
+# in (notes/compiler_rebuilds.md, card compiler-rebuild-policy): a warp-self.wasm built in another tree sees a word
 # added to a temporary lib's os.warp, named by WARP_LIB, found beside the binary, or through the launcher. Run it
 # through the queue: tests/queue.sh tests/host/test_host_library.sh
 # The host and the compilers as in test_host.sh: WARP_HOST_BINARY (default target/host/warp-host, else target/release/,
-# else target/debug/), compiler-self.wasm from beside WARP_LAUNCHER_RUST (default the shared warp, scripts/shared-warp.sh). That compiler must
+# else target/debug/), warp-self.wasm from beside WARP_LAUNCHER_RUST (default the shared warp, scripts/shared-warp.sh). That compiler must
 # read WARP_LIB (run_library, main ab93badf7) and match the lib/ staged: WARP_TEST_LIB (default the checkout's lib/).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
@@ -16,8 +16,8 @@ export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
-compiler=$(dirname "$rust")/compiler-self.wasm
-[ -f "$compiler" ] || { echo "✗ no compiler-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
+compiler=$(dirname "$rust")/warp-self.wasm
+[ -f "$compiler" ] || { echo "✗ no warp-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/installed" "$stage/stub" "$stage/work" || exit 1
 # lib/ copied into the stage (two places, one content: the kept values are shared), with a word no other lib/ has
 cp -R "${WARP_TEST_LIB:-$checkout/lib}" "$stage/lib" || exit 1

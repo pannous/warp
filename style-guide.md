@@ -9,3 +9,6 @@ all_different(variants: list): bool := {...} => def all_different(list variants)
 (def my_fun) easier to grep, but LSP can handle?
 
 use "walk.warp" => IDK  import walk  Prefers local files over modules?
+
+false => no
+true => yes

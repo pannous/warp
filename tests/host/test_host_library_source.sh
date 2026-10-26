@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # The embedded std modules (prelude, math, list, regex) come from the run's lib/, the text inlined at build time only a
 # fallback (card compiler-library-source, notes/compiler_rebuilds.md): an alias added to a temporary lib's prelude.warp
-# works with a compiler-self.wasm built before it, named by WARP_LIB. Run it through the queue:
+# works with a warp-self.wasm built before it, named by WARP_LIB. Run it through the queue:
 # tests/queue.sh tests/host/test_host_library_source.sh
 # The host and the compiler as in test_host.sh: WARP_HOST_BINARY (default target/host/warp-host, else target/release/,
-# else target/debug/), compiler-self.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp).
+# else target/debug/), warp-self.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
@@ -15,8 +15,8 @@ export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
-compiler=$(dirname "$rust")/compiler-self.wasm
-[ -f "$compiler" ] || { echo "✗ no compiler-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
+compiler=$(dirname "$rust")/warp-self.wasm
+[ -f "$compiler" ] || { echo "✗ no warp-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/work" || exit 1
 cp -R "$checkout/lib" "$stage/lib" || exit 1
 # an alias no lib/ has, in a module the compiler used to read only from its build-time copy
