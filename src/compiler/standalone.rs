@@ -185,7 +185,9 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
 	let owner = crate::extensions::sha256_hex(&compiler.bytes);
-	let said = crate::modules::std_adapters::kept_by(owner, || crate::pipeline::run_module(compiler));
+	// both compilers are compiled by lib/compiler now (by the seed or by compiler.wasm): their kept values stay their
+	// own, never keyed by the makers' files alone (std_adapters kept_key)
+	let said = crate::modules::std_adapters::kept_by(owner, true, || crate::pipeline::run_module(compiler));
 	crate::modules::std_adapters::set_program_arguments(running);
 	said
 }

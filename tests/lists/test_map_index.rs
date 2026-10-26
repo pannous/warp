@@ -30,3 +30,14 @@ fn an_indexed_map_changed_in_place_finds_the_change() {
 	is!(&format!("{fill}; def at(m, k) {{ m[k] }}; m = {{}}; fill(m, 40); x = at(m, \"k5\") + at(m, \"k6\"); m#1 = (q: 9); y = try at(m, \"k0\"); [at(m, \"q\"), at(m, \"k9\"), y is error]"), warp::parse("[9 9 yes]"));
 	is!(&format!("{fill}; def has(m, k) {{ m[k] }}; m = {{}}; fill(m, 40); x = has(m, \"k1\"); m.k1 = 5; m.z = 2; [has(m, \"k1\"), has(m, \"z\"), count(m)]"), warp::parse("[5 2 41]"));
 }
+
+#[test]
+fn maps_looked_up_in_turn_find_their_entries_and_changes() {
+	let fill = "def fill(m, n) { for i in 0..n { m[\"k\" + i] = i } }; def at(m, k) { m[k] }";
+	let filled = "a = {}; b = {}; c = {}; d = {}; fill(a, 40); fill(b, 40); fill(c, 40); fill(d, 40)";
+	// four maps read one after another, then one changed by a new field and one by a field set while others were read
+	let read = "x = at(a, \"k1\") + at(b, \"k1\") + at(c, \"k1\") + at(d, \"k1\") + at(a, \"k2\") + at(b, \"k2\") + at(c, \"k2\") + at(d, \"k2\")";
+	let changed = "a.extra = 7; b.k3 = 30";
+	let found = "[x, at(c, \"k4\") + at(d, \"k4\"), at(a, \"extra\"), at(b, \"k3\"), count(a), count(b)]";
+	is!(&format!("{fill}; {filled}; {read}; {changed}; {found}"), warp::parse("[12 8 7 30 41 40]"));
+}

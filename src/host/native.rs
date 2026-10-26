@@ -994,7 +994,7 @@ fn wasi_context() -> wasmtime_wasi::p1::WasiP1Ctx {
 	let preopens = match crate::host::sandbox::is_sandboxed() {
 		true => [
 			(PathBuf::from("/"), "/", ReadOnly),
-			(crate::host::sandbox::state_folder().map(PathBuf::from).unwrap_or(working_folder), ".", ReadWrite),
+			(crate::host::sandbox::state_folder().unwrap_or(working_folder), ".", ReadWrite),
 		],
 		false => [(PathBuf::from("/"), "/", ReadWrite), (working_folder, ".", ReadWrite)],
 	};
