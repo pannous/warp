@@ -21,6 +21,7 @@ fd_prestat_dir_name(fd: int, name_at: int, length: int): int from runtime
 path_open(dir: int, lookup: int, path_at: int, length: int, open: int, rights: int, inherited: int, flags: int, opened_at: int): int from runtime
 fd_read(fd: int, iovecs_at: int, count: int, read_at: int): int from runtime
 fd_close(fd: int): int from runtime
+fd_readdir(fd: int, entries_at: int, room: int, cookie: int, used_at: int): int from runtime
 fd_write(fd: int, iovecs_at: int, count: int, written_at: int): int from runtime
 
 # the scratch area: a prestat or a count pair, an iovec, the count a call wrote, an fd, then the bytes
@@ -39,6 +40,12 @@ wasi_stdin(): int := 0
 wasi_stderr(): int := 2
 wasi_first_preopen(): int := 3
 wasi_no_entry(): int := 44
+# path_open's flag for a folder, and the right to read its entries
+wasi_directory(): int := 2
+wasi_readdir_right(): int := 16384
+# a folder entry's bytes before its name: the next entry's cookie (u64), the inode (u64), the name's length (u32), the
+# type (u8) and padding
+wasi_entry_head(): int := 24
 
 # the 4-byte little-endian word at a scratch offset, written and read
 store_scratch_word(at: int, value: int) := {
@@ -114,6 +121,37 @@ read_file(path: Node): Node := {
 	answer
 }
 
+# `use file; list_files(folder)`: the names of the folder's entries without . and .., in the order WASI gives them;
+# the Error of why not
+std_file_list(path: Node): Node := {
+	t = text_of_textual(path)
+	place = preopened_place(t)
+	if place#1 < 0 { return file_failure("list", t, wasi_no_entry()) }
+	put_scratch_bytes(scratch_bytes(), place#2)
+	error = path_open(place#1, wasi_follow_links(), output_address() + scratch_bytes(), byte_count(place#2), wasi_directory(), wasi_readdir_right(), wasi_readdir_right(), 0, output_address() + scratch_fd())
+	if error != 0 { return file_failure("list", t, error) }
+	fd = scratch_word(scratch_fd())
+	names = []
+	cookie = 0
+	more = yes
+	while more {
+		fd_readdir(fd, output_address() + scratch_bytes(), wasi_chunk(), cookie, output_address() + scratch_count())
+		used = scratch_word(scratch_count())
+		# a full buffer may end inside an entry: the next call starts again at the last whole one's cookie
+		more = used == wasi_chunk()
+		at = scratch_bytes()
+		ended = scratch_bytes() + used
+		while at + wasi_entry_head() <= ended and at + wasi_entry_head() + scratch_word(at + 16) <= ended {
+			length = scratch_word(at + 16)
+			name = scratch_text(at + wasi_entry_head(), length)
+			if name != "." and name != ".." { names += [name] }
+			cookie = scratch_word(at) + 4294967296 * scratch_word(at + 4)
+			at += wasi_entry_head() + length
+		}
+	}
+	fd_close(fd)
+	names
+}
 # the texts WASI lists: the environment's NAME=value lines, else the command line's arguments
 wasi_list(environment: bool): list := {
 	if environment then environ_sizes_get(output_address() + scratch_pair(), output_address() + scratch_pair() + 4) else args_sizes_get(output_address() + scratch_pair(), output_address() + scratch_pair() + 4)

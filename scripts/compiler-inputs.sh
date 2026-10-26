@@ -3,18 +3,16 @@
 # warp-self.wasm) built from <lib> (notes/compiler_rebuilds.md): 16 hex digits. Two trees with the same inputs give
 # the same hash wherever they lie (paths are hashed relative to <lib>). -v lists the files on stderr.
 # The inputs: core/**, the Rust build compiling the stages (WARP_SOURCE, the third line of a build file's
-# warp.build section: scripts/rebuild.sh finds it), and the std modules the compiler still embeds as text at build time
-# through module_source(…) (aliases, prelude, math, list, regex; user 2026-10-25: the compiler's own data is built in,
-# never read at run time). Any other change of lib/ (a std
-# module, a new host verb in os.warp, sugar) never changes the hash: the compiler reads those at run time.
+# warp.build section: scripts/rebuild.sh finds it), and every .warp module of lib/, which the compiler bundles
+# (parser.warp LIBRARY_FILES, decision built-in-lib: a built compiler reads no lib/ from disk; a set WARP_LIB lets a
+# module changed since then win over its bundled copy without a rebuild). Other lib/ files never change the hash.
 set -euo pipefail
-EMBEDDED_MODULES=(aliases prelude math list regex)
 lib=$(cd "${1:?usage: scripts/compiler-inputs.sh <lib> [<rust fingerprint>] [-v]}" && pwd)
 rust=${2-}
 [ -d "$lib/compiler" ] || { echo "compiler-inputs.sh: no compiler/ in $lib" >&2; exit 1; }
 files() {
 	(cd "$lib" && find -H compiler -type f ! -name '.*' | LC_ALL=C sort
-		for module in "${EMBEDDED_MODULES[@]}"; do [ -f "$module.warp" ] && echo "$module.warp"; done)
+		find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||' | LC_ALL=C sort)
 }
 [ "${3-}" = -v ] && files >&2
 {

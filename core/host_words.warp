@@ -81,6 +81,8 @@ host_words = {
 	path_open: [["i32", "i32", "i32", "i32", "i32", "int", "int", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	fd_read: [["i32", "i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	fd_close: [["i32"], ["i32"], "wasi_snapshot_preview1"]
+	# a folder's fd, where its entries go and their room, the cookie to go on from (an i64), where the bytes used go
+	fd_readdir: [["i32", "i32", "i32", "int", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	fd_write: [["i32", "i32", "i32", "i32"], ["i32"], "wasi_snapshot_preview1"]
 	# the clock's id, the precision asked for in nanoseconds (an i64), where its u64 nanoseconds go (lib/time.warp now)
 	clock_time_get: [["i32", "int", "i32"], ["i32"], "wasi_snapshot_preview1"]
