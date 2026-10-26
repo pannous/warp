@@ -96,7 +96,7 @@ Principles and Talking live only in common.md.
 - Close what you start : after every test, probe or build, kill your own leftover processes by PID
   (warp, data/warp, test binaries, cargo, refusals.sh ladders); check with `ps -o pid,etime,command -U $USER | grep
   <your worktree>` before reporting. The safety net, not a substitute: cron's ~/dev/bin/reap-orphans (every 15 min,
-  log /Users/me/warp/reap-orphans.log) kills orphaned warp/test binaries, cargo test/build and xargs sweeps after 30
+  log ~/Library/Logs/warp/cron/reap-orphans.log) kills orphaned warp/test binaries, cargo test/build and xargs sweeps after 30
   min and a test binary's children after WARP_TEST_TIME_LIMIT (600 s).
 - Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is upgraded to the
   working value in its own commit; a change of meaning,
