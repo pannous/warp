@@ -12,6 +12,8 @@ use "types.warp"
 # captured values (emitter.warp closure_value), texts and characters as texts, numbers as numbers (an int and a float alike)
 node_equal(a: Node, b: Node): bool := {
 	if is_null(a) or is_null(b) { return is_null(a) == is_null(b) }
+	# two texts, the common case of a match on spellings (`Op·case`): their bytes, past none of the other kinds' tests
+	if kind_code(a) == Kind.Text and kind_code(b) == Kind.Text { return byte_count(unboxed_text(a)) == byte_count(unboxed_text(b)) and text_order(unboxed_text(a), unboxed_text(b)) == 0 }
 	if kind_code(a) == Kind.Key or kind_code(b) == Kind.Key {
 		return code_free_kind(a) == code_free_kind(b) and same_bytes(key_name(a), key_name(b)) and node_equal(key_value(a), key_value(b))
 	}
