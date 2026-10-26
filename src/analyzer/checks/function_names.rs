@@ -114,11 +114,12 @@ pub(crate) fn is_type_word(name: &str) -> bool {
 }
 
 /// `double := it*2`, `double(x) := …` or `hex(x) := …`: a type word names a type, never a function, a conversion word
-/// too 
+/// too, and a plural type word, the list type `ints` (`x: ints` is `x: list of int`)
 pub(crate) fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, program);
-	let mut clashes: Vec<&String> = ctx.user_functions.keys().filter(|name| is_type_word(name)).collect();
+	let names_a_type = |name: &&String| is_type_word(name) || crate::analyzer::plural_element_type(name).is_some();
+	let mut clashes: Vec<&String> = ctx.user_functions.keys().filter(names_a_type).collect();
 	clashes.sort();
 	let name = clashes.first()?;
 	let mut definition = None;

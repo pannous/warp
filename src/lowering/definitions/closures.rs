@@ -1178,7 +1178,7 @@ impl Lifting {
 				}
 				// `t = k * 2` before any read of t binds the lambda's own local, no capture; `global n` shares n
 				// a local of an enclosing body is read even when a function elsewhere has its name (`w in numbers`
-				// beside lexer.warp's numbers(text))
+				// beside lexer.warp's number_starts(text))
 				let is_enclosing_local = self.locals.iter().any(|locals| locals.contains(name));
 				if !params.contains(name)
 					&& !globals.contains(name)
