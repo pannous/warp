@@ -42,8 +42,9 @@ export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
 # the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names,
-# the position of the statement it happened in
-exported_globals = ["trap_detail", "text_heap", "trap_position"]
+# the position of the statement it happened in, the name of the runtime word it failed in (trap_name: the runner no
+# longer needs that word's frame on the stack, which Cranelift's inlining takes away)
+exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name"]
 # trap_position holds line * columns_per_line + column, Rust's line << 12 | column (src/wasm_emitter/control/traps.rs
 # encoded_position)
 columns_per_line = 4096
@@ -69,6 +70,7 @@ error_tag_name = "warp_error"
 try_depth_name = "try_depth"
 # the message of the error a try caught (error_throw), a text
 failed_in_name = "failed_in"
+trap_name_global = "trap_name"
 # the trap-only functions of a missing field or switch case: their prefix, then the name (error_function)
 no_field_prefix = "no_field_"
 no_case_prefix = "no_case_"

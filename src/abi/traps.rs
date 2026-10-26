@@ -39,7 +39,7 @@ pub const RUNTIME_ERROR_FIXES: [(&str, &str); 9] = [
 /// lib/prelude.warp, which `except IndexError` tests
 pub fn runtime_error_class(name: &str) -> &'static str {
 	match name {
-		"index_out_of_range" => "IndexError",
+		INDEX_OUT_OF_RANGE => "IndexError",
 		"key_not_found" => "KeyError",
 		DIVIDE_BY_ZERO => "ZeroDivisionError",
 		"out_of_memory" => "MemoryError",
@@ -72,6 +72,8 @@ pub fn runtime_error_message(name: &str) -> String {
 
 /// index_out_of_range_of(index, count): index_out_of_range with the index and the list's count as the trap detail, which
 /// trap_error turns into "index out of range: 7 not in 1…3" (card index-range)
+/// The runtime word an index outside its list fails in
+pub const INDEX_OUT_OF_RANGE: &str = "index_out_of_range";
 pub const INDEX_OUT_OF_RANGE_OF: &str = "index_out_of_range_of";
 
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
@@ -92,7 +94,7 @@ pub const ERROR_IN_DATA_FIX: &str = "handle it with try … else, or declare `or
 pub const NOT_A_MAP: &str = "not_a_map";
 
 pub const RUNTIME_ERRORS: [&str; 35] = [
-	"index_out_of_range",
+	INDEX_OUT_OF_RANGE,
 	INDEX_NOT_INTEGRAL,
 	"invalid_number",
 	"out_of_memory",
@@ -242,7 +244,7 @@ pub fn index_range_message(detail: &str) -> Option<String> {
 		return None;
 	};
 	let range = if *count == 0 { EMPTY_RANGE.to_string() } else { format!("1…{count}") };
-	Some(format!("{}: {index} not in {range}", runtime_error_message("index_out_of_range")))
+	Some(format!("{}: {index} not in {range}", runtime_error_message(INDEX_OUT_OF_RANGE)))
 }
 
 /// The runtime error a trap means, read from its trace: the function names on the stack and the `trap detail: …`
@@ -273,7 +275,8 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 	let returned_error =
 		trace.contains(RETURNED_ERROR).then(|| trap_detail(trace)).flatten().map(|detail| unquoted(&detail));
 	let index_range =
-		trace.contains(INDEX_OUT_OF_RANGE_OF).then(|| index_range_message(&trap_detail(trace)?)).flatten();
+		// index_out_of_range_of leaves [index, count] in trap_detail and fails in index_out_of_range, the word trap_name names
+		trace.contains(INDEX_OUT_OF_RANGE).then(|| index_range_message(&trap_detail(trace)?)).flatten();
 	// `[e 2]`, `q.k = e` of an Error e: its own message, then why it stops here
 	let error_in_data = [ERROR_IN_DATA, ERROR_IN_FIELD]
 		.into_iter()
