@@ -71,7 +71,7 @@ const REPL_COMMAND: &str = "repl";
 /// `warp pure run <file|code>`, `warp pure eval <code>`: the same as without the word, the program run here
 const PURE_RUNNING_WORDS: [&str; 2] = ["run", "eval"];
 /// `warp rebuild [pure|self]`: warp.wasm, the compiler of `warp pure`, built anew from lib/ by the seed
-/// (seed/warp-self.wasm); `self`: warp.wasm promoted to warp-self.wasm, `warp self`'s, when it compiles compiler.warp
+/// (warp-seed.wasm beside the binary); `self`: warp.wasm promoted to warp-self.wasm, `warp self`'s, when it compiles compiler.warp
 /// to its own bytes (decision compiler-build, card rust-bootstrap; src/compiler/standalone.rs)
 const REBUILD_COMMAND: &str = "rebuild";
 /// The first words the command line takes as commands, for unknown_command's suggestion
@@ -632,7 +632,7 @@ fn usage() {
 	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (core/compiler.warp)");
 	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by the seed");
 	println!("  warp pure build <file.warp|code> Its module (out.wasm for code) made by compiler.warp; also run, eval");
-	println!("  warp rebuild [pure|self] Build warp.wasm (by seed/warp-self.wasm) anew from lib/ / promote it to warp-self.wasm at a fixpoint (its compiler runs: no 60 s limit, 2 h, env WARP_REBUILD_TIME_LIMIT)");
+	println!("  warp rebuild [pure|self] Build warp.wasm (by the seed, warp-seed.wasm) anew from lib/ / promote it to warp-self.wasm at a fixpoint (its compiler runs: no 60 s limit, 2 h, env WARP_REBUILD_TIME_LIMIT)");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
 	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");

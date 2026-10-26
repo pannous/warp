@@ -25,7 +25,8 @@ words, FFI), the runtime that reads results back, and the CLI. Most things are i
 compiler extensions (core/extensions/). If the core compiler (core/*.warp) or the Rust harness needs changes, this needs
 to go through the interviewer. Ignore all old tasks about Rust features or  'both lanes'. 
 
-warp-self.wasm (seed/) is the checked-in fixpoint compiler; it compiles compiler.warp to
+The seed, warp-seed.wasm beside the binary (~/dev/bin; no file of git, published on GitHub pre-releases seed-<date>), is
+the fixpoint compiler; it compiles compiler.warp to
 warp.wasm, which promotes itself to warp-self.wasm when it recompiles itself to the same bytes (the fix point).
 
 ## Core Architecture
@@ -48,8 +49,8 @@ It is similar to JSON5 / ECMA Script but much simplified yet with a richer synta
 `compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
 parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
 whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp declares the Node enum.
-- `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a fixpoint
-  compiler checked in; scripts/refresh-seed.sh refreshes it). No Rust-compiled stage builds either compiler
+- `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (warp-seed.wasm beside the binary, a
+  fixpoint compiler; scripts/refresh-seed.sh refreshes and publishes it). No Rust-compiled stage builds either compiler
 - `warp self <file|code>`: runs warp-self.wasm, a copy of warp.wasm promoted only when warp.wasm passes the fixpoint
   test (it compiles compiler.warp to its own bytes, stage N+1 == N)
 - `warp rebuild` / `warp rebuild pure`: builds warp.wasm anew from lib/ (nothing rebuilds it automatically); the gate
