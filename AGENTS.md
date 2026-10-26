@@ -50,7 +50,7 @@ case as src/node/mod.rs has it.
 
 Plain `warp <file>` still compiles with the Rust pipeline below.
 
-### Node AST (the enum in `src/node/mod.rs`)
+### Node AST (the enum in `core/node.warp`)
 
 The central data structure is `Node`, an enum representing all AST node types:
 
@@ -106,6 +106,9 @@ This project keeps its to-dos on the board https://github.com/users/pannous/proj
 every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next) todo.md as fallback
 `todo list`, `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). 
 Picking a card is `todo take <card> <session name>` The branch will and must be named identical to the card. 
+
+TODO: Old cards with bugs in the Rust implementation must be dropped unless that bug is critical for bootstrapping of warp
+TODO: Old cards with features for the Rust implementation must be converted to WARP implementation or dropped 
 
 When encountering a TODO without corresponding card in my main checkout ~/dev/angles/warp/lib/ Create a card for that to do and mark the card name behind the todo and commit 
 
