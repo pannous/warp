@@ -72,8 +72,7 @@ const START_FUNCTION: &str = "install";
 /// The first stand-in call index of a runtime function the analysis did not foresee, far above any real one
 /// (emit_call); the module's finish puts in the real index
 const UNFORESEEN_CALL_BASE: u32 = 1 << 30;
-/// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
-pub const MEMORY_ENTITY: &str = "memory";
+pub use crate::abi::MEMORY_ENTITY;
 pub const TABLE_ENTITY: &str = "table";
 pub const IMPORTABLE_ENTITIES: [&str; 2] = [MEMORY_ENTITY, TABLE_ENTITY];
 /// The bytes of a wasm memory page
@@ -1121,32 +1120,13 @@ fn first_mention_assigns(statements: &[Node], name: &str) -> bool {
 	}
 }
 
-/// The bracket of a list as the high bits of its kind (`new_list(first, rest, bracket_info)`); node_in reads it back
-pub fn bracket_info(bracket: &Bracket) -> i64 {
-	match bracket {
-		Bracket::Curly => 0,
-		Bracket::Square => 1,
-		Bracket::Round => 2,
-		Bracket::Less => 3,
-		Bracket::Other(_, _) => 4,
-		Bracket::None => 5,
-	}
-}
+pub use crate::abi::bracket_info;
 
-/// The separators of a list by their code above SEPARATOR_SHIFT (None is 0: a list made at run time names none)
-pub const SEPARATORS: [Separator; 6] =
-	[Separator::None, Separator::Space, Separator::Comma, Separator::Semicolon, Separator::Newline, Separator::Tab];
+pub use crate::abi::SEPARATORS;
 
-/// The code of a list's separator, as `separated` and `n.separator` know it
-pub fn separator_code(separator: &Separator) -> i64 {
-	SEPARATORS.iter().position(|known| known == separator).unwrap_or(0) as i64
-}
+pub use crate::abi::separator_code;
 
-/// The kind field's info bits (above KIND_BITS) of a list: its bracket and its separator (card keep-list)
-pub fn list_info(bracket: &Bracket, separator: &Separator) -> i64 {
-	bracket_info(bracket)
-		| separator_code(separator) << (crate::type_kinds::SEPARATOR_SHIFT - crate::type_kinds::KIND_BITS)
-}
+pub use crate::abi::list_info;
 
 /// Each separator's code and the text `n.separator` gives for it ("" for none)
 pub fn separator_texts() -> Vec<(i64, String)> {
@@ -1157,22 +1137,9 @@ pub fn separator_texts() -> Vec<(i64, String)> {
 		.collect()
 }
 
-/// The separator of a list's kind field, separator_code read back
-pub fn separator_of_kind(kind: i64) -> Separator {
-	let code = (kind & crate::type_kinds::SEPARATOR_MASK) >> crate::type_kinds::SEPARATOR_SHIFT;
-	SEPARATORS.get(code as usize).cloned().unwrap_or(Separator::None)
-}
+pub use crate::abi::separator_of_kind;
 
-/// The bracket of a list's kind high bits, bracket_info read back (Other as None)
-pub fn bracket_of_info(info: i64) -> Bracket {
-	match info {
-		0 => Bracket::Curly,
-		1 => Bracket::Square,
-		2 => Bracket::Round,
-		3 => Bracket::Less,
-		_ => Bracket::None,
-	}
-}
+pub use crate::abi::bracket_of_info;
 
 /// Where the last compiled module is kept for inspection: one fixed path under the home directory, never the current
 /// directory, which would leave build debris beside the sources (card cwd-artifacts); None without a home (the browser)

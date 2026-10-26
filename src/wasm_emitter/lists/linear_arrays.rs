@@ -9,16 +9,7 @@ use crate::operators::Op;
 use wasm_encoder::{Function, Instruction as I, MemArg, ValType};
 use ValType::{F64, I32, I64, V128};
 
-/// The library the linear words belong to: emitted by the module, not imported (import_manager skips it)
-pub const LINEAR_LIBRARY: &str = "linear";
-pub const LINEAR_NEW: &str = "linear_new";
-pub const LINEAR_COUNT: &str = "linear_count";
-/// get, set, add of an Int cell and of a float cell (the order of shared_arrays' element words)
-pub const LINEAR_INT_WORDS: [&str; 3] = ["linear_get", "linear_set", "linear_add"];
-pub const LINEAR_FLOAT_WORDS: [&str; 3] = ["linear_getf", "linear_setf", "linear_addf"];
-/// linear_dotf(xs, ys) -> the sum of xs#i * ys#i over xs's count of cells, two pairs at a time in f64x2 lanes: `dot` and
-/// `sum(xs .* ys)` of two linear float arrays of equal length (shared_arrays.rs checks it)
-pub const LINEAR_DOT: &str = "linear_dotf";
+pub use crate::abi::{LINEAR_COUNT, LINEAR_DOT, LINEAR_FLOAT_WORDS, LINEAR_INT_WORDS, LINEAR_LIBRARY, LINEAR_NEW};
 /// linear_address(xs): the Int of a linear array's address, for a host word that reads its block (shared_arrays.rs)
 pub const LINEAR_ADDRESS: &str = "linear_address";
 /// The registry names crate::wasm_emitter's ffi_func_index looks the words up by
@@ -34,9 +25,8 @@ const FUNCTION_NAMES: [(&str, &str); 9] = [
 	(LINEAR_DOT, "ffi_linear_dotf"),
 ];
 
-/// The exported linear_new and kernel prefix the host calls to split a map (tasks.rs split_map)
-pub const SPLIT_BLOCK_NEW: &str = "ffi_linear_new";
-pub const SPLIT_KERNEL_PREFIX: &str = "ffi_";
+pub use crate::abi::SPLIT_BLOCK_NEW;
+pub use crate::abi::SPLIT_KERNEL_PREFIX;
 
 /// `ys = xs.map(x => x * 0.5 + 1)` over a linear float array: the kernel `linear_mapf·x·x*0.5+1`, its parameter and
 /// body in its name, a new block of the results computed two cells at a time with f64x2 (notes/simd.md)
@@ -91,22 +81,7 @@ fn kernel_of(name: &str) -> (String, Node) {
 const CELL_BYTES: i64 = 8;
 const CELL: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
 
-/// name, parameters, results of the linear words
-pub fn linear_word_signatures() -> [(&'static str, Vec<ValType>, Vec<ValType>); 9] {
-	let [get, set, add] = LINEAR_INT_WORDS;
-	let [getf, setf, addf] = LINEAR_FLOAT_WORDS;
-	[
-		(LINEAR_NEW, vec![I64], vec![I64]),
-		(LINEAR_COUNT, vec![I64], vec![I64]),
-		(get, vec![I64, I64], vec![I64]),
-		(set, vec![I64, I64, I64], vec![I64]),
-		(add, vec![I64, I64, I64], vec![I64]),
-		(getf, vec![I64, I64], vec![F64]),
-		(setf, vec![I64, I64, F64], vec![F64]),
-		(addf, vec![I64, I64, F64], vec![F64]),
-		(LINEAR_DOT, vec![I64, I64], vec![F64]),
-	]
-}
+pub use crate::abi::linear_word_signatures;
 
 pub fn is_linear_word(name: &str) -> bool {
 	FUNCTION_NAMES.iter().any(|(word, _)| *word == name)

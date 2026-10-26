@@ -33,9 +33,7 @@ mod slow_paths;
 pub const INT_RUNTIME: &str = "int_runtime";
 /// Marks a program that calculates: exact_cmp then carries its small shortcut
 pub const EXACT_ARITHMETIC: &str = "exact_arithmetic";
-/// The exported Int operations a host builds an exact number beyond the fixnums with (tasks.rs Builders, host.js
-/// exactHandle): shift, add, subtract, divide
-pub const EXACT_BUILDERS: [&str; 4] = ["int_shift_left", "exact_add", "exact_sub", "exact_div"];
+pub use crate::abi::EXACT_BUILDERS;
 /// The operators a fast region computes on machine i64s across a whole expression (card fast-int)
 const MACHINE_OPS: [Op; 8] = [Op::Add, Op::Sub, Op::Mul, Op::Mod, Op::Rem, Op::Xor, Op::BitAnd, Op::BitOr];
 /// The declared types of an Int that wraps at 2^63 (decision i64-wraps; `x: fast int` parses to i64); the fixed
@@ -46,8 +44,8 @@ const STRICT_WRAPPING_WIDTH: &str = "int64";
 const BYTE_WORDS: [&str; 2] =
 	[crate::wasm_emitter::text::text_builtins::BYTE_AT, crate::wasm_emitter::text::text_builtins::MEMORY_BYTE];
 pub const FIXNUM_OFFSET: i64 = (1 << 62) - 1;
-pub const FIXNUM_MIN: i128 = -((1 << 62) - 1);
-pub const FIXNUM_MAX: i128 = 1 << 62;
+pub use crate::abi::FIXNUM_MIN;
+pub use crate::abi::FIXNUM_MAX;
 const HANDLE_BASE: i64 = i64::MIN;
 /// Every integer within ±2^53 is an f64 exactly
 const F64_EXACT_LIMIT: i64 = 1 << 53;
@@ -98,9 +96,7 @@ fn exact_f64(number: &Number) -> Option<f64> {
 	}
 }
 
-pub fn is_fixnum(n: i64) -> bool {
-	is_fixnum_range(Some((n as i128, n as i128)))
-}
+pub use crate::abi::is_fixnum;
 
 fn combine(left: IntRange, right: IntRange, op: impl Fn(i128, i128) -> Option<i128>) -> IntRange {
 	let ((a, b), (c, d)) = (left?, right?);

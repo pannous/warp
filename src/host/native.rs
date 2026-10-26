@@ -48,9 +48,9 @@ fn guarded_call(mut caller: Caller<'_, HostState>, name: i32, arguments: HostNod
 /// The Error of `reason`, built with the module's own error_of: a failure the program's `try` catches
 fn error_in_program(caller: &mut Caller<'_, HostState>, reason: &str) -> wasmtime::Result<HostNode> {
 	let text =
-		built_in_program(caller, &Node::Text(reason.to_string()), crate::wasm_emitter::text::text_builtins::ERROR_OF)?;
+		built_in_program(caller, &Node::Text(reason.to_string()), crate::abi::ERROR_OF)?;
 	let error_of = caller
-		.get_export(crate::wasm_emitter::text::text_builtins::ERROR_OF)
+		.get_export(crate::abi::ERROR_OF)
 		.and_then(Extern::into_func)
 		.ok_or_else(|| wasmtime::Error::msg("no exported error_of"))?;
 	let mut error = [Val::AnyRef(None)];
@@ -160,7 +160,7 @@ pub use warp_runtime::gc_values::{write_at, write_to_heap};
 
 /// The calling module's linear memory, if it exports one (host words, tasks and foreign calls read texts out of it)
 pub(crate) fn exported_memory<T>(caller: &mut Caller<'_, T>) -> Option<Memory> {
-	caller.get_export(crate::wasm_emitter::MEMORY_ENTITY)?.into_memory()
+	caller.get_export(crate::abi::MEMORY_ENTITY)?.into_memory()
 }
 
 /// The file at the path in WASM memory, written back like a fetched body: (ptr, len), or (ptr, -len) of the failure reason
@@ -471,7 +471,7 @@ fn ints_of_list(
 	list: HostNode,
 	room: usize,
 ) -> wasmtime::Result<Option<Vec<u64>>> {
-	use crate::wasm_emitter::lists::int_lists::LIST_TO_INTS;
+	use crate::abi::LIST_TO_INTS;
 	let Some(Extern::Func(list_to_ints)) = caller.get_export(LIST_TO_INTS) else {
 		return Ok(None);
 	};
@@ -621,7 +621,7 @@ fn foreign_call_or_failure(
 	let builders =
 		Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| task_failure(problem.to_string()))?;
 	let mut callback = |index: usize, values: Node| -> Result<Node, String> {
-		let Some(Extern::Func(apply)) = caller.get_export(crate::wasm_emitter::CLOSURE_APPLY) else {
+		let Some(Extern::Func(apply)) = caller.get_export(crate::abi::CLOSURE_APPLY) else {
 			return Err("the module exports no closure_apply".into());
 		};
 		let function = functions.iter().flatten().nth(index).copied().ok_or(format!("no warp function {index}"))?;
@@ -735,7 +735,7 @@ fn response_header(mut caller: Caller<'_, HostState>, name: HostNode, value: Hos
 /// trap_detail and the module's returned_error raises it, which a running `try` catches (`catch e` binds the message)
 /// and which otherwise traps as `raise` does; any other failure, or a module without a `try`, stays as it was
 pub(super) fn raised<T>(caller: &mut Caller<'_, HostState>, result: wasmtime::Result<T>) -> wasmtime::Result<T> {
-	use crate::wasm_emitter::lists::list_ops::RETURNED_ERROR;
+	use crate::abi::RETURNED_ERROR;
 	let failure = match result {
 		Err(failure) if failure.is::<crate::host::tasks::TaskFailure>() => failure,
 		done => return done,
@@ -780,7 +780,7 @@ fn route_failure(
 ) -> crate::web::web_server::RouteFailure {
 	let left = taken_trap_detail(caller);
 	let failure = anyhow::Error::from(failure);
-	let raised = format!("{failure:?}").contains(crate::wasm_emitter::lists::list_ops::RETURNED_ERROR);
+	let raised = format!("{failure:?}").contains(crate::abi::RETURNED_ERROR);
 	// a runtime error names its statement; what the program raised is its own words to the client
 	let failure = match raised {
 		true => failure,

@@ -108,10 +108,9 @@ impl WasmGcEmitter {
 	}
 }
 
-pub const NEW_BOOL: &str = "new_bool";
+pub use crate::abi::NEW_BOOL;
 pub const NEW_EMPTY_LIST: &str = "new_empty_list";
-/// new_type(name, body): a type declaration in code, `class P {x: int}` (Kind::TypeDef)
-pub const NEW_TYPE: &str = "new_type";
+pub use crate::abi::NEW_TYPE;
 /// new_text_of(text) / new_symbol_of(text): a Text or Symbol node of the $Text
 pub const NEW_TEXT_OF: &str = "new_text_of";
 pub const NEW_SYMBOL_OF: &str = "new_symbol_of";

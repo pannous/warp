@@ -18,17 +18,12 @@ use Instruction as I;
 use StorageType::Val;
 use ValType::Ref;
 
-/// The export name prefix of a closure's captured variable, `capture·add·k` (tasks copy them to their instance)
-pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
+pub use crate::abi::CAPTURE_EXPORT_PREFIX;
 
 const ENTRY_PREFIX: &str = "closure_entry_";
-/// closure_rebuild(name, captured) and closure_captured(f): what a host needs to carry a closure to another instance of
-/// the module (a task, src/host/tasks.rs): its target's name and its captured values; the entry is found again by name
-pub const CLOSURE_REBUILD: &str = "closure_rebuild";
+pub use crate::abi::CLOSURE_REBUILD;
 pub const CLOSURE_CAPTURED: &str = "closure_captured";
-/// closure_apply(f, arguments): f called with the items of the list `arguments`, as many as f takes (missing ones ø,
-/// extra ones dropped, as JavaScript calls a function): how a foreign runtime calls back a warp function it was given
-pub const CLOSURE_APPLY: &str = "closure_apply";
+pub use crate::abi::CLOSURE_APPLY;
 /// function_text(f): how print and a list's text show a function value: a named function by its name, a lambda as
 /// written (`x => x + n`) (card print-closure)
 pub const FUNCTION_TEXT: &str = "function_text";

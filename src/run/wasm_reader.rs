@@ -306,7 +306,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 		.collect()
 }
 
-pub use crate::wasm_emitter::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_POSITION};
+pub use crate::abi::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_POSITION};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(
@@ -395,7 +395,7 @@ fn struct_node<T>(
 	};
 	let kind = kind.unwrap_i64();
 	let high_byte = (kind >> 8) & 0xFF;
-	let separator = crate::wasm_emitter::separator_of_kind(kind);
+	let separator = crate::abi::separator_of_kind(kind);
 	let mut node = |val: &Val| node_along(val, store, memory, path);
 	// a runtime word that builds a node wrongly (a text kind over a non-text) fails loudly, never reads as ""
 	let malformed = || crate::node::error(&format!("malformed node: kind {kind:#x} holds no text"));
@@ -420,7 +420,7 @@ fn struct_node<T>(
 		}
 		Some(Kind::Block) => list_in(data, child, Bracket::Curly, separator, store, memory, path),
 		Some(Kind::List) => {
-			list_in(data, child, crate::wasm_emitter::bracket_of_info(high_byte), separator, store, memory, path)
+			list_in(data, child, crate::abi::bracket_of_info(high_byte), separator, store, memory, path)
 		}
 		Some(Kind::Data) => text_of(store, &data, memory).map_or_else(malformed, data_node),
 		// a closure reads as the name of its function
@@ -459,11 +459,10 @@ fn int_node<T>(store: &mut StoreContextMut<'_, T>, data: &Val, high_byte: i64) -
 		};
 	}
 	match number {
-		Ok(Number::Int(value)) if crate::wasm_emitter::numbers::radix::radix_of_info(high_byte).is_some() => {
-			Node::Number(Number::Int(value)).with_source_literal(
-				&crate::wasm_emitter::numbers::radix::marked_literal(high_byte, value).expect("a radix mark"),
-			)
-		}
+		Ok(Number::Int(value)) => match crate::abi::marked_literal(high_byte, value) {
+			Some(literal) => Node::Number(Number::Int(value)).with_source_literal(&literal),
+			None => Node::Number(Number::Int(value)),
+		},
 		Ok(number) => Node::Number(number),
 		Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
 	}

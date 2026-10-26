@@ -88,8 +88,7 @@ pub const INDEX_OUT_OF_RANGE_OF: &str = "index_out_of_range_of";
 /// index_out_of_range_in(list, index): index_out_of_range_of a cons list, counting its cells
 pub(super) const INDEX_OUT_OF_RANGE_IN: &str = "index_out_of_range_in";
 
-/// `return error "…"` from a function that returns numbers: the run fails, the message is the trap detail
-pub const RETURNED_ERROR: &str = "returned_error";
+pub use crate::abi::RETURNED_ERROR;
 
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";

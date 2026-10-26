@@ -33,8 +33,7 @@ const SEPARATOR_PART: i32 = 5;
 const LINE_PART: i32 = 6;
 const COLUMN_PART: i32 = LINE_PART + 1;
 const META_FIELDS: [(i32, u32); 3] = [(LINE_PART, 3), (COLUMN_PART, 4), (COLUMN_PART + 1, 5)];
-/// node_at(node, line, column, comment) -> the node with its source position and comment (or null), a $MetaNode
-pub const NODE_AT: &str = "node_at";
+pub use crate::abi::NODE_AT;
 /// operator_code(text) -> i64: the code of the operator written so (operators::OP_CODES), -1 for none
 const OPERATOR_CODE: &str = "operator_code";
 /// bracket_code(text) -> i64: the bracket info of the opening bracket written so, -1 for none

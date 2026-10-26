@@ -6,21 +6,10 @@ pub(crate) const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 	("int_shift_", "a shift needs an integer and a count from 0 to 65536"),
 	("exact_pow", "an exact power needs an integer exponent"),
 ];
-/// The exported global where a program leaves the value a runtime error is about (the subject of a missed switch)
-pub const TRAP_DETAIL: &str = "trap_detail";
-/// How a trapped run carries that value into its error: `trap detail: <value>`
-pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
+pub use crate::abi::TRAP_DETAIL;
+pub use crate::abi::TRAP_DETAIL_PREFIX;
 
-/// The `trap detail: <value>` line of a trapped run; an Error value raised as it is (Node arithmetic on an Error, a text
-/// builtin of an Error) names its message
-pub fn trap_detail_line(detail: &Node) -> String {
-	let shown = match detail {
-		Node::Error(reason) => reason.serialize(),
-		value => value.serialize(),
-	};
-	// one line in the trace, whatever lines the value has: `\` and line breaks escaped, trap_detail reads them back
-	format!("{TRAP_DETAIL_PREFIX}{}", shown.replace('\\', "\\\\").replace('\n', "\\n"))
-}
+pub use crate::abi::trap_detail_line;
 
 /// A detail written as a quoted text is the message it quotes, the `\` before a quote or `\` undone (`"a \"b\""` is
 /// a "b"; node/serialization.rs quoted writes them)
@@ -61,10 +50,8 @@ pub(in crate::wasm_emitter) const UNIT_AT_RUN_TIME: &str =
 pub(in crate::wasm_emitter) const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
 /// The class `raise_as` raised its error as, which `catch e` gives the Error (decision error-classes); ø for a plain raise
 const TRAP_CLASS_GLOBAL: &str = "trap·class";
-/// The exported global where a program leaves the source position of the statement it runs, for its runtime errors
-pub const TRAP_POSITION: &str = "trap_position";
-/// How a trapped run carries that position into its error: `trap position: <line << 12 | column>`
-pub const TRAP_POSITION_PREFIX: &str = "trap position: ";
+pub use crate::abi::TRAP_POSITION;
+pub use crate::abi::TRAP_POSITION_PREFIX;
 /// The global behind the export `trap_position`
 pub(in crate::wasm_emitter) const TRAP_POSITION_GLOBAL: &str = "trap·position";
 /// Where `trap_position` stood when the latest `try` caught an error, for `raise_on` to raise it on from there
@@ -78,10 +65,7 @@ pub(in crate::wasm_emitter) fn encoded_position(position: &crate::compiler::meta
 	((position.line_nr as i32) << COLUMN_BITS) | position.column.min((1 << COLUMN_BITS) - 1) as i32
 }
 
-/// The `trap position: …` line of a trapped run, from the value of `trap_position`; none before the first statement
-pub fn trap_position_line(encoded: i64) -> Option<String> {
-	(encoded != 0).then(|| format!("{TRAP_POSITION_PREFIX}{encoded}"))
-}
+pub use crate::abi::trap_position_line;
 
 /// The position a trace's `trap position: …` line carries
 pub(in crate::wasm_emitter) fn trap_position(trace: &str) -> Option<crate::compiler::meta::LineInfo> {

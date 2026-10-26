@@ -12,6 +12,7 @@ pub mod util; // reexported for tests
 pub mod words;
 #[cfg(feature = "native")]
 pub use util::gc_engine;
+pub mod abi;
 pub mod analyzer;
 pub mod compiler;
 #[cfg(feature = "native")]

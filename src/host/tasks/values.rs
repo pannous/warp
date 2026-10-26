@@ -7,15 +7,15 @@ pub(crate) const CAPTURED_FIELD: usize = 1;
 pub(crate) const CONSTRUCTORS: [&str; 12] = [
 	"new_empty",
 	"new_int",
-	crate::wasm_emitter::NEW_BOOL,
+	crate::abi::NEW_BOOL,
 	"new_float",
 	"new_codepoint",
 	"new_text",
 	"new_symbol",
 	"new_key",
 	"new_list",
-	crate::wasm_emitter::NEW_TYPE,
-	crate::wasm_emitter::CLOSURE_REBUILD,
+	crate::abi::NEW_TYPE,
+	crate::abi::CLOSURE_REBUILD,
 	NODE_AT,
 ];
 pub(crate) const LIMB_BITS: i64 = 32;
@@ -59,7 +59,7 @@ impl TaskValue {
 		Ok(match node.drop_meta() {
 			Node::Empty => TaskValue::Empty,
 			Node::True | Node::False => TaskValue::Bool(matches!(node.drop_meta(), Node::True)),
-			Node::Number(Number::Int(n)) if crate::wasm_emitter::is_fixnum(*n) => TaskValue::Int(*n),
+			Node::Number(Number::Int(n)) if crate::abi::is_fixnum(*n) => TaskValue::Int(*n),
 			Node::Number(Number::Int(n)) => TaskValue::Exact((*n).into(), 1.into()),
 			Node::Number(Number::BigInt(n)) => TaskValue::Exact((*n).clone(), 1.into()),
 			Node::Number(Number::Quotient(n, d)) => TaskValue::Exact((*n).into(), (*d).into()),
@@ -70,7 +70,7 @@ impl TaskValue {
 			Node::Symbol(name) => TaskValue::Symbol(name.clone()),
 			Node::List(items, bracket, separator) => TaskValue::List(
 				items.iter().map(TaskValue::of).collect::<Result<_>>()?,
-				crate::wasm_emitter::list_info(bracket, separator),
+				crate::abi::list_info(bracket, separator),
 			),
 			Node::Key(left, op, right) => TaskValue::Key(
 				Box::new(TaskValue::of(left)?),
@@ -136,7 +136,7 @@ impl Builders {
 	fn integer_handle(&self, n: &num_bigint::BigInt, store: &mut StoreContextMut<'_, HostState>) -> Result<i64> {
 		use num_traits::ToPrimitive;
 		if let Some(small) =
-			n.to_i64().filter(|small| self.holds_machine_ints() || crate::wasm_emitter::is_fixnum(*small))
+			n.to_i64().filter(|small| self.holds_machine_ints() || crate::abi::is_fixnum(*small))
 		{
 			return Ok(small);
 		}
@@ -170,7 +170,7 @@ impl Builders {
 	/// An Int of this instance as a value of its own: a fixnum as it is, a handle (a big integer, a ratio) read
 	/// through the instance's Int node
 	pub(super) fn integer(&self, n: i64, store: &mut StoreContextMut<'_, HostState>) -> Result<TaskValue> {
-		if self.holds_machine_ints() || crate::wasm_emitter::is_fixnum(n) {
+		if self.holds_machine_ints() || crate::abi::is_fixnum(n) {
 			return Ok(TaskValue::Int(n));
 		}
 		let node = self.call("new_int", &[Val::I64(n)], store)?;
@@ -192,10 +192,10 @@ impl Builders {
 			TaskValue::Empty => self.call("new_empty", &[], store),
 			TaskValue::Int(n) => self.call("new_int", &[Val::I64(*n)], store),
 			// a module that has no bools (a page reading form JSON) takes a truth as the Int 1/0 its code reads
-			TaskValue::Bool(truth) if !self.functions.contains_key(crate::wasm_emitter::NEW_BOOL) => {
+			TaskValue::Bool(truth) if !self.functions.contains_key(crate::abi::NEW_BOOL) => {
 				self.call("new_int", &[Val::I64(*truth as i64)], store)
 			}
-			TaskValue::Bool(truth) => self.call(crate::wasm_emitter::NEW_BOOL, &[Val::I64(*truth as i64)], store),
+			TaskValue::Bool(truth) => self.call(crate::abi::NEW_BOOL, &[Val::I64(*truth as i64)], store),
 			TaskValue::Float(x) => self.call("new_float", &[Val::F64(x.to_bits())], store),
 			TaskValue::Char(c) => self.call("new_codepoint", &[Val::I32(*c as i32)], store),
 			TaskValue::Text(text) | TaskValue::Symbol(text) => {
@@ -209,7 +209,7 @@ impl Builders {
 			}
 			TaskValue::Type(name, body) => {
 				let (name, body) = (self.build(name, store)?, self.build(body, store)?);
-				self.call(crate::wasm_emitter::NEW_TYPE, &[name, body], store)
+				self.call(crate::abi::NEW_TYPE, &[name, body], store)
 			}
 			// ø, as the emitter makes `[]`: a null would not pass for a Node (a wrapper's empty argument list)
 			TaskValue::List(items, _) if items.is_empty() => self.call("new_empty", &[], store),
@@ -227,7 +227,7 @@ impl Builders {
 					TaskValue::Empty => Val::AnyRef(None),
 					values => self.build(values, store)?,
 				};
-				self.call(crate::wasm_emitter::CLOSURE_REBUILD, &[name, captured], store)
+				self.call(crate::abi::CLOSURE_REBUILD, &[name, captured], store)
 			}
 			// a module without node_at has no positions to keep (it quotes no code)
 			TaskValue::Positioned(value, ..) if !self.functions.contains_key(NODE_AT) => self.build(value, store),

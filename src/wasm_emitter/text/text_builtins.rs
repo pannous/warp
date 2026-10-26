@@ -66,8 +66,7 @@ const ASCII_ALPHANUMERIC_RANGES: [(u8, u8); 3] = [(b'0', b'9'), (b'A', b'Z'), (b
 const READ: &str = "read";
 const READ_TEXT: &str = "read_text";
 const HOST_READ: &str = "host_read";
-/// error_of(text) → Error: exported, the host builds the Error of a caught stack overflow with it (guarded_call)
-pub const ERROR_OF: &str = "error_of";
+pub use crate::abi::ERROR_OF;
 /// class_error(text, class) → the Error of the text, of the class (a symbol; ø: none), decision error-classes
 pub const CLASS_ERROR: &str = "class_error";
 /// `raise_as(message, class)`: raise the message as an error of the class, which `except C` tests (error_class)

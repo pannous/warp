@@ -1,12 +1,12 @@
 # rust-bootstrap: handover (Worker Bootstrap, 2026-10-26)
 
 Goal (user 2026-10-26 12:58): the Rust compiler moves to its own `rust-bootstrap` branch; main is self-hosted.
-PLAN CHANGE (user 2026-10-26 ~14:25, via the Integrator): Rust is NOT cut on main. The Rust-free result grows on the
-long-lived branch `pure`: main minus the Rust compiler, the minimal Rust harness kept, `warp rebuild` starting from
-seed/compiler-self.wasm (on main since 8f0d4049e). Step branches (rust-bootstrap-self, rust-bootstrap-parse, the
-src/ cut …) merge into `pure`; the card is readied as `todo ready rust-bootstrap pure`. origin/main is merged into
-`pure` regularly (git merge, never rebase, never force-push). When everything works, `pure` becomes main. The
-fixpoint is reached (stage3 == stage4 with fixpoint fixes 1+2, /workspace/cow/fixpoint-progress.md).
+Rules now (user via the Integrator, 2026-10-26): every step that does NOT delete the Rust compiler goes to main via
+`todo ready rust-bootstrap <branch>`; only the deletion step lives on the long-lived branch `pure` for the trial
+(`pure` replaces main later). Once a branch is Ready its worker is done with it: no merging main into it, no
+re-Ready (the Integrator merges and fixes conflicts). Merges are gated on hello in the pure, self and plain lanes,
+not on `warp rebuild` (until rebuild speed is fixed). The fixpoint is reached (stage3 == stage4 with fixpoint fixes
+1+2, /workspace/cow/fixpoint-progress.md); step 2's own stage C on the Mac: B == C.
 
 ## Steps and branches
 1. `rust-bootstrap-seed`: seed/compiler-self.wasm (stage4q, 1572586 B, sha256 3197e7ff…dc4e), seed/README.md,
@@ -100,6 +100,31 @@ Rust compiler to delete after the cut (only once the commands above run on the s
    pipeline.rs, normalize/, the flat passes, compiler/{self_hosted, analysis_memo, compile_*, context,
    dead_functions, function*, local, meta, phase_times, run_time_blocks}, law*, numbers/units, the WARP_SELF_HOSTED
    lanes, and the cargo tests that drive them (they live on in rust-bootstrap). Keep the harness list above.
+
+## Step 4: the cut map (branch rust-bootstrap-cut = pure + -parse + -eval, merged into `pure` when it builds)
+Harness → compiler edges, as found on rust-bootstrap-cut 567ce244f (each must go before its module can):
+- ABI the host shares with emitted modules (export names, trap lines, list kind bits, linear words, radix marks):
+  moved to src/abi.rs; wasm_emitter re-exports them from there. Done in the first cut commit.
+- wasm_emitter::failed_run / trap_error (run/wasmtime_runner.rs, host/tasks): the runtime-error translation of a
+  trap, tied to lists::list_ops' RUNTIME_ERRORS names and messages; unjoinable_message parses with warp_parser
+  (→ standalone::parsed). Next: move with those tables into run/traps.rs.
+- pipeline::CompiledModule / run_module (standalone.rs, self_hosted.rs, run/program_cache.rs): move into run/.
+- pipeline::fast_math, sandboxed, for_tests, serving_at (main.rs, cli/flags.rs, cli/serve.rs, program_cache): the
+  harness-side flags; move the flags into run/ or modules/std_adapters.rs.
+- host/host_parts.rs deployable (pipeline::compile for_hosting / for_a_page, lowering::serve::PAGE_SUBMITTED),
+  cli/outputs.rs (`warp build` page/wagi/component), cli/executables.rs, web/{site,headless,markup,deploy}: compile
+  features; on `pure` they either run compiler.wasm with a build flag or report "not in the self lane yet".
+- host.rs (lowering::nodes::children_rewritten, analyzer::TEMPORARY_SEPARATOR), host/aliases.rs (analyzer::
+  declaring_name_and_type, lowering::nodes::key), host/database.rs (lowering::database_tables names),
+  host/native.rs:560 (lowering::parse_word::code_of), node/serialization.rs (normalize::text_quote,
+  lowering::blocks::sealed_text): small helpers to move beside their host users.
+- main.rs: run_tests_of (pipeline::for_tests + wasm_emitter::eval, lowering::test_blocks), `warp lower`,
+  `warp verify`/law, lowering::library_words::is_calling_word, cli/formatting.rs (formatting/, wasm_emitter::eval
+  of the fix program), serve.rs (wasm_emitter::eval). formatting/ and law/ are compiler-side and go.
+- compiler/self_hosted.rs: the WARP_SELF_HOSTED lanes (pipeline::compile, lower, warp_parser) go; what standalone.rs
+  still uses from it (module_of_bytes, WORKER_STACK, view_of_json) moves into standalone.rs.
+- tests/ (cargo test crate, 1807 files, `is!` over the Rust pipeline): stays on rust-bootstrap; on `pure` the
+  [[test]] target can only go with the compiler with the user's OK (rule: never delete tests); warp tests stay.
 
 ## Open
 - fixpoint-fixes (analyzer.warp binding, parser.warp min-int, walk.warp names_made) landing on main: then refresh the

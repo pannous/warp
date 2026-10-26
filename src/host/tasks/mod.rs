@@ -13,8 +13,8 @@ use crate::host::{
 };
 use crate::node::{Bracket, Node};
 use crate::run::wasm_reader::Imports;
-use crate::wasm_emitter::EXACT_BUILDERS;
-use crate::wasm_emitter::NODE_AT;
+use crate::abi::EXACT_BUILDERS;
+use crate::abi::NODE_AT;
 use anyhow::{anyhow, Result};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -348,7 +348,7 @@ impl TaskTable {
 			.module
 			.exports()
 			.map(|export| export.name().to_string())
-			.filter(|name| name.starts_with(crate::wasm_emitter::CAPTURE_EXPORT_PREFIX))
+			.filter(|name| name.starts_with(crate::abi::CAPTURE_EXPORT_PREFIX))
 			.collect();
 		if names.is_empty() {
 			return Ok(vec![]);
@@ -419,7 +419,7 @@ impl TaskTable {
 	/// kernel's results for xs's, mapped in slices by instances of their own on threads of their own; 0 inside a task,
 	/// where the caller maps alone
 	fn split_map(self: &Arc<Self>, caller: &mut Caller<'_, HostState>, kernel: &str, source: i64) -> Result<i64> {
-		use crate::wasm_emitter::lists::linear_arrays::{SPLIT_BLOCK_NEW, SPLIT_KERNEL_PREFIX};
+		use crate::abi::{SPLIT_BLOCK_NEW, SPLIT_KERNEL_PREFIX};
 		if caller.data().in_task {
 			return Ok(0);
 		}
@@ -451,7 +451,7 @@ impl TaskTable {
 
 	/// The kernel's results for `cells` (f64s as bytes) into `results`, in an instance of their own
 	fn map_slice(self: &Arc<Self>, kernel: &str, cells: &[u8], results: &mut [u8]) -> Result<()> {
-		use crate::wasm_emitter::lists::linear_arrays::SPLIT_BLOCK_NEW;
+		use crate::abi::SPLIT_BLOCK_NEW;
 		let control = TaskControl::running();
 		let (mut store, instance) = self.instance(control)?;
 		let memory = instance.get_memory(&mut store, "memory").ok_or_else(|| anyhow!("no exported memory"))?;
@@ -496,7 +496,7 @@ impl TaskTable {
 				if signature.params().len() == 1 && function.ends_with(crate::declarations::NODE_WRAPPER_SUFFIX) =>
 			{
 				vec![builders.build(
-					&TaskValue::List(arguments.to_vec(), crate::wasm_emitter::bracket_info(&Bracket::Square)),
+					&TaskValue::List(arguments.to_vec(), crate::abi::bracket_info(&Bracket::Square)),
 					&mut store.as_context_mut(),
 				)?]
 			}

@@ -6,15 +6,13 @@ use super::super::*;
 use crate::type_kinds;
 use crate::wasm_emitter::functions::late_calls::LateCall;
 
-/// A radix an Int may show in: its type word, its mark above the kind bits, its literal prefix, the bits per digit, its
+/// A radix an Int may show in: its type word, its mark above the kind bits (its literal: abi.rs marked_literal), its
 /// runtime function `as_<word>(node) -> ref $Node` (an Int marked, any other node as it is) and lib/prelude.warp's
 /// `<word>_text(n: int)`, the text 0xFF, which list_join calls (by its prelude name)
 #[derive(PartialEq)]
 pub struct Radix {
 	pub word: &'static str,
 	pub info: i64,
-	prefix: &'static str,
-	digit_bits: i64,
 	pub as_function: &'static str,
 	text_word: &'static str,
 	pub text_function: &'static str,
@@ -23,8 +21,6 @@ pub struct Radix {
 pub const HEX: Radix = Radix {
 	word: "hex",
 	info: type_kinds::HEX_INFO,
-	prefix: "0x",
-	digit_bits: 4,
 	as_function: "as_hex",
 	text_word: "hex_text",
 	text_function: "prelude·hex_text",
@@ -32,8 +28,6 @@ pub const HEX: Radix = Radix {
 pub const BINARY: Radix = Radix {
 	word: "binary",
 	info: type_kinds::BINARY_INFO,
-	prefix: "0b",
-	digit_bits: 1,
 	as_function: "as_binary",
 	text_word: "binary_text",
 	text_function: "prelude·binary_text",
@@ -50,12 +44,7 @@ impl Radix {
 
 	/// The literal an Int shown in this radix reads as: 0xFF, -0x1, 0b101
 	pub fn literal(&self, value: i64) -> String {
-		let sign = if value < 0 { "-" } else { "" };
-		let digits = match self.digit_bits {
-			1 => format!("{:b}", value.unsigned_abs()),
-			_ => format!("{:X}", value.unsigned_abs()),
-		};
-		format!("{sign}{}{digits}", self.prefix)
+		crate::abi::marked_literal(self.info, value).expect("a radix's own mark")
 	}
 }
 
@@ -87,10 +76,7 @@ pub fn radix_of_info(info: i64) -> Option<&'static Radix> {
 	RADIXES.iter().find(|radix| radix.info == info)
 }
 
-/// The literal an Int read back shows: 0xFF for one marked hex, None for a plain one
-pub fn marked_literal(info: i64, value: i64) -> Option<String> {
-	radix_of_info(info).map(|radix| radix.literal(value))
-}
+pub use crate::abi::marked_literal;
 
 /// `x as hex`, `x as binary` compute as an int; the Node it becomes shows in that radix (emit_node_instructions).
 /// `as bin` is `as binary` with a got-it note

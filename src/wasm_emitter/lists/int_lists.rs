@@ -7,11 +7,8 @@ use super::list_ops::ItemWalk;
 use crate::type_kinds::Kind;
 use wasm_encoder::{BlockType, Function, HeapType, Instruction as I, MemArg, RefType, ValType};
 
-/// ints_to_list(address, count) -> list: the `count` u32 at `address` as a square list of Ints (gpu_render's pixels)
-pub const INTS_TO_LIST: &str = "ints_to_list";
-/// list_to_ints(list, address, room) -> count: the list's first `room` Ints as i64 at `address` (paint's pixels, negatives
-/// as their magnitude), -1 when an item is no fixnum Int and the host reads the list itself
-pub const LIST_TO_INTS: &str = "list_to_ints";
+pub use crate::abi::INTS_TO_LIST;
+pub use crate::abi::LIST_TO_INTS;
 const U32: MemArg = MemArg { offset: 0, align: 2, memory_index: 0 };
 const I64: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
 const SQUARE_BRACKET: i64 = 1;
