@@ -22,8 +22,9 @@ Read notes/agents/common.md. Procedures and history are in notes/agents/handbook
   `warp self` when a warp-self.wasm is there). Tier 1: every probes/gate/<name>.warp in both lanes. Tier 2: `warp test`
   of the test files the batch changed. Stop at the first red tier; compare a red lane with origin/main's run before
   blaming the batch. A green main: `--tag-good`; a lane regression: `scripts/bisect-lane.sh <probe> <expected>`.
-- A branch lands when the merged tip fails no more test cases than its base or is net-positive; tiers 0 and 1 stay
-  green. Push exactly the tested hash (`git push origin <tested-hash>:main`), never a branch ref that may have moved.
+- A branch lands as soon as tier 0 is green, plus `scripts/self-check.sh` (the compiler compiles itself) when the
+  batch touches core/ (user, decision quick-merges). Tiers 1 and 2 then run in the background on the pushed tip and
+  never hold a merge: a red result is fixed forward on the owner's card, a crash gets an urgent card. Push exactly the tested hash (`git push origin <tested-hash>:main`), never a branch ref that may have moved.
   Verify each merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`.
 - A change to the Rust harness (src/, crates/, Cargo.*, build.rs, rare) additionally needs `cargo check` and
   `cargo build` of the merged tip, and a rebuilt ~/dev/bin/warp.
