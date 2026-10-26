@@ -92,6 +92,12 @@ parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such 
 
 ### Building
 
+Agents must inherit a clean baseline and start working from there. 
+Agents must not rebuild and retest the baseline, this will save many rebuilds.
+The integrator must make sure that the main branch is always clean, functional, and up to date.
+As soon as a branch passes the quick fix test, that's signal enough to be worthy of merging.
+A full suite test can be done in parallel or later or batched.
+
 The `warp` binary (the Rust host and bootstrap) is built by cargo; the warp compiler it runs by `warp rebuild`:
 ```bash
 cargo build                    # Debug build
