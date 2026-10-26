@@ -1,0 +1,5 @@
+use "kinds.warp"
+print mixed("a", "b")
+print mixed("a", "a")
+print said(["x", "y", ""])
+print said(["x", "y", "z"])
