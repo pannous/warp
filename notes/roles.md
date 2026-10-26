@@ -92,6 +92,5 @@ One task, one branch, one worktree; targeted tests (`warp test`); done = `todo r
 notes/agents/common.md (role prompts: worker.md, fixer.md, implementer.md).
 
 ## Enforcement
-- One local build (main's, the Integrator's); the Rust harness changes rarely. Warp tests (`warp test`,
-  scripts/is_tests.py) run locally with the shared binary, the whole suite only in the Integrator's gate.
+- One local build (main's, the Integrator's); the Rust harness changes rarely. Warp tests (`warp test`) run locally with the shared binary, the whole suite only in the Integrator's gate.
   `.claude/hooks/test-gate.py` (PreToolUse, Bash) blocks cargo test runs of this checkout.
