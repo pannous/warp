@@ -604,7 +604,8 @@ def indented_block(p: Parser): Node := {
 	skip_end_line(p)
 	lines = group_parts(block)
 	if lines != ø and lines#1 == "" { return listed("{", lines#2, lines#3) }
-	listed("{", "", [block])
+	// one statement, as `{ statement }` reads it
+	phrase("{", [block])
 }
 
 // The words that may stand alone on the line after a block read by indentation: Ruby's `end`, the shell's `fi`
