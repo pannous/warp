@@ -439,7 +439,7 @@ fn without_meta(node: &Node) -> Node {
 			Node::List(items.iter().map(without_meta).collect(), bracket.clone(), separator.clone())
 		}
 		Node::Key(left, op, right) => {
-			Node::Key(Box::new(without_meta(left)), op.clone(), Box::new(without_meta(right)))
+			Node::Key(Box::new(without_meta(left)), *op, Box::new(without_meta(right)))
 		}
 		plain => plain.clone(),
 	}

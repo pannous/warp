@@ -3,3 +3,6 @@
 # an_indexed_map_changed_in_place_finds_the_change
 is! 'def fill(m, n) { for i in 0..n { m["k" + i] = i } }; m = {}; fill(m, 40); m.k3 = 7; m["k3"]' 7
 is! 'def fill(m, n) { for i in 0..n { m["k" + i] = i } }; def has(m, k) { m[k] }; m = {}; fill(m, 40); x = has(m, "k1"); m.k1 = 5; m.z = 2; [has(m, "k1"), has(m, "z"), count(m)]' [5 2 41]
+
+# maps_looked_up_in_turn_find_their_entries_and_changes
+is! 'def fill(m, n) { for i in 0..n { m["k" + i] = i } }; def at(m, k) { m[k] }; a = {}; b = {}; c = {}; d = {}; fill(a, 40); fill(b, 40); fill(c, 40); fill(d, 40); x = at(a, "k1") + at(b, "k1") + at(c, "k1") + at(d, "k1") + at(a, "k2") + at(b, "k2") + at(c, "k2") + at(d, "k2"); a.extra = 7; b.k3 = 30; [x, at(c, "k4") + at(d, "k4"), at(a, "extra"), at(b, "k3"), count(a), count(b)]' [12 8 7 30 41 40]
