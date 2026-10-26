@@ -21,7 +21,7 @@ Read notes/agents/common.md.
 - Tier 0: `WARP_LIB=<tip>/lib warp rebuild pure`, then 
   <!-- GO TO worktree / branch which wants to be merged.  -->
   `warp pure samples/hello/hello.warp` prints Hello (and `warp self` when a warp-self.wasm is there). 
-  Tier 1: every probes/gate/<name>.warp in both lanes. 
+  Tier 1: every test/gate/<name>.warp in both lanes. 
   Tier 2: `warp test` of the test files the batch changed. Stop at the first red tier; compare a red lane with origin/main's run before
   blaming the batch. A green main: `--tag-good`; a lane regression: `scripts/bisect-lane.sh <probe> <expected>`.
 - A branch lands as soon as tier 0 is green, plus `scripts/self-check.sh` (the compiler compiles itself) when the

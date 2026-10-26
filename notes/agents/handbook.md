@@ -19,7 +19,7 @@ Principles and Talking live only in common.md.
   express; one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
   lambdas.warp's fusion) are warp-folds' until its cards land; migration 3 skips them. Aliases are warp-signatures'
   lib/aliases.warp.
-- Small changes on main: only what nothing compiles (notes, docs, wiki, probes, scripts, samples, playground text)
+- Small changes on main: only what nothing compiles (notes, docs, wiki, scripts, samples, playground text)
   goes straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or branch: commit your own
   paths by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push; never leave unpushed commits on
   main. A new root .warp data file (components.warp …): tell the Integrator the commit, tests read it.
@@ -69,7 +69,7 @@ Principles and Talking live only in common.md.
   Higher effort only for real debugging or design work.
 - Tiered gate, pure pipeline first : `scripts/gate-probes.sh
   [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure (warp.wasm) and
-  the hellos (minutes; self only when data/ has a promoted warp-self.wasm). Tier 1: every probes/gate/<name>.warp in
+  the hellos (minutes; self only when data/ has a promoted warp-self.wasm). Tier 1: every test/gate/<name>.warp in
   those lanes against <name>.expected
   (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
   Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/warp-rust-latest (the old sol-warp-* names stay as links for old scripts).
@@ -119,7 +119,7 @@ Principles and Talking live only in common.md.
   Never rebuild in the main checkout: that replaces main's delivered pair under every running check; only the
   Integrator's push installs it; a form emitter.warp refuses there is fixed or carded, never left for main to find.
   Fleet-wide at most 2 heavy warp runs at once : every self build, `warp rebuild`, `warp
-  pure` of a compiler file and every test sweep (is_tests, is_pairs, probe series) runs inside `scripts/slot.sh <cmd>`
+  pure` of a compiler file and every test sweep (is_tests, is_pairs, test series) runs inside `scripts/slot.sh <cmd>`
   (slots on /Volumes/Build/self-check; self-check.sh takes one itself; the Integrator's gate included). A sweep runs
   its programs serially inside one slot, never N parallel warps. The Integrator's gate runs with WARP_SLOT_GATE=1 in
   a reserved slot of its own, so it never waits behind workers. The Grok box (Debian, 8 cores, 15 GB) has 3 heavy
@@ -137,7 +137,7 @@ Principles and Talking live only in common.md.
 - Every CLI run of a program that might paint gets `WARP_NO_WINDOW=1` (no windows on the user's screen), except in try
   lines for the user: it also mutes sound and prints MIDI as hex.
 - Quick check first: run the .warp code you wrote or touched through the shared binary from your worktree,
-  `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp probes/<x>.warp` (after `WARP_LIB=<worktree>/lib … warp rebuild pure` when
+  `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp <scratchpad>/<x>.warp` (after `WARP_LIB=<worktree>/lib … warp rebuild pure` when
   core/ or lib/ changed). It catches undefined words, parse errors and wrong values in seconds; `WARP_HINTS=0` hides
   hints. Then the targeted `warp test <folders>`.
 - `warp pure` / `warp self` run compiler.warp's build files warp.wasm / warp-self.wasm (decision
@@ -195,7 +195,7 @@ Principles and Talking live only in common.md.
 ## Done
 - Samples: every major or semi-major feature (a new syntax form, library area, server/ORM/GPU capability, playground
   ability) ships with a sample in samples/<topic>.warp that shows it the way a user would write it, in the same
-  branch, `chmod +x` (probes/check_layout.sh). A sample that cannot run in the browser goes in
+  branch, `chmod +x`. A sample that cannot run in the browser goes in
   web/playground/excluded_samples.txt. Name the sample in a `todo note` on the card.
 - Docs are part of done: a card that changes what users write or see (syntax, words, flags, messages, defaults)
   updates the wiki page of that concept in the same task: a minimal example and one sentence, one idea per snippet,
@@ -240,7 +240,7 @@ Principles and Talking live only in common.md.
 - Try lines: a result the user can see or use gets `todo done <card> <commit> --try "…"` once the Integrator closed
   the card: one concrete line with the exact command or URL, always `/Users/me/dev/bin/warp <full path>` (main's
   optimized build, refreshed a few minutes after each pushed batch; plain `warp` is the older brew release;
-  /Users/me/dev/bin/warp-debug is main's debug build). A program with quotes goes into a committed probes/<name>.warp,
+  /Users/me/dev/bin/warp-debug is main's debug build). A program with quotes goes into a committed file (samples/ or its test/<topic>/),
   not inline. Run the exact line yourself first. Early try: once the feature's targeted test passes on your branch,
   SendMessage warp-interviewer a try line with your scratch/warp path and the expected output. Every landing the user
   can see, hear or run gets a fresh try line to warp-interviewer the moment you learn it merged. Time performance
@@ -257,6 +257,6 @@ Principles and Talking live only in common.md.
   <branch> && git push -q origin --delete <branch>`. Never hand a delete command to the user: if it still blocks,
   tell the Supervisor with the exact error. scripts/prune-worktrees.sh removes leftovers daily.
 - Deleting old stuff needs no confirmation: merged branches, stale copies, leftover stashes, scratch files. Never
-  delete a probe the user touched: a "(user)" commit, a shebang, an executable bit or commented wish lines (those
+  delete a file the user touched: a "(user)" commit, a shebang, an executable bit or commented wish lines (those
   become cards).
 - Conventional commit messages; no Co-Authored-By, session trailers or links.
