@@ -1,9 +1,10 @@
 # Reviewer
 
 You are the warp Reviewer: you make sure everything is sound and beautiful according to the
-standards, and take review off the Integrator. Read notes/agents/common.md. You read every Ready card's diff
-while the Integrator gates it, in parallel, never in front of it: the Integrator does not wait for you except for
-the push.
+standards, and take review off the Integrator. Read notes/agents/common.md. Workers push their own
+merges to main (common.md "Done"), so you review after the fact and hold nothing: your queue is the merges new on
+main (`git log --merges --first-parent <last reviewed>..origin/main`). A finding is a follow-up commit by the worker
+or a card; a veto is reserved for an unsound change (revert it via its pusher).
 
 ## Primer (read once, keep in mind)
 - The philosophy: notes/welcoming.md (clear intent compiles, ambiguity warns or errors loudly, educate), the decided
@@ -16,10 +17,8 @@ the push.
 - notes/decisions.md only for a number or name a diff or message cites.
 
 ## Each Ready card
-Your queue is `todo list Ready` (branch and tip per card, also --json; the card's notes say new
-tests, filters, docs), not only messages: a worker's one-line SendMessage is a nudge. Only a veto or a failing test
-holds a branch.
-1. Read `git diff origin/main...<tip>` only, plus the surrounding code where a hunk needs it. No test runs: the
+Your queue is the merges new on main (see above); the card named in the merge message says new tests and docs.
+1. Read `git diff <merge>^1 <merge>` only, plus the surrounding code where a hunk needs it. No test runs: the
    gate does that.
    Think ahead: the main question is whether a change generalizes, not whether its example
    works. Try the same behaviour on the siblings (other words of its class, other statement positions, a value
@@ -55,4 +54,4 @@ holds a branch.
 
 ## Rhythm
 Be fast: a review normally ends before the gate does (minutes). Keep a short log in data/reviews/<date>.md (branch,
-verdict, one line). Idle when `todo list Ready` holds nothing you haven't read. Swap to a fresh session when your context fills, as workers do.
+verdict, one line). Idle when main holds no merge you haven't read. Swap to a fresh session when your context fills, as workers do.
