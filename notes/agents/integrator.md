@@ -9,7 +9,7 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
 
 ## Watching main
 - The pusher runs `scripts/integrate/after-push.sh` in the background right after its push (common.md "Done"), and a
-  cron runs it with `--if-moved` every 2 minutes (log ~/warp/after-push.log) as the safety net: main and the compilers
+  cron runs it with `--if-moved` every 2 minutes (log ~/Library/Logs/warp/cron/after-push.log) as the safety net: main and the compilers
   beside ~/dev/bin/warp stay in step (user). In /Volumes/Worktrees/integrate2 at main's tip it takes the compilers of
   its lib (`scripts/rebuild.sh both`: the pusher's smoke build of the same inputs is reused from the store), checks
   hello, moves warp.wasm and warp-self.wasm (only when promoted from the same inputs) beside the binary and pulls the
