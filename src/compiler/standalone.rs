@@ -71,6 +71,19 @@ pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 	ran(compiled_code(code, folder, by), Vec::new())
 }
 
+/// The value written as `text` in warp notation (a channel's message, as it was sent), read by compiler.warp in wasm,
+/// the compiler of `warp pure`: no Rust parser (card rust-bootstrap). Text that is no value stays the text. The running
+/// program's own arguments are kept: the compile's are the compiler's
+pub fn value_of_text(text: &str) -> Node {
+	let arguments = crate::modules::std_adapters::program_arguments();
+	let value = run_code(text, &std::env::temp_dir(), Compiler::RustCompiled);
+	crate::modules::std_adapters::set_program_arguments(arguments);
+	match value.drop_meta() {
+		Node::Error(_) => Node::Text(text.to_string()),
+		_ => value.drop_meta().clone(),
+	}
+}
+
 /// The module compiler.warp makes of `code`, compiled as a program file of `folder` would be
 pub fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let file = std::env::temp_dir().join(format!("warp-inline-{}.warp", std::process::id()));
