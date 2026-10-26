@@ -1,16 +1,19 @@
 #!/bin/bash
-# Gives Codex one or two cards from the board and hands completed branches to the Integrator.
+# Gives Codex one or two library cards the Supervisor picked (notes/agents/codex_cards.txt); Codex lands them itself.
 # Scheduled by the user's crontab every five hours. CODEX_PROBE_PROMPT runs a small isolated probe.
 set -uo pipefail
 
 DEFAULT_REPO=/Users/me/dev/angles/warp
-INTEGRATOR=warp-integrator
+DEFAULT_MODEL=gpt-6.1-terra
+SUPERVISOR=warp-supervisor
 CODEX_BOSS="Warp Boss"
 DEFAULT_TURN_TIMEOUT_SECONDS=16200
 EXEC_EXIT_GRACE_SECONDS=30
 POLL_SECONDS=1
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=${CODEX_REPO:-$DEFAULT_REPO}
+export CODEX_MODEL=${CODEX_MODEL:-$DEFAULT_MODEL}
+CARD_LIST=$REPO/notes/agents/codex_cards.txt
 LOG_DIR=$REPO/data/agents/codex${CODEX_PROBE_PROMPT:+/probe}
 LOCK=$LOG_DIR/running.pid
 TURN_TIMEOUT_SECONDS=${CODEX_TURN_TIMEOUT_SECONDS:-$DEFAULT_TURN_TIMEOUT_SECONDS}
@@ -140,31 +143,23 @@ PROMPT="You are a warp worker session named codex, started by a timer; nobody wa
 notes/agents/common.md and follow them, with these differences: you cannot use SendMessage, ListAgents or ask anyone,
 so never wait for input, and make undoable default choices yourself (note them in your final message).
 
-YOUR TASK: take one or two cards that look quickly done (a small, clear bug or gap with a probe or example in the card),
-from any topic: first the Next column (\`todo list Next\`), then Soon (\`todo list Soon\`) (user, 2026-10-15: random
-topics that seem quickly done; replaces the cleanup-only rule of 2026-10-13). Skip big design cards, roadmaps and
-cards waiting on a user decision. None free: stop with nothing taken. State the net src/ line delta in your final
-message (simpler, more general code is the aim). Skip any card that
-already names an agent or whose branch exists on origin (another session works on it). Skip every card whose key
-starts with \`user-\`: those are the user's own to-dos (clicks in web UIs, cloud settings, accounts), not repository
-work, and you must not take, branch or push for them. Take only cards solved by changing this repository. Claim each with
-\`todo take <card> codex\`. Per card: its own branch and worktree (\`cowtree add\`, as in common.md), test first,
-targeted tests only through \`tests/queue.sh -- <filter>\`, CARGO_BUILD_JOBS=2, clippy and the wasm32 check clean,
-push the branch, then \`gh workflow run Playground -R pannous/warp --ref <branch>\` and wait for it with
-\`gh run watch --interval 60\`. Never push main, never run ./test.sh, never change existing tests unless common.md allows it.
-Do not close the cards: the Integrator closes them after the merge.
+YOUR TASK: take one or two cards from the Supervisor's list $CARD_LIST, in its order (user, 2026-10-26: library work
+that does not disturb the sessions working on the compiler). Skip a card that already names an agent, whose branch
+exists on origin, or that is no longer on the board (\`todo show <card>\`). None free: stop with nothing taken. Work in
+lib/ (and samples/, test/, wiki/); never change core/ or the Rust harness: a card that needs them gets
+\`todo note <card> \"needs core: …\"\` and is released. Claim each with \`todo take <card> codex\`. Per card: its own
+branch and worktree (\`cowtree add\`, as in common.md), a test first in test/<topic>/, then common.md \"Done\": format,
+merge origin/main, smoke test (\`scripts/rebuild.sh pure <worktree>\`, then hello), \`warp test\` on the folders you
+touched, push to main yourself, \`todo done <card> <commit>\`. Never change existing tests unless common.md allows it.
 
-Your FINAL message must contain, for every branch that is pushed and green, one block exactly like this (the tip
-copied from \`git rev-parse\` output):
-MERGE REQUEST
-branch: <branch>
-tip: <full sha>
+Your FINAL message must contain, for every card landed on main, one block exactly like this:
+LANDED
 card: <card key>
-playground: <run id> <green|red>
-filters: <test filters>
+commit: <sha on main>
 changes: <what it does, defaults chosen, existing tests touched and why>
 END
-A card you could not finish: push what you have, then \`todo release <card> \"done: …; left: …; branch: …\"\` so it goes back to Next with no agent, say why in the final message, and put no block for it."
+A card you could not finish: push its branch, then \`todo release <card> \"done: …; left: …; branch: …\"\`, say why in
+the final message, and put no block for it."
 
 [ -n "${CODEX_PROBE_PROMPT:-}" ] && PROMPT=$CODEX_PROBE_PROMPT
 
@@ -193,7 +188,7 @@ if [ "$FINAL_EXIT" -eq 2 ]; then
 	echo "$(date +%FT%T) $RUN_DETAIL"
 	tell_boss "Codex run active through codex exec, NOT visible in the Codex app: \"$THREAD_NAME\", log $RUN.jsonl" ||
 		RUN_DETAIL="$RUN_DETAIL; fallback start notice failed"
-	codex exec --dangerously-bypass-approvals-and-sandbox -C "$REPO" --json -o "$RUN.last.md" "$PROMPT" >> "$RUN.jsonl" 2>&1 &
+	codex exec --dangerously-bypass-approvals-and-sandbox -m "$CODEX_MODEL" -C "$REPO" --json -o "$RUN.last.md" "$PROMPT" >> "$RUN.jsonl" 2>&1 &
 	APP_PID=$!
 	local_deadline=$((SECONDS + TURN_TIMEOUT_SECONDS))
 	while process_is_running "$APP_PID" && [ "$SECONDS" -lt "$local_deadline" ]; do
@@ -220,17 +215,17 @@ fi
 
 ensure_artifact
 CARDS=$(grep -oE 'todo take [A-Za-z0-9_-]+' "$RUN.jsonl" 2>/dev/null | cut -d' ' -f3 | sort -u | paste -sd, - || true)
-REQUESTS=""
+LANDINGS=""
 if [ "$RUN_STATUS" = completed ]; then
-	REQUESTS=$(awk '/^MERGE REQUEST/{keep=1} keep{print} /^END/{keep=0}' "$RUN.last.md")
+	LANDINGS=$(awk '/^LANDED/{keep=1} keep{print} /^END/{keep=0}' "$RUN.last.md")
 fi
-if [ -z "$REQUESTS" ]; then
-	OUTCOME="no merge request (run status $RUN_STATUS)"
-elif relay claude-relay.sh "$INTEGRATOR" "Merge request from the timed Codex worker (log $RUN.jsonl):
-$REQUESTS"; then
-	OUTCOME="$(grep -c '^MERGE REQUEST' <<< "$REQUESTS") merge request(s) sent to $INTEGRATOR (cards $(grep '^card:' <<< "$REQUESTS" | cut -d' ' -f2 | paste -sd, -))"
+if [ -z "$LANDINGS" ]; then
+	OUTCOME="nothing landed (run status $RUN_STATUS)"
+elif relay claude-relay.sh "$SUPERVISOR" "The timed Codex worker landed (log $RUN.jsonl):
+$LANDINGS"; then
+	OUTCOME="$(grep -c '^LANDED' <<< "$LANDINGS") card(s) landed, reported to $SUPERVISOR (cards $(grep '^card:' <<< "$LANDINGS" | cut -d' ' -f2 | paste -sd, -))"
 else
-	OUTCOME="RELAY FAILED (see $RUN.relay.log): the merge requests in $RUN.last.md never reached $INTEGRATOR"
+	OUTCOME="RELAY FAILED (see $RUN.relay.log): the landings in $RUN.last.md never reached $SUPERVISOR"
 	[ "$FINAL_EXIT" -eq 0 ] && FINAL_EXIT=1
 fi
 
