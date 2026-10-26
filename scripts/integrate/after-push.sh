@@ -38,12 +38,12 @@ red() { # red <what> [--urgent]: a card for the pushers, then on
 
 # the tree's compilers beside the shared binary, warp-self.wasm only when promoted from the same inputs
 install_compilers() {
-	local folder data=$TREE/data inputs lane got
+	local folder compilers=$TREE/lib inputs lane got
 	folder=$(dirname "$(readlink -f "$MAIN_WARP")")
-	inputs=$(cut -d' ' -f1 "$data/warp.wasm.inputs")
-	cp "$data/warp.wasm" "$folder/warp.wasm.new" && mv "$folder/warp.wasm.new" "$folder/warp.wasm"
-	if [ -f "$data/warp-self.wasm" ] && [ "$(cut -d' ' -f1 "$data/warp-self.wasm.inputs" 2>/dev/null)" = "$inputs" ]; then
-		cp "$data/warp-self.wasm" "$folder/warp-self.wasm.new" && mv "$folder/warp-self.wasm.new" "$folder/warp-self.wasm"
+	inputs=$(cut -d' ' -f1 "$compilers/warp.wasm.inputs")
+	cp "$compilers/warp.wasm" "$folder/warp.wasm.new" && mv "$folder/warp.wasm.new" "$folder/warp.wasm"
+	if [ -f "$compilers/warp-self.wasm" ] && [ "$(cut -d' ' -f1 "$compilers/warp-self.wasm.inputs" 2>/dev/null)" = "$inputs" ]; then
+		cp "$compilers/warp-self.wasm" "$folder/warp-self.wasm.new" && mv "$folder/warp-self.wasm.new" "$folder/warp-self.wasm"
 	else
 		rm -f "$folder/warp-self.wasm"  # an older pair's: `warp self` says it is missing instead of running it
 	fi

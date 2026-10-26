@@ -57,7 +57,7 @@ whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp 
 - `warp rebuild` / `warp rebuild pure`: builds warp.wasm anew from lib/ (nothing rebuilds it automatically); the gate
   needs only warp.wasm. `warp rebuild self` runs that self test and promotes; `scripts/promote-self.sh
   [--background] [<tree>]` does that every once in a while, in parallel, and never fails its caller. A worktree's
-  compilers live in <worktree>/data/ (`WARP_LIB=<worktree>/lib`), main's beside the binary. Until 2026-10-26 they were
+  compilers live in <worktree>/lib/ itself (`WARP_LIB=<worktree>/lib`), main's beside the binary. Until 2026-10-26 they were
   named compiler.wasm and compiler-self.wasm; those names are still read when the new ones are missing
 - A form outside emitter.warp's core is refused loudly (`outside the core: …`)
 
