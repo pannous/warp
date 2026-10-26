@@ -34,7 +34,10 @@ Read notes/agents/common.md.
   batch touches core/ (user, decision quick-merges). 
   Tiers 1 and 2 then run in the background on the pushed tip and never hold a merge: a red result is fixed forward on the owner's card, a crash gets an urgent card. Push exactly the tested hash (`git push origin <tested-hash>:main`), never a branch ref that may have moved.
   Verify each merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`.
-- A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs, rare) additionally needs `cargo check` and `cargo build` of the merged tip, and a rebuilt ~/dev/bin/warp.
+- A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs) never holds the merge: tier 0 runs with the
+  shared ~/dev/bin/warp (the compiler does not depend on the harness, and a new harness forces a fresh compiler build).
+  `cargo build --release` of the pushed tip runs beside it; its binary goes to ~/dev/bin/main-builds/<hash>/ and
+  ~/dev/bin/warp points there once hello passes with it (user 2026-10-26).
 - Fix forward: a failure from a worker's change that takes a couple of lines (stale path, renamed word) you fix in the
   batch in its own commit and tell the worker in one line; up to 10 other failing tests: a `fixnow-<test>` card in Now
   for the owner, the batch goes on; more than that, or a crash at start, bounces the branch.
