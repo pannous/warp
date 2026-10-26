@@ -35,8 +35,7 @@ index_least(): int := 16
 map_table(entries: list): list := {
 	slot = index_slot(entries)
 	if slot == 0 {
-		slot = next_index_slot
-		next_index_slot = int_remainder(slot, 4) + 1
+		slot = cheapest_slot()
 		hold_index(slot, entries, 0, new_list(4 * #entries))
 	}
 	table = slot_table(slot)
@@ -51,6 +50,13 @@ map_table(entries: list): list := {
 	}
 	hold_index(slot, entries, covered, table)
 	table
+}
+# the slot a new map's index takes: a free one, else the one covering the fewest entries, so the big maps looked up
+# again and again (the emitter's texts, its functions) keep their index and a small one is what gets made anew
+cheapest_slot(): int := {
+	slot = 1
+	for candidate in 2 to 4 { if slot_covered(candidate) < slot_covered(slot) { slot = candidate } }
+	slot
 }
 index_slot(entries: list): int := {
 	if covered_1 >= 0 and same_list(indexed_1, entries) { return 1 }
