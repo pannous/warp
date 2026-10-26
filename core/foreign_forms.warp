@@ -108,7 +108,7 @@ def ruby_fields(p: Parser, word: text): Node := {
 	listed("", ";", names.map(name => symbol(name)))
 }
 
-def without_colon(name: text): text := if starts_at(name, ":", 0) then name[1 .. name.length] else name
+def without_colon(name: text): text := if name.starts_with(":") then name[1 .. name.length] else name
 
 // `mixin Name {`: a name and a block after the blanks behind `word`
 // Rust twin: scanning.rs name_and_block_follow
