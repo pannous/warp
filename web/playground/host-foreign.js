@@ -251,7 +251,7 @@ function awaitedPromise(holder, called, promise, valueOf) {
 
 // a program's foreign_call where its main waits (host.js JSPI) goes through this module: host.call gives the value, and
 // when that is a promise (host.pending), host.await, a Suspending import, waits for it. The engine suspends wasm frames
-// only, and a Suspending import always suspends (probes/jspi_semantics.mjs), so the module calls it only for a promise.
+// only, and a Suspending import always suspends, so the module calls it only for a promise.
 // Assembled by wasm-tools from:
 // (func (export "foreign_call") (param anyref anyref anyref anyref anyref) (result anyref) (local $given anyref)
 //   (local.set $given (call $call (local.get 0) (local.get 1) (local.get 2) (local.get 3) (local.get 4)))

@@ -1,6 +1,6 @@
 // The page's side of a program Worker's task pool (host-tasks.js addTaskWorker): the page makes the task Workers, since in
 // Firefox a Worker's own `new Worker` waits for the page's thread and, right after the browser started, that wait
-// sometimes never ends (card tour-firefox-stall: 4 fresh starts in 80 stalled, probes/firefox_start/starts.py). The
+// sometimes never ends (card tour-firefox-stall: 4 fresh starts in 80 stalled). The
 // program's Worker asks {taskWorker: {id, url}} and gets {taskWorker: id, port}, a MessagePort to the new Worker;
 // {endTaskWorker: id} stops one. The program's Worker, terminated, takes its task Workers with it as before. What a task
 // Worker posts itself (its sounds) reaches the program Worker's listeners, as if that Worker had said it.

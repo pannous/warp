@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # warp-host's ahead-of-time compilation (card warp-host-aot, notes/warp_host.md "AOT"): `compile --aot` writes the
 # machine code f.cwasm, `warp-host f.cwasm` runs it, `build` writes a standalone executable carrying it, which runs with
-# WASI, std_io and C calls as warp-host does. Run it through the queue: tests/queue.sh tests/host/test_host_aot.sh
-# The host and compilers are found as in tests/host/test_host.sh (WARP_HOST_BINARY, WARP_LAUNCHER_RUST, WARP_WAT2WASM);
+# WASI, std_io and C calls as warp-host does. Run it with bash test/host/test_host_aot.sh
+# The host and compilers are found as in test/host/test_host.sh (WARP_HOST_BINARY, WARP_LAUNCHER_RUST, WARP_WAT2WASM);
 # staged in scratch/host-aot-test/. Kept values and machine code go to scratch/host-cache/, shared with test_host.sh.
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}

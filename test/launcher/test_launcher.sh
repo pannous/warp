@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # What the launcher packaging/bin/warp prints and exits with (notes/pure_wrapper.md): programs through the pure
-# pipeline, other commands through warp-rust. Run it through the queue: tests/queue.sh tests/launcher/test_launcher.sh
+# pipeline, other commands through warp-rust. Run it with bash test/launcher/test_launcher.sh
 # The Rust binary under test is WARP_LAUNCHER_RUST (default the checkout's target/debug/warp) with warp.wasm and
 # warp-self.wasm beside it (`warp rebuild pure`, `warp rebuild self`); it and the launcher are staged together in
 # scratch/launcher-test/, as installed. Refusals and failures come from a stand-in warp-rust (stub_rust below), so these

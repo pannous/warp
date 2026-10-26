@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Long lists from warp-host's words (card warp-host-list-cap): read_bytes of a file over 24,000 bytes, and compile_wasm
 # of a `use os` program (a module of ~25 KB, given as a list of its bytes). Before the fix, a list of more than ~20,000
-# items failed: "memory cap: growing a memory to 4096 MB …", then "list join: 0". Run it through the queue:
-# tests/queue.sh tests/host/test_host_lists.sh
+# items failed: "memory cap: growing a memory to 4096 MB …", then "list join: 0". Run it with
+# bash test/host/test_host_lists.sh
 # The host and the compilers as in test_host.sh: WARP_HOST_BINARY (default target/host/warp-host, else target/release/,
 # else target/debug/), warp-self.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)

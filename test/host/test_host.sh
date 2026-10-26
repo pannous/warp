@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # What warp-host prints and exits with (notes/warp_host.md): pure programs compiled by warp-self.wasm and run with
-# WASI and shell commands, and the launcher packaging/bin/warp handing programs to a warp-host beside it. Run it through
-# the queue: tests/queue.sh tests/host/test_host.sh
+# WASI and shell commands, and the launcher packaging/bin/warp handing programs to a warp-host beside it. Run it with
+# bash test/host/test_host.sh
 # The host under test is WARP_HOST_BINARY (default the checkout's target/host/warp-host, else target/release/, else
 # target/debug/: `cargo build --profile host -p warp-runtime --features host --bin warp-host`), with warp-self.wasm
 # and warp.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`); staged in

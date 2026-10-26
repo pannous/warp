@@ -44,7 +44,7 @@ STUB_PATH = "/__stub__"  # answers with the status and body its query names, aft
 CLICK_MILLISECONDS = 300  # a click's handler runs in the worker and its markup comes back
 ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
 # serve without the isolation headers, as GitHub Pages does, so the page isolates itself under coi-serviceworker.js
-# (card firefox-coi-worker: probes/firefox_start/starts.py follows those starts)
+# (card firefox-coi-worker)
 UNISOLATED = os.environ.get("WARP_SERVE_UNISOLATED") == "1"
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -163,11 +163,11 @@ gpu_compute(shader, [1], 1)"""
 GPU_JOBS_NEVER = "Out of memory"
 # the console lines a check makes on purpose: Chrome logs the broken shader's WGSL error itself
 # Firefox on lavapipe: the 400 jobs outlast RUN_TIMEOUT_MS, so the run is stopped and the stop's terminate logs the
-# anonymous uncaught exception below; 50 jobs finish in time and log nothing (probes/firefox_webgpu/gpu_jobs.sh, card
+# anonymous uncaught exception below; 50 jobs finish in time and log nothing (card
 # firefox-gpu-jobs-uncaught)
 # and Firefox its own two lines of the broken shader
 # Firefox's bug: terminating a Worker busy inside a WebAssembly.promising call logs an anonymous uncaught exception on
-# the page, which no listener sees (probes/firefox_jspi_terminate.html, card firefox-logs). Stop does that: the
+# the page, which no listener sees (card firefox-logs). Stop does that: the
 # compiler's web_evaluate and the program's main run under promising (worker.js, host.js JSPI); the run stopped and
 # the button right. The clipboard check does the same on purpose: its run_code("1") replaces the worker of the run that
 # waits for the permission click (card tour-firefox-fails: two such lines on each Firefox run of the check alone)
