@@ -1,0 +1,7 @@
+# from test_shader_holes.rs: edit the Rust test, then run the script again
+
+# a_hole_is_read_from_the_values
+is! 's = shader { let x = $size * size; }
+s' 'let x = values.size * size;'
+is! 's = shader { let x = $1; }
+s' 'let x = $1;'

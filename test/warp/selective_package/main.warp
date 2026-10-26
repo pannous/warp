@@ -1,0 +1,2 @@
+use pkg
+"\(box(0.5)) \(bright(0.5)) \(dim(0.5))"

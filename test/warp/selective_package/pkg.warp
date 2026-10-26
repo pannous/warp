@@ -1,0 +1,3 @@
+# fixture: a package main file passing on chosen words of its own files (card import-hides)
+from shapes import box
+from palette import bright, dim

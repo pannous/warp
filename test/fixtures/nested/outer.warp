@@ -1,0 +1,2 @@
+include inner
+outer_value=inner_value+1

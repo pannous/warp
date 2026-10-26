@@ -1,0 +1,5 @@
+# from test_loop_forms.rs: edit the Rust test, then run the script again
+
+# a_while_without_a_body_loops
+is! 'x = 3; while x-->0
+x' 0

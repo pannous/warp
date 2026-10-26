@@ -1,0 +1,3 @@
+area(r) := r*r*3
+plus(a, b) := a+b
+unused_name := 1

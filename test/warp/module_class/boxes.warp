@@ -1,0 +1,6 @@
+// a module with a class, for tests/modules/test_module_classes.rs
+class Box { items = []
+  put(x) := items.add(x)
+  take() := items.pop()
+  size() := count(items)
+}

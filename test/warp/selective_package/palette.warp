@@ -1,0 +1,5 @@
+# fixture: uses a standard module; shapes.warp takes shade, pkg.warp bright and dim
+use math
+shade(x) := floor(x * 10)
+bright(x) := shade(x) + 1
+dim(x) := shade(x) - 1

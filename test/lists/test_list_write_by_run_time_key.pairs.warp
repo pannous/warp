@@ -1,0 +1,5 @@
+# from test_list_write_by_run_time_key.rs: edit the Rust test, then run the script again
+
+# a_list_takes_a_write_by_a_run_time_key_in_place
+'f(k) := { xs = [1, 2, 3]; xs[k] = 9; xs }; f(1)'	[1 9 3]
+'f(k) := { xs = []; xs += 4; xs[k] = 5; xs }; f(0)'	[5]
