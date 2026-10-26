@@ -2,7 +2,7 @@
 // systemd: the daemon runs its programs as child processes (WARP_LAMBDA_RUNNER=process), asks the live warp-hosting
 // Worker who is logged in (a GitHub token, gh auth token), and serves the deployed program by its Host name. Then the
 // playground's ☁ Deploy to pannous.com button deploys it too (headless agent-browser).
-// node web/hosting/test_lambda.mjs   needs: scratch/warp (built from this checkout), gh logged in, python3, agent-browser.
+// node web/hosting/test_lambda.mjs   needs: data/warp (built from this checkout), gh logged in, python3, agent-browser.
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { get } from "node:http";
@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { deployedByPlayground } from "./playground_driver.mjs";
 
 const ROOT = resolve(import.meta.dirname, "../..");
-const STATE = join(ROOT, "scratch/lambda_test");
+const STATE = join(ROOT, "data/lambda_test");
 const PORT = Number(process.env.WARP_LAMBDA_TEST_PORT ?? 8894); // outside the test suite's 87xx ports
 const DAEMON = `http://127.0.0.1:${PORT}`;
 const DOMAIN = "lambda.pannous.com";
@@ -40,7 +40,7 @@ async function startDaemon() {
 	rmSync(STATE, { recursive: true, force: true });
 	mkdirSync(STATE, { recursive: true });
 	const env = { ...process.env, WARP_LAMBDA_PORT: String(PORT), WARP_LAMBDA_STATE: STATE, WARP_LAMBDA_RUNNER: "process",
-		WARP_LAMBDA_WARP: join(ROOT, "scratch/warp"), WARP_LAMBDA_PROGRAM_ADDRESS: "127.0.0.1" };
+		WARP_LAMBDA_WARP: join(ROOT, "data/warp"), WARP_LAMBDA_PROGRAM_ADDRESS: "127.0.0.1" };
 	const daemon = spawn("python3", [join(ROOT, "web/hosting/server/warp_lambda.py")], { env, stdio: "inherit" });
 	for (let i = 0; i < STARTS; i++) {
 		if (await fetch(`${DAEMON}/native/ask?domain=x`).then(() => true, () => false)) return daemon;

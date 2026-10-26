@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To present
+- enum-raw-values: `enum W { A = "a·b", B }` spells cases; unspelled ones spell as their name (no mix error); `Dime = 10` its int.
 
 ## Parked
 - graphics-plain (warp-markup, parked): display alias table with notes (stays in Rust); bare width/height as canvas sides with did-you-mean (stays).

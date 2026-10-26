@@ -3,11 +3,11 @@
 # pipeline, other commands through warp-rust. Run it with bash test/launcher/test_launcher.sh
 # The Rust binary under test is WARP_LAUNCHER_RUST (default the checkout's target/debug/warp) with warp.wasm and
 # warp-self.wasm beside it (`warp rebuild pure`, `warp rebuild self`); it and the launcher are staged together in
-# scratch/launcher-test/, as installed. Refusals and failures come from a stand-in warp-rust (stub_rust below), so these
+# data/launcher-test/, as installed. Refusals and failures come from a stand-in warp-rust (stub_rust below), so these
 # checks hold whatever the pure pipeline covers.
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
-stage=$checkout/scratch/launcher-test
+stage=$checkout/data/launcher-test
 hello=$checkout/samples/hello/hello.warp
 HELLO='"Hello 🌍2026"'
 REFUSAL='Error("outside the core: `stub` at 1:1")'

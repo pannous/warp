@@ -1,7 +1,7 @@
 // End-to-end test of warp-assistant (no mocks): the Worker under wrangler dev with Cloudflare's always-passing Turnstile
 // test secret, the real Anthropic API, the playground's guides served locally. Checks that it is no open relay.
 // node web/assistant/test_assistant.mjs   needs: wrangler, python3, an Anthropic key in ANTHROPIC_API_KEY_VISION or
-// ANTHROPIC_API_KEY (written to a private env file under scratch/ for the run, removed after)
+// ANTHROPIC_API_KEY (written to a private env file under data/ for the run, removed after)
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { stopGroup, stopGroupOnExit } from "../process_groups.mjs";
 
 const ROOT = resolve(import.meta.dirname, "../..");
-const WORK = join(ROOT, "scratch/assistant_test");
+const WORK = join(ROOT, "data/assistant_test");
 const PLAYGROUND = join(ROOT, "web/playground");
 const PORT = 8893; // outside the test suite's 87xx ports and test_hosting's 88xx ones
 const PLAYGROUND_PORT = 8894;

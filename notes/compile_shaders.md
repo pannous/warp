@@ -25,7 +25,7 @@ functions painted as one shader, its WGSL printed), beside the WGSL samples/gpu/
   `sound_seconds(song)`. Browser host: card spectrum-song.
 
 ## Porting a WebGPU page: web-ocean (samples/gpu/ocean.warp)
-github.com/Noniv/web-ocean (MIT; clone in scratch/web-ocean) is a multi-pass WebGPU renderer (FFT wave cascades in
+github.com/Noniv/web-ocean (MIT; clone in data/web-ocean) is a multi-pass WebGPU renderer (FFT wave cascades in
 compute passes, sky LUTs, environment cube map, CDLOD mesh, bloom). paint(f) is one fragment shader, so the port
 raymarches a sum of dragged exp(sin − 1) waves under an analytic sky with two noise cloud layers, and ports the
 post chain (white balance, highlight bleach, AgX + look) as is; card gpu-multipass for the real pipeline.

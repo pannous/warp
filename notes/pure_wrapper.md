@@ -95,20 +95,6 @@ In the repo: scripts/self-check.sh and scripts/lib_bench.sh run /Users/me/dev/bi
 is not installed (both need the Rust binary: self-check copies it and runs `rebuild`; the lib bench measures Rust's
 lanes). Nothing in ~/dev/bin was installed or swapped by this branch.
 
-### Integrator follow-up (integrator_tools/, outside the repo, not changed here)
-
-- refresh_main_binary.sh `build_and_install`: install `$target/$profile/warp` as `$bin/warp-rust` (binaries list:
-  `warp` → `warp-rust` as the destination name), then the launcher: `install_binary $worktree/packaging/bin/warp
-  $bin/warp`. The version line reads `$bin/warp-rust --version`.
-- refresh_main_binary.sh `keep_main_build`: keep `$bin/warp-rust` (with warp.wasm) in main-builds/<commit>/ and
-  link `$bin/warp-<commit>` to it (as now, a Rust binary finding its compilers through the link); `cmp` against
-  warp-rust. `rebuild_worktree_compilers`: `$bin/warp-rust rebuild pure`.
-- express.sh l.81: `install_compilers.sh /Users/me/dev/bin/warp-rust $PWD` (it copies the binary it is given and runs
-  `rebuild`; the launcher there would be copied without its warp-rust).
-- pure_chain_check.sh: `MAIN_WARP=/Users/me/dev/bin/warp-rust` (its `warp pure` passes through either way).
-- warp-debug, warp-runtime, warp-page-runtime keep their names. scripts/llm/llm.py runs generated programs with
-  WARP_PIPELINE=rust until the pure pipeline covers enough (card llm-pure).
-
 ## Packaging that must follow later (not changed)
 
 Since card installed-compilers the packages ship warp.wasm, warp-self.wasm and lib/ in `<prefix>/share/warp`,
@@ -140,7 +126,7 @@ lowers compiler.warp's runtime words once: 8–14 s here (debug), `warp rebuild`
 
 tests/launcher/test_launcher.sh (outcome checks, expected output and exit status), through the queue:
 `tests/queue.sh tests/launcher/test_launcher.sh`. WARP_LAUNCHER_RUST names the Rust binary under test (default the
-checkout's target/debug/warp), warp.wasm and warp-self.wasm beside it; staged in scratch/launcher-test/.
+checkout's target/debug/warp), warp.wasm and warp-self.wasm beside it; staged in data/launcher-test/.
 
 Pure-pipeline coverage: `tests/queue.sh <warp-rust> test tests` (or `--self`) runs every test of tests/ through the
 pure pipeline and prints `m of n failed`; n − m is the number going green.

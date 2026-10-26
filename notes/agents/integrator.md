@@ -8,12 +8,13 @@ Workers land their own branches: they merge origin/main, smoke-test that merge (
 and push it (common.md "Done", user decision self-landing). You repeat no test. You watch main.
 
 ## Watching main
-- After each push to main (a worker's message, or `git fetch` shows a new tip):
-  `scripts/integrate/after-push.sh` in the background (`run_in_background`). In /Volumes/Worktrees/integrate2 at
-  main's tip it takes the compilers of its lib (`scripts/rebuild.sh both`: the pusher's build of the same inputs is
-  reused), checks hello, moves warp.wasm and warp-self.wasm (only when promoted from the same inputs) beside
-  ~/dev/bin/warp, pulls the user's checkout, then runs promote-self.sh and tiers 1-2 (`scripts/gate.sh`) of what
-  changed since the last tip it watched. Several pushes in a row: one run for the newest tip covers them all.
+- The pusher runs `scripts/integrate/after-push.sh` in the background right after its push (common.md "Done"), and a
+  cron runs it with `--if-moved` every 2 minutes (log ~/Library/Logs/warp/cron/after-push.log) as the safety net: main and the compilers
+  beside ~/dev/bin/warp stay in step (user). In /Volumes/Worktrees/integrate2 at main's tip it takes the compilers of
+  its lib (`scripts/rebuild.sh both`: the pusher's smoke build of the same inputs is reused from the store), checks
+  hello, moves warp.wasm and warp-self.wasm (only when promoted from the same inputs) beside the binary and pulls the
+  user's checkout first; promote-self.sh and tiers 1-2 (`scripts/gate.sh`) follow. One run at a time: a second one
+  returns, the running one loops while main moved past what it handled, installing the newest tip first.
 - What goes red becomes a card in Now naming the commits pushed since; the pusher fixes it forward. A red smoke test
   (hello) on main is urgent, and revert first, bisect after (user, standing): when the suspect push is known,
   `git revert` it at once, name the decision revert-first in the commit, push, tell the owner and the Supervisor; the
@@ -23,9 +24,10 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
 - The full suite (`warp test`) at rare intervals (nightly, before a release), in the background; its failures grouped
   into cards.
 - Read each failure's message before passing it as flaky; a different message is a real failure.
-- A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs; after-push.sh says HARNESS CHANGED) never holds
-  anything: the compiler does not depend on the harness. `cargo build --release` of main's tip, its binary to
-  ~/dev/bin/main-builds/<hash>/, and ~/dev/bin/warp points there once hello passes with it (user 2026-10-26).
+- A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs) is installed by after-push.sh too, before the
+  compilers: when the installed binary's `release build <commit>` differs in those paths from main's tip it runs
+  `cargo build --release`, puts the binary in ~/dev/bin/main-builds/<hash>/ with a warp.wasm it built, checks hello,
+  links ~/dev/bin/warp there and deletes every other main-builds/ folder. No ~/dev/bin/warp-<hash> links (user).
 - Compilers beside ~/dev/bin/warp come only with main's tip, never because a lib/ changed, and are never built in the
   main checkout (a pull mid-build paired mismatched compilers).
 

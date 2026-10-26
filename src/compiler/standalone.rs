@@ -1,13 +1,14 @@
 //! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): core/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
-//! build output (decision compiler-build): warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a
-//! compiler checked in that compiles itself; card rust-bootstrap), for `warp pure`; warp-self.wasm, for `warp self`, is no build of
-//! its own: a copy of warp.wasm, promoted when warp.wasm compiles compiler.warp once more (user 2026-10-26: no
-//! fixpoint needed; `warp rebuild self`, scripts/promote-self.sh). The old names compiler.wasm and compiler-self.wasm are still read when
+//! build output (decision compiler-build): warp.wasm, compiler.warp compiled by the seed (warp-seed.wasm beside the
+//! binary, published on GitHub releases seed-<date>; card rust-bootstrap), for `warp pure`; warp-self.wasm, for `warp
+//! self`, is no build of its own: a copy of warp.wasm, promoted when warp.wasm compiles compiler.warp once more (user
+//! 2026-10-26: no fixpoint needed; `warp rebuild self`, scripts/promote-self.sh). The old names compiler.wasm and
+//! compiler-self.wasm are still read when
 //! the new ones are missing (transition). No Rust-compiled stage takes part. The pair next to the binary is the delivered
 //! one (a release's, or main's, stamped with the commit it was built from) and is used as it is, whatever lib/ beside
 //! it says (card installed-compilers); a lib/ named by WARP_LIB that the pair is not for keeps its own in
-//! <lib>/../data/, where a run on one built from another lib/ or warp build says so in one line. Only `warp rebuild`
+//! that lib/ folder itself (user 2026-10-26), where a run on one built from another lib/ or warp build says so in one line. Only `warp rebuild`
 //! builds one: a missing one is an error naming it.
 use crate::compiler::compiler_files::{compiler_inputs_hash, library, module_of_bytes};
 use crate::node::{error, Node};
@@ -26,17 +27,13 @@ const BUILD_PARTS_JUDGED: usize = 3;
 /// `warp rebuild [pure|self]`, the one command that builds a compiler
 const REBUILD_WORD: &str = "rebuild";
 const SHOWN_COMMIT_LENGTH: usize = 10;
-/// Where a lib/ other than the binary's keeps its build files, beside lib/
-const OTHER_LIBRARY_FOLDER: &str = "data";
 /// Names a lib/ of its own (a worktree's): only then can the compilers be other than those next to the binary
 const LIBRARY_VARIABLE: &str = "WARP_LIB";
 /// What a new build compiles once to compute its kept values
 const WARMING_PROGRAM: &str = "0";
-/// The seed compiler, beside lib/ in a checkout (or in the installed folder): compiler.warp compiled by a stage that
-/// compiles itself once more, what every build starts from (seed/README.md, scripts/refresh-seed.sh)
-const SEED_FILE: &str = "seed/warp-self.wasm";
-/// The seed's old name, read when SEED_FILE is missing (transition)
-const LEGACY_SEED_FILE: &str = "seed/compiler-self.wasm";
+/// The seed compiler, beside the binary (no file of git: scripts/refresh-seed.sh publishes it on a GitHub release
+/// seed-<date>): compiler.warp compiled by a stage that compiles itself once more, what every build starts from
+const SEED_FILE: &str = "warp-seed.wasm";
 /// Names another seed file (a candidate seed tried before it is checked in)
 const SEED_VARIABLE: &str = "WARP_SEED";
 /// The ending of an output compiler.warp writes parser.warp's view to, as JSON, instead of a module (its VIEW_SUFFIX)
@@ -430,14 +427,14 @@ fn builder(_by: Compiler) -> Result<(String, CompiledModule, Option<String>), No
 	let seed = seed_file();
 	let bytes = std::fs::read(&seed).map_err(|failure| {
 		error(&format!(
-			"no seed compiler at {} ({failure}): {SEED_VARIABLE} names one, scripts/refresh-seed.sh makes one",
+			"no seed compiler at {} ({failure}): {SEED_VARIABLE} names one, `gh release download` of the newest seed-* release fetches one",
 			seed.display()
 		))
 	})?;
 	Ok((format!("the seed {}", seed.display()), shipped(&seed, bytes), None))
 }
 
-/// `warp rebuild seed`, and before `warp rebuild pure`: the seed's machine code beside it (seed/warp-self.wasm.cwasm),
+/// `warp rebuild seed`, and before `warp rebuild pure`: the seed's machine code beside it (warp-seed.wasm.cwasm),
 /// made when it is missing or stale (a refreshed seed: scripts/refresh-seed.sh), so no build compiles the seed at run
 /// time (card precompiled-compilers); its path
 pub fn ship_seed() -> Result<PathBuf, Node> {
@@ -463,17 +460,16 @@ fn kept_scope(by: Compiler) -> Option<String> {
 	}
 }
 
-/// The seed: WARP_SEED, else seed/warp-self.wasm beside lib/ (a checkout's), else in the installed folder; at each
-/// place seed/compiler-self.wasm, the old name, when only that is there
+/// The seed: WARP_SEED, else warp-seed.wasm beside the binary, else beside the link it was started by (~/dev/bin/warp
+/// links to a build folder)
 fn seed_file() -> PathBuf {
 	if let Some(file) = std::env::var_os(SEED_VARIABLE) {
 		return PathBuf::from(file);
 	}
-	let checkout = library().parent().unwrap_or(library()).to_path_buf();
-	let places = std::iter::once(checkout.clone()).chain(binary_folder());
-	let found =
-		places.flat_map(|folder| [folder.join(SEED_FILE), folder.join(LEGACY_SEED_FILE)]).find(|file| file.exists());
-	found.unwrap_or_else(|| checkout.join(SEED_FILE))
+	let started_by = std::env::current_exe().ok().and_then(|link| link.parent().map(Path::to_path_buf));
+	let places: Vec<PathBuf> = binary_folder().into_iter().chain(started_by).collect();
+	let found = places.iter().map(|folder| folder.join(SEED_FILE)).find(|file| file.exists());
+	found.unwrap_or_else(|| places.first().cloned().unwrap_or_default().join(SEED_FILE))
 }
 
 /// The build file of `by` for these compiler inputs, and its bytes: the build path's, else the delivered one; None when
@@ -554,8 +550,8 @@ fn found_path(by: Compiler) -> PathBuf {
 	path.parent().map_or(path.clone(), |folder| by.file_in(folder))
 }
 
-/// The build file: next to the binary, unless WARP_LIB names a lib/ the pair there is not for, whose build files lie
-/// beside it. A missing one is judged by its siblings there (none: yes), so a worktree's `warp self` never puts its
+/// The build file: next to the binary, unless WARP_LIB names a lib/ the pair there is not for, which keeps its build
+/// files in itself. A missing one is judged by its siblings there (none: yes), so a worktree's `warp self` never puts its
 /// warp-self.wasm next to main's warp.wasm (card build-path-missing)
 fn build_path(by: Compiler) -> PathBuf {
 	let binary_folder = binary_folder();
@@ -575,6 +571,6 @@ fn build_path(by: Compiler) -> PathBuf {
 	};
 	match binary_folder.filter(for_this_library) {
 		Some(folder) => folder.join(by.file_name()),
-		None => library().parent().unwrap_or(library()).join(OTHER_LIBRARY_FOLDER).join(by.file_name()),
+		None => library().join(by.file_name()),
 	}
 }

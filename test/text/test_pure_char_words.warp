@@ -1,6 +1,6 @@
 # card pure-compiles-compiler: characters in the pure lane, as core/prelude_words.warp's is_name_part(c: char)
 # meets them when the pure-built compiler compiles itself
-# (`warp test tests/text` runs them through warp pure)
+# (`warp test tests/text` )
 
 # a_result_declared_char
 is! "g(): char := 'a'

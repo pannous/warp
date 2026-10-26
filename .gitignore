@@ -19,22 +19,22 @@ out
 notes/session
 
 
-# disposable copies, worktrees, cargo homes, private index files, temp builds
-scratch/
-/scratch
-# kept but not committed: logs, test results, patches, dumps, benchmark data
+# a checkout's own output, never committed: logs, test results, dumps, copies, temp builds (the main checkout's is
+# a symlink to /Volumes/Junk/warp/data, notes/churn_volume.md)
 data/
+/data
 !src/lowering/data/
+# the compilers `warp rebuild` builds in a lib/ (WARP_LIB's folder itself), with their machine code, inputs and kept values
+/lib/warp.wasm*
+/lib/warp-self.wasm*
+/lib/compiler.wasm*
+/lib/compiler-self.wasm*
 
 # packages fetched by `use <name>`, see packages.warp
 /packages/
 
 # test fixtures may be prebuilt modules and components (tests/fixtures/components/*/build.sh rebuilds them)
 !tests/fixtures/**/*.wasm
-# the seed compiler the self lane starts from (seed/README.md, card rust-bootstrap)
-!/seed/warp-self.wasm
-# its machine code, made by `warp rebuild` (card precompiled-compilers), never committed
-/seed/*.cwasm
 # libc.wasm is the browser's `use c` (P147), served with the playground; build_libc.sh rebuilds it
 !web/playground/lib/libc.wasm
 # `stored x = v` keeps its values beside the program (src/lowering/stored_values.rs)

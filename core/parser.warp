@@ -645,7 +645,8 @@ def indented_block(p: Parser): Node := {
 	skip_end_line(p)
 	lines = group_parts(block)
 	if lines != ø and lines#1 == "" { return listed("{", lines#2, lines#3) }
-	listed("{", "", [block])
+	// one statement, as `{ statement }` reads it
+	phrase("{", [block])
 }
 
 // The words that may stand alone on the line after a block read by indentation: Ruby's `end`, the shell's `fi`
@@ -2400,11 +2401,11 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 	} else if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
 		body = items_until(p, '}', "{")
-	} else if is_list_of(condition, "(") and at_body_start(p) {
-		// `if (x < 0) return -1`, `while (i < 9) i++`: C's parenthesized condition, then the statement on the same line
+	} else if at_body_start(p) {
+		// `if a == 1 print "ok"`, `if (x < 0) return -1`, `while (i < 9) i++`: the statement on the condition's line
 		outer = p.in_branch
 		p.in_branch = word == "if"
-		body = expression(p, 0)
+		body = statement_words(p)
 		p.in_branch = outer
 	} else {
 		// `while m > 1` ending its line: the lines indented below (Rust twin: blocks.rs indented_lines_below); without

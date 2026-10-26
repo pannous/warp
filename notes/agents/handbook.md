@@ -7,7 +7,7 @@ Principles and Talking live only in common.md.
 - Quota wind-down : every Claude worker
   finishes and lands the card it is on, writes its handover into the card (`todo release`), then retires. No new
   cards. Only warp-integrator and warp-layers keep running. The sugar passes outside parser.warp belong to the user's
-  Grok Bot coders (instructions: scratch/grok-cards.md; they report in scratch/grok-reports.md); warp-layers keeps
+  Grok Bot coders; warp-layers keeps
   parser.warp only.
 - Beautiful types (decision beautiful-types): every lib/ declaration a migration or cleanup branch touches leaves it
   fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
@@ -94,9 +94,9 @@ Principles and Talking live only in common.md.
   while it runs. Never poll its output file or sleep-loop on it: the exit notice wakes you; meanwhile do other work
   or end the turn. Note the job's PID in your handover; a job you abandon gets killed by PID.
 - Close what you start : after every test, probe or build, kill your own leftover processes by PID
-  (warp, scratch/warp, test binaries, cargo, refusals.sh ladders); check with `ps -o pid,etime,command -U $USER | grep
+  (warp, data/warp, test binaries, cargo, refusals.sh ladders); check with `ps -o pid,etime,command -U $USER | grep
   <your worktree>` before reporting. The safety net, not a substitute: cron's ~/dev/bin/reap-orphans (every 15 min,
-  log /Users/me/warp/reap-orphans.log) kills orphaned warp/test binaries, cargo test/build and xargs sweeps after 30
+  log ~/Library/Logs/warp/cron/reap-orphans.log) kills orphaned warp/test binaries, cargo test/build and xargs sweeps after 30
   min and a test binary's children after WARP_TEST_TIME_LIMIT (600 s).
 - Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is upgraded to the
   working value in its own commit; a change of meaning,
@@ -118,7 +118,7 @@ Principles and Talking live only in common.md.
   Integrator's after-push step installs it; a form emitter.warp refuses there is fixed or carded, never left for main to find.
   Commands run directly, no slots or queues (decision no-slots). The tree it checks
   is a cowtree worktree under /Volumes/Worktrees or a throwaway lib/ copy under /Volumes/Junk, never inside the main
-  checkout (scratch/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
+  checkout (data/ copies there load fseventsd; the script refuses them). Heavy self-build series (bisecting,
   cold module caches) go to Grok Warp Code 3's Linux box.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
@@ -133,9 +133,9 @@ Principles and Talking live only in common.md.
   core/ or lib/ changed). It catches undefined words, parse errors and wrong values in seconds; `WARP_HINTS=0` hides
   hints. Then the targeted `warp test <folders>`.
 - `warp pure` / `warp self` run compiler.warp's build files warp.wasm / warp-self.wasm (decision
-  compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
+  compiler-build): next to the binary for the main checkout's lib/, in <worktree>/lib/ itself for a worktree's
   (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never build one : a missing one is an error
-  naming `warp rebuild`; a worktree's stale one in data/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user: "we don't want automatic
+  naming `warp rebuild`; a worktree's stale one in lib/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user: "we don't want automatic
   rebuilds just by changing of lib"): no cron, no git hook, no watcher. The pair beside the binary is main's
   delivered compiler: the Integrator's push builds both from the pushed tip's committed lib/ and installs them
   together (notes/agents/integrator.md). A worktree's
@@ -201,7 +201,7 @@ Principles and Talking live only in common.md.
 - Forward crunch: land a branch once it builds and its smoke test passes; tests failing in its own area don't hold
   it back: the Integrator's background tiers card them and you fix forward. More than ~20 failing tests of yours:
   fix those before new work.
-- Before landing: `scratch/warp format <files>` on the .warp files you wrote or changed (notes/warp_format.md),
+- Before landing: `data/warp format <files>` on the .warp files you wrote or changed (notes/warp_format.md),
   and commit what it moved. A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
 - Landing (self-landing, user 2026-10-26: no merge queue, no Ready column; common.md "Done"):
   1. Targeted tests, commit, formatted.
@@ -226,7 +226,7 @@ Principles and Talking live only in common.md.
   optimized build, refreshed a few minutes after each pushed batch; plain `warp` is the older brew release;
   /Users/me/dev/bin/warp-debug is main's debug build). A program with quotes goes into a committed file (samples/ or its test/<topic>/),
   not inline. Run the exact line yourself first. Early try: once the feature's targeted test passes on your branch,
-  SendMessage warp-interviewer a try line with your scratch/warp path and the expected output. Every landing the user
+  SendMessage warp-interviewer a try line with your data/warp path and the expected output. Every landing the user
   can see, hear or run gets a fresh try line to warp-interviewer the moment you learn it merged. Time performance
   only with an optimized build.
 - Never retire with a card still yours: every card you took is `todo done`, noted `land: <branch> <tip>`, or released with `todo release

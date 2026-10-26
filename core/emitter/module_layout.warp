@@ -19,15 +19,15 @@ def function_body(f: Function): list {
 	uleb(#content) + content
 }
 def index_name(i: int, name: text): list { uleb(i) + name_bytes(name) }
-def name_map(names: any): list { vector(range_list(#names).map(i => index_name(i, names#(i + 1)))) }
+def name_map(names: list): list { vector(range_list(#names).map(i => index_name(i, names#(i + 1)))) }
 def local_name_map(f: Function): list { uleb(f.index) + name_map(f.local_names) }
 def range_list(n: int): list {
 	out = []
 	for i in 0..n { out += [i] }
 	out
 }
-def subsection(id: int, content: any): list { [id] + uleb(#content) + content }
-def names_section(functions: any): list {
+def subsection(id: int, content: list): list { [id] + uleb(#content) + content }
+def names_section(functions: list): list {
 	imported = range_list(#module.imports).map(i => index_name(i, module.imports#(i + 1)#2))
 	function_names = vector(imported + functions.map(f => index_name(f.index, f.name)))
 	locals = vector(functions.map(local_name_map))
@@ -41,7 +41,7 @@ def names_section(functions: any): list {
 	section(section_ids.custom, name_bytes("name") + content)
 }
 
-def module_bytes(functions: any): list {
+def module_bytes(functions: list): list {
 	# what names a value type first (functions' signatures and locals, globals), so the GC types the module declares
 	# are all known: those its code used, then these (gc_type)
 	function_types = functions.map(function_type)

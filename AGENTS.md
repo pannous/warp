@@ -25,7 +25,8 @@ words, FFI), the runtime that reads results back, and the CLI. Most things are i
 compiler extensions (core/extensions/). If the core compiler (core/*.warp) or the Rust harness needs changes, this needs
 to go through the interviewer. Ignore all old tasks about Rust features or  'both lanes'. 
 
-warp-self.wasm (seed/) is the checked-in seed compiler; it compiles compiler.warp to
+The seed, warp-seed.wasm beside the binary (~/dev/bin; no file of git, published on GitHub pre-releases seed-<date>), is
+the seed compiler; it compiles compiler.warp to
 warp.wasm, which promotes itself to warp-self.wasm when it compiles itself once more (no fixed point needed, user
 2026-10-26).
 
@@ -49,14 +50,14 @@ It is similar to JSON5 / ECMA Script but much simplified yet with a richer synta
 `compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
 parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
 whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp declares the Node enum.
-- `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a
-  compiler checked in that compiles itself; scripts/refresh-seed.sh refreshes it). No Rust-compiled stage builds either compiler
+- `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (warp-seed.wasm beside the binary, a
+  compiler that compiles itself; scripts/refresh-seed.sh refreshes and publishes it). No Rust-compiled stage builds either compiler
 - `warp self <file|code>`: runs warp-self.wasm, a copy of warp.wasm promoted when warp.wasm compiles
   compiler.warp once more (a fixpoint, stage N+1 == N, is only reported)
 - `warp rebuild` / `warp rebuild pure`: builds warp.wasm anew from lib/ (nothing rebuilds it automatically); the gate
   needs only warp.wasm. `warp rebuild self` runs that self test and promotes; `scripts/promote-self.sh
   [--background] [<tree>]` does that every once in a while, in parallel, and never fails its caller. A worktree's
-  compilers live in <worktree>/data/ (`WARP_LIB=<worktree>/lib`), main's beside the binary. Until 2026-10-26 they were
+  compilers live in <worktree>/lib/ itself (`WARP_LIB=<worktree>/lib`), main's beside the binary. Until 2026-10-26 they were
   named compiler.wasm and compiler-self.wasm; those names are still read when the new ones are missing
 - A form outside emitter.warp's core is refused loudly (`outside the core: …`)
 
@@ -136,7 +137,7 @@ with origin/main, the worker pushes it to main itself and closes the card with `
 
 Several agent sessions share this Mac and the full suite is slow, so run the cheapest check that covers the change
 (roles: notes/roles.md):
-- Smoke test (minutes), every branch: `WARP_LIB=<worktree>/lib warp rebuild pure`, then
+- Smoke test (minutes), every branch: `scripts/rebuild.sh pure <worktree>`, then `WARP_LIB=<worktree>/lib`
   `warp pure samples/hello/hello.warp` prints Hello.
 - Self test, only for parser/compiler changes (core/): `scripts/self-check.sh <worktree>`, the compiler compiles
   itself and that build prints Hello. For core/ changes smoke + self test is the whole check: no test folders.

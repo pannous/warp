@@ -104,6 +104,9 @@ jobs:
       run: |
         chmod +x bin/*
         export WARP_LIB=$PWD/lib
+        # the seed beside the binary: the newest seed-* release's asset (scripts/refresh-seed.sh publishes them)
+        seed=$(gh release list --repo pannous/warp --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("seed-"))][0].tagName')
+        gh release download "$seed" --repo pannous/warp --pattern warp-seed.wasm --dir bin
         bin/warp rebuild pure
         bin/warp rebuild self
         said=$(bin/warp pure samples/hello/hello.warp 2>&1) || true

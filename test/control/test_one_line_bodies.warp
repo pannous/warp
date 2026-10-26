@@ -1,0 +1,37 @@
+# a body of one statement reads the same indented below its head, after a colon, in braces or on the head's line
+
+# an_indented_body_of_one_assignment
+is! 'xs = []
+for i in 1 to 3
+	if i == 2
+		xs = xs + [i]
+xs' [2]
+is! 'n = 0
+for i in 1 to 3
+	n = n + i
+n' 6
+is! 'xs = []
+i = 0
+while i < 3
+	i = i + 1
+	if i == 2
+		xs = xs + [i]
+xs' [2]
+is! 'n = 0
+if 1 == 1
+	if 2 == 2
+		n = 5
+n' 5
+is! 'n = 0
+for y in 1 to 3:
+	if y > 1 then n = n + y
+n' 5
+
+# a_statement_on_the_line_of_its_condition
+is! 'n = 0
+for x in [1,2,3]
+	if x == 2 n = x
+n' 2
+is! 'n = 0; for x in [1,2,3] { if x == 2 n = n + x }; n' 2
+is! 'a = 123; n = 0; if a == 123 n = 1; n' 1
+is! 'n = 0; if (n == 0) n = 7; n' 7

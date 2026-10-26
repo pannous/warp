@@ -26,7 +26,7 @@ Every copy of warp building into the shared target dir (worktrees, exports) maps
 metadata hash ignores the path of a root package and the fingerprint compares mtimes of relative paths, so a copy can
 report "Fresh warp" and run another checkout's code. Fix: a unique pre-release `version = "0.1.1-<topic>"` in each
 copy's Cargo.toml, never committed (set by hand; the harness is rarely built). Still shared by every copy:
-the binary `debug/warp`; `scripts/own-warp.sh` keeps a private copy under `scratch/warp`.
+the binary `debug/warp`; `scripts/own-warp.sh` keeps a private copy under `data/warp`.
 
 ## Shared target sweep
 macOS keeps every link's object files (`*.rcgu.o`) next to the binary for its debug info (~30 GB an hour with several

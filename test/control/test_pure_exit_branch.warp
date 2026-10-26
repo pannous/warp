@@ -1,6 +1,6 @@
 # card pure-exit-miscompile (issue #3098): exit() never returns, so a try or an if with an exit branch takes the value
 # of its other branch, inside a function as at the top level
-# (`warp test tests/control` runs them through warp pure)
+# (`warp test tests/control` )
 
 # a_try_whose_catch_exits_keeps_the_tried_value
 is! "f() := try 42 catch e { exit(1) }

@@ -1,0 +1,15 @@
+# enum cases with spellings, raw values as in Swift and TypeScript (decision enum-raw-values, card enum-spelled-cases)
+
+# a spelled case converts to its spelling and back
+is! 'enum Word { LoopStep = "loop·step", TryElse = "try·else" }; Word.LoopStep as text' 'loop·step'
+is! 'enum Word { LoopStep = "loop·step", TryElse = "try·else" }; "try·else" as Word == Word.TryElse' true
+
+# a case equals its spelling
+is! 'enum Word { LoopStep = "loop·step", TryElse = "try·else" }; Word.LoopStep == "loop·step"' true
+is! 'enum Word { LoopStep = "loop·step", TryElse = "try·else" }; w = "try·else"; w == Word.LoopStep' false
+
+# a case without a spelling is spelled by its name
+is! 'enum Word { LoopStep = "loop·step", Other }; Word.Other as text' 'Other'
+
+# a variable holding a case
+is! 'enum Word { A = "a", B = "b" }; w = Word.B; w as text' 'b'

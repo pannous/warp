@@ -1,5 +1,5 @@
 # card liter-hectare-2: litre, millilitre and hectare in lib/units.warp's unit table, 1 L = 0.001 m³, 1 ha = 10000 m²
-# (run-time quantities: `warp test tests/numbers` runs them through warp pure)
+# (run-time quantities: `warp test tests/numbers` )
 
 # a_litre_counts_in_millilitres
 is! 'use units

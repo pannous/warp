@@ -48,7 +48,7 @@ node_length(n: Node): int := {
 # sees the shorter list
 list_pop(xs: list): any := {
 	last = xs#(#xs)
-	forget_map_indexes()
+	forget_map_index(xs)
 	set_count(xs, #xs - 1)
 	last
 }
@@ -56,7 +56,7 @@ list_pop(xs: list): any := {
 node_set_at(n: Node, index: int, value: Node): Node := {
 	if kind_code(n) != Kind.List { fail() }
 	items = unboxed_list(n)
-	forget_map_indexes()
+	forget_map_index(items)
 	items#index = value
 	value
 }
@@ -68,10 +68,10 @@ zero_fill(count: int, filler: Node): list := {
 }
 # `sum(xs)` as `list_sum(xs, loop)`: the loop the lowering wrote gives it
 list_sum(xs: list, computed: Node): Node := computed
-# The indexes of the maps looked up last (maps.warp map_index; card rebuild-speed): slot k holds the entries indexed,
+# The indexes of four big maps (maps.warp map_index, least_recent_slot; card rebuild-speed): slot k holds the entries indexed,
 # how many of them its table covers (-1: the slot is free) and the table, each entry's place by the hash of its name. An index stays right
 # while entries are only added at the end (the next lookup takes them on) or replaced by one of the same name
-# (field_with); any other change in place (map_without, node_set_at, list_pop) forgets every index
+# (field_with); any other change in place (map_without, node_set_at, list_pop) forgets that index alone
 global indexed_1 = new_list(0)
 global indexed_2 = new_list(0)
 global indexed_3 = new_list(0)
@@ -80,15 +80,22 @@ global covered_1 = -1
 global covered_2 = -1
 global covered_3 = -1
 global covered_4 = -1
+# when each slot was last looked up, by the count of lookups (least_recent_slot)
+global used_1 = 0
+global used_2 = 0
+global used_3 = 0
+global used_4 = 0
+global index_clock = 0
 global table_1 = new_list(0)
 global table_2 = new_list(0)
 global table_3 = new_list(0)
 global table_4 = new_list(0)
-global next_index_slot = 1
-forget_map_indexes(): int := {
-	covered_1 = -1
-	covered_2 = -1
-	covered_3 = -1
-	covered_4 = -1
+# the index of these entries forgotten, after a change in place an index cannot follow; the other maps keep theirs
+# (forgetting every index at each pop of any list made the emitter's texts map be indexed anew all the time)
+forget_map_index(entries: list): int := {
+	if same_list(indexed_1, entries) { covered_1 = -1 }
+	if same_list(indexed_2, entries) { covered_2 = -1 }
+	if same_list(indexed_3, entries) { covered_3 = -1 }
+	if same_list(indexed_4, entries) { covered_4 = -1 }
 	0
 }

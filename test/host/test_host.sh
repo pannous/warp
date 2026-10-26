@@ -5,16 +5,16 @@
 # The host under test is WARP_HOST_BINARY (default the checkout's target/host/warp-host, else target/release/, else
 # target/debug/: `cargo build --profile host -p warp-runtime --features host --bin warp-host`), with warp-self.wasm
 # and warp.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`); staged in
-# scratch/host-test/ as installed.
-# Kept values and machine code go to scratch/host-cache/, kept between runs: the first run computes them (~30 s).
+# data/host-test/ as installed.
+# Kept values and machine code go to data/host-cache/, kept between runs: the first run computes them (~30 s).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
 [ -x "$host" ] || host=$checkout/target/debug/warp-host
 rust=${WARP_LAUNCHER_RUST:-$checkout/target/debug/warp}
-stage=$checkout/scratch/host-test
+stage=$checkout/data/host-test
 HELLO='"Hello 🌍2026"'
-export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=0
+export WARP_HOST_CACHE=$checkout/data/host-cache WARP_NO_WINDOW=1 WARP_HINTS=0
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }

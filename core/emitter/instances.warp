@@ -11,7 +11,7 @@ def name_node(name: any): list {
 	node(Kind.Text, text_bytes(name))
 }
 # (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry)
-is_map_entry(n: any): bool := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global")
+is_map_entry(n: any): bool := is_key(n, Op.Colon) and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global")
 # `{a: 1, b: "x"}`: a map
 def map_value(body: Body, entries: any): list { ["node", entries_code(body, entries.map(e => key_of(e)), entries.map(e => value_of(e)))] }
 # the map of the names to the values
@@ -67,11 +67,11 @@ def instance_of_fields(body: Body, class_name: text, field_names: any, field_val
 # `m.x`, lowered as the subscript `m#("x"+1)`: the name's text, else ø
 subscript_name(index: any): any := {
 	# (type() of an arithmetic key is "operation", not key)
-	if op_of(index) == "+" and value_of(index) == 1 and key_of(index) is text { return key_of(index) }
+	if op_of(index) == Op.Add and value_of(index) == 1 and key_of(index) is text { return key_of(index) }
 	ø
 }
 # `k+1`, the index `m[k]` lowers to
-is_shifted_index(index: any): bool := op_of(index) == "+" and value_of(index) == 1
+is_shifted_index(index: any): bool := op_of(index) == Op.Add and value_of(index) == 1
 # `m.name`, `m["name"]`: a map's or an instance's entry, a swizzle's components of a list of 2 to 4 numbers (`p.zy`),
 # else the run ends in no_field_<name>, which Rust's run reports as "no field name"
 def field_read(body: Body, target: any, name: text): list {
@@ -114,7 +114,7 @@ collect_types(n: any): any := {
 # a class or enum declaration, the opaque view ["type", name, body]
 declares_type(n: any): bool := type(n) is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
 # `type Name = text`: a declaration of no body naming another type
-is_type_alias(n: any): bool := type(n) is key and op_of(n) == "=" and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and value_of(n) is symbol
+is_type_alias(n: any): bool := is_key(n, Op.Assign) and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and value_of(n) is symbol
 record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" {
 		module.class_defaults[name#2] = field_defaults(body)
@@ -259,7 +259,7 @@ def put_back(body: Body, target: any, object: any, put: any): list {
 # a variable, or a field or element of one: what an assignment can write
 def is_place(target: any): bool {
 	if target is symbol { return yes }
-	type(target) is key and (op_of(target) == "." or op_of(target) == "#") and is_place(key_of(target))
+	type(target) is key and (op_of(target) == Op.Dot or op_of(target) == Op.Hash) and is_place(key_of(target))
 }
 # Rust checks a field write against the field's type only on a local it holds as an instance of the class
 # (struct_backend.rs find_typed_structs), never on a parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
