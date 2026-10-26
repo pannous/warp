@@ -111,11 +111,18 @@ pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 
 /// The module compiler.warp makes of the program file with `folder` in scope: `compiler.warp <source> <wasm> <folder> <lib>`
 fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
-	compiled_with(program, folder, compiler(by)?)
+	compiled_with(program, folder, compiler(by)?, matches!(by, Compiler::SelfCompiled))
 }
 
-/// The module `compiler` (a module of compiler.warp) makes of the program file with `folder` in scope
-fn compiled_with(program: &Path, folder: &Path, compiler: CompiledModule) -> Result<CompiledModule, Node> {
+/// The module `compiler` (a module of compiler.warp) makes of the program file with `folder` in scope; `self_compiled`
+/// when it was not built from these compiler inputs as compiler.wasm is (compiler-self.wasm, the seed): its kept values
+/// are keyed by the whole compiler, not by their makers' files (std_adapters::kept_by)
+fn compiled_with(
+	program: &Path,
+	folder: &Path,
+	compiler: CompiledModule,
+	self_compiled: bool,
+) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
 	let arguments = [program, output.as_path(), folder, library()];
@@ -123,9 +130,7 @@ fn compiled_with(program: &Path, folder: &Path, compiler: CompiledModule) -> Res
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
 	let owner = crate::extensions::sha256_hex(&compiler.bytes);
-	let said = crate::modules::std_adapters::kept_by(owner, matches!(by, Compiler::SelfCompiled), || {
-		crate::pipeline::run_module(compiler)
-	});
+	let said = crate::modules::std_adapters::kept_by(owner, self_compiled, || crate::pipeline::run_module(compiler));
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
@@ -193,8 +198,8 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let file = library().join(COMPILER_FILE);
 	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let folder = file.parent().unwrap_or(library()).to_path_buf();
-	let (builder, compiler) = builder(by)?;
-	let module = compiled_with(&file, &folder, compiler)
+	let (builder, compiler, self_compiled) = builder(by)?;
+	let module = compiled_with(&file, &folder, compiler, self_compiled)
 		.map_err(|failure| error(&format!("compiler.warp compiled by {builder}: {}", failure.serialize())))?;
 	let mut bytes = module.bytes.clone();
 	let section = current_build().join(BUILD_SEPARATOR);
@@ -209,11 +214,12 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 }
 
 /// Who builds compiler.warp for `by`, named, and its module: compiler.wasm for `warp self` when there is one of these
-/// compiler inputs (`warp rebuild` builds compiler.wasm first), else the seed. No Rust-compiled stage (card rust-bootstrap)
-fn builder(by: Compiler) -> Result<(String, CompiledModule), Node> {
+/// compiler inputs (`warp rebuild` builds compiler.wasm first), else the seed; and whether it is the seed (compiled_with's
+/// self_compiled). No Rust-compiled stage (card rust-bootstrap)
+fn builder(by: Compiler) -> Result<(String, CompiledModule, bool), Node> {
 	if let Compiler::SelfCompiled = by {
 		if let Some((path, bytes)) = current_build_file(Compiler::RustCompiled) {
-			return Ok((path.display().to_string(), module_of_bytes(bytes)));
+			return Ok((path.display().to_string(), module_of_bytes(bytes), false));
 		}
 		eprintln!(
 			"no compiler.wasm of these compiler inputs: the seed builds compiler-self.wasm (`warp {REBUILD_WORD}` builds both, compiler-self.wasm by compiler.wasm)"
@@ -226,7 +232,7 @@ fn builder(by: Compiler) -> Result<(String, CompiledModule), Node> {
 			seed.display()
 		))
 	})?;
-	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes)))
+	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes), true))
 }
 
 /// The seed: WARP_SEED, else seed/compiler-self.wasm beside lib/ (a checkout's), else in the installed folder
