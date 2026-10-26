@@ -14,6 +14,7 @@ pub mod words;
 pub use util::gc_engine;
 pub mod abi;
 pub mod analyzer;
+pub mod compiled_module;
 pub mod compiler;
 #[cfg(feature = "native")]
 pub mod gc_traits;

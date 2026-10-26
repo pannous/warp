@@ -15,6 +15,7 @@ pub mod phase_times;
 #[cfg(feature = "native")]
 pub mod pure_tests;
 pub mod run_time_blocks;
+pub mod compiler_files;
 pub mod self_hosted;
 #[cfg(feature = "native")]
 pub mod standalone;

@@ -7,9 +7,9 @@
 //! it says (card installed-compilers); a lib/ named by WARP_LIB that the pair is not for keeps its own in
 //! <lib>/../data/, where a run on one built from another lib/ or warp build says so in one line. Only `warp rebuild`
 //! builds one: a missing one is an error naming it.
-use crate::compiler::self_hosted::{compiler_inputs_hash, library, module_of_bytes};
+use crate::compiler::compiler_files::{compiler_inputs_hash, library, module_of_bytes};
 use crate::node::{error, Node};
-use crate::pipeline::CompiledModule;
+use crate::compiled_module::CompiledModule;
 use std::path::{Path, PathBuf};
 
 const COMPILER_FILE: &str = "compiler/compiler.warp";
@@ -80,7 +80,7 @@ pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 pub fn parsed(code: &str) -> Node {
 	match parsed_view(code) {
 		Ok(json) => match serde_json::from_str(&json) {
-			Ok(view) => crate::compiler::node_views::node_of_view(&crate::compiler::self_hosted::view_of_json(view)),
+			Ok(view) => crate::compiler::node_views::node_of_view(&crate::compiler::compiler_files::view_of_json(view)),
 			Err(failure) => error(&format!("compiler.warp's view of the code is no JSON: {failure}")),
 		},
 		Err(failure) => failure,
@@ -142,7 +142,7 @@ fn ran(module: Result<CompiledModule, Node>, arguments: Vec<String>) -> Node {
 	match module {
 		Ok(module) => {
 			crate::modules::std_adapters::set_program_arguments(arguments);
-			crate::pipeline::run_module(module)
+			crate::compiled_module::run_module(module)
 		}
 		Err(failure) => failure,
 	}
@@ -187,7 +187,7 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 	let owner = crate::extensions::sha256_hex(&compiler.bytes);
 	// both compilers are compiled by lib/compiler now (by the seed or by compiler.wasm): their kept values stay their
 	// own, never keyed by the makers' files alone (std_adapters kept_key)
-	let said = crate::modules::std_adapters::kept_by(owner, true, || crate::pipeline::run_module(compiler));
+	let said = crate::modules::std_adapters::kept_by(owner, true, || crate::compiled_module::run_module(compiler));
 	crate::modules::std_adapters::set_program_arguments(running);
 	said
 }

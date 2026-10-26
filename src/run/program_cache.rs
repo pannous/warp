@@ -8,7 +8,7 @@
 //! again once it changes, appears or goes. A compile that reads beyond them (packages, `use project`, a C library) is
 //! not kept; the hints, warnings and assumptions of a kept compile are said again by each run from its module. Kept next to the compiled machine code (module_cache.rs), `WARP_MODULE_CACHE=off` turns both off.
 use crate::errors::diagnostic::{recording_said, say_again, Said};
-use crate::pipeline::CompiledModule;
+use crate::compiled_module::CompiledModule;
 use sha2::{Digest, Sha256};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;

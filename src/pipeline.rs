@@ -13,10 +13,7 @@ use log::warn;
 
 use crate::errors::run_time::{explain_runtime_error, has_exclusive_range};
 #[cfg(feature = "native")]
-use crate::run::wasm_reader::read_bytes;
-#[cfg(feature = "native")]
 use crate::wasm_emitter::run_raw_struct;
-use crate::run::failures::failed_run;
 
 /// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {
@@ -75,15 +72,7 @@ pub fn eval_untrusted(code: &str) -> Node {
 	}
 }
 
-/// A compiled program and the host capabilities its imports need.
-#[cfg_attr(not(feature = "native"), allow(dead_code))] // the browser host links every import itself
-#[derive(Clone)]
-pub struct CompiledModule {
-	pub bytes: Vec<u8>,
-	pub(crate) needs_host: bool,
-	pub(crate) needs_wasi: bool,
-	pub(crate) needs_ffi: bool,
-}
+pub use crate::compiled_module::{run_module, CompiledModule};
 
 type Pass = fn(Node) -> Node;
 
@@ -733,23 +722,3 @@ fn checked_markup(result: Node) -> Node {
 	result
 }
 
-/// Run a compiled program with the linker its imports need
-#[cfg(feature = "native")]
-pub fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
-	use crate::run::wasm_reader::{read_bytes_with_imports, Imports};
-	let result = crate::compiler::phase_times::timed("run (with wasmtime compile)", || {
-		if needs_ffi || needs_wasi || needs_host {
-			read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
-		} else {
-			read_bytes(&bytes)
-		}
-	});
-	result.unwrap_or_else(failed_run)
-}
-
-/// Without wasmtime the embedding host runs the program (the browser playground: web.rs); a final quantity's unit is
-/// read back from the module's `warp.meta` section (entry units), as wasm_reader does natively
-#[cfg(not(feature = "native"))]
-pub fn run_module(module: CompiledModule) -> Node {
-	crate::numbers::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
-}

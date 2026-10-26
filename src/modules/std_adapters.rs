@@ -283,10 +283,10 @@ fn keep_value(name: &str, makers: &[String], value: &Node) {
 #[cfg(feature = "native")]
 fn kept_key(name: &str, makers: &[String]) -> Option<String> {
 	if !makers.is_empty() && !KEEPING_SELF_COMPILED.with(std::cell::Cell::get) {
-		return Some(crate::compiler::self_hosted::made_by_key(&format!("{KEPT_VALUE} {name}"), makers));
+		return Some(crate::compiler::compiler_files::made_by_key(&format!("{KEPT_VALUE} {name}"), makers));
 	}
 	let compiler = KEEPING_COMPILER.with(|compiler| compiler.borrow().clone());
-	crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {compiler} {name}"))
+	crate::compiler::compiler_files::stage_key(&format!("{KEPT_VALUE} {compiler} {name}"))
 }
 
 #[cfg(feature = "native")]
@@ -305,7 +305,7 @@ const LIBRARY_VARIABLE: &str = "WARP_LIB";
 /// compiler-cache-keys); any other program sees the process's environment as it is
 pub fn environment_variable(name: &str) -> Option<String> {
 	if name == LIBRARY_VARIABLE && in_compiler_run() {
-		return Some(crate::compiler::self_hosted::library().display().to_string());
+		return Some(crate::compiler::compiler_files::library().display().to_string());
 	}
 	std::env::var(name).ok()
 }
