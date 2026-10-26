@@ -1,1 +1,0 @@
-nums=[1,2]; fun f(xs) { return xs[0] }; f(nums)

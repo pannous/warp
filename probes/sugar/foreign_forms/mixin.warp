@@ -1,4 +1,0 @@
-# `mixin Walker {…}`: the methods a class takes in. Expected: Don walks (warp pure and self don't reach it today)
-mixin Walker{steps:int=0; walk() := name + " walks"}
-class Duck with Walker{name}
-print Duck("Don").walk()

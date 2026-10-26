@@ -1,7 +1,0 @@
-#!/usr/bin/env warp
-// card self-cold-trap: lookup phrases (`of`, `in`, `from`) and a declaration head under warp self; prints 3
-type Point { x: int, y: int }
-p = Point{x: 1, y: 2}
-xs = [1, 2, 3]
-n = count of xs
-print n

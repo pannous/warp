@@ -1,9 +1,0 @@
-// match arms of enum cases (cards pure-runs, pure-enums): plain_enums.warp lowers the declaration and Color.Red
-// out: warm mild
-enum Color { Red, Green, Blue }
-def warmth(c) := match c {
-	Color.Red: "warm"
-	Color.Blue: "cold"
-	_: "mild"
-}
-print warmth(Color.Red) + " " + warmth(Color.Green)

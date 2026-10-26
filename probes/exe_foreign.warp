@@ -1,4 +1,0 @@
-use python math
-use js Math
-print math.factorial(25)
-Math.max(3, 7)

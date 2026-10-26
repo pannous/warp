@@ -1,9 +1,0 @@
-cs = ["a", "b"]
-a = "ab"
-t = a#1 in cs or a#2 in cs
-u = "x" not in cs
-class Box { items: list }
-b = Box(["q"])
-v = "q" in b.items and "z" not in b.items
-w: bool = "a" in cs
-print t, u, v, w

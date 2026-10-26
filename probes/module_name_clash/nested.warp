@@ -1,2 +1,0 @@
-use "d.warp"
-print(use_d(1))

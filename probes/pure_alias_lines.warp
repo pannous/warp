@@ -1,8 +1,0 @@
-# a program's own alias lines: `alias pt = Point` names the class Point, `alias twice = doubled` the function
-# (wiki/alias.md, card pure-alias)
-alias pt = Point
-alias twice = doubled
-class Point { x: int; y: int }
-doubled(n) := 2 * n
-p = pt(3, 4)
-print twice(p.x + p.y)

@@ -1,3 +1,0 @@
-class Cup{name: text}
-stored cups: [Cup] in "cups_named"
-for cup in cups { upper cup.name }

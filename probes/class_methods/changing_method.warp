@@ -1,5 +1,0 @@
-class K { counts = [0, 0]
- bump(i) := { counts#i += 1 }
-}
-k = K(); k.bump(1); k.bump(1); k.bump(2)
-print k.counts#1 * 10 + k.counts#2

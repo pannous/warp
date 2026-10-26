@@ -1,5 +1,0 @@
-number_kind(n: number): text := if n is int then "int" else "other"
-kind_of(n: any): text := if n is number then number_kind(n) else "no number"
-print kind_of(2.5 as float)
-print kind_of(3)
-print kind_of("a")

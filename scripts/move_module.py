@@ -25,7 +25,7 @@ LIB = os.path.join(SOURCE, "lib.rs")
 BINARY_ROOTS = [os.path.join(SOURCE, "main.rs")]
 # A relative path in include_str!/include_bytes!, also when built with concat!
 INCLUDE_PATH = re.compile(r'(include_(?:str|bytes)!\((?:concat!\()?")(?!/)')
-PATH_DIRECTORIES = ["src", "tests", "benches", "examples", "crates", "build.rs", "probes"]
+PATH_DIRECTORIES = ["src", "benches", "examples", "crates", "build.rs"]
 SUPER_CHAIN = re.compile(r"(?<![\w:])((?:super::)+)")
 INLINE_MODULE = re.compile(r"^\s*(pub(\([^)]*\))? )?mod \w+ \{", re.M)
 MOD_LINE = r"^(pub(\([^)]*\))? )?mod {};"

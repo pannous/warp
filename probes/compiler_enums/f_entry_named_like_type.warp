@@ -1,7 +1,0 @@
-enum Op { Colon, Add }
-empty(): any := { t = {}; t }
-m = empty()
-m["Op"] = empty()
-m["Bracket"] = 1
-print #m
-print m

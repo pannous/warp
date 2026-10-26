@@ -1,7 +1,0 @@
-# Node cases written as types (decision node-refinements): a function takes and gives a Key, a List, a Symbol
-left(k: Key): Node := key_of(k)
-named(s: Symbol): text := "named " + name_of(s)
-wrapped(n: Node): List? := if n is key then ø else [n]
-print left(parse("a+1"))
-print named(parse("b"))
-print wrapped(3)

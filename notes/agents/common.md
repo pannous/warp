@@ -49,7 +49,7 @@ before asking a question). After a context swap, this file and your role file be
   warp-integrator gets only requests it must act on; the card is the merge request.
 
 ## Where to work
-- Notes, docs, wiki, probes, scripts, samples: straight onto main in /Users/me/dev/angles/warp; commit your own paths
+- Notes, docs, wiki, scripts, samples: straight onto main in /Users/me/dev/angles/warp; commit your own paths
   by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push. Never leave unpushed commits on main.
 - Anything compiled (core/, the harness in src/, Cargo.*): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
@@ -86,4 +86,4 @@ before asking a question). After a context swap, this file and your role file be
 - Results the user can try get a try line (`/Users/me/dev/bin/warp <full path>`) to warp-interviewer.
 - Never retire holding a card: done, Ready, or `todo release <card> "done: …; left: …; branch: …"`.
 - After the merge remove your worktree and branches (local and remote). Deleting merged/stale things needs no
-  confirmation, except probes the user touched.
+  confirmation, except files the user touched.

@@ -1,3 +1,0 @@
-// web-apis (IndexedDB): database[k] natively lives in database.database.json beside this file
-database["runs"] = (database["runs"] or 0) + 1
-database["runs"]

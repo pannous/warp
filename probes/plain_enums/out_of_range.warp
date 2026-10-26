@@ -1,3 +1,0 @@
-// expected: an error: 7 is no case: the cases count from 0 to 2
-enum Coin { Penny, Nickel, Dime }
-print 7 as Coin

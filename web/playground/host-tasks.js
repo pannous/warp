@@ -456,7 +456,7 @@ function finishedTask(run, hooks, id) {
 	// a Worker that could not even instantiate the task runs it here instead: a page holds ~124 Wasm memories in all its
 	// Workers, and only the isolate that dropped an instance collects it, so the dead instances of this one (the
 	// starting program's) block the Worker until this isolate collects them, which it does when its own allocation
-	// fails (card browser-test, probes/wasm_memory_limit.html)
+	// fails (card browser-test)
 	if (record.unstarted) record = task.inline();
 	run.tasks.set(id, record);
 	return queuedSignals(run, record);

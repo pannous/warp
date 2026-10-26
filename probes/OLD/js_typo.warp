@@ -1,2 +1,0 @@
-use js crypto
-crypto.randomUUUID()

@@ -1,7 +1,0 @@
-enum Direction {
-	case north
-	case south
-}
-d = Direction.south
-print(d)
-print(d is Direction)

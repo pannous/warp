@@ -1,7 +1,0 @@
-// card local-shadows-lib-function: a main-level variable named like a lib function is the variable (no call of
-// list.warp's index(xs, x), of max); expected lines: 4 10 3
-index = 3
-print(index + 1)
-max = 5
-print(max * 2)
-print(index)

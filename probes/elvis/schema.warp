@@ -1,4 +1,0 @@
-// expected: config other (the schema field `debug?: bool` is optional)
-pattern Config = {port: int, host: text, debug?: bool}
-print(match {port: 80, host: "x"} { Config => "config"; _ => "other" })
-print(match {port: 80, host: "x", debug: 3} { Config => "config"; _ => "other" })

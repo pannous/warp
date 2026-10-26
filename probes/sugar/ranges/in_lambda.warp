@@ -1,3 +1,0 @@
-# a range inside a function literal. Expected: [[1] [1 2]]
-f = n => 1 to n
-print [f(1), f(2)]

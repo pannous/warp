@@ -1,8 +1,0 @@
-# the operand is computed once. Expected: 4 1
-global calls = 0
-next() := {
-	calls += 1
-	ø
-}
-v = next() ?? 4
-print "$(v) $(calls)"

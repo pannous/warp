@@ -1,3 +1,0 @@
-# a call's result falls back. Expected: bc
-tail(t: text?) := t[1..] ?? ""
-print tail("abc")

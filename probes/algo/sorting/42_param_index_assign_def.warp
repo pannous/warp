@@ -1,1 +1,0 @@
-def f(xs) { xs[1] = 9; return xs[1] }; a=[1,2]; f(a)

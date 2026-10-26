@@ -1,3 +1,0 @@
-s = 0
-for k in 0..5 { if k > 2 { s += k } }
-s

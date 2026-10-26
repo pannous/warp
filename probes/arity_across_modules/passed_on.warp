@@ -1,9 +1,0 @@
-#!/usr/bin/env warp
-# a function parameter handed on to an overload of another file's name (card self-trap-function-param)
-use "one.warp"
-is_word(n: int, accepts: function): bool := accepts(n) and is_word(n)
-any_word(ns: list, accepts: function): bool := ns.any(n => is_word(n, accepts))
-table = [[k => k < 10, k => k * 2]]
-entry = table#1
-print(any_word([1, 5], entry#1))
-print(any_word([1, 2], entry#1))

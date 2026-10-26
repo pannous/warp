@@ -1,3 +1,0 @@
-// card types-first-run: warp types builds the Lean model once (minutes, announced), later runs take a second
-x = 1
-x + 2

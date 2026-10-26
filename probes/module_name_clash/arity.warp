@@ -1,3 +1,0 @@
-use "a.warp"
-use "b2.warp"
-print(use_a(1) + use_b(1))

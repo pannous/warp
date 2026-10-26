@@ -1,3 +1,0 @@
-# a standard module used by name reaches the pure lane (card uses-std-modules)
-use case_tables
-print(#upper_case_ranges)

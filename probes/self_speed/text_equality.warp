@@ -1,3 +1,0 @@
-# `==` of texts and characters known only at run time
-def same(a: any, b: any): bool { a == b }
-print([same('a', 'a'), same('a', 'b'), same('a', "a"), same("a", 'a'), same("ab", "ab"), same("ab", "a"), same('é', "é"), same("x", 1), same('x', ø)])

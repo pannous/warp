@@ -1,4 +1,0 @@
-# `a ?? b ?? c`: the first one not missing. Expected: 3
-x = ø
-y = ø
-print x ?? y ?? 3

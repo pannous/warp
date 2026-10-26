@@ -1,4 +1,0 @@
-# a slice of an empty list held as any value is empty
-xs = []
-h = {items: []}
-[xs[0..], h.items[0..], xs[..2]]

@@ -1,3 +1,0 @@
-# `public static int x = 5`: modifiers before a typed variable. Expected: 5
-public static int x = 5
-print x

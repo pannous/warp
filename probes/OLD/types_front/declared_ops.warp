@@ -1,4 +1,0 @@
-use "../../core/parser.warp"
-print(declared_operators(module_source("math")))
-print(declared_operators("infix operator ⊕(a: int, b: int) := a"))
-print(blank_words("a b"))

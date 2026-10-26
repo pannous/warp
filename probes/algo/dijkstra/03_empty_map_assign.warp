@@ -1,3 +1,0 @@
-dist = {}
-dist["A"] = 5
-dist["A"]

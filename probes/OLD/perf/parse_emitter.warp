@@ -1,3 +1,0 @@
-// a heavy run of Rust-compiled warp code for timing (probes/perf/wasm_opt_bench.sh): parser.warp reads emitter.warp
-use "../../core/parser.warp"
-print #tree(read("../../core/emitter.warp"))

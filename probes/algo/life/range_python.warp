@@ -1,4 +1,0 @@
-size = 3
-x = 0
-for r in range(size) { x += 1 }
-x

@@ -1,3 +1,0 @@
-m = [{name: "a"}, {name: "b"}]
-print m.name
-print names of m

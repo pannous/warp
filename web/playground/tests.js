@@ -56,7 +56,7 @@ function showFailure(result) {
 }
 
 // Chrome holds ~124 live Wasm memories per page, all its Workers together, and an isolate that runs out collects only
-// the instances it dropped itself (probes/wasm_memory_limit.html): another worker's garbage fails an instance here
+// the instances it dropped itself: another worker's garbage fails an instance here
 const OUT_OF_WASM_MEMORY = /Cannot allocate Wasm memory/;
 const runners = new Set(); // the busy runners, each replacing its worker on `replace`
 const memoryResets = []; // the tests that ran out of Wasm memory and ran again on fresh workers

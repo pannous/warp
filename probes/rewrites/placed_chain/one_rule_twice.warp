@@ -1,5 +1,0 @@
-// out: 5
-// one placed rule fires on its own result too
-rewrite loudly $s... => $s... where statement
-loudly loudly loudly h() := 5
-print h()

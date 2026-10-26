@@ -1,8 +1,0 @@
-# exact int powers beyond 64 bits from runtime/extended/big_ints.warp (card pure-big-int-power), the same in the Rust,
-# pure and self lanes: 2^100 = 1267650600228229401496703205376, 3^50 = 717897987691852588770249, (-3)^41 =
-# -36472996377170786403, 10^30 = 1000000000000000000000000000000, and 2^62 = 4611686018427387904 still an int
-print 2 ^ 100
-print 3 ^ 50
-print (-3) ^ 41
-print 10 ^ 30
-print 2 ^ 62

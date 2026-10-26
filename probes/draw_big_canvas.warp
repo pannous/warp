@@ -1,4 +1,0 @@
-use draw
-canvas(200, 200)
-clear(red)
-canvas_pixels[39999] == red

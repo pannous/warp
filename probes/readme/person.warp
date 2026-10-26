@@ -1,3 +1,0 @@
-class Person{name:String age:i64}
-alice = Person{name:"Alice" age:30}
-alice.age

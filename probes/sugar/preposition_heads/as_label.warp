@@ -1,4 +1,0 @@
-// out: x!
-// `as` labels a parameter too
-shout(t: text, as mark: text): text := t + mark
-print shout("x", "!")

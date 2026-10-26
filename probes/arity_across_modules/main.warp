@@ -1,5 +1,0 @@
-#!/usr/bin/env warp
-# two files define is_word with different parameter counts; each call names the one its count fits
-use "two.warp"
-print(twice_word(5))
-print(is_word(1))

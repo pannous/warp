@@ -1,2 +1,0 @@
-// card words-glue, plain since markup-plain-library: `;` ends the value before the text: <label for="email">Email</label>
-label{ for: email; "Email" }

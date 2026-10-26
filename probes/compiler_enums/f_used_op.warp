@@ -1,3 +1,0 @@
-use "used/ops.warp"
-print is_assign(Op.Assign)
-print is_assign(Op.Colon)

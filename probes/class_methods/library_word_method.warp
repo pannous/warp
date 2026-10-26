@@ -1,3 +1,0 @@
-class Bag { items: list; sum() := 42 }
-print Bag([1, 2]).sum()
-print [1, 2, 3].sum()

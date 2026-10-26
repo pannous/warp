@@ -1,4 +1,0 @@
-a = [2,3,5]
-lo = 0
-hi = a.length - 1
-hi

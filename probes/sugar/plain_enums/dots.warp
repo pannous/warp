@@ -1,4 +1,0 @@
-# sugar-plain-enums probe; expected: warmmildcold
-enum Color { Red, Green, Blue }
-warmth(c) := match c { Color.Red: "warm"; Color::Blue: "cold"; _: "mild" }
-print warmth(Color.Red) + warmth(Color.Green) + warmth(Color::Blue)

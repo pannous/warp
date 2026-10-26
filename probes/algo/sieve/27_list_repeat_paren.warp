@@ -1,3 +1,0 @@
-n=4
-a = [false] * (n + 1)
-a.length

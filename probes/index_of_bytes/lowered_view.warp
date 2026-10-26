@@ -1,3 +1,0 @@
-# the pure lane's passes on a program given as the argument: its view after parser.warp and every warp pass
-use "../../core/passes.warp"
-print view_of(lowered_node(plain_node(parsed(args#1))))

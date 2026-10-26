@@ -1,5 +1,0 @@
-print trim("  a ")
-print starts_with("abc","a")
-n = parse("a: 1")
-print key_of(n)
-print read

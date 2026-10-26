@@ -1,4 +1,0 @@
-// out: 12
-// an untyped parameter after a preposition
-scaled(x, by factor) := x * factor
-print scaled(3, 4)

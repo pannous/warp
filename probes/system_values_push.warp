@@ -1,3 +1,0 @@
-seen = []
-seen.push([online, battery])
-seen

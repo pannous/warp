@@ -1,3 +1,0 @@
-p = []
-for j in 0..3 { p.push(j) }
-p[3]

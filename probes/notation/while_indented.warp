@@ -1,5 +1,0 @@
-// expected: 3 (the lines indented below a while are its body)
-y = 0
-while y < 3
-	y += 1
-print y

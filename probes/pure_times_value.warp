@@ -1,9 +1,0 @@
-# `n times t` repeats the text a name holds, `n times x` of a number multiplies (lib/text.warp repeat, pad_left)
-repeat(t, n) := n times t
-print repeat("ab", 3)
-pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
-print pad_left("x", 4)
-k = 4
-print 3 times k
-print 2 times [0]
-print 2 times "-"

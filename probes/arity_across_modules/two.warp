@@ -1,3 +1,0 @@
-use "one.warp"
-is_word(n: int, accepts: function): bool := accepts(n) and is_word(n)
-twice_word(n: int): bool := is_word(n, k => k < 10)

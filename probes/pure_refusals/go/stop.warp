@@ -1,4 +1,0 @@
-// expected: 2
-job = go { 1 }
-stop job
-print 2

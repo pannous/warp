@@ -1,9 +1,0 @@
-# an unannotated parameter passed a list by one call and a text by another holds either: last of a list, of a text
-# (lib/list.warp dedupe and lib/text.warp snake_case both call the prelude's last)
-ending(xs) := xs#(count(xs))
-numbers = [1, 2]
-print ending(numbers)
-word = "ab"
-print ending(word)
-print last(numbers) + 1
-print last(word)

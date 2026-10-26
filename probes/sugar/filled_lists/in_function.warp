@@ -1,4 +1,0 @@
-# inside a function and a lambda. Expected: [0 0] [[0] [0 0]]
-zeros(n: int): list := int[n]
-print zeros(2)
-print [1, 2].map(k => int[k])

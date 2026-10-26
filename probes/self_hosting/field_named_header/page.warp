@@ -1,2 +1,0 @@
-class Page { header: bool; status: int }
-shown(p) := if p.header then p.status else 0

@@ -1,6 +1,0 @@
-said(found: list): list := found.map(x => x + "!")
-compile(found: list): int := {
-	for warning in said(found) { warn warning }
-	1
-}
-print(compile(["a", "b"]))

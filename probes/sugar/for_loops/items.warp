@@ -1,6 +1,0 @@
-# a loop over a list and over a text visits each item. Expected: 6 a,b,c,
-s = 0
-for x in [1, 2, 3] { s += x }
-t = ""
-for c in "abc" { t += c + "," }
-print "$(s) $(t)"

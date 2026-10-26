@@ -1,3 +1,0 @@
-// expected: the run time error "min of an empty list"
-ys = []
-print min(ys)

@@ -1,3 +1,0 @@
-# `var x: int = 3`: a typed declaration
-var x: int = 3
-x + 1

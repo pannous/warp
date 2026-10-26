@@ -1,3 +1,0 @@
-use "used/middle.warp"
-print is_function(Meaning.Function)
-print variable_meaning

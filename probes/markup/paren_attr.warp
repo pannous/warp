@@ -1,3 +1,0 @@
-c = true
-x = "body text"
-html{ lang:"en" body{ table{ tr{ td{ title:(if c then "a" else "b") (x) } td{ width=(2*3) "y" } } } } }

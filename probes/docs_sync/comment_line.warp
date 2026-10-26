@@ -1,5 +1,0 @@
-settings = data {
-	count: 3 // how many
-	size: 4
-}
-print settings#1.comment

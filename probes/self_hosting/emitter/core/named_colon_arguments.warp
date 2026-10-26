@@ -1,6 +1,0 @@
-// `Signature(parameters: …)`: a named argument written with a colon, as with `=`, fills its field or parameter by
-// name, the others left out take their defaults (signatures.warp builds Parameter and Signature so)
-class Signature { parameters: list = []; result: text = "" }
-s = Signature(result: "int", parameters: [1, 2])
-shown(prefix: text = "", value: text = "") := prefix + value
-print(#s.parameters + " " + s.result + " " + shown(value: "x"))

@@ -1,5 +1,0 @@
-both(a, next) := a > 0 and next > 0
-next = 2
-ok = 0
-if both(1, next) { ok = 1 }
-ok

@@ -1,2 +1,0 @@
-class person{name age:int}
-print person("Ann", 40).age

@@ -1,3 +1,0 @@
-enum Wasm { StructGet, StructNew, RefCast }
-f(w: Wasm): bool := w == Wasm.RefCast
-print f(Wasm.RefCast)

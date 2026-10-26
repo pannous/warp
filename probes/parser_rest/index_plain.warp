@@ -1,3 +1,0 @@
-print "0123456789abcdef".index_of("f")
-c = 'f'
-print "0123456789abcdef".index_of(c)

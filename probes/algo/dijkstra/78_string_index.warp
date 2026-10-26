@@ -1,3 +1,0 @@
-names = "ABCDEF"
-p = names[1]
-p

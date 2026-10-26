@@ -1,2 +1,0 @@
-if 8 & 4 { print "bits" }
-print "done"

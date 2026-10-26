@@ -1,5 +1,0 @@
-# a diagnosed error names its place and the source line, as Rust: x was a list, is given an int … at …kind_change.warp:4:1
-x = [1, 2]
-print(x)
-x = 3
-x

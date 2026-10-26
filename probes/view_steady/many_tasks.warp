@@ -1,4 +1,0 @@
-twice(x) := x * 2
-total = 0
-for i in 1 to 400 { total += await go twice(i) }
-total

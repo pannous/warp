@@ -1,2 +1,0 @@
-on alarm { exit 3 }
-emit alarm

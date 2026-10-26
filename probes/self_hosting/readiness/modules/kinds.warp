@@ -1,2 +1,0 @@
-// a second helper module: shared tables between compiler parts
-operators = {"+": "add", "*": "mul"}

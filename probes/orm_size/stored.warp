@@ -1,8 +1,0 @@
-class Cup{size: text; count: int}
-stored cups: [Cup] in "cups_sized"
-cups.add(Cup("big", 3))
-print cups#1.size
-print cups#1.count
-print count(cups)
-first = cups#1
-first.size

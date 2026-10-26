@@ -1,4 +1,0 @@
-# a Kotlin data class with a primary constructor. Expected: 3 (warp pure and self don't reach it today)
-data class Point(val x: Int, val y: Int)
-val p = Point(1, 2)
-print p.x + p.y

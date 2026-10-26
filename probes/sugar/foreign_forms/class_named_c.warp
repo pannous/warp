@@ -1,4 +1,0 @@
-# a class named C keeps its name. Expected: 4
-class C{pi:int}
-c = C(4)
-print c.pi

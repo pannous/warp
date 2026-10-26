@@ -1,6 +1,0 @@
-def half(x: int): int {
-	if x < 0 { return ø }
-	x / 2
-}
-print half(4)
-print half(-1)

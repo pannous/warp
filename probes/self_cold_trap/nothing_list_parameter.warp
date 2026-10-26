@@ -1,7 +1,0 @@
-#!/usr/bin/env warp
-// decision optional-result: ø reaching a place declared `list` becomes [], `list?` keeps ø as missing (card
-// own-words-miscompile: parser.warp's prints(phrase: list) tested `!= ø`); prints [] then ø (the Rust lane: ø ø)
-def as_list(xs: list): any := xs
-def as_optional(xs: list?): any := xs
-print as_list(ø)
-print as_optional(ø)

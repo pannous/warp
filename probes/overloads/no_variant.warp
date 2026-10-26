@@ -1,3 +1,0 @@
-#!/usr/bin/env warp
-# a call no typed variant takes: the same error in every lane (card pure-lane-refuses)
-f(a:int) := 1; f(a:text) := 2; print f(1.5)

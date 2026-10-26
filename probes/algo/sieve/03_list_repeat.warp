@@ -1,2 +1,0 @@
-a = [true] * 5
-a.length

@@ -1,3 +1,0 @@
-class Person{name: text; age: int}
-stored people: [Person]
-print people#1.age

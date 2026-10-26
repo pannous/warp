@@ -1,9 +1,0 @@
-// expected: 20 2 1 (glued `twice{…}` loops, in a block too; a map entry `once: {…}` keeps its key)
-n = 0
-twice{n += 10}
-print n
-m = 0
-if yes { twice{m += 1} }
-print m
-p = {once: {a: 1}}
-print p.once.a

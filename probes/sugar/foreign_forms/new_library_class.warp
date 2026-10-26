@@ -1,4 +1,0 @@
-# `new Set(…)` of a library class. Expected: 2 (warp pure and self don't reach it today)
-use collections
-s = new Set([1 2 2])
-print s.size()

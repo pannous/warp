@@ -1,3 +1,0 @@
-// card found-find: a walk after an assigned list walks the list
-found = [[1, 2], [3, 4]] find [3, x]
-print found

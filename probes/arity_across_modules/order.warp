@@ -1,7 +1,0 @@
-#!/usr/bin/env warp
-# the two-parameter overload's file comes first, the one-parameter one's later (card self-trap-function-param)
-use "three.warp"
-use "four.warp"
-print(is_word(5, k => k < 10))
-print(first_word([3, 7]))
-print(is_word(1))

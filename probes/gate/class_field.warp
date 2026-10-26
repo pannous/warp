@@ -1,3 +1,0 @@
-# a class field read, after probes/sugar/foreign_forms/data_class.warp (Kotlin data class)
-data class P {x:int}
-print P(1).x

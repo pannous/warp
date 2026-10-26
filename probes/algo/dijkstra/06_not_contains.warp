@@ -1,2 +1,0 @@
-visited = ["A"]
-!visited.contains("B")

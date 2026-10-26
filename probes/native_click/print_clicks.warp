@@ -1,5 +1,0 @@
-// card native-window: click in the paint window; each click prints where it was (event.x, event.y in the frame's pixels)
-use draw
-clear(white)
-show()
-on click { print "clicked at " + event.x + ", " + event.y }

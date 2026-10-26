@@ -1,3 +1,0 @@
-// the prelude's sum over a million items (compare probes/sum_speed_own.warp, a program's own sum)
-xs = [i for i in 1 to 1000000]
-print sum(xs)

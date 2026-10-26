@@ -1,5 +1,0 @@
-mark = "?"
-class F { name: text; result: text = mark }
-f = F("a")
-print f.result
-print F("a").result

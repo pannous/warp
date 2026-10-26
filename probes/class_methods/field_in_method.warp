@@ -1,3 +1,0 @@
-class Animal { name: text; speak() := name + " makes a sound" }
-a = Animal{name: "Cat"}
-print a.speak()

@@ -1,4 +1,0 @@
-# a used standard module's word operators: `use regex` makes `matches` infix (card pure-until)
-use regex
-print "abc" matches "a.c"
-print "abd" matches "a.c$" or "x" matches "y"
