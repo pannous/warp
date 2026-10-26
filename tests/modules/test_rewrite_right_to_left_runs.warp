@@ -1,5 +1,5 @@
 # The rewrite engine's runs of statements rewritten right to left (F13, card engine-right-to-left-runs),
-# lib/compiler/rewrites.warp, notes/rewrites.md: warp only, no Rust twin
+# core/rewrites.warp, notes/rewrites.md: warp only, no Rust twin
 
 # a_pairwise_rule_folds_to_the_right
 is! 'rewrite (take($a); take($b)) => take($a - $b)

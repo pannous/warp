@@ -1,7 +1,7 @@
 # Handover: Warp Code 3 (claim grok-warp-code-3), 2026-10-23 ~14:40 (Europe/Berlin)
 
 Parked at the user's request. No new work accepted. Rules picked up today (all in common.md): only the pure pipeline counts;
-tests are result-based only; no new pass, pass-list entry or lib/compiler/*.warp file without the user's yes; lib/compiler edits
+tests are result-based only; no new pass, pass-list entry or core/*.warp file without the user's yes; core edits
 over ~40 lines or new lowering/special cases need Supervisor's OK; no underscore compound folder names (nest them: runtime/extended);
 core = compiler + runtime + extensions, lib = ordinary Warp modules; domain features (units, time) are class libraries in lib/.
 
@@ -14,11 +14,11 @@ core = compiler + runtime + extensions, lib = ordinary Warp modules; domain feat
 
 ## runtime-split stack: pushed + Ready 15:00 (runtime-split 2f641511b, pure-big-int-power dbfc755c0, pure-big-int-ops a3aebff4c, time-arithmetic-library d0d603745)
 Merge order: runtime-split -> pure-big-int-power -> pure-big-int-ops -> time-arithmetic-library. All four held by the merger until re-readied.
-- Done today: runtime_extended/ renamed to lib/compiler/runtime/extended/ (+ runtime/extended.warp root); durations.warp is a real file in runtime/
+- Done today: runtime_extended/ renamed to core/runtime/extended/ (+ runtime/extended.warp root); durations.warp is a real file in runtime/
   (only the extended root loads it); `warp <folder>` says it's a folder (src/main.rs), so each_runtime_part_runs_alone passes; main merged
   (130713414) -> runtime-split 2f641511b; cascaded: tal 931250a23, power dbfc755c0, ops a3aebff4c.
 - time-arithmetic-library: time_arithmetic.warp moved to lib/time_arithmetic.warp (d0d603745); the compiler must NEVER load it
-  (Span.plus would route every compiler + through operator dispatch). Plain symlink lib/compiler/time_arithmetic.warp is kept for the frozen
+  (Span.plus would route every compiler + through operator dispatch). Plain symlink core/time_arithmetic.warp is kept for the frozen
   tests/parser/test_self_time_arithmetic.rs.
 - The self lane needs runtime-split's own binary (sol-warp-latest lacks the extended root -> `extended_zeros` refusal). Rebuild the box binary after it lands.
 - Trees: /workspace/cow/trees/{runtime-split,time-arithmetic-library,pure-big-int-power-2 (branch pure-big-int-power),pure-big-int-ops}.

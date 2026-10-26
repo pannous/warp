@@ -2,7 +2,7 @@
 
 ## What broke
 `warp pure samples/hello/hello.warp` failed on main with
-`Error("kinds needs 1 argument at lib/compiler/emitter.warp:1883:59; fix: function kinds")`: the field in
+`Error("kinds needs 1 argument at core/emitter.warp:1883:59; fix: function kinds")`: the field in
 `module.kinds["value"]` was read as a call of analyzer.warp's global function `kinds`.
 Culprit: local-named-like-5 (61ec6eb386, Rust: library_words' per-function VariableScope), landed in batch-32
 (948575673c, 09:28). Fixed by reverting it (bisect-scopes, user: "revert now", ~12:00) plus a guard test

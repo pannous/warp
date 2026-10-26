@@ -13,7 +13,7 @@ Principles and Talking live only in common.md.
   fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
   adds the shallow subclasses; don't invent parallel ones in your branch.
 - The sugar migration  keeps one line of history: warp-layers alone removes sugar
-  from lib/compiler/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
+  from core/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
   origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
   express the same day. Other branches touching parser.warp or a pass on the migration list stay small and land
   express; one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,
@@ -84,16 +84,21 @@ Principles and Talking live only in common.md.
   gate runs) go to a helper at low effort with a step cap; give it the exact commands and stop when they finish.
   Higher effort only for real debugging or design work.
 - Tiered gate, pure pipeline first : `scripts/gate-probes.sh
-  [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure and self, both
-  hellos (the self check, minutes). Tier 1: every probes/gate/<name>.warp in both lanes against <name>.expected
+  [--tiers 0-2] [--base <ref>] [<tree>] [<binary>]` stops at the first red tier. Tier 0: rebuild pure (warp.wasm) and
+  the hellos (minutes; self only when data/ has a promoted warp-self.wasm). Tier 1: every probes/gate/<name>.warp in
+  those lanes against <name>.expected
   (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
   Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). Tier 3,
   Rust tests: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; the script names it, the cargo
   gate or cloud lane runs it. On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/warp-rust-latest (the old sol-warp-* names stay as links for old scripts).
+- warp-self.wasm (`warp self`'s compiler) is no gate build: `scripts/promote-self.sh [--background] [<tree>]` copies
+  warp.wasm to it only when warp.wasm compiles compiler.warp to its own bytes (the fixpoint), every once in a while,
+  in parallel; it never fails its caller. Install a compiler pair as warp.wasm + warp-self.wasm (the old names
+  compiler.wasm / compiler-self.wasm are still read when the new ones are missing).
 - Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate-probes.sh --tag-good` tags it
   `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `scripts/bisect-lane.sh [--lane
   pure|self|both] <probe.warp> <expected> [good] [bad]` (default the newest good/* tag .. origin/main, first-parent)
-  bisects in a temporary worktree it removes: per step rebuild pure and self with the shared binary, bad only on
+  bisects in a temporary worktree it removes: per step rebuild pure (and the self promotion) with the shared binary, bad only on
   wrong output, skipped (125) on a failed rebuild or a timeout; it prints the first bad commit.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
@@ -103,7 +108,7 @@ Principles and Talking live only in common.md.
   build for their tests"): only main's build runs on the Mac (/Users/me/dev/bin/warp, /Users/me/dev/bin/warp-debug,
   refreshed after each pushed batch). Workers run no cargo build, check or own-warp.sh locally: .warp changes are
   checked with that binary, Rust changes are built and tested by the cloud lane. It reads lib/ from WARP_LIB, else
-  the nearest lib/compiler above the program or cwd, so run it from your worktree (or `WARP_LIB=<worktree>/lib`).
+  the nearest lib/ holding compiler/ (lib/compiler links to core/) above the program or cwd, so run it from your worktree (or `WARP_LIB=<worktree>/lib`).
   Standard modules (`use list`) still come from its build (card std-modules).
   One exception : warp-speed may build its own branches locally (quick
   release, CARGO_BUILD_JOBS=2, one build at a time) to time Rust speed changes before they land; timing runs only,
@@ -144,7 +149,7 @@ Principles and Talking live only in common.md.
   fails no worse than main's (the same error): a red main never blocks the queue (supervisor 2026-10-22). Warp
   branches have priority over Rust-change branches : they land before any Rust batch, and work in
   .warp is preferred whenever a task can be done there.
-  A change to lib/compiler/ (types or annotations included) also checks the self build before Ready:
+  A change to core/ (types or annotations included) also checks the self build before Ready:
   `scripts/self-check.sh <worktree>` (it rebuilds both compilers in a queue slot; a bare `warp rebuild self` skips the
   queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
   replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
@@ -170,12 +175,12 @@ Principles and Talking live only in common.md.
 - Quick check first, before the cloud lane: run the .warp code you wrote or touched through the shared binary from
   your worktree, `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp probes/<x>.warp`, and for compiler work through the
   self-hosted pipeline: `WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 /Users/me/dev/bin/warp probes/<x>.warp` (=front:
-  front end only). The stages load your worktree's lib/compiler/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
+  front end only). The stages load your worktree's core/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
   the stage programs (~35 s with the optimized /Users/me/dev/bin/warp, ~2 min with warp-debug: use warp-debug only for a backtrace; prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
   and wrong values in seconds. `WARP_EMIT_REFUSALS=/dev/stderr` shows whether emitter.warp refused the program
   (`outside the core: …`, then the Rust emitter emitted it); `WARP_HINTS=0` hides hints (the stage programs' own
   warnings still show: card cli-show). Then the targeted tests in the cloud lane.
-- `warp pure` / `warp self` run compiler.warp's build files compiler.wasm / compiler-self.wasm (decision
+- `warp pure` / `warp self` run compiler.warp's build files warp.wasm / warp-self.wasm (decision
   compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
   (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never build one : a missing one is an error
   naming `warp rebuild`; a worktree's stale one in data/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user 2026-10-22: "we don't want automatic

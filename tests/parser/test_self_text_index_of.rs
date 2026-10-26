@@ -51,7 +51,7 @@ fn bytes_and_characters_do_not_mix() {
 	assert!(output.contains("a byte index given to a position"), "{output}");
 }
 
-/// decision index-units: a declared index or position holds a value counted its way (lib/compiler/index_positions.warp)
+/// decision index-units: a declared index or position holds a value counted its way (core/index_positions.warp)
 #[test]
 fn a_declared_index_or_position_holds_its_count() {
 	let program = format!("{}/probes/index_of_bytes/declared_counts.warp", env!("CARGO_MANIFEST_DIR"));

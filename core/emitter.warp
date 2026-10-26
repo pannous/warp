@@ -3,7 +3,7 @@
 # The core knows ints (i64), floats (f64), yes/no conditions (i32), characters (i32), texts (GC byte arrays), lists
 # (GC vectors), arithmetic, comparisons, locals, functions, if and while, print (layout: notes/self_hosting.md "Value
 # layout"). A value of a kind known only at run time, and a value main gives that is no number, is a boxed `$Node`.
-# Runtime words are warp (lib/compiler/runtime.warp, lowered like a program), compiled on their first call. Any other
+# Runtime words are warp (core/runtime.warp, lowered like a program), compiled on their first call. Any other
 # form refuses the program: `wasm_module` then gives a text naming the form, and the twin harness
 # (tests/common/twins.rs emitter_differential) counts the source as outside the core. A function's parameters take
 # their kinds from their annotations, else from the first call; its result kind from its body, read twice so that a
@@ -77,7 +77,7 @@ runtime_error_fixes = {index_must_be_an_integer: whole_number_fix, count_must_be
 	an_int_must_be_a_whole_number: whole_number_fix, not_a_map: "keys, values and entries are a map's; a list's positions are 1..count(xs)",
 	a_list_item_holds_no_error: error_in_data_fix, a_field_holds_no_error: error_in_data_fix}
 # `[e 2]`, `q.k = e`: an item written into a list or field, shown `data·item: e`, `data·field: e` (src/compiler/node_views.rs
-# SHOWN_LIST_ITEM; lib/compiler/data_items.warp), and the runtime word that fails where it holds an Error
+# SHOWN_LIST_ITEM; core/data_items.warp), and the runtime word that fails where it holds an Error
 data_item_checks = {"data·item": "held_list_item", "data·field": "held_field"}
 # `data e`: e as written (src/lowering/control/blocks.rs DATA_WORD)
 catch_clause_byte = 0
@@ -197,7 +197,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # pure-lane-shape)
 # counts_fuel: the program said `use fuel`
 # aliases: the type each type alias names, `type Name = text`, by its name
-# kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
+# kinds: what core/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
@@ -1155,7 +1155,7 @@ def std_word(n: any): any {
 # the arguments of a std word: `[]` is held behind the opaque word (is_empty_list)
 std_arguments(arguments: Node): list := if is_empty_list(arguments) then [] else items_of(arguments)
 # the module of a lowered program, or a text naming the first form outside the core; `runtime` is
-# lib/compiler/runtime.warp lowered by the same pipeline
+# core/runtime.warp lowered by the same pipeline
 wasm_module(program: any, runtime: any): any := hosted_wasm_module(program, runtime, {})
 
 # as wasm_module, the host words `host` names importable (src/compiler/self_hosted.rs passes src/host.rs's)

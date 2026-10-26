@@ -8,7 +8,7 @@
 #   pure-runs) over the ladder probes/self_hosting/pure (simplest first) and the samples: how many ran pure, how many of
 #   those printed the right output (a program's `// out:` lines, else what it prints the usual way), the rungs not
 #   right, the refusals ranked
-# SURVEY=1 FOLDERS=lib/compiler probes/self_hosting/refusals.sh <warp binary>   → data/self_hosting/bootstrap_gap.txt:
+# SURVEY=1 FOLDERS=core probes/self_hosting/refusals.sh <warp binary>   → data/self_hosting/bootstrap_gap.txt:
 #   with WARP_EMIT_SURVEY, every refused function of the programs (warp's compiler itself, card bootstrap-gap) once,
 #   ranked by the form refused
 set -u

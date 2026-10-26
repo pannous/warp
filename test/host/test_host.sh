@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# What warp-host prints and exits with (notes/warp_host.md): pure programs compiled by compiler-self.wasm and run with
+# What warp-host prints and exits with (notes/warp_host.md): pure programs compiled by warp-self.wasm and run with
 # WASI and shell commands, and the launcher packaging/bin/warp handing programs to a warp-host beside it. Run it through
 # the queue: tests/queue.sh tests/host/test_host.sh
 # The host under test is WARP_HOST_BINARY (default the checkout's target/host/warp-host, else target/release/, else
-# target/debug/: `cargo build --profile host -p warp-runtime --features host --bin warp-host`), with compiler-self.wasm
-# and compiler.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`); staged in
+# target/debug/: `cargo build --profile host -p warp-runtime --features host --bin warp-host`), with warp-self.wasm
+# and warp.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp, after `warp rebuild`); staged in
 # scratch/host-test/ as installed.
 # Kept values and machine code go to scratch/host-cache/, kept between runs: the first run computes them (~30 s).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
@@ -18,7 +18,7 @@ export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
-for compiler in compiler.wasm compiler-self.wasm; do
+for compiler in warp.wasm warp-self.wasm; do
 	[ -f "$(dirname "$rust")/$compiler" ] || { echo "✗ no $compiler beside $rust: $rust rebuild builds it"; exit 1; }
 done
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/stub" || exit 1
@@ -44,7 +44,7 @@ program exits 'exit(5)'
 # A stand-in warp-rust: says it ran, and by which lane
 cat >"$stage/stub/warp-rust" <<'STUB'
 #!/usr/bin/env bash
-case $1 in pure | self | *compiler*.wasm) echo "ran by warp-rust pure" ;; *) echo "ran by warp-rust" ;; esac
+case $1 in pure | self | *warp*.wasm) echo "ran by warp-rust pure" ;; *) echo "ran by warp-rust" ;; esac
 STUB
 chmod +x "$stage/stub/warp-rust"
 launcher() { WARP_RUST=$stage/stub/warp-rust "$stage/bin/warp" "$@"; }
@@ -99,7 +99,7 @@ expect "no command: a module without .wasm runs by its magic bytes" 0 "$HELLO" \
 expect "a missing .warp file is an error, not code" 1 "could not read file nosuch.warp" -- "$host" nosuch.warp
 expect "run of a missing .warp file is that error too" 1 "could not read file nosuch.warp" -- "$host" run nosuch.warp
 expect "--help: usage, status 0" 0 "usage: warp-host" "no command means run" -- "$host" --help
-expect "--compiler full: compiler.wasm" 0 "$HELLO" -- "$host" --compiler full run hello.warp
+expect "--compiler full: warp.wasm" 0 "$HELLO" -- "$host" --compiler full run hello.warp
 expect "no program: usage" 2 "usage: warp-host" -- "$host"
 expect "the launcher runs a program by warp-host beside it" 0 "$HELLO" ! "ran by" -- launcher hello.warp
 expect "the launcher's warp run" 0 "hi" ! "ran by" -- launcher run command.warp

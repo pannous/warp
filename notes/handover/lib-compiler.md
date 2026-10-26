@@ -2,11 +2,11 @@
 
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
-- Card: #2760 lib/compiler/*.warp still test emptiness with ==… ([lib-compiler](https://github.com/pannous/warp/issues/2760))
-- Branch: `lib-compiler` at `b17879384`, 17 ahead / 676 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: lib/compiler/analyzer.warp, lib/compiler/builtin_signatures.warp, lib/compiler/emitter.warp, lib/compiler/foreign_forms.warp, lib/compiler/kind_changes.warp …)
+- Card: #2760 core/*.warp still test emptiness with ==… ([lib-compiler](https://github.com/pannous/warp/issues/2760))
+- Branch: `lib-compiler` at `b17879384`, 17 ahead / 676 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/analyzer.warp, core/builtin_signatures.warp, core/emitter.warp, core/foreign_forms.warp, core/kind_changes.warp …)
 - Kind: warp only
 - Owner: No owner: the card waits in Next for the planner to assign.
-- State: lib/compiler tests emptiness with `is empty` / plain `if x` (rule empty-is-not-missing); the rewrite broke the self build (bisect notes on the card), 670 behind.
+- State: core tests emptiness with `is empty` / plain `if x` (rule empty-is-not-missing); the rewrite broke the self build (bisect notes on the card), 670 behind.
 
 ## Done
 The rewrite (one commit landed as fa09d9c2b).

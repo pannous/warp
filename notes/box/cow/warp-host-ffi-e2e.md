@@ -40,6 +40,6 @@ Old compiler → .wasm → warp-host (the warp-host-run-wasm build) [M]:
 
 ## 3. Pure pipeline before the branch
 Every C call was refused: `Error("outside the core: the call strlen(…)")` (also atof, getenv, erf, fmin, ceil,
-sqlite3_open, compressBound) [M]. `is_import` statements are dropped (lib/compiler/emitter.warp:250-252), foreign
+sqlite3_open, compressBound) [M]. `is_import` statements are dropped (core/emitter.warp:250-252), foreign
 lines are read only for result kinds (builtin_signatures.warp:159), and module.imports had only fd_write and host words
 (emitter.warp:1102-1106).

@@ -221,7 +221,7 @@ pub(crate) const OPTIONAL_RESULT_TOPIC: &str = "optional-result";
 
 // ⚠ WARP DOES THIS DIFFERENTLY: ø reaching a place declared `list` (a result or a parameter) becomes [] silently, no
 // warning, `list?` keeps ø (decision optional-result, list part reversed by the user); Rust still warns and keeps ø
-// here, and a `list` parameter given ø holds ø → lib/compiler/runtime/conversions.warp list_of_node
+// here, and a `list` parameter given ø holds ø → core/runtime/conversions.warp list_of_node
 /// A function that can answer ø declares `T?` (decision optional-result): `def f(x): list { … return ø … }` warns with
 /// the `?` as its fix and reads its result as `list?`, so the ø reaches the caller unchanged
 fn optional_when_answering_empty(

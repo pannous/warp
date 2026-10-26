@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 // parser.warp's tree of a call before a block (twin difference on forms.warp:157, 2026-10-18):
 // Rust `match (f x) {…}`, three items
-use "lib/compiler/parser.warp"
+use "core/parser.warp"
 print tree("match f(x) { _ => 1 }")
 print tree("f(x) { 1 }")
 print tree("g f(x) { 1 }")

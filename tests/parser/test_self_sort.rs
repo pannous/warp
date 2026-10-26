@@ -1,4 +1,4 @@
-//! card sort-warp: lib/compiler/runtime.warp sorts as Rust's list_sort and list_sorted_by do (stable bottom-up merge
+//! card sort-warp: core/runtime.warp sorts as Rust's list_sort and list_sorted_by do (stable bottom-up merge
 //! sort, node_order), checked by running the sorting probes through emitter.warp next to Rust's module
 use crate::common::twins::emitter_differential;
 use std::path::PathBuf;

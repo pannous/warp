@@ -1,13 +1,14 @@
 #!/bin/bash
 # The tiered gate of a tree (a merged batch, a branch, main), pure pipeline first, stopping at the first red tier:
-#   tier 0  rebuild pure + pure hello, rebuild self + self hello   (the self check; minutes, the rebuilds)
-#   tier 1  every probes/gate/<name>.warp in both lanes, its stdout against <name>.expected   (seconds)
+#   tier 0  rebuild pure (warp.wasm) + pure hello, + self hello when the tree has a warp-self.wasm   (minutes, the rebuild)
+#   tier 1  every probes/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout against <name>.expected
+#           (seconds). warp-self.wasm is no gate build: scripts/promote-self.sh promotes warp.wasm at a fixpoint, apart
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
 #   tier 3  Rust: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; not run here, only named
 #           (scripts/cloud-test.sh, or the Integrator's cargo gate)
 # usage: scripts/gate-probes.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
 #                               [<tree>, default this checkout] [<binary>, default /workspace/cow/warp-rust-latest]
-#   --no-rebuild  tier 0 only runs hello with the tree's built pair (data/compiler.wasm, data/compiler-self.wasm)
+#   --no-rebuild  tier 0 only runs hello with the tree's built compilers (data/warp.wasm, data/warp-self.wasm if there)
 #   --base        what tier 2 diffs against (default origin/main; a batch merged on main: the main it started from)
 #   --folders     tier 2 runs the whole folders of the changed test files (many fail today: compare with the base's run)
 #   --tag-good    when every tier run is green and the tree's HEAD is on origin/main: tag good/<YYYY-MM-DD-HHMM>
@@ -48,16 +49,21 @@ red() { echo "gate: RED at tier $1 ($(git rev-parse --short HEAD), $(since $star
 # the first line worth showing of a run: its stdout, else its first error line without the source gutter
 said() { local text; text=$(grep -v '^ *[0-9]* |\|^ *|' "$1" | head -1); echo "${text:0:160}"; }
 
+# the lanes judged: pure, and self when the binary finds a promoted warp-self.wasm (`warp version` names a missing one)
+lanes=pure
+if ! "$warp" version 2>/dev/null | grep -q 'warp-self.wasm missing'; then lanes="pure self"
+else echo "gate: no warp-self.wasm: self lane skipped (scripts/promote-self.sh promotes warp.wasm at a fixpoint)"; fi
+
 if wants 0; then
 	t0=$(date +%s) ok=1
-	for lane in pure self; do
-		if ((rebuild)); then
+	for lane in $lanes; do
+		if ((rebuild)) && [[ $lane == pure ]]; then
 			"$warp" rebuild $lane > "$logs/rebuild-$lane.log" 2>&1 || { echo "FAIL rebuild $lane: $(grep -i 'error\|refus' "$logs/rebuild-$lane.log" | head -1 | cut -c1-160) (log $logs/rebuild-$lane.log)"; red 0; }
 		fi
 		got=$(timeout 300 "$warp" $lane samples/hello/hello.warp 2>&1 | tail -1)
 		[[ $got == *Hello* ]] || { echo "FAIL $lane hello: got ${got:0:160}"; red 0; }
 	done
-	echo "tier 0 (rebuild + hello, both lanes): $( ((ok)) && echo ok || echo RED) $(since $t0)"
+	echo "tier 0 (rebuild + hello, $lanes): $( ((ok)) && echo ok || echo RED) $(since $t0)"
 	((ok)) || red 0
 fi
 
@@ -65,7 +71,7 @@ if wants 1; then
 	t1=$(date +%s) ok=1
 	for probe in probes/gate/*.warp; do
 		name=${probe%.warp}; want=$(cat "$name.expected" 2>/dev/null) || { echo "FAIL ${name##*/}: no $name.expected"; ok=0; continue; }
-		for lane in pure self; do
+		for lane in $lanes; do
 			timeout 120 "$warp" $lane "$probe" > "$logs/probe.out" 2> "$logs/probe.err"
 			got=$(cat "$logs/probe.out")
 			if [[ $got == "$want" ]]; then echo "ok   ${name##*/} ($lane)"
@@ -75,7 +81,7 @@ if wants 1; then
 			fi
 		done
 	done
-	echo "tier 1 (probes/gate, both lanes): $( ((ok)) && echo ok || echo RED) $(since $t1)"
+	echo "tier 1 (probes/gate, $lanes): $( ((ok)) && echo ok || echo RED) $(since $t1)"
 	((ok)) || red 1
 fi
 

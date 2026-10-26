@@ -1,4 +1,4 @@
-//! The analyzer's result as text, what its warp twin lib/compiler/analyzer.warp writes (card inferred-kinds,
+//! The analyzer's result as text, what its warp twin core/analyzer.warp writes (card inferred-kinds,
 //! notes/self_hosting.md step 14): the kinds of each function's parameters and result, of each main-level variable and
 //! of the program's value
 

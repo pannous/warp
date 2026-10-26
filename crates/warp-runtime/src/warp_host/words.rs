@@ -45,7 +45,7 @@ pub fn link(linker: &mut Linker<Host>) -> Result<()> {
 	link_memory_words(linker)
 }
 
-/// The words of compiler.wasm (built by warp-rust) that pass texts through linear memory: (ptr, len) in, (ptr, len) of
+/// The words of warp.wasm (built by warp-rust) that pass texts through linear memory: (ptr, len) in, (ptr, len) of
 /// the answer out, (ptr, -len) of a failure's reason
 fn link_memory_words(linker: &mut Linker<Host>) -> Result<()> {
 	linker.func_wrap(HOST_LIBRARY, "read", |mut caller: Caller<'_, Host>, pointer: i32, length: i32| {

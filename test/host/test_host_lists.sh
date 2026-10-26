@@ -4,7 +4,7 @@
 # items failed: "memory cap: growing a memory to 4096 MB …", then "list join: 0". Run it through the queue:
 # tests/queue.sh tests/host/test_host_lists.sh
 # The host and the compilers as in test_host.sh: WARP_HOST_BINARY (default target/host/warp-host, else target/release/,
-# else target/debug/), compiler-self.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp).
+# else target/debug/), warp-self.wasm from beside WARP_LAUNCHER_RUST (default target/debug/warp).
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
@@ -15,9 +15,9 @@ export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
-[ -f "$(dirname "$rust")/compiler-self.wasm" ] || { echo "✗ no compiler-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
+[ -f "$(dirname "$rust")/warp-self.wasm" ] || { echo "✗ no warp-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" || exit 1
-cp "$host" "$stage/bin/warp-host" && cp "$(dirname "$rust")/compiler-self.wasm" "$stage/bin/" || exit 1
+cp "$host" "$stage/bin/warp-host" && cp "$(dirname "$rust")/warp-self.wasm" "$stage/bin/" || exit 1
 host=$stage/bin/warp-host
 cd "$stage" || exit 1
 # 30,000 bytes counting 0…255 over and over: their count and their sum say they all arrived

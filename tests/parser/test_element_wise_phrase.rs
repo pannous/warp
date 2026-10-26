@@ -1,5 +1,5 @@
 // The parser keeps `xs .* 2` as written, the phrase [xs .* 2]; lowering/broadcasting.rs gives it its meaning (a map over
-// the elements), so the parser twin in lib/compiler/parser.warp stays syntactic (card cleanup-parser-element-wise)
+// the elements), so the parser twin in core/parser.warp stays syntactic (card cleanup-parser-element-wise)
 use crate::is;
 use warp::warp_parser::parse;
 

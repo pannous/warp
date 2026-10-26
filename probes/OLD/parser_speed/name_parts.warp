@@ -1,5 +1,5 @@
 // The microseconds parser.warp spends per call on the parts of reading a name (card profile-stage-programs)
-use "../../lib/compiler/parser.warp"
+use "../../core/parser.warp"
 probe_rounds = 1000
 probe_source = "alpha = beta\n"
 probe_parser = Parser{code: probe_source, n: probe_source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: [], breaks: [], finally_blocks: 0, types: [], bangs: [], type_body: false}

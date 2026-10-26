@@ -13,11 +13,11 @@ fn self_hosted_run(folder: &std::path::Path, library: Option<&std::path::Path>) 
 	String::from_utf8_lossy(&run.stdout).into_owned() + &String::from_utf8_lossy(&run.stderr)
 }
 
-/// A checkout whose lib/compiler holds no compiler: reading it fails, naming the file it looked for
+/// A checkout whose core holds no compiler: reading it fails, naming the file it looked for
 fn empty_checkout() -> (std::path::PathBuf, std::path::PathBuf) {
 	let checkout = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(CHECKOUT);
 	let program_folder = checkout.join("probes");
-	std::fs::create_dir_all(checkout.join("lib/compiler")).unwrap();
+	std::fs::create_dir_all(checkout.join("core")).unwrap();
 	std::fs::create_dir_all(&program_folder).unwrap();
 	std::fs::write(program_folder.join("program.warp"), PROGRAM).unwrap();
 	(checkout, program_folder)
@@ -27,7 +27,7 @@ fn empty_checkout() -> (std::path::PathBuf, std::path::PathBuf) {
 fn the_compiler_comes_from_the_checkout_above_the_program() {
 	let (checkout, program_folder) = empty_checkout();
 	let output = self_hosted_run(&program_folder, None);
-	let expected = checkout.join("lib/compiler/passes.warp");
+	let expected = checkout.join("core/passes.warp");
 	assert!(output.contains(&expected.display().to_string()), "{output}");
 }
 

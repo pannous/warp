@@ -4,7 +4,7 @@ use crate::is;
 use std::path::Path;
 use warp::modules::fetch_package_into;
 
-const TABLE: &str = "lib/compiler/entities.tsv";
+const TABLE: &str = "core/entities.tsv";
 const REGENERATE: &str = "WARP_REGENERATE_ENTITIES";
 const RECORD_BYTES: usize = 20;
 

@@ -10,7 +10,7 @@ modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes }
 
 - The entry's key is the canonical form, the one format and print show. An entry keyed by an operator (`"<="`, `"->"`)
   is that operator.
-- `operator` / `prefix-operator`: the operator the word names; `symbol`: the operation (Op of lib/compiler/node.warp).
+- `operator` / `prefix-operator`: the operator the word names; `symbol`: the operation (Op of core/node.warp).
 - `aliases`: the other spellings. A symbol alias spells the operator (`≤` is `<=`, `**` is `^`), a word alias the word
   (`size` is count, `elif` is `else if`).
 - `infix: yes`: the word and its word aliases are also written between operands (`7 mod 2`, `1 upto 5`), but name a
@@ -21,11 +21,11 @@ modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes }
 
 ## Who reads it
 
-- lib/compiler/parser.warp `read_aliases`, the first time a parse starts (its own parse sees the parser's own
+- core/parser.warp `read_aliases`, the first time a parse starts (its own parse sees the parser's own
   operators only): symbol aliases join `symbol_operators` (ordered longest first, so `**` wins over `*`), infix words
   join `word_operators`, word aliases of a keyword take its form in `keyword_forms` (`elif`, `has`, `true`, `null`).
   `canonical_word(spelling)` gives the entry's word.
-- lib/compiler/builtin_signatures.warp `unaliased`: a call's library word is its canonical word, then the prelude's
+- core/builtin_signatures.warp `unaliased`: a call's library word is its canonical word, then the prelude's
   `alias keys = map_keys` lines (public name → implementation, not synonyms).
 - The Rust compiler (frozen) keeps its own tables, below; lib/prelude.warp keeps its `alias has = collection_contains`
   lines for it.

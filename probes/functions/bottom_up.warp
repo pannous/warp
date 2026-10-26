@@ -1,4 +1,4 @@
-# the shared walk of self-hosted passes (lib/compiler/walk.warp planned): f handed down through a lambda
+# the shared walk of self-hosted passes (core/walk.warp planned): f handed down through a lambda
 # y
 # [y z]
 children(n, f) := if type(n) is key then key(f(n.key), n.op, f(n.value)) else if n is list then n.map(f) else n

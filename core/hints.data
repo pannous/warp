@@ -1,0 +1,2 @@
+# The hints of the warp compiler (core/diagnostics.warp): pattern TAB message, the first match wins
+alias_word($written, $canonical)	"warp says {canonical}"	"{canonical}"	"alias-{written}@{written}"

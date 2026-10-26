@@ -1,6 +1,6 @@
 // Where parser.warp's time goes (card profile-stage-programs): the milliseconds of each phase of parsing the file
-// args#1 names. Run: WARP_LIB=<worktree>/lib warp probes/parser_speed/phases.warp lib/compiler/lexer.warp
-use "../../lib/compiler/parser.warp"
+// args#1 names. Run: WARP_LIB=<worktree>/lib warp probes/parser_speed/phases.warp core/lexer.warp
+use "../../core/parser.warp"
 use os
 source = read(args#1)
 started = clock()

@@ -1,6 +1,6 @@
 # GC-free "glue" from the pure compiler: does `[1,2,3] as array` give linear memory? (investigation, 2026-10-23)
 
-Investigation only. No code changed; src/ and lib/compiler were only read. Tree: /workspace/cow/trees/glue-linear (boxtree,
+Investigation only. No code changed; src/ and core were only read. Tree: /workspace/cow/trees/glue-linear (boxtree,
 origin/main cdc63fbca). Probes and outputs: /workspace/cow/glue-linear-probes/ (measure.sh, runall.sh, runcimp.sh,
 out/, out-cimp/, target-shape/). [M] = measured, [R] = read in source, [I] = inferred.
 
@@ -74,7 +74,7 @@ The pre-strip module never validates non-GC because module_bytes always writes g
 emitter.warp:1124; text globals start as ref.null $text, list ones as struct.new, module_layout.warp:5-13).
 
 ## How C imports pass strings today (pure-c-imports branch, not on main) [R]
-- lib/compiler/c_imports.warp (branch): `text` crosses as warp kind `node` (c_parameter_kinds, line 35) with
+- core/c_imports.warp (branch): `text` crosses as warp kind `node` (c_parameter_kinds, line 35) with
   c_signatures name `ptr` (c_parameter_names, line 36); warp-host copies the Node's text NUL-terminated
   (c_calls.rs native_arguments). A text *result* is a `char *` read back through new_text + text_heap.
   c_host_word at lines 244-262 builds [kinds, results, library, warp.c_functions line].
@@ -130,20 +130,20 @@ How options reach the emitter today:
     :72-77 (active cstr segment)
 - Effort: the mode itself is ~10 lines (pragma + Module field); each site's native path is the same work as route A's
   steps 2-5, plus a refusal per site (~1-3 lines each, ~10 sites). It is cleaner for users ("in native code a list is
-  refused" instead of silently GC) and leaves default output byte-identical, but it touches more lib/compiler files at
+  refused" instead of silently GC) and leaves default output byte-identical, but it touches more core files at
   once. Route A (cstr type + `as cstr` + unboxed print) can be done first and later be what the mode selects; the two
   are not exclusive [I].
 
 ## Proposed minimal plan
 0. Merge pure-c-imports to main (Claude-owned; its own card). No new work.
-1. `cstr` parameter type: 3 table entries in lib/compiler/c_imports.warp. Result: `puts(s: cstr): i32 from 'c'` +
+1. `cstr` parameter type: 3 table entries in core/c_imports.warp. Result: `puts(s: cstr): i32 from 'c'` +
    memory_set_byte bytes + `puts(1024)` → a 206 B GC-free module that runs under warp-host and natively via wasm2c.
-   Touches lib/compiler (an existing file, no new pass) → needs the user's OK and the Claude owner's.
+   Touches core (an existing file, no new pass) → needs the user's OK and the Claude owner's.
 2. cstr literals: `"hi" as cstr` → an active data segment + i32 address (emitter.warp `as`, module_layout.warp,
-   layout constants). lib/compiler, existing files, ~30-50 lines [I]. Then `puts("hi" as cstr)` is the one-liner glue.
+   layout constants). core, existing files, ~30-50 lines [I]. Then `puts("hi" as cstr)` is the one-liner glue.
 3. GC-free print of ints/cstrs (output.warp + a runtime word or two), ~40-60 lines [I].
 4. Optional: the `use native` mode as a pragma (emitter.warp, ~10 lines + refusals per site), new pass-list entries:
-   none needed. New lib/compiler/*.warp files: none needed for 1-3.
+   none needed. New core/*.warp files: none needed for 1-3.
 5. Later, only if needed: linear int/float arrays (a new list representation, ~200-400 lines [I]).
 Tests for each, result-based only (no exit codes or internals), e.g. a host test that `puts("hi" as cstr)` prints hi,
 or `is! 'memory_set_byte(100, 7); memory_byte(100)' 7`.

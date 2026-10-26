@@ -385,7 +385,7 @@ fn bound(name: &str, code: Node, bindings: &mut Bindings) -> bool {
 }
 
 // ⚠ WARP DOES THIS DIFFERENTLY: an unbound template hole is a fresh `t·N` name per firing, statements in a value's
-// place are its block, the template is placed at the rewritten code → lib/compiler/rewrites.warp rule_spliced
+// place are its block, the template is placed at the rewritten code → core/rewrites.warp rule_spliced
 /// The template with each hole's code, a rest hole's items in its place
 fn spliced(template: &Node, bindings: &Bindings) -> Node {
 	if let Some(code) = hole_name(template).and_then(|name| bindings.get(name)) {

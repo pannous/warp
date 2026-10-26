@@ -2,7 +2,7 @@
 // element through a Node parameter does. Prints "assign" twice once fixed (prints "assign", "other" on 2026-10-19).
 // out: assign
 // out: assign
-use "../lib/compiler/passes.warp"
+use "../core/passes.warp"
 program = node_of(plain(tree("a, b = b, a")))
 parts = match program {
 	List(parts, bracket, separator): parts

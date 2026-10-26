@@ -15,7 +15,7 @@ the host words (src/host.rs HOST_WORD_SIGNATURES as JSON).
 
 ## The design
 
-### Entry point: lib/compiler/compiler.warp
+### Entry point: core/compiler.warp
 An ordinary warp program, nothing compiler-special about how it runs:
 
 ```warp
@@ -53,7 +53,7 @@ input files for this lane. `node_of`/`view_of` stay only for the twin lanes (fro
 compare with Rust stages; they retire with those lanes (decision self-hosting: twins go once both sides are warp).
 
 ### What Rust still does (the edges)
-1. Bootstrap: compile lib/compiler/compiler.warp once with the Rust pipeline, kept in the program cache under the
+1. Bootstrap: compile core/compiler.warp once with the Rust pipeline, kept in the program cache under the
    key self_hosted.rs `stage_key` already makes (binary, lib/ contents, WARP_ settings). A cold compile takes minutes,
    a warm start a fraction of a second, as the stage programs do today.
 2. Input: the program file's path is `args#1`. Inline code (`warp "1 + 2"`, is! tests) has no file: Rust writes it to
@@ -65,21 +65,21 @@ compare with Rust stages; they retire with those lanes (decision self-hosting: t
 4. Run: the produced module through `run_module` with WASI and the host imports it names (`imports_from`), plus the
    fuel mark as today.
 
-The same file runs from the command line with no switch at all: `warp lib/compiler/compiler.warp app.warp app.wasm`,
+The same file runs from the command line with no switch at all: `warp core/compiler.warp app.warp app.wasm`,
 then `warp app.wasm`. That is the independence the decision asks for; the Rust lane is only a convenience around it.
 
 ### `warp pure <program.warp> [arguments…]` (card warp-pure, user 2026-10-20: "put everything in the binary")
-src/compiler/standalone.rs: compiler.warp's module, the build file compiler.wasm (decision compiler-build: a build
+src/compiler/standalone.rs: compiler.warp's module, the build file warp.wasm (decision compiler-build: a build
 output, no cache), runs as `compiler.warp <source> <wasm> <folder> <lib>`; the module it writes runs with the program's
 arguments. The Rust pipeline compiles compiler.warp, always (user 2026-10-21: "pure always is Rust's compiler.warp and
 `warp self` always uses the self-hosted, self-compiled"). `warp self <program.warp>` runs the program through
-compiler.warp compiled by the pure lane, itself, the build file compiler-self.wasm; a refusal of that compile is a loud
+compiler.warp compiled by the pure lane, itself, the build file warp-self.wasm; a refusal of that compile is a loud
 error, never a fallback to the Rust-compiled one. `warp pure` switches to the self-compiled compiler once more tests
 pass with it (the count self vs Rust-compiled goes to the supervisor first: `scripts/is_tests.py run warp-pure
 warp-self` runs every test pair both ways, ~35 min a lane, and ends with the parity line; decision
 self-compiled-parity: self may pass 5 % fewer, reported, no gate yet). It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
-Build files (decision compiler-build, cards compiler-wasm, installed-compilers): compiler.wasm and compiler-self.wasm
+Build files (decision compiler-build, cards compiler-wasm, installed-compilers): warp.wasm and warp-self.wasm
 next to the binary are the delivered pair (a release's, or main's from the Integrator), used as they are: never
 compared with the checkout's lib/, no notice (custom section `warp.build`: lib/'s path, its fingerprint, the binary's
 WARP_SOURCE from build.rs, then the commit of lib/'s checkout, the stamp `warp version` shows). Only a lib/ named by
@@ -95,7 +95,7 @@ Warm start (card pure-warm-start): 2.9 s, of which ~97% was compiler.warp loweri
 (WARP_PROFILE: 590 of 613 samples). compiler.warp now keeps them, `kept(name) ?? keep(name, value)` of use os (a
 value in the module cache under stage_key: binary + lib/): warm hello 0.07 s, a new program ~0.1–0.2 s. The kept
 Node crosses to Rust and back (postcard); 38 samples give the same results with and without it.
-Computing that kept value takes ~50 s CPU in compiler-self.wasm on the Mac (more on a 4-core cloud VM): inside a
+Computing that kept value takes ~50 s CPU in warp-self.wasm on the Mac (more on a 4-core cloud VM): inside a
 program's first run it blew the 60 s turn limit (card cloud-lane-narrow), so a build (`warp rebuild`, or a missing
 build file) runs the new compiler once on `0` to keep it (standalone.rs `warm`).
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
@@ -107,7 +107,7 @@ cycle; admitted() now holds it as the declared kind, the reread fixes the code).
 error, not "not a list at 23:2". Holding only a typed block's last statement as the result (definitions.warp
 result_held) is no longer needed with admitted() and made `warp rebuild self` refuse ("the operator # on int"), so
 it was dropped. Debug recipe: copy lib to scratch/upN, add prints (`print "CF " + f.name` in compile_function), run
-`WARP_LIB=<copy>/lib warp lib/compiler/compiler.warp p.warp p.wasm <dir> <copy>/lib` to keep the wasm for
+`WARP_LIB=<copy>/lib warp core/compiler.warp p.warp p.wasm <dir> <copy>/lib` to keep the wasm for
 `wasm-tools validate --features all`. A self-build refusal reproduces in ~4 min with `WARP_SELF_HOSTED=pure-only
 WARP_LIB=<copy>/lib warp <copy>/lib/compiler/compiler.warp`; bisect it by copying main's lib and swapping one changed
 file in at a time. Remaining ladder gaps: card under-pure-2.
@@ -130,11 +130,11 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
    word; the error only when a file that sees both calls the word itself. No renames (card file-own-words).
 2. Runtime words lowered by warp: runtime.warp through `lowered_program` (folder lib/, so uses.warp splices its
    `use case_tables`; since card runtime-split its parts are `use "runtime/<part>.warp"` beside it, so the folder is
-   lib/compiler and uses.warp must also find a std module name in lib/: card uses-std-modules) runs (cold 2 min), with warnings that `Round`, `Add`, `Define` name nothing (enum variants
+   core and uses.warp must also find a std module name in lib/: card uses-std-modules) runs (cold 2 min), with warnings that `Round`, `Add`, `Define` name nothing (enum variants
    written bare in runtime.warp: warp-compiler-enums). Whether emitter.warp emits the same from it as from Rust's
    lowering is the next probe. Cost: lowered once per compiler run; if that is slow, the general fix is lowering
    only the runtime words a program reaches (as the prelude words are, card prelude-for-pure), never a cached JSON.
-3. Host words as warp data: lib/compiler/host_words.warp, `{draw_shape: [[int, float, float, float, float, int],
+3. Host words as warp data: core/host_words.warp, `{draw_shape: [[int, float, float, float, float, int],
    []], …}`, the one source of truth; build.rs generates src/host.rs HOST_WORD_SIGNATURES from it (the host is an
    edge, its table is not).
 4. `library_folder`, `folder_of`: words the compiler needs from os/file (the folder of lib/, a path's folder);
@@ -155,8 +155,8 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
   named like a function elsewhere was taken for that function in list heads, type inference, a returned local
   (closure analysis), lambda captures, prefix calls (`call#1`) and nested lambdas. Plus: a text's member looked up by
   name (`line.length` beside a map with a key length) was typed a text.
-- Step 3 written: lib/compiler/compiler.warp and host_words.warp. Not yet through: the next probe needs the scope fixes
-  in the shared build. Probe: `cd scratch/sc && WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp ../../lib/compiler/compiler.warp app.warp app.wasm`.
+- Step 3 written: core/compiler.warp and host_words.warp. Not yet through: the next probe needs the scope fixes
+  in the shared build. Probe: `cd scratch/sc && WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp ../../core/compiler.warp app.warp app.wasm`.
 - Blocked on compile time (card analyzer-settle): compiler.warp does not finish compiling (>30 min CPU); even
   `use passes+emitter; print(1)` takes >45 min, while each stage alone compiles in ~30 s. A 23-min sample of the
   whole warp-debug run (probes/sample_inclusive.py) put 98% of it in one caller: run_time_blocks::data_holders ran
@@ -187,26 +187,26 @@ What stopped compiler.warp compiled by itself, in the order found (each a genera
 - A kept value (os.kept of the lowered runtime words) holding an Int beyond the fixnums: the host built it through the
   Int runtime's builders, which an emitter.warp module lacks; such a module holds machine i64s (src/host/tasks/values.rs
   holds_machine_ints).
-- Debugging: a bare `unreachable` trap of compiler.wasm is an error function whose name the runner dropped; bisect with
+- Debugging: a bare `unreachable` trap of warp.wasm is an error function whose name the runner dropped; bisect with
   prints in compiler.warp's steps, then reproduce the failing step as a pure-lane program (`WARP_SELF_HOSTED=pure-only
   warp probe.warp` runs the same emitted code, no compiler rebuild). Set WARP_LIB to the worktree's lib for those runs:
   from a scratch folder the stages otherwise come from the main checkout's lib.
 
 ## warp.wasm under plain wasmtime (card standalone, reopened 2026-10-21, user: "build in the runtime itself.
 ## wasmtime warp.wasm should behave like the native binary")
-Today `wasmtime run -W gc=y,function-references=y,exceptions=y --dir . compiler.wasm hello.warp h.wasm` stops at the
+Today `wasmtime run -W gc=y,function-references=y,exceptions=y --dir . warp.wasm hello.warp h.wasm` stops at the
 first host import. Imports found (2026-10-21):
-- compiler.wasm (Rust-compiled): host.fetch, fetch_within, read, warn, run, std_io + wasi fd_write.
-- compiler-self.wasm (self-compiled): all 69 host words + m.pow: emitter.warp imports a host word whenever the
+- warp.wasm (Rust-compiled): host.fetch, fetch_within, read, warn, run, std_io + wasi fd_write.
+- warp-self.wasm (self-compiled): all 69 host words + m.pow: emitter.warp imports a host word whenever the
   program `mentions` its name, and compiler.warp includes host_words.warp, whose map keys name every one.
 What each is for in compiler.warp: std_io carries `use os` (args, env, kept, keep) and `use file` (write_bytes,
 exists …); read is the prelude's file/URL read (fetch/fetch_within its URL half); warn the compile's warnings; run
 probably a mention only.
 
 Plan, one import at a time, each a WASI-backed runtime part in both emitters (Rust wasm_emitter for the bootstrap
-compiler.wasm, emitter.warp for compiler-self.wasm):
+warp.wasm, emitter.warp for warp-self.wasm):
 1. Imports only for words called: a map key or text naming a host word imports nothing (emitter.warp `mentions`,
-   and the Rust side's equivalent). Takes compiler-self.wasm from 69 host imports to the handful it calls.
+   and the Rust side's equivalent). Takes warp-self.wasm from 69 host imports to the handful it calls.
 2. `_start`: a WASI command export calling main, so `wasmtime warp.wasm …` needs no `--invoke`.
 3. os.args, os.env: args_sizes_get/args_get, environ (emit_wasi_environment exists).
 4. read / file.read_bytes / exists: path_open on the preopened dirs (fd_prestat_get), fd_read, fd_close; a URL under
@@ -220,7 +220,7 @@ host (instantiate is no WASI call) or an evaluator in warp; default until answer
 prints how to run it.
 
 ### Float pow without libm (runtime/extended/pow.warp, card standalone)
-- lib/compiler/runtime/extended/pow.warp ports musl's pow (src/math/pow.c, the Arm optimized-routines one glibc also has) on
+- core/runtime/extended/pow.warp ports musl's pow (src/math/pow.c, the Arm optimized-routines one glibc also has) on
   its non-fma path (wasm has no fma); pow_tables.warp holds pow_data.c / exp_data.c as the doubles' bits, 16 hex digits each,
   read in place by hex_entry (no table list, no global).
   C's uint64_t compares go through unsigned_below (add 2^63 to both sides), shifts through shifted_right/_signed.

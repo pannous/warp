@@ -1,5 +1,5 @@
 //! The kinds of user function parameters and results as one flow inference (card src-analyzer, the Rust side of
-//! lib/compiler/analyzer.warp): each undeclared parameter holds the join of the kinds that flow into it (the arguments
+//! core/analyzer.warp): each undeclared parameter holds the join of the kinds that flow into it (the arguments
 //! of every call, the values a closure captures, the literals its body assigns it), else the kind its body's use
 //! suggests, else what the closure calls pass; results follow from the bodies, starting from Int. Every round
 //! recomputes the results and the flows from the kinds of the last one, until nothing changes.

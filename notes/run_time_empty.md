@@ -14,4 +14,4 @@ Now `[]` is ø marked with the square bracket above the kind bits, `type_kinds::
 - `[] == ø` is no (decision empty-is-not-missing, notes/emptiness.md).
 
 Not yet: the empty results of list operations (`xs[0..<0]`, a filter that keeps nothing, `pop` of the last item)
-are still plain ø; the self-hosted runtime (lib/compiler/runtime) has its own empty list and still shows `ø`.
+are still plain ø; the self-hosted runtime (core/runtime) has its own empty list and still shows `ø`.

@@ -1,6 +1,6 @@
 # What parser.warp refuses (card pure-front): each program it reads with an error in its tree, with the first error
 # message; then the count read
-use "../../lib/compiler/parser.warp"
+use "../../core/parser.warp"
 use os
 refused = 0
 for path in args {

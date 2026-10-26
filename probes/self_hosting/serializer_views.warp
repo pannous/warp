@@ -1,5 +1,5 @@
-// card self-serializer: the warp twin of Node::serialize on hand-made node views (lib/compiler/serializer.warp)
-use "lib/compiler/serializer.warp"
+// card self-serializer: the warp twin of Node::serialize on hand-made node views (core/serializer.warp)
+use "core/serializer.warp"
 [
 	serialize(3),
 	serialize(yes),

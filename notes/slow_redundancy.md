@@ -95,7 +95,7 @@ whichever runs first pays the stage compile. Ignoring them would save nothing.
 |---|---|---|
 | parser::test_warp_pure::warp_self_takes_repeated_parameter_names | 1145 (timed out) | `middle(_, value, _)` under `warp self` (bug pin of the self-compiled compiler) |
 | parser::test_warp_pure::warp_self_writes_the_largest_int | 1144 (timed out) | the largest int literal under `warp self` (bug pin) |
-| functions::test_bodiless_runtime_words::each_runtime_part_runs_alone | 262 | each lib/compiler/runtime/ part compiles alone (nothing else checks this; the most expensive test on the list) |
+| functions::test_bodiless_runtime_words::each_runtime_part_runs_alone | 262 | each core/runtime/ part compiles alone (nothing else checks this; the most expensive test on the list) |
 | parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it | 61.5 | `as rational` of a float inside the warp emitter (narrow twin, as for int powers) |
 | parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts | 44.1 | shortest float digits in runtime.warp (narrow twin) |
 | text::test_text_builders::texts_built_in_turn_grow_linearly | 35.2 | text appends in linear time |

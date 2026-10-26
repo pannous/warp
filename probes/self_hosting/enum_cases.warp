@@ -1,5 +1,5 @@
 // node.warp enum cases inside functions through emitter.warp (goal parser-compiles): want yes, ":", yes
-use "../../lib/compiler/node.warp"
+use "../../core/node.warp"
 is_colon(o: Op): bool := o == Op.Colon
 print(is_colon(Op.Colon))
 print(Op.Colon as text)

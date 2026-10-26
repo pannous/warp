@@ -20,8 +20,8 @@ pub fn with_entries(mut bytes: Vec<u8>, entries: Vec<(&str, Node)>) -> Vec<u8> {
 	bytes
 }
 
-/// The section's map read back: by compiler.wasm in the native host (card rust-bootstrap), by the data parser in the
-/// browser build, which has no compiler.wasm
+/// The section's map read back: by warp.wasm in the native host (card rust-bootstrap), by the data parser in the
+/// browser build, which has no warp.wasm
 #[cfg(feature = "native")]
 fn read_map(text: &str) -> Node {
 	crate::compiler::standalone::parsed(text)

@@ -1,4 +1,4 @@
-# The rewrite engine's conditions on word lists and on where the matched code stands (lib/compiler/rewrites.warp,
+# The rewrite engine's conditions on word lists and on where the matched code stands (core/rewrites.warp,
 # notes/rewrites.md, card engine-rule-conditions), written in warp: no Rust twin
 
 # where_not_method_leaves_the_method_part

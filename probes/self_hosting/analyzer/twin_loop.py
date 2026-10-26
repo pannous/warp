@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fast loop for the analyzer twin (card inferred-kinds): runs lib/compiler/analyzer.warp `inferred_kinds` with the
+"""Fast loop for the analyzer twin (card inferred-kinds): runs core/analyzer.warp `inferred_kinds` with the
 checkout's own warp (scratch/warp) over the cases the survey test wrote (data/self_analyzer/cases.jsonl: path, Rust
 kinds, program view) and lists the differences, without a cargo test run.
 Usage: probes/self_hosting/analyzer/twin_loop.py [path-substring] [--limit N] [--chunk N]"""
@@ -29,7 +29,7 @@ def arguments():
 def warp_kinds(chunk):
     calls = [f'print(inferred_kinds(node_of(json(read("{CASE_FOLDER}/{index}.json")))).join("{SEPARATOR}"))'
              for index, _ in chunk]
-    program = 'use "lib/compiler/analyzer.warp"\n' + "\n".join(calls) + "\n0"
+    program = 'use "core/analyzer.warp"\n' + "\n".join(calls) + "\n0"
     run = subprocess.run([WARP, program], capture_output=True, text=True, timeout=600,
                          env={**os.environ, "WARP_NO_WINDOW": "1"})
     lines = [line for line in run.stdout.splitlines() if SEPARATOR in line or line.startswith("= ")]

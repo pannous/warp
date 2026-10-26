@@ -1,6 +1,6 @@
 // Which part of lexer.warp gaps() grows with the square of the source (card profile-stage-programs): the milliseconds
 // of gaps itself and of its loop without the comment test, of the file args#1 names
-use "../../lib/compiler/lexer.warp"
+use "../../core/lexer.warp"
 use os
 def blanks_only(source: any, n: int): int {
 	started = clock()

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# warp: programs run through the warp compiler written in warp (compiler.wasm, as `warp-rust pure` runs it), fix and
+# warp: programs run through the warp compiler written in warp (warp.wasm, as `warp-rust pure` runs it), fix and
 # beautify as lib/fix/command.warp, every other command through the Rust binary warp-rust, unchanged
 # (notes/pure_wrapper.md). Plain bash 3.2, macOS's /bin/bash.
 # With warp-host (card launcher-host-dispatch): run, pure, self, compile, inline code and a .wasm module are warp-host's;
@@ -7,7 +7,7 @@
 # every other command is the shared warp-rust's.
 #   WARP_PIPELINE=rust            every command as warp-rust runs it
 #   WARP_FALLBACK=rust            a program the pure pipeline refuses runs again through warp-rust, said loudly
-#   WARP_COMPILER=self or --self  compiler-self.wasm (compiler.warp compiled by itself) instead of compiler.wasm (pure)
+#   WARP_COMPILER=self or --self  warp-self.wasm (compiler.warp compiled by itself) instead of warp.wasm (pure)
 #   WARP_RUST=<binary>            the Rust binary; else warp-rust beside this script (links followed), else on PATH,
 #                                 else the shared one: /workspace/cow/warp-rust-latest on the box, ~/dev/bin/warp on the Mac
 #   WARP_HOST=<binary>|none       the native host warp-host compiles and runs programs instead of warp-rust's pure lane
@@ -20,7 +20,7 @@
 pure_command() {
 	case $1 in
 		run) echo run_file ;;                                     # warp run f.warp [-- args]
-		pure | self) echo run_with ;;                             # warp pure f.warp, warp self f.warp: through compiler.wasm, compiler-self.wasm
+		pure | self) echo run_with ;;                             # warp pure f.warp, warp self f.warp: through warp.wasm, warp-self.wasm
 		compile) echo compile_module ;;                           # warp compile --wasm f.warp
 		rebuild) echo rebuild_pair ;;                             # warp rebuild [pure|self]: scripts/rebuild.sh of the checkout
 		test) echo run_tests ;;                                   # warp test …: the test runner
@@ -37,12 +37,13 @@ export_library() {
 	local lib
 	lib=$(library_for "$1") || return 0
 	[ -n "$lib" ] || return 0
-	if [ -n "$HOST" ] || [ -f "$lib/../data/compiler.wasm" ] || [ -f "$lib/../data/compiler-self.wasm" ]; then
+	if [ -n "$HOST" ] || [ -f "$lib/../data/warp.wasm" ] || [ -f "$lib/../data/warp-self.wasm" ] ||
+		[ -f "$lib/../data/compiler.wasm" ] || [ -f "$lib/../data/compiler-self.wasm" ]; then
 		export WARP_LIB=$lib
 	fi
 }
 
-# warp f.warp [-- args], warp run f.warp: compiled by compiler.wasm, run by warp-rust
+# warp f.warp [-- args], warp run f.warp: compiled by warp.wasm, run by warp-rust
 run_file() {
 	[[ ${1-} == *.warp ]] || pass_on
 	export_library "$1"
@@ -92,7 +93,7 @@ run_code() {
 	pure "${runner[@]}" "${options[@]}" "$@"
 }
 
-# warp compile --wasm f.warp: f.wasm written by compiler.wasm; other compiles (--exe, --site, …) are warp-rust's
+# warp compile --wasm f.warp: f.wasm written by warp.wasm; other compiles (--exe, --site, …) are warp-rust's
 compile_module() {
 	[ $# -eq 2 ] && [ "$1" = --wasm ] && [[ $2 == *.warp ]] || pass_on
 	local source=$2 module=${2%.warp}.wasm lib
@@ -205,14 +206,19 @@ installed_folder() {
 }
 
 holds_warp() {
-	[ -e "$1/compiler.wasm" ] || [ -d "$1/lib/compiler" ]
+	[ -e "$1/warp.wasm" ] || [ -e "$1/compiler.wasm" ] || [ -d "$1/lib/compiler" ]
 }
 
-# The compiler's build file, as warp-rust finds it: a worktree's (WARP_LIB) in <lib>/../data/, else the installed one
+# The compiler's build file, as warp-rust finds it: a worktree's (WARP_LIB) in <lib>/../data/, else the installed one;
+# in each folder the file of the old name (compiler.wasm, compiler-self.wasm) when only that is there (transition)
 compiler_file() {
-	local name=compiler.wasm
-	[ "$compiler" = self ] && name=compiler-self.wasm
-	[ -f "${WARP_LIB:-/nonexistent}/../data/$name" ] && echo "$WARP_LIB/../data/$name" || echo "$(installed_folder)/$name"
+	local name=warp.wasm old=compiler.wasm folder
+	[ "$compiler" = self ] && name=warp-self.wasm old=compiler-self.wasm
+	for folder in "${WARP_LIB:-/nonexistent}/../data" "$(installed_folder)"; do
+		[ -f "$folder/$name" ] && { echo "$folder/$name"; return; }
+		[ -f "$folder/$old" ] && { echo "$folder/$old"; return; }
+	done
+	echo "$(installed_folder)/$name"
 }
 
 # lib/ for compiler.warp: WARP_LIB, else the installed one (beside the binaries, the lib/ their compilers ship with),
@@ -253,7 +259,7 @@ main() {
 		shift
 	done
 	command_line=("${options[@]}" "$@")
-	# the pure pipeline's command: warp-host's run (compiler-self.wasm; WARP_COMPILER=pure: compiler.wasm), else
+	# the pure pipeline's command: warp-host's run (warp-self.wasm; WARP_COMPILER=pure: warp.wasm), else
 	# warp-rust's pure or self
 	HOST=$(find_host)
 	host_options=()

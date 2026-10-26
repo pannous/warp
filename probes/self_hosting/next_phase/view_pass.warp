@@ -1,5 +1,5 @@
 // lowering pass on parser.warp's view (twins.rs node_view): a tree walk that rebuilds every list, `x + 0` → `x`
-use "lib/compiler/parser.warp"
+use "core/parser.warp"
 def simplified(view) {
 	if not (view is list) or #view == 0 { return view }
 	parts = view.map(simplified)

@@ -1,4 +1,4 @@
-//! Card node-enum (decision compiler-node-enum): lib/compiler/node.warp declares the built-in node's cases, so `Node` is
+//! Card node-enum (decision compiler-node-enum): core/node.warp declares the built-in node's cases, so `Node` is
 //! a type, `Key(a, Op.Add, b)` builds a key and `match n { Key(left, op, right): … }` takes the node itself apart; Op,
 //! Bracket and Separator are enums spelled as a node carries them.
 use crate::is;

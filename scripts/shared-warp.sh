@@ -25,11 +25,13 @@ copied() { cmp -s "$1" "$2" || { cp -c "$1" "$2.new-$$" 2>/dev/null || cp --refl
 copied "$shared" "$stage/warp" && chmod +x "$stage/warp" || exit 1
 WARP_BINARY=$shared "$tree/scripts/rebuild.sh" --check both "$tree" >&2
 if [ "$(uname)" = Darwin ]; then store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}; else store=${WARP_COMPILER_STORE:-/workspace/cow/compilers}; fi
-for name in compiler compiler-self; do
+# warp.wasm and warp-self.wasm; in the store also a file of the old name (compiler, compiler-self: transition)
+for name in warp warp-self; do
+	old=${name/warp/compiler}
 	if [ -f "$tree/data/$name.wasm" ]; then copied "$tree/data/$name.wasm" "$stage/$name.wasm"
-	elif [ -f "$store/main/$name.wasm" ]; then
-		echo "shared-warp.sh: no $name.wasm in data/: the store's main pair, of other compiler inputs" >&2
-		copied "$store/main/$name.wasm" "$stage/$name.wasm"
+	elif [ -f "$store/main/$name.wasm" ] || [ -f "$store/main/$old.wasm" ]; then
+		echo "shared-warp.sh: no $name.wasm in data/: the store's main one, of other compiler inputs" >&2
+		if [ -f "$store/main/$name.wasm" ]; then copied "$store/main/$name.wasm" "$stage/$name.wasm"; else copied "$store/main/$old.wasm" "$stage/$name.wasm"; fi
 	fi
 done
 echo "$stage/warp"

@@ -1,4 +1,4 @@
-//! A node as plain warp data, the view the warp-written compiler parts in lib/compiler/ read and give (walk.warp
+//! A node as plain warp data, the view the warp-written compiler parts in core/ read and give (walk.warp
 //! node_of / view_of, notes/self_hosting.md): a number, bool or ø is itself, every other node a list tagged by its kind.
 //! The twin tests (tests/common/twins.rs) and the self-hosted pipeline (self_hosted.rs) both cross this bridge.
 use crate::extensions::numbers::Number;

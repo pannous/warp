@@ -1,5 +1,5 @@
 // Are list reads and writes constant time? The milliseconds of `gaps`-like backwards fills of n items, as gaps() in
-// lib/compiler/lexer.warp does them (card profile-stage-programs)
+// core/lexer.warp does them (card profile-stage-programs)
 def filled(n: int): int {
 	started = clock()
 	marks = (n + 1) times [n]

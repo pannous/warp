@@ -1240,7 +1240,7 @@ impl Broadcast {
 		named_by(self.paired.next_number().to_string())
 	}
 
-	// ⚠ WARP DOES THIS DIFFERENTLY: map-fold fusion for any fold, not sum by name → lib/compiler/lambdas.warp
+	// ⚠ WARP DOES THIS DIFFERENTLY: map-fold fusion for any fold, not sum by name → core/lambdas.warp
 	/// `sum(xs .op ys)`, `sum(xs .op k)`: one loop adding the items, the element-wise list never built
 	fn fused_sum(&self, items: &[Node], bracket: &Bracket) -> Option<Node> {
 		let [head, argument] = items else { return None };

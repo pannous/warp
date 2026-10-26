@@ -54,7 +54,7 @@ half the cores, at most 8 at once, 30 s each), so a hang, trap or crash fails on
 the test file's folder. An expected column that is not data (`π`, `(-1)`, `1 + pi`) runs through `warp pure` too.
 Matching as the prelude's is!: `got == expected`, or both falsy, never an error. Prints ⊘ for skipped pairs, a ✗ line
 per failure (`file:line "code" expected: got …`), then `m of n failed in f files, s skipped`; exits 1 on a failure.
-`--self`: through `warp self` (compiler-self.wasm); `--each`: a ✓ line for each passed test too. The verdict lines
+`--self`: through `warp self` (warp-self.wasm); `--each`: a ✓ line for each passed test too. The verdict lines
 print in file order after the run, so two runs (pure and self) diff line by line. The parent builds a missing
 compiler first, so children never race to build it. `warp test <file.warp>` keeps the Rust pipeline (user 2026-10-21,
 decision test-keyword: all three commands take test blocks once compiler.warp learns them, card test-pure). Probe:

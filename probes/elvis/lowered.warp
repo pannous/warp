@@ -1,5 +1,5 @@
 # prints a program (args#1) as the pure lane passes leave it
-use "../../lib/compiler/passes.warp"
+use "../../core/passes.warp"
 use os
 use file
 lib = env("WARP_LIB")

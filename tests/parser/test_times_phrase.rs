@@ -1,5 +1,5 @@
 // The parser keeps `n times …` as written, the phrase [n times operand]; lowering/times_phrases.rs gives it its meaning
-// (a loop, a filled list or a repeated text), so the parser twin in lib/compiler/parser.warp stays syntactic
+// (a loop, a filled list or a repeated text), so the parser twin in core/parser.warp stays syntactic
 use crate::is;
 
 #[test]

@@ -31,7 +31,7 @@ names its warp form.
 2. Items (card rust-items): `struct P { x: i32 }`, `impl P { fn sum(&self) … }`, `trait T { fn f(&self) -> i32; }`,
    `impl T for S {…}` and `enum` work, also on one line: a struct/enum/impl/trait statement ends at its closing `}`, and a
    `let` or item word after any `}` starts the next statement (src/warp_parser/collections/lists.rs ITEM_WORDS,
-   lookahead.rs ends_statement_after_brace). Not mirrored in lib/compiler/parser.warp yet.
+   lookahead.rs ends_statement_after_brace). Not mirrored in core/parser.warp yet.
 3. `fn main() { … }` beside the program's own main: "duplicate export name main" (card rust-fn-main).
 4. Smaller cards: rust-map-insert (`m.insert(k, v)` on a map), rust-map-type (`HashMap<K, V>` as a type),
    rust-generic-result (`fn f() -> Vec<i32> { … }` leaves f undefined), rust-vec-repeat (`vec![0; n]`),

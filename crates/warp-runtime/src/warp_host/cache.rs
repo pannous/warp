@@ -18,13 +18,13 @@ pub fn fingerprint(parts: impl Hash) -> String {
 	format!("{:016x}", hasher.finish())
 }
 
-/// The std modules a compile reads from lib/ besides lib/compiler: the parser's spellings (aliases), the prelude, and
+/// The std modules a compile reads from lib/ besides core: the parser's spellings (aliases), the prelude, and
 /// the modules compiler.warp's lowered runtime words use or reach as type modules (the Rust lane's STAGE_MODULES, card
 /// compiler-cache-keys)
 const COMPILER_MODULES: [&str; 10] = ["aliases", "prelude", "math", "list", "regex", "os", "file", "map", "text", "time"];
 
 /// The fingerprint of what the compiler reads from lib/ for the values it keeps (compiler.warp's lowered runtime
-/// words): the files below lib/compiler and lib/<module>.warp of COMPILER_MODULES, by their paths within lib/ and their
+/// words): the files below core and lib/<module>.warp of COMPILER_MODULES, by their paths within lib/ and their
 /// contents, so a cache made from the same lib/ elsewhere (a shipped cache, `shipped()`) matches, and an edit of any
 /// other file of lib/ (a std module, a sugar file, a test) keeps them (card warp-host-cache-key: hashing all of lib/
 /// made a one-line lib/ edit cost every agent a cold run of ~40 s); reading these takes a few ms
@@ -143,7 +143,7 @@ fn write(file: &Path, bytes: &[u8]) {
 	}
 }
 
-/// The variable naming the lib/ a compiler run reads its std modules from (lib/compiler/parser.warp run_library)
+/// The variable naming the lib/ a compiler run reads its std modules from (core/parser.warp run_library)
 pub const LIBRARY_VARIABLE: &str = "WARP_LIB";
 
 /// The environment a run sees: this process's, with WARP_LIB the compiler run's lib/ (its keeper's) when it has one,

@@ -9,7 +9,7 @@ test -z "$(git status --porcelain --untracked-files=no)" || { echo "needs a clea
 branch=$(git branch --show-current)
 probe_branch="$branch-stale-probe"
 git checkout -q -b "$probe_branch"
-sed -i '' 's/:= wasm f64.nearest/:= nearest(x)/' lib/compiler/runtime.warp
+sed -i '' 's/:= wasm f64.nearest/:= nearest(x)/' core/runtime.warp
 git commit -q -am "probe: runtime.warp that does not lower"
 output=$(WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 scratch/warp '1 + 2' 2>&1 || true)
 git checkout -q "$branch"

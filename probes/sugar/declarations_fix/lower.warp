@@ -1,5 +1,5 @@
 # lowers a program (args#1) with the pure lane's passes in the Rust lane, so an error there has a place
-use "../../../lib/compiler/passes.warp"
+use "../../../core/passes.warp"
 use os
 use file
 lib = env("WARP_LIB")

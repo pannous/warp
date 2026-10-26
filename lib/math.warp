@@ -4,7 +4,7 @@
 // The math spellings of operators (decision operator-alias), every program reads them: each keeps the precedence
 // of the operator it spells
 operator × := *
-operator · := *
+// operator · := *   (user 2026-10-26: · no longer multiplies; the compiler names its made words with it, item·3)
 operator ⋅ := *
 operator ÷ := /!
 operator ÷= := /!=

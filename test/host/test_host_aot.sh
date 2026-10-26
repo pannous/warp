@@ -15,9 +15,9 @@ export WARP_HOST_CACHE=${WARP_HOST_CACHE:-$checkout/scratch/host-cache} WARP_NO_
 unset WARP_LIB WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
-[ -f "$(dirname "$rust")/compiler-self.wasm" ] || { echo "✗ no compiler-self.wasm beside $rust: $rust rebuild self builds it"; exit 1; }
+[ -f "$(dirname "$rust")/warp-self.wasm" ] || { echo "✗ no warp-self.wasm beside $rust: $rust rebuild self builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/elsewhere" || exit 1
-cp "$host" "$stage/bin/warp-host" && cp "$(dirname "$rust")"/compiler-self.wasm "$stage/bin/" || exit 1
+cp "$host" "$stage/bin/warp-host" && cp "$(dirname "$rust")"/warp-self.wasm "$stage/bin/" || exit 1
 cp "$checkout/samples/hello/hello.warp" "$stage/" || exit 1
 host=$stage/bin/warp-host
 cd "$stage" || exit 1

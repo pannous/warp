@@ -92,7 +92,7 @@ declarations_used(statements: any, folder: text, seen: any, claimed: any): list 
 }
 
 # a used file's parse, kept by its text (card speed-module-cache): a rebuild parses again only the files that changed;
-# kept by the files that parse (os.keep_of), so an edit of lib/compiler beyond them keeps the parses
+# kept by the files that parse (os.keep_of), so an edit of core beyond them keeps the parses
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { return plain_node(parsed(source)) }
@@ -183,7 +183,10 @@ without_steps_up(path: text): text := {
 	}
 	kept.join("/")
 }
-file_text(path: text): any := try read(path) else ø
+# the files the compiler has built in, by path (compiler.warp's runtime files while it lowers its runtime words): their
+# text, never read from lib/
+global built_in_files = {}
+file_text(path: text): any := built_in_files.get(path) ?? (try read(path) else ø)
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
 # `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program), a named

@@ -4,7 +4,7 @@
 # - driver.warp is compiled once, by the given warp-host, to scratch/host-from-warp/driver.wasm
 # - a shim `warp-host` (a shell script test_host.sh copies into its stage) runs `<warp-host> driver.wasm "$@"`
 # - --spawn: the driver compiles and runs by warp-host processes (WARP_DRIVER_SPAWN), else in-process
-# - <compiler-dir> holds compiler.wasm, compiler-self.wasm and a file `warp` (test_host.sh takes the compilers from
+# - <compiler-dir> holds warp.wasm, warp-self.wasm and a file `warp` (test_host.sh takes the compilers from
 #   beside WARP_LAUNCHER_RUST); default: the folder of <warp-host>
 # - the C modules' WAT has GC types: WARP_WAT2WASM, else wasm-tools on PATH (wabt 1.0.42's wat2wasm reads no `rec`)
 # Prints test_host.sh's output: its ✓/✗ lines are the checks the driver passes or not.

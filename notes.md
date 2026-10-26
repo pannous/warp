@@ -79,7 +79,7 @@
 - 2026-10-18 like-tea CI: prelude reflection reads signatures as text, so labelled parameters need the same label stripping as AST parameters; keep `replace.signature` labelled while `replace.params` returns the variable name `new`.
 - 2026-10-19 traps-wasm-trap: `text_argument` propagated Error and converted Codepoint but never required Text, so `byte_at(3, 0)` reached `emit_text_bytes` and trapped on the payload cast. Validate the shared argument after conversion, before any text storage access.
 
-- 2026-10-18 julia-floor-divide: Unicode math operator aliases are declared in lib/math.warp and read into the Rust operator table, while lib/compiler/parser.warp keeps a direct SYMBOL_OPERATORS twin; compound glyph aliases such as ÷= must be declared in both places and ordered before their shorter glyph.
+- 2026-10-18 julia-floor-divide: Unicode math operator aliases are declared in lib/math.warp and read into the Rust operator table, while core/parser.warp keeps a direct SYMBOL_OPERATORS twin; compound glyph aliases such as ÷= must be declared in both places and ordered before their shorter glyph.
 
 - emitter.warp: a runtime word compiled as an arity variant is named `word·arity` (returned_error·0); error_throw uses the word before the `·`. A one-statement curly block assigned as a value (`x = {f(1)}`) is data natively, so lowerings must splice a block's statement, not hold the block (tries.warp, 2026-10-20).
 2026-10-20 build-failing-space: cloud-test.sh already deleted target/ and retried ENOSPC once, but a second ENOSPC flowed through the ordinary summary as red and collect() returned that full VM to the pool. Persistent ENOSPC needs its own environmental result and job-to-session retirement at collection time, where the pool identity is known.

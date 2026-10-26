@@ -1,6 +1,6 @@
 # quick check of the of_lookups twin on single sources (card sugar-twins)
-use "../lib/compiler/parser.warp"
-use "../lib/compiler/of_lookups.warp"
+use "../core/parser.warp"
+use "../core/of_lookups.warp"
 check(source: text) := view_of(keyword_rewrites(node_of(plain(tree(source))), [[is_lookup_word, lookup_phrase]]))
 print check("a of b")
 print check("z: list of int = [1]")

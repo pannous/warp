@@ -21,7 +21,7 @@ src/pipeline.rs `lower_with_sealed_quotes` runs, in order:
 | after | 10 | effects, late binding, main globals, diagnose, lint, data scope, declarations, inlining, self sums |
 
 About 200 steps; src/lowering is 57k lines, src/analyzer 9k. A used module's source runs SUGAR + DECLARATION
-(`lower_module_source`) minus the program-only passes. The warp twins: lib/compiler/passes.warp `passes` (8 twinned
+(`lower_module_source`) minus the program-only passes. The warp twins: core/passes.warp `passes` (8 twinned
 with Rust through src/compiler/self_hosted.rs TWINNED_PASSES) and `pure_passes` (33, the pure lane).
 
 Cost: lowering is ~5 ms of a 115 ms hello run (`WARP_PHASE_TIMES=1`); the payoff of merging is clarity and fewer

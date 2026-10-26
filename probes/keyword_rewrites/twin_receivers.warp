@@ -1,6 +1,6 @@
 # the warp twin of the sugar phrases' walk on grouped receivers (card keyword-rewrites): `(p).a` of a variable p is
 # `p.a`; a function's `(f).a` stays the call's
-use "../../lib/compiler/passes.warp"
+use "../../core/passes.warp"
 for source in ["p = {a: 1}; (p).a", "f() := {a: 1}; (f).a", "for p in [{a: 1}] { print (p).a }", "3 times (p).a"] {
 	print view_of(sugar_phrases(plain_node(parsed(source))))
 }

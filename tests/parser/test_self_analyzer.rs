@@ -1,4 +1,4 @@
-//! card emitter-takes (decision ignore-rust): lib/compiler/analyzer.warp gets the program after every lowering pass and
+//! card emitter-takes (decision ignore-rust): core/analyzer.warp gets the program after every lowering pass and
 //! gives the kinds emitter.warp reads; it must run on every listed source (tests/common/twins.rs analyzer_runs)
 use crate::common::twins::{analyzed, analyzer_runs, sources, view_json};
 use std::path::PathBuf;

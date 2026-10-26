@@ -35,7 +35,7 @@ Card warp-host-wasm-load (Soon), branch warp-host-wasm-load from origin/warp-hos
   only.
 - lib/c.warp: `strlen(s: text): i64 from 'c'`, the foreign declaration lines that card pure-c-imports (branch
   pure-c-imports) teaches the pure emitter to turn into `(import "c" "strlen" …)`.
-- lib/compiler/uses.warp: the pure lane follows `use "x.warp"` and keeps std `use os`. Nothing pure handles a
+- core/uses.warp: the pure lane follows `use "x.warp"` and keeps std `use os`. Nothing pure handles a
   .wasm `use` or import yet.
 - compiler-self reads std modules from the lib/ it was built from, so a new lib/wasm.warp needs a `warp rebuild self`.
 

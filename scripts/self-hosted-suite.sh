@@ -1,6 +1,6 @@
 #!/bin/bash
 # The suite through the warp compiler (card warp-pipeline-suite, notes/self_hosting.md): every test with
-# WARP_SELF_HOSTED=front (src/compiler/self_hosted.rs: parser.warp parses, the pass twins of lib/compiler/passes.warp
+# WARP_SELF_HOSTED=front (src/compiler/self_hosted.rs: parser.warp parses, the pass twins of core/passes.warp
 # replace their Rust passes, the rest stays Rust; =1 adds emitter.warp), the twin tests (parser::test_self_*) left out. Prints
 # "self-hosted: N passed / M" and the failures grouped by cause, the most frequent first.
 #   scripts/self-hosted-suite.sh [<tip>]               on the cloud lane: the pushed tip (default HEAD) plus a throwaway

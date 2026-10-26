@@ -36,7 +36,7 @@ kind switches they stand for. Done in slices per word family, each with its net 
 - The untyped single signatures still to type per kind: listed on the card (audit note 2026-10-18).
 
 ## The warp analyzer's signature table (Back-end focus, branch signature-table)
-- lib/compiler/signatures.warp parses the prelude's `from warp` / `from emitter` lines (overloads, aliases) from
+- core/signatures.warp parses the prelude's `from warp` / `from emitter` lines (overloads, aliases) from
   `module_source("prelude")`, a compile-time word (library_words.rs word_call) that becomes the embedded std module
   text, so the stage reads it from any working directory and in the browser. It answers emitted_call_kind,
   argument_result and overload_kind (call_result_kind) as Rust does: tests/parser/test_self_signatures.rs compares
@@ -48,8 +48,8 @@ kind switches they stand for. Done in slices per word family, each with its net 
   declared result passed by name fails (card function-declared); an apostrophe-heavy # comment broke
   analyzer.warp's parse (card comment-three).
 
-## Typing lib/compiler (decision compiler-typed, 2026-10-19)
-Every lib/compiler file declares parameter and result types, except the owners' analyzer.warp, emitter.warp,
+## Typing core (decision compiler-typed, 2026-10-19)
+Every core file declares parameter and result types, except the owners' analyzer.warp, emitter.warp,
 runtime.warp and the hot parser.warp. Types that are not usable yet stay `any`; each has a card:
 - a result that may be ø, `: text?`: "text? is no type" (card text-type; `int?` works)
 - a map: `{}` passed to `s: map` is "an Int" (card needs-map)

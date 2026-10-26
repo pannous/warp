@@ -2,7 +2,7 @@
 // prelude, passes, kind changes) on the file
 // args#1 names, its uses read from the folder args#2; its view goes to args#3 for pure_analysis_stage.warp. Run from
 // this folder: WARP_LIB=<checkout>/lib warp pure_passes_stage.warp <file> <its folder> <view.json>
-use "../../lib/compiler/passes.warp"
+use "../../core/passes.warp"
 use os
 use json
 probe_started = clock()

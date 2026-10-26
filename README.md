@@ -81,7 +81,7 @@ cargo build --release && cargo build --release -p warp-runtime   # binaries in t
 ```
 
 `warp-runtime` is the small runtime that standalone executables are made from; it belongs in the same folder as `warp`.
-`warp rebuild pure` then builds `compiler.wasm`, the compiler written in Warp (lib/compiler/), which `warp pure` runs.
+`warp rebuild pure` then builds `warp.wasm`, the compiler written in Warp (lib/compiler/), which `warp pure` runs.
 
 ## Run
 

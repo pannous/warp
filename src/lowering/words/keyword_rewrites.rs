@@ -3,7 +3,7 @@
 //! entry of a table instead of a pass of its own. One bottom-up walk applies a whole table at its place in the pass
 //! lists (src/pipeline.rs) and skips a program holding none of the table's words. A fact of the whole program an entry
 //! reads (its bindings) is computed once, before the walk, and handed in; a rewrite that needs another place in the
-//! order stays a pass. Twin: lib/compiler/scope.warp keyword_rewrites.
+//! order stays a pass. Twin: core/scope.warp keyword_rewrites.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::program_names::Bindings;

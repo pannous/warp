@@ -7,7 +7,7 @@ use "show.warp"
 use "text.warp"
 # a value as a boxed $Node
 held(value: Node): Node := value
-# the built-in node's parts (lib/compiler/node.warp): a key's operator is its code above the kind bits, the
+# the built-in node's parts (core/node.warp): a key's operator is its code above the kind bits, the
 # position of its spelling here (src/operators/codes.rs OP_CODES)
 operator_spellings(): list := ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
 	"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",

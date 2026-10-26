@@ -3,7 +3,7 @@
 ## Sources
 - Baseline (measured by Supervisor on the Mac, main 6b7abc92de): `scripts/lib_bench.sh` → 6b7abc92de.txt (copy here;
   Mac: ~/dev/angles/warp/data/lib_bench/6b7abc92de.txt). parsed 119/119, pure-compiled 82/119, Rust 96/119
-  (lib/compiler/runtime/ counted apart).
+  (core/runtime/ counted apart).
 - Pure suite at 6b7abc92de: suite-6b7abc92de.out (copy here; Mac: /Volumes/Build/measure-pure/suite-6b7abc92de.out),
   5623 of 10720 failed (last line of the file) → 5097 pass.
 - Box repro per file (origin/main 32af43655, branch libgap-lines-clash): `pure1.sh <tree> <file>`, the exact
@@ -19,27 +19,27 @@
 | file | pure verdict | root cause | where the fix belongs | owner |
 |---|---|---|---|---|
 | lib/shell.warp | passes.warp stage: `lines(any) is declared in both file.warp and text.warp` (the bench showed it as a wasm `unreachable` trap) | two std modules declare `lines` with one signature; uses.warp claim_signatures (twin of loader.rs) refuses | lib/text.warp | **FIXED** card pure-lines-clash, branch libgap-lines-clash |
-| lib/math.warp | the unknown name x | a bodiless foreign declaration `sqrt(x: number): number from warp` is not read as a declaration: its parameter leaks as a name | foreign forms / definition heads (lib/compiler/foreign_forms.warp, definitions.warp) | grok-warp-code-3 (sugar-foreign-forms), grok-warp-ffi (pure-c-imports), grok-warp-code (sugar-definitions) |
-| lib/channels.warp | a call of sleep with 2 arguments | `5 ms` (and `5ms`): unit literals unknown in the pure lane ("the unknown name ms") | units/time literal fold (lib/compiler, parser or time_arithmetic) | Claude (lib/compiler) |
-| lib/draw.warp | the unknown name view_width | host global view_width/view_height not known to emitter.warp | lib/compiler/emitter (host words) | emitter (Claude) |
+| lib/math.warp | the unknown name x | a bodiless foreign declaration `sqrt(x: number): number from warp` is not read as a declaration: its parameter leaks as a name | foreign forms / definition heads (core/foreign_forms.warp, definitions.warp) | grok-warp-code-3 (sugar-foreign-forms), grok-warp-ffi (pure-c-imports), grok-warp-code (sugar-definitions) |
+| lib/channels.warp | a call of sleep with 2 arguments | `5 ms` (and `5ms`): unit literals unknown in the pure lane ("the unknown name ms") | units/time literal fold (core, parser or time_arithmetic) | Claude (core) |
+| lib/draw.warp | the unknown name view_width | host global view_width/view_height not known to emitter.warp | core/emitter (host words) | emitter (Claude) |
 | lib/wagi.warp | the unknown name wasi_environment | prelude `wasi_environment(): text from warp` not implemented by emitter.warp | emitter / WASI | Claude |
 | lib/extra/netbase.warp | the call fetch(…) | prelude `fetch(url, options...): text from emitter` not expanded by emitter.warp | emitter | Claude |
-| lib/markup.warp | a test of the type pair | `value is pair` not in emitter runtime_words core_type_words (lib/compiler/emitter/runtime_words.warp:159) | emitter | Claude |
+| lib/markup.warp | a test of the type pair | `value is pair` not in emitter runtime_words core_type_words (core/emitter/runtime_words.warp:159) | emitter | Claude |
 | lib/router.warp | the call answer(…) | `route.answer(request)`: calling a function value held in a record field | emitter closures / lambdas.warp | Claude (emitter / folds) |
 | lib/units.warp | the call shown(…) | method of a class (`q.shown()`) | classes | Warp Classes (pure-class-methods) — skipped |
 | lib/case_table.warp, lib/sound.warp, lib/uncertain.warp | an instance of X, a class with methods | classes with methods | classes | Warp Classes — skipped |
-| lib/compiler/compiler.warp, lib/compiler/passes.warp | timed out after 120 s | pure lane too slow on the compiler itself | lib/compiler | Claude — not touched |
-| lib/compiler/emitter.warp | `module is a main-level variable: declare it global module` | emitter.warp assigns the main-level `module` inside a function | lib/compiler/emitter.warp | emitter (Claude) |
+| core/compiler.warp, core/passes.warp | timed out after 120 s | pure lane too slow on the compiler itself | core | Claude — not touched |
+| core/emitter.warp | `module is a main-level variable: declare it global module` | emitter.warp assigns the main-level `module` inside a function | core/emitter.warp | emitter (Claude) |
 
 ## Files neither lane compiles
-- 10× `unknown type Body of parameter body` + control_flow/encoding/literals/module_layout: all lib/compiler/emitter/*.warp,
+- 10× `unknown type Body of parameter body` + control_flow/encoding/literals/module_layout: all core/emitter/*.warp,
   emitter.warp's parts (emitter.warp:19-30 `use "emitter/…"`); Body/Function are declared in emitter.warp, so a part
   compiled alone cannot know them. Not a pure-lane gap: a bench artefact. Options (owned, not done): count
-  lib/compiler/emitter/ apart like lib/compiler/runtime/ in scripts/lib_bench.sh, or move the shared classes into a
+  core/emitter/ apart like core/runtime/ in scripts/lib_bench.sh, or move the shared classes into a
   part each part uses.
 - foreign_forms.warp (`unknown type Parser`, a parser.warp part), rewrites.warp (word_lines from library_calls.warp),
   runtime.warp, time_arithmetic.warp, aliases.warp, extrema.warp, fast_math.warp, prelude.warp, wasmtime.warp: missing
-  uses / library-word clashes; lib/compiler ones owned.
+  uses / library-word clashes; core ones owned.
 
 ## Overlap with the pure suite errors (suite-6b7abc92de.out, counts of ✗ lines matching)
 - `the unknown name x` 106 — same family as math.warp: definition heads with a return/type clause (`int g(x) = …`,
@@ -64,14 +64,14 @@ parser.warp shapes (probe /tmp/lg/v/shapes.warp):
 - `int g(x) = e` / `:= e` → List Space [int, Assign|Define(head, e)] — C-style result type in front, not handled
 - `sqrt(x: number): number from warp` → [Colon(Sqrt(ø, (x: number)), number), from, warp] — sqrt parsed as the √
   operator; is_runtime_declaration drops only `from runtime`, not `from warp` / `from emitter`
-Fix site: lib/compiler/definitions.warp (definition, is_head, result_held, is_runtime_declaration); keyword forms
+Fix site: core/definitions.warp (definition, is_head, result_held, is_runtime_declaration); keyword forms
 (`def …`) now move to lib/sugar/functions.warp on branch sugar-definitions (Warp Code), which also edits
 definitions.warp → collision risk. foreign_forms.warp (Warp Code 3) handles `from 'c'` lines, not `from warp`.
 Suite (6b7abc92de): of 106 "unknown name x" failures ~30 are definition heads; the rest are other forms
 (`x : 100 int`, `x be 3`, `real x`, `x : a+b` quotes, `{x*x}(x=5)`, `! Pure` effect annotations, `where`, `fast f(x)`).
 
 ## 2026-10-23 ~02:30: card pure-def-heads (branch libgap-def-heads, fix 408d9b96f, tip a6ec951d2)
-lib/compiler/definitions.warp: keyword-less typed heads (`f(x): T = e`, `f(x: T) = e`, `f(x) as T := e`/`= e`,
+core/definitions.warp: keyword-less typed heads (`f(x): T = e`, `f(x: T) = e`, `f(x) as T := e`/`= e`,
 `T f(x) = e`/`:= e`) become `f(x): T := e` (declared_result_form, result_held unchanged); `… from warp|emitter` lines
 go like `from runtime`. Measured with `warp test --each` (runtime-split's release binary as host, compiler.wasm built by
 `warp rebuild pure` from each lib; base = origin/main dcba843fd lib):
@@ -97,7 +97,7 @@ Not covered (other root causes): `def`-keyword variants (Warp Code), `fast f(x)`
 - core_type_words pair: "key". Measured (pure-only probes): markup.warp moves to "unknown name option" (element blocks); test_type_word_scopes:4 moves to Error("no field 0") (for item in a map held as any: separate bug). Suite gain 0 alone.
 
 ## pure-property-accessors (Ready, libgap-canvas-props 3bf55c469)
-- New lib/compiler/property_accessors.warp, hooked in passes.warp with_used before with_type_module_uses.
+- New core/property_accessors.warp, hooked in passes.warp with_used before with_type_module_uses.
 - Pitfalls met: a global fn `written` shadowed rewrites.warp's local `written: text`; `found#1 + "." + …` parses as found#(1 + …) ("not an int"); lambda `entry => entry#2` -> loop_item error; scope.warp counts `canvas.width = …` as binding canvas.
 - Measured: 17 files, 89 -> 77 of 160 failed (+12, 0 regressions), base main a7479a2c2 + system-values.
 ## pure-field-calls (Ready, libgap-field-calls 64968d5ee)
@@ -153,7 +153,7 @@ Rust lowering: class_methods/operators.rs operator_calls = compile-time static r
 ## PARKED: pure-unit-literals (2026-10-23 10:35 CEST) until Warp's conversion mechanism (`5 as ms`, as/convert) exists
 - State: branch libgap-units-2, tip 50addcb2a (pushed), off main 38458226b; NOT measured, NOT Ready.
 - Accepted design: one pure sugar rule in lib/sugar/units.warp, `rewrite $n * $u => quantity_value($n, $u) where $n is literal and $u is unit`;
-  the new rewrites.warp condition `is unit` reads lib/units.warp's unit_definitions at compile time (lib/compiler/unit_table.warp:
+  the new rewrites.warp condition `is unit` reads lib/units.warp's unit_definitions at compile time (core/unit_table.warp:
   exact numerator/denominator per unit, quantity, long name → short unit; simple `quantity`/`unit X := N U`/`U/N`/`name` lines only, no SI prefix generation).
   No template computation needed: the unit word travels in quantity_value; the emitter scales it (emitter/quantities.warp quantity_amount).
   The analyzer keeps the written unit (quantity_facts → kinds.quantities {units, refusal}); showing via print/str/text/joins prints amount/scale + unit
@@ -171,8 +171,8 @@ Rust lowering: class_methods/operators.rs operator_calls = compile-time static r
   Older probes /tmp/lg/u/p, overload/type probes /tmp/lg/ov (o1–ob, t1/t2 timing), bisect /tmp/lg/bis (run.sh, out).
 - Unit table checked in the Rust lane: km 1000/1, ms 1/1000, hours 3600, inch 127/5000, mi 201168/125, lb 45359237/1e8, meters 1, min 60.
 ## pure-as-conversions (2026-10-23 ~11:10 CEST, branch libgap-as-conversions off d9490fc59) — PAUSED for Supervisor plan OK
-- Pushed 22c2ff825: lib/compiler/conversions.warp (new file, ~70 lines) + definitions.warp hook + errors.data own_type_conversion. Violates the
-  later soft pass ban (new lib/compiler file): uncommitted fold of it into definitions.warp sits in the tree (D conversions.warp, M definitions.warp).
+- Pushed 22c2ff825: core/conversions.warp (new file, ~70 lines) + definitions.warp hook + errors.data own_type_conversion. Violates the
+  later soft pass ban (new core file): uncommitted fold of it into definitions.warp sits in the tree (D conversions.warp, M definitions.warp).
 - Local-only tree libgap-as-units (not pushed): merge of libgap-units-2 + quantity_as (`3 km as m`, `5 as ms`) commit aaec4aa36; still has unit_table.warp (new file, must fold).
 - Survey probes queued (box slots full 30+ min): /tmp/lg/ac (a1-a12 built-in/units, c1-c8 program conversions; base.out vs after.out, PID 2249671),
   /tmp/lg/acu (u1-u6 units with RUST_BACKTRACE=1, units.out, PID 2261879). Test set for counts: /tmp/lg/act (114 .warp files with `as`), measure.sh in libgap/ac.

@@ -16,5 +16,5 @@ fn a_missing_compiler_is_an_error_naming_rebuild() {
 		.expect("warp runs");
 	let said = String::from_utf8_lossy(&run.stdout).to_string() + &String::from_utf8_lossy(&run.stderr);
 	assert!(said.contains("warp rebuild pure"), "{said}");
-	assert!(!folder.join("compiler.wasm").exists(), "built on demand: {said}");
+	assert!(!folder.join("warp.wasm").exists(), "built on demand: {said}");
 }

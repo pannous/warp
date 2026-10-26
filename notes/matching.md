@@ -184,7 +184,7 @@ Rust compiler. Probe of the gaps: probes/self_hosting/code_patterns.warp. Steps 
 | 8 ★ | text-patterns | text patterns for the lexer: `"0x" + rest`, prefix/suffix, character classes | done (Text patterns below) |
 | 9 | node-exhaustive | exhaustiveness over the Node kinds and sealed key ops, so a pass's match misses no shape | runtime "no case" |
 | 10 | pattern-dispatch-speed | many-arm matches compiled to one decision tree (switch on kind/op first); measured on the passes | arm by arm |
-| 11 | patterns-second-pass | rewrite lib/compiler (passes first, then parser, analyzer, emitter) as rule sets with 1–10; judged by the warp-pipeline-suite count and line count | — |
+| 11 | patterns-second-pass | rewrite core (passes first, then parser, analyzer, emitter) as rule sets with 1–10; judged by the warp-pipeline-suite count and line count | — |
 
 ## Text patterns (card text-patterns, step 8)
 A sum of text pieces and holes is a pattern in `match`/`switch` arms and after `is`: `"0x" + rest`, `name + ".txt"`,

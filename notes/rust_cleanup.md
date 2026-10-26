@@ -32,7 +32,7 @@ type-theory, errors; emitter → printing, codegen, format, runtime-speed; libra
 New feature gaps (spec-gaps) stay where they are.
 
 ## Warp files in the Rust chain
-Where a warp part is finished and clean (lib/compiler passes such as number_words.warp, times_phrases.warp,
+Where a warp part is finished and clean (core passes such as number_words.warp, times_phrases.warp,
 interpolation.warp, sugar.warp; library words already moved to lib/*.warp), the Rust pipeline runs it instead of
 keeping a Rust twin, and the Rust twin is deleted. Condition: compile time measured before and after (each pass
 runs as compiled warp at compile time); a pass that costs too much keeps its Rust form until the prelude parsing

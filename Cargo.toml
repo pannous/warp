@@ -220,7 +220,7 @@ opt-level = "z"
 opt-level = 3
 
 # warp-host (notes/warp_host.md, card warp-host-size): optimized for size, 6.5 MB instead of release's 11.5 MB; wasmtime's
-# runtime stays at 3, and Cranelift at "z" compiles compiler-self in 4.1 s instead of 2.4 s, once per cache
+# runtime stays at 3, and Cranelift at "z" compiles warp-self in 4.1 s instead of 2.4 s, once per cache
 # (`cargo build --profile host -p warp-runtime --features host --bin warp-host`, target/host/warp-host)
 [profile.host]
 inherits = "release"

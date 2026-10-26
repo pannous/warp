@@ -7,7 +7,7 @@ use crate::words::MAP_KEYS;
 pub const NO_FIELD_PREFIX: &str = "no_field_";
 /// How a missing field's error begins: `no field title`
 pub const NO_FIELD_MESSAGE: &str = "no field ";
-/// The runtime error of a missing field whose name is known only at run time (lib/compiler/runtime.warp map_get):
+/// The runtime error of a missing field whose name is known only at run time (core/runtime.warp map_get):
 /// the trap detail holds the name
 pub const MISSING_FIELD: &str = "missing_field";
 /// struct_body(node): the field list of an instance of a declared type, else the node itself
@@ -905,7 +905,7 @@ impl WasmGcEmitter {
 				s.call(f, MAP_COLUMN);
 			});
 		}
-		// ⚠ WARP DOES THIS DIFFERENTLY: text index_of counts graphemes → lib/compiler/runtime/text_words.warp
+		// ⚠ WARP DOES THIS DIFFERENTLY: text index_of counts graphemes → core/runtime/text_words.warp
 		// collection_contains(xs, x) (`x in xs`, `xs.has(x)`): yes when a map has the key x or a list the element x, else
 		// no (decision in-bool); collection_position(xs, x) (`xs.index_of(x)`): the 1-based position of x in a list, 1/0
 		// for a map key

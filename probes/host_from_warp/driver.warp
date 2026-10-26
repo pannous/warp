@@ -20,7 +20,7 @@
 # TODO(host): in-process, a .warp file is compiled as code of the current folder (compile_wasm takes code, not a path).
 # TODO(pure-c-imports): C imports and the shell words in programs (`strlen(s: text): i64 from 'c'`, os.exec) are
 #   refused by today's compiler-self ("outside the core"); they unblock with the card pure-c-imports
-#   (lib/compiler/c_imports.warp and a rebuilt compiler-self). The driver needs none of them itself.
+#   (core/c_imports.warp and a rebuilt compiler-self). The driver needs none of them itself.
 use os
 use file
 

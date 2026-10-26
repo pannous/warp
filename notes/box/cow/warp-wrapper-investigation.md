@@ -26,8 +26,8 @@ over, outputs. M = measured this session, I = inferred from code/notes.
   probes/: pure 17, rebuild 9, run 8, compile --wasm 6, lower --json 4, eval 4 (M). AGENTS.md/CLAUDE.md: none real.
 
 ### 2. The self-hosted pipeline today
-- Sources: lib/compiler/*.warp (parser 184 KB, emitter 172 KB, analyzer, passes, runtime/…); entry
-  lib/compiler/compiler.warp: `compiler.warp <source> <wasm> [<folder> [<lib>]]`, source in, wasm bytes written to
+- Sources: core/*.warp (parser 184 KB, emitter 172 KB, analyzer, passes, runtime/…); entry
+  core/compiler.warp: `compiler.warp <source> <wasm> [<folder> [<lib>]]`, source in, wasm bytes written to
   args#2, refusal raised ("outside the core: …") (M). Design: notes/standalone_compiler.md, notes/self_hosting.md,
   notes/self_hosting_dropped.md.
 - Built by `warp rebuild [pure|self]` (src/compiler/standalone.rs): compiler.wasm = compiler.warp compiled by the Rust
@@ -53,8 +53,8 @@ over, outputs. M = measured this session, I = inferred from code/notes.
 | `warp version` | | 0.029 s |
 All print "Hello 🌍2026" (M). Parity on 12 random samples/: 1 identical (99-bottles), 9 refused "outside the core"
 (class instance, divisors, match, j-i interpolation, `as binary`, `on`, `n times`, map, FFI), 2 failed with
-"no message for the diagnostic (parse_error …) in lib/compiler/errors.data" although errors.data has parse_error (a
-pure-lane diagnostics bug; lib/compiler unchanged since 9fc81b, so not version skew) (M). `use os; args` refused (M).
+"no message for the diagnostic (parse_error …) in core/errors.data" although errors.data has parse_error (a
+pure-lane diagnostics bug; core unchanged since 9fc81b, so not version skew) (M). `use os; args` refused (M).
 Errors carry file:line:col and the source line (M). Exit code 1 on refusal (M).
 
 ### 4. Runtimes
@@ -72,7 +72,7 @@ message lookup bug; `use` of std modules only partly (uses.warp). Running the pr
 runner (Node GC values back to text, WASI fd_write, fuel/time limit).
 
 ### 6. Ownership
-Wrapper needs no change in lib/compiler, emitter, folds, aliases/signatures, error positions, standalone.rs or WASI.
+Wrapper needs no change in core, emitter, folds, aliases/signatures, error positions, standalone.rs or WASI.
 Board (Mac `todo list` in ~/dev/angles/warp; from ~ it fails "not a git repository"): related open cards pure-self,
 pure-big-int-power, self-showcase, user-cloud, topics self-hosted / self-hosted-2; notes name cards standalone
 (reopened 2026-10-21, WASI), warp-pure, installed-compilers, compiler-wasm, under-pure-2, cloud-lane-narrow. No

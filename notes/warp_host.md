@@ -26,7 +26,7 @@ count.
 
 - Source: crates/warp-runtime/src/warp_host/
   - main.rs: commands, finding lib/ and the compiler, running a module
-  - words.rs: std_io, and compiler.wasm's host.read/fetch/warn
+  - words.rs: std_io, and warp.wasm's host.read/fetch/warn
   - shell.rs: std_io's words of lib/shell.warp (cd, mkdir, copy, move, touch, remove …)
   - nodes.rs: GC nodes in and out
   - cache.rs: kept values and machine code
@@ -34,7 +34,7 @@ count.
 - It reuses warp-runtime's engine settings, host words, libm and libc linking. Feature `host` (= `compiler`, parallel
   compilation, wasmtime-wasi p1); feature `wat` adds WAT text. Build: `cargo build --profile host -p warp-runtime
   --features host --bin warp-host` (target/host/warp-host, 6,499,736 B; see Size).
-- Compiler: compiler-self.wasm by default; `--compiler full` uses compiler.wasm (built by warp-rust). It is looked for
+- Compiler: warp-self.wasm by default; `--compiler full` uses warp.wasm (built by warp-rust). It is looked for
   beside warp-host first (its own folder, a symlink to it followed), then in `<lib>/../data/` (a checkout built by
   `warp rebuild`), then in `<bin>/../share/warp/`.
   - The build puts both beside the binary (card warp-host-compiler-beside): crates/warp-runtime/build.rs, with the
@@ -42,12 +42,12 @@ count.
     (a cargo warning when they are missing). Test: tests/host/test_host_compiler_beside.sh.
   - lib/ is found the way the launcher finds it: WARP_LIB, else the nearest lib/ holding compiler/ above the source or
     the current folder, else the installed one.
-  - compiler-self reads std modules (`use os`) from the lib/ it was built from (its module_directory), not from the lib/
+  - warp-self reads std modules (`use os`) from the lib/ it was built from (its module_directory), not from the lib/
     it is given. So a new std word such as os.run needs a `warp rebuild self`.
 - Imports linked:
   - WASI p1, with stdio, the environment and args inherited, and preopens `/` and `.`
   - warp-runtime's host words (local_offset, clock, random, sleep_ms, exit, …), libm, and libc under `c`
-  - host.std_io; for compiler.wasm also host.read, fetch and fetch_within (by curl), and warn
+  - host.std_io; for warp.wasm also host.read, fetch and fetch_within (by curl), and warn
   - any other import traps when called
 - std_io:
   - os: env, args, cwd, input, stdin, kept, keep, command, exec, run, run_wasm, compile_wasm
@@ -62,7 +62,7 @@ count.
     - A failure names the path: `file.list: nosuch: No such file or directory (os error 2)`.
   - The file words take `~` and `~/…` as the home folder. A relative path is in the process's working directory, so
     after `cd` they follow it, as commands do.
-  - compiler-self's output calls them through std_io, so no `warp rebuild self` is needed for them.
+  - warp-self's output calls them through std_io, so no `warp rebuild self` is needed for them.
   - A failure answers the program an Error with the same text as warp-rust's std_adapters.rs, e.g. `os.command: sh -c
     exit 3 failed (exit status: 3): …`.
   - `run(argv)` (lib/os.warp) gives `{status, out, err}` with trailing newlines dropped. A failing command is no error
@@ -75,16 +75,16 @@ count.
   name and trap_detail), status 1; WARP_HOST_DEBUG=1 adds the wasm backtrace.
 - Cache (WARP_HOST_CACHE, else $XDG_CACHE_HOME/warp-host, else ~/.cache/warp-host), and a shipped one read after it,
   never written: WARP_HOST_SHIPPED_CACHE, else `<bin>/../share/warp/host-cache` or `<bin>/host-cache`:
-  - A compiler module's machine code (`<hash>.cwasm`, ~18 MB for compiler-self, keyed by its bytes and the engine's
+  - A compiler module's machine code (`<hash>.cwasm`, ~18 MB for warp-self, keyed by its bytes and the engine's
     compatibility hash).
   - Kept values (`<hash>.kept`, keyed by the compiler's bytes, lib/'s files (paths within lib/ and contents) and the
     name with lib/'s path taken out (compiler.warp names them "… runtime words of <lib>"), so the key is the same on
     every install). compiler.warp's lowered runtime words are ~380 KB.
   - The machine code of modules run by run_wasm, keyed by their bytes, and kept in memory for the rest of the run too.
   - WARP_HOST_DEBUG=1 prints the compiler, lib/ and kept-values key of a compile.
-  - Values with a big integer, a ratio or a function aren't kept. compiler.wasm's runtime words hold such an Int, so
+  - Values with a big integer, a ratio or a function aren't kept. warp.wasm's runtime words hold such an Int, so
     `--compiler full` lowers them on every run (~8 s).
-- Texts reach the program through its own `new_text(ptr, len)`, which copies them out of linear memory. compiler-self
+- Texts reach the program through its own `new_text(ptr, len)`, which copies them out of linear memory. warp-self
   exports no text_heap, so the host writes into pages past the program's memory and reuses them while the memory size
   stays the same.
 
@@ -108,9 +108,9 @@ count.
     same structs, made by the host of the program's structural types (card host-run-wasm-float; it had failed
     `run wasm: 0`).
 - `compile_wasm(code)`: the code, a program of the current folder, compiled in-process by warp-host's compiler
-  (compiler-self, or compiler.wasm with `--compiler full`); its bytes, or the refusal as an Error.
+  (warp-self, or warp.wasm with `--compiler full`); its bytes, or the refusal as an Error.
   - `run_wasm(compile_wasm("6*7"))` gives 42: an eval.
-- Both go through std_io like os.run, so compiler-self's output calls them without an emitter change. The old
+- Both go through std_io like os.run, so warp-self's output calls them without an emitter change. The old
   `host.run(ptr, len) -> i64` of warp-rust (src/host/native.rs) passes bytes in linear memory and gives only an i64;
   pure modules have no such call, and std_io's node in, node out fits better. warp-rust has no os.run_wasm yet.
 - Timings (box, warm, profile host; the program `use os`+`use file` itself takes ~0.85 s to compile and run):
@@ -213,7 +213,7 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   - `owned_text` (card warp-host-repl-fixes): a `char *` the caller owns, strdup's or readline's, is copied into a
     text like `text` and then given to free(); NULL is ø, freed never. Spelled:
     - in a foreign line, a result type only: `readline(prompt: text): owned_text from 'edit'`
-      (lib/compiler/c_imports.warp)
+      (core/c_imports.warp)
     - in warp.c_functions, the result field `owned_text` (c_signatures.rs CPointer::OwnedText)
     - in warp.c_calls, the result letters `ft`, "free the text", beside `t` and `ot` (ffi.rs OWNED_TEXT_LETTERS)
   - A `text` result is built with the module's new_text and needs its text_heap; pure modules don't export text_heap
@@ -243,7 +243,7 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   - So Cranelift, the component model and async that wasmtime-wasi p1 pulls in, and WASI add ~9.7 MB on Linux. The
     split between them is not measured.
 - Engine: warp-runtime's deterministic_config, with GC and function references on. Exceptions are on too, because
-  wasmtime 49 enables them whenever its `gc` feature is (config.rs:2555); compiler-self.wasm has a tag section and runs.
+  wasmtime 49 enables them whenever its `gc` feature is (config.rs:2555); warp-self.wasm has a tag section and runs.
   The wasm stack is 240 MB on a 256 MB thread.
 - Timings: wall clock, one run each unless noted, release build.
 
@@ -251,7 +251,7 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   |---|---|
   | `run hello.warp`, empty cache (Cranelift compile + lowering the runtime words) | 29.4 s |
   | the same, machine code cached but no kept values | 22.1 s |
-  | the same, kept values but no machine code (Cranelift compiling compiler-self.wasm) | 7.3 s |
+  | the same, kept values but no machine code (Cranelift compiling warp-self.wasm) | 7.3 s |
   | `run hello.warp`, warm | 0.12–0.15 s (3 runs) |
   | `run '6*7'`, warm | 0.11 s |
   | `compile hello.warp hello.wasm` (1,685 B), warm | 0.12–0.14 s |
@@ -263,7 +263,7 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
 ## The lib/ of a compile (card compiler-rebuild-policy)
 
 warp-host resolves lib/ as WARP_LIB, else the lib/ beside the binary, else the one above the program or the current
-folder. It hands that lib/ to the compiler run as WARP_LIB, so a compiler-self.wasm built anywhere reads the std
+folder. It hands that lib/ to the compiler run as WARP_LIB, so a warp-self.wasm built anywhere reads the std
 modules of that lib/. How agents get a compiler pair without building it: notes/compiler_rebuilds.md.
 
 ## Tests
@@ -298,21 +298,21 @@ hello.wasm, warm, 2–3 runs. Host suite 29/29 and launcher suite 22/22 pass wit
 | (b) wat off by default | 11.39 MB | 32 s | 0.14–0.16 s | 0.11 s | 6–25 ms | tests assemble their WAT with wat2wasm |
 | (c) opt-level "s" | 7.70 MB | 34 s | 0.13–0.16 s | 0.12–0.15 s | 7–9 ms | |
 | (c) opt-level "z" | 6.43 MB | 38 s | 0.14–0.19 s | 0.13–0.16 s | 8–10 ms | Cranelift at z compiles slower |
-| + parallel compilation, opt 3 | 11.47 MB | 27 s | 0.14–0.17 s | 0.11 s | 5–7 ms | compiler-self's machine code 8.3 → 2.4 s |
+| + parallel compilation, opt 3 | 11.47 MB | 27 s | 0.14–0.17 s | 0.11 s | 5–7 ms | warp-self's machine code 8.3 → 2.4 s |
 | + parallel compilation, "s" | 7.77 MB | 25.5 s | 0.13–0.15 s | 0.10 s | 6 ms | machine code 2.6 s |
 | **+ parallel compilation, "z" (profile host, the default)** | **6.50 MB** | 26 s | 0.15–0.18 s | 0.11–0.12 s | 7–8 ms | machine code 4.1 s |
 | + a shipped .kept (384 KB, any machine) | 6.50 MB + 0.38 MB | **4.1 s** | 0.15 s | 0.12 s | | only the machine code is made |
 | + a shipped .kept and .cwasm (18 MB, one target) | 6.50 MB + 18.5 MB | **0.15 s** | 0.15 s | 0.12 s | | |
-| (a) no Cranelift, precompiled compiler-self | ~2.2 MB (estimate) | — | — | — | — | can't run `run`: see below |
+| (a) no Cranelift, precompiled warp-self | ~2.2 MB (estimate) | — | — | — | — | can't run `run`: see below |
 | (d) hand-written WASI p1 instead of wasmtime-wasi | ~6.0 MB (estimate) | same | same | same | same | not built: ~0.4–0.5 MB for ~300 lines |
 | (e) wasmtime as a shared library (C API) | ~0.5–0.8 MB + 21–32 MB lib (estimate) | 2–4 s machine code + 23 s kept | ~same | ~same | 6 ms (prototype) | see below |
 
-- Cold start: 23 s of the ~26 s is compiler-self computing its kept values (the lowered runtime words), ~2–4 s is
-  Cranelift compiling compiler-self. A shipped `.kept` removes the first, so a fresh install's first run takes ~4 s;
+- Cold start: 23 s of the ~26 s is warp-self computing its kept values (the lowered runtime words), ~2–4 s is
+  Cranelift compiling warp-self. A shipped `.kept` removes the first, so a fresh install's first run takes ~4 s;
   shipping the machine code too makes it warm but adds 18 MB per target, against the goal (Supervisor: ship the
   .kept only).
 - Packaging (card warp-host-run-wasm): packaging/host_cache.sh <dir> fills <dir>/host-cache with the .kept files of
-  one hello run in a tarball's layout (warp-host, compiler-self.wasm, lib/). release.yml builds warp-host
+  one hello run in a tarball's layout (warp-host, warp-self.wasm, lib/). release.yml builds warp-host
   (`--profile host`) for each target, makes host-cache once in the compilers job and puts warp-host and host-cache in
   every tarball. deb/rpm install it in /usr/share/warp/host-cache, the wheel in <env>/share/warp/host-cache, the
   formula in pkgshare. Checked on the box with a staged tarball: nfpm's .deb, unpacked, with a fresh HOME runs hello
@@ -320,7 +320,7 @@ hello.wasm, warm, 2–3 runs. Host suite 29/29 and launcher suite 22/22 pass wit
 - Chosen default: profile host (opt-level "z", wasmtime's runtime at 3), parallel compilation, no wat. It is the
   smallest with warm times within noise of opt-level 3 (the programs' machine code is Cranelift's either way, so the
   opt-level only slows the host and Cranelift itself). `--release` still builds the 11.5 MB fast one.
-- (a) Without Cranelift: compiler-self could load as a precompiled `.cwasm`, but every program it compiles is a new
+- (a) Without Cranelift: warp-self could load as a precompiled `.cwasm`, but every program it compiles is a new
   module that needs machine code. Pulley (wasmtime's interpreter) gets its bytecode from Cranelift too, and Winch is
   built on Cranelift's assembler and has no GC or exceptions. So a host without Cranelift runs only modules compiled
   elsewhere. Estimate: the 1.57 MB stub plus ~0.6 MB of WASI.
@@ -344,7 +344,7 @@ hello.wasm, warm, 2–3 runs. Host suite 29/29 and launcher suite 22/22 pass wit
     struct layout change would be undefined behaviour, not an error. `brew upgrade wasmtime` swaps the library under
     the host; the cached machine code is then refused ("Module was compiled with incompatible version '49'") and
     rebuilt. So the host would pin a version and ship the library beside itself, or be rebuilt with every upgrade.
-  - Times: the same engine. The prototype compiled compiler-self.wasm in 2.1 s (parallel) and loaded its .cwasm in
+  - Times: the same engine. The prototype compiled warp-self.wasm in 2.1 s (parallel) and loaded its .cwasm in
     2 ms, and ran hello.wasm in 6 ms. Cold start would still be dominated by the 23 s of kept values.
   - Work: nodes.rs, words.rs, ffi.rs, cache.rs and c_calls.rs's linking use the Rust API (Rooted, StructRef, Caller,
     Linker), so they would be rewritten against the C API: ~1500 lines of unsafe code (estimate).
@@ -356,7 +356,7 @@ unique_lines, find_files, file_size, info, which, glob, list_files. tests/host/t
 Not yet, for reasons outside warp-host:
 - `pwd`/`cwd` after `cd` still give the start folder. The pure compiler computes a definition without parameters
   (`cwd := std_io(…)`, `pwd := cwd`) once, where warp-rust runs it at every read; and `f() := …` has no bare `f`.
-- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (lib/compiler/runtime/extended/wasi.warp), not
+- `cat`/`read` and the prelude's file reads go through the runtime's own WASI (core/runtime/extended/wasi.warp), not
   std_io. So they take no `~`, and a relative path stays in the start folder (WASI's preopened `.`) after `cd`.
 - `ls("nosuch")` traps (`node length`): the comprehension takes list_files's Error as a list. `list_files("nosuch")`
   itself is a catchable Error.
@@ -385,7 +385,7 @@ Adopted from warp-rust's `compile --aot` and `build` (notes/aot.md), in crates/w
     and the last 32 bytes). When it carries a program it runs that with all its arguments, so `app --help` is the
     program's, and prints the value as `warp-host f.warp` does. It needs no compiler, lib/ or cache.
   - It is one binary: WASI, std_io (shell words, commands, run_wasm) and C calls work as in warp-host. compile_wasm
-    still needs a compiler-self.wasm to be found.
+    still needs a warp-self.wasm to be found.
   - macOS: appending after the signature breaks it. Instead, the signature is dropped, the program goes inside
     __LINKEDIT (macho.rs), and the file is signed ad hoc with `codesign --sign - --force`.
     `codesign --verify --strict` passes (tested on the Mac, arm64).
@@ -410,7 +410,7 @@ Adopted from warp-rust's `compile --aot` and `build` (notes/aot.md), in crates/w
 
   The executable is warp-host plus the deflated machine code. On the Mac it came out smaller than warp-host itself:
   the linker's signature is replaced by codesign's.
-- The optional precompiled compiler-self.cwasm already exists as the shipped host-cache's .cwasm (18–19 MB per
+- The optional precompiled warp-self.cwasm already exists as the shipped host-cache's .cwasm (18–19 MB per
   target, see Size). It is opt-in through packaging (packaging/host_cache.sh), so no second mechanism was added.
 
 ## Next

@@ -1,6 +1,6 @@
 # lib/ as precompiled wasm modules: runtime.wasm + on-demand modules loaded by warp-host
 
-Investigation and design, 2026-10-23 10:00–10:15 CEST. No lib/compiler or src/ edits, nothing committed.
+Investigation and design, 2026-10-23 10:00–10:15 CEST. No core or src/ edits, nothing committed.
 Base: worktree `/workspace/cow/trees/lib-wasm-modules` = `origin/warp-host-wasm-load` `4e3808b76` (not yet in main; main is `7b437156b`).
 Probes: `/workspace/cow/scratch/lwm/` (x1 GC/tag link, x2 startup, x3 sqlite3 naming, x4 WASI from a module; `w2w` = a tiny wat→wasm built offline with the `wat` 1.259 crate).
 warp-host used: `/workspace/cow/trees/warp-host-wasm-load/target/host/warp-host` (built 03:27 CEST from 4e3808b76, no `wat` feature).
@@ -55,7 +55,7 @@ C declarations), **CT** (compile-time: rewrite rules, operator/alias declaration
 "defs" = lines with `:=`. Verdict: **R** = core runtime.wasm, **M** = good on-demand module, **I** = keep inline/source (too thin, or must be
 compiled into the caller), **C** = stays compiler-side.
 
-### Core runtime (lib/compiler/runtime/, 30 files, 135,042 B, ~399 definitions; plus auto-used type modules)
+### Core runtime (core/runtime/, 30 files, 135,042 B, ~399 definitions; plus auto-used type modules)
 
 | file(s) | what | kind | deps | verdict |
 |---|---|---|---|---|
@@ -204,7 +204,7 @@ boundary that cannot happen. Rules:
 
 ### 2.5 What the compiler needs (M3, new files only)
 
-* New `lib/compiler/module_imports.warp`: given `use sound` and a signature table for `sound` (`<modules>/sound.sig`, the
+* New `core/module_imports.warp`: given `use sound` and a signature table for `sound` (`<modules>/sound.sig`, the
   `warp.signatures` section as text, written by the build step, so the compiler does not parse wasm), it turns each word into a **host
   word of the module `warp:sound@<abi>`**: exactly what c_imports.warp does for C functions (`with_c_functions(host, functions)`,
   "each becomes a host word of the module its library names, so the emitter imports `library.name` and calls it like any host word").
@@ -235,7 +235,7 @@ boundary that cannot happen. Rules:
 * **`warp-host build`:** reads the program's `warp.links`, writes the executable and copies the listed `<name>@<abi>.{wasm,cwasm}` into
   `<exe-dir>/modules/` (beside, per the requirement); an `--embed` option to append them to the executable can come later.
 * **Developer step:** `warp-host build-modules [--lib <lib>] [-o <dir>]` (or `scripts/build-modules.sh` first): compiles
-  lib/compiler/runtime.warp → runtime.wasm and each module in a list (`lib/modules.list`) with compiler-self, writes .sig, .cwasm and
+  core/runtime.warp → runtime.wasm and each module in a list (`lib/modules.list`) with compiler-self, writes .sig, .cwasm and
   modules.json5. Releases run it once and ship the folder. It is the **only** way a lib/ change reaches a module.
 
 ---
@@ -303,9 +303,9 @@ Topic **lib-wasm-modules** (Soon, under ffi-libraries-roadmap). Cards in order; 
 | card | what | touch points (new files first) | est. | conflict risk |
 |---|---|---|---|---|
 | **M0 lwm-host-namespace** | warp-host: `warp:<name>@<abi>` lookup (WARP_MODULES, `<bin>/modules`, `<bin>/../share/warp/modules`), shipped .cwasm, strict mode, clear ABI-mismatch and type-mismatch errors, program folder passed to instantiate. Tests: the x1/x3 WAT pairs as tests/ fixtures (new). | new `crates/warp-runtime/src/warp_host/warp_modules.rs`; 2–3 line hooks in wasm_modules.rs `import_file` and ffi.rs (skip `warp:` imports) | 1 | low: warp-host is ours; Rust is frozen except for the pure pipeline's needs, and this is one (needs Supervisor OK) |
-| **M1 lwm-runtime** | `build-modules` step (script first) compiling runtime.warp → runtime@abi.wasm with every core word in fixed forms + `warp.signatures`/`warp.module` sections; .sig and .cwasm; measure size/cold/warm. Runtime owns tag, trap_detail, try_depth, failed_in. | new `scripts/build-modules.sh`, new `lib/compiler/module_exports.warp` (an "export everything with fixed kinds" mode of the compiler driver), `lib/modules.list` | 3 | **medium**: needs an emitter mode to export runtime words and to define-and-export the tag; keep it a new file plus one switch in compiler.warp; coordinate with the emitter owners |
+| **M1 lwm-runtime** | `build-modules` step (script first) compiling runtime.warp → runtime@abi.wasm with every core word in fixed forms + `warp.signatures`/`warp.module` sections; .sig and .cwasm; measure size/cold/warm. Runtime owns tag, trap_detail, try_depth, failed_in. | new `scripts/build-modules.sh`, new `core/module_exports.warp` (an "export everything with fixed kinds" mode of the compiler driver), `lib/modules.list` | 3 | **medium**: needs an emitter mode to export runtime words and to define-and-export the tag; keep it a new file plus one switch in compiler.warp; coordinate with the emitter owners |
 | **M2 lwm-sqlite3** | first on-demand module: lib/native/sqlite3.warp's warp words (column_value, rows, run_query) → sqlite3@abi.wasm importing C `sqlite3`; a hand-linked program calls `warp:sqlite3@…`.`rows`. Blocked on pure-c-imports (`2caa11295`) reaching main. sound.wasm follows once compiler-self compiles sound.warp (si_amount). | build-modules list; no compiler change (the program side can be hand-written WAT or wasm_call first) | 1–2 | low |
-| **M3 lwm-compiler-imports** | compiler emits imports: `use sound` + `<modules>/sound.sig` → host words of `warp:sound@abi` (c_imports.warp's path), boxing at the boundary; runtime words from runtime.sig become imports; tag/trap_detail imported and trap_detail re-exported; `warp.links` section. Behind `--link-modules`. Test: the suite count with the switch on vs off. | new `lib/compiler/module_imports.warp`; one hook each in `emitter/runtime_words.warp` (import instead of compile), `emitter/module_layout.warp` (import tag/globals, write warp.links), host_words kinds `text`/`list` | 4–6 | **high**: emitter files are owned by the Claude workers (AGENTS: stay out of lib/compiler emitter); do it as new files + minimal hooks, merged by warp-integrator, after announcing to warp-supervisor |
+| **M3 lwm-compiler-imports** | compiler emits imports: `use sound` + `<modules>/sound.sig` → host words of `warp:sound@abi` (c_imports.warp's path), boxing at the boundary; runtime words from runtime.sig become imports; tag/trap_detail imported and trap_detail re-exported; `warp.links` section. Behind `--link-modules`. Test: the suite count with the switch on vs off. | new `core/module_imports.warp`; one hook each in `emitter/runtime_words.warp` (import instead of compile), `emitter/module_layout.warp` (import tag/globals, write warp.links), host_words kinds `text`/`list` | 4–6 | **high**: emitter files are owned by the Claude workers (AGENTS: stay out of core emitter); do it as new files + minimal hooks, merged by warp-integrator, after announcing to warp-supervisor |
 | **M4 lwm-build-bundle** | `warp-host build` copies the linked modules beside the executable (`<exe-dir>/modules/`); release.yml/packaging ships `share/warp/modules/` built once by build-modules | warp_host/aot.rs, packaging/ | 1 | low |
 | **M5 lwm-more-modules** | graphics (draw + compute_toys over host words, later raylib/SDL2), markup, web (router/wagi/i18n), units run-time, uncertain (classes), math defs | build-modules list | per module 0.5–1 | low, once M3 works |
 

@@ -1,7 +1,7 @@
 // Where parser.warp fails on a file: each top-level chunk (a line at column 0 and the indented or closing lines below
 // it) parsed alone, the failing ones printed with their line number and message. Run from probes/self_hosting:
 // warp parse_failures.warp <file>
-use "../../lib/compiler/parser.warp"
+use "../../core/parser.warp"
 use os
 
 // the message of the first error view in a view, else ø

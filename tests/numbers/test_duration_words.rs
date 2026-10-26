@@ -4,7 +4,7 @@
 use warp::time::calendar::Duration;
 use warp::*;
 
-const RUNTIME_WORDS: &str = "lib/compiler/runtime/durations.warp";
+const RUNTIME_WORDS: &str = "core/runtime/durations.warp";
 const DURATIONS_SECTION: &str = "## durations";
 /// The section ends where the next starts, after an empty line: its own header goes on over several `##` lines
 const NEXT_SECTION: &str = "\n\n## ";

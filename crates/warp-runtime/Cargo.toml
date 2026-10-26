@@ -15,7 +15,7 @@ name = "warp-runtime"
 path = "src/main.rs"
 required-features = ["engine"]
 
-# the small native host of pure programs (notes/warp_host.md): compiles with compiler-self.wasm and runs the module
+# the small native host of pure programs (notes/warp_host.md): compiles with warp-self.wasm and runs the module
 # with WASI, shell commands and C calls; built on its own: `cargo build --profile host -p warp-runtime --features host --bin warp-host`
 [[bin]]
 name = "warp-host"
@@ -48,7 +48,7 @@ webview = ["dep:wry", "dep:winit", "dep:objc2"]
 # the C library libwarp_runtime (library.rs, include/warp_runtime.h): run_wasm compiles the module it is given, so it
 # carries Cranelift; built on its own: `cargo rustc --release -p warp-runtime --lib --crate-type cdylib --features library`
 library = ["compiler"]
-# warp-host: a compiler for the modules it is given, on all cores (compiler-self's machine code: 8 s on one, 2 s on
+# warp-host: a compiler for the modules it is given, on all cores (warp-self's machine code: 8 s on one, 2 s on
 # eight; rayon is ~0.1 MB), WASI preview 1
 host = ["compiler", "wasmtime/parallel-compilation", "dep:wasmtime-wasi", "wat"]
 # WAT text (notes/warp_host.md): warp-host runs .wat modules, as warp does (card warp-host-cli-parity: in the host

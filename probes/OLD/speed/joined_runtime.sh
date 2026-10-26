@@ -1,5 +1,5 @@
 #!/bin/bash
-# lib/compiler/runtime.warp with the files its `use` lines name appended, as self_hosted.rs runtime_source joins it
+# core/runtime.warp with the files its `use` lines name appended, as self_hosted.rs runtime_source joins it
 # usage: probes/speed/joined_runtime.sh [lib folder]   (prints the joined source)
 lib=${1:-$(dirname "$0")/../../lib}
 joined="" used=""

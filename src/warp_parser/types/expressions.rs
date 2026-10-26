@@ -13,7 +13,7 @@ const REF_TYPE_WORD: &str = "ref";
 /// names of several words the fixed width they mean there (card unsigned-int, as ffi/struct_layouts.rs reads headers),
 /// `unsigned int` uint32, with a note naming warp's word. The longest first.
 // ⚠ WARP DOES THIS DIFFERENTLY: `byte index`, `byte position` are count types of bytes (decision index-units)
-// → lib/compiler/parser.warp COMPOUND_TYPES, lib/compiler/index_positions.warp
+// → core/parser.warp COMPOUND_TYPES, core/index_positions.warp
 const COMPOUND_TYPES: [(&[&str], &str); 13] = [
 	(&["unsigned", "long", "long"], "uint64"),
 	(&["long", "long", "int"], "int64"),

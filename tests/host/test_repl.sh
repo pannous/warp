@@ -2,7 +2,7 @@
 # The console in pure warp (lib/repl.warp, card pure-repl) on warp-host: entries piped to its standard input, what it
 # prints checked. Run it through the queue: tests/queue.sh tests/host/test_repl.sh
 # The host and compilers are found as tests/host/test_host.sh finds them: WARP_HOST_BINARY (default the checkout's
-# target/host/warp-host), compiler-self.wasm beside WARP_LAUNCHER_RUST (default target/debug/warp)
+# target/host/warp-host), warp-self.wasm beside WARP_LAUNCHER_RUST (default target/debug/warp)
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
 [ -x "$host" ] || host=$checkout/target/release/warp-host
@@ -13,10 +13,10 @@ export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=
 unset WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
-[ -f "$(dirname "$rust")/compiler-self.wasm" ] || { echo "✗ no compiler-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
+[ -f "$(dirname "$rust")/warp-self.wasm" ] || { echo "✗ no warp-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" || exit 1
 ln -f "$host" "$stage/bin/warp-host" 2>/dev/null || cp "$host" "$stage/bin/warp-host" || exit 1
-cp "$(dirname "$rust")/compiler-self.wasm" "$stage/bin/" || exit 1
+cp "$(dirname "$rust")/warp-self.wasm" "$stage/bin/" || exit 1
 cd "$stage" || exit 1
 
 run=0 failed=0

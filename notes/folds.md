@@ -3,7 +3,7 @@
 User 2026-10-22: sum is just a function, done in warp, the pure clean way without special cases; the Rust compiler
 is frozen legacy and only carries `// ⚠ WARP DOES THIS DIFFERENTLY` banners at its sum hacks (19 sites).
 
-## What warp does (lib/prelude.warp, lib/list.warp, lib/compiler/lambdas.warp)
+## What warp does (lib/prelude.warp, lib/list.warp, core/lambdas.warp)
 
 - `sum(xs) := fold(xs, 0, +)`, `product(xs) := fold(xs, 1, *)`: plain definitions. A program's own `sum` replaces the
   prelude's (prelude reach brings only undefined words), and its range rules with it (rewrites.warp skips a module rule

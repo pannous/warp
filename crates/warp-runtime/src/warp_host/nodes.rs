@@ -7,7 +7,7 @@ use wasmtime::{Extern, Func, Global, Memory, Result, StoreContextMut, Val};
 
 const TYPE_DEF: u8 = 12;
 const PAGE_BITS: u32 = 16;
-/// A list's bracket code above the Kind (lib/compiler/kinds.warp BracketCode)
+/// A list's bracket code above the Kind (core/kinds.warp BracketCode)
 const BRACKETS: [(&str, &str); 4] = [("{", "}"), ("[", "]"), ("(", ")"), ("<", ">")];
 /// A curly list of `key: value` entries, and its entries' kind (kinds.warp Marked)
 pub const MAP: i64 = LIST as i64;
@@ -21,7 +21,7 @@ pub enum Node {
 	Bool(bool),
 	Float(f64),
 	/// an exact rational, numerator and denominator (above 1): the pure lane's `2.5` and `1/3`, an Int node holding a
-	/// $Ratio of two $i64box (lib/compiler/emitter.warp gc_types)
+	/// $Ratio of two $i64box (core/emitter.warp gc_types)
 	Ratio(i64, i64),
 	Codepoint(u32),
 	Text(Vec<u8>),
@@ -181,7 +181,7 @@ fn ratio_of(data: &Val, store: &mut StoreContextMut<'_, Host>) -> Option<(i64, i
 	if ratio.ty(&*store).ok()?.fields().len() != 2 {
 		return None;
 	}
-	// each part an $i64box (compiler-self's), or the number itself
+	// each part an $i64box (warp-self's), or the number itself
 	let mut part = |index: usize| match ratio.field(&mut *store, index).ok()? {
 		Val::I64(n) => Some(n),
 		part @ Val::AnyRef(Some(_)) => boxed(&part, store)?.i64(),
@@ -247,7 +247,7 @@ pub fn read(node: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<Me
 				Some(Val::I64(n)) => Node::Int(n),
 				// a number whose kind says int and whose box holds a float (`x = 7.0; x /= 2`): the float
 				Some(Val::F64(bits)) => Node::Float(f64::from_bits(bits)),
-				// an exact rational (`3.5`, `0.1 + 0.2`; lib/compiler/runtime/exact.warp): a $Ratio of two $i64box
+				// an exact rational (`3.5`, `0.1 + 0.2`; core/runtime/exact.warp): a $Ratio of two $i64box
 				_ => match ratio_of(&data, store) {
 					Some((n, 1)) => Node::Int(n),
 					Some((n, d)) => Node::Ratio(n, d),
@@ -298,7 +298,7 @@ fn bytes_of(piece: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<M
 	Ok(bytes.ok_or_else(|| wasmtime::Error::msg("a text beyond memory"))?.to_vec())
 }
 
-/// The constructors a program exports for its host calls (lib/compiler/emitter/host.warp host_builders) and its memory
+/// The constructors a program exports for its host calls (core/emitter/host.warp host_builders) and its memory
 pub struct Builders {
 	memory: Memory,
 	heap: Option<Global>,
@@ -392,7 +392,7 @@ impl Builders {
 	}
 
 	/// A list of the items at once, for a program whose lists are vectors (a node over a `{count: i32, items: array}`
-	/// struct, compiler-self's): new_list(first, rest) copies rest's items into a new vector, so building a list a cell
+	/// struct, warp-self's): new_list(first, rest) copies rest's items into a new vector, so building a list a cell
 	/// at a time copies n²/2 items (24,000 bytes of read_bytes: 288 million, past the memory cap). Here new_list makes
 	/// a one-item list, and its vector gets an array of all the items. None for a program whose lists are cons cells.
 	fn vector_list(&self, items: &[Val], info: i64, store: &mut StoreContextMut<'_, Host>) -> Result<Option<Val>> {
@@ -432,7 +432,7 @@ impl Builders {
 }
 
 /// Bytes put into the program's memory for it to copy out at once, their address: at its text heap when it has one
-/// (compiler.wasm), else in pages past its own, the same pages again while the memory stays that size
+/// (warp.wasm), else in pages past its own, the same pages again while the memory stays that size
 pub fn placed(
 	memory: Memory,
 	heap: Option<Global>,

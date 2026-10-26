@@ -1,4 +1,4 @@
-# warp's commands in warp (card wasm-commands, notes/standalone.md): `wasmtime compiler-self.wasm <command> …`, `warp
+# warp's commands in warp (card wasm-commands, notes/standalone.md): `wasmtime warp-self.wasm <command> …`, `warp
 # pure <command> …` and `warp self <command> …` all come here through compiler.warp. Plain WASI runs no module the
 # compiler makes, so the commands that run code say so and name the native warp; those that need a host (a server,
 # a window, the network) refuse naming it too
@@ -35,12 +35,17 @@ is_command(word: text): bool := word in command_words()
 source_of(target: text): text := try read(target) else target
 
 show_help() := {
-	print "warp, the compiler written in warp (lib/compiler/compiler.warp), its commands:"
+	print "warp, the compiler written in warp (core/compiler.warp), its commands:"
 	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
 	print "  need the native warp: " + (running_commands + native_commands).join(" ")
 }
 
-padded(words: text, width: int): text := if #words < width then words + " " * (width - #words) else words + " "
+# words, then spaces up to width, at least one
+padded(words: text, width: int): text := {
+	line = words + " "
+	while #line < width { line = line + " " }
+	line
+}
 
 # the version of the lib/ beside the compiler: its checkout's Cargo.toml
 version_text(library: text): text := {

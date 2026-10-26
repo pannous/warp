@@ -14,11 +14,11 @@ export WARP_HOST_CACHE=$checkout/scratch/host-cache WARP_NO_WINDOW=1 WARP_HINTS=
 unset WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
-[ -f "$(dirname "$rust")/compiler-self.wasm" ] || { echo "✗ no compiler-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
+[ -f "$(dirname "$rust")/warp-self.wasm" ] || { echo "✗ no warp-self.wasm beside $rust: $rust rebuild builds it"; exit 1; }
 command -v python3 >/dev/null || { echo "✗ no python3 for the pseudo-terminal"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/home" || exit 1
 ln -f "$host" "$stage/bin/warp-host" 2>/dev/null || cp "$host" "$stage/bin/warp-host" || exit 1
-cp "$(dirname "$rust")/compiler-self.wasm" "$stage/bin/" || exit 1
+cp "$(dirname "$rust")/warp-self.wasm" "$stage/bin/" || exit 1
 cd "$stage" || exit 1
 library=libedit.so
 [ "$(uname)" = Darwin ] && library=libedit.dylib

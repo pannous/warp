@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: #3207 warp-host CLI parity with warp: --fuel n… ([warp-host-cli-parity](https://github.com/pannous/warp/issues/3207))
-- Branch: `warp-host-cli-parity` at `5651b154e`, 18 ahead / 199 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: crates/warp-runtime/src/warp_host/nodes.rs, lib/compiler/c_imports.warp)
+- Branch: `warp-host-cli-parity` at `5651b154e`, 18 ahead / 199 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: crates/warp-runtime/src/warp_host/nodes.rs, core/c_imports.warp)
 - Kind: touches Rust (src/, crates/ or *.rs): waits for the Rust lane
 - Owner: Warp Wrapper (grok-warp-wrapper; session parked 2026-10-23, handover notes/box/handover/warp-wrapper.md): that owner continues it when resumed (the planner reassigns it otherwise).
 - State: warp-host's command line matches warp's (--fuel, rationals shown as warp does); rest of the parity list unfinished; conflicts in nodes.rs and c_imports.warp.

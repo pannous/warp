@@ -1,6 +1,6 @@
-# lowers a lib/compiler file (args#1) as the pure lane's passes stage does and prints each assignment whose target is
+# lowers a core file (args#1) as the pure lane's passes stage does and prints each assignment whose target is
 # no name, key or group: the forms the emitter refuses as "an assignment to a …"
-use "../../lib/compiler/passes.warp"
+use "../../core/passes.warp"
 use os
 use file
 lib = env("WARP_LIB")

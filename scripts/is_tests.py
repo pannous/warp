@@ -53,8 +53,8 @@ LANES = {
     "warp-pure": {},
     "warp-self": {},
 }
-# lanes run by a command of their own (src/compiler/standalone.rs): compiler.wasm, compiler.warp built by Rust, and
-# compiler-self.wasm, compiler.warp built by itself
+# lanes run by a command of their own (src/compiler/standalone.rs): warp.wasm, compiler.warp built by the seed, and
+# warp-self.wasm, warp.wasm promoted at a fixpoint (compiler.warp built by itself)
 LANE_COMMANDS = {"warp-pure": ["pure"], "warp-self": ["self"]}
 PAIR_LANES = {"pure-only", *LANE_COMMANDS}  # a pair at a time: one refused pair sinks no other
 # decision self-compiled-parity: warp self may pass this share fewer pairs than warp pure (reported, no gate yet)

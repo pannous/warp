@@ -33,7 +33,7 @@ fn builtin_line(node: &Node, name: &str) -> Node {
 
 /// `is_null(x: any): bool from runtime` (decision bodiless-imports): the self-hosted emitter supplies the word as an
 /// intrinsic; the Rust lane, which has none, compiles the declaration as a function that traps when called, so a
-/// runtime part of lib/compiler/runtime/ compiles alone. A value the emitter supplies, `failed_in: text from runtime`,
+/// runtime part of core/runtime/ compiles alone. A value the emitter supplies, `failed_in: text from runtime`,
 /// is a global starting at its type's zero (ø for a type of none)
 fn runtime_line(node: &Node) -> Node {
 	let Some(signature) = signature_of(node) else {

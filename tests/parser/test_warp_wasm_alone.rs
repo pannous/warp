@@ -1,4 +1,4 @@
-//! `wasmtime run --default-values-unknown-imports compiler-self.wasm hello.warp hello.wasm <folder> <lib>`: the
+//! `wasmtime run --default-values-unknown-imports warp-self.wasm hello.warp hello.wasm <folder> <lib>`: the
 //! self-compiled warp compiler runs under plain wasmtime with WASI preview 1, no warp host, and the module it writes
 //! runs there too (card standalone, decision wasm-standalone)
 use std::path::{Path, PathBuf};
@@ -44,14 +44,14 @@ fn run_wasi(module: &Path, arguments: &[&str], folder: &Path) -> WasiRun {
 	WasiRun { status, stdout: text(&stdout), stderr: text(&stderr) }
 }
 
-/// compiler-self.wasm next to the test's warp, built anew once per test run by the self lane (test_warp_pure lane)
+/// warp-self.wasm next to the test's warp, built anew once per test run by the self lane (test_warp_pure lane)
 fn self_compiled_compiler() -> PathBuf {
 	super::test_warp_pure::lane("self");
-	Path::new(crate::common::warp_command().get_program()).with_file_name("compiler-self.wasm")
+	Path::new(crate::common::warp_command().get_program()).with_file_name("warp-self.wasm")
 }
 
 #[test]
-#[ignore = "slow: builds compiler-self.wasm like test_warp_pure; run with --ignored"]
+#[ignore = "slow: builds warp-self.wasm like test_warp_pure; run with --ignored"]
 fn compiler_wasm_runs_under_plain_wasmtime() {
 	let folder = crate::common::scratch_directory("warp_wasm_alone");
 	std::fs::create_dir_all(&folder).unwrap();

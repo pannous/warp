@@ -1,5 +1,5 @@
 # The rewrite engine's fresh zipped rest holes (F11) and shorter statement runs tried again (F12),
-# lib/compiler/rewrites.warp, notes/rewrites.md: warp only, no Rust twin
+# core/rewrites.warp, notes/rewrites.md: warp only, no Rust twin
 
 # a_zipped_rest_hole_the_pattern_did_not_bind_is_as_many_fresh_names
 is! 'rewrite kept($xs...) => (($t = $x) for ($t, $x) in ($ts..., $xs...); [$ts...])
