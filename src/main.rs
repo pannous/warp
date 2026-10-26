@@ -500,14 +500,22 @@ fn command_line(program: &str, arguments: &[&str]) -> Option<String> {
 }
 
 /// `warp rebuild [pure|self]`: warp.wasm built anew (plain `warp rebuild` too), or warp.wasm promoted to warp-self.wasm
-/// when it passes the fixpoint test (`self`); status 1 when that failed
+/// when it passes the fixpoint test (`self`), each with its machine code beside it (<file>.cwasm); status 1 when that
+/// failed. `warp rebuild seed`: the seed's machine code only
 fn rebuild_compilers(command: Option<&str>) {
-	use warp::compiler::standalone::{rebuild, Compiler};
+	use warp::compiler::standalone::{rebuild, ship_seed, Compiler};
+	if command == Some("seed") {
+		match ship_seed() {
+			Ok(path) => println!("precompiled {}", path.display()),
+			Err(failure) => fail(format!("warp rebuild seed: {}", failure.serialize())),
+		}
+		return;
+	}
 	let word = command.unwrap_or(Compiler::RustCompiled.command());
 	let chosen: Vec<Compiler> = Compiler::ALL.into_iter().filter(|by| word == by.command()).collect();
 	if chosen.is_empty() {
 		fail(format!(
-			"warp rebuild: no compiler {:?}; say `warp rebuild`, `warp rebuild pure` or `warp rebuild self`",
+			"warp rebuild: no compiler {:?}; say `warp rebuild`, `warp rebuild pure`, `warp rebuild self` or `warp rebuild seed`",
 			command.unwrap_or_default()
 		));
 	}

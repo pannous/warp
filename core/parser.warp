@@ -6,6 +6,7 @@ use "shapes.warp"
 use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
+use os
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; in_branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list; circumfixes: list; phrases: list; bracket: text; closing_ends: any; stops_at_end: bool; word_types: list; line_starts: list }
 
@@ -121,10 +122,11 @@ def bang_words(source: text): list {
 	# only a line with `!(` can define one: the prelude's scan, at every start of a stage program, took 60 ms
 	for line in source.split("\n") {
 		if not line.contains("!(") { continue }
-		at = blanks_end(line, 0, line.length)
-		if starts_at(line, "def ", at) { at = blanks_end(line, at + 4, line.length) }
-		end = name_end(line, at, line.length)
-		if end > at and starts_at(line, "!(", end) { found += [line[at .. end] + "!"] }
+		n = line.length
+		at = blanks_end(line, 0, n)
+		if starts_at(line, "def ", at, n) { at = blanks_end(line, at + 4, n) }
+		end = name_end(line, at, n)
+		if end > at and starts_at(line, "!(", end, n) { found += [line[at .. end] + "!"] }
 	}
 	found
 }
@@ -230,13 +232,16 @@ def alias_spellings(): Spellings := {
 	}
 	spelling_tables
 }
+// the alias table's parse, kept across runs (os.kept): the table is the compiler's own, so is its parse; parsing it at
+// every run was a sixth of a small program's compile (card speed-module-rules)
+def alias_table_tree(): Node := kept("the alias table parse " + ALIAS_TABLE) ?? keep("the alias table parse " + ALIAS_TABLE, written_tree(ALIAS_TABLE))
 def own_spellings(): Spellings := {
 	symbols = pairs_of(SYMBOL_OPERATORS)
 	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: []}
 }
 def aliased_spellings(): Spellings := {
 	tables = own_spellings()
-	for row in items_of(written_tree(ALIAS_TABLE)) { add_alias_entry(tables, spelling_text(row#1), row#2) }
+	for row in items_of(alias_table_tree()) { add_alias_entry(tables, spelling_text(row#1), row#2) }
 	tables.operator_symbols = longest_first(tables.operator_symbols)
 	tables
 }
@@ -314,7 +319,7 @@ def longest_spelled_at(p: Parser, candidates: list): any {
 	longest = ø
 	for candidate in candidates {
 		spelled = candidate#1
-		here = starts_at(p.code, spelled, p.at) and not (is_name_start(spelled#1) and is_at_name_char(p, p.at + spelled.length))
+		here = starts_at(p.code, spelled, p.at, p.n) and not (is_name_start(spelled#1) and is_at_name_char(p, p.at + spelled.length))
 		if here and (longest == ø or spelled.length > longest#1.length) { longest = candidate }
 	}
 	longest
@@ -430,7 +435,7 @@ def words_ahead_end(p: Parser, words: list, first_end: int): int {
 	end = first_end
 	for word in words[1 .. words.length] {
 		start = spaces_end(p, end)
-		if start == end or not starts_at(p.code, word, start) { return 0 }
+		if start == end or not starts_at(p.code, word, start, p.n) { return 0 }
 		end = start + word.length
 		following = peek(p.code, end, p.n)
 		if is_name_char(following) or following == '-' { return 0 }
@@ -943,7 +948,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 				left = operator_call(op#2, [left, expression(p, powers#2)])
 			} else if op#2 == "|>" {
 				left = piped(left, expression(p, powers#2))
-			} else if (op#2 == ".." or op#2 == "to") and (starts_at(p.code, "=>", p.at) or ",;)]}".contains(peek(p.code, p.at, p.n)) or (left is symbol and name_of(left).starts_with("$") and keyword_at(p, "for"))) {
+			} else if (op#2 == ".." or op#2 == "to") and (starts_at(p.code, "=>", p.at, p.n) or ",;)]}".contains(peek(p.code, p.at, p.n)) or (left is symbol and name_of(left).starts_with("$") and keyword_at(p, "for"))) {
 				// the match arm `65.. => "senior"`, the rest hole `$xs... => …`, `($as..., $bs...)`: a range without end; also a
 				// rule's rest hole before a comprehension's clause, `[$e... for $x in $xs]` (card sugar-comprehensions)
 				left = keyed(op#2, left, ø)
@@ -1134,12 +1139,12 @@ def condition_has_branch(p: Parser, at: int): bool {
 		} else if c == ')' or c == ']' or c == '}' {
 			if depth == 0 { return false }
 			if c == '}' and depth == 1 and spaced_brace_open {
-				if not starts_at(p.code, "=>", blank_end(p, i + 1)) { return true }
+				if not starts_at(p.code, "=>", blank_end(p, i + 1), p.n) { return true }
 				spaced_brace_open = false
 			}
 			depth = depth - 1
 		} else if depth == 0 {
-			if starts_at(p.code, "=>", i) or c == '\n' or c == ';' { return false }
+			if starts_at(p.code, "=>", i, p.n) or c == '\n' or c == ';' { return false }
 			if c == 't' and not is_name_char(p.code[i - 1]) and keyword_at_position(p, "then", i) { return true }
 		}
 	}
@@ -1372,7 +1377,7 @@ SLICE_FROM_START = [[":", ":"], ["…", "to"], ["...", "to"], ["..", ".."]]
 // Rust twin: subscripts.rs parse_slice_from_start
 def slice_from_start(p: Parser): Node := {
 	for mark in SLICE_FROM_START {
-		if starts_at(p.code, mark#1, p.at) {
+		if starts_at(p.code, mark#1, p.at, p.n) {
 			p.at = p.at + mark#1.length
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { return keyed(mark#2, ø, ø) }
@@ -1457,7 +1462,7 @@ def operator_at(p: Parser): list {
 		if p.iterable and iterable_operator_at(p).length > 0 { return iterable_operator_at(p) }
 		return aliased_operator_at(p)
 	}
-	if starts_at(p.code, "//", p.at) { return [] }
+	if starts_at(p.code, "//", p.at, p.n) { return [] }
 	// `x = 1  # one` is a comment, `xs #1` the index operator (card parser-parses)
 	if c == '#' and skipped_end(p.code, p.at, p.n) > p.at { return [] }
 	spelled_symbol = symbol_operator_at(p, c)
@@ -1476,7 +1481,7 @@ def word_operator_at(p: Parser, c: any): list {
 def symbol_operator_at(p: Parser, c: any): list {
 	for pair in symbol_operators() {
 		written = pair#1
-		if written#1 == c and starts_at(p.code, written, p.at) and (written != ">>" or operand_follows(p, 2)) and (written != "?." or not is_digit(peek(p.code, p.at + 2, p.n))) { return pair }
+		if written#1 == c and starts_at(p.code, written, p.at, p.n) and (written != ">>" or operand_follows(p, 2)) and (written != "?." or not is_digit(peek(p.code, p.at + 2, p.n))) { return pair }
 	}
 	[]
 }
@@ -1591,8 +1596,10 @@ def scanned_operators(source: text): list {
 global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
-		declared = declared_operators(module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex"))
-		library_operators = declared.filter(operator => not is_name_start(operator#1#1))
+		sources = module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex")
+		// kept across runs (os.kept) as the alias table's parse is: the sources are the compiler's own
+		name = "the library glyph operators of " + sources
+		library_operators = kept(name) ?? keep(name, declared_operators(sources).filter(operator => not is_name_start(operator#1#1)))
 	}
 	library_operators
 }
@@ -1749,7 +1756,7 @@ def operator_method_head(p) {
 	if op.length == 0 or not METHOD_OPERATORS.contains(op#2) { return ø }
 	open = p.at + op#1.length
 	if not is_at(p.code, open, '(', p.n) { return ø }
-	if not starts_at(p.code, ":=", blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n))) { return ø }
+	if not starts_at(p.code, ":=", blank_end(p, hole_end(p.code, open + 1, '(', ')', p.n)), p.n) { return ø }
 	p.at = open
 	parameters = group_items(expression(p, binding_powers(":=")#1 + 1))
 	listed("(", "", [symbol(op#2)] + parameters)
@@ -2100,7 +2107,7 @@ DASH_GLYPHS = "‐‑‒–—―−"
 // The circumfix operator opening at the parser's position as [opening, closing, function], else []
 // Rust twin: math_notation.rs circumfix_here
 def circumfix_at(p: Parser): list {
-	for pair in p.circumfixes { if starts_at(p.code, pair#1, p.at) { return pair } }
+	for pair in p.circumfixes { if starts_at(p.code, pair#1, p.at, p.n) { return pair } }
 	[]
 }
 // The glyph opens or closes a circumfix operator: `⌋` is no free symbol
@@ -2113,10 +2120,10 @@ def is_circumfix_glyph(p: Parser, glyph: text): bool {
 def circumfix_closing(p: Parser, pair: list, from: int): int {
 	depth = 0
 	for at in from ..< p.n {
-		if starts_at(p.code, pair#2, at) {
+		if starts_at(p.code, pair#2, at, p.n) {
 			if depth == 0 { return at }
 			depth = depth - 1
-		} else if starts_at(p.code, pair#1, at) { depth = depth + 1 }
+		} else if starts_at(p.code, pair#1, at, p.n) { depth = depth + 1 }
 	}
 	p.n
 }
@@ -2265,7 +2272,7 @@ STAR_PREFIXES = [["...", "*"], ["**", "**"], ["*", "*"]]
 def starred_name(p: Parser): Node := {
 	for prefix in STAR_PREFIXES {
 		start = p.at + prefix#1.length
-		if starts_at(p.code, prefix#1, p.at) and is_name_start(peek(p.code, start, p.n)) {
+		if starts_at(p.code, prefix#1, p.at, p.n) and is_name_start(peek(p.code, start, p.n)) {
 			end = name_end(p.code, start, p.n)
 			p.at = end
 			return symbol(prefix#2 + p.code[start .. end])
@@ -2636,7 +2643,7 @@ def branch_value(p: Parser, min_power: int): Node := {
 	print_call_from(p, one_expression(words_binding(p, min_power)), min_power)
 }
 
-def keyword_at_position(p: Parser, word: text, at: int): bool := starts_at(p.code, word, at) and not (at + word.length < p.n and is_name_char(p.code[at + word.length]))
+def keyword_at_position(p: Parser, word: text, at: int): bool := starts_at(p.code, word, at, p.n) and not (at + word.length < p.n and is_name_char(p.code[at + word.length]))
 
 // `for x in xs {…}` or `for each x in xs {…}`: the loop variable, the iterable and the body, else ø, nothing read
 // Rust twin: loops.rs try_parse_for_in, for_iterable_and_body_word
@@ -2762,7 +2769,7 @@ ITERABLE_ENDS = ";}]),"
 // Rust twin: loops.rs at_loop_body
 def at_loop_body(p: Parser): bool {
 	c = peek(p.code, p.at, p.n)
-	c == '{' or c == ':' or c == '\n' or starts_at(p.code, "//", p.at) or keyword_at(p, "do") or body_hole_at(p)
+	c == '{' or c == ':' or c == '\n' or starts_at(p.code, "//", p.at, p.n) or keyword_at(p, "do") or body_hole_at(p)
 }
 
 // In a list or braces, where a loop is a comprehension's clause: `[x * 2 for x in reverse xs]`
@@ -3089,7 +3096,7 @@ def bare_atom(p: Parser): Node := {
 TRUE_GLYPHS = ["✔️", "✓️", "☑️", "⊤", "✓", "✔", "☑", "✅", "🗸", "🗹"]
 FALSE_GLYPHS = ["⊥", "❌", "✗"]
 def truth_glyph_at(p: Parser): text {
-	for glyph in TRUE_GLYPHS + FALSE_GLYPHS { if starts_at(p.code, glyph, p.at) { return glyph } }
+	for glyph in TRUE_GLYPHS + FALSE_GLYPHS { if starts_at(p.code, glyph, p.at, p.n) { return glyph } }
 	""
 }
 
@@ -3556,13 +3563,13 @@ def named(p: Parser): Node := {
 		if shader != ø { return shader }
 	}
 	// the Java/C array type `int[]` is the list type `[int]` (Rust twin: types/expressions.rs try_parse_array_type_suffix)
-	if starts_at(p.code, "[]", p.at) and is_type_argument(word) {
+	if starts_at(p.code, "[]", p.at, p.n) and is_type_argument(word) {
 		p.at = p.at + 2
 		return listed("[", " ", [symbol(word)])
 	}
 	// Rust's turbofish `sum::<i32>()`, `collect::<Vec<i32>>()`: the type arguments say nothing warp needs, the call is
 	// `sum()` (Rust twin: atoms.rs skip_turbofish)
-	turbofish = if starts_at(p.code, "::", p.at) then type_application_length(p, p.at + 2) else 0
+	turbofish = if starts_at(p.code, "::", p.at, p.n) then type_application_length(p, p.at + 2) else 0
 	if turbofish > 0 { p.at = p.at + 2 + turbofish }
 	name = symbol(word)
 	// `x°`: a variable in degrees, as `30°` (Rust twin: atoms.rs, card angles-degrees)

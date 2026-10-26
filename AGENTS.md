@@ -98,8 +98,8 @@ This harness should barely ever be rebuilt, and if so, independent of the warp f
 
 Agents must inherit a clean baseline and start working from there. 
 Agents must not rebuild and retest the baseline, this will save many rebuilds.
-The integrator must make sure that the main branch is always clean, functional, and up to date.
-As soon as a branch passes the smoke test (see Testing), that's signal enough to be worthy of merging.
+Whoever pushes keeps main clean, functional and up to date.
+As soon as a branch, merged with origin/main, passes the smoke test (see Testing), its worker pushes it to main.
 The full suite runs only at rare intervals, never per branch or batch.
 
 The `warp` binary (the Rust harness) is built by cargo; the warp compiler it runs by `warp rebuild`:
@@ -128,10 +128,9 @@ Every worker gets a plan from Supervisor, and everything in it is pre-approved: 
 A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
 <!-- `todo add "merge: <branch> <sha>" Ready -b "<one-line summary, tests run>"`.  -->
 Main moved again in the meantime?
-AVOID full rebuild for small changes! If the minimal smoke test (Compiling Hello World) passes the task is done, and it can go fully to the integrator.
-Then `todo ready <card> [branch]`
-The Integrator merges and closes them with `todo done`.
-The Git commit message Merge branch MUST Also include a summary of the changes (TODO via todo tool?)
+AVOID full rebuild for small changes! If the minimal smoke test (Compiling Hello World) passes on the branch merged
+with origin/main, the worker pushes it to main itself and closes the card with `todo done <card> <commit>`
+(notes/agents/common.md "Done"). The merge commit message MUST include a summary of the changes.
 
 ### Testing
 
@@ -146,8 +145,9 @@ Several agent sessions share this Mac and the full suite is slow, so run the che
 - Full suite (`warp test`): only the Integrator, at rare intervals (nightly, before a release), never per branch.
 We always want the very quick feedback loop and quick merges: anything slower than smoke + fixpoint runs in the
 background (`run_in_background`) and never holds a merge; what it finds is fixed forward on a card.
-A worker marks its card Ready with a note naming branch, tip commit and the checks it ran; the Integrator merges after
-its gate (smoke, test/gate, the changed test files) and sends what fails back to the card's owner, who fixes it.
+Workers merge origin/main into their branch, run the smoke test on that merge and push it to main themselves; nobody
+repeats their test. The Integrator runs the slower tiers in the background on main and sends what fails back to the
+pusher's card, who fixes it forward.
 
 Warp tests run locally with the shared binary, through the warp compiler (src/compiler/pure_tests.rs,
 notes/is_tests.md):

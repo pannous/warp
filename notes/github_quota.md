@@ -1,16 +1,16 @@
 # GitHub API quota
 
 The fleet uses about 10 % of the hourly GitHub quota (5000 GraphQL points, 5000 REST requests). Tools live in ~/dev/bin
-(its own repo); logs in data/github-quota/.
+(its own repo); logs in ~/Library/Logs/gh-quota/ (GH_METER_DIR).
 
 ## Measuring
 
 - `~/bin/gh` → `~/dev/bin/gh-metered`: wraps every gh call (ahead of /opt/homebrew/bin in interactive shells; `todo`
-  calls it directly, also from cron). It runs gh with `GH_DEBUG=api` and logs to data/github-quota/calls.tsv: time,
+  calls it directly, also from cron). It runs gh with `GH_DEBUG=api` and logs to ~/Library/Logs/gh-quota/calls.tsv: time,
   `program@session` (GH_METER_CALLER, tmux session), command, exit, seconds, HTTP requests, per quota bucket the
   requests and first/last `X-Ratelimit-Used`, non-2xx statuses, and 5xx / secondary / primary limit hits. No extra
   request. `GH_METER=off` turns logging off.
-- `~/dev/bin/gh-quota-sampler [minutes]`: total use once a minute (data/github-quota/rate_limit.tsv).
+- `~/dev/bin/gh-quota-sampler [minutes]`: total use once a minute (~/Library/Logs/gh-quota/rate_limit.tsv).
 - `~/dev/bin/gh-quota-report [since] [until] [--exclude caller]`: top consumers.
 - `~/dev/bin/probes/board_query_cost.py [filter|-] [page_size] [body]`: points and seconds per board page.
 

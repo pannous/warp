@@ -19,13 +19,18 @@ use std::sync::OnceLock;
 pub const PROGRAM_EXTENSION: &str = "program";
 /// The settings that change a compile are named so
 const SETTINGS_PREFIX: &str = "WARP_";
-/// The WARP_ settings only a run reads: its time limit, its profile, its GC heap, the phase times, crash cards
-const RUN_SETTINGS: [&str; 5] = [
+/// The WARP_ settings only a run reads: its time limit, its profile, its GC heap, the phase times, crash cards; where
+/// the cache lies and the Mac's run slot (scripts/slot.sh) change no compile either: with them in the key a compiler's
+/// values kept by `warp rebuild` in a slot, or shipped beside it, missed every run elsewhere (card precompiled-compilers)
+const RUN_SETTINGS: [&str; 8] = [
 	warp_runtime::fuel::TIME_LIMIT_VARIABLE,
 	warp_runtime::profile::PROFILE_VARIABLE,
 	warp_runtime::engine::GC_HEAP_VARIABLE,
 	crate::compiler::phase_times::SETTING,
 	crate::errors::crash_card::OFF_SWITCH,
+	crate::run::module_cache::CACHE_VARIABLE,
+	"WARP_SLOT",
+	"WARP_SLOT_GATE",
 ];
 /// The kept bytes: one byte of the imports the module needs, then the Compiled (postcard), then the module
 const NEEDS_HOST: u8 = 1;

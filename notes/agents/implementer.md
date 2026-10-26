@@ -8,5 +8,5 @@ card (`todo list`, its body): branch, failing tests, approach, scope, label.
 - Never change the planner's tests. If a test or the approach looks wrong, ambiguous, or needs a design choice: stop,
   `todo move <card> Next` with a note in the body saying why, tell the planner and warp-supervisor, and retire.
   Returning a card is a success, guessing is a failure.
-- Done: targeted `warp test <folders>`, push and `todo ready <card>`
+- Done: targeted `warp test <folders>`, then land it yourself as common.md "Done" says (push to main, `todo done <card> <commit>`)
   (common.md "Done"), fix what comes back, remove the worktree after the Integrator closed the card, and retire.
