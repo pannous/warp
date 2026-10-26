@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# scripts/promote-self.sh [--background] [<worktree>, default this checkout]: the fixpoint test of the tree's warp.wasm,
-# promoting it to warp-self.wasm (`warp self`'s compiler) only on a pass. warp.wasm (stage N) compiles
-# core/compiler.warp again (stage N+1); only output byte-identical to warp.wasm's own module copies warp.wasm to
-# data/warp-self.wasm (`warp rebuild self`, src/compiler/standalone.rs promote; through scripts/rebuild.sh self, so a
+# scripts/promote-self.sh [--background] [<worktree>, default this checkout]: the self test of the tree's warp.wasm,
+# promoting it to warp-self.wasm (`warp self`'s compiler) on a pass. warp.wasm (stage N) compiles core/compiler.warp
+# again (stage N+1); when it does, warp.wasm is copied to data/warp-self.wasm, a fixpoint or not (user 2026-10-26) (`warp rebuild self`, src/compiler/standalone.rs promote; through scripts/rebuild.sh self, so a
 # promoted warp-self.wasm of these compiler inputs in data/ or the store is taken without running the test again, and a
 # new one is published to the store). A missing warp.wasm of these inputs is built first.
-# Never fails its caller: it prints PROMOTED, NO FIXPOINT or FAILED and exits 0. Meant to run every once in a while,
+# Never fails its caller: it prints PROMOTED, PROMOTED BUT BROKEN (no hello) or FAILED and exits 0. Meant to run every once in a while,
 # in parallel, without blocking anything: --background detaches it (log data/promote-self.log); a run already going for
 # the tree makes another one a no-op (lock folder data/promote-self.lock). The normal rebuild and the gate need only warp.wasm.
 # WARP_BINARY: the warp binary (default as scripts/rebuild.sh: the shared one).
@@ -35,16 +34,19 @@ fi
 echo $$ >"$lock/pid"
 trap 'rm -rf "$lock"' EXIT
 started=$(date +%s)
-echo "promote-self: $(date '+%Y-%m-%d %H:%M:%S %Z') fixpoint test of $tree/data/warp.wasm"
+echo "promote-self: $(date '+%Y-%m-%d %H:%M:%S %Z') self test of $tree/data/warp.wasm"
 # a compile of compiler.warp runs for minutes: an exported short limit must not cut it
 said=$(WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} "$scripts/rebuild.sh" self "$tree" 2>&1)
 status=$?
 took=$(($(date +%s) - started))
 sha() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-16; }
+# the promoted build runs a program (decision no-fixpoint: it compiles compiler.warp again and that build runs hello)
 if [ $status = 0 ]; then
-	echo "promote-self: PROMOTED in ${took}s: warp-self.wasm = warp.wasm (sha256 $(sha "$data/warp-self.wasm")…)"
-elif echo "$said" | grep -q 'no fixpoint'; then
-	echo "promote-self: NO FIXPOINT in ${took}s: $(echo "$said" | grep -o 'no fixpoint[^"]*' | head -1 | cut -c1-240)"
+	hello=$(cd "$tree" && WARP_LIB=$tree/lib warp self samples/hello/hello.warp 2>&1)
+	echo "$hello" | grep -q Hello || { echo "promote-self: PROMOTED BUT BROKEN: warp self runs no hello: $(echo "$hello" | tail -1 | cut -c1-300)"; exit 0; }
+fi
+if [ $status = 0 ]; then
+	echo "promote-self: PROMOTED in ${took}s: warp-self.wasm = warp.wasm (sha256 $(sha "$data/warp-self.wasm")…; $(echo "$said" | grep -o 'a fixpoint\|no fixpoint' | head -1))"
 else
 	echo "promote-self: FAILED in ${took}s (warp-self.wasm left as it was): $(echo "$said" | tail -3 | tr '\n' ' ' | cut -c1-400)"
 fi

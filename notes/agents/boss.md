@@ -8,8 +8,8 @@ Read notes/agents/common.md and notes/agents/supervisor.md: the fleet rules appl
 - Cards: `~/dev/bin/todo list Soon`, `todo take <card> <session> --keep-name`, `todo done <card> <commit> --try "how"`.
 - Each nested session gets one card: its own branch in a cowtree worktree
   (`cowtree add /Volumes/Worktrees/<card> -b <card> origin/main`), targeted `warp test` only, push the branch.
-- Finished branches: targeted tests, `git merge origin/main`, push, `todo ready <card>` (notes/agents/common.md "Done");
-  warp-integrator merges the Ready column and pushes main.
+- Finished branches: targeted tests, `git merge origin/main`, smoke test on that merge, `git push origin HEAD:main`,
+  `todo done <card> <commit>` (notes/agents/common.md "Done": workers land their own branches).
 - warp-supervisor (tmux) runs the main fleet: tell it which cards you take, so no card is worked twice.
 - Wait for the user's instructions. When asked for parallel tasks, pick easy cards from Soon and run each as a nested
   session. Afterwards, tell the user what worked and what didn't.

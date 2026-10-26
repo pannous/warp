@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/integrate/merge.sh [--tree <worktree>] [--tip <commit>] [<card>…]: landing the branches of retired sessions,
 # step 1 of 2 (step 2: land.sh). --tip: a merged tip handed over (a carrier branch), checked out in the tree for tier 0 alone.
-# Else it merges the Ready cards (default: all of `todo list Ready`) onto origin/main in the tree, one merge commit each,
+# Else it merges the cards noted "land: <branch> <tip>" (default: all of `todo landing`) onto origin/main in the tree,
+# one merge commit each,
 # then runs tier 0 on the result: the compiler of the merged lib (scripts/rebuild.sh pure: taken from data/ or the
 # store when its inputs were built before, so a tip already built is never built twice), hello through it, and
 # scripts/self-check.sh when the batch touches core/. A card whose merge conflicts is left out and named.
@@ -26,8 +27,8 @@ git -C "$tree" checkout -q --detach origin/main || exit 1
 base=$(git -C "$tree" rev-parse HEAD)
 [ -n "$tip" ] && { git -C "$tree" checkout -q --detach "$tip" || exit 1; }
 
-ready=$([ -n "$tip" ] && echo '[]' || todo list --json Ready) || exit 1
-[ $# -gt 0 ] && ready=$(jq --args '[.[] | select(.key as $key | $ARGS.positional | index($key))]' "$@" <<<"$ready")
+landing=$([ -n "$tip" ] && echo '[]' || todo landing --json) || exit 1
+[ $# -gt 0 ] && landing=$(jq --args '[.[] | select(.key as $key | $ARGS.positional | index($key))]' "$@" <<<"$landing")
 
 # the ref a card lands at: origin/<branch> when it descends from the tip the card names, else that tip
 landing_ref() {
@@ -46,7 +47,7 @@ while IFS=$'\t' read -r key branch card_tip title; do
 		say "CONFLICT $key ($branch): $(git -C "$tree" diff --name-only --diff-filter=U | tr '\n' ' ')"
 		git -C "$tree" merge --abort
 	fi
-done < <(jq -r '.[] | [.key, .branch, .tip, .title] | @tsv' <<<"$ready")
+done < <(jq -r '.[] | [.key, .branch, .tip, .title] | @tsv' <<<"$landing")
 ((${#merged[@]})) || [ -n "$tip" ] || { say "nothing merged"; exit 1; }
 
 tested=$(git -C "$tree" rev-parse HEAD)

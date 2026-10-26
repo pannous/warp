@@ -1,15 +1,18 @@
 #!/bin/bash
 # Refresh the seed compiler (warp-seed.wasm beside the warp binary, card rust-bootstrap): the seed compiles core/compiler.warp
-# (stage A), stage A compiles it again (stage B), and only when B compiles it to the same bytes as itself (stage C == B,
-# the fixpoint; or A == B at once) does B replace the seed. The seed is what `warp rebuild` builds warp.wasm with; no
-# Rust-compiled stage takes part. (scripts/promote-self.sh is the light check of warp.wasm alone: N+1 == N.)
+# (stage A), each stage compiles it again with the one before (B, C; WARP_SEED_STAGES names them), and the last stage
+# that compiled itself once more (the next stage built) replaces the seed; no fixpoint is needed (user 2026-10-26), one
+# ends the stages early. A feature the compiler uses on itself (a runtime word, a bundled lib/) arrives a stage after
+# the stage that brings it, so such a change asks for more stages. The seed is what `warp rebuild` builds warp.wasm
+# with; no Rust-compiled stage takes part. (scripts/promote-self.sh is the light check of warp.wasm alone.)
 # usage: scripts/refresh-seed.sh [--check] [<tree>, default this checkout]   (--check: run the stages, replace nothing)
 # A new seed replaces warp-seed.wasm beside the binary (WARP_SEED names another) and is published as the asset of a
 # GitHub pre-release seed-<date>-<sha8>, where the release workflow and fresh installs fetch it.
 # WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~17-20 min on the Mac: run it
 # in the background. The bytes depend on where lib/ lies (compiler.warp keeps its folder), so
-# the fixpoint holds per tree, and a seed refreshed in another tree differs in that path alone.
+# a seed refreshed in another tree differs in that path alone.
 set -u
+STAGES=${WARP_SEED_STAGES:-A B C}
 check=
 [ "${1-}" = --check ] && { check=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
@@ -40,24 +43,31 @@ stage() {
   mv "$built" "$2"
   echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $((SECONDS - start)) s, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
 }
-stage "$seed" "$scratch/A.wasm"
-stage "$scratch/A.wasm" "$scratch/B.wasm"
-if cmp -s "$scratch/A.wasm" "$scratch/B.wasm"; then
-  fixpoint=$scratch/B.wasm
-else
-  stage "$scratch/B.wasm" "$scratch/C.wasm"
-  cmp -s "$scratch/B.wasm" "$scratch/C.wasm" || { echo "refresh-seed: NO FIXPOINT: stage C differs from stage B; the seed stays" >&2; exit 1; }
-  fixpoint=$scratch/C.wasm
-fi
-echo "refresh-seed: FIXPOINT $(wc -c <"$fixpoint" | tr -d ' ') B sha256 $(shasum -a 256 "$fixpoint" | cut -d' ' -f1)"
+previous=$seed
+chosen=
+for name in $STAGES; do
+  stage "$previous" "$scratch/$name.wasm"
+  [ "$previous" != "$seed" ] && chosen=$previous
+  if [ "$previous" != "$seed" ] && cmp -s "$previous" "$scratch/$name.wasm"; then
+    echo "refresh-seed: $name is the same bytes as the stage before: a fixpoint"
+    break
+  fi
+  previous=$scratch/$name.wasm
+done
+[ -n "$chosen" ] || { echo "refresh-seed: no stage compiled itself once more (WARP_SEED_STAGES: $STAGES); the seed stays" >&2; exit 1; }
+# and the chosen stage runs a program (decision no-fixpoint: it compiles compiler.warp again and that build runs hello)
+cp "$chosen" "$data/warp-self.wasm"
+hello=$(cd "$tree" && "$warp" self samples/hello/hello.warp 2>&1)
+echo "$hello" | grep -q Hello || { echo "refresh-seed: $(basename "$chosen" .wasm) runs no hello ($(echo "$hello" | tail -1 | cut -c1-200)); the seed stays" >&2; exit 1; }
+echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr -d ' ') B sha256 $(shasum -a 256 "$chosen" | cut -d' ' -f1)"
 if [ -n "$check" ]; then
-  cmp -s "$fixpoint" "$seed" && echo "refresh-seed: the seed is the fixpoint" || echo "refresh-seed: the seed differs from the fixpoint (--check: kept)"
+  cmp -s "$chosen" "$seed" && echo "refresh-seed: the seed is that stage" || echo "refresh-seed: the seed differs from that stage (--check: kept)"
   exit 0
 fi
-cp "$fixpoint" "$seed" && echo "refresh-seed: replaced $seed"
+cp "$chosen" "$seed" && echo "refresh-seed: replaced $seed"
 release=seed-$(date +%Y-%m-%d)-$(shasum -a 256 "$seed" | cut -c1-8)
 gh release create "$release" "$seed" --repo pannous/warp --prerelease --title "$release" \
-  --notes "The seed compiler: core/compiler.warp of $(git -C "$tree" rev-parse --short HEAD) compiled by itself at a fixpoint." &&
+  --notes "The seed compiler: core/compiler.warp of $(git -C "$tree" rev-parse --short HEAD) compiled by a stage that compiles itself once more." &&
   echo "refresh-seed: published $release"
 # its machine code beside it, for the engine runs use (card precompiled-compilers): no build JIT-compiles the seed
 (cd "$tree" && "$warp" rebuild seed)
