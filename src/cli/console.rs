@@ -12,7 +12,7 @@ impl ConsoleSession {
 	}
 
 	fn remember(&mut self, input: &str, value: &Node) {
-		if !matches!(value.drop_meta(), Node::Error(_)) && console_state_line(&warp_parser::parse(input)) {
+		if !matches!(value.drop_meta(), Node::Error(_)) && console_state_line(&warp::compiler::standalone::parsed(input)) {
 			self.state.push(input.to_string());
 		}
 	}

@@ -787,7 +787,7 @@ fn files_below(folder: PathBuf) -> Vec<PathBuf> {
 }
 
 /// The view a JSON value writes: an array a list, null ø
-fn view_of_json(json: serde_json::Value) -> Node {
+pub(crate) fn view_of_json(json: serde_json::Value) -> Node {
 	use serde_json::Value;
 	match json {
 		Value::Null => Node::Empty,

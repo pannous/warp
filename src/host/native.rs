@@ -941,7 +941,7 @@ fn fetch_reply(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<H
 fn channel_next(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<HostNode> {
 	let message = crate::web::web_sockets::next(id).unwrap_or_else(|| {
 		crate::host::channels::next(id)
-			.map(|text| crate::compiler::standalone::value_of_text(&text))
+			.map(|text| crate::compiler::standalone::parsed(&text).drop_meta().clone())
 			.unwrap_or(Node::Empty)
 	});
 	built_in_program(&mut caller, &message, "on message")

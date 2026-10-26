@@ -32,6 +32,8 @@ const WARMING_PROGRAM: &str = "0";
 const SEED_FILE: &str = "seed/compiler-self.wasm";
 /// Names another seed file (a candidate seed tried before it is checked in)
 const SEED_VARIABLE: &str = "WARP_SEED";
+/// The ending of an output compiler.warp writes parser.warp's view to, as JSON, instead of a module (its VIEW_SUFFIX)
+const VIEW_EXTENSION: &str = "view.json";
 
 /// Who builds compiler.warp's module: for `warp pure` the seed, for `warp self` compiler.wasm, compiler.warp itself
 // ⚠ RustCompiled keeps its name until the Rust compiler leaves main (card rust-bootstrap): the seed builds it now
@@ -71,16 +73,47 @@ pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 	ran(compiled_code(code, folder, by), Vec::new())
 }
 
-/// The value written as `text` in warp notation (a channel's message, as it was sent), read by compiler.warp in wasm,
-/// the compiler of `warp pure`: no Rust parser (card rust-bootstrap). Text that is no value stays the text. The running
-/// program's own arguments are kept: the compile's are the compiler's
-pub fn value_of_text(text: &str) -> Node {
-	let arguments = crate::modules::std_adapters::program_arguments();
-	let value = run_code(text, &std::env::temp_dir(), Compiler::RustCompiled);
-	crate::modules::std_adapters::set_program_arguments(arguments);
-	match value.drop_meta() {
-		Node::Error(_) => Node::Text(text.to_string()),
-		_ => value.drop_meta().clone(),
+/// The node parser.warp reads `code` as: compiler.wasm, the compiler of `warp pure`, writes its view as JSON
+/// (compiler.warp's view mode), read back with node_views (card rust-bootstrap: the host reads warp text without a
+/// Rust parser: a channel's message, a console line, a test file, `warp data`, `warp parse`). An error when there is
+/// no compiler.wasm or it fails
+pub fn parsed(code: &str) -> Node {
+	match parsed_view(code) {
+		Ok(json) => match serde_json::from_str(&json) {
+			Ok(view) => crate::compiler::node_views::node_of_view(&crate::compiler::self_hosted::view_of_json(view)),
+			Err(failure) => error(&format!("compiler.warp's view of the code is no JSON: {failure}")),
+		},
+		Err(failure) => failure,
+	}
+}
+
+/// The view JSON compiler.wasm writes of `code`, kept by the code and the compiler: the children of `warp test` read
+/// their file's view, not their file again
+fn parsed_view(code: &str) -> Result<String, Node> {
+	use crate::run::module_cache::{keep_bytes, kept_bytes};
+	let compiler = compiler(Compiler::RustCompiled)?;
+	let owner = crate::extensions::sha256_hex(&compiler.bytes);
+	let key = crate::extensions::sha256_hex(format!("{VIEW_EXTENSION}\n{owner}\n{code}").as_bytes());
+	if let Some(json) = kept_bytes(&key, VIEW_EXTENSION).and_then(|bytes| String::from_utf8(bytes).ok()) {
+		return Ok(json);
+	}
+	static PARSES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+	let parse = PARSES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+	let folder = std::env::temp_dir();
+	let source = folder.join(format!("warp-parse-{}-{parse}.warp", std::process::id()));
+	let output = source.with_extension(VIEW_EXTENSION);
+	std::fs::write(&source, code).map_err(|failure| error(&format!("{}: {failure}", source.display())))?;
+	let said = run_compiler(&source, &output, &folder, compiler);
+	let json = std::fs::read_to_string(&output);
+	let _ = std::fs::remove_file(&source);
+	let _ = std::fs::remove_file(&output);
+	match (said.drop_meta(), json) {
+		(Node::Error(_), _) => Err(inline_positions(&said, &source)),
+		(_, Ok(json)) => {
+			keep_bytes(&key, VIEW_EXTENSION, json.as_bytes());
+			Ok(json)
+		}
+		(_, Err(_)) => Err(error(&format!("compiler.warp wrote no view, it gave {}", said.serialize()))),
 	}
 }
 
@@ -131,12 +164,7 @@ fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledMo
 fn compiled_with(program: &Path, folder: &Path, compiler: CompiledModule) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
-	let arguments = [program, output.as_path(), folder, library()];
-	crate::modules::std_adapters::set_program_arguments(
-		arguments.iter().map(|path| path.display().to_string()).collect(),
-	);
-	let owner = crate::extensions::sha256_hex(&compiler.bytes);
-	let said = crate::modules::std_adapters::kept_by(owner, || crate::pipeline::run_module(compiler));
+	let said = run_compiler(program, &output, folder, compiler);
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
@@ -145,6 +173,21 @@ fn compiled_with(program: &Path, folder: &Path, compiler: CompiledModule) -> Res
 		(_, Ok(bytes)) => Ok(module_of_bytes(bytes)),
 		(_, Err(_)) => Err(error(&format!("compiler.warp wrote no module, it gave {}", said.serialize()))),
 	}
+}
+
+/// What the run of `compiler` (a module of compiler.warp) said, writing `output` of the program file with `folder` in
+/// scope: `compiler.warp <source> <output> <folder> <lib>`, a module, or parser.warp's view when `output` ends in
+/// VIEW_EXTENSION. The arguments of the program running, if any (a host word parses in its run), stay its own
+fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: CompiledModule) -> Node {
+	let running = crate::modules::std_adapters::program_arguments();
+	let arguments = [program, output, folder, library()];
+	crate::modules::std_adapters::set_program_arguments(
+		arguments.iter().map(|path| path.display().to_string()).collect(),
+	);
+	let owner = crate::extensions::sha256_hex(&compiler.bytes);
+	let said = crate::modules::std_adapters::kept_by(owner, || crate::pipeline::run_module(compiler));
+	crate::modules::std_adapters::set_program_arguments(running);
+	said
 }
 
 /// `warp rebuild`: the build file of each compiler built anew from the current lib/, its path, or why it failed
