@@ -10,8 +10,7 @@
 #   1. data/<compiler>.wasm (warp, warp-self) whose data/<compiler>.wasm.inputs names the current inputs hash (compiler-inputs.sh): kept
 #   2. else the shared store's pair of that hash, copied: /workspace/cow/compilers/<hash>/ on the box,
 #      /Volumes/Build/compilers/<hash>/ on the Mac (WARP_COMPILER_STORE names another)
-#   3. else, unless --check, `warp rebuild` in a heavy slot (scripts/slot.sh on the Mac, /workspace/box-slot.sh on the
-#      box), the result published to the store; the store's `main` link moves to it only for a build of origin/main
+#   3. else, unless --check, `warp rebuild`, the result published to the store; the store's `main` link moves to it only for a build of origin/main
 # --check: steps 1 and 2 only, exit 3 on a miss. --force: step 3 whatever the hash says.
 # The warp binary building: WARP_BINARY, else the shared one (main's: /workspace/cow/warp-rust-latest on the box). Its Rust fingerprint:
 # WARP_RUST_FINGERPRINT, else the warp.build section of the warp.wasm (or compiler.wasm) beside it (what that binary built).
@@ -35,12 +34,9 @@ lib=$tree/lib data=$tree/data
 if [ "$(uname)" = Darwin ]; then
 	store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers} main_warp=/Users/me/dev/bin/warp-rust
 	[ -x "$main_warp" ] || main_warp=/Users/me/dev/bin/warp
-	slot=("$scripts/slot.sh")
 else
 	store=${WARP_COMPILER_STORE:-/workspace/cow/compilers} main_warp=/workspace/cow/warp-rust-latest
-	slot=(/workspace/box-slot.sh)
 fi
-[ -n "${WARP_SLOT-}" ] && slot=()  # inside a slot already (self-check.sh)
 # the shared binary, never the tree's own target/debug/warp: Rust src/ is frozen, and a tree's copy is a stale one
 # (boxtree copies target/), or a per-tree cargo build (card scripts-off-cargo)
 warp=${WARP_BINARY:-$main_warp}
@@ -112,7 +108,7 @@ one() {
 	logged "$name" miss-building
 	local lane=pure
 	[ "$name" = warp-self ] && lane=self
-	built=$(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash "${slot[@]}" "$warp" rebuild $lane 2>&1)
+	built=$(cd "$tree" && WARP_LIB=$lib WARP_INPUTS_HASH=$hash "$warp" rebuild $lane 2>&1)
 	status=$?
 	[ $status = 0 ] || { echo "$built" | tail -5 >&2; logged "$name" build-failed; return 1; }
 	local path
