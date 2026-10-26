@@ -1,4 +1,4 @@
-# The warnings of the warp compiler (lib/compiler/diagnostics.warp): pattern TAB message, the first match wins
+# The warnings of the warp compiler (core/diagnostics.warp): pattern TAB message, the first match wins
 
 # a text spelling a number added to a number (source_checks.warp, card print-oldest)
 spelled_number_join($written, $spelled, $as_sum, $as_text)	"{written} joins the texts; {spelled} spells a number"	"{as_sum} or {as_text}"

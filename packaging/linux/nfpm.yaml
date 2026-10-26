@@ -16,18 +16,27 @@ vendor: pannous
 homepage: https://warp.pannous.com/
 license: AGPL-3.0-or-later AND MIT # the compiler AGPL, warp-runtime MIT (CONTRIBUTING.md)
 contents:
-  # warp, warp-runtime and (since the page stub) warp-page-runtime: all next to each other
-  - src: ./warp*
+  # warp, warp-runtime, (since the page stub) warp-page-runtime and warp-host: all next to each other; named, so the
+  # compilers warp.wasm and warp-self.wasm stay out of /usr/bin
+  - src: ./warp
+    dst: /usr/bin/warp
+    file_info:
+      mode: 0755
+  - src: ./warp-*runtime
     dst: /usr/bin/
     file_info:
       mode: 0755
+  - src: ./warp-host
+    dst: /usr/bin/warp-host
+    file_info:
+      mode: 0755
   # the warp-written compilers and lib/, where warp in /usr/bin finds them (card installed-compilers)
-  - src: ./compiler*.wasm
+  - src: ./warp*.wasm
     dst: /usr/share/warp/
   - src: ./lib
     dst: /usr/share/warp/lib
     type: tree
-  # warp-host's shipped cache, compiler-self's kept values (packaging/host_cache.sh, notes/warp_host.md)
+  # warp-host's shipped cache, warp-self's kept values (packaging/host_cache.sh, notes/warp_host.md)
   - src: ./host-cache
     dst: /usr/share/warp/host-cache
     type: tree

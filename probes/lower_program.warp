@@ -1,6 +1,6 @@
 # lowers a program (args#1) pass by pass with the pure lane passes in the Rust lane, printing each pass number first,
 # so the pass that fails is the last number printed
-use "../lib/compiler/passes.warp"
+use "../core/passes.warp"
 use os
 use file
 lib = env("WARP_LIB")

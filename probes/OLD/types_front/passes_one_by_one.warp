@@ -1,4 +1,4 @@
-use "../../lib/compiler/passes.warp"
+use "../../core/passes.warp"
 n = with_reached(with_used_modules(with_type_module_uses(with_uses(plain_node(parsed("print \"hello world\"")), ".")), "."), "", no)
 print("reached")
 i = 0

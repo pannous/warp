@@ -1,5 +1,5 @@
 //! card node-enum-order: a field may name a type declared further down the file, as enum Node's `op: Op` in
-//! lib/compiler/node.warp names enum Op declared after it
+//! core/node.warp names enum Op declared after it
 use crate::is;
 
 #[test]

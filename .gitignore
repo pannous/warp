@@ -48,7 +48,7 @@ data/
 # test fixtures may be prebuilt modules and components (tests/fixtures/components/*/build.sh rebuilds them)
 !tests/fixtures/**/*.wasm
 # the seed compiler the self lane starts from (seed/README.md, card rust-bootstrap)
-!/seed/compiler-self.wasm
+!/seed/warp-self.wasm
 # libc.wasm is the browser's `use c` (P147), served with the playground; build_libc.sh rebuilds it
 !web/playground/lib/libc.wasm
 # `stored x = v` keeps its values beside the program (src/lowering/stored_values.rs)

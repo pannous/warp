@@ -1,5 +1,5 @@
 // The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as nodes
-// (lib/compiler/shapes.warp), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs),
+// (core/shapes.warp), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs),
 // which compares its view (tests/common/twins.rs node_view)
 use "lexer.warp"
 use "shapes.warp"
@@ -1600,7 +1600,7 @@ def library_glyph_operators(): list {
 // The words of a statement that uses a module: `use regex`, `require regex`, `import regex`
 // Rust twin: use_statements.rs USE_KEYWORDS
 USE_KEYWORDS = ["use", "require", "import"]
-// The folder holding the file of a path: lib/compiler of lib/compiler/parser.warp
+// The folder holding the file of a path: core of core/parser.warp
 def folder_of(path: text): text {
 	parts = path.split("/")
 	parts[0 ..< #parts - 1].join("/")

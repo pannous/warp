@@ -48,18 +48,20 @@ class Warp < Formula
       bin.install "warp", "warp-runtime"
       # releases before the page stub (card build-links) ship none
       bin.install "warp-page-runtime" if File.exist?("warp-page-runtime")
-      # warp-host and its shipped cache, compiler-self's kept values (notes/warp_host.md); newer releases only
+      # warp-host and its shipped cache, warp-self's kept values (notes/warp_host.md); newer releases only
       bin.install "warp-host" if File.exist?("warp-host")
       pkgshare.install "host-cache" if File.exist?("host-cache")
       # the warp-written compilers and lib/, found by warp in <prefix>/share/warp (card installed-compilers); releases
       # before 1.5.0 ship none
-      pkgshare.install "compiler.wasm", "compiler-self.wasm", "lib" if File.exist?("compiler.wasm")
+      # (warp.wasm and warp-self.wasm; compiler.wasm and compiler-self.wasm before the rename)
+      compilers = %w[warp.wasm warp-self.wasm compiler.wasm compiler-self.wasm].select { |file| File.exist?(file) }
+      pkgshare.install(*compilers, "lib") unless compilers.empty?
     end
   end
 
   test do
     assert_match version.to_s, shell_output("#{bin}/warp --version") unless build.head?
     assert_equal "42", shell_output("#{bin}/warp eval '6*7'").strip.split.last
-    assert_equal "42", shell_output("#{bin}/warp pure '6*7'").strip.split.last if (pkgshare/"compiler.wasm").exist?
+    assert_equal "42", shell_output("#{bin}/warp pure '6*7'").strip.split.last if (pkgshare/"warp.wasm").exist? || (pkgshare/"compiler.wasm").exist?
   end
 end

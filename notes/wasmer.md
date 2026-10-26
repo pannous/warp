@@ -25,7 +25,7 @@ Cranelift, LLVM, V8") has all four; `WASMER=<it> probes/wasmer/features.sh` runs
 
 - warp's `samples/hello/hello.warp` → `warp compile --wasm` (10 KB) fails on all four backends ("array indexed
   types not supported without the gc feature"; V8: "GC is not implemented yet").
-- `/Users/me/dev/bin/compiler.wasm` on V8: "only numeric types are supported in function signatures: Unsupported
+- `/Users/me/dev/bin/warp.wasm` on V8: "only numeric types are supported in function signatures: Unsupported
   ref type: anyref". It also imports 6 custom `host` functions (read, run, fetch, fetch_within, std_io, warn) plus
   WASI fd_write, so it would need those host words built in (card standalone) on any runtime.
 - `--enable-all` makes every backend refuse even an MVP module ("No backends support the required features").

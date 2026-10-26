@@ -1,6 +1,6 @@
 //! The compile through the warp-written compiler (card warp-pipeline-suite, notes/self_hosting.md): with
-//! WARP_SELF_HOSTED set, lib/compiler/parser.warp parses each program and every Rust pass with a warp twin in
-//! lib/compiler/passes.warp gives way to it, and emitter.warp emits each program inside its core; the passes without
+//! WARP_SELF_HOSTED set, core/parser.warp parses each program and every Rust pass with a warp twin in
+//! core/passes.warp gives way to it, and emitter.warp emits each program inside its core; the passes without
 //! a twin and the Rust emitter do the rest. The suite run this way (tests/self_hosted.sh) counts how much of warp the
 //! warp compiler already compiles.
 //! A stage is a warp program answering one request, compiled once per worker thread: the compile of the stage program
@@ -46,7 +46,7 @@ const EMIT_PROGRAM: &str = concat!(
 const LIBRARY_MARK: &str = "{lib}";
 /// The runtime words emitter.warp compiles into a module, lowered like a program, in the compiler's folder
 const RUNTIME_WORDS: &str = "runtime.warp";
-/// The extended runtime words, which the core (runtime.warp and its parts) never uses: lib/compiler/runtime/extended/
+/// The extended runtime words, which the core (runtime.warp and its parts) never uses: core/runtime/extended/
 /// named by this file's `use` lines, joined after the core's (decision runtime-split; compiler.warp RUNTIME_ROOTS)
 const EXTENDED_RUNTIME_WORDS: &str = "runtime/extended.warp";
 /// The module the host words are imported from
@@ -54,7 +54,7 @@ const HOST_MODULE: &str = "host";
 /// The file of the table of words a module may import (the host's and WASI's), and the variable it assigns
 const HOST_WORDS_FILE: &str = "host_words.warp";
 const HOST_WORDS_NAME: &str = "host_words";
-/// The levels of lib/compiler/diagnostics.warp's message files beside a warning: errors.data, hints.data
+/// The levels of core/diagnostics.warp's message files beside a warning: errors.data, hints.data
 const ERROR_LEVEL: &str = "error";
 const HINT_LEVEL: &str = "hint";
 /// How emitter.warp refuses a program beyond its core; the Rust emitter emits it then
@@ -118,7 +118,7 @@ type Request = (String, Sender<String>);
 /// The JSON text a stage program reads as one of its setup files, or why it could not be made
 type Setup = fn() -> Result<String, Node>;
 
-/// A stage program, named by its file in lib/compiler, the JSON texts a worker writes once for it to read as `args#2`,
+/// A stage program, named by its file in core, the JSON texts a worker writes once for it to read as `args#2`,
 /// `args#3`…, and its idle workers
 struct Stage {
 	file: &'static str,
@@ -329,7 +329,7 @@ pub(crate) fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
 }
 
 /// What the checks of the passes stage diagnosed, [level, message, fix, topic@expression] each
-/// (lib/compiler/diagnostics.warp): an error is the program's value, the warnings and hints are said as the Rust
+/// (core/diagnostics.warp): an error is the program's value, the warnings and hints are said as the Rust
 /// checks' are
 fn diagnosed(diagnostics: &serde_json::Value) -> Result<Vec<crate::errors::diagnostic::Diagnostic>, Node> {
 	use crate::errors::diagnostic::{Diagnostic, Level};
@@ -412,7 +412,7 @@ fn module_of(answer: &str) -> Result<Vec<u8>, String> {
 	}
 }
 
-/// The words a module may import, as JSON: the table lib/compiler/host_words.warp assigns to HOST_WORDS_NAME, {name:
+/// The words a module may import, as JSON: the table core/host_words.warp assigns to HOST_WORDS_NAME, {name:
 /// [[parameter kind…], [result kind…], module when not the host's]}, the one compiler.warp reads too
 fn host_words() -> Result<String, Node> {
 	let file = compiler_folder().join(HOST_WORDS_FILE);
@@ -445,12 +445,12 @@ fn without_meta(node: &Node) -> Node {
 	}
 }
 
-/// The prelude's source, whose definitions a pure program reaches (lib/compiler/prelude_words.warp)
+/// The prelude's source, whose definitions a pure program reaches (core/prelude_words.warp)
 fn prelude_text() -> Result<String, Node> {
 	Ok(crate::modules::std_module(crate::modules::PRELUDE_MODULE).unwrap_or_default().to_string())
 }
 
-/// The view of lib/compiler/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
+/// The view of core/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
 /// keeps its result's kind); a warp older than lib/ may fail to lower it (card crash-3)
 fn runtime_words() -> Result<String, Node> {
 	runtime_source()
@@ -458,12 +458,12 @@ fn runtime_words() -> Result<String, Node> {
 		.and_then(|source| crate::pipeline::lower(&source))
 		.map(|lowered| view_json(&analysis_view(&lowered)))
 		.map_err(|failure| {
-			crate::node::error(&format!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()))
+			crate::node::error(&format!("core/runtime.warp does not lower: {}", failure.serialize()))
 		})
 }
 
 /// runtime.warp with the files its `use` lines name in their place, after it: a module of lib (`use case_tables`) or
-/// one of its parts (`use "runtime/text.warp"`, relative to lib/compiler). Their words become runtime words, compiled
+/// one of its parts (`use "runtime/text.warp"`, relative to core). Their words become runtime words, compiled
 /// into a module only when called. A part's own `use "x.warp"` lines (its siblings, the intrinsics it declares, so it
 /// compiles alone) join the same way, each file once, breadth first: the parts keep runtime.warp's order. The
 /// declarations of emitter.warp's intrinsics (`is_null(x: any): bool from runtime`) stay out, left to emitter.warp as
@@ -687,7 +687,7 @@ fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Nod
 }
 
 /// With the switch on, the key of the warp compiler that compiles programs (lib/ and the binary): a kept program of an
-/// older lib/compiler is no program of this one
+/// older core is no program of this one
 #[cfg(feature = "native")]
 pub fn compiler_key() -> Option<&'static str> {
 	static KEY: OnceLock<Option<String>> = OnceLock::new();
@@ -712,7 +712,7 @@ pub(crate) fn stage_key(program: &str) -> Option<String> {
 	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
-/// The cache key of a compiled stage (lib/compiler's passes, analysis, emitter compiled by this binary): the sources
+/// The cache key of a compiled stage (core's passes, analysis, emitter compiled by this binary): the sources
 /// warp was built from, the program, the WARP_ settings and the compiler's inputs alone (compiler_inputs), not every
 /// file of lib/: a std module, a sugar file or a test edited leaves the stages kept (card compiler-cache-keys: the
 /// stages compiled again after every lib/ edit made each self build long and memory-hungry)
@@ -732,9 +732,9 @@ fn compiled_stage_key(program: &str) -> String {
 	crate::extensions::hex_text(&hasher.finalize())
 }
 
-/// The key of the value `name` that the lib/compiler files `makers` made, run as this binary compiles them (os.keep_of):
-/// the sources warp was built from, the WARP_ settings and every file of lib/ but the warp files of lib/compiler the
-/// makers' `use` lines do not reach, so an edit of lib/compiler elsewhere keeps the value (card speed-module-cache:
+/// The key of the value `name` that the core files `makers` made, run as this binary compiles them (os.keep_of):
+/// the sources warp was built from, the WARP_ settings and every file of lib/ but the warp files of core the
+/// makers' `use` lines do not reach, so an edit of core elsewhere keeps the value (card speed-module-cache:
 /// uses.warp keeps each used file's parse by parser.warp's files); every file when a maker cannot be read
 #[cfg(feature = "native")]
 pub(crate) fn made_by_key(name: &str, makers: &[String]) -> String {
@@ -765,15 +765,15 @@ pub(crate) fn made_by_key(name: &str, makers: &[String]) -> String {
 }
 
 /// The std modules whose text the compiler embeds when it is built (`module_source("math")`): its inputs until
-/// lib/compiler reads them from the run's lib/ (card compiler-library-source)
+/// core reads them from the run's lib/ (card compiler-library-source)
 #[cfg(feature = "native")]
 const EMBEDDED_MODULES: [&str; 5] = ["aliases", "prelude", "math", "list", "regex"];
-/// What a stage compiled by Rust reads besides lib/compiler: the embedded modules, and the std modules its sources use
+/// What a stage compiled by Rust reads besides core: the embedded modules, and the std modules its sources use
 /// (`use os`, `use file`) or reach as type modules, which the Rust lane reads from lib/ when they were edited
 #[cfg(feature = "native")]
 const STAGE_MODULES: [&str; 10] = ["aliases", "prelude", "math", "list", "regex", "os", "file", "map", "text", "time"];
 
-/// [path inside lib/, contents] of each compiler input: the files below lib/compiler (dot files left out), sorted,
+/// [path inside lib/, contents] of each compiler input: the files below core (dot files left out), sorted,
 /// then lib/<module>.warp of each module there is
 #[cfg(feature = "native")]
 fn compiler_input_files(modules: &[&str]) -> Vec<(String, Vec<u8>)> {
@@ -795,7 +795,7 @@ fn compiler_input_files(modules: &[&str]) -> Vec<(String, Vec<u8>)> {
 }
 
 /// The inputs hash of the compiler pair built from lib/ by this binary, as scripts/compiler-inputs.sh computes it
-/// (16 hex digits): lib/compiler, the embedded modules and WARP_SOURCE; the key of the shared compiler store
+/// (16 hex digits): core, the embedded modules and WARP_SOURCE; the key of the shared compiler store
 /// (notes/compiler_rebuilds.md)
 #[cfg(feature = "native")]
 pub fn compiler_inputs_hash() -> String {

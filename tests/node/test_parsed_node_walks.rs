@@ -62,7 +62,7 @@ fn parsed_type_declarations_are_nodes() {
 	is!("n = parse(\"class P { x: int }\"); \"\\(n)\"", "type P {x:type int ø}");
 	is!("t = \"class P { x: int }\"; n = parse(t); \"\\(n)\"", "type P {x:type int ø}");
 	is!("t = \"class P { x: int }\\nf(a) := a\"; #parse(t)", 2);
-	is!("n = parse(read(\"lib/compiler/parser.warp\")); #n > 50", true);
+	is!("n = parse(read(\"core/parser.warp\")); #n > 50", true);
 }
 
 /// Card node-part-clash: `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` read

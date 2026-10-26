@@ -1,4 +1,4 @@
-//! card float-as-exact-warp: `x as rational` of a run-time float compiles in lib/compiler/emitter.warp, through
+//! card float-as-exact-warp: `x as rational` of a run-time float compiles in core/emitter.warp, through
 //! runtime.warp's float_as_exact over float_digits, and runs as Rust's float_as_exact runs
 use crate::common::twins::emitter_differential;
 use std::path::PathBuf;
