@@ -337,6 +337,20 @@ impl Lowering {
 		Some(Node::List(statements, Bracket::None, Separator::Semicolon))
 	}
 
+	/// `p.items += more` as `place·0 = p.items; place·0 += more; p.items = place·0`: the place's list grows in place as a
+	/// variable's does, every holder seeing the new items (P200b, as the pure lane does it); a number or text adds as
+	/// before. `p.items = p.items + more` copied the whole list at each step: quadratic, emitter.warp's `module.bytes +=
+	/// t.bytes` took a fifth of `warp rebuild self`'s emit stage (card speed-parallel-emit)
+	pub(super) fn added_through_temporary(&self, place: Node, added: Node) -> Node {
+		let held = Node::Symbol(format!("{PLACE_TEMPORARY}{}", self.next_temporary()));
+		let statements = vec![
+			key(held.clone(), Op::Assign, place.clone()),
+			key(held.clone(), Op::AddAssign, added),
+			key(place, Op::Assign, held),
+		];
+		Node::List(statements, Bracket::None, Separator::Semicolon)
+	}
+
 	pub(super) fn next_temporary(&self) -> usize {
 		self.temporaries.next_number()
 	}

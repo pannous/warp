@@ -666,7 +666,11 @@ impl Lowering {
 			{
 				self.expand(stepped(*left, op))
 			}
-			// `p.size += 1`, `bags#1.n += 4`, `xs#1#2 += 1`: `place = place + 4`, written back into the place
+			// `p.items += more`: through a variable, so a list grows in place
+			Node::Key(left, Op::AddAssign, right) if is_field_place(&left) => {
+				self.expand(self.added_through_temporary(*left, *right))
+			}
+			// `p.size -= 1`, `bags#1.n *= 4`, `xs#1#2 /= 2`: `place = place * 4`, written back into the place
 			Node::Key(left, op, right) if op.is_compound_assign() && is_field_place(&left) => {
 				let combined = Node::Key(left.clone(), op.base_op(), right);
 				self.expand(key(*left, Op::Assign, combined))

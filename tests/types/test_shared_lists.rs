@@ -90,3 +90,23 @@ fn a_typed_alias_of_a_field_or_item_is_no_snapshot() {
 	is!("m = [[1, 2], [3, 4]]; row = m#2; m#2.add(5); count(row)", 3);
 	is!("m = [[1, 2], [3, 4]]; s = 0; for i in 1 to 2 { row = m#i; for j in 1 to 2 { s += row#j } }; s", 10);
 }
+
+#[test]
+fn a_field_grown_by_plus_assign_is_seen_by_its_holders() {
+	// card speed-parallel-emit: `p.items += more` grows the field's list in place, as `xs += more` and the pure lane do
+	is!("class Bag { items: list }; b = Bag([1]); xs = b.items; b.items += [2, 3]; count(xs)", 3);
+	is!("class Bag { items: any }; b = Bag([1]); xs = b.items; b.items += [2]; count(xs)", 2);
+	is!("p = {xs: [1]}; ys = p.xs; p.xs += [5]; count(ys)", 2);
+	is!("class Bag { items: list }; b = Bag([]); b.items += [7]; b.items#1", 7);
+	is!("class Bag { total: int }; b = Bag(1); b.total += 4; b.total", 5);
+	is!("class Tag { name: text }; t = Tag(\"a\"); t.name += \"b\"; t.name", "ab");
+	// `+` still makes a new list
+	is!("class Bag { items: list }; b = Bag([1]); xs = b.items; b.items = b.items + [2]; count(xs)", 1);
+}
+
+#[test]
+fn a_field_grown_step_by_step_takes_linear_steps() {
+	// 3000 steps of two items: copying the field's list at each step took ~10^8 steps
+	let gathered = "class Bag { items: list }; b = Bag([]); for i in 1 to 3000 { b.items += [i, i] }; count(b.items)";
+	warp::util::with_fuel(30_000_000, || is!(gathered, 6000));
+}
