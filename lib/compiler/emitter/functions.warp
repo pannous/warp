@@ -64,7 +64,9 @@ def call_values(f: Function, values: any): list {
 	[result, code + [op.call] + uleb(f.index)]
 }
 # a value a compiled function's unannotated parameter cannot take, `last(t)` after `last(xs)`: the module is compiled
-# again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module)
+# again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module). A reading that widened
+# one goes on to find the others (module.widened_now): it is read again anyway, and stopping at the second call of a
+# widened parameter took a reading of the whole compiler for each (card speed-parallel-emit)
 def passed(f: Function, i: int, value: any): list {
 	slot = parameter_key(f.name, i)
 	try {
@@ -74,9 +76,14 @@ def passed(f: Function, i: int, value: any): list {
 		converted(value, f.kinds[i])
 	} catch refusal {
 		joint = parameter_joint(f.kinds[i], value#1)
-		if slot not in module.unannotated or not (joint in type_bytes or joint in references) or module.later_kinds.get(slot) == joint { throw refusal }
-		module.later_kinds[slot] = joint
-		module.widenings += 1
+		if slot not in module.unannotated or not (joint in type_bytes or joint in references) { throw refusal }
+		known = module.later_kinds.get(slot) == joint
+		if known and slot not in module.widened_now { throw refusal }
+		if not known {
+			module.later_kinds[slot] = joint
+			module.widened_now[slot] = yes
+			module.widenings += 1
+		}
 		value#2
 	}
 }
