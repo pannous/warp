@@ -13,6 +13,7 @@ use "walk.warp"
 use "words.warp"
 use "signatures.warp"
 use "builtin_signatures.warp"
+use "types.warp"
 use "kinds.warp"
 use "byte_codes.warp"
 use math
@@ -41,8 +42,9 @@ export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
 # the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names,
-# the position of the statement it happened in
-exported_globals = ["trap_detail", "text_heap", "trap_position"]
+# the position of the statement it happened in, the name of the runtime word it failed in (trap_name: the runner no
+# longer needs that word's frame on the stack, which Cranelift's inlining takes away)
+exported_globals = ["trap_detail", "text_heap", "trap_position", "trap_name"]
 # trap_position holds line * columns_per_line + column, Rust's line << 12 | column (src/wasm_emitter/control/traps.rs
 # encoded_position)
 columns_per_line = 4096
@@ -68,6 +70,7 @@ error_tag_name = "warp_error"
 try_depth_name = "try_depth"
 # the message of the error a try caught (error_throw), a text
 failed_in_name = "failed_in"
+trap_name_global = "trap_name"
 # the trap-only functions of a missing field or switch case: their prefix, then the name (error_function)
 no_field_prefix = "no_field_"
 no_case_prefix = "no_case_"
@@ -183,7 +186,7 @@ survey_setting = "WARP_EMIT_SURVEY"
 ## the program's functions
 # a function as written, its name, signature and body; compiling it gives the rest: kinds its parameters' kinds, result
 # its result's kind
-class Function { name: text; signature: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no }
+class Function { name: text; signature: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: map = {}; sums: map = {}; gives_nothing: bool = no }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in the module's data segment, which
 # holds the texts in the order first used, text_size bytes so far; placed: the functions in order so far
 # globals: [index, kind] of each `global` variable by name, global_order their names
@@ -204,7 +207,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: any; order: any; placed: int = 0; runtime: any = {}; texts: any = {}; text_size: int = 0; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; parents: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {}; later_kinds: any = {}; widened_now: any = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: any = []; gc_indices: map = {}; gc_order: list = []; program_file: text = ""; emitting_at: text = "" }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; runtime_globals: list = []; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: list = []; gc_indices: map = {}; gc_order: list = []; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
@@ -316,7 +319,7 @@ shared_names(statements: any) := {
 	shared
 }
 # the names among `wanted` a walk found symbols of, each once, as mentions finds one
-class Mentions { wanted: any; found: any = {} }
+class Mentions { wanted: any; found: map = {} }
 gather_mentions(n: Node, mentioned: Mentions) := match n {
 	Symbol(name): { if name in mentioned.wanted { mentioned.found[name] = yes } }
 	Key(left, _, right): {
@@ -359,7 +362,7 @@ def defined_names(program: any): list {
 # continuable: whether each takes a continue (continued_safely)
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 # globals: the names the body declares `global`, which it assigns as the module's variables, never as its own locals
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; continuable: any; unshared: any; globals: any }
+class Body { names: map; kinds: list; order: list; scratch: int; intrinsics: bool; function: Function; returned: list; declared: map; depth: int; exits: list; continuable: list; unshared: any; globals: map }
 
 local_index(body: Body, name: text, kind: text): int := {
 	if name in body.names { return body.names[name] }
@@ -743,7 +746,7 @@ repeats_at(items: any, at: int): bool := {
 	value = items#(at + 1)
 	items#at == symbol("times") and not (is_group(value) and (bracket_of(value) == "{" or (bracket_of(value) == "[" and #value != 1)))
 }
-repetition_call(count: any, value: any): any := if is_group(value) and bracket_of(value) == "[" then call_of("zero_fill", [count, value#1]) else call_of("times·text", [count, value])
+repetition_call(count: any, value: any): any := if is_group(value) and bracket_of(value) == "[" then call_of("zero_fill", [count, value#1]) else call_of(HiddenWord.TimesText, [count, value])
 # the group with its repetition at `at` as one call: the group itself when only the repetition is left
 repetition_folded(n: any, at: int): any := {
 	items = items_of(n)
@@ -770,7 +773,7 @@ def group_expression(body: Body, n: any): list {
 	# the forms `wasm i64.rem_s` and `try` lower to, ahead of the program's functions: emitter.warp has a
 	# wasm_instruction of its own
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("wasm_instruction") and n#2 is text { return wasm_instruction(body, n#2) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ran·without·error") { return ran_without_error(body, n#2) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol(HiddenWord.RanWithoutError) { return ran_without_error(body, n#2) }
 	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and is_program_call(body, name_of(n#1), items_of(n)[1..]) {
 		return call(body, module.functions[name_of(n#1)], items_of(n)[1..])
 	}
@@ -1186,7 +1189,7 @@ module_compiled(program: any, runtime: any, host: any, kinds: any): any := {
 	module.globals = {}
 	module.runtime_globals = []
 	module.global_order = []
-	module.catches_errors = mentions(program, "ran·without·error")
+	module.catches_errors = mentions(program, HiddenWord.RanWithoutError)
 	if module.catches_errors {
 		declared_global(try_depth_name, "int")
 		declared_global(failed_in_name, "text")

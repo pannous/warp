@@ -1,22 +1,22 @@
 # Output (emitter.warp's part): the text a value shows as and print writing it to stdout through WASI's fd_write
 # fd_write of the first `count` output bytes, its error code as an int
-def write_output(count: any): list {
+def write_output(count: list): list {
 	word = [op.i32_store, 2, 0]
 	iovec = [op.i32_const] + sleb(iovec_address) + [op.i32_const] + sleb(output_address) + word
 	iovec += [op.i32_const] + sleb(iovec_address + 4) + count + word
 	arguments = [op.i32_const] + sleb(stdout) + [op.i32_const] + sleb(iovec_address) + [op.i32_const, 1, op.i32_const] + sleb(written_address)
 	iovec + arguments + [op.call] + uleb(import_index(fd_write_import)) + [op.i64_extend_i32_u]
 }
-import_index(entry: any): int := {
+import_index(entry: list): int := {
 	index = -1
 	for i in 0..<#module.imports { if module.imports[i] == entry { index = i } }
 	if index < 0 { refuse("the import " + entry#2 + ", not declared") }
 	index
 }
 # the dispatcher of the program's classes showing their instances by text() (class_methods.warp showing_dispatcher)
-instance_text_word = "text·shown"
+instance_text_word = HiddenWord.TextShown
 # a value as the text `+` joins it with and print writes
-def shown_text(value: any): list {
+def shown_text(value: TypedCode): list {
 	kind = value#1
 	if kind == "text" { return value }
 	if kind == pending { return ["text", value#2] }
@@ -32,7 +32,7 @@ def shown_text(value: any): list {
 }
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
 # first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
-def printed_value(body: Body, n: any): list {
+def printed_value(body: Body, n: Node): list {
 	# `print first xs`: a call of a program function prints its value
 	if is_quote(n) or is_spaced_call(body, n) or has_repetition(n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
 	if n#1 is text and text_value(n#1)#1 == "text" { return texts_joined(body, items_of(n), "") }
@@ -41,7 +41,7 @@ def printed_value(body: Body, n: any): list {
 	runtime_call("items_text", [list_value(body, items_of(n))])
 }
 # the texts of the values, the separator between
-def texts_joined(body: Body, values: any, separator: text): list {
+def texts_joined(body: Body, values: list, separator: text): list {
 	printed_text = shown_text(expression_code(body, values#1))
 	for x in values[1..] {
 		if separator != "" { printed_text = runtime_call("text_join", [printed_text, ["text", text_bytes(separator)]]) }
@@ -50,13 +50,13 @@ def texts_joined(body: Body, values: any, separator: text): list {
 	printed_text
 }
 spaced_arithmetic = ["+", "-", "*", "/", "%", "^"]
-is_spaced_value(n: any): bool := {
+is_spaced_value(n: Node): bool := {
 	if n is number or n is text { return yes }
 	if not (type(n) is key and op_of(n) in spaced_arithmetic) { return no }
 	(key_of(n) == ø or is_spaced_value(key_of(n))) and (value_of(n) == ø or is_spaced_value(value_of(n)))
 }
 # `5 -2`: a glued sign, a value of its own
-is_negative_literal(n: any): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
+is_negative_literal(n: Node): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
-def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc_type(gc.node)]] }
-def runtime_call(name: text, values: any): list { call_values(module.runtime[name], values) }
+def printed(value: TypedCode): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc_type(gc.node)]] }
+def runtime_call(name: text, values: list): list { call_values(module.runtime[name], values) }

@@ -245,7 +245,7 @@ without_step(body: Node): Node := {
 	if not is_group(body) or #body == 0 or not is_step(body#(#body)) { return body }
 	group_like(body, items_of(body)[0 ..< #body - 1])
 }
-is_step(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol("loop·step")
+is_step(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol(HiddenWord.LoopStep)
 
 # `xs#i`: an element of a list of known elements, a character of a text
 subscript_kind(indexed: Node, index: Node, scope: Scope): KindName := {
@@ -574,7 +574,7 @@ used_sequence(n: Node): Node := {
 }
 
 is_list_literal(n: Node): bool := is_group(n) and bracket_of(n) == "["
-is_literal_text(n: Node): bool := n is text or head_name(n) == "times·text"
+is_literal_text(n: Node): bool := n is text or head_name(n) == HiddenWord.TimesText
 
 # the name `+` joins to a value `joined` accepts: `xs + [x]`, `" " + t`, `t[0 ..< n] + "…"`
 joined_name(n: Node, joined: function): Name := {

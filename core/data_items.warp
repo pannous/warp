@@ -11,9 +11,10 @@ to admit an Error stays unmarked: a variable of the scope `xs: [int or error] = 
 */
 use "walk.warp"
 use "shapes.warp"
+use "words.warp"
 
-list_item_mark = "data·item"
-field_mark = "data·field"
+list_item_mark = HiddenWord.DataItem
+field_mark = HiddenWord.DataField
 # the methods that write their arguments into the list they are called on (Rust's list_mutations APPEND_METHODS)
 item_writing_methods = ["add", "append", "push", "insert"]
 
