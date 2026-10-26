@@ -65,6 +65,7 @@ compile(source: text, folder: text): any := {
 	made
 }
 
+# todo wrap in main
 # warp compiler.warp <source file> <wasm file> [<folder of the source's uses> [<lib folder>]]
 source_file = args#1
 folder = if #args > 2 then args#3 else folder_of(source_file)

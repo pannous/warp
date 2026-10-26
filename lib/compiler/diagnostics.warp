@@ -89,7 +89,9 @@ shown(part: any): text := if part is symbol then name_of(part) else if part is t
 diagnosed_since(known: int): list := diagnosed[known ..]
 
 # the first error among the diagnosed in the program's file, as Rust's Diagnostic says it; ø when none is an error
+# todo list of what?
 first_error(found: list, file: text): text? := {
+	# todo BIG refactor said#1 =>  said.name Or whatever the number one here and everywhere applies to 
 	failing = found.find(said => said#1 == "error")
 	if not failing { return ø }
 	said_text(failing, file)
@@ -98,7 +100,8 @@ first_error(found: list, file: text): text? := {
 # the warnings among the diagnosed in the program's file, each as Rust's Diagnostic says it
 warnings_said(found: list, file: text): list := found.filter(said => said#1 == "warning").map(said => said_text(said, file))
 
-# a diagnosed [level, message, fix, topic, place] as Rust's Diagnostic says it: the message and where in the file,
+# a diagnosed [level, message, fix, topic, place] as diagnostic says it: the message and where in the file,
+# todo wrap [level, message, fix, topic, place] as small type / class
 # then `; fix: ` and the fix when it names one
 said_text(said: list, file: text): text := {
 	text = said#2 + place_text(said#5, file)
