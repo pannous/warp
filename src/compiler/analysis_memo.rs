@@ -1,4 +1,4 @@
-//! One analysis per program state (user decision P91, notes/build_speed.md): `extract_user_functions` of a fresh
+//! One analysis per program state : `extract_user_functions` of a fresh
 //! Context is remembered by a fingerprint of the whole tree, positions and comments included, so the many lowering
 //! passes (and every EffectReport::of) that analyse a program the pass before them did not change get the same answer
 //! without recomputing it. A changed tree has another fingerprint and is analysed anew: the answer is always the one a

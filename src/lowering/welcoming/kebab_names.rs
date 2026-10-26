@@ -17,7 +17,7 @@ pub fn resolve_data_scope(program: Node) -> Node {
 	subtract_kebab_variables(resolved, &variables)
 }
 
-/// field-or-minus (user 2026-10-12, replaced P168's subtraction): `p.phone-number` of an object without that field,
+/// field-or-minus : `p.phone-number` of an object without that field,
 /// `number` a variable, is the error "p has no field phone-number" with the fix `p.phone - number`; an object whose
 /// fields are unknown keeps the field read. Early, before member reads become indexes
 pub fn lower_kebab_members(program: Node) -> Node {

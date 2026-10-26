@@ -207,7 +207,7 @@ pub(crate) fn runtime_stub_path(kind: &RuntimeStub) -> Result<std::path::PathBuf
 	let neighbour = next_to_warp.iter().find(|stub| stub.is_file());
 	if !in_cargo_target(&resolved) {
 		// an installed warp (brew, a release tarball, ~/dev/bin) uses the prebuilt stub shipped next to it and never
-		// builds one (user 2026-10-09)
+		// builds one 
 		return neighbour.cloned().ok_or_else(|| {
 			format!(
 				"no runtime stub {}: {} ships next to warp (brew, the release tarball); put it there or name one in {}",

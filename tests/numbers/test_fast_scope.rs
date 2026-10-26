@@ -1,4 +1,4 @@
-//! `fast` on a function, a program or a module (user 2026-10-16, card fast-scope): sin cos exp pow atan2 are
+//! `fast` on a function, a program or a module : sin cos exp pow atan2 are
 //! lib/fast_math.warp's polynomials, Ints machine i64s that wrap, `/` of Ints a float; the rest stays exact.
 //! `x: fast int` is i64, `x: fast float` f64
 use crate::is;

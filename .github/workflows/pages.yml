@@ -4,7 +4,7 @@ name: Playground
 # The browser playground (web/playground, notes/web_playground.md) on GitHub Pages, custom domain warp.pannous.com:
 # the warp compiler built for wasm32-unknown-unknown without the native feature (warp.wasm optimized, warp.debug.wasm
 # with names and line tables: ?debug), the page, samples/<chapter>/*.warp and the jco-transpiled components (components.js).
-# Stage 2 of 2 (user 2026-10-15): the Integrator pushes main after the native gate (stage 1) and never waits for this.
+# Stage 2 of 2 : the Integrator pushes main after the native gate (stage 1) and never waits for this.
 # Hourly, the latest main is built, checked in the browsers and deployed, if it changed the compiler, the page or the
 # samples since the last green run; by hand at once (`gh workflow run Playground -R pannous/warp`) for an urgent fix or
 # a branch check. A failure keeps the last good site up and is fixed forward.
@@ -97,7 +97,7 @@ jobs:
     - uses: actions/upload-pages-artifact@v5
       with:
         path: _site
-    # the tour jobs check this very site, in parallel (user 2026-10-09): Chrome and Firefox each take minutes
+    # the tour jobs check this very site, in parallel : Chrome and Firefox each take minutes
     - uses: actions/upload-artifact@v7
       with:
         name: site
@@ -126,8 +126,8 @@ jobs:
         SUITE_PATHS: ^(src/|tests/|web/|crates/|Cargo\.|\.cargo/|\.github/workflows/pages\.yml)
 
   # the whole test suite in headless Chrome (cargo browser-test, notes/web_playground.md): browser tests run in CI only
-  # (user 2026-10-09). Beside the deploy, not before it: a failure shows in the run without holding the page back.
-  # Four shards of every 4th test, each running one test per core (user 2026-10-10: one job took 21 min)
+  # . Beside the deploy, not before it: a failure shows in the run without holding the page back.
+  # Four shards of every 4th test, each running one test per core 
   browser-suite:
     needs: scope
     if: needs.scope.outputs.suite == 'true' && !inputs.skip_checks
@@ -271,7 +271,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/ --site _site
     # the page is deployed by now: a Firefox failure here (the intermittent worker-start hang, card firefox-hello) is a
-    # warning annotation on the run, not a failed run mailing the user (user 2026-10-09: "conditionally skip the tests")
+    # warning annotation on the run, not a failed run mailing the user 
     - name: The same in headless Firefox (a warning, not a failure)
       timeout-minutes: 15
       env:

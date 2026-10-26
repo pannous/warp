@@ -1,4 +1,4 @@
-// Two print statements on one line separated only by spaces are an error naming the separators (user decision 2026-10-03)
+// Two print statements on one line separated only by spaces are an error naming the separators 
 use crate::common::fails_with;
 use crate::is;
 

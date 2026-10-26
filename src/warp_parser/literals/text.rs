@@ -173,7 +173,7 @@ impl WarpParser {
 		match self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
 			Some(number_type) => {
 				let message = format!(
-					"\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character"
+					"\"{c}\" as {number_type}: a text is no number ; codepoint('{c}') is the code point of the character"
 				);
 				let explicit = format!("{}('{c}') as {number_type}", crate::words::CODEPOINT);
 				Diagnostic { message, line, column, ..Default::default() }

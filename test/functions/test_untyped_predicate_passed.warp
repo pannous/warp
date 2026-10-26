@@ -1,0 +1,6 @@
+# from test_untyped_predicate_passed.rs: edit the Rust test, then run the script again
+
+# an_untyped_predicate_passed_as_a_value
+is! «f(c) := is_digit(c) or c == '-'
+apply(g, v) := g(v)
+apply(f, '-')» true

@@ -1,4 +1,4 @@
-// P222 (user 2026-10-08): `warp serve [app.warp] [port]` serves any program (its page, its `server def`s as POST
+// P222 : `warp serve [app.warp] [port]` serves any program (its page, its `server def`s as POST
 // /rpc/f, its top-level `get`/`post` routes) without a `serve PORT {…}` statement; plain `warp app.warp` serves too when
 // the program is obviously a server (serve::serves, a static check)
 use std::time::Duration;

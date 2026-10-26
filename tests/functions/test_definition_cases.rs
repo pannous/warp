@@ -1,4 +1,4 @@
-// card definition-cases (user decision definition-cases, notes/decisions.md): a second definition of the same shape is
+// card definition-cases : a second definition of the same shape is
 // the error "fib is defined twice" with a fix pointing at a match; cases are not joined. Overloads by parameter count or
 // by parameter type are unaffected (test_arity_overloads.rs).
 use crate::common::fails_with;

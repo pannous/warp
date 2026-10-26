@@ -31,7 +31,7 @@ pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {
 /// Each field typed with a tolerance (`length: m ± 1 mm`) by class: its position among the fields, its name, its spread
 type Tolerances = HashMap<String, Vec<(usize, String, Node)>>;
 
-/// `class Part{length: m ± 1 mm}`: the value carries the tolerance (user decision P233): `Part(5 m)` holds `5 m ± 1 mm`
+/// `class Part{length: m ± 1 mm}`: the value carries the tolerance : `Part(5 m)` holds `5 m ± 1 mm`
 /// (a run-time quantity, lower_run_time_tolerances runs next), a value given with its own tolerance keeps it, and the
 /// field type is the plain unit
 pub(crate) fn lower_field_tolerances(program: Node) -> Node {

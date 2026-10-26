@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Inline code's value is its output and its status not an Int's, as warp-rust's inline code (src/cli/display.rs
 # show_and_fail_on_error); an Error still fails (card warp-host-inline-status). Result-based: only the output is
-# checked, and of the status only that an Error's is not 0 (user rule 2026-10-23).
+# checked, and of the status only that an Error's is not 0 .
 # Run it through the queue: tests/queue.sh tests/host/test_host_inline_status.sh
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}

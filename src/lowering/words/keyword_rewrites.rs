@@ -1,4 +1,4 @@
-//! Keyword-triggered local rewrites (user decision pass-triggers): a rewrite of one node, triggered by a word of the
+//! Keyword-triggered local rewrites : a rewrite of one node, triggered by a word of the
 //! node's own (has_own_word: one of its items, a key's operator, a declaration head's name), is an
 //! entry of a table instead of a pass of its own. One bottom-up walk applies a whole table at its place in the pass
 //! lists (src/pipeline.rs) and skips a program holding none of the table's words. A fact of the whole program an entry

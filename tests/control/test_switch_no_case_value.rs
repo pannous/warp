@@ -1,4 +1,4 @@
-// #31 (user 2026-10-03, "Show runtime value"): a switch without a matching case names the subject's runtime value.
+// #31 : a switch without a matching case names the subject's runtime value.
 use crate::common::fails_with;
 
 #[test]

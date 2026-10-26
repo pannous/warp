@@ -9,12 +9,12 @@ notes/agents/common.md.
   something stalls (a gate holding batches, a lane fault, a worker stuck, a Ready queue piling up), act at once
   instead of waiting for reports. Make the smart decision yourself: a technical or process choice that follows the
   decided direction (notes/welcoming.md, notes/decisions.md) needs no Interviewer round first. Record it yourself
-  as one line in notes/decisions.md (user 2026-10-22: small decision-table updates are the Supervisor's own job). A rule that blocks progress may be bent; say which rule and why in the
+  as one line in notes/decisions.md . A rule that blocks progress may be bent; say which rule and why in the
   message or commit, and persist the change if it should last. Only questions of the language's meaning still go to the
   user via the Interviewer.
 - Swap notices from workers ("Swap: … was replaced by me"): answer with no text at all; never tell the user
   (notes/agents/common.md).
-- Procedure changes are persisted, not only announced (user 2026-10-20): whenever a rule of how we work changes,
+- Procedure changes are persisted, not only announced : whenever a rule of how we work changes,
   write it into the notes the sessions read (notes/agents/common.md or the role file, AGENTS.md, notes/roles.md,
   the decision in notes/decisions.md), remove every line that now contradicts it, push, and only then tell the agents.
 - High-level only: talk to the user, turn requests and decisions into tasks, spawn and assign workers, watch the load
@@ -68,8 +68,8 @@ notes/agents/common.md.
 - Grok Bot's Supervisor (it runs the Grok Bot agents Warp Code, Warp Code 2, Warp Issues) is not reachable by
   SendMessage: reach it with `grok-msg warp-supervisor "<text>"` (~/dev/bin/grok-msg, webhook; secrets in
   ~/.config/grok-bot/webhook, never in the repo). It replies by typing into your tmux pane or via scratch/grok-cards.md.
-  Treat its agents as our own workers (user 2026-10-22: "freely send them cards"), but first ask the Grok Supervisor
-  with grok-msg whether they're busy and how many cards each can take (user 2026-10-22); then `todo take <card> grok-warp-code`
+  Treat its agents as our own workers , but first ask the Grok Supervisor
+  with grok-msg whether they're busy and how many cards each can take ; then `todo take <card> grok-warp-code`
   / `grok-warp-code-2` / `grok-warp-issues` yourself, write the task into scratch/grok-cards.md and ping with
   grok-msg; they `todo ready`, the Integrator merges. Capacity (Grok Supervisor, 2026-10-22): at most 1 active + 1
   queued card per Grok coder; heavy builds (self builds, cold module caches) go to Warp Code 3's Linux box.
@@ -81,7 +81,7 @@ notes/agents/common.md.
   hear directly go into notes/decisions.md by you, in the user's words; the Interviewer only for open questions.
 - Report to the user at the end of each answer: what merged (suite count), what runs. Anything needed from the user
   (a `!` command a hook blocks, a confirmation) goes to warp-interviewer once and only once, never into the replies
-  (user 2026-10-22: "stop fucking repeating what still needs me"). Delete merged or stale things without asking.
+  . Delete merged or stale things without asking.
 - Cloud: `claude --cloud "<task>"` sessions (run inside tmux: --cloud needs a TTY) spend the user's Cloud session
   credit, not plan limits (notes/cloud_development.md); use them for self-contained tasks when the Mac is loaded or
   when the user asks for cloud sessions (then never local ones). Follow-ups only via `claude -p "msg" --cloud <id>`

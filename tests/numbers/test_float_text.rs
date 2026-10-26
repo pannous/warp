@@ -1,5 +1,5 @@
 //! A float computed at run time has a text: print, `str(x)`, `x as text`, `"a" + x` and join show the shortest
-//! digits that read back (user decision float-text), positional from 1e-5 up to 1e15, else with an exponent
+//! digits that read back , positional from 1e-5 up to 1e15, else with an exponent
 use crate::is;
 
 /// The float `value` computed at run time (a host random number times zero keeps the compiler from folding it)

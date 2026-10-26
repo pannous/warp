@@ -32,7 +32,7 @@
 # `/model` before each job (`--model` on a follow-up message doesn't switch it). Fast mode applies to new sessions only.
 set -uo pipefail
 case "${1:-}" in -h | --help) sed -n '2,/^set -uo pipefail/{/^#/s/^# \{0,1\}//p;}' "$0"; exit 0 ;; esac
-CLOUD_PAUSED=$HOME/.config/warp/cloud-paused   # on the Mac only: while it exists no job starts (user 2026-10-22)
+CLOUD_PAUSED=$HOME/.config/warp/cloud-paused   # on the Mac only: while it exists no job starts 
 if [ -f "$CLOUD_PAUSED" ]; then
 	echo "cloud-test: the cloud lane is paused ($CLOUD_PAUSED: $(cat "$CLOUD_PAUSED")); remove the file to resume" >&2
 	exit 3
@@ -51,7 +51,7 @@ SHOWN_ITEMS=12                 # lines of a real failure's panic message shown u
 KNOWN_FAILURES=notes/known_failures.md   # read in the tested checkout, as the gate reads it at the tested tip
 CARGO_FLAGS_WITH_VALUE='--config|--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
 MAX_PARALLEL_RUNS=7           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
-WORKER_RUNS=$((MAX_PARALLEL_RUNS - 2))   # slots a worker's runs may hold: the rest is kept for gate runs (user 2026-10-21)
+WORKER_RUNS=$((MAX_PARALLEL_RUNS - 2))   # slots a worker's runs may hold: the rest is kept for gate runs 
 GATE_BRANCHES='^(batch-|express)'        # branches whose runs are gate runs without --gate
 PENDING_MINUTES=90             # a job older than this without a result: its session is dropped from the pool (a full run's shard takes ~15)
 POOL=/Users/me/dev/angles/warp/data/cloud/pool   # one file per cloud session: its current job, or idle
@@ -81,8 +81,8 @@ SHARD_FLAG=--shard             # --full --shard <i>/<n>: one shard's job, on the
 SHARD_HEADER="==== shard "     # a merged log's line before each shard's log
 RERUN_MARK="cloud-test: RERUN" # a killed run's failed tests run once more for their panic texts: lines after it count no test
 RERUN_SECONDS=600
-SLOW_TESTS_LIST=scripts/slow-tests.txt   # the tests --full leaves out and --slow runs (user 2026-10-22), in the main checkout
-PAUSED_TESTS_LIST=scripts/paused-tests.txt   # name prefixes --full leaves out and nothing runs (user 2026-10-22: the playground tests)
+SLOW_TESTS_LIST=scripts/slow-tests.txt   # the tests --full leaves out and --slow runs , in the main checkout
+PAUSED_TESTS_LIST=scripts/paused-tests.txt   # name prefixes --full leaves out and nothing runs 
 SLOW_SECONDS=10                # a --full run appends each test that took this long to SLOW_TESTS_LIST
 SLOW_LEFT_OUT="slow tests left out (--slow runs them)"   # a shard's log line: the merge expects that many fewer tests
 TIMINGS=timings.tsv            # data/cloud/<run>/: each test's seconds and name, slowest first (libtest's --report-time)

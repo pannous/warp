@@ -22,7 +22,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
   - `.deb`/`.rpm` warp-lang, from packaging/linux/nfpm.yaml (nfpm 2.47 in CI, `brew install nfpm` locally; run in the
     unpacked tarball, nfpm doesn't expand env vars in `src`): /usr/bin/warp, warp-runtime, warp-page-runtime, attached
     to the release as warp-lang_<v>_amd64.deb / warp-lang-<v>-1.x86_64.rpm (and arm64/aarch64).
-  - No AUR (user 2026-10-22, decision no-aur): Arch users take the GitHub release's linux tarball.
+  - No AUR : Arch users take the GitHub release's linux tarball.
   - Linux needs glibc >= 2.39 (Ubuntu 24.04, Debian 13, Fedora 40; not Ubuntu 22.04 or RHEL 9): the binaries are
     built on ubuntu-24.04 runners (card linux-glibc-floor).
   - One-time setup (user): PyPI account → pypi.org/manage/account/publishing "Add a new pending publisher": project

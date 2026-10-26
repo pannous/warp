@@ -201,7 +201,7 @@ fn test_running_a_file_shows_its_hints_once() {
 	assert!(executable.exists(), "{stderr}");
 }
 
-/// card executable-flag (user 2026-10-12, replaces P103's default): a plain run leaves no executable
+/// card executable-flag : a plain run leaves no executable
 #[test]
 fn test_plain_run_leaves_no_executable_by_default() {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_plain_run.warp");

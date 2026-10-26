@@ -13,7 +13,7 @@ use warp::formatting::{format, soft_hints, Formatted, Options};
 
 pub(crate) const FORMAT_COMMANDS: [&str; 2] = ["format", "lint"];
 pub(crate) const BEAUTIFY_COMMAND: &str = "beautify";
-/// `warp fix <file>` = beautify (user 2026-10-15)
+/// `warp fix <file>` = beautify 
 pub(crate) const BEAUTIFY_COMMANDS: [&str; 2] = [BEAUTIFY_COMMAND, "fix"];
 /// ⚠ WARP DOES THIS DIFFERENTLY: warp fix and warp beautify are lib/fix/command.warp, run with the command word and its
 /// arguments (card fix-in-lib); src/formatting's beautify stays for its Rust callers

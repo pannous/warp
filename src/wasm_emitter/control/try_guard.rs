@@ -1,4 +1,4 @@
-//! `try X else Y` catches a runtime error however deep inside X it happens (user decision #34), with the wasm
+//! `try X else Y` catches a runtime error however deep inside X it happens , with the wasm
 //! exception-handling proposal: every runtime error function (`index_out_of_range`, …) throws the tag `warp_error`
 //! with its error id while a `try` is running, and traps as before otherwise, so an uncaught error keeps its message.
 //! `ran·without·error{statement}` runs the statement inside a `try_table` catching that tag: 1 when it finished, 0 when
@@ -12,7 +12,8 @@ use wasm_encoder::*;
 use Instruction as I;
 
 /// The marker call `try X else Y` lowers to (library_words::lower_try): `ran·without·error{try_tmp = X}`, a name no program defines
-pub const RAN_WITHOUT_ERROR: &str = "ran·without·error";
+pub const RAN_WITHOUT_ERROR: &str = "ran·without·error"; 
+// todo Do we really need a helper function to apply try catch with try tables? Please bring to interviewer for discussion 
 const ERROR_TAG_NAME: &str = "warp_error";
 const TRY_DEPTH_GLOBAL: &str = "try_depth";
 const CAUGHT_ERROR_GLOBAL: &str = "caught_error_id";

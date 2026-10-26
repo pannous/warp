@@ -89,7 +89,7 @@ pub const MACOS_C_HEADERS: Resource = Resource {
 	available: || cfg!(target_os = "macos"),
 };
 
-/// `lean`/`lake` runs are disabled in cloud sessions (user decision): no toolchain there, and proofs are slow
+/// `lean`/`lake` runs are disabled in cloud sessions : no toolchain there, and proofs are slow
 pub const LEAN: Resource = Resource {
 	name: "the Lean toolchain (disabled in cloud sessions)",
 	available: || std::env::var(CLOUD_SESSION_VAR).as_deref() != Ok("true"),
@@ -106,7 +106,7 @@ pub const RUST_PIPELINE: Resource = Resource {
 pub const WASM_SPLIT: Resource =
 	Resource { name: "binaryen's wasm-split", available: || warp::modules::binaryen::available("wasm-split") };
 
-// The test macros (user decision P100: they live with the tests, not in the library). is!(code, value) compiles and
+// The test macros . is!(code, value) compiles and
 // runs code through the whole pipeline (parse, analyze, emit, run, read back) and compares the result
 #[macro_export]
 macro_rules! eq {

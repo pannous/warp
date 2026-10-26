@@ -43,7 +43,7 @@ fn meaning(count: Node, operand: Node, loops: &mut usize) -> Node {
 	}
 }
 
-/// `for times·N in 0..count body`; the count is evaluated once, before the first round (user decision #22): the body
+/// `for times·N in 0..count body`; the count is evaluated once, before the first round : the body
 /// may change what it reads
 fn rounds(count: Node, body: Node, number: usize) -> Node {
 	let counter = symbol(&format!("{TIMES_WORD}·{number}"));

@@ -151,7 +151,7 @@ pub enum Capability {
 
 impl Capability {
 	pub const ALL: [Capability; 7] = [Host, Wasi, Ffi, Libm, Sql, Process, Foreign];
-	/// Capabilities `eval` grants: all of them for now (user decision P88, "currently allow everything to everyone");
+	/// Capabilities `eval` grants: all of them for now ;
 	/// the checks stay, a host that grants less will narrow this
 	pub const GRANTED_BY_EVAL: [Capability; 7] = Capability::ALL;
 	/// Capabilities untrusted code gets: all of them for now too (P88)
@@ -186,7 +186,7 @@ pub struct FunctionEffects {
 	pub effects: EffectSet,
 	/// Performed by the body itself, not via a call: `global` state, a `while` loop, non-shrinking recursion
 	pub own: EffectSet,
-	/// Directly resolved callees (user functions and externals)
+	/// Directly resolved callees 
 	pub calls: BTreeSet<String>,
 	/// The callees called only inside `try`, which handles their Fail
 	pub tried_calls: BTreeSet<String>,

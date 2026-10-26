@@ -10,7 +10,7 @@ fn chr_of_an_expression_is_a_function_result() {
 
 #[test]
 fn walked_chars_are_the_list_of_chars() {
-	is!("\"ab\".chars", texts(vec!["a", "b"])); // the list as everywhere (user 2026-10-14, card abc-chars)
+	is!("\"ab\".chars", texts(vec!["a", "b"])); // the list as everywhere 
 	is!("w=\"ab\"; w.chars.map(c => ord c)", ints![97, 98]);
 	is!("s=0; for c in \"ab\".chars { s += ord c }; s", 195);
 }

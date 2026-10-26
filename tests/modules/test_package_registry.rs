@@ -1,4 +1,4 @@
-//! Card build-sh / package registry (user 2026-10-17): most packages need no registry line. The default registry
+//! Card build-sh / package registry : most packages need no registry line. The default registry
 //! github.com/pannous/warp-packages holds one folder per package (`use colors`), its versions tagged `colors@1.0.0`;
 //! a folder whose manifest package.warp names a `repository` is a proxy for it (`use uniscript`). A packages.warp line
 //! only pins or redirects: `name: 1.2.3`, `name: "owner/repo@1.2.3"`, the long `{repository, version, library}`.

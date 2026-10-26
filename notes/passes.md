@@ -48,7 +48,7 @@ ordering constraints, not speed.
    With notes and scoped shadowing in rules (card rewrite-notes-scopes), word_operators, std_aliases and number_words
    can follow.
 
-   Expressed in existing warp syntax (user 2026-10-21: "can they be expressed with given warp syntax, so as a lib"):
+   Expressed in existing warp syntax :
    - plain definitions, as lib/PHP.warp and lib/R.warp already do (`array_sum(xs) := sum(xs)`): foreign words that
      are ordinary calls. Missing: the got-it note, and a module-qualified name (`json.loads`) can't be defined that way.
    - `alias X = Y` exists in lib/collections.warp for class names (with a note) but not for words: in a program
@@ -110,7 +110,7 @@ ordering constraints, not speed.
   one `with_implied_routes` picks by the compile mode.
 - library_words: `lower_byte_counts` is the last step of `library_words::lower`, which wrote what it reads.
 
-## Keyword-rewrite table: measured, parked (user 2026-10-22)
+## Keyword-rewrite table: measured, parked
 Merging local sugar passes into one walk (src/lowering/words/keyword_rewrites.rs, SUGAR_PHRASES) saves next to
 nothing: in a 52 s cold compile of passes.warp and its uses (WARP_PHASE_TIMES, empty WARP_MODULE_CACHE, main's build)
 the four passes it replaced took 59 ms together (of_lookups 45.5, grouped_receivers 5, element-wise 4.7, arrow

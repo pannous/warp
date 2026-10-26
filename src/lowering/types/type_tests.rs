@@ -3,7 +3,7 @@
 //! as `type(x)`) when it is known, else from the value's kind at run time (`runtime_kind_mask`, node_kind_in) or, for a
 //! declared type, its instance type (instance_of). `type of x` is `type(x)` (of_lookups.rs).
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
-//! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
+//! `x == int` is no type test : a value never equals a type, so it is false and hints `x is int`.
 
 use super::memoization::{definition_parts, Rebuild};
 use super::nodes::{call, children_rewritten, is_call_head, key, or_operands, parameter_name};
@@ -338,7 +338,7 @@ fn union_operands(union: &Node) -> Vec<Node> {
 	}
 }
 
-/// `int or text` of only type words, compared with `==`, stays a value (user decision #30, as `x == int`)
+/// `int or text` of only type words, compared with `==`, stays a value 
 fn is_type_union(union: &Node) -> bool {
 	let types = union_operands(union);
 	types.len() > 1
@@ -386,7 +386,7 @@ fn phrase_words(node: &Node) -> Option<Vec<&str>> {
 	}
 }
 
-/// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
+/// Meta key marking a type word compared with `==` (not `is`): only `is` tests types 
 pub(crate) const EQUALITY_OPERAND: &str = "equality operand";
 
 /// A side of `x == word` or `word != x` as the parser marks it when the word names a type; lowering names it by its
@@ -538,7 +538,7 @@ fn function_itself(operand: Node, names: &Names) -> Node {
 	}
 }
 
-/// `floor == function`: a function never equals a type (user decision #30), so no (`!=`: yes), hinting `floor is
+/// `floor == function`: a function never equals a type , so no (`!=`: yes), hinting `floor is
 /// function`
 fn function_compared_with_type(left: &Node, op: &Op, right: &Node, names: &Names) -> Option<Node> {
 	let (function, type_word) = match (is_type_operand(left, names), is_type_operand(right, names)) {

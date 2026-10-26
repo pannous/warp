@@ -30,7 +30,7 @@ pub(crate) const WORKGROUP_SIZE: i64 = 256;
 /// ~3·10^4 items even against a heavy lambda (sin, cos: ~70–190 ns an item on the CPU, ~12 on the GPU)
 pub(crate) const GPU_MAP_MIN_COUNT: i64 = 32768;
 /// A map without @gpu goes to the GPU from 10× the break-even: an order of magnitude of room for slower GPUs and faster
-/// CPUs, so the switch never makes a program slower (user 2026-10-10)
+/// CPUs, so the switch never makes a program slower 
 pub const GPU_AUTO_MIN_COUNT: i64 = 10 * GPU_MAP_MIN_COUNT;
 /// The attributes marking an @gpu map whose result stays on the GPU for a later map of it, and that later map
 const KEEP_RESULT_ATTRIBUTE: &str = "gpu_keep_result";

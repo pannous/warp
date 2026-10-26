@@ -11,7 +11,7 @@ exclude = ["packages"]
 resolver = "2"
 
 [package]
-name = "warp-lang" # crates.io: `warp` is the web framework (user 2026-10-06: "lang is perfect"); the library stays `warp`
+name = "warp-lang" # crates.io: `warp` is the web framework ; the library stays `warp`
 version = "1.4.1"
 edition = "2021"  # Cargo edition! NOT package edition!
 description = "Warp: the Warp language, a data notation that is also a programming language, compiled to WebAssembly GC"

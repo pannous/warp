@@ -1,5 +1,5 @@
 // `warp build` just works (issue #10) with the prebuilt warp-runtime shipped next to warp. An installed warp never builds
-// the stub itself (user 2026-10-09: "It should never be built by the script itself. It should already be prebuilt."):
+// the stub itself :
 // without one it says where warp-runtime belongs
 #![cfg(feature = "native")]
 use std::path::PathBuf;

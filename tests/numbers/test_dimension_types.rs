@@ -40,7 +40,7 @@ fn a_declared_height_is_the_programs() {
 	is!("width: cm = 3 cm; width + 1 cm", value("4 cm"));
 }
 
-/// Derived dimensions with a name of their own (user 2026-10-15, Q4 of dimensions-units)
+/// Derived dimensions with a name of their own 
 #[test]
 fn speed_area_volume_and_frequency_are_named_dimensions() {
 	is!("4 m² is area", true);
@@ -53,7 +53,7 @@ fn speed_area_volume_and_frequency_are_named_dimensions() {
 	fails_with("a: area = 3 m", "DimensionError: a is declared area (m²), is given m (length)");
 }
 
-/// A unit after a list is each element's (user 2026-10-15, Q3 of dimensions-units); was "repeat or multiply?". A list of
+/// A unit after a list is each element's ; was "repeat or multiply?". A list of
 /// quantities goes wherever a whole list does: assigned, shown, summed, nested
 #[test]
 fn a_unit_after_a_list_applies_to_each_element() {

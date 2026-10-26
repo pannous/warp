@@ -1,4 +1,4 @@
-// card shader-builtins (user 2026-10-10): $width, $height, $size, $time, $frame, $mouse, $mouse_down and $key are there
+// card shader-builtins : $width, $height, $size, $time, $frame, $mouse, $mouse_down and $key are there
 // in every shader block without warp variables of those names: the host fills them at each paint or gpu_render
 // (src/graphics/gpu.rs with_builtin_values, host-gpu.js); a program's own variable of such a name, or a values map entry, wins
 #[cfg(feature = "native")]
@@ -18,7 +18,7 @@ fn the_host_fills_the_builtin_holes() {
 	assert!(said.contains(&(0xFF04_02FFu32).to_string()), "{said}");
 }
 
-// card shader-read (user wish): $previous(at) is the color the shader left at that pixel in its previous frame of the
+// card shader-read : $previous(at) is the color the shader left at that pixel in its previous frame of the
 // same size, kept on the GPU (black before the first): painting with memory, as a feedback texture. Each render here
 // adds a quarter of red to what was there
 #[cfg(feature = "native")]

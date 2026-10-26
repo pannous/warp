@@ -39,7 +39,7 @@ fn a_result_that_cannot_be_empty_or_is_declared_optional_stays_quiet() {
 	assert!(warnings.is_empty(), "{warnings:?}");
 }
 
-/// A list result autocasts ø to [] without a warning (user 2026-10-22, card list-result-autocast); other types still warn
+/// A list result autocasts ø to [] without a warning ; other types still warn
 #[test]
 fn a_list_result_of_empty_is_the_empty_list() {
 	let (value, warnings) = crate::common::warnings_of("def found(x: int): ints { if x > 0 { [x] } }; found(-1)");

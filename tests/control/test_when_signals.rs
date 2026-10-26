@@ -1,4 +1,4 @@
-// Card signals-shape (user decision 2026-10-08): `when` by shape. `when click {…}` is `on click {…}`, `when x > 3 {…}` is
+// Card signals-shape : `when` by shape. `when click {…}` is `on click {…}`, `when x > 3 {…}` is
 // `whenever x > 3 {…}` (edge-triggered, P156), a block of `->` arms stays Kotlin's switch
 use crate::is;
 

@@ -176,7 +176,7 @@ FIREFOX_TERMINATED_PROMISING = ["uncaught exception: undefined"]  # card firefox
 # WebAssembly.promising, so whichever run replaces that worker next logs Firefox's anonymous uncaught exception (dry runs
 # 2026-10-15: on the swirl itself, also with a 3 s loop, or on the sample after it); card logs-uncaught finds the cause
 FIREFOX_SKIPPED_SAMPLES = {"warp_compiled_wgsl_shader": "its worker, replaced, logs 'uncaught exception: undefined' (card logs-uncaught)"}
-# samples no tour runs (user 2026-10-21: disable the memory hungry ones): the largest growths of the tour's memory
+# samples no tour runs : the largest growths of the tour's memory
 # (card our-playground, isolated runs after 5b0b7f1bdb, anon)
 MEMORY_HUNGRY_SAMPLES = {"ringed_planet": "+211 MB: a 1920×1080 compute_toy painted on the CPU in headless Chrome",
 	"uniscript_text": "+195 MB: reads uniscript's 10 MB entities index", "sound_patterns": "+100 MB"}

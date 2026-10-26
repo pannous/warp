@@ -38,7 +38,7 @@ pub fn long_decimal(text: &str) -> Option<Number> {
 	Some(Number::ratio(Number::from_bigint(numerator), Number::from_bigint(denominator)))
 }
 
-/// The text of a float as the run-time float_text writes it (user decision float-text): the shortest digits that read
+/// The text of a float as the run-time float_text writes it : the shortest digits that read
 /// back (`0.1+0.2` as floats is `0.30000000000000004`), positional from 1e-5 up to 1e15, else `1.5e20` / `1e-7`
 pub fn float_text(x: f64) -> String {
 	if x.is_nan() {

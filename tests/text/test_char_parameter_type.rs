@@ -1,6 +1,6 @@
 use crate::is;
 
-// card chars-codepoints follow-up (user decision A, a one-character text is a character): a parameter given "a" holds
+// card chars-codepoints follow-up : a parameter given "a" holds
 // a one-character text, whose type at run time is codepoint too, as type("a") and x = "a"; type(x) say
 
 #[test]

@@ -1,0 +1,3 @@
+# a used file typing its function with the alias of the file it uses (test_used_types.rs)
+use "used_types.warp"
+shout(n: Name): Name := n + "!"

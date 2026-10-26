@@ -1,4 +1,4 @@
-# The compiler rewrite: plan, state, next (user 2026-10-22)
+# The compiler rewrite: plan, state, next
 
 The user's main goal: the warp compiler written in warp replaces the Rust one, built as notation → kernel → sugar.
 Details of the layers, every sugar form and the rule it becomes: notes/layers.md. Rule engine spec: notes/rewrites.md.
@@ -50,9 +50,9 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
 - **Honest count:** the sugar passes are all still there and parser.warp is about its old size (4272 lines); about
   1–3 % of the ~3900 sugar lines have moved. The engine was the first half of the work; the moving starts now.
 
-## Next (user 2026-10-22 late: finish it fast, decision finish-migration)
+## Next
 
-1. **F5 name building, high priority** (user 2026-10-22 evening, card rewrite-templates, decision name-glue):
+1. **F5 name building, high priority** :
    `square·$a` → square_a_number, `$i·end`; unblocks for_loops, English `To …:` definitions, accessors per field.
 2. **Sugar passes into lib/sugar/** (Grok coders, one pass per branch, express): coalesce, comprehensions, ranges
    (F3); type_tests, filled_lists, grouped_receivers, prefix_comparisons, plain_enums (F2); foreign_forms,

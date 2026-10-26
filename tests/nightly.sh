@@ -1,5 +1,5 @@
 #!/bin/zsh
-# The nightly tier (user 2026-10-16, notes/test_speed.md): tests the gate only samples run in full on the latest
+# The nightly tier : tests the gate only samples run in full on the latest
 # origin/main, in a detached worktree of their own, through the test queue. A failure becomes a to-do card with the
 # log's path. Run by cron at night:
 #   10 3 * * * /Users/me/dev/angles/warp/tests/nightly.sh >> /Users/me/.companion/logs/warp-nightly.log 2>&1

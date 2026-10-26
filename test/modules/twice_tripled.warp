@@ -1,0 +1,2 @@
+def twice(x) := x * 3
+def second_word := "second"

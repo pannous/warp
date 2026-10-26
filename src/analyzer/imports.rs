@@ -370,7 +370,7 @@ pub(super) fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 }
 
 /// floor, ceil, round and √ are wasm instructions (f64.floor, f64.ceil, f64.nearest, f64.sqrt) and the rounding words give
-/// exact Ints (user 2026-10-10: "floor(v) should be int, upgradable to float"): never linked from libm, also not by
+/// exact Ints  should be int, upgradable to float"): never linked from libm, also not by
 /// `use m` or `import floor from 'm'`, whose f64 results the analyzer did not expect (lib/draw.warp's cell failed)
 fn is_wasm_builtin(name: &str) -> bool {
 	crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt"

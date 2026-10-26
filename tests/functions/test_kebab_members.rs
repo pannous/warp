@@ -1,4 +1,4 @@
-//! field-or-minus (user 2026-10-12, replaced P168's subtraction): `p.phone-number` of an object without that field,
+//! field-or-minus : `p.phone-number` of an object without that field,
 //! `number` a variable, is an error offering `p.phone - number`
 use crate::common::fails_with;
 use crate::is;

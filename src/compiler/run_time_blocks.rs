@@ -56,7 +56,7 @@ fn with_written_atoms(code: Node) -> Node {
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
 /// names separated by spaces) are bound to `values` first, the values the program had where it ran the block, then
 /// the program's function `definitions` follow. Only the names the block or the definitions mention are bound.
-/// The block gets no capability but pure libm, wherever its code came from (user decision: pure by default)
+/// The block gets no capability but pure libm, wherever its code came from 
 /// `Err` is the message the run fails with, naming the block.
 pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) -> Result<Node, String> {
 	let written = block.serialize().trim().to_string();

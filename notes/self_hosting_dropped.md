@@ -52,7 +52,7 @@ Per form: the form, the sources showing it, why it is left out, how to bring it 
   `o.expect(m)`, `o.is_some()`. Sources: probes/rust_reading/option.warp. Left out: warp's own forms say it
   (`if o != ø`, `o ?? d`, `o ?? raise(m)`). The Rust compiler dropped it too (decision rust-cleanup-drops). Back:
   src/lowering/welcoming/rust_options.rs from git history, as a pass before the match arms.
-- `set x to 5` dropped for good (user 2026-10-19: extra syntax, `x = 5` says it). `set width of p to 12` (decision
+- `set x to 5` dropped for good . `set width of p to 12` (decision
   setter-calls: `p.width = 12`). Sources: probes/english_setter.warp. Back as library code (card set-set): lib/english.warp's rewrite rule, in the Rust
   compiler; the warp compiler gets them once it reads rewrite rules (src/modules/rewrites.rs). The style hint
   "warp doesn't do prose" is gone: a rule has no hints (test_set_to_hints_the_assignment stays ignored).
@@ -233,7 +233,7 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - Not yet read (card emitter-twin): probes/self_hosting/readiness/scan_100k.warp, where warp's module traps
   ("trap detail: 0") and Rust's prints 40000 and 20000, and samples/web/select_binding.warp. Both differ on main
   f9e2a9e6ba, without the changes of branch cache-fixes (2026-10-19). Back: once the card reads and fixes them.
-- Warp right, Rust frozen (user 2026-10-22: Rust is frozen legacy, so its value is not fixed to match): the twin is
+- Warp right, Rust frozen : the twin is
   dropped where emitter.warp gives the decided value and Rust's does not. probes/parser_rest/empty_keys.warp:
   `{}.keys` is [] (decision keys-of-empty), Rust's prints ø. probes/repeated_parameter_names.warp: `last_of(_, _, z)`
   binds z to the third argument (6), Rust's binds the second `_`'s slot (4) (2026-10-22, card keys-of-empty). Back: never,

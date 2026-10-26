@@ -1,7 +1,7 @@
 use crate::is;
 use warp::wasm_emitter::eval;
 
-// card chars-codepoints (user decision): "abc".chars is a list of characters (codepoints) and prints ['a' 'b' 'c'];
+// card chars-codepoints : "abc".chars is a list of characters (codepoints) and prints ['a' 'b' 'c'];
 // a literal ['a' 'b'] keeps its characters; 'a' == "a" stays yes
 
 #[test]

@@ -1,4 +1,4 @@
-//! Interpolated text (user decision D1, 2026-10-03): double-quoted text in code takes Swift holes `"a \(x+1) b"` and
+//! Interpolated text : double-quoted text in code takes Swift holes `"a \(x+1) b"` and
 //! dollar holes `"${x+1}"`; A bare `"$x"` is text single quotes stay literal. Backtick templates don't need the braces.
 //!
 //! The parser keeps such a literal as its template text (holes written `${expr}`, a literal dollar `$$`, the syntax of

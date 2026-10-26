@@ -1,4 +1,4 @@
-// A method changing fields of its object (user decision P116, notes/classes.md step 2): `c.inc()` updates the variable c,
+// A method changing fields of its object : `c.inc()` updates the variable c,
 // as `xs.add(v)` updates xs; the call gives the changed object
 use crate::is;
 

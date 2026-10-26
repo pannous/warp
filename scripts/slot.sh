@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Runs a heavy warp command in one of the Mac's fleet-wide slots (user 2026-10-22, via the Grok Supervisor): self
+# Runs a heavy warp command in one of the Mac's fleet-wide slots : self
 # builds, pure compiles of compiler files, test sweeps. At most heavy_slots run at once; a further command waits for a
 # free slot. A sweep runs its programs serially inside one slot. Inside a slot WARP_SLOT names the slot's directory
 # (a command can keep its scratch files there), and a nested slot.sh runs its command at once.

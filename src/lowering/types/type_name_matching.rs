@@ -148,7 +148,7 @@ fn typed_return(type_name: &Node, definition: &Node, optional: &[String]) -> Opt
 		Err(warning_failed) => return Some(warning_failed),
 	};
 	let written = type_name.name();
-	// a list result gives [] for ø, with no warning (user 2026-10-22, card list-result-autocast: "ø can autocast to []")
+	// a list result gives [] for ø, with no warning 
 	if crate::analyzer::names_list_type(&written) && can_answer_empty(body, optional) {
 		// held as any list or ø: `list of int?` names no type
 		let held = converted(body, &symbol(&format!("{}?", crate::words::LIST_WORD)));

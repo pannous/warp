@@ -82,7 +82,7 @@ pub fn shows_windows() -> bool {
 /// Show the image in a window (paint_window.rs) when windows are allowed, else (or without a window) write it, say where
 pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
 	if width == 0 || height == 0 {
-		return Ok(None); // nothing to show, as the playground's canvas (user 2026-10-10: defaults, no errors)
+		return Ok(None); // nothing to show, as the playground's canvas 
 	}
 	if pixels.len() < width * height {
 		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, pixels.len()));

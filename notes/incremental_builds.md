@@ -1,6 +1,6 @@
 # Incremental builds: modules lowered once (card prelude-cache-runs)
 
-Goal (user 2026-10-18): std modules and a project's own modules are parsed, lowered and analysed once and kept on disk,
+Goal : std modules and a project's own modules are parsed, lowered and analysed once and kept on disk,
 keyed by module source + warp binary + the flags that change lowering, so a program pays only for its own changed code.
 Whole-program typing, specialisation and dead-code removal stay: the cache holds lowered definitions, not wasm
 (notes/static_binding.md). The machine code is cached already (notes/aot.md "Compiled-module cache").
