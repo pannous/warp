@@ -27,10 +27,50 @@ prelude_source = module_source("prelude")
 # the files of the runtime words, each with the files its `use` lines name: the core and, never used by it, the
 # extended runtime (decision runtime-split)
 RUNTIME_ROOTS = ["runtime.warp", "runtime/extended.warp"]
+# the text of each file the roots reach by `use`, by its path in lib/compiler, built into the compiler as it is built
+# (module_source; user 2026-10-26: "this should be baked in by now"): its runtime words never read the lib/ it runs
+# with. A file missing here is read from lib/ (uses.warp file_text)
+RUNTIME_FILES = {
+	"runtime.warp": module_source("compiler/runtime.warp"),
+	"runtime/extended.warp": module_source("compiler/runtime/extended.warp"),
+	"runtime/instructions.warp": module_source("compiler/runtime/instructions.warp"),
+	"runtime/walks.warp": module_source("compiler/runtime/walks.warp"),
+	"runtime/text.warp": module_source("compiler/runtime/text.warp"),
+	"runtime/case.warp": module_source("compiler/runtime/case.warp"),
+	"runtime/show.warp": module_source("compiler/runtime/show.warp"),
+	"runtime/arithmetic.warp": module_source("compiler/runtime/arithmetic.warp"),
+	"runtime/equality.warp": module_source("compiler/runtime/equality.warp"),
+	"runtime/maps.warp": module_source("compiler/runtime/maps.warp"),
+	"runtime/fields.warp": module_source("compiler/runtime/fields.warp"),
+	"runtime/types.warp": module_source("compiler/runtime/types.warp"),
+	"runtime/characters.warp": module_source("compiler/runtime/characters.warp"),
+	"runtime/lists.warp": module_source("compiler/runtime/lists.warp"),
+	"runtime/text_words.warp": module_source("compiler/runtime/text_words.warp"),
+	"runtime/library_words.warp": module_source("compiler/runtime/library_words.warp"),
+	"runtime/floats.warp": module_source("compiler/runtime/floats.warp"),
+	"runtime/conversions.warp": module_source("compiler/runtime/conversions.warp"),
+	"runtime/bridge.warp": module_source("compiler/runtime/bridge.warp"),
+	"runtime/errors.warp": module_source("compiler/runtime/errors.warp"),
+	"runtime/nodes.warp": module_source("compiler/runtime/nodes.warp"),
+	"runtime/builders.warp": module_source("compiler/runtime/builders.warp"),
+	"runtime/ordering.warp": module_source("compiler/runtime/ordering.warp"),
+	"runtime/text_numbers.warp": module_source("compiler/runtime/text_numbers.warp"),
+	"runtime/extended/big_ints.warp": module_source("compiler/runtime/extended/big_ints.warp"),
+	"runtime/extended/exact.warp": module_source("compiler/runtime/extended/exact.warp"),
+	"runtime/durations.warp": module_source("compiler/runtime/durations.warp"),
+	"runtime/extended/times.warp": module_source("compiler/runtime/extended/times.warp"),
+	"runtime/extended/pow_tables.warp": module_source("compiler/runtime/extended/pow_tables.warp"),
+	"runtime/extended/pow.warp": module_source("compiler/runtime/extended/pow.warp"),
+	"runtime/extended/exact_rounding.warp": module_source("compiler/runtime/extended/exact_rounding.warp"),
+	"runtime/extended/wasi.warp": module_source("compiler/runtime/extended/wasi.warp"),
+	"runtime/intrinsics.warp": module_source("compiler/runtime/intrinsics.warp"),
+	"kinds.warp": module_source("compiler/kinds.warp"),
+	"byte_codes.warp": module_source("compiler/byte_codes.warp")
+}
 # a root's text, its `use` paths named from lib/compiler, where the roots are lowered together: runtime/extended.warp's
 # `use "extended/exact.warp"` is lib/compiler/runtime/extended/exact.warp
 root_text(file: text): text := {
-	text = read(library_folder + "/compiler/" + file)
+	text = RUNTIME_FILES[file]
 	steps = file.split("/")
 	if #steps == 1 { return text }
 	text.replace("use \"", "use \"" + steps[0 ..< #steps - 1].join("/") + "/")
@@ -44,9 +84,13 @@ fresh_runtime_words(): Node := {
 	# module cache give the same bytes (card fixpoint-check)
 	global names_made
 	global fresh_names
+	global built_in_files
 	counted = [names_made, fresh_names]
 	roots = RUNTIME_ROOTS.map(file => root_text(file))
+	built_in_files = {}
+	for file in RUNTIME_FILES.keys { built_in_files[library_folder + "/compiler/" + file] = RUNTIME_FILES[file] }
 	words = lowered_program(roots.join("\n"), library_folder + "/compiler", prelude_source)
+	built_in_files = {}
 	names_made = counted#1
 	fresh_names = counted#2
 	keep(RUNTIME_WORDS, words)
