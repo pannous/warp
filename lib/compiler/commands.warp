@@ -40,7 +40,12 @@ show_help() := {
 	print "  need the native warp: " + (running_commands + native_commands).join(" ")
 }
 
-padded(words: text, width: int): text := if #words < width then words + " " * (width - #words) else words + " "
+# words, then spaces up to width, at least one
+padded(words: text, width: int): text := {
+	line = words + " "
+	while #line < width { line = line + " " }
+	line
+}
 
 # the version of the lib/ beside the compiler: its checkout's Cargo.toml
 version_text(library: text): text := {

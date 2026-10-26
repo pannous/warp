@@ -41,6 +41,11 @@ const LEGACY_SEED_FILE: &str = "seed/compiler-self.wasm";
 const SEED_VARIABLE: &str = "WARP_SEED";
 /// The ending of an output compiler.warp writes parser.warp's view to, as JSON, instead of a module (its VIEW_SUFFIX)
 const VIEW_EXTENSION: &str = "view.json";
+/// Computing time of the compiler runs of `warp rebuild` (compiling compiler.warp, then warming the new build): the seed
+/// compiling compiler.warp takes minutes on a small VM, no runaway, so a program's 60 s (WARP_TIME_LIMIT) does not apply
+const REBUILD_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(2 * 60 * 60);
+/// Overrides REBUILD_TIME_LIMIT, in seconds
+const REBUILD_TIME_LIMIT_VARIABLE: &str = "WARP_REBUILD_TIME_LIMIT";
 
 /// Who builds compiler.warp's module: for `warp pure` the seed; `warp self`'s is warp.wasm itself, promoted at a fixpoint
 // ⚠ RustCompiled keeps its name until the Rust compiler leaves main (card rust-bootstrap): the seed builds it now
@@ -249,11 +254,18 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 /// fixpoint test, else why not, warp-self.wasm left as it was
 pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	let path = build_path(by);
-	match by {
-		Compiler::RustCompiled => build(by, &path)?,
-		Compiler::SelfCompiled => promote(&path)?,
-	};
+	crate::util::with_time_limit(rebuild_time_limit(), || match by {
+		Compiler::RustCompiled => build(by, &path),
+		Compiler::SelfCompiled => promote(&path),
+	})?;
 	Ok(path)
+}
+
+/// The time limit of a rebuild's compiler runs: WARP_REBUILD_TIME_LIMIT seconds when positive, else REBUILD_TIME_LIMIT
+fn rebuild_time_limit() -> std::time::Duration {
+	let seconds =
+		std::env::var(REBUILD_TIME_LIMIT_VARIABLE).ok().and_then(|seconds| seconds.trim().parse::<f64>().ok());
+	seconds.filter(|seconds| *seconds > 0.0).map_or(REBUILD_TIME_LIMIT, std::time::Duration::from_secs_f64)
 }
 
 /// The fixpoint test of warp.wasm (stage N): it compiles lib/compiler/compiler.warp again (stage N+1), and only output
