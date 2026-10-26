@@ -151,7 +151,7 @@ byte_count_words = {bytecount: yes, byte_size: yes}
 def byte_size_code(value: any): list { runtime_call("node_bytes", [["node", boxed(value)]]) }
 # the kinds `+` joins as texts
 characters = {text: yes, char: yes}
-comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
+comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo yes?? 
 equalities = {"==": yes, "!=": yes}
 identities = {"===": yes, "!==": yes}
 compiled_compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
@@ -366,11 +366,15 @@ def converted(value: any, to: text): list {
 	if from == "node" and to in node_readers { return runtime_call(node_readers[to], [value])#2 }
 	if from == "char" and to == "text" { return runtime_call("char_text", [value])#2 }
 	# (a local holding a call still compiling, in a first reading of a cycle, whose code is not kept)
+	# todo Plug in the general convert mechanism that calls convert on any two types IF it is defined (dynamic lookup at runtime?)
 	if from != to and from != pending and to != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
 # `text(x)`, `string(x)`: x as shown (Rust's TEXT_TYPES)
 text_words = ["text", "string"]
+# (type $Text (array (mut i8)))   TODO differentiate with linear memory type:
+# (type $String (struct (field $ptr i32) (field $len i32)))  # ONLY use at boundary (ffi) or for extreme speed algorithms / tasks
+
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
 text_readers = {int: "text_as_int", float: "text_as_float"}
 node_casts = {int: "truncated_int", float: "float_cast"}

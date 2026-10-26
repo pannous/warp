@@ -3,8 +3,10 @@
 This is **warp**, the successor of **wasp** (C++). It began as a Rust implementation; the compiler is now self-hosted
 in warp (lib/compiler/*.warp, notes/self_hosting.md). The Rust code in src/ and crates/ is frozen legacy: the bootstrap
 that first compiles compiler.warp, the native host (wasmtime, host words, FFI) and the runtime (notes/agents/common.md
-"Principles").
+"Principles"). 
 
+# self hosted
+The core WARP compiler is functional and able to compile itself. From now on, most things should be implemented as libraries, or as compiler extensions. If the core compiler (or even the Rust bootstrap) needs changes, this needs to go through the interviewer. 
 
 https://github.com/pannous/warp
 https://warp.pannous.com/
@@ -98,10 +100,23 @@ cargo build --offline          # Offline mode (uses the local registry cache)
 warp rebuild pure              # compiler.wasm from lib/ (`warp rebuild self`: compiler-self.wasm)
 ```
 
+
+## To-dos
+This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
+every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next) todo.md as fallback
+`todo list`, `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). 
+Picking a card is `todo take <card> <session name>`
+
+When encountering a TODO without corresponding card in my main checkout ~/dev/angles/warp/lib/ Create a card for that to do and mark the card name behind the todo and commit 
+
+<!-- un-ignore every #[ignore = "next"] or even #[ignore = "soon"]  once it passes  -->
+
+
 ### Testing
 
 Several agent sessions share this Mac, so test runs are rationed (roles and rules: notes/roles.md):
-- Rust tests run in the cloud (user 2026-10-20): workers run targeted tests only, with `scripts/cloud-test.sh`;
+- Rust tests Should only be run irregularly in the rare cases that modifications to the legacy Bootstrap Rust are needed 
+-  run in the cloud (user 2026-10-20): workers run targeted tests only, with `scripts/cloud-test.sh`;
   tests/queue.sh only for the Mac-only tests (scripts/cloud-test-environmental.txt). A hook blocks direct
   `cargo test` / `cargo browser-test` runs.
 - Only the Integrator session runs the full suite (`./test.sh`, which queues itself) and pushes code to main. Workers
@@ -126,23 +141,23 @@ cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs a
 - `tests/parser/test_parser.rs`, `test_parser.pairs.warp` - warp data notation read into values
 - `tests/wasm/test_wasm.rs`, `test_wasm.pairs.warp`, `test_wasm.warp` - programs compiled to WASM GC and run (is!)
 
-## WASM GC Reading Patterns
+<!-- ## WASM GC Reading Patterns -->
 
-The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection
-(`src/gc_traits/`):
-
+<!-- The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection -->
+<!-- (`src/gc_traits/`): -->
+<!-- 
 - Loading WAT modules with GC types enabled
 - Reading GC struct fields by index
 - Type-safe wrappers with `gc_struct!` macro
 - Ergonomic `GcObject` wrapper hiding store management
 - Creating GC objects from Rust
-
+ -->
 ## Important Notes
 
 Use WASM names excessively! Wasm provides custom sections for names, use ALL of them!
 
 ### Offline Development
-
+Legacy Rust:
 The project is configured for **offline-first** development to avoid compilation delays: dependencies come from the
 local registry cache. Use `--offline` flag when building.
 
@@ -259,19 +274,16 @@ is!("def square:=it*it; square(3)",9);
 is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55); 
 ```
 
-## Pre-approved plans, no approval ping-pong (user 2026-10-23, very important)
+## Pre-approved plans
 Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
 A good idea of your own beyond the plan may be implemented too, as long as it is undoable (its own commits on a branch).
-When in doubt, ask the user directly, not Supervisor. This replaces per-change OKs (pass ban, lib/compiler size
-limits) for work inside a plan.
-Ready goes through the board, not chat: when a branch is finished and pushed, run
-`todo add "merge: <branch> <sha>" Now -b "<one-line summary, tests run>"`. The Integrator merges the `merge:` cards
-in Now and closes them with `todo done`.
+<!-- `todo add "merge: <branch> <sha>" Ready -b "<one-line summary, tests run>"`.  -->
+Then `todo ready <card> [branch]`
+The Integrator merges and closes them with `todo done`.
 
-## Commit everything (user 2026-10-23)
+## Commit everything
 Commit and push all meaningful progress all the time, including notes, handovers and WIP: a box or session can
-disappear at any moment and anything only on disk is lost. Unfinished work goes to its branch as a `wip:` commit.
-Pushing a work branch is always fine, so push it after every commit or two; only main goes through the Integrator.
+disappear
 
 # Important
 Don't cargo clean unless absolutely necessary!
@@ -311,14 +323,6 @@ cargo fix runs in the Integrator's gate for every batch (integrator_tools/gate.s
 
 ### Associated projects
 ~/Library/Application Support/Sublime Text 3/Packages/Warp
-
-## To-dos
-This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
-every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next) todo.md as fallback
-`todo list`, `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). 
-Picking a card is `todo take <card> <session name>`
-
-<!-- un-ignore every #[ignore = "next"] or even #[ignore = "soon"]  once it passes  -->
 
 Builds go to the shared target-dir from ~/.cargo/config.toml (sccache is on). 
 Never create a local target/ or *_target dir. 
