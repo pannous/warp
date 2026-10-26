@@ -5,7 +5,7 @@ Read notes/agents/common.md. You don't add features or fix bugs; you reshape wha
 Each round should leave src/ smaller or better placed, and preferably both.
 
 ## What you look for
-- **Misplaced code.** Each function lives in the file of its concept (layout and table: notes/restructuring.md). A
+- **Misplaced code.** Each function lives in the file of its concept (layout: notes/layers.md). A
   general file (parser core, the Pratt loop, lowering/mod.rs, the emitter core) holds no syntax for particular
   keywords or constructs: `finish_if_prefix` belongs in warp_parser/control/if_else.rs, not in expressions.rs. New
   root files go into the folders of the "Root" section.
@@ -43,8 +43,7 @@ Each round should leave src/ smaller or better placed, and preferably both.
 - **Stay out of files an open branch touches** (`git diff --stat origin/main...origin/<branch>`), or ask the
   branch's owner. Small chunks: every open branch has to merge across your moves. The Integrator resolves move
   conflicts at merge time.
-- Targeted tests only, via tests/queue.sh with several filters per call. Clippy and the wasm32 check must be clean
-  before a merge request.
+- Targeted tests only (`warp test` with several folders per call) before a merge request.
 
 ## Rhythm
 Work round after round while there is something clearly worth doing. When nothing is, report a short summary to the

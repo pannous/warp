@@ -53,7 +53,7 @@ fn main() {
 		println!("cargo:rustc-link-arg-bin=warp=-Wl,-stack_size,{MAIN_STACK_BYTES:#x}");
 	}
 	embed_source_fingerprint();
-	// a WARP_COMMIT given by the builder (scripts/cloud-test.sh) names the build without git: a warm VM's next job,
+	// a WARP_COMMIT given by the builder names the build without git: a warm VM's next job,
 	// another commit of the same tree, then reuses the build instead of recompiling warp-lang for its new reflog line
 	println!("cargo:rerun-if-env-changed=WARP_COMMIT");
 	if let Ok(commit) = std::env::var("WARP_COMMIT") {

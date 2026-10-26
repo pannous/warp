@@ -42,7 +42,7 @@ Below 50 GB free afterwards it notifies and messages the supervisor, at most eve
 ## Test-suite wall clock
 test.sh prints `TIMING: compile N s, run N s; tests summed N s (N s per thread)` and keeps every test's seconds in
 data/test_times.txt. When the per-thread sum is close to the run's wall clock, the run is bound by total test time, not
-by one slow test. More: notes/test_speed.md.
+by one slow test.
 
 ## P91: one analysis per program state (src/compiler/analysis_memo.rs)
 extract_user_functions (and every EffectReport::of) of a fresh Context is remembered per thread by a fingerprint of the

@@ -138,7 +138,6 @@ under `warp run`.
   Speeding up `warp run` further is the compiler-speed card (lowering passes, the emitted runtime).
 - A plain run that builds an executable (`WARP_EXECUTABLE=1`) pays for the printing variant compiled once more and its
   machine code written; unchanged files skip it (the executable is newer).
-- Test-suite time: notes/test_speed.md.
 
 ## libwarp_runtime: the runtime as a C library (card run-wasm-lib)
 `cargo rustc --release -p warp-runtime --lib --crate-type cdylib --features library` builds libwarp_runtime (6.2 MB

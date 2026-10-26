@@ -212,7 +212,7 @@ pub fn run_child_case(command: &str, file: &str, index: &str) -> bool {
 	matches
 }
 
-/// The two looser matches of the Rust `is!` tests these cases were translated from (scripts/is_tests.py), which
+/// The two looser matches of the old Rust `is!` tests these cases were translated from, which
 /// compared the result with a Rust literal (src/node/comparison.rs): an int and a float of the same value,
 /// `PartialEq<i64>` / `PartialEq<f64>` for Node (`Float(2.0) == 2`), and a one-character text and its char,
 /// `PartialEq<char>` for Node (`Text("b") == 'b'`). Only at the top, as `is!` was: lists compare as Node does

@@ -134,7 +134,7 @@ fn thread_clock() -> impl Fn() -> Duration + Send + 'static {
 }
 
 /// A refusal's lines in the file WARP_EMIT_REFUSALS names, when set: a run over many programs ranks what keeps them
-/// outside the core (scripts/is_tests.py counts them)
+/// outside the core
 pub fn record_refusal(message: &str) {
 	use std::io::Write;
 	let Some(file) = std::env::var_os(REFUSALS_FILE) else { return };

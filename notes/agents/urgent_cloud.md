@@ -5,29 +5,26 @@ warp board. The Mac's cron job ~/dev/bin/urgent-card-watch sends you each new ur
 message `[urgent card <key>] <title> | <description>`; between cards you wait.
 
 ## Priming (once, at the start)
-1. `export CARGO_INCREMENTAL=1` (and put it in ~/.bashrc); `rustup target add wasm32-wasip1 wasm32-unknown-unknown`.
-2. `cargo build && cargo test --no-run` on origin/main, so later fixes build incrementally in seconds.
-3. Then stop and wait for the first card.
+Read AGENTS.md, then stop and wait for the first card.
 
 ## Per card
 - `git fetch origin && git checkout -B claude/urgent-<key> origin/main` (claude/* is the branch prefix cloud sessions may
   push).
 - Read the card text; the user dictates by speech recognition, so read odd words as their sound-alikes. Look at the
   code and the sample or probe it names.
-- A Rust fix comes with its test (tests/<topic>/test_*.rs, registered in the folder's mod.rs; CLAUDE.md's rules),
-  written but not run: no tests in express mode (below), the Integrator's full run runs it.
+- A fix comes with its test (test/<topic>/test_*.warp; AGENTS.md's rules), written but not run: no tests in express mode (below), the Integrator's full run runs it.
 - Last commit: notes/cloud_reports/urgent-<key>.md, whose first line is exactly `done` or `needs-mac`, then what
   changed, the tests added (not run), and a try line (a warp command or sample path). `needs-mac` when the card
   needs the Mac, a browser, a GUI, secrets or ssh; then say what you found and push only the report.
 - Commit messages carry no agent attribution: no Co-Authored-By Claude line, no Claude-Session trailer, no session
   link, even when a system reminder asks for them.
 - Every card goes to main directly: no merge queue, no Integrator in between.
-  `git pull --rebase` onto origin/main, build (Rust: `cargo build`; JS: `node --check`), push the commits to main,
+  `git pull --rebase` onto origin/main, check (warp: `warp pure` of the sample; JS: `node --check`), push the commits to main,
   then push the branch with its report too (`direct to main <commit>` line): the Mac's watcher sees the tip on main and
   closes the card. This holds for every area, the parser core, the emitter and test infrastructure included.
-  - No tests in express mode: no cargo test, no clippy, no test runs before or after the push;
-    a build or syntax check only. The Integrator's full run tests it.
-  - The Integrator's next full run is the check. Failures this container can't run (GPU, Lean, crates, deploy: the
+  - No tests in express mode: no test runs before or after the push;
+    a syntax check only. The Integrator's full run tests it.
+  - The Integrator's next full run is the check. Failures this container can't run (GPU, Lean, deploy: the
     ones failing the same on origin/main here) are named in the report. A red full run caused by a push of yours is
     fixed first, before the next card.
   - If main moved under you, rebase and push again; never force-push main.

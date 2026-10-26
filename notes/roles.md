@@ -61,8 +61,7 @@ findings become cards for the Refactorer. Prompt: notes/agents/reviewer.md; a de
 
 ## Steward (warp-steward, the warp compiler's test owner)
 Owns "the warp-written compiler passes its own tests", orthogonal to the Integrator, who keeps merging everything.
-After each merge batch that touches core or the pipeline (and nightly), it runs the warp-pipeline-suite on the
-cloud lane, records the pass count over time (data/self_hosting/suite_counts.txt), groups the failures by cause and
+After each merge batch that touches core or the pipeline (and nightly), it runs the warp-pipeline-suite, records the pass count over time (data/self_hosting/suite_counts.txt), groups the failures by cause and
 turns the biggest groups into cards for the self-hosting workers, reporting the count and the top groups to the
 Supervisor. It merges nothing and writes no compiler code beyond the runner itself. Started once the
 warp-pipeline-suite runner is on main.
@@ -89,25 +88,10 @@ It must always run in bypass permissions mode: after every start, check
 the footer shows bypass permissions; card sends pass `--permission-mode bypassPermissions` too.
 
 ## Workers
-One task, one branch, one worktree; targeted tests through the queue; done = `todo ready <card>`. Every rule:
+One task, one branch, one worktree; targeted tests (`warp test`); done = `todo ready <card>`. Every rule:
 notes/agents/common.md (role prompts: worker.md, fixer.md, implementer.md).
 
 ## Enforcement
-- Rust tests run in the cloud (`scripts/cloud-test.sh`; user 2026-10-20), one local build (main's, the Integrator's).
-  Enforced for the Rust tests only (user: "only for the Rust test, the warp tests are fine locally"): test-gate.py
-  blocks cargo test, test binaries, tests/queue.sh and ./test.sh; the queue below stays for the Mac-only tests
-  (scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1 tests/queue.sh -- <filter>`. Warp tests (`warp
-  test`, scripts/is_tests.py) run locally. Probe: probes/hooks/test_gate_cases.py.
-- `tests/queue.sh`: every test run waits for one of 3 machine-wide slot locks (`~/.cargo/warp-tests.lock`, `.lock.2`,
-  `.lock.3`, lockf), so at most 3 targeted runs go at once (4 test threads each, nice 10); a full `./test.sh` holds all
-  three and runs alone. Each slot's holder is in its `.owner` file. Waiters are served first come, first served by
-  ticket files in `~/.cargo/warp-tests.lock.queue/` (`<priority>-<time>-<pid>`, tickets of dead PIDs are dropped):
-  only the first in line takes a slot, so a waiting full run (priority 0, like the Integrator's integrate* targeted
-  runs) keeps any later run from starting until the slots drain. Never rename a ticket.
-- `.claude/hooks/test-gate.py` (PreToolUse, Bash): blocks `cargo test`, `cargo browser-test` and direct `deps/tests-*`
-  binaries that bypass the queue; `cargo test --no-run` (build only) passes. It applies to every session whose project
-  directory is this checkout.
-- Both are Mac-local: cloud sessions (`CLAUDE_CODE_REMOTE=true`) are exempt from the gate, and queue.sh falls back to
-  flock on Linux, or runs unlocked with a loud note when neither lockf nor flock exists.
-- Not covered: a script a worker writes itself that calls cargo test, and sessions in other checkouts; the role rule
-  covers those.
+- One local build (main's, the Integrator's); the Rust harness changes rarely. Warp tests (`warp test`,
+  scripts/is_tests.py) run locally with the shared binary, the whole suite only in the Integrator's gate.
+  `.claude/hooks/test-gate.py` (PreToolUse, Bash) blocks cargo test runs of this checkout.

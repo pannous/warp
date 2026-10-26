@@ -6,7 +6,7 @@ checkout's own warp binary; `data/` logs, results, patches, dumps; build output 
 
 - Allowlist lives in `.gitignore` (`!probes/**/*.<ext>`); `probes/check_layout.sh [tree-ish]` reads the same list and
   fails on tracked probes under src/ tests/ target/ vendor/ .git, blobs over 100 KB, or other extensions.
-- `./test.sh` runs the check first: agents commit through `git commit-tree`, which skips hooks. The local
+- The gate runs the check first: agents commit through `git commit-tree`, which skips hooks. The local
   `.git/hooks/pre-commit` runs it too, for humans.
 - Templates `probes/algo/fixer_prompt.md` / `worker_prompt.md` use `scratch/<tag>.index`, `scratch/<tag>-export`, `data/<tag>/`.
 

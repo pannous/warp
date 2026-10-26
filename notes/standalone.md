@@ -48,5 +48,4 @@ warp self repl           # the same REPL, each line's module run by the native w
 - Commands needing a host (serve, fetch, app, lsp …) and those not yet written in warp (format, lint, types, verify)
   refuse naming the native warp.
 
-Outcome tests: tests/parser/test_warp_commands.rs; tests/parser/test_warp_wasm_alone.rs (ignored as slow, it builds warp-self.wasm; run it with
-`--ignored` at opt-level 2: `scripts/cloud-test.sh --optimized <branch> <tip> -- compiler_wasm_runs_under_plain_wasmtime --ignored`).
+Outcome tests: test/host and test/launcher (shell tests of the harness).

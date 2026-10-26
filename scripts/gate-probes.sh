@@ -4,8 +4,8 @@
 #   tier 1  every probes/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout against <name>.expected
 #           (seconds). warp-self.wasm is no gate build: scripts/promote-self.sh promotes warp.wasm at a fixpoint, apart
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
-#   tier 3  Rust: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; not run here, only named
-#           (scripts/cloud-test.sh, or the Integrator's cargo gate)
+#   tier 3  Rust harness: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; not run here, only named
+#           (`cargo check`)
 # usage: scripts/gate-probes.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
 #                               [<tree>, default this checkout] [<binary>, default /workspace/cow/warp-rust-latest]
 #   --no-rebuild  tier 0 only runs hello with the tree's built compilers (data/warp.wasm, data/warp-self.wasm if there)
@@ -101,7 +101,7 @@ if wants 2; then
 fi
 
 rust=$(git diff --name-only "$from" HEAD -- src crates Cargo.toml Cargo.lock '*.rs' '*build.rs' 2>/dev/null | head -3)
-[[ -n $rust ]] && echo "tier 3 (Rust): needed, not run here: the change touches ${rust//$'\n'/ } … (scripts/cloud-test.sh / the cargo gate)"
+[[ -n $rust ]] && echo "tier 3 (Rust harness): needed, not run here: the change touches ${rust//$'\n'/ } … (run cargo check)"
 echo "gate: green ($(git rev-parse --short HEAD), $(since $started) in all)"
 
 if ((tag)); then

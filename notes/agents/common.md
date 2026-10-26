@@ -6,7 +6,7 @@ sessions it names via SendMessage, not to the user, unless the user talks to you
 relays an explicit user decision counts as the user's decision.
 
 Startup reading is this file plus your role file, nothing more (AGENTS.md is already loaded). Everything else is
-looked up when a task needs it: notes/agents/handbook.md (the detailed procedures: worktree build tweak, cloud lane,
+looked up when a task needs it: notes/agents/handbook.md (the detailed procedures: worktree build tweak,
 gate tiers, bisects, Grok box, try lines, the Done checklist), notes/welcoming.md (how warp treats unclear input),
 wiki/Footguns.md (decided language rules: grep it, never read it whole), notes/decisions.md (grep a key or a topic
 before asking a question). After a context swap, this file and your role file beat the handover.
@@ -18,10 +18,9 @@ before asking a question). After a context swap, this file and your role file be
   compiler's included, uses the full language and reads like a good sample program.
 - Word choices are aliases: the recommended word is canonical, the others work with a got-it note (notes/fixits.md).
   Only differences in meaning go to the Interviewer.
-- The Rust in src/ and crates/ is frozen legacy: new work goes into warp (lib/, core/). Rust changes only to
-  keep the bootstrap building or to fix a crash; where warp does it differently, the Rust gets a comment banner
-  `// ⚠ WARP DOES THIS DIFFERENTLY: <what> → <lib file>`. Exception: `warp fix` (src/cli/formatting.rs,
-  src/formatting/). A card that needs Rust work is redone as warp work.
+- The compiler is warp; the only Rust left is the harness (src/, crates/warp-runtime: host, runtime, CLI), changed
+  rarely and through the interviewer. A card that needs Rust work is redone as warp work. The old Rust compiler is the
+  snapshot on branch `rust-bootstrap`; do not port its code, write the clean version in warp.
 - No new passes. Sugar (new spellings) → rules in lib/sugar/*.warp; new capabilities → one file each in
   core/extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
@@ -52,9 +51,9 @@ before asking a question). After a context swap, this file and your role file be
 ## Where to work
 - Notes, docs, wiki, probes, scripts, samples: straight onto main in /Users/me/dev/angles/warp; commit your own paths
   by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push. Never leave unpushed commits on main.
-- Anything compiled (core, src/, crates/, tests/, Cargo.*, build.rs): a worktree,
+- Anything compiled (core/, the harness in src/, Cargo.*): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
-  /Volumes/Worktrees/warp, /integrator or /me. Rust worktrees need the build tweak (handbook "Where to work").
+  /Volumes/Worktrees/warp, /integrator or /me.
 - The user's uncommitted edits are integrated at once by whoever meets them: complete, run, commit as "(user)", push.
 - Absolute paths and `git -C <worktree>`; in zsh `${var}:path`. Files named `*_local*` are globally git-ignored.
 
@@ -64,8 +63,6 @@ before asking a question). After a context swap, this file and your role file be
   `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` / `warp test <folders>`.
   Never rebuild in the main checkout. A core change also runs `scripts/self-check.sh <worktree>`.
 - At most 2 heavy warp runs fleet-wide: rebuilds, compiler compiles and sweeps go through `scripts/slot.sh <cmd>`.
-- Rust tests only when Rust changed, in the cloud lane (`scripts/cloud-test.sh`, handbook "Testing"); a hook blocks
-  local cargo test. Currently PAUSED by the user (~/.config/warp/cloud-paused): Rust branches wait.
 - Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never `pkill -f`, and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.
 - Outcome tests only: a test checks what warp code produces (is!, output, error), never intermediates, exit codes or
@@ -75,15 +72,14 @@ before asking a question). After a context swap, this file and your role file be
 
 ## Cards
 - `todo pick` shows the next cards in board order; `todo take <card> <session>`; before taking check nobody has a
-  branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate, Rust-only → archive).
+  branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
 - Every branch has a card: comment branch, tip and state on it; a parked branch gets notes/handover/<branch>.md.
 - Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - A card is closed only with a commit: `todo done <card> <commit>`. Mechanics: `todo --help`.
 
 ## Done
 - A major feature ships with samples/<topic>.warp (chmod +x) and its wiki page updated in the same task.
-- Before Ready: `scratch/warp format` and `scripts/style_lint.py --fix` on what you wrote (Rust also fmt, clippy,
-  wasm32 check: handbook "Done"). Merge origin/main into the branch (real merges, you resolve conflicts), push,
+- Before Ready: `scratch/warp format` and `scripts/style_lint.py --fix` on what you wrote . Merge origin/main into the branch (real merges, you resolve conflicts), push,
   `todo note <card> "card | branch | tip | tests | result"`, `todo ready <card>` (`--express` when asked for speed or
   for a crash fix). The quick check passing is enough to merge; the full suite follows at the Integrator.
 - Results the user can try get a try line (`/Users/me/dev/bin/warp <full path>`) to warp-interviewer.

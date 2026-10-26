@@ -14,21 +14,19 @@ The specification is not fully implemented yet
 - The project parses a custom syntax, builds a Node-based AST, and emits WebAssembly modules using:
 - WIT (WebAssembly Interface Types) definitions
 - WASM GC (Garbage Collection) bytecode
-- wasmtime to run them (feature `native`; the browser build in web/playground runs them in JavaScript)
+- a small Rust harness (wasmtime) to run them; the browser build in web/playground runs them in JavaScript
 
 # self hosted
 
-It began as a Rust implementation; the compiler is now self-hosted
-in warp (core/*.warp, notes/self_hosting.md). The Rust code in src/ and crates/ is frozen legacy: the bootstrap
-that first compiles compiler.warp, the native host (wasmtime, host words, FFI) and the runtime (notes/agents/common.md
-"Principles"). 
+warp began as a Rust implementation; since 2026-10-26 the compiler is written in warp (core/*.warp,
+notes/self_hosting.md) and compiles itself. The old Rust compiler is the snapshot on branch `rust-bootstrap`; nothing
+of it is on main. What stays Rust is the harness in src/ and crates/warp-runtime: the native host (wasmtime, host
+words, FFI), the runtime that reads results back, and the CLI. Most things are implemented as libraries (lib/) or
+compiler extensions (core/extensions/). If the core compiler (core/*.warp) or the Rust harness needs changes, this needs
+to go through the interviewer.
 
-The core WARP compiler is functional and able to compile itself. From now on, most things should be implemented as libraries, or as compiler extensions. If the core compiler (or even the Rust bootstrap) needs changes, this needs to go through the interviewer. 
-
-warp0.wasm bootstrapped by Rust implementation, partially using .warp files? legacy branch rust-bootstrap
-warp.wasm compiler written in pure warp (compiled by warp0.wasm or warp2.wasm)
-warp2.wasm recompiled fix point
-
+warp-self.wasm (seed/) is the checked-in fixpoint compiler; it compiles compiler.warp to
+warp.wasm, which promotes itself to warp-self.wasm when it recompiles itself to the same bytes (the fix point).
 
 ## Core Architecture
 
@@ -49,8 +47,7 @@ It is similar to JSON5 / ECMA Script but much simplified yet with a richer synta
 
 `compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
 parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
-whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp declares the Node enum case for
-case as src/node/mod.rs has it.
+whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp declares the Node enum.
 - `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a fixpoint
   compiler checked in; scripts/refresh-seed.sh refreshes it). No Rust-compiled stage builds either compiler
 - `warp self <file|code>`: runs warp-self.wasm, a copy of warp.wasm promoted only when warp.wasm passes the fixpoint
@@ -62,7 +59,7 @@ case as src/node/mod.rs has it.
   named compiler.wasm and compiler-self.wasm; those names are still read when the new ones are missing
 - A form outside emitter.warp's core is refused loudly (`outside the core: …`)
 
-Plain `warp <file>` still compiles with the Rust pipeline below.
+Plain `warp <file>` and `warp run` run through the same compiler (warp.wasm).
 
 ### Node AST (the enum in `core/node.warp`)
 
@@ -71,11 +68,11 @@ The central data structure is `Node`, an enum representing all AST node types:
 - **Empty, True, False, Number, Char, Text, Symbol** - Atomic values
 - **Key** - Binary structures (Pair, Tag), with an `Op`
 - **List** - Collection of nodes with a `Bracket` (curly, square, round …) and a `Separator`
-- **Data** - Generic container (`DataValue`) for arbitrary Rust types with the `CloneAny` trait
+- **Data** - Generic container for an arbitrary value (`Data(value: any)`)
 - **Meta** - Node wrapper that adds metadata (comments, line/column positions)
 - **Error, Type** - an error; a type definition (name + body)
 
-### Warp parser
+### Warp parser (`core/parser.warp`)
 
 Recursive descent parser that converts text input to Node AST:
 
@@ -83,24 +80,16 @@ Recursive descent parser that converts text input to Node AST:
 - Handles comments (`//` line and `/* */` block) attached as metadata
 - Parses literals (numbers, strings, symbols), groups ((), [], {}), and structures
 
-### Legacy rust pipeline (`src/pipeline.rs`: `compile`, `eval`, `lower`)
+### Emitter (`core/emitter.warp`)
 
-parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such as `mutation.rs`, `lambdas.rs`,
-`library_words.rs`, `switch.rs`, plus `analyzer/`) → analysis and diagnostics → WASM GC emitter → run.
+Generates the WASM GC bytecode and its runtime words (texts, lists, maps, unbounded ints, exact numbers, equality,
+WASI, FFI) in warp; the value layout and the `Kind` enum are in notes/self_hosting.md "Value layout".
 
-### Emitters
+### Rust harness (`src/`, `crates/warp-runtime`)
 
-0. **Text**: `Node::serialize` (`src/node/serialization.rs`), warp notation similar to json5; `src/formats/wisp_parser.rs` reads and writes Wisp
-1. **Rust WASM GC Emitter** (`src/wasm_emitter/`; emitter.warp is its warp successor)
-    - Generates WASM GC bytecode using the `wasm-encoder` crate; `mod.rs` emits programs, the other files the runtime
-      functions (texts, lists, maps, unbounded ints, exact numbers, equality, WASI, FFI)
-    - `function_builder.rs`: `runtime_function` / `exported_function` emit a whole function in one call
-    - Uses the `Kind` enum (`src/type_kinds.rs`) for runtime type discrimination
-
-### WASM Runtime (`src/run/wasm_reader.rs`, `src/run/wasmtime_runner.rs`, `src/host.rs`, `src/ffi/`)
-
-- `wasm_reader::run_main` instantiates a module with the host, WASI or FFI imports and calls `main`
-- `wasm_reader` and `gc_traits/` read the resulting GC objects back into Nodes
+Runs the compiled modules and nothing else: `src/run/` (wasmtime), `src/host/` and `src/host.rs` (host words, sandbox,
+channels, database), `src/ffi/`, `src/gc_traits/` (reads GC objects back into Nodes), `src/node/` (printing results),
+`src/cli/`, `src/compiler/standalone.rs` and `pure_tests.rs` (run warp.wasm, `warp test`).
 
 ## Build and Test Commands
 
@@ -112,7 +101,7 @@ The integrator must make sure that the main branch is always clean, functional, 
 As soon as a branch passes the quick fix test, that's signal enough to be worthy of merging.
 A full suite test can be done in parallel or later or batched.
 
-The `warp` binary (the Rust host and bootstrap) is built by cargo; the warp compiler it runs by `warp rebuild`:
+The `warp` binary (the Rust harness) is built by cargo; the warp compiler it runs by `warp rebuild`:
 ```bash
 cargo build                    # Debug build
 cargo build --release          # Release build
@@ -132,8 +121,6 @@ When encountering a TODO without corresponding card in my main checkout ~/dev/an
 
 When implementing gaps that the old Rust legacy implementation had, but are not part of the pure WARP implementation yet, do not resort to blindly copying old spaghetti code. Instead, create a clean, idiomatic new implementation from first principles. 
 
-<!-- un-ignore every #[ignore = "next"] or even #[ignore = "soon"]  once it passes  -->
-
 
 ## Pre-approved plans
 Every worker gets a plan from Supervisor, and everything in it is pre-approved: implement it without asking.
@@ -148,23 +135,15 @@ The Git commit message Merge branch MUST Also include a summary of the changes (
 ### Testing
 
 Several agent sessions share this Mac, so test runs are rationed (roles and rules: notes/roles.md):
--  run in the cloud : workers run targeted tests only, with `scripts/cloud-test.sh`;
-  tests/queue.sh only for the Mac-only tests (scripts/cloud-test-environmental.txt). A hook blocks direct
-  `cargo test` / `cargo browser-test` runs.
-- Only the Integrator session runs the full suite (`./test.sh`, which queues itself) and pushes code to main. Workers
-  hand it "branch, tip, filters" and fix what it reports.
+- Workers run the tests that cover their change (`warp test <folders>`); only the Integrator session runs the
+  whole suite and pushes code to main. Workers hand it "branch, tip, filters" and fix what it reports.
 
 Warp tests run locally with the shared binary, through the warp compiler (src/compiler/pure_tests.rs,
 notes/is_tests.md):
 ```bash
-warp test                      # all of tests/: each *.pairs.warp pair, each is! line of test_*.warp, via warp pure
-warp test tests/numbers        # only these folders; --self: via `warp self`
+warp test                      # all of test/: each *.pairs.warp pair, each is! line of test_*.warp, via warp pure
+warp test test/numbers         # only these folders; --self: via `warp self`
 ```
-
-#### Important Test Files
-
-- `tests/parser/test_parser.rs`, `test_parser.pairs.warp` - warp data notation read into values
-- `tests/wasm/test_wasm.rs`, `test_wasm.pairs.warp`, `test_wasm.warp` - programs compiled to WASM GC and run (is!)
 
 ### Test File Locations
 
@@ -210,7 +189,7 @@ emitter.warp in notes/self_hosting.md "Value layout".
    Lists held as arrays: `$IntList`, `$FloatList`, `$NodeList` (length, items array), maps `$NodeMap`; a program that
    quotes code gets `$MetaNode`, a $Node subtype with line, column and comment. -->
 
-2. Kind encoding (see `src/type_kinds.rs`):
+2. Kind encoding (`src/type_kinds.rs` is the harness's copy for reading results back):
 
    - Lower 8 bits are `Kind` (Empty=0, Int=1, Float=2, Text=3, Codepoint=4, Symbol=5, Key=6, Block=7, List=8, Data=9, Meta=10, Error=11, TypeDef=12, ... Time=18)
    - For Key and List, extra info is stored in the high bits:
@@ -226,17 +205,12 @@ emitter.warp in notes/self_hosting.md "Value layout".
    - Codepoint: `data = i31ref(char)`, `value = null`
    - Text/Symbol: `data = ref $Text`, `value = null`
    - Key: `data = left node`, `value = right node`
-   - List/Block: Rust emitter: `data = first node`, `value = rest list node` (cons cells); emitter.warp: `data = $list`
-     vector (length, items array); readers tell them apart by the first field
+   - List/Block: `data = $list` vector (length, items array)
    - TypeDef: `data = name node`, `value = body node`
    - True/False: a bool, the Int 1/0 marked BOOL_INFO above the kind bits (kind = BOOL_KIND); prints yes/no (notes/bool_type.md)
    - Meta is dropped during emission; Error currently emits the inner node
    - Data nodes currently serialize as `Symbol(type_name)` in the emitter
 
-<!-- 4. Verification pointers:
-
-   - `tests/wasm/test_wasm_emitter.rs` covers `test_wasm_roundtrip_via_is`
- -->
 5. Round-trip:
 
    code -> parse -> Node -> wasm emitter -> WASM GC object -> Node -> value
@@ -280,9 +254,8 @@ The probes/ folder is NOT a place to doublicate worktrees!
 - `probes/` = hand-written probe sources only 
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
 
-Workers: before and after each task, run `git status` and the tests that cover your change 
-<!-- (cloud lane: `scripts/cloud-test.sh`).  -->
-Do NOT run `./test.sh` (the full suite): only the Integrator runs it, after merging your branch (notes/roles.md).
+Workers: before and after each task, run `git status` and the tests that cover your change.
+Do NOT run the full suite: only the Integrator runs it, after merging your branch (notes/roles.md).
 If previously passing test fail after the task as seen via git diff test_results.txt try to fix failing tests and if it doesn't work roll back
 
 When fixing a problem NEVER modify the test itself without consulting!

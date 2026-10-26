@@ -23,9 +23,9 @@ Principles and Talking live only in common.md.
   goes straight onto main in the main checkout /Users/me/dev/angles/warp, no worktree or branch: commit your own
   paths by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push; never leave unpushed commits on
   main. A new root .warp data file (components.warp …): tell the Integrator the commit, tests read it.
-- Anything in src/, crates/, tests/, Cargo.* or build.rs keeps its worktree, however small (a half-done edit there
-  breaks every build of the main checkout): `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main` on the
-  Worktrees volume (never touch /Volumes/Worktrees/warp, cowtree's donor, /Volumes/Worktrees/integrator, nor the
+- Anything compiled (core/, the harness in src/ and crates/, Cargo.*) keeps its worktree, however small (a half-done
+  edit there breaks every build of the main checkout): `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
+  on the Worktrees volume (never touch /Volumes/Worktrees/warp, cowtree's donor, /Volumes/Worktrees/integrator, nor the
   user's own /Volumes/Worktrees/me, which prune-worktrees.sh never removes). A new worktree's files get their last
   commit's time (~/.git-hooks/post-checkout runs ~/dev/bin/restore-mtimes), not the checkout time.
 - On the Grok box (Debian, /workspace) worktrees come from `boxtree <branch> [base]` (default origin/main): a
@@ -35,23 +35,15 @@ Principles and Talking live only in common.md.
   refresh with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh`, which moves the link only after a passing
   smoke test); a branch with Rust changes uses its own build. Branch self-check: `/workspace/box-slot.sh
   /workspace/selfcheck-branch.sh <branch>`.
-- Only the pure pipeline counts (user, 2026-10-23): coverage is what passes purely; the Rust compiler's results don't
-  matter. Don't cargo-build `warp` per branch: run `/workspace/box-slot.sh /workspace/cow/warp-rust-latest rebuild pure`
-  with `WARP_LIB=<tree>/lib`. Rebuild Rust only on branches that change Rust code (src/ is frozen except urgent fixes);
-  crates/warp-runtime changes need only a warp-host build. The merger refreshes the shared binary after Rust lands.
+- Don't cargo-build `warp` per branch: run `/workspace/box-slot.sh /workspace/cow/warp-rust-latest rebuild pure` with
+  `WARP_LIB=<tree>/lib`. The Rust harness changes rarely; a branch that changes it uses its own build, the merger
+  refreshes the shared binary after it lands.
 - Moving on demand: a change in the main checkout that grows (more than a few files, many build/test rounds, or
   another session's files) moves into a worktree while still uncommitted: `cowtree add -b <task> <worktree> HEAD`,
   `git diff -- <own paths> | git -C <worktree> apply`, then undo only your own paths in the main checkout. A worktree
   branch that turns out small goes straight to main itself (`git pull --rebase`, push `HEAD:main`).
-- The build tweak, uncommitted in every worktree, right after `cowtree add` (neither cowtree nor tests/queue.sh does
-  it): `scripts/version-tweak.sh <branch>` appends `-<branch>` to every workspace package version and to the path
-  dependency's requirement (`restore` puts the committed manifests back). Without it the shared target dir links
-  another checkout's warp or warp-runtime ("Finished in 0.5s", 0 tests, foreign failures). Check with `grep -n
-  version Cargo.toml crates/*/Cargo.toml`.
-- Git with the tweak: add files by name, never `git commit -a` (it takes the tweak); a tweaked manifest you must
-  change: `version-tweak.sh restore`, edit, commit, re-tweak. Rebase and merge with `--autostash`; never a bare `git
-  stash pop` afterwards (the stash list is shared by all worktrees). Stashes are agent scratch: drop leftovers
-  yourself (the hook saves them under refs/dropped-stashes).
+- Rebase and merge with `--autostash`; never a bare `git stash pop` (the stash list is shared by all worktrees).
+  Stashes are agent scratch: drop leftovers yourself (the hook saves them under refs/dropped-stashes).
 - The user's uncommitted edits (modified, staged or untracked, in the main checkout or wiki/) are integrated at once
   by whoever meets them, in the main checkout itself, never left lying, reported as "untouched" or parked in a batch
   (an unpushed batch commit leaves their checkout showing them uncommitted). Read each diff; a D next to an untracked
@@ -65,16 +57,11 @@ Principles and Talking live only in common.md.
   `&&`-chained commit silently doesn't happen. Check `git show --stat HEAD` after committing.
 
 ## Testing
-- PAUSED : no cloud runs
-  (scripts/cloud-test.sh refuses while ~/.config/warp/cloud-paused exists), GitHub workflows disabled, the context-swap
+- PAUSED : GitHub workflows disabled, the context-swap
   hook swaps nobody (~/.claude/swap/swap_tokens = 1e9), crons urgent-card-watch, codex_worker.sh and nightly.sh
-  commented out (#PAUSED-by-user). Until the user lifts it, only warp-only branches land (self-check), Rust branches
-  wait.
-- Rust tests run in the cloud :
-  commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs (a hook blocks them), except tests
-  needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1
-  tests/queue.sh -- <filter>`. The Integrator's full suite runs in the cloud too. Warp tests (`warp test`,
-  scripts/is_tests.py) run locally with the shared binary.
+  commented out (#PAUSED-by-user).
+- Warp tests (`warp test`, scripts/is_tests.py) run locally with the shared binary; the whole suite only in the
+  Integrator's gate.
 - Stop isolation : an agent stops only its own helper jobs, never with a stop that
   reaches other agents.
 - Communicate less : message only when it really matters (Ready, blocked, a decision needed); batch
@@ -88,9 +75,7 @@ Principles and Talking live only in common.md.
   the hellos (minutes; self only when data/ has a promoted warp-self.wasm). Tier 1: every probes/gate/<name>.warp in
   those lanes against <name>.expected
   (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
-  Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). Tier 3,
-  Rust tests: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; the script names it, the cargo
-  gate or cloud lane runs it. On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/warp-rust-latest (the old sol-warp-* names stay as links for old scripts).
+  Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). On the box: through /workspace/box-slot.sh, shared binary /workspace/cow/warp-rust-latest (the old sol-warp-* names stay as links for old scripts).
 - warp-self.wasm (`warp self`'s compiler) is no gate build: `scripts/promote-self.sh [--background] [<tree>]` copies
   warp.wasm to it only when warp.wasm compiles compiler.warp to its own bytes (the fixpoint), every once in a while,
   in parallel; it never fails its caller. Install a compiler pair as warp.wasm + warp-self.wasm (the old names
@@ -100,19 +85,14 @@ Principles and Talking live only in common.md.
   pure|self|both] <probe.warp> <expected> [good] [bad]` (default the newest good/* tag .. origin/main, first-parent)
   bisects in a temporary worktree it removes: per step rebuild pure (and the self promotion) with the shared binary, bad only on
   wrong output, skipped (125) on a failed rebuild or a timeout; it prints the first bad commit.
-- Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
-  to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
-  suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
-  prompts; kill by PID).
-- One local build (user 2026-10-20: "We create just one cargo build now, and every other one uses that one warp
-  build for their tests"): only main's build runs on the Mac (/Users/me/dev/bin/warp, /Users/me/dev/bin/warp-debug,
-  refreshed after each pushed batch). Workers run no cargo build, check or own-warp.sh locally: .warp changes are
-  checked with that binary, Rust changes are built and tested by the cloud lane. It reads lib/ from WARP_LIB, else
-  the nearest lib/ holding compiler/ (lib/compiler links to core/) above the program or cwd, so run it from your worktree (or `WARP_LIB=<worktree>/lib`).
-  Standard modules (`use list`) still come from its build (card std-modules).
-  One exception : warp-speed may build its own branches locally (quick
-  release, CARGO_BUILD_JOBS=2, one build at a time) to time Rust speed changes before they land; timing runs only,
-  tests stay in the cloud.
+- Test first. Only targeted runs, filtered to the test files your change touches (grep test/ for the changed syntax
+  to find the ones pinning old behaviour), never whole folders: the Integrator runs the full suite. Never pkill by
+  pattern (it matches session prompts; kill by PID).
+- One local build: only main's build runs on the Mac (/Users/me/dev/bin/warp, /Users/me/dev/bin/warp-debug, refreshed
+  after each pushed batch). Workers run no cargo build locally: .warp changes are checked with that binary. It reads
+  lib/ from WARP_LIB, else the nearest lib/ holding compiler/ (lib/compiler links to core/) above the program or cwd,
+  so run it from your worktree (or `WARP_LIB=<worktree>/lib`). Standard modules (`use list`) still come from its build
+  (card std-modules).
 - Long commands in the background : anything expected to take more than a few seconds (cloud
   lane, builds, surveys, stage compiles, sweeps) runs with the Bash tool's `run_in_background`, so messages reach you
   while it runs. Never poll its output file or sleep-loop on it: the exit notice wakes you; meanwhile do other work
@@ -123,7 +103,7 @@ Principles and Talking live only in common.md.
   log /Users/me/warp/reap-orphans.log) kills orphaned warp/test binaries, cargo test/build and xargs sweeps after 30
   min and a test binary's children after WARP_TEST_TIME_LIMIT (600 s).
 - Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is upgraded to the
-  working value in its own commit, and `#[ignore]` is dropped from a test that passes unedited; a change of meaning,
+  working value in its own commit; a change of meaning,
   or editing an un-ignored test's assertions, goes to the Interviewer. Test edits a user decision implies need the
   Interviewer's approval only, not a new question.
 - Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
@@ -131,29 +111,16 @@ Principles and Talking live only in common.md.
 - Tests are result-based (user, 2026-10-23): assert what a program computes, e.g. `is! '6*7' 42`, or its printed
   output. Don't pin incidental details such as exit codes of successful runs, internal forms, pass names, error
   wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
-- Native-only test code: anything used only by a `#[cfg(feature = "native")]` test gets the same cfg; a whole test
-  file running the CLI or std::os::unix gets it on its `mod` line, and a new `mod x;` never goes between a cfg line
-  and the module it guards. Register a new test file in its folder's mod.rs before `cargo fmt` (fmt skips it).
-- Cloud test lane: `scripts/cloud-test.sh --card <card> <branch> <tip from git rev-parse HEAD> <filters>` in the
-  background (~6 min on a cloud VM of its own, ~$0.30 of the Cloud session credit, exit 0 = green;
-  notes/cloud_development.md). A green cloud run counts as the targeted run. A Rust change to the parser, lowering,
-  analyzer, emitter, compiler runner, or pipeline also runs `scripts/cloud-test.sh --pure-hello <branch> <tip>`: the
-  preset gives the ignored end-to-end `warp pure hello` test its required test opt-level 2 and exact runner flags.
-  The `warp self` tests (warp_self_*) run with `--optimized`, the gate's opt-level 2: in a debug build they time out.
-  Warp-only branches (user 2026-10-21, decision warp-only-acceptance: nothing in src/, crates/, tests/**/*.rs,
-  Cargo.*, build.rs) need no cloud run at all: the branch is accepted when the Rust-compiled compiler.warp compiles
-  itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's binary; it
-  queues behind a running check, one at a time on the Mac: never run `warp rebuild self` in parallel). Mark it
+- Acceptance (user 2026-10-21, decision warp-only-acceptance): a branch is accepted when warp.wasm compiles
+  compiler.warp itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's
+  binary; it queues behind a running check, one at a time on the Mac: never run `warp rebuild self` in parallel). Mark it
   `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. While
   main's own self build is red (its owner fixes it), a branch passes when its pure lane is green and its self check
-  fails no worse than main's (the same error): a red main never blocks the queue (supervisor 2026-10-22). Warp
-  branches have priority over Rust-change branches : they land before any Rust batch, and work in
-  .warp is preferred whenever a task can be done there.
-  A change to core/ (types or annotations included) also checks the self build before Ready:
-  `scripts/self-check.sh <worktree>` (it rebuilds both compilers in a queue slot; a bare `warp rebuild self` skips the
-  queue: three at once pushed the load to 288, supervisor 2026-10-22). Never rebuild in the main checkout: that
-  replaces main's delivered pair under every running check; only the Integrator's push installs it; a form
-  emitter.warp refuses there is fixed or carded, never left for main to find.
+  fails no worse than main's (the same error): a red main never blocks the queue (supervisor 2026-10-22).
+  A change to core/ also checks the self build before Ready: `scripts/self-check.sh <worktree>` (it rebuilds both
+  compilers in a queue slot; a bare `warp rebuild self` skips the queue: three at once pushed the load to 288).
+  Never rebuild in the main checkout: that replaces main's delivered pair under every running check; only the
+  Integrator's push installs it; a form emitter.warp refuses there is fixed or carded, never left for main to find.
   Fleet-wide at most 2 heavy warp runs at once : every self build, `warp rebuild`, `warp
   pure` of a compiler file and every test sweep (is_tests, is_pairs, probe series) runs inside `scripts/slot.sh <cmd>`
   (slots on /Volumes/Build/self-check; self-check.sh takes one itself; the Integrator's gate included). A sweep runs
@@ -168,18 +135,14 @@ Principles and Talking live only in common.md.
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,
   `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`, `--chrome`, `--firefox`, `--suite
-  [filter…]`, `--again`; notes/ci.md "Browser dry run"), until green; then dispatch the Playground workflow on your
+  [filter…]`, `--again`; scripts/browser-dry-run.sh), until green; then dispatch the Playground workflow on your
   branch once (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
 - Every CLI run of a program that might paint gets `WARP_NO_WINDOW=1` (no windows on the user's screen), except in try
   lines for the user: it also mutes sound and prints MIDI as hex.
-- Quick check first, before the cloud lane: run the .warp code you wrote or touched through the shared binary from
-  your worktree, `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp probes/<x>.warp`, and for compiler work through the
-  self-hosted pipeline: `WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 /Users/me/dev/bin/warp probes/<x>.warp` (=front:
-  front end only). The stages load your worktree's core/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
-  the stage programs (~35 s with the optimized /Users/me/dev/bin/warp, ~2 min with warp-debug: use warp-debug only for a backtrace; prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
-  and wrong values in seconds. `WARP_EMIT_REFUSALS=/dev/stderr` shows whether emitter.warp refused the program
-  (`outside the core: …`, then the Rust emitter emitted it); `WARP_HINTS=0` hides hints (the stage programs' own
-  warnings still show: card cli-show). Then the targeted tests in the cloud lane.
+- Quick check first: run the .warp code you wrote or touched through the shared binary from your worktree,
+  `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp probes/<x>.warp` (after `WARP_LIB=<worktree>/lib … warp rebuild pure` when
+  core/ or lib/ changed). It catches undefined words, parse errors and wrong values in seconds; `WARP_HINTS=0` hides
+  hints. Then the targeted `warp test <folders>`.
 - `warp pure` / `warp self` run compiler.warp's build files warp.wasm / warp-self.wasm (decision
   compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
   (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never build one : a missing one is an error
@@ -205,7 +168,7 @@ Principles and Talking live only in common.md.
   at once.
 - Backlog cards : Soon and Later mix the user's own ideas and bugs with auto-generated and parked
   cards. Before taking a card from Soon or Later, check it's still relevant: is it already fixed on main, a duplicate,
-  or obsolete (e.g. Rust-only work)? If it's clearly dead, archive it with a one-line note. If unsure, ask the user,
+  or obsolete (e.g. a bug of the old Rust compiler)? If it's clearly dead, archive it with a one-line note. If unsure, ask the user,
   interviewing them briefly (what's the card for, is it still wanted) before starting work.
 - Picking cards : never read whole columns or the board to choose work. Run `todo pick` (or the top
   of the column in board order): the top few cards of the highest non-empty column, in board order. Take the first
@@ -249,14 +212,11 @@ Principles and Talking live only in common.md.
 - Forward crunch: send a branch once it builds and its quick check works; tests failing in its own area don't hold
   it back: the Integrator ignores them onto your card and you fix forward. Only a branch that doesn't build or
   breaks other areas' tests is bounced. More than ~20 ignored tests of yours: fix those before new work.
-- Before `todo ready`: `cargo fmt`, `cargo clippy --offline --all-targets -- -D warnings` (the gate's command), and
-  the wasm32 check `cargo check --offline --lib --tests --target wasm32-unknown-unknown --no-default-features`, on
-  your branch. Rust formatting opt-outs go in rustfmt.toml `ignore`, never as an attribute on a mod line. .warp files
-  you wrote or changed: `scratch/warp format <files>` (notes/warp_format.md). Then `scripts/style_lint.py --fix` (the
-  style rules rustfmt and clippy lack, notes/style_lint.md) and commit what it moved. Style nits are the linter's, not
-  hand polish (user, 2026-10-15).
+- Before `todo ready`: `scratch/warp format <files>` on the .warp files you wrote or changed (notes/warp_format.md),
+  then `scripts/style_lint.py --fix` (the style rules, notes/style_lint.md) and commit what it moved. Style nits are the
+  linter's, not hand polish (user, 2026-10-15). A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
 - Done = the card is the handoff (the board's Ready column is the merge queue):
-  1. Targeted tests (queue or cloud lane), commit, fmt, clippy, wasm32 check.
+  1. Targeted tests, commit, formatted.
   2. Make sure the branch merges cleanly: `git fetch origin && git merge --autostash origin/main`. You resolve
      conflicts, never the Integrator. Take a side of a conflicted file only after `git diff <merge-base> HEAD --
      <file>` (merges your branch carries are your side too); otherwise resolve the hunk and check `git diff
@@ -266,12 +226,12 @@ Principles and Talking live only in common.md.
   3. Push the branch, then `todo ready <card>`. It reads the tip itself and refuses a branch that is not pushed,
      differs from origin, or does not merge cleanly (naming the files); `--force` only for a branch carrying other
      branches. Several cards on one branch: ready each. First a `todo note <card>` in this fixed form: `card | branch |
-     tip (full sha) | filters | passed/failed (cloud) | clippy+wasm32 ok`, then new tests, "docs: <page>"
+     tip (full sha) | filters | passed/failed`, then new tests, "docs: <page>"
      and the sample. Express (the user or the Supervisor asked for your result fast, a crash fix, and every card of
      warp-speed, the standing speed worker: user 2026-10-20 "express route to main"): `todo ready <card>
      --express`; the Integrator pushes it to main untested at once, the gate follows. When the user says "express" or
      "quickly", they expect about a minute: one targeted test or none, give the user a try line with
-     `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp` (a Rust change: after its express landing), ready it express.
+     `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp` , ready it express.
   4. Optional: one line to warp-reviewer ("<card> ready"); it reads `todo list Ready` anyway. Report one line to the
      Supervisor.
   The Integrator merges only Ready cards and closes them. A bounce (failing test, semantic conflict, reviewer veto)

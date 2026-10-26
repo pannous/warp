@@ -11,7 +11,7 @@ that allows access to anything.
 | C compiled to wasm | `import lib.wasm` with a header beside it: texts, out-pointers, buffers cross; same results natively and in the browser | notes/wasm_modules.md "How to add a C library" |
 | Python | `use python "math"`: one `python3 -u` child per process speaking JSON lines; in the playground Pyodide 0.29.5 | src/modules/foreign.rs, web/playground/foreign_python.py |
 | JavaScript | `use js Math`: a `node` child natively, the page's globalThis in the browser | foreign.rs FOREIGN_JS_LOOP, host.js foreign_call |
-| Rust crates | `use cargo regex`: a wrapper component generated from rustdoc JSON | notes/cargo_crates.md |
+| Rust crates | `use cargo regex`: a wrapper component generated from rustdoc JSON | |
 | WebAssembly components | `use lib.wasm` / `use wasm "lib.wasm" as lib` | src/modules/components.rs |
 
 `use c` in the browser calls web/playground/lib/libc.wasm (wasi-libc built once); natively dlopen (the macOS SDK's
