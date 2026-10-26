@@ -6,15 +6,15 @@
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
 #   tier 3  Rust harness: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; not run here, only named
 #           (`cargo check`)
-# usage: scripts/gate-probes.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
+# usage: scripts/gate.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
 #                               [<tree>, default this checkout] [<binary>, default /workspace/cow/warp-rust-latest]
 #   --no-rebuild  the probes run with the tree's built compilers (data/warp.wasm, data/warp-self.wasm if there)
 #   --base        what tier 2 diffs against (default origin/main; a batch merged on main: the main it started from)
 #   --folders     tier 2 runs the whole folders of the changed test files (many fail today: compare with the base's run)
 #   --tag-good    when every tier run is green and the tree's HEAD is on origin/main: tag good/<YYYY-MM-DD-HHMM>
-#                 (Europe/Berlin) and push the tag; scripts/bisect-lane.sh starts from the newest good/* tag
+#                 (Europe/Berlin) and push the tag; a `git bisect run` starts from the newest good/* tag
 # Output: one line per tier (time), one per probe and lane (ok, or FAIL got … want …), logs in <tree>/data/gate/.
-# Exit: 0 green, 1 a red tier, 2 usage. Heavy (the rebuilds): on the Grok box run it through /workspace/box-slot.sh.
+# Exit: 0 green, 1 a red tier, 2 usage.
 tiers=0-2 rebuild=1 base=origin/main folders=0 tag=0 args=()
 while (($#)); do
 	case $1 in

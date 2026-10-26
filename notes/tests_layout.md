@@ -15,4 +15,4 @@ parser, node, numbers (incl. units, floats, laws), operators, types, lists, text
 try, blocks, signals, tasks), functions, scope (globals, use scopes), modules, ffi (host, WASI, libm), wasm (emitter,
 reader, names, optimizer, WIT), web, welcoming (footguns, got-it warnings, other languages' forms), programs
 (algorithms, samples, kitchen sink, sound), sweeps (regression sweeps), host and launcher (shell tests of the harness),
-gate (the gate's tier 1 programs and their .expected output, scripts/gate-probes.sh).
+gate (the gate's tier 1 programs and their .expected output, scripts/gate.sh).

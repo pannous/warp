@@ -5,7 +5,7 @@ itself at a fixpoint (stage N+1 == stage N, byte for byte). `warp rebuild` build
 compiler needs no Rust compiler (card rust-bootstrap, notes/handover/rust-bootstrap.md). A warp whose checkout has
 only the old name reads seed/compiler-self.wasm (transition).
 
-- Refresh: `scripts/slot.sh scripts/refresh-seed.sh [<tree>]` (seed → A → B (→ C), replaced only at the fixpoint;
+- Refresh: `scripts/refresh-seed.sh [<tree>]` (in the background) (seed → A → B (→ C), replaced only at the fixpoint;
   `--check` replaces nothing). Do it when core changes in a way the old seed can't compile, or to pick up
   compiler fixes in the seed itself.
 - Provenance of the current seed: see the commit that last changed it (`git log --follow -- seed/warp-self.wasm`).

@@ -22,14 +22,14 @@ Read notes/agents/common.md.
   change where it now lives, tell the owner); logic touched on both sides bounces: `todo move <card> Now` + `todo note`.
   Never "take ours/theirs" blindly.
 
-## Gate (scripts/gate-probes.sh)
+## Gate (scripts/gate.sh)
 - Tier 0: `scripts/rebuild.sh pure <tree>` (a build of the same compiler inputs, in data/ or the store, is reused:
   never rebuild a tip already built), then
   <!-- GO TO worktree / branch which wants to be merged.  -->
   `warp pure samples/hello/hello.warp` prints Hello (and `warp self` when a warp-self.wasm is there). 
   Tier 1: every test/gate/<name>.warp in both lanes. 
   Tier 2: `warp test` of the test files the batch changed. Stop at the first red tier; compare a red lane with origin/main's run before
-  blaming the batch. A green main: `--tag-good`; a lane regression: `scripts/bisect-lane.sh <probe> <expected>`.
+  blaming the batch. A green main: `--tag-good`; a lane regression: `git bisect run` from the newest good/* tag (handbook).
 - A branch lands as soon as tier 0 is green, plus `scripts/self-check.sh` (the compiler compiles itself) when the
   batch touches core/ (user, decision quick-merges). 
   Tiers 1 and 2 then run in the background on the pushed tip and never hold a merge: a red result is fixed forward on the owner's card, a crash gets an urgent card. Push exactly the tested hash (`git push origin <tested-hash>:main`), never a branch ref that may have moved.

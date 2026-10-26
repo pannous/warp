@@ -26,17 +26,16 @@ few things differently. Where this file and the role files disagree, Grok agents
 ## The box
 - The box can go away: commit and push all progress, notes and handovers right away (AGENTS.md).
 - All agents share one Linux box. The shared binary is /workspace/cow/warp-rust-latest, refreshed by the Integrator
-  with `/workspace/box-slot.sh /workspace/build-fresh-warp.sh` after pushed batches.
+  with `/workspace/build-fresh-warp.sh` after pushed batches.
 - Pure only: `warp rebuild pure` and `rebuild self` on the shared binary, with WARP_LIB=<worktree>/lib. No per-branch
   cargo builds unless a branch changes Rust.
-- Every heavy run goes through /workspace/box-slot.sh (4 slots, memory guard). Box memory is the tight resource.
 - Worktrees with boxtree under /workspace/cow/trees/, never compacted. Kill processes by PID only.
 - Routine builds and tests run at low effort with a step cap.
 
 ## Merging
 - The Integrator merges Ready cards in batches, once most of them are Ready, with one merge commit per branch.
 - Every batch gate runs the gate set (test/gate) in both pure and self lanes. After a green batch the Integrator tags main
-  `good/<date>`. A regression is bisected with scripts/bisect-lane.sh from the latest good tag.
+  `good/<date>`. A regression is bisected with `git bisect run` from the latest good tag.
 - Handovers of parked agents: /workspace/handover/<agent>.md.
 
 ## For the Supervisor
