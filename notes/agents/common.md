@@ -27,7 +27,7 @@ before asking a question). After a context swap, this file and your role file be
   lowering case, special case or refusal path, needs an OK first (files, functions, 3-line reason to the Supervisor,
   who takes core changes to the user via the Interviewer). Small bug fixes need no question.
 - Layout: core/ = compiler, runtime, sugar, extensions; lib/ = plain modules programs import. Folder names never join
-  two topics with an underscore. core/ is the real folder since 2026-10-26; lib/compiler links to ../core for a transition
+  two topics with an underscore. core/ is the real folder; lib/compiler links to ../core for a transition
   (the compiler is still found as <lib>/compiler), core/sugar to ../lib/sugar. New syntax goes by layer (notes/layers.md): table row or declaration first, else a
   `rewrite` rule; a parser branch only when the commit names the missing rewrite-engine feature.
 - Rare edge cases (∞/NaN literals, wording nits, odd feature pairs) go to `todo add Later`.

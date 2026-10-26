@@ -42,7 +42,7 @@ few things differently. Where this file and the role files disagree, Grok agents
 ## For the Supervisor
 Grok Bot's Supervisor runs the agents Warp Code, Warp Code 2, Warp Issues; SendMessage can't reach it. Message it with
 `grok-msg warp-supervisor "<text>"` (~/dev/bin/grok-msg, webhook; secrets in ~/.config/grok-bot/webhook, never in the
-repo); it replies in your tmux pane or via scratch/grok-cards.md. Its agents are our workers (user 2026-10-22: "freely
+repo); it replies in your tmux pane or via scratch/grok-cards.md. Its agents are our workers (user: "freely
 send them cards"): first ask it whether they're busy and how many cards each can take, then `todo take <card>
 grok-warp-code` / `grok-warp-code-2` / `grok-warp-issues`, write the task into scratch/grok-cards.md and ping with
 grok-msg; they `todo ready`, the Integrator merges. Capacity: at most 1 active + 1 queued card per Grok coder; heavy

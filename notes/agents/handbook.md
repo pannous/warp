@@ -57,10 +57,7 @@ Principles and Talking live only in common.md.
   `&&`-chained commit silently doesn't happen. Check `git show --stat HEAD` after committing.
 
 ## Testing
-- PAUSED : GitHub workflows disabled, the context-swap
-  hook swaps nobody (~/.claude/swap/swap_tokens = 1e9), crons urgent-card-watch, codex_worker.sh and nightly.sh
-  commented out (#PAUSED-by-user).
-- Warp tests (`warp test`, scripts/is_tests.py) run locally with the shared binary; the whole suite only in the
+- Warp tests (`warp test`) run locally with the shared binary; the whole suite only in the
   Integrator's gate.
 - Stop isolation : an agent stops only its own helper jobs, never with a stop that
   reaches other agents.
@@ -108,15 +105,15 @@ Principles and Talking live only in common.md.
   Interviewer's approval only, not a new question.
 - Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
   intermediate; a test pinning one may be deleted or rewritten as one is! line.
-- Tests are result-based (user, 2026-10-23): assert what a program computes, e.g. `is! '6*7' 42`, or its printed
+- Tests are result-based (user): assert what a program computes, e.g. `is! '6*7' 42`, or its printed
   output. Don't pin incidental details such as exit codes of successful runs, internal forms, pass names, error
   wording or timing. Exit codes are tested only when the feature itself is about them (e.g. `exit(5)`).
-- Acceptance (user 2026-10-21, decision warp-only-acceptance): a branch is accepted when warp.wasm compiles
+- Acceptance (decision warp-only-acceptance): a branch is accepted when warp.wasm compiles
   compiler.warp itself and that self build compiles and runs hello world: `scripts/self-check.sh <worktree>` (main's
   binary; it queues behind a running check, one at a time on the Mac: never run `warp rebuild self` in parallel). Mark it
   `todo ready <card> <branch> --express`; the Integrator re-runs the check on the merged tip and pushes. While
   main's own self build is red (its owner fixes it), a branch passes when its pure lane is green and its self check
-  fails no worse than main's (the same error): a red main never blocks the queue (supervisor 2026-10-22).
+  fails no worse than main's (the same error): a red main never blocks the queue.
   A change to core/ also checks the self build before Ready: `scripts/self-check.sh <worktree>` (it rebuilds both
   compilers in a queue slot; a bare `warp rebuild self` skips the queue: three at once pushed the load to 288).
   Never rebuild in the main checkout: that replaces main's delivered pair under every running check; only the
@@ -146,7 +143,7 @@ Principles and Talking live only in common.md.
 - `warp pure` / `warp self` run compiler.warp's build files warp.wasm / warp-self.wasm (decision
   compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
   (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never build one : a missing one is an error
-  naming `warp rebuild`; a worktree's stale one in data/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user 2026-10-22: "we don't want automatic
+  naming `warp rebuild`; a worktree's stale one in data/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user: "we don't want automatic
   rebuilds just by changing of lib"): no cron, no git hook, no watcher. The pair beside the binary is main's
   delivered compiler: the Integrator's push builds both from the pushed tip's committed lib/ and installs them
   together (notes/agents/integrator.md). A worktree's
@@ -214,7 +211,7 @@ Principles and Talking live only in common.md.
   breaks other areas' tests is bounced. More than ~20 ignored tests of yours: fix those before new work.
 - Before `todo ready`: `scratch/warp format <files>` on the .warp files you wrote or changed (notes/warp_format.md),
   then `scripts/style_lint.py --fix` (the style rules, notes/style_lint.md) and commit what it moved. Style nits are the
-  linter's, not hand polish (user, 2026-10-15). A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
+  linter's, not hand polish. A change to the Rust harness is also `cargo fmt`ed and `cargo check`ed.
 - Done = the card is the handoff (the board's Ready column is the merge queue):
   1. Targeted tests, commit, formatted.
   2. Make sure the branch merges cleanly: `git fetch origin && git merge --autostash origin/main`. You resolve
@@ -228,7 +225,7 @@ Principles and Talking live only in common.md.
      branches. Several cards on one branch: ready each. First a `todo note <card>` in this fixed form: `card | branch |
      tip (full sha) | filters | passed/failed`, then new tests, "docs: <page>"
      and the sample. Express (the user or the Supervisor asked for your result fast, a crash fix, and every card of
-     warp-speed, the standing speed worker: user 2026-10-20 "express route to main"): `todo ready <card>
+     warp-speed, the standing speed worker): `todo ready <card>
      --express`; the Integrator pushes it to main untested at once, the gate follows. When the user says "express" or
      "quickly", they expect about a minute: one targeted test or none, give the user a try line with
      `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp` , ready it express.

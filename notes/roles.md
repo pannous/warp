@@ -73,20 +73,6 @@ feature merges or once a day. It moves functions to their concept's file, merges
 functions, and folds special cases into the general machinery. Every chunk goes on its own branch to the Integrator,
 stating its net src/ delta. Feature cuts go to the Interviewer. Prompt: notes/agents/refactorer.md.
 
-## Urgent (warp-urgent, in the cloud)
-A standing `claude --cloud` session in fast mode that fixes the user's urgent cards; crash cards
-keep their local worker. ~/dev/bin/urgent-card-watch sends it each new urgent card (`claude -p … --cloud <id>`, the id
-in ~/.cache/todo-board/urgent-cloud-session; SendMessage is held for approval there) and collects its pushed
-`claude/urgent-<key>` branches: a `done` report whose tip is on main closes the card, `needs-mac` goes to the
-Supervisor. warp-urgent pushes and merges every card to main itself, in any area, without the merge queue; the Integrator's next full run checks it. Prompt: notes/agents/urgent_cloud.md.
-Start (or replace) it: `tmux new-session -d -s cloud-warp-urgent -c /Users/me/dev/angles/warp "claude --model opus
---name warp-urgent --permission-mode bypassPermissions --settings '{\"fastMode\": true}' --cloud 'You are warp-urgent. Read notes/agents/urgent_cloud.md
-and AGENTS.md, then do the Priming and wait for urgent cards.'"`, then write its session id into that file and
-switch fast mode on: `claude -p "/fast on" --cloud <id> < /dev/null`. `--settings '{"fastMode": true}'` does not
-reach a cloud session; check the session's footer once.
-It must always run in bypass permissions mode: after every start, check
-the footer shows bypass permissions; card sends pass `--permission-mode bypassPermissions` too.
-
 ## Workers
 One task, one branch, one worktree; targeted tests (`warp test`); done = `todo ready <card>`. Every rule:
 notes/agents/common.md (role prompts: worker.md, fixer.md, implementer.md).
