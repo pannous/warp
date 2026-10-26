@@ -1397,7 +1397,7 @@ impl Lowering {
 	}
 }
 
-// ⚠ WARP DOES THIS DIFFERENTLY: no list_sum hook by name: sum is one fold loop like any other → lib/compiler/lambdas.warp
+// ⚠ WARP DOES THIS DIFFERENTLY: no list_sum hook by name: sum is one fold loop like any other → core/lambdas.warp
 /// `(tmp = xs; loop)` → `(tmp = xs; list_sum(tmp, loop))`
 fn dispatched_sum(expanded: Node) -> Node {
 	let Node::List(mut items, bracket, separator) = expanded.drop_meta().clone() else {

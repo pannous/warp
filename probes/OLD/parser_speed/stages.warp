@@ -3,7 +3,7 @@
 // WARP_LIB=<checkout>/lib warp probes/parser_speed/stages.warp <file>
 // The globals carry a probe_ prefix: a global named like a parameter of a used function (lambdas.warp `lowering`)
 // replaces it there
-use "../../lib/compiler/passes.warp"
+use "../../core/passes.warp"
 use os
 probe_source = read(args#1)
 probe_started = clock()

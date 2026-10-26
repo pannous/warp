@@ -18,17 +18,18 @@ before asking a question). After a context swap, this file and your role file be
   compiler's included, uses the full language and reads like a good sample program.
 - Word choices are aliases: the recommended word is canonical, the others work with a got-it note (notes/fixits.md).
   Only differences in meaning go to the Interviewer.
-- The Rust in src/ and crates/ is frozen legacy: new work goes into warp (lib/, lib/compiler/). Rust changes only to
+- The Rust in src/ and crates/ is frozen legacy: new work goes into warp (lib/, core/). Rust changes only to
   keep the bootstrap building or to fix a crash; where warp does it differently, the Rust gets a comment banner
   `// ⚠ WARP DOES THIS DIFFERENTLY: <what> → <lib file>`. Exception: `warp fix` (src/cli/formatting.rs,
   src/formatting/). A card that needs Rust work is redone as warp work.
 - No new passes. Sugar (new spellings) → rules in lib/sugar/*.warp; new capabilities → one file each in
-  core/extensions/<name>.warp (until the compiler-to-core flip: lib/compiler/extensions/). A new pass, pass-list
-  entry or lib/compiler/*.warp file needs the user's yes; more than ~40 changed lines in lib/compiler/*.warp, or a new
+  core/extensions/<name>.warp. A new pass, pass-list
+  entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
   lowering case, special case or refusal path, needs an OK first (files, functions, 3-line reason to the Supervisor,
   who takes core changes to the user via the Interviewer). Small bug fixes need no question.
 - Layout: core/ = compiler, runtime, sugar, extensions; lib/ = plain modules programs import. Folder names never join
-  two topics with an underscore. New syntax goes by layer (notes/layers.md): table row or declaration first, else a
+  two topics with an underscore. core/ is the real folder since 2026-10-26; lib/compiler links to ../core for a transition
+  (the compiler is still found as <lib>/compiler), core/sugar to ../lib/sugar. New syntax goes by layer (notes/layers.md): table row or declaration first, else a
   `rewrite` rule; a parser branch only when the commit names the missing rewrite-engine feature.
 - Rare edge cases (∞/NaN literals, wording nits, odd feature pairs) go to `todo add Later`.
 - Emptiness is tested loosely: `is empty`, `if no x`, `if x`; `x is ø` only tests missing.
@@ -51,7 +52,7 @@ before asking a question). After a context swap, this file and your role file be
 ## Where to work
 - Notes, docs, wiki, probes, scripts, samples: straight onto main in /Users/me/dev/angles/warp; commit your own paths
   by name (`git commit -- <paths>`), `git pull --rebase --autostash`, push. Never leave unpushed commits on main.
-- Anything compiled (lib/compiler, src/, crates/, tests/, Cargo.*, build.rs): a worktree,
+- Anything compiled (core, src/, crates/, tests/, Cargo.*, build.rs): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
   /Volumes/Worktrees/warp, /integrator or /me. Rust worktrees need the build tweak (handbook "Where to work").
 - The user's uncommitted edits are integrated at once by whoever meets them: complete, run, commit as "(user)", push.
@@ -61,7 +62,7 @@ before asking a question). After a context swap, this file and your role file be
 - Start from the clean baseline: don't rebuild or retest main before your change; the Integrator keeps main green.
 - Only the pure pipeline counts. Check .warp changes with the shared binary from your worktree:
   `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` / `warp test <folders>`.
-  Never rebuild in the main checkout. A lib/compiler change also runs `scripts/self-check.sh <worktree>`.
+  Never rebuild in the main checkout. A core change also runs `scripts/self-check.sh <worktree>`.
 - At most 2 heavy warp runs fleet-wide: rebuilds, compiler compiles and sweeps go through `scripts/slot.sh <cmd>`.
 - Rust tests only when Rust changed, in the cloud lane (`scripts/cloud-test.sh`, handbook "Testing"); a hook blocks
   local cargo test. Currently PAUSED by the user (~/.config/warp/cloud-paused): Rust branches wait.

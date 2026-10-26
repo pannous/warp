@@ -1,7 +1,7 @@
-# repro (card comment-apostrophe): lowered as a program, this copy of lib/compiler/runtime.warp fails with "result is
+# repro (card comment-apostrophe): lowered as a program, this copy of core/runtime.warp fails with "result is
 # declared int, cannot assign text NaN" in float_text; spelling the comment of checked_add without its apostrophe
 # (the word Rust with its apostrophe s, spelled "of Rust") lowers it. Run: scratch/warp lower "$(cat <this file>)"
-# The runtime words of lib/compiler/emitter.warp: warp over the emitter's intrinsics (`intrinsic` there: new_text,
+# The runtime words of core/emitter.warp: warp over the emitter's intrinsics (`intrinsic` there: new_text,
 # byte_at, set_byte … each one or two instructions, callable only here). This file is lowered by the same pipeline as
 # any program; the emitter compiles a word on its first call, so a module carries only the words it uses.
 
@@ -705,7 +705,7 @@ index_must_be_an_integer() := {
 }
 # a value as a boxed $Node
 held(value: any) := value
-# the built-in node's parts (lib/compiler/node.warp): a key's operator is its code above the kind bits, the
+# the built-in node's parts (core/node.warp): a key's operator is its code above the kind bits, the
 # position of its spelling here (src/operators/codes.rs OP_CODES)
 operator_spellings() := ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
 	"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",
