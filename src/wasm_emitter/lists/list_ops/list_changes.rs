@@ -49,21 +49,22 @@ impl WasmGcEmitter {
 				let copy = CopyCells::at(2);
 				let kind = copy.result + 1;
 				let walk_start = kind + 1;
-				let extended_last = s.list_cursor(CursorPart::Extended).zip(s.list_cursor(CursorPart::Last));
-				// the list extended last starts its walk to the end at its last cell then
+				let cursors = s.extend_cursors();
+				// a list extended lately starts its walk to the end at the last cell it had then, and leaves its cursor,
+				// stored again once it grew (a cell past it only walks on: `last` is where the walk starts, never the end)
 				Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(walk_start)]);
-				if let Some((extended, last)) = extended_last {
+				for &(extended, last) in &cursors {
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
 						I::GlobalGet(extended), I::LocalGet(list), I::RefEq, I::If(BlockType::Empty),
 							I::GlobalGet(last), I::LocalSet(walk_start),
+							I::RefNull(HeapType::Concrete(node_type)), I::GlobalSet(extended),
 						I::End,
 					]);
 				}
 				// items added at the end leave each cell at its index: the index cursor stays, and the count of another
 				// list, so a loop over a list appending to this one walks on (a comprehension over a table's rows); this
 				// list's count grows by the items (emit_count_grown), so a worklist's `at <= #waiting` counts it once
-				Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Extended]));
 				s.emit_item_as_list(f, items, kind);
 				s.emit_item_check(f, super::super::super::declared_values::LIST_ITEMS_CHECK, list, items);
 				s.emit_empty_as_null(f, items);
@@ -125,9 +126,17 @@ impl WasmGcEmitter {
 				walk_to_last(s, f);
 				Self::emit_list(f, &[I::LocalGet(copy.cell), I::LocalGet(copy.result), set(2)]);
 				s.emit_count_grown(f, list, &copy);
-				if let Some((extended, last)) = extended_last {
+				if let Some(&(extended, last)) = cursors.first() {
 					f.instruction(&I::LocalGet(copy.result));
 					walk_to_last(s, f);
+					// the newest first: the others move one on, the oldest dropped
+					for pair in cursors.windows(2).rev() {
+						let ((list, cell), (next_list, next_cell)) = (pair[0], pair[1]);
+						#[rustfmt::skip]
+						Self::emit_list(f, &[
+							I::GlobalGet(list), I::GlobalSet(next_list), I::GlobalGet(cell), I::GlobalSet(next_cell),
+						]);
+					}
 					Self::emit_list(
 						f,
 						&[I::LocalGet(list), I::GlobalSet(extended), I::LocalGet(copy.cell), I::GlobalSet(last)],

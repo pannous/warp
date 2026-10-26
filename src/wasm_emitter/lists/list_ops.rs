@@ -103,6 +103,10 @@ const SHORT_WALK: i64 = 8;
 /// Lists whose read cursors are kept at once: a loop reading several long lists by turns (`room#i for room in rooms`,
 /// lib/sound.warp's four reverb combs) walks on in each instead of from the head of all but one (quadratic)
 const READ_CURSORS: u32 = 4;
+/// Lists whose last cells are kept at once: a function growing several lists by turns (the emitter's
+/// `module.texts[t] = …; module.bytes += t.bytes`, a map's pairs and a list) appends at the end of each instead of
+/// walking all but one from the head (quadratic, card speed-parallel-emit)
+const EXTEND_CURSORS: u32 = 4;
 /// Texts whose grapheme cursors are kept at once (emit_text_cursor_globals): a lexer comparing its source with a word
 /// (`src#i == word#j`) walks on in both instead of from the start of the source at each index (quadratic)
 const TEXT_CURSORS: u32 = 2;
@@ -209,6 +213,10 @@ impl WasmGcEmitter {
 				self.declare_global_of(val_type, initial);
 			}
 		}
+		// the extend cursors after the first: list, last cell each
+		for _ in 1..EXTEND_CURSORS * 2 - 1 {
+			self.declare_global_of(Ref(self.node_ref(true)), ConstExpr::ref_null(HeapType::Concrete(node_type)));
+		}
 	}
 
 	/// The text cursors of text_grapheme_offset, newest first, and the counted texts of text_grapheme_count, each keyed
@@ -282,6 +290,18 @@ impl WasmGcEmitter {
 		(0..READ_CURSORS).filter_map(|slot| self.read_cursor(slot)).collect()
 	}
 
+	/// The globals (list, last cell) of each extend cursor, newest first: the first is the list cursor's own
+	pub(super) fn extend_cursors(&self) -> Vec<(u32, u32)> {
+		let Some(first) = self.list_cursor_global else {
+			return vec![];
+		};
+		let after_reads = first + LIST_CURSOR_PARTS.len() as u32 + (READ_CURSORS - 1) * 3;
+		let own = (first + CursorPart::Extended as u32, first + CursorPart::Last as u32);
+		std::iter::once(own)
+			.chain((1..EXTEND_CURSORS).map(|slot| after_reads + (slot - 1) * 2).map(|list| (list, list + 1)))
+			.collect()
+	}
+
 	/// The global of a part of the list cursor
 	fn list_cursor(&self, part: CursorPart) -> Option<u32> {
 		self.list_cursor_global.map(|first| first + part as u32)
@@ -304,7 +324,18 @@ impl WasmGcEmitter {
 		} else {
 			vec![]
 		};
-		parts.iter().filter_map(|part| self.list_cursor(*part)).chain(read_lists).flat_map(forget).collect()
+		let extended_lists: Vec<u32> = if parts.iter().any(|part| matches!(part, CursorPart::Extended)) {
+			self.extend_cursors().into_iter().skip(1).map(|(list, _)| list).collect()
+		} else {
+			vec![]
+		};
+		parts
+			.iter()
+			.filter_map(|part| self.list_cursor(*part))
+			.chain(read_lists)
+			.chain(extended_lists)
+			.flat_map(forget)
+			.collect()
 	}
 
 	/// list_at and list_node_at: the element of a cons list at a 1-based index
