@@ -106,7 +106,7 @@ fn parsed_view(code: &str) -> Result<String, Node> {
 	let source = folder.join(format!("warp-parse-{}-{parse}.warp", std::process::id()));
 	let output = source.with_extension(VIEW_EXTENSION);
 	std::fs::write(&source, code).map_err(|failure| error(&format!("{}: {failure}", source.display())))?;
-	let said = run_compiler(&source, &output, &folder, compiler, false);
+	let said = run_compiler(&source, &output, &folder, compiler);
 	let json = std::fs::read_to_string(&output);
 	let _ = std::fs::remove_file(&source);
 	let _ = std::fs::remove_file(&output);
@@ -181,20 +181,14 @@ pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 
 /// The module compiler.warp makes of the program file with `folder` in scope: `compiler.warp <source> <wasm> <folder> <lib>`
 fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
-	compiled_with(program, folder, compiler(by)?, matches!(by, Compiler::SelfCompiled))
+	compiled_with(program, folder, compiler(by)?)
 }
 
-/// The module `compiler` (a module of compiler.warp) makes of the program file with `folder` in scope; `self_compiled`:
-/// the compiler is not compiler.wasm (run_compiler)
-fn compiled_with(
-	program: &Path,
-	folder: &Path,
-	compiler: CompiledModule,
-	self_compiled: bool,
-) -> Result<CompiledModule, Node> {
+/// The module `compiler` (a module of compiler.warp) makes of the program file with `folder` in scope
+fn compiled_with(program: &Path, folder: &Path, compiler: CompiledModule) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
-	let said = run_compiler(program, &output, folder, compiler, self_compiled);
+	let said = run_compiler(program, &output, folder, compiler);
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
@@ -207,17 +201,17 @@ fn compiled_with(
 
 /// What the run of `compiler` (a module of compiler.warp) said, writing `output` of the program file with `folder` in
 /// scope: `compiler.warp <source> <output> <folder> <lib>`, a module, or parser.warp's view when `output` ends in
-/// VIEW_EXTENSION. The arguments of the program running, if any (a host word parses in its run), stay its own.
-/// `self_compiled`: the compiler is compiler-self.wasm or the seed, whose kept values stay their own; compiler.wasm's are
-/// keyed by their makers' lib/compiler files alone (std_adapters kept_key)
-fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: CompiledModule, self_compiled: bool) -> Node {
+/// VIEW_EXTENSION. The arguments of the program running, if any (a host word parses in its run), stay its own
+fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: CompiledModule) -> Node {
 	let running = crate::modules::std_adapters::program_arguments();
 	let arguments = [program, output, folder, library()];
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
 	let owner = crate::extensions::sha256_hex(&compiler.bytes);
-	let said = crate::modules::std_adapters::kept_by(owner, self_compiled, || crate::pipeline::run_module(compiler));
+	// both compilers are compiled by lib/compiler now (by the seed or by compiler.wasm): their kept values stay their
+	// own, never keyed by the makers' files alone (std_adapters kept_key)
+	let said = crate::modules::std_adapters::kept_by(owner, true, || crate::pipeline::run_module(compiler));
 	crate::modules::std_adapters::set_program_arguments(running);
 	said
 }
@@ -279,8 +273,8 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let file = library().join(COMPILER_FILE);
 	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let folder = file.parent().unwrap_or(library()).to_path_buf();
-	let (builder, compiler, by_seed) = builder(by)?;
-	let module = compiled_with(&file, &folder, compiler, by_seed)
+	let (builder, compiler) = builder(by)?;
+	let module = compiled_with(&file, &folder, compiler)
 		.map_err(|failure| error(&format!("compiler.warp compiled by {builder}: {}", failure.serialize())))?;
 	let mut bytes = module.bytes.clone();
 	let section = current_build().join(BUILD_SEPARATOR);
@@ -295,12 +289,11 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 }
 
 /// Who builds compiler.warp for `by`, named, and its module: compiler.wasm for `warp self` when there is one of these
-/// compiler inputs (`warp rebuild` builds compiler.wasm first), else the seed (then true). No Rust-compiled stage (card
-/// rust-bootstrap)
-fn builder(by: Compiler) -> Result<(String, CompiledModule, bool), Node> {
+/// compiler inputs (`warp rebuild` builds compiler.wasm first), else the seed. No Rust-compiled stage (card rust-bootstrap)
+fn builder(by: Compiler) -> Result<(String, CompiledModule), Node> {
 	if let Compiler::SelfCompiled = by {
 		if let Some((path, bytes)) = current_build_file(Compiler::RustCompiled) {
-			return Ok((path.display().to_string(), module_of_bytes(bytes), false));
+			return Ok((path.display().to_string(), module_of_bytes(bytes)));
 		}
 		eprintln!(
 			"no compiler.wasm of these compiler inputs: the seed builds compiler-self.wasm (`warp {REBUILD_WORD}` builds both, compiler-self.wasm by compiler.wasm)"
@@ -313,7 +306,7 @@ fn builder(by: Compiler) -> Result<(String, CompiledModule, bool), Node> {
 			seed.display()
 		))
 	})?;
-	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes), true))
+	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes)))
 }
 
 /// The seed: WARP_SEED, else seed/compiler-self.wasm beside lib/ (a checkout's), else in the installed folder
