@@ -3,7 +3,7 @@ name: Release
 
 # A version tag (v*, matching Cargo.toml's version) publishes a GitHub release with prebuilt binaries: per platform one
 # tarball holding `warp`, `warp-runtime` (the stub `warp build --exe` needs next to warp), `warp-page-runtime` (the
-# stub of page apps, with the web view), the warp-written compilers compiler.wasm and compiler-self.wasm, and lib/. The Homebrew formula
+# stub of page apps, with the web view), the warp-written compilers warp.wasm and warp-self.wasm, and lib/. The Homebrew formula
 # (packaging/homebrew/Formula/warp.rb, copied to pannous/homebrew-tap) installs these binaries (no Rust build); its
 # --HEAD install builds main from source. Then the tarballs are repackaged: PyPI wheels (warp-language), .deb and .rpm
 # (warp-lang) on the release; notes/packaging.md
@@ -79,9 +79,9 @@ jobs:
 
   compilers:
     # the warp-written compiler as wasm, shipped in every tarball beside the binary and as release assets (user
-    # 2026-10-22, card installed-compilers): compiler.wasm (`warp pure`'s, compiled by the Rust pipeline) and
-    # compiler-self.wasm (`warp self`'s, compiled by itself), both from the tag's lib/ by the tag's linux binary; an
-    # installed warp never builds one
+    # 2026-10-22, card installed-compilers): warp.wasm (`warp pure`'s, compiled by the seed) and warp-self.wasm
+    # (`warp self`'s: warp.wasm promoted by `warp rebuild self` when it compiles compiler.warp to its own bytes; the job
+    # fails without that fixpoint), both from the tag's lib/ by the tag's linux binary; an installed warp never builds one
     needs: binaries
     if: ${{ !inputs.repackage }}
     runs-on: ubuntu-24.04
@@ -111,21 +111,21 @@ jobs:
         [[ $said == *Hello* ]]
         bin/warp self samples/hello/hello.warp || echo "warp self hello failed (card self-cold-trap)"
     - name: warp-host's shipped cache
-      # compiler-self's kept values, made once in a tarball's layout and shipped in every one (the same on every
+      # warp-self's kept values, made once in a tarball's layout and shipped in every one (the same on every
       # platform), so an installed warp-host's first run takes ~4 s, not ~26 s; no machine code (card warp-host-size)
       run: |
-        mkdir -p stage && cp bin/warp-host bin/compiler-self.wasm stage/ && cp -R lib stage/lib
+        mkdir -p stage && cp bin/warp-host bin/warp-self.wasm stage/ && cp -R lib stage/lib
         packaging/host_cache.sh stage
         mv stage/host-cache bin/host-cache
     - uses: actions/upload-artifact@v7
       with:
         name: compilers
         path: |
-          bin/compiler.wasm
-          bin/compiler-self.wasm
+          bin/warp.wasm
+          bin/warp-self.wasm
           bin/host-cache
     - name: upload
-      run: gh release upload "$TAG" bin/compiler.wasm bin/compiler-self.wasm --clobber
+      run: gh release upload "$TAG" bin/warp.wasm bin/warp-self.wasm --clobber
 
   tarballs:
     # per platform one tarball, made once (its sha256 is the formula's): the binaries, the compilers and the tag's lib/
@@ -156,7 +156,7 @@ jobs:
       run: |
         chmod +x dist/warp dist/warp-runtime dist/warp-page-runtime dist/warp-host
         cp -R lib dist/lib
-        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime warp-host compiler.wasm compiler-self.wasm lib host-cache
+        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime warp-host warp.wasm warp-self.wasm lib host-cache
         gh release upload "$TAG" "$ARCHIVE" --clobber
 
   packages:

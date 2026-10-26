@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# C calls of pure programs (card pure-c-imports, notes/warp_host.md "C calls"): compiler-self.wasm compiles foreign
+# C calls of pure programs (card pure-c-imports, notes/warp_host.md "C calls"): warp-self.wasm compiles foreign
 # lines, `import f from 'lib'` and `use lib` into imports with a warp.c_functions section, and warp-host loads the
 # libraries and calls them. Run it through the queue: tests/queue.sh tests/host/test_ffi.sh
-# The host and compilers are found as tests/host/test_host.sh finds them; WARP_FFI_COMPILER=full tests compiler.wasm,
+# The host and compilers are found as tests/host/test_host.sh finds them; WARP_FFI_COMPILER=full tests warp.wasm,
 # WARP_FFI_COMPILER_FILE names the compiler module to use.
 # A library missing on this machine skips its checks (sqlite3, z).
 # The texts are longer than one letter: the pure lane prints a one-letter text in a list as a codepoint ('a'), C's or not.
@@ -17,7 +17,7 @@ unset WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HO
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
 compiler=${WARP_FFI_COMPILER:-self}
-compiler_file=$([ "$compiler" = full ] && echo compiler.wasm || echo compiler-self.wasm)
+compiler_file=$([ "$compiler" = full ] && echo warp.wasm || echo warp-self.wasm)
 compiler_path=${WARP_FFI_COMPILER_FILE:-$(dirname "$rust")/$compiler_file}
 [ -f "$compiler_path" ] || { echo "✗ no $compiler_file beside $rust: $rust rebuild builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" || exit 1

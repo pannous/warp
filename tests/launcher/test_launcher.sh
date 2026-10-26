@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # What the launcher packaging/bin/warp prints and exits with (notes/pure_wrapper.md): programs through the pure
 # pipeline, other commands through warp-rust. Run it through the queue: tests/queue.sh tests/launcher/test_launcher.sh
-# The Rust binary under test is WARP_LAUNCHER_RUST (default the shared warp, scripts/shared-warp.sh) with compiler.wasm and
-# compiler-self.wasm beside it (`warp rebuild pure`, `warp rebuild self`); it and the launcher are staged together in
+# The Rust binary under test is WARP_LAUNCHER_RUST (default the shared warp, scripts/shared-warp.sh) with warp.wasm and
+# warp-self.wasm beside it (`warp rebuild pure`, `warp rebuild self`); it and the launcher are staged together in
 # scratch/launcher-test/, as installed. Refusals and failures come from a stand-in warp-rust (stub_rust below), so these
 # checks hold whatever the pure pipeline covers.
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
@@ -15,7 +15,7 @@ NOTICE='WARP_FALLBACK=rust: THE PURE PIPELINE REFUSED THIS PROGRAM'
 export WARP_NO_WINDOW=1 WARP_HINTS=0
 unset WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HOSTED
 
-for compiler in compiler.wasm compiler-self.wasm; do
+for compiler in warp.wasm warp-self.wasm; do
 	[ -f "$(dirname "$rust")/$compiler" ] || { echo "✗ no $compiler beside $rust: $rust rebuild builds it"; exit 1; }
 done
 rm -rf "$stage" && mkdir -p "$stage/bin" "$stage/elsewhere" "$stage/stub" || exit 1
@@ -26,13 +26,13 @@ cp "$hello" "$stage/hello.warp" || exit 1
 ln -s "$stage/bin/warp" "$stage/elsewhere/warp"
 warp=$stage/elsewhere/warp
 
-# A stand-in warp-rust: its pure pipeline (`pure|self …`, `…compiler.wasm -- …`) refuses programs named refused, fails
+# A stand-in warp-rust: its pure pipeline (`pure|self …`, `…warp.wasm -- …`) refuses programs named refused, fails
 # those named failing, exits 3 for those named exits; it says what it was given on stderr, and "ran by <lane>"
 stub_rust=$stage/stub/warp-rust
 cat >"$stub_rust" <<'STUB'
 #!/usr/bin/env bash
 echo "warp-rust $* (WARP_SELF_HOSTED=${WARP_SELF_HOSTED-unset})" >&2
-case $1 in pure | self | *compiler*.wasm) lane=pure ;; *) lane=rust ;; esac
+case $1 in pure | self | *warp*.wasm) lane=pure ;; *) lane=rust ;; esac
 if [ $lane = pure ]; then
 	case $* in
 		*refused*) echo 'Error("outside the core: `stub` at 1:1")'; exit 1 ;;
@@ -42,7 +42,7 @@ if [ $lane = pure ]; then
 fi
 echo "ran by $lane"
 STUB
-chmod +x "$stub_rust" && touch "$stage/stub/compiler.wasm" "$stage/stub/refused.warp" || exit 1
+chmod +x "$stub_rust" && touch "$stage/stub/warp.wasm" "$stage/stub/refused.warp" || exit 1
 mkdir -p "$stage/stub/lib/compiler"
 stub() { WARP_RUST=$stub_rust "$warp" "$@"; }
 
@@ -73,8 +73,8 @@ expect() {
 
 expect "a program file runs through the pure pipeline" 0 "$HELLO" -- "$warp" "$hello"
 expect "warp run" 0 "$HELLO" -- "$warp" run "$hello"
-expect "--self: compiler-self.wasm" 0 "$HELLO" -- "$warp" --self "$hello"
-expect "WARP_COMPILER=self: compiler-self.wasm" 0 "$HELLO" -- env WARP_COMPILER=self "$warp" "$hello"
+expect "--self: warp-self.wasm" 0 "$HELLO" -- "$warp" --self "$hello"
+expect "WARP_COMPILER=self: warp-self.wasm" 0 "$HELLO" -- env WARP_COMPILER=self "$warp" "$hello"
 expect "WARP_COMPILER=other: refused" 1 "WARP_COMPILER is pure or self" -- env WARP_COMPILER=rusty "$warp" "$hello"
 expect "inline code prints its value and exits 0" 0 "42" -- "$warp" '6*7'
 expect "inline code's output" 0 "inline 42" -- "$warp" 'print "inline " + 6*7'

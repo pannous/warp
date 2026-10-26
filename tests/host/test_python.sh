@@ -2,7 +2,7 @@
 # Python from warp (card ffi-python-adapter, notes/python_adapter.md): `use python` brings lib/native/python.warp, whose
 # foreign lines warp-host links to libpython by dlopen and dlsym. Outcome checks: the printed values and exit statuses.
 # Run it through the queue: tests/queue.sh tests/host/test_python.sh
-# The host and compiler are found as tests/host/test_ffi.sh finds them; WARP_FFI_COMPILER=full tests compiler.wasm.
+# The host and compiler are found as tests/host/test_ffi.sh finds them; WARP_FFI_COMPILER=full tests warp.wasm.
 # Without libpython (Linux libpython3.X.so.1.0, the package libpython3.X) every check is skipped; without numpy its one.
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 host=${WARP_HOST_BINARY:-$checkout/target/host/warp-host}
@@ -15,7 +15,7 @@ unset WARP_HOST WARP_RUST WARP_PIPELINE WARP_FALLBACK WARP_COMPILER WARP_SELF_HO
 
 [ -x "$host" ] || { echo "✗ no warp-host at $host: cargo build --profile host -p warp-runtime --features host --bin warp-host"; exit 1; }
 compiler=${WARP_FFI_COMPILER:-self}
-compiler_file=$([ "$compiler" = full ] && echo compiler.wasm || echo compiler-self.wasm)
+compiler_file=$([ "$compiler" = full ] && echo warp.wasm || echo warp-self.wasm)
 compiler_path=${WARP_FFI_COMPILER_FILE:-$(dirname "$rust")/$compiler_file}
 [ -f "$compiler_path" ] || { echo "✗ no $compiler_file beside $rust: $rust rebuild builds it"; exit 1; }
 rm -rf "$stage" && mkdir -p "$stage/bin" || exit 1

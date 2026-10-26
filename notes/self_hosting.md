@@ -430,7 +430,7 @@ objects cost more than Rust's stack values; typically 1.2-2x, less for allocatio
 | Little inlining | small functions stay calls | emitter inlining or wasm-opt |
 
 Host after self-hosting: the native `warp` stays a Rust shell (wasmtime, host words, FFI, graphics, sound) embedding
-`compiler.wasm` precompiled to .cwasm; the playground loads the same file. New interface: compiler imports for
+`warp.wasm` precompiled to .cwasm; the playground loads the same file. New interface: compiler imports for
 reading `use`d files, FFI signatures, the host-word list.
 
 Measured (2026-10-17, probes/self_hosting/emitter/bench/list_reads.warp: 20 million `xs#i` at scattered places of a

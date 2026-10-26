@@ -181,7 +181,7 @@ fn ratio_of(data: &Val, store: &mut StoreContextMut<'_, Host>) -> Option<(i64, i
 	if ratio.ty(&*store).ok()?.fields().len() != 2 {
 		return None;
 	}
-	// each part an $i64box (compiler-self's), or the number itself
+	// each part an $i64box (warp-self's), or the number itself
 	let mut part = |index: usize| match ratio.field(&mut *store, index).ok()? {
 		Val::I64(n) => Some(n),
 		part @ Val::AnyRef(Some(_)) => boxed(&part, store)?.i64(),
@@ -392,7 +392,7 @@ impl Builders {
 	}
 
 	/// A list of the items at once, for a program whose lists are vectors (a node over a `{count: i32, items: array}`
-	/// struct, compiler-self's): new_list(first, rest) copies rest's items into a new vector, so building a list a cell
+	/// struct, warp-self's): new_list(first, rest) copies rest's items into a new vector, so building a list a cell
 	/// at a time copies n²/2 items (24,000 bytes of read_bytes: 288 million, past the memory cap). Here new_list makes
 	/// a one-item list, and its vector gets an array of all the items. None for a program whose lists are cons cells.
 	fn vector_list(&self, items: &[Val], info: i64, store: &mut StoreContextMut<'_, Host>) -> Result<Option<Val>> {
@@ -432,7 +432,7 @@ impl Builders {
 }
 
 /// Bytes put into the program's memory for it to copy out at once, their address: at its text heap when it has one
-/// (compiler.wasm), else in pages past its own, the same pages again while the memory stays that size
+/// (warp.wasm), else in pages past its own, the same pages again while the memory stays that size
 pub fn placed(
 	memory: Memory,
 	heap: Option<Global>,

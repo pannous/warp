@@ -69,17 +69,17 @@ The same file runs from the command line with no switch at all: `warp lib/compil
 then `warp app.wasm`. That is the independence the decision asks for; the Rust lane is only a convenience around it.
 
 ### `warp pure <program.warp> [arguments…]` (card warp-pure, user 2026-10-20: "put everything in the binary")
-src/compiler/standalone.rs: compiler.warp's module, the build file compiler.wasm (decision compiler-build: a build
+src/compiler/standalone.rs: compiler.warp's module, the build file warp.wasm (decision compiler-build: a build
 output, no cache), runs as `compiler.warp <source> <wasm> <folder> <lib>`; the module it writes runs with the program's
 arguments. The Rust pipeline compiles compiler.warp, always (user 2026-10-21: "pure always is Rust's compiler.warp and
 `warp self` always uses the self-hosted, self-compiled"). `warp self <program.warp>` runs the program through
-compiler.warp compiled by the pure lane, itself, the build file compiler-self.wasm; a refusal of that compile is a loud
+compiler.warp compiled by the pure lane, itself, the build file warp-self.wasm; a refusal of that compile is a loud
 error, never a fallback to the Rust-compiled one. `warp pure` switches to the self-compiled compiler once more tests
 pass with it (the count self vs Rust-compiled goes to the supervisor first: `scripts/is_tests.py run warp-pure
 warp-self` runs every test pair both ways, ~35 min a lane, and ends with the parity line; decision
 self-compiled-parity: self may pass 5 % fewer, reported, no gate yet). It is also the gate's
 pure-chain check (`warp pure samples/hello/hello.warp` → "Hello 🌍2026").
-Build files (decision compiler-build, cards compiler-wasm, installed-compilers): compiler.wasm and compiler-self.wasm
+Build files (decision compiler-build, cards compiler-wasm, installed-compilers): warp.wasm and warp-self.wasm
 next to the binary are the delivered pair (a release's, or main's from the Integrator), used as they are: never
 compared with the checkout's lib/, no notice (custom section `warp.build`: lib/'s path, its fingerprint, the binary's
 WARP_SOURCE from build.rs, then the commit of lib/'s checkout, the stamp `warp version` shows). Only a lib/ named by
@@ -95,7 +95,7 @@ Warm start (card pure-warm-start): 2.9 s, of which ~97% was compiler.warp loweri
 (WARP_PROFILE: 590 of 613 samples). compiler.warp now keeps them, `kept(name) ?? keep(name, value)` of use os (a
 value in the module cache under stage_key: binary + lib/): warm hello 0.07 s, a new program ~0.1–0.2 s. The kept
 Node crosses to Rust and back (postcard); 38 samples give the same results with and without it.
-Computing that kept value takes ~50 s CPU in compiler-self.wasm on the Mac (more on a 4-core cloud VM): inside a
+Computing that kept value takes ~50 s CPU in warp-self.wasm on the Mac (more on a 4-core cloud VM): inside a
 program's first run it blew the 60 s turn limit (card cloud-lane-narrow), so a build (`warp rebuild`, or a missing
 build file) runs the new compiler once on `0` to keep it (standalone.rs `warm`).
 For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
@@ -187,26 +187,26 @@ What stopped compiler.warp compiled by itself, in the order found (each a genera
 - A kept value (os.kept of the lowered runtime words) holding an Int beyond the fixnums: the host built it through the
   Int runtime's builders, which an emitter.warp module lacks; such a module holds machine i64s (src/host/tasks/values.rs
   holds_machine_ints).
-- Debugging: a bare `unreachable` trap of compiler.wasm is an error function whose name the runner dropped; bisect with
+- Debugging: a bare `unreachable` trap of warp.wasm is an error function whose name the runner dropped; bisect with
   prints in compiler.warp's steps, then reproduce the failing step as a pure-lane program (`WARP_SELF_HOSTED=pure-only
   warp probe.warp` runs the same emitted code, no compiler rebuild). Set WARP_LIB to the worktree's lib for those runs:
   from a scratch folder the stages otherwise come from the main checkout's lib.
 
 ## warp.wasm under plain wasmtime (card standalone, reopened 2026-10-21, user: "build in the runtime itself.
 ## wasmtime warp.wasm should behave like the native binary")
-Today `wasmtime run -W gc=y,function-references=y,exceptions=y --dir . compiler.wasm hello.warp h.wasm` stops at the
+Today `wasmtime run -W gc=y,function-references=y,exceptions=y --dir . warp.wasm hello.warp h.wasm` stops at the
 first host import. Imports found (2026-10-21):
-- compiler.wasm (Rust-compiled): host.fetch, fetch_within, read, warn, run, std_io + wasi fd_write.
-- compiler-self.wasm (self-compiled): all 69 host words + m.pow: emitter.warp imports a host word whenever the
+- warp.wasm (Rust-compiled): host.fetch, fetch_within, read, warn, run, std_io + wasi fd_write.
+- warp-self.wasm (self-compiled): all 69 host words + m.pow: emitter.warp imports a host word whenever the
   program `mentions` its name, and compiler.warp includes host_words.warp, whose map keys name every one.
 What each is for in compiler.warp: std_io carries `use os` (args, env, kept, keep) and `use file` (write_bytes,
 exists …); read is the prelude's file/URL read (fetch/fetch_within its URL half); warn the compile's warnings; run
 probably a mention only.
 
 Plan, one import at a time, each a WASI-backed runtime part in both emitters (Rust wasm_emitter for the bootstrap
-compiler.wasm, emitter.warp for compiler-self.wasm):
+warp.wasm, emitter.warp for warp-self.wasm):
 1. Imports only for words called: a map key or text naming a host word imports nothing (emitter.warp `mentions`,
-   and the Rust side's equivalent). Takes compiler-self.wasm from 69 host imports to the handful it calls.
+   and the Rust side's equivalent). Takes warp-self.wasm from 69 host imports to the handful it calls.
 2. `_start`: a WASI command export calling main, so `wasmtime warp.wasm …` needs no `--invoke`.
 3. os.args, os.env: args_sizes_get/args_get, environ (emit_wasi_environment exists).
 4. read / file.read_bytes / exists: path_open on the preopened dirs (fd_prestat_get), fd_read, fd_close; a URL under
