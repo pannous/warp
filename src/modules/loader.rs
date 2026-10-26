@@ -674,7 +674,7 @@ impl<'a> Loader<'a> {
 		};
 		let module = match is_std_source(&shown.to_string_lossy()) {
 			true => lowered_std_module(source, classes_early, lower)?,
-			false => lower()?,
+			false => lowered_file_module(&shown, source, classes_early, lower)?,
 		};
 		self.join_lowered(import, path, file, module)
 	}

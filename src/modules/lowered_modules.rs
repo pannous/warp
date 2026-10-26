@@ -1,5 +1,7 @@
-//! The standard modules' sources lowered once and kept on disk between runs (card prelude-cache-runs, notes/
+//! The modules' sources lowered once and kept on disk between runs (card prelude-cache-runs, notes/
 //! incremental_builds.md): `use sound` spent ~150 ms of its ~430 ms parsing and lowering lib/sound.warp at every run.
+//! A used file (`use "parser.warp"`) is kept the same way, by its path and source (card speed-module-cache): a rebuild
+//! of the compiler lowers again only the files that changed, or whose inputs did.
 //! Kept is pipeline::lower_module_source's result, not wasm, so whole-program typing and tree shaking stay. The key: the
 //! warp binary (whose sources the module and its passes are), the module's source and what its passes read of the
 //! compile so far (compile_context::lowering_inputs, LoweredEffects); the module files its `use`s found are checked at
@@ -47,6 +49,17 @@ pub(super) fn lowered_std_module(
 	lower: impl FnOnce() -> Result<Node, Node>,
 ) -> Result<Node, Node> {
 	lowered_kept(source.as_bytes(), classes_early, lower)
+}
+
+/// A used file's source lowered by `lower`, or as a run before this one kept it: its path is part of what it is, as
+/// the positions of its nodes name the file
+pub(super) fn lowered_file_module(
+	path: &Path,
+	source: &str,
+	classes_early: bool,
+	lower: impl FnOnce() -> Result<Node, Node>,
+) -> Result<Node, Node> {
+	lowered_kept(format!("{}\n{source}", path.display()).as_bytes(), classes_early, lower)
 }
 
 /// Parsed definitions of a standard module (the prelude's the program reaches) lowered by `lower`, or as kept
@@ -156,13 +169,17 @@ fn keep(key: &str, kept: &Kept) {
 #[cfg(not(feature = "native"))]
 fn keep(_: &str, _: &Kept) {}
 
-/// The binary, the module's code, whether its classes went in front of the program and what its passes read
+/// The binary, the module's code, whether its classes went in front of the program, what its passes read and what
+/// its lowering may say: a lowering kept while hints or warnings were off said nothing, which a run showing them must
+/// hear
 #[cfg(feature = "native")]
 fn key(identity: &[u8], classes_early: bool, inputs: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	let mut hasher = Sha256::new();
 	hasher.update(binary_stamp()?);
-	hasher.update(format!("{classes_early}\n{inputs}\n{:?}\n", LoweredEffects::now()));
+	let muted = crate::compiler::compile_context::read(|context| context.hints_muted);
+	let said = (crate::normalize::hint_mode(), muted, crate::errors::diagnostic::warning_mode());
+	hasher.update(format!("{classes_early}\n{inputs}\n{:?}\n{said:?}\n", LoweredEffects::now()));
 	hasher.update(identity);
 	Some(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
 }

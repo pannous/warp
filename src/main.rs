@@ -543,6 +543,7 @@ fn rebuild_compilers(command: Option<&str>) {
 			}
 		}
 	}
+	warp::compiler::phase_times::report();
 	std::process::exit(failed as i32)
 }
 

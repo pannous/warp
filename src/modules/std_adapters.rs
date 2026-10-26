@@ -266,9 +266,14 @@ fn keep_value(name: &str, value: &Node) {
 	}
 }
 
-/// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs
+/// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs, or
+/// the running stage program's (kept_by_stage)
 #[cfg(feature = "native")]
 fn kept_key(name: &str) -> Option<String> {
+	let stage = KEEPING_STAGE.with(|stage| stage.borrow().clone());
+	if !stage.is_empty() {
+		return Some(crate::extensions::sha256_hex(format!("{KEPT_VALUE} {stage} {name}").as_bytes()));
+	}
 	let compiler = KEEPING_COMPILER.with(|compiler| compiler.borrow().clone());
 	crate::compiler::self_hosted::stage_key(&format!("{KEPT_VALUE} {compiler} {name}"))
 }
@@ -277,6 +282,18 @@ fn kept_key(name: &str) -> Option<String> {
 thread_local! {
 	/// The SHA-256 of the compiler module running (compiler.wasm, compiler-self.wasm), empty for any other program
 	static KEEPING_COMPILER: std::cell::RefCell<String> = Default::default();
+	/// The key of what the running stage program of lib/compiler reads (self_hosted stage_keeper), empty outside one
+	static KEEPING_STAGE: std::cell::RefCell<String> = Default::default();
+}
+
+/// `run` of a stage program of lib/compiler, keeping values under `keeper`, its module and the files of lib/ it reads
+/// (self_hosted stage_keeper): an edit of lib/compiler outside the stage keeps them (card speed-module-cache)
+#[cfg(feature = "native")]
+pub fn kept_by_stage<R>(keeper: String, run: impl FnOnce() -> R) -> R {
+	let before = KEEPING_STAGE.with(|stage| stage.replace(keeper));
+	let result = run();
+	KEEPING_STAGE.with(|stage| stage.replace(before));
+	result
 }
 
 /// The variable naming the lib/ a compiler run reads its std modules from (lib/compiler/parser.warp run_library)

@@ -470,26 +470,38 @@ fn runtime_words() -> Result<String, Node> {
 /// definitions.warp drops them
 pub fn runtime_source() -> std::io::Result<String> {
 	let roots = [RUNTIME_WORDS, EXTENDED_RUNTIME_WORDS].map(|root| compiler_folder().join(root));
-	let mut joined = HashSet::from(roots.clone());
-	let mut waiting = VecDeque::from(roots);
 	let mut source = String::new();
-	while let Some(file) = waiting.pop_front() {
-		let folder = file.parent().unwrap_or(Path::new(".")).to_path_buf();
-		for line in std::fs::read_to_string(&file)?.lines() {
-			match line.strip_prefix("use ").map(str::trim) {
-				Some(name) => {
-					let path = used_file(&folder, name);
-					if joined.insert(path.clone()) {
-						waiting.push_back(path);
-					}
-				}
-				None if is_intrinsic_declaration(line) => {}
-				None => source += line,
+	for (_, text) in use_closure(&roots)? {
+		for line in text.lines() {
+			if !line.starts_with(USE_LINE) && !is_intrinsic_declaration(line) {
+				source += line;
 			}
 			source.push('\n');
 		}
 	}
 	Ok(source)
+}
+
+/// How a line names a file or module it uses
+const USE_LINE: &str = "use ";
+
+/// The files `roots` name with the files their `use` lines name, each file once, breadth first: [file, its text]
+fn use_closure(roots: &[PathBuf]) -> std::io::Result<Vec<(PathBuf, String)>> {
+	let mut joined: HashSet<PathBuf> = roots.iter().cloned().collect();
+	let mut waiting: VecDeque<PathBuf> = roots.iter().cloned().collect();
+	let mut files = Vec::new();
+	while let Some(file) = waiting.pop_front() {
+		let text = std::fs::read_to_string(&file)?;
+		let folder = file.parent().unwrap_or(Path::new(".")).to_path_buf();
+		for name in text.lines().filter_map(|line| line.strip_prefix(USE_LINE)).map(str::trim) {
+			let path = used_file(&folder, name);
+			if joined.insert(path.clone()) {
+				waiting.push_back(path);
+			}
+		}
+		files.push((file, text));
+	}
+	Ok(files)
 }
 
 fn is_intrinsic_declaration(line: &str) -> bool {
@@ -531,6 +543,10 @@ fn started(stages: &[&'static Stage]) {
 
 /// The JSON an idle worker of `stage` answers the request with, or the failure text when warp fails
 fn answer(stage: &'static Stage, request: String) -> Result<String, String> {
+	crate::compiler::phase_times::timed_as(|| format!("self-hosted stage {}", stage.file), || answered(stage, request))
+}
+
+fn answered(stage: &'static Stage, request: String) -> Result<String, String> {
 	let worker = stage.workers.lock().unwrap().pop().unwrap_or_else(|| spawn_worker(stage));
 	let (reply_to, reply) = channel();
 	let answer = worker.send((request, reply_to)).ok().and_then(|_| reply.recv().ok());
@@ -576,6 +592,8 @@ struct StageProgram {
 	module: Result<crate::pipeline::CompiledModule, Node>,
 	input: PathBuf,
 	setup: Vec<PathBuf>,
+	/// whose values its runs keep (stage_keeper)
+	keeper: String,
 }
 
 impl StageProgram {
@@ -601,13 +619,14 @@ impl StageProgram {
 			Some(failure) => Err(failure),
 			None => scoped(|context| &mut context.beyond_working_directory, true, || compiled_stages(&stage.text())),
 		};
-		StageProgram { module, input, setup }
+		let keeper = module.as_ref().map(|module| stage_keeper(&stage.text(), &module.bytes)).unwrap_or_default();
+		StageProgram { module, input, setup, keeper }
 	}
 
 	/// The view the stage gives as JSON, or the failure as a text that is no JSON
 	fn run(&self, request: &str) -> String {
 		let value = match (&self.module, std::fs::write(&self.input, request)) {
-			(Ok(module), Ok(())) => crate::pipeline::run_module(module.clone()),
+			(Ok(module), Ok(())) => kept_by_stage(&self.keeper, || crate::pipeline::run_module(module.clone())),
 			(Err(failure), _) => failure.clone(),
 			(_, Err(failure)) => crate::node::error(&failure.to_string()),
 		};
@@ -616,6 +635,21 @@ impl StageProgram {
 			view => view_json(view),
 		}
 	}
+}
+
+/// A stage's run keeping its values under `keeper`; the browser build keeps none
+#[cfg(feature = "native")]
+fn kept_by_stage<R>(keeper: &str, run: impl FnOnce() -> R) -> R {
+	crate::modules::std_adapters::kept_by_stage(keeper.to_string(), run)
+}
+#[cfg(not(feature = "native"))]
+fn kept_by_stage<R>(_: &str, run: impl FnOnce() -> R) -> R {
+	run()
+}
+
+#[cfg(not(feature = "native"))]
+fn stage_keeper(_: &str, _: &[u8]) -> String {
+	String::new()
 }
 
 impl Drop for StageProgram {
@@ -662,7 +696,7 @@ fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Nod
 	if let Some(module) = key.as_deref().and_then(kept_under) {
 		return Ok(module);
 	}
-	let module = crate::pipeline::compile(program)?;
+	let module = crate::compiler::phase_times::timed("self-hosted stage compile", || crate::pipeline::compile(program))?;
 	// compiled once, run for every program: worth wasm-opt's seconds
 	let module = match crate::modules::binaryen::optimized_for_speed(&module.bytes) {
 		Some(bytes) => crate::pipeline::CompiledModule { bytes, ..module },
@@ -691,31 +725,89 @@ pub fn compiler_key() -> Option<&'static str> {
 pub(crate) fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	let mut hasher = Sha256::new();
-	let library = library();
-	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
-	let mut settings = crate::run::program_cache::warp_settings();
-	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
-	hasher.update(format!("{}\n{settings:?}\n{program}\n", env!("WARP_SOURCE")));
+	hasher.update(format!("{}\n{}\n", env!("WARP_SOURCE"), stage_settings(program)));
 	hash_library(&mut hasher);
 	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
 /// The cache key of a compiled stage (lib/compiler's passes, analysis, emitter compiled by this binary): the sources
-/// warp was built from, the program, the WARP_ settings and the compiler's inputs alone (compiler_inputs), not every
-/// file of lib/: a std module, a sugar file or a test edited leaves the stages kept (card compiler-cache-keys: the
-/// stages compiled again after every lib/ edit made each self build long and memory-hungry)
+/// warp was built from, the program, the WARP_ settings and the compiler's inputs the stage reads (stage_inputs), not
+/// every file of lib/: a std module, a sugar file or a test edited leaves the stages kept (card compiler-cache-keys: the
+/// stages compiled again after every lib/ edit made each self build long and memory-hungry), and so does an edit of
+/// another stage's sources (card speed-module-cache: an emitter edit keeps the passes compiled)
 #[cfg(feature = "native")]
 fn compiled_stage_key(program: &str) -> String {
 	use sha2::{Digest, Sha256};
-	let library = library();
-	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
-	let mut settings = crate::run::program_cache::warp_settings();
-	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
 	let mut hasher = Sha256::new();
-	hasher.update(format!("{}\n{settings:?}\n{program}\n", env!("WARP_SOURCE")));
-	for (file, bytes) in compiler_input_files(&STAGE_MODULES) {
+	hasher.update(format!("{}\n{}\n", env!("WARP_SOURCE"), stage_settings(program)));
+	for (file, bytes) in stage_inputs(program) {
 		hasher.update(format!("{file}\n"));
 		hasher.update(bytes);
+	}
+	crate::extensions::hex_text(&hasher.finalize())
+}
+
+/// The WARP_ settings that change a stage's compile and run, with its program, its lib/ named by LIBRARY_MARK
+#[cfg(feature = "native")]
+fn stage_settings(program: &str) -> String {
+	let program = program.replace(&library().display().to_string(), LIBRARY_MARK);
+	let mut settings = crate::run::program_cache::warp_settings();
+	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
+	format!("{settings:?}\n{program}")
+}
+
+/// What the compile of the stage `program` reads: compiler_input_files but the warp files of lib/compiler outside
+/// the stage's own (the files its program's `use` lines reach)
+#[cfg(feature = "native")]
+fn stage_inputs(program: &str) -> Vec<(String, Vec<u8>)> {
+	let own = stage_files(program);
+	let others_sources = |file: &String| is_compiler_source(file) && !own.contains(file);
+	compiler_input_files(&STAGE_MODULES).into_iter().filter(|(file, _)| !others_sources(file)).collect()
+}
+
+/// A warp file of lib/compiler itself, by its path inside lib/: not one of the folders lib/compiler links to (sugar)
+#[cfg(feature = "native")]
+fn is_compiler_source(file: &str) -> bool {
+	let real = |path: PathBuf| path.canonicalize().unwrap_or(path);
+	file.ends_with(".warp") && real(library().join(file)).starts_with(real(compiler_folder()))
+}
+
+/// The files of lib/ a stage program is compiled from, by their paths inside lib/; none when one cannot be read, so
+/// its key then covers every compiler file
+#[cfg(feature = "native")]
+fn stage_files(program: &str) -> HashSet<String> {
+	let folder = library().canonicalize().unwrap_or_else(|_| library().to_path_buf());
+	let marked = format!("{USE_LINE}\"{LIBRARY_MARK}/");
+	let roots: Vec<PathBuf> = program
+		.replace(&library().display().to_string(), LIBRARY_MARK)
+		.lines()
+		.filter_map(|line| line.strip_prefix(&marked)?.strip_suffix('"').map(|file| folder.join(file)))
+		.collect();
+	let closure = use_closure(&roots).unwrap_or_default();
+	let relative = |file: &Path| file.strip_prefix(&folder).unwrap_or(file).display().to_string();
+	closure.into_iter().map(|(file, _)| relative(&file)).collect()
+}
+
+/// Whose values a stage program keeps (os.keep, std_adapters kept_by): its module, made of its sources, the sources
+/// warp was built from, the WARP_ settings and every file of lib/ but the stage's own sources; a value made of other
+/// files names them in its name (uses.warp keeps a used file's parse by its text), so an edit of lib/compiler outside
+/// the stage keeps its values (card speed-module-cache)
+#[cfg(feature = "native")]
+fn stage_keeper(program: &str, module: &[u8]) -> String {
+	use sha2::{Digest, Sha256};
+	let library = library();
+	let own = stage_files(program);
+	let mut hasher = Sha256::new();
+	hasher.update(format!("{}\n{}\n", env!("WARP_SOURCE"), stage_settings(program)));
+	hasher.update(module);
+	let mut files = files_below(library.to_path_buf());
+	files.sort();
+	for file in files {
+		let relative = file.strip_prefix(library).unwrap_or(&file).display().to_string();
+		if !(is_compiler_source(&relative) && own.contains(&relative)) {
+			hasher.update(format!("{relative}\n"));
+			hasher.update(std::fs::read(&file).unwrap_or_default());
+		}
 	}
 	crate::extensions::hex_text(&hasher.finalize())
 }
