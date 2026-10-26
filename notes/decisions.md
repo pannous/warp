@@ -7,6 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
+- quick-merges (user, 2026-10-26): "We always want the very quick feedback loop and quick merges. All the slow tests have to run in the background." "As long as the compiler compiles itself, that's the important thing. Or even less so as long as the compiler builds hello world for small changes outside of the core." So: core/ changes merge on smoke + fixpoint, everything else on the smoke test (hello); folder tests are background feedback, the full suite runs only at rare intervals (AGENTS.md "Testing").
 - root-files (user): the repo root keeps only what cargo build and the seed need (Cargo.toml, Cargo.lock, .cargo/config.toml, seed/); stale root files (components.warp, todo.md, test_results.txt, rustfmt.toml, .editorconfig, .claudeignore) go.
 - quick-answer-first (user, every agent; AGENTS.md): first a quick answer from what is known now, then the tasks and investigations in the background, then the complete answer once the information arrives.
 - compilers-delivered (user, replaces compilers-always-fresh): no automatic rebuild just because lib/ changed (no cron or watcher); compiler.wasm and compiler-self.wasm come only with main's delivery (the Integrator builds them from the pushed tip), and the installed pair doesn't warn against a checkout's lib/ (card installed-compilers). `warp self` / `warp pure` on the command line never rebuild them.

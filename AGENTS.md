@@ -141,7 +141,8 @@ Several agent sessions share this Mac and the full suite is slow, so run the che
   `warp pure samples/hello/hello.warp` prints Hello.
 - Fixpoint test, only for parser/compiler changes (core/): `scripts/self-check.sh <worktree>`, the compiler compiles
   itself and that build prints Hello. For core/ changes smoke + fixpoint is the whole check: no test folders.
-- Folder tests, for lib/ features only: `warp test <folders>` of the few test files the change touches.
+- Changes outside core/: the smoke test is enough to merge. `warp test <folders>` of the few test files a lib/
+  feature touches is feedback for the worker, run in the background, never a merge condition.
 - Full suite (`warp test`): only the Integrator, at rare intervals (nightly, before a release), never per branch.
 We always want the very quick feedback loop and quick merges: anything slower than smoke + fixpoint runs in the
 background (`run_in_background`, scripts/slot.sh) and never holds a merge; what it finds is fixed forward on a card.
