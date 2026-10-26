@@ -1,6 +1,11 @@
 # rust-bootstrap: handover (Worker Bootstrap, 2026-10-26)
 
-Goal (user 2026-10-26 12:58): the Rust compiler moves to its own `rust-bootstrap` branch; main is self-hosted. The
+Goal (user 2026-10-26 12:58): the Rust compiler moves to its own `rust-bootstrap` branch; main is self-hosted.
+PLAN CHANGE (user 2026-10-26 ~14:25, via the Integrator): Rust is NOT cut on main. The Rust-free result grows on the
+long-lived branch `pure`: main minus the Rust compiler, the minimal Rust harness kept, `warp rebuild` starting from
+seed/compiler-self.wasm (on main since 8f0d4049e). Step branches (rust-bootstrap-self, rust-bootstrap-parse, the
+src/ cut …) merge into `pure`; the card is readied as `todo ready rust-bootstrap pure`. origin/main is merged into
+`pure` regularly (git merge, never rebase, never force-push). When everything works, `pure` becomes main. The
 fixpoint is reached (stage3 == stage4 with fixpoint fixes 1+2, /workspace/cow/fixpoint-progress.md).
 
 ## Steps and branches
@@ -55,9 +60,46 @@ Rust compiler to delete after the cut (only once the commands above run on the s
 - Tests under tests/ that drive the Rust pipeline (cargo tests) go with it to the rust-bootstrap branch; warp tests
   (`warp test`) stay.
 
+## Smoke results
+- Step 1 (seed): seed compiled compiler.warp of 46c441c440 → stage A, 1603 s at load 30-70; A ran hello (40 s cold).
+- Step 2 (rust-bootstrap-self at f8bbe974fc = main b65a545429 + seed + step 2), branch binary, Mac:
+  `warp rebuild pure` (seed → compiler.wasm, 1577271 B) 1300 s, `warp pure` hello ✓ (1 s), 3*7 = 21 ✓;
+  `warp rebuild self` (compiler.wasm → compiler-self.wasm, 1577053 B) 1047 s, `warp self` hello ✓, 21 ✓.
+  Old Rust lane for comparison (box): `warp rebuild pure` 189 s.
+
 ## Timing (Mac, load ~9-14)
 - seed → compiler.warp (one self build): see progress lines; the fixpoint run took 1015-1255 s per stage.
 - Old lane: `warp rebuild self` (Rust-compiled stages) ~507 s.
+
+## Harness uses of the Rust parser (user decision 2026-10-26: they call the self-hosted compiler in wasm; no
+## separate Rust data-notation reader)
+- src/host/native.rs:944 channel_next: a message's text read into a value → `standalone::value_of_text`, which runs
+  the text through compiler.wasm (`warp pure`'s compiler) and gives its value (text that is no value stays the text).
+  Branch rust-bootstrap-parse (step 3a).
+- src/ffi/mod.rs:133 is_plain_name: a local check (letters, digits, `_`). Step 3a.
+- src/cli/console.rs:15 (does a REPL line carry state: assignment, `let`/`var`/`const`/`global`, statements of those)
+  and src/cli/outputs.rs:71 (`warp build --wit`, component_worlds::world_wit of the parsed program): need the parsed
+  program as a Node. Plan: compiler.warp gets a view mode (an output path ending in `.json` writes parser.warp's view
+  instead of wasm), and the harness turns it into a Node with compiler/node_views.rs (kept in the harness). `--wit`
+  is a compile feature: with the Rust lowering gone, component_worlds moves into warp (later).
+- Also still parsing with Rust, not in the decision's list: compiler/pure_tests.rs:104/200 (`warp test` finds the
+  cases with warp_parser + lowering::test_blocks: the same view mode serves it), formats/meta_section.rs:32
+  (parse_data of a module's meta section), main.rs:343/467 (`warp data`/`warp parse` printing). The rest of the
+  warp_parser users (numbers/units, time, web, law, formatting, normalize, modules loader) are the Rust compiler and
+  leave with it; std-library lowering for plain `warp <file>` is later work (user 2026-10-26) and no blocker.
+
+## Cut plan (on branch `pure`, not main: see PLAN CHANGE above; the steps below land on `pure`)
+1. Land rust-bootstrap-seed (Ready, express) and rust-bootstrap-self (step 2): from then on `warp rebuild`, `warp
+   pure`, `warp self`, `warp test` touch no Rust-compiled stage.
+2. Integrator creates branch `rust-bootstrap` at that main commit (the last main with the whole Rust compiler; it
+   builds the seed's ancestors and can always recompile compiler.warp via the old pure lane).
+3. Step 3a (rust-bootstrap-parse): the four harness parser uses above call the wasm compiler.
+4. Step 3b: plain `warp <file>` / `eval` / `run` / repl run through standalone::run (compiler.wasm) instead of
+   pipeline::eval; programs using std modules the self lane can't load yet keep failing loudly (later work).
+5. Step 4 (deletion branch, after 3a/3b): remove warp_parser (all), lowering/, analyzer/, wasm_emitter/,
+   pipeline.rs, normalize/, the flat passes, compiler/{self_hosted, analysis_memo, compile_*, context,
+   dead_functions, function*, local, meta, phase_times, run_time_blocks}, law*, numbers/units, the WARP_SELF_HOSTED
+   lanes, and the cargo tests that drive them (they live on in rust-bootstrap). Keep the harness list above.
 
 ## Open
 - fixpoint-fixes (analyzer.warp binding, parser.warp min-int, walk.warp names_made) landing on main: then refresh the
