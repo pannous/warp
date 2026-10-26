@@ -122,18 +122,28 @@ field_meanings(item: Node): list := match item {
 # every key and list of a program, the program first; an opaque view's parts (a type's name and body) as nodes
 nodes_in(top: Node): list := nodes_kept(top, n => yes)
 
+# the nodes found so far, a global, which grows in place (a local stack popped and a local list appended to copied them
+# at each node: a seventh of the passes' time in `warp rebuild self`, card speed-symbol-calls)
+global kept_found = []
 # the nodes `kept` accepts, the program first, without the parts of one it refuses
 nodes_kept(top: Node, kept: function): list := {
-	found = []
-	unvisited = [top]
-	while #unvisited > 0 {
-		n = unvisited.pop()
-		if kept(n) {
-			found += [n]
-			unvisited += parts_within(n)
+	kept_found = []
+	keep_nodes(top, kept)
+	found = kept_found
+	kept_found = []
+	found
+}
+# n and the nodes kept within it, each part's after the next one's, in the order a stack of them pops them
+keep_nodes(n: Node, kept: function) := {
+	if kept(n) {
+		kept_found += [n]
+		parts = parts_within(n)
+		at = #parts
+		while at > 0 {
+			keep_nodes(parts#at, kept)
+			at -= 1
 		}
 	}
-	found
 }
 
 # the scope with each [name, meaning] pair added
