@@ -1,11 +1,11 @@
 # seed/
 
 `warp-self.wasm` (until 2026-10-26 `compiler-self.wasm`): the seed compiler, core/compiler.warp compiled by
-itself at a fixpoint (stage N+1 == stage N, byte for byte). `warp rebuild` builds warp.wasm with it, so compiling the
+a stage that compiles itself once more (no fixpoint needed, user 2026-10-26). `warp rebuild` builds warp.wasm with it, so compiling the
 compiler needs no Rust compiler (card rust-bootstrap, notes/handover/rust-bootstrap.md). A warp whose checkout has
 only the old name reads seed/compiler-self.wasm (transition).
 
-- Refresh: `scripts/refresh-seed.sh [<tree>]` (in the background) (seed → A → B (→ C), replaced only at the fixpoint;
+- Refresh: `scripts/refresh-seed.sh [<tree>]` (in the background) (seed → A → B → C, B replaces the seed once it compiled C; a fixpoint ends the stages early, WARP_SEED_STAGES names more;
   `--check` replaces nothing). Do it when core changes in a way the old seed can't compile, or to pick up
   compiler fixes in the seed itself.
 - Provenance of the current seed: see the commit that last changed it (`git log --follow -- seed/warp-self.wasm`).
@@ -14,4 +14,4 @@ only the old name reads seed/compiler-self.wasm (transition).
   91febb7b → B f1bda088 → C f1bda088 (C == B, the fixpoint). The old seed could not compile commands.warp's `" " * n`
   (char * int).
 - warp-self.wasm in data/ or beside the binary (`warp self`'s compiler) is no build of its own: warp.wasm copied there
-  by scripts/promote-self.sh (`warp rebuild self`) when it passes the fixpoint test.
+  by scripts/promote-self.sh (`warp rebuild self`) when warp.wasm compiles compiler.warp once more.

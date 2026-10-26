@@ -74,7 +74,7 @@ Principles and Talking live only in common.md.
   (seconds; the set grows by adding the two files, the expected output is the right value, never today's error).
   Tier 2: `warp test` (pure) of only the test files changed since --base (`--folders`: their whole folders). On the box: shared binary /workspace/cow/warp-rust-latest (the old sol-warp-* names stay as links for old scripts).
 - warp-self.wasm (`warp self`'s compiler) is no gate build: `scripts/promote-self.sh [--background] [<tree>]` copies
-  warp.wasm to it only when warp.wasm compiles compiler.warp to its own bytes (the fixpoint), every once in a while,
+  warp.wasm to it when warp.wasm compiles compiler.warp once more (no fixpoint needed), every once in a while,
   in parallel; it never fails its caller. Install a compiler pair as warp.wasm + warp-self.wasm (the old names
   compiler.wasm / compiler-self.wasm are still read when the new ones are missing).
 - Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate.sh --tag-good` tags it

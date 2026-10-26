@@ -3,7 +3,7 @@
 # without building them when it can (notes/compiler_rebuilds.md). Run only by hand or by self-check.sh --rebuild: nothing
 # calls it on a change of lib/, and no warp binary rebuilds a compiler by itself.
 # pure (the default): warp.wasm, built by the seed. self: warp-self.wasm, no build of its own: warp.wasm promoted by
-# `warp rebuild self` when it passes the fixpoint test (scripts/promote-self.sh runs that and never fails its caller).
+# `warp rebuild self` when warp.wasm compiles compiler.warp once more (scripts/promote-self.sh runs that and never fails its caller).
 # both: pure, then warp-self.wasm only from data/ or the store (steps 1-2), never promoted here: the gate needs warp.wasm.
 # Transition: a file of the old name (compiler.wasm, compiler-self.wasm) in data/ or the store counts when the new one
 # is missing, and is copied under the new name.

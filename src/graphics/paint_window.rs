@@ -21,7 +21,7 @@ use winit::window::{Window, WindowId};
 
 pub const COMMAND: &str = "paint-window";
 /// `warp paint-window --check`: the first frame drawn is read back from the window's surface, its center pixel printed
-/// as `center r g b`, and the viewer ends (probes/paint_window.sh: what reaches the screen, without a screenshot)
+/// as `center r g b`, and the viewer ends
 pub const CHECK: &str = "--check";
 /// A copy to a buffer takes whole rows of this many bytes
 const COPY_ROW_BYTES: u32 = 256;

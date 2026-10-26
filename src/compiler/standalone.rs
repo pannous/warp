@@ -1,9 +1,9 @@
 //! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): core/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
 //! build output (decision compiler-build): warp.wasm, compiler.warp compiled by the seed (seed/warp-self.wasm, a
-//! fixpoint compiler checked in; card rust-bootstrap), for `warp pure`; warp-self.wasm, for `warp self`, is no build of
-//! its own: a copy of warp.wasm, promoted only when warp.wasm compiles compiler.warp to its own bytes (the fixpoint,
-//! `warp rebuild self`, scripts/promote-self.sh). The old names compiler.wasm and compiler-self.wasm are still read when
+//! compiler checked in that compiles itself; card rust-bootstrap), for `warp pure`; warp-self.wasm, for `warp self`, is no build of
+//! its own: a copy of warp.wasm, promoted when warp.wasm compiles compiler.warp once more (user 2026-10-26: no
+//! fixpoint needed; `warp rebuild self`, scripts/promote-self.sh). The old names compiler.wasm and compiler-self.wasm are still read when
 //! the new ones are missing (transition). No Rust-compiled stage takes part. The pair next to the binary is the delivered
 //! one (a release's, or main's, stamped with the commit it was built from) and is used as it is, whatever lib/ beside
 //! it says (card installed-compilers); a lib/ named by WARP_LIB that the pair is not for keeps its own in
@@ -32,8 +32,8 @@ const OTHER_LIBRARY_FOLDER: &str = "data";
 const LIBRARY_VARIABLE: &str = "WARP_LIB";
 /// What a new build compiles once to compute its kept values
 const WARMING_PROGRAM: &str = "0";
-/// The seed compiler, beside lib/ in a checkout (or in the installed folder): compiler.warp compiled by itself at a
-/// fixpoint, what every build starts from (seed/README.md, scripts/refresh-seed.sh)
+/// The seed compiler, beside lib/ in a checkout (or in the installed folder): compiler.warp compiled by a stage that
+/// compiles itself once more, what every build starts from (seed/README.md, scripts/refresh-seed.sh)
 const SEED_FILE: &str = "seed/warp-self.wasm";
 /// The seed's old name, read when SEED_FILE is missing (transition)
 const LEGACY_SEED_FILE: &str = "seed/compiler-self.wasm";
@@ -47,7 +47,7 @@ const REBUILD_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(2
 /// Overrides REBUILD_TIME_LIMIT, in seconds
 const REBUILD_TIME_LIMIT_VARIABLE: &str = "WARP_REBUILD_TIME_LIMIT";
 
-/// Who builds compiler.warp's module: for `warp pure` the seed; `warp self`'s is warp.wasm itself, promoted at a fixpoint
+/// Who builds compiler.warp's module: for `warp pure` the seed; `warp self`'s is warp.wasm itself, promoted when it compiles itself
 // ⚠ RustCompiled keeps its name until the Rust compiler leaves main (card rust-bootstrap): the seed builds it now
 #[derive(Clone, Copy)]
 pub enum Compiler {
@@ -255,8 +255,8 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 }
 
 /// `warp rebuild [pure]`: warp.wasm built anew from the current lib/, its path, or why it failed. `warp rebuild self`:
-/// warp.wasm (built first when there is none of these compiler inputs) promoted to warp-self.wasm when it passes the
-/// fixpoint test, else why not, warp-self.wasm left as it was
+/// warp.wasm (built first when there is none of these compiler inputs) promoted to warp-self.wasm when it compiles
+/// compiler.warp once more, else why not, warp-self.wasm left as it was
 pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	if let Compiler::RustCompiled = by {
 		ship_seed()?;
@@ -276,8 +276,8 @@ fn rebuild_time_limit() -> std::time::Duration {
 	seconds.filter(|seconds| *seconds > 0.0).map_or(REBUILD_TIME_LIMIT, std::time::Duration::from_secs_f64)
 }
 
-/// The fixpoint test of warp.wasm (stage N): it compiles core/compiler.warp again (stage N+1), and only output
-/// byte-identical to its own module (its bytes without the build section) copies warp.wasm to `path`, warp-self.wasm.
+/// The self test of warp.wasm (stage N): it compiles core/compiler.warp again (stage N+1), and when it does, warp.wasm is
+/// copied to `path`, warp-self.wasm; whether stage N+1 is byte-identical to its own module (the fixpoint) is said.
 /// A warp.wasm of other compiler inputs is built anew first
 fn promote(path: &Path) -> Result<CompiledModule, Node> {
 	let pure = Compiler::RustCompiled;
@@ -298,15 +298,9 @@ fn promote(path: &Path) -> Result<CompiledModule, Node> {
 		compiled_with(&file, &folder, shipped(&warp_file, warp_bytes.clone()), kept_scope(pure)).map_err(|failure| {
 			error(&format!("compiler.warp compiled by {}: {}", warp_file.display(), failure.serialize()))
 		})?;
-	if !is_module_with_build_section(&warp_bytes, &next.bytes) {
-		return Err(error(&format!(
-			"no fixpoint: {} ({} B) compiles compiler.warp to other bytes ({} B); {} stays as it was",
-			warp_file.display(),
-			warp_bytes.len(),
-			next.bytes.len(),
-			path.display()
-		)));
-	}
+	// byte-identical output (the fixpoint) is reported, not required (user 2026-10-26: "If the compiler can compile
+	// itself once more, we don't need the fixed point")
+	let fixpoint = is_module_with_build_section(&warp_bytes, &next.bytes);
 	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| write_new(path, &warp_bytes));
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	// the same bytes, so the same machine code: warp.wasm's .cwasm copied, made only when it is not current
@@ -318,8 +312,9 @@ fn promote(path: &Path) -> Result<CompiledModule, Node> {
 		ship(path, &warp_bytes)?;
 	}
 	eprintln!(
-		"fixpoint: {} compiles compiler.warp to its own bytes, promoted to {}",
+		"{} compiles compiler.warp once more ({}), promoted to {}",
 		warp_file.display(),
+		if fixpoint { "to its own bytes, a fixpoint" } else { "to other bytes, no fixpoint" },
 		path.display()
 	);
 	warm(Compiler::SelfCompiled)?;
@@ -365,7 +360,7 @@ fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
 		let rebuild = match by {
 			Compiler::RustCompiled => format!("`warp {REBUILD_WORD} pure` builds it"),
 			Compiler::SelfCompiled => format!(
-				"`warp {REBUILD_WORD} self` (scripts/promote-self.sh) promotes warp.wasm to it when warp.wasm passes the fixpoint test"
+				"`warp {REBUILD_WORD} self` (scripts/promote-self.sh) promotes warp.wasm to it when warp.wasm compiles compiler.warp once more"
 			),
 		};
 		return Err(error(&format!(
