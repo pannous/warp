@@ -51,9 +51,14 @@ check_lane() {
 scratch=$(mktemp -d /tmp/self-check.XXXXXX) && trap "rm -rf $scratch" EXIT
 warp=$scratch/warp
 cp $main_warp $warp || exit 1
+# the seed lies beside the launcher; the pair in the build folder the launcher links to (main-builds/<tip>)
+cp ${main_warp:h}/warp-seed.wasm $scratch/ 2>/dev/null || cp ${main_warp:A:h}/warp-seed.wasm $scratch/ || exit 1
+# main's warp.wasm beside the copy too: the binary takes an empty folder as holding the worktree's pair, and would look
+# for it there instead of in the worktree's lib/ (standalone.rs build_path)
+cp ${main_warp:A:h}/warp.wasm $scratch/ || exit 1
 # the pair for these inputs: lib/'s, else the store's; built by the copy only with --rebuild. The Rust fingerprint is
 # that of main's binary, read from the pair beside it (the copy has none beside it)
-beside=${main_warp:h}/warp.wasm
+beside=${main_warp:A:h}/warp.wasm
 [[ -f $beside ]] || beside=${main_warp:h}/compiler.wasm  # the old name (transition)
 export WARP_RUST_FINGERPRINT=$(LC_ALL=C tr '\0' '\n' <$beside 2>/dev/null | LC_ALL=C sed -n '/warp\.build/{n;n;p;q;}' | LC_ALL=C grep -ao '^[0-9a-f]\{16\}' | head -1)
 if [[ -n $rebuild ]]; then
@@ -77,7 +82,7 @@ check_host() {
 }
 # the self lane only when there is a promoted warp-self.wasm (`warp version` names a missing one)
 self_lane() {
-  if $warp version 2>/dev/null | grep -q 'warp-self.wasm missing'; then
+  if [[ ! -f $worktree/data/warp-self.wasm && ! -f $scratch/warp-self.wasm ]]; then
     print -r -- "self-check: no warp-self.wasm: self lane skipped (scripts/promote-self.sh)"; return 0
   fi
   check_lane self
