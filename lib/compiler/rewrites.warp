@@ -400,7 +400,14 @@ first_alphabetic_word(written: text): text := {
 	""
 }
 
-module_rules_of(source: text, module: text): list := statements_in(plain_node(parsed(rules_ended(source)))).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+module_rules_of(source: text, module: text): list := statements_in(rules_parsed(source)).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
+# a rules module's parse, kept by its text as uses.warp's file_parsed keeps a used file's: each compile read every sugar
+# module's rules, and parsing them again at every run was most of a small program's compile (card speed-module-rules)
+rules_parsed(source: text): Node := {
+	name = "the rules parse of " + source
+	kept_of(name, rules_parse_makers) ?? keep_of(name, plain_node(parsed(rules_ended(source))), rules_parse_makers)
+}
+rules_parse_makers = ["parser.warp", "walk.warp", "rewrites.warp"]
 
 # the source with each rule ending its line in `$s...` ended by `;`: the parser reads `...` at the end of a line as a
 # range going on into the next line (`rewrite loudly $s... => $s...` and the line after it as `$s ... (next line)`),
