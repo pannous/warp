@@ -257,8 +257,7 @@ pub(in crate::analyzer) const MAP_TYPE_PREFIX: &str = "map of ";
 pub(in crate::analyzer) const NODE_LIST_TYPE: &str = "list of node";
 /// The element type of a NODE_LIST_TYPE
 const NODE_TYPE_WORD: &str = "node";
-/// Between a variable and the name of a temporary made for it (`xs·range`, `xs·item`, `m·removed`)
-pub const TEMPORARY_SEPARATOR: &str = "·";
+pub use crate::abi::TEMPORARY_SEPARATOR;
 
 /// A name only a lowering pass makes (`word·sum·3`, `x·iterator`): the program cannot write `·` in a name, where it
 /// reads as a product

@@ -2,8 +2,7 @@
 //! system's libsqlite3 (loaded like any FFI library, ffi/link.rs): `std_io("table", member, …)` answered natively.
 //! A connection per file and thread; inline code's tables (database_tables::TABLES_FILE) live in memory per thread.
 
-use crate::lowering::database_tables::OPTIONAL_MARK;
-use crate::lowering::database_tables::WARP_CALL;
+use crate::abi::{OPTIONAL_MARK, WARP_CALL};
 use crate::node::{Bracket, Node, Separator};
 use crate::Number;
 use std::collections::HashMap;

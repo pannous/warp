@@ -124,7 +124,7 @@ const LIVE_LOOP_WORD: &str = "live_loop";
 /// The names of the program's live loops, the functions its `live_loop(drums, 4)` calls play (LIVE_LOOPS_SECTION), as
 /// lowered: `live_loop·2(closure_new(drums), 4)`
 pub fn live_loop_names(program: &Node) -> std::collections::BTreeSet<String> {
-	use crate::analyzer::TEMPORARY_SEPARATOR;
+	use crate::abi::TEMPORARY_SEPARATOR;
 	let function_named = |cycle: &Node| match cycle.call_parts() {
 		Some((crate::closures::CLOSURE_NEW, [function])) => function.symbol_name().map(str::to_string),
 		_ => cycle.symbol_name().map(str::to_string),
@@ -312,10 +312,8 @@ pub const HOST_WORDS: [&str; HOST_WORD_SIGNATURES.len()] = {
 	words
 };
 
-mod aliases;
 use crate::extensions::numbers::Number;
 use crate::extensions::utils::download_within;
-use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use anyhow::Result;
 
@@ -325,7 +323,6 @@ pub mod channels;
 pub mod database;
 pub mod host_parts;
 pub mod page_parts;
-pub use aliases::*;
 mod fetch;
 pub use fetch::*;
 #[cfg(feature = "native")]

@@ -184,3 +184,11 @@ pub fn marked_literal(info: i64, value: i64) -> Option<String> {
 		_ => None,
 	}
 }
+
+/// Between a variable and the name of a temporary made for it (`xs·range`, `xs·item`, `m·removed`)
+pub const TEMPORARY_SEPARATOR: &str = "·";
+
+/// The SQL function a query calls a warp function through (database.rs)
+pub const WARP_CALL: &str = "warp_call";
+/// `Team?`: an optional field
+pub const OPTIONAL_MARK: char = '?';

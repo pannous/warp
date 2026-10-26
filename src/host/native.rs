@@ -557,7 +557,7 @@ fn parse_code(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Re
 	let Some(source) = text.text_value() else {
 		return error_in_program(&mut caller, &format!("{PARSE_CODE}: needs a text, got {}", text.serialize().trim()));
 	};
-	match crate::lowering::parse_word::code_of(&source) {
+	match code_of(&source) {
 		// code the program can't hold yet fails as its error, which `try` catches, not as a trap
 		Ok(code) => {
 			let built = built_in_program(&mut caller, &crate::compiler::run_time_blocks::held_code(code), PARSE_CODE);
@@ -1097,5 +1097,15 @@ mod tests {
 		let mut state = HostState::new();
 		assert_eq!(state.alloc(10), 65536);
 		assert_eq!(state.alloc(5), 65552); // 65536 + 10 = 65546, aligned to 8
+	}
+}
+
+/// The code a text holds, read by compiler.wasm's view mode (card rust-bootstrap: no Rust parser in the host), or its
+/// first parse failure; never a file (`parse("a.warp")` is the code `a.warp`)
+fn code_of(source: &str) -> Result<Node, String> {
+	let code = crate::compiler::standalone::parsed(source);
+	match code.first_error().map(Node::drop_meta) {
+		Some(Node::Error(failure)) => Err(failure.text_value().unwrap_or_else(|| failure.serialize())),
+		_ => Ok(code),
 	}
 }

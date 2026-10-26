@@ -176,10 +176,8 @@ const BODY_PLACEHOLDER: &str = "table_body";
 /// The one parameter of a query's function: [id, columns…, the filter's values…] of a row
 const ARGUMENTS: &str = "table_arguments";
 const FUNCTION: &str = "table·call";
-/// The SQL function a query calls a warp function through (database.rs)
-pub(crate) const WARP_CALL: &str = "warp_call";
-/// `Team?`: an optional field
-pub(crate) const OPTIONAL_MARK: char = '?';
+pub(crate) use crate::abi::WARP_CALL;
+pub(crate) use crate::abi::OPTIONAL_MARK;
 const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];
 /// A bool field's column holds 0/1 (database.rs column types), read back as the bool
 const BOOL_TYPE: &str = "bool";

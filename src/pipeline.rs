@@ -267,7 +267,7 @@ const DECLARATION_PASSES: &[Pass] = &[
 /// The used modules join the program (modules::resolve), then the passes that read their words again
 const MODULE_PASSES: &[Pass] = &[
 	// `random(1, 6)`, `random int`: the prelude words they call, which resolve then loads, and only those
-	crate::host::lower_random_forms,
+	crate::lowering::host_aliases::lower_random_forms,
 	// `count(x) := 7`: the program's count·any for the values the library's count is not for (typed_library_words.rs)
 	crate::lowering::typed_library_words::lower,
 	crate::modules::resolve,
@@ -354,7 +354,7 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::mutation::lower,
 	crate::lowering::nested_index::lower,
 	crate::lowering::field_elements::lower,
-	crate::host::lower_aliases,
+	crate::lowering::host_aliases::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::lowering::getters::lower,
 	crate::lowering::type_name_matching::lower,

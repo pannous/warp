@@ -1,5 +1,8 @@
-//! Other spellings of the host words, renamed to the host word unless the program defines them
-use super::*;
+//! Other spellings of the host words, renamed to the host word unless the program defines them (a lowering pass: it
+//! left host/ for the Rust compiler's side, card rust-bootstrap)
+use crate::host::*;
+use crate::extensions::numbers::Number;
+use crate::node::{children_rewritten, Bracket, Node, Separator};
 use crate::node::prelude_call;
 use crate::operators::Op;
 
