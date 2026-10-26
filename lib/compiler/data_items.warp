@@ -148,5 +148,5 @@ may_hold_an_error(item: any): bool := {
 	if is_group(item) and bracket_of(item) in ["[", "{"] { return no }
 	not (is_key(item, Op.Arrow) or is_key(item, Op.Define))
 }
-is_opaque(n: Node): bool := n is key and key_of(n) == symbol(opaque_word)
+is_opaque(n: Node): bool := n is key and key_of(n) == opaque_symbol
 is_attribute(n: Node): bool := n is key and key_of(n) == symbol(attribute_word)

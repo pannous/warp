@@ -1,0 +1,3 @@
+smallest = -9223372036854775808
+largest = 9223372036854775807
+in_range(n: int): bool := n >= smallest and n <= largest
