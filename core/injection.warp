@@ -130,7 +130,7 @@ lowered_template(tag: text, argument: any): any := {
 	}
 	holed = holed_pieces(literal, yes)
 	parts = if tag == "sql" then sql_template(holed) else shell_template(holed)
-	if parts is ø then ø else listed("(", " ", parts)
+	if parts is ø then ø else listed(Bracket.Round, Separator.Space, parts)
 }
 
 # the tag of the template a variable holds, else ""

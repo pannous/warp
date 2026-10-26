@@ -105,7 +105,7 @@ def ruby_fields(p: Parser, word: text): Node := {
 	names = p.code[start .. end].split(",").map(name => without_colon(name.trim()))
 	if not names.all(name => name and name_end(name, 0, name.length) == name.length) { return ø }
 	p.at = end
-	listed("", ";", names.map(name => symbol(name)))
+	listed(Bracket.None, Separator.Semicolon, names.map(name => symbol(name)))
 }
 
 def without_colon(name: text): text := if name.starts_with(":") then name[1 .. name.length] else name

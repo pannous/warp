@@ -1,0 +1,5 @@
+# lists and maps print with their brackets, the empty ones too (core-types-parser broke {} and [] by spelling a Bracket parameter)
+print [1, 2]
+print {a: 1}
+print []
+print {}

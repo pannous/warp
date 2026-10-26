@@ -62,13 +62,18 @@ aliased(n: any, aliases: list): any := {
 
 # `module_source("prelude")`: lib/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
 # writes it out (the std modules are lib/<name>.warp); `module_source("compiler/errors.data")`, a name with an
-# extension, that file of lib/. A compiled compiler reads its own data from nowhere (user 2026-10-25: "These should
-# all be built in")
+# extension, that file of lib/; `library_sources()`, every module of lib/ (parser.warp LIBRARY_FILES). A compiled
+# compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
 module_text(n: Node): any := {
+	if is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol("library_sources") { return library_literal(library_texts(run_library(), "")) }
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
-	source = file_text(module_source_path(n#2))
+	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
+	path = module_source_path(n#2)
+	source = built_in_files.get(path) ?? (try read(path) else ø)
 	if source == ø then n else source
 }
+# a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
+library_literal(files: any): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
 # the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
 module_source_path(name: text): text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
 
@@ -186,7 +191,7 @@ without_steps_up(path: text): text := {
 # the files the compiler has built in, by path (compiler.warp's runtime files while it lowers its runtime words): their
 # text, never read from lib/
 global built_in_files = {}
-file_text(path: text): any := built_in_files.get(path) ?? (try read(path) else ø)
+file_text(path: text): any := built_in_files.get(path) ?? file_source(path)
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
 # `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program), a named

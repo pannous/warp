@@ -30,7 +30,7 @@ subscript(target: Node, index: Node): Node := {
 	for bound in subscript_positions(index) {
 		if counts_from_the_end(bound) { return error_node("index out of range: negative index " + negated_form(bound) + " does not wrap around, the last element is last(${target})") }
 	}
-	if bounds != ø { return listed("(", "", [symbol("slice"), target] + bounds) }
+	if bounds != ø { return call_of([symbol("slice"), target] + bounds) }
 	Key(target, Op.Hash, one_based(index))
 }
 
@@ -127,7 +127,7 @@ is_pair_key(node: Node): bool := key_of(node) != opaque_symbol and key_of(node) 
 // A class body's members, typed; the line `left: Node` is the one field
 typed_members(bracket: text, separator: text, members: list): Node := {
 	if bracket == "" and #members == 1 and is_pair(members#1) { return members#1 }
-	listed(bracket, separator, members)
+	listed(bracket as Bracket, separator as Separator, members)
 }
 
 // `def scaled(k) {…}`, `get`, `init(n) {…}`: a member that starts with code
