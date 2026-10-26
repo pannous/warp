@@ -73,12 +73,25 @@ compile(source: text, folder: text): any := {
 	made
 }
 
+# the module of the source file, its uses read from `uses_folder`; a program outside the emitter's core fails the run with
+# the refusal, no module written (card compiler-refusal-loud)
+module_of(file: text, uses_folder: text): any := {
+	emitting_file(working_relative(file))
+	compiled = compile(read(file), uses_folder)
+	if compiled is text { raise compiled }
+	compiled
+}
+
+# an output ending so gets parser.warp's view of the source as JSON, no module: how the host reads warp text into a
+# node without a Rust parser (a channel's message, a console line, a test file; card rust-bootstrap)
+VIEW_SUFFIX = ".view.json"
+
 # todo wrap in main
-# warp compiler.warp <source file> <wasm file> [<folder of the source's uses> [<lib folder>]]
+# warp compiler.warp <source file> <wasm file | view file> [<folder of the source's uses> [<lib folder>]]
 source_file = args#1
 folder = if #args > 2 then args#3 else folder_of(source_file)
-emitting_file(working_relative(source_file))
-compiled = compile(read(source_file), folder)
-# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
-if compiled is text { raise compiled }
-write_bytes(args#2, compiled)
+if args#2.ends_with(VIEW_SUFFIX) {
+	write(args#2, view_json(bridged(stage_view(parsed(read(source_file))))))
+} else {
+	write_bytes(args#2, module_of(source_file, folder))
+}

@@ -9,11 +9,10 @@ use warp::node;
 use warp::run::module_cache::COMPILED_EXTENSION;
 use warp::util::{dirs_home, extract_after, file_exists, load_file};
 use warp::{
-	errors::diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser,
+	errors::diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util,
 	wasm_emitter, web::markup,
 };
 use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
-use wasm_emitter::eval;
 
 mod cli;
 use cli::*;
@@ -208,10 +207,23 @@ fn test_case(args: &[String]) -> Option<&[String; 3]> {
 	}
 }
 
+/// A program file or code, compiled by compiler.wasm (the warp compiler, `warp pure`'s) and run: plain `warp <file>`,
+/// `warp run`, `warp eval`, piped code and the console run no Rust pipeline (card rust-bootstrap, branch pure). A file's
+/// folder is in scope (D15), code's the working directory; the program's arguments are those set for it
+fn eval(code: &str) -> Node {
+	use warp::compiler::standalone::{run, run_code, Compiler};
+	if !code.contains('\n') && has_warp_extension(code) && file_exists(code) {
+		let arguments = warp::modules::std_adapters::program_arguments();
+		return run(std::path::Path::new(code), arguments, Compiler::RustCompiled);
+	}
+	run_code(code, &env::current_dir().unwrap_or_default(), Compiler::RustCompiled)
+}
+
+// ⚠ WARP DOES THIS DIFFERENTLY: a file's `test` blocks still run through the Rust pipeline here → lib/compiler (later)
 /// The tests of one file run, its summary printed: (tests run, failed)
 fn run_tests_of(path: &str) -> (usize, usize) {
 	diagnostic::show_lines_of(&source_of(path), Some(path));
-	let result = warp::pipeline::for_tests(|| eval(path));
+	let result = warp::pipeline::for_tests(|| wasm_emitter::eval(path));
 	let summary = match result.drop_meta() {
 		Node::Text(summary) => summary.clone(),
 		Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => summary.drop_meta().name(),
@@ -341,7 +353,7 @@ fn run_command(args: &[String], given: &[String]) {
 	} else if let Some(target) = command_argument(&arg_string, "data") {
 		// `warp data file.warp` prints the file as data
 		let text = source_of(target);
-		println!("{}", warp_parser::parse_data(&text).serialize());
+		println!("{}", warp::compiler::standalone::parsed(&text).serialize());
 	} else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
 		let target = extract_after(&arg_string, " ");
 		let (flags, target) = leading_flags(target);
@@ -465,7 +477,7 @@ fn run_command(args: &[String], given: &[String]) {
 			Err(final_value) => println!("no module needed: {}", final_value.serialize()),
 		}
 	} else if let Some(code) = command_argument(&arg_string, "parse") {
-		println!("{}", structure(&warp_parser::parse(code)));
+		println!("{}", structure(&warp::compiler::standalone::parsed(code)));
 	} else if matches!(arg_string.as_str(), "repl" | "console" | "start" | "run") {
 		console();
 	} else if matches!(arg_string.as_str(), "2D" | "2d" | "SDL" | "sdl") {

@@ -20,6 +20,18 @@ pub fn with_entries(mut bytes: Vec<u8>, entries: Vec<(&str, Node)>) -> Vec<u8> {
 	bytes
 }
 
+/// The section's map read back: by compiler.wasm in the native host (card rust-bootstrap), by the data parser in the
+/// browser build, which has no compiler.wasm
+#[cfg(feature = "native")]
+fn read_map(text: &str) -> Node {
+	crate::compiler::standalone::parsed(text)
+}
+
+#[cfg(not(feature = "native"))]
+fn read_map(text: &str) -> Node {
+	crate::warp_parser::parse_data(text)
+}
+
 /// The entry `key` of the module's `warp.meta` section
 pub fn entry(bytes: &[u8], key: &str) -> Option<Node> {
 	let data =
@@ -29,7 +41,7 @@ pub fn entry(bytes: &[u8], key: &str) -> Option<Node> {
 			}
 			_ => None,
 		})?;
-	let map = crate::warp_parser::parse_data(&String::from_utf8(data).ok()?);
+	let map = read_map(&String::from_utf8(data).ok()?);
 	match map[key].drop_meta() {
 		Node::Empty => None,
 		value => Some(value.clone()),

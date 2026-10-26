@@ -126,6 +126,21 @@ stage_view(n: Node): any := {
 	view
 }
 
+# a view as JSON, ø as null and 1.0 as 1.0 (Rust twin: compiler/node_views.rs view_json), what the host reads back
+# into a node (compiler.warp's view mode, card rust-bootstrap)
+view_json(view: any): text := {
+	if view === ø { return "null" }
+	if view is list { return "[" + view.map(view_json).join(", ") + "]" }
+	if view is text or view is char { return json_text("${view}") }
+	if view is bool { return if view then "true" else "false" }
+	shown = "${view}"
+	if view is float and not shown.contains(".") and not shown.contains("e") { return shown + ".0" }
+	shown
+}
+
+# a text as a JSON string
+json_text(t: text): text := "\"" + t.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
+
 # the view of a node
 view_of(n: Node): any := {
 	view = unpositioned_view_of(n)
