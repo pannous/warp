@@ -102,7 +102,7 @@ meanings_of(n: Node): list := match n {
 key_meanings(target: Node, op: Op, value: Node): list := {
 	if op == Op.Assign or op == Op.Define { return assignment_meanings(op, target, value) }
 	if op == Op.Arrow { return as_parameters(parameters_of(target)) }
-	if target == symbol(opaque_word) and value#1 == "type" { return [[declared_type_name(value#2), Meaning.Type]] }
+	if target == opaque_symbol and value#1 == "type" { return [[declared_type_name(value#2), Meaning.Type]] }
 	[]
 }
 
@@ -202,7 +202,7 @@ rewritten_if(n: Node, accepts: function, rewritten: function): Node := if has_ow
 # a node's own words: its items' words, a key's operator, a declaration head's name (`type of`)
 has_own_word(n: Node, accepts: function): bool := match n {
 	List(parts, _, _): parts.any(part => is_word_of_item(part, accepts))
-	Key(left, op, right): { if left == symbol(opaque_word) then is_declaration_word(right, accepts) else accepts(symbol(op as text)) }
+	Key(left, op, right): { if left == opaque_symbol then is_declaration_word(right, accepts) else accepts(symbol(op as text)) }
 	_: no
 }
 # an item's words: the word itself, a declaration head's name, the words of a phrase the parser grouped inside the
@@ -210,7 +210,7 @@ has_own_word(n: Node, accepts: function): bool := match n {
 is_word_of_item(part: Node, accepts: function): bool := match part {
 	Symbol(name): accepts(part)
 	List(words, Bracket.None, Separator.Space): words.any(word => is_word_of_item(word, accepts))
-	Key(left, op, right): left == symbol(opaque_word) and is_declaration_word(right, accepts)
+	Key(left, op, right): left == opaque_symbol and is_declaration_word(right, accepts)
 	_: no
 }
 # the opaque view of a type whose name is a word accepts takes

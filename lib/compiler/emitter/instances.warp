@@ -112,7 +112,7 @@ collect_types(n: any): any := {
 	if is_group(n) { for x in n { collect_types(x) } }
 }
 # a class or enum declaration, the opaque view ["type", name, body]
-declares_type(n: any): bool := type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type"
+declares_type(n: any): bool := type(n) is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
 # `type Name = text`: a declaration of no body naming another type
 is_type_alias(n: any): bool := type(n) is key and op_of(n) == "=" and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and value_of(n) is symbol
 record_type(name: any, body: any): any := {

@@ -183,7 +183,7 @@ rewritten_program(program: any, source: text): any := {
 # only (class_methods.warp routes the calls), so a sugar rule of it (lib/sugar/extremes.warp's max) still reaches the
 # other values
 is_type_declaration(statement: Node): bool := match statement {
-	Key(left, op, right): left == symbol(opaque_word) and kind_of(right) == "type"
+	Key(left, op, right): left == opaque_symbol and kind_of(right) == "type"
 	_: no
 }
 
@@ -221,7 +221,7 @@ sugared_node(n: any, rules: list): any := {
 	n = with_changed_members(n, member => sugar_at_place(bottom_up(member, part => sugared_node(part, rules)), "member", rules))
 	if holds_statements(n) {
 		n = group_like(n, sugar_runs(spliced_statements(items_of(n).map(statement => sugar_at_place(statement, "statement", rules))), rules))
-	} else if n is key and key_of(n) != symbol(opaque_word) {
+	} else if n is key and key_of(n) != opaque_symbol {
 		n = with_placed_parts(n, (code, place) => sugar_at_place(code, place, rules))
 	}
 	sugar_rewritten(n, rules)
@@ -910,7 +910,7 @@ enum_of_case(code: any): text := {
 }
 
 # `{a: 1, b: 2}`: braces of entries only, a map written out, not a block of code
-is_braced_map(code: any): bool := #code > 0 and items_of(code).all(item => is_key(item, Op.Colon) and key_of(item) != symbol(opaque_word))
+is_braced_map(code: any): bool := #code > 0 and items_of(code).all(item => is_key(item, Op.Colon) and key_of(item) != opaque_symbol)
 
 # the pattern's words that are no holes
 literal_words(pattern: any): list := mentioned_names(pattern, []).filter(name => not name.starts_with(rule_hole_mark))
@@ -953,7 +953,7 @@ rule_rewritten(n: any, rules: list, origins: list): any := {
 		# statements (`$f(x) := …` defines f where the phrase stood), a value's turns into its block (as_value) there
 		n = if phrase and #runs == 1 then runs#1 else group_like(n, runs.map(as_value))
 	} else if n is key {
-		n = if key_of(n) == symbol(opaque_word) then with_changed_members(n, member => at_place(member, "member", rules, origins)) else with_placed_parts(n, (code, place) => at_place(code, place, rules, origins))
+		n = if key_of(n) == opaque_symbol then with_changed_members(n, member => at_place(member, "member", rules, origins)) else with_placed_parts(n, (code, place) => at_place(code, place, rules, origins))
 	}
 	for index in 0 ..< #rules {
 		if rules[index].place == "" and not matches_runs(rules[index]) {
@@ -1039,7 +1039,7 @@ head_with_parameters(head: any, changed: function): any := {
 
 # a class with each item of its body changed: the passes see it as the opaque view ["type", name, body]
 with_changed_members(n: any, changed: function): any := {
-	if not (n is key and key_of(n) == symbol(opaque_word)) { return n }
+	if not (n is key and key_of(n) == opaque_symbol) { return n }
 	view = value_of(n)
 	if kind_of(view) != "type" { return n }
 	body = node_of(view#3)

@@ -157,7 +157,7 @@ spelling_functions(enum_name: text): list := {
 is_spelling_needed(n: any, enum_name: text, declared: any): bool := match n {
 	Symbol(name): name == spelled_function(enum_name, "text") or name == spelled_function(enum_name, "case")
 	Key(left, op, right): {
-		if left == symbol(opaque_word) { return no }
+		if left == opaque_symbol { return no }
 		if spelled_enum_of(n, declared) == enum_name { return yes }
 		is_spelling_needed(left, enum_name, declared) or is_spelling_needed(right, enum_name, declared)
 	}

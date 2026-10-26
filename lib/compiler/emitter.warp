@@ -221,7 +221,7 @@ def note_emitting(body: Body, n: any) {
 
 # a refused form as the program writes it, in a few words: `… := …`, the call `memo_known(…)`, a name
 form_of(n: any): text := {
-	if type(n) is key and key_of(n) == symbol(opaque_word) { return opaque_form(value_of(n)) }
+	if type(n) is key and key_of(n) == opaque_symbol { return opaque_form(value_of(n)) }
 	if type(n) is key { return "`… " + op_of(n) + " …`" }
 	if n is symbol { return name_of(n) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol { return "the call " + name_of(n#1) + "(…)" }
@@ -880,8 +880,8 @@ def key_expression(body: Body, n: any): list {
 	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
 	if is_loop_step(n) { return expression_code(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
-	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
-	if left == symbol(opaque_word) { return refuse(opaque_form(right)) }
+	if left == opaque_symbol and kind_of(right) == "type" { return [no_kind, []] }
+	if left == opaque_symbol { return refuse(opaque_form(right)) }
 	# the key of `Point{x: 1}` has no operator as parser.warp reads it, `:` as Rust's analysis view shows it
 	# `P{}`: every field its default (an empty group reads as ø, or as the opaque `{}`)
 	if operator == "" and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
@@ -1086,7 +1086,7 @@ def collect_assigned(n: any, found: any) {
 }
 def collect_referred(n: any, found: any) {
 	if n is symbol { found[name_of(n)] = yes }
-	if type(n) is key and key_of(n) != symbol(opaque_word) {
+	if type(n) is key and key_of(n) != opaque_symbol {
 		collect_referred(key_of(n), found)
 		collect_referred(value_of(n), found)
 	}

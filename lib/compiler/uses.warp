@@ -180,7 +180,7 @@ file_text(path: text): any := try read(path) else ø
 # pattern; not its main-level statements
 is_declaration(statement: Node): bool := match statement {
 	Key(left, op, right): {
-		if left == symbol(opaque_word) { return kind_of(right) == "type" }
+		if left == opaque_symbol { return kind_of(right) == "type" }
 		if assigns_or_defines(op) { return yes }
 		# `def f(x): list {…}`: the key of the head and its result type
 		op == Op.Colon and (is_keyword_group(left) or is_declaration_keyword(left))

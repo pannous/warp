@@ -33,7 +33,7 @@ in_view(view: any): any := {
 
 template_built(n: Node): Node := match n {
 	Key(opaque, op, view): {
-		if opaque != symbol(opaque_word) then n
+		if opaque != opaque_symbol then n
 		else if kind_of(view) == template_kind then built(view#2)
 		else Key(opaque, Op.Colon, in_view(view))
 	}

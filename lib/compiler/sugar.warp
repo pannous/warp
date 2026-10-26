@@ -122,7 +122,7 @@ is_parameter_word(node: Node): bool := {
 }
 
 // A key of the program, no opaque view or attribute layer
-is_pair_key(node: Node): bool := key_of(node) != symbol(opaque_word) and key_of(node) != symbol(attribute_word)
+is_pair_key(node: Node): bool := key_of(node) != opaque_symbol and key_of(node) != symbol(attribute_word)
 
 // A class body's members, typed; the line `left: Node` is the one field
 typed_members(bracket: text, separator: text, members: list): Node := {
