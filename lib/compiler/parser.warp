@@ -52,7 +52,9 @@ def entities(): any {
 }
 def expanded_entities(source: text): text {
 	if not source.contains(ENTITY_MARK) { return source }
-	points = code_points(source)
+	// the text itself when each character is one code point, as the lexer reads it: indexing a list of code points walks
+	// it, which made this scan most of the passes' list reads in `warp rebuild self` (card speed-symbol-calls)
+	points = if one_point_each(source) then source else code_points(source)
 	n = points.length
 	// the pieces between entities are copied whole: one append per character made the run quadratic (card
 	// pure-compile-speed: 69% of a pure-lane compile of uses.warp)
