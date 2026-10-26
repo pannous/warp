@@ -1,4 +1,0 @@
-#!/usr/bin/env warp
-// card booleans-foreign: a python boolean is a warp bool
-use python math
-print math.isnan(1)

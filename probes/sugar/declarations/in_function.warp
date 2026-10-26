@@ -1,3 +1,0 @@
-# `let` inside a function body
-f(n) := { let m = n * 2; m + 1 }
-f(4)

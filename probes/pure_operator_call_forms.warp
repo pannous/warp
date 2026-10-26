@@ -1,8 +1,0 @@
-# a declared word operator also has its call form: plusser(3, 4) calls it, as `1 plusser 2` does; a used module's too:
-# matches(s, p) of `use regex` (lib/shell.warp grep), while `"abc" matches("a.c")` stays infix
-use regex
-infix operator plusser(a: int, b: int) := a + b
-print 1 plusser 2
-print plusser(3, 4)
-print matches("ab", "a")
-print "abc" matches("a.c")

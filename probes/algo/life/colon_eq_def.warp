@@ -1,3 +1,0 @@
-f(g, i) := g[i]
-cells = [0, 5, 0]
-f(cells, 1)

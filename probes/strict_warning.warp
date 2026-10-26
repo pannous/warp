@@ -1,3 +1,0 @@
-use strict
-warning "careful"
-print "not reached"

@@ -1,3 +1,0 @@
-xs = [1, 2]
-ys = [10, 20]
-print [a + b for a in xs for b in ys]

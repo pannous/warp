@@ -1,3 +1,0 @@
-# a refusal names its place, as Rust: … undefined_word(…) at …undefined.warp:3:22
-x = 1
-print(undefined_word(x))

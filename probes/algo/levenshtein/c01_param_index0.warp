@@ -1,2 +1,0 @@
-fun f(a) { return a[0] }
-f("abcd")

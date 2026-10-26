@@ -1,3 +1,0 @@
-# an untyped parameter, where both readings work, stays as parsed. Expected: no
-twice(x) := x + x
-print twice 2 == 4

@@ -1,2 +1,0 @@
-print round(3.5)
-print round(7/2)

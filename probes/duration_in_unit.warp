@@ -1,3 +1,0 @@
-// card duration-var-in-unit: a duration kept in a variable converts to a time unit: 24h
-d = 1 day
-d in h

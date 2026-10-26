@@ -1,3 +1,0 @@
-fun f() { r = [1, 2]; return r }
-x = f()
-x[1]

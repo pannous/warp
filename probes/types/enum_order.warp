@@ -1,4 +1,0 @@
-class Order { status: Status; amount: int }
-enum Status { open, paid }
-o = Order(paid, 30)
-print o.status

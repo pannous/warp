@@ -1,9 +1,0 @@
-# a loop over a map walks its keys; `k, v` also binds the value. Expected: ab 3 a1b2
-m = {a: 1, b: 2}
-ks = ""
-for k in m { ks += k }
-total = 0
-for k, v in m { total += v }
-s = ""
-for k, v in {a: 1, b: 2} { s += k + "$(v)" }
-print "$(ks) $(total) $(s)"

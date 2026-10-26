@@ -1,3 +1,0 @@
-class C{x:int; doubled() := x*2; quad() := doubled() * 2}
-c = C(3)
-print c.quad()

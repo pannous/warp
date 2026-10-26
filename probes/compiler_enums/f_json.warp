@@ -1,4 +1,0 @@
-use json
-enum Kind { Empty, Int, Float, Text }
-k: Kind = Kind.Float
-print to_json({value: k, params: [Kind.Int, Kind.Text]})

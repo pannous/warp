@@ -1,2 +1,0 @@
-contact{ name: James  age: 33 }
-contact.age + 1

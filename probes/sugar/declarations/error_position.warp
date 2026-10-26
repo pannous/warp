@@ -1,3 +1,0 @@
-# an error after a declaration points at the user line
-let y = 1
-y + zed

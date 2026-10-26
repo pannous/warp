@@ -1,3 +1,0 @@
-print data (a; b)
-print data [a,b]
-print data {a;b}

@@ -1,3 +1,0 @@
-count = 0
-for dr in [-1, 0, 1] { count += dr }
-count

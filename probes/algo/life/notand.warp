@@ -1,3 +1,0 @@
-alive = false
-n = 3
-if not alive and n == 3 { 2 } else { 3 }

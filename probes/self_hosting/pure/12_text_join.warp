@@ -1,2 +1,0 @@
-// out: ab
-print "a" + "b"

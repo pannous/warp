@@ -1,2 +1,0 @@
-// expected: 3 (int(float(3)))
-print int float 3

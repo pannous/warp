@@ -11,4 +11,4 @@
 'n=4; c=0; for i in 0..<n-1 {c+=1}; c'	3
 
 # every_for_header_bound_minus_one_asks
-'probes/ask/kotlin_range_forms.warp'	21
+'test/welcoming/kotlin_range_forms.warp'	21

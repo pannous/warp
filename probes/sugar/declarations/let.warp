@@ -1,3 +1,0 @@
-# `let x = 2`: the assignment `x = 2`
-let x = 2
-x * 3

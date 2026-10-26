@@ -1255,7 +1255,7 @@ function initialize() {
 	addEventListener("hashchange", chooseExampleOfHash);
 }
 
-// for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
+// for headless runs (test_in_browser.py --examples): evaluate code as the page does and return the report
 window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };

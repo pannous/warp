@@ -1,4 +1,0 @@
-// the pure lane's lowering of a sum over a mapped list: one loop, no list built (map-fold fusion)
-use "../core/passes.warp"
-prelude = read("lib/prelude.warp")
-print lowered("xs = [1, 2, 3]\nprint sum(xs .* 2)", "probes", prelude)

@@ -1,3 +1,0 @@
-# `constant` used as a name stays one. Expected: 3
-constant = 2
-print constant + 1

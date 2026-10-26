@@ -1,4 +1,0 @@
-#!/usr/bin/env warp
-# an error names its file: warp probes/error_names/index_error.warp (card error-names)
-xs = [1, 2]
-print xs#5

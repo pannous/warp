@@ -1,2 +1,0 @@
-def found(x: int): ints { if x > 0 { [x] } }
-found(-1)

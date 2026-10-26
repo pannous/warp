@@ -1,7 +1,0 @@
-#!/usr/bin/env warp
-# glued data(e) quotes e as written, as spaced data e does (card pure-refuses-glued)
-# want: (a), b+1, c on Rust, WARP_SELF_HOSTED=1 and warp pure
-print data((a))
-x = data(b + 1)
-print x
-print data(c)

@@ -1,9 +1,0 @@
-xs = [1, 2]
-xs.push(3)
-xs.add(4)
-xs.append(5)
-last = xs.pop()
-m = {a: 1, b: 2}
-got = m.remove("a")
-doubled(n: int) := n * 2
-print "$(xs) $(last) $(got) $(3.doubled()) $(2 in xs) $(xs contains 9) $(xs has 1) $(m includes "b")"

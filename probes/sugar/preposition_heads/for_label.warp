@@ -1,4 +1,0 @@
-// out: 7 (traps "cast failure" in the pure lane on main and on this branch alike, card pure-for-label)
-// `for` labels a parameter of a definition, never a loop
-beep(tone: int, for duration: int) := tone + duration
-print beep(3, 4)

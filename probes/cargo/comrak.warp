@@ -1,2 +1,0 @@
-use cargo comrak
-comrak.markdown_to_html("# Hi *there*", comrak.Options())

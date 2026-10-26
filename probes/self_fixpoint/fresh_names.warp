@@ -1,8 +1,0 @@
-#!/usr/bin/env warp
-# names the passes make (item·N, closure_lambda_N) are numbered the same whether compiler.warp lowered its runtime words
-# in this run or took them kept: `warp pure build --wasm` of this file gives the same bytes with a cold and a warm module
-# cache (card fixpoint-check)
-doubled = [1, 2, 3].map(x => x * 2)
-evens = doubled.filter(x => x % 4 == 0)
-print(doubled)
-print(evens)

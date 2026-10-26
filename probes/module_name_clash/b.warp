@@ -1,2 +1,0 @@
-named(x) := "b"
-use_b(x) := named(x)

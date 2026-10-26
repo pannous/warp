@@ -1,4 +1,0 @@
-f(x: any): bool := x is key
-g(x: any): bool := x is text
-print f(1)
-print g("a")

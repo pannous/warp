@@ -1,3 +1,0 @@
-// card page-ids: the common clash, an error naming input{ bind: name }
-input{ id: "name" aria-label: "name" }
-name = $name

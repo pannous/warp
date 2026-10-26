@@ -1,6 +1,0 @@
-slow(x) := { sleep(500 ms); x }
-xs = [1, 2, 3]
-started = clock()
-ys = @parallel slow all xs
-print clock() - started
-ys

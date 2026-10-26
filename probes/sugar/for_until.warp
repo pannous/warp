@@ -1,6 +1,0 @@
-def sliced(start, end) {
-	bytes = []
-	for address in start until end { bytes = bytes + [address] }
-	bytes
-}
-print sliced(2, 5)

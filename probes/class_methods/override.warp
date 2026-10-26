@@ -1,4 +1,0 @@
-class Animal { name: text; speak() := name + " makes a sound" }
-class Dog extends Animal { speak() := name + " barks" }
-class Cat extends Animal { lives: int = 9 }
-print Dog{name: "Rex"}.speak() + ", " + Cat{name: "Tom"}.speak() + ", " + Animal{name: "Gnu"}.speak()

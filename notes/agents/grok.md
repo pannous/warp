@@ -35,7 +35,7 @@ few things differently. Where this file and the role files disagree, Grok agents
 
 ## Merging
 - The Integrator merges Ready cards in batches, once most of them are Ready, with one merge commit per branch.
-- Every batch gate runs the probe set in both pure and self lanes. After a green batch the Integrator tags main
+- Every batch gate runs the gate set (test/gate) in both pure and self lanes. After a green batch the Integrator tags main
   `good/<date>`. A regression is bisected with scripts/bisect-lane.sh from the latest good tag.
 - Handovers of parked agents: /workspace/handover/<agent>.md.
 

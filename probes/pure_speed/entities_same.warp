@@ -1,6 +1,0 @@
-#!/usr/bin/env warp
-// card pure-compile-speed: expanded_entities of the entity test sources, to diff two lib/ versions
-use "../../core/parser.warp"
-tests = module_directory + "/../../tests/"
-sources = ["parser/test_entity_table.pairs.warp", "parser/test_uniscript_hyphen_names.pairs.warp", "parser/test_escaped_quote_slashes.pairs.warp", "parser/test_emoji_atoms.pairs.warp", "numbers/test_infinity.pairs.warp", "parser/test_uniscript_entities.rs", "web/test_uniscript.rs", "welcoming/test_fixits.rs"]
-for source in sources { print expanded_entities(read(tests + source)) }

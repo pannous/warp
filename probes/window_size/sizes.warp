@@ -1,3 +1,0 @@
-canvas.width = 160
-window.width = 800
-print "canvas \(canvas.width)×\(canvas.height), window \(window.width)×\(window.height), display \(display.width)×\(display.height)"

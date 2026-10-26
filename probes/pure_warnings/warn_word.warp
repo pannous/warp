@@ -1,3 +1,0 @@
-warn "careful"
-warning("twice")
-print(1)

@@ -1,4 +1,0 @@
-class Run{distance: km; note: text}
-stored runs: [Run]
-runs.add(Run(5 km ± 10 m, "park"))
-runs#1.distance

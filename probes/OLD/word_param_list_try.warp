@@ -1,3 +1,0 @@
-# card word-param-list: a parameter named like a library word heads no call in a list
-def k(size: any): any := [size, 4]
-print k(3)

@@ -1,3 +1,0 @@
-# `extern C int y = 5`: C as a modifier before a declaration. Expected: 5
-extern C int y = 5
-print y

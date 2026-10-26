@@ -1,3 +1,0 @@
-# `parts.last` of a value of kind any: a map's entry of that name, else the call last(parts)
-tail(parts: any): any := parts.last
-[tail([1, 2, 3]), tail({last: 5})]

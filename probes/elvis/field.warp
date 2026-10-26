@@ -1,6 +1,0 @@
-// expected: j@x ø (an optional field, glued `email?: text`)
-class contact{name; email?: text}
-c = contact{name:"Jo", email: "j@x"}
-d = contact{name:"Al"}
-print(c.email)
-print(d.email)

@@ -1,3 +1,0 @@
-// map, filter and sum over 1M ints
-xs = 1..1000000
-sum(xs.map(x => x * 2).filter(x => x % 3 == 0))

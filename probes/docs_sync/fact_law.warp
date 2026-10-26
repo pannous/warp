@@ -1,3 +1,0 @@
-fact(n) := if n <= 0 then 1 else n * fact(n - 1)
-law x > 0 and y > 0 => x * y > 0
-law fact(n) > 0

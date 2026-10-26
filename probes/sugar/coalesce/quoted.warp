@@ -1,2 +1,0 @@
-# quoted code keeps its `??`. Expected: yes
-print data(a ?? b) == parse_code("a ?? b")

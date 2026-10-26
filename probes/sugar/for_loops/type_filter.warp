@@ -1,7 +1,0 @@
-# a type word as the loop variable visits only the items of that type. Expected: 2 ab
-xs = [1, "a", 2.5, "b"]
-n = 0
-for number in xs { n += 1 }
-s = ""
-for text in xs { s += text }
-print "$(n) $(s)"

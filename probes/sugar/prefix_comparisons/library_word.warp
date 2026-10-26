@@ -1,2 +1,0 @@
-# a typed library word. Expected: (the pure lane's reading at baseline)
-print abs 3 == 3

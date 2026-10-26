@@ -1,3 +1,0 @@
-b: byte index = 9
-p: position = b
-p

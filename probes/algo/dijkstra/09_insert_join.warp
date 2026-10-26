@@ -1,3 +1,0 @@
-p = ["B"]
-p.insert(0, "A")
-p.join("")

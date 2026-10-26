@@ -1,3 +1,0 @@
-# sugar-plain-enums probe; expected: an error: 5 is no Coin case (pure lane at main: Error("outside the core: pure: an error value"))
-enum Coin { Penny, Nickel, Dime }
-print 5 as Coin

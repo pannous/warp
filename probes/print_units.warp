@@ -1,5 +1,0 @@
-// card print-print: each quantity prints in the unit it was written in: 2h, 120min, 24h, 1440min
-print 2 h
-print 120 min
-print 1 day in h
-print 1 day in minutes

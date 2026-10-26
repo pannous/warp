@@ -1,5 +1,0 @@
-# two used files declaring named(any) differently: an error naming both files, as Rust (loader.rs claim_signatures):
-# named(any) is declared in both …clash_a.warp and …clash_b.warp
-use "clash/clash_a.warp"
-use "clash/clash_b.warp"
-print(use_a(1) + use_b(1))

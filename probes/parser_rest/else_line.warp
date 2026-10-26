@@ -1,5 +1,0 @@
-f(name: text): list := {
-	if name == "for" then [1]
-	else []
-}
-print f("def")

@@ -1,3 +1,0 @@
-# an untyped parameter key of a run-time subscript is decided at run time (card entry-number)
-f(m, k) := m[k]
-print f({1: 5, 2: 6}, 2)

@@ -1,2 +1,0 @@
-xs = ["ccc" "a" "bb"]
-sort(xs, by: count)

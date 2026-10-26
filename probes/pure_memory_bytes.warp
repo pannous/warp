@@ -1,7 +1,0 @@
-# lib/memory.warp's words in a program: memory_set_byte writes one byte of linear memory, memory_byte reads it back
-# (card pure-until)
-at = 60000
-print memory_set_byte(at, 300)
-memory_set_byte(at + 1, 7)
-print memory_byte(at)
-print memory_byte(at + 1)

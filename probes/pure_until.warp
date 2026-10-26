@@ -1,7 +1,0 @@
-# `until`: Kotlin's exclusive range in a loop's iterable, the negated trailing `while` elsewhere (card pure-until)
-xs = []
-for i in 0 until 3 { xs = xs + [i] }
-n = 0
-n += 1 until n == 4
-print xs
-print n

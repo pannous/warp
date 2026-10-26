@@ -1,0 +1,3 @@
+# a class field read, as in a Kotlin data class
+data class P {x:int}
+print P(1).x

@@ -1,4 +1,0 @@
-// card self-sql-templates: an sql template keeps its holes as parameters, so the injected quote stays data
-name="x' OR '1'='1"
-q=sql "SELECT * FROM t WHERE name = $name"
-print q#1

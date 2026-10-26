@@ -1,2 +1,0 @@
-use "../../core/positions.warp"
-print(line_widths("ab\ncde"))

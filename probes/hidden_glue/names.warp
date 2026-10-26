@@ -1,5 +1,0 @@
-// expected: 1 in the pure lane (k_end·x is a hidden name, so the program's k_end is untouched); the Rust parser knows no `··`
-rewrite mark $i => ($i·end··x = 1)
-mark k
-k_end = 0
-print(k_end + 1)

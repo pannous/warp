@@ -1,8 +1,0 @@
-#!/usr/bin/env warp
-# logic, equality and dash glyphs, vulgar fractions and uniscript entities, through the self-hosted parser:
-# WARP_SELF_HOSTED=front /Users/me/dev/bin/warp probes/self_hosting/front/glyph_aliases.warp
-logic = true ∧ (false ∨ true)
-same = 3 ≟ 3
-difference = 3 − 1
-half = ½ + ⅓
-print "${logic} ${same} ${difference} ${half} \:alpha"

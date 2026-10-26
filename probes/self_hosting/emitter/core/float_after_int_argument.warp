@@ -1,5 +1,0 @@
-# emitter core: an unannotated parameter given an int, then a float literal, holds a float (card untyped-def)
-# 0.5
-same(x) := x
-whole = same(1)
-same(0.5)

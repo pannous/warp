@@ -1,3 +1,0 @@
-# a program's own times: prints 12 (card program-own)
-times(a, b) := a * b
-print times(3, 4)

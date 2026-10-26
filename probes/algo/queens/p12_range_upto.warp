@@ -1,3 +1,0 @@
-s = 0
-for r in 0 upto 4 { s += r }
-s

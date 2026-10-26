@@ -1,3 +1,0 @@
-use cargo regex
-r = regex.Regex("a")
-r.shortest_match_at("abc", 10)

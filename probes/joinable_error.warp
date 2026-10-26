@@ -1,2 +1,0 @@
-use sound
-for trick in dir(sound): print (function trick).dump

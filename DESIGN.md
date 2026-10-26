@@ -414,7 +414,7 @@ infers or the programmer constrains (`@f64`). The existing `Quotient` in
 
 ### Measuring semantic density
 
-`probes/agent_bench/` should hold small tasks solved by agents in Warp, Rust, and
+`test/agent_bench/` should hold small tasks solved by agents in Warp, Rust, and
 Python, scoring first-try correctness and tokens to a verified solution. This turns the
 information-theoretic goal of Purpose.md into a tracked number.
 

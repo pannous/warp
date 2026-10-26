@@ -39,7 +39,7 @@ the test file's folder. An expected column that is not data (`π`, `(-1)`, `1 + 
 Prints ⊘ for skipped pairs, a ✗ line per failure (`file:line "code" expected: got …`), then `m of n failed in f files,
 s skipped`; exits 1 on a failure. `--self`: through `warp self` (warp-self.wasm); `--each`: a ✓ line for each passed
 test too. The verdict lines print in file order after the run, so two runs (pure and self) diff line by line. The
-parent builds a missing compiler first, so children never race to build it. Probe: probes/warp_test_runner/run.sh.
+parent builds a missing compiler first, so children never race to build it.
 `warp pure "2+3*4"` / `warp self "…"`: inline code through the warp compiler, `use` reading from the current folder.
 
 ## Known gaps (cards)

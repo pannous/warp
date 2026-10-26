@@ -1,7 +1,0 @@
-// `text(x)` is x's text as `x as text` gives it, and `x === ø` also compares the kind: `[] == ø` is yes, `[] === ø` is no (the empty list is not ø itself, as `0 === false` is no)
-shown(a: any) := text(a) + "!"
-print shown(7)
-print shown([1, "b"])
-none_yet = []
-print none_yet === ø
-none_yet !== ø

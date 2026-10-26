@@ -1,4 +1,0 @@
-serve 18491 {
-  get "/fail" { raise "boom" }
-  get "/ok" { "fine" }
-}

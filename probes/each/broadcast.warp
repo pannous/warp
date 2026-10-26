@@ -1,3 +1,0 @@
-// expected: 1 2 [ø ø] (the broadcasting word: print is called with each item, the value the list of results)
-xs = [1, 2]
-print each xs

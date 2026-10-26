@@ -1,2 +1,0 @@
-simplify = rules { data($a * 1) => a; data($a + 0) => a }
-print simplify(data(y * 1 * 1 + k * 1))

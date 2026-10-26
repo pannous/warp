@@ -1,6 +1,0 @@
-# a returned tuple is the list of its items. Expected: [4 8]
-g(n) := {
-	if n > 9 { return (0, 0) }
-	return (n, n * 2)
-}
-print g(4)

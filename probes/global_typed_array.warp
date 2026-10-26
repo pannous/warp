@@ -1,4 +1,0 @@
-global s = int[20000]
-def f() { for i in 0..20000 { s[i] = i } }
-f()
-s[19999]

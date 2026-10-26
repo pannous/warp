@@ -1,3 +1,0 @@
-// try for cards it-reserved/self-reserved: warns that self is reserved
-self = 3
-self

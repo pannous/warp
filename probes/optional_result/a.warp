@@ -1,6 +1,0 @@
-def evens(x: int): list {
-	if x < 0 { return ø }
-	[x, x+2]
-}
-print evens(2)
-print evens(-1)

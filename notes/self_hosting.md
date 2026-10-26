@@ -195,9 +195,7 @@ checks (match_exhaustive, switch unit names, index_positions, check_unit_names: 
 Goal: WARP_SELF_HOSTED runs parser → passes → analyzer → emitter → runtime all in warp; the suite count per stage
 shows the progress. Every compiler function typed (generic ones generically), written with classes, enums and match.
 Emitter rule (2026-10-19, after emitter-structures cost 57 + emitter tests the gate didn't see): a form enters
-emitter.warp's core only when it compiles right; unsure → refuse (Rust takes it). Before sending a tip that touches
-emitter.warp or runtime.warp, run the touched area's suite tests with WARP_SELF_HOSTED=1 (scripts/self-hosted-suite.sh
---local <filters>, + emitter switch) and compare with the same filters on main: no new failures.
+emitter.warp's core only when it compiles right; unsure → refuse (Rust takes it).
 WARP_SELF_HOSTED=emit runs Rust's front end and lowering, then emitter.warp: an emitter form whose source the warp front
 end cannot read yet (`try … else …`) is checked there before parser.warp reads it.
 | owner | part |
@@ -308,8 +306,7 @@ function and local names.
   decision ignore-rust: no comparison with src/analyzer). analyzer.warp `emitter_kinds(program)` gives {functions: {f:
   {params: [k…], result: k, locals: {x: k}, elements: {xs: k}}}, variables: {x: k}, elements: {xs: k}, value: k} with
   k one of int float char text list node (node: any value held boxed, ø included); elements: the element kind of a
-  list whose type is known. An empty map comes as null (to_json, card lib-json). tests/parser/test_self_analyzer.rs
-  checks it runs on every source of tests/parser/analyzer_twin_sources.txt.
+  list whose type is known. An empty map comes as null (to_json, card lib-json).
 
 ## Value layout (card emitter-gc; the Rust emitter follows: card rust-emitter)
 Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a value's kind it stays plain:
@@ -455,14 +452,8 @@ Shared runtime library (`warp build --shared`, libwarp-runtime.dylib): only an o
 no total saving, loses self-contained files, and a .cwasm only runs on the exact wasmtime that compiled it.
 
 ## The suite through the warp pipeline (card warp-pipeline-suite)
-`scripts/self-hosted-suite.sh [<pushed tip>]` runs the whole suite on the cloud lane with WARP_SELF_HOSTED=1 and
-prints "self-hosted: N passed / M" plus the failures grouped by cause (an assertion's left side, digits as #), the most
-frequent first; `--local <filters>` runs it here through tests/queue.sh, `--rank <log>` ranks any test log,
-`--tests <cause regex> <log…>` lists the failed tests of a cause. Plain runs set WARP_SELF_HOSTED=front (front end only, emit-families);
-`--stage <name>=<VAR>[=<value>]` sets a later stage's switch too (run `<tip>+<name>`, compared with the last run of
-the same stages): `--stage emitter=WARP_SELF_HOSTED=1` is + emitter, the per-stage counts of "Back-end focus". A cloud run appends its count to
-data/self_hosting/suite_counts.txt (warp-steward reruns after each batch touching core or the pipeline, and
-nightly). The failure groups are cards suite-* in topic self-hosted-2, each naming its stage owner.
+History: scripts/self-hosted-suite.sh ran the Rust suite with the warp stages switched on; it went with the Rust
+compiler (2026-10-26), `warp test` is the suite now.
 - src/compiler/self_hosted.rs: with the switch on, `lawful_program` parses with parser.warp (passes.warp `stage`
   [0, source]) and `run_program_passes` hands every source pass with a warp twin (TWINNED_PASSES, the order of
   passes.warp `passes`) to it ([i, view]); the passes without a twin, the analyzer and the emitter stay Rust.

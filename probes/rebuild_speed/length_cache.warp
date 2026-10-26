@@ -1,8 +1,0 @@
-# a long text's length asked again and again: the runtime keeps its count, so 2000 asks cost about one count
-code = read("core/parser.warp")
-other = read("core/lexer.warp")
-total = 0
-for i in 1..2000 { total += code.length }
-print total
-for i in 1..200 { total += code.length + other.length }
-print total

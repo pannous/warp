@@ -1,5 +1,0 @@
-// whole-number math words show int parameters (card signature-signature)
-use math
-print gcd.signature
-print type(factorial)
-print lerp.signature

@@ -1,3 +1,0 @@
-// a fraction reaching a declared int result is an error ; swap in `as float` for 1.5
-def half(x) as int { x / 2 }
-half(3)

@@ -1,5 +1,0 @@
-# feasibility probe (card standalone): the warp passes lower core/runtime.warp, which Rust lowers today
-use "../../core/passes.warp"
-use file
-runtime = lowered_program(read("../../core/runtime.warp"), "../../core")
-print(#statements_of(runtime))

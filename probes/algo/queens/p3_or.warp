@@ -1,3 +1,0 @@
-c = 1
-if c == 2 or abs(c - 4) == 3 { return 7 }
-0

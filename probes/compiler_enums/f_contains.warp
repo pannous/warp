@@ -1,3 +1,0 @@
-enum Wasm { StructGet, StructNew, RefCast }
-ops = [StructGet, RefCast]
-print ops contains RefCast

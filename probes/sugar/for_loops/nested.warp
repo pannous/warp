@@ -1,7 +1,0 @@
-# two loops of one variable, nested and in a row, each keep their own hidden names. Expected: 14 abab
-n = 0
-for x in [1, 2] { for x in [3, 4] { n += x } }
-print n
-s = ""
-for x in [1, 2] { for x in "ab" { s += x } }
-print s

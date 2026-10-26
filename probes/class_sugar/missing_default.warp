@@ -1,4 +1,0 @@
-// expected: ø (a missing default stays missing)
-class box{size = ø}
-b = box{}
-print b.size

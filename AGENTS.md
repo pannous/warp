@@ -23,7 +23,7 @@ notes/self_hosting.md) and compiles itself. The old Rust compiler is the snapsho
 of it is on main. What stays Rust is the harness in src/ and crates/warp-runtime: the native host (wasmtime, host
 words, FFI), the runtime that reads results back, and the CLI. Most things are implemented as libraries (lib/) or
 compiler extensions (core/extensions/). If the core compiler (core/*.warp) or the Rust harness needs changes, this needs
-to go through the interviewer.
+to go through the interviewer. Ignore all old tasks about Rust features or  'both lanes'. 
 
 warp-self.wasm (seed/) is the checked-in fixpoint compiler; it compiles compiler.warp to
 warp.wasm, which promotes itself to warp-self.wasm when it recompiles itself to the same bytes (the fix point).
@@ -147,7 +147,7 @@ Several agent sessions share this Mac and the full suite is slow, so run the che
 We always want the very quick feedback loop and quick merges: anything slower than smoke + fixpoint runs in the
 background (`run_in_background`, scripts/slot.sh) and never holds a merge; what it finds is fixed forward on a card.
 A worker marks its card Ready with a note naming branch, tip commit and the checks it ran; the Integrator merges after
-its gate (smoke, probes/gate, the changed test files) and sends what fails back to the card's owner, who fixes it.
+its gate (smoke, test/gate, the changed test files) and sends what fails back to the card's owner, who fixes it.
 
 Warp tests run locally with the shared binary, through the warp compiler (src/compiler/pure_tests.rs,
 notes/is_tests.md):
@@ -168,8 +168,8 @@ Folder plan and condensing rules: notes/tests_layout.md notes/is_tests.md
 1. Develop new features preferably in library /lib/
 2. Only in rare cases touch core/parser.warp or emitter.warp 
    /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` 
-3. **Add probes** - Create or update quick tests in `probes/`
-4. **Add tests** - Create or update clean short functional tests in `test/`
+3. **Experiment** - quick throwaway programs go in the session scratchpad or `data/<topic>/`, never in the repo
+4. **Add tests** - Create or update clean short functional tests in `test/`: every kept test lives there
 5. **Run tests** - warp test <folders>`
 
 ## Serialization
@@ -257,14 +257,13 @@ NEVER modify a README without the user's review and explicit confirmation.
 Small or non-conflicting changes may go straight onto main without a worktree. 
 Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
 /Volumes/Worktrees/warp is cowtree's donor, never removed.
-/Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md),
+/Volumes/Worktrees/integrate and integrate2 are the Integrator's (tools: scripts/integrate/, notes/agents/integrator.md).
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` 
-The probes/ folder is NOT a place to doublicate worktrees!
 Before removing a worktree: `git status --short -uall` (untracked files are hidden on this Mac) + files changed in 2 h.
 
 
 ## Folders
-- `probes/` = hand-written probe sources only 
+- `test/` = every kept test (test/<topic>/, test/gate/ for the gate); there is no probes/ folder any more
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
 
 Workers: before and after each task, run `git status` and the tests that cover your change.

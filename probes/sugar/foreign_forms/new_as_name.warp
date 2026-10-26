@@ -1,3 +1,0 @@
-# a variable named new stays one. Expected: 6
-new = 2
-print new * 3
