@@ -696,7 +696,8 @@ fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Nod
 	if let Some(module) = key.as_deref().and_then(kept_under) {
 		return Ok(module);
 	}
-	let module = crate::compiler::phase_times::timed("self-hosted stage compile", || crate::pipeline::compile(program))?;
+	let module =
+		crate::compiler::phase_times::timed("self-hosted stage compile", || crate::pipeline::compile(program))?;
 	// compiled once, run for every program: worth wasm-opt's seconds
 	let module = match crate::modules::binaryen::optimized_for_speed(&module.bytes) {
 		Some(bytes) => crate::pipeline::CompiledModule { bytes, ..module },
