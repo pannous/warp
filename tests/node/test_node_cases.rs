@@ -98,3 +98,13 @@ fn an_operator_case_and_its_spelling_are_synonyms() {
 	is!("Op.Add == Op.Sub", false);
 	is!("Op.Add", symbol("Add"));
 }
+
+/// Two cases compare as they are, a case and its spelling as spellings (card speed-symbol-calls: `op == Op.Define`
+/// without Op·text's match over every case)
+#[test]
+fn cases_compare_as_they_are() {
+	const SAME: &str = "same(n: Node, o: Op): list := match n { Key(l, w, r): [w == o, w != o, w == Op.Define, w != Op.Add], _: [] }";
+	is!(&format!("{SAME}\nsame(parse(\"a := 1\"), Op.Define) == [yes, no, yes, yes]"), true);
+	is!(&format!("{SAME}\nsame(parse(\"a + 1\"), Op.Define) == [no, yes, no, no]"), true);
+	is!("colon(o: Op): bool := o == Op.Colon; colon(Op.Colon) and not colon(Op.Dot)", true);
+}

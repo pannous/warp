@@ -124,7 +124,7 @@ looked_up(parts: any): any := {
 # the body of `type of …`, which the parser reads as a declaration head, else ø; `none` when it has none
 type_of_body(n: Node): any := match n {
 	Key(opaque, op, view): {
-		if opaque == symbol(opaque_word) and kind_of(view) == "type" and view#2 == ["symbol", of_word] then node_of(view#3) else none_word
+		if opaque == opaque_symbol and kind_of(view) == "type" and view#2 == ["symbol", of_word] then node_of(view#3) else none_word
 	}
 	_: none_word
 }

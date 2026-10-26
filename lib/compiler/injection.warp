@@ -43,7 +43,7 @@ template_tag_of(n: any): text := match n {
 # the literal of a template, "…" or ("…"); ø for anything computed
 template_source(n: any): any := {
 	if n is text { return n }
-	if n is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == template_kind { return value_of(n)#2 }
+	if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == template_kind { return value_of(n)#2 }
 	if is_group(n) and bracket_of(n) == "(" and #items_of(n) == 1 { return template_source(items_of(n)#1) }
 	ø
 }
@@ -190,7 +190,7 @@ templates_lowered(n: any): any := match n {
 		else List(lowered_items(line), bracket, separator)
 	}
 	Key(left, op, right): {
-		if left == symbol(opaque_word) then n
+		if left == opaque_symbol then n
 		else if op == Op.Assign or op == Op.Define then assigned_template(left, op, right)
 		else Key(templates_lowered(left), op, templates_lowered(right))
 	}

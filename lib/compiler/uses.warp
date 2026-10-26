@@ -80,7 +80,7 @@ declarations_used(statements: any, folder: text, seen: any, claimed: any): list 
 		file = file_used(statement, folder)
 		if file != ø and file not in seen {
 			seen += [file]
-			used = statements_in(with_module_directory(plain_node(parsed(file_text(file))), folder_of(file)))
+			used = statements_in(with_module_directory(file_parsed(file), folder_of(file)))
 			inner = declarations_used(used, folder_of(file), seen, claimed)
 			seen = inner#2
 			own = used.filter(s => (is_declaration(s) or use_target(s) is symbol) and file_used(s, folder_of(file)) == ø)
@@ -89,6 +89,15 @@ declarations_used(statements: any, folder: text, seen: any, claimed: any): list 
 		}
 	}
 	[declarations, seen]
+}
+
+# a used file's parse, kept by its text (card speed-module-cache): a rebuild parses again only the files that changed;
+# the running compiler keys what it keeps by itself (os.keep), so a changed parser parses them all again
+file_parsed(file: text): Node := {
+	source = file_text(file)
+	if source is ø { return plain_node(parsed(source)) }
+	name = "the parse of " + source
+	kept(name) ?? keep(name, plain_node(parsed(source)))
 }
 
 # A used file's declarations claim their signatures: another file declaring one already, differently, is the error
@@ -180,7 +189,7 @@ file_text(path: text): any := try read(path) else ø
 # pattern; not its main-level statements
 is_declaration(statement: Node): bool := match statement {
 	Key(left, op, right): {
-		if left == symbol(opaque_word) { return kind_of(right) == "type" }
+		if left == opaque_symbol { return kind_of(right) == "type" }
 		if assigns_or_defines(op) { return yes }
 		# `def f(x): list {…}`: the key of the head and its result type
 		op == Op.Colon and (is_keyword_group(left) or is_declaration_keyword(left))

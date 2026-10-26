@@ -102,7 +102,7 @@ meanings_of(n: Node): list := match n {
 key_meanings(target: Node, op: Op, value: Node): list := {
 	if op == Op.Assign or op == Op.Define { return assignment_meanings(op, target, value) }
 	if op == Op.Arrow { return as_parameters(parameters_of(target)) }
-	if target == symbol(opaque_word) and value#1 == "type" { return [[declared_type_name(value#2), Meaning.Type]] }
+	if target == opaque_symbol and value#1 == "type" { return [[declared_type_name(value#2), Meaning.Type]] }
 	[]
 }
 
@@ -122,18 +122,28 @@ field_meanings(item: Node): list := match item {
 # every key and list of a program, the program first; an opaque view's parts (a type's name and body) as nodes
 nodes_in(top: Node): list := nodes_kept(top, n => yes)
 
+# the nodes found so far, a global, which grows in place (a local stack popped and a local list appended to copied them
+# at each node: a seventh of the passes' time in `warp rebuild self`, card speed-symbol-calls)
+global kept_found = []
 # the nodes `kept` accepts, the program first, without the parts of one it refuses
 nodes_kept(top: Node, kept: function): list := {
-	found = []
-	unvisited = [top]
-	while #unvisited > 0 {
-		n = unvisited.pop()
-		if kept(n) {
-			found += [n]
-			unvisited += parts_within(n)
+	kept_found = []
+	keep_nodes(top, kept)
+	found = kept_found
+	kept_found = []
+	found
+}
+# n and the nodes kept within it, each part's after the next one's, in the order a stack of them pops them
+keep_nodes(n: Node, kept: function) := {
+	if kept(n) {
+		kept_found += [n]
+		parts = parts_within(n)
+		at = #parts
+		while at > 0 {
+			keep_nodes(parts#at, kept)
+			at -= 1
 		}
 	}
-	found
 }
 
 # the scope with each [name, meaning] pair added
@@ -202,7 +212,7 @@ rewritten_if(n: Node, accepts: function, rewritten: function): Node := if has_ow
 # a node's own words: its items' words, a key's operator, a declaration head's name (`type of`)
 has_own_word(n: Node, accepts: function): bool := match n {
 	List(parts, _, _): parts.any(part => is_word_of_item(part, accepts))
-	Key(left, op, right): { if left == symbol(opaque_word) then is_declaration_word(right, accepts) else accepts(symbol(op as text)) }
+	Key(left, op, right): { if left == opaque_symbol then is_declaration_word(right, accepts) else accepts(symbol(op as text)) }
 	_: no
 }
 # an item's words: the word itself, a declaration head's name, the words of a phrase the parser grouped inside the
@@ -210,7 +220,7 @@ has_own_word(n: Node, accepts: function): bool := match n {
 is_word_of_item(part: Node, accepts: function): bool := match part {
 	Symbol(name): accepts(part)
 	List(words, Bracket.None, Separator.Space): words.any(word => is_word_of_item(word, accepts))
-	Key(left, op, right): left == symbol(opaque_word) and is_declaration_word(right, accepts)
+	Key(left, op, right): left == opaque_symbol and is_declaration_word(right, accepts)
 	_: no
 }
 # the opaque view of a type whose name is a word accepts takes

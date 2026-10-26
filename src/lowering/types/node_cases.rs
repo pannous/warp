@@ -21,6 +21,9 @@ const SPELLED_VALUE: &str = "spelled";
 /// `Op·text(c)`: the spelling of a case; `Op·case(t)`: the case spelled so
 const TEXT_FUNCTION: &str = "text";
 const CASE_FUNCTION: &str = "case";
+/// `Op·is(x, Define, ":=")`: x is that case or its spelling; `Op·same(a, b)`: a and b are one case or spelling
+const IS_FUNCTION: &str = "is";
+const SAME_FUNCTION: &str = "same";
 const BRACKETS: [(&str, Bracket); 5] = [
 	("Curly", Bracket::Curly),
 	("Square", Bracket::Square),
@@ -151,10 +154,45 @@ fn spelling_functions(enum_name: &str, cases: &[String]) -> Vec<Node> {
 	let is_text = kind_test(node_case("Text").expect("NODE_CASES has Text"), &value);
 	let cases_to_text = matched(value.clone(), to_text.chain([other.clone()]).collect());
 	let text = if_then_else(is_text, value.clone(), cases_to_text);
+	// Op·is and Op·same compare two cases as they are, a case's spelling only against a text
+	let (case, spelled, other_value) =
+		(Node::symbol(WRITTEN_CASE), Node::symbol(WRITTEN_SPELLING), Node::symbol(OTHER_VALUE));
+	let is_symbol = |side: &Node| kind_test(node_case("Symbol").expect("NODE_CASES has Symbol"), side);
+	let texts = |side: &Node| call(&spelled_function(enum_name, TEXT_FUNCTION), vec![side.clone()]);
+	let is_case = if_then_else(
+		is_symbol(&value),
+		key(value.clone(), Op::Eq, case.clone()),
+		key(texts(&value), Op::Eq, spelled.clone()),
+	);
+	let both_cases = key(is_symbol(&value), Op::And, is_symbol(&other_value));
+	let same = if_then_else(
+		both_cases,
+		key(value.clone(), Op::Eq, other_value.clone()),
+		key(texts(&value), Op::Eq, texts(&other_value)),
+	);
+	let defined = |name: &str, parameters: Vec<Node>, body: Node| {
+		key(call(&spelled_function(enum_name, name), parameters), Op::Define, body)
+	};
 	vec![
 		function(TEXT_FUNCTION, text),
 		function(CASE_FUNCTION, matched(value.clone(), to_case.chain([other]).collect())),
+		defined(IS_FUNCTION, vec![value.clone(), case, spelled], is_case),
+		defined(SAME_FUNCTION, vec![value.clone(), other_value], same),
 	]
+}
+
+const WRITTEN_CASE: &str = "case_written";
+const WRITTEN_SPELLING: &str = "case_spelled";
+const OTHER_VALUE: &str = "other_spelled";
+
+/// `Op·is(x, Define, ":=")`: whether x is the case written or its spelling
+pub fn case_test(enum_name: &str, value: Node, case: Node, spelled: String) -> Node {
+	call(&spelled_function(enum_name, IS_FUNCTION), vec![value, case, Node::Text(spelled)])
+}
+
+/// `Op·same(a, b)`: whether a and b are one case, or spell one
+pub fn same_cases(enum_name: &str, left: Node, right: Node) -> Node {
+	call(&spelled_function(enum_name, SAME_FUNCTION), vec![left, right])
 }
 
 /// The type names the program declares itself: `enum Op {…}`, `class Node {…}`
