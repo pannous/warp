@@ -13,6 +13,7 @@ use "walk.warp"
 use "words.warp"
 use "signatures.warp"
 use "builtin_signatures.warp"
+use "types.warp"
 use "kinds.warp"
 use "byte_codes.warp"
 use math

@@ -1,14 +1,14 @@
 # Lists (emitter.warp's part): literals, length, items read and written by index
-def list_value(body: Body, items: any): list { ["list", vector_code(items.map(item => boxed(expression_code(body, item))))] }
-def vector_code(item_codes: any): list {
+def list_value(body: Body, items: list): list { ["list", vector_code(items.map(item => boxed(expression_code(body, item))))] }
+def vector_code(item_codes: list): list {
 	code = [op.i32_const] + sleb(#item_codes) + concatenated(item_codes)
 	code + gc_code(gc_ops.array_new_fixed, [gc_type(gc.items), #item_codes]) + gc_code(gc_ops.struct_new, [gc_type(gc.list)])
 }
 # an int as an i32 index
-def index_code(value: any): list { converted(value, "int") + [op.i32_wrap_i64] }
+def index_code(value: TypedCode): list { converted(value, "int") + [op.i32_wrap_i64] }
 # `#x`: the characters of a text (a character is a one-character text), the items of a list or map, either known only
 # at run time
-def length_code(value: any): list {
+def length_code(value: TypedCode): list {
 	if value#1 == "text" { return runtime_call("text_count", [value]) }
 	if value#1 == "char" { return length_code(["text", converted(value, "text")]) }
 	if value#1 == "list" { return ["int", value#2 + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i64_extend_i32_u]] }
@@ -17,7 +17,7 @@ def length_code(value: any): list {
 	refuse("cannot access length code of " + value#1)
 }
 # `xs#i = v`: the i-th item becomes v, boxed; the assignment gives v
-def element_assignment(body: Body, list: any, index: any, value: any): list {
+def element_assignment(body: Body, list: TypedCode, index: TypedCode, value: TypedCode): list {
 	if list#1 == "node" { return runtime_call("node_set_at", [list, index, value]) }
 	if list#1 != "list" { return refuse("an assignment to an element of a " + list#1) }
 	held = uleb(fresh_local(body, value#1))
@@ -25,13 +25,13 @@ def element_assignment(body: Body, list: any, index: any, value: any): list {
 	[value#1, code + gc_code(gc_ops.array_set, [gc_type(gc.items)]) + [op.local_get] + held]
 }
 # `xs#i`: the i-th item, counted from 1
-def element(body: Body, list: any, index: any): list {
+def element(body: Body, list: TypedCode, index: TypedCode): list {
 	if list#1 == "node" { return runtime_call("node_at", [list, index]) }
 	if list#1 != "list" { return refuse("an element of a " + list#1) }
 	["node", checked_item(body, list, index) + gc_code(gc_ops.array_get, [gc_type(gc.items)])]
 }
 # a list's items and the 0-based place of its index-th item; an index outside 1…count fails in index_out_of_range_of
-def checked_item(body: Body, list: any, index: any): list {
+def checked_item(body: Body, list: TypedCode, index: TypedCode): list {
 	held = uleb(fresh_local(body, "list"))
 	at = [op.local_get] + uleb(fresh_local(body, "int"))
 	count = ["int", [op.local_get] + held + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i64_extend_i32_u]]
@@ -42,7 +42,7 @@ def checked_item(body: Body, list: any, index: any): list {
 	code + [op.local_get] + held + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + at + [op.i32_wrap_i64, op.i32_const, 1, op.i32_sub]
 }
 # an index as an int; one known only at run time must be an integer ("index must be an integer", not a cast failure)
-def whole_index(index: any): list {
+def whole_index(index: TypedCode): list {
 	if index#1 == "node" { return runtime_call("index_of_node", [index]) }
 	["int", converted(index, "int")]
 }
