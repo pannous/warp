@@ -9,7 +9,7 @@ export WARP_NO_WINDOW=1 WARP_HINTS=0
 # warp reads a piped stdin as its program: < /dev/null keeps it off the loop's file list
 lowered() { timeout 20 "$WARP" lower "$(cat "$1")" < /dev/null 2>&1 | sed 's/[0-9]*:[0-9]*//g'; }
 
-rm -rf "$WORK" && mkdir -p "$WORK" && cp -R "$REPO/samples" "$REPO/lib" "$WORK/"
+rm -rf "$WORK" && mkdir -p "$WORK" && cp -R "$REPO/samples" "$REPO/lib" "$REPO/core" "$WORK/"
 "$WARP" format "$WORK" | tail -1
 compared=0 different=0
 while read -r formatted; do

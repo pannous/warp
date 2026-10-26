@@ -54,7 +54,7 @@ def case_ranges(mapping):
 
 
 # the ints as one text read when the module loads: a 9,600-int list literal took wasmtime 39 s to compile (debug);
-# the text as a word of its own, which lib/compiler/runtime.warp reads too (`use case_tables`)
+# the text as a word of its own, which core/runtime.warp reads too (`use case_tables`)
 def warp_list(name, ranges):
 	numbers = " ".join(str(field) for range_ in ranges for field in range_)
 	return f'{name}_case_text(): text := "{numbers}"\n{name}_case_ranges = {INTS_WORD}({name}_case_text())\n'

@@ -508,7 +508,7 @@ pub fn program_linker(engine: &Engine) -> wasmtime::Result<Linker<Host>> {
 }
 
 /// A failed run's message: a runtime error fails inside a function of its name (index_out_of_range, …), the global
-/// trap_detail holding the value it names; a raise's message is that value (lib/compiler/runtime/errors.warp)
+/// trap_detail holding the value it names; a raise's message is that value (core/runtime/errors.warp)
 fn failure(error: &wasmtime::Error, store: &mut Store<Host>, instance: &Instance) -> Ran {
 	// WARP_HOST_DEBUG=1: the failure with its wasm backtrace too
 	if std::env::var_os("WARP_HOST_DEBUG").is_some() {

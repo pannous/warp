@@ -1,5 +1,5 @@
 // The microseconds per call of lexer.warp's character tests (card profile-stage-programs)
-use "../../lib/compiler/parser.warp"
+use "../../core/parser.warp"
 probe_rounds = 1000
 probe_source = "alpha = beta\n"
 def timed(label, f) {

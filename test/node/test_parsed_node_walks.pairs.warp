@@ -31,7 +31,7 @@
 'n = parse("class P { x: int }"); "\\(n)"'	'type P {x:type int ø}'
 't = "class P { x: int }"; n = parse(t); "\\(n)"'	'type P {x:type int ø}'
 't = "class P { x: int }\\nf(a) := a"; #parse(t)'	2
-'n = parse(read("lib/compiler/parser.warp")); #n > 50'	true
+'n = parse(read("core/parser.warp")); #n > 50'	true
 
 # part_readers_never_clash_with_fields
 'k = key(symbol("op"), ":", 3); op_of(k)'	':'

@@ -1,5 +1,5 @@
 # The warp compiler as one warp program (card standalone, notes/standalone_compiler.md): source text in, wasm bytes out,
-# its stages handing each other plain warp values. `warp lib/compiler/compiler.warp app.warp app.wasm`, then
+# its stages handing each other plain warp values. `warp core/compiler.warp app.warp app.wasm`, then
 # `warp app.wasm`; a form beyond the emitter's core is the compile's error ("outside the core: …")
 use "passes.warp"
 use "analyzer.warp"
@@ -27,8 +27,8 @@ prelude_source = module_source("prelude")
 # the files of the runtime words, each with the files its `use` lines name: the core and, never used by it, the
 # extended runtime (decision runtime-split)
 RUNTIME_ROOTS = ["runtime.warp", "runtime/extended.warp"]
-# a root's text, its `use` paths named from lib/compiler, where the roots are lowered together: runtime/extended.warp's
-# `use "extended/exact.warp"` is lib/compiler/runtime/extended/exact.warp
+# a root's text, its `use` paths named from core, where the roots are lowered together: runtime/extended.warp's
+# `use "extended/exact.warp"` is core/runtime/extended/exact.warp
 root_text(file: text): text := {
 	text = read(library_folder + "/compiler/" + file)
 	steps = file.split("/")

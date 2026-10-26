@@ -92,7 +92,7 @@ declarations_used(statements: any, folder: text, seen: any, claimed: any): list 
 }
 
 # a used file's parse, kept by its text (card speed-module-cache): a rebuild parses again only the files that changed;
-# kept by the files that parse (os.keep_of), so an edit of lib/compiler beyond them keeps the parses
+# kept by the files that parse (os.keep_of), so an edit of core beyond them keeps the parses
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { return plain_node(parsed(source)) }

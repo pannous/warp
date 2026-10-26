@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: #3214 wasm-load + pure-c-imports + compiler-build… ([warp-host-integration](https://github.com/pannous/warp/issues/3214))
-- Branch: `warp-host-integration` at `9af177982`, 13 ahead / 199 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: lib/compiler/c_imports.warp)
+- Branch: `warp-host-integration` at `9af177982`, 13 ahead / 199 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/c_imports.warp)
 - Kind: touches Rust (src/, crates/ or *.rs): waits for the Rust lane
 - Owner: Warp Wrapper (grok-warp-wrapper; session parked 2026-10-23, handover notes/box/handover/warp-wrapper.md): that owner continues it when resumed (the planner reassigns it otherwise).
 - State: Integration of wasm-load + pure-c-imports + compiler-build + main b84496b86; one c_imports.warp conflict now; the Integrator's 2026-10-23 test found every C call refused (same self-compiler breakage as main then).

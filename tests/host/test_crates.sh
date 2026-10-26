@@ -3,7 +3,7 @@
 # notes/crate_adapter.md): scripts/warp-crate builds lib/crates/{regex,sha2,crc32fast}.warp, and semver's
 # lines drafted by `warp-crate scan`, into cdylib shims
 # installed in the crates cache (~/.cache/warp/crates, or WARP_CRATES_CACHE: lib/ and native/), where warp-host and
-# lib/compiler/c_imports.warp find them, and programs say `use crate "regex@1"` or `use rs_regex`. Nothing of a crate is
+# core/c_imports.warp find them, and programs say `use crate "regex@1"` or `use rs_regex`. Nothing of a crate is
 # in warp-host. Run it through the queue: tests/queue.sh tests/host/test_crates.sh
 # Needs cargo (the first build fetches and compiles the crates, ~1 min each), and a warp-host and compiler.wasm built
 # from pure-c-imports 57f273b59 or later (the crates cache lookup, `use crate`, the bytes type): WARP_HOST_BINARY

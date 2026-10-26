@@ -1,5 +1,5 @@
 //! card bodiless-imports (decision bodiless-imports): `is_null(x: any): bool from runtime` declares an intrinsic of the
-//! self-hosted emitter without a body, so a file of lib/compiler/runtime/ compiles alone; the Rust lane has no such
+//! self-hosted emitter without a body, so a file of core/runtime/ compiles alone; the Rust lane has no such
 //! intrinsic and traps if one is called
 use crate::common::fails_with;
 use crate::is;
@@ -31,13 +31,13 @@ fn a_declared_runtime_value_is_a_global() {
 	is!("g: text from runtime\nf() := { global g; g + \"!\" }\nf()", "!");
 }
 
-/// Each part of lib/compiler/runtime/ names the intrinsics it calls (runtime/intrinsics.warp) and the parts whose words
+/// Each part of core/runtime/ names the intrinsics it calls (runtime/intrinsics.warp) and the parts whose words
 /// it calls, so it compiles and runs alone in the Rust lane
 #[cfg(feature = "native")]
 #[test]
 fn each_runtime_part_runs_alone() {
 	let mut parts: Vec<_> =
-		std::fs::read_dir("lib/compiler/runtime").unwrap().map(|entry| entry.unwrap().path()).collect();
+		std::fs::read_dir("core/runtime").unwrap().map(|entry| entry.unwrap().path()).collect();
 	parts.sort();
 	let failed: Vec<String> = parts
 		.iter()

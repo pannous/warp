@@ -1,7 +1,7 @@
 # The `warp` launcher: programs through the pure pipeline (cards warp-launcher, warp-rust-install)
 
 `warp` is a bash script, packaging/bin/warp. It runs programs through the warp compiler written in warp
-(lib/compiler/compiler.warp built as compiler.wasm, run as `warp-rust pure` runs it) and hands every other command to the
+(core/compiler.warp built as compiler.wasm, run as `warp-rust pure` runs it) and hands every other command to the
 Rust binary, installed as `warp-rust`, unchanged (`exec`: same arguments, stdio and exit status). Plan A of the
 investigation of 2026-10-22; no Rust changed. Progress is how many tests pass through the pure pipeline, not how close
 it comes to Rust's output.
@@ -40,7 +40,7 @@ it comes to Rust's output.
 ## Refusals
 
 warp-rust has no exit status of its own for a refusal. compiler.warp raises `outside the core: …` before the program
-runs (lib/compiler/compiler.warp; the emitter's text, lib/compiler/emitter.warp `outside_the_core`), and warp-rust
+runs (core/compiler.warp; the emitter's text, core/emitter.warp `outside_the_core`), and warp-rust
 prints that Error as the run's value, `Error("outside the core: …")`, on stdout and exits 1 (standalone.rs `run` →
 src/cli/display.rs `print_and_exit`; the source excerpt goes to stderr). The launcher counts a run as refused when it
 exits 1 and its whole stdout is one line starting `Error("outside the core: `: nothing of the program ran before, so

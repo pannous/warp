@@ -6,7 +6,7 @@ Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md).
 - Branch: `pure-match-guard-arms` at `658c010a6`, 1 ahead / 227 behind origin/main `b8d2c4e99`; merges cleanly: yes
 - Kind: warp only
 - Owner: Warp Code 2 (grok-warp-code-2; parked 2026-10-23, handover notes/box/handover/warp-code-2.md): that owner continues it when resumed (the planner reassigns it otherwise).
-- State: Match step A: lib/compiler/node_matches.warp +36/-4, guard arms `p if c` and bare-name binding arms in the pure lane; untested.
+- State: Match step A: core/node_matches.warp +36/-4, guard arms `p if c` and bare-name binding arms in the pure lane; untested.
 
 ## Done
 node_matches.warp change; probes in /workspace/probes-mg/.

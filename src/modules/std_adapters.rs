@@ -277,9 +277,9 @@ fn keep_value(name: &str, makers: &[String], value: &Node) {
 }
 
 /// The cache key of the value kept under `name`, within the running compiler's own values when a compiler runs; a
-/// value its `makers` made (os.keep_of, lib/compiler files) by theirs alone and who compiled them (KEEPING_SCOPE: this
-/// binary, or the seed for compiler.wasm): an edit of lib/compiler they do not reach keeps it (card
-/// speed-module-cache). compiler-self.wasm was compiled by all of lib/compiler, so its values stay its own
+/// value its `makers` made (os.keep_of, core files) by theirs alone and who compiled them (KEEPING_SCOPE: this
+/// binary, or the seed for compiler.wasm): an edit of core they do not reach keeps it (card
+/// speed-module-cache). compiler-self.wasm was compiled by all of core, so its values stay its own
 #[cfg(feature = "native")]
 fn kept_key(name: &str, makers: &[String]) -> Option<String> {
 	if let (false, Some(scope)) = (makers.is_empty(), KEEPING_SCOPE.with(|scope| scope.borrow().clone())) {
@@ -294,12 +294,12 @@ thread_local! {
 	/// The SHA-256 of the compiler module running (compiler.wasm, compiler-self.wasm), empty for any other program
 	static KEEPING_COMPILER: std::cell::RefCell<String> = Default::default();
 	/// Where the program running keeps the values its makers made (kept_key): "" for a program this warp compiled,
-	/// "seed:<hash> " for compiler.wasm; None for a compiler all of lib/compiler compiled (standalone.rs kept_scope),
+	/// "seed:<hash> " for compiler.wasm; None for a compiler all of core compiled (standalone.rs kept_scope),
 	/// whose values stay its own
 	static KEEPING_SCOPE: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(Some(String::new()));
 }
 
-/// The variable naming the lib/ a compiler run reads its std modules from (lib/compiler/parser.warp run_library)
+/// The variable naming the lib/ a compiler run reads its std modules from (core/parser.warp run_library)
 const LIBRARY_VARIABLE: &str = "WARP_LIB";
 
 /// A variable of the environment a run sees: the process's, but WARP_LIB the lib/ of this warp (library_folder) in a

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One small program per form of lib/compiler/passes.warp pass_owners (card pass-order-owners): each compiles through
+# One small program per form of core/passes.warp pass_owners (card pass-order-owners): each compiles through
 # the pure lane and runs to the value its owner pass makes of it. Compiles only against the staged compiler-self, no
 # cargo: seconds once the host cache is warm. Run it through the queue: tests/queue.sh tests/host/test_pass_owners.sh
 LIBRARY=pass-owners

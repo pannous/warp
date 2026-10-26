@@ -8,8 +8,8 @@ args = std_io("os", "args", [])
 // stay as they are, ø until kept; keep gives the value. The browser keeps nothing: kept is ø there
 kept(name: any) := std_io("os", "kept", [name])
 keep(name: any, value: any) := std_io("os", "keep", [name, value])
-// `kept_of(name, ["parser.warp"]) ?? keep_of(name, value, ["parser.warp"])`: a value made by those lib/compiler files
-// (with the files they use) alone, kept while they, warp and the rest of lib/ stay as they are: an edit of lib/compiler
+// `kept_of(name, ["parser.warp"]) ?? keep_of(name, value, ["parser.warp"])`: a value made by those core files
+// (with the files they use) alone, kept while they, warp and the rest of lib/ stay as they are: an edit of core
 // elsewhere keeps it (card speed-module-cache)
 kept_of(name: any, makers: any) := std_io("os", "kept", [name, makers])
 keep_of(name: any, value: any, makers: any) := std_io("os", "keep", [name, value, makers])

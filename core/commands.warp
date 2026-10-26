@@ -35,7 +35,7 @@ is_command(word: text): bool := word in command_words()
 source_of(target: text): text := try read(target) else target
 
 show_help() := {
-	print "warp, the compiler written in warp (lib/compiler/compiler.warp), its commands:"
+	print "warp, the compiler written in warp (core/compiler.warp), its commands:"
 	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
 	print "  need the native warp: " + (running_commands + native_commands).join(" ")
 }

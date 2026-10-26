@@ -2,7 +2,7 @@
 //! levels 0 and 2): a word is the program's where one of its bindings is in scope. Everywhere: its functions, at the
 //! numbers of arguments they take, and the variables it assigns at the top level. Inside a function: also its
 //! parameters and the names its body assigns. A field of an object literal takes no bare word.
-//! Bindings: every name the program gives anywhere and how (twin: lib/compiler/scope.warp), one walk that knows every
+//! Bindings: every name the program gives anywhere and how (twin: core/scope.warp), one walk that knows every
 //! binding form: `x = v` a variable (a function when v is one), `f(a) := …` / `def f(a) {…}` a function and its
 //! parameters, `x => …` a parameter, `for x in …` a loop variable, `a, b = …` destructured variables, `{k: v}` a field.
 

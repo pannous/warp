@@ -1,5 +1,5 @@
 # The bridge (decision runtime-split): the hooks through which the core runtime hands a value of an extended type, an
-# exact ratio or a time, to the extended runtime (lib/compiler/runtime/extended/, joined by runtime/extended.warp).
+# exact ratio or a time, to the extended runtime (core/runtime/extended/, joined by runtime/extended.warp).
 # Core's generic words (show, ordering, equality, arithmetic, conversions, text_numbers, floats) call these hooks and
 # never an extended word, nor use an extended file. Each hook is declared here by its typed head only; its body is
 # runtime/extended.warp's, which fills it with the extended words when the extended runtime is compiled in. The

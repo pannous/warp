@@ -15,7 +15,7 @@ probes/self_hosting/pure/*.warp (simplest first, expected output in `// out:` li
 WARP_SELF_HOSTED=pure; it counts the programs that ran pure ("pure: ran" lines in WARP_EMIT_REFUSALS) and how many of
 them were right, names the first rung not right and ranks the lane's own refusals → data/self_hosting/pure.txt.
 Fix the top refusal (or any wrong output first), repeat; suite counts only at milestones (warp-steward).
-Counts: 21 ran / 17 right (morning) → 31 / 30 (afternoon). The pure lane's passes come first in lib/compiler/passes.warp
+Counts: 21 ran / 17 right (morning) → 31 / 30 (afternoon). The pure lane's passes come first in core/passes.warp
 `pure_passes`, around the twinned `passes` Rust drives by index: definitions (def/fun), clauses (pattern clauses),
 multiple_assignments, then phrase_blocks ({print x}), for_loops (for → while), ranges (range values), list_methods
 (xs.push), number_keys (`m = {}; m[1] = 2` keys m by the text "1", P34; plain_node keeps the empty `{}` behind
@@ -23,7 +23,7 @@ the opaque word for it, every other empty group stays ø). A call leaving out tr
 defaults in emitter.warp (`f(x, y = 2)`, runtime words alike: `slice(xs, 1)`); a default reading another parameter
 is refused. Not core, skipped: `on` handlers, `stored` tables, shaders, canvas.
 `use` (card pure-follows-use): the stage request is ["pure", source, folder] (self_hosted.rs program_folder: the
-program file's folder, else the working directory); lib/compiler/uses.warp parses each used file of that folder on
+program file's folder, else the working directory); core/uses.warp parses each used file of that folder on
 its own and splices its declarations (src/modules/declarations.rs is_declaration's forms, not its main-level
 statements) in front of the program, the files it uses first, each once, before the passes run. A `use` naming no
 file there (`use os`, `use math`: a std module) stays and the emitter refuses what it needs. `module_source("x")`
@@ -31,17 +31,17 @@ is written out as lib/x.warp's text, as library_words.rs does.
 Traps writing passes in warp (cards match-silently and others):
 - `match xs#i { Key(…): … }` takes no case: pass the element through a Node parameter. `Empty:` does not take ø: `n is ø`.
 - a local or pattern binding named like a global function (`items`, `defined`, `value`, `names`) silently means the
-  function: pick names no lib/compiler file defines. emitter.warp words using `values` (a parameter),
+  function: pick names no core file defines. emitter.warp words using `values` (a parameter),
   `field` (a loop variable) and `instance_of` (runtime.warp's word too) even overflowed the stack, with no message;
   renaming the three cured it (which one did it is untested; `values` is the likeliest). A parameter `index` in a
   match subject was even called: `undefined: match in (closure_call_1 index …)` (card parameter-named).
 - a pass word ending in `{ … }` needs `def` (`def f(…): list { … }`): without it the word is undefined.
 - a pass's top-level word named like another file's (for_loops.warp's `named`, `statements_of`, `repeated` were
   parser.warp's) replaces it in every program that uses both, silently: passes.warp's `use` lines broke the front lane
-  (card suite-front-c993b941). Before adding a pass, check its words against the other lib/compiler files.
+  (card suite-front-c993b941). Before adding a pass, check its words against the other core files.
 - `[]` is ø, so `acc = []; acc + more` is refused statically: build lists with map/filter over `1 to n`.
 - the stage programs are cached per binary and lib/ contents; a cold compile takes 2-5 min, so the first run after a
-  lib/compiler edit is slow (the loop warms it with `3 + 4`). Run the binary by an absolute path or a build that
+  core edit is slow (the loop warms it with `3 + 4`). Run the binary by an absolute path or a build that
   canonicalizes it (self_hosted.rs stage_key), else each folder compiles them anew.
 
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
@@ -98,7 +98,7 @@ parser-keyword-table. Target shapes:
 - parser-desugar-pass: the tree keeps what is written: `xs[i]` an index, `xs[a:b]` a slice, `loop {…}`, `/!`, `/!=`,
   `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
   each; the twin compares after that pass.
-  Done (lib/compiler/sugar.warp, `tree` = `sugared(written_tree(…))`): `xs[i]`, slices, `/!`, `div`, `/!=`, `is in`,
+  Done (core/sugar.warp, `tree` = `sugared(written_tree(…))`): `xs[i]`, slices, `/!`, `div`, `/!=`, `is in`,
   `loop {…}`, count words (`twice {…}`, with the scope: `counted`); `1e3`, `2x`, `x⁻¹`, `global int n`
   already leave the parser as one number or one key, with no written form worth keeping.
 - parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
@@ -112,7 +112,7 @@ parser-keyword-table. Target shapes:
   writes `twice {…}` as written and sugar.warp `counted(tree, scope_of_view(written))` makes it `2 times {…}` unless
   the program binds the word (scope.warp, one scope for the whole program: a parameter `once` keeps the word anywhere).
 - parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
-  Done: parser.warp keeps the class body as written, the sugar pass (lib/compiler/sugar.warp typed_fields) types it.
+  Done: parser.warp keeps the class body as written, the sugar pass (core/sugar.warp typed_fields) types it.
 - parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
   restoring by hand.
 - parser-keyword-table: one table, word → shape, for the word forms (print, times, count words, function references,
@@ -146,18 +146,18 @@ parser-keyword-table. Target shapes:
 | 2 | self-node-api | Node API for data values | none |
 | 3 | self-byte-buffer | Growable byte buffer and string builder | none |
 | 4 | self-differential | Differential harness: warp twin vs Rust part over every sample and probe | none |
-| 5 | self-lexer | Tokenizer in warp (lib/compiler/lexer.warp) | 1, 4 |
-| 6 | self-parser | Parser in warp producing the same Node as src/warp_parser (lib/compiler/parser.warp) | 2, 5 |
-| 7 | self-serializer | Node::serialize in warp (lib/compiler/serializer.warp) | 2, 4 |
+| 5 | self-lexer | Tokenizer in warp (core/lexer.warp) | 1, 4 |
+| 6 | self-parser | Parser in warp producing the same Node as src/warp_parser (core/parser.warp) | 2, 5 |
+| 7 | self-serializer | Node::serialize in warp (core/serializer.warp) | 2, 4 |
 | 8 | self-showcase | The warp-written parser as a sample: warp parses itself | 6 |
 | 9 | self-next-phase | Plan the next parts: passes, analyzer, emitter (steps 10–18) | 6, 7 |
 
 Rules
 - Each step lands with its differential test: same Node, same text as the Rust twin. The harness
   (tests/common/twins.rs): `differential(part, word, rust_twin)` runs `word(read(path))` of
-  lib/compiler/<part>.warp for every sample and probe, 64 sources per program (~1300 sources, a few seconds, under
+  core/<part>.warp for every sample and probe, 64 sources per program (~1300 sources, a few seconds, under
   300 MB) and fails on the first source whose serialized value differs, with both texts around the first difference.
-  First twin: lib/compiler/positions.warp `line_widths` (tests/parser/test_self_differential.rs). A twin's list is
+  First twin: core/positions.warp `line_widths` (tests/parser/test_self_differential.rs). A twin's list is
   built with `warp_list`: warp's empty list is ø.
 - The lexer's twins (tests/parser/test_self_lexer.rs): the Rust parser is scannerless. Its one real lexer pass is
   `comment_and_text_spans` (warp_parser/mod.rs); lexer.warp `spans` matches it on every source. The tokens after it
@@ -165,7 +165,7 @@ Rules
 - A new gap becomes its own card in this topic (`todo add … --topic self-hosted`).
 
 ## Serializer twin
-lib/compiler/serializer.warp `serialize(view)` writes a node as Node::serialize does
+core/serializer.warp `serialize(view)` writes a node as Node::serialize does
 (tests/parser/test_self_serializer.rs). warp has no Node of its own for the parse of a source (no `parse` word giving
 Nodes, `data` drops Meta), so both twins share a plain-data view (tests/common/twins.rs node_view): a number, yes, no
 or ø as itself, every other node a list tagged by its kind (["key", op, left, right], ["list", bracket, separator,
@@ -203,7 +203,7 @@ end cannot read yet (`try … else …`) is checked there before parser.warp rea
 | owner | part |
 |---|---|
 | warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |
-| warp-list-result-type | the builtins' typed lines as the analyzer's signature table (analyzer.warp reads them); types on every lib/compiler function |
+| warp-list-result-type | the builtins' typed lines as the analyzer's signature table (analyzer.warp reads them); types on every core function |
 | warp-self-emitter | emitter.warp beyond the core (int `/`, exact rationals, big ints, `#`, `==`, slices, errors, memo calls); the switch hands emission to it |
 | warp-runtime (was self-passes) | runtime.warp: the text, list and number runtime functions of src/wasm_emitter in warp |
 | warp-clicking-guide (markup) | maps, classes/objects and equality: their layout in emitter.warp and their runtime words (coordinate emitter.warp hunks with warp-self-emitter) |
@@ -227,7 +227,7 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
   word)` (tests/common/twins.rs) takes the program from `pipeline::around_source_pass(code, pass)`, the Rust source
   passes before `pass` run as compiling runs them, hands it as view JSON to `view_of(word(node_of(…)))`, and compares
   with the view after the Rust pass. A twin is a word from node to node on real Nodes (so data(…) templates work):
-  lib/compiler/walk.warp has the bridge (`node_of`, `view_of`; an error, a type or sealed data stays opaque) and the
+  core/walk.warp has the bridge (`node_of`, `view_of`; an error, a type or sealed data stays opaque) and the
   shared walk (`children(n, f)`, `bottom_up(n, f)`; a group is `n.bracket != ø`). Both sides drop literal and attribute
   layers, read a character as a text and an empty group as ø (card empty-group-node, open). `bridge_differential`
   checks the bridge alone. Twins so far: number_words.warp (with its hints).
@@ -262,8 +262,8 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
 
 ### Bootstrap gap (card bootstrap-gap)
-`SURVEY=1 FOLDERS=lib/compiler probes/self_hosting/refusals.sh scratch/warp` → data/self_hosting/bootstrap_gap.txt:
-every refused function of lib/compiler once, by the first form refused (a fixed family uncovers the next one behind
+`SURVEY=1 FOLDERS=core probes/self_hosting/refusals.sh scratch/warp` → data/self_hosting/bootstrap_gap.txt:
+every refused function of core once, by the first form refused (a fixed family uncovers the next one behind
 it; totals vary between runs under load, compare runs on one state). 2026-10-19: 262 refused functions, 8 of 22 files
 inside the core; after `x == ø` / `x != ø` and main-level variables read by functions as module globals: 185, 9 inside.
 runtime.warp's calls of the intrinsics (`is_null`, `byte_count`, `kind_code`, `new_list`, `fail`, `unboxed_*`, ~60) are
@@ -281,7 +281,7 @@ module globals; bool parameters; parameters declared `function` (a closure is a 
 (a match's `_: ø`, which made functions "giving a none").
 
 ## Emitter core (card emits-wasm, step 15)
-lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
+core/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
 node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives
 the text "outside the core: <first form>". Module: type, function, export (main), code and a name section with
 function and local names.
@@ -304,7 +304,7 @@ function and local names.
   silently), a yes/no variable, a loop's value, slices, error values (a run-time error traps, without
   Rust's message: the twin counts a failure on both sides as the same outcome), every other runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
-- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp feeds it (card emitter-takes,
+- Kinds come from emitter.warp's own small inference until core/analyzer.warp feeds it (card emitter-takes,
   decision ignore-rust: no comparison with src/analyzer). analyzer.warp `emitter_kinds(program)` gives {functions: {f:
   {params: [k…], result: k, locals: {x: k}, elements: {xs: k}}}, variables: {x: k}, elements: {xs: k}, value: k} with
   k one of int float char text list node (node: any value held boxed, ø included); elements: the element kind of a
@@ -342,8 +342,8 @@ Readers of the layout (each place a module's result or a value crossing the boun
   before compiling): one page of memory, exported as "memory", where the runtime word print_line copies a text's bytes
   a chunk at a time (iovec at 0, written count at 8, bytes from 16). That is the one edge helper; nothing else
   touches memory. Done (card emitter-prints); the emitter twin compares stdout too (host::with_captured_stdout).
-Runtime words are warp: lib/compiler/runtime.warp (an index of `use "runtime/<part>.warp"` lines, one idea per part
-in lib/compiler/runtime/, joined by self_hosted.rs runtime_source), written in idiomatic warp (for loops and all sugar) and lowered by
+Runtime words are warp: core/runtime.warp (an index of `use "runtime/<part>.warp"` lines, one idea per part
+in core/runtime/, joined by self_hosted.rs runtime_source), written in idiomatic warp (for loops and all sugar) and lowered by
 the same pipeline as any program before emitter.warp sees them (`wasm_module(program, runtime)`; the twin harness
 lowers it with pipeline::lower). emitter.warp handles only lowered forms, never hand-lowered source. The words use a
 handful of intrinsics, one or two instructions each and callable only from runtime words: texts (new_text, copy_text,
@@ -461,7 +461,7 @@ frequent first; `--local <filters>` runs it here through tests/queue.sh, `--rank
 `--tests <cause regex> <log…>` lists the failed tests of a cause. Plain runs set WARP_SELF_HOSTED=front (front end only, emit-families);
 `--stage <name>=<VAR>[=<value>]` sets a later stage's switch too (run `<tip>+<name>`, compared with the last run of
 the same stages): `--stage emitter=WARP_SELF_HOSTED=1` is + emitter, the per-stage counts of "Back-end focus". A cloud run appends its count to
-data/self_hosting/suite_counts.txt (warp-steward reruns after each batch touching lib/compiler or the pipeline, and
+data/self_hosting/suite_counts.txt (warp-steward reruns after each batch touching core or the pipeline, and
 nightly). The failure groups are cards suite-* in topic self-hosted-2, each naming its stage owner.
 - src/compiler/self_hosted.rs: with the switch on, `lawful_program` parses with parser.warp (passes.warp `stage`
   [0, source]) and `run_program_passes` hands every source pass with a warp twin (TWINNED_PASSES, the order of
@@ -519,7 +519,7 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   parser.warp's `Unexpected character` 344 (π @ > . $ & = * ⊕ : σ, a space before a trailing block), `undefined
   variable` 184 (try 52, T# 22: forms parser.warp reads otherwise), a bare `#` left side 76 (a wrong number), `cannot
   extract a numeric value from ø` 46, database `may be ø` hints 50, `not a number` 33, hints pointing into
-  lib/compiler/parser.warp (its own warnings leak into the program's output) 41.
+  core/parser.warp (its own warnings leak into the program's output) 41.
 
 ## Case table in warp (card case-table-warp, 2026-10-19, written blind in the sprint: untested)
 `use case_table` gives case_upper / case_lower / case_fold, warp over the ranges of text_unicode.rs (lib/case_table.warp:

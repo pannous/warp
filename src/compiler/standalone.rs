@@ -1,4 +1,4 @@
-//! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): lib/compiler/compiler.warp,
+//! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): core/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
 //! build output (decision compiler-build): compiler.wasm, compiler.warp compiled by the seed (seed/compiler-self.wasm, a
 //! fixpoint compiler checked in; card rust-bootstrap), for `warp pure`; compiler-self.wasm, compiler.warp compiled by
@@ -12,7 +12,7 @@ use crate::node::{error, Node};
 use crate::pipeline::CompiledModule;
 use std::path::{Path, PathBuf};
 
-/// compiler.warp's command compiling one REPL line (lib/compiler/compiler.warp repl_step)
+/// compiler.warp's command compiling one REPL line (core/compiler.warp repl_step)
 const REPL_STEP: &str = "repl-step";
 
 const COMPILER_FILE: &str = "compiler/compiler.warp";
@@ -129,7 +129,7 @@ pub fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<Compiled
 	module
 }
 
-/// `warp pure <command> …` (card wasm-commands): compiler.warp's own command (lib/compiler/commands.warp), the command
+/// `warp pure <command> …` (card wasm-commands): compiler.warp's own command (core/commands.warp), the command
 /// line its arguments
 pub fn command(arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiler(by), arguments)
@@ -315,9 +315,9 @@ fn builder(by: Compiler) -> Result<(String, CompiledModule, Option<String>), Nod
 }
 
 /// Where a compiler's run keeps the values its makers made (os.keep_of; std_adapters kept_by): compiler.wasm, which the
-/// seed compiled, under the makers' files of lib/compiler and the seed, so an edit of lib/compiler outside them keeps
+/// seed compiled, under the makers' files of core and the seed, so an edit of core outside them keeps
 /// them (card speed-module-cache: a used file's parse survives a compiler edit beyond the parser); None for
-/// compiler-self.wasm and the seed, which all of lib/compiler compiled (a seed of its time), whose values stay their own
+/// compiler-self.wasm and the seed, which all of core compiled (a seed of its time), whose values stay their own
 fn kept_scope(by: Compiler) -> Option<String> {
 	match by {
 		Compiler::RustCompiled => std::fs::read(seed_file()).ok().map(|seed| crate::extensions::sha256_hex(&seed)),
@@ -364,7 +364,7 @@ fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 	std::fs::rename(&new, path)
 }
 
-/// What a build of now is made from: lib/ (where, not judged), the compiler inputs hash (lib/compiler and the modules it
+/// What a build of now is made from: lib/ (where, not judged), the compiler inputs hash (core and the modules it
 /// embeds, with WARP_SOURCE: scripts/compiler-inputs.sh's), the sources of this warp (WARP_SOURCE, build.rs). An edit of
 /// lib/ outside the compiler's inputs leaves a build current (card compiler-cache-keys)
 fn judged_build() -> Vec<String> {

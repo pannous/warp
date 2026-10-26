@@ -7,7 +7,7 @@ use wasmtime::{Extern, Func, Global, Memory, Result, StoreContextMut, Val};
 
 const TYPE_DEF: u8 = 12;
 const PAGE_BITS: u32 = 16;
-/// A list's bracket code above the Kind (lib/compiler/kinds.warp BracketCode)
+/// A list's bracket code above the Kind (core/kinds.warp BracketCode)
 const BRACKETS: [(&str, &str); 4] = [("{", "}"), ("[", "]"), ("(", ")"), ("<", ">")];
 /// A curly list of `key: value` entries, and its entries' kind (kinds.warp Marked)
 pub const MAP: i64 = LIST as i64;
@@ -21,7 +21,7 @@ pub enum Node {
 	Bool(bool),
 	Float(f64),
 	/// an exact rational, numerator and denominator (above 1): the pure lane's `2.5` and `1/3`, an Int node holding a
-	/// $Ratio of two $i64box (lib/compiler/emitter.warp gc_types)
+	/// $Ratio of two $i64box (core/emitter.warp gc_types)
 	Ratio(i64, i64),
 	Codepoint(u32),
 	Text(Vec<u8>),
@@ -247,7 +247,7 @@ pub fn read(node: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<Me
 				Some(Val::I64(n)) => Node::Int(n),
 				// a number whose kind says int and whose box holds a float (`x = 7.0; x /= 2`): the float
 				Some(Val::F64(bits)) => Node::Float(f64::from_bits(bits)),
-				// an exact rational (`3.5`, `0.1 + 0.2`; lib/compiler/runtime/exact.warp): a $Ratio of two $i64box
+				// an exact rational (`3.5`, `0.1 + 0.2`; core/runtime/exact.warp): a $Ratio of two $i64box
 				_ => match ratio_of(&data, store) {
 					Some((n, 1)) => Node::Int(n),
 					Some((n, d)) => Node::Ratio(n, d),
@@ -298,7 +298,7 @@ fn bytes_of(piece: &Val, store: &mut StoreContextMut<'_, Host>, memory: Option<M
 	Ok(bytes.ok_or_else(|| wasmtime::Error::msg("a text beyond memory"))?.to_vec())
 }
 
-/// The constructors a program exports for its host calls (lib/compiler/emitter/host.warp host_builders) and its memory
+/// The constructors a program exports for its host calls (core/emitter/host.warp host_builders) and its memory
 pub struct Builders {
 	memory: Memory,
 	heap: Option<Global>,

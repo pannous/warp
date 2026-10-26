@@ -67,12 +67,12 @@ publish() {
 	rm -f "$store/$hash/$name.new-$$"
 	inputs_line >"$store/$hash/$name.inputs"
 }
-# the store's main link to this hash, when the tree is origin/main and its lib/compiler unchanged
+# the store's main link to this hash, when the tree is origin/main and its core unchanged
 mark_main() {
 	local head remote
 	head=$(git -C "$tree" rev-parse HEAD 2>/dev/null) || return
 	remote=$(git -C "$tree" ls-remote origin refs/heads/main 2>/dev/null | cut -f1)
-	[ -n "$remote" ] && [ "$head" = "$remote" ] && git -C "$tree" diff --quiet HEAD -- lib/compiler && ln -sfn "$hash" "$store/main"
+	[ -n "$remote" ] && [ "$head" = "$remote" ] && git -C "$tree" diff --quiet HEAD -- core && ln -sfn "$hash" "$store/main"
 }
 
 # data/'s file beside each of the tree's warp-host binaries, unless the same file is there

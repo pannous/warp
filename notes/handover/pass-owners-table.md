@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: draft card hDLGn0 "passes.warp names the pass order and each refused form's owner (pass-owners-table)" (Next)
-- Branch: `pass-owners-table` at `36c13bceb`, 10 ahead / 254 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: crates/warp-runtime/src/warp_host/ffi.rs, crates/warp-runtime/src/warp_host/main.rs, lib/compiler/c_imports.warp)
+- Branch: `pass-owners-table` at `36c13bceb`, 10 ahead / 254 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: crates/warp-runtime/src/warp_host/ffi.rs, crates/warp-runtime/src/warp_host/main.rs, core/c_imports.warp)
 - Kind: touches Rust (src/, crates/ or *.rs): waits for the Rust lane
 - Owner: Warp FFI (parked 2026-10-23, handover notes/box/handover/Warp FFI.md): that owner continues it when resumed (the planner reassigns it otherwise).
 - State: passes.warp names the pass order and each refused form's owner (pass_owners, owned_refusal) with tests/host/test_pass_owners.sh; on top of pure-c-imports, never built or tested.
