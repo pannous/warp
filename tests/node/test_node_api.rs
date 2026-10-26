@@ -53,5 +53,6 @@ fn literal_symbols_are_made_once() {
 	is!("f(n: Node): bool := n == symbol(\"print\"); f(symbol(\"other\"))", false);
 	is!("f(n: Node): bool := n == symbol(\"print\"); f(data print)", true);
 	is!("w = \"pr\" + \"int\"; n = 0; for i in 0..3 { if symbol(w) == symbol(\"print\") { n += 1 } }; n", 3);
-	is!("s = symbol(\"x\"); t = symbol(\"x\"); [s.name, t.name]", warp::parse("[\"x\" \"x\"]"));
+	is!("s = symbol(\"xy\"); t = symbol(\"xy\"); s == t", true);
+	is!("s = symbol(\"xy\"); symbol(\"xy\"); s.name", "xy");
 }
