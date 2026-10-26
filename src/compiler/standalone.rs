@@ -211,13 +211,21 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 	let owner = crate::extensions::sha256_hex(&compiler.bytes);
 	// both compilers are compiled by lib/compiler now (by the seed or by compiler.wasm): their kept values stay their
 	// own, never keyed by the makers' files alone (std_adapters kept_key)
-	let said = crate::modules::std_adapters::kept_by(owner, true, || crate::pipeline::run_module(compiler));
+	// its kept values shipped beside its build file serve a cold cache; a new build's warming run writes them there
+	let shipped = crate::run::module_cache::shipped_kept_folder(&compiler.bytes);
+	let warming = crate::run::module_cache::warming();
+	let said = crate::run::module_cache::with_shipped_kept(shipped, warming, || {
+		crate::modules::std_adapters::kept_by(owner, true, || crate::pipeline::run_module(compiler))
+	});
 	crate::modules::std_adapters::set_program_arguments(running);
 	said
 }
 
 /// `warp rebuild`: the build file of each compiler built anew from the current lib/, its path, or why it failed
 pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
+	if let Compiler::RustCompiled = by {
+		ship_seed()?;
+	}
 	let path = build_path(by);
 	build(by, &path)?;
 	Ok(path)
@@ -255,7 +263,22 @@ fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
 			path.display()
 		);
 	}
-	Ok(module_of_bytes(bytes))
+	Ok(shipped(&path, bytes))
+}
+
+/// A build file's module, run from the machine code shipped beside it (module_cache shipped_with): a compiler is never
+/// compiled at run time (card precompiled-compilers)
+fn shipped(path: &Path, bytes: Vec<u8>) -> CompiledModule {
+	crate::run::module_cache::shipped_with(path, &bytes);
+	module_of_bytes(bytes)
+}
+
+/// The build file's machine code written beside it, for the engine its runs use (`<file>.cwasm`)
+fn ship(path: &Path, bytes: &[u8]) -> Result<(), Node> {
+	let (engine, _) = crate::run::wasm_reader::engine_for(bytes);
+	crate::run::module_cache::write_shipped(&engine, path, bytes)
+		.map(|_| ())
+		.map_err(|failure| error(&format!("{}: cannot precompile: {failure:#}", path.display())))
 }
 
 /// Where the delivered compilers lie: next to the binary, or in an installed warp's share/warp
@@ -284,6 +307,7 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	);
 	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| write_new(path, &bytes));
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
+	ship(path, &bytes)?;
 	warm(by)?;
 	Ok(module)
 }
@@ -293,7 +317,7 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 fn builder(by: Compiler) -> Result<(String, CompiledModule), Node> {
 	if let Compiler::SelfCompiled = by {
 		if let Some((path, bytes)) = current_build_file(Compiler::RustCompiled) {
-			return Ok((path.display().to_string(), module_of_bytes(bytes)));
+			return Ok((path.display().to_string(), shipped(&path, bytes)));
 		}
 		eprintln!(
 			"no compiler.wasm of these compiler inputs: the seed builds compiler-self.wasm (`warp {REBUILD_WORD}` builds both, compiler-self.wasm by compiler.wasm)"
@@ -306,7 +330,22 @@ fn builder(by: Compiler) -> Result<(String, CompiledModule), Node> {
 			seed.display()
 		))
 	})?;
-	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes)))
+	Ok((format!("the seed {}", seed.display()), shipped(&seed, bytes)))
+}
+
+/// `warp rebuild seed`, and before `warp rebuild pure`: the seed's machine code beside it (seed/compiler-self.wasm.cwasm),
+/// made when it is missing or stale (a refreshed seed: scripts/refresh-seed.sh), so no build compiles the seed at run
+/// time (card precompiled-compilers); its path
+pub fn ship_seed() -> Result<PathBuf, Node> {
+	let seed = seed_file();
+	let bytes =
+		std::fs::read(&seed).map_err(|failure| error(&format!("no seed compiler at {}: {failure}", seed.display())))?;
+	let (engine, _) = crate::run::wasm_reader::engine_for(&bytes);
+	if !crate::run::module_cache::shipped_current(&engine, &seed, &bytes) {
+		eprintln!("precompiling the seed {} (once per seed and engine)", seed.display());
+		ship(&seed, &bytes)?;
+	}
+	Ok(crate::run::module_cache::shipped_path(&seed))
 }
 
 /// The seed: WARP_SEED, else seed/compiler-self.wasm beside lib/ (a checkout's), else in the installed folder
@@ -338,7 +377,8 @@ fn current_build_file(by: Compiler) -> Option<(PathBuf, Vec<u8>)> {
 /// lowered runtime words: ~50 s on the Mac) are computed by the build, not by the first program's run within its time
 /// limit (card cloud-lane-narrow: the first `warp self` after `warp rebuild self` ran out of time on a cloud VM)
 fn warm(by: Compiler) -> Result<(), Node> {
-	compiled_code(WARMING_PROGRAM, library(), by).map(|_| ())
+	let _ = std::fs::remove_dir_all(crate::run::module_cache::shipped_kept_folder_of(&build_path(by)));
+	crate::run::module_cache::warming_with(|| compiled_code(WARMING_PROGRAM, library(), by)).map(|_| ())
 }
 
 /// A new file moved into place: writing over a module another warp run reads would hand it half a module

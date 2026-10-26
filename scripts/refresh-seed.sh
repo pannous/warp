@@ -53,3 +53,5 @@ if [ -n "$check" ]; then
   exit 0
 fi
 cp "$fixpoint" "$seed" && echo "refresh-seed: replaced $seed (commit it: git add seed/compiler-self.wasm)"
+# its machine code beside it, for the engine runs use (card precompiled-compilers): no build JIT-compiles the seed
+(cd "$tree" && "$warp" rebuild seed)

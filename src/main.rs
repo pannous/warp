@@ -539,14 +539,22 @@ fn command_line(program: &str, arguments: &[&str]) -> Option<String> {
 	String::from_utf8_lossy(&output.stdout).lines().next().map(str::to_string)
 }
 
-/// `warp rebuild [pure|self]`: the named compiler's build file, or both, built anew; status 1 when one failed
+/// `warp rebuild [pure|self]`: the named compiler's build file, or both, built anew, each with its machine code beside
+/// it (<file>.cwasm); status 1 when one failed. `warp rebuild seed`: the seed's machine code only
 fn rebuild_compilers(command: Option<&str>) {
-	use warp::compiler::standalone::{rebuild, Compiler};
+	use warp::compiler::standalone::{rebuild, ship_seed, Compiler};
+	if command == Some("seed") {
+		match ship_seed() {
+			Ok(path) => println!("precompiled {}", path.display()),
+			Err(failure) => fail(format!("warp rebuild seed: {}", failure.serialize())),
+		}
+		return;
+	}
 	let chosen: Vec<Compiler> =
 		Compiler::ALL.into_iter().filter(|by| command.is_none_or(|word| word == by.command())).collect();
 	if chosen.is_empty() {
 		fail(format!(
-			"warp rebuild: no compiler {:?}; say `warp rebuild`, `warp rebuild pure` or `warp rebuild self`",
+			"warp rebuild: no compiler {:?}; say `warp rebuild`, `warp rebuild pure`, `warp rebuild self` or `warp rebuild seed`",
 			command.unwrap_or_default()
 		));
 	}
