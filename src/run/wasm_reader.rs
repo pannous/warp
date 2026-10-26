@@ -298,7 +298,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 		.collect()
 }
 
-pub use crate::abi::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_POSITION};
+pub use crate::abi::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_NAME, TRAP_NAME_PREFIX, TRAP_POSITION};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(
@@ -309,6 +309,14 @@ pub(crate) fn with_trap_detail<T, R>(
 	outcome.map_err(|failure| {
 		let position = instance.get_global(&mut *store, TRAP_POSITION).map(|global| global.get(&mut *store));
 		let failure = with_trap_position(anyhow::Error::from(failure), position);
+		let name = instance.get_global(&mut *store, TRAP_NAME).map(|global| global.get(&mut *store));
+		let failure = match name
+			.filter(|value| !matches!(value, Val::AnyRef(None)))
+			.and_then(|value| val_to_node(&value, store, instance).ok())
+		{
+			Some(Node::Text(name)) => failure.context(format!("{TRAP_NAME_PREFIX}{name}")),
+			_ => failure,
+		};
 		let detail = instance.get_global(&mut *store, TRAP_DETAIL).map(|global| global.get(&mut *store));
 		match detail
 			.filter(|value| !matches!(value, Val::AnyRef(None)))
