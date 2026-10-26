@@ -128,7 +128,7 @@ type_of_body(n: Node): any := match n {
 	}
 	_: none_word
 }
-none_word = symbol("of·none")
+none_word = symbol(HiddenWord.OfNone)
 
 # `type of x` as `type(x)`, `print type of x` as `print type(x)`
 type_of_called(parts: any): any := {

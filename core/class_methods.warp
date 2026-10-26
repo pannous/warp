@@ -31,6 +31,7 @@
 use "walk.warp"
 use "signatures.warp"
 use "builtin_signatures.warp"
+use "words.warp"
 
 self_node = symbol("self")
 # what a method may call its instance: self, as Swift's and Python's, or this, as Java's and C++'s
@@ -44,7 +45,7 @@ ordering_method = "compare"
 ordering_operators = ["<", "<=", ">", ">="]
 # the method a class's instances show by, and its dispatcher (emitter/output.warp reads the name)
 showing_method = "text"
-showing_dispatcher = "text·shown"
+showing_dispatcher = HiddenWord.TextShown
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
 # the function a bare call of a sibling method calls: the dispatcher of a routed one
