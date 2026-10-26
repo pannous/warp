@@ -8,6 +8,7 @@ use "lists.warp"
 use "nodes.warp"
 use "show.warp"
 use "text.warp"
+use "types.warp"
 # a map is a curly list of `name:value` keys (Marked.Map and Marked.Entry, as Rust's); a class instance `Point{x:1}`
 # is the key of its class name and the map of its fields; any other key `n:20` is the map of itself, as Rust's
 # keys(n:20) is [n]
@@ -19,8 +20,15 @@ fields_of(m: Node): Node := {
 # the place of m's entry named `name`, counted from 1; 0 when it has none
 map_index(m: Node, name: text): int := {
 	entries = unboxed_list(fields_of(m))
-	for i in 1 to #entries { if kind_code(entries#i) == Kind.Key and text_order(key_name(entries#i), name) == 0 { return i } }
+	for i in 1 to #entries { if kind_code(entries#i) == Kind.Key and same_bytes(entry_name(entries#i), name) { return i } }
 	0
+}
+# an entry's name as a text: a symbol's or a text's own, without node_text's match over every kind (map_index runs it
+# for each entry it passes); another name as key_name shows it
+entry_name(entry: Node): text := {
+	name = entry_key(entry)
+	plain = not is_null(name) and (kind_code(name) == Kind.Symbol or kind_code(name) == Kind.Text) and not names_a_type(name)
+	if plain then unboxed_text(name) else key_name(entry)
 }
 # 1 when m has fields to look up: a map, or a class instance (the key of its class name and its fields)
 has_fields(m: Node): bool := not is_null(m) and not is_null(fields_of(m)) and kind_code(fields_of(m)) == Kind.List
@@ -32,11 +40,11 @@ map_get(m: Node, name: text): Node := {
 	if kind_code(m) == Kind.Symbol { return unboxed_text(m) }
 	if is_error_message(m, name) { return unboxed_text(m) }
 	# a field of that name wins over the part reader: `.key` of the code `key = 3` is 3 (card node-part-clash)
-	if is_entry(m) and text_order(key_name(m), name) == 0 { return key_value(m) }
-	if is_entry(m) and text_order(name, "name") == 0 { return key_name(m) }
-	if is_entry(m) and text_order(name, "key") == 0 { return entry_key(m) }
-	if is_entry(m) and text_order(name, "value") == 0 { return key_value(m) }
-	if is_entry(m) and text_order(name, "op") == 0 { return key_operator(m) }
+	if is_entry(m) and same_bytes(key_name(m), name) { return key_value(m) }
+	if is_entry(m) and same_bytes(name, "name") { return key_name(m) }
+	if is_entry(m) and same_bytes(name, "key") { return entry_key(m) }
+	if is_entry(m) and same_bytes(name, "value") { return key_value(m) }
+	if is_entry(m) and same_bytes(name, "op") { return key_operator(m) }
 	at = if has_fields(m) then map_index(m, name) else 0
 	if at == 0 { missing_field(name) }
 	key_value(unboxed_list(fields_of(m))#at)

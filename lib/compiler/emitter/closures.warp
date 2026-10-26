@@ -70,9 +70,9 @@ function_name(target: text): text := {
 	last = parts.last
 	if last in module.classes then parts[0..<(#parts - 1)].join(name_joiner) else last
 }
-# a value called that is no closure fails in not_a_function; for each closure of f's arity: if the closure's number is
-# its own, the target's call on the captured values and the arguments; a closure of another arity fails in
-# wrong_number_of_arguments (the runtime errors of Rust's src/wasm_emitter/functions/closures.rs)
+# a value called that is no closure fails in not_a_function; the closure's number picks, in one br_table jump, the
+# target's call on the captured values and the arguments (a test per closure made every call scan them all); a closure
+# of another arity fails in wrong_number_of_arguments (the runtime errors of Rust's src/wasm_emitter/functions/closures.rs)
 dispatcher_code(f: Function): any := {
 	arity = #f.kinds - 1
 	closure = [op.local_get, 0]
@@ -80,14 +80,25 @@ dispatcher_code(f: Function): any := {
 	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
 	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
+	# the arms in closure order, each the block its br_table label leaves; the outermost block (label #arms) fails
+	arms = []
+	labels = []
 	for k in 0..<#module.closures {
 		target = module.functions[module.closures[k]#1]
 		captured = module.closures[k]#2
 		if #target.signature.parameters - captured == arity {
+			labels += [#arms]
 			values = range_list(captured).map(i => closure_item(closure, i + 1)) + range_list(arity).map(j => ["node", [op.local_get] + uleb(j + 1)])
-			called = boxed(call_values(target, values))
-			code += number + [op.i64_const] + sleb(k) + [op.i64_eq, op.if, no_value] + called + [op.return, op.end]
+			arms += [boxed(call_values(target, values)) + [op.return]]
+		} else {
+			labels += [-1]
 		}
 	}
-	f.code = code + dropped(runtime_call("wrong_number_of_arguments", [])) + [op.unreachable]
+	failing = #arms
+	table = uleb(#labels)
+	for label in labels { table += uleb(if label < 0 then failing else label) }
+	for i in 0..<(failing + 1) { code += [op.block, no_value] }
+	code += number + [op.i32_wrap_i64, op.br_table] + table + uleb(failing)
+	for arm in arms { code += [op.end] + arm }
+	f.code = code + [op.end] + dropped(runtime_call("wrong_number_of_arguments", [])) + [op.unreachable]
 }

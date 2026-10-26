@@ -16,6 +16,19 @@ fn gc_heap_initial_bytes() -> u64 {
 	let megabytes: Option<u64> = std::env::var(GC_HEAP_VARIABLE).ok().and_then(|value| value.trim().parse().ok());
 	megabytes.map_or(GC_HEAP_INITIAL_BYTES, |megabytes| megabytes << 20)
 }
+/// Environment variable that turns Cranelift's inlining off (`WARP_INLINING=no`): timing experiments, backtraces with
+/// every frame (card rebuild-speed)
+pub const INLINING_VARIABLE: &str = "WARP_INLINING";
+
+/// Whether Cranelift inlines small wasm functions into their callers: yes unless WARP_INLINING says no. Warp's
+/// compiler and runtime words are many small functions (kind_code, info_byte, int_quotient …): inlining them made
+/// the self-built compiler's runs ~X faster (card rebuild-speed)
+fn inlining() -> wasmtime::Inlining {
+	match std::env::var(INLINING_VARIABLE).ok().as_deref().map(str::trim) {
+		Some("no" | "0" | "off") => wasmtime::Inlining::No,
+		_ => wasmtime::Inlining::Yes,
+	}
+}
 /// The main thread's stack kept for the host when wasm gets the rest (`give_main_stack_to_wasm`): the compiler and host
 /// words run below the wasm frames
 const HOST_STACK_BYTES: usize = 16 << 20;
@@ -32,6 +45,7 @@ pub fn deterministic_config() -> Config {
 	config.wasm_gc(true);
 	config.wasm_function_references(true);
 	config.gc_heap_initial_size(gc_heap_initial_bytes());
+	config.compiler_inlining(inlining());
 	// warp runs core modules, no components: the machine code then also loads into a runtime built without the
 	// component model (the warp-runtime stub), where it is off anyway
 	#[cfg(feature = "compiler")]
