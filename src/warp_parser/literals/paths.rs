@@ -1,5 +1,6 @@
 //! Paths and URLs: where a path literal starts and a URL ends
 use super::*;
+use std::collections::HashSet;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
 /// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
@@ -21,25 +22,74 @@ pub fn is_path_literal(node: &Node) -> bool {
 	}
 }
 
-/// The variables every assignment of which is a path written without quotes: `notes = ~/notes.txt`
-pub fn path_variables(node: &Node) -> std::collections::HashSet<String> {
-	let (mut paths, mut others) = (std::collections::HashSet::new(), std::collections::HashSet::new());
-	node.visit(&mut |part| {
-		if let Node::Key(name, Op::Assign | Op::Define, value) = part.drop_meta() {
-			if let Node::Symbol(name) = name.drop_meta() {
-				match is_path_literal(value) {
-					true => paths.insert(name.clone()),
-					false => others.insert(name.clone()),
-				};
-			}
-		}
-	});
-	paths.difference(&others).cloned().collect()
+/// What holds a path written without quotes, through the program's functions (card path-written): the variables and
+/// parameters every value of which is such a path (`notes = ~/notes.txt`, p of `f(p) := sort p; f(./n.txt)`), and the
+/// functions every result of which is one (`g() := ./n.txt`), grown until nothing more holds one
+#[derive(Default, PartialEq)]
+pub struct WrittenPaths {
+	names: HashSet<String>,
+	functions: HashSet<String>,
 }
 
-/// A path written without quotes, or one of the `path_variables`: a Path where a method takes one
-pub fn is_written_path(argument: &Node, path_variables: &std::collections::HashSet<String>) -> bool {
-	is_path_literal(argument) || argument.symbol_name().is_some_and(|name| path_variables.contains(name))
+impl WrittenPaths {
+	pub fn of(program: &Node) -> WrittenPaths {
+		let context = crate::analyzer::function_definitions(program);
+		let mut paths = WrittenPaths::default();
+		loop {
+			let grown = paths.grown(program, &context);
+			if grown == paths {
+				return paths;
+			}
+			paths = grown;
+		}
+	}
+
+	/// A variable or parameter holding only paths
+	pub fn holds(&self, name: &str) -> bool {
+		self.names.contains(name)
+	}
+
+	/// A path written without quotes, a name holding only such paths, or a call of a function giving only them: a Path
+	/// where a method takes one
+	pub fn is_written(&self, value: &Node) -> bool {
+		is_path_literal(value)
+			|| value.symbol_name().is_some_and(|name| self.holds(name))
+			|| match value.drop_meta() {
+				Node::List(items, Bracket::Round | Bracket::None, _) => {
+					items.first().and_then(Node::symbol_name).is_some_and(|name| self.functions.contains(name))
+				}
+				_ => false,
+			}
+	}
+
+	/// The names and functions every value of which is a path as far as these paths reach
+	fn grown(&self, program: &Node, context: &crate::compiler::context::Context) -> WrittenPaths {
+		let (mut paths, mut others) = (HashSet::new(), HashSet::new());
+		let mut record = |name: &str, value: &Node| match self.is_written(value) {
+			true => paths.insert(name.to_string()),
+			false => others.insert(name.to_string()),
+		};
+		program.visit(&mut |part| {
+			if let Node::Key(name, Op::Assign | Op::Define, value) = part.drop_meta() {
+				if let Node::Symbol(name) = name.drop_meta() {
+					record(name, value);
+				}
+			}
+		});
+		let bodies = context.user_functions.values().map(|function| function.body.as_ref());
+		for body in std::iter::once(program).chain(bodies) {
+			crate::analyzer::visit_arguments(body, context, &mut |function, index, argument| {
+				record(&context.user_functions[function].params[index].name, argument);
+			});
+		}
+		let functions = context.user_functions.iter().filter(|(_, function)| {
+			crate::lowering::nodes::returned_values(&function.body).into_iter().all(|value| self.is_written(value))
+		});
+		WrittenPaths {
+			names: paths.difference(&others).cloned().collect(),
+			functions: functions.map(|(name, _)| name.clone()).collect(),
+		}
+	}
 }
 
 impl WarpParser {

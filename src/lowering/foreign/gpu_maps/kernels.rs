@@ -1,6 +1,6 @@
 //! WGSL from warp: a numeric lambda as a compute kernel (with its reductions), a painted function as a fragment shader
 use super::*;
-use crate::lowering::nodes::{is_binding, is_return};
+use crate::lowering::nodes::{block_statements, is_binding, returned_value, returned_values};
 use std::collections::{HashMap, HashSet};
 use warp_runtime::host_words::GPU_PAINTS;
 
@@ -880,9 +880,7 @@ fn gives_color(body: &Node) -> bool {
 }
 
 fn gives_color_within(body: &Node, seen: &mut Vec<String>) -> bool {
-	let mut values = vec![];
-	returned_values(body, &mut values);
-	values.iter().any(|value| match value.drop_meta() {
+	returned_values(body).iter().any(|value| match value.drop_meta() {
 		Node::Number(number) => f64::from(*number) >= crate::graphics::pixels::COLOR_FROM as f64,
 		Node::List(items, _, _) if !items.is_empty() => {
 			let name = items[0].name();
@@ -894,30 +892,6 @@ fn gives_color_within(body: &Node, seen: &mut Vec<String>) -> bool {
 		}
 		_ => false,
 	})
-}
-
-/// The values a body gives: its last statement's (each branch's), and every `return`'s
-fn returned_values<'a>(body: &'a Node, values: &mut Vec<&'a Node>) {
-	body.visit(&mut |part| {
-		if let Some(value) = returned_value(part) {
-			values.push(value);
-		}
-	});
-	last_values(body, values);
-}
-
-fn last_values<'a>(node: &'a Node, values: &mut Vec<&'a Node>) {
-	if let Some(statements) = block_statements(node) {
-		return statements.last().into_iter().for_each(|last| last_values(last, values));
-	}
-	if let Some((_, then, otherwise)) = branches(node) {
-		last_values(then, values);
-		return last_values(otherwise, values);
-	}
-	match node.drop_meta() {
-		Node::List(items, _, _) if items.len() == 1 => last_values(&items[0], values),
-		_ => values.push(node),
-	}
 }
 
 /// The prelude word painted_functions may call where the program writes none (modules IMPLIED_WORDS): pixel_color,
@@ -1088,27 +1062,6 @@ fn comparison(op: Op) -> Option<&'static str> {
 		Op::Ne => "!=",
 		_ => return None,
 	})
-}
-
-/// The statements of a block: `{ … }`, or lines and `;` without brackets
-fn block_statements(node: &Node) -> Option<&[Node]> {
-	match node.drop_meta() {
-		Node::List(items, crate::node::Bracket::Curly, _) => Some(items.as_slice()),
-		Node::List(
-			items,
-			crate::node::Bracket::None,
-			crate::node::Separator::Semicolon | crate::node::Separator::Newline,
-		) => Some(items.as_slice()),
-		_ => None,
-	}
-}
-
-/// `return v`: v
-fn returned_value(node: &Node) -> Option<&Node> {
-	match node.drop_meta() {
-		Node::List(items, _, _) if is_return(items) => Some(&items[1]),
-		_ => None,
-	}
 }
 
 /// `for i in a..b { … }` (`a to b` includes b): i, a, the range operator, b and the body

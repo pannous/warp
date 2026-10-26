@@ -607,6 +607,45 @@ pub(crate) fn is_return(items: &[Node]) -> bool {
 	matches!(items, [word, _] if word.is_symbol(crate::words::RETURN_WORD))
 }
 
+/// The statements of a block: `{ … }`, or lines and `;` without brackets
+pub(crate) fn block_statements(node: &Node) -> Option<&[Node]> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => Some(items.as_slice()),
+		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => Some(items.as_slice()),
+		_ => None,
+	}
+}
+
+/// `return v`: v
+pub(crate) fn returned_value(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::List(items, _, _) if is_return(items) => Some(&items[1]),
+		_ => None,
+	}
+}
+
+/// The values a body gives: its last statement's (each branch's), and every `return`'s
+pub(crate) fn returned_values(body: &Node) -> Vec<&Node> {
+	let mut values = vec![];
+	body.visit(&mut |part| values.extend(returned_value(part)));
+	last_values(body, &mut values);
+	values
+}
+
+fn last_values<'a>(node: &'a Node, values: &mut Vec<&'a Node>) {
+	if let Some(statements) = block_statements(node) {
+		return statements.last().into_iter().for_each(|last| last_values(last, values));
+	}
+	if let Some((_, then, otherwise)) = branches(node) {
+		last_values(then, values);
+		return last_values(otherwise, values);
+	}
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.len() == 1 => last_values(&items[0], values),
+		_ => values.push(node),
+	}
+}
+
 /// The list with its head kept and each later item rewritten: a call's name stays, its arguments change
 pub(crate) fn arguments_rewritten(
 	items: Vec<Node>,
