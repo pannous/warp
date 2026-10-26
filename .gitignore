@@ -18,22 +18,6 @@ out
 
 notes/session
 
-# probes/ holds hand-written probe sources only (tracked); see AGENTS.md "Folders"
-probes/**
-!probes/**/
-!probes/**/*.warp
-!probes/**/*.md
-!probes/**/*.rs
-!probes/**/*.py
-!probes/**/*.sh
-!probes/**/*.lean
-!probes/**/*.html
-!probes/**/*.mjs
-!probes/**/*.expected
-probes/**/target/
-probes/**/scratch/
-probes/*-export/
-probes/*-work/
 
 # disposable copies, worktrees, cargo homes, private index files, temp builds
 scratch/

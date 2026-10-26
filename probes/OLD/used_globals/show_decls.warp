@@ -1,5 +1,0 @@
-use "../../lib/compiler/parser.warp"
-use "../../lib/compiler/uses.warp"
-for s in statements_in(plain_node(parsed("enum Meaning { Variable, Loop }\nclass Box { w: int }\nK = 1"))) {
-	print "\(is_declaration(s)) \(view_of(s))"
-}

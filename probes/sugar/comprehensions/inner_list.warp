@@ -1,2 +1,0 @@
-grid = [[1, 2], [3, 4]]
-print [[c * 2 for c in row] for row in grid]

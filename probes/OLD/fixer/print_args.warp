@@ -1,2 +1,0 @@
-greeting = "Hello " + "🌍"
-print greeting*2    print(greeting, greeting)   print greeting, greeting

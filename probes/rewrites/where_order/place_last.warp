@@ -1,7 +1,0 @@
-// out: [5, 0]
-// the same conditions the other way round, `where $p is literal and value`
-rewrite keep $p => $p where $p is literal and value
-rewrite keep $p => 0 where $p is not literal
-y = 2
-m = {a: keep 5, b: keep y}
-print [m.a, m.b]

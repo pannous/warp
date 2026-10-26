@@ -1,5 +1,0 @@
-f(m: any) := {
-	if "a" not in m { m["a"] = [1, "x"] }
-	m["a"]#2
-}
-print(f({}))

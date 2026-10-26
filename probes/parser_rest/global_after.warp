@@ -1,3 +1,0 @@
-f(x: any): bool := x == y
-y = 2
-print f(2)

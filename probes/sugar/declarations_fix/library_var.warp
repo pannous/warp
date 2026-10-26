@@ -1,3 +1,0 @@
-use math
-x := 3
-print norm x

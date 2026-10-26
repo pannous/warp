@@ -1,4 +1,0 @@
-# `var` and `let` (not migrated yet: definitions.warp keeps them)
-var a = 5
-let b = 7
-a + b

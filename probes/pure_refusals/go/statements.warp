@@ -1,4 +1,0 @@
-// expected: 3
-f(x) := x
-job = go { f(1); 3 }
-print await job

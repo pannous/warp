@@ -1,2 +1,0 @@
-use cargo strsim
-print strsim.levenshtein("kitten", "sitting")

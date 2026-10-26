@@ -1,7 +1,0 @@
-# a map's own member stays the word beside an entry of its name, as Rust's reads_entry_first: prelude_words.warp's
-# symbol_words keeps the words in a map and returns found.keys, which the word `keys` of runtime/ordering.warp turned
-# into the entry yes (card self-hello)
-found = {}
-found["keys"] = yes
-found["a"] = yes
-print(found.keys)

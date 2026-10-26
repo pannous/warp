@@ -1,3 +1,0 @@
-class Animal { name: text; speak() := name + " makes a sound" }
-class Dog extends Animal { breed: text }
-print Dog{name: "Rex", breed: "pug"}.speak()

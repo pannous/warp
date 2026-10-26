@@ -1,7 +1,0 @@
-# a match arm of a constant, `True:`, `no:`, tests the subject equals it; node_matches.warp left such a match
-# unlowered, so the runtime word node_text refused under `warp self` (card match-bool-arm)
-answer(b: bool): text := match b {
-	True: "yes"
-	_: "no"
-}
-answer(1 > 0) + answer(no)

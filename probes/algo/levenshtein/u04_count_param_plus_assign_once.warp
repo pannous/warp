@@ -1,7 +1,0 @@
-def g(a) {
-    s = a
-    #s
-}
-t = 0
-t += g("abc")
-t

@@ -1,6 +1,0 @@
-# emitter: a global variable every function reads and writes
-global count = 0
-bump() := { count += 1 }
-bump()
-bump()
-count

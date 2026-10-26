@@ -1,5 +1,0 @@
-# export, global and const keep their meaning. Expected: 11
-export fun f() := 3
-global y = 1
-const k = 7
-print f() + y + k

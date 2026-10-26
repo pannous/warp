@@ -1,3 +1,0 @@
-use regex
-print matches("abc", "a.c")   // yes: the module operator in call form
-print "abc" matches "x"       // no: the infix form

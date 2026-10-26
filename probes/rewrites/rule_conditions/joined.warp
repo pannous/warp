@@ -1,7 +1,0 @@
-// out: [2000, 7, 6]
-// `where not method and not shadowed`: a call of the word anywhere else, as parse_words' `eval` would be a rule
-rewrite plus($x) => $x * 1000 where not method and not shadowed
-plus(a, b) := a + b
-f(t) := { plus = x => x + 1; plus(t) }
-n = 3
-print [plus(2), n.plus(4), f(5)]

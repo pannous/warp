@@ -1,6 +1,0 @@
-area(width: int, height: int) := width * height
-t = area.dump + ""
-print "area:", parse(t)
-p = {a: 1}
-print (p).a
-1

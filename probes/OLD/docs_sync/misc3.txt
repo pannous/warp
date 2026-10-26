@@ -1,2 +1,0 @@
-class Node{next: Node; v:int} ⇒ !can never be filled
-s: int or text = "three"; s ⇒ three

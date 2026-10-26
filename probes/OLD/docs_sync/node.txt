@@ -1,9 +1,0 @@
-n = data(a: 1); n.key ⇒ a
-n = data(a: 1); n.value ⇒ 1
-n = data(a + b); n.op ⇒ +
-symbol("hi") ⇒ hi
-key("a", 1) ⇒ a:1
-float_bits(1.0) ⇒ 4607182418800017408
-bits_float(4607182418800017408) ⇒ 1
-separated([1 2 3], ",") ⇒ [1, 2, 3]
-xs = [1, 2]; xs.separator ⇒ ,

@@ -1,3 +1,0 @@
-# a type word the program binds as a value indexes (the pure lane reads `text[2]` as its third character). Expected: c
-text = "abc"
-print text[2]

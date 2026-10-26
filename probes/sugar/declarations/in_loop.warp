@@ -1,4 +1,0 @@
-# `var` inside a loop body
-s = 0
-for i in 1 to 3 { var t = i * i; s += t }
-s

@@ -1,3 +1,0 @@
-shown = [0.0, 0.0]
-for i in 0..2 { shown[i] = max(sqrt(2.0), shown[i]) }
-print shown

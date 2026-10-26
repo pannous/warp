@@ -1,2 +1,0 @@
-enum Wasm { StructGet, StructNew, RefCast }
-print Wasm.StructGet as text

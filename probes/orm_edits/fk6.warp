@@ -1,4 +1,0 @@
-class Team{name: text}
-stored teams: [Team]
-print teams
-print teams#1

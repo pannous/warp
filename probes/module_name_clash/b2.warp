@@ -1,2 +1,0 @@
-named(x, y) := "b2"
-use_b(x) := named(x, 1)

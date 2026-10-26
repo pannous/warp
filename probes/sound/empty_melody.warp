@@ -1,3 +1,0 @@
-use sound
-tempo=1000000
-melody([C5, G5], beat(1/8))

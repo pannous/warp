@@ -1,7 +1,0 @@
-def f(n) {
-    c = [n]
-    x = n + 1
-    c.push(x)
-    c#2
-}
-f(3)

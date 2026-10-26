@@ -1,3 +1,0 @@
-# `def f(x): T { body }`: a typed result before the block
-def half(x: int): int { x / 2 }
-half(8)

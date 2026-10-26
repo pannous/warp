@@ -1,6 +1,0 @@
-// out: 5
-// `$t($a)` binds the one argument
-rewrite build $t($a) => $t($a) where $t is type
-class P { x: int }
-p = build P(5)
-print p.x

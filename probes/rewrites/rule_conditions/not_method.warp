@@ -1,6 +1,0 @@
-// out: [2000, 7]
-// `where not method`: the rule leaves the method part of `n.plus(4)`, a call of the program's plus(n, 4)
-rewrite plus($x) => $x * 1000 where not method
-plus(a, b) := a + b
-n = 3
-print [plus(2), n.plus(4)]

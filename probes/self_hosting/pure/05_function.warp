@@ -1,3 +1,0 @@
-// out: 42
-twice(x) := x * 2
-twice(21)

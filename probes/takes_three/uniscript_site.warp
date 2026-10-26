@@ -1,3 +1,0 @@
-// card takes-three: a built site ships the uniscript library it calls (modules/uniscript_c.wasm)
-use uniscript
-p{ uniscript("<:alpha/> <:fracture A/>") }

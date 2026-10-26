@@ -1,3 +1,0 @@
-# every modifier word before one function. Expected: 3
-public static export import extern external C global inline virtual override final abstract private protected internal const constexpr volatile mutable thread_local synchronized transient native fun ignore(){3}
-print ignore()

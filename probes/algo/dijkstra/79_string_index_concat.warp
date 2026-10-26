@@ -1,4 +1,0 @@
-names = "ABCDEF"
-path = "" + names[5]
-path = names[2] + path
-path

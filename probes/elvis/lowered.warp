@@ -1,7 +1,0 @@
-# prints a program (args#1) as the pure lane passes leave it
-use "../../core/passes.warp"
-use os
-use file
-lib = env("WARP_LIB")
-print lowered_program(read(args#1), lib + "/compiler", read(lib + "/prelude.warp"))
-print count(kept_sugar)

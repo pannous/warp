@@ -1,3 +1,0 @@
-use b.warp
-fa() := 1
-print fb() + fa()

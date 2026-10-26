@@ -1,4 +1,0 @@
-enum Meaning { Variable, Loop }
-kinds = [Meaning.Variable]
-WORDS = [["once", 1], ["twice", 2]]
-first_word(): any := WORDS#1#1

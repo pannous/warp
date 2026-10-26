@@ -1,8 +1,0 @@
-#!/usr/bin/env warp
-// card self-cold-trap: definitions.warp is_declaration_word(n) beside scope.warp is_declaration_word(view, accepts),
-// the two-parameter one called with a function handed on from a lambda; prints yes
-is_declaration_word(n: any): bool := n == "type"
-is_declaration_word(view: any, accepts: function): bool := view is list and accepts(view#1)
-is_word_of_item(part: any, accepts: function): bool := is_declaration_word(part, accepts)
-has_own_word(parts: list, accepts: function): bool := parts.any(part => is_word_of_item(part, accepts))
-print has_own_word([[1], [5]], x => x > 3)

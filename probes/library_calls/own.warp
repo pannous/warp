@@ -1,3 +1,0 @@
-// expected: 12 (a program's own word keeps its function)
-upper(n) := n * 4
-print upper 3

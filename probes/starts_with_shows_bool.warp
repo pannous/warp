@@ -1,3 +1,0 @@
-#!/usr/bin/env warp
-print "abc".starts_with("a")
-print "abc".starts_with("b")

@@ -1,2 +1,0 @@
-class square{side:int; area := side*side; perimeter() := 4*side}
-print square(2).perimeter() + square(2).area

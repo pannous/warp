@@ -1,3 +1,0 @@
-class dot{x:int}
-smallest(xs: Comparable list) := (sort xs)#1
-smallest([dot(3) dot(1)])

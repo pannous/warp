@@ -1,3 +1,0 @@
-use file
-n = #read("samples/hello/hello.warp")
-print n

@@ -1,4 +1,0 @@
-// out: 5
-class Point { x: int; y: int }
-p = Point(2, 3)
-p.x + p.y

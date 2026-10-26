@@ -1,3 +1,0 @@
-enum Wasm { StructGet, StructNew, RefCast }
-g(): Wasm := StructNew
-print g()

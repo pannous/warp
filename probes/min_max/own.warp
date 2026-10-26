@@ -1,3 +1,0 @@
-// expected: 12 (a program's own max)
-max(a, b) := a * b
-print max(3, 4)

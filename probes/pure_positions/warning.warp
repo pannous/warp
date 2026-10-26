@@ -1,4 +1,0 @@
-# warp pure warnings name their place: warning: sleep needs a unit … at …warning.warp:3:7 (the 1), then 1
-x = 1
-sleep 1
-x

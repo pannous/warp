@@ -1,4 +1,0 @@
-if 1 {
-beep
-play(440Hz, 0.1s)
-}

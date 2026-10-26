@@ -1,7 +1,0 @@
-#!/usr/bin/env warp
-# parsed text holding a type declaration is a type definition node, under warp pure too (card parse-class)
-# want: type P {x:type int ø}, class code, yes on Rust, WARP_SELF_HOSTED=1 and warp pure
-t = parse("class P { x: int }")
-print t
-print type(t)
-print t == parse("class P { x: int }")

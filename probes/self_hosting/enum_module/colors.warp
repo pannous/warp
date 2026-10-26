@@ -1,3 +1,0 @@
-// a used module declaring an enum (probes/self_hosting/enum_module/main.warp)
-enum Color { Red, Green }
-is_green(c) := c == Color.Green

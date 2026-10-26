@@ -1,2 +1,0 @@
-use "divisors.warp"
-print(divisor(12, 18))

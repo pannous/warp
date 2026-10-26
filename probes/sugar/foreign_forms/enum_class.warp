@@ -1,3 +1,0 @@
-# Kotlin `enum class`. Expected: green
-enum class Color {red, green}
-print green

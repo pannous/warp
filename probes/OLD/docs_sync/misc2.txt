@@ -1,8 +1,0 @@
-a=5; [a -1] ⇒ [5 -1]
-a=5; [a-1] ⇒ [4]
-p = {phone: 5}; number = 2; p.phone-number ⇒ !p.phone - number
-x: u8 = 300 ⇒ !byte
-x: u8 = 3; x ⇒ 3
-class Tree{left: Tree?; v:int}; t = Tree(ø, 3); t.v ⇒ 3
-s: int or text = 3; s ⇒ 3
-s: int | text = [1] ⇒ !int

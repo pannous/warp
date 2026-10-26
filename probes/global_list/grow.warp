@@ -1,4 +1,0 @@
-out = []
-add(i) := { global out; out += [i] }
-for i in 1 to 20000 { add(i) }
-print count(out)

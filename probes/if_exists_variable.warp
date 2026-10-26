@@ -1,2 +1,0 @@
-profile = "~/.profile"
-if exists profile { print "found ~/.profile" } else { print "no ~/.profile" }

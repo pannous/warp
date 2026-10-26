@@ -1,6 +1,0 @@
-// out: [2000, 6, 4]
-// `where not shadowed`: a definition binding the word itself keeps its own, in its body or as a parameter
-rewrite plus($x) => $x * 1000 where not shadowed
-f(t) := { plus = x => x + 1; plus(t) }
-g(plus, t) := plus(t)
-print [plus(2), f(5), g(x => x - 1, 5)]

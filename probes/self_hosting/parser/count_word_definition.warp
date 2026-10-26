@@ -1,3 +1,0 @@
-#!/usr/bin/env warp
-// `def twice {…}` defines twice, no block run twice (card parser-reads-once); a file of its own: the definition binds twice for the whole program
-def twice { 5 }

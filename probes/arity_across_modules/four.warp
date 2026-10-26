@@ -1,5 +1,0 @@
-is_word(n: int): bool := n > 2
-first_word(ns: list): int := {
-	if #ns == 2 and is_word(ns#1) { return ns#2 }
-	0
-}

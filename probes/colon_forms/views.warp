@@ -1,4 +1,0 @@
-// parser.warp's views of the colon forms (card parser-colon-forms), one per line of cases.txt; `warp parse` gives Rust's
-use "../../core/passes.warp"
-use file
-for code in read("cases.txt").split("\n") { if code != "" { print(code + "  =>  " + view_of(parsed(code))) } }

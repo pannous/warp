@@ -1,1 +1,0 @@
-fun f(a, b) { return a.length + b.length }; f("ab", "abc")

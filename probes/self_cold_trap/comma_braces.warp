@@ -1,8 +1,0 @@
-#!/usr/bin/env warp
-// card own-words-miscompile: braces holding a comma list whose first item is no group parse (warp self parsed them
-// as an error node); prints 2 then 3
-x = {1, 2}
-a, b = 1, 2
-p = {x: 1, y: 2}
-print b
-print p.x + p.y

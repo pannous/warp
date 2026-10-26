@@ -1,3 +1,0 @@
-#!/usr/bin/env warp
-# a symbol named `key` passes `type(n) is key`: gives yes, should be no (symbol("abc") gives no)
-type(symbol("key")) is key

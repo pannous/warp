@@ -1,7 +1,7 @@
 #!/bin/bash
 # The tiered gate of a tree (a merged batch, a branch, main), pure pipeline first, stopping at the first red tier:
 #   tier 0  rebuild pure (warp.wasm) + pure hello, + self hello when the tree has a warp-self.wasm   (minutes, the rebuild)
-#   tier 1  every probes/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout against <name>.expected
+#   tier 1  every test/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout against <name>.expected
 #           (seconds). warp-self.wasm is no gate build: scripts/promote-self.sh promotes warp.wasm at a fixpoint, apart
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
 #   tier 3  Rust harness: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; not run here, only named
@@ -69,7 +69,7 @@ fi
 
 if wants 1; then
 	t1=$(date +%s) ok=1
-	for probe in probes/gate/*.warp; do
+	for probe in test/gate/*.warp; do
 		name=${probe%.warp}; want=$(cat "$name.expected" 2>/dev/null) || { echo "FAIL ${name##*/}: no $name.expected"; ok=0; continue; }
 		for lane in $lanes; do
 			timeout 120 "$warp" $lane "$probe" > "$logs/probe.out" 2> "$logs/probe.err"
@@ -81,7 +81,7 @@ if wants 1; then
 			fi
 		done
 	done
-	echo "tier 1 (probes/gate, $lanes): $( ((ok)) && echo ok || echo RED) $(since $t1)"
+	echo "tier 1 (test/gate, $lanes): $( ((ok)) && echo ok || echo RED) $(since $t1)"
 	((ok)) || red 1
 fi
 

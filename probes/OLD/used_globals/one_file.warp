@@ -1,3 +1,0 @@
-WORDS = [["once", 1], ["twice", 2]]
-first_word(): any := WORDS#1#1
-print first_word()

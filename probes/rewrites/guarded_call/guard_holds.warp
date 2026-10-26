@@ -1,6 +1,0 @@
-// out: 20
-// a call of a function is no type: the rule leaves it
-rewrite build $t($a...) => $t($a...) where $t is type
-build(n: int) := n * 10
-f(n: int) := n
-print build f(2)

@@ -1,5 +1,0 @@
-# ø is absence, empty is not missing (decision empty-is-not-missing, card empty-is-absence):
-# [] == ø and "" == ø are no, ø == ø is yes; `is empty` and `if no x` ask for emptiness
-xs = []
-print([xs == ø, "" == ø, ø == ø])
-print([xs is empty, "" is empty, if no xs then "no xs" else "some"])

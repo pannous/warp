@@ -1,6 +1,0 @@
-#!/usr/bin/env warp
-# the one-parameter overload answers by a match (card self-trap-function-param)
-use "five.warp"
-is_word(n: text, accepts: function): bool := n.length > 1 and accepts(n)
-print(first_word(["let", "x"]))
-print(is_word("ab", w => w == "ab"))

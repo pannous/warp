@@ -1,6 +1,0 @@
-// expected: 7 (F13: runs right to left, say(10 - (5 - 2)); left to right: 3, say((10 - 5) - 2))
-rewrite (say($a); say($b)) => say($a - $b)
-say(x) := print x
-say(10)
-say(5)
-say(2)

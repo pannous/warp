@@ -1,7 +1,0 @@
-# the loop and guard forms parser.warp reads, as views (card parser-loop-forms)
-use "../../core/parser.warp"
-sources = ["a = 2 if 1", "a = 2 unless 1", "i++ while i<3", "i++ until i>=3", "unless 0 {5}", "unless 1 {5} else {6}", "until i>=3 {i++}", "until i>=3: i++", "x = do{ 5 }", "do { i = i + 1 } while i < 3", "if 0 { x+=1 } unless 0 { x+=10 }", "while x-->0\nx", "while x-->0; x", "while(i<9)i++;i+1", "while (i<9) i++;i+1"]
-for source in sources {
-	print source
-	print view_of(node_of(plain(tree(source))))
-}

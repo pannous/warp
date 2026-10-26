@@ -1,5 +1,0 @@
-#!/usr/bin/env warp
-# a program table named like a runtime table (kinds.warp Kind) stays the program's own (card constants-exist)
-Kind = {A: 1, B: 2}
-b() := Kind.B
-print(Kind.A + b())

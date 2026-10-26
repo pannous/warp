@@ -1,2 +1,0 @@
-use helpers
-pairs_of([1, 2, 3])

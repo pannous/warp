@@ -1,4 +1,0 @@
-xs = [1, 2, 3]
-twice(x) := x * 2
-print match xs.map(twice) { [2, 4, 6]: "doubled"; _: "other" }
-print match ["key", "=", "x", 1] { ["key", op, l, r] if op == "=" => "assign " + l, _ => 0 }

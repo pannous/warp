@@ -1,2 +1,0 @@
-named(t: text) := "b"
-use_b(x) := named("t")

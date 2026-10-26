@@ -1,3 +1,0 @@
-# `static k = 3` at the top. Expected: 3
-static k = 3
-print k

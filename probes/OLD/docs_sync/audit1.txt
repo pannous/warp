@@ -1,7 +1,0 @@
-() + 1 == 1 ⇒ yes
-() + 1 == (1) ⇒ yes
-square number = number*number; square [1 2 3] == [1 4 9] ⇒ yes
-square number = number*number; square [a:1 b:2 c:3] == [a:1 b:4 c:9] ⇒ yes
-square number = number*number; square.([1 2 3]) ⇒ [1 4 9]
-map [1,2,3] {it+1} ⇒ [2 3 4]
-each [1,2,3] {it+1} ⇒ [2 3 4]

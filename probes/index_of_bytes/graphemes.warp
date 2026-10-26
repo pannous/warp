@@ -1,7 +1,0 @@
-[
-    "a·b(c)".index_of("(")
-    "q\u{301}x".index_of("x")
-    "a👍🏽b".index_of("b")
-    "abc".index_of("z")
-    [10 20 30].index_of(20)
-]

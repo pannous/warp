@@ -1,8 +1,0 @@
-use math
-use collections
-use lib
-print sqrt(16)
-s = Stack()
-s.push(3)
-print s.pop()
-print ok()

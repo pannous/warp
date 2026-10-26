@@ -1,6 +1,0 @@
-# a local named like a function of the program is no pipe stage: `a or listed` stays the or of two values
-listed(x) := 100
-either(a) := { listed = no; a or listed }
-print either(yes)
-inc(x) := x + 1
-print 3 | inc

@@ -1,4 +1,0 @@
-watch(s) := on change s {print "now " + value}
-x = 1
-watch(x)
-x = 2

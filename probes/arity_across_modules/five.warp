@@ -1,9 +1,0 @@
-words = ["var", "let"]
-is_word(n: text): bool := match n {
-	"var": yes
-	_: n in words
-}
-first_word(ns: list): text := {
-	if #ns == 2 and is_word(ns#1) { return ns#2 }
-	"none"
-}

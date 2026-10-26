@@ -1,1 +1,0 @@
-o-b=it.chars.map(c=>{o=ord(c);b=o<97?65:97;chr((o-b+13)%26+b)})

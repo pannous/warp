@@ -1,4 +1,0 @@
-# a typed list result gives [] for ø
-def evens(n: int): list { if n > 0 then [n * 2] }
-print evens(0)
-evens(2)

@@ -1,9 +1,0 @@
-Read notes/agents/common.md (git -C /Users/me/dev/angles/warp show origin/main:notes/agents/common.md) and follow it; your Supervisor is BOSS-cheeky-shannon.
-
-YOUR NAME: wiki-branch. Small investigation, user's words: "I think there was a general problem with GitHub that wikis cannot be switched to main or something. Spawn an agent to do a little investigation. Maybe we can merge both now. Main would be the preferred thing, just like this repo."
-
-Context: the wiki repo pannous/warp.wiki (local checkout /Users/me/dev/angles/warp/wiki, which has the user's uncommitted edits: never touch them) has branches master (GitHub's default; the web wiki shows it) and main (where agents pushed). The supervisor merged main into master today (ddbb3fd); both are identical now. The local checkout's main is configured to pull/push master (branch.main.merge, remote.origin.push).
-Find out, with sources (GitHub docs, community discussions; WebSearch/WebFetch) and a harmless check (e.g. `gh api repos/pannous/warp.wiki` and whether the wiki's default branch can be read or changed via the API or settings):
-1. Can a GitHub wiki serve a branch other than master? Does GitHub honour a default-branch change for wiki repos, does pushing only `main` show up, and has this changed (e.g. with the 2020 main rename)?
-2. If main can be the wiki's served branch: the exact steps, the risk, and whether it needs the user (web settings). If not: the cleanest setup, e.g. master served and `main` deleted, or a server-side mirror, and how agents and the user's local checkout should push.
-Do NOT change branches, settings or the user's checkout yourself. Write findings and a recommendation into /Users/me/dev/angles/warp/notes/wiki_branch.md (commit it to warp main from a temporary worktree, notes-only), send the recommendation to the Interviewer (it is a user decision if it needs a settings change or deleting a branch), and send BOSS-cheeky-shannon a 5-line summary.

@@ -1,4 +1,0 @@
-# an error at a range end points at what the user wrote. Expected: the unknown name zed at 4:12
-x = 1
-y = 2
-print x to zed

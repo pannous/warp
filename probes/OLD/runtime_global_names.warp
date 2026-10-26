@@ -1,7 +1,0 @@
-# a program's local may share its name with a runtime word's global (`counted`, which text counting keeps)
-def first_word(words: any): any {
-	counted = words#1
-	if counted is text { return counted }
-	"none"
-}
-first_word(["hi", "yo"])

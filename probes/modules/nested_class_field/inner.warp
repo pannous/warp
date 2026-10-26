@@ -1,2 +1,0 @@
-// a class two use levels down (card nested-use-class-field)
-class Inner { x: int }

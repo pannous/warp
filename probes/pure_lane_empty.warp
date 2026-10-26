@@ -1,4 +1,0 @@
-# the pure lane reads the test words and holds [] (cards pure-lane-empty, pure-lane-holds, parser-misses):
-# run with WARP_SELF_HOSTED=pure
-print(["" is empty, [] is empty, "a" is empty])
-print(type([]).name)

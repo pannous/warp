@@ -1,7 +1,0 @@
-#!/usr/bin/env warp
-# an assigned phrase is the statement it reads as (card assigned-phrase-pairs)
-xs = [1, 2, 3]
-x = max 3 4
-y = sum of xs
-print x
-print y

@@ -1,4 +1,0 @@
-# an error inside the fallback points at what the user wrote. Expected: the unknown name zed at 4:12
-x = ø
-y = 1
-print x ?? zed + y

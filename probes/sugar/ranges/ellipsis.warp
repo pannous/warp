@@ -1,2 +1,0 @@
-# `a … b` is `a to b`. Expected: [1 2 3]
-print 1 … 3

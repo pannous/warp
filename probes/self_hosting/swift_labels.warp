@@ -1,5 +1,0 @@
-#!/usr/bin/env warp
-// Swift labels with a function type, `_ f: (Int) -> Int` (card parser-each-loops); 36
-func apply(_ f: (Int) -> Int, _ x: Int) -> Int { f(x) }
-func twice(using f: (Int) -> Int, to x: Int) -> Int { f(x) }
-apply({ $0 + 1 }, 2) * 10 + twice(using: { $0 * 3 }, to: 2)

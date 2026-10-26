@@ -1,2 +1,0 @@
-twice(t: text, n: int) := t * n
-"ab".twice 2

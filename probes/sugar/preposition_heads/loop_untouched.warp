@@ -1,4 +1,0 @@
-// out: 1
-// 2
-// a `for` loop and a phrase outside a definition's head keep their prepositions
-for i in [1, 2] { print i }

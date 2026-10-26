@@ -1,2 +1,0 @@
-// a used module naming node.warp's spelled enum Op without declaring it
-is_colon(o) := o == Op.Colon

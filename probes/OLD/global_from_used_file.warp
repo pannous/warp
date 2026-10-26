@@ -1,2 +1,0 @@
-use "../core/sugar.warp"
-print count_of("twice")
