@@ -52,8 +52,8 @@ the full suite at rare intervals, and turns what goes red into a card for the pu
 urgent). It also lands branches whose session retired. How: notes/agents/integrator.md.
 
 ## Reviewer
-Makes sure everything is sound and beautiful according to standards. It reads each Ready card's diff in parallel
-with the gate: two signals for the worker, the gate's "it works" and the Reviewer's "here it can generalize or read
+Makes sure everything is sound and beautiful according to standards. It reads each landed merge's diff in parallel
+with the background tiers: two signals for the worker, the gate's "it works" and the Reviewer's "here it can generalize or read
 better", which the worker makes its next commit. The Reviewer approves nothing and sends the Integrator nothing but a
 rare veto (unsound: the card goes back to Now with a note, the Integrator leaves it out of the push). Structural
 findings become cards for the Refactorer. Prompt: notes/agents/reviewer.md; a default service.

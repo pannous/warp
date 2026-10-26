@@ -2,7 +2,7 @@
 # The tiered gate of a tree (a merged batch, a branch, main), pure pipeline first, stopping at the first red tier:
 #   tier 0  rebuild pure (warp.wasm, scripts/rebuild.sh: a build of the same inputs is reused) + pure hello, + self hello when the tree has a warp-self.wasm   (minutes, the rebuild)
 #   tier 1  every test/gate/<name>.warp in the pure lane (and self, as tier 0), its stdout against <name>.expected
-#           (seconds). warp-self.wasm is no gate build: scripts/promote-self.sh promotes warp.wasm at a fixpoint, apart
+#           (seconds). warp-self.wasm is no gate build: scripts/promote-self.sh promotes warp.wasm once it compiles itself, apart
 #   tier 2  `warp test` (pure) of the test files the tree changed since --base   (seconds to minutes)
 #   tier 3  Rust harness: only when the change touches src/, crates/, *.rs, Cargo.*, build.rs; not run here, only named
 #           (`cargo check`)
@@ -62,7 +62,7 @@ done
 # the lanes judged: pure, and self when the binary finds a promoted warp-self.wasm (`warp version` names a missing one, on stderr)
 lanes=pure
 if ! "$warp" version 2>&1 | grep -q 'warp-self.wasm missing'; then lanes="pure self"
-else echo "gate: no warp-self.wasm: self lane skipped (scripts/promote-self.sh promotes warp.wasm at a fixpoint)"; fi
+else echo "gate: no warp-self.wasm: self lane skipped (scripts/promote-self.sh promotes warp.wasm once it compiles itself)"; fi
 
 if wants 0; then
 	t0=$(date +%s) ok=1
