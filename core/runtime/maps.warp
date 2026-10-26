@@ -215,7 +215,7 @@ map_without(c: Node, key: Node): Node := {
 	at = if marked_kind(c) == Marked.Map then map_index(c, name_text(key)) else collection_position(c, key)
 	if at == 0 { return c }
 	items = unboxed_list(fields_of(c))
-	forget_map_indexes()
+	forget_map_index(items)
 	copy_items(items, at - 1, items, at, #items - at)
 	set_count(items, #items - 1)
 	c
