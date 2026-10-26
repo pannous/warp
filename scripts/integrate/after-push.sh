@@ -14,6 +14,8 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 TREE=/Volumes/Worktrees/integrate2
 EXPECTED=Hello
 HARNESS_PATHS=(src crates Cargo.toml Cargo.lock build.rs)
+BUILDS=/Users/me/dev/bin/main-builds  # one folder: the installed harness and its compilers, no other builds or links
+CARGO_BINARY=/Volumes/Build/target/release/warp  # ~/.cargo/config.toml's target-dir
 
 if_moved=
 [ "${1-}" = --if-moved ] && { if_moved=1; shift; }
@@ -53,6 +55,28 @@ install_compilers() {
 	say "compilers of ${tip:0:10} installed beside $MAIN_WARP"
 }
 
+# whether the installed binary was built from the harness of $tip ("release build <commit>" in `warp version`)
+harness_current() {
+	local built
+	built=$("$MAIN_WARP" version 2>&1 | sed -n 's/^release build \([0-9a-f]*\).*/\1/p')
+	[ -n "$built" ] && git -C "$TREE" diff --quiet "$built" "$tip" -- "${HARNESS_PATHS[@]}" 2>/dev/null
+}
+
+# the harness of $tip built and installed: its folder in $BUILDS with warp.wasm built by it, hello, then ~/dev/bin/warp
+# links there and every older folder goes (user: no stale builds, no warp-<hash> links)
+install_harness() {
+	local folder=$BUILDS/${tip:0:9} got
+	say "harness of ${tip:0:10} changed: cargo build --release"
+	(cd "$TREE" && cargo build --release -q) || { red "harness: cargo build --release failed" --urgent; return 1; }
+	mkdir -p "$folder" && cp "$CARGO_BINARY" "$folder/warp" || return 1
+	(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib "$folder/warp" rebuild pure >/dev/null 2>&1)
+	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$folder/warp" pure samples/hello/hello.warp 2>&1 | tail -1)
+	[[ $got == *$EXPECTED* ]] || { red "harness: hello with the new binary got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
+	ln -sfn "${folder#"$(dirname "$MAIN_WARP")/"}/warp" "$MAIN_WARP"
+	find "$BUILDS" -mindepth 1 -maxdepth 1 ! -name "${tip:0:9}" -exec rm -rf {} +
+	say "harness of ${tip:0:10} installed: $MAIN_WARP -> $folder/warp"
+}
+
 # watch <commit>: install its compilers, then (unless main moved on meanwhile) the slow tiers
 watch() {
 	tip=$1
@@ -60,13 +84,12 @@ watch() {
 	git -C "$TREE" checkout -q --detach "$tip" || return 1
 	pushed=$(git -C "$TREE" log --first-parent --format=%s "$since..$tip" | head -5 | paste -sd ';' -)
 	echo "$tip" >"$state/handled"
+	harness_current || install_harness || return 1
 	"$scripts/rebuild.sh" both "$TREE" || { red "rebuild pure failed" --urgent; return 1; }
 	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
 	install_compilers
 	git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash || say "the user's checkout did not pull: look at it"
-	git -C "$TREE" diff --quiet "$since" "$tip" -- "${HARNESS_PATHS[@]}" ||
-		say "HARNESS CHANGED: cargo build --release of ${tip:0:10}, installed apart (notes/agents/integrator.md)"
 	echo "$tip" >"$state/watched"
 	[ "$(main_tip)" = "$tip" ] || return 0
 

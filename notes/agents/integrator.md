@@ -24,11 +24,10 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
 - The full suite (`warp test`) at rare intervals (nightly, before a release), in the background; its failures grouped
   into cards.
 - Read each failure's message before passing it as flaky; a different message is a real failure.
-- A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs; after-push.sh says HARNESS CHANGED) never holds
-  anything: the compiler does not depend on the harness. `cargo build --release` of main's tip, its binary to
-  ~/dev/bin/main-builds/<hash>/, and ~/dev/bin/warp points there once hello passes with it (user 2026-10-26).
-  Then delete every other main-builds/ folder: only the installed build stays. Never create ~/dev/bin/warp-<hash> links
-  (user 2026-10-26: "Clean those up immediately, or even better, don't create them").
+- A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs) is installed by after-push.sh too, before the
+  compilers: when the installed binary's `release build <commit>` differs in those paths from main's tip it runs
+  `cargo build --release`, puts the binary in ~/dev/bin/main-builds/<hash>/ with a warp.wasm it built, checks hello,
+  links ~/dev/bin/warp there and deletes every other main-builds/ folder. No ~/dev/bin/warp-<hash> links (user).
 - Compilers beside ~/dev/bin/warp come only with main's tip, never because a lib/ changed, and are never built in the
   main checkout (a pull mid-build paired mismatched compilers).
 
