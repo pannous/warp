@@ -1,7 +1,7 @@
 #!/bin/zsh
 # The warp-only acceptance check (decision warp-only-acceptance): the Rust-compiled compiler.warp compiles itself and
 # that self build runs hello world.
-# The pair checked is the one for the branch's compiler inputs (scripts/rebuild.sh, notes/compiler_rebuilds.md): data/'s
+# The pair checked is the one for the branch's compiler inputs (scripts/rebuild.sh, notes/compiler_rebuilds.md): lib/'s
 # or the shared store's. A miss is said ("REBUILD NEEDED") and the existing pair is checked: the check builds only when
 # asked to, with --rebuild. Nothing rebuilds the compilers because lib/ changed .
 # usage: scripts/self-check.sh [--rebuild] [<worktree>, default the current checkout]   (exit 0 = Hello printed)
@@ -54,9 +54,9 @@ cp $main_warp $warp || exit 1
 # the seed lies beside the launcher; the pair in the build folder the launcher links to (main-builds/<tip>)
 cp ${main_warp:h}/warp-seed.wasm $scratch/ 2>/dev/null || cp ${main_warp:A:h}/warp-seed.wasm $scratch/ || exit 1
 # main's warp.wasm beside the copy too: the binary takes an empty folder as holding the worktree's pair, and would look
-# for it there instead of in the worktree's data/ (standalone.rs build_path)
+# for it there instead of in the worktree's lib/ (standalone.rs build_path)
 cp ${main_warp:A:h}/warp.wasm $scratch/ || exit 1
-# the pair for these inputs: data/'s, else the store's; built by the copy only with --rebuild. The Rust fingerprint is
+# the pair for these inputs: lib/'s, else the store's; built by the copy only with --rebuild. The Rust fingerprint is
 # that of main's binary, read from the pair beside it (the copy has none beside it)
 beside=${main_warp:A:h}/warp.wasm
 [[ -f $beside ]] || beside=${main_warp:h}/compiler.wasm  # the old name (transition)
@@ -68,7 +68,7 @@ else
 fi
 case $? in
   0) ;;
-  3) print -r -- "self-check: REBUILD NEEDED: no pair for these compiler inputs in data/ nor the store; checking the existing pair (scripts/self-check.sh --rebuild builds it)" ;;
+  3) print -r -- "self-check: REBUILD NEEDED: no pair for these compiler inputs in lib/ nor the store; checking the existing pair (scripts/self-check.sh --rebuild builds it)" ;;
   *) print -r -- "SELF CHECK RED: scripts/rebuild.sh failed in $worktree: $(print -r -- $pair | tail -3)"; exit 1 ;;
 esac
 print -r -- $pair

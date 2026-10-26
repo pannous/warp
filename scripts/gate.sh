@@ -8,7 +8,7 @@
 #           (`cargo check`)
 # usage: scripts/gate.sh [--tiers 0-2|0,1|1] [--no-rebuild] [--base <ref>] [--folders] [--tag-good]
 #                               [<tree>, default this checkout] [<binary>, default /workspace/cow/warp-rust-latest]
-#   --no-rebuild  the probes run with the tree's built compilers (data/warp.wasm, data/warp-self.wasm if there)
+#   --no-rebuild  the probes run with the tree's built compilers (lib/warp.wasm, lib/warp-self.wasm if there)
 #   --base        what tier 2 diffs against (default origin/main; a batch merged on main: the main it started from)
 #   --folders     tier 2 runs the whole folders of the changed test files (many fail today: compare with the base's run)
 #   --tag-good    when every tier run is green and the tree's HEAD is on origin/main: tag good/<YYYY-MM-DD-HHMM>

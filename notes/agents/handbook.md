@@ -96,7 +96,7 @@ Principles and Talking live only in common.md.
 - Close what you start : after every test, probe or build, kill your own leftover processes by PID
   (warp, data/warp, test binaries, cargo, refusals.sh ladders); check with `ps -o pid,etime,command -U $USER | grep
   <your worktree>` before reporting. The safety net, not a substitute: cron's ~/dev/bin/reap-orphans (every 15 min,
-  log /Users/me/warp/reap-orphans.log) kills orphaned warp/test binaries, cargo test/build and xargs sweeps after 30
+  log ~/Library/Logs/warp/cron/reap-orphans.log) kills orphaned warp/test binaries, cargo test/build and xargs sweeps after 30
   min and a test binary's children after WARP_TEST_TIME_LIMIT (600 s).
 - Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is upgraded to the
   working value in its own commit; a change of meaning,
@@ -133,9 +133,9 @@ Principles and Talking live only in common.md.
   core/ or lib/ changed). It catches undefined words, parse errors and wrong values in seconds; `WARP_HINTS=0` hides
   hints. Then the targeted `warp test <folders>`.
 - `warp pure` / `warp self` run compiler.warp's build files warp.wasm / warp-self.wasm (decision
-  compiler-build): next to the binary for the main checkout's lib/, in <worktree>/data/ for a worktree's
+  compiler-build): next to the binary for the main checkout's lib/, in <worktree>/lib/ itself for a worktree's
   (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never build one : a missing one is an error
-  naming `warp rebuild`; a worktree's stale one in data/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user: "we don't want automatic
+  naming `warp rebuild`; a worktree's stale one in lib/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user: "we don't want automatic
   rebuilds just by changing of lib"): no cron, no git hook, no watcher. The pair beside the binary is main's
   delivered compiler: the Integrator's push builds both from the pushed tip's committed lib/ and installs them
   together (notes/agents/integrator.md). A worktree's

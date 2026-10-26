@@ -343,7 +343,7 @@ fn compile(engine: &Engine, compiler: &str, source: &Path, wasm: &Path, folder: 
 	let folder = folder.or_else(|| source.parent().map(Path::to_path_buf)).unwrap_or_default();
 	let lib = library_for(&source).ok_or("no lib/ with compiler/ found: WARP_LIB names one")?;
 	let compiler = compiler_file(&lib, compiler)
-		.ok_or(format!("no {compiler} beside warp-host nor in {}/../data", lib.display()))?;
+		.ok_or(format!("no {compiler} beside warp-host nor in {}", lib.display()))?;
 	let bytes = std::fs::read(&compiler).map_err(|problem| format!("{}: {problem}", compiler.display()))?;
 	let keeper = cache::fingerprint((&bytes, cache::compiler_inputs_fingerprint(&lib)));
 	if std::env::var_os("WARP_HOST_DEBUG").is_some() {
@@ -373,14 +373,14 @@ fn library_for(source: &Path) -> Option<PathBuf> {
 	installed.or_else(|| source.parent().map(Path::to_path_buf).and_then(above)).or_else(|| current.and_then(above))
 }
 
-/// The compiler module: built from that lib/ (<lib>/../data/, a checkout's), else installed beside warp-host
+/// The compiler module: built from that lib/ (in <lib>/ itself, a checkout's), else installed beside warp-host
 /// The compiler beside warp-host comes first: the one a harness staged there or `warp rebuild` wrote into target/, not
-/// a checkout's data/ one, which may be older than its lib/ (a data/warp-self.wasm without C imports refused every
-/// C call as "outside the core"); then lib/../data, then <prefix>/share/warp. In each folder the file of the old name
+/// a checkout's lib/ one, which may be older than its lib/ sources (a warp-self.wasm without C imports refused every
+/// C call as "outside the core"); then lib/ itself, then <prefix>/share/warp. In each folder the file of the old name
 /// (compiler.wasm, compiler-self.wasm) when only that is there (transition)
 fn compiler_file(lib: &Path, name: &str) -> Option<PathBuf> {
 	let beside = installed_folders().pop().into_iter().collect::<Vec<_>>();
-	let folders = [beside, vec![lib.join("../data")], installed_folders()].concat();
+	let folders = [beside, vec![lib.to_path_buf()], installed_folders()].concat();
 	let legacy = legacy_compiler_name(name);
 	let in_folder =
 		|folder: &PathBuf| [folder.join(name), folder.join(legacy)].into_iter().find(|file: &PathBuf| file.is_file());

@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# scripts/rebuild.sh [--check] [--force] [pure|self|both] [<worktree>]: the compilers of a worktree's lib/ in its data/
+# scripts/rebuild.sh [--check] [--force] [pure|self|both] [<worktree>]: the compilers of a worktree's lib/, in that lib/ itself
 # without building them when it can (notes/compiler_rebuilds.md). Run only by hand or by self-check.sh --rebuild: nothing
 # calls it on a change of lib/, and no warp binary rebuilds a compiler by itself.
 # pure (the default): warp.wasm, built by the seed. self: warp-self.wasm, no build of its own: warp.wasm promoted by
 # `warp rebuild self` when warp.wasm compiles compiler.warp once more (scripts/promote-self.sh runs that and never fails its caller).
-# both: pure, then warp-self.wasm only from data/ or the store (steps 1-2), never promoted here: the gate needs warp.wasm.
-# Transition: a file of the old name (compiler.wasm, compiler-self.wasm) in data/ or the store counts when the new one
+# both: pure, then warp-self.wasm only from lib/ or the store (steps 1-2), never promoted here: the gate needs warp.wasm.
+# Transition: a file of the old name (compiler.wasm, compiler-self.wasm) in lib/ or the store counts when the new one
 # is missing, and is copied under the new name.
-#   1. data/<compiler>.wasm (warp, warp-self) whose data/<compiler>.wasm.inputs names the current inputs hash (compiler-inputs.sh): kept
+#   1. lib/<compiler>.wasm (warp, warp-self) whose lib/<compiler>.wasm.inputs names the current inputs hash (compiler-inputs.sh): kept
 #   2. else the shared store's pair of that hash, copied: /workspace/cow/compilers/<hash>/ on the box,
 #      /Volumes/Build/compilers/<hash>/ on the Mac (WARP_COMPILER_STORE names another)
 #   3. else, unless --check, `warp rebuild`, the result published to the store; the store's `main` link moves to it only for a build of origin/main
 # --check: steps 1 and 2 only, exit 3 on a miss. --force: step 3 whatever the hash says.
 # The warp binary building: WARP_BINARY, else the shared one (main's: /workspace/cow/warp-rust-latest on the box). Its Rust fingerprint:
 # WARP_RUST_FINGERPRINT, else the warp.build section of the warp.wasm (or compiler.wasm) beside it (what that binary built).
-# warp-host takes the compiler beside it first, then lib/../data, then <prefix>/share/warp (card pure-c-imports): so the
-# pair, once in data/, is also copied beside the tree's warp-host (target/{debug,host,release}/), where an older one
+# warp-host takes the compiler beside it first, then lib/ itself, then <prefix>/share/warp (card pure-c-imports): so the
+# pair, once in lib/, is also copied beside the tree's warp-host (target/{debug,host,release}/), where an older one
 # would shadow it. Not beside a lone warp binary: warp-rust judges its own target/debug/ build by the path baked in it. The lookup itself stays warp-host's: this only fills its first folder.
 # Every hit and miss is a line of <store>/rebuilds.log: time, tree, hash, compiler, hit or miss.
 set -uo pipefail
@@ -30,7 +30,7 @@ for word in "$@"; do
 done
 tree=$(cd "${tree:-$(git rev-parse --show-toplevel)}" && pwd) || exit 1
 scripts=$(cd "$(dirname "$0")" && pwd)
-lib=$tree/lib data=$tree/data
+lib=$tree/lib compilers=$tree/lib
 if [ "$(uname)" = Darwin ]; then
 	store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers} main_warp=/Users/me/dev/bin/warp-rust
 	[ -x "$main_warp" ] || main_warp=/Users/me/dev/bin/warp
@@ -53,7 +53,7 @@ rust_fingerprint() {
 rust=$(rust_fingerprint)
 [ -n "$rust" ] || echo "rebuild.sh: no Rust fingerprint for $warp (no warp.wasm beside it): WARP_RUST_FINGERPRINT names it" >&2
 hash=$("$scripts/compiler-inputs.sh" "$lib" "$rust") || exit 1
-mkdir -p "$store" "$data" 2>/dev/null
+mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
 copied() { cp -c "$1" "$2" 2>/dev/null || cp --reflink=auto "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
 inputs_line() { echo "$hash rust=$rust commit=$(git -C "$tree" rev-parse --short HEAD 2>/dev/null) built=$(date '+%Y-%m-%dT%H:%M:%S%z')"; }
@@ -76,27 +76,27 @@ mark_main() {
 	[ -n "$remote" ] && [ "$head" = "$remote" ] && git -C "$tree" diff --quiet HEAD -- core && ln -sfn "$hash" "$store/main"
 }
 
-# data/'s file beside each of the tree's warp-host binaries, unless the same file is there
+# lib/'s file beside each of the tree's warp-host binaries, unless the same file is there
 besides() {
 	local name=$1 folder
 	for folder in "$tree"/target/debug "$tree"/target/host "$tree"/target/release; do
 		[ -x "$folder/warp-host" ] || continue
-		cmp -s "$data/$name.wasm" "$folder/$name.wasm" && continue
-		copied "$data/$name.wasm" "$folder/$name.wasm.new-$$" && mv "$folder/$name.wasm.new-$$" "$folder/$name.wasm" &&
-			cp "$data/$name.wasm.inputs" "$folder/$name.wasm.inputs" && echo "rebuild.sh: $name beside ${folder#"$tree"/}"
+		cmp -s "$compilers/$name.wasm" "$folder/$name.wasm" && continue
+		copied "$compilers/$name.wasm" "$folder/$name.wasm.new-$$" && mv "$folder/$name.wasm.new-$$" "$folder/$name.wasm" &&
+			cp "$compilers/$name.wasm.inputs" "$folder/$name.wasm.inputs" && echo "rebuild.sh: $name beside ${folder#"$tree"/}"
 	done
 }
 # a compiler's name before the rename (transition)
 legacy() { case $1 in warp) echo compiler ;; warp-self) echo compiler-self ;; *) echo "$1" ;; esac; }
-# one <name> [check]: data/<name>.wasm for these inputs, from data/, the store, else built (promoted for warp-self)
+# one <name> [check]: lib/<name>.wasm for these inputs, from lib/, the store, else built (promoted for warp-self)
 one() {
-	local name=$1 file=$data/$1.wasm built status old
+	local name=$1 file=$compilers/$1.wasm built status old
 	local check=${2:-$check}
-	old=$data/$(legacy "$name").wasm
+	old=$compilers/$(legacy "$name").wasm
 	if [ -z "$force" ] && [ ! -f "$file" ] && [ -f "$old" ] && [ "$(cut -d' ' -f1 "$old.inputs" 2>/dev/null)" = "$hash" ]; then
-		copied "$old" "$file" && cp "$old.inputs" "$file.inputs" && logged "$name" hit-data-old-name
+		copied "$old" "$file" && cp "$old.inputs" "$file.inputs" && logged "$name" hit-lib-old-name
 	fi
-	if [ -z "$force" ] && [ -f "$file" ] && [ "$(cut -d' ' -f1 "$file.inputs" 2>/dev/null)" = "$hash" ]; then logged "$name" hit-data; return 0; fi
+	if [ -z "$force" ] && [ -f "$file" ] && [ "$(cut -d' ' -f1 "$file.inputs" 2>/dev/null)" = "$hash" ]; then logged "$name" hit-lib; return 0; fi
 	local stored=$store/$hash/$name.wasm
 	[ -f "$stored" ] || stored=$store/$hash/$(legacy "$name").wasm
 	if [ -z "$force" ] && [ -f "$stored" ]; then
@@ -125,12 +125,12 @@ self_found=0
 case $which in
 	pure) one warp || result=$? ;;
 	self) one warp-self || result=$?; [ $result = 0 ] && self_found=1 ;;
-	# warp-self.wasm only when data/ or the store has it for these inputs: never promoted here, never a failure
+	# warp-self.wasm only when lib/ or the store has it for these inputs: never promoted here, never a failure
 	both) one warp || result=$?; [ $result = 1 ] || { one warp-self check && self_found=1; } ;;
 esac
 if [ $result = 0 ]; then
 	[ $which = self ] || besides warp
 	[ $self_found = 1 ] && besides warp-self
 fi
-[ $result = 0 ] && [ -f "$data/warp.wasm" ] && [ -f "$store/$hash/warp.wasm" ] && mark_main
+[ $result = 0 ] && [ -f "$compilers/warp.wasm" ] && [ -f "$store/$hash/warp.wasm" ] && mark_main
 exit $result

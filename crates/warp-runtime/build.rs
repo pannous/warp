@@ -1,6 +1,6 @@
 //! warp-host's compilers beside it (card warp-host-compiler-beside): a build with the feature `host` copies
 //! warp-self.wasm and warp.wasm next to the binary (target/<profile>/warp-host), where warp-host looks first.
-//! They come from WARP_HOST_COMPILERS (a folder), else the checkout's data/ (`warp rebuild` writes them there); a file of
+//! They come from WARP_HOST_COMPILERS (a folder), else the checkout's lib/ (`warp rebuild` writes them there); a file of
 //! the old name (compiler-self.wasm, compiler.wasm) there is copied under the new one (transition).
 use std::path::{Path, PathBuf};
 
@@ -15,7 +15,7 @@ fn main() {
 	let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
 	let source = match std::env::var_os("WARP_HOST_COMPILERS") {
 		Some(folder) => PathBuf::from(folder),
-		None => manifest.join("../../data"),
+		None => manifest.join("../../lib"),
 	};
 	// OUT_DIR is <target>/<profile>/build/warp-runtime-<hash>/out: the binaries are in <target>/<profile>
 	let out = PathBuf::from(std::env::var("OUT_DIR").unwrap_or_default());

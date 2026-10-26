@@ -8,7 +8,7 @@
 //! the new ones are missing (transition). No Rust-compiled stage takes part. The pair next to the binary is the delivered
 //! one (a release's, or main's, stamped with the commit it was built from) and is used as it is, whatever lib/ beside
 //! it says (card installed-compilers); a lib/ named by WARP_LIB that the pair is not for keeps its own in
-//! <lib>/../data/, where a run on one built from another lib/ or warp build says so in one line. Only `warp rebuild`
+//! that lib/ folder itself (user 2026-10-26), where a run on one built from another lib/ or warp build says so in one line. Only `warp rebuild`
 //! builds one: a missing one is an error naming it.
 use crate::compiler::compiler_files::{compiler_inputs_hash, library, module_of_bytes};
 use crate::node::{error, Node};
@@ -27,8 +27,6 @@ const BUILD_PARTS_JUDGED: usize = 3;
 /// `warp rebuild [pure|self]`, the one command that builds a compiler
 const REBUILD_WORD: &str = "rebuild";
 const SHOWN_COMMIT_LENGTH: usize = 10;
-/// Where a lib/ other than the binary's keeps its build files, beside lib/
-const OTHER_LIBRARY_FOLDER: &str = "data";
 /// Names a lib/ of its own (a worktree's): only then can the compilers be other than those next to the binary
 const LIBRARY_VARIABLE: &str = "WARP_LIB";
 /// What a new build compiles once to compute its kept values
@@ -552,8 +550,8 @@ fn found_path(by: Compiler) -> PathBuf {
 	path.parent().map_or(path.clone(), |folder| by.file_in(folder))
 }
 
-/// The build file: next to the binary, unless WARP_LIB names a lib/ the pair there is not for, whose build files lie
-/// beside it. A missing one is judged by its siblings there (none: yes), so a worktree's `warp self` never puts its
+/// The build file: next to the binary, unless WARP_LIB names a lib/ the pair there is not for, which keeps its build
+/// files in itself. A missing one is judged by its siblings there (none: yes), so a worktree's `warp self` never puts its
 /// warp-self.wasm next to main's warp.wasm (card build-path-missing)
 fn build_path(by: Compiler) -> PathBuf {
 	let binary_folder = binary_folder();
@@ -573,6 +571,6 @@ fn build_path(by: Compiler) -> PathBuf {
 	};
 	match binary_folder.filter(for_this_library) {
 		Some(folder) => folder.join(by.file_name()),
-		None => library().parent().unwrap_or(library()).join(OTHER_LIBRARY_FOLDER).join(by.file_name()),
+		None => library().join(by.file_name()),
 	}
 }

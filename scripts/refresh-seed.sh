@@ -18,24 +18,23 @@ check=
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 warp=${WARP_BINARY:-warp}
 seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}
-data=$tree/data
+compilers=$tree/lib
 built=$tree/core/compiler.wasm  # where `warp self build --wasm core/compiler.warp` writes
 [ -f "$seed" ] || { echo "refresh-seed: no seed at $seed" >&2; exit 2; }
 # a self build of the compiler runs for minutes: an exported short limit (600 s) must not cut it
 export WARP_LIB=$tree/lib WARP_TIME_LIMIT=${WARP_SEED_TIME_LIMIT:-7200} WARP_NO_WINDOW=1 WARP_HINTS=0
 unset WARP_SELF_HOSTED WARP_EMITTER
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/refresh-seed.XXXXXX") || exit 2
-mkdir -p "$data"
 kept=
-[ -f "$data/warp-self.wasm" ] && { kept=$scratch/kept.wasm; cp "$data/warp-self.wasm" "$kept"; }
+[ -f "$compilers/warp-self.wasm" ] && { kept=$scratch/kept.wasm; cp "$compilers/warp-self.wasm" "$kept"; }
 restore() {
-  if [ -n "$kept" ]; then cp "$kept" "$data/warp-self.wasm"; else rm -f "$data/warp-self.wasm"; fi
+  if [ -n "$kept" ]; then cp "$kept" "$compilers/warp-self.wasm"; else rm -f "$compilers/warp-self.wasm"; fi
   rm -rf "$scratch"
 }
 trap restore EXIT
 # stage <compiler> <output>: compiler.warp compiled by <compiler>
 stage() {
-  cp "$1" "$data/warp-self.wasm" || exit 1
+  cp "$1" "$compilers/warp-self.wasm" || exit 1
   rm -f "$built"
   local start=$SECONDS
   (cd "$tree" && "$warp" self build --wasm core/compiler.warp) 2>&1 | tail -5
@@ -56,7 +55,7 @@ for name in $STAGES; do
 done
 [ -n "$chosen" ] || { echo "refresh-seed: no stage compiled itself once more (WARP_SEED_STAGES: $STAGES); the seed stays" >&2; exit 1; }
 # and the chosen stage runs a program (decision no-fixpoint: it compiles compiler.warp again and that build runs hello)
-cp "$chosen" "$data/warp-self.wasm"
+cp "$chosen" "$compilers/warp-self.wasm"
 hello=$(cd "$tree" && "$warp" self samples/hello/hello.warp 2>&1)
 echo "$hello" | grep -q Hello || { echo "refresh-seed: $(basename "$chosen" .wasm) runs no hello ($(echo "$hello" | tail -1 | cut -c1-200)); the seed stays" >&2; exit 1; }
 echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr -d ' ') B sha256 $(shasum -a 256 "$chosen" | cut -d' ' -f1)"
