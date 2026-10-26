@@ -91,7 +91,7 @@ def host_int(value: any): list {
 # `global name = 0`, `= ""` or `= []` at the top of runtime.warp: a module variable of that kind its words share, from
 # the kind's zero (ø for a text, an empty list); `[]` is held behind the opaque word (is_empty_list)
 runtime_global(n: any): any := {
-	if not (type(n) is key and op_of(n) == ":" and key_of(n) == symbol("global")) { return ø }
+	if not (is_key(n, Op.Colon) and key_of(n) == symbol("global")) { return ø }
 	name = name_of(key_of(value_of(n)))
 	# a table the runtime parts use for its numbers (kinds.warp, byte_codes.warp) is folded into the code, no variable
 	# of the runtime: the program keeps its own `Kind` (card constants-exist)
