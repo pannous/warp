@@ -1,0 +1,234 @@
+# cargo install --path . --locked --offline
+# Offline builds: avoids the ~10 s registry update on every compile
+# --offline mode: dependencies come from the local registry cache. Vendoring is deactivated for now (no vendor/ on main;
+# the `vendor` branch and its refresh workflow are kept for offline cloud agents: notes/cloud_offline_build.md)
+
+
+# crates/warp-runtime: running compiled programs without the compiler; its binary is the stub of `warp build --exe`
+[workspace]
+members = ["crates/warp-runtime"]
+exclude = ["packages"]
+resolver = "2"
+
+[package]
+name = "warp-lang" # crates.io: `warp` is the web framework ; the library stays `warp`
+version = "1.4.1"
+edition = "2021"  # Cargo edition! NOT package edition!
+description = "Warp: the Warp language, a data notation that is also a programming language, compiled to WebAssembly GC"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/pannous/warp"
+homepage = "https://warp.pannous.com/"
+readme = "README.md"
+keywords = ["wasm", "webassembly", "language", "compiler", "notation"]
+categories = ["compilers", "wasm", "command-line-utilities"]
+# the published crate: the sources and the files they include_str! (lib/, the playground's host scripts), not the tests or wiki
+include = ["src/**", "build.rs", "packages.warp", "web/playground/foreign_python.py", "web/playground/*.js", "lib/**", "README.md", "LICENSE"]
+# No cargo test crate on `pure`: the warp tests in test/ run with `warp test` (user 2026-10-26, card rust-bootstrap)
+autotests = false
+
+[[bin]]
+name = "warp"
+path = "src/main.rs"
+required-features = ["native"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Zero warnings: these warn locally and CI denies them and every clippy lint (rust.yml steps "warnings" and "clippy").
+# Fix or delete the code instead of a crate-level #![allow(...)].
+[lints.rust]
+unused = "warn"
+dead_code = "warn"
+unreachable_code = "warn"
+deprecated = "warn"
+
+[features]
+# native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
+default = ["native", "validate"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "warp-runtime/profiling", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wgpu", "dep:pollster", "dep:winit", "dep:ab_glyph", "dep:objc2", "dep:cpal", "dep:midir"]
+# validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
+# of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
+validate = []
+#test = [] superfluous, just use cargo test => #[cfg(test)]
+ffi = []  # Enable FFI tests (requires native libraries like libc/libm)
+
+[dependencies]
+# ⚠️ toggle OFFLINE mode!
+# can't exclude dependencies from test, only with features
+anyhow = "1.0"
+#regex = "1.10.3" # removed: unused
+serde = { version = "1.0", features = ["derive"] }
+postcard = { version = "1.1", default-features = false, features = ["alloc"] } # values os.keep_of keeps and the header cache, on disk
+serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"] } # objects keep the order of warp maps (and of JS JSON.stringify); a float read from JSON is the float written (the browser hands results over as JSON)
+#wast = "*"
+wasmparser = "0.259"
+wat = { version = "1.259", optional = true } # native: an imported module may be WAT text (wasm_modules.rs)
+wasm-encoder = "0.259" # the build section standalone.rs appends to a compiler, the value types of the header cache
+log = "0.4.29"
+#fetch = "0.8.1"
+num-bigint = { version = "0.4.8", features = ["serde"] }
+num-traits = "0.2"
+num-integer = "0.1"
+ureq = { version = "3.1.4", optional = true }
+# a channel named by a ws:// or wss:// address is a WebSocket (src/web/web_sockets.rs), TLS through the rustls ureq brings
+tungstenite = { version = "0.30", optional = true, features = ["rustls-tls-webpki-roots"] }
+# gpu_compute natively (src/graphics/gpu.rs): WGSL compute shaders on Metal, Vulkan or DX12, as WebGPU runs them in the browser
+wgpu = { version = "30", optional = true, default-features = false, features = ["std", "parking_lot", "wgsl", "metal", "vulkan", "dx12"] }
+pollster = { version = "0.4", optional = true } # wgpu answers with futures: block on them
+ab_glyph = { version = "0.2", optional = true } # label of use draw natively: text set in a system font (src/graphics/text_raster.rs)
+# paint() in a terminal shows its frames in a window (src/graphics/paint_window.rs), drawn through a wgpu surface (Metal on macOS)
+winit = { version = "0.30", optional = true, default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
+regex = { version = "1.12", optional = true }
+tiny_http = { version = "0.12", optional = true } # `serve 8080 { get "/" { … } }` natively (src/web/web_server.rs) # the stdlib module regex natively (src/std_adapters.rs); JS RegExp in the browser
+paste = "1.0"
+rustyline = { version = "18", optional = true }
+libloading = { version = "0.9", optional = true }  # Dynamic library loading for FFI (raylib, SDL2, etc.)
+
+# syn and reqwest removed - treeshaking
+
+#wasm-bindgen = "0.2.91"
+
+#wasmer = "4.2.5"
+#wasmedge-sdk = "0.13.2" BROKEN!
+
+#binaryen = "*" # 0.12.0 C++ compiler and toolchain infrastructure library for WebAssembly.
+#It exposes an API for parsing and generating WebAssembly modules, and a set of tools for interacting with them.
+#wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
+
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat", "demangle", "addr2line", "incremental-cache", "parallel-compilation"], optional = true }
+wasmtime-wasi = { version = "49.0.1", optional = true }
+warp-runtime = { path = "crates/warp-runtime", version = "1.4.1", default-features = false } # without features: the names of the host words only
+flate2 = { version = "1.1", optional = true } # paint() writes a PNG natively (src/graphics/paint.rs); in the tree through wasmtime already
+crc32fast = { version = "1.5", optional = true } # the PNG chunk checksums
+sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (src/run/module_cache.rs); wasmtime uses it already
+#wasmtime-runtime = "*" # Wasmtime runtime
+#wasmtime-wasi = "*" # WASI support for Wasmtime
+#wasmtime-wast = "*" # Wast support for Wasmtime
+#wasmtime-environ = "*" # Wasmtime environment
+#wasmtime-obj = "*" # Wasmtime object file
+#wasmtime-objdump = "*" # Wasmtime object file dumper
+#wasmtime-profiling = "*" # Wasmtime profiling
+#wasmtime-wasi-common = "*" # WASI common support for Wasmtime
+#wasmtime-jit = "*" # JIT compiler for Wasmtime
+#wasmtime-wiggle = "*" # Wiggle support for Wasmtime
+
+#wasm-builder = "*" #Wasm builder is a utility for building a rust project as a Wasm binary
+
+#parity-wasm = "*" # Low-level WebAssembly format library for serializing, deserializing, and building .wasm binaries.
+#Good support for well-known custom sections, such as the "names" section and "reloc.WHATEVER" sections.
+# parity-wasm is INCOMPLETE: pub enum Type { Function(FunctionType),
+
+# the paint window's AppKit calls (src/graphics/paint_window.rs); the web view of `warp app` is warp-runtime's (webview feature)
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "0.6", optional = true }
+# our own sound output (src/sound/sound_engine.rs, card native-sound): sounds mixed sample-accurately in a CoreAudio callback
+# instead of one afplay per sound; macOS only for now (Linux would link ALSA), elsewhere the players stay
+cpal = { version = "0.18", optional = true }
+midir = { version = "=0.11.0", optional = true } # MIDI in and out natively (src/sound/midi.rs, card midi-receive): CoreMIDI, ALSA, WinMM
+
+# no dev-dependencies on `pure`: the cargo test crate left with the Rust compiler (card rust-bootstrap)
+
+
+[profile.dev]
+incremental = true
+# Maximum build speed optimizations
+opt-level = 0          # No optimization for faster compile
+debug = "line-tables-only"  # backtraces keep function names and file:line (crash cards); no IDE needs full debug info
+split-debuginfo = "unpacked"  # Faster on macOS
+codegen-units = 16     # Rust default (256 was wasteful)
+
+# dependencies without debug info (warp-debug was 247 MB, ~118 MB of it symbols); the entries for single packages
+# below win over this one. Not opt-level 1: the clean build took 425 s instead of 271 s and the full suite ran only
+# 3-5 % faster (1080 s vs 1111/1141 s, card test-runner-deps)
+[profile.dev.package."*"]
+debug = false
+
+# tests run the programs on wasmtime too: its GC at full speed (two million map entries took 40 s unoptimized)
+[profile.dev.package.wasmtime]
+opt-level = 3
+# every run compiles its module with Cranelift: unoptimized, it took 118 of the 122 s of a functions:: test run
+# (581 modules, 200 ms each); at opt-level 3 the run takes 15 s
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+[profile.dev.package.cranelift-frontend]
+opt-level = 3
+[profile.dev.package.cranelift-bforest]
+opt-level = 3
+[profile.dev.package.cranelift-entity]
+opt-level = 3
+[profile.dev.package.regalloc2]
+opt-level = 3
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 3
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+[profile.dev.package.wasmparser]
+opt-level = 3
+
+[profile.test]
+inherits = "dev"       # Use dev profile for tests
+
+# don't use for now to see if it helps with IDEs using same build cache
+#[profile.fast]
+#inherits = "dev"
+#debug = false          # No debug symbols → /opt/cargo/fast/
+
+# web/playground's warp.debug.wasm: optimized enough to run, with DWARF and the name section kept for the browser's
+# debugger and readable stack traces (build.sh)
+[profile.web-debug]
+inherits = "release"
+opt-level = 1
+lto = false
+codegen-units = 16
+debug = "line-tables-only" # full DWARF is 53 MB; lines and function names are what the debugger and traces need
+strip = false
+
+# the native compiler (brew, the GitHub releases, crates.io): optimized for speed. Measured 2026-10-17 against
+# opt-level z: compiling 3.3x faster (a 300-function program 5.0 s → 1.5 s), the binary 15.5 → 28.9 MB, the
+# standalone executables' warp-runtime stub 1.02 → 1.22 MB
+[profile.release]
+incremental = false    # Release doesn't need incremental
+opt-level = 3
+lto = true             # Full LTO for maximum treeshaking
+codegen-units = 1      # Single codegen unit for best optimization
+panic = "abort"        # Smaller binary, no unwinding
+strip = true           # Strip symbols
+
+# web/playground's warp.wasm, which every visitor downloads: optimized for size (build.sh)
+[profile.web-release]
+inherits = "release"
+opt-level = "z"
+
+# the native runtime runs the programs: its GC and libcalls at full speed (a size-optimized wasmtime ran a GC-heavy
+# map program 2.5× slower than the wasmtime CLI); the web build has no wasmtime, so its size is untouched
+[profile.release.package.wasmtime]
+opt-level = 3
+
+# warp-host (notes/warp_host.md, card warp-host-size): optimized for size, 6.5 MB instead of release's 11.5 MB; wasmtime's
+# runtime stays at 3, and Cranelift at "z" compiles warp-self in 4.1 s instead of 2.4 s, once per cache
+# (`cargo build --profile host -p warp-runtime --features host --bin warp-host`, target/host/warp-host)
+[profile.host]
+inherits = "release"
+opt-level = "z"
+
+[profile.host.package.wasmtime]
+opt-level = 3
+
+# the user's try binary ~/dev/bin/warp, rebuilt after every pushed batch (install_user_warp.sh): optimized for speed
+# but cheap to rebuild (no LTO, parallel codegen, incremental); unwinding keeps tasks.rs catch_unwind and panic
+# messages as in the debug build. A finger paint show(): debug 250 ms, release 20-40 ms
+[profile.quick-release]
+inherits = "release"
+opt-level = 3
+lto = false
+codegen-units = 16
+incremental = true
+panic = "unwind"
+
+[lib]
+name = "warp"
+# Only rlib: the browser build asks for the cdylib itself (web/playground/build.sh: `cargo rustc --crate-type cdylib`).
+# A cdylib here made cargo name the rlib without a hash, so every checkout copy linked the same libwarp.rlib.
+crate-type = ["rlib"]
+# Every doc example is `ignore`: a Doc-tests step would test nothing, yet it relinks against the shared target dir's
+# dependency rlibs after the suite, where another checkout's build can replace them mid-run (E0463, card gate-doc).
+doctest = false

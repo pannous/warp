@@ -1,0 +1,22 @@
+[net]
+offline = true
+
+[build]
+# Maximum incremental compilation
+incremental = true
+# Parallel jobs (default uses all cores, 8 is explicit)
+jobs = 8
+# Let CARGO_TARGET_DIR env var control target dir (default: /opt/cargo for shared cache)
+# Note: Use 'cargo test --no-fail-fast' to run all tests
+#test = ["test", "--no-fail-fast"] forbidden?
+# The test suite in headless Chrome (notes/web_playground.md): `cargo browser-test [filter]` builds tests/main.rs for
+# wasm32-wasip1 without the native feature and runs it through web/playground/tests.html
+[alias]
+browser-test = ["test", "--target", "wasm32-wasip1", "--no-default-features", "--test", "tests"]
+
+[target.wasm32-wasip1]
+runner = "web/playground/test_in_browser.py"
+
+# each test thread keeps a sample's database tables in its own copy here (src/host/database.rs, card orm-sample-lock)
+[env]
+WARP_TEST_TABLES = { value = "data/test_tables", relative = true }
