@@ -249,6 +249,8 @@ Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Work
 /Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md),
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` 
 The probes/ folder is NOT a place to doublicate worktrees!
+Before removing a worktree: `git status --short -uall` (untracked files are hidden on this Mac) + files changed in 2 h.
+
 
 ## Folders
 - `probes/` = hand-written probe sources only 

@@ -1,4 +1,0 @@
-vendor
-target
-*.wasm
-Cargo.lock
