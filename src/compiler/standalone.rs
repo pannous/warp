@@ -296,19 +296,14 @@ fn promote(path: &Path) -> Result<CompiledModule, Node> {
 		compiled_with(&file, &folder, shipped(&warp_file, warp_bytes.clone()), kept_scope(pure)).map_err(|failure| {
 			error(&format!("compiler.warp compiled by {}: {}", warp_file.display(), failure.serialize()))
 		})?;
-	let fixpoint = is_module_with_build_section(&warp_bytes, &next.bytes);
-	if !fixpoint {
-		compiles_once_more(&file, &folder, path, &next.bytes).map_err(|failure| {
-			error(&format!(
-				"no fixpoint: {} ({} B) compiles compiler.warp to other bytes ({} B), and those fail to compile it once \
-				 more ({}); {} stays as it was",
-				warp_file.display(),
-				warp_bytes.len(),
-				next.bytes.len(),
-				failure.serialize(),
-				path.display()
-			))
-		})?;
+	if !is_module_with_build_section(&warp_bytes, &next.bytes) {
+		return Err(error(&format!(
+			"no fixpoint: {} ({} B) compiles compiler.warp to other bytes ({} B); {} stays as it was",
+			warp_file.display(),
+			warp_bytes.len(),
+			next.bytes.len(),
+			path.display()
+		)));
 	}
 	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| write_new(path, &warp_bytes));
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
@@ -320,20 +315,13 @@ fn promote(path: &Path) -> Result<CompiledModule, Node> {
 	if !copied {
 		ship(path, &warp_bytes)?;
 	}
-	let reached = if fixpoint { "compiles compiler.warp to its own bytes" } else { "builds a compiler that compiles compiler.warp once more" };
-	eprintln!("fixpoint: {} {reached}, promoted to {}", warp_file.display(), path.display());
+	eprintln!(
+		"fixpoint: {} compiles compiler.warp to its own bytes, promoted to {}",
+		warp_file.display(),
+		path.display()
+	);
 	warm(Compiler::SelfCompiled)?;
 	Ok(next)
-}
-
-/// The loose fixpoint (user 2026-10-26): a stage N+1 of other bytes still counts when it compiles compiler.warp once more
-fn compiles_once_more(file: &Path, folder: &Path, promoted: &Path, next: &[u8]) -> Result<(), Node> {
-	let next_file = promoted.with_extension("next.wasm");
-	write_new(&next_file, next).map_err(|failure| error(&format!("{}: {failure}", next_file.display())))?;
-	let again = compiled_with(file, folder, shipped(&next_file, next.to_vec()), kept_scope(Compiler::RustCompiled));
-	let _ = std::fs::remove_file(crate::run::module_cache::shipped_path(&next_file));
-	let _ = std::fs::remove_file(&next_file);
-	again.map(|_| ())
 }
 
 /// Whether `file` is `module` followed by one custom section (the build section `build` appends) and nothing else
