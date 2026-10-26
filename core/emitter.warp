@@ -8,6 +8,7 @@
 # (tests/common/twins.rs emitter_differential) counts the source as outside the core. A function's parameters take
 # their kinds from their annotations, else from the first call; its result kind from its body, read twice so that a
 # recursive call knows it.
+# Use WASM names excessively! Wasm provides custom sections for names, use ALL of them!
 use "walk.warp"
 use "words.warp"
 use "signatures.warp"
