@@ -498,4 +498,4 @@ D8 → approx-zero. D9, D12, D13 → got-it rule + reconsider-spaced + list-sign
 exact-decimals. #40 → list-sign. dimension-bridges → pixel-lengths. dollar-element → page-ids. definition-cases → cut.
 P85, P87, P93, P95, P96, P98, P99, P101, P137, P144, P181, P53, P59, P79, P80, P9, P10, P16, P19, #2, #14b–d, #15–20,
 the original questions 1–41: test edits and housekeeping done.
-- typed-signatures (user): no more `continued_safely(test: any, parts: any)`: core/ parameters get real types instead of any; the type workers do it after their current chunks (2026-10-26)
+- typed-signatures (user): "in general, less anys": core/ parameters get real types wherever one exists (example: `continued_safely(test: any, parts: any)`); any stays only for values that really are anything. The type workers do it after their current chunks (2026-10-26)
