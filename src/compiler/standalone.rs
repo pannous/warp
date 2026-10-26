@@ -244,7 +244,12 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
 	let owner = crate::extensions::sha256_hex(&compiler.bytes);
-	let said = crate::modules::std_adapters::kept_by(owner, scope, || crate::compiled_module::run_module(compiler));
+	// its kept values shipped beside its build file serve a cold cache; a new build's warming run writes them there
+	let shipped = crate::run::module_cache::shipped_kept_folder(&compiler.bytes);
+	let warming = crate::run::module_cache::warming();
+	let said = crate::run::module_cache::with_shipped_kept(shipped, warming, || {
+		crate::modules::std_adapters::kept_by(owner, scope, || crate::compiled_module::run_module(compiler))
+	});
 	crate::modules::std_adapters::set_program_arguments(running);
 	said
 }
@@ -253,6 +258,9 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 /// warp.wasm (built first when there is none of these compiler inputs) promoted to warp-self.wasm when it passes the
 /// fixpoint test, else why not, warp-self.wasm left as it was
 pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
+	if let Compiler::RustCompiled = by {
+		ship_seed()?;
+	}
 	let path = build_path(by);
 	crate::util::with_time_limit(rebuild_time_limit(), || match by {
 		Compiler::RustCompiled => build(by, &path),
@@ -287,7 +295,7 @@ fn promote(path: &Path) -> Result<CompiledModule, Node> {
 	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let folder = file.parent().unwrap_or(library()).to_path_buf();
 	let next =
-		compiled_with(&file, &folder, module_of_bytes(warp_bytes.clone()), kept_scope(pure)).map_err(|failure| {
+		compiled_with(&file, &folder, shipped(&warp_file, warp_bytes.clone()), kept_scope(pure)).map_err(|failure| {
 			error(&format!("compiler.warp compiled by {}: {}", warp_file.display(), failure.serialize()))
 		})?;
 	if !is_module_with_build_section(&warp_bytes, &next.bytes) {
@@ -301,6 +309,14 @@ fn promote(path: &Path) -> Result<CompiledModule, Node> {
 	}
 	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| write_new(path, &warp_bytes));
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
+	// the same bytes, so the same machine code: warp.wasm's .cwasm copied, made only when it is not current
+	let (engine, _) = crate::run::wasm_reader::engine_for(&warp_bytes);
+	let shipped_warp = crate::run::module_cache::shipped_path(&warp_file);
+	let copied = crate::run::module_cache::shipped_current(&engine, &warp_file, &warp_bytes)
+		&& std::fs::copy(&shipped_warp, crate::run::module_cache::shipped_path(path)).is_ok();
+	if !copied {
+		ship(path, &warp_bytes)?;
+	}
 	eprintln!(
 		"fixpoint: {} compiles compiler.warp to its own bytes, promoted to {}",
 		warp_file.display(),
@@ -364,7 +380,22 @@ fn compiler(by: Compiler) -> Result<CompiledModule, Node> {
 			path.display()
 		);
 	}
-	Ok(module_of_bytes(bytes))
+	Ok(shipped(&path, bytes))
+}
+
+/// A build file's module, run from the machine code shipped beside it (module_cache shipped_with): a compiler is never
+/// compiled at run time (card precompiled-compilers)
+fn shipped(path: &Path, bytes: Vec<u8>) -> CompiledModule {
+	crate::run::module_cache::shipped_with(path, &bytes);
+	module_of_bytes(bytes)
+}
+
+/// The build file's machine code written beside it, for the engine its runs use (`<file>.cwasm`)
+fn ship(path: &Path, bytes: &[u8]) -> Result<(), Node> {
+	let (engine, _) = crate::run::wasm_reader::engine_for(bytes);
+	crate::run::module_cache::write_shipped(&engine, path, bytes)
+		.map(|_| ())
+		.map_err(|failure| error(&format!("{}: cannot precompile: {failure:#}", path.display())))
 }
 
 /// Where the delivered compilers lie: next to the binary, or in an installed warp's share/warp
@@ -393,6 +424,7 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	);
 	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| write_new(path, &bytes));
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
+	ship(path, &bytes)?;
 	warm(by)?;
 	Ok(module)
 }
@@ -407,7 +439,22 @@ fn builder(_by: Compiler) -> Result<(String, CompiledModule, Option<String>), No
 			seed.display()
 		))
 	})?;
-	Ok((format!("the seed {}", seed.display()), module_of_bytes(bytes), None))
+	Ok((format!("the seed {}", seed.display()), shipped(&seed, bytes), None))
+}
+
+/// `warp rebuild seed`, and before `warp rebuild pure`: the seed's machine code beside it (seed/warp-self.wasm.cwasm),
+/// made when it is missing or stale (a refreshed seed: scripts/refresh-seed.sh), so no build compiles the seed at run
+/// time (card precompiled-compilers); its path
+pub fn ship_seed() -> Result<PathBuf, Node> {
+	let seed = seed_file();
+	let bytes =
+		std::fs::read(&seed).map_err(|failure| error(&format!("no seed compiler at {}: {failure}", seed.display())))?;
+	let (engine, _) = crate::run::wasm_reader::engine_for(&bytes);
+	if !crate::run::module_cache::shipped_current(&engine, &seed, &bytes) {
+		eprintln!("precompiling the seed {} (once per seed and engine)", seed.display());
+		ship(&seed, &bytes)?;
+	}
+	Ok(crate::run::module_cache::shipped_path(&seed))
 }
 
 /// Where a compiler's run keeps the values its makers made (os.keep_of; std_adapters kept_by): warp.wasm, which the
@@ -449,7 +496,8 @@ fn current_build_file(by: Compiler) -> Option<(PathBuf, Vec<u8>)> {
 /// lowered runtime words: ~50 s on the Mac) are computed by the build, not by the first program's run within its time
 /// limit (card cloud-lane-narrow: the first `warp self` after `warp rebuild self` ran out of time on a cloud VM)
 fn warm(by: Compiler) -> Result<(), Node> {
-	compiled_code(WARMING_PROGRAM, library(), by).map(|_| ())
+	let _ = std::fs::remove_dir_all(crate::run::module_cache::shipped_kept_folder_of(&build_path(by)));
+	crate::run::module_cache::warming_with(|| compiled_code(WARMING_PROGRAM, library(), by)).map(|_| ())
 }
 
 /// A new file moved into place: writing over a module another warp run reads would hand it half a module

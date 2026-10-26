@@ -49,6 +49,8 @@ data/
 !tests/fixtures/**/*.wasm
 # the seed compiler the self lane starts from (seed/README.md, card rust-bootstrap)
 !/seed/warp-self.wasm
+# its machine code, made by `warp rebuild` (card precompiled-compilers), never committed
+/seed/*.cwasm
 # libc.wasm is the browser's `use c` (P147), served with the playground; build_libc.sh rebuilds it
 !web/playground/lib/libc.wasm
 # `stored x = v` keeps its values beside the program (src/lowering/stored_values.rs)
