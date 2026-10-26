@@ -42,8 +42,9 @@ It is similar to JSON5 / ECMA Script but much simplified yet with a richer synta
 parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
 whose runtime words are warp too (runtime.warp, runtime/*.warp). lib/compiler/node.warp declares the Node enum case for
 case as src/node/mod.rs has it.
-- `warp pure <file|code>`: runs compiler.wasm, compiler.warp compiled by the Rust compiler
-- `warp self <file|code>`: runs compiler-self.wasm, compiler.warp compiled by itself
+- `warp pure <file|code>`: runs compiler.wasm, compiler.warp compiled by the seed (seed/compiler-self.wasm, a fixpoint
+  compiler checked in; scripts/refresh-seed.sh refreshes it). No Rust-compiled stage builds either compiler
+- `warp self <file|code>`: runs compiler-self.wasm, compiler.warp compiled by itself (by compiler.wasm)
 - `warp rebuild [pure|self]`: builds them anew from lib/ (nothing rebuilds them automatically); a worktree's pair lives
   in <worktree>/data/ (`WARP_LIB=<worktree>/lib`), main's beside the binary
 - A form outside emitter.warp's core is refused loudly (`outside the core: …`)
@@ -103,7 +104,7 @@ The `warp` binary (the Rust host and bootstrap) is built by cargo; the warp comp
 cargo build                    # Debug build
 cargo build --release          # Release build
 cargo build --offline          # Offline mode (uses the local registry cache)
-warp rebuild pure              # compiler.wasm from lib/ (`warp rebuild self`: compiler-self.wasm)
+warp rebuild pure              # compiler.wasm from lib/ by the seed (`warp rebuild self`: compiler-self.wasm by compiler.wasm)
 ```
 
 

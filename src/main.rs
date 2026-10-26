@@ -71,10 +71,11 @@ const LOWER_JSON_COMMAND: &str = "lower --json";
 /// `warp pure <file> [arguments…]`: the program compiled by lib/compiler/compiler.warp, the warp compiler as one warp
 /// program, compiled by Rust, and run (src/compiler/standalone.rs)
 const PURE_COMMAND: &str = "pure";
-/// `warp self <file> [arguments…]`: as `warp pure`, with compiler.warp compiled by itself (the pure lane)
+/// `warp self <file> [arguments…]`: as `warp pure`, with compiler.warp compiled by itself (by compiler.wasm)
 const SELF_COMMAND: &str = "self";
 /// `warp rebuild [pure|self]`: compiler.wasm and compiler-self.wasm, the compilers of `warp pure` and `warp self`, built
-/// anew from lib/ (decision compiler-build; src/compiler/standalone.rs)
+/// anew from lib/: compiler.wasm by the seed (seed/compiler-self.wasm), compiler-self.wasm by compiler.wasm (decision
+/// compiler-build, card rust-bootstrap; src/compiler/standalone.rs)
 const REBUILD_COMMAND: &str = "rebuild";
 /// The first words the command line takes as commands, for unknown_command's suggestion
 const COMMAND_WORDS: [&str; 33] = [
@@ -640,9 +641,9 @@ fn usage() {
 	println!("  warp <file.warp>     Run a warp file (env WARP_EXECUTABLE=1: also leave its standalone executable <file> next to it)");
 	println!("  warp run <file.warp> Run a warp file, never an executable");
 	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (lib/compiler/compiler.warp)");
-	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by Rust");
+	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by the seed");
 	println!("  warp pure build <file.warp|code> Its module (out.wasm for code) made by compiler.warp; also run, eval");
-	println!("  warp rebuild [pure|self] Build compiler.wasm / compiler-self.wasm, their compilers, anew from lib/");
+	println!("  warp rebuild [pure|self] Build compiler.wasm (by seed/compiler-self.wasm) / compiler-self.wasm (by compiler.wasm) anew from lib/");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
 	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");
