@@ -448,6 +448,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - go-voice: a `go {}` task is a voice sounding along from where its starter stands. deleted-loop: a live_loop deleted from the source stops on re-evaluation (≤ ~4 s fade).
 
 ## Modules, library and foreign code
+- file-words-implicit (user): every word of lib/file.warp (write, exists, append, delete…) works without `use file`, like `read`; its first use loads the bundled module on demand (built-in-lib); the host's capability check still applies.
 - bodiless-imports (user): a function without a body is its typed head with who supplies it: `is_null(x: any): bool from warp` (the foreign-signature line, `from runtime`/`from 'm'` alike); `import is_null(x: any): bool` works too (WASM's word). `import m` without a head stays `use m` (P139).
 - foreign-signature: a libm function is declared by a typed foreign line `sin(x: float): float from 'm'`; builtin math words use the same line with `from warp`; a bare `floor` is warp's, C's only qualified (`m.floor`); `import (…) from 'm'` keeps working for headers. Open (card foreign-line): a program's own line should win over the header's signature.
 - P169 `use math` is the module with readable names; raw C math is `use cmath`.
