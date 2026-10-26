@@ -1,18 +1,14 @@
 ## Project Overview
 
-This is **warp**, the successor of **wasp** (C++). It began as a Rust implementation; the compiler is now self-hosted
-in warp (lib/compiler/*.warp, notes/self_hosting.md). The Rust code in src/ and crates/ is frozen legacy: the bootstrap
-that first compiles compiler.warp, the native host (wasmtime, host words, FFI) and the runtime (notes/agents/common.md
-"Principles"). 
-
-# self hosted
-The core WARP compiler is functional and able to compile itself. From now on, most things should be implemented as libraries, or as compiler extensions. If the core compiler (or even the Rust bootstrap) needs changes, this needs to go through the interviewer. 
+warp is a data format and wasm first programming language
 
 https://github.com/pannous/warp
 https://warp.pannous.com/
 
-warp is a data format and wasm first programming language
-C++ source code locally at ~/wasp/ documentation and specification at ./wiki 
+This is **warp**, the successor of **wasp** (C++). 
+
+C++ source code locally at ~/wasp/ 
+documentation and specification at ./wiki 
 The specification is not fully implemented yet 
 
 - The project parses a custom syntax, builds a Node-based AST, and emits WebAssembly modules using:
@@ -20,9 +16,23 @@ The specification is not fully implemented yet
 - WASM GC (Garbage Collection) bytecode
 - wasmtime to run them (feature `native`; the browser build in web/playground runs them in JavaScript)
 
+# self hosted
+
+It began as a Rust implementation; the compiler is now self-hosted
+in warp (lib/compiler/*.warp, notes/self_hosting.md). The Rust code in src/ and crates/ is frozen legacy: the bootstrap
+that first compiles compiler.warp, the native host (wasmtime, host words, FFI) and the runtime (notes/agents/common.md
+"Principles"). 
+
+The core WARP compiler is functional and able to compile itself. From now on, most things should be implemented as libraries, or as compiler extensions. If the core compiler (or even the Rust bootstrap) needs changes, this needs to go through the interviewer. 
+
+warp0.wasm bootstrapped by Rust implementation, partially using .warp files? legacy branch rust-bootstrap
+warp.wasm compiler written in pure warp (compiled by warp0.wasm or warp2.wasm)
+warp2.wasm recompiled fix point
+
+
 ## Core Architecture
 
-Wasp Wisp and Warp are similar to lisp in that they are a data format from first principles,
+Warp is similar to lisp: a data and code format from first principles,
 but instead of s-expressions they use a more modern syntax with blocks, lists, key-value pairs, tags, comments, and rich atomic types.
 
 ```warp
@@ -34,7 +44,6 @@ Person {
 ```
 
 It is similar to JSON5 / ECMA Script but much simplified yet with a richer syntax and more precise and flexible data model.
-
 
 ### The warp compiler (`lib/compiler/`, `core/` links to it)
 
@@ -61,7 +70,7 @@ The central data structure is `Node`, an enum representing all AST node types:
 - **Meta** - Node wrapper that adds metadata (comments, line/column positions)
 - **Error, Type** - an error; a type definition (name + body)
 
-### Rust parser (`src/warp_parser/`, the bootstrap)
+### Warp parser
 
 Recursive descent parser that converts text input to Node AST:
 
@@ -69,7 +78,7 @@ Recursive descent parser that converts text input to Node AST:
 - Handles comments (`//` line and `/* */` block) attached as metadata
 - Parses literals (numbers, strings, symbols), groups ((), [], {}), and structures
 
-### Rust pipeline (`src/pipeline.rs`: `compile`, `eval`, `lower`)
+### Legacy rust pipeline (`src/pipeline.rs`: `compile`, `eval`, `lower`)
 
 parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such as `mutation.rs`, `lambdas.rs`,
 `library_words.rs`, `switch.rs`, plus `analyzer/`) → analysis and diagnostics → WASM GC emitter → run.
@@ -113,10 +122,9 @@ every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column 
 `todo list`, `todo move <card> <column>`, `todo done <card> [commit]` (never delete a card). 
 Picking a card is `todo take <card> <session name>` The branch will and must be named identical to the card. 
 
-TODO: Old cards with bugs in the Rust implementation must be dropped unless that bug is critical for bootstrapping of warp
-TODO: Old cards with features for the Rust implementation must be converted to WARP implementation or dropped 
-
 When encountering a TODO without corresponding card in my main checkout ~/dev/angles/warp/lib/ Create a card for that to do and mark the card name behind the todo and commit 
+
+When implementing gaps that the old Rust legacy implementation had, but are not part of the pure WARP implementation yet, do not resort to blindly copying old spaghetti code. Instead, create a clean, idiomatic new implementation from first principles. 
 
 <!-- un-ignore every #[ignore = "next"] or even #[ignore = "soon"]  once it passes  -->
 
@@ -278,7 +286,7 @@ runs completely in warp; from then on only outcome tests.
 
 eq! is just a shortcut for assert_eq! but
 is! invokes the whole machinery, to parse, analyze, emit to wasm, read back, run / convert to Node again
-(in warp tests `is!` is lib/prelude.warp's `eval(warp) == expected`, notes/is_tests.md):
+in warp tests `is!` is lib/prelude.warp's `eval(warp) == expected`, notes/is_tests.md:
 
 the is! function triggers the following roundtrip: 
 is!("3+3",6); => parse("3+3") -> Node -> wasm_node -> test.wasm -> wasm_node -> Node == 6
