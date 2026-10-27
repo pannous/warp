@@ -54,7 +54,7 @@ word_alias(statement: Node): any := {
 		_: ø
 	}
 }
-aliased(n: any, aliases: list): any := {
+aliased(n: Node, aliases: list): any := {
 	if not (n is symbol) { return n }
 	for pair in aliases { if name_of(n) == pair#1 { return symbol(pair#2) } }
 	n
@@ -206,7 +206,7 @@ is_declaration(statement: Node): bool := match statement {
 	_: declared_enum(statement) != ø or is_keyword_group(statement) or is_pattern_definition(statement)
 }
 assigns_or_defines(op: Op): bool := op == Op.Assign or op == Op.Define
-is_declaration_keyword(n: any): bool := n is symbol and name_of(n) in declaration_keywords
+is_declaration_keyword(n: Node): bool := n is symbol and name_of(n) in declaration_keywords
 # `def f(x) …`, `global x = 0`: a group a function or declaration keyword starts
 is_keyword_group(n: Node): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or is_declaration_keyword(n#1))
 

@@ -44,7 +44,7 @@ assigned_enum(value: Node, enums: any): text := match value {
 
 # the names assigned cases of one enum, `c = Coin.Dime`, with that enum; "" for a name also assigned anything else
 # Rust twin: plain_enums.rs assigned_cases
-assigned_in(n: any, enums: any, subjects: any): any := {
+assigned_in(n: Node, enums: any, subjects: any): any := {
 	if is_key(n, Op.Assign) and is_name(key_of(n)) { held_as(subjects, name_of(key_of(n)), assigned_enum(value_of(n), enums)) }
 	for part in scope_parts(n) { assigned_in(part, enums, subjects) }
 	subjects

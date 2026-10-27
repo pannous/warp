@@ -36,9 +36,9 @@ kind_changes(program: Node): Node := {
 	program
 }
 
-is_define_statement(n: any): bool := is_operator(n, ":=")
+is_define_statement(n: Node): bool := is_operator(n, ":=")
 # `(f x) := …`: the name it defines, else ""
-define_statement_name(n: any): text := {
+define_statement_name(n: Node): text := {
 	head = key_of(n)
 	if is_group(head) and #head > 0 and head#1 is symbol then name_of(head#1) else ""
 }
