@@ -1,6 +1,6 @@
 # Cards for the timed Codex worker (notes/agents/codex_worker.sh), in order; the Supervisor keeps this list.
 # Library work only (lib/, samples/, test/, wiki/), away from the sessions changing core/ (user 2026-10-26).
-hC3bOg                  # unit literals 300ms/5km: one sugar rule $n $u => Quantity($n, $u); Quantity's operators in lib/units.warp (decision units-quantity-lib)
+unit-literals           # unit literals 300ms/5km: one sugar rule $n $u => Quantity($n, $u); Quantity's operators in lib/units.warp (decision units-quantity-lib)
 list-word-methods       # list words range(…), dot, insert, array(…), random(n)
 canvas-paint-arity      # canvas words: paint(…) with 1 or 3 arguments, window size typing
 gpu-arrays-samples      # gpu samples: gpu_arrays field totals, gpu_map sin, shader_of
