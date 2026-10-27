@@ -222,9 +222,65 @@ with_type_module_uses(program: Node): Node := {
 	}
 	# in the order of type_modules, Rust's sorted one
 	modules = type_modules.filter(module => module in wanted and module not in used)
+	with_module_uses(program, modules)
+}
+# the program with a `use` of each module in front of it
+with_module_uses(program: Node, modules: list): Node := {
 	if #modules == 0 { return program }
 	use_statements = modules.map(module => plain_node(parsed("use " + module)))
 	separated(bracketed(use_statements + statements_in(program), ""), ";")
+}
+
+# `sleep(3ms)`: an argument naming a word nothing defines finds it in the module of the class its parameter is typed
+# with, which the program then uses: `sleep(duration: Time)` names Time, units.warp declares it and defines ms
+# (decision expected-type-names); `x = 3ms` expects no type and stays an unknown name
+with_expected_type_uses(program: Node, prelude: text): Node := {
+	own = own_heads(program)
+	bound = names_bound_in(program)
+	prelude_names = definition_slices(prelude).map(slice => slice#1)
+	is_unknown = word => word not in own and word not in bound and word not in prelude_names and not is_declared_word(word)
+	calls = nodes_in(program).filter(n => is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol and items_of(n)[1 ..].any(argument => symbol_words(argument).any(is_unknown)))
+	if #calls == 0 { return program }
+	modules = bundled_modules()
+	classes = class_modules(modules)
+	used = statements_in(program).map(use_target).filter(target => target is symbol).map(name_of)
+	wanted = []
+	for call in calls {
+		arguments = items_of(call)[1 ..]
+		for i in 0 ..< #arguments {
+			words = symbol_words(arguments[i]).filter(is_unknown)
+			for type in parameter_types(name_of(call#1), i, [prelude] + modules.values) {
+				module = classes.get(type) ?? ""
+				defines = word => definition_slices(modules[module]).any(slice => slice#1 == word)
+				if module and module not in wanted and module not in used and words.any(defines) { wanted += [module] }
+			}
+		}
+	}
+	with_module_uses(program, wanted)
+}
+# module name → text of each module at the top of lib/, `units` → lib/units.warp's
+bundled_modules(): map := {
+	modules = {}
+	for path in LIBRARY_FILES.keys { if not path.contains("/") and path.ends_with(module_extension) { modules[path[0 ..< #path - #module_extension]] = LIBRARY_FILES[path] } }
+	modules
+}
+# class name → the module declaring it, `Time` → units
+class_modules(modules: map): map := {
+	classes = {}
+	for module in modules.keys { for slice in definition_slices(modules[module]) { if slice#2.starts_with("class ") { classes[slice#1] = module } } }
+	classes
+}
+# the types written for parameter `at` (from 0) of each definition of `name` in the sources, `[Time]` of `sleep(duration: Time)`
+parameter_types(name: text, at: int, sources: list): list := {
+	types = []
+	for source in sources {
+		for slice in definition_slices(source).filter(slice => slice#1 == name) {
+			head = definition_head_of(statements_in(plain_node(parsed(slice#2)))#1)
+			parameter = if head != ø and at + 1 < #head then head#(at + 2) else ø
+			if parameter != ø and is_key(parameter, Op.Colon) and value_of(parameter) is symbol { types += [name_of(value_of(parameter))] }
+		}
+	}
+	types
 }
 # the words the program names bare that a type module defines as a function taking nothing, `now() := …`
 bare_calls(program: Node, providers: any): list := {
