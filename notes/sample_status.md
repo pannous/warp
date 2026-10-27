@@ -1,51 +1,77 @@
 # Sample status
 
-Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout) on 2026-10-26, binary 43413c4d5: **49/224 run**. Failing samples are grouped by cause on the board under the topic card sample-gaps; raw results in data/sample_gaps/results.txt.
+Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one at a time) on 2026-10-27, branch samples: **66/224 run** (55 on main before it, 49 on 2026-10-26). A sample fails when it prints an `Error(…)`, traps or times out; its exit code is its last value, no failure. Failing samples are grouped by cause on the board under the topic card sample-gaps; raw results in ~/Library/Logs/warp/samples/sweep.txt.
 
-- ❌ samples/advanced/circle.warp: not a list
+- ❌ samples/advanced/circle.warp: outside the core: a value after an assignment
 - ❌ samples/advanced/filled_circle.warp: outside the core: a value after an assignment
 - ❌ samples/advanced/mandelbrot_canvas.warp: outside the core: a value after an assignment
-- ❌ samples/advanced/neural_net.warp: not a list
+- ❌ samples/advanced/neural_net.warp: outside the core: the call exp(…) (foreign C call; owner c_imports did not claim it)
 - ❌ samples/advanced/particles.warp: outside the core: a number
+- ✅ samples/advanced/raytracer.warp
 - ❌ samples/advanced/snake.warp: outside the core: the group (…
 - ❌ samples/advanced/test.warp: outside the core: the call array(…)
 - ❌ samples/conditions/control_flow.warp: not a list
+- ✅ samples/conditions/fizzbuzz.warp
 - ❌ samples/crates/regex_and_sha2.warp: outside the core: the call find_all(…)
+- ✅ samples/errors/assertions.warp
 - ❌ samples/errors/errors.warp: `]` closes the group opened at 4:9, which needs `}`
+- ✅ samples/errors/parse_number.warp
+- ✅ samples/errors/raise_error.warp
+- ✅ samples/errors/try_catch.warp
+- ✅ samples/errors/try_else.warp
 - ❌ samples/errors/try_failed_json.warp: outside the core: the call parse(…)
 - ❌ samples/events/arrow_keys.warp: outside the core: the unknown name on
 - ❌ samples/events/effects.warp: outside the core: the unknown name on
+- ✅ samples/functions/ackermann.warp
 - ❌ samples/functions/block_arguments.warp: not a function
 - ❌ samples/functions/code_as_data.warp: outside the core: quoted code whose position or comment is read
+- ✅ samples/functions/fibonacci.warp
 - ❌ samples/functions/functions.warp: outside the core: a call of square with 2 arguments
 - ❌ samples/functions/list_overloads.warp: outside the core: the unknown name pattern·clause·play
 - ❌ samples/functions/queens.warp: outside the core: the call range(…)
+- ✅ samples/functions/queens_idiomatic.warp
+- ✅ samples/functions/sudoku.warp
 - ❌ samples/functions/y_combinator.warp: outside the core: the unknown name def
+- ✅ samples/golf/99-bottles-of-beer.short.warp
+- ✅ samples/golf/99-bottles-of-beer.warp
 - ❌ samples/golf/arabic-to-roman.short.warp: outside the core: the operator : on int and char
-- ❌ samples/golf/arabic-to-roman.warp: not a list
-- ❌ samples/golf/catalan-numbers.short.warp: outside the core: the unknown name for
+- ❌ samples/golf/arabic-to-roman.warp: outside the core: the operator : on int and char
+- ❌ samples/golf/catalan-numbers.short.warp: wasm trap: wasm `unreachable` instruction executed
 - ❌ samples/golf/catalan-numbers.warp: wasm trap: wasm `unreachable` instruction executed
-- ❌ samples/golf/collatz.warp: outside the core: the call stopping_time(…)
+- ✅ samples/golf/collatz.short.warp
+- ✅ samples/golf/collatz.warp
 - ❌ samples/golf/diamonds.short.warp: outside the core: the operator * on char and node
 - ❌ samples/golf/diamonds.warp: wasm trap: null reference
-- ❌ samples/golf/divisors.short.warp: outside the core: the unknown name for
-- ❌ samples/golf/evil-numbers.warp: not a list
-- ❌ samples/golf/fizz-buzz.short.warp: outside the core: the unknown name for
+- ✅ samples/golf/divisors.short.warp
+- ✅ samples/golf/divisors.warp
+- ✅ samples/golf/evil-numbers.short.warp
+- ✅ samples/golf/evil-numbers.warp
+- ✅ samples/golf/fibonacci.short.warp
+- ✅ samples/golf/fibonacci.warp
+- ❌ samples/golf/fizz-buzz.short.warp: outside the core: the operator * on text and bool
+- ✅ samples/golf/fizz-buzz.warp
 - ❌ samples/golf/happy-numbers.short.warp: outside the core: the call map(…)
-- ❌ samples/golf/happy-numbers.warp: not a list
-- ❌ samples/golf/leap-years.short.warp: outside the core: the unknown name for
-- ❌ samples/golf/leap-years.warp: not a list
+- ✅ samples/golf/happy-numbers.warp
+- ✅ samples/golf/leap-years.short.warp
+- ✅ samples/golf/leap-years.warp
 - ❌ samples/golf/look-and-say.short.warp: outside the core: the unknown name j-i
-- ❌ samples/golf/look-and-say.warp: outside the core: the call say(…)
-- ❌ samples/golf/niven-numbers.short.warp: outside the core: the unknown name for
-- ❌ samples/golf/niven-numbers.warp: not a list
-- ❌ samples/golf/pernicious-numbers.short.warp: outside the core: the unknown name for
-- ❌ samples/golf/pernicious-numbers.warp: not a list
-- ❌ samples/golf/prime-numbers.warp: not a list
-- ❌ samples/golf/rot13.short.warp: outside the core: the unknown name for
-- ❌ samples/golf/rot13.warp: outside the core: the call rotated(…)
+- ✅ samples/golf/look-and-say.warp
+- ✅ samples/golf/niven-numbers.short.warp
+- ✅ samples/golf/niven-numbers.warp
+- ✅ samples/golf/pascals-triangle.short.warp
+- ✅ samples/golf/pascals-triangle.warp
+- ✅ samples/golf/pernicious-numbers.short.warp
+- ✅ samples/golf/pernicious-numbers.warp
+- ✅ samples/golf/prime-numbers.short.warp
+- ✅ samples/golf/prime-numbers.warp
+- ✅ samples/golf/quine.short.warp
+- ✅ samples/golf/quine.warp
+- ❌ samples/golf/rot13.short.warp: outside the core: the unknown name o-b
+- ✅ samples/golf/rot13.warp
+- ✅ samples/golf/sierpiński-triangle.short.warp
+- ✅ samples/golf/sierpiński-triangle.warp
 - ❌ samples/gpu/gpu_arrays.warp: no field totals
-- ❌ samples/gpu/gpu_map.warp: outside the core: the call sin(…)
+- ❌ samples/gpu/gpu_map.warp: outside the core: the call sin(…) (foreign C call; owner c_imports did not claim it)
 - ❌ samples/gpu/gpu_visualizer.warp: outside the core: the call si_amount(…)
 - ❌ samples/gpu/kaleidoscope.warp: outside the core: a call of paint with 1 arguments
 - ❌ samples/gpu/lava_lamp.warp: outside the core: an error value
@@ -72,8 +98,9 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout) on 
 - ❌ samples/graphics/webgpu.warp: outside the core: a call of paint with 1 arguments
 - ❌ samples/graphics/window_size.warp: outside the core: a text where a int is needed
 - ❌ samples/hello/comments.warp: outside the core: the unknown name greeting
+- ✅ samples/hello/hello.warp
 - ❌ samples/hello/natural.warp: outside the core: the unknown name plus
-- ❌ samples/hello/phrases.warp: not a list
+- ❌ samples/hello/phrases.warp: outside the core: an assignment to `… as …`
 - ❌ samples/hello/sample.warp: outside the core: the unknown name fun
 - ❌ samples/laws/kitchensink.warp: outside the core: the unknown name f
 - ❌ samples/laws/laws.warp: outside the core: the unknown name law
@@ -81,37 +108,52 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout) on 
 - ❌ samples/lists/dot.warp: outside the core: the call dot(…)
 - ❌ samples/lists/primes.warp: outside the core: the unknown name n
 - ❌ samples/lists/quicksort.warp: outside the core: a call of random with 1 arguments
-- ❌ samples/lists/sorting.warp: outside the core: the call range(…)
-- ❌ samples/loops/game_of_life.warp: outside the core: the group (…
+- ✅ samples/lists/sieve.warp
+- ✅ samples/lists/sieve_idiomatic.warp
+- ✅ samples/lists/sorting.warp
+- ✅ samples/lists/sorting_idiomatic.warp
+- ✅ samples/lists/typed_lists.warp
+- ❌ samples/loops/game_of_life.warp: outside the core: the unknown name ms
 - ❌ samples/loops/iterators.warp: wasm trap: wasm `unreachable` instruction executed
-- ❌ samples/loops/life.warp: outside the core: the group (…
-- ❌ samples/loops/life_kotlin_ranges.warp: outside the core: the group (…
+- ✅ samples/loops/life.warp
+- ✅ samples/loops/life_idiomatic.warp
+- ❌ samples/loops/life_kotlin_ranges.warp: index out of range: 64 not in 1…63
+- ✅ samples/loops/mandelbrot.warp
 - ❌ samples/matching/code_templates.warp: outside the core: the unknown name match
 - ❌ samples/matching/matching.warp: outside the core: the unknown name match
-- ❌ samples/matching/pattern_clauses.warp: wasm trap: wasm `unreachable` instruction executed
+- ❌ samples/matching/pattern_clauses.warp: outside the core: a function value in +
 - ❌ samples/matching/text_patterns.warp: outside the core: the unknown name match
 - ❌ samples/matching/tree_patterns.warp: outside the core: the operator : on node and text
 - ❌ samples/modules/agent.warp: outside the core: the unknown name agent
-- ❌ samples/modules/javascript.warp: outside the core: the call floor(…)
-- ❌ samples/modules/main.warp: outside the core: the call puts(…)
+- ❌ samples/modules/javascript.warp: outside the core: the call floor(…) (foreign C call; owner c_imports did not claim it)
+- ✅ samples/modules/lib.warp
+- ❌ samples/modules/main.warp: outside the core: the call puts(…) (foreign C call; owner c_imports did not claim it)
 - ❌ samples/modules/modules.warp: outside the core: the call pop(…)
 - ❌ samples/modules/packages.warp: outside the core: the call to_hex(…)
 - ❌ samples/modules/rust_crates.warp: outside the core: the call levenshtein(…)
+- ✅ samples/modules/square.warp
 - ❌ samples/modules/test_ffi.warp: outside the core: the operator ∛ with nothing before it
 - ❌ samples/modules/test_ffi_comprehensive.warp: outside the core: the operator ∛ with nothing before it
-- ❌ samples/modules/test_ffi_extended.warp: outside the core: the unknown name test
+- ❌ samples/modules/test_ffi_extended.warp: outside the core: the operator ≈ on int
 - ❌ samples/numbers/bits.warp: outside the core: the operator xor on bool and bool
+- ✅ samples/numbers/collatz.warp
 - ❌ samples/numbers/dates.warp: outside the core: a data
-- ❌ samples/numbers/factorial.warp: outside the core: the unknown name test
+- ✅ samples/numbers/factorial.warp
+- ✅ samples/numbers/gcd.warp
 - ❌ samples/numbers/measurements.warp: outside the core: the unknown name m
-- ❌ samples/numbers/power.warp: outside the core: the unknown name test
+- ✅ samples/numbers/power.warp
+- ✅ samples/numbers/quadratic.warp
+- ✅ samples/numbers/simple.warp
 - ❌ samples/numbers/sin.warp: outside the core: the group (…
 - ❌ samples/numbers/sine.warp: outside the core: the group (…
+- ✅ samples/numbers/sum.warp
 - ❌ samples/numbers/units_dynamic.warp: outside the core: the call quantity(…)
+- ✅ samples/objects/binary_tree.warp
 - ❌ samples/objects/data_structures.warp: outside the core: the unknown name red
 - ❌ samples/objects/dijkstra.warp: outside the core: the call insert(…)
+- ✅ samples/objects/dijkstra_idiomatic.warp
 - ❌ samples/objects/json_parser.warp: outside the core: the call byte_slice(…)
-- ❌ samples/objects/references.warp: outside the core: the unknown name test
+- ❌ samples/objects/references.warp: outside the core: the operator === on int
 - ❌ samples/python/numpy_matrix.warp: could not run the program: unknown import: `python::Py_InitializeEx` has not been defined
 - ❌ samples/python/python_modules.warp: could not run the program: unknown import: `python::Py_InitializeEx` has not been defined
 - ❌ samples/servers/hosting.warp: outside the core: the unknown name get
@@ -134,27 +176,34 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout) on 
 - ❌ samples/sound/sound_kick_samples.warp: outside the core: the unknown name ms
 - ❌ samples/sound/sound_patterns.warp: outside the core: the unknown name pattern
 - ❌ samples/sound/sound_pipes.warp: outside the core: the unknown name s
-- ❌ samples/sound/stereo_sound.warp: left_block is a main-level variable: declare it `global left_block` to change it from a function, or use a new…
+- ❌ samples/sound/stereo_sound.warp: left_block is a main-level variable: declare it `global left_block` to change it from a function, or use a new local name; fix: global left_block
 - ❌ samples/sound/synth.warp: outside the core: the call si_amount(…)
 - ❌ samples/sound/visualizer.warp: outside the core: the call si_amount(…)
 - ❌ samples/sound/voices.warp: outside the core: the call si_amount(…)
 - ❌ samples/storage/netbase.warp: outside the core: the unknown name query
 - ❌ samples/storage/orm.warp: outside the core: the unknown name stored
-- ❌ samples/storage/orm_transaction.warp: al is a main-level variable: declare it `global al` to change it from a function, or use a new local name
+- ❌ samples/storage/orm_transaction.warp: al is a main-level variable: declare it `global al` to change it from a function, or use a new local name; fix: global al
 - ❌ samples/storage/orm_units.warp: outside the core: the unknown name stored
 - ❌ samples/storage/store.warp: outside the core: the unknown name stored
 - ❌ samples/storage/todo_app.warp: outside the core: the unknown name stored
-- ❌ samples/system/crontab.warp: outside the core: an error value (no owner)
+- ❌ samples/system/crontab.warp: outside the core: an error value
 - ❌ samples/system/unix_commands.warp: not a list
 - ❌ samples/tasks/async.warp: outside the core: the unknown name ms
 - ❌ samples/tasks/parallel_let.warp: outside the core: the unknown name left
 - ❌ samples/tasks/threads.warp: outside the core: the unknown name stop
 - ❌ samples/text/calculator.warp: outside the core: the call byte_slice(…)
+- ✅ samples/text/find_text.warp
+- ✅ samples/text/levenshtein.warp
+- ✅ samples/text/levenshtein_idiomatic.warp
+- ✅ samples/text/palindrome.warp
+- ✅ samples/text/regexes.warp
 - ❌ samples/text/replace_word.warp: outside the core: the field replace of a text
+- ✅ samples/text/sort_words.warp
 - ❌ samples/text/uniscript_text.warp: outside the core: the call uniscript(…)
 - ❌ samples/text/word_count.warp: outside the core: the field split of a text
 - ❌ samples/text/word_lengths.warp: outside the core: the call all(…)
 - ❌ samples/types/dispatch.warp: outside the core: the unknown name pattern·clause·speak
+- ✅ samples/types/polymorphism.warp
 - ❌ samples/types/reflection.warp: outside the core: the call dir(…)
 - ❌ samples/types/return_polymorphism.warp: outside the core: an assignment to `… as …`
 - ❌ samples/types/return_polymorphism2.warp: outside the core: a float where a int is needed
@@ -177,52 +226,3 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout) on 
 - ❌ samples/web/page_elements.warp: outside the core: an instance of div, a class not declared here
 - ❌ samples/web/select_binding.warp: outside the core: an instance of div, a class not declared here
 - ❌ samples/web/typed_form.warp: outside the core: an instance of form, a class not declared here
-- ✅ samples/advanced/raytracer.warp
-- ✅ samples/conditions/fizzbuzz.warp
-- ✅ samples/errors/assertions.warp
-- ✅ samples/errors/parse_number.warp
-- ✅ samples/errors/raise_error.warp
-- ✅ samples/errors/try_catch.warp
-- ✅ samples/errors/try_else.warp
-- ✅ samples/functions/ackermann.warp
-- ✅ samples/functions/fibonacci.warp
-- ✅ samples/functions/queens_idiomatic.warp
-- ✅ samples/functions/sudoku.warp
-- ✅ samples/golf/99-bottles-of-beer.short.warp
-- ✅ samples/golf/99-bottles-of-beer.warp
-- ✅ samples/golf/collatz.short.warp
-- ✅ samples/golf/divisors.warp
-- ✅ samples/golf/evil-numbers.short.warp
-- ✅ samples/golf/fibonacci.short.warp
-- ✅ samples/golf/fibonacci.warp
-- ✅ samples/golf/fizz-buzz.warp
-- ✅ samples/golf/pascals-triangle.short.warp
-- ✅ samples/golf/pascals-triangle.warp
-- ✅ samples/golf/prime-numbers.short.warp
-- ✅ samples/golf/quine.short.warp
-- ✅ samples/golf/quine.warp
-- ✅ samples/golf/sierpiński-triangle.short.warp
-- ✅ samples/golf/sierpiński-triangle.warp
-- ✅ samples/hello/hello.warp
-- ✅ samples/lists/sieve.warp
-- ✅ samples/lists/sieve_idiomatic.warp
-- ✅ samples/lists/sorting_idiomatic.warp
-- ✅ samples/lists/typed_lists.warp
-- ✅ samples/loops/life_idiomatic.warp
-- ✅ samples/loops/mandelbrot.warp
-- ✅ samples/modules/lib.warp
-- ✅ samples/modules/square.warp
-- ✅ samples/numbers/collatz.warp
-- ✅ samples/numbers/gcd.warp
-- ✅ samples/numbers/quadratic.warp
-- ✅ samples/numbers/simple.warp
-- ✅ samples/numbers/sum.warp
-- ✅ samples/objects/binary_tree.warp
-- ✅ samples/objects/dijkstra_idiomatic.warp
-- ✅ samples/text/find_text.warp
-- ✅ samples/text/levenshtein.warp
-- ✅ samples/text/levenshtein_idiomatic.warp
-- ✅ samples/text/palindrome.warp
-- ✅ samples/text/regexes.warp
-- ✅ samples/text/sort_words.warp
-- ✅ samples/types/polymorphism.warp
