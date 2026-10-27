@@ -1,0 +1,4 @@
+# a program's own property and a standard one (core-typed-rest once lost the standard ones: a class field's default map)
+temperature.fahrenheit := 212
+print temperature.fahrenheit
+print window.width
