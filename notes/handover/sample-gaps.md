@@ -9,11 +9,7 @@
 - notes/sample_status.md: 80/224 samples run (main 45a41fcd2d)
 
 ## Open, in order
-1. paint (6 samples, card paint-samples-branch): branch pure-paint has the prelude overload
-   `paint(picture, width, height)`. Blocked in core: emitter.warp checks is_program_call by name before module.host, so the
-   prelude's 3-parameter paint hides the host's 4-argument paint (pixels, w, h, shader values) and its own inner call is
-   refused. Next step: let a call whose arity no program function takes fall through to the host word (emitter.warp
-   around line 782, is_program_call), a small core change: smoke + self-check + gate.
+1. paint: DONE 4431a21768 (host words shadowed per arity; paint_function, paint_text, window_size run)
 2. sound + units (card lib-sound): si_amount should read a Quantity; `use units` + `use reals` in lib/sound.warp fails
    the sound samples on linear_new(…), floor of a ? (/ through the class operator dispatcher), distortion, a list for a text
 3. `sleep 50ms` without parentheses misses the expected-type units (told warp-text-field; snake, game_of_life)

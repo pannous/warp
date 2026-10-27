@@ -369,14 +369,14 @@ assigns(n: Node, name: text) := {
 	if is_group(n) { for x in n { if assigns(x, name) { return yes } } }
 	no
 }
-# the names of the functions the program defines
-def defined_names(program: Node): list {
-	names = []
+# name → the parameter counts of the functions the program defines by that name
+def defined_arities(program: Node): map {
+	arities = {}
 	for n in program_statements(program).map(unkeyworded) {
 		head = function_head(n)
-		if head != ø { names += [name_of(head#1)] }
+		if head != ø { arities[name_of(head#1)] = (arities.get(name_of(head#1)) ?? []) + [#head - 1] }
 	}
-	names
+	arities
 }
 
 ## one function's locals while its body is read
@@ -545,7 +545,7 @@ def local_value(body: Body, n: Node): TypedCode {
 	# a function taking nothing, named bare, is its call: `f() := 42; f + 1`, a library's `now` (Rust: a bare word
 	# naming a zero-parameter function calls it)
 	if name not in body.names and name in module.functions and #module.functions[name].signature.parameters == 0 { return call(body, module.functions[name], []) }
-	if name not in body.names { return refuse("the unknown name " + name) }
+	if name not in body.names { return refuse("the unknown name " + name + module_hint(name)) }
 	index = body.names[name]
 	TypedCode(body.kinds#(index + 1), [op.local_get] + uleb(index))
 }
@@ -1206,10 +1206,11 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 	}
 	module.texts = {}
 	module.text_size = 0
-	# the host words, but those the program defines itself: its own `notify(x) := …` is its own
+	# the host words, but those the program defines itself taking as many values: its own `notify(x) := …` is its own,
+	# its own `paint(picture, width, height)` leaves the host's paint of four
 	module.host = {}
-	defined = defined_names(program)
-	for name in host.keys { if name not in defined { module.host[name] = host[name] } }
+	defined = defined_arities(program)
+	for name in host.keys { if #host[name]#1 not in (defined.get(name) ?? []) { module.host[name] = host[name] } }
 	module.classes = {}
 	module.parents = {}
 	module.variants = {}
