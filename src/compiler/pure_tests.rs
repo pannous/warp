@@ -25,8 +25,13 @@ const WARP_SUFFIX: &str = ".warp";
 /// A test still running after this fails as timed out
 const CASE_SECONDS: u64 = 30;
 const POLL: Duration = Duration::from_millis(5);
-/// Children at once: half the cores, the Mac is shared by several sessions
-const MAX_PARALLEL: usize = 8;
+/// The machine-wide pool of case slots every `warp test` takes from (card shared-test-slots): lock files in one folder
+/// below the home directory, as many as the cores, WARP_TEST_SLOTS overriding; parallel runs (sessions, the gate,
+/// sweeps) queue for them instead of piling up, and a slot's lock goes with the process holding it
+const SLOTS_FOLDER: &str = ".cache/warp/test-slots";
+const SLOTS_VARIABLE: &str = "WARP_TEST_SLOTS";
+/// How long a case waits before it looks for a free slot again
+const SLOT_WAIT: Duration = Duration::from_millis(20);
 /// The child's last stdout line on a wrong value: `got <value>`
 const GOT: &str = "got ";
 const QUIET_CHILD: [(&str, &str); 2] = [("WARP_NO_WINDOW", "1"), ("WARP_HINTS", "0")];
@@ -114,11 +119,11 @@ fn cases_of(file: &Path, source: &str) -> Vec<Case> {
 		.collect()
 }
 
-/// The cases run by children, MAX_PARALLEL at once: their verdicts in the cases' order
+/// The cases run by children, each in a slot of the machine's pool: their verdicts in the cases' order
 fn run_cases(cases: &[Case], by: Compiler) -> Vec<Result<(), String>> {
 	let next = AtomicUsize::new(0);
 	let verdicts = Mutex::new(vec![Ok(()); cases.len()]);
-	let parallel = std::thread::available_parallelism().map_or(1, |cores| cores.get() / 2).clamp(1, MAX_PARALLEL);
+	let parallel = slot_count().min(cases.len()).max(1);
 	std::thread::scope(|scope| {
 		for _ in 0..parallel {
 			scope.spawn(|| loop {
@@ -132,8 +137,34 @@ fn run_cases(cases: &[Case], by: Compiler) -> Vec<Result<(), String>> {
 	verdicts.into_inner().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// One case in its child: Ok when it gave the expected value, else what it gave
+/// The number of slots in the machine's pool: WARP_TEST_SLOTS, else the cores
+fn slot_count() -> usize {
+	let set = std::env::var(SLOTS_VARIABLE).ok().and_then(|count| count.trim().parse::<usize>().ok());
+	set.filter(|count| *count > 0).unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |cores| cores.get()))
+}
+
+/// A slot of the machine's pool, held until the file is dropped, waited for while every slot is taken; None without a
+/// home directory to keep the pool in, the case then running unqueued
+fn taken_slot() -> Option<std::fs::File> {
+	let folder = PathBuf::from(std::env::var_os("HOME")?).join(SLOTS_FOLDER);
+	std::fs::create_dir_all(&folder).ok()?;
+	let count = slot_count();
+	// each run starts looking at a slot of its own, so the runs do not all try the first one
+	let first = std::process::id() as usize;
+	loop {
+		for slot in (0..count).map(|offset| (first + offset) % count) {
+			let file = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(folder.join(slot.to_string())).ok()?;
+			if file.try_lock().is_ok() {
+				return Some(file);
+			}
+		}
+		std::thread::sleep(SLOT_WAIT);
+	}
+}
+
+/// One case in its child, in a slot of the machine's pool: Ok when it gave the expected value, else what it gave
 fn run_case(case: &Case, by: Compiler) -> Result<(), String> {
+	let _slot = taken_slot();
 	let child = Command::new(std::env::current_exe().map_err(|failure| failure.to_string())?)
 		.args(["test", CASE_FLAG, by.command(), &case.file.display().to_string(), &case.index.to_string()])
 		.envs(QUIET_CHILD)
