@@ -453,14 +453,14 @@ is_update(n: Node): bool := {
 joined_kind(a: ValueKind, b: ValueKind): ValueKind := {
 	if a == ValueKind.Unknown or a == b { return b }
 	if b == ValueKind.Unknown { return a }
-	if is_pair(a, b, ValueKind.Float, ValueKind.Int) { return ValueKind.Float }
-	if is_pair(a, b, ValueKind.Codepoint, ValueKind.Text) { return ValueKind.Text }
-	if is_pair(a, b, ValueKind.List, ValueKind.Nil) { return ValueKind.List }
+	if is_kind_pair(a, b, ValueKind.Float, ValueKind.Int) { return ValueKind.Float }
+	if is_kind_pair(a, b, ValueKind.Codepoint, ValueKind.Text) { return ValueKind.Text }
+	if is_kind_pair(a, b, ValueKind.List, ValueKind.Nil) { return ValueKind.List }
 	ValueKind.Empty
 }
 
 # a and b are the kinds one and other, in either order
-is_pair(a: ValueKind, b: ValueKind, one: ValueKind, other: ValueKind): bool := (a == one and b == other) or (a == other and b == one)
+is_kind_pair(a: ValueKind, b: ValueKind, one: ValueKind, other: ValueKind): bool := (a == one and b == other) or (a == other and b == one)
 
 # the type word of a list's elements given both a and b (common_type), a node when they have none
 joined_word(a: TypeWord, b: TypeWord): TypeWord := {
