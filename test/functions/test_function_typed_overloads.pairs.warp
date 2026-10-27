@@ -1,0 +1,7 @@
+# A function-typed parameter tells an overload apart; a typed list field takes a list; libm serves sin and cos
+# (card sound-import-failure)
+'g(f: (int) -> int, x) := f(x); g(x, y) := x + y; g(3, 4)'	7
+'g(f: (int) -> int, x) := f(x); g(x, y) := x + y; g(z => z * 2, 4)'	8
+'class S { fs: [int] }; l = [1, 2, 3]; x = S(l[1..]); #x.fs'	2
+'cos(0.0) + sin(0.0)'	1
+'use sound; x = C4; x'	261.63
