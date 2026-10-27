@@ -129,7 +129,8 @@ is_spelled_type(type: Node, declared: map): bool := type is symbol and name_of(t
 node_value(n: Node, builds: map, declared: map): Node := match n {
 	Key(owner, Op.Dot, case_name): if is_word(owner, node_type) then node_case(case_name) else n
 	Key(owner, Op.Scope, case_name): if is_word(owner, node_type) then node_case(case_name) else n
-	Key(subject, Op.Colon, type): if holds_any(type, declared) then Key(subject, Op.Colon, symbol("any")) else n
+	# a name's annotation, not a map entry: `{"K": K}` keeps the value K
+	Key(subject, Op.Colon, type): if subject is symbol and holds_any(type, declared) then Key(subject, Op.Colon, symbol("any")) else n
 	Key(value, Op.As, type): if is_spelled_type(type, declared) then spelled_case(value, name_of(type), n) else n
 	Key(left, Op.Eq, right): spelled_equality(left, Op.Eq, right, n, declared)
 	Key(left, Op.Ne, right): spelled_equality(left, Op.Ne, right, n, declared)
