@@ -1,0 +1,12 @@
+# names from the expected type (card expected-type-names, wiki/inventions.md): an argument for a parameter typed T
+# finds T's values by name
+
+# an enum's case, though another enum has one of the same name
+is! 'enum Color { Red, Green }; enum Wine { Red, White }; paint(c: Color) := c == Color.Red; paint(Red)' true
+is! 'enum Color { Red, Green }; enum Wine { Red, White }; shade(c: Color) := c as index; shade(Green)' 1
+
+# a name the program binds stays its own
+is! 'enum Color { Red, Green }; Red = 3; f(c: Color) := c; f(Red)' 3
+
+# a value the program defines of the type, `T.x`
+is! 'class Key { code: int }; Key.escape := Key(27); press(k: Key) := k.code; press(escape)' 27
