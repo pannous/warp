@@ -1136,8 +1136,9 @@ def collect_assigned(n: Node, found: any) {
 	if is_group(n) { for item in n { collect_assigned(item, found) } }
 }
 # the runtime words the emitter calls on its own for an operator's form, which the program never names: a field read
-# `p.x` takes the field at its place (slot_field, which may warn on stdout), else by name (card text-field)
-emitter_operator_words = {".": ["slot_field", "map_get", "has_field"]}
+# `p.x` reads a field (a getter ends in map_get, else has_field), `p.x = v` sets one (field_with, which may warn on
+# stdout: a field the class does not declare) (cards text-field, declared-class)
+emitter_operator_words = {".": ["map_get", "has_field", "field_with"]}
 
 def collect_referred(n: Node, found: any) {
 	if n is symbol { found[name_of(n)] = yes }
