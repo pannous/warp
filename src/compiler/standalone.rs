@@ -551,27 +551,13 @@ fn found_path(by: Compiler) -> PathBuf {
 	path.parent().map_or(path.clone(), |folder| by.file_in(folder))
 }
 
-/// The build file: next to the binary, unless WARP_LIB names a lib/ the pair there is not for, which keeps its build
-/// files in itself. A missing one is judged by its siblings there (none: yes), so a worktree's `warp self` never puts its
-/// warp-self.wasm next to main's warp.wasm (card build-path-missing)
+/// The build file: in the lib/ WARP_LIB names, which keeps its compilers in itself (user 2026-10-26), else next to
+/// the binary. A build with WARP_LIB never writes beside the binary: that judged the binary's folder by the pair in it
+/// and took it when warp.wasm was missing there, so a worktree's rebuild replaced the installed compiler (card
+/// rebuild-writes-main). The pair beside the binary is still read as the delivered one (compiler, same inputs)
 fn build_path(by: Compiler) -> PathBuf {
-	let binary_folder = binary_folder();
-	if std::env::var_os(LIBRARY_VARIABLE).is_none() {
-		if let Some(folder) = &binary_folder {
-			return folder.join(by.file_name());
-		}
-	}
-	let library_path = library().display().to_string();
-	let for_this_library = |folder: &PathBuf| {
-		let read = |file: Compiler| std::fs::read(file.file_in(folder)).ok();
-		let judged: Vec<Vec<u8>> = match read(by) {
-			Some(bytes) => vec![bytes],
-			None => Compiler::ALL.into_iter().filter_map(read).collect(),
-		};
-		judged.iter().all(|bytes| built_from(bytes).first() == Some(&library_path))
-	};
-	match binary_folder.filter(for_this_library) {
-		Some(folder) => folder.join(by.file_name()),
-		None => library().join(by.file_name()),
+	match (std::env::var_os(LIBRARY_VARIABLE), binary_folder()) {
+		(None, Some(folder)) => folder.join(by.file_name()),
+		_ => library().join(by.file_name()),
 	}
 }
