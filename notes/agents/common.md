@@ -12,6 +12,10 @@ wiki/Footguns.md (decided language rules: grep it, never read it whole), notes/d
 before asking a question). After a context swap, this file and your role file beat the handover.
 
 ## Principles
+- Elegance first (user): always the most elegant option, never the quick hack. Before writing code, picture how the
+  most beautiful, most general code would look (a library function over a general feature beats a rewrite plus core
+  patches), and build that; if it needs a missing language feature, build or card the feature instead of a workaround.
+  Recommended options in questions and plans are the elegant ones.
 - No special cases: a fix is the general rule, holding for the siblings of the example. A test that seems to force a
   special case goes to warp-interviewer.
 - Never degrade the input to suit a tool (compiler stage, parser, harness): fix or card the tool. Warp source, the
