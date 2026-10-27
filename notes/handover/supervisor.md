@@ -31,8 +31,9 @@ any size needs an OK; the Supervisor records user decisions itself.
   emitter kinds are ValueKind cases, TypedCode and lambdas tuples are classes; core `: any` params 933 → ~350.
 - Units as values in lib/units.warp; `sleep(3ms)` without `use units` (expected-type-names part 1); π exact in
   lib/reals.warp; data blocks and `data` parameters; block parameters with shared captures. Samples 80/224.
-- SEED HOLD: no seed refresh until warp-fixer's instance-runtime fast paths land (a compiler on main's runtime is
-  2.6× slower since declared-class; decision no-seed-before-instance-runtime).
+- SEED HOLD: the instance-runtime fast paths landed (instance-words-build, 1e8dcd512c: stage B 86–111 s CPU, was
+  2.6× slower), but the hold stays until warp-fixer's 131-file class test comparison on main is clean
+  (notes/handover/instance-words-build.md); then warp-fixer lifts it.
 
 ## Waiting for the user
 - Test audit page (60 constructs, keep/rewrite/drop): https://claude.ai/code/artifact/74a487d1-9874-4267-bfa1-ef8fd60f352e,
