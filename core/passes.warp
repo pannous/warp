@@ -5,7 +5,6 @@ use "interpolation.warp"
 use "number_words.warp"
 use "of_lookups.warp"
 use "definitions.warp"
-use "data_blocks.warp"
 use "multiple_assignments.warp"
 use "clauses.warp"
 use "phrase_blocks.warp"
@@ -70,7 +69,7 @@ owned_refusal(refusal: text, form: text?): text := {
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, data_blocks, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
+pure_passes = [parse_words, tries, definitions, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: Node): Node := {
