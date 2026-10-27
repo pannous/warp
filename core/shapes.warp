@@ -5,26 +5,8 @@ use "words.warp"
 use "walk.warp"
 
 def listed(bracket: Bracket, separator: Separator, nodes: list): Node := {
-	if #nodes == 0 { return opaque(["list", bracket_glyph(bracket), separator_glyph(separator)]) }
+	if #nodes == 0 { return opaque(["list", bracket as text, separator as text]) }
 	List(nodes, bracket, separator)
-}
-
-// The spellings of node.warp's Bracket and Separator: `bracket as text` of a parameter gives the case's name, not its
-// spelling (card enum-parameter-conversion)
-def bracket_glyph(bracket: Bracket): text := match bracket {
-	Bracket.Curly: "{"
-	Bracket.Square: "["
-	Bracket.Round: "("
-	Bracket.Less: "<"
-	_: ""
-}
-def separator_glyph(separator: Separator): text := match separator {
-	Separator.Space: " "
-	Separator.Comma: ","
-	Separator.Semicolon: ";"
-	Separator.Newline: "\n"
-	Separator.Tab: "\t"
-	_: ""
 }
 
 // `f(a, b)` as the node (f a b) that calls f
@@ -36,7 +18,7 @@ def spaced(nodes: list): Node := listed(Bracket.None, Separator.Space, nodes)
 // The key of an operator given by its spelling: `keyed("+", a, b)` is a+b
 def keyed(op: text, left: Node, right: Node): Node := Key(left, op as Op, right)
 
-def opaque(view: any): Node := Key(symbol(opaque_word), Op.Colon, view)
+def opaque(view: list): Node := Key(symbol(opaque_word), Op.Colon, view)
 def type_node(name: Node, body: Node): Node := opaque(["type", view_of(name), view_of(body)])
 def error_node(message: text): Node := opaque(["error", ["text", message]])
 def template_node(holed: text): Node := opaque(["template", holed])
