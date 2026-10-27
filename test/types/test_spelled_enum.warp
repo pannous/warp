@@ -26,3 +26,7 @@ is! 'f(o: Op?): text := o as text; f(Op.Sub)' '-'
 # cases named like types are the cases (card core-types-emitter)
 is! 'enum Kind { Int = "int", Text = "text", Symbol = "symbol" }; f(k: Kind): text := k as text; [f(Kind.Int), f(Kind.Text), f(Kind.Symbol)]' ['int', 'text', 'symbol']
 is! 'enum Kind { Int = "int", Text = "text" }; "int" as Kind == Kind.Int' true
+
+# ø is no case (card core-types-emitter)
+is! 'enum Kind { Int = "int", Text = "text" }; k = ø; k == Kind.Int' false
+is! 'enum Kind { Int = "int", Text = "text" }; f(k: Kind?): bool := k == Kind.Text; f(ø)' false

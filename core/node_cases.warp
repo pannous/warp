@@ -172,9 +172,11 @@ comparing_functions(enum_name: text): list := {
 	case_written = symbol("case_written")
 	other = symbol("other_spelled")
 	text_of = spelled_function(enum_name, "text")
-	is_case = chosen(type_test(value, "symbol"), Key(value, Op.Eq, case_written), Key(applied(text_of, value), Op.Eq, symbol("case_spelled")))
+	# a value neither a case nor a spelling, ø, equals no case, and is never spelled (Op·text gives texts only)
+	spelled_of = side => chosen(type_test(side, "symbol"), applied(text_of, side), side)
+	is_case = chosen(type_test(value, "symbol"), Key(value, Op.Eq, case_written), Key(value, Op.Eq, symbol("case_spelled")))
 	both_cases = Key(type_test(value, "symbol"), Op.And, type_test(other, "symbol"))
-	same = chosen(both_cases, Key(value, Op.Eq, other), Key(applied(text_of, value), Op.Eq, applied(text_of, other)))
+	same = chosen(both_cases, Key(value, Op.Eq, other), Key(spelled_of(value), Op.Eq, spelled_of(other)))
 	[Key(call_of(spelled_function(enum_name, "is"), [value, case_written, symbol("case_spelled")]), Op.Define, is_case),
 		Key(call_of(spelled_function(enum_name, "same"), [value, other]), Op.Define, same)]
 }
