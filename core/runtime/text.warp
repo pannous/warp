@@ -50,6 +50,15 @@ output_room(): int := 65520
 output_bytes(t: text, start: int, stop: int) := {
 	for i in start..stop { output_byte(i - start, byte_at(t, i)) }
 }
+# where a text goes as a C string for a host word: past the output area's scratch bytes (runtime/extended/wasi.warp
+# scratch_bytes)
+c_text_at(): int := 32
+# t as the C string a host word reads, its bytes and a 0 in linear memory: its address
+c_text(t: text): int := {
+	for i in 0..<byte_count(t) { output_byte(c_text_at() + i, byte_at(t, i)) }
+	output_byte(c_text_at() + byte_count(t), 0)
+	output_address() + c_text_at()
+}
 # t and a newline to stdout
 print_line(t: text): int := {
 	print_text(t)
