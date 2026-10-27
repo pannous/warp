@@ -129,7 +129,7 @@ pub fn parsed(code: &str) -> Node {
 fn parsed_view(code: &str) -> Result<String, Node> {
 	use crate::run::module_cache::{keep_bytes, kept_bytes};
 	let compiler = compiler(Compiler::RustCompiled)?;
-	let owner = crate::extensions::sha256_hex(&compiler.bytes);
+	let owner = crate::extensions::hex_text(&crate::run::module_cache::module_digest(&compiler.bytes));
 	let key = crate::extensions::sha256_hex(format!("{VIEW_EXTENSION}\n{owner}\n{code}").as_bytes());
 	if let Some(json) = kept_bytes(&key, VIEW_EXTENSION).and_then(|bytes| String::from_utf8(bytes).ok()) {
 		return Ok(json);
@@ -249,7 +249,7 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
-	let owner = crate::extensions::sha256_hex(&compiler.bytes);
+	let owner = crate::extensions::hex_text(&crate::run::module_cache::module_digest(&compiler.bytes));
 	// its kept values shipped beside its build file serve a cold cache; a new build's warming run writes them there
 	let shipped = crate::run::module_cache::shipped_kept_folder(&compiler.bytes);
 	let warming = crate::run::module_cache::warming();

@@ -157,12 +157,15 @@ fn real(path: &Path) -> PathBuf {
 	path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-/// A source file of lib/: its path inside lib/, its real path, the SHA-256 of its contents
+/// A source file of lib/: its path inside lib/, as found and real, its stamp (file_stamp), the SHA-256 of its contents
+/// in hexadecimal
 #[cfg(feature = "native")]
 struct LibraryFile {
 	inside: String,
+	file: PathBuf,
 	real: PathBuf,
-	digest: Vec<u8>,
+	stamp: String,
+	digest: String,
 }
 
 #[cfg(feature = "native")]
@@ -176,10 +179,10 @@ impl LibraryFile {
 
 /// The source files of lib/, sorted, each read once per process: every kept value's key names them (stage_key,
 /// made_by_key; a compile looks up ~80, card startup-time). The compilers a lib/ keeps in itself are its outputs, not
-/// its sources (standalone.rs is_kept_compiler)
+/// its sources (standalone.rs is_kept_compiler). A file whose size and time of change the digests kept by an earlier
+/// run name is not read again
 #[cfg(feature = "native")]
 fn library_files() -> &'static [LibraryFile] {
-	use sha2::{Digest, Sha256};
 	static FILES: OnceLock<Vec<LibraryFile>> = OnceLock::new();
 	FILES.get_or_init(|| {
 		let library = library();
@@ -188,15 +191,65 @@ fn library_files() -> &'static [LibraryFile] {
 		let mut files: Vec<PathBuf> =
 			sources.flat_map(|path| if path.is_dir() { files_below(path) } else { vec![path] }).collect();
 		files.sort();
-		files
+		let kept = kept_digests();
+		let library_files: Vec<LibraryFile> = files
 			.into_iter()
-			.map(|file| LibraryFile {
-				inside: file.strip_prefix(library).unwrap_or(&file).display().to_string(),
-				digest: Sha256::digest(std::fs::read(&file).unwrap_or_default()).to_vec(),
-				real: real(&file),
+			.map(|file| {
+				let stamp = file_stamp(&file);
+				let digest = match kept.get(&file) {
+					Some((kept_stamp, digest)) if *kept_stamp == stamp => digest.clone(),
+					_ => crate::extensions::sha256_hex(&std::fs::read(&file).unwrap_or_default()),
+				};
+				let inside = file.strip_prefix(library).unwrap_or(&file).display().to_string();
+				LibraryFile { inside, real: real(&file), file, stamp, digest }
 			})
-			.collect()
+			.collect();
+		let unchanged = kept.len() == library_files.len()
+			&& library_files.iter().all(|file| kept.get(&file.file).is_some_and(|(stamp, _)| *stamp == file.stamp));
+		if !unchanged {
+			keep_digests(&library_files);
+		}
+		library_files
 	})
+}
+
+/// A file's size and time of change, `<size> <nanoseconds>`: what says it is unchanged since its digest was kept
+#[cfg(feature = "native")]
+fn file_stamp(file: &Path) -> String {
+	let metadata = std::fs::metadata(file).ok();
+	let changed = metadata.as_ref().and_then(|metadata| metadata.modified().ok());
+	let since = changed.and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok());
+	format!("{} {}", metadata.map_or(0, |metadata| metadata.len()), since.map_or(0, |since| since.as_nanos()))
+}
+
+/// The cache file of the digests of lib/'s files kept between runs, one line a file: `<stamp>\t<digest>\t<path>`
+#[cfg(feature = "native")]
+fn digests_file() -> Option<PathBuf> {
+	let folder = crate::extensions::sha256_hex(library().display().to_string().as_bytes());
+	crate::run::module_cache::cache_file(&format!("{folder}.{LIBRARY_DIGESTS}"))
+}
+
+#[cfg(feature = "native")]
+const LIBRARY_DIGESTS: &str = "library-digests";
+
+#[cfg(feature = "native")]
+fn kept_digests() -> std::collections::HashMap<PathBuf, (String, String)> {
+	let text = digests_file().and_then(|file| std::fs::read_to_string(file).ok()).unwrap_or_default();
+	let entry = |line: &str| {
+		let mut parts = line.splitn(3, '\t');
+		let (stamp, digest, file) = (parts.next()?, parts.next()?, parts.next()?);
+		Some((PathBuf::from(file), (stamp.to_string(), digest.to_string())))
+	};
+	text.lines().filter_map(entry).collect()
+}
+
+#[cfg(feature = "native")]
+fn keep_digests(files: &[LibraryFile]) {
+	let lines: Vec<String> =
+		files.iter().map(|file| format!("{}\t{}\t{}", file.stamp, file.digest, file.file.display())).collect();
+	if let Some(path) = digests_file() {
+		crate::run::module_cache::store_cache_file(&path, lines.join("\n").as_bytes());
+	}
 }
 
 /// The std modules whose text the compiler embeds when it is built (`module_source("math")`): its inputs until
