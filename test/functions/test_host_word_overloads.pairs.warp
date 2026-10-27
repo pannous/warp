@@ -1,0 +1,6 @@
+# A program's function named like a host word takes its own arity only (shadowing per arity, as library words'):
+# the host word of another count of values stays (card paint-samples-branch)
+'clock(x) := x; clock() > 0 and clock(7) == 7'	true
+'sleep_ms(a, b) := a + b; sleep_ms(1); sleep_ms(2, 3)'	5
+'paint([1, 0], 2, 1); 1'	1
+'paint((column, row) => column, 2, 1); 2'	2
