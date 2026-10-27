@@ -16,3 +16,9 @@ is! 'enum Word { A = "a", B = "b" }; w = Word.B; w as text' 'b'
 
 # a spelled enum of a used file
 is! 'use "test/fixtures/spelled_enum.warp"; Level.Warning as text' 'warning'
+
+# a parameter typed by a spelled enum keeps its spelling (card enum-parameter-conversion)
+is! 'enum Word { A = "a", B = "b" }; f(w: Word): text := w as text; f(Word.B)' 'b'
+is! 'f(b: Bracket): text := b as text; f(Bracket.Square)' '['
+is! 'f(o: Op): bool := o == "+"; f(Op.Add)' true
+is! 'f(o: Op?): text := o as text; f(Op.Sub)' '-'
