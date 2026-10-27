@@ -52,6 +52,9 @@ rust_fingerprint() {
 }
 rust=$(rust_fingerprint)
 [ -n "$rust" ] || echo "rebuild.sh: no Rust fingerprint for $warp (no warp.wasm beside it): WARP_RUST_FINGERPRINT names it" >&2
+# the seed building warp.wasm, named for the build and its inputs hash alike: WARP_SEED, else the one beside the binary
+seed_beside() { local folder; for folder in "$(dirname "$warp")" "$(dirname "$(readlink -f "$warp" 2>/dev/null || echo "$warp")")"; do [ -f "$folder/warp-seed.wasm" ] && { echo "$folder/warp-seed.wasm"; return; }; done; }
+export WARP_SEED=${WARP_SEED:-$(seed_beside)}
 hash=$("$scripts/compiler-inputs.sh" "$lib" "$rust") || exit 1
 mkdir -p "$store" "$compilers" 2>/dev/null
 logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>"$store/rebuilds.log" 2>/dev/null; echo "rebuild.sh: $1 $2 ($hash)"; }
