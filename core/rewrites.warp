@@ -74,8 +74,10 @@ each_in_word = "in"
 each_at_word = "at"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions (`key` and `value` of
 # `k: v` the PairKey and PairValue); Anywhere a rule asking none
-enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter, Element, Argument }
-PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter, "element": Place.Element, "argument": Place.Argument}
+enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter, Element, Argument, Operand }
+PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter, "element": Place.Element, "argument": Place.Argument, "operand": Place.Operand}
+# the operators whose two sides the rules `where operand` rewrite
+compared_by = [Op.Eq, Op.Ne, Op.Identical, Op.NotIdentical, Op.Lt, Op.Gt, Op.Le, Op.Ge]
 # the mark of a rule whose pattern's first word spells the template's another way
 alias_mark = "alias"
 takes_word = "takes"
@@ -1104,7 +1106,11 @@ with_placed_parts(n: Node, placed_code: function): Node := {
 		right = placed_code(right, Place.PairValue)
 	}
 	if is_key(n, Op.Define) { left = head_with_parameters(left, parameter => placed_code(parameter, Place.Parameter)) }
-	if left == key_of(n) and right == value_of(n) and not is_statements_template(left) and not is_statements_template(right) { return n }
+	if compared_by.any(operator => is_key(n, operator)) {
+		left = placed_code(left, Place.Operand)
+		right = placed_code(right, Place.Operand)
+	}
+	if not changes(left, key_of(n)) and not changes(right, value_of(n)) and not is_statements_template(left) and not is_statements_template(right) { return n }
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
 }
 
