@@ -11,6 +11,7 @@ use "signatures.warp"
 use "clauses.warp"
 use "builtin_signatures.warp"
 use "words.warp"
+use "class_methods.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
 target_call(target: Node): Node := match target {
@@ -192,8 +193,9 @@ overload_kind(type: text): text? := {
 	if type in overload_kinds then overload_kinds[type] else ø
 }
 
-# also a class, `x: Real`, which the run time tells by `is`
-is_overload_type(type: text): bool := type == any_word or overload_kind(type) != ø or is_capitalized(type)
+# also a class the program declares, `x: Real`, which the run time tells by `is`
+is_overload_type(type: text, classes: list): bool := type == any_word or overload_kind(type) != ø or type in classes
+declared_classes(program: Node): list := statements_in(program).map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
 
 # `x: int` → "int", an untyped parameter "any"; a definition taking a pattern apart, `len([h, t...])`, is a clause of
 # clauses.warp, no overload (card pattern-clause-refusal)
@@ -210,13 +212,14 @@ typed_variant(name: text, types: list): text := name + types.map(t => "·" + (if
 # name → the parameter types of each of its definitions, for each name defined with several, all different, all of
 # the types above and some typed (a class's parameters dispatch through its methods instead)
 overloaded_types(program: Node): map := {
+	classes = declared_classes(program)
 	signatures = defined_types(program)
 	for name in signatures.keys { signatures[name] = signatures[name] + library_variants(name, signatures[name]) }
 	overloaded = {}
 	for name in signatures.keys {
 		variants = signatures[name]
 		typed = variants.any(types => types.any(t => t != any_word))
-		if #variants > 1 and typed and all_different(variants) and variants.all(types => types.all(is_overload_type)) { overloaded[name] = variants }
+		if #variants > 1 and typed and all_different(variants) and variants.all(types => types.all(type => is_overload_type(type, classes))) { overloaded[name] = variants }
 	}
 	overloaded
 }
