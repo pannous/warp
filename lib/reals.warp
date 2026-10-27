@@ -36,6 +36,12 @@ denominator_of(x: number) := {
 	if denominator < largest_shown_denominator then denominator else 1
 }
 
+// sin and cos of a whole number of half π exactly, `sin π` is 0, `cos π` -1; of any other real the float's
+sin(x: Real) := if x.pi_power == 1 and (2 * x.coefficient) is int then half_turns_sine(2 * x.coefficient) else sin(x.float())
+cos(x: Real) := if x.pi_power == 1 and (2 * x.coefficient) is int then half_turns_sine(2 * x.coefficient + 1) else cos(x.float())
+// sin(n·π/2): 0, 1, 0, -1 around the circle
+half_turns_sine(n: int) := [0, 1, 0, -1][((n % 4) + 4) % 4]
+
 π() := Real(1, 1)
 pi() := π
 τ() := Real(2, 1)
