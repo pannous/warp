@@ -104,6 +104,7 @@ A place word among the `where` conditions lets a rule rewrite code only standing
 | `condition` | the condition of an `if` or `while` |
 | `member` | an item of a class body |
 | `key`, `value` | the key or the value of `k: v` |
+| `element` | an item of a list literal `[…]` (the tuple `(1, 0)` of `[(1, 0), (2, 1)]`, core/extensions/tuples.warp) |
 
 ```warp
 rewrite $s except_if $c => if not $c then $s where statement

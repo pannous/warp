@@ -13,3 +13,6 @@ rewrite $x unknown => not $x
 rewrite $x is unknown => not $x
 rewrite $x undefined => not $x
 rewrite $x is undefined => not $x
+# `test C` runs only under `warp test` (decision test-soft, P209): a plain run compiles C but skips it, its value ø; a
+# program's own function `test` keeps its word (test_soft_tests). A template of ø alone would read as no rewrite
+rewrite $t $c => (if no { $c }; ø) where statement and $t in [test] and not $t is function
