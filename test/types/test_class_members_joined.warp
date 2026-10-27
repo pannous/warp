@@ -1,0 +1,6 @@
+# fields a line joins by `;` beside methods on their own lines are each a field (the shape of test_class_method_changes.warp's Counter)
+
+is! 'class V { names = []; counts = []
+ vote(x) := { names.add(x); counts.add(1) }
+}
+v = V(); v.vote("a"); v.vote("b"); count(v.names) * 10 + count(v.counts)' 22

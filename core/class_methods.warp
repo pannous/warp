@@ -222,12 +222,14 @@ fields_spelled(top_statement: Node): Node := {
 		_: top_statement
 	}
 }
-# a member `name age` as the fields name and age, `name age: int` as name and `age: int`, else the member itself
+# a member `name age` as the fields name and age, `name age: int` as name and `age: int`, members a line joins by `;`
+# (`names = []; counts = []`) as each, else the member itself
 spelled_members(member: list): list := {
 	n = node_of(member)
 	field_words = word_run(n)
 	if #field_words > 0 { return field_words.map(view_of) }
 	match n {
+		List(parts, Bracket.None, Separator.Semicolon): parts.flat_map(part => spelled_members(view_of(part)))
 		Key(left, Op.Colon, right): {
 			typed_names = word_run(left)
 			if #typed_names == 0 { return [member] }
