@@ -68,34 +68,62 @@ zero_fill(count: int, filler: Node): list := {
 }
 # `sum(xs)` as `list_sum(xs, loop)`: the loop the lowering wrote gives it
 list_sum(xs: list, computed: Node): Node := computed
-# The indexes of four big maps (maps.warp map_index, least_recent_slot; card rebuild-speed): slot k holds the entries indexed,
-# how many of them its table covers (-1: the slot is free) and the table, each entry's place by the hash of its name. An index stays right
-# while entries are only added at the end (the next lookup takes them on) or replaced by one of the same name
-# (field_with); any other change in place (map_without, node_set_at, list_pop) forgets that index alone
-global indexed_1 = new_list(0)
-global indexed_2 = new_list(0)
-global indexed_3 = new_list(0)
-global indexed_4 = new_list(0)
-global covered_1 = -1
-global covered_2 = -1
-global covered_3 = -1
-global covered_4 = -1
-# when each slot was last looked up, by the count of lookups (least_recent_slot)
-global used_1 = 0
-global used_2 = 0
-global used_3 = 0
-global used_4 = 0
+# The indexes of the big maps looked up last (maps.warp map_index; card rebuild-speed), one per slot: the entries
+# indexed and the table (each wrapped as a list's node), how many entries the table covers (ø or -1: the slot is free)
+# and when the slot was last looked up, by the count of lookups. An index stays right while entries are only added at
+# the end (the next lookup takes them on) or replaced by one of the same name (field_with); any other change in place
+# (map_without, node_set_at, list_pop) forgets that index alone. Four slots were too few: the emitter looks up more big
+# maps (its functions, runtime words, globals, kinds) between two lookups of its texts, whose index was made anew each time
+index_slots(): int := 16
+# (a runtime global list starts empty, whatever it is given: the slots are made at the first lookup, index_slot)
+global index_entries = []
+global index_tables = []
+global index_covered = []
+global index_used = []
 global index_clock = 0
-global table_1 = new_list(0)
-global table_2 = new_list(0)
-global table_3 = new_list(0)
-global table_4 = new_list(0)
+# the slot index_slot found last: a run of lookups in one map (a parser's fields, read again and again) finds it first
+global index_last = 0
+slot_free(slot: int): bool := is_null(index_covered#slot) or unboxed_int(index_covered#slot) < 0
+holds_entries(slot: int, entries: list): bool := not slot_free(slot) and same_list(unboxed_list(index_entries#slot), entries)
+# the slot holding these entries' index, 0 for none
+index_slot(entries: list): int := {
+	if index_last > 0 and holds_entries(index_last, entries) { return index_last }
+	if #index_covered == 0 {
+		index_entries = new_list(index_slots())
+		index_tables = new_list(index_slots())
+		index_covered = new_list(index_slots())
+		index_used = new_list(index_slots())
+	}
+	for slot in 1 to index_slots() {
+		if holds_entries(slot, entries) {
+			index_last = slot
+			return slot
+		}
+	}
+	0
+}
+# the slot a new map's index takes: a free one, else the one looked up least recently
+least_recent_slot(): int := {
+	slot = 1
+	for candidate in 2 to index_slots() {
+		if not slot_free(slot) and (slot_free(candidate) or unboxed_int(index_used#candidate) < unboxed_int(index_used#slot)) { slot = candidate }
+	}
+	slot
+}
+slot_table(slot: int): list := unboxed_list(index_tables#slot)
+slot_covered(slot: int): int := unboxed_int(index_covered#slot)
+hold_index(slot: int, entries: list, covered: int, table: list): int := {
+	index_clock += 1
+	index_last = slot
+	index_used#slot = index_clock
+	index_entries#slot = list_node(Kind.List, entries)
+	index_tables#slot = list_node(Kind.List, table)
+	index_covered#slot = covered
+	0
+}
 # the index of these entries forgotten, after a change in place an index cannot follow; the other maps keep theirs
-# (forgetting every index at each pop of any list made the emitter's texts map be indexed anew all the time)
 forget_map_index(entries: list): int := {
-	if same_list(indexed_1, entries) { covered_1 = -1 }
-	if same_list(indexed_2, entries) { covered_2 = -1 }
-	if same_list(indexed_3, entries) { covered_3 = -1 }
-	if same_list(indexed_4, entries) { covered_4 = -1 }
+	slot = index_slot(entries)
+	if slot > 0 { index_covered#slot = -1 }
 	0
 }

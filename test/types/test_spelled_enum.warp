@@ -22,3 +22,7 @@ is! 'enum Word { A = "a", B = "b" }; f(w: Word): text := w as text; f(Word.B)' '
 is! 'f(b: Bracket): text := b as text; f(Bracket.Square)' '['
 is! 'f(o: Op): bool := o == "+"; f(Op.Add)' true
 is! 'f(o: Op?): text := o as text; f(Op.Sub)' '-'
+
+# cases named like types are the cases (card core-types-emitter)
+is! 'enum Kind { Int = "int", Text = "text", Symbol = "symbol" }; f(k: Kind): text := k as text; [f(Kind.Int), f(Kind.Text), f(Kind.Symbol)]' ['int', 'text', 'symbol']
+is! 'enum Kind { Int = "int", Text = "text" }; "int" as Kind == Kind.Int' true

@@ -1,0 +1,3 @@
+# words the prelude (lib/prelude.warp) defines reach a program: a probe that fails when the prelude is lost
+print first([4, 5])
+print count_of("abab", "b")
