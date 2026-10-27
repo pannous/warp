@@ -25,6 +25,10 @@ before asking a question). After a context swap, this file and your role file be
 - The compiler is warp; the only Rust left is the harness (src/, crates/warp-runtime: host, runtime, CLI), changed
   rarely and through the interviewer. A card that needs Rust work is redone as warp work. The old Rust compiler is the
   snapshot on branch `rust-bootstrap`; do not port its code, write the clean version in warp.
+- Samples are not the spec: before making a failing sample run, ask whether it should be written more beautifully or
+  more generally. Rewrite the sample (its own commit, saying why) rather than add special syntax for it; a special
+  spelling may be given up for the general beauty of the compiler (user 2026-10-27). Dropping a spelling the wiki
+  promises goes to the Interviewer.
 - Plain warp first: a feature is a function, an enum, a class, an overload or a block parameter in lib/ whenever
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
