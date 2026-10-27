@@ -216,6 +216,19 @@ fn store_file(directory: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()
 	fs::rename(&staging, path)
 }
 
+/// A file of the cache directory by its name, none with the cache off
+pub fn cache_file(name: &str) -> Option<PathBuf> {
+	cache_directory().map(|directory| directory.join(name))
+}
+
+/// The bytes written to a file of the cache directory (cache_file), so parallel runs never read half of it
+pub fn store_cache_file(path: &Path, bytes: &[u8]) {
+	let Some(directory) = path.parent() else { return };
+	if let Err(failure) = store_file(directory, path, bytes) {
+		eprintln!("warning: module cache {}: {failure}", directory.display());
+	}
+}
+
 /// The bytes kept under `key` with `extension` (src/run/program_cache.rs), a hit counting as a use for pruning; none
 /// without them or with the cache off
 pub fn kept_bytes(key: &str, extension: &str) -> Option<Vec<u8>> {
@@ -285,6 +298,31 @@ const STAMP_LENGTH: usize = 32 + 8 + STAMP_MARK.len();
 /// The build files whose machine code ships beside them, by their bytes' SHA-256 (shipped_with)
 static SHIPPED: LazyLock<Mutex<HashMap<Vec<u8>, PathBuf>>> = LazyLock::new(Mutex::default);
 
+/// The large modules this process hashed, with their SHA-256 (module_digest)
+static DIGESTS: Mutex<Vec<(Vec<u8>, [u8; 32])>> = Mutex::new(Vec::new());
+/// Modules of this size or more have their SHA-256 remembered: comparing bytes is far cheaper than hashing them
+const REMEMBERED_DIGEST_SIZE: usize = 1 << 18;
+/// Past this many remembered digests the oldest goes
+const MAX_REMEMBERED_DIGESTS: usize = 4;
+
+/// The SHA-256 of a module's bytes, of a large one computed once per process: a compiler's run keys its kept values,
+/// its shipped machine code and its kept folder by it (card startup-time)
+pub fn module_digest(bytes: &[u8]) -> [u8; 32] {
+	if bytes.len() < REMEMBERED_DIGEST_SIZE {
+		return Sha256::digest(bytes).into();
+	}
+	let mut digests = DIGESTS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	if let Some((_, digest)) = digests.iter().find(|(known, _)| known.as_slice() == bytes) {
+		return *digest;
+	}
+	let digest: [u8; 32] = Sha256::digest(bytes).into();
+	if digests.len() >= MAX_REMEMBERED_DIGESTS {
+		digests.remove(0);
+	}
+	digests.push((bytes.to_vec(), digest));
+	digest
+}
+
 /// The .cwasm beside a build file
 pub fn shipped_path(build_file: &Path) -> PathBuf {
 	let mut name = build_file.as_os_str().to_owned();
@@ -295,14 +333,14 @@ pub fn shipped_path(build_file: &Path) -> PathBuf {
 /// `bytes`, read from the build file at `build_file`, run from the machine code shipped beside it (compiled_module)
 pub fn shipped_with(build_file: &Path, bytes: &[u8]) {
 	if let Ok(mut shipped) = SHIPPED.lock() {
-		shipped.insert(Sha256::digest(bytes).to_vec(), build_file.to_path_buf());
+		shipped.insert(module_digest(bytes).to_vec(), build_file.to_path_buf());
 	}
 }
 
 fn stamp(engine: &Engine, bytes: &[u8]) -> Vec<u8> {
 	let mut engine_hasher = std::collections::hash_map::DefaultHasher::new();
 	engine.precompile_compatibility_hash().hash(&mut engine_hasher);
-	let mut stamp = Sha256::digest(bytes).to_vec();
+	let mut stamp = module_digest(bytes).to_vec();
 	stamp.extend(engine_hasher.finish().to_le_bytes());
 	stamp.extend(STAMP_MARK);
 	stamp
@@ -347,9 +385,10 @@ fn shipped_mismatch(engine: &Engine, path: &Path, bytes: &[u8]) -> Option<&'stat
 /// A shipped build file's module from the machine code beside it; None for any other module. A missing or stale .cwasm
 /// is compiled once, said in one line, and written back
 fn shipped_module(engine: &Engine, bytes: &[u8]) -> Option<Result<Module>> {
-	let build_file = SHIPPED.lock().ok()?.get(Sha256::digest(bytes).as_slice()).cloned()?;
+	let digest = module_digest(bytes);
+	let build_file = SHIPPED.lock().ok()?.get(digest.as_slice()).cloned()?;
 	let path = shipped_path(&build_file);
-	let key = format!("shipped {}", cache_key(engine, bytes));
+	let key = format!("shipped {}", crate::extensions::hex_text(&digest));
 	if let Some(module) = remembered(engine, &key) {
 		return Some(Ok(module));
 	}
@@ -394,7 +433,7 @@ thread_local! {
 
 /// The folder of kept values shipped beside the build file `bytes` were read from (shipped_with), if any
 pub fn shipped_kept_folder(bytes: &[u8]) -> Option<PathBuf> {
-	let build_file = SHIPPED.lock().ok()?.get(Sha256::digest(bytes).as_slice()).cloned()?;
+	let build_file = SHIPPED.lock().ok()?.get(module_digest(bytes).as_slice()).cloned()?;
 	Some(shipped_kept_folder_of(&build_file))
 }
 
