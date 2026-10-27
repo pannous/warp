@@ -33,3 +33,8 @@ is! 'enum Kind { Int = "int", Text = "text" }; f(k: Kind?): bool := k == Kind.Te
 
 # a case is itself, made once, and equals its spelling (decision enum-identity, card enum-cases)
 is! 'enum Kind { Int = "int", Text = "text" }; k = Kind.Int; [k == Kind.Int, k == "int", k == Kind.Text, k != Kind.Text]' [true, true, false, true]
+
+# a case knows its enum: two enums' cases of one name differ, a symbol of its name is no case (decision enum-identity,
+# card case-enum-carry)
+is! 'enum Level { Error, Warning }; enum Kind { Error, Int }; Level.Error == Kind.Error' false
+is! 'enum Coin { Penny, Dime }; c = Coin.Dime; [c == Coin.Dime, c == Dime, c == symbol("Dime"), c is Coin]' [true, true, false, true]
