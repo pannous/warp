@@ -22,6 +22,7 @@ power { operator: "^", symbol: Op.Pow, aliases: ["**"] }
 count { prefix-operator: "#", symbol: Op.Hash, aliases: [size, len, length] }
 
 # comparison and logic
+equal { operator: "==", symbol: Op.Eq }
 "<=" { symbol: Op.Le, aliases: ["≤"] }
 ">=" { symbol: Op.Ge, aliases: ["≥"] }
 "!=" { symbol: Op.Ne, aliases: ["≠"] }
