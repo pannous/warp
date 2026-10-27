@@ -1,0 +1,4 @@
+# a block of samples in linear memory (lib/sound.warp class samples): #b its count, b#p its cells, written in place
+'use sound; b = new_samples(4); b#2 = 1.5; [#b, b#2, b#1 == 0]'	[4, 1.5, true]
+'use sound; hum(block: samples, t) := for i in 1 to #block { block#i = 0.25 }; b = new_samples(3); hum(b, 0.0); b#3'	0.25
+'use sound; hum(block: samples, t) := { print(#block); 0 }; play(hum, 0.03s); 1'	1

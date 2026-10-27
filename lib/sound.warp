@@ -554,10 +554,46 @@ plain_hertz(pitch) := {
 // case for signals)
 play(tone, for duration) := if is_signal(tone) then play_signal(tone, duration) else sound(chord_samples(pitches_of(tone), si_amount(duration), wave_shape))
 // block-wise (decision music-plain-details): hum(block: samples, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi *
-// 220 * (t + (i - 1) / sample_rate)) }; play(hum, 2s) calls hum once a block, t its first sample's time. The type
-// `samples` is a block of 512 samples, a linear float array (src/lowering/collections/shared_arrays.rs SAMPLES_TYPE);
-// class Sample is a clip, a list of them `list of Sample`
-play(fill: (samples, float) -> any, for duration) := std_io("sound", "blocks", [fill, linear_new(512), si_amount(duration), sample_rate])
+// 220 * (t + (i - 1) / sample_rate)) }; play(hum, 2s) calls hum once a block, t its first sample's time. The host
+// calls fill_block, which hands the program's fill the block; class Sample is a clip, a list of them `list of Sample`
+play(fill: (samples, float) -> any, for duration) := {
+	block_filler = fill
+	filled_block = new_samples(block_size)
+	std_io("sound", "blocks", [fill_block, filled_block.address, si_amount(duration), sample_rate])
+}
+global block_filler = ø
+global filled_block = ø
+block_size() := 512
+fill_block(t: float): float := {
+	// a local name, as a global holding a function is no call yet (card global-function-value)
+	fill = block_filler
+	fill(filled_block, t)
+	0.0
+}
+// a block of samples in linear memory, where the host reads and the program writes them in place: [count: i64][count
+// f64 cells] at its address, made by one-instruction words (decision wasm-instruction-body), on pages of its own
+class samples {
+	address: int
+	count() := count_at(address)
+	position(p) := cell_at(address + cell_bytes * p)
+	position(p, value) := set_cell(address + cell_bytes * p, value)
+}
+// nullary words: a class method reaches no module value
+cell_bytes() := 8
+page_bytes() := 65536
+cell_at(address: int): float := wasm f64.load
+set_cell(address: int, value: float) := wasm f64.store
+count_at(address: int): int := wasm i64.load
+set_count_at(address: int, count: int) := wasm i64.store
+memory_pages(): int := wasm memory.size
+grown_pages(pages: int): int := wasm memory.grow
+// n zeroed samples (grown memory is zeroed), never freed
+new_samples(n: int): samples := {
+	address = memory_pages() * page_bytes
+	grown_pages(cell_bytes * (n + 1) /! page_bytes + 1)
+	set_count_at(address, n)
+	samples(address)
+}
 is_signal(tone) := tone is function or tone is list and count(tone) == 2 and tone[0] is function
 // the note played through a bus (card shared-buses stage 2): play(C4, 1s, bus: room)
 play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), play(tone, duration))
