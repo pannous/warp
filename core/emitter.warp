@@ -829,6 +829,8 @@ def group_expression(body: Body, n: Node): TypedCode {
 		word = library_words[name_of(n#1)]
 		if word in sort_words and orders_instances() { return refuse("a sort where instances order through compare") }
 		if word == "symbol_node" and #n == 2 and n#2 is text { return interned_symbol(body, n#2) }
+		# `str(p)` shows p as print does, an instance by its class's text(); not inside that dispatcher, whose fallback it is
+		if word == "node_text" and #n == 2 and body.function.name != instance_text_word { return shown_text(expression_code(body, n#2)) }
 		# `a /! b` of a ratio, a float or a value known only at run time floors the quotient as Rust does;
 		# floor_quotient takes ints only
 		if word == "floor_quotient" and #n == 3 {

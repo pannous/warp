@@ -1,0 +1,5 @@
+# a class's text() is how str and as text show its instances, as print does (card class-text-coercion)
+'class P{x; text() := "P" + x}; str(P(3))'	'P3'
+'class P{x; text() := "P" + x}; P(3) as text'	'P3'
+'use units; str(5km) + " " + (300m as text)'	'5km 300m'
+'class P{x}; str(P(3))'	'P{x:3}'
