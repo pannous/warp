@@ -4,10 +4,14 @@
 #   fib(n) := fib(n - 1) + fib(n - 2)
 # is one function trying them in order, `fib(clause·1) := if clause·1 == 0 then 0 else if clause·1 == 1 then 1 else
 # (n = clause·1; fib(n - 1) + fib(n - 2))`. A parameter is a literal the argument must equal, or a name it binds.
-# Other patterns (`total([first, rest...])`, `simplify(data($a * 1))`) become a call of `pattern·clause·<name>`, which
-# emitter.warp refuses: the function is not taken apart yet, and never run as its last clause alone.
+# A list pattern takes a list apart, `total([first, rest...])`, a quoted one code, `simplify(data($a * 1))`; a pattern
+# none of these becomes a call of `pattern·clause·<name>`, which emitter.warp refuses.
 use "walk.warp"
 use "phrase_blocks.warp"
+use "words.warp"
+
+# the word quoting a code pattern, `data($a * 1)`
+code_word = "data"
 
 name_text(n: Node): text := match n {
 	Symbol(name): name
@@ -42,31 +46,74 @@ joined(conditions: list): Node := {
 	condition
 }
 
-# the clause's body with its names bound, as a branch; ø when a pattern is neither a literal nor a name
-branch_of(name: text, clause: Clause): Node := {
-	patterns = clause.patterns
-	places = 1 to #patterns
-	if not places.all(i => is_name(patterns#i) or is_literal(patterns#i)) { return ø }
-	bound = places.filter(i => is_name(patterns#i)).map(i => Key(patterns#i, Op.Assign, parameter(name, i)))
-	if #bound == 0 then clause.body else List(bound + [clause.body], Bracket.Round, Separator.Semicolon)
+# what a pattern asks of the value at `at` and the names it binds there: [tests, bindings], ø for a pattern no clause
+# can take apart. A literal equals the value, a name binds it, `[h, t...]` takes a list apart (`t...` the rest),
+# `data($a * 1)` takes code apart, its `$a` binding the part written there
+pattern_parts(pattern: Node, at: Node): any := {
+	if is_literal(pattern) { return [[Key(at, Op.Eq, pattern)], []] }
+	if is_name(pattern) { return [[], [Key(pattern, Op.Assign, at)]] }
+	if is_empty_list(pattern) { return list_parts([], at) }
+	if is_group(pattern) and bracket_of(pattern) == "[" { return list_parts(items_of(pattern), at) }
+	if is_group(pattern) and bracket_of(pattern) == "(" and #pattern == 2 and pattern#1 == symbol(code_word) { return code_parts(pattern#2, at) }
+	ø
 }
 
-# the clause's test, ø when it takes every argument
-test_of(name: text, clause: Clause): Node := {
-	patterns = clause.patterns
-	places = (1 to #patterns).filter(i => is_literal(patterns#i))
-	if #places == 0 then ø else joined(places.map(i => Key(parameter(name, i), Op.Eq, patterns#i)))
+# `t...` of a list pattern, the rest of the list: its name, else ø
+rest_pattern_name(item: Node): any := if is_key(item, Op.To) and is_name(key_of(item)) and value_of(item) == ø then key_of(item) else ø
+
+# `[]`, `[h, t...]`: a list of that many items (at least as many before a rest), each item's pattern at its place
+list_parts(items: list, at: Node): any := {
+	rest = if #items > 0 then rest_pattern_name(items.last) else ø
+	fixed = if rest == ø then items else items[0..<(#items - 1)]
+	count = Key(Key(ø, Op.Hash, at), if rest == ø then Op.Eq else Op.Ge, #fixed)
+	parts = [[Key(at, Op.Is, symbol("list")), count], []]
+	for i in 1 to #fixed {
+		item = pattern_parts(fixed#i, Key(at, Op.Hash, i))
+		if item == ø { return ø }
+		parts = [parts#1 + item#1, parts#2 + item#2]
+	}
+	if rest != ø { parts = [parts#1, parts#2 + [Key(rest, Op.Assign, call_of("slice", [at, #fixed, ø]))]] }
+	parts
+}
+
+# `data($a * 1)`: code of that shape, a key of that operator with its sides taken apart, `$a` binding its part
+code_parts(pattern: Node, at: Node): any := {
+	if pattern is symbol and name_of(pattern).starts_with("$") { return [[], [Key(symbol(name_of(pattern)[1..]), Op.Assign, at)]] }
+	if is_literal(pattern) { return [[Key(at, Op.Eq, pattern)], []] }
+	if not (type(pattern) is key) { return ø }
+	left = code_parts(key_of(pattern), call_of("key_of", [at]))
+	right = code_parts(value_of(pattern), call_of("value_of", [at]))
+	if left == ø or right == ø { return ø }
+	shape = [Key(at, Op.Is, symbol("key")), Key(call_of("op_of", [at]), Op.Eq, op_of(pattern))]
+	[shape + left#1 + right#1, left#2 + right#2]
+}
+
+# the clause taken apart: [tests, bindings] of all its patterns, ø when one cannot be
+clause_parts(name: text, clause: Clause): any := {
+	parts = [[], []]
+	for i in 1 to #clause.patterns {
+		taken = pattern_parts(clause.patterns#i, parameter(name, i))
+		if taken == ø { return ø }
+		parts = [parts#1 + taken#1, parts#2 + taken#2]
+	}
+	parts
 }
 
 untaken(name: text): Node := List([symbol("pattern·clause·" + name)], Bracket.Round, Separator.None)
+# arguments no clause takes, `len(7)` of `len([]) := 0; len([h, t...]) := …`: an error when it runs
+unmatched_clauses(name: text): Node := List([symbol(raise_word), "no clause of " + name + " takes these arguments"], Bracket.None, Separator.Space)
 
 # the clauses from the last one up: each tried when the ones before did not take the arguments
 tried(name: text, clauses: list, at: int): Node := {
-	branch = branch_of(name, clauses#at)
-	if branch is ø { return untaken(name) }
-	test = test_of(name, clauses#at)
-	if test is ø { return branch }
-	rest = if at == #clauses then untaken(name) else tried(name, clauses, at + 1)
+	clause = clauses#at
+	parts = clause_parts(name, clause)
+	if parts is ø { return untaken(name) }
+	tests = parts#1
+	bindings = parts#2
+	branch = if #bindings == 0 then clause.body else List(bindings + [clause.body], Bracket.Round, Separator.Semicolon)
+	if #tests == 0 { return branch }
+	test = joined(tests)
+	rest = if at == #clauses then unmatched_clauses(name) else tried(name, clauses, at + 1)
 	Key(Key(Key(ø, Op.If, test), Op.Then, branch), Op.Else, rest)
 }
 
