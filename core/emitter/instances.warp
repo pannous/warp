@@ -98,11 +98,15 @@ def classes_parents_first(): list {
 	for level in 0 to deepest { ordered += module.classes.keys.filter(class_name => class_depth(class_name) == level) }
 	ordered
 }
-# an instance's three node fields: the kind, the class name, the list of the field names
+# an instance's three node fields: the kind, the class name, the list of the field names (made once, a global the
+# class's instances share)
 def instance_head(class_name: text): list {
 	names = module.classes[class_name].keys.map(field => node(Kind.Symbol, text_bytes(field)))
-	[op.i64_const] + sleb(Marked.Instance) + node(Kind.Symbol, text_bytes(class_name)) + node(Kind.List, vector_code(names))
+	shared = uleb(declared_global(class_fields_prefix + class_name, "node")#1)
+	made = [op.global_get] + shared + [op.ref_is_null, op.if, no_value] + node(Kind.List, vector_code(names)) + [op.global_set] + shared + [op.end]
+	[op.i64_const] + sleb(Marked.Instance) + node(Kind.Symbol, text_bytes(class_name)) + made + as_node([op.global_get] + shared)
 }
+class_fields_prefix = "fields·"
 # the struct field of a class's field `name` (its place after the node's three), ø when the class lacks it
 def struct_field(class_name: text, name: text): any {
 	fields = module.classes[class_name].keys
@@ -200,6 +204,21 @@ def field_getter_code(f: Function) {
 		}
 	}
 	f.code = code + runtime_call("map_get", [["node", [op.local_get, 0]], text_value_of(name)])#2
+}
+# `set·code(m, value)`: m with its field code set in the struct of whichever class declaring it m is an instance of;
+# any other value (a map, an instance whose class lacks the field) as field_with sets it
+field_setter_prefix = "set·"
+def field_setter_code(f: Function) {
+	name = f.name[#field_setter_prefix ..]
+	code = []
+	for class_name in made_classes() {
+		place = struct_field(class_name, name)
+		if place != ø {
+			struct_index = gc_type(class_struct(class_name))
+			code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value, op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index]) + as_node([op.local_get, 1]) + gc_code(gc_ops.struct_set, [struct_index, place]) + [op.local_get, 0, op.return, op.end]
+		}
+	}
+	f.code = code + runtime_call("field_with", [["node", [op.local_get, 0]], text_value_of(name), ["node", [op.local_get, 1]]])#2
 }
 def instance_entries_code(f: Function) {
 	code = []
@@ -357,6 +376,14 @@ def field_value(field_type: any, value: TypedCode): list { if checked_at_run_tim
 # `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, target: any, name: text, value: TypedCode): list {
 	if checks_fields(body, target) and not field_admits(name, value#1) { return refuse("a " + value#1 + " written to a typed field " + name) }
+	# a field some class declares: that field's setter, which tests only the classes declaring it
+	if declares_field(name) {
+		held = [op.local_get] + uleb(fresh_local(body, value#1))
+		object = expression_code(body, target)
+		setter = made_late(field_setter_prefix + name, "node", ["m", "value"])
+		set = put_back(body, target, object, ["node", call_values(setter, [object, [value#1, held]])#2])
+		return [value#1, value#2 + [op.local_set] + held[1..] + set + held]
+	}
 	entry_assignment(body, target, text_value_of(name), value)
 }
 # the entry named by the text `name` of the map `target` set to value, a variable target holding the result, a map
