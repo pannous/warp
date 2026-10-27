@@ -63,7 +63,7 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 		# an optional field `b: text?` takes ø as it is, any other value as its base type
 		field_type = if given[field_name] == ø and written_type != base_type(written_type) then ø else base_type(written_type)
 		value = texted(field_type, expression_code(body, given[field_name]))
-		if not checked_at_run_time(field_type, value.kind) and not admits(field_type, value.kind) { return refuse("a " + value.kind + " for a typed field of " + class_name) }
+		if not checked_at_run_time(field_type, value.kind) and not admits(field_type, value.kind) { return refuse("a " + kind_spelling(value.kind) + " for a typed field of " + class_name) }
 		codes += [as_node(boxed(field_value(field_type, value)))]
 	}
 	TypedCode("node", instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [gc_type(class_struct(class_name))]))
@@ -265,7 +265,7 @@ def error_function(name: text): int {
 	f.index
 }
 # a recursive call not yet known (pending) is read as the node it may be, as element() takes it (card recursive-class-return)
-def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): TypedCode { if value.kind == "node" or value.kind == pending then field_read(body, TypedCode("node", value.code), name, class_name) else refuse("the field " + name + " of a " + value.kind) }
+def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): TypedCode { if value.kind == "node" or value.kind == pending then field_read(body, TypedCode("node", value.code), name, class_name) else refuse("the field " + name + " of a " + kind_spelling(value.kind)) }
 # `m.x = v`: the map with its entry x set to v
 def field_assignment(map: any, name: any, value: TypedCode): TypedCode { runtime_call("field_with", [TypedCode("node", boxed(map)), shown_text(name), TypedCode("node", boxed(value))]) }
 # a name as a text value, even of one character (text_value gives a "char" then)
@@ -393,13 +393,20 @@ field_defaults(body: any): any := {
 
 # a typed field's value of another kind, or known only at run time, is checked then: "not an int" as Rust's
 # (src/wasm_emitter/declared_values.rs), a float field keeping an int
-field_checks = {int: "int_admitted", list: "list_admitted", text: "text_checked", bool: "bool_checked", float: "float_checked"}
-def checked_at_run_time(field_type: any, kind: text): bool { not admits(field_type, kind) and field_kind(field_type) in field_checks }
-def field_value(field_type: any, value: TypedCode): TypedCode { if checked_at_run_time(field_type, value.kind) then runtime_call(field_checks[field_kind(field_type)], [value]) else value }
+field_check(kind: ValueKind): text? := match kind {
+	ValueKind.Int: "int_admitted"
+	ValueKind.List: "list_admitted"
+	ValueKind.Text: "text_checked"
+	ValueKind.Bool: "bool_checked"
+	ValueKind.Float: "float_checked"
+	_: ø
+}
+def checked_at_run_time(field_type: any, kind: ValueKind): bool { not admits(field_type, kind) and field_check(field_kind(field_type)) != ø }
+def field_value(field_type: any, value: TypedCode): TypedCode { if checked_at_run_time(field_type, value.kind) then runtime_call(field_check(field_kind(field_type)), [value]) else value }
 
 # `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, target: any, name: text, value: TypedCode): TypedCode {
-	if checks_fields(body, target) and not field_admits(name, value.kind) { return refuse("a " + value.kind + " written to a typed field " + name) }
+	if checks_fields(body, target) and not field_admits(name, value.kind) { return refuse("a " + kind_spelling(value.kind) + " written to a typed field " + name) }
 	# a field some class declares: that field's setter, which tests only the classes declaring it
 	if declares_field(name) {
 		held = [op.local_get] + uleb(fresh_local(body, value.kind))

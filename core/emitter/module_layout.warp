@@ -1,7 +1,7 @@
 # The module's sections in order (emitter.warp's part): types, imports, functions, memory, globals, exports, code, data
 # and the names section
 ## the module
-def value_type(kind: text): list { if kind in references then gc_bytes(references[kind]) else [type_bytes[kind]] }
+def value_type(kind: ValueKind): list { if is_reference(kind) then gc_bytes(reference_of(kind)) else [number_byte(kind)] }
 # a global's first value, before its declaration sets it
 def zero_code_of(kind: text): list {
 	if kind == "int" { return [op.i64_const, 0] }
@@ -9,7 +9,7 @@ def zero_code_of(kind: text): list {
 	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
 	if kind == "node" { return boxed(number_value(0)) }
 	if kind == "list" { return vector_code([]) }
-	if kind in references { return [ref_null] + (if kind == "time" then [110] else uleb(gc_type(references[kind]#2))) }
+	if is_reference(kind) { return [ref_null] + (if kind == ValueKind.Time then [110] else uleb(gc_type(reference_of(kind)#2))) }
 	[op.i32_const, 0]
 }
 def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2) + [op.end] }

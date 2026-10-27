@@ -108,6 +108,27 @@ gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node",
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 # a time, a $Node of Kind time held as anyref like a node, is its own kind so that only what handles times takes one
 references = {text: [99, gc.text], list: [99, gc.list], node: [110], time: [110]}
+# a kind's wasm value type: a number's, a yes/no's or a character's own byte, else its reference (decision kinds-as-cases)
+number_byte(kind: ValueKind): int? := match kind {
+	ValueKind.Int: type_bytes.int
+	ValueKind.Float: type_bytes.float
+	ValueKind.Bool: type_bytes.bool
+	ValueKind.Char: type_bytes.char
+	ValueKind.I32: type_bytes.i32
+	_: ø
+}
+reference_of(kind: ValueKind): list? := match kind {
+	ValueKind.Text: references.text
+	ValueKind.List: references.list
+	ValueKind.Node: references.node
+	ValueKind.Time: references.time
+	_: ø
+}
+is_reference(kind: ValueKind): bool := reference_of(kind) != ø
+# a kind the emitter holds a value as: a number, a yes/no, a character or a reference
+is_held_kind(kind: ValueKind): bool := number_byte(kind) != ø or is_reference(kind)
+# a text or a character
+is_textual(kind: ValueKind): bool := kind == ValueKind.Text or kind == ValueKind.Char
 passive_segment = 1
 # block type of a block that leaves nothing
 no_value = 64
@@ -156,7 +177,6 @@ entry_name(entry: any): text := if key_of(entry) is symbol then name_of(key_of(e
 byte_count_words = {bytecount: yes, byte_size: yes}
 def byte_size_code(value: TypedCode): TypedCode { runtime_call("node_bytes", [TypedCode("node", boxed(value))]) }
 # the kinds `+` joins as texts
-characters = {text: yes, char: yes}
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes} # todo yes?? 
 equalities = {"==": yes, "!=": yes}
 identities = {"===": yes, "!==": yes}
@@ -390,7 +410,14 @@ joint_kind(a: text, b: text): text := {
 	"node"
 }
 # code of kind `from` as kind `to`; a boxed value read as a text, yes/no or list by the runtime word checking it is one
-node_readers = {text: "text_of_node", bool: "bool_of_node", list: "list_of_node", char: "char_of_node"}
+# the runtime word reading a node as the kind, else ø
+node_reader(kind: ValueKind): text? := match kind {
+	ValueKind.Text: "text_of_node"
+	ValueKind.Bool: "bool_of_node"
+	ValueKind.List: "list_of_node"
+	ValueKind.Char: "char_of_node"
+	_: ø
+}
 def converted(value: TypedCode, to: text): list {
 	from = value.kind
 	if to == "node" { return boxed(value) }
@@ -399,11 +426,11 @@ def converted(value: TypedCode, to: text): list {
 	if from == "int" and to == "bool" { return condition(value) }
 	if from == "node" and to == "int" { return runtime_call("int_of_node", [value]).code }
 	if from == "node" and to == "float" { return runtime_call("float_of_node", [value]).code }
-	if from == "node" and to in node_readers { return runtime_call(node_readers[to], [value]).code }
+	if from == "node" and node_reader(to) != ø { return runtime_call(node_reader(to), [value]).code }
 	if from == "char" and to == "text" { return runtime_call("char_text", [value]).code }
 	# (a local holding a call still compiling, in a first reading of a cycle, whose code is not kept)
 	# todo Plug in the general convert mechanism that calls convert on any two types IF it is defined (dynamic lookup at runtime?)
-	if from != to and from != pending and to != pending { refuse("a " + from + " where a " + to + " is needed") }
+	if from != to and from != pending and to != pending { refuse("a " + kind_spelling(from) + " where a " + kind_spelling(to) + " is needed") }
 	value.code
 }
 # `text(x)`, `string(x)`: x as shown (Rust's TEXT_TYPES)
@@ -412,15 +439,17 @@ text_words = ["text", "string"]
 # (type $String (struct (field $ptr i32) (field $len i32)))  # ONLY use at boundary (ffi) or for extreme speed algorithms / tasks
 
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
-text_readers = {int: "text_as_int", float: "text_as_float"}
-node_casts = {int: "truncated_int", float: "float_cast"}
+# the words casting to a number, `int(x)`, `float(x)`
+cast_words = ["int", "float"]
+text_reader(kind: ValueKind): text? := match kind { ValueKind.Int: "text_as_int"; ValueKind.Float: "text_as_float"; _: ø }
+node_cast(kind: ValueKind): text? := match kind { ValueKind.Int: "truncated_int"; ValueKind.Float: "float_cast"; _: ø }
 def cast(value: TypedCode, to: text): TypedCode {
-	if value.kind == "text" { return runtime_call(text_readers[to], [value]) }
+	if value.kind == "text" { return runtime_call(text_reader(to), [value]) }
 	# '7' as int is 7, the text it is
 	if value.kind == "char" { return cast(TypedCode("text", converted(value, "text")), to) }
 	if value.kind == "float" and to == "int" { return TypedCode("int", value.code + [op.i64_trunc_f64_s]) }
 	# `7/2 as int`: an exact rational truncated toward 0; a text known only at run time spells the number
-	if value.kind == "node" { return runtime_call(node_casts[to], [value]) }
+	if value.kind == "node" { return runtime_call(node_cast(to), [value]) }
 	TypedCode(to, converted(value, to))
 }
 # a value as a yes/no condition: non-zero is yes
@@ -428,9 +457,9 @@ def condition(value: TypedCode): list {
 	kind = value.kind
 	if kind == "int" { return value.code + [op.i64_eqz, op.i32_eqz] }
 	if kind == "float" { return value.code + [op.f64_const] + le64(0) + [op.f64_ne] }
-	if kind == "node" or kind == "list" or kind in characters { return runtime_call("node_truthy", [TypedCode("node", boxed(value))]).code }
+	if kind == "node" or kind == "list" or is_textual(kind) { return runtime_call("node_truthy", [TypedCode("node", boxed(value))]).code }
 	# (a recursive call not yet known is taken as yes/no: wasm validation fails the module if it is not)
-	if kind != "bool" and kind != pending { refuse("a " + kind + " as a condition") }
+	if kind != "bool" and kind != pending { refuse("a " + kind_spelling(kind) + " as a condition") }
 	value.code
 }
 # the test of an if or a loop read inside `blocks` more blocks: in `if name and …` each side is tested by its own kind
@@ -487,7 +516,7 @@ def boxed(value: TypedCode): list {
 	if kind == "char" { return node(Kind.Codepoint, code + gc_code(gc_ops.ref_i31, [])) }
 	if kind == "float" { return node(Kind.Float, code + gc_code(gc_ops.struct_new, [gc_type(gc.float_box)])) }
 	if kind == "bool" { return node(Marked.Bool, code + [op.i64_extend_i32_u] + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])) }
-	if kind != "int" and kind != pending { refuse("a " + kind + " as a value") }
+	if kind != "int" and kind != pending { refuse("a " + kind_spelling(kind) + " as a value") }
 	node(Kind.Int, code + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)]))
 }
 # `[a, b, c]`: a vector of its items, boxed, read in order
@@ -587,7 +616,7 @@ def assignment(body: Body, target: any, value: TypedCode): TypedCode {
 	TypedCode(kind, converted(value, kind) + [op.local_tee] + index)
 }
 
-# `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (field_checks: int_admitted,
+# `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (field_check: int_admitted,
 # bool_checked, …), any other value Rust would check at run time (a fraction, a byte's range) is refused
 declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool", char: "char"}
 def declaration(body: Body, name: text, written_type: text, value: TypedCode): TypedCode {
@@ -606,7 +635,7 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode): T
 # its fields, or a case of T), a node; a value known only at run time is checked then (runtime.warp object_checked
 # fails with "not a T", as Rust's), one of another kind refused
 def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
-	if value.kind != "node" and value.kind != pending { return refuse("a " + value.kind + " given to a variable declared " + type_name) }
+	if value.kind != "node" and value.kind != pending { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
 # `x: int? = v` (`line: int? = try n.line else ø`): a T or ø, so x holds a node; a value known
@@ -614,13 +643,13 @@ def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode)
 # annotation, a class too: an object or ø) holds the node as it is
 def optional_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
 	if type_name in node_annotations or type_name in module.classes {
-		if value.kind != "node" and value.kind != pending and type_name in module.classes { return refuse("a " + value.kind + " given to a variable declared " + type_name + "?") }
+		if value.kind != "node" and value.kind != pending and type_name in module.classes { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name + "?") }
 		return assignment(body, symbol(name), value)
 	}
 	if type_name not in declared_kinds { return refuse("a variable declared " + type_name + "?") }
 	value = texted(type_name, value)
 	kind = value.kind
-	if kind != "node" and kind != pending and kind != declared_kinds[type_name] { return refuse("a " + kind + " given to a variable declared " + type_name + "?") }
+	if kind != "node" and kind != pending and kind != declared_kinds[type_name] { return refuse("a " + kind_spelling(kind) + " given to a variable declared " + type_name + "?") }
 	assignment(body, symbol(name), TypedCode("node", boxed(value)))
 }
 # a value as the declared kind takes it: an int widened to a float, a char (a one-character text) to a text, a value known only at run time checked (a list
@@ -629,11 +658,11 @@ def admitted(value: TypedCode, kind: text): TypedCode {
 	if value.kind == kind { return value }
 	if value.kind == "int" and kind == "float" { return TypedCode("float", converted(value, "float")) }
 	if value.kind == "char" and kind == "text" { return shown_text(value) }
-	if value.kind == "node" and kind in field_checks { return runtime_call(field_checks[kind], [value]) }
+	if value.kind == "node" and field_check(kind) != ø { return runtime_call(field_check(kind), [value]) }
 	# the result of a call still compiling (pending), or a kind guessed from one (`f(x) + g(x)` an int), is held as the
 	# declared kind: the reading is done again once the call's result is known
 	if value.kind == pending or module.saw_pending { return TypedCode(kind, value.code) }
-	refuse("a " + value.kind + " given to a variable declared " + kind)
+	refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + kind_spelling(kind))
 }
 def whole(value: TypedCode): TypedCode { admitted(value, "int") }
 # whether a local (not a parameter) of kind `held` assigned a `kind` takes their joint kind from the next reading of
@@ -644,7 +673,7 @@ widens(body: Body, name: text, held: text, kind: text): bool := {
 	# a yes/no stays one (a number given to it counts as yes when not 0), an int given a yes/no takes 1 or 0
 	if body.names[name] < #body.function.signature.parameters or held == pending or kind == pending or held == "bool" or kind == "bool" { return no }
 	joint = joint_kind(held, kind)
-	joint != held and (joint in type_bytes or joint in references)
+	joint != held and (is_held_kind(joint))
 }
 
 # `global name = value` declares the module's variable name, which every function reads and writes; a bare
@@ -823,7 +852,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in bit_casts { return bit_cast(expression_code(body, n#2), bit_casts[name_of(n#1)]) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("unwrap") { return unwrapped(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_words { return shown_text(expression_code(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_readers { return cast(expression_code(body, n#2), name_of(n#1)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in cast_words { return cast(expression_code(body, n#2), name_of(n#1)) }
 	if bracket_of(n) == "(" and #n == 1 { return expression_code(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression_code(body, n#2)) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("global") { return global_declaration_code(body, n#2) }
@@ -921,7 +950,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 		# Rust's `s += "ab"` on a number is its type error, though `s = s + "ab"` joins
 		# a number variable given boxed values by `+=` (a sum over a list's items) stays a sum after it widens
 		numeric = target.kind == "int" or target.kind == "float"
-		if numeric and added.kind in characters { return refuse("a number += a " + added.kind) }
+		if numeric and is_textual(added.kind) { return refuse("a number += a " + kind_spelling(added.kind)) }
 		sum = left is symbol and (numeric or name_of(left) in body.function.sums)
 		if sum and added.kind == "node" {
 			body.function.sums[name_of(left)] = yes
@@ -971,9 +1000,9 @@ def key_expression(body: Body, n: Node): TypedCode {
 	# `t as codepoint`, `x as integer`: a type word's other names are its kind's; `255 as byte`, `5 as hex` an int's
 	target = if not (right is symbol) then ø else if name_of(right) in core_type_words then core_type_words[name_of(right)] else if name_of(right) in int_spellings then "int" else name_of(right)
 	if operator == Op.As and target == "number" { return as_number(expression_code(body, left)) }
-	if operator == Op.As and (target in type_bytes or target in references) {
+	if operator == Op.As and (is_held_kind(target)) {
 		value = expression_code(body, left)
-		if target in text_readers { return cast(value, target) }
+		if text_reader(target) != ø { return cast(value, target) }
 		if target == "text" { return shown_text(value) }
 		# `"ab" as list` is its characters, as Rust's emit_cast
 		if target == "list" and value.kind == "text" { return runtime_call("text_chars", [value]) }
@@ -1007,20 +1036,20 @@ int_spellings = ["byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint
 # `t as number`: a text spells the number, "1/3" the exact ratio (runtime text_numbers.warp); a number stays as it is
 def as_number(value: TypedCode): TypedCode {
 	if value.kind == "int" or value.kind == "float" { return value }
-	if value.kind in characters { return runtime_call("text_as_number", [TypedCode("text", converted(value, "text"))]) }
+	if is_textual(value.kind) { return runtime_call("text_as_number", [TypedCode("text", converted(value, "text"))]) }
 	runtime_call("number_cast", [TypedCode("node", boxed(value))])
 }
 # `x as rational` of a float: the runtime's float_as_exact (decision float-as-rational); other kinds Rust takes
 def as_rational(value: TypedCode): TypedCode {
 	if value.kind == "float" { return runtime_call("float_as_exact", [value]) }
-	refuse("a " + value.kind + " as rational")
+	refuse("a " + kind_spelling(value.kind) + " as rational")
 }
 
 # -value; a value known only at run time as 0 - value
 def negation(body: Body, value: TypedCode): TypedCode {
 	if value.kind == "float" { return TypedCode("float", value.code + [op.f64_neg]) }
 	if value.kind == "node" { return operation_code(body, "-", number_value(0), value) }
-	if value.kind != "int" { refuse("the negation of a " + value.kind) }
+	if value.kind != "int" { refuse("the negation of a " + kind_spelling(value.kind)) }
 	TypedCode("int", [op.i64_const, 0] + value.code + [op.i64_sub])
 }
 # `a and b`, `a or b` on yes/no values: b is read only when a leaves the answer open
@@ -1049,9 +1078,9 @@ def logical_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCod
 	}
 	kind = if a.kind == "bool" then b.kind else if b.kind == "bool" then a.kind else joint_kind(a.kind, b.kind)
 	# a list or text, `at < n and fields`, `e or "a"`: either value boxed, as a value known only at run time is
-	if kind == "list" or kind in characters { kind = "node" }
+	if kind == "list" or is_textual(kind) { kind = "node" }
 	# on a float Rust fails: "is a float where an exact Int is expected"; boxed values count by their truth
-	if (kind != "int" and kind != "node") or a.kind == "float" or b.kind == "float" { return refuse("the operator " + symbol + " on " + a.kind + " and " + b.kind) }
+	if (kind != "int" and kind != "node") or a.kind == "float" or b.kind == "float" { return refuse("the operator " + symbol + " on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	held = TypedCode(a.kind, [op.local_get] + uleb(fresh_local(body, a.kind)))
 	test = condition(TypedCode(a.kind, a.code + [op.local_set] + held.code[1..] + held.code))
 	# beside a value known only at run time a yes/no on the left counts as 1 or 0, one on the right stays yes/no, as Rust's

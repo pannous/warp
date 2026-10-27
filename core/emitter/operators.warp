@@ -14,26 +14,26 @@ def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedC
 	if symbol == "+" and a.kind == "list" and b.kind == "list" { return runtime_call("list_join", [a, b]) }
 	# a list takes any other value as its last item: `[1] + "a"` is [1 'a'] (runtime arithmetic.warp node_add)
 	if symbol == "+" and a.kind == "list" and b.kind != "node" { return runtime_call("list_join", [a, TypedCode("list", vector_code([boxed(b)]))]) }
-	textual = a.kind in characters or b.kind in characters
+	textual = is_textual(a.kind) or is_textual(b.kind)
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
 	structured = a.kind == "list" or b.kind == "list" or a.kind == "node" or b.kind == "node"
 	if structured and symbol in equalities { return equality(body, symbol, a, b) }
 	# `"ab" * 2.5`: Rust says how a text repeats, a trap could not
-	if textual and (a.kind == "node" or b.kind == "node") and symbol not in comparisons { return refuse("the operator " + symbol + " on " + a.kind + " and " + b.kind) }
+	if textual and (a.kind == "node" or b.kind == "node") and symbol not in comparisons { return refuse("the operator " + symbol + " on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	# a boxed left operand may be an instance whose class defines the operator: its dispatcher (class_methods.warp's
 	# `+·operator`, the operator a codepoint) calls the method or, on any other value, this builtin, which its own body keeps
 	dispatcher = "${symbol}·operator"
 	if a.kind == "node" and dispatcher in module.functions and body.function.name != dispatcher { return call_values(module.functions[dispatcher], [a, TypedCode("node", boxed(b))]) }
 	if a.kind == "node" or b.kind == "node" { return node_operation(body, symbol, boxed(a), boxed(b)) }
 	# `"ab" * 3`, `3 * " "`: the text repeated, as `3 times "ab"`
-	if symbol == "*" and a.kind in characters and b.kind == "int" { return runtime_call("repeated_text", [b, TypedCode("node", boxed(a))]) }
-	if symbol == "*" and b.kind in characters and a.kind == "int" { return runtime_call("repeated_text", [a, TypedCode("node", boxed(b))]) }
+	if symbol == "*" and is_textual(a.kind) and b.kind == "int" { return runtime_call("repeated_text", [b, TypedCode("node", boxed(a))]) }
+	if symbol == "*" and is_textual(b.kind) and a.kind == "int" { return runtime_call("repeated_text", [a, TypedCode("node", boxed(b))]) }
 	if symbol in comparisons and a.kind == "char" and b.kind == "char" { return operation_code(body, symbol, code_point(a), code_point(b)) }
-	if symbol in comparisons and textual and a.kind in characters and b.kind in characters {
+	if symbol in comparisons and textual and is_textual(a.kind) and is_textual(b.kind) {
 		return operation_code(body, symbol, runtime_call("text_order", [shown_text(a), shown_text(b)]), number_value(0))
 	}
 	if kind == "bool" and symbol in bool_ops { return TypedCode("bool", a.code + b.code + [bool_ops[symbol]]) }
-	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a.kind + " and " + b.kind) }
+	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
 	if symbol == "%" { return runtime_call("float_mod", [TypedCode("float", converted(a, kind)), TypedCode("float", converted(b, kind))]) }
 	if symbol == "rem" and kind == "float" { return float_remainder(body, converted(a, kind), converted(b, kind)) }
@@ -42,7 +42,7 @@ def operation_code(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedC
 	if symbol == "^" and kind == "int" { return runtime_call("exact_pow", [TypedCode("node", boxed(a)), TypedCode("node", boxed(b))]) }
 	if symbol == "^" { return float_power(body, converted(a, kind), converted(b, kind)) }
 	ops = if kind == "float" then float_ops else int_ops
-	if symbol not in ops { return refuse("the operator " + symbol + " on " + kind) }
+	if symbol not in ops { return refuse("the operator " + symbol + " on " + kind_spelling(kind)) }
 	if kind == "int" and symbol in checked_words and not body.intrinsics {
 		checked = runtime_call(checked_words[symbol], [TypedCode("int", converted(a, kind)), TypedCode("int", converted(b, kind))])
 		return TypedCode(if unknown then pending else checked.kind, checked.code)
@@ -104,11 +104,18 @@ def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode,
 # ratio, as Rust's exact_floor)
 # `type(x)`: the type value of x's kind, of a value known only at run time the one its kind names there (a list's
 # items unknown here, Rust's `list of int`, outside the core)
-static_type_words = {int: "int", float: "float", text: "text", char: "codepoint", bool: "bool"}
+static_type_word(kind: ValueKind): text? := match kind {
+	ValueKind.Int: "int"
+	ValueKind.Float: "float"
+	ValueKind.Text: "text"
+	ValueKind.Char: "codepoint"
+	ValueKind.Bool: "bool"
+	_: ø
+}
 def type_value_of(body: Body, value: TypedCode): TypedCode {
 	if value.kind == "node" { return runtime_call("node_type_name", [value, list_value(body, module.classes.keys)]) }
-	if value.kind in static_type_words { return TypedCode("node", node(Marked.TypeValue, text_bytes(static_type_words[value.kind]))) }
-	refuse("the type of a " + value.kind)
+	if static_type_word(value.kind) != ø { return TypedCode("node", node(Marked.TypeValue, text_bytes(static_type_word(value.kind)))) }
+	refuse("the type of a " + kind_spelling(value.kind))
 }
 # ord(c): the code point of a character, of a text its first; chr(n) the character of the code point n
 def code_point(value: TypedCode): TypedCode {
@@ -122,7 +129,7 @@ def floored(value: TypedCode): TypedCode {
 	if value.kind == "int" { return value }
 	if value.kind == "float" { return TypedCode("int", value.code + [op.f64_floor, op.i64_trunc_f64_s]) }
 	if value.kind == "node" { return runtime_call("floored_node", [value]) }
-	refuse("floor of a " + value.kind)
+	refuse("floor of a " + kind_spelling(value.kind))
 }
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
 def if_else_code(kind: text, a: TypedCode, b: TypedCode): list { [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end] }
@@ -134,7 +141,7 @@ def both_of_kind(a: list, b: list, code: int): list {
 # `‖x‖`, abs(x): -x when x < 0, else x
 def absolute_value(body: Body, value: TypedCode): TypedCode {
 	if value.kind == "float" { return TypedCode("float", value.code + [op.f64_abs]) }
-	if value.kind != "int" and value.kind != "node" { return refuse("the absolute value of a " + value.kind) }
+	if value.kind != "int" and value.kind != "node" { return refuse("the absolute value of a " + kind_spelling(value.kind)) }
 	local = uleb(fresh_local(body, value.kind))
 	saved = TypedCode(value.kind, [op.local_get] + local)
 	below_zero = condition(operation_code(body, "<", saved, number_value(0)))

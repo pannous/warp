@@ -76,7 +76,7 @@ def passed(f: Function, i: int, value: TypedCode): list {
 		converted(value, f.kinds[i])
 	} catch refusal {
 		joint = parameter_joint(f.kinds[i], value.kind)
-		if slot not in module.unannotated or not (joint in type_bytes or joint in references) { throw refusal }
+		if slot not in module.unannotated or not (is_held_kind(joint)) { throw refusal }
 		known = module.later_kinds.get(slot) == joint
 		if known and slot not in module.widened_now { throw refusal }
 		if not known {
@@ -93,7 +93,7 @@ widen_parameter(f: Function, i: int, kind: text) := {
 	held = f.kinds[i]
 	if f.result != pending or parameter_key(f.name, i) not in module.unannotated or kind == pending or held_as(kind, held) { return }
 	joint = joint_kind(held, kind)
-	if joint in type_bytes or joint in references { f.widened[parameter_key(f.name, i)] = joint }
+	if is_held_kind(joint) { f.widened[parameter_key(f.name, i)] = joint }
 }
 
 ## functions
@@ -111,8 +111,7 @@ parameter_local_name(scope: Body, name: text, i: int): text := if name in scope.
 analyzed_program(): bool := module.kinds != ø and "value" in module.kinds
 # the kinds analyzer.warp finds that the emitter holds as found; a node stays the emitter's own reading of the value
 # not int: analyzer.warp's int is warp's unbounded one, a node holding a big number would trap as an i64
-held_kinds = {float: 1, char: 1, text: 1, list: 1}
-kept_kind(kind: KindName?): KindName? := if kind in held_kinds then kind else ø
+kept_kind(kind: ValueKind?): ValueKind? := if kind == ValueKind.Float or kind == ValueKind.Char or kind == ValueKind.Text or kind == ValueKind.List then kind else ø
 # whether a value of the emitter's kind `from` is held as the analyzed kind `to` without loss: a character as a text, an
 # int as a float; a node the emitter boxed (`if c then "a" else 2`, analyzer.warp's text) stays one
 held_as(from: text, to: text): bool := from == to or (from == "char" and to == "text") or (from == "int" and to == "float")
@@ -136,7 +135,7 @@ declared_result(f: Function): any := cast_kind(f.body)
 cast_kind(n: Node): any := {
 	if is_key(n, Op.As) and value_of(n) is symbol {
 		kind = annotated_kind(name_of(value_of(n)))
-		return if kind in type_bytes or kind in references then kind else "node"
+		return if is_held_kind(kind) then kind else "node"
 	}
 	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
 	held = held_result_type(n#1)
@@ -166,12 +165,11 @@ analyzed_local_kind(f: Function, name: text): any := {
 	kept_kind(found["locals"][name])
 }
 # the kind of the elements analyzer.warp found for f's list `name`, if the emitter unboxes it from a node
-unboxed_element_kinds = {float: 1, text: 1, list: 1}
 analyzed_element_kind(f: Function, name: text): any := {
 	found = analyzed_function(f)
 	if found == ø or found["elements"] == ø or name not in found["elements"] { return ø }
 	kind = found["elements"][name]
-	if kind in unboxed_element_kinds then kind else ø
+	if kind == ValueKind.Float or kind == ValueKind.Text or kind == ValueKind.List then kind else ø
 }
 
 compile_function(f: Function, argument_kinds: list): any := {
@@ -234,7 +232,7 @@ aliased_type(word: text): text := {
 	while resolved in module.aliases { resolved = module.aliases[resolved] }
 	if optional then resolved + "?" else resolved
 }
-names_a_type(word: text): bool := word in type_bytes or word in references or word in node_annotations or word in module.classes or word in module.aliases
+names_a_type(word: text): bool := is_held_kind(word) or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: list): any := {
 	placed(f)
 	parameter_kinds = []
@@ -253,7 +251,7 @@ function_compiled(f: Function, argument_kinds: list): any := {
 		if annotation == ø { module.unannotated[parameter_key(f.name, i)] = yes }
 		parameter_kinds += [if annotation == ø then given else annotated_kind(annotation)]
 	}
-	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
+	for kind in parameter_kinds { if not (is_held_kind(kind)) { return refuse("a parameter of kind " + kind_spelling(kind)) } }
 	f.kinds = parameter_kinds
 	# the first readings find the result kind and the kinds of locals assigned values of two kinds (`widens`), the
 	# last gives the code with every recursive call knowing the result
@@ -270,7 +268,7 @@ function_compiled(f: Function, argument_kinds: list): any := {
 	# the kind a definition declares is the one its callers took while it was compiling (call_values), whatever its body
 	# gave in a first reading of a cycle
 	if result != no_kind and declared_result(f) != ø { result = declared_result(f) }
-	if result == "mixed" { return refuse(f.name + " giving a " + result) }
+	if result == "mixed" { return refuse(f.name + " giving a " + kind_spelling(result)) }
 	# a body ending in a statement (a loop, a print) gives ø, as Rust's does; one giving only the result of a call
 	# still compiling gives a node
 	f.result = if result == no_kind or result == pending then "node" else result

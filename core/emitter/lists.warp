@@ -14,12 +14,12 @@ def length_code(value: TypedCode): TypedCode {
 	if value.kind == "list" { return TypedCode("int", value.code + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i64_extend_i32_u]) }
 	# a recursive call not yet known (pending) is counted as the node it may be, as condition() takes it
 	if value.kind == "node" or value.kind == pending { return runtime_call("node_length", [value]) }
-	refuse("cannot access length code of " + value.kind)
+	refuse("cannot access length code of " + kind_spelling(value.kind))
 }
 # `xs#i = v`: the i-th item becomes v, boxed; the assignment gives v
 def element_assignment(body: Body, list: TypedCode, index: TypedCode, value: TypedCode): TypedCode {
 	if list.kind == "node" { return runtime_call("node_set_at", [list, index, value]) }
-	if list.kind != "list" { return refuse("an assignment to an element of a " + list.kind) }
+	if list.kind != "list" { return refuse("an assignment to an element of a " + kind_spelling(list.kind)) }
 	held = uleb(fresh_local(body, value.kind))
 	code = value.code + [op.local_set] + held + checked_item(body, list, index) + boxed(TypedCode(value.kind, [op.local_get] + held))
 	TypedCode(value.kind, code + gc_code(gc_ops.array_set, [gc_type(gc.items)]) + [op.local_get] + held)
@@ -27,7 +27,7 @@ def element_assignment(body: Body, list: TypedCode, index: TypedCode, value: Typ
 # `xs#i`: the i-th item, counted from 1
 def element(body: Body, list: TypedCode, index: TypedCode): TypedCode {
 	if list.kind == "node" { return runtime_call("node_at", [list, index]) }
-	if list.kind != "list" { return refuse("an element of a " + list.kind) }
+	if list.kind != "list" { return refuse("an element of a " + kind_spelling(list.kind)) }
 	TypedCode("node", checked_item(body, list, index) + gc_code(gc_ops.array_get, [gc_type(gc.items)]))
 }
 # a list's items and the 0-based place of its index-th item; an index outside 1…count fails in index_out_of_range_of
