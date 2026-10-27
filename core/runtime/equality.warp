@@ -15,6 +15,8 @@ node_equal(a: Node, b: Node): bool := {
 	if same_node(a, b) { return yes }
 	# two texts, the common case of a match on spellings (`Op·case`): their bytes, past none of the other kinds' tests
 	if kind_code(a) == Kind.Text and kind_code(b) == Kind.Text { return byte_count(unboxed_text(a)) == byte_count(unboxed_text(b)) and text_order(unboxed_text(a), unboxed_text(b)) == 0 }
+	# two instances: of one class, their fields equal (each read from its struct as a map)
+	if marked_kind(a) == Marked.Instance and marked_kind(b) == Marked.Instance and not is_null(instance_entries(a)) and not is_null(instance_entries(b)) { return same_bytes(key_name(a), key_name(b)) and node_equal(instance_entries(a), instance_entries(b)) }
 	if kind_code(a) == Kind.Key or kind_code(b) == Kind.Key {
 		return code_free_kind(a) == code_free_kind(b) and same_bytes(key_name(a), key_name(b)) and node_equal(key_value(a), key_value(b))
 	}

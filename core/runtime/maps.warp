@@ -11,10 +11,12 @@ use "show.warp"
 use "text.warp"
 use "types.warp"
 # a map is a curly list of `name:value` keys (Marked.Map and Marked.Entry, as Rust's); a class instance `Point{x:1}`
-# is the key of its class name and the map of its fields; any other key `n:20` is the map of itself, as Rust's
-# keys(n:20) is [n]
+# is its class's struct, whose fields read as such a map (instance_entries: a new one at each call, for iteration,
+# printing and comparison); any other key `n:20` is the map of itself, as Rust's keys(n:20) is [n]
 fields_of(m: Node): Node := {
 	if marked_kind(m) != Marked.Instance { return m }
+	entries = instance_entries(m)
+	if not is_null(entries) { return entries }
 	fields = key_value(m)
 	if not is_null(fields) and kind_code(fields) == Kind.List then fields else map_of([m])
 }
@@ -96,17 +98,6 @@ entry_name(entry: Node): text := {
 }
 # 1 when m has fields to look up: a map, or a class instance (the key of its class name and its fields)
 has_fields(m: Node): bool := not is_null(m) and not is_null(fields_of(m)) and kind_code(fields_of(m)) == Kind.List
-# `p.code` of a class instance: its field at `place`, where its class declares it (emitter instances.warp
-# instance_of_fields builds the fields in that order), checked by name; any other value reads as map_get reads it. An
-# instance holding the field elsewhere is a bug of the emitter's layout, warned at each read (card instance-field-order)
-slot_field(m: Node, name: text, place: int): Node := {
-	if marked_kind(m) == Marked.Instance and has_fields(m) {
-		entries = unboxed_list(fields_of(m))
-		if place <= #entries and kind_code(entries#place) == Kind.Key and same_bytes(entry_name(entries#place), name) { return key_value(entries#place) }
-		if map_index(m, name) > 0 { extended_warned("a class instance's field is not at its declared place (card instance-field-order)") }
-	}
-	map_get(m, name)
-}
 # `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
 map_get(m: Node, name: text): Node := {
 	if is_position_part(m, name) { return position_part(m, name) }
@@ -125,7 +116,9 @@ map_get(m: Node, name: text): Node := {
 	key_value(unboxed_list(fields_of(m))#at)
 }
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
-map_entries(n: Node): Node := {
+map_entries(m: Node): Node := {
+	# an instance walks its fields
+	n = fields_of(m)
 	if marked_kind(n) != Marked.Map { return n }
 	out = []
 	for entry in unboxed_list(n) { out += [[key_name(entry), key_value(entry)]] }
@@ -204,9 +197,20 @@ node_put(n: Node, key: Node, value: Node): Node := {
 # becomes a map of the one entry
 field_with(m: Node, name: text, value: Node): Node := {
 	if is_null(m) { return map_of([new_key(name, value)]) }
+	# an instance's field in its struct; a field its class does not declare among its extra fields, said once a write
+	if marked_kind(m) == Marked.Instance {
+		set = instance_set(m, name, value)
+		if set == 0 { extended_warned("the class " + key_name(m) + " declares no field " + name) }
+		if set != 2 { return m }
+	}
 	entries = unboxed_list(fields_of(m))
 	at = map_index(m, name)
 	if at == 0 { list_append(entries, [new_key(name, value)]) } else { entries#at = new_key(name, value) }
+	m
+}
+# the map m with the entries of another, ø, after its own (an instance's declared fields, then its extra ones)
+with_entries_of(m: Node, more: Node): Node := {
+	if not is_null(more) { list_append(unboxed_list(fields_of(m)), unboxed_list(fields_of(more))) }
 	m
 }
 # `map_get_or(m, key, fallback)`: the value of m's entry key, fallback (ø when left out: `m.get(k)`) when m has none

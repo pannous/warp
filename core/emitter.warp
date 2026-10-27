@@ -41,6 +41,8 @@ function_type_byte = 96
 export_function_byte = 0
 export_memory_byte = 2
 export_global_byte = 3
+# a recursion group of types in the type section (rec), the class structs (module_layout.warp type_entries)
+rec_group_byte = 78
 # the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names,
 # the position of the statement it happened in, the name of the runtime word it failed in (trap_name: the runner no
 # longer needs that word's frame on the stack, which Cranelift's inlining takes away)
@@ -117,7 +119,7 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
 # GC instructions, after their prefix 251
 gc_prefix = 251
-gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
+gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast: 22, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
 	array_set: 14, array_len: 15, array_copy: 17, ref_test: 20, ref_i31: 28, i31_get_u: 30}
 # the abstract heap type i31 (a character boxed in a $Node), as a cast's immediate
 i31_type = 108
@@ -207,7 +209,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; runtime_globals: list = []; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: list = []; gc_indices: map = {}; gc_order: list = []; program_file: text = ""; emitting_at: text = "" }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; runtime_globals: list = []; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
@@ -452,11 +454,15 @@ def gc_code(code: int, immediates: list): list { [gc_prefix] + uleb(code) + conc
 # so each type follows those it names (a type naming itself, as $Node, refers to the index it takes)
 def gc_type(name: text): int {
 	if name in module.gc_indices { return module.gc_indices[name] }
-	for part in gc_types#(gc_position(name)) { if part is text and part != name { gc_type(part) } }
+	for part in gc_definition(name) { if part is text and part != name { gc_type(part) } }
 	module.gc_indices[name] = #module.gc_order
 	module.gc_order += [name]
 	module.gc_indices[name]
 }
+# a GC type's definition and its fields' names: a class's struct (module.class_structs, instances.warp class_struct),
+# else the fixed type of gc_types and gc_names
+def gc_definition(name: text): list { if name in module.class_structs then module.class_structs[name]#1 else gc_types#(gc_position(name)) }
+def gc_field_names(name: text): list { if name in module.class_structs then module.class_structs[name]#2 else gc_names#(gc_position(name))#2 }
 # the position (from 1) of the GC type of this name in gc_types and gc_names
 def gc_position(name: text): int {
 	for i in 1 to #gc_names { if gc_names#i#1 == name { return i } }
@@ -1092,8 +1098,9 @@ def collect_assigned(n: Node, found: any) {
 	if is_group(n) { for item in n { collect_assigned(item, found) } }
 }
 # the runtime words the emitter calls on its own for an operator's form, which the program never names: a field read
-# `p.x` takes the field at its place (slot_field, which may warn on stdout), else by name (card text-field)
-emitter_operator_words = {".": ["slot_field", "map_get", "has_field"]}
+# `p.x` reads a field (a getter ends in map_get, else has_field), `p.x = v` sets one (field_with, which may warn on
+# stderr: a field the class does not declare), `m[k] = v` too (node_put) (cards text-field, declared-class)
+emitter_operator_words = {".": ["map_get", "has_field", "field_with"], "#": ["node_put"]}
 
 def collect_referred(n: Node, found: any) {
 	if n is symbol { found[name_of(n)] = yes }
@@ -1188,12 +1195,15 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 	module.big_int_sites = []
 	module.gc_indices = {}
 	module.gc_order = []
+	module.class_structs = {}
 	collect_types(program)
 	for child in module.parents.keys { inherit_fields(child) }
+	declare_class_structs()
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	reached = reached_words(program)
-	# a print, or a runtime word reached that writes to stdout (a field check failing, card text-field)
-	module.imports = if "print" in reached or "write_output" in reached then [fd_write_import] else []
+	# a print, or a runtime word reached that writes to stdout or stderr (a field check failing, card text-field; a
+	# warning, card declared-class)
+	module.imports = if "print" in reached or "write_output" in reached or "fd_write" in reached then [fd_write_import] else []
 	# imported ahead of the functions, whose indices follow them: every host or WASI word the program reaches
 	for name in module.host.keys {
 		if (name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
@@ -1216,11 +1226,11 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 			f = module.functions[name]
 			if f.kinds == ø and not name.starts_with(prelude_prefix) { compile_function(f, f.signature.parameters.map(p => "node")) }
 		}
-		# a dispatcher's call may compile a target that makes more closures or dispatchers: again until none is new
+		# a dispatcher's call may compile a target that makes more closures, dispatchers or class structs: again until none is new
 		seen = -1
-		while seen != #module.closures + #module.dispatchers {
-			seen = #module.closures + #module.dispatchers
-			for f in module.dispatchers { if f.name == closure_text_name { closure_text_code(f) } else if f.name == shown_big_int_name { shown_big_int_code(f) } else { dispatcher_code(f) } }
+		while seen != #module.closures + #module.dispatchers + #module.class_structs.keys {
+			seen = #module.closures + #module.dispatchers + #module.class_structs.keys
+			for f in module.dispatchers { late_code(f) }
 		}
 		# every function compiled, no call gives a guessed kind any more
 		for f in module.rereads {

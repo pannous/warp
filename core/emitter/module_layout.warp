@@ -32,7 +32,7 @@ def names_section(functions: list): list {
 	function_names = vector(imported + functions.map(f => index_name(f.index, f.name)))
 	locals = vector(functions.map(local_name_map))
 	types = name_map(module.gc_order)
-	fields = vector(range_list(#module.gc_order).map(i => uleb(i) + name_map(gc_names#(gc_position(module.gc_order#(i + 1)))#2)))
+	fields = vector(range_list(#module.gc_order).map(i => uleb(i) + name_map(gc_field_names(module.gc_order#(i + 1)))))
 	content = subsection(names_subsections.functions, function_names) + subsection(names_subsections.locals, locals)
 	globals = name_map(module.global_order)
 	content += subsection(names_subsections.types, types) + subsection(names_subsections.globals, globals)
@@ -41,6 +41,18 @@ def names_section(functions: list): list {
 	section(section_ids.custom, name_bytes("name") + content)
 }
 
+# the type section's entries of the GC types, in index order: each its own, but the class structs (contiguous:
+# instances.warp declare_class_structs) one recursion group, its types told apart by their place in it
+def type_entries(): list {
+	entries = []
+	group = []
+	for name in module.gc_order {
+		if name in module.class_structs { group += [gc_bytes(gc_definition(name))] } else { entries += [gc_bytes(gc_definition(name))] }
+	}
+	if #group == 0 { return entries }
+	first = module.gc_indices[module.gc_order.filter(name => name in module.class_structs)#1]
+	entries[0 ..< first] + [[rec_group_byte] + uleb(#group) + concatenated(group)] + entries[first ..< #entries]
+}
 def module_bytes(functions: list): list {
 	# what names a value type first (functions' signatures and locals, globals), so the GC types the module declares
 	# are all known: those its code used, then these (gc_type)
@@ -50,7 +62,7 @@ def module_bytes(functions: list): list {
 	# an import's type follows the GC types in the imports' order, so a function's type is #gc_order + its index too
 	# the tag's type after every function's
 	tag_types = if module.catches_errors then [[function_type_byte] + vector([value_type("bool")]) + [0]] else []
-	gc_declared = module.gc_order.map(name => gc_bytes(gc_types#(gc_position(name))))
+	gc_declared = type_entries()
 	types = section(section_ids.type, vector(gc_declared + module.imports.map(i => i#3) + function_types + tag_types))
 	imported = section(section_ids.import, vector(range_list(#module.imports).map(i => import_entry(i))))
 	declared = section(section_ids.function, vector(functions.map(f => uleb(#module.gc_order + f.index))))
