@@ -7,6 +7,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To present
+- kinds-as-cases: compiler kinds are enum cases as values, texts only at edges. Open alternative (warp-core-types-emitter's A): a spelled case IS its spelling at run time, `print Op.Add` → + instead of Add (would change enum-case).
 - enum-raw-values: `enum W { A = "a·b", B }` spells cases; unspelled ones spell as their name (no mix error); `Dime = 10` its int.
 
 ## Parked
