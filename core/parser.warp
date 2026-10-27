@@ -3163,7 +3163,8 @@ FREE_SYMBOL_BLOCKS = [['←', '⏿'], ['■', '◿'], ['➔', '➿'], ['⟀', '�
 // Rust twin: operators.rs is_free_symbol
 def is_free_symbol(p: Parser, c: text): bool {
 	glyph = "$(c)"
-	if glyph.length != 1 or PREFIX_OPERATORS.contains(glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø { return false }
+	// a declared operator calls as declared: `prefix operator ∆` makes `print ∆ 5` print ∆(5), no free infix
+	if glyph.length != 1 or PREFIX_OPERATORS.contains(glyph) or is_circumfix_glyph(p, glyph) or symbol_operator(glyph) != ø or declared_level(p.operators, glyph) >= 0 { return false }
 	FREE_SYMBOL_BLOCKS.any(block => c >= block#1 and c <= block#2) and not p.aliases.any(alias => alias#1 == glyph)
 }
 // `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;

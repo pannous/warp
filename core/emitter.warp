@@ -1135,8 +1135,13 @@ def collect_assigned(n: Node, found: any) {
 	}
 	if is_group(n) { for item in n { collect_assigned(item, found) } }
 }
+# the runtime words the emitter calls on its own for an operator's form, which the program never names: a field read
+# `p.x` takes the field at its place (slot_field, which may warn on stdout), else by name (card text-field)
+emitter_operator_words = {".": ["slot_field", "map_get", "has_field"]}
+
 def collect_referred(n: Node, found: any) {
 	if n is symbol { found[name_of(n)] = yes }
+	if type(n) is key and op_of(n) in emitter_operator_words { for word in emitter_operator_words[op_of(n)] { found[word] = yes } }
 	if type(n) is key and key_of(n) != opaque_symbol {
 		collect_referred(key_of(n), found)
 		collect_referred(value_of(n), found)
@@ -1231,7 +1236,8 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 	declare_class_structs()
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	reached = reached_words(program)
-	module.imports = if "print" in reached then [fd_write_import] else []
+	# a print, or a runtime word reached that writes to stdout (a field check failing, card text-field)
+	module.imports = if "print" in reached or "write_output" in reached then [fd_write_import] else []
 	# imported ahead of the functions, whose indices follow them: every host or WASI word the program reaches
 	for name in module.host.keys {
 		if (name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }

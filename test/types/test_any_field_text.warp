@@ -3,3 +3,6 @@
 # a_field_of_an_any_value_ignores_a_class_field_of_that_name
 is! 'class T{t: text; p: int}; f(r: any) := T(r.t, int(r.p)); f({t: "a", p: "2"}).p' 2
 is! 'class T{t: text; p: int}; f(r: any) := T(r.t, int(r.p)); f({t: "a", p: "23"}).p' 23
+
+# a text field read as the value of the program (card text-field)
+is! 'class Tag { kind: text }; t = Tag("int"); t.kind' 'int'

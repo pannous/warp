@@ -1,0 +1,10 @@
+# a field defaulting to the empty map holds a map of its own, also written through a local (card map-class)
+class C { n: int; m: map = {}; xs: list = [] }
+b = C{n: 2}
+g = b.m
+g["z"] = 2
+print b.m.has("z")
+print b.m
+c = C{n: 3}
+print c.m
+print c.xs

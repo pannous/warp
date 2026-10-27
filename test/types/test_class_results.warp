@@ -1,0 +1,10 @@
+# class instances as function results
+# a field of a recursive call's result, its kind not known yet at the first reading (card recursive-class-return)
+is! 'class Cut { n: int }
+cut(xs: list): Cut? := {
+	if #xs == 0 { return ø }
+	inner = cut(xs[1..])
+	if inner == ø { return Cut(1) }
+	Cut(inner.n + 1)
+}
+cut([1, 2, 3]).n' 3
