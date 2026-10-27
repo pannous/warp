@@ -13,3 +13,6 @@ is! 'enum Word { LoopStep = "loop·step", Other }; Word.Other as text' 'Other'
 
 # a variable holding a case
 is! 'enum Word { A = "a", B = "b" }; w = Word.B; w as text' 'b'
+
+# a spelled enum of a used file
+is! 'use "test/fixtures/spelled_enum.warp"; Level.Warning as text' 'warning'
