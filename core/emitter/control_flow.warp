@@ -182,8 +182,13 @@ appended(body: Body, target_name: Node, addition: Node): list? := {
 # the statements in order, the value that of the last
 def sequence(body: Body, items: list): list {
 	if #items == 0 { return refuse("an empty block") }
-	code = effects(body, items[0..<(#items - 1)])
-	last = statement(body, items.last)
+	# a class or enum declaration is no value (collect_types reads it): the block's value is its last other statement,
+	# also where a used class's declaration was brought in after the program (the prelude's `class Error` that `x =
+	# Error; 7` reaches made the program show nothing)
+	valued = items
+	while #valued > 1 and declares_type(valued.last) { valued = valued[0..<(#valued - 1)] }
+	code = effects(body, valued[0..<(#valued - 1)])
+	last = statement(body, valued.last)
 	[last#1, code + last#2]
 }
 # a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,

@@ -1,0 +1,4 @@
+# a program's value is its last statement that is no class or enum declaration: a value named like the built-in type
+# Error, which brings the prelude's class Error in after the program, still shows (card multiline-enum-parse)
+'enum L { Error }; 7'	7
+'x = Error; 7'	7
