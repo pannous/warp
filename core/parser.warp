@@ -911,7 +911,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		} else if left != ø and keyword_at(p, "times") and times_binds(p, min_power) {
 			p.at = p.at + 5
 			skip_spaces(p)
-			left = spaced([left, symbol("times"), repeated(p)])
+			left = operator_call("times", [left, repeated(p)])
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
 			if MEMBERSHIP_POWERS#1 < min_power { break }
@@ -1240,7 +1240,7 @@ def times_binds(p: Parser, min_power: int): bool {
 
 TIMES_POWER = 50
 
-// What `n times` repeats: a block, `: body` as a block, a list or a value
+// What `n times` repeats, the prelude's infix times: a block, `: body` as a block, a list or a value
 // Rust twin: suffixes.rs parse_times_loop
 def repeated(p: Parser): Node := {
 	if is_at(p.code, p.at, ':', p.n) {

@@ -16,3 +16,12 @@ phrase_block(n: Node): Node := match n {
 }
 
 phrase_blocks(program: Node): Node := bottom_up(program, phrase_block)
+
+# a block given as an argument, `{n += 1}`: braces of statements, not a map's entries
+is_block_argument(n: Node): bool := is_curly_group(n) and not (#n > 0 and items_of(n).all(item => is_key(item, Op.Colon)))
+# `twice{n += 1}`, a name glued to its block, which the parser reads as the tagged block `twice: {…}`: the call
+# `twice({n += 1})` where `takes(name)` says the name takes a block, else n
+glued_block_call(n: Node, takes: function): Node := match n {
+	Key(name, Op.Colon, block): { if name is symbol and takes(name_of(name)) and is_block_argument(block) then List([name, block], Bracket.Round, Separator.None) else n }
+	_: n
+}

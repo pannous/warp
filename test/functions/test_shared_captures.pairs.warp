@@ -1,0 +1,23 @@
+# Shared captures and block parameters (card block-parameters-captures; P124, decisions block-lazy-body,
+# handler-blocks-share, count-words-library)
+
+# a lambda changing a variable of its scope shares it
+'n=0; f = () => n += 1; f(); f(); n'	2
+'g(k) := { f = () => k += 5; f(); k }; g(1)'	6
+'s="a"; add = () => s += "b"; add(); add(); s'	'abb'
+
+# a plain assignment in a lambda is its own variable, a read sees the value it captured
+'def f(){ n=1; g = () => { n = 5; n }; g() + n }; f()'	6
+'n=1; f = () => n * 10; n = 2; f()'	10
+
+# a block given to a block parameter is its lazy body, of its scope
+'twice(a: block) := {a(); a()}; n = 0; twice {n += 1}; n'	2
+'run(f: block) := f(); n = 4; run { n = 9 }; n'	9
+'repeats(k: int, body: block) := { for i in 1 to k { body() } }; s = 0; repeats(3) { s += 2 }; s'	6
+'run(f: block) := f(); run { m = 5 }; 1'	1
+
+# times and the count words are prelude functions
+'c=0; 3 times { c += 1 }; c'	3
+'f(k) := { t = 0; k times { t += 1 }; t }; f(4)'	4
+'2 times [1, 2]'	[1, 2, 1, 2]
+'n=0; thrice{n+=1}; n'	3

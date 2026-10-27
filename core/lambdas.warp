@@ -440,10 +440,10 @@ function_positions_of(written: list): any := {
 	found
 }
 block_lambda(block: Node): Node := Key(if mentions(block, "it") then symbol("it") else ø, Op.Arrow, block)
-is_block_argument(n: Node): bool := is_curly_group(n) and not (#n > 0 and items_of(n).all(item => is_key(item, Op.Colon)))
 takes_function(n: Node, positions: any): bool := n is symbol and positions.has(name_of(n))
-# `f(a) {…}` as the call `f(a, {…})` where f takes a function, else n
+# `f(a) {…}` and `f{…}` as the calls `f(a, {…})` and `f({…})` where f takes a function, else n
 joined_block_call(n: Node, positions: any): Node := {
+	n = glued_block_call(n, name => positions.has(name))
 	if not (n is list and #n == 2 and is_round(n#1) and #n#1 > 0 and takes_function(n#1#1, positions) and is_block_argument(n#2)) { return n }
 	call_node(n#1#1, arguments_of(items_of(n#1)) + [n#2])
 }

@@ -1,6 +1,6 @@
 // The standard library module text (notes/stdlib.md): standard functions of every program, `repeat(t, 2)` or `t.repeat(2)`, no `use` needed (`use text` only for the qualified `text.repeat(t, 2)`)
 use list
-repeat(t, n) := n times t
+repeat(t: text, n: int) := t * n
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
 pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
 // format("{} has {} items", ["cart", 3]): each {} takes the next value
