@@ -197,18 +197,20 @@ node_put(n: Node, key: Node, value: Node): Node := {
 # becomes a map of the one entry
 field_with(m: Node, name: text, value: Node): Node := {
 	if is_null(m) { return map_of([new_key(name, value)]) }
-	# an instance's field in its struct; a field its class does not declare makes it the map of its fields and that one
+	# an instance's field in its struct; a field its class does not declare among its extra fields, said once a write
 	if marked_kind(m) == Marked.Instance {
 		set = instance_set(m, name, value)
-		if set == 1 { return m }
-		if set == 0 {
-			extended_warned("the class " + key_name(m) + " declares no field " + name + ": the instance becomes a map")
-			return field_with(instance_entries(m), name, value)
-		}
+		if set == 0 { extended_warned("the class " + key_name(m) + " declares no field " + name) }
+		if set != 2 { return m }
 	}
 	entries = unboxed_list(fields_of(m))
 	at = map_index(m, name)
 	if at == 0 { list_append(entries, [new_key(name, value)]) } else { entries#at = new_key(name, value) }
+	m
+}
+# the map m with the entries of another, ø, after its own (an instance's declared fields, then its extra ones)
+with_entries_of(m: Node, more: Node): Node := {
+	if not is_null(more) { list_append(unboxed_list(fields_of(m)), unboxed_list(fields_of(more))) }
 	m
 }
 # `map_get_or(m, key, fallback)`: the value of m's entry key, fallback (ø when left out: `m.get(k)`) when m has none
