@@ -117,11 +117,16 @@ with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 	if #reached == 0 { return program }
 	brought = []
 	for slice in slices { if slice#2 in reached { brought += reached[slice#2] } }
-	parts = if in_front then [] else statements_in(program)
-	for reached_statement in brought { parts += [reached_statement] }
-	if in_front { for own_statement in statements_in(program) { parts += [own_statement] } }
+	# a value the program reaches, `online := system_value("online") != 0`, holds before the program reads it; a
+	# function goes where the module wants its definitions (card prelude-definition-reachability)
+	values = brought.filter(is_value_definition)
+	functions = brought.filter(statement => not is_value_definition(statement))
+	own_statements = statements_in(program)
+	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
 }
+# `name := …`, `name = …`: a value's definition, no function's
+is_value_definition(statement: Node): bool := (is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
 
 # `alias keys = map_keys` of a module: the word by each alias (Rust: src/modules/declarations.rs, an alias declares
 # nothing, its calls call the word)
