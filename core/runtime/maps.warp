@@ -27,10 +27,10 @@ map_index(m: Node, name: text): int := {
 	hashed_place(entries, map_table(entries), name)
 }
 # A map with fewer entries is walked: an object like `{x: 1, y: 2}` read field by field needs no index (Rust's
-# MIN_INDEXED_ENTRIES); a bigger one is looked up through its index (lists.warp indexed_1 …), so `b[k] = a[k]` in a
+# MIN_INDEXED_ENTRIES); a bigger one is looked up through its index (lists.warp index_slot), so `b[k] = a[k]` in a
 # loop over a's keys takes linear time, not quadratic
 index_least(): int := 16
-# the table of the entries' index, brought up to their count: the slot holding it, else the next slot in turn; a table
+# the table of the entries' index, brought up to their count: the slot holding it, else the least recent one; a table
 # kept at most half full, made anew when the entries outgrew it or fewer are left than it covers
 map_table(entries: list): list := {
 	slot = index_slot(entries)
@@ -50,54 +50,6 @@ map_table(entries: list): list := {
 	}
 	hold_index(slot, entries, covered, table)
 	table
-}
-# the slot a new map's index takes: a free one, else the one looked up least recently, so the maps looked up again and
-# again (the emitter's texts, its functions) keep their index while one no longer used gives its slot up (taking turns
-# instead let a fifth map evict the emitter's texts map every few lookups)
-least_recent_slot(): int := {
-	slot = 1
-	for candidate in 2 to 4 {
-		if slot_covered(slot) >= 0 and (slot_covered(candidate) < 0 or slot_used(candidate) < slot_used(slot)) { slot = candidate }
-	}
-	slot
-}
-slot_used(slot: int): int := if slot == 1 then used_1 else if slot == 2 then used_2 else if slot == 3 then used_3 else used_4
-index_slot(entries: list): int := {
-	if covered_1 >= 0 and same_list(indexed_1, entries) { return 1 }
-	if covered_2 >= 0 and same_list(indexed_2, entries) { return 2 }
-	if covered_3 >= 0 and same_list(indexed_3, entries) { return 3 }
-	if covered_4 >= 0 and same_list(indexed_4, entries) { return 4 }
-	0
-}
-slot_table(slot: int): list := if slot == 1 then table_1 else if slot == 2 then table_2 else if slot == 3 then table_3 else table_4
-slot_covered(slot: int): int := if slot == 1 then covered_1 else if slot == 2 then covered_2 else if slot == 3 then covered_3 else covered_4
-hold_index(slot: int, entries: list, covered: int, table: list): int := {
-	index_clock += 1
-	if slot == 1 { used_1 = index_clock }
-	if slot == 2 { used_2 = index_clock }
-	if slot == 3 { used_3 = index_clock }
-	if slot == 4 { used_4 = index_clock }
-	if slot == 1 {
-		indexed_1 = entries
-		covered_1 = covered
-		table_1 = table
-	}
-	if slot == 2 {
-		indexed_2 = entries
-		covered_2 = covered
-		table_2 = table
-	}
-	if slot == 3 {
-		indexed_3 = entries
-		covered_3 = covered
-		table_3 = table
-	}
-	if slot == 4 {
-		indexed_4 = entries
-		covered_4 = covered
-		table_4 = table
-	}
-	0
 }
 # where a name's probe starts in a table: the hash of its bytes, mixed by Knuth's multiplier (below 2^32, so the
 # product of a hash below 2^30 stays in an i64) before it picks a slot: names a last letter apart ("text 41", "text
