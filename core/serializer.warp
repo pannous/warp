@@ -23,15 +23,15 @@ bare(view: any): any := if is_layer(view) then bare(layered(view)) else view
 // the source text of a literal under the node's layers, "" for none
 source_literal(view: any): text := if kind(view) == "literal" then view#2 else if kind(view) == "attribute" then source_literal(view#4) else ""
 
-is_word_operator(op: any): bool := #op > 0 and op#1 >= 'a' and op#1 <= 'z'
+is_word_operator(op: text): bool := #op > 0 and op#1 >= 'a' and op#1 <= 'z'
 // an operator in front of its one operand, ø on the left: `#x`, `-x`, `not x`
 is_prefix_form(view: any): bool := {
 	node = bare(view)
 	kind(node) == "key" and bare(node#3) is ø and node#2 in prefix_operators
 }
 
-opening(bracket: any): text := if bracket == "" then " " else bracket#1
-closing(bracket: any): text := {
+opening(bracket: text): text := if bracket == "" then " " else bracket#1
+closing(bracket: text): text := {
 	if #bracket == 2 { return bracket#2 }
 	if bracket == "{" { return "}" }
 	if bracket == "[" { return "]" }
@@ -40,7 +40,7 @@ closing(bracket: any): text := {
 	" "
 }
 
-attribute_text(name: any, value: any): text := if value is bool and value then "@" + name + " " else "@" + name + "(" + serialize(value) + ") "
+attribute_text(name: text, value: any): text := if value is bool and value then "@" + name + " " else "@" + name + "(" + serialize(value) + ") "
 // the @name(value) annotations in front of a node, outermost first
 attribute_prefix(view: any): text := {
 	if kind(view) == "attribute" { return attribute_text(view#2, view#3) + attribute_prefix(view#4) }
@@ -51,7 +51,7 @@ attribute_prefix(view: any): text := {
 serialize(view: any): text := written(view, yes)
 
 // with_attributes: a key prints its value's annotations in front of itself, so the value leaves them out
-written(view: any, with_attributes: any): text := {
+written(view: any, with_attributes: bool): text := {
 	if view is bool { return if view then yes_text else no_text }
 	if view is number { return "" + view }
 	if view is ø { return empty_text }
@@ -80,14 +80,14 @@ list_text(view: any): text := {
 
 // a list item: one character in single quotes, a one-character text too, as the runtime prints it (chars-codepoints);
 // in code without brackets in double quotes, as the hint `fail "?"` writes it
-item_text(item: any, bracket: any): text := {
+item_text(item: any, bracket: text): text := {
 	if bracket == "" and kind(bare(item)) == "char" { return quoted("" + bare(item)#2) }
 	if bracket != "" and kind(bare(item)) == "text" and count(bare(item)#2) == 1 { return quoted_by(bare(item)#2, "'") }
 	serialize(item)
 }
 // a text in quotes, a quote or \ in it escaped by a \ so it reads back, as the runtime prints it (P126)
-quoted(text: any): text := quoted_by(text, quote)
-quoted_by(text: any, mark: any): text := {
+quoted(text: text): text := quoted_by(text, quote)
+quoted_by(text: text, mark: text): text := {
 	written = "" + mark
 	for c in text {
 		if c == mark or c == "\\" { written += "\\" }
@@ -97,9 +97,9 @@ quoted_by(text: any, mark: any): text := {
 }
 
 // items are joined by their separator and a space, unless the separator is one (a newline)
-joint(separator: any): text := if separator == "\n" or separator == " " or separator == "\t" then separator else separator + " "
+joint(separator: text): text := if separator == "\n" or separator == " " or separator == "\t" then separator else separator + " "
 
-key_text(op: any, left: any, right: any, view: any): text := {
+key_text(op: text, left: any, right: any, view: any): text := {
 	space = if is_word_operator(op) then " " else ""
 	if is_prefix_form(view) { return op + space + serialize(right) }
 	if bare(right) is ø and op in suffix_operators { return operand_text(left) + op }
@@ -118,7 +118,7 @@ key_text(op: any, left: any, right: any, view: any): text := {
 
 // the left side of op: a key of `:` stays bare (`name: 1`), a text, template or character operand keeps its quotes
 // (`"ab"+x`, `"n is ${n}"==t`)
-left_side(left: any, op: any): text := if op == ":" then shown(left) else operand_text(left)
+left_side(left: any, op: text): text := if op == ":" then shown(left) else operand_text(left)
 operand_text(left: any): text := if QUOTED_OPERANDS.contains(kind(bare(left))) then serialize(left) else shown(left)
 QUOTED_OPERANDS = ["text", "template", "char"]
 
