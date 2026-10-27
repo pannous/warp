@@ -34,8 +34,8 @@ for_each(item: Node, list: Node, parts: list): Node := List([symbol("for"), item
 # built, for every iteration word (map-fold fusion: `sum(xs .* 2)` is one loop)
 each_of(item: Node, list: Node, parts: list): Node := {
 	inner = iteration_of(list)
-	mapping = if inner != ø and inner#1 == "map" then round_code("map", inner#4) else ø
-	if mapping == ø then for_each(item, list, parts) else fused(item, inner#2, mapping, parts)
+	mapping = if inner != ø and inner.word == "map" then round_code("map", inner.callee) else ø
+	if mapping == ø then for_each(item, list, parts) else fused(item, inner.source, mapping, parts)
 }
 fused(item: Node, list: Node, mapping: function, parts: list): Node := {
 	source = fresh_name("source", fresh_number())
@@ -96,8 +96,10 @@ inlined_body(arrow: Node, values: list): Node := {
 
 ## iterations
 
-# `xs.map(f)`, `map(xs, f)`: [word, list, extras, function] of an iteration call, else ø
-iteration_of(n: Node): list? := match n {
+# `xs.map(f)`, `map(xs, f)`: the word, the list it walks, the extra arguments (fold's start) and the function called
+class Iteration { word: text; source: Node; extras: list; callee: Node }
+# the iteration of a call, else ø
+iteration_of(n: Node): Iteration? := match n {
 	Key(list, Op.Dot, called): method_iteration(list, called)
 	List(call, Bracket.Round, Separator.None): {
 		if #call >= 3 and call#1 is symbol and name_of(call#1) in iteration_extras then iteration_parts(name_of(call#1), arguments_of(call)) else ø
@@ -105,7 +107,7 @@ iteration_of(n: Node): list? := match n {
 	_: ø
 }
 
-method_iteration(list: Node, called: Node): list? := match called {
+method_iteration(list: Node, called: Node): Iteration? := match called {
 	List(call, Bracket.Round, Separator.None): {
 		if #call >= 2 and call#1 is symbol and name_of(call#1) in iteration_extras then iteration_parts(name_of(call#1), [list] + arguments_of(call)) else ø
 	}
@@ -113,9 +115,9 @@ method_iteration(list: Node, called: Node): list? := match called {
 }
 
 # the list, the extra arguments and the function of the word, when it has as many as it takes
-iteration_parts(word: text, arguments: list): list? := {
+iteration_parts(word: text, arguments: list): Iteration? := {
 	if #arguments != 2 + iteration_extras[word] { return ø }
-	[word, arguments#1, arguments[1 ..< #arguments - 1], arguments#(#arguments)]
+	Iteration(word, arguments#1, arguments[1 ..< #arguments - 1], arguments#(#arguments))
 }
 
 # the loop of the word over list, `apply` giving the function's call on the values of each round
@@ -139,13 +141,15 @@ iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
 
 ## the program's functions and values
 
-# `f(a, b) := body`: [name, parameters as written, body] of a definition, else ø
-definition_of(n: Node): list? := match n {
+# `f(a, b) := body`: its name, its parameters as written and its body
+class Definition { name: text; parameters: list; body: Node }
+# the definition a statement is, else ø
+definition_of(n: Node): Definition? := match n {
 	Key(signature, Op.Define, body): defined_head(signature, body)
 	_: ø
 }
-defined_head(signature: Node, body: Node): list? := match signature {
-	List(call, Bracket.Round, Separator.None): { if #call >= 1 and call#1 is symbol then [name_of(call#1), arguments_of(call), body] else ø }
+defined_head(signature: Node, body: Node): Definition? := match signature {
+	List(call, Bracket.Round, Separator.None): { if #call >= 1 and call#1 is symbol then Definition(name_of(call#1), arguments_of(call), body) else ø }
 	Key(call, Op.Colon, type): defined_head(call, body)
 	_: ø
 }
@@ -266,7 +270,7 @@ function_parameters_of(written: list): map := {
 	for statement in written {
 		parts = definition_of(statement)
 		if parts != ø {
-			for parameter in parts#2 { if is_key(parameter, Op.Colon) and key_of(parameter) is symbol and value_of(parameter) == symbol("function") { found[name_of(key_of(parameter))] = yes } }
+			for parameter in parts.parameters { if is_key(parameter, Op.Colon) and key_of(parameter) is symbol and value_of(parameter) == symbol("function") { found[name_of(key_of(parameter))] = yes } }
 		}
 	}
 	found
@@ -287,9 +291,9 @@ operator_function(function: Node): Op? := match function {
 }
 
 # the loop of an iteration whose function is a lambda, a function of the program or a function value, else ø
-iteration_over(iteration: list, locals: list, lowering: Lowering): Node? := {
-	apply = round_code(iteration#1, iteration#4)
-	if apply == ø then ø else iteration_loop(iteration#1, iteration#2, iteration#3, apply)
+iteration_over(iteration: Iteration, locals: list, lowering: Lowering): Node? := {
+	apply = round_code(iteration.word, iteration.callee)
+	if apply == ø then ø else iteration_loop(iteration.word, iteration.source, iteration.extras, apply)
 }
 
 # the word's function as the code of its call on the values of a round, else ø
@@ -324,16 +328,17 @@ lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 
 ## functions that are one iteration
 
-# `sum(xs) := fold(xs, 0, +)`: [parameter names, body] of a function whose body is one iteration over its first
+# `sum(xs) := fold(xs, 0, +)`: a function whose body is one iteration over its first
 # parameter, each parameter read once and the function not called in it, else ø. Its calls are its body, so the loop
 # runs where it is called and fuses with the list given (`sum(xs .* 2)`), whatever the function is named
-iteration_function(parts: list): list? := {
-	names = parts#2.map(parameter_name)
-	body = parts#3
+class InlinedFunction { names: list; body: Node }
+iteration_function(parts: Definition): InlinedFunction? := {
+	names = parts.parameters.map(parameter_name)
+	body = parts.body
 	iteration = iteration_of(body)
-	if iteration == ø or #names == 0 or iteration#2 != symbol(names#1) or mentions(body, parts#1) { return ø }
+	if iteration == ø or #names == 0 or iteration.source != symbol(names#1) or mentions(body, parts.name) { return ø }
 	if not names.all(name => mention_count(body, name) == 1) { return ø }
-	[names, body]
+	InlinedFunction(names, body)
 }
 
 mention_count(n: Node, name: text): int := {
@@ -352,9 +357,9 @@ inlined_call(n: Node, locals: list, lowering: Lowering): Node? := match n {
 	List(call, Bracket.Round, Separator.None): {
 		if #call == 0 or not (call#1 is symbol) or name_of(call#1) in locals or name_of(call#1) not in lowering.inlined { return ø }
 		function = lowering.inlined[name_of(call#1)]
-		names = function#1
+		names = function.names
 		arguments = arguments_of(call)
-		body = function#2
+		body = function.body
 		if #arguments != #names or not arguments[1 ..].all(is_steady) { return ø }
 		if arguments.any(argument => mentioned_names(argument, []).any(name => name not in names and mentions(body, name))) { return ø }
 		for i in 1 to #names { body = renamed(body, names#i, arguments#i) }
@@ -400,9 +405,9 @@ celled_scope(statements: list, parameters: list, positions: map): list := {
 celled_definition(statement: Node, positions: map): Node := {
 	parts = definition_of(statement)
 	if parts == ø { return statement }
-	statements = if is_curly_group(parts#3) then items_of(parts#3) else [parts#3]
+	statements = if is_curly_group(parts.body) then items_of(parts.body) else [parts.body]
 	match statement {
-		Key(signature, Op.Define, body): Key(signature, Op.Define, block_of(celled_scope(statements, parts#2.map(parameter_name), positions)))
+		Key(signature, Op.Define, body): Key(signature, Op.Define, block_of(celled_scope(statements, parts.parameters.map(parameter_name), positions)))
 		_: statement
 	}
 }
@@ -411,7 +416,7 @@ celled_definition(statement: Node, positions: map): Node := {
 lowered_statement(statement: Node, top_locals: list, lowering: Lowering): Node := {
 	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
-	locals = parts#2.map(parameter_name) + names_bound(parts#3, [])
+	locals = parts.parameters.map(parameter_name) + names_bound(parts.body, [])
 	match statement {
 		Key(signature, Op.Define, body): Key(signature, Op.Define, lowered_lambdas(body, locals, lowering))
 		_: statement
@@ -439,7 +444,7 @@ function_positions_of(written: list): map := {
 	found = {}
 	for statement in written {
 		parts = definition_of(statement)
-		if parts != ø and parts#2.any(is_function_parameter) { found[parts#1] = (1 to #parts#2).filter(i => is_function_parameter(parts#2#i)) }
+		if parts != ø and parts.parameters.any(is_function_parameter) { found[parts.name] = (1 to #parts.parameters).filter(i => is_function_parameter(parts.parameters#i)) }
 	}
 	found
 }
@@ -472,14 +477,14 @@ lambdas(program: Node): Node := {
 	arities = {}
 	for statement in written {
 		parts = definition_of(statement)
-		if parts != ø { arities[parts#1] = #(parts#2) }
+		if parts != ø { arities[parts.name] = #parts.parameters }
 	}
 	lowering = Lowering{arities: arities, lambdas_lifted: []}
 	lowering.callable_fields = callable_fields_of(program, arities, function_parameters_of(written))
 	for statement in written {
 		parts = definition_of(statement)
 		function = if parts == ø then ø else iteration_function(parts)
-		if function != ø { lowering.inlined[parts#1] = function }
+		if function != ø { lowering.inlined[parts.name] = function }
 	}
 	top_locals = []
 	for statement in written {

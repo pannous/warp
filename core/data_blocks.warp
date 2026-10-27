@@ -24,7 +24,7 @@ data_positions_of(written: list): map := {
 	found = {}
 	for statement in written {
 		parts = definition_of(statement)
-		if parts != ø and parts#2.any(is_data_parameter) { found[parts#1] = (1 to #parts#2).filter(i => is_data_parameter(parts#2#i)) }
+		if parts != ø and parts.parameters.any(is_data_parameter) { found[parts.name] = (1 to #parts.parameters).filter(i => is_data_parameter(parts.parameters#i)) }
 	}
 	found
 }
