@@ -92,6 +92,14 @@ impl Compiler {
 	}
 }
 
+/// Whether a file of lib/ is a compiler it keeps in itself or a file beside one (`.cwasm`, `.inputs`, `.kept/`, its
+/// old names too): an output of lib/, never one of its sources
+pub(crate) fn is_kept_compiler(name: &std::ffi::OsStr) -> bool {
+	let name = name.to_string_lossy();
+	let builds = Compiler::ALL.into_iter().flat_map(|by| [by.file_name(), by.legacy_file_name()]);
+	builds.into_iter().any(|build| name.strip_prefix(build).is_some_and(|rest| rest.is_empty() || rest.starts_with('.')))
+}
+
 /// The program's value, run from the module compiler.warp made of it, with these arguments (`use os; args`)
 pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiled(program, by), arguments)
@@ -121,7 +129,7 @@ pub fn parsed(code: &str) -> Node {
 fn parsed_view(code: &str) -> Result<String, Node> {
 	use crate::run::module_cache::{keep_bytes, kept_bytes};
 	let compiler = compiler(Compiler::RustCompiled)?;
-	let owner = crate::extensions::sha256_hex(&compiler.bytes);
+	let owner = crate::extensions::hex_text(&crate::run::module_cache::module_digest(&compiler.bytes));
 	let key = crate::extensions::sha256_hex(format!("{VIEW_EXTENSION}\n{owner}\n{code}").as_bytes());
 	if let Some(json) = kept_bytes(&key, VIEW_EXTENSION).and_then(|bytes| String::from_utf8(bytes).ok()) {
 		return Ok(json);
@@ -241,7 +249,7 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
-	let owner = crate::extensions::sha256_hex(&compiler.bytes);
+	let owner = crate::extensions::hex_text(&crate::run::module_cache::module_digest(&compiler.bytes));
 	// its kept values shipped beside its build file serve a cold cache; a new build's warming run writes them there
 	let shipped = crate::run::module_cache::shipped_kept_folder(&compiler.bytes);
 	let warming = crate::run::module_cache::warming();

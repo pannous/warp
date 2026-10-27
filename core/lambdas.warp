@@ -14,6 +14,7 @@ use "phrase_blocks.warp"
 use "scope.warp"
 use "multiple_assignments.warp"
 use "signatures.warp"
+use "kind_changes.warp"
 
 lifted_prefix = "closure_lambda_"
 closure_call_word = "closure_call_"
@@ -363,6 +364,50 @@ inlined_call(n: Node, locals: list, lowering: Lowering): any := match n {
 	_: ø
 }
 
+## shared captures
+
+# A variable of a scope that a lambda in it changes, `n += 1`, is shared (P124): it lives in a cell, `n·cell = Cell(n)`,
+# each mention `n·cell.value`, and the lambda captures the cell by value; a lambda's plain `n = 5` is its own n. A block
+# is of its scope (decision handler-blocks-share): each name of the scope it assigns is shared. A name only the lambda
+# or block binds stays its own, a `global` one global
+cell_class = "Cell"
+cell_suffix = "·cell"
+counting_steps = ["++", "--"]
+shared_names(statements: list, locals: list, blocks: list): list := {
+	changed = blocks.flat_map(block => assigned_names(block, assigning_operators))
+	for lambda in statements.flat_map(nodes_in).filter(is_lambda) {
+		own = lambda_parameter_names(lambda_of(lambda))
+		changed += assigned_names(arrow_result(lambda), assigning_operators.filter(op => op != "=")).filter(name => name not in own)
+	}
+	globals = global_variables(block_of(statements))
+	shared = []
+	for name in changed { if name in locals and name not in globals and name not in shared { shared += [name] } }
+	shared
+}
+# the names a node changes with one of the operators, `n += …`, `n++`
+assigned_names(n: Node, operators: list): list := nodes_in(n).filter(part => part is key and (op_of(part) in operators or op_of(part) in counting_steps) and key_of(part) is symbol).map(part => name_of(key_of(part)))
+cell_of(name: text): Node := Key(symbol(name + cell_suffix), Op.Dot, symbol("value"))
+# the statements of a scope, its parameters and the blocks it gives functions as lambdas, its shared names in cells
+# made first, a parameter's holding its value
+celled_scope(statements: list, parameters: list, positions: any): list := {
+	blocks = statements.flat_map(statement => blocks_given(statement, positions))
+	statements = statements.map(statement => with_block_arguments(statement, positions))
+	locals = parameters + statements.fold([], (found, statement) => names_bound(statement, found))
+	shared = shared_names(statements, locals, blocks)
+	celled = statements.map(statement => shared.fold(statement, (part, name) => renamed(part, name, cell_of(name))))
+	shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø]))) + celled
+}
+# a definition with its body in that form
+celled_definition(statement: Node, positions: any): Node := {
+	parts = definition_of(statement)
+	if parts == ø { return statement }
+	statements = if is_curly_group(parts#3) then items_of(parts#3) else [parts#3]
+	match statement {
+		Key(signature, Op.Define, body): Key(signature, Op.Define, block_of(celled_scope(statements, parts#2.map(parameter_name), positions)))
+		_: statement
+	}
+}
+
 # a definition with its body lowered, its parameters and variables the locals
 lowered_statement(statement: Node, top_locals: list, lowering: Lowering): any := {
 	parts = definition_of(statement)
@@ -374,8 +419,52 @@ lowered_statement(statement: Node, top_locals: list, lowering: Lowering): any :=
 	}
 }
 
+## blocks given to function parameters
+
+# A `{…}` given to a parameter typed `function` or `block` is its lazy body (decision block-lazy-body): the lambda of
+# no parameters, of `it` when it mentions it, a closure sharing what it changes; a `block` parameter is a function
+block_types = [symbol("function"), symbol("block")]
+is_function_parameter(parameter: Node): bool := is_key(parameter, Op.Colon) and value_of(parameter) in block_types
+as_function_parameter(parameter: Node): Node := if is_function_parameter(parameter) then Key(key_of(parameter), Op.Colon, symbol("function")) else parameter
+with_function_parameters(statement: Node): Node := match statement {
+	Key(List(call, Bracket.Round, Separator.None), Op.Define, body): Key(call_node(call#1, arguments_of(call).map(as_function_parameter)), Op.Define, body)
+	_: statement
+}
+# the positions of each function's function parameters, by its name
+function_positions_of(written: list): any := {
+	found = {}
+	for statement in written {
+		parts = definition_of(statement)
+		if parts != ø and parts#2.any(is_function_parameter) { found[parts#1] = (1 to #parts#2).filter(i => is_function_parameter(parts#2#i)) }
+	}
+	found
+}
+block_lambda(block: Node): Node := Key(if mentions(block, "it") then symbol("it") else ø, Op.Arrow, block)
+takes_function(n: Node, positions: any): bool := n is symbol and positions.has(name_of(n))
+# `f(a) {…}` and `f{…}` as the calls `f(a, {…})` and `f({…})` where f takes a function, else n
+joined_block_call(n: Node, positions: any): Node := {
+	n = glued_block_call(n, name => positions.has(name))
+	if not (n is list and #n == 2 and is_round(n#1) and #n#1 > 0 and takes_function(n#1#1, positions) and is_block_argument(n#2)) { return n }
+	call_node(n#1#1, arguments_of(items_of(n#1)) + [n#2])
+}
+# the arguments of the call or phrase `f a {…}` that are blocks given to a function parameter of f, by position
+given_positions(n: Node, positions: any): list := {
+	if not (n is list and #n >= 2 and takes_function(n#1, positions)) { return [] }
+	positions[name_of(n#1)].filter(i => i < #n and is_block_argument(n#(i + 1)))
+}
+blocks_given(n: Node, positions: any): list := nodes_in(n).map(part => joined_block_call(part, positions)).flat_map(call => given_positions(call, positions).map(i => call#(i + 1)))
+# `f {…}`, `f(a) {…}`, `f(a, {…})` with those blocks as lambdas
+with_block_arguments(n: Node, positions: any): Node := {
+	n = joined_block_call(children(n, part => with_block_arguments(part, positions)), positions)
+	given = given_positions(n, positions)
+	if #given == 0 then n else group_like(n, (1 to #n).map(i => if i - 1 in given then block_lambda(n#i) else n#i))
+}
+
 lambdas(program: Node): Node := {
-	written = statements_in(program)
+	positions = function_positions_of(statements_in(program))
+	written = statements_in(program).map(statement => with_function_parameters(celled_definition(statement, positions)))
+	main_statements = written.filter(statement => definition_of(statement) == ø)
+	written = written.filter(statement => definition_of(statement) != ø) + celled_scope(main_statements, [], positions)
 	arities = {}
 	for statement in written {
 		parts = definition_of(statement)

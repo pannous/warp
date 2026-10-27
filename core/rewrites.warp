@@ -226,6 +226,9 @@ sugared(program: Node, rules: list): Node := {
 }
 sugared_statement(statement: Node, rules: list, maps: map): Node := placed_map_scoped(statement, n => sugared_node(n, rules), maps)
 
+# the words of the templates of the rules that can fire in the program
+reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(rule => required_words(rule.pattern)), rules.map(rule => words_within(rule.template)), program).flat_map(rule => words_within(rule.template))
+
 # the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
 # result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
 # with these alone gives what all the rules give, without trying the others at each node
