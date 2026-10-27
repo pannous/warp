@@ -210,8 +210,10 @@ c_functions_of(source: text, library_folder: text): list := {
 			for d in catalog { if d#2 == library and not functions.has(d#1) and not c_warps(own, d#1, library) { functions[d#1] = d } }
 		}
 	}
-	# libm's functions warp has no word for, called without an import as Rust's lane calls them
-	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not own.has(d#1) and source.contains(d#1 + "(") { functions[d#1] = d } }
+	# libm's functions warp has no pure code for (all but c_emitted_words: sin, cos, exp…), called without an import as
+	# Rust's lane calls them, by the program or a standard module it uses (`use sound`'s log2)
+	calling = ([source] + used_module_sources(source)).join("\n")
+	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not c_warps(own, d#1, "m") and calling.contains(d#1 + "(") { functions[d#1] = d } }
 	[c_without(kept, resolved).join("\n"), functions, missing]
 }
 # the lines without the statements of `statements`, the other statements of a line kept (a line left empty stays)

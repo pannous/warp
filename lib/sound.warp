@@ -1,9 +1,12 @@
 // The standard library module sound (card basic-sound): `play(440Hz, 0.5s)`, `play(C4)`, `play([C4 E4 G4])` (a chord, as
 // in Sonic Pi), `play note("C#4")` (a Note), `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
-// and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers (src/numbers/units/static_units.rs). The samples are made here and played by the host word
+// and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers. The samples are made here and played by the host word
 // sound_samples: natively a WAV file and the system's player (src/sound/mod.rs; silent under tests and WARP_NO_WINDOW),
 // in the browser WebAudio. Loaded when a program calls one of its words (src/modules.rs SOUND_WORDS)
 global sample_rate = 22050
+// a frequency's or duration's plain number in SI units (Hz, seconds): a unit written in the program is that number at
+// run time already (units stay static), so the amount is the value itself
+si_amount(value) := value
 // the share of the loudest sample: chords and melodies stay below it
 global loudness = 0.3 as float
 // sine, square, triangle, sawtooth or noise
@@ -35,6 +38,8 @@ global sustain = 1.0 as float
 global release = 0.005 as float
 // a note letter's semitone above C is its place here, from 0
 scale_letters = "C.D.EF.G.A.B"
+// the names of the notes of an octave, with sharps
+note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 // the frequency of A4 every note is tuned to: tuning = 442 (card music-values)
 global tuning = 440.0 as float
 
@@ -292,7 +297,6 @@ midi(pitch) := plain_midi(si_amount(pitch))
 // the units go first: a quantity tested against a class fails (card quantity-is-class)
 plain_midi(pitch) := if pitch is Note then pitch.key else round(69 + 12 * log2(pitch / tuning)) as int
 // the name of the note nearest a frequency, with sharps: note_name(Eb4) is "D#4"
-note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 note_name(pitch) := {
 	key = midi(pitch)
 	note_names[key % 12] + string(floor(key / 12) as int - 1)
@@ -302,7 +306,7 @@ is_note_name(name) := count(name) >= 2 and count(name) <= 3 and contains("CDEFGA
 // the frequency of a note name: note_hertz("A4") is 440, note_hertz("C#4") a semitone above C4, note_hertz("Eb5") one below E5
 note_hertz(name) := {
 	accidental = if count(name) == 3 then (if name#2 == "#" or name#2 == "♯" then 1 else - 1) else 0
-	octave = number(name#(count(name)))
+	octave = int(name#(count(name)))
 	midi_hertz(12 * (octave + 1) + scale_letters.index_of(name#1) - 1 + accidental)
 }
 // a note as a value (card note-value, user decision: the word note): note(C4), note("C#4"), note(445Hz) is the nearest
