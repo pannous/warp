@@ -9,7 +9,6 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## To present
 
 ## Parked
-- units-as-values (user discussing with warp-supervisor-vivid-thompson; card unit-literals on hold): a unit is a value of magnitude 1 (`km = Quantity(1, "km")`), dimensions are classes, `5km` is implicit multiplication `5 * km`, no sugar rule; `90km/h` free; units after `use units`, a local shadowing a unit after a number warns.
 - event-handlers (discuss with the user in prose once block-parameters-captures lands): `on` as a prelude function over a sharing block vs today's branch event-handlers-unknown (a4d0dde771, rewrite into generated functions + injected `global`).
 - graphics-plain (warp-markup, parked): display alias table with notes (stays in Rust); bare width/height as canvas sides with did-you-mean (stays).
 - maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.
