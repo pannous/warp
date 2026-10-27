@@ -35,6 +35,15 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 - Side research goes to a background Agent-tool subagent returning a short answer with sources.
 - Never assign @copilot. Releases (version bump, tag, tap formula) need no approval; nothing waits for brew.
 
+## Team handover (reboot, shutdown, "handover")
+1. Tell every running session (ListAgents; tmux warp-*) to push its branch, note the card and write
+   notes/handover/<card or role>.md, then reply "handover done".
+2. Write notes/handover/supervisor.md: a restart table (session, its handover file, its Claude session id from
+   ~/.claude/projects/-Users-me-dev-angles-warp/*.jsonl, the resume and respawn commands), the state, items waiting
+   for the user, queues, holds, and what dies with the session (session crons such as the watch round).
+3. Report the count of handovers on main to the user and tell them when all are in. The next Supervisor reads
+   notes/handover/supervisor.md first and resumes or respawns from its table.
+
 ## Incidents
 - Urgent cards (column Now, no Agent): `todo key` and `todo take` at once, assign ahead of all else. A card you add to
   Now yourself needs an immediate take.
