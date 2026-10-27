@@ -9,6 +9,9 @@ use "phrase_blocks.warp"
 use "scope.warp"
 use "signatures.warp"
 use "clauses.warp"
+use "builtin_signatures.warp"
+use "words.warp"
+use "class_methods.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
 target_call(target: Node): Node := match target {
@@ -190,7 +193,9 @@ overload_kind(type: text): text? := {
 	if type in overload_kinds then overload_kinds[type] else ø
 }
 
-is_overload_type(type: text): bool := type == any_word or overload_kind(type) != ø
+# also a class the program declares, `x: Real`, which the run time tells by `is`
+is_overload_type(type: text, classes: list): bool := type == any_word or overload_kind(type) != ø or type in classes
+declared_classes(program: Node): list := statements_in(program).map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
 
 # `x: int` → "int", an untyped parameter "any"; a definition taking a pattern apart, `len([h, t...])`, is a clause of
 # clauses.warp, no overload (card pattern-clause-refusal)
@@ -207,6 +212,20 @@ typed_variant(name: text, types: list): text := name + types.map(t => "·" + (if
 # name → the parameter types of each of its definitions, for each name defined with several, all different, all of
 # the types above and some typed (a class's parameters dispatch through its methods instead)
 overloaded_types(program: Node): map := {
+	classes = declared_classes(program)
+	signatures = defined_types(program)
+	for name in signatures.keys { signatures[name] = signatures[name] + library_variants(name, signatures[name]) }
+	overloaded = {}
+	for name in signatures.keys {
+		variants = signatures[name]
+		typed = variants.any(types => types.any(t => t != any_word))
+		if #variants > 1 and typed and all_different(variants) and variants.all(types => types.all(type => is_overload_type(type, classes))) { overloaded[name] = variants }
+	}
+	overloaded
+}
+
+# name → the parameter types of each of the program's definitions of it
+defined_types(program: Node): map := {
 	signatures = {}
 	# nodes_in walks the last part first: reversed, the definitions come in declaration order
 	for n in nodes_in(program).reverse() {
@@ -217,13 +236,24 @@ overloaded_types(program: Node): map := {
 			signatures[name] = signatures[name] + [parameter_types(call)]
 		}
 	}
-	overloaded = {}
-	for name in signatures.keys {
-		variants = signatures[name]
-		typed = variants.any(types => types.any(t => t != any_word))
-		if #variants > 1 and typed and all_different(variants) and variants.all(types => types.all(is_overload_type)) { overloaded[name] = variants }
-	}
-	overloaded
+	signatures
+}
+
+# a library word the program defines for other types, `sin(x: Real) := …` beside math's `sin(x: float)`: the library's
+# lines join its variants (decision sound-core-order), so a float still reaches the library's sin
+library_variants(name: text, defined: list): list := {
+	if not word_lines().has(name) { return [] }
+	written = word_lines()[name].map(line => line.signature.parameters.map(p => if p.type_name == "" then any_word else p.type_name))
+	joining = []
+	# math declares sin twice, from warp and from 'm': one variant
+	for types in written { if types not in defined and types not in joining and defined.any(own => #own == #types) { joining += [types] } }
+	joining
+}
+# `sin·float(value·1: float) := sin(value·1)`: a library line as a variant, the call of the library's word
+library_variant(name: text, types: list): Node := {
+	values = (1 to #types).map(at => symbol("value·" + at))
+	parameters = (1 to #types).map(at => Key(values#at, Op.Colon, symbol(types#at)))
+	Key(call_of(typed_variant(name, types), parameters), Op.Define, call_of(name, values))
 }
 
 all_different(variants: list): bool := {
@@ -442,5 +472,10 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
-	if #overloaded == 0 then program else typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program)))
+	if #overloaded == 0 { return program }
+	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program)))
+	# after the resolving, so a library variant's own call stays the library's
+	defined = defined_types(program)
+	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))
+	if #variants == 0 then resolved else separated(bracketed(statements_in(resolved) + variants, ""), ";")
 }

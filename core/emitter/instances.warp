@@ -480,7 +480,7 @@ def keyed_assignment(body: Body, target: any, object: TypedCode, key: any, value
 # map: card local-named); a main-level variable a function changes an entry of is changed for every function, as a
 # reference is in Rust's (`module.functions[name] = …`), not a new local of the function
 def put_back(body: Body, target: any, object: TypedCode, put: TypedCode): list {
-	if target is symbol and object.kind == ValueKind.Node and is_global(body, name_of(target)) { return dropped(global_assignment(name_of(target), put)) }
+	if target is symbol and object.kind == ValueKind.Node and is_global(body, name_of(target)) { return dropped(global_assignment(global_key(body, name_of(target)), put)) }
 	if is_place(target) and object.kind == ValueKind.Node then dropped(assignment(body, target, put)) else dropped(put)
 }
 # a variable, or a field or element of one: what an assignment can write

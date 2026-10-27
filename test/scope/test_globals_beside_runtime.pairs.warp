@@ -1,0 +1,5 @@
+# a program's global named like one of the runtime's (core/runtime/walks.warp's counted, nodes.warp's
+# runtime_spelling_lists) is the program's own (card runtime-global-shadowing)
+'counted = 5; bump() := { global counted; counted += 1 }; bump(); bump(); counted'	7
+'runtime_spelling_lists = [1, 2]; f() := count(runtime_spelling_lists); f()'	2
+'counted = 5; bump() := { global counted; counted += 1 }; bump(); "abc".upper() + counted'	"ABC6"

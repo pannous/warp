@@ -85,3 +85,7 @@ wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add
 	"f64.ceil": 155, "f64.floor": 156, "f64.trunc": 157, "f64.nearest": 158, "f64.sqrt": 159, "f64.add": 160, "f64.sub": 161,
 	"f64.mul": 162, "f64.div": 163, "f64.min": 164, "f64.max": 165, "f64.copysign": 166, "i64.trunc_f64_s": 176,
 	"i64.trunc_f64_u": 177, "f64.convert_i64_s": 185, "f64.convert_i64_u": 186, "i64.reinterpret_f64": 189, "f64.reinterpret_i64": 191}
+# the memory instructions a function body may be, their opcode and immediates: a load or store of an 8-byte cell (align
+# 3, offset 0), memory.size and memory.grow of memory 0
+memory_instructions = {"i64.load": [41, 3, 0], "f64.load": [43, 3, 0], "i64.store": [55, 3, 0], "f64.store": [57, 3, 0],
+	"memory.size": [63, 0], "memory.grow": [64, 0]}

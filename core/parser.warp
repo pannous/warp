@@ -3803,7 +3803,7 @@ def wasm_instruction_after(p: Parser): Node := {
 	if end == type_end + 1 { return ø }
 	name = p.code[p.at + 1 .. end]
 	p.at = end
-	if name not in wasm_instructions { return error_node("wasm " + name + " is no instruction warp takes: the ones on i64 and f64, e.g. wasm f64.sqrt") }
+	if name not in wasm_instructions and name not in memory_instructions { return error_node("wasm " + name + " is no instruction warp takes: the ones on i64 and f64 and the memory's, e.g. wasm f64.sqrt, wasm f64.load") }
 	call_of([symbol("wasm_instruction"), name])
 }
 
