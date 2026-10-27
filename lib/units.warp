@@ -66,49 +66,76 @@ quantity_text(q: Quantity) := str(q.shown()) + q.unit
 unit_product(first: text, second: text) := if first == second then unit_power(first, 2) else first + "·" + second
 unit_power(u: text, power: int) := if power == 1 then u else if power == 2 then u + "²" else if power == 3 then u + "³" else u + "^" + str(power)
 
-// a unit of the given SI amount shown by its name: `km` is named_unit("km", 1000 * m)
-named_unit(name: text, amount: Quantity) := measured(amount.amount, amount.dims, name, amount.amount)
-base_unit(name: text, dims: int) := measured(1, dims, name, 1)
-
-m() := base_unit("m", length_dimension)
-kg() := base_unit("kg", mass_dimension)
-s() := base_unit("s", duration_dimension)
-K() := base_unit("K", temperature_dimension)
-px() := base_unit("px", pixels_dimension)
-mm() := named_unit("mm", m / 1000)
-cm() := named_unit("cm", m / 100)
-dm() := named_unit("dm", m / 10)
-km() := named_unit("km", 1000 * m)
-inch() := named_unit("inch", 254 * m / 10000)
-ft() := named_unit("ft", 12 * inch)
-yd() := named_unit("yd", 3 * ft)
-mi() := named_unit("mi", 1760 * yd)
-g() := named_unit("g", kg / 1000)
-mg() := named_unit("mg", g / 1000)
-lb() := named_unit("lb", 45359237 * kg / 100000000)
-ms() := named_unit("ms", s / 1000)
-µs() := named_unit("µs", ms / 1000)
-ns() := named_unit("ns", µs / 1000)
-// `min` stays the function min(a, b)
-minute() := named_unit("min", 60 * s)
-h() := named_unit("h", 3600 * s)
-day() := named_unit("day", 24 * h)
-Hz() := base_unit("Hz", 0 - duration_dimension)
-kHz() := named_unit("kHz", 1000 * Hz)
-N() := named_unit("N", kg * m / s ^ 2)
-L() := named_unit("L", dm ^ 3)
-ml() := named_unit("ml", cm ^ 3)
-ha() := named_unit("ha", 10000 * m ^ 2)
-dpi() := named_unit("dpi", px / inch)
-
-// the units a text may name, by their symbol, and their long names (`quantity(2, "hours")`)
-units_by_name(): map := {
-	"m": m, "kg": kg, "s": s, "K": K, "px": px, "mm": mm, "cm": cm, "dm": dm, "km": km, "inch": inch, "ft": ft,
-	"yd": yd, "mi": mi, "g": g, "mg": mg, "lb": lb, "ms": ms, "µs": µs, "ns": ns, "min": minute, "h": h, "day": day,
-	"Hz": Hz, "kHz": kHz, "N": N, "L": L, "l": L, "ml": ml, "mL": ml, "ha": ha, "dpi": dpi
+// the units by symbol, each [its SI amount, its dimension]; no unit is written in another, so a program's own `s` or
+// `m` leaves every unit as it is
+unit_table(): map := {
+	"m": [1, length_dimension],
+	"kg": [1, mass_dimension],
+	"s": [1, duration_dimension],
+	"K": [1, temperature_dimension],
+	"px": [1, pixels_dimension],
+	"mm": [1/1000, length_dimension],
+	"cm": [1/100, length_dimension],
+	"dm": [1/10, length_dimension],
+	"km": [1000, length_dimension],
+	"inch": [254/10000, length_dimension],
+	"ft": [12 * 254/10000, length_dimension],
+	"yd": [36 * 254/10000, length_dimension],
+	"mi": [1760 * 36 * 254/10000, length_dimension],
+	"g": [1/1000, mass_dimension],
+	"mg": [1/1000000, mass_dimension],
+	"lb": [45359237/100000000, mass_dimension],
+	"ms": [1/1000, duration_dimension],
+	"µs": [1/1000000, duration_dimension],
+	"ns": [1/1000000000, duration_dimension],
+	"min": [60, duration_dimension],
+	"h": [3600, duration_dimension],
+	"day": [86400, duration_dimension],
+	"Hz": [1, 0 - duration_dimension],
+	"kHz": [1000, 0 - duration_dimension],
+	"N": [1, mass_dimension + length_dimension - 2 * duration_dimension],
+	"L": [1/1000, 3 * length_dimension],
+	"ml": [1/1000000, 3 * length_dimension],
+	"ha": [10000, 2 * length_dimension],
+	"dpi": [10000/254, pixels_dimension - length_dimension]
 }
+// the unit of that symbol, shown by it: `known_unit("km")` is the Length of 1000 m shown in km
+known_unit(symbol: text) := { entry = unit_table()[symbol]; measured(entry#1, entry#2, symbol, entry#1) }
+
+m() := known_unit("m")
+kg() := known_unit("kg")
+s() := known_unit("s")
+K() := known_unit("K")
+px() := known_unit("px")
+mm() := known_unit("mm")
+cm() := known_unit("cm")
+dm() := known_unit("dm")
+km() := known_unit("km")
+inch() := known_unit("inch")
+ft() := known_unit("ft")
+yd() := known_unit("yd")
+mi() := known_unit("mi")
+g() := known_unit("g")
+mg() := known_unit("mg")
+lb() := known_unit("lb")
+ms() := known_unit("ms")
+µs() := known_unit("µs")
+ns() := known_unit("ns")
+// `min` stays the function min(a, b)
+minute() := known_unit("min")
+h() := known_unit("h")
+day() := known_unit("day")
+Hz() := known_unit("Hz")
+kHz() := known_unit("kHz")
+N() := known_unit("N")
+L() := known_unit("L")
+ml() := known_unit("ml")
+ha() := known_unit("ha")
+dpi() := known_unit("dpi")
+
+// the long names a text may give a unit (`quantity(2, "hours")`), by its symbol
 long_unit_names(): map := {
-	"meter": "m", "meters": "m", "metre": "m", "kilogram": "kg", "second": "s", "seconds": "s", 
+	"meter": "m", "meters": "m", "metre": "m", "kilogram": "kg", "second": "s", "seconds": "s",
 	"kilometer": "km", "kilometers": "km", "inches": "inch", "foot": "ft", "feet": "ft", "yard": "yd", "mile": "mi",
 	"miles": "mi", "gram": "g", "grams": "g", "pound": "lb", "lbs": "lb", "millisecond": "ms", "minute": "min",
 	"minutes": "min", "hour": "h", "hours": "h", "days": "day", "litre": "L"
@@ -127,10 +154,9 @@ unit_named(u: text) := {
 	}
 	if u.ends_with("²") or u.ends_with("^2") { return unit_named(u.replace("^2", "").replace("²", "")) ^ 2 }
 	if u.ends_with("³") or u.ends_with("^3") { return unit_named(u.replace("^3", "").replace("³", "")) ^ 3 }
-	known = units_by_name()
 	symbol = long_unit_names().get(u) ?? u
-	if not known.has(symbol) { raise "unknown unit: " + u }
-	known[symbol]
+	if not unit_table().has(symbol) { raise "unknown unit: " + u }
+	known_unit(symbol)
 }
 
 // `quantity(5, "km")`: amount of the unit u, shown in it; `quantity("5 km")`, `quantity("2.5km/h")`: read from text
