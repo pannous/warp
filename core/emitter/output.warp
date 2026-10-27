@@ -27,7 +27,7 @@ def shown_text(value: TypedCode): TypedCode {
 	# a value that may be an instance of a class showing by its text() (class_methods.warp text·shown)
 	if kind == "node" and instance_text_word in module.functions { return TypedCode("text", converted(call_values(module.functions[instance_text_word], [value]), "text")) }
 	if kind == "node" or kind == "time" { return runtime_call("node_text", [value]) }
-	if kind != "bool" { return refuse("the text of a " + kind) }
+	if kind != "bool" { return refuse("the text of a " + kind_spelling(kind)) }
 	TypedCode("text", value.code + [op.if] + gc_bytes(references.text) + text_value("yes").code + [op.else] + text_value("no").code + [op.end])
 }
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
