@@ -1136,7 +1136,7 @@ def end_block(p: Parser, stops_at_else: bool): Node := items_until(p, Bracket.Cu
 
 // What closes the items, as the messages name it; ' ' where no character does
 def closer_of(bracket: Bracket, ends: ItemsEnd): text := match ends {
-	ItemsEnd.Closer: closing_of(bracket as text)
+	ItemsEnd.Closer: closing_of(bracket_glyph(bracket))
 	ItemsEnd.End: "end"
 	ItemsEnd.EndOrElse: "end else"
 	_: ' '
