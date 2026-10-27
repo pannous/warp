@@ -80,7 +80,7 @@ without_layers(view: any, attributes: bool): any := {
 # the empty map `{}` (number_keys.warp keys a variable that starts as one by texts) and the empty list `[]` (as
 # Rust's parser builds it), a character as a text, an opaque type or error whole
 # the node made at the place of `at`, where the user wrote the code it stands for (a rewritten form, a rebuilt group)
-placed(made: any, at: any): any := {
+placed(made: Node, at: Node): Node := {
 	line = line_of(at)
 	column = column_of(at)
 	if line is int and column is int then positioned(made, line, column) else made
@@ -109,8 +109,8 @@ plain_parts(n: Node): Node := match n {
 node_of(view: any): Node := node_from(view, no)
 # the node of a view Rust hands a pass stage: the empty map `{}` behind the opaque word, as plain_node keeps it for
 # number_keys
-stage_node(view: any): any := node_from(view, yes)
-node_from(view: any, keeps_maps: bool): any := {
+stage_node(view: any): Node := node_from(view, yes)
+node_from(view: any, keeps_maps: bool): Node := {
 	kind = kind_of(view)
 	part = inner => node_from(inner, keeps_maps)
 	if kind == "symbol" { return symbol(view#2) }
@@ -172,7 +172,7 @@ unpositioned_view_of(n: Node): any := if n == ø and n !== ø then ["list", "[",
 
 # the name of a type declaration's view: `P` of ["symbol", "P"], under the attribute layers of an enum's cases or a
 # base class
-declared_type_name(name: any): any := {
+declared_type_name(name: any): text? := {
 	if name#1 == "symbol" { return name#2 }
 	if name#1 == "attribute" { return declared_type_name(name#4) }
 	ø
@@ -304,7 +304,7 @@ mentions(n: Node, word: text): bool := match n {
 }
 
 # whether a key of the operator occurs anywhere in n
-has_operator(n: any, operator: Op): bool := match n {
+has_operator(n: Node, operator: Op): bool := match n {
 	Key(left, written, right): written == operator or has_operator(left, operator) or has_operator(right, operator)
 	List(items, _, _): items.any(item => has_operator(item, operator))
 	_: no
