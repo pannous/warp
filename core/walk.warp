@@ -79,7 +79,20 @@ without_layers(view: any, attributes: bool): any := {
 # the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
 # the empty map `{}` (number_keys.warp keys a variable that starts as one by texts) and the empty list `[]` (as
 # Rust's parser builds it), a character as a text, an opaque type or error whole
-plain_node(n: Node): Node := match n {
+# the node made at the place of `at`, where the user wrote the code it stands for (a rewritten form, a rebuilt group)
+placed(made: any, at: any): any := {
+	line = line_of(at)
+	column = column_of(at)
+	if line is int and column is int then positioned(made, line, column) else made
+}
+
+# n without its attributes, opaque empty groups and characters, keeping the place it was written at: the parser places a
+# call on its group, which a rebuilt group would lose, so a refusal of the call would name the node before it
+plain_node(n: Node): Node := {
+	plain = plain_parts(n)
+	if plain === ø or is_positioned(plain) then plain else placed(plain, n)
+}
+plain_parts(n: Node): Node := match n {
 	Key(left, op, right): {
 		if left == symbol(attribute_word) and right#1 == mutated_mark { return List([symbol(unwrap_word), plain_node(right#3)], Bracket.Round, Separator.None) }
 		if left == symbol(attribute_word) { return plain_node(right#3) }
