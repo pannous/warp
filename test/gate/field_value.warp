@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+# a class field read as the program's value, nothing printed: the emitter's own field words count as reached (card text-field)
+class Tag { k: int }
+t = Tag(3)
+t.k
