@@ -373,9 +373,10 @@ declared_field(field: any): any := {
 }
 # an optional type's base, `text?` → text; any other type as it is
 base_type(type: any): any := if type is text and #type > 1 and type.ends_with("?") then type[0..<(#type - 1)] else type
-# a field's declared type as a name: `int` read as a type or as a symbol, else "?"
+# a field's declared type as a name: `int` read as a type or as a symbol, `[int]` a list, else "?"
 type_name_of(type: any): text := {
 	if kind_of(type) == "symbol" { return type#2 }
+	if kind_of(type) == "list" { return "list" }
 	if kind_of(type) == "type" and kind_of(type#2) == "symbol" { return type#2#2 }
 	"?"
 }

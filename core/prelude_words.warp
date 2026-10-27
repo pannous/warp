@@ -125,8 +125,11 @@ with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
 }
-# `name := …`, `name = …`: a value's definition, no function's
-is_value_definition(statement: Node): bool := (is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
+# `name := …`, `name = …`, `global name = …`: a value's definition, no function's
+is_value_definition(statement: Node): bool := {
+	if is_key(statement, Op.Colon) and key_of(statement) == symbol("global") { return is_value_definition(value_of(statement)) }
+	(is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
+}
 
 # `alias keys = map_keys` of a module: the word by each alias (Rust: src/modules/declarations.rs, an alias declares
 # nothing, its calls call the word)

@@ -184,6 +184,8 @@ element_of(type: text): text? := {
 # the kind of value a parameter type takes: list, map or one of overload_kinds; ø of `any` and of another type
 overload_kind(type: text): text? := {
 	if type == "list" or element_of(type) != ø { return "list" }
+	# `(samples, float) -> any`: a function
+	if ["->", "=>", "→"].any(arrow => type.contains(arrow)) { return "function" }
 	if type == "map" { return "map" }
 	if type in overload_kinds then overload_kinds[type] else ø
 }
@@ -319,7 +321,7 @@ takes_widened(type: text): bool := type == "float" or type == "number"
 # item type at run time (an empty list fits every list type)
 run_time_test(argument: Node, type: text): Node := {
 	element = element_of(type)
-	if element == ø { return call_of("is_type", [argument, if takes_widened(type) then "number" else type]) }
+	if element == ø { return call_of("is_type", [argument, if takes_widened(type) then "number" else if overload_kind(type) == "function" then "function" else type]) }
 	no_items = Key(call_of("count", [argument]), Op.Eq, 0)
 	first_item = run_time_test(Key(argument, Op.Hash, 1), element)
 	Key(call_of("is_type", [argument, "list"]), Op.And, Key(no_items, Op.Or, first_item))

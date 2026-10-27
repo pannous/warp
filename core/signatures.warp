@@ -16,6 +16,11 @@ parameter_of(written: any): Parameter := {
 	if rest_name(written) != ø { return Parameter(name: rest_name(written), rest: yes) }
 	declared = if is_key(written, Op.Assign) then key_of(written) else written
 	defaulted_to = if is_key(written, Op.Assign) then [value_of(written)] else ø
+	# `f: (int) -> int`, which the parser reads as `(f: (int)) -> int`: a function
+	if is_key(declared, Op.Arrow) and is_key(key_of(declared), Op.Colon) {
+		taken = key_of(declared)
+		return Parameter(name: parameter_name(key_of(taken)), type_name: type_text(value_of(taken)) + " -> " + type_text(value_of(declared)), defaulted_to: defaulted_to)
+	}
 	if not is_key(declared, Op.Colon) { return Parameter(name: parameter_name(declared), defaulted_to: defaulted_to) }
 	Parameter(name: parameter_name(key_of(declared)), type_name: type_text(value_of(declared)), defaulted_to: defaulted_to)
 }
