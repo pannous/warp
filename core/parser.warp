@@ -56,9 +56,9 @@ def use_library(folder: text) { given_library = folder }
 UNBUNDLED_FOLDERS = ["compiler", "data"]
 LIBRARY_FILES = library_sources()
 // (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
-def library_sources(within: text = ""): any := library_texts(run_library(), within)
+def library_sources(within: text = ""): map := library_texts(run_library(), within)
 // the .warp files of lib/<within> and its folders, by their paths within lib/
-def library_texts(library: text, within: text): any {
+def library_texts(library: text, within: text): map {
 	found = {}
 	entry_names = try list_files(library + "/" + within) else []
 	# a compiler without the runtime's own listing (one an older seed built) lists nothing: it reads lib/ where it runs
@@ -77,14 +77,14 @@ def library_texts(library: text, within: text): any {
 // A source file's text: a bundled module of lib/ from the bundle, unless WARP_LIB is set and has the file (a module
 // changed after the build, per module); any other file (the program's own, core reached as lib/compiler) from the disk;
 // ø for none
-def file_source(path: text): any {
+def file_source(path: text): text? {
 	library = run_library() + "/"
 	bundled = if path.starts_with(library) then LIBRARY_FILES.get(path[library.length .. path.length]) else ø
 	if bundled != ø and env("WARP_LIB") == ø { return bundled }
 	(try read(path) else ø) ?? bundled
 }
 global entity_table = ø
-def entities(): any {
+def entities(): map {
 	if entity_table == ø {
 		entity_table = {}
 		lines = ENTITY_TABLE.split("\n")
@@ -123,22 +123,22 @@ def expanded_entities(source: text): text {
 }
 // The known entity name written at `at` (`\:name`), else "": its run of ASCII letters, or a longer known name with
 // hyphenated parts (`\:fracture-A`)
-def entity_name_at(points: any, at: int, n: int): text {
-	if not (points[at] == '\\' and peek(points, at + 1, n) == ':') { return "" }
+def entity_name_at(source: any, at: int, n: int): text {
+	if not (source[at] == '\\' and peek(source, at + 1, n) == ':') { return "" }
 	letters = at + 2
-	while letters < n and is_alpha(points[letters]) { letters = letters + 1 }
+	while letters < n and is_alpha(source[letters]) { letters = letters + 1 }
 	if letters == at + 2 { return "" }
 	run = letters
-	while run < n and (is_alphanumeric(points[run]) or points[run] == '-') { run = run + 1 }
+	while run < n and (is_alphanumeric(source[run]) or source[run] == '-') { run = run + 1 }
 	end = run
 	while end > letters {
-		if end == run or points[end] == '-' {
-			name = text_between(points, at + 2, end)
+		if end == run or source[end] == '-' {
+			name = text_between(source, at + 2, end)
 			if name in entities() { return name }
 		}
 		end = end - 1
 	}
-	name = text_between(points, at + 2, letters)
+	name = text_between(source, at + 2, letters)
 	if name in entities() then name else ""
 }
 // The characters from `from` to `to` of a text or of its code points
@@ -324,11 +324,11 @@ def symbol_operators(): list := alias_spellings().operator_symbols
 def word_operators(): list := alias_spellings().operator_words
 def keyword_forms(): map := alias_spellings().forms
 // The canonical word an alias spells (`plus` gives add), else ø
-def canonical_word(spelling: text): any := alias_spellings().canonical.get(spelling)
+def canonical_word(spelling: text): text? := alias_spellings().canonical.get(spelling)
 // The operator a symbol or word spells (`≤` gives <=, `mod` %), else ø
-def symbol_operator(written: any): any := spelled_by(symbol_operators(), written)
-def word_operator(written: any): any := spelled_by(word_operators(), written)
-def spelled_by(pairs: list, written: any): any {
+def symbol_operator(written: text): text? := spelled_by(symbol_operators(), written)
+def word_operator(written: text): text? := spelled_by(word_operators(), written)
+def spelled_by(pairs: list, written: text): text? {
 	for pair in pairs { if pair#1 == written { return pair#2 } }
 	ø
 }
@@ -1207,7 +1207,7 @@ def guarded_statement(statement: Node, word: text, condition: Node): Node := {
 // `pattern: match v {…}`: the arm's value is the whole inner match, its subject and its cases on the line, though `:`
 // binds tighter than the words after it (card match-arm-whose)
 // Rust twin: control/switch.rs with_switch_cases
-def with_switch_cases(p, value) {
+def with_switch_cases(p: Parser, value: Node): Node {
 	opens_switch = value == symbol("match") or value == symbol("switch")
 	if not opens_switch or not starts_atom_at(p, blank_end(p, p.at)) { return value }
 	skip_blanks(p)
@@ -1514,7 +1514,7 @@ def operator_at(p: Parser): list {
 	if spelled_symbol.length > 0 then spelled_symbol else aliased_operator_at(p)
 }
 // The operator word at the parser's position as [written, canonical], else []
-def word_operator_at(p: Parser, c: any): list {
+def word_operator_at(p: Parser, c: text): list {
 	for pair in word_operators() {
 		written = pair#1
 		if written#1 == c and keyword_at(p, written) and not (p.group.in_branch and written == "else") and not names_block(p, written) { return pair }
@@ -1523,7 +1523,7 @@ def word_operator_at(p: Parser, c: any): list {
 }
 // The operator symbol at the parser's position as [written, canonical], the longest, else []
 // (`c ?.5 : 1` keeps its ternary: `?.` before a digit is `?` and the number .5)
-def symbol_operator_at(p: Parser, c: any): list {
+def symbol_operator_at(p: Parser, c: text): list {
 	for pair in symbol_operators() {
 		written = pair#1
 		if written#1 == c and starts_at(p.code, written, p.at, p.n) and (written != ">>" or operand_follows(p, 2)) and (written != "?." or not is_digit(peek(p.code, p.at + 2, p.n))) { return pair }
@@ -1790,7 +1790,7 @@ def operator_declaration(p: Parser, word: text): Node := {
 }
 
 // The items of a parenthesized group, the one item of any other node, none of ø: the parameters of `⊕(a, b)`
-def group_items(declared) {
+def group_items(declared: Node): list {
 	if declared == ø { return [] }
 	parts = group_parts(declared)
 	if parts != ø and parts#1 == "(" then parts#3 else [declared]
@@ -1803,7 +1803,7 @@ METHOD_OPERATORS = ["+", "-", "*", "/", "%", "<", ">", "≈", "~", "#"]
 // `+(o) := …` defines a class's method of an operator by its glyph (its plus): the head is the call `+(o)`, no unary
 // plus, no count `#`; ø where no `:=` follows the parentheses
 // Rust twin: operators.rs try_parse_operator_method_head
-def operator_method_head(p) {
+def operator_method_head(p: Parser): Node {
 	op = operator_at(p)
 	if op.length == 0 or not METHOD_OPERATORS.contains(op#2) { return ø }
 	open = p.at + op#1.length
@@ -1817,7 +1817,7 @@ def operator_method_head(p) {
 // `operator #(n) := …`, `infix operator +(a: V, b: V) := …`: the method of a built-in operator, its keywords
 // superfluous; ø for any other statement starting with the word
 // Rust twin: operators.rs operator_method_definition
-def operator_method_definition(p, word) {
+def operator_method_definition(p: Parser, word: text): Node {
 	start = p.at
 	p.at = p.at + word.length
 	skip_spaces(p)
@@ -2445,7 +2445,7 @@ def control_condition(word: text, condition: Node): Node := if NEGATED_CONTROL_W
 // `print it if it%2`, `do {i++} while c`: a trailing `if` guards and a trailing `while` loops the whole command, not its
 // last word; else ø
 // Rust twin: conditions.rs guarded_command
-def guarded_command(nodes: list): any := {
+def guarded_command(nodes: list): Node := {
 	if nodes.length < 2 or nodes#1 is not symbol { return ø }
 	match nodes#(nodes.length) {
 		Key(head, Op.Do, body): { if bare_control(head, "while") then Key(head, Op.Do, command_with(nodes, body)) else ø }
@@ -3812,7 +3812,7 @@ def wasm_instruction_after(p: Parser): Node := {
 // `{empty: yes}`, `Kind = {Empty: 0}`, `class Cell{empty: bool}`: a word naming ø with a `:` glued to it is a name,
 // not with the definition `:=` nor the scope `::`
 // Rust twin: variables.rs names_field
-def names_key(p) := peek(p.code, p.at, p.n) == ':' and not "=:".contains(peek(p.code, p.at + 1, p.n))
+def names_key(p: Parser): bool := peek(p.code, p.at, p.n) == ':' and not "=:".contains(peek(p.code, p.at + 1, p.n))
 
 def names_case(p: Parser, length: int): bool {
 	start = p.at - length

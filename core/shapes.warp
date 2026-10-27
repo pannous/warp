@@ -36,7 +36,7 @@ def spaced(nodes: list): Node := listed(Bracket.None, Separator.Space, nodes)
 // The key of an operator given by its spelling: `keyed("+", a, b)` is a+b
 def keyed(op: text, left: Node, right: Node): Node := Key(left, op as Op, right)
 
-def opaque(view: any): Node := Key(symbol(opaque_word), Op.Colon, view)
+def opaque(view: list): Node := Key(symbol(opaque_word), Op.Colon, view)
 def type_node(name: Node, body: Node): Node := opaque(["type", view_of(name), view_of(body)])
 def error_node(message: text): Node := opaque(["error", ["text", message]])
 def template_node(holed: text): Node := opaque(["template", holed])
