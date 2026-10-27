@@ -163,9 +163,8 @@ property_accessors(program: Node): Node := {
 	kept = statements.filter(statement => property_definition(statement) == ø)
 	scope = scope_of(without_dotted_writes(program))
 	# an argument for a parameter typed T reads a free x as the property T.x (card expected-type-names, plain_enums.warp)
-	types = parameter_types_of(program)
-	values = property_values(properties)
-	rewritten = kept.map(statement => property_accessed(with_expected_names(statement, values, types, scope), properties, scope))
+	expectation = Expectation(property_values(properties), parameter_types_of(program), scope, program)
+	rewritten = kept.map(statement => property_accessed(expected_in(statement, expectation), properties, scope))
 	# the modules of the properties the program names: `use draw` in front for the canvas's
 	needed = properties.owners.keys.filter(name => property_object(name) in mentioned).map(name => properties.owners[name])
 	uses = statements.map(use_target).filter(target => target is symbol).map(name_of)

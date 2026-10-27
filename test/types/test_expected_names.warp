@@ -5,8 +5,9 @@
 is! 'enum Color { Red, Green }; enum Wine { Red, White }; paint(c: Color) := c == Color.Red; paint(Red)' true
 is! 'enum Color { Red, Green }; enum Wine { Red, White }; shade(c: Color) := c as index; shade(Green)' 1
 
-# a name the program binds stays its own
-is! 'enum Color { Red, Green }; Red = 3; f(c: Color) := c; f(Red)' 3
+# a name the program binds stays its own when it holds the type's values, else the type's value wins
+is! 'enum Color { Red, Green }; Red = Color.Green; f(c: Color) := c == Color.Green; f(Red)' true
+is! 'enum Color { Red, Green }; Red = 3; f(c: Color) := c == Color.Red; f(Red)' true
 
 # a value the program defines of the type, `T.x`
 is! 'class Key { code: int }; Key.escape := Key(27); press(k: Key) := k.code; press(escape)' 27

@@ -174,7 +174,7 @@ enum_node(n: Node, enums: map, subjects: map): Node := match n {
 plain_enums(program: Node): Node := {
 	enums = enums_in(program, {})
 	if #enums.keys == 0 { return program }
-	program = with_expected_names(program, enums, parameter_types_of(program), scope_of(program))
+	program = expected_in(program, Expectation(enums, parameter_types_of(program), scope_of(program), program))
 	scoped_enum_nodes(program, enums, held_cases(program, enums, {}))
 }
 
@@ -193,24 +193,42 @@ parameter_types_of(program: Node): map := {
 	found
 }
 
-with_expected_names(program: Node, values: map, types: map, scope: map): Node := bottom_up(program, n => expected_call(n, values, types, scope))
+# what the arguments of a program's calls are read against: the values each type has by name, the parameter types of
+# its functions, the names it binds, and the program itself for the values a name it binds holds
+class Expectation { type_values: map; parameter_types: map; scope: map; program: Node }
+
+expected_in(n: Node, expectation: Expectation): Node := bottom_up(n, m => expected_call(m, expectation))
 
 # a call of a function whose parameters name their types, each argument read from its parameter's type
-expected_call(n: Node, values: map, types: map, scope: map): Node := match n {
+expected_call(n: Node, expectation: Expectation): Node := match n {
 	List(parts, Bracket.Round, Separator.None): {
+		types = expectation.parameter_types
 		if #parts < 2 or not is_name(parts#1) or name_of(parts#1) not in types or #types[name_of(parts#1)] != #parts - 1 { return n }
 		expected = types[name_of(parts#1)]
-		List([parts#1] + (1 to #expected).map(i => expected_value(parts#(i + 1), expected#i, values, scope)), Bracket.Round, Separator.None)
+		List([parts#1] + (1 to #expected).map(i => expected_value(parts#(i + 1), expected#i, expectation)), Bracket.Round, Separator.None)
 	}
 	_: n
 }
 
-# `Red` as an argument for a Color: Color.Red, `escape` for a Key: Key.escape; any other argument as it is
-expected_value(argument: Node, type: text, values: map, scope: map): Node := {
+# `Red` as an argument for a Color: Color.Red, `escape` for a Key: Key.escape; any other argument as it is. A name the
+# program binds stays its own when all it holds are the type's values, else the type's value wins; both are warned
+expected_value(argument: Node, type: text, expectation: Expectation): Node := {
+	values = expectation.type_values
 	if not is_name(argument) or type not in values or name_of(argument) not in values[type] { return argument }
-	if binds_value(scope, name_of(argument)) {
-		diagnose(call_of("shadows_expected_value", [argument, symbol(type)]), argument)
-		return argument
+	if binds_value(expectation.scope, name_of(argument)) {
+		if assigned_values(expectation.program, name_of(argument)).all(value => is_value_of(value, type, values)) {
+			diagnose(call_of("shadows_expected_value", [argument, symbol(type)]), argument)
+			return argument
+		}
+		diagnose(call_of("loses_to_expected_value", [argument, symbol(type)]), argument)
 	}
 	Key(symbol(type), Op.Dot, argument)
+}
+
+# a value written as one of the type's: `Color.Red`, a case `Red`, made by `Color(…)`
+is_value_of(value: Node, type: text, values: map): bool := match value {
+	Key(owner, Op.Dot, _): owner == symbol(type)
+	List(parts, Bracket.Round, Separator.None): #parts > 0 and parts#1 == symbol(type)
+	Symbol(name): type in values and name in values[type]
+	_: no
 }
