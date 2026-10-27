@@ -1,0 +1,4 @@
+# a function whose body is one memory instruction (decision wasm-instruction-body): its address an int
+'cell(a: int): float := wasm f64.load; put(a: int, v: float) := wasm f64.store; put(64, 2.5); cell(64)'	2.5
+'count_at(a: int): int := wasm i64.load; set_count(a: int, v: int) := wasm i64.store; set_count(72, 7); count_at(72) + 1'	8
+'pages(): int := wasm memory.size; grow(n: int): int := wasm memory.grow; before = pages(); grow(2); pages() - before'	2
