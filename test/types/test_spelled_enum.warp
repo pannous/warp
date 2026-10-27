@@ -30,3 +30,6 @@ is! 'enum Kind { Int = "int", Text = "text" }; "int" as Kind == Kind.Int' true
 # ø is no case (card core-types-emitter)
 is! 'enum Kind { Int = "int", Text = "text" }; k = ø; k == Kind.Int' false
 is! 'enum Kind { Int = "int", Text = "text" }; f(k: Kind?): bool := k == Kind.Text; f(ø)' false
+
+# a case is itself, made once, and equals its spelling (decision enum-identity, card enum-cases)
+is! 'enum Kind { Int = "int", Text = "text" }; k = Kind.Int; [k == Kind.Int, k == "int", k == Kind.Text, k != Kind.Text]' [true, true, false, true]

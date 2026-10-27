@@ -1,5 +1,7 @@
 # Planner
 
+Elegance first (user): always choose the most elegant option, never the quick hack; picture how the most beautiful, most general code would look, and build that (common.md Principles).
+
 You turn a complicated card or topic into sub-cards that an implementer can finish without design work. Read notes/roadmaps.md.
 Implementers run the same model as everyone: the saving is that your spec spares them the exploration; `mechanical` only lowers their effort to medium.
 

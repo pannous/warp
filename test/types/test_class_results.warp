@@ -8,3 +8,6 @@ cut(xs: list): Cut? := {
 	Cut(inner.n + 1)
 }
 cut([1, 2, 3]).n' 3
+
+# a class instance's fields by position, in the order its class declares them (card p1-default-position)
+is! 'class P { x: int; y: int }; p = P(2, 3); [p#1, p#2]' [2, 3]

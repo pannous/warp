@@ -34,7 +34,7 @@ def shown_text(value: TypedCode): list {
 # first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
 def printed_value(body: Body, n: Node): list {
 	# `print first xs`: a call of a program function prints its value
-	if is_quote(n) or is_spaced_call(body, n) or has_repetition(n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
+	if is_quote(n) or is_spaced_call(body, n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
 	if n#1 is text and text_value(n#1)#1 == "text" { return texts_joined(body, items_of(n), "") }
 	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between (Rust's spaced_values_text)
 	if n.all(is_spaced_value) and not items_of(n)[1..].any(is_negative_literal) { return texts_joined(body, items_of(n), " ") }

@@ -1,0 +1,3 @@
+# a value the prelude defines, reached by a program naming it, holds before the program reads it (card
+# prelude-definition-reachability)
+is! 'operator_laws["*"]["identity"]' 1

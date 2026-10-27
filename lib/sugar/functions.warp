@@ -10,4 +10,7 @@ rewrite (func $d) => def $d
 rewrite (def $h($p...): $t {$b...}) => ($h($p...): $t := {$b...})
 rewrite (def $h($p...) -> $t {$b...}) => ($h($p...): $t := {$b...})
 rewrite def $h($p...) {$b...} => ($h($p...) := {$b...})
+# Python's colon before the lines indented below, `def f(x):` (or none, `def f(x)`), which the parser reads as the pair
+# f(x): {body}
+rewrite (def $h($p...): {$b...}) => ($h($p...) := {$b...})
 rewrite (def $d) => $d

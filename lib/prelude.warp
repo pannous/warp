@@ -249,6 +249,19 @@ is_type_value(x: any) := (kind_mark(x) >> type_value_bit()) % 2 == 1
 // n copies of value, ø for none (list.warp fill): `n times [x]` and `int[n]` where no typed array holds them; the
 // compiler calls it (wasm_emitter/lists/list_emitter.rs), so a fractional count is the error the runtime gives
 filled_list(n, value: any) := { if n > floor(n) { raise "count must be an integer; fix: compute it with /! (floor division) or `… as int`" }; out = []; for i in 1 to n { out = out + [value] }; out }
+// `n times {…}` runs the block n times, a plain library function (decision language-layers); `n times [x]` is n
+// copies of x, `n times "ab"` the text n times, `n times x` of a number their product
+infix operator times(n: int, body: block) := for i in 1 to n { body() }
+infix operator times(n: int, items: list) := if #items == 1 then zero_fill(n, items#1) else { out = []; for i in 1 to n { out = out + items }; out }
+infix operator times(n: int, t: text) := t * n
+infix operator times(n: number, x: number) := n * x
+// once, twice and thrice count as times does (decision count-words-library): a block runs, a value repeats
+once(body: block) := 1 times body
+once(value: any) := 1 times value
+twice(body: block) := 2 times body
+twice(value: any) := 2 times value
+thrice(body: block) := 3 times body
+thrice(value: any) := 3 times value
 // how a ± value prints (card plus-minus, P219): the ± part to 2 significant digits, the value to the same place, 7.0 ± 2.0;
 // a ± part of 0 or ∞, or more digits than 17, as each float prints; gaussian 1 adds σ. The printer calls it with the
 // parts (wasm_emitter/numbers/uncertain.rs)
@@ -377,6 +390,26 @@ random_int() := (random_below(0x100000000) - 0x80000000) * 0x100000000 + random_
 random_bool() := random_below(2) == 1
 // a Unicode scalar value: the surrogates 0xD800…0xDFFF are no characters
 random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then n = n + 0x800; n as codepoint }
+// the machine's readings, read now by the host word system_value (Rust: lowering/signals/system_values.rs,
+// warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
+// program's own name of the same word wins
+battery() := system_value("battery")
+charging() := system_value("charging") != 0
+online() := system_value("online") != 0
+mouse_x() := system_value("mouse_x") as float
+mouse_y() := system_value("mouse_y") as float
+mouse_down() := system_value("mouse_down") != 0
+mouse_wheel() := system_value("mouse_wheel")
+key_down() := system_value("key_down") != 0
+window_open() := system_value("window_open") != 0
+view_width() := system_value("view_width")
+view_height() := system_value("view_height")
+gpu_drawing() := system_value("gpu_drawing") != 0
+window_width() := system_value("window_width")
+window_height() := system_value("window_height")
+display_width() := system_value("display_width")
+display_height() := system_value("display_height")
+display_dpi() := system_value("display_dpi")
 // the paint window's size (the playground: the paintings' frame), system values, so `whenever window.width > 800 {…}`
 // listens; written, the window resizes
 window.width := window_width
@@ -468,3 +501,5 @@ is!(warp: text, expected: any) := {
 
 // The class of every error (decision error-classes): `class ParseError: Error` declares one, `except Error` catches all
 class Error { message: text }
+# a value that lambdas share, the variable they change (core/lambdas.warp shared captures, P124)
+class Cell { value: any }

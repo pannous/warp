@@ -74,8 +74,8 @@ each_in_word = "in"
 each_at_word = "at"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions (`key` and `value` of
 # `k: v` the PairKey and PairValue); Anywhere a rule asking none
-enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter }
-PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter}
+enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter, Element }
+PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter, "element": Place.Element}
 # the mark of a rule whose pattern's first word spells the template's another way
 alias_mark = "alias"
 takes_word = "takes"
@@ -215,7 +215,8 @@ sugared(program: Node, rules: list): Node := {
 	first_parameter_types = typed_first_parameters(program)
 	rule_case_holders = case_holders_of(program)
 	maps = map_names_of(program)
-	if not is_statement_sequence(program) { return placed_map_scoped(program, n => sugared_node(n, rules), maps) }
+	# a program of one statement: that statement, so the rules `where statement` apply to it too
+	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
 	# each statement walked with the rules that can fire in it (rules_reaching), the program's runs with them all
 	needs = rules.map(rule => required_words(rule.pattern))
 	results = rules.map(rule => words_within(rule.template))
@@ -224,6 +225,9 @@ sugared(program: Node, rules: list): Node := {
 	sugared_node(walked, rules)
 }
 sugared_statement(statement: Node, rules: list, maps: map): Node := placed_map_scoped(statement, n => sugared_node(n, rules), maps)
+
+# the words of the templates of the rules that can fire in the program
+reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(rule => required_words(rule.pattern)), rules.map(rule => words_within(rule.template)), program).flat_map(rule => words_within(rule.template))
 
 # the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
 # result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
@@ -255,11 +259,16 @@ required_words(pattern: Node): list := {
 	if is_group(pattern) then items_of(pattern).flat_map(item => required_words(item)) else []
 }
 
+# `[a, b]`: a list literal, whose items are rewritten by the rules `where element`
+is_element_list(n: Node): bool := is_group(n) and bracket_of(n) == "["
+
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
 sugared_node(n: Node, rules: list): Node := {
 	n = with_changed_members(n, member => sugar_at_place(bottom_up(member, part => sugared_node(part, rules)), Place.Member, rules))
 	if holds_statements(n) {
 		n = group_like(n, sugar_runs(spliced_statements(items_of(n).map(statement => sugar_at_place(statement, Place.Statement, rules))), rules))
+	} else if is_element_list(n) {
+		n = group_like(n, items_of(n).map(element => sugar_at_place(element, Place.Element, rules)))
 	} else if n is key and key_of(n) != opaque_symbol {
 		n = with_placed_parts(n, (code, place) => sugar_at_place(code, place, rules))
 	}
@@ -488,8 +497,8 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	for index in 0 ..< #after { if where_at == #after and after[index] == symbol(where_word) { where_at = index } }
 	cut = split_at_where(written)
 	if cut != ø {
-		written = cut#1
-		after = cut#2 + after
+		written = cut.template
+		after = cut.conditions + after
 		where_at = -1
 	}
 	continued = after[0 ..< max(where_at, 0)]
@@ -512,29 +521,32 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module, whole, aliased)
 }
 
-# [the template before a `where` its last words swallowed, the words after that `where`] (`$c + $n where`, `$s where
-# statement`), else ø
-split_at_where(n: Node): list? := {
+# a template cut at a `where` its last words swallowed (`$c + $n where`, `$s where statement`): the template before it
+# and the words after it
+class WhereCut { template: Node; conditions: list }
+
+# the template cut at a `where` inside it, else ø
+split_at_where(n: Node): WhereCut? := {
 	if n is key {
 		inner = split_at_where(value_of(n))
 		if inner == ø {
 			# `$p where parameter and $w is label`: the parser joined a condition after `where` to the next by the
 			# operator, the `where` inside its left side; the operator joins them again after the cut
 			left = split_at_where(key_of(n))
-			return if left == ø then ø else [left#1, [Key(as_phrase(left#2), op_of(n), value_of(n))]]
+			return if left == ø then ø else WhereCut(left.template, [Key(as_phrase(left.conditions), op_of(n), value_of(n))])
 		}
 		# `$s... where statement`: the parser read the conditions as the end of the rest's range, which ends nowhere
-		before = inner#1
+		before = inner.template
 		if is_group(before) and #before == 0 { before = ø }
-		return [Key(key_of(n), op_of(n), before), inner#2]
+		return WhereCut(Key(key_of(n), op_of(n), before), inner.conditions)
 	}
 	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 0) { return ø }
 	items = items_of(n)
 	for index in 0 ..< #items {
-		if items[index] == symbol(where_word) { return [words_phrase(items[0 ..< index]), items[index + 1 ..]] }
+		if items[index] == symbol(where_word) { return WhereCut(words_phrase(items[0 ..< index]), items[index + 1 ..]) }
 	}
 	inner = split_at_where(items[#items - 1])
-	if inner == ø then ø else [words_phrase(items[0 ..< #items - 1] + [inner#1]), inner#2]
+	if inner == ø then ø else WhereCut(words_phrase(items[0 ..< #items - 1] + [inner.template]), inner.conditions)
 }
 
 # the words in runs between the word, `$a is type and $n < 0` as [[$a is type], [$n < 0]]
@@ -995,6 +1007,7 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 	if is_group(n) and separator_of(n) in statement_separators {
 		n = group_like(n, statement_runs(spliced_statements(items_of(n).map(statement => at_place(statement, Place.Statement, rules, origins))), rules, origins))
 	} else if is_group(n) and #n > 0 {
+		if is_element_list(n) { n = group_like(n, items_of(n).map(element => at_place(element, Place.Element, rules, origins))) }
 		phrase = bracket_of(n) == "" and separator_of(n) == " "
 		items = items_of(n)
 		runs = with_runs(if phrase then words_of_all(items) else items, rules, origins)
