@@ -27,9 +27,8 @@ class Quantity {
 	compare(other) := amount - same_quantity(this, other, "compare").amount
 	// the same quantity shown in another unit of its kind: `q.to("m")`
 	to(u) := { target = same_quantity(this, quantity(1, u), "convert"); measured(amount, dims, u, target.scale) }
-	// its amount counted in a unit of its kind: `q.amount_in("m")` is a plain number (a method named `in` would take
-	// the `in` of `for x in xs`, card method-named-in)
-	amount_in(u) := to(u).shown()
+	// its amount counted in a unit of its kind: `q.in("m")` is a plain number
+	in(u) := to(u).shown()
 	shown() := amount / scale
 	text() := quantity_text(this)
 }
@@ -74,8 +73,7 @@ base_unit(name: text, dims: int) := measured(1, dims, name, 1)
 m = base_unit("m", length_dimension)
 kg = base_unit("kg", mass_dimension)
 s = base_unit("s", duration_dimension)
-// a single capital, K, N, L, would be a type parameter's name, as T and V (card capital-globals)
-kelvin = base_unit("K", temperature_dimension)
+K = base_unit("K", temperature_dimension)
 px = base_unit("px", pixels_dimension)
 mm = named_unit("mm", m / 1000)
 cm = named_unit("cm", m / 100)
@@ -97,17 +95,17 @@ h = named_unit("h", 3600 * s)
 day = named_unit("day", 24 * h)
 Hz = base_unit("Hz", 0 - duration_dimension)
 kHz = named_unit("kHz", 1000 * Hz)
-newton = named_unit("N", kg * m / s ^ 2)
-liter = named_unit("L", dm ^ 3)
+N = named_unit("N", kg * m / s ^ 2)
+L = named_unit("L", dm ^ 3)
 ml = named_unit("ml", cm ^ 3)
 ha = named_unit("ha", 10000 * m ^ 2)
 dpi = named_unit("dpi", px / inch)
 
 // the units a text may name, by their symbol, and their long names (`quantity(2, "hours")`)
 units_by_name(): map := {
-	"m": m, "kg": kg, "s": s, "K": kelvin, "px": px, "mm": mm, "cm": cm, "dm": dm, "km": km, "inch": inch, "ft": ft,
+	"m": m, "kg": kg, "s": s, "K": K, "px": px, "mm": mm, "cm": cm, "dm": dm, "km": km, "inch": inch, "ft": ft,
 	"yd": yd, "mi": mi, "g": g, "mg": mg, "lb": lb, "ms": ms, "µs": µs, "ns": ns, "min": minute, "h": h, "day": day,
-	"Hz": Hz, "kHz": kHz, "N": newton, "L": liter, "l": liter, "ml": ml, "mL": ml, "ha": ha, "dpi": dpi
+	"Hz": Hz, "kHz": kHz, "N": N, "L": L, "l": L, "ml": ml, "mL": ml, "ha": ha, "dpi": dpi
 }
 long_unit_names(): map := {
 	"meter": "m", "meters": "m", "metre": "m", "kilogram": "kg", "second": "s", "seconds": "s", 

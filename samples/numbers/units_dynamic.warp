@@ -5,12 +5,12 @@ use units
 legs = ["5 km", "250m", "1.5 km", "800 m"]
 var total = quantity(0, "km")
 for leg in legs { total = total + quantity(leg) }
-print "run: \(total), in metres \(total.amount_in("m"))"
+print "run: \(total), in metres \(total.in("m"))"
 
 time = quantity("45 min")
 speed = total / time
 pace = speed.to("km/h")
-print "pace: \(pace), about \(round(pace.amount_in("km/h") * 10) / 10) km/h"
+print "pace: \(pace), about \(round(pace.in("km/h") * 10) / 10) km/h"
 
 unit = "kg"
 print quantity(3, unit) > quantity("2500 g")
