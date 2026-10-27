@@ -13,8 +13,8 @@
 'use units; x = 2km; if x > 1500m then "far" else "near"'	'far'
 'use units; try str(3km + 2s) else "no"'	'no'
 'use units; m = 5; m * 3'	15
-'use units; quantity("2.5 km").amount_in("m")'	2500
+'use units; quantity("2.5 km").in("m")'	2500
 'use units; quantity("1 min") == quantity("60 s")'	true
-'use units; quantity("6 m²").amount_in("cm²")'	60000
+'use units; quantity("6 m²").in("cm²")'	60000
 'use units; quantity(3, "kg") > quantity("2500 g")'	true
 'use units; started = clock(); sleep(50ms); clock() - started >= 50'	true

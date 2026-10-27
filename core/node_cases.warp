@@ -129,7 +129,8 @@ is_spelled_type(type: Node, declared: map): bool := type is symbol and name_of(t
 node_value(n: Node, builds: map, declared: map): Node := match n {
 	Key(owner, Op.Dot, case_name): if is_word(owner, node_type) then node_case(case_name) else n
 	Key(owner, Op.Scope, case_name): if is_word(owner, node_type) then node_case(case_name) else n
-	Key(subject, Op.Colon, type): if holds_any(type, declared) then Key(subject, Op.Colon, symbol("any")) else n
+	# a name's annotation, not a map entry: `{"K": K}` keeps the value K
+	Key(subject, Op.Colon, type): if subject is symbol and holds_any(type, declared) then Key(subject, Op.Colon, symbol("any")) else n
 	Key(value, Op.As, type): if is_spelled_type(type, declared) then spelled_case(value, name_of(type), n) else n
 	Key(left, Op.Eq, right): spelled_equality(left, Op.Eq, right, n, declared)
 	Key(left, Op.Ne, right): spelled_equality(left, Op.Ne, right, n, declared)
@@ -163,7 +164,10 @@ spelling_functions(enum_name: text): list := {
 	value = symbol(spelled_value)
 	cases = spellings[enum_name].keys
 	other = Key(symbol(other_arm), Op.Colon, value)
-	to_text = matched(value, cases.map(case => Key(qualified_case(enum_name, case), Op.Colon, spelling(enum_name, case))) + [other], ø, cases)
+	compared = matched(value, cases.map(case => Key(qualified_case(enum_name, case), Op.Colon, spelling(enum_name, case))) + [other], ø, cases)
+	# a case is made once (decision enum-identity): the very node is found by ref.eq, the match comparing each in turn
+	# only after that (node_equal per arm was 15% of a rebuild)
+	to_text = cases.reverse().fold(compared, (rest, case) => chosen(call_of("same_node", [value, qualified_case(enum_name, case)]), spelling(enum_name, case), rest))
 	is_spelling = Key(type_test(value, "text"), Op.Or, type_test(value, "codepoint"))
 	cases_by_spelling = symbol(spelled_function(enum_name, "cases"))
 	every_case = List(cases.map(case => Key(spelling(enum_name, case), Op.Colon, qualified_case(enum_name, case))), Bracket.Curly, Separator.Comma)

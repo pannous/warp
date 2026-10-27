@@ -1,0 +1,4 @@
+# a parameter typed with a module's class finds that module's values by name: sleep(duration: Time) uses units for
+# sleep(3ms) (decision expected-type-names)
+'sleep(3ms); 1'	1
+'sleep(1ms); f(n) := n + 1; f(2)'	3

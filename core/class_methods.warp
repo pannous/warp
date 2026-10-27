@@ -58,6 +58,10 @@ showing_method = "text"
 showing_dispatcher = HiddenWord.TextShown as text
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
+# a method named by a type word or a word of the syntax, `float()`, `in(u)`, is routed: lifted as itself it would change
+# that word everywhere, `x is float`, `for x in xs`
+syntax_words = phrase_prepositions + ["if", "then", "else", "while", "is", "as", "and", "or", "not", "return"]
+names_syntax(method: text): bool := is_tested_type_word(method) or method in syntax_words
 # the function a bare call of a sibling method calls: the dispatcher of a routed one
 called_name(method: text, routes: list): text := if method in routes then routed_name(method) else method
 # the functions the program defines, by name
@@ -98,7 +102,7 @@ methods_lifted(program: Node): Node := {
 	if #constructed > 0 { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then constructions(top_statement, constructed) else top_statement) }
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and taken_count(classes, liftable, method) == 1)
-	routes = methods.filter(method => is_library_word(method) or method in functions or method in operator_methods)
+	routes = methods.filter(method => is_library_word(method) or method in functions or method in operator_methods or names_syntax(method))
 	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
 	entry_words = []
 	for method in operator_methods {
@@ -108,7 +112,9 @@ methods_lifted(program: Node): Node := {
 	if #routes > 0 { rewritten = rewritten.map(top_statement => routed(top_statement, classes, liftable, routes)) }
 	for name in methods.filter(method => method in routes or #owners_of(classes, liftable, method) > 1) {
 		owners = owners_of(classes, liftable, name)
-		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), name in routes, spelled_operator(operator_table, name))]
+		# a word of the syntax has no function of its own to fall back to
+		falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name))
+		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name))]
 	}
 	for word in entry_words {
 		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
@@ -450,7 +456,8 @@ deepest_first(classes: map, names: list): list := {
 on_instance(n: Node, fields: list, siblings: list, routes: list): Node := {
 	if n is symbol and name_of(n) in instance_names { return self_node }
 	if n is symbol and name_of(n) in fields { return Key(self_node, Op.Dot, n) }
-	if n is symbol and name_of(n) in siblings { return call_of(called_name(name_of(n), routes), [self_node]) }
+	# a sibling named by a type word read bare is the type, `o is float`; it is called as `float()`
+	if n is symbol and name_of(n) in siblings and not names_syntax(name_of(n)) { return call_of(called_name(name_of(n), routes), [self_node]) }
 	if is_called_name(n) and name_of(n#1) in siblings { return call_of(called_name(name_of(n#1), routes), [self_node] + arguments_on_instance(n, fields, siblings, routes)) }
 	match n {
 		Key(left, Op.Dot, right): {

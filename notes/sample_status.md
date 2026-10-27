@@ -1,14 +1,14 @@
 # Sample status
 
-Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one at a time) on 2026-10-27 on main 2a6ae953a1: **68/224 run** (66 on branch samples earlier that day, 49 on 2026-10-26). A sample fails when it prints an `Error(…)`, traps or times out; its exit code is its last value, no failure. Failing samples are grouped by cause on the board under the topic card sample-gaps; raw results in ~/Library/Logs/warp/samples/sweep.txt.
+Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one at a time) on 2026-10-27 on main 45a41fcd2d: **80/224 run** (68 earlier that day on 2a6ae953a1, 49 on 2026-10-26). A sample fails when it prints an `Error(…)`, traps or times out; its exit code is its last value, no failure. Failing samples are grouped by cause on the board under the topic card sample-gaps; raw results in ~/Library/Logs/warp/samples/sweep.txt.
 
 - ❌ samples/advanced/circle.warp: outside the core: a value after an assignment
 - ❌ samples/advanced/filled_circle.warp: outside the core: a value after an assignment
 - ❌ samples/advanced/mandelbrot_canvas.warp: outside the core: a value after an assignment
 - ❌ samples/advanced/neural_net.warp: not a function
-- ❌ samples/advanced/particles.warp: outside the core: a number
+- ❌ samples/advanced/particles.warp: outside the core: the unknown name moved
 - ✅ samples/advanced/raytracer.warp
-- ❌ samples/advanced/snake.warp: outside the core: the group (…
+- ❌ samples/advanced/snake.warp: outside the core: the unknown name ms
 - ❌ samples/advanced/test.warp: outside the core: the call array(…)
 - ❌ samples/conditions/control_flow.warp: not a list
 - ✅ samples/conditions/fizzbuzz.warp
@@ -23,7 +23,7 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ❌ samples/events/arrow_keys.warp: outside the core: the unknown name on
 - ❌ samples/events/effects.warp: outside the core: the unknown name on
 - ✅ samples/functions/ackermann.warp
-- ❌ samples/functions/block_arguments.warp: not a function
+- ✅ samples/functions/block_arguments.warp
 - ❌ samples/functions/code_as_data.warp: outside the core: quoted code whose position or comment is read
 - ✅ samples/functions/fibonacci.warp
 - ❌ samples/functions/functions.warp: outside the core: a call of square with 2 arguments
@@ -72,12 +72,12 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ✅ samples/golf/sierpiński-triangle.warp
 - ❌ samples/gpu/gpu_arrays.warp: no field totals
 - ✅ samples/gpu/gpu_map.warp
-- ❌ samples/gpu/gpu_visualizer.warp: outside the core: a number
+- ❌ samples/gpu/gpu_visualizer.warp: outside the core: the unknown name pi
 - ❌ samples/gpu/kaleidoscope.warp: outside the core: a call of paint with 1 arguments
 - ❌ samples/gpu/lava_lamp.warp: outside the core: an error value
 - ❌ samples/gpu/manual_3d_object_viewer.warp: outside the core: the unknown name obj
 - ❌ samples/gpu/northern_lights.warp: outside the core: an error value
-- ❌ samples/gpu/ocean.warp: outside the core: a number
+- ❌ samples/gpu/ocean.warp: outside the core: the unknown name on
 - ❌ samples/gpu/ringed_planet.warp: outside the core: an error value
 - ❌ samples/gpu/warp_compiled_wgsl_shader.warp: outside the core: the call shader_of(…)
 - ❌ samples/graphics/finger_paint.warp: outside the core: a call of paint with 3 arguments
@@ -125,9 +125,9 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ❌ samples/matching/text_patterns.warp: outside the core: the unknown name match
 - ❌ samples/matching/tree_patterns.warp: outside the core: the operator : on node and text
 - ❌ samples/modules/agent.warp: outside the core: the unknown name agent
-- ❌ samples/modules/javascript.warp: outside the core: the call floor(…) (foreign C call; owner c_imports did not claim it)
+- ❌ samples/modules/javascript.warp: outside the core: the call floor(…)
 - ✅ samples/modules/lib.warp
-- ❌ samples/modules/main.warp: outside the core: the call puts(…) (foreign C call; owner c_imports did not claim it)
+- ❌ samples/modules/main.warp: outside the core: the call puts(…)
 - ❌ samples/modules/modules.warp: outside the core: the call pop(…)
 - ❌ samples/modules/packages.warp: outside the core: the call to_hex(…)
 - ❌ samples/modules/rust_crates.warp: outside the core: the call levenshtein(…)
@@ -144,10 +144,10 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ✅ samples/numbers/power.warp
 - ✅ samples/numbers/quadratic.warp
 - ✅ samples/numbers/simple.warp
-- ❌ samples/numbers/sin.warp: outside the core: the group (…
-- ❌ samples/numbers/sine.warp: outside the core: the group (…
+- ✅ samples/numbers/sin.warp
+- ❌ samples/numbers/sine.warp: wasm trap: cast failure
 - ✅ samples/numbers/sum.warp
-- ❌ samples/numbers/units_dynamic.warp: outside the core: the call quantity(…)
+- ✅ samples/numbers/units_dynamic.warp
 - ✅ samples/objects/binary_tree.warp
 - ❌ samples/objects/data_structures.warp: outside the core: the unknown name red
 - ❌ samples/objects/dijkstra.warp: outside the core: the call insert(…)
@@ -167,22 +167,22 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ❌ samples/sound/harmony.warp: outside the core: the unknown name tuning
 - ❌ samples/sound/hum_blocks.warp: outside the core: the unknown name s
 - ❌ samples/sound/midi.warp: outside the core: the unknown name midi_on
-- ❌ samples/sound/music.warp: outside the core: a number
+- ❌ samples/sound/music.warp: outside the core: the unknown name pi
 - ❌ samples/sound/play_mp3.warp: outside the core: the unknown name play
-- ❌ samples/sound/rhythm.warp: outside the core: a number
-- ❌ samples/sound/signal_graph.warp: outside the core: a number
+- ❌ samples/sound/rhythm.warp: outside the core: the unknown name pi
+- ❌ samples/sound/signal_graph.warp: outside the core: the unknown name pi
 - ❌ samples/sound/siren_sound.warp: outside the core: the unknown name s
 - ❌ samples/sound/sound_features.warp: outside the core: the call help(…)
 - ❌ samples/sound/sound_kick_samples.warp: outside the core: the unknown name ms
 - ❌ samples/sound/sound_patterns.warp: outside the core: the unknown name pattern
 - ❌ samples/sound/sound_pipes.warp: outside the core: the unknown name s
-- ❌ samples/sound/stereo_sound.warp: left_block is a main-level variable: declare it `global left_block` to change it from a function, or use a new local name; fix: global left_block
-- ❌ samples/sound/synth.warp: outside the core: a number
-- ❌ samples/sound/visualizer.warp: outside the core: a number
-- ❌ samples/sound/voices.warp: outside the core: a number
+- ❌ samples/sound/stereo_sound.warp: left_block is a main-level variable: declare it `global left_block` to change it from a function, or use a new local name
+- ❌ samples/sound/synth.warp: outside the core: the unknown name pi
+- ❌ samples/sound/visualizer.warp: outside the core: the unknown name pi
+- ❌ samples/sound/voices.warp: outside the core: the unknown name pi
 - ❌ samples/storage/netbase.warp: outside the core: the unknown name query
 - ❌ samples/storage/orm.warp: outside the core: the unknown name stored
-- ❌ samples/storage/orm_transaction.warp: al is a main-level variable: declare it `global al` to change it from a function, or use a new local name; fix: global al
+- ❌ samples/storage/orm_transaction.warp: outside the core: the unknown name stored
 - ❌ samples/storage/orm_units.warp: outside the core: the unknown name stored
 - ❌ samples/storage/store.warp: outside the core: the unknown name stored
 - ❌ samples/storage/todo_app.warp: outside the core: the unknown name stored
@@ -211,18 +211,18 @@ Each samples/**/*.warp run with `warp pure` (WARP_NO_WINDOW=1, 30 s timeout, one
 - ❌ samples/wasm/component_reflection.warp: outside the core: the unknown name demo
 - ❌ samples/wasm/import_compiled.warp: outside the core: the call area(…)
 - ❌ samples/wasm/wasm_interop.warp: outside the core: the unknown name def
-- ❌ samples/web/component_binding.warp: outside the core: the unknown name div
-- ❌ samples/web/component_totals.warp: outside the core: the unknown name div
-- ❌ samples/web/computed_tags.warp: outside the core: the unknown name div
-- ❌ samples/web/form_submit.warp: outside the core: an instance of div, a class not declared here
+- ✅ samples/web/component_binding.warp
+- ❌ samples/web/component_totals.warp: outside the core: the unknown name sum
+- ❌ samples/web/computed_tags.warp: outside the core: the operator : on text and node
+- ✅ samples/web/form_submit.warp
 - ❌ samples/web/hello_div.warp: outside the core: the unknown name on
-- ❌ samples/web/html.warp: outside the core: an instance of html, a class not declared here
+- ✅ samples/web/html.warp
 - ❌ samples/web/html_dsl.warp: outside the core: the unknown name html
-- ❌ samples/web/keyed_counters.warp: outside the core: the unknown name div
-- ❌ samples/web/keyframes.warp: outside the core: the operator : on text and node
-- ❌ samples/web/leaving_list.warp: outside the core: an instance of div, a class not declared here
+- ❌ samples/web/keyed_counters.warp: outside the core: a call of Counter with 2 arguments
+- ✅ samples/web/keyframes.warp
+- ✅ samples/web/leaving_list.warp
 - ❌ samples/web/live_region.warp: outside the core: the unknown name fetch
-- ❌ samples/web/page_custom_event.warp: outside the core: an instance of div, a class not declared here
-- ❌ samples/web/page_elements.warp: outside the core: an instance of div, a class not declared here
-- ❌ samples/web/select_binding.warp: outside the core: an instance of div, a class not declared here
-- ❌ samples/web/typed_form.warp: outside the core: an instance of form, a class not declared here
+- ✅ samples/web/page_custom_event.warp
+- ✅ samples/web/page_elements.warp
+- ✅ samples/web/select_binding.warp
+- ✅ samples/web/typed_form.warp

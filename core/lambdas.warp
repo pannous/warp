@@ -207,6 +207,8 @@ lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 		Symbol(name): function_value(name, n, locals, lowering)
 		Key(left, Op.Dot, right): dotted_lowered(left, right, locals, lowering)
 		Key(left, Op.Colon, right): Key(left, Op.Colon, lowered_lambdas(right, locals, lowering))
+		# `p as text` names a type, also where the program defines a function text()
+		Key(left, Op.As, type): Key(lowered_lambdas(left, locals, lowering), Op.As, type)
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
 		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals + loop_variables(n), lowering)
