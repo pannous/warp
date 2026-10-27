@@ -112,11 +112,11 @@ spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: any): Nod
 }
 
 # the annotations that hold any value, unless the program declares that type itself: Node and its cases (also
-# optional, `Key?`); Op, Bracket and Separator,
-# whose cases a text stands for; a type variable `T` of a generic signature (Rust twin: type_parameters.rs
-# lower_type_variables)
+# optional, `Key?`); a type variable `T` of a generic signature (Rust twin: type_parameters.rs lower_type_variables).
+# A spelled enum's annotation, `op: Op`, whose cases a text stands for, stays for plain_enums.warp, which reads the
+# names it types before it lets them hold any value (card enum-parameter-conversion)
 holds_any(type: Node, declared: any): bool := match type {
-	Symbol(name): name not in declared and (holds_node(required_type(name)) or name in spelled_enums or (#name == 1 and is_capitalized(name)))
+	Symbol(name): name not in declared and (holds_node(required_type(name)) or (#name == 1 and is_capitalized(name)))
 	_: no
 }
 
@@ -176,9 +176,9 @@ comparing_functions(enum_name: text): list := {
 		Key(call_of(spelled_function(enum_name, "same"), [value, other]), Op.Define, same)]
 }
 
-# whether a case of the enum, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n
+# whether the enum, `op: Op`, a case of it, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n
 is_spelling_needed(n: any, enum_name: text, declared: any): bool := match n {
-	Symbol(name): name in ["text", "case", "is", "same"].map(word => spelled_function(enum_name, word))
+	Symbol(name): name == enum_name or name in ["text", "case", "is", "same"].map(word => spelled_function(enum_name, word))
 	Key(left, op, right): {
 		if left == opaque_symbol { return no }
 		if spelled_enum_of(n, declared) == enum_name { return yes }

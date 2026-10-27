@@ -130,8 +130,15 @@ case_conversion(value: Node, target: Node, n: Node, enums: any, subjects: any): 
 	if enum_name != ø and enum_name in spelled_enums then held_text(enum_name, value) else n
 }
 
+# `op: Op`, `op: Op?`: a spelled enum's annotation holds any value, a text standing for a case (its names were read
+# as subjects already)
+spelled_annotation(subject: Node, type: Node, n: Node): Node := {
+	if type is symbol and required_type(name_of(type)) in spelled_enums then Key(subject, Op.Colon, symbol(any_word)) else n
+}
+
 enum_node(n: Node, enums: any, subjects: any): Node := match n {
 	Key(value, Op.As, target): case_conversion(value, target, n, enums, subjects)
+	Key(subject, Op.Colon, type): spelled_annotation(subject, type, n)
 	Key(left, Op.Eq, right): held_equality(left, Op.Eq, right, n, subjects)
 	Key(left, Op.Ne, right): held_equality(left, Op.Ne, right, n, subjects)
 	_: {
