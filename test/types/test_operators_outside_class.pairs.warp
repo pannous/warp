@@ -1,0 +1,7 @@
+# An operator defined outside its class, on its first parameter's class, is that class's operator (card
+# pure-class-operators): its instances reach it, any other value the builtin
+
+'class Vec{x:int; y:int}; infix operator +(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); v = Vec(1, 2) + Vec(3, 4) + Vec(1, 1); [v.x, 1.5 + 2, "a" + "b"]'	[5, 3.5, "ab"]
+'class R{c: float}; infix operator *(a: R, b: number) := R(a.c * b); (2 * R(1.5)).c + (R(1.5) * 2).c + 3 * 4'	18
+'class R{c: float}; infix operator *(a: number, b: R) := R(a * b.c); infix operator *(a: R, b: number) := R(a.c * b); (2 * R(1.5)).c'	3
+'class V{x:int}; minus(a: V, b: V) := V(a.x - b.x); (V(5) - V(2)).x + (5 - 2)'	6
