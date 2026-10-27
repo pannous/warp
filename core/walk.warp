@@ -201,6 +201,8 @@ is_word(n: Node, word: text): bool := n == symbol(word)
 # pattern_definition)
 is_pattern_definition(n: Node): bool := is_group(n) and #n == 2 and is_word(n#1, "pattern") and is_key(n#2, Op.Assign)
 call_of(name: text, arguments: list): Node := bracketed([symbol(name)] + arguments, "(")
+# the statements as a block, `{ a; b }`
+block_of(parts: list): Node := List(parts, Bracket.Curly, Separator.Semicolon)
 
 # the numbers of the names the passes make, counted across all of them as Rust's nodes.rs fresh_number counts
 global names_made = 0

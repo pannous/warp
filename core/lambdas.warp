@@ -28,7 +28,6 @@ iteration_extras = {"map": 0, "filter": 0, "each": 0, "for_each": 0, "forEach": 
 arguments_of(call: list): list := call[1..]
 call_node(signature: Node, arguments: list): Node := List([signature] + arguments, Bracket.Round, Separator.None)
 set_to(target: Node, value: Node): Node := Key(target, Op.Assign, value)
-block_of(parts: list): Node := List(parts, Bracket.Curly, Separator.Semicolon)
 if_block(test: Node, parts: list): Node := Key(Key(ø, Op.If, test), Op.Then, block_of(parts))
 for_each(item: Node, list: Node, parts: list): Node := List([symbol("for"), item, symbol("in"), list, block_of(parts)], Bracket.None, Separator.Space)
 # `for item in xs.map(f) {parts}` fused into `for source in xs { item = f(source); parts }`: the mapped list is never
