@@ -1,0 +1,2 @@
+# a call of a name nothing defines: the compiler refuses it by name, never a bare trap (card refused-program-diagnostic)
+zork("a")
