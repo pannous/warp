@@ -30,3 +30,4 @@ extended_float(n: Node): float := {
 extended_truncated(n: Node): int := int_quotient(exact_numerator(n), exact_denominator(n))
 extended_ratio(n: int, d: int): Node := exact_ratio(n, d)
 extended_zeros(count: int): text := zeros(count)
+extended_warned(message: text): Node := warned(message)
