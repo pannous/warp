@@ -463,7 +463,7 @@ fn kept_scope(by: Compiler) -> Option<String> {
 
 /// The seed: WARP_SEED, else warp-seed.wasm beside the binary, else beside the link it was started by (~/dev/bin/warp
 /// links to a build folder)
-pub(crate) fn seed_file() -> PathBuf {
+fn seed_file() -> PathBuf {
 	if let Some(file) = std::env::var_os(SEED_VARIABLE) {
 		return PathBuf::from(file);
 	}

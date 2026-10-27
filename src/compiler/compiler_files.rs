@@ -170,16 +170,15 @@ pub(crate) fn compiler_input_files(modules: &[&str]) -> Vec<(String, Vec<u8>)> {
 }
 
 /// The inputs hash of the compiler pair built from lib/ by this binary, as scripts/compiler-inputs.sh computes it
-/// (16 hex digits): lib/compiler, the embedded modules, WARP_SOURCE and the seed; the key of the shared compiler store
+/// (16 hex digits): lib/compiler, the embedded modules and WARP_SOURCE, not the seed that built it (a builder, as a C
+/// compiler's version: scripts/compiler-inputs.sh names it, so a refreshed seed rebuilds, but a run never judges by it,
+/// card scripts-rebuild); the key of the shared compiler store
 /// (notes/compiler_rebuilds.md)
 #[cfg(feature = "native")]
 pub fn compiler_inputs_hash() -> String {
 	use sha2::{Digest, Sha256};
 	let mut hasher = Sha256::new();
 	hasher.update(format!("rust {}\n", env!("WARP_SOURCE")));
-	// the seed building warp.wasm: a refreshed seed builds anew (card scripts-rebuild)
-	let seed = std::fs::read(crate::compiler::standalone::seed_file()).ok();
-	hasher.update(format!("seed {}\n", seed.map(|bytes| crate::extensions::sha256_hex(&bytes)).unwrap_or_default()));
 	for (file, bytes) in compiler_input_files(&EMBEDDED_MODULES) {
 		hasher.update(file.as_bytes());
 		hasher.update([0u8]);
