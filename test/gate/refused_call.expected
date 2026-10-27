@@ -1,1 +1,1 @@
-Error("outside the core: the call zork(…) (no owner)")
+Error("outside the core: the call zork(…) at test/gate/refused_call.warp:2:6 (no owner)")
