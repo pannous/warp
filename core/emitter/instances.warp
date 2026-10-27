@@ -177,6 +177,8 @@ def receiver_class(body: Body, n: any): text {
 instance_set_name = "instance_set"
 instance_entries_name = "instance_entries"
 instance_field_at_name = "instance_field_at"
+instance_place_name = "instance_place"
+is_class_instance_name = "is_class_instance"
 def class_depth(class_name: text): int { if class_name in module.parents then 1 + class_depth(module.parents[class_name]) else 0 }
 def made_classes(): list {
 	made = module.classes.keys.filter(class_name => instance_struct_prefix + class_name in module.class_structs)
@@ -192,19 +194,24 @@ def made_classes(): list {
 }
 # the code of a class's test on the instance (parameter 0): when its struct, `each(field, struct field)` for its
 # fields, then `after` (an instance of the class lacking the field)
-def each_class_field(each: function, after: list = []): list {
+def each_class_field(each: function, after: function = (count => [])): list {
 	code = []
 	for class_name in made_classes() {
 		struct_index = gc_type(class_struct(class_name))
 		fields = module.classes[class_name].keys
 		inner = []
 		for i in 0..<#fields { inner += each(fields[i], [op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index]), struct_index, i + #instance_fields) }
-		code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value] + inner + after + [op.end]
+		code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value] + inner + after(#fields) + [op.end]
 	}
 	code
 }
-# whether the name (parameter 1) is this field's
-def names_field(field: text): list { condition(runtime_call("node_equal", [TypedCode(ValueKind.Node, [op.local_get, 1]), TypedCode(ValueKind.Node, boxed(text_value_of(field)))])) }
+# whether the name (parameter 1, a text node) is this field's: its byte count first, then its bytes (a lookup tests
+# each field of a class)
+def names_field(field: text): list {
+	name = payload([op.local_get, 1], gc_type(gc.text))
+	same_count = name + gc_code(gc_ops.array_len, []) + [op.i32_const] + sleb(#field.bytes) + [op.i32_sub, op.i32_eqz]
+	same_count + if_else_code(ValueKind.Bool, runtime_call("same_bytes", [TypedCode(ValueKind.Text, name), text_value_of(field)]), TypedCode(ValueKind.Bool, [op.i32_const, 0]))
+}
 # instance_set(m, name, value): 1 when m's class declares the field, set in its struct; 0 when it does not, the field
 # set in m's extra fields; 2 when m is no instance of a class (an AST key without an operator is marked so too)
 def instance_set_code(f: Function) {
@@ -214,7 +221,7 @@ def instance_set_code(f: Function) {
 	name = payload([op.local_get, 1], gc_type(gc.text))
 	put = runtime_call("field_with", [TypedCode(ValueKind.Node, extra), TypedCode(ValueKind.Text, name), TypedCode(ValueKind.Node, as_node([op.local_get, 2]))]).code
 	extra_set = [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + as_node(put) + gc_code(gc_ops.struct_set, [base, extra_field]) + [op.i64_const, 0, op.return]
-	f.code = each_class_field(write, extra_set) + [op.i64_const, 2]
+	f.code = each_class_field(write, count => extra_set) + [op.i64_const, 2]
 }
 # `field·code(m)`: m's field code read from the struct of whichever class declaring it m is an instance of, a subclass
 # before its parent; any other value as map_get reads it
@@ -259,11 +266,31 @@ def instance_entries_code(f: Function) {
 	}
 	f.code = code + [ref_null, gc_type(gc.node)]
 }
-# instance_field_at(m, index): the declared field at that place (from 1) of whichever class m is an instance of, ø past them
+# The places of an instance's fields, as map_index counts them: its class's declared ones from 1, then its extra ones
+# (card instance-words-build: a lookup reads the struct, the entries are built only to walk or show them)
+# m's extra fields, the map or ø
+def extra_of(): TypedCode {
+	base = gc_type(instance_struct())
+	TypedCode(ValueKind.Node, [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + gc_code(gc_ops.struct_get, [base, extra_field]))
+}
+# instance_field_at(m, index): the field at that place of whichever class m is an instance of, ø past its fields
 def instance_field_at_code(f: Function) {
 	index = unboxed([op.local_get, 1], gc_type(gc.int_box))
 	read = (field, instance, struct_index, place) => index + [op.i64_const] + sleb(place - #instance_fields + 1) + [op.i64_eq, op.if, no_value] + instance + gc_code(gc_ops.struct_get, [struct_index, place]) + [op.return, op.end]
-	f.code = each_class_field(read) + [ref_null, gc_type(gc.node)]
+	extra = count => runtime_call("extra_value_at", [extra_of(), TypedCode(ValueKind.Int, index), TypedCode(ValueKind.Int, [op.i64_const] + sleb(count))]).code + [op.return]
+	f.code = each_class_field(read, extra) + [ref_null, gc_type(gc.node)]
+}
+# instance_place(m, name): the place of m's field name, 0 when it has none
+def instance_place_code(f: Function) {
+	find = (field, instance, struct_index, place) => names_field(field) + [op.if, no_value, op.i64_const] + sleb(place - #instance_fields + 1) + [op.return, op.end]
+	name = TypedCode(ValueKind.Text, payload([op.local_get, 1], gc_type(gc.text)))
+	extra = count => runtime_call("extra_place", [extra_of(), name, TypedCode(ValueKind.Int, [op.i64_const] + sleb(count))]).code + [op.return]
+	f.code = each_class_field(find, extra) + [op.i64_const, 0]
+}
+# is_class_instance(m): whether m is an instance of a class the program makes, a struct (an AST key without an
+# operator is marked as an instance too)
+def is_class_instance_code(f: Function) {
+	f.code = if #made_classes() == 0 then [op.i32_const, 0] else [op.local_get, 0] + gc_code(gc_ops.ref_test, [gc_type(instance_struct())])
 }
 # whether a declared class has a field `name`: a read of it may meet an instance (field_value), else only a map
 def declares_field(name: text): bool { module.classes.keys.any(class_name => name in module.classes[class_name]) }

@@ -29,8 +29,15 @@ handled() { cat "$state/handled" 2>/dev/null; }
 [ -d "$TREE" ] || cowtree add --detach "$TREE" origin/main >/dev/null || exit 1
 mkdir -p "$state"
 [ -n "$if_moved" ] && [ "$(main_tip)" = "$(handled)" ] && exit 0
-mkdir "$state/lock" 2>/dev/null || { say "a run is going ($state/lock): it takes the newest tip when it ends"; exit 0; }
-trap 'rmdir "$state/lock"' EXIT
+# the lock holds the runner's pid: a dead runner's (a reboot, a kill) is taken over
+lock=$state/lock
+if ! mkdir "$lock" 2>/dev/null; then
+	holder=$(cat "$lock/pid" 2>/dev/null)
+	if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then say "run $holder is going: it takes the newest tip when it ends"; exit 0; fi
+	rm -rf "$lock" && mkdir "$lock" 2>/dev/null || exit 0
+fi
+echo $$ >"$lock/pid"
+trap 'rm -rf "$lock"' EXIT
 
 red() { # red <what> [--urgent]: a card for the pushers, then on
 	todo add Now "main ${tip:0:10}: $1 (pushed since ${since:0:10}: $pushed)" "${@:2}" >/dev/null
