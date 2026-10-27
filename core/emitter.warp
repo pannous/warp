@@ -229,7 +229,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; runtime_globals: list = []; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = "" }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
@@ -526,15 +526,16 @@ is_curly_list(n: Node): bool := bracket_of(n) == "{" and separator_of(n) == ","
 def curly_list_value(body: Body, items: list): TypedCode { TypedCode(ValueKind.Node, node(Marked.Map, vector_code(items.map(item => boxed(expression_code(body, item)))))) }
 # a body or branch `{a, b}` runs its statements, as Rust unwraps a block there
 statements_block(n: Node): any := if is_curly_list(n) then separated(n, ";") else n
-# a runtime word sees only the globals runtime.warp declares, the program only its own: its local `counted` is no
-# runtime word's global of that name
-is_global(body: Body, name: text): bool := name not in body.names and name in module.globals and body.intrinsics == (name in module.runtime_globals)
+# the runtime's globals and the program's are two namespaces: a runtime word's `counted` is the module's global of
+# that name (the emitter's and the host's too, `trap_detail`), the program's own `counted` is held as program·counted
+global_key(body: Body, name: text): text := if body.intrinsics then name else "program·" + name
+is_global(body: Body, name: text): bool := name not in body.names and global_key(body, name) in module.globals
 # a built-in type's name, `type` or a declared class's
 names_a_type_value(name: text): bool := is_tested_type_word(name) or name == "type" or name in module.classes
 def local_value(body: Body, n: Node): TypedCode {
 	name = name_of(n)
 	if is_global(body, name) {
-		entry = module.globals[name]
+		entry = module.globals[global_key(body, name)]
 		return TypedCode(entry#2, [op.global_get] + uleb(entry#1))
 	}
 	# a bare enum case is its name, a symbol, at run time, made once: the very case is the one node (decision
@@ -590,8 +591,8 @@ def assignment(body: Body, target: any, value: TypedCode): TypedCode {
 	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local,
 	# unless the function declared it `global`
 	is_shared = name in module.shared and name not in body.globals
-	if name not in body.names and is_shared and body.function.name == "main" { return declare_global(name, value) }
-	if is_global(body, name) and not is_shared { return global_assignment(name, value) }
+	if name not in body.names and is_shared and body.function.name == "main" { return declare_global(global_key(body, name), value) }
+	if is_global(body, name) and not is_shared { return global_assignment(global_key(body, name), value) }
 	if name not in body.names and name in body.function.widened { kind = body.function.widened[name] }
 	# analyzer.warp's kind of the local, unless a value not held as that kind widened it (`x = 10.0; x = floor(2.5)`);
 	# a node stays one where the analyzer found a list: a $List holds no bracket or separator (bracketed(xs, "("))
@@ -682,17 +683,14 @@ widens(body: Body, name: text, held: ValueKind, kind: ValueKind): bool := {
 def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	if declaration is symbol {
 		body.globals[name_of(declaration)] = yes
-		entry = declared_global(name_of(declaration), ValueKind.Node)
-		# a runtime word's `global trap_detail = …`, lowered `global: trap_detail; trap_detail = …`, writes the global
-		if body.intrinsics and name_of(declaration) not in module.runtime_globals { module.runtime_globals += [name_of(declaration)] }
+		entry = declared_global(global_key(body, name_of(declaration)), ValueKind.Node)
 		return TypedCode(entry#2, [op.global_get] + uleb(entry#1))
 	}
 	if not (is_key(declaration, Op.Assign) and key_of(declaration) is symbol) {
 		return refuse("the declaration global " + form_of(declaration))
 	}
 	body.globals[name_of(key_of(declaration))] = yes
-	if body.intrinsics { module.runtime_globals += [name_of(key_of(declaration))] }
-	declare_global(name_of(key_of(declaration)), expression_code(body, value_of(declaration)))
+	declare_global(global_key(body, name_of(key_of(declaration))), expression_code(body, value_of(declaration)))
 }
 def declare_global(name: text, value: TypedCode): TypedCode {
 	declared_global(name, value.kind)
@@ -1197,7 +1195,6 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 	module.placed = 0
 	module.runtime = {}
 	module.globals = {}
-	module.runtime_globals = []
 	module.global_order = []
 	module.catches_errors = mentions(program, HiddenWord.RanWithoutError as text)
 	if module.catches_errors {
