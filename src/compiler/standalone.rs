@@ -92,6 +92,14 @@ impl Compiler {
 	}
 }
 
+/// Whether a file of lib/ is a compiler it keeps in itself or a file beside one (`.cwasm`, `.inputs`, `.kept/`, its
+/// old names too): an output of lib/, never one of its sources
+pub(crate) fn is_kept_compiler(name: &std::ffi::OsStr) -> bool {
+	let name = name.to_string_lossy();
+	let builds = Compiler::ALL.into_iter().flat_map(|by| [by.file_name(), by.legacy_file_name()]);
+	builds.into_iter().any(|build| name.strip_prefix(build).is_some_and(|rest| rest.is_empty() || rest.starts_with('.')))
+}
+
 /// The program's value, run from the module compiler.warp made of it, with these arguments (`use os; args`)
 pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiled(program, by), arguments)
