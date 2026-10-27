@@ -81,18 +81,18 @@ def class_struct(class_name: text): text {
 	if name not in module.class_structs {
 		super = if class_name in module.parents then class_struct(module.parents[class_name]) else instance_struct()
 		fields = module.classes[class_name].keys
-		definition = [80, 1, super, 95] + uleb(#instance_fields + #fields) + instance_field_types + concatenated(fields.map(field => [99, gc.node, 1]))
+		definition = [80, 1, super, 95] + uleb(#instance_fields + #fields) + instance_field_types() + concatenated(fields.map(field => [99, gc.node, 1]))
 		module.class_structs[name] = [definition, instance_fields + fields]
 	}
 	name
 }
 # $Instance, every class's struct's supertype: a $Node with the map of its extra fields
 instance_fields = ["kind", "data", "value", "extra"]
-instance_field_types = node_fields + [99, gc.node, 1]
+def instance_field_types(): list { node_fields + [99, gc.node, 1] }
 extra_field = 3
 def instance_struct(): text {
 	name = "Instance"
-	if name not in module.class_structs { module.class_structs[name] = [[80, 1, gc.node, 95] + uleb(#instance_fields) + instance_field_types, instance_fields] }
+	if name not in module.class_structs { module.class_structs[name] = [[80, 1, gc.node, 95] + uleb(#instance_fields) + instance_field_types(), instance_fields] }
 	name
 }
 # every class's struct declared at once, a parent before its children, as one recursion group (module_layout.warp
@@ -203,7 +203,8 @@ def instance_set_code(f: Function) {
 	write = (field, instance, struct_index, place) => names_field(field) + [op.if, no_value] + instance + as_node([op.local_get, 2]) + gc_code(gc_ops.struct_set, [struct_index, place]) + [op.i64_const, 1, op.return, op.end]
 	base = gc_type(instance_struct())
 	extra = [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + gc_code(gc_ops.struct_get, [base, extra_field])
-	put = runtime_call("field_with", [["node", extra], ["text", [op.local_get, 1]], ["node", [op.local_get, 2]]])#2
+	name = payload([op.local_get, 1], gc_type(gc.text))
+	put = runtime_call("field_with", [["node", extra], ["text", name], ["node", as_node([op.local_get, 2])]])#2
 	extra_set = [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + as_node(put) + gc_code(gc_ops.struct_set, [base, extra_field]) + [op.i64_const, 0, op.return]
 	f.code = each_class_field(write, extra_set) + [op.i64_const, 2]
 }
