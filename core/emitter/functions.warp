@@ -217,6 +217,8 @@ node_annotations = ["any", "Node", "function", "type", "map", "number", "symbol"
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(written: text): text := {
+	# `(samples, float) -> any`: a function, held as a node
+	if written.contains(" -> ") { return "node" }
 	word = aliased_type(written)
 	if word in node_annotations or word in module.classes or word.ends_with("?") { return "node" }
 	# Rust twin: type_names.rs plural_element_type
