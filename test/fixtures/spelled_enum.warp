@@ -1,0 +1,2 @@
+# a spelled enum, used by test/types/test_spelled_enum.warp
+enum Level { Error = "error", Warning = "warning", Hint }
