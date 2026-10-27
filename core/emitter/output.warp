@@ -59,4 +59,9 @@ is_spaced_value(n: Node): bool := {
 is_negative_literal(n: Node): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
 def printed(value: TypedCode): TypedCode { TypedCode(ValueKind.Node, dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc_type(gc.node)]) }
+# the export `show`: the text the host prints main's result as, as print shows it (3.5km by a class's text(), π/2)
+def shown_result(kind: ValueKind): any {
+	f = exported_function("show", [kind], ValueKind.Text)
+	f.code = shown_text(TypedCode(kind, [op.local_get, 0])).code
+}
 def runtime_call(name: text, values: list): TypedCode { call_values(module.runtime[name], values) }
