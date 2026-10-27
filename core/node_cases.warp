@@ -107,7 +107,9 @@ spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: map): Nod
 	case_side = if spelled_enum_of(right, declared) == enum_name then right else left
 	other_side = if case_side == right then left else right
 	if not is_name(other_side) { return Key(spelled_text(enum_name, left, declared), op, spelled_text(enum_name, right, declared)) }
-	tested = call_of(spelled_function(enum_name, "is"), [other_side, case_side, spelled_text(enum_name, case_side, declared)])
+	# a case is made once (emitter local_value), so the very case is the one node: no call of Op·is, no bytes compared
+	# (decision enum-identity, card enum-cases)
+	tested = Key(call_of("same_node", [other_side, case_side]), Op.Or, Key(other_side, Op.Eq, spelled_text(enum_name, case_side, declared)))
 	if op == Op.Ne then Key(ø, Op.Not, tested) else tested
 }
 

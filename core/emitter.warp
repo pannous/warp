@@ -500,8 +500,9 @@ def local_value(body: Body, n: Node): list {
 		entry = module.globals[name]
 		return [entry#2, [op.global_get] + uleb(entry#1)]
 	}
-	# a bare enum case is its name, a symbol, at run time
-	if name not in body.names and name in module.variants { return ["node", node(Kind.Symbol, text_bytes(name))] }
+	# a bare enum case is its name, a symbol, at run time, made once: the very case is the one node (decision
+	# enum-identity)
+	if name not in body.names and name in module.variants { return interned_symbol(body, name) }
 	# a type's name, unbound, is the type value: `k = int` (Rust: names_a_type_value)
 	if name not in body.names and names_a_type_value(name) { return ["node", node(Marked.TypeValue, text_bytes(name))] }
 	if name not in body.names and system_value_kinds.has(name) { return system_value_read(name) }
