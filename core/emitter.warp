@@ -1137,8 +1137,8 @@ def collect_assigned(n: Node, found: any) {
 }
 # the runtime words the emitter calls on its own for an operator's form, which the program never names: a field read
 # `p.x` reads a field (a getter ends in map_get, else has_field), `p.x = v` sets one (field_with, which may warn on
-# stdout: a field the class does not declare) (cards text-field, declared-class)
-emitter_operator_words = {".": ["map_get", "has_field", "field_with"]}
+# stderr: a field the class does not declare), `m[k] = v` too (node_put) (cards text-field, declared-class)
+emitter_operator_words = {".": ["map_get", "has_field", "field_with"], "#": ["node_put"]}
 
 def collect_referred(n: Node, found: any) {
 	if n is symbol { found[name_of(n)] = yes }
@@ -1237,8 +1237,9 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 	declare_class_structs()
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	reached = reached_words(program)
-	# a print, or a runtime word reached that writes to stdout (a field check failing, card text-field)
-	module.imports = if "print" in reached or "write_output" in reached then [fd_write_import] else []
+	# a print, or a runtime word reached that writes to stdout or stderr (a field check failing, card text-field; a
+	# warning, card declared-class)
+	module.imports = if "print" in reached or "write_output" in reached or "fd_write" in reached then [fd_write_import] else []
 	# imported ahead of the functions, whose indices follow them: every host or WASI word the program reaches
 	for name in module.host.keys {
 		if (name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
