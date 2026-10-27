@@ -13,8 +13,8 @@ use "walk.warp"
 use "shapes.warp"
 use "words.warp"
 
-list_item_mark = HiddenWord.DataItem
-field_mark = HiddenWord.DataField
+list_item_mark = HiddenWord.DataItem as text
+field_mark = HiddenWord.DataField as text
 # the methods that write their arguments into the list they are called on (Rust's list_mutations APPEND_METHODS)
 item_writing_methods = ["add", "append", "push", "insert"]
 

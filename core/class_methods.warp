@@ -45,7 +45,7 @@ ordering_method = "compare"
 ordering_operators = ["<", "<=", ">", ">="]
 # the method a class's instances show by, and its dispatcher (emitter/output.warp reads the name)
 showing_method = "text"
-showing_dispatcher = HiddenWord.TextShown
+showing_dispatcher = HiddenWord.TextShown as text
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
 # the function a bare call of a sibling method calls: the dispatcher of a routed one
