@@ -74,12 +74,12 @@ scoped_enum_nodes(n: Node, enums: map, subjects: map): Node := {
 	enum_node(children(n, part => scoped_enum_nodes(part, enums, scope)), enums, scope)
 }
 
-# the spelled enum whose case a name holds, else ø
+# the spelled enum whose case a name holds or a call gives, else ø
 held_spelled(value: Node, subjects: map): text? := {
-	if not is_name(value) or name_of(value) not in subjects { return ø }
-	enum_name = subjects[name_of(value)]
+	enum_name = if is_enum_call(value) then enum_results[name_of(value#1)] else if is_name(value) then subjects.get(name_of(value)) else ø
 	if enum_name in spelled_enums then enum_name else ø
 }
+is_enum_call(value: Node): bool := is_group(value) and bracket_of(value) == "(" and #value > 0 and value#1 is symbol and name_of(value#1) in enum_results
 
 # `x == "+"` of a name holding a spelled case: Op·text(x) == "+", a case equals its spelling
 held_equality(left: Node, op: Node, right: Node, n: Node, subjects: map): Node := {
@@ -111,10 +111,27 @@ owned_case(owner: Node, case: Node, enums: map): list? := {
 	if name_of(case) in enums[name_of(owner)] then [name_of(owner), name_of(case)] else ø
 }
 
-# the enum of a value: a case it writes, or a name declared of the enum, else ø
+# the enum each function of the program gives, `f(k): Coin := …`, which definitions.warp holds as
+# `f(k) := {the result: Coin = …; the result}`
+global enum_results = {}
+results_in(program: Node, enums: map): map := {
+	found = {}
+	for n in nodes_in(program) {
+		call = if is_key(n, Op.Define) then key_of(n) else ø
+		first = if call != ø and is_group(value_of(n)) and #value_of(n) > 0 then value_of(n)#1 else ø
+		declared = if first != ø and is_key(first, Op.Assign) and is_key(key_of(first), Op.Colon) and key_of(key_of(first)) == symbol("the result") then value_of(key_of(first)) else ø
+		if declared is symbol and required_type(name_of(declared)) in enums and is_group(call) and bracket_of(call) == "(" and #call > 0 and call#1 is symbol {
+			found[name_of(call#1)] = required_type(name_of(declared))
+		}
+	}
+	found
+}
+
+# the enum of a value: a case it writes, a name declared of the enum or a call of a function giving it, else ø
 type_of(value: Node, enums: map, subjects: map): text? := {
 	written = written_case(value, enums)
 	if written != ø { return written#1 }
+	if is_enum_call(value) { return enum_results[name_of(value#1)] }
 	if not is_name(value) { return ø }
 	name = name_of(value)
 	if name in subjects and subjects[name] then subjects[name] else ø
@@ -175,6 +192,7 @@ plain_enums(program: Node): Node := {
 	enums = enums_in(program, {})
 	if #enums.keys == 0 { return program }
 	program = expected_in(program, Expectation(enums, parameter_types_of(program), scope_of(program), program))
+	enum_results = results_in(program, enums)
 	scoped_enum_nodes(program, enums, held_cases(program, enums, {}))
 }
 

@@ -233,13 +233,13 @@ with_module_uses(program: Node, modules: list): Node := {
 
 # `sleep(3ms)`: an argument naming a word nothing defines finds it in the module of the class its parameter is typed
 # with, which the program then uses: `sleep(duration: Time)` names Time, units.warp declares it and defines ms
-# (decision expected-type-names); `x = 3ms` expects no type and stays an unknown name
+# (decision expected-type-names), also as a phrase `sleep 50ms`; `x = 3ms` expects no type and stays an unknown name
 with_expected_type_uses(program: Node, prelude: text): Node := {
 	own = own_heads(program)
 	bound = names_bound_in(program)
 	prelude_names = definition_slices(prelude).map(slice => slice#1)
 	is_unknown = word => word not in own and word not in bound and word not in prelude_names and not is_declared_word(word)
-	calls = nodes_in(program).filter(n => is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol and items_of(n)[1 ..].any(argument => symbol_words(argument).any(is_unknown)))
+	calls = nodes_in(program).filter(n => is_group(n) and (bracket_of(n) == "(" or bracket_of(n) == "") and #n > 1 and n#1 is symbol and items_of(n)[1 ..].any(argument => symbol_words(argument).any(is_unknown)))
 	if #calls == 0 { return program }
 	modules = bundled_modules()
 	classes = class_modules(modules)

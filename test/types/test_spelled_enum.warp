@@ -41,3 +41,6 @@ is! 'enum Coin { Penny, Dime }; c = Coin.Dime; [c == Coin.Dime, c == Dime, c == 
 
 # a call compared with a case is read once and may give ø, which equals no case
 is! 'enum K { Text = "text" }; f(): K? := ø; g(): K? := K.Text; [f() == K.Text, g() == K.Text, f() != K.Text]' [false, true, true]
+
+# a call of a function giving a spelled enum's case shows and compares by its spelling, as a name holding it does
+is! 'enum Kind { List = "list", Text = "text" }; f(k: Kind): Kind := k; [f(Kind.List) as text, f(Kind.Text) == "text", f(Kind.Text) == "list"]' ["list", true, false]
