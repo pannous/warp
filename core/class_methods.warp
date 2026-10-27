@@ -237,7 +237,10 @@ member_read(member: list): Node := brace_method(colon_method(bottom_up(early_sug
 # a method written with its body in braces, `area(side) { … }` (a call beside a block as it parses), or a constructor of
 # no parameters `value { … }` (the tagged block it parses as), read as `area(side) := { … }`, `value() := { … }`
 brace_method(member: Node): Node := {
-	if is_group(member) and bracket_of(member) != "{" and #member == 2 and is_called_name(member#1) and is_braced(member#2) { return Key(member#1, Op.Define, member#2) }
+	if is_group(member) and bracket_of(member) != "{" and #member == 2 and is_braced(member#2) {
+		if is_called_name(member#1) { return Key(member#1, Op.Define, member#2) }
+		if member#1 is symbol and name_of(member#1) in constructor_methods { return Key(call_of(name_of(member#1), []), Op.Define, member#2) }
+	}
 	match member {
 		Key(Symbol(word), key_op, right): { if word in constructor_methods and (key_op == Op.Colon or key_op == Op.None) and is_braced(right) then Key(call_of(word, []), Op.Define, right) else member }
 		_: member

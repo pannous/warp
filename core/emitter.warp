@@ -949,7 +949,8 @@ def key_expression(body: Body, n: Node): list {
 		word = member_word(name_of(right))
 		value = expression_code(body, left)
 		if holds_entry(body, left, name_of(right)) { return field_read(body, value, name_of(right)) }
-		if keeps_word(name_of(right), word) { return runtime_call(word, [value]) }
+		# a field some class declares is read first, `c.keys` of a class declaring keys (card declared-class)
+		if keeps_word(name_of(right), word) and not declares_field(name_of(right)) { return runtime_call(word, [value]) }
 		return field_or_word(body, value, name_of(right), receiver => runtime_call(word, [receiver]))
 	}
 	if operator == Op.Dot and right is symbol and name_of(right) in byte_count_words { return byte_size_code(expression_code(body, left)) }
