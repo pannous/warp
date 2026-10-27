@@ -1,6 +1,7 @@
 # Maps and class instances: their entries, fields, lookups and updates
 use "intrinsics.warp"
 use "../kinds.warp"
+use "bridge.warp"
 use "equality.warp"
 use "errors.warp"
 use "fields.warp"
@@ -102,7 +103,7 @@ slot_field(m: Node, name: text, place: int): Node := {
 	if marked_kind(m) == Marked.Instance and has_fields(m) {
 		entries = unboxed_list(fields_of(m))
 		if place <= #entries and kind_code(entries#place) == Kind.Key and same_bytes(entry_name(entries#place), name) { return key_value(entries#place) }
-		if map_index(m, name) > 0 { warned("a class instance's field is not at its declared place (card instance-field-order)") }
+		if map_index(m, name) > 0 { extended_warned("a class instance's field is not at its declared place (card instance-field-order)") }
 	}
 	map_get(m, name)
 }
