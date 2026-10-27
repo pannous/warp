@@ -223,8 +223,9 @@ fn compiled_with(
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
-		// a position the compiler's run names is one in compiler.warp (its `raise`), not in the program
-		(Node::Error(_), _) => Err(crate::errors::diagnostic::located_in_file(&said, &library().join(COMPILER_FILE))),
+		// a position the compiler's run names is no place of the program, nor one in compiler.warp: its line and column
+		// may be in any of core's files, so it is left out (a refusal reads as `outside the core: the call zork(…)`)
+		(Node::Error(_), _) => Err(crate::errors::diagnostic::without_position(&said)),
 		(_, Ok(bytes)) => Ok(module_of_bytes(bytes)),
 		(_, Err(_)) => Err(error(&format!("compiler.warp wrote no module, it gave {}", said.serialize()))),
 	}

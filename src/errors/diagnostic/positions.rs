@@ -84,6 +84,26 @@ pub fn located_in_file(failure: &Node, file: &std::path::Path) -> Node {
 	Node::Error(Box::new(Node::Text(format!("{}{}:{}", &text[..at], file.display(), &text[at..]))))
 }
 
+/// A failure without its last position ` at line:column`: one that names no file, so it cannot be placed
+pub fn without_position(failure: &Node) -> Node {
+	let Node::Error(message) = failure.drop_meta() else {
+		return failure.clone();
+	};
+	let Node::Text(text) = message.drop_meta() else {
+		return failure.clone();
+	};
+	let is_position = |place: &str| {
+		place
+			.split_once(':')
+			.is_some_and(|(line, column)| position_number(line).is_some() && position_number(column).is_some())
+	};
+	let Some((at, place)) = places(text).find(|(_, place)| is_position(place)) else {
+		return failure.clone();
+	};
+	let start = at - " at ".len();
+	Node::Error(Box::new(Node::Text(format!("{}{}", &text[..start], &text[at + place.len()..]))))
+}
+
 /// The words after each ` at ` of a message's description, the last first, with where each starts
 fn places(message: &str) -> impl Iterator<Item = (usize, &str)> {
 	let description = described(message);
