@@ -291,7 +291,9 @@ record_type(name: any, body: any): any := {
 	}
 	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
 	if name#2 == "variants" {
-		for variant in name#3[3..] { module.variants[variant#2] = yes }
+		enum_name = declared_type_name(name)
+		module.enum_cases[enum_name] = name#3[3..].map(variant => variant#2)
+		for variant in name#3[3..] { module.variants[variant#2] = (module.variants.get(variant#2) ?? []) + [enum_name] }
 		if #name#3 > 3 { module.sum_types[declared_type_name(name)] = "cases" }
 	}
 	if name#2 in base_class_layers and kind_of(name#3) == "symbol" {

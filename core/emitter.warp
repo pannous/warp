@@ -209,7 +209,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; runtime_globals: list = []; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = "" }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; runtime_globals: list = []; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
@@ -508,7 +508,7 @@ def local_value(body: Body, n: Node): list {
 	}
 	# a bare enum case is its name, a symbol, at run time, made once: the very case is the one node (decision
 	# enum-identity)
-	if name not in body.names and name in module.variants { return interned_symbol(body, name) }
+	if name not in body.names and name in module.variants { return if #module.variants[name] == 1 then case_value(module.variants[name]#1, name) else interned_symbol(body, name) }
 	# a type's name, unbound, is the type value: `k = int` (Rust: names_a_type_value)
 	if name not in body.names and names_a_type_value(name) { return ["node", node(Marked.TypeValue, text_bytes(name))] }
 	# a function taking nothing, named bare, is its call: `f() := 42; f + 1`, a library's `now` (Rust: a bare word
@@ -688,6 +688,18 @@ def interned_symbol(body: Body, word: text): list {
 	made = runtime_call("symbol_node", [text_value_of(word)])#2
 	["node", kind_code_of(kept) + [op.i64_const] + sleb(Kind.Symbol) + [op.i64_ne, op.if, no_value] + made + [op.global_set] + index + [op.end] + kept]
 }
+# an enum's case, `Coin.Dime`, or a bare `Dime` of the one enum declaring it: made once, kept in the global
+# `case·Coin·Dime`, its enum's number in the kind's info byte, so two enums' cases of one name never equal (decision
+# enum-identity, card case-enum-carry)
+def case_value(enum_name: text, case: text): list {
+	if enum_name not in module.enum_numbers { module.enum_numbers[enum_name] = #module.enum_numbers.keys + 1 }
+	index = uleb(declared_global("case·" + enum_name + "·" + case, "node")#1)
+	kept = [op.global_get] + index
+	made = node(Kind.Symbol + module.enum_numbers[enum_name] * KindUnit.Info, text_bytes(case))
+	["node", kind_code_of(kept) + [op.i64_const] + sleb(Kind.Symbol) + [op.i64_ne, op.if, no_value] + made + [op.global_set] + index + [op.end] + kept]
+}
+# `Coin.Dime` of an enum the program declares, its name no local's
+is_case_read(body: Body, owner: Node, case: Node): bool := owner is symbol and case is symbol and name_of(owner) not in body.names and name_of(case) in (module.enum_cases.get(name_of(owner)) ?? [])
 # `return x`: x ends the function; what follows it is unreachable, of any kind
 def return_value(body: Body, value: TypedCode): list {
 	body.returned += [value#1]
@@ -860,6 +872,7 @@ def key_expression(body: Body, n: Node): list {
 	left = key_of(n)
 	right = value_of(n)
 	if body.intrinsics and table_number(left, read_field(n)) != ø { return number_value(table_number(left, read_field(n))) }
+	if operator == Op.Dot and is_case_read(body, left, right) { return case_value(name_of(left), name_of(right)) }
 	# `{}`: a map of no entries, not ø, so the entries a function given it writes reach every holder, as in Rust's
 	if is_empty_map(n) { return ["node", node(Marked.Map, vector_code([]))] }
 	# `[]`, held behind the opaque word as Rust's parser builds it: a list of no items
@@ -1164,6 +1177,8 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 	module.classes = {}
 	module.parents = {}
 	module.variants = {}
+	module.enum_cases = {}
+	module.enum_numbers = {}
 	module.sum_types = {}
 	module.errors = {}
 	module.closures = []
