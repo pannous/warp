@@ -9,6 +9,7 @@ SUPERVISOR=warp-supervisor
 CODEX_BOSS="Warp Boss"
 DEFAULT_TURN_TIMEOUT_SECONDS=16200
 EXEC_EXIT_GRACE_SECONDS=30
+RELAY_TIMEOUT_SECONDS=60
 POLL_SECONDS=1
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=${CODEX_REPO:-$DEFAULT_REPO}
@@ -42,7 +43,7 @@ FINAL_EXIT=0
 echo $$ > "$LOCK"
 
 relay() {
-	"$1" "$2" "$3" >> "$RUN.relay.log" 2>&1 && return
+	timeout "$RELAY_TIMEOUT_SECONDS" "$1" "$2" "$3" >> "$RUN.relay.log" 2>&1 && return
 	echo "$(date +%FT%T) RELAY FAILED (see $RUN.relay.log): $2 never got: ${3%%$'\n'*}"
 	return 1
 }
