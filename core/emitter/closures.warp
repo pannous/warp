@@ -72,7 +72,7 @@ function_name(target: text): text := {
 }
 # the code of a function made late (made_late), once the program's closures and classes are known
 late_code(f: Function): int := {
-	if f.name == closure_text_name { closure_text_code(f) } else if f.name == shown_big_int_name { shown_big_int_code(f) } else if f.name == instance_set_name { instance_set_code(f) } else if f.name == instance_entries_name { instance_entries_code(f) } else if f.name == instance_field_at_name { instance_field_at_code(f) } else if f.name.starts_with(field_getter_prefix) { field_getter_code(f) } else if f.name.starts_with(field_setter_prefix) { field_setter_code(f) } else { dispatcher_code(f) }
+	if f.name == closure_text_name { closure_text_code(f) } else if f.name == shown_big_int_name { shown_big_int_code(f) } else if f.name == instance_set_name { instance_set_code(f) } else if f.name == instance_entries_name { instance_entries_code(f) } else if f.name == instance_field_at_name { instance_field_at_code(f) } else if f.name == instance_place_name { instance_place_code(f) } else if f.name == is_class_instance_name { is_class_instance_code(f) } else if f.name.starts_with(field_getter_prefix) { field_getter_code(f) } else if f.name.starts_with(field_setter_prefix) { field_setter_code(f) } else { dispatcher_code(f) }
 	0
 }
 # a value called that is no closure fails in not_a_function; the closure's number picks, in one br_table jump, the

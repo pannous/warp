@@ -1,40 +1,51 @@
-# Supervisor handover (2026-10-26, evening)
+# Supervisor handover (2026-10-27, 18:00, before the user's reboot)
 
-## Direction from the user
-"The main part of the migration to the pure WASM parser is done. We may focus a bit on performance before then
-resuming implementing features. Actually, this is a good time to do some quality reassessment and beautify the
-compiler by adding more types, classes, enums, and so on." And: "As always, he has to delegate these tasks."
+## Restart after the reboot
+1. Supervisor first, in tmux warp-supervisor: `notes/agents/start.sh supervisor`, or resume this conversation:
+   `FORCE_SPAWN=1 CLAUDE_RESUME=f2cd2fb2-3718-4833-b9b0-2b85ead3c858 ~/dev/bin/claude-remote.sh supervisor /Users/me/dev/angles/warp "<RESUME prompt>"`.
+2. Services: `notes/agents/start.sh` (integrator, interviewer, fixer, reviewer), each reads its notes/handover/<role>.md.
+3. Workers, each resumed or respawned from its handover (resume keeps the whole context):
 
-So, in this order:
-1. Performance: rebuild speed (card rebuild-time-speedup, warp-fixer) continues.
-2. Quality reassessment + beautifying the compiler: core/*.warp gets more types, classes and enums (e.g. the Kind/
-   Node tags, pass results, the analyzer's tables, refusal kinds as enums instead of text/number codes; classes for
-   the parser state, scopes, emitter context). Delegate: one refactorer-style session per area (parser, passes /
-   analyzer, emitter), at most two at once. Each change keeps the compiler compiling itself (self test) and hello.
-   Core changes over ~40 lines need the user's OK via warp-interviewer: send a short plan per area first.
-3. Then features again (the Sample gaps topic: notes/sample_status.md, 49/224 samples run; 26 sub-cards).
+| session | handover | resume id (from the transcript titles; check `claude --resume` if one fails) |
+|---|---|---|
+| warp-fixer | notes/handover/instance-words-build.md | ca3ff03f-a60e-48ac-8778-a23ecf360f7a |
+| warp-text-field (was warp-core-types-emitter) | notes/handover/core-types-emitter.md (branch emitter-kinds WIP) | 356f4529-9849-463e-b812-38049e490485 |
+| warp-global-named-capital (was warp-samples) | notes/handover/sample-gaps.md (branch pure-paint WIP) | 3f9a2566-f302-4179-9600-522967854bab |
+| warp-integrator | notes/handover/integrator.md | 042c9a17-9831-4855-8bc0-52a02d84416a |
+| warp-interviewer | notes/handover/interviewer.md (9eccb1459a) | 43f62aa9-b30f-4ef2-a667-684c0816c38f |
+| warp-reviewer | notes/handover/reviewer.md | d39cb067-4ff7-499c-b8e0-e2698d740b6c |
 
-## State
-- Milestone commit be4efc400b "victory: the first clean pure warp compiler". No release until the sample gap is
-  smaller (user).
-- Rebuild (`warp rebuild pure`): 1044 s → 208 s today (starts_at fix, hashed map index, refreshed seeds). The fixer
-  is on refresh 4 (LRU slots). Parallel compilation: quick answer given (wasm GC has no shared threads; separate
-  per-module units + caching first); a proper investigation only after the next profile.
-- Running sessions: warp-integrator (watches main: after-push.sh installs compilers within seconds, cron every 2 min,
-  installs a changed harness itself), warp-interviewer, warp-reviewer (reviews merges after they land), warp-fixer.
-- warp-fixer's queue, in order: refresh 4 → hDucUM / refused-program-diagnostic (every refused program traps the
-  compiler at compiler.warp:118 instead of printing "outside the core: …"; urgent, user-facing) → file-words-implicit
-  (user decision: lib/file.warp words without `use file`) → built-compiler (lib/ bundled, on-demand modules,
-  WARP_LIB overrides per module; decision built-in-lib) → more rebuild hotspots.
+   Respawn instead of resume: `notes/agents/start.sh worker <name> "Resume from notes/handover/<file>.md"`.
+4. The hourly watch round was a session cron (dies with the session): recreate it (CronCreate, minute 17, prompt in
+   notes/decisions.md "night-watch"). The Codex timer is in the user's crontab and survives (02/07/12/17/22:35).
 
-## Rules decided today (all in notes/decisions.md and the role files)
-quick-merges, self-landing (workers push their own smoke-tested merges; no Ready column any more), no-slots,
-no-fixpoint, built-in-lib, root-files, n-times-prelude-now, file-words-implicit; probes/ and scratch/ are gone
-(tests in test/, output in a checkout's data/, kept logs in ~/Library/Logs/warp/); ~/dev/bin keeps only the
-installed main-builds/<hash>, never warp-<hash> links.
+## Direction (user)
+Performance, then compiler quality (types, classes, enums in core/), then features (sample gaps). Standing rules added
+today, all in notes/agents/common.md: elegance first; plain warp first (a rewrite rule only for what a function cannot
+say); vocabulary is library; samples are not the spec; tests are spec only when backed (notes/taste.md); new syntax of
+any size needs an OK; the Supervisor records user decisions itself.
 
-## Open
-- /Volumes/Worktrees/fixpoint-stages and /Volumes/Worktrees/rb-logs: stale plain folders (stage wasm and logs of
-  10:00-16:46); a safety check blocks agents from removing top-level folders there, so the user removes them.
-- /Volumes/Worktrees/rts-main: the fixer's "before" tree for timings; asked to remove it when done.
-- Samples list predates today's fixes: rerun the sweep once the refusal trap is fixed.
+## State at handover
+- Rebuild ~145 s → compile stage ~77 s CPU (TypedCode structs); `warp 3+3` 0.1 s (startup-time, kept-value-key).
+- Classes are wasm GC structs with methods and operators (declared-class stages 1–2, class-operator-overloads);
+  emitter kinds are ValueKind cases, TypedCode and lambdas tuples are classes; core `: any` params 933 → ~350.
+- Units as values in lib/units.warp; `sleep(3ms)` without `use units` (expected-type-names part 1); π exact in
+  lib/reals.warp; data blocks and `data` parameters; block parameters with shared captures. Samples 80/224.
+- SEED HOLD: the instance-runtime fast paths landed (instance-words-build, 1e8dcd512c: stage B 86–111 s CPU, was
+  2.6× slower), but the hold stays until warp-fixer's 131-file class test comparison on main is clean
+  (notes/handover/instance-words-build.md); then warp-fixer lifts it.
+
+## Waiting for the user
+- Test audit page (60 constructs, keep/rewrite/drop): https://claude.ai/code/artifact/74a487d1-9874-4267-bfa1-ef8fd60f352e,
+  choices readable with the Artifact tool's read_db (collection `choices`); notes/test_audit.md.
+- Event-handler shape (parked; proposal: `on(key: Key, handler: block)` in lib, `on escape {…}` via expected type).
+- Undeclared field write keeps the instance (extra fields) instead of converting to a map: confirm.
+- data_blocks.warp as its own file vs folded into definitions.warp.
+- Stray uncommitted src/extensions.rs (old Rust assert_throws) in the main checkout: the user reverts or keeps it.
+
+## Queues
+- warp-fixer: instance-runtime fast paths (lifts the seed hold) → method-name-clash → runtime-global-shadowing →
+  run-time speed of compute samples.
+- warp-text-field: class-text-coercion (results print via text(): 3.5km) → expected-type-names part 2 (fix-it).
+- warp-samples: units-shadowing → sweep → biggest sample group except `on` and foreign spellings.
+- Codex list: notes/agents/codex_cards.txt (library cards only).

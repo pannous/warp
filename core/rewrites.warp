@@ -194,7 +194,8 @@ unbound_rules(module_rules: list, program: Node): list := if #module_rules == 0 
 # [the program's scope, its scope outside its type declarations]: the bindings unbound_rules reads, worked out once for
 # all the sugar steps of a program (card speed-module-cache)
 rule_bindings(program: Node): list := [scope_of(program), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
-rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(if is_library_word(word) then bindings#2 else bindings#1, word, Meaning.Function)))
+# (a class's method binds no word of the program: `in(u)` of a class keeps `for x in xs`)
+rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filter(rule => not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(bindings#2, word, Meaning.Function)))
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (rule_bindings: a
 # program's own `push` keeps its own), before the definitions it reaches from the prelude and the modules join it

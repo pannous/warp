@@ -22,6 +22,9 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 ## Team
 - Start of day: `tmux ls | grep warp-` and ListAgents; missing services: `notes/agents/start.sh` (integrator,
   interviewer, fixer, reviewer). At most TWO feature workers at once.
+- Leftovers in the main checkout (`git status --short` at every watch round and handover): integrate them in the same
+  turn without asking (user 2026-10-27): run what they touch and commit as "(user)", or, when they cannot work, save a
+  patch in data/stray/ and restore the file from HEAD. At most one line about it to the user, once.
 - New task: `notes/agents/start.sh worker <card> "<task in the user's words>"`. Reuse an idle worker of the same area
   (SendMessage it); an unrelated topic gets a fresh session named for it; a finished area's worker hands over and
   retires. Off-area quick cards go to warp-fixer.
@@ -34,6 +37,15 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 - Quick capability checks: `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp 'use math; dir(math)'`; never rebuild for it.
 - Side research goes to a background Agent-tool subagent returning a short answer with sources.
 - Never assign @copilot. Releases (version bump, tag, tap formula) need no approval; nothing waits for brew.
+
+## Team handover (reboot, shutdown, "handover")
+1. Tell every running session (ListAgents; tmux warp-*) to push its branch, note the card and write
+   notes/handover/<card or role>.md, then reply "handover done".
+2. Write notes/handover/supervisor.md: a restart table (session, its handover file, its Claude session id from
+   ~/.claude/projects/-Users-me-dev-angles-warp/*.jsonl, the resume and respawn commands), the state, items waiting
+   for the user, queues, holds, and what dies with the session (session crons such as the watch round).
+3. Report the count of handovers on main to the user and tell them when all are in. The next Supervisor reads
+   notes/handover/supervisor.md first and resumes or respawns from its table.
 
 ## Incidents
 - Urgent cards (column Now, no Agent): `todo key` and `todo take` at once, assign ahead of all else. A card you add to

@@ -1,0 +1,8 @@
+# A method's name changes no syntax elsewhere (cards class-method, global-named-capital): a method named in keeps
+# every `for x in xs`, one named float keeps `x is float`; a map entry's value named by one capital is that value
+'class C{a:int; in(u) := a + u}; c = C(1); s = 0; for x in [1, 2] { s += x }; s + c.in(5)'	9
+'class C{a:int; in(u) := a + u}; [1, 2].map(x => x * 2)'	[2, 4]
+'class C{a:int; float() := a * 1.5; *(o) := if o is float then "f" else "n"}; x: float = 0.25; C(2) * x'	'f'
+'class C{a:int; float() := a * 1.5; g() := float() + 1}; C(2).g()'	4
+'x: float = 0.25; 2 * pi * x > 1.57'	true
+'K = 3; f() := {"K": K}; f()["K"]'	3
