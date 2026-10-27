@@ -1,0 +1,20 @@
+# Units are values (decision units-as-values, lib/units.warp): 5km is 5 times the unit km, shown in the unit written,
+# equal by amount; dimensions are classes, quantities of different ones neither add nor compare
+'use units; "" + 5km'	'5km'
+'use units; "" + (3km + 500m)'	'3.5km'
+'use units; 3km == 3000m'	true
+'use units; 3km != 3001m'	true
+'use units; 2999m < 3km'	true
+'use units; 0.25km == 250m'	true
+'use units; "" + 90km/h'	'90km/h'
+'use units; "" + 9.81m/s^2'	'9.81m/s²'
+'use units; 6km / 2000m'	3
+'use units; x = 300ms; x is Time'	true
+'use units; x = 2km; if x > 1500m then "far" else "near"'	'far'
+'use units; try str(3km + 2s) else "no"'	'no'
+'use units; m = 5; m * 3'	15
+'use units; quantity("2.5 km").amount_in("m")'	2500
+'use units; quantity("1 min") == quantity("60 s")'	true
+'use units; quantity("6 m²").amount_in("cm²")'	60000
+'use units; quantity(3, "kg") > quantity("2500 g")'	true
+'use units; started = clock(); sleep(50ms); clock() - started >= 50'	true
