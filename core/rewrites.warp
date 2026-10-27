@@ -488,8 +488,8 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	for index in 0 ..< #after { if where_at == #after and after[index] == symbol(where_word) { where_at = index } }
 	cut = split_at_where(written)
 	if cut != ø {
-		written = cut#1
-		after = cut#2 + after
+		written = cut.template
+		after = cut.conditions + after
 		where_at = -1
 	}
 	continued = after[0 ..< max(where_at, 0)]
@@ -512,29 +512,32 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module, whole, aliased)
 }
 
-# [the template before a `where` its last words swallowed, the words after that `where`] (`$c + $n where`, `$s where
-# statement`), else ø
-split_at_where(n: Node): list? := {
+# a template cut at a `where` its last words swallowed (`$c + $n where`, `$s where statement`): the template before it
+# and the words after it
+class WhereCut { template: Node; conditions: list }
+
+# the template cut at a `where` inside it, else ø
+split_at_where(n: Node): WhereCut? := {
 	if n is key {
 		inner = split_at_where(value_of(n))
 		if inner == ø {
 			# `$p where parameter and $w is label`: the parser joined a condition after `where` to the next by the
 			# operator, the `where` inside its left side; the operator joins them again after the cut
 			left = split_at_where(key_of(n))
-			return if left == ø then ø else [left#1, [Key(as_phrase(left#2), op_of(n), value_of(n))]]
+			return if left == ø then ø else WhereCut(left.template, [Key(as_phrase(left.conditions), op_of(n), value_of(n))])
 		}
 		# `$s... where statement`: the parser read the conditions as the end of the rest's range, which ends nowhere
-		before = inner#1
+		before = inner.template
 		if is_group(before) and #before == 0 { before = ø }
-		return [Key(key_of(n), op_of(n), before), inner#2]
+		return WhereCut(Key(key_of(n), op_of(n), before), inner.conditions)
 	}
 	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 0) { return ø }
 	items = items_of(n)
 	for index in 0 ..< #items {
-		if items[index] == symbol(where_word) { return [words_phrase(items[0 ..< index]), items[index + 1 ..]] }
+		if items[index] == symbol(where_word) { return WhereCut(words_phrase(items[0 ..< index]), items[index + 1 ..]) }
 	}
 	inner = split_at_where(items[#items - 1])
-	if inner == ø then ø else [words_phrase(items[0 ..< #items - 1] + [inner#1]), inner#2]
+	if inner == ø then ø else WhereCut(words_phrase(items[0 ..< #items - 1] + [inner.template]), inner.conditions)
 }
 
 # the words in runs between the word, `$a is type and $n < 0` as [[$a is type], [$n < 0]]
