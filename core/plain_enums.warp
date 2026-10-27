@@ -122,9 +122,29 @@ enum_type(name: text, cases: list): Node := {
 	node_of(["type", ["attribute", variants_word, variants, ["symbol", name]], ["list", "{", ""]])
 }
 
+# the types a numbered case converts to its number, `Coin.Dime as int` (decision enum-raw-values); `as index` and
+# `as position` count the cases as of any enum (lib/sugar/enums.warp)
+number_types = ["int", "integer"]
+
+# `Coin.Dime as int` of `enum Coin { Penny = 1, Dime = 10 }`: 10, the number the case declares
+case_number(enum_name: text, value: Node): Node := {
+	cases = numbered_enums[enum_name]
+	matched(value, cases.keys.map(case => Key(qualified_case(enum_name, case), Op.Colon, cases[case])), ø, {})
+}
+
+# `10 as Coin`: the case numbered 10, an error for a number no case has
+numbered_case(enum_name: text, value: Node): Node := {
+	cases = numbered_enums[enum_name]
+	missing = Key(symbol(other_arm), Op.Colon, List([symbol(raise_word), "no " + enum_name + " case has that number"], Bracket.None, Separator.Space))
+	matched(value, cases.keys.map(case => Key(cases[case], Op.Colon, qualified_case(enum_name, case))) + [missing], ø, {})
+}
+
 # `op as text` of node.warp's spelled enums its spelling (node_cases.warp converted the other values to them already);
 # other conversions as they are (a case's number and the case at an index are lib/sugar/enums.warp's rules)
 case_conversion(value: Node, target: Node, n: Node, enums: map, subjects: map): Node := {
+	numbered = type_of(value, enums, subjects)
+	if is_name(target) and name_of(target) in number_types and numbered in numbered_enums { return case_number(numbered, value) }
+	if is_name(target) and name_of(target) in numbered_enums and numbered == ø { return numbered_case(name_of(target), value) }
 	if not is_name(target) or name_of(target) not in text_types { return n }
 	enum_name = type_of(value, enums, subjects)
 	if enum_name != ø and enum_name in spelled_enums then held_text(enum_name, value) else n

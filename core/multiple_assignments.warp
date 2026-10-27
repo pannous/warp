@@ -4,6 +4,7 @@
 # elements in order: `x·values = [1, 2]; x = x·values#1; y = x·values#2`. Tuple returns (`return 1, 2`) are not here yet.
 use "walk.warp"
 use "phrase_blocks.warp"
+use "enum_declarations.warp"
 
 held(name: Node, suffix: text): Node := match name {
 	Symbol(text): symbol(text + "·" + suffix)
@@ -61,4 +62,5 @@ multiple_assignment(n: Node): Node := match n {
 	_: n
 }
 
-multiple_assignments(program: Node): Node := bottom_up(program, multiple_assignment)
+# an enum's cases are no assignments: `enum Level { Low, Mid = 5 }` numbers Mid (card enum-case)
+multiple_assignments(program: Node): Node := if declared_enum(program) != ø then program else multiple_assignment(children(program, multiple_assignments))

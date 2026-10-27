@@ -228,7 +228,48 @@ spelled_declarations(n: Node, found: map): map := {
 
 # node.warp's spelled enums and the program's own, their spellings taken in; the program's declarations go, as
 # with_spelled_enums declares each spelled enum again with its spelling functions
+# `enum Coin { Penny = 1, Dime = 10, Quarter }` (decision enum-raw-values): [its name, its cases each with its number],
+# a case without one numbered one past the case before it (the first 0), as in Swift; ø of an enum none of whose cases
+# is numbered
+numbered_cases(n: Node): any := match n {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts != 3 or parts#1 != symbol(enum_word) or not is_name(parts#2) or not is_curly_group(parts#3) { return ø }
+		rows = enum_rows(items_of(parts#3))
+		if not rows.any(is_numbered_case) { return ø }
+		cases = {}
+		next = 0
+		for row in rows {
+			name = enum_case_name(row)
+			if name == ø { return ø }
+			if is_numbered_case(row) { next = value_of(row) }
+			cases[name] = next
+			next += 1
+		}
+		[name_of(parts#2), cases]
+	}
+	_: ø
+}
+is_numbered_case(row: Node): bool := is_key(row, Op.Assign) and is_name(key_of(row)) and value_of(row) is int
+
+# the numbered enums the program declares, by name, each case with its number: {Coin: {Penny: 1, Dime: 10}}
+global numbered_enums = {}
+
+numbered_declarations(n: Node, found: map): map := {
+	declared = numbered_cases(n)
+	if declared != ø { found[declared#1] = declared#2 } else if is_group(n) { for part in items_of(n) { numbered_declarations(part, found) } }
+	found
+}
+
+# a numbered enum declared as the plain enum of its cases, its numbers kept in numbered_enums for `as int`
+unnumbered(n: Node): Node := {
+	declared = numbered_cases(n)
+	if declared == ø { return n }
+	List([symbol(enum_word), symbol(declared#1), List(declared#2.keys.map(case => symbol(case)), Bracket.Curly, Separator.Comma)], Bracket.None, Separator.Space)
+}
+
 taking_spelled_enums(program: Node): Node := {
+	numbered_enums = numbered_declarations(program, {})
+	if #numbered_enums > 0 { program = bottom_up(program, unnumbered) }
 	own = spelled_declarations(program, {})
 	spelled_enums = node_spelled_enums + own.keys
 	spellings = {}
