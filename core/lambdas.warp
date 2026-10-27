@@ -98,7 +98,7 @@ inlined_body(arrow: Node, values: list): Node := {
 ## iterations
 
 # `xs.map(f)`, `map(xs, f)`: [word, list, extras, function] of an iteration call, else ø
-iteration_of(n: Node): any := match n {
+iteration_of(n: Node): list? := match n {
 	Key(list, Op.Dot, called): method_iteration(list, called)
 	List(call, Bracket.Round, Separator.None): {
 		if #call >= 3 and call#1 is symbol and name_of(call#1) in iteration_extras then iteration_parts(name_of(call#1), arguments_of(call)) else ø
@@ -106,7 +106,7 @@ iteration_of(n: Node): any := match n {
 	_: ø
 }
 
-method_iteration(list: Node, called: Node): any := match called {
+method_iteration(list: Node, called: Node): list? := match called {
 	List(call, Bracket.Round, Separator.None): {
 		if #call >= 2 and call#1 is symbol and name_of(call#1) in iteration_extras then iteration_parts(name_of(call#1), [list] + arguments_of(call)) else ø
 	}
@@ -114,7 +114,7 @@ method_iteration(list: Node, called: Node): any := match called {
 }
 
 # the list, the extra arguments and the function of the word, when it has as many as it takes
-iteration_parts(word: text, arguments: list): any := {
+iteration_parts(word: text, arguments: list): list? := {
 	if #arguments != 2 + iteration_extras[word] { return ø }
 	[word, arguments#1, arguments[1 ..< #arguments - 1], arguments#(#arguments)]
 }
@@ -141,11 +141,11 @@ iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
 ## the program's functions and values
 
 # `f(a, b) := body`: [name, parameters as written, body] of a definition, else ø
-definition_of(n: Node): any := match n {
+definition_of(n: Node): list? := match n {
 	Key(signature, Op.Define, body): defined_head(signature, body)
 	_: ø
 }
-defined_head(signature: Node, body: Node): any := match signature {
+defined_head(signature: Node, body: Node): list? := match signature {
 	List(call, Bracket.Round, Separator.None): { if #call >= 1 and call#1 is symbol then [name_of(call#1), arguments_of(call), body] else ø }
 	Key(call, Op.Colon, type): defined_head(call, body)
 	_: ø
@@ -185,13 +185,13 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: any; lambdas_lifted: any; inlined: map = {}; callable_fields: map = {} }
+class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {} }
 
 ## the walk
 
 # n with its lambdas lifted, its iterations looped, its function names as values and its calls of variables as
 # closures; `locals` the variables and parameters in scope
-lowered_lambdas(n: Node, locals: list, lowering: Lowering): any := {
+lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
 	inlined = inlined_call(n, locals, lowering)
 	if inlined != ø { return lowered_lambdas(inlined, locals, lowering) }
 	iteration = iteration_of(n)
@@ -249,20 +249,20 @@ dotted_lowered(left: Node, right: Node, locals: list, lowering: Lowering): Node 
 
 # the fields the program gives a function value, named unlike any of its functions: `{answer: answer}` of a parameter
 # `answer: function`, `{d: x => x + 1}`, `{f: square}` of a function with parameters
-callable_fields_of(program: Node, arities: any, function_parameters: any): any := {
+callable_fields_of(program: Node, arities: map, function_parameters: map): map := {
 	fields = {}
 	for n in nodes_in(program) {
 		if is_key(n, Op.Colon) and key_of(n) is symbol and not arities.has(name_of(key_of(n))) and gives_function(value_of(n), arities, function_parameters) { fields[name_of(key_of(n))] = yes }
 	}
 	fields
 }
-gives_function(value: Node, arities: any, function_parameters: any): bool := {
+gives_function(value: Node, arities: map, function_parameters: map): bool := {
 	if is_lambda(value) { return yes }
 	if not (value is symbol) { return no }
 	function_parameters.has(name_of(value)) or (arities.has(name_of(value)) and arities[name_of(value)] > 0)
 }
 # the parameters declared functions, `answer: function`, of the program's definitions
-function_parameters_of(written: list): any := {
+function_parameters_of(written: list): map := {
 	found = {}
 	for statement in written {
 		parts = definition_of(statement)
@@ -281,20 +281,20 @@ lowered_method(n: Node, locals: list, lowering: Lowering): Node := match n {
 
 # the operator a function value names, `fold(xs, 0, +)`, `fold(bits, no, or)`: a bare operator (the parser's key with
 # neither side) or an operator word, else ø
-operator_function(function: Node): any := match function {
+operator_function(function: Node): Op? := match function {
 	Key(left, op, right): if left is ø and right is ø then op else ø
 	Symbol(name): operator_words.get(name)
 	_: ø
 }
 
 # the loop of an iteration whose function is a lambda, a function of the program or a function value, else ø
-iteration_over(iteration: list, locals: list, lowering: Lowering): any := {
+iteration_over(iteration: list, locals: list, lowering: Lowering): Node? := {
 	apply = round_code(iteration#1, iteration#4)
 	if apply == ø then ø else iteration_loop(iteration#1, iteration#2, iteration#3, apply)
 }
 
 # the word's function as the code of its call on the values of a round, else ø
-round_code(word: text, function: Node): any := {
+round_code(word: text, function: Node): function? := {
 	if is_lambda(function) {
 		arrow = lambda_of(function)
 		if #lambda_parameter_names(arrow) != iteration_extras[word] + 1 { return ø }
@@ -328,7 +328,7 @@ lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 # `sum(xs) := fold(xs, 0, +)`: [parameter names, body] of a function whose body is one iteration over its first
 # parameter, each parameter read once and the function not called in it, else ø. Its calls are its body, so the loop
 # runs where it is called and fuses with the list given (`sum(xs .* 2)`), whatever the function is named
-iteration_function(parts: list): any := {
+iteration_function(parts: list): list? := {
 	names = parts#2.map(parameter_name)
 	body = parts#3
 	iteration = iteration_of(body)
@@ -349,7 +349,7 @@ is_steady(n: Node): bool := n is symbol or n is number or n is text or is_lambda
 
 # the call of a function that is one iteration as its body on the arguments, else ø; the list may be any code (the
 # loop reads it once), the others steady and free of the body's own names
-inlined_call(n: Node, locals: list, lowering: Lowering): any := match n {
+inlined_call(n: Node, locals: list, lowering: Lowering): Node? := match n {
 	List(call, Bracket.Round, Separator.None): {
 		if #call == 0 or not (call#1 is symbol) or name_of(call#1) in locals or name_of(call#1) not in lowering.inlined { return ø }
 		function = lowering.inlined[name_of(call#1)]
@@ -389,7 +389,7 @@ assigned_names(n: Node, operators: list): list := nodes_in(n).filter(part => par
 cell_of(name: text): Node := Key(symbol(name + cell_suffix), Op.Dot, symbol("value"))
 # the statements of a scope, its parameters and the blocks it gives functions as lambdas, its shared names in cells
 # made first, a parameter's holding its value
-celled_scope(statements: list, parameters: list, positions: any): list := {
+celled_scope(statements: list, parameters: list, positions: map): list := {
 	blocks = statements.flat_map(statement => blocks_given(statement, positions))
 	statements = statements.map(statement => with_block_arguments(statement, positions))
 	locals = parameters + statements.fold([], (found, statement) => names_bound(statement, found))
@@ -398,7 +398,7 @@ celled_scope(statements: list, parameters: list, positions: any): list := {
 	shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø]))) + celled
 }
 # a definition with its body in that form
-celled_definition(statement: Node, positions: any): Node := {
+celled_definition(statement: Node, positions: map): Node := {
 	parts = definition_of(statement)
 	if parts == ø { return statement }
 	statements = if is_curly_group(parts#3) then items_of(parts#3) else [parts#3]
@@ -409,7 +409,7 @@ celled_definition(statement: Node, positions: any): Node := {
 }
 
 # a definition with its body lowered, its parameters and variables the locals
-lowered_statement(statement: Node, top_locals: list, lowering: Lowering): any := {
+lowered_statement(statement: Node, top_locals: list, lowering: Lowering): Node := {
 	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
 	locals = parts#2.map(parameter_name) + names_bound(parts#3, [])
@@ -431,7 +431,7 @@ with_function_parameters(statement: Node): Node := match statement {
 	_: statement
 }
 # the positions of each function's function parameters, by its name
-function_positions_of(written: list): any := {
+function_positions_of(written: list): map := {
 	found = {}
 	for statement in written {
 		parts = definition_of(statement)
@@ -440,21 +440,21 @@ function_positions_of(written: list): any := {
 	found
 }
 block_lambda(block: Node): Node := Key(if mentions(block, "it") then symbol("it") else ø, Op.Arrow, block)
-takes_function(n: Node, positions: any): bool := n is symbol and positions.has(name_of(n))
+takes_function(n: Node, positions: map): bool := n is symbol and positions.has(name_of(n))
 # `f(a) {…}` and `f{…}` as the calls `f(a, {…})` and `f({…})` where f takes a function, else n
-joined_block_call(n: Node, positions: any): Node := {
+joined_block_call(n: Node, positions: map): Node := {
 	n = glued_block_call(n, name => positions.has(name))
 	if not (n is list and #n == 2 and is_round(n#1) and #n#1 > 0 and takes_function(n#1#1, positions) and is_block_argument(n#2)) { return n }
 	call_node(n#1#1, arguments_of(items_of(n#1)) + [n#2])
 }
 # the arguments of the call or phrase `f a {…}` that are blocks given to a function parameter of f, by position
-given_positions(n: Node, positions: any): list := {
+given_positions(n: Node, positions: map): list := {
 	if not (n is list and #n >= 2 and takes_function(n#1, positions)) { return [] }
 	positions[name_of(n#1)].filter(i => i < #n and is_block_argument(n#(i + 1)))
 }
-blocks_given(n: Node, positions: any): list := nodes_in(n).map(part => joined_block_call(part, positions)).flat_map(call => given_positions(call, positions).map(i => call#(i + 1)))
+blocks_given(n: Node, positions: map): list := nodes_in(n).map(part => joined_block_call(part, positions)).flat_map(call => given_positions(call, positions).map(i => call#(i + 1)))
 # `f {…}`, `f(a) {…}`, `f(a, {…})` with those blocks as lambdas
-with_block_arguments(n: Node, positions: any): Node := {
+with_block_arguments(n: Node, positions: map): Node := {
 	n = joined_block_call(children(n, part => with_block_arguments(part, positions)), positions)
 	given = given_positions(n, positions)
 	if #given == 0 then n else group_like(n, (1 to #n).map(i => if i - 1 in given then block_lambda(n#i) else n#i))
