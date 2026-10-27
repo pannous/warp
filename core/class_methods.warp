@@ -109,7 +109,7 @@ methods_lifted(program: Node): Node := {
 	group_like(program, rewritten)
 }
 # the dispatchers a class's compare(o) and text() give: its instances ordered by <, <=, >, >=, and shown by their text
-derived_dispatchers(classes: any, names: list, routes: list): list := {
+derived_dispatchers(classes: map, names: list, routes: list): list := {
 	made = []
 	other = symbol("other")
 	orderers = owners_of(classes, names, ordering_method).filter(owning_class => #method_parameters(method_in(classes[owning_class], ordering_method)) == 1)
@@ -132,13 +132,13 @@ derived_dispatchers(classes: any, names: list, routes: list): list := {
 	made
 }
 # the value of the first owner's on an instance of it, else of the next owner's…, the fallback on any other value
-value_dispatch(owners: list, values: map, fallback: any): Node := {
+value_dispatch(owners: list, values: map, fallback: Node): Node := {
 	otherwise = if #owners == 1 then fallback else value_dispatch(owners[1..], values, fallback)
 	test = Key(ø, Op.If, Key(self_node, Op.Is, symbol(owners#1)))
 	Key(Key(test, Op.Then, values[owners#1]), Op.Else, otherwise)
 }
 # the function a class's method was lifted to: its own name when one class declares it and it is not routed
-lifted_name(classes: any, names: list, method: text, owning_class: text, routes: list): text := if #owners_of(classes, names, method) == 1 and method not in routes then method else owned_name(method, owning_class)
+lifted_name(classes: map, names: list, method: text, owning_class: text, routes: list): text := if #owners_of(classes, names, method) == 1 and method not in routes then method else owned_name(method, owning_class)
 
 # the class declaration with each field its own member: `name age: int` as `name; age: int`
 fields_spelled(top_statement: Node): Node := {
@@ -221,13 +221,13 @@ field_name(member: Node): any := match member {
 }
 
 # a class, its parent, the parent's parent… among the program's classes
-lineage(classes: any, name: text): list := if name in classes and classes[name].parent in classes then [name] + lineage(classes, classes[name].parent) else [name]
-fields_reaching(classes: any, name: text): list := lineage(classes, name).flat_map(ancestor => classes[ancestor].fields)
+lineage(classes: map, name: text): list := if name in classes and classes[name].parent in classes then [name] + lineage(classes, classes[name].parent) else [name]
+fields_reaching(classes: map, name: text): list := lineage(classes, name).flat_map(ancestor => classes[ancestor].fields)
 # the names of the methods an instance of the class has: its own and its ancestors'
-methods_reaching(classes: any, name: text): list := lineage(classes, name).flat_map(ancestor => classes[ancestor].methods.map(defined_word))
+methods_reaching(classes: map, name: text): list := lineage(classes, name).flat_map(ancestor => classes[ancestor].methods.map(defined_word))
 # the classes declaring a method of that name, among `names`
-owners_of(classes: any, names: list, method: text): list := names.filter(name => classes[name].methods.any(m => defined_word(m) == method))
-methods_of(classes: any, names: list): list := {
+owners_of(classes: map, names: list, method: text): list := names.filter(name => classes[name].methods.any(m => defined_word(m) == method))
+methods_of(classes: map, names: list): list := {
 	found = []
 	for method in names.flat_map(name => classes[name].methods.map(defined_word)) { if method not in found { found += [method] } }
 	found
@@ -236,7 +236,7 @@ method_in(declared: Declared, method: text): Node := declared.methods.filter(m =
 
 # whether a class's methods may be lifted: each member a field or a method, no method kept or named like a class, the
 # classes it shares a method name with taking as many parameters, and so its ancestors
-lifts(classes: any, name: text, top_statements: list): bool := {
+lifts(classes: map, name: text, top_statements: list): bool := {
 	declared = classes[name]
 	if #declared.methods == 0 or declared.fields.any(field => field == ø) { return no }
 	for method in declared.methods {
@@ -260,14 +260,14 @@ without_methods(top_statement: Node, view: any): Node := {
 
 # the functions of the method `name`: the method itself when one class declares it, else each owner's (its dispatcher
 # methods_lifted adds once the program is routed)
-functions_of(classes: any, names: list, method: text, routes: list): list := {
+functions_of(classes: map, names: list, method: text, routes: list): list := {
 	owners = owners_of(classes, names, method)
 	if #owners == 1 and method not in routes { return [method_function(classes, owners#1, method, method, routes)] }
 	owners.map(owning_class => method_function(classes, owning_class, method, owned_name(method, owning_class), routes))
 }
 owned_name(method: text, owning_class: text): text := method + "·" + owning_class
 # the class's method as the function `name(self, parameters…)` of its instance
-method_function(classes: any, owning_class: text, method: text, name: text, routes: list): Node := {
+method_function(classes: map, owning_class: text, method: text, name: text, routes: list): Node := {
 	declared = method_in(classes[owning_class], method)
 	parameters = method_parameters(declared)
 	taken = parameters.map(parameter_name)
@@ -281,7 +281,7 @@ assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 # `name(self, parameters…)` of a method several classes declare, of a routed one or of an operator: the call of the
 # instance's class's own, each class tested before the classes it extends; each owner's spelling of it (an operator's
 # `plus` in one class, `+` in another); the last owner taking any other instance, unless it falls back
-method_dispatcher(classes: any, owners: list, spellings: list, name: text, falls_back: bool, operator: any): Node := {
+method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, operator: any): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
@@ -296,7 +296,7 @@ method_dispatcher(classes: any, owners: list, spellings: list, name: text, falls
 # the call of the first owner's method on an instance of it, else of the next owner's…, the last owner's on any other;
 # with a fallback (a routed method's function itself, an operator's builtin), that on any value not an instance of
 # the owners
-class_dispatch(owners: list, called: map, call_arguments: list, fallback: any): Node := {
+class_dispatch(owners: list, called: map, call_arguments: list, fallback: Node): Node := {
 	first_call = call_of(called[owners#1], call_arguments)
 	if #owners == 1 and fallback == ø { return first_call }
 	otherwise = if #owners == 1 then fallback else class_dispatch(owners[1..], called, call_arguments, fallback)
@@ -307,7 +307,7 @@ class_dispatch(owners: list, called: map, call_arguments: list, fallback: any): 
 # a call `x.sum(…)` of a routed method, the dispatcher's `sum·method(x, …)` when it passes as many
 # arguments as the method takes; `x.sum` the same of a method of none not also a field's name; a call on a class
 # (`Math.max(a, b)`) stays
-routed(n: Node, classes: any, names: list, routed_methods: list): Node := match n {
+routed(n: Node, classes: map, names: list, routed_methods: list): Node := match n {
 	Key(left, Op.Dot, right): {
 		object = routed(left, classes, names, routed_methods)
 		static = left is symbol and name_of(left) in classes
@@ -330,15 +330,15 @@ operator_spellings(): any := {
 }
 # the operator a method's name spells (not named operator_word: a plural reads as the function's, and lambdas.warp's
 # global operator_words would be its call), [its word, its glyph] (`plus` and `+` give [add, "+"]), else ø
-spelled_operator(operator_table: any, spelled: text): any := if spelled in operator_table then operator_table[spelled] else ø
+spelled_operator(operator_table: map, spelled: text): any := if spelled in operator_table then operator_table[spelled] else ø
 # how many parameters the method of that name takes (besides its instance)
-taken_count(classes: any, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
-is_field_of_any(classes: any, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
+taken_count(classes: map, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
+is_field_of_any(classes: map, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
 
 # the class and the classes of the program extending it, directly or through others
-extending_classes(classes: any, name: text): list := classes.keys.filter(other => name in lineage(classes, other))
+extending_classes(classes: map, name: text): list := classes.keys.filter(other => name in lineage(classes, other))
 # that the value is an instance of the class or of one extending it: `x is Animal or x is Dog`
-instance_check(classes: any, name: text, tested_value: Node): Node := {
+instance_check(classes: map, name: text, tested_value: Node): Node := {
 	extending = extending_classes(classes, name)
 	test = Key(tested_value, Op.Is, symbol(name))
 	for class_kind in extending { if class_kind != name { test = Key(test, Op.Or, Key(tested_value, Op.Is, symbol(class_kind))) } }
@@ -346,13 +346,13 @@ instance_check(classes: any, name: text, tested_value: Node): Node := {
 }
 # a program's test `x is Animal` of a class others extend, as instance_check; a value not a name is tested once, as
 # written
-widened_tests(n: Node, classes: any): Node := match n {
+widened_tests(n: Node, classes: map): Node := match n {
 	Key(left, Op.Is, right): { if left is symbol and right is symbol and name_of(right) in classes and #extending_classes(classes, name_of(right)) > 1 then instance_check(classes, name_of(right), left) else children(n, part => widened_tests(part, classes)) }
 	_: children(n, part => widened_tests(part, classes))
 }
 
 # the classes, each before the classes it extends
-deepest_first(classes: any, names: list): list := {
+deepest_first(classes: map, names: list): list := {
 	ordered = []
 	for name in names {
 		insert_at = #ordered.filter(other => #lineage(classes, other) >= #lineage(classes, name))
