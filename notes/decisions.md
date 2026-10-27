@@ -226,6 +226,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - unit-types: a unit can type a field (`display { density: dpi }`): it fixes the kind of quantity, converts other units, refuses other quantities. unit-field-plain-number: a plain number there warns with a fix adding the unit.
 - general-conversions: one conversion mechanism `A as B := body` (`Person as text := it.name`); a program's conversions come before built-in ones; unit lines are its unit cases.
 - units-library: units, quantities and prefixes are lib/units.warp lines, run-time quantities its Quantity class; the compile-time check (static_units.rs, P64) stays Rust until types take a quantity parameter.
+- units-quantity-lib (user): a unit literal (`300ms`, `5 km`) is one sugar rule to `Quantity(n, unit)`, lib/units.warp's class, whose operators do conversion, showing (`5km`) and the dimension error (`5km + 2s`, at run time for now); no unit tables or unit tracking in core (branch libgap-units-2, a Rust-twin port, stays a reference). The compile-time check comes with types taking a quantity parameter.
 - duration-units: `1 h` beside a duration is a duration; `name hour := h` stays (`2 h in minutes` → 120min).
 - canvas-size: `window`, `display` and `canvas` `.width/.height` are writable properties natively and in the playground; a bare top-level `width` works with a did-you-mean.
 
