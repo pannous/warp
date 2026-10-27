@@ -12,9 +12,9 @@ any_word = "any"
 required_type(word: text): text := if word.ends_with("?") then word[0..<(#word - 1)] else word
 # the hidden words the passes write for the emitter and analyzer, a `·` in each so no program can name them:
 # `ran·without·error{statement}` (what `try` lowers to), `loop·step: i++` (a loop's step, after its body),
-# `times·text(n, t)` (a text repeated), the guard markers, data items and fields, the shown text of an instance
+# the guard markers, data items and fields, the shown text of an instance
 # and the missing part of an `of` lookup
-enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·step", TimesText = "times·text", TryElse = "try·else",
+enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·step", TryElse = "try·else",
 	AssertElse = "assert·else", DataItem = "data·item", DataField = "data·field", TextShown = "text·shown", OfNone = "of·none" }
 # the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }` (Rust twin: words.rs IMPLICIT_PARAMETER)
 implicit_parameter = "it"

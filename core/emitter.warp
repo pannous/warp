@@ -735,34 +735,8 @@ is_spaced_call(body: Body, n: Node): bool := {
 }
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: Node): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
-# `n times [x]`, `n times "ab"`, `n times t` among the items of a spaced group or a call `print(3 times [7])`: n copies,
-# as Rust's times_phrases.rs lowers them (zero_fill, times·text, which multiplies a number), the count the item before;
-# `n times {…}` is a loop by then (lib/sugar/loops.warp). The index of `times` in items, 0 for none
-repetition_at(items: list): int := {
-	places = range_list(#items).map(i => i + 1).filter(at => at > 1 and at < #items and repeats_at(items, at))
-	if places then places#1 else 0
-}
-# whether items#at is `times` before a value it repeats
-repeats_at(items: list, at: int): bool := {
-	value = items#(at + 1)
-	items#at == symbol("times") and not (is_group(value) and (bracket_of(value) == "{" or (bracket_of(value) == "[" and #value != 1)))
-}
-repetition_call(count: Node, value: Node): Node := if is_group(value) and bracket_of(value) == "[" then call_of("zero_fill", [count, value#1]) else call_of(HiddenWord.TimesText as text, [count, value])
-# the group with its repetition at `at` as one call: the group itself when only the repetition is left
-repetition_folded(n: Node, at: int): any := {
-	items = items_of(n)
-	folded = items[..(at - 2)] + [repetition_call(items#(at - 1), items#(at + 1))] + items[(at + 1)..]
-	if #folded == 1 then folded#1 else separated(bracketed(folded, bracket_of(n)), separator_of(n))
-}
-has_repetition(n: Node): bool := {
-	if not is_group(n) or not (bracket_of(n) == "" or bracket_of(n) == "(") { return no }
-	repetition_at(items_of(n)) > 0
-}
-# the group with each of its repetitions one call
-repetitions_folded(n: Node): any := if has_repetition(n) then repetitions_folded(repetition_folded(n, repetition_at(items_of(n)))) else n
 def group_expression(body: Body, n: Node): list {
 	if is_quote(n) { return ["node", quoted_code(body, n#2)] }
-	if has_repetition(n) { return expression_code(body, repetitions_folded(n)) }
 	if inline_quote_at(n) > 0 { return group_expression(body, quote_folded(n, inline_quote_at(n))) }
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, items_of(n)[2..]) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
@@ -830,11 +804,6 @@ def group_expression(body: Body, n: Node): list {
 		if word == "floor_quotient" and #n == 3 {
 			values = n[1..].map(x => expression_code(body, x))
 			if values.any(value => value#1 != "int") { return floored(operation_code(body, "/", values#1, values#2)) }
-		}
-		# `3 times 4` of numbers multiplies (Rust's emit_text_times)
-		if word == "repeated_text" and #n == 3 {
-			values = n[1..].map(x => expression_code(body, x))
-			if values#2#1 in ["int", "float"] { return operation_code(body, "*", values#1, values#2) }
 		}
 		return call(body, module.runtime[word], items_of(n)[1..])
 	}
