@@ -98,13 +98,14 @@ def classes_parents_first(): list {
 	for level in 0 to deepest { ordered += module.classes.keys.filter(class_name => class_depth(class_name) == level) }
 	ordered
 }
-# an instance's three node fields: the kind, the class name, the list of the field names (made once, a global the
-# class's instances share)
+# an instance's three node fields: the kind, the class name, the list of the field names (their items made once, a
+# list global the class's instances share; a list global starts empty, a node global as 0)
 def instance_head(class_name: text): list {
 	names = module.classes[class_name].keys.map(field => node(Kind.Symbol, text_bytes(field)))
-	shared = uleb(declared_global(class_fields_prefix + class_name, "node")#1)
-	made = [op.global_get] + shared + [op.ref_is_null, op.if, no_value] + node(Kind.List, vector_code(names)) + [op.global_set] + shared + [op.end]
-	[op.i64_const] + sleb(Marked.Instance) + node(Kind.Symbol, text_bytes(class_name)) + made + as_node([op.global_get] + shared)
+	shared = uleb(declared_global(class_fields_prefix + class_name, "list")#1)
+	empty = [op.global_get] + shared + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i32_eqz]
+	made = empty + [op.if, no_value] + vector_code(names) + [op.global_set] + shared + [op.end]
+	[op.i64_const] + sleb(Marked.Instance) + node(Kind.Symbol, text_bytes(class_name)) + made + node(Kind.List, [op.global_get] + shared)
 }
 class_fields_prefix = "fields·"
 # the struct field of a class's field `name` (its place after the node's three), ø when the class lacks it
