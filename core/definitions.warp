@@ -9,6 +9,7 @@ use "diagnostics.warp"
 use "class_methods.warp"
 use "scope.warp"
 use "lambdas.warp"
+use "data_blocks.warp"
 
 # `f(x, y)`, `f(x: int, y)`: a name applied to parameter names, each maybe typed
 is_head(n: Node): bool := match n {
@@ -204,7 +205,8 @@ is_call(n: Node): bool := match n {
 # (a class's methods first become functions of the program: class_methods.warp; its conversions too, below)
 definitions(program: Node): Node := {
 	optional_functions = optional_functions_of(program)
-	bottom_up(conversions(methods_lifted(program)), definition)
+	# then data written as data (data_blocks.warp), once the definitions say which functions take it
+	data_blocks(bottom_up(conversions(methods_lifted(program)), definition))
 }
 
 # A program's conversions (decision general-conversions; Rust twin: src/lowering/types/conversions.rs): `Person as

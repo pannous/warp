@@ -47,13 +47,13 @@ name_defined_in(line: text): text := {
 	is_value = following.starts_with(":=") or (following.starts_with("=") and not following.starts_with("=="))
 	if is_function or is_value then leading else ""
 }
-# the name a line starts with, "" when it starts with another character
+# the name a line starts with, "" when it starts with another character; one beyond ASCII is a name's, `π() := …`
 leading_name(line: text): text := {
 	stop = 0
 	while stop < #line and is_name_part(line#(stop + 1)) { stop += 1 }
 	line[0 ..< stop]
 }
-is_name_part(c: char): bool := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_'
+is_name_part(c: char): bool := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_' or c > '~'
 # a line inside the definition above it: indented, or the brace closing it
 continues(line: text): bool := #line > 0 and (line#1 == '\t' or line#1 == ' ' or line#1 == '}')
 
@@ -205,8 +205,8 @@ definition_head_of(statement: Node): any := {
 }
 
 # the standard modules named after a builtin type word (Rust's type_modules: lib/<word>.warp for a word of
-# BUILTIN_TYPES in src/lowering/types/type_tests.rs)
-type_modules = ["list", "map", "text", "time"]
+# BUILTIN_TYPES in src/lowering/types/type_tests.rs), and the reals, whose `π` a program names bare
+type_modules = ["list", "map", "text", "time", "reals"]
 
 # `xs.flatten()`, `unique(xs)`: a program calling a word of exactly one type module, a word it defines nowhere and no
 # library word, uses that module, a `use` in front of it (Rust twin: src/modules/implicit_modules.rs

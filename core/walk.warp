@@ -241,12 +241,14 @@ opaque_parts(view: any): list := view.filter(part => part is list).map(node_of)
 # pass rewrites (Rust lowers no quote)
 quote_word = "data"
 quote_symbol = symbol(quote_word)
+# data with its names spliced in (data_blocks.warp), which no pass rewrites either
+spliced_quote_symbol = symbol("data·spliced")
 def items_walked(items: list, quoting_allowed: bool, f: function): list {
 	walked = []
 	quoting = no
 	for item in items {
 		walked += [if quoting then item else f(item)]
-		quoting = quoting_allowed and item == quote_symbol
+		quoting = quoting_allowed and (item == quote_symbol or item == spliced_quote_symbol)
 	}
 	walked
 }

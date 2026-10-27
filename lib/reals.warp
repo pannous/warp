@@ -1,0 +1,45 @@
+# The exact reals: `π`, `τ` and their rational multiples and powers, `π/2`, `2π`, `π²`, kept exact and printed so;
+# a float or an unrelated sum makes a float. `∞` is the float infinity, `ℯ` Euler's number
+# (decision exact-constants: the parser leaves these words alone, the library gives them their values)
+
+float_pi = 3.141592653589793
+
+class Real {
+	coefficient: number
+	pi_power: int
+	float() := coefficient * float_pi ^ pi_power
+	*(other) := if other is Real then real_of(coefficient * other.coefficient, pi_power + other.pi_power) else if other is float then float() * other else real_of(coefficient * other, pi_power)
+	/(other) := if other is Real then real_of(coefficient / other.coefficient, pi_power - other.pi_power) else if other is float then float() / other else real_of(coefficient / other, pi_power)
+	+(other) := if other is Real and other.pi_power == pi_power then real_of(coefficient + other.coefficient, pi_power) else float() + real_float(other)
+	-(other) := if other is Real and other.pi_power == pi_power then real_of(coefficient - other.coefficient, pi_power) else float() - real_float(other)
+	compare(other) := float() - real_float(other)
+	text() := coefficient_text(coefficient, pi_power_text(pi_power))
+}
+
+real_of(coefficient: number, pi_power: int) := if coefficient == 0 or pi_power == 0 then coefficient else Real(coefficient, pi_power)
+real_float(x) := if x is Real then x.float() else x
+pi_power_text(pi_power: int) := if pi_power == 1 then "π" else "π^" + str(pi_power)
+# 2π, -π, 3π/4: the coefficient as the fraction it is, its numerator before the power, its denominator after it
+coefficient_text(coefficient: number, power: text) := {
+	denominator = denominator_of(coefficient)
+	numerator = coefficient * denominator
+	over = if denominator == 1 then "" else "/" + str(denominator)
+	if numerator == 1 { return power + over }
+	if numerator == -1 { return "-" + power + over }
+	str(numerator) + power + over
+}
+largest_shown_denominator = 10000
+# the least whole number making x whole, 1 for a float or a fraction of a larger denominator
+denominator_of(x: number) := {
+	denominator = 1
+	while not ((x * denominator) is int) and denominator < largest_shown_denominator { denominator += 1 }
+	if denominator < largest_shown_denominator then denominator else 1
+}
+
+π() := Real(1, 1)
+pi() := π
+τ() := Real(2, 1)
+tau() := τ
+∞() := 1.0 / 0.0
+ℯ() := 2.718281828459045
+euler() := ℯ

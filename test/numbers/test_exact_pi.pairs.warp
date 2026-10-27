@@ -1,0 +1,12 @@
+# π, τ and their rational multiples stay exact (lib/reals.warp, decision exact-constants): shown as written, a float
+# makes a float
+'(π/2) as string'	'π/2'
+'(3*π/4) as string'	'3π/4'
+'(2π) as string'	'2π'
+'(τ/4) as string'	'π/2'
+'(π*π) as string'	'π^2'
+'"a" + pi'	'aπ'
+'(π/2) as string'	'π/2'
+'π*2 > 6'	true
+'2 * π * 0.5 == π'	true
+'x = 2 * pi; x * 0.5 > 3.14'	true

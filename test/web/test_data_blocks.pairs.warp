@@ -1,0 +1,13 @@
+# Data blocks and data parameters (decisions data-parameter, data-names, data-parameters): a word nothing binds glued
+# to its block is the data pair `word: […]`, its bound names their values, an unbound word a word; a parameter typed
+# `data` takes its argument so
+
+'use markup; to_html(div{ class: "box" h1{"Hi"} })'	'<div class="box"><h1>Hi</h1></div>'
+'use markup; to_html(input{ type: email id: email })'	'<input type="email" id="email">'
+'use markup; name = "Ann"; to_html(p{ "Hi " + name })'	'<p>Hi Ann</p>'
+'use markup; xs = ["a", "b"]; to_html(ul{ [li{ x } for x in xs] })'	'<ul><li>a</li><li>b</li></ul>'
+# a `for` among the items gives its items
+'use markup; gs = ["a", "b"]; to_html(ul{ for g in gs { li{ g } } })'	'<ul><li>a</li><li>b</li></ul>'
+'use markup; to_html(style{ .box { color: red } })'	'<style>.box { color: red }</style>'
+'theme = "red"; f(x: data) := x; str(f{ color: theme ul })'	'{color:"red" ul}'
+'f(x: data) := x; str(f{ a: 1 b })'	'{a:1 b}'
