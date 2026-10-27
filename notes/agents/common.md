@@ -85,6 +85,8 @@ before asking a question). After a context swap, this file and your role file be
 - Outcome tests only: a test checks what warp code produces (is!, output, error), never intermediates, exit codes or
   wording. An error/"not yet"/ignored test that now works is upgraded in its own commit without asking; a change of
   meaning goes to the Interviewer.
+- Tests are spec only when backed: a test file's header names its source (a wiki page or a decision key); add cases
+  only for forms a wiki page or decision shows. Taste by example: notes/taste.md (user 2026-10-27).
 - GitHub API quota is shared: never poll `todo list` or `gh` in a loop.
 
 ## Cards
