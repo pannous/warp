@@ -1092,7 +1092,8 @@ with_changed_members(n: Node, changed: function): Node := {
 	if not (n is key and key_of(n) == opaque_symbol) { return n }
 	view = value_of(n)
 	if kind_of(view) != "type" { return n }
-	body = node_of(view#3)
+	# stage_node keeps an empty map `{}` (a field default) as the opaque `{}`; node_of would read it as ø
+	body = stage_node(view#3)
 	if not is_group(body) { return n }
 	members = spliced_statements(items_of(body).map(changed))
 	Key(key_of(n), op_of(n), [view#1, view#2, view_of(group_like(body, members))])
