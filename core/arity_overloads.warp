@@ -292,10 +292,54 @@ assigned_kinds(program: Node): map := {
 	kinds
 }
 
-# the static_kind of an argument, also of a variable assigned values of one kind
-known_kind(n: Node, variables: map): list? := {
-	if n is symbol and name_of(n) in variables and variables[name_of(n)] { return variables[name_of(n)] }
+# what the compile knows of an argument's kind (card number-computed-float): a literal's, a variable's assigned
+# values', the result a builtin declares (`floor(x)` a float), `-x`, `√x` and `a + b`, `a - b`, `a * b` of known numbers
+class ArgumentJudge { variables: map; own: map }
+keeps_numbers(op: Op): bool := match op {
+	Op.Add: yes
+	Op.Sub: yes
+	Op.Mul: yes
+	_: no
+}
+# `-x`, `‖x‖` keep a number's kind, `√x`, `∛x` give a float
+prefixed_kind(op: Op, number: list?): list? := match op {
+	Op.Sub: number
+	Op.Neg: number
+	Op.Abs: number
+	Op.Sqrt: if number != ø then ["float", ø] else ø
+	Op.Cbrt: if number != ø then ["float", ø] else ø
+	_: ø
+}
+# [the operator, its operand] of `-x`, `√x`, also written as a word, `sqrt(x)`, `abs x`; else ø
+prefix_operation(n: Node): list? := {
+	if n is key and is_empty(key_of(n)) { return [op_of(n), value_of(n)] }
+	if not (is_group(n) and #n == 2 and n#1 is symbol) { return ø }
+	word = name_of(n#1)
+	operator = if word in PREFIX_OPERATORS then word else KEYWORD_FORMS.get(word) ?? ""
+	if operator in PREFIX_OPERATORS then [operator as Op, n#2] else ø
+}
+numeric_kinds = ["int", "float"]
+known_kind(n: Node, judge: ArgumentJudge): list? := {
+	if n is symbol and name_of(n) in judge.variables and judge.variables[name_of(n)] { return judge.variables[name_of(n)] }
+	# `(2)`, the operand of `sqrt(2)`, is 2
+	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return known_kind(n#1, judge) }
+	prefixed = prefix_operation(n)
+	if prefixed != ø { return prefixed_kind(prefixed#1, numeric(known_kind(prefixed#2, judge))) }
+	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) not in judge.own { return declared_result(name_of(n#1), #n - 1) }
+	if n is key and not is_empty(key_of(n)) and keeps_numbers(op_of(n)) { return joined_numbers(known_kind(key_of(n), judge), known_kind(value_of(n), judge)) }
 	static_kind(n)
+}
+# the kind of a builtin's call by the one result type all its lines taking that many arguments declare
+declared_result(word: text, count: int): list? := {
+	results = lines_of(typed_lines + foreign_math_lines, unaliased(word)).filter(line => takes(line.signature, count)).map(line => line.signature.result)
+	if #results == 0 or results.any(result => result != results#1) or argument_result(word) != ø or results#1 not in overload_kinds { return ø }
+	[overload_kinds[results#1], ø]
+}
+numeric(kind: list?): list? := if kind != ø and kind#1 in numeric_kinds then kind else ø
+# an int with an int stays an int, a float makes a float
+joined_numbers(a: list?, b: list?): list? := {
+	if numeric(a) == ø or numeric(b) == ø { return ø }
+	[if a#1 == "float" or b#1 == "float" then "float" else "int", ø]
 }
 
 # the kind all the items share, ø when they differ, are lists or are not known
@@ -395,7 +439,7 @@ dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: 
 }
 
 # `f(1.5)`, `f 1.5`: the call of the variant its arguments fit best; a call of a name not overloaded by type as it is
-typed_call(n: Node, overloaded: map, variables: map): Node := {
+typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	n = glued_block_call(n, name => name in overloaded)
 	is_call = is_group(n) and ((bracket_of(n) == "(" and separator_of(n) == "") or (bracket_of(n) == "" and separator_of(n) == " "))
 	if not (is_call and #n > 1 and n#1 is symbol) { return n }
@@ -403,7 +447,7 @@ typed_call(n: Node, overloaded: map, variables: map): Node := {
 	if name not in overloaded { return n }
 	arguments = items_of(n)[1 ..]
 	variants = overloaded[name].filter(types => #types == #arguments)
-	kinds = arguments.map(argument => known_kind(argument, variables))
+	kinds = arguments.map(argument => known_kind(argument, judge))
 	fitting = variants.filter(types => variant_fit(kinds, types) != ø)
 	written = "${n}"
 	listed = variants.map(types => name + "(" + types.join(", ") + ")").join(", ")
@@ -417,19 +461,19 @@ typed_call(n: Node, overloaded: map, variables: map): Node := {
 }
 
 # top-down, so a definition is renamed by its own parameter types
-typed_resolved(n: Node, overloaded: map, variables: map): Node := {
+typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	call = definition_call(n)
 	if call != ø and name_of(call#1) in overloaded {
-		return Key(renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))), Op.Define, typed_resolved(value_of(n), overloaded, variables))
+		return Key(renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))), Op.Define, typed_resolved(value_of(n), overloaded, judge))
 	}
 	# a one-line block's words are its phrase already, `{ thrice {n += 1} }` (phrase_blocks.warp)
-	children(typed_call(phrase_block(n), overloaded, variables), x => typed_resolved(x, overloaded, variables))
+	children(typed_call(phrase_block(n), overloaded, judge), x => typed_resolved(x, overloaded, judge))
 }
 
 typed_overloads(program: Node): Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
-	resolved = typed_resolved(program, overloaded, assigned_kinds(program))
+	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program)))
 	# after the resolving, so a library variant's own call stays the library's
 	defined = defined_types(program)
 	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))

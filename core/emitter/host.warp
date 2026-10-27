@@ -100,6 +100,5 @@ runtime_global(n: Node): any := {
 	if name in constant_tables { return ø }
 	value = value_of(value_of(n))
 	module.globals[name] = [#module.global_order, if value is number then ValueKind.Int else if type(value) is list or is_empty_list(value) then ValueKind.List else ValueKind.Text]
-	module.runtime_globals += [name]
 	module.global_order += [name]
 }
