@@ -34,6 +34,10 @@ before asking a question). After a context swap, this file and your role file be
   two topics with an underscore. core/ is the real folder; lib/compiler links to ../core for a transition
   (the compiler is still found as <lib>/compiler), core/sugar to ../lib/sugar. New syntax goes by layer (notes/layers.md): table row or declaration first, else a
   `rewrite` rule; a parser branch only when the commit names the missing rewrite-engine feature.
+- Vocabulary is library: the names and values of a domain (keys, units, colors, system values, months …) are
+  declared in lib/ as an enum or as values of a class, found through `use` or names from the expected type; never a
+  table in core/, never one rewrite rule per name. core/ holds mechanisms only. A core diff that adds names of a domain
+  is the sign that a mechanism is missing: card it.
 - Rare edge cases (∞/NaN literals, wording nits, odd feature pairs) go to `todo add Later`.
 - Emptiness is tested loosely: `is empty`, `if no x`, `if x`; `x is ø` only tests missing.
 - JSON5 or warp notation for anything people or agents write; strict JSON only where a tool requires it.
