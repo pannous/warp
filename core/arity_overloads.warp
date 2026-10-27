@@ -11,14 +11,14 @@ use "signatures.warp"
 use "clauses.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
-target_call(target: Node): any := match target {
+target_call(target: Node): Node := match target {
 	Key(head, op, result): { if op == Op.Colon or op == Op.As then target_call(head) else ø }
 	List(call, Bracket.Round, Separator.None): { if #call > 0 and is_name(call#1) then target else ø }
 	_: ø
 }
 
 # the call a definition `f(a, b) := body` names, ø for anything else
-definition_call(n: Node): any := match n {
+definition_call(n: Node): Node := match n {
 	Key(target, op, body): { if op == Op.Define then target_call(target) else ø }
 	_: ø
 }
@@ -27,7 +27,7 @@ definition_call(n: Node): any := match n {
 arity_of(call: Node): list := arity(signature_of(items_of(call)))
 
 # name → its arities, for each name defined with several parameter counts, no two of them the same
-overloaded_arities(program: Node): any := {
+overloaded_arities(program: Node): map := {
 	arities = {}
 	for n in nodes_in(program) {
 		call = definition_call(n)
@@ -64,7 +64,7 @@ renamed_target(target: Node, name: text): Node := match target {
 
 # the call naming the variant that takes its arguments, `receivers` of them before the dot; the call itself when its
 # name is not overloaded or no single variant takes them
-variant_call(n: Node, overloaded: any, receivers: int): any := {
+variant_call(n: Node, overloaded: map, receivers: int): Node := {
 	if not (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 0 and n#1 is symbol) { return n }
 	name = name_of(n#1)
 	if name not in overloaded { return n }
@@ -75,7 +75,7 @@ variant_call(n: Node, overloaded: any, receivers: int): any := {
 }
 
 # how many arguments `body` calls `parameter` with: 1 of `f(x)`; ø when its calls differ or there are none
-called_count(body: Node, parameter: text): any := {
+called_count(body: Node, parameter: text): int? := {
 	counts = []
 	for n in nodes_in(body) {
 		if is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 0 and n#1 == symbol(parameter) and not (#n - 1 in counts) { counts += [#n - 1] }
@@ -84,7 +84,7 @@ called_count(body: Node, parameter: text): any := {
 }
 
 # how many arguments a function passed on is called with: 1 of `apply(f, x)` when apply calls f(x)
-passed_on_count(body: Node, parameter: text, called: any): any := {
+passed_on_count(body: Node, parameter: text, called: map): int? := {
 	for n in nodes_in(body) {
 		if is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol {
 			for at in 2 to #n {
@@ -97,7 +97,7 @@ passed_on_count(body: Node, parameter: text, called: any): any := {
 
 # function·index → how many arguments the function calls that parameter with, also by passing it on (Rust:
 # overloads.rs called_parameters)
-called_parameters(program: Node): any := {
+called_parameters(program: Node): map := {
 	definitions = nodes_in(program).filter(n => definition_call(n) != ø)
 	called = {}
 	for n in definitions { called = remember_calls(n, called, (body, name) => called_count(body, name)) }
@@ -110,7 +110,7 @@ called_parameters(program: Node): any := {
 }
 
 # `called` with the counts `counted_in(body, name)` gives the definition's parameters that have none yet
-remember_calls(n: Node, called: any, counted_in: function): any := {
+remember_calls(n: Node, called: map, counted_in: function): map := {
 	call = definition_call(n)
 	parameters = items_of(call)[1 ..]
 	for index in 1 to #parameters {
@@ -126,7 +126,7 @@ remember_calls(n: Node, called: any, counted_in: function): any := {
 
 # `bottom_up(n, phrase)` of phrase overloaded by arity: the argument is the variant taking as many arguments as the
 # called function calls that parameter with
-passed_variants(n: Node, overloaded: any, called: any): any := {
+passed_variants(n: Node, overloaded: map, called: map): Node := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol) { return n }
 	callee = name_of(n#1)
 	arguments = items_of(n)[1 ..]
@@ -134,7 +134,7 @@ passed_variants(n: Node, overloaded: any, called: any): any := {
 	group_like(n, [n#1] + passed)
 }
 
-passed_variant(argument: any, key: text, overloaded: any, called: any): any := {
+passed_variant(argument: Node, key: text, overloaded: map, called: map): Node := {
 	if not (argument is symbol and name_of(argument) in overloaded and key in called) { return argument }
 	count = called[key]
 	fitting = overloaded[name_of(argument)].filter(span => span#1 <= count and count <= span#2)
@@ -142,7 +142,7 @@ passed_variant(argument: any, key: text, overloaded: any, called: any): any := {
 }
 
 # top-down, so a definition is renamed by its own parameters and a method call counts its receiver
-resolved(n: Node, overloaded: any, called: any): any := {
+resolved(n: Node, overloaded: map, called: map): Node := {
 	call = definition_call(n)
 	if call != ø and name_of(call#1) in overloaded {
 		return Key(renamed_target(key_of(n), variant_name(name_of(call#1), arity_of(call)#2)), Op.Define, resolved(value_of(n), overloaded, called))
@@ -173,7 +173,7 @@ overload_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int
 	codepoint: "codepoint", char: "codepoint", character: "codepoint", bool: "bool", boolean: "bool"}
 
 # the element type of a list type: int of `[int]`, `ints`, `list of int`; ø of another type
-element_of(type: text): any := {
+element_of(type: text): text? := {
 	if type.starts_with("[") { return type.replace("[", "").replace("]", "").trim() }
 	if type.starts_with("list of ") { return type.replace("list of ", "") }
 	singular = type[0 ..< #type - 1]
@@ -181,7 +181,7 @@ element_of(type: text): any := {
 }
 
 # the kind of value a parameter type takes: list, map or one of overload_kinds; ø of `any` and of another type
-overload_kind(type: text): any := {
+overload_kind(type: text): text? := {
 	if type == "list" or element_of(type) != ø { return "list" }
 	if type == "map" { return "map" }
 	if type in overload_kinds then overload_kinds[type] else ø
@@ -197,7 +197,7 @@ typed_variant(name: text, types: list): text := name + types.map(t => "·" + (if
 
 # name → the parameter types of each of its definitions, for each name defined with several, all different, all of
 # the types above and some typed (a class's parameters dispatch through its methods instead)
-overloaded_types(program: Node): any := {
+overloaded_types(program: Node): map := {
 	signatures = {}
 	# nodes_in walks the last part first: reversed, the definitions come in declaration order
 	for n in nodes_in(program).reverse() {
@@ -227,7 +227,7 @@ all_different(variants: list): bool := {
 }
 
 # [kind, element kind or ø] of an argument whose type the compile knows, a literal; ø for one only the run time knows
-static_kind(n: Node): any := {
+static_kind(n: Node): list? := {
 	if n is bool { return ["bool", ø] }
 	if n is int { return ["int", ø] }
 	if n is float { return ["float", ø] }
@@ -239,7 +239,7 @@ static_kind(n: Node): any := {
 
 # variable → the static_kind of the values assigned to it, [] where they differ: by name across the program, as Rust's
 # agreeing_kinds, so an `xs` of other values in another function leaves both to the run-time test
-assigned_kinds(program: Node): any := {
+assigned_kinds(program: Node): map := {
 	kinds = {}
 	for n in nodes_in(program) {
 		if is_key(n, Op.Assign) and key_of(n) is symbol {
@@ -252,13 +252,13 @@ assigned_kinds(program: Node): any := {
 }
 
 # the static_kind of an argument, also of a variable assigned values of one kind
-known_kind(n: Node, variables: any): any := {
+known_kind(n: Node, variables: map): list? := {
 	if n is symbol and name_of(n) in variables and variables[name_of(n)] { return variables[name_of(n)] }
 	static_kind(n)
 }
 
 # the kind all the items share, ø when they differ, are lists or are not known
-element_kind(items: list): any := {
+element_kind(items: list): text? := {
 	if not items { return ø }
 	kinds = items.map(static_kind)
 	first = kinds#1
@@ -267,7 +267,7 @@ element_kind(items: list): any := {
 
 # how well a value of `kind` fits a parameter of `type`: 0 exactly, 1 widened (an int to a float, a number to number,
 # a codepoint to a text); ø when it does not
-fit(kind: text, type: text): any := {
+fit(kind: text, type: text): int? := {
 	if type == any_word { return any_fit }
 	if type == "number" { return if kind == "int" or kind == "float" then 1 else ø }
 	wanted = overload_kind(type)
@@ -276,7 +276,7 @@ fit(kind: text, type: text): any := {
 }
 
 # how well a list of `element`s fits a parameter of `type`; a list of untold elements fits every list type
-element_fit(element: any, type: text): any := {
+element_fit(element: text?, type: text): int? := {
 	wanted = element_of(type)
 	if wanted == ø {
 		if type == any_word { return any_fit }
@@ -287,13 +287,13 @@ element_fit(element: any, type: text): any := {
 }
 
 # an argument the run time tells fits every type for now
-argument_fit(kind: any, type: text): any := {
+argument_fit(kind: list?, type: text): int? := {
 	if kind == ø { return 0 }
 	if kind#1 == "list" then element_fit(kind#2, type) else fit(kind#1, type)
 }
 
 # the sum of the arguments' fits, ø when one does not fit
-variant_fit(kinds: list, types: list): any := {
+variant_fit(kinds: list, types: list): int? := {
 	total = 0
 	for at in 1 to #types {
 		one = argument_fit(kinds#at, types#at)
@@ -354,7 +354,7 @@ dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: 
 }
 
 # `f(1.5)`: the call of the variant its arguments fit best; a call of a name not overloaded by type as it is
-typed_call(n: Node, overloaded: any, variables: any): any := {
+typed_call(n: Node, overloaded: map, variables: map): Node := {
 	if not (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 1 and n#1 is symbol) { return n }
 	name = name_of(n#1)
 	if name not in overloaded { return n }
@@ -374,7 +374,7 @@ typed_call(n: Node, overloaded: any, variables: any): any := {
 }
 
 # top-down, so a definition is renamed by its own parameter types
-typed_resolved(n: Node, overloaded: any, variables: any): any := {
+typed_resolved(n: Node, overloaded: map, variables: map): Node := {
 	call = definition_call(n)
 	if call != ø and name_of(call#1) in overloaded {
 		return Key(renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))), Op.Define, typed_resolved(value_of(n), overloaded, variables))
