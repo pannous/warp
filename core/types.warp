@@ -3,8 +3,13 @@
 
 # a word of the program: a variable's, function's, field's or type's name
 type Name = text
-# the kind analyzer.warp infers for a value: a name of Rust's Kind or a finer one ("int", "text", "list", "data",
-# "empty", "rational", "nil"; "" while nothing flowed in)
+# the kind analyzer.warp infers for a value: one of Rust's Kinds or a finer one, Unknown while nothing flowed in; each
+# spelled as the type word it reads as (decision kinds-as-cases: cases inside, spellings only at the edges)
+enum ValueKind { Unknown = "", Int = "int", Float = "float", Text = "text", Codepoint = "codepoint", List = "list",
+	Symbol = "symbol", Data = "data", Empty = "empty", Nil = "nil", Rational = "rational", Function = "function", Key = "key",
+	Error = "error", Pointer = "pointer", I32 = "i32", F32 = "f32", Char = "char", Node = "node", Map = "map", Bool = "bool",
+	Time = "time" }
+# the kind emitter.warp holds a value as, spelled: "int", "float", "char", "text", "list", "node" (analyzer.warp emitter_kind)
 type KindName = text
 # a type word, one naming the elements of a list or map as well: `int`, `list of int`, `map of text`
 type TypeWord = text
