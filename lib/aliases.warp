@@ -20,6 +20,8 @@ modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes }
 power { operator: "^", symbol: Op.Pow, aliases: ["**"] }
 "^=" { symbol: Op.PowAssign, aliases: ["**="] }
 count { prefix-operator: "#", symbol: Op.Hash, aliases: [size, len, length] }
+# a class's position(p) is `b#p` and its index(i), `b[i]`, the parser's b#(i+1) (core/class_methods.warp)
+position { operator: "#", symbol: Op.Hash }
 
 # comparison and logic
 equal { operator: "==", symbol: Op.Eq }

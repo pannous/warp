@@ -327,7 +327,7 @@ class Note {
 // `F#4` (decision music-plain-details): a letter is its pitch class, indexed by an octave its sharp note there, F♯4
 class PitchClass {
 	key: int
-	index(octave) := midi_hertz(12 * (octave + 1) + key + 1)
+	position(octave) := midi_hertz(12 * (octave + 1) + key + 1)
 }
 C = PitchClass(0)
 D = PitchClass(2)
