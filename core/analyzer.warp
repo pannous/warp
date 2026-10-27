@@ -1,7 +1,7 @@
 # The analyzer (card inferred-kinds, notes/self_hosting.md step 14; Rust twin src/analyzer): the kind of each
 # function's parameters and result, of each main-level variable and of the program's value, read off the program
 # after every lowering pass. `inferred_kinds` writes them as src/analyzer/inferred_kinds.rs does:
-# `f(int, float) -> float`, `x: text`, `= int`, definitions sorted, the value last. Kinds are Rust's Kind names; a
+# `f(int, float) -> float`, `x: text`, `= int`, definitions sorted, the value last. Kinds are types.warp's ValueKind; a
 # variable holding a list also has a type word naming its elements (`list of int`, `map of text`, `list of node`).
 use "walk.warp"
 use "words.warp"
@@ -24,20 +24,22 @@ arithmetic_ops = {"+": 1, "-": 1, "*": 1, "/": 1, "%": 1, "^": 1, "**": 1, "//":
 comparison_ops = {"==": 1, "!=": 1, "<": 1, ">": 1, "<=": 1, ">=": 1, "≤": 1, "≥": 1, "≠": 1, "is": 1, "in": 1}
 compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%", "^=": "^"}
 # the kinds held as plain numbers; every other kind is held as a node (a reference)
-primitive_kinds = {"int": 1, "float": 1, "codepoint": 1, "i32": 1, "f32": 1, "pointer": 1}
-# the kinds of the values a variable may hold that do not mix: one given two of them holds a node (empty)
-concrete_kinds = {"int": 1, "float": 1, "text": 1, "codepoint": 1, "list": 1, "symbol": 1}
+primitive_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Codepoint, ValueKind.I32, ValueKind.F32, ValueKind.Pointer]
 # type words a declaration holds as a node: any value, a map
 node_types = {any: 1, map: 1}
 
 # --- kinds of expressions (Rust infer_type) ---
 
+# the kind a type word or a builtin's line names, `"int"` of int, ø of none; the spelling of a kind
+kind_named(word: text?): ValueKind? := if word == ø then ø else word as ValueKind
+kind_spelling(kind: ValueKind): text := kind as text
+
 # a decimal of at most 15 significant digits is exact, an int; a longer one a float
-number_kind(n: number): KindName := {
-	if n is int { return "int" }
+number_kind(n: number): ValueKind := {
+	if n is int { return ValueKind.Int }
 	digits = "${n}".replace(".", "").replace("-", "")
 	while digits.starts_with("0") { digits = digits[1..] }
-	if #digits <= 15 { "int" } else { "float" }
+	if #digits <= 15 { ValueKind.Int } else { ValueKind.Float }
 }
 
 # the nodes a node holds: a key's two sides, a list's items
@@ -49,45 +51,46 @@ node_parts(n: Node): list := match n {
 is_empty(n: Node): bool := n == ø
 head_name(n: Node): Name := if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ""
 # a local, else a global the scope sees
-binding(scope: Scope, name: Name): KindName? := if name in scope.kinds then scope.kinds[name] else if "" in scopes then scopes[""].kinds.get(name) else scope.globals.get(name)
-is_ref(kind: KindName): bool := kind not in primitive_kinds
+binding(scope: Scope, name: Name): ValueKind? := if name in scope.kinds then scope.kinds[name] else if "" in scopes then scopes[""].kinds.get(name) else scope.globals.get(name)
+is_ref(kind: ValueKind): bool := kind not in primitive_kinds
 all_of(xs: list, f: function): bool := #xs.filter(f) == #xs
 any_of(xs: list, f: function): bool := #xs.filter(f) > 0
 
-arithmetic_kind(left: KindName, op: text, right: KindName): KindName := {
-	if left is empty or right is empty { return "" }
-	if (left == "data" or left == "empty") and (right == "data" or right == "empty" or right == "int" or right == "float") { return "data" }
-	if (right == "data" or right == "empty") and (left == "int" or left == "float") { return "data" }
-	if op == "+" and (left == "list" or left == "empty") and (right == "list" or right == "empty") { return "list" }
-	if op == "+" and (left == "text" or right == "text" or left == "codepoint" or right == "codepoint") and left != "function" and right != "function" { return "text" }
-	texts = left == "text" or left == "codepoint" or right == "text" or right == "codepoint"
-	if op == "*" and texts and (left == "int" or right == "int") { return "text" }
-	if texts or left == "list" or right == "list" or left == "error" or right == "error" or left == "function" or right == "function" { return "error" }
-	if left == "float" or right == "float" { return "float" }
+arithmetic_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
+	if left == ValueKind.Unknown or right == ValueKind.Unknown { return ValueKind.Unknown }
+	if (left == ValueKind.Data or left == ValueKind.Empty) and (right == ValueKind.Data or right == ValueKind.Empty or right == ValueKind.Int or right == ValueKind.Float) { return ValueKind.Data }
+	if (right == ValueKind.Data or right == ValueKind.Empty) and (left == ValueKind.Int or left == ValueKind.Float) { return ValueKind.Data }
+	if op == "+" and (left == ValueKind.List or left == ValueKind.Empty) and (right == ValueKind.List or right == ValueKind.Empty) { return ValueKind.List }
+	if op == "+" and (left == ValueKind.Text or right == ValueKind.Text or left == ValueKind.Codepoint or right == ValueKind.Codepoint) and left != ValueKind.Function and right != ValueKind.Function { return ValueKind.Text }
+	texts = left == ValueKind.Text or left == ValueKind.Codepoint or right == ValueKind.Text or right == ValueKind.Codepoint
+	if op == "*" and texts and (left == ValueKind.Int or right == ValueKind.Int) { return ValueKind.Text }
+	if texts or left == ValueKind.List or right == ValueKind.List or left == ValueKind.Error or right == ValueKind.Error or left == ValueKind.Function or right == ValueKind.Function { return ValueKind.Error }
+	if left == ValueKind.Float or right == ValueKind.Float { return ValueKind.Float }
 	# 7 / 2 is the ratio 7/2, not an int (6 / 2 is 3, known only when it runs)
-	if op == "/" { return "rational" }
-	"int"
+	if op == "/" { return ValueKind.Rational }
+	ValueKind.Int
 }
 
 # either branch's value: one kind stays, numbers widen, any other mix is a node
-branches_kind(a: KindName, b: KindName): KindName := {
-	if a is empty or b is empty { return a + b }
-	if a == b and (is_ref(a) or a == "codepoint") { return a }
-	if a == "list" or b == "list" { return if (a == "list" or a == "empty") and (b == "list" or b == "empty") then "list" else "data" }
-	if a == "empty" or b == "empty" { return "empty" }
-	numbers = {"int": 1, "float": 1, "data": 1}
-	if (a == "data" or b == "data") and a in numbers and b in numbers { return "data" }
-	if a == "text" or b == "text" or a == "codepoint" or b == "codepoint" { return "text" }
-	if is_ref(a) or is_ref(b) { return "data" }
-	if a == "float" or b == "float" { return "float" }
-	"int"
+branches_kind(a: ValueKind, b: ValueKind): ValueKind := {
+	if a == ValueKind.Unknown { return b }
+	if b == ValueKind.Unknown { return a }
+	if a == b and (is_ref(a) or a == ValueKind.Codepoint) { return a }
+	if a == ValueKind.List or b == ValueKind.List { return if (a == ValueKind.List or a == ValueKind.Empty) and (b == ValueKind.List or b == ValueKind.Empty) then ValueKind.List else ValueKind.Data }
+	if a == ValueKind.Empty or b == ValueKind.Empty { return ValueKind.Empty }
+	numbers = [ValueKind.Int, ValueKind.Float, ValueKind.Data]
+	if (a == ValueKind.Data or b == ValueKind.Data) and a in numbers and b in numbers { return ValueKind.Data }
+	if a == ValueKind.Text or b == ValueKind.Text or a == ValueKind.Codepoint or b == ValueKind.Codepoint { return ValueKind.Text }
+	if is_ref(a) or is_ref(b) { return ValueKind.Data }
+	if a == ValueKind.Float or b == ValueKind.Float { return ValueKind.Float }
+	ValueKind.Int
 }
 
 # the kind a variable holding `value` gets: ø and the empty block are a node, a character a text
-held_kind(value: Node, scope: Scope): KindName := {
-	if is_empty(value) or (is_curly_group(value) and #value == 0) { return "empty" }
+held_kind(value: Node, scope: Scope): ValueKind := {
+	if is_empty(value) or (is_curly_group(value) and #value == 0) { return ValueKind.Empty }
 	kind = inferred_kind(value, scope)
-	if kind == "codepoint" and (value is text or value is symbol) { "text" } else { kind }
+	if kind == ValueKind.Codepoint and (value is text or value is symbol) { ValueKind.Text } else { kind }
 }
 
 # the last statement of a block, or the node itself
@@ -99,7 +102,7 @@ computed(branch: Node): Node := {
 	if is_curly_group(branch) and #branch > 0 { return computed(branch#(#branch)) }
 	branch
 }
-branch_kind(branch: Node, scope: Scope): KindName := held_kind(computed(branch), scope)
+branch_kind(branch: Node, scope: Scope): ValueKind := held_kind(computed(branch), scope)
 
 # `name := {…}` holds what the block computes (a body run at each read), `name = {…}` the block; a map or a comma list
 # stays data
@@ -114,22 +117,22 @@ raises_error(branch: Node): bool := {
 	is_group(last) and #last == 2 and (head_name(last) == "error" or head_name(last) in raise_words)
 }
 
-choice_kind(then: Node, otherwise: Node, scope: Scope): KindName := {
+choice_kind(then: Node, otherwise: Node, scope: Scope): ValueKind := {
 	if raises_error(then) and not raises_error(otherwise) { return error_or(branch_kind(otherwise, scope)) }
 	if raises_error(otherwise) and not raises_error(then) { return error_or(branch_kind(then, scope)) }
 	branches_kind(branch_kind(then, scope), branch_kind(otherwise, scope))
 }
 # the kind of a node as written, not run (Rust Node::kind; a block is a list)
-written_kind(n: Node): KindName := match n {
-	Key(_, _, _): "key"
-	List(_, _, _): "list"
-	Symbol(_): "symbol"
-	Text(_): "text"
-	_: { if n is int then "int" else if n is number then "float" else "empty" }
+written_kind(n: Node): ValueKind := match n {
+	Key(_, _, _): ValueKind.Key
+	List(_, _, _): ValueKind.List
+	Symbol(_): ValueKind.Symbol
+	Text(_): ValueKind.Text
+	_: { if n is int then ValueKind.Int else if n is number then ValueKind.Float else ValueKind.Empty }
 }
-error_or(kind: KindName): KindName := if kind == "int" or kind == "float" then "data" else kind
+error_or(kind: ValueKind): ValueKind := if kind == ValueKind.Int or kind == ValueKind.Float then ValueKind.Data else kind
 
-kind_of_list(n: Node, scope: Scope): KindName := {
+kind_of_list(n: Node, scope: Scope): ValueKind := {
 	name = head_name(n)
 	if name == "return" and #n == 2 { return inferred_kind(n#2, scope) }
 	if name and name in results and name not in scope.parameters { return results[name] }
@@ -139,28 +142,28 @@ kind_of_list(n: Node, scope: Scope): KindName := {
 	if (name == "slice" or name == "reverse") and #n >= 2 {
 		# of a value of no known sequence kind (`p.code`, a field: inferred_kind's "int" names no kind there), any value
 		element = inferred_kind(n#2, scope)
-		return if element == "text" or element == "codepoint" then "text" else if element == "list" then "list" else "empty"
+		return if element == ValueKind.Text or element == ValueKind.Codepoint then ValueKind.Text else if element == ValueKind.List then ValueKind.List else ValueKind.Empty
 	}
-	declared = if name and (#n >= 2 or bracket_of(n) == "(") and binding(scope, name) == ø then declared_call_kind(name, #n - 1) else ø
+	declared = if name and (#n >= 2 or bracket_of(n) == "(") and binding(scope, name) == ø then kind_named(declared_call_kind(name, #n - 1)) else ø
 	if declared != ø { return declared }
 	typed = typed_call_kind(n, scope)
 	if typed != ø { return typed }
 	# a call of a function parameter: no closure is known to flow in, any value of run-time kind (Rust closure_call_kind)
-	if called_closure(n) in scope.parameters { return "data" }
+	if called_closure(n) in scope.parameters { return ValueKind.Data }
 	# a word nothing defines or tables (a function value, a host word): any value
-	if bracket_of(n) == "(" and #n >= 2 and separator_of(n) != "," and name { return "empty" }
+	if bracket_of(n) == "(" and #n >= 2 and separator_of(n) != "," and name { return ValueKind.Empty }
 	if bracket_of(n) == "(" and #n == 1 {
-		if name { return if binding(scope, name) != ø then binding(scope, name) else "empty" }
+		if name { return if binding(scope, name) != ø then binding(scope, name) else ValueKind.Empty }
 		return inferred_kind(n#1, scope)
 	}
 	statements = separator_of(n) == ";" or separator_of(n) == "\n"
 	# `(a, b)` computes its elements
-	if bracket_of(n) == "(" and separator_of(n) == "," { return "list" }
+	if bracket_of(n) == "(" and separator_of(n) == "," { return ValueKind.List }
 	# `{a: 1, b: 2}`: a map, a node at run time
-	if bracket_of(n) == "{" and #n > 0 and all_of(n, part => is_key(part, Op.Colon)) { return "data" }
+	if bracket_of(n) == "{" and #n > 0 and all_of(n, part => is_key(part, Op.Colon)) { return ValueKind.Data }
 	# `y 1+1`: values side by side, a list without brackets, a node at run time that keeps them (its text `3 2`)
-	if bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and all_of(n, is_data) { return "data" }
-	if bracket_of(n) == "[" or (not (statements and bracket_of(n) == "") and all_of(n, is_data)) { return "list" }
+	if bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and all_of(n, is_data) { return ValueKind.Data }
+	if bracket_of(n) == "[" or (not (statements and bracket_of(n) == "") and all_of(n, is_data)) { return ValueKind.List }
 	inferred_kind(n#(#n), scope)
 }
 
@@ -173,69 +176,69 @@ is_data(n: Node): bool := {
 	no
 }
 
-kind_of_key(n: Node, scope: Scope): KindName := {
+kind_of_key(n: Node, scope: Scope): ValueKind := {
 	op = op_of(n)
-	if op == ".." or op == "..<" or op == "to" or op == "…" { return "list" }
-	if op == "±" { return "data" }
+	if op == ".." or op == "..<" or op == "to" or op == "…" { return ValueKind.List }
+	if op == "±" { return ValueKind.Data }
 	# `p.code`: a field, whose kind the emitter knows from the class (a node at run time here); `xs.length` counts
-	if op == "." and value_of(n) is symbol { return if name_of(value_of(n)) in counting_words then "int" else "data" }
+	if op == "." and value_of(n) is symbol { return if name_of(value_of(n)) in counting_words then ValueKind.Int else ValueKind.Data }
 	if op in arithmetic_ops and not is_empty(key_of(n)) { return arithmetic_kind(inferred_kind(key_of(n), scope), op, inferred_kind(value_of(n), scope)) }
 	if op == "=" or op == ":=" { return held_kind(assigned_value(n), scope) }
 	if op in compound_ops { return compound_kind(inferred_kind(key_of(n), scope), compound_ops[op], inferred_kind(value_of(n), scope)) }
-	if (op == "++" or op == "--") and inferred_kind(key_of(n), scope) == "float" { return "float" }
-	if op == ":" { return if key_of(n) == symbol("global") then inferred_kind(value_of(n), scope) else "key" }
+	if (op == "++" or op == "--") and inferred_kind(key_of(n), scope) == ValueKind.Float { return ValueKind.Float }
+	if op == ":" { return if key_of(n) == symbol("global") then inferred_kind(value_of(n), scope) else ValueKind.Key }
 	if op == "as" { return converted_kind(n, scope) }
 	if op == "and" or op == "or" { return logical_kind(inferred_kind(key_of(n), scope), inferred_kind(value_of(n), scope)) }
-	if op in comparison_ops { return "int" }
-	if (op == "√" or op == "∛") and is_empty(key_of(n)) { return if inferred_kind(value_of(n), scope) == "data" or inferred_kind(value_of(n), scope) == "empty" then "data" else "float" }
+	if op in comparison_ops { return ValueKind.Int }
+	if (op == "√" or op == "∛") and is_empty(key_of(n)) { return if inferred_kind(value_of(n), scope) == ValueKind.Data or inferred_kind(value_of(n), scope) == ValueKind.Empty then ValueKind.Data else ValueKind.Float }
 	if is_empty(key_of(n)) and op != "#" and op != "if" and op != "while" { return inferred_kind(value_of(n), scope) }
 	if op == "?" and is_key(value_of(n), Op.Colon) { return choice_kind(key_of(value_of(n)), value_of(value_of(n)), scope) }
 	if op == "else" and is_key(key_of(n), Op.Then) { return choice_kind(value_of(key_of(n)), value_of(n), scope) }
-	if op == "then" and is_key(key_of(n), Op.If) { return branches_kind(branch_kind(value_of(n), scope), "int") }
+	if op == "then" and is_key(key_of(n), Op.If) { return branches_kind(branch_kind(value_of(n), scope), ValueKind.Int) }
 	if op == "#" and not is_empty(key_of(n)) { return subscript_kind(key_of(n), value_of(n), scope) }
 	if op == "do" and is_key(key_of(n), Op.While) { return loop_kind(value_of(n), scope) }
 	# `Point{x: 1}` as the pure lane leaves it, the class name before its fields: an instance, a node
-	if op == "" and key_of(n) is symbol and bracket_of(value_of(n)) == "{" { return "data" }
-	"int"
+	if op == "" and key_of(n) is symbol and bracket_of(value_of(n)) == "{" { return ValueKind.Data }
+	ValueKind.Int
 }
 
-compound_kind(left: KindName, op: text, right: KindName): KindName := {
-	if left is empty or right is empty { return "" }
-	if op == "+" and (left == "list" or right == "list") and left != "text" and right != "text" { return "list" }
-	if op == "+" and (left == "text" or right == "text") { return "text" }
-	if left == "empty" { return "empty" }
-	if left == "float" or right == "float" { return "float" }
-	"int"
+compound_kind(left: ValueKind, op: text, right: ValueKind): ValueKind := {
+	if left == ValueKind.Unknown or right == ValueKind.Unknown { return ValueKind.Unknown }
+	if op == "+" and (left == ValueKind.List or right == ValueKind.List) and left != ValueKind.Text and right != ValueKind.Text { return ValueKind.List }
+	if op == "+" and (left == ValueKind.Text or right == ValueKind.Text) { return ValueKind.Text }
+	if left == ValueKind.Empty { return ValueKind.Empty }
+	if left == ValueKind.Float or right == ValueKind.Float { return ValueKind.Float }
+	ValueKind.Int
 }
 
-logical_kind(left: KindName, right: KindName): KindName := {
-	if left is empty or right is empty { return "" }
-	if is_ref(left) or is_ref(right) or left == "codepoint" or right == "codepoint" or left == "empty" or right == "empty" {
+logical_kind(left: ValueKind, right: ValueKind): ValueKind := {
+	if left == ValueKind.Unknown or right == ValueKind.Unknown { return ValueKind.Unknown }
+	if is_ref(left) or is_ref(right) or left == ValueKind.Codepoint or right == ValueKind.Codepoint or left == ValueKind.Empty or right == ValueKind.Empty {
 		return branches_kind(left, right)
 	}
-	"int"
+	ValueKind.Int
 }
 
-converted_kind(n: Node, scope: Scope): KindName := {
+converted_kind(n: Node, scope: Scope): ValueKind := {
 	target = if value_of(n) is symbol then name_of(value_of(n)).lower() else ""
-	if target == "codepoint" or target == "char" or target == "character" { return "codepoint" }
-	if target == "list" { return "list" }
-	if target == "text" or target == "string" or target == "str" or target == "decimal" { return "text" }
-	if target == "hex" or target == "binary" or target == "octal" or target == "byte" { return "int" }
-	if target == "number" and inferred_kind(key_of(n), scope) != "float" { return "data" }
-	if type_kinds.get(target) == "float" { return "float" }
+	if target == "codepoint" or target == "char" or target == "character" { return ValueKind.Codepoint }
+	if target == "list" { return ValueKind.List }
+	if target == "text" or target == "string" or target == "str" or target == "decimal" { return ValueKind.Text }
+	if target == "hex" or target == "binary" or target == "octal" or target == "byte" { return ValueKind.Int }
+	if target == "number" and inferred_kind(key_of(n), scope) != ValueKind.Float { return ValueKind.Data }
+	if type_kinds.get(target) == ValueKind.Float { return ValueKind.Float }
 	# `as int`, `as exact` stay exact ints; any other conversion gives a value of run-time kind
-	if type_kinds.get(target) == "int" { "int" } else { "empty" }
+	if type_kinds.get(target) == ValueKind.Int { ValueKind.Int } else { ValueKind.Empty }
 }
 
 # a loop is its last body value: a text or list as such, ø after a print, else a number or ø decided at run time
-loop_kind(body: Node, scope: Scope): KindName := {
+loop_kind(body: Node, scope: Scope): ValueKind := {
 	statements = without_step(body)
 	# `{print x}` holds the words of its one statement, the call
 	last = if is_curly_group(statements) and separator_of(statements) == " " and #statements > 1 then statements else last_statement(statements)
-	if is_group(last) and #last == 2 and gives_nothing(head_name(last)) { return "empty" }
+	if is_group(last) and #last == 2 and gives_nothing(head_name(last)) { return ValueKind.Empty }
 	kind = inferred_kind(statements, scope)
-	if kind is empty or kind == "text" or kind == "codepoint" or kind == "list" { kind } else { "data" }
+	if kind == ValueKind.Unknown or kind == ValueKind.Text or kind == ValueKind.Codepoint or kind == ValueKind.List { kind } else { ValueKind.Data }
 }
 
 
@@ -248,69 +251,69 @@ without_step(body: Node): Node := {
 is_step(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol(HiddenWord.LoopStep as text)
 
 # `xs#i`: an element of a list of known elements, a character of a text
-subscript_kind(indexed: Node, index: Node, scope: Scope): KindName := {
+subscript_kind(indexed: Node, index: Node, scope: Scope): ValueKind := {
 	indexed_kind = inferred_kind(indexed, scope)
-	if indexed_kind is empty { return "" }
+	if indexed_kind == ValueKind.Unknown { return ValueKind.Unknown }
 	element = element_kind(indexed, scope)
 	if element != ø { return element }
 	# a list whose elements nothing tells may hold any value
-	if indexed_kind == "list" { return "empty" }
-	if index is text or inferred_kind(index, scope) == "text" or inferred_kind(index, scope) == "codepoint" { "empty" } else { "int" }
+	if indexed_kind == ValueKind.List { return ValueKind.Empty }
+	if index is text or inferred_kind(index, scope) == ValueKind.Text or inferred_kind(index, scope) == ValueKind.Codepoint { ValueKind.Empty } else { ValueKind.Int }
 }
 
 # a call of a builtin the prelude types (builtin_signatures.warp; Rust emitted_call_kind, then library_call_kind): the kind
 # its line declares, that of an argument (`same as object`, `element of xs`), of its overload for the first value; ø
 # for no typed builtin
-typed_call_kind(n: Node, scope: Scope): KindName? := {
+typed_call_kind(n: Node, scope: Scope): ValueKind? := {
 	name = head_name(n)
 	if name is empty or binding(scope, name) != ø or name in scope.parameters or not (#n >= 2 or bracket_of(n) == "(") { return ø }
-	emitted = emitted_call_kind(name, #n - 1)
+	emitted = kind_named(emitted_call_kind(name, #n - 1))
 	if emitted != ø { return emitted }
 	if #lines_of(typed_lines, unaliased(name)) == 0 or bracket_of(n) != "(" or #n < 2 or separator_of(n) == "," { return ø }
 	result_rule = argument_result(name)
 	if result_rule != ø {
-		if #n <= result_rule#2 { return "empty" }
+		if #n <= result_rule#2 { return ValueKind.Empty }
 		argument = n#(result_rule#2 + 1)
-		if result_rule#1 == "same" { return if is_ref(inferred_kind(argument, scope)) then inferred_kind(argument, scope) else "empty" }
-		return element_kind(argument, scope) ?? "empty"
+		if result_rule#1 == "same" { return if is_ref(inferred_kind(argument, scope)) then inferred_kind(argument, scope) else ValueKind.Empty }
+		return element_kind(argument, scope) ?? ValueKind.Empty
 	}
-	overload_kind(name, inferred_kind(n#2, scope)) ?? "int"
+	kind_named(overload_kind(name, kind_spelling(inferred_kind(n#2, scope)))) ?? ValueKind.Int
 }
 
-element_kind(indexed: Node, scope: Scope): KindName? := {
+element_kind(indexed: Node, scope: Scope): ValueKind? := {
 	kind = inferred_kind(indexed, scope)
-	if kind == "text" or kind == "symbol" { return "text" }
-	if kind == "empty" { return "empty" }
+	if kind == ValueKind.Text or kind == ValueKind.Symbol { return ValueKind.Text }
+	if kind == ValueKind.Empty { return ValueKind.Empty }
 	typed_element_kind(list_type(indexed, scope))
 }
 
 # the kind of an element of a list or map type (list of int: int), ø when the type names none
-typed_element_kind(type_name: TypeWord?): KindName? := {
+typed_element_kind(type_name: TypeWord?): ValueKind? := {
 	if type_name == ø { return ø }
-	if type_name == "map" or type_name == "list of node" { return "empty" }
+	if type_name == "map" or type_name == "list of node" { return ValueKind.Empty }
 	element = if type_name.starts_with("list of ") then type_name[8..] else if type_name.starts_with("map of ") then type_name[7..] else ""
 	if element is empty { return ø }
-	if element.starts_with("list") { return "list" }
-	if element == "rational" { return "int" }
-	if element == "real" { return "float" }
-	if element == "number" { return "empty" }
-	kind = type_kinds.get(element)
-	if kind == "codepoint" { return "text" }
-	if kind != ø { kind } else { "empty" }
+	if element.starts_with("list") { return ValueKind.List }
+	if element == ValueKind.Rational { return ValueKind.Int }
+	if element == "real" { return ValueKind.Float }
+	if element == "number" { return ValueKind.Empty }
+	kind = kind_named(type_kinds.get(element))
+	if kind == ValueKind.Codepoint { return ValueKind.Text }
+	if kind != ø { kind } else { ValueKind.Empty }
 }
 
-inferred_kind(n: Node, scope: Scope): KindName := {
-	if is_empty(n) { return "empty" }
-	if n == yes or n == no { return "int" }
+inferred_kind(n: Node, scope: Scope): ValueKind := {
+	if is_empty(n) { return ValueKind.Empty }
+	if n == yes or n == no { return ValueKind.Int }
 	if n is number { return number_kind(n) }
-	if n is text { return if #n == 1 then "codepoint" else "text" }
+	if n is text { return if #n == 1 then ValueKind.Codepoint else ValueKind.Text }
 	if n is symbol {
 		bound = binding(scope, name_of(n))
-		return if bound == ø then "symbol" else if bound == "nil" then "empty" else bound
+		return if bound == ø then ValueKind.Symbol else if bound == ValueKind.Nil then ValueKind.Empty else bound
 	}
 	if type(n) is key { return kind_of_key(n, scope) }
 	if is_group(n) and #n > 0 { return kind_of_list(n, scope) }
-	"int"
+	ValueKind.Int
 }
 
 # --- list types (Rust list_type_name) ---
@@ -323,9 +326,9 @@ type_word(n: Node, scope: Scope): TypeWord := {
 # the type word of one element: ø, a literal number's (int, rational, float), else its kind
 element_type_word(n: Node, scope: Scope): TypeWord := {
 	if is_empty(n) { return "ø" }
-	if n is number { return if n is int then "int" else if number_kind(n) == "int" then (if n % 1 == 0 then "int" else "rational") else "float" }
+	if n is number { return if n is int then "int" else if number_kind(n) == ValueKind.Int then (if n % 1 == 0 then "int" else "rational") else "float" }
 	if is_key(n, Op.Div) and key_of(n) is int and value_of(n) is int and value_of(n) != 0 { return if key_of(n) % value_of(n) == 0 then "int" else "rational" }
-	inferred_kind(n, scope)
+	kind_spelling(inferred_kind(n, scope))
 }
 
 # the one type word all elements fit, ø when they are no common kind
@@ -348,10 +351,10 @@ list_type(n: Node, scope: Scope): TypeWord := {
 	if n is symbol {
 		declared = scope.types.get(name_of(n))
 		# `xs: list`, a parameter of no declared element type, as an untyped one: each caller may pass other elements
-		if declared == "list" and name_of(n) in scope.parameters { return "list of node" }
+		if declared == ValueKind.List and name_of(n) in scope.parameters { return "list of node" }
 		if declared != ø { return declared }
 		if name_of(n) in scope.parameters { return "list of node" }
-		if binding(scope, name_of(n)) == ø and results.get(name_of(n)) == "list" { return result_types.get(name_of(n)) ?? "list of node" }
+		if binding(scope, name_of(n)) == ø and results.get(name_of(n)) == ValueKind.List { return result_types.get(name_of(n)) ?? "list of node" }
 		return "list"
 	}
 	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return list_type(n#1, scope) }
@@ -364,7 +367,7 @@ list_type(n: Node, scope: Scope): TypeWord := {
 	if name == "chars" { return "list of codepoint" }
 	if name and bracket_of(n) == "(" and separator_of(n) == "" { return result_types.get(name) ?? "list of node" }
 	if is_curly_group(n) and #n > 0 and all_of(n, e => is_key(e, Op.Colon)) { return map_type(n, scope) }
-	if is_key(n, Op.Add) and inferred_kind(key_of(n), scope) == "list" and inferred_kind(value_of(n), scope) == "list" {
+	if is_key(n, Op.Add) and inferred_kind(key_of(n), scope) == ValueKind.List and inferred_kind(value_of(n), scope) == ValueKind.List {
 		words = [list_type(key_of(n), scope), list_type(value_of(n), scope)]
 		if not all_of(words, w => w.starts_with("list of ")) { return "list" }
 		common = common_type(words.map(w => w[8..]))
@@ -380,7 +383,7 @@ list_type(n: Node, scope: Scope): TypeWord := {
 	"list"
 }
 
-nested_type(item: Node, scope: Scope): TypeWord := if inferred_kind(item, scope) == "list" then list_type(item, scope) else type_word(item, scope)
+nested_type(item: Node, scope: Scope): TypeWord := if inferred_kind(item, scope) == ValueKind.List then list_type(item, scope) else type_word(item, scope)
 
 map_type(n: Node, scope: Scope): TypeWord := {
 	values = n.map(entry => value_of(entry))
@@ -447,15 +450,17 @@ is_update(n: Node): bool := {
 
 # the kind a slot holding both a and b has: equal kinds stay, an int widens to a float, a character to a text,
 # ø (nil) to a list, a number of run-time kind takes either number, any other pair is a node (empty)
-joined_kind(a: KindName, b: KindName): KindName := {
-	if a is empty or a == b { return b }
-	if b is empty { return a }
-	pair = [a, b].sort()
-	if pair == ["float", "int"] { return "float" }
-	if pair == ["codepoint", "text"] { return "text" }
-	if pair == ["list", "nil"] { return "list" }
-	"empty"
+joined_kind(a: ValueKind, b: ValueKind): ValueKind := {
+	if a == ValueKind.Unknown or a == b { return b }
+	if b == ValueKind.Unknown { return a }
+	if is_kind_pair(a, b, ValueKind.Float, ValueKind.Int) { return ValueKind.Float }
+	if is_kind_pair(a, b, ValueKind.Codepoint, ValueKind.Text) { return ValueKind.Text }
+	if is_kind_pair(a, b, ValueKind.List, ValueKind.Nil) { return ValueKind.List }
+	ValueKind.Empty
 }
+
+# a and b are the kinds one and other, in either order
+is_kind_pair(a: ValueKind, b: ValueKind, one: ValueKind, other: ValueKind): bool := (a == one and b == other) or (a == other and b == one)
 
 # the type word of a list's elements given both a and b (common_type), a node when they have none
 joined_word(a: TypeWord, b: TypeWord): TypeWord := {
@@ -465,12 +470,12 @@ joined_word(a: TypeWord, b: TypeWord): TypeWord := {
 	if common == ø { "node" } else { common }
 }
 
-declared_kind(name: TypeWord): KindName? := {
-	if name.ends_with("?") or name in node_types or name.starts_with("map") { return "empty" }
+declared_kind(name: TypeWord): ValueKind? := {
+	if name.ends_with("?") or name in node_types or name.starts_with("map") { return ValueKind.Empty }
 	# an inline union `int or text` and `number` hold a value of any of their kinds as a node
-	if name == "number" or name.contains(" or ") and not name.starts_with("list of ") { return "empty" }
-	if name.starts_with("list") or name.ends_with("s") and type_kinds.get(name[0..(#name - 1)]) != ø { return "list" }
-	type_kinds.get(name)
+	if name == "number" or name.contains(" or ") and not name.starts_with("list of ") { return ValueKind.Empty }
+	if name.starts_with("list") or name.ends_with("s") and type_kinds.get(name[0..(#name - 1)]) != ø { return ValueKind.List }
+	kind_named(type_kinds.get(name))
 }
 
 # --- functions ---
@@ -479,21 +484,21 @@ function_parameters(name: Name): list := defined_signatures[name].parameters
 
 # the kind a parameter is pinned to: as declared, else its default's (a defaulted one by its default, as Rust's flow.rs);
 # "" when its calls decide
-pinned_kind(parameter: Parameter): KindName := {
-	if parameter.type_name and parameter.defaulted_to == ø { return declared_kind(parameter.type_name) ?? "empty" }
+pinned_kind(parameter: Parameter): ValueKind := {
+	if parameter.type_name and parameter.defaulted_to == ø { return declared_kind(parameter.type_name) ?? ValueKind.Empty }
 	if parameter.defaulted_to != ø {
 		kind = held_kind(parameter.defaulted_to#1, Scope())
-		if kind == "float" or kind == "text" or kind == "list" { return kind }
-		if kind == "codepoint" { return "text" }
+		if kind == ValueKind.Float or kind == ValueKind.Text or kind == ValueKind.List { return kind }
+		if kind == ValueKind.Codepoint { return ValueKind.Text }
 	}
-	""
+	ValueKind.Unknown
 }
 
 # what a body does with a name: calls it (a function), uses it as a sequence (a list, a text when also joined to a text)
-used_as(name: Name, used: Usages): KindName? := {
-	if name in used.called { return "function" }
-	if name in used.celled or name in used.foreign { return "data" }
-	if name in used.sequences { return if name in used.texts then "text" else "list" }
+used_as(name: Name, used: Usages): ValueKind? := {
+	if name in used.called { return ValueKind.Function }
+	if name in used.celled or name in used.foreign { return ValueKind.Data }
+	if name in used.sequences { return if name in used.texts then ValueKind.Text else ValueKind.List }
 	ø
 }
 
@@ -619,12 +624,12 @@ result_values(name: Name): list := {
 
 # a function giving ø in one place and a list in another gives a node, unlike a variable (Rust twin:
 # infer_function_return_kind, a returned Node of another kind)
-result_kind(name: Name): KindName := {
+result_kind(name: Name): ValueKind := {
 	scope = scopes[name]
 	kinds = result_values(name).map(value => flowing_kind(value, scope))
-	kind = ""
+	kind = ValueKind.Unknown
 	for each in kinds { kind = joined_kind(kind, each) }
-	if kind == "list" and "nil" in kinds { "empty" } else { kind }
+	if kind == ValueKind.List and ValueKind.Nil in kinds { ValueKind.Empty } else { kind }
 }
 
 # the list type of a function giving a list: the list types of its list values joined
@@ -632,13 +637,13 @@ result_type(name: Name): TypeWord? := {
 	scope = scopes[name]
 	type = ø
 	for value in result_values(name) {
-		if inferred_kind(value, scope) == "list" { type = joined_list_type(type, list_type(value, scope)) }
+		if inferred_kind(value, scope) == ValueKind.List { type = joined_list_type(type, list_type(value, scope)) }
 	}
 	type
 }
 
 # the kind a value flows into a slot: ø and the empty block are nil (a list or map may hold it), else as held
-flowing_kind(value: Node, scope: Scope): KindName := if is_empty(value) or (is_curly_group(value) and #value == 0) then "nil" else held_kind(value, scope)
+flowing_kind(value: Node, scope: Scope): ValueKind := if is_empty(value) or (is_curly_group(value) and #value == 0) then ValueKind.Nil else held_kind(value, scope)
 
 # the statements of a program, those of a nested sequence (an included module) among them
 flat_statements(program: Node): list := {
@@ -766,9 +771,9 @@ apply(flow: Flow): bool := {
 	}
 	holder = owner(context, target)
 	kind = flowing_kind(value, scope)
-	if kind is empty or target in holder.pinned { return no }
+	if kind == ValueKind.Unknown or target in holder.pinned { return no }
 	changed = set_slot(holder, target, kind)
-	if holder.kinds[target] == "list" and kind == "list" {
+	if holder.kinds[target] == ValueKind.List and kind == ValueKind.List {
 		known = holder.types.get(target)
 		joined = joined_list_type(known, list_type(value, scope))
 		if joined != known { changed = yes }
@@ -784,13 +789,13 @@ joined_list_type(known: TypeWord?, given: TypeWord): TypeWord? := {
 }
 
 # join kind into the slot name of scope; yes when it changed
-set_slot(scope: Scope, name: Name, kind: KindName): bool := {
-	if kind is empty { return no }
+set_slot(scope: Scope, name: Name, kind: ValueKind): bool := {
+	if kind == ValueKind.Unknown { return no }
 	known = scope.kinds.get(name)
-	joined = joined_kind(if known == ø then "" else known, kind)
+	joined = joined_kind(known ?? ValueKind.Unknown, kind)
 	if joined == known { return no }
 	scope.kinds[name] = joined
-	if joined != "list" { scope.types[name] = ø }
+	if joined != ValueKind.List { scope.types[name] = ø }
 	yes
 }
 
@@ -807,7 +812,7 @@ settle(flows: list) := {
 				results[name] = joined
 				changed = yes
 			}
-			type = if joined == "list" then result_type(name) else ø
+			type = if joined == ValueKind.List then result_type(name) else ø
 			if type != result_types.get(name) {
 				result_types[name] = type
 				changed = yes
@@ -827,9 +832,9 @@ forwarded_kinds(name: Name): map := {
 		for index in 0..<min(#arguments, #callee) {
 			argument = arguments[index]
 			kind = scopes[call#1].kinds[callee[index].name]
-			if argument is symbol and name_of(argument) in own and kind and kind != "int" {
+			if argument is symbol and name_of(argument) in own and kind != ValueKind.Unknown and kind != ValueKind.Int {
 				passed = name_of(argument)
-				forwarded[passed] = joined_kind(forwarded.get(passed) ?? "", kind)
+				forwarded[passed] = joined_kind(forwarded.get(passed) ?? ValueKind.Unknown, kind)
 			}
 		}
 	}
@@ -843,7 +848,7 @@ weak_kinds(flows: list): map := {
 		if flow.way == FlowWay.Weak {
 			kind = flowing_kind(flow.value, scopes[flow.context])
 			slot = flow.target + "(" + "${flow.index}" + ")"
-			if kind { passed[slot] = joined_kind(passed.get(slot) ?? "", if kind == "nil" then "empty" else kind) }
+			if kind != ValueKind.Unknown { passed[slot] = joined_kind(passed.get(slot) ?? ValueKind.Unknown, if kind == ValueKind.Nil then ValueKind.Empty else kind) }
 		}
 	}
 	passed
@@ -862,21 +867,21 @@ defaults(flows: list) := {
 		for index in 0..<#parameters {
 			own = parameters[index].name
 			agreed = weak.get(name + "(" + "${index}" + ")")
-			if scope.kinds[own] is empty {
+			if scope.kinds[own] == ValueKind.Unknown {
 				# a function value takes whatever the closure calls pass it: `part => … part#2` handed texts and lists by
 				# view_has holds any value, not the list its use suggests
 				kind = agreed ?? used_as(own, used) ?? forwarded[name].get(own)
-				scope.kinds[own] = if kind != ø then kind else "int"
+				scope.kinds[own] = kind ?? ValueKind.Int
 			}
 		}
-		if results[name] is empty { results[name] = "int" }
-		if results[name] == "nil" { results[name] = "empty" }
+		if results[name] == ValueKind.Unknown { results[name] = ValueKind.Int }
+		if results[name] == ValueKind.Nil { results[name] = ValueKind.Empty }
 	}
 	for context in scopes.keys() {
 		scope = scopes[context]
 		for name in scope.kinds.keys() {
-			if scope.kinds[name] is empty { scope.kinds[name] = "int" }
-			if scope.kinds[name] == "nil" { scope.kinds[name] = "empty" }
+			if scope.kinds[name] == ValueKind.Unknown { scope.kinds[name] = ValueKind.Int }
+			if scope.kinds[name] == ValueKind.Nil { scope.kinds[name] = ValueKind.Empty }
 		}
 	}
 }
@@ -887,7 +892,7 @@ register(flows: list) := {
 		target = flow.target
 		if flow.way == FlowWay.Variable {
 			holder = owner(flow.context, target)
-			if target not in holder.kinds { holder.kinds[target] = "" }
+			if target not in holder.kinds { holder.kinds[target] = ValueKind.Unknown }
 		}
 	}
 }
@@ -920,13 +925,13 @@ analyze(program: Node): Node := {
 			own = parameter.name
 			# `if x is list then … else x`: a plain parameter whose kind the body tests takes any value, as `x: any`
 			plain = parameter.type_name is empty and parameter.defaulted_to == ø
-			kind = if plain and own in tested then "empty" else pinned_kind(parameter)
+			kind = if plain and own in tested then ValueKind.Empty else pinned_kind(parameter)
 			scope.kinds[own] = kind
-			if kind { scope.pinned[own] = yes }
+			if kind != ValueKind.Unknown { scope.pinned[own] = yes }
 			scope.parameters[own] = yes
 		}
 		scopes[name] = scope
-		results[name] = ""
+		results[name] = ValueKind.Unknown
 	}
 	flows = gather(program, "", [])
 	for name in defined_functions.keys() { gather(value_of(defined_functions[name]), name, flows) }
@@ -937,23 +942,23 @@ analyze(program: Node): Node := {
 	program
 }
 
-# the kinds as data: {functions: {f: {params: [kind…], result: kind}}, variables: {x: kind}, value: kind}
+# the kinds as data, spelled: {functions: {f: {params: [kind…], result: kind}}, variables: {x: kind}, value: kind}
 kinds(program: Node): map := {
 	analyze(program)
 	functions = {}
 	for name in defined_functions.keys() {
 		scope = scopes[name]
-		functions[name] = {params: taken_names(defined_signatures[name]).map(own => scope.kinds[own]), result: results[name]}
+		functions[name] = {params: taken_names(defined_signatures[name]).map(own => kind_spelling(scope.kinds[own])), result: kind_spelling(results[name])}
 	}
 	main = scopes[""]
 	variables = {}
-	for name in main.kinds.keys() { if name not in main.declared_globals { variables[name] = main.kinds[name] } }
-	{functions: functions, variables: variables, value: inferred_kind(program, main)}
+	for name in main.kinds.keys() { if name not in main.declared_globals { variables[name] = kind_spelling(main.kinds[name]) } }
+	{functions: functions, variables: variables, value: kind_spelling(inferred_kind(program, main))}
 }
 
 # the kinds emitter.warp holds values as: int, float, char, text, list, any other value a boxed node
-emitter_kind(kind: KindName): KindName := if kind == "codepoint" then "char" else if kind in emitter_kept_kinds then kind else "node"
-emitter_kept_kinds = {int: 1, float: 1, text: 1, list: 1}
+emitter_kind(kind: ValueKind): KindName := if kind == ValueKind.Codepoint then "char" else if kind in emitter_kept_kinds then kind as text else "node"
+emitter_kept_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Text, ValueKind.List]
 
 # the variables of a scope but its parameters, each with its emitter kind
 emitter_locals(scope: Scope, parameters: list): map := {
@@ -967,7 +972,7 @@ emitter_elements(scope: Scope): map := {
 	elements = {}
 	for name in scope.types.keys() {
 		element = typed_element_kind(scope.types[name])
-		if element != ø and scope.kinds.get(name) == "list" { elements[name] = emitter_kind(element) }
+		if element != ø and scope.kinds.get(name) == ValueKind.List { elements[name] = emitter_kind(element) }
 	}
 	elements
 }
