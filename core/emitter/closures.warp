@@ -20,7 +20,7 @@ def closure_value(body: Body, target: Node, captured: list): TypedCode {
 	if not (target is symbol and name_of(target) in module.functions) { return refuse("a closure of " + form_of(target)) }
 	number = closure_number(name_of(target), #captured)
 	items = [boxed(number_value(number))] + captured.map(c => boxed(expression_code(body, c)))
-	TypedCode("node", key_code(Kind.Function, vector_code(items), name_node(target)))
+	TypedCode(ValueKind.Node, key_code(Kind.Function, vector_code(items), name_node(target)))
 }
 closure_number(name: text, captured: int): int := {
 	for i in 0..<#module.closures { if module.closures[i]#1 == name { return i } }
@@ -28,20 +28,20 @@ closure_number(name: text, captured: int): int := {
 	#module.closures - 1
 }
 # the item i of a closure's list: 0 its number, then its captured values
-def closure_item(closure: list, i: int): TypedCode { TypedCode("node", payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)])) }
+def closure_item(closure: list, i: int): TypedCode { TypedCode(ValueKind.Node, payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)])) }
 captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
 def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
 	call_values(dispatcher(arity), arguments.map(a => expression_code(body, a)))
 }
 dispatcher(arity: int): any := {
-	made_late(closure_call_prefix + arity, "node", ["closure"] + range_list(arity).map(i => "argument" + (i + 1)))
+	made_late(closure_call_prefix + arity, ValueKind.Node, ["closure"] + range_list(arity).map(i => "argument" + (i + 1)))
 }
 # a function over closures whose code is written once the program's closures are known, made at its first call
-made_late(name: text, result: text, parameters: list): any := {
+made_late(name: text, result: ValueKind, parameters: list): any := {
 	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
 	for known in module.dispatchers { if known.name == name { return known } }
-	f = added_function(name, parameters.map(p => "node"), result, parameters)
+	f = added_function(name, parameters.map(p => ValueKind.Node), result, parameters)
 	f.code = [op.unreachable]
 	module.dispatchers += [f]
 	f
@@ -93,7 +93,7 @@ dispatcher_code(f: Function): any := {
 		captured = module.closures[k]#2
 		if #target.signature.parameters - captured == arity {
 			labels += [#arms]
-			values = range_list(captured).map(i => closure_item(closure, i + 1)) + range_list(arity).map(j => TypedCode("node", [op.local_get] + uleb(j + 1)))
+			values = range_list(captured).map(i => closure_item(closure, i + 1)) + range_list(arity).map(j => TypedCode(ValueKind.Node, [op.local_get] + uleb(j + 1)))
 			arms += [boxed(call_values(target, values)) + [op.return]]
 		} else {
 			labels += [-1]
