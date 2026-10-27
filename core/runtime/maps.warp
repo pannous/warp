@@ -97,19 +97,15 @@ entry_name(entry: Node): text := {
 has_fields(m: Node): bool := not is_null(m) and not is_null(fields_of(m)) and kind_code(fields_of(m)) == Kind.List
 # `p.code` of a class instance: its field at `place`, where its class declares it (emitter instances.warp
 # instance_of_fields builds the fields in that order), checked by name; any other value reads as map_get reads it. An
-# instance missing its field's place is a bug of the emitter's layout, said once (card instance-field-order)
+# instance holding the field elsewhere is a bug of the emitter's layout, warned at each read (card instance-field-order)
 slot_field(m: Node, name: text, place: int): Node := {
 	if marked_kind(m) == Marked.Instance and has_fields(m) {
 		entries = unboxed_list(fields_of(m))
 		if place <= #entries and kind_code(entries#place) == Kind.Key and same_bytes(entry_name(entries#place), name) { return key_value(entries#place) }
-		if not slot_missed and map_index(m, name) > 0 {
-			slot_missed = yes
-			warned("an instance's field " + name + " is not at its declared place " + int_text(place) + " (card instance-field-order)")
-		}
+		if map_index(m, name) > 0 { warned("a class instance's field is not at its declared place (card instance-field-order)") }
 	}
 	map_get(m, name)
 }
-global slot_missed = no
 # `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
 map_get(m: Node, name: text): Node := {
 	if is_position_part(m, name) { return position_part(m, name) }

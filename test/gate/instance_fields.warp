@@ -1,11 +1,15 @@
 # a class instance's fields read by their declared place (card instance-field-order): given out of order, defaulted,
-# beside a plain map and a list that have the same names, and a field the map lacks
+# beside a plain map and a list that have the same names, and a field the map lacks. Bag's fields are its own names,
+# so their reads take the place path; x, y and length are declared by other classes too
 class Point { x: int; y: int; length: int = 4 }
+class Bag { bag_items: list; bag_total: int = 0 }
 p = Point{y: 2, x: 1}
 print p.x + p.y
 print p.length
-m = {y: 5, x: 7}
-print m.x
+b = Bag{bag_total: 5, bag_items: [1, 2]}
+print count(b.bag_items) + b.bag_total
+m = {y: 5, x: 7, bag_total: 9}
+print m.x + m.bag_total
 xs = [1, 2, 3]
 print xs.length
 print m.length
