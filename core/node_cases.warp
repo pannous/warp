@@ -153,16 +153,20 @@ type_test(value: Node, type_name: text): Node := List([symbol("is_type"), value,
 # `ValueKind.Int`, a case named with its enum: a bare `Int` in a match arm would test for an int (card core-types-emitter)
 qualified_case(enum_name: text, case: text): Node := Key(symbol(enum_name), Op.Dot, symbol(case))
 
-# `Op·text(spelled): text := if spelled is text or codepoint then spelled else match spelled {Add: "+", …, _: spelled}` and
-# `Op·case(spelled) := match spelled {"+": Add, …, _: spelled}`: a text passes either, so `key(a, "+", b)` keeps working
+# `Op·text(spelled): text := if spelled is text or codepoint then spelled else match spelled {Add: "+", …, _: spelled}`,
+# `Op·cases = {"+": Op.Add, …}` and `Op·case(spelled) := if spelled is text or codepoint then map_get_or(Op·cases, spelled,
+# spelled) else spelled`: a text passes either, so `key(a, "+", b)` keeps working. Op·case looks the spelling up in the map
+# of every spelling (hashed): a match over Op's ~100 spellings compared each in turn, 20% of a rebuild under children
 spelling_functions(enum_name: text): list := {
 	value = symbol(spelled_value)
 	cases = spellings[enum_name].keys
 	other = Key(symbol(other_arm), Op.Colon, value)
 	to_text = matched(value, cases.map(case => Key(qualified_case(enum_name, case), Op.Colon, spelling(enum_name, case))) + [other], ø, cases)
 	is_spelling = Key(type_test(value, "text"), Op.Or, type_test(value, "codepoint"))
-	to_case = matched(value, cases.map(case => Key(spelling(enum_name, case), Op.Colon, qualified_case(enum_name, case))) + [other], ø, cases)
-	[spelling_function(enum_name, "text", "text", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + comparing_functions(enum_name)
+	cases_by_spelling = symbol(spelled_function(enum_name, "cases"))
+	every_case = List(cases.map(case => Key(spelling(enum_name, case), Op.Colon, qualified_case(enum_name, case))), Bracket.Curly, Separator.Comma)
+	to_case = chosen(is_spelling, call_of("map_get_or", [cases_by_spelling, value, value]), value)
+	[Key(cases_by_spelling, Op.Assign, every_case), spelling_function(enum_name, "text", "text", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + comparing_functions(enum_name)
 }
 
 # `Op·is(spelled, case_written, case_spelled)`, `Op·same(spelled, other_spelled)`: two cases compare as they are, a case
