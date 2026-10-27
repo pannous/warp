@@ -1,6 +1,5 @@
 # Cards for the timed Codex worker (notes/agents/codex_worker.sh), in order; the Supervisor keeps this list.
 # Library work only (lib/, samples/, test/, wiki/), away from the sessions changing core/ (user 2026-10-26).
-unit-literals           # units are values (decision on the card): Quantity + dimensions + unit values in lib/units.warp, typed sleep; 5km = 5 * km
 list-word-methods       # list words range(…), dot, insert, array(…), random(n)
 canvas-paint-arity      # canvas words: paint(…) with 1 or 3 arguments, window size typing
 gpu-arrays-samples      # gpu samples: gpu_arrays field totals, gpu_map sin, shader_of
