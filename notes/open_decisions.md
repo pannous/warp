@@ -9,6 +9,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## To present
 
 ## Parked
+- event-handlers (discuss with the user in prose once block-parameters-captures lands): `on` as a prelude function over a sharing block vs today's branch event-handlers-unknown (a4d0dde771, rewrite into generated functions + injected `global`).
 - graphics-plain (warp-markup, parked): display alias table with notes (stays in Rust); bare width/height as canvas sides with did-you-mean (stays).
 - maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.
 - body-statements: a function body looped as a list of statements, each with its kind (operation, call, assignment…); no `.kind` until then.

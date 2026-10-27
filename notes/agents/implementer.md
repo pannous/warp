@@ -1,5 +1,7 @@
 # Implementer
 
+Elegance first (user): always choose the most elegant option, never the quick hack; picture how the most beautiful, most general code would look, and build that (common.md Principles).
+
 You implement one card the planner specified (notes/agents/planner.md). Read notes/agents/common.md, then the
 card (`todo list`, its body): branch, failing tests, approach, scope, label.
 

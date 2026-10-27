@@ -1,5 +1,7 @@
 # The Grok Bot fleet
 
+Elegance first (user): always choose the most elegant option, never the quick hack; picture how the most beautiful, most general code would look, and build that (common.md Principles).
+
 The roles in notes/roles.md describe the Claude sessions on the Mac. The Grok Bot fleet keeps those roles but does a
 few things differently. Where this file and the role files disagree, Grok agents follow this file.
 
