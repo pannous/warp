@@ -341,8 +341,12 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
 	for i in 0..<#owners { called[owners[i]] = owned_name(spellings[i], owners[i]) }
+	# a library word of the method's name taking other values than it is no fallback: `tally(x)` of a class
+	falls_back = falls_back and (operator != ø or not is_library_word(spellings#1) or library_word_takes(spellings#1, #call_arguments))
 	operated = falls_back and operator != ø and #call_arguments == 2
-	fallback = if not falls_back then ø else if operated then Key(call_arguments#1, operator#2 as Op, call_arguments#2) else call_of(spellings#1, call_arguments)
+	# a routed method's fallback is the method call on the value, `self.add(x)`, as the sugar lowers it: a list's add
+	# changes the list (card declared-class)
+	fallback = if not falls_back then ø else if operated then Key(call_arguments#1, operator#2 as Op, call_arguments#2) else Key(self_node, Op.Dot, call_of(spellings#1, call_arguments[1..]))
 	# an operator's operands are any values: a number reaches the builtin, an instance its class's method; a routed
 	# method's instance too, so a list `[3, 1].sort()` passes none of the owners' methods its kind (their `self.n`)
 	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [if falls_back then Key(self_node, Op.Colon, symbol("any")) else self_node] + parameters
