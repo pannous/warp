@@ -81,9 +81,13 @@ global index_tables = []
 global index_covered = []
 global index_used = []
 global index_clock = 0
+# the slot index_slot found last: a run of lookups in one map (a parser's fields, read again and again) finds it first
+global index_last = 0
 slot_free(slot: int): bool := is_null(index_covered#slot) or unboxed_int(index_covered#slot) < 0
+holds_entries(slot: int, entries: list): bool := not slot_free(slot) and same_list(unboxed_list(index_entries#slot), entries)
 # the slot holding these entries' index, 0 for none
 index_slot(entries: list): int := {
+	if index_last > 0 and holds_entries(index_last, entries) { return index_last }
 	if #index_covered == 0 {
 		index_entries = new_list(index_slots())
 		index_tables = new_list(index_slots())
@@ -91,7 +95,10 @@ index_slot(entries: list): int := {
 		index_used = new_list(index_slots())
 	}
 	for slot in 1 to index_slots() {
-		if not slot_free(slot) and same_list(unboxed_list(index_entries#slot), entries) { return slot }
+		if holds_entries(slot, entries) {
+			index_last = slot
+			return slot
+		}
 	}
 	0
 }
@@ -107,6 +114,7 @@ slot_table(slot: int): list := unboxed_list(index_tables#slot)
 slot_covered(slot: int): int := unboxed_int(index_covered#slot)
 hold_index(slot: int, entries: list, covered: int, table: list): int := {
 	index_clock += 1
+	index_last = slot
 	index_used#slot = index_clock
 	index_entries#slot = list_node(Kind.List, entries)
 	index_tables#slot = list_node(Kind.List, table)
