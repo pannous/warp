@@ -19,3 +19,5 @@ extended_truncated(n: Node): int from runtime
 extended_ratio(n: int, d: int): Node from runtime
 # floats: a text of count zero digits
 extended_zeros(count: int): text from runtime
+# maps: a warning on stderr (a class instance read wrongly, card instance-field-order)
+extended_warned(message: text): Node from runtime

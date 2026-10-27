@@ -189,8 +189,14 @@ overload_kind(type: text): text? := {
 
 is_overload_type(type: text): bool := type == any_word or overload_kind(type) != ø
 
-# `x: int` → "int", an untyped parameter "any"
-parameter_types(call: Node): list := signature_of(items_of(call)).parameters.map(p => if p.type_name == "" then any_word else p.type_name)
+# `x: int` → "int", an untyped parameter "any"; a definition taking a pattern apart, `len([h, t...])`, is a clause of
+# clauses.warp, no overload (card pattern-clause-refusal)
+parameter_types(call: Node): list := {
+	if items_of(call)[1..].any(is_list_pattern) { return [pattern_type] }
+	signature_of(items_of(call)).parameters.map(p => if p.type_name == "" then any_word else p.type_name)
+}
+pattern_type = "pattern"
+is_list_pattern(written: Node): bool := is_empty_list(written) or (is_group(written) and bracket_of(written) == "[")
 
 # `f·list_of_int·text`: one word
 typed_variant(name: text, types: list): text := name + types.map(t => "·" + (if element_of(t) != ø then "list_of_" + element_of(t) else t)).join("")
