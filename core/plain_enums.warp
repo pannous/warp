@@ -18,7 +18,7 @@ use "node_cases.warp"
 # Rust twin: match_exhaustive.rs typed_subjects
 subjects_in(n: Node, enums: any, subjects: any): any := {
 	declared = match n {
-		Key(name, Op.Colon, type_name): if is_name(name) and is_name(type_name) and name_of(type_name) in enums then [name_of(name), name_of(type_name)] else ø
+		Key(name, Op.Colon, type_name): if is_name(name) and type_name is symbol and required_type(name_of(type_name)) in enums then [name_of(name), required_type(name_of(type_name))] else ø
 		_: ø
 	}
 	if declared != ø { held_as(subjects, declared#1, declared#2) }

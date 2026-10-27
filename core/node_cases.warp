@@ -178,7 +178,7 @@ comparing_functions(enum_name: text): list := {
 
 # whether the enum, `op: Op`, a case of it, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n
 is_spelling_needed(n: Node, enum_name: text, declared: any): bool := match n {
-	Symbol(name): name == enum_name or name in ["text", "case", "is", "same"].map(word => spelled_function(enum_name, word))
+	Symbol(name): required_type(name) == enum_name or name in ["text", "case", "is", "same"].map(word => spelled_function(enum_name, word))
 	Key(left, op, right): {
 		if left == opaque_symbol { return no }
 		if spelled_enum_of(n, declared) == enum_name { return yes }
