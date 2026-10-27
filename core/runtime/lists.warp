@@ -74,7 +74,7 @@ list_sum(xs: list, computed: Node): Node := computed
 # the end (the next lookup takes them on) or replaced by one of the same name (field_with); any other change in place
 # (map_without, node_set_at, list_pop) forgets that index alone. Four slots were too few: the emitter looks up more big
 # maps (its functions, runtime words, globals, kinds) between two lookups of its texts, whose index was made anew each time
-index_slots(): int := 16
+index_slots(): int := 64
 # (a runtime global list starts empty, whatever it is given: the slots are made at the first lookup, index_slot)
 global index_entries = []
 global index_tables = []
