@@ -92,7 +92,7 @@ before asking a question). After a context swap, this file and your role file be
 - GitHub API quota is shared: never poll `todo list` or `gh` in a loop.
 
 ## Cards
-- `todo pick` shows the next cards in board order; `todo take <card> <session>`; before taking check nobody has a
+- `todo pick` shows the next cards in board order; `todo take <card> <session>` (a further card of the same session: `--keep-name`, so the session keeps its area name); before taking check nobody has a
   branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
 - Every branch has a card: comment branch, tip and state on it; a parked branch gets notes/handover/<branch>.md.
 - No Ready column, no merge queue (user 2026-10-26): workers land their own branches ("Done"). A finished branch

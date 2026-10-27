@@ -9,8 +9,8 @@
 | session | handover | resume id (from the transcript titles; check `claude --resume` if one fails) |
 |---|---|---|
 | warp-fixer | notes/handover/instance-words-build.md | ca3ff03f-a60e-48ac-8778-a23ecf360f7a |
-| warp-text-field | notes/handover/core-types-emitter.md (branch emitter-kinds WIP) | 356f4529-9849-463e-b812-38049e490485 |
-| warp-samples | notes/handover/sample-gaps.md (branch pure-paint WIP) | 3f9a2566-f302-4179-9600-522967854bab |
+| warp-text-field (was warp-core-types-emitter) | notes/handover/core-types-emitter.md (branch emitter-kinds WIP) | 356f4529-9849-463e-b812-38049e490485 |
+| warp-global-named-capital (was warp-samples) | notes/handover/sample-gaps.md (branch pure-paint WIP) | 3f9a2566-f302-4179-9600-522967854bab |
 | warp-integrator | notes/handover/integrator.md | 042c9a17-9831-4855-8bc0-52a02d84416a |
 | warp-interviewer | notes/handover/interviewer.md (9eccb1459a) | 43f62aa9-b30f-4ef2-a667-684c0816c38f |
 | warp-reviewer | notes/handover/reviewer.md | d39cb067-4ff7-499c-b8e0-e2698d740b6c |
