@@ -991,7 +991,7 @@ def key_expression(body: Body, n: Node): list {
 			called = module.functions[name_of(right)]
 			return field_or_word(body, value, name_of(right), receiver => call_values(called, defaulted(body, called, [receiver], 1)))
 		}
-		return field_of(body, value, name_of(right))
+		return field_of(body, value, name_of(right), receiver_class(body, left))
 	}
 	# (only `rational`: a float `as real` or `as exact` stays a float in Rust, type_tests.rs is_exact_fraction_type)
 	if operator == Op.As and right is symbol and name_of(right) == "rational" {
