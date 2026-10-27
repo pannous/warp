@@ -90,6 +90,8 @@ def intrinsic(body: Body, name: text, arguments: list): list {
 		"meta_line": ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 3])]
 		"meta_column": ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 4])]
 		"closure_text": call_values(made_late(closure_text_name, "text", ["closure"]), values)
+		"instance_set": call_values(made_late(instance_set_name, "int", ["m", "name", "value"]), values)
+		"instance_entries": call_values(made_late(instance_entries_name, "node", ["m"]), values)
 		"shown_big_int": call_values(made_late(shown_big_int_name, "text", ["n"]), values)
 		"is_null": ["bool", values#1#2 + [op.ref_is_null]]
 		"same_text": ["bool", values#1#2 + values#2#2 + [op.ref_eq]]
@@ -140,7 +142,7 @@ intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, is_plain_int: 1, shown_big_int: 1, big_sum_case: 2, big_difference_case: 2, big_product_case: 2, big_order_case: 2, big_float_case: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	big_int_of: 2, is_big_int: 1, big_int_negative: 1, limb_count: 1, limb: 2, set_limb: 3,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, same_list: 2, same_node: 2, closure_text: 1}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, error_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2, same_list: 2, same_node: 2, closure_text: 1, instance_set: 3, instance_entries: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum", list_pop: "list_pop",

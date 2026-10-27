@@ -70,6 +70,11 @@ function_name(target: text): text := {
 	last = parts.last
 	if last in module.classes then parts[0..<(#parts - 1)].join(name_joiner) else last
 }
+# the code of a function made late (made_late), once the program's closures and classes are known
+late_code(f: Function): int := {
+	if f.name == closure_text_name { closure_text_code(f) } else if f.name == shown_big_int_name { shown_big_int_code(f) } else if f.name == instance_set_name { instance_set_code(f) } else if f.name == instance_entries_name { instance_entries_code(f) } else if f.name.starts_with(field_getter_prefix) { field_getter_code(f) } else if f.name.starts_with(field_setter_prefix) { field_setter_code(f) } else { dispatcher_code(f) }
+	0
+}
 # a value called that is no closure fails in not_a_function; the closure's number picks, in one br_table jump, the
 # target's call on the captured values and the arguments (a test per closure made every call scan them all); a closure
 # of another arity fails in wrong_number_of_arguments (the runtime errors of Rust's src/wasm_emitter/functions/closures.rs)

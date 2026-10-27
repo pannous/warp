@@ -1,0 +1,12 @@
+# a declared class's instance is its own struct type (card declared-class): it prints, compares, lists its keys and
+# values as before, a parameter declared as its class reads its fields, a subclass's instance too, a field set stays,
+# a field the class does not declare makes it a map, and two classes of as many fields stay two
+'class P { x: int; y: int }; str(P{y: 2, x: 1})'	"P{x:1 y:2}"
+'class P { x: int; y: int }; P{y: 2, x: 1} == P{x: 1, y: 2}'	true
+'class P { x: int; y: int }; P{x: 1, y: 2} == P{x: 1, y: 3}'	false
+'class P { x: int; y: int }; P{x: 1, y: 2}.values'	[1, 2]
+'class P { x: int; y: int }; count(P{x: 1, y: 2}.keys)'	2
+'class P { x: int; y: int }; class Q extends P { z: int }; t(a: P): int := a.x + a.y; t(Q{x: 1, y: 2, z: 3})'	3
+'class P { x: int }; p = P{x: 1}; p.x = 5; p.x'	5
+'class P { x: int }; p = P{x: 1}; p.w = 2; p.w + p.x'	3
+'class A { m: int }; class B { n: int }; A{m: 1}.m + B{n: 2}.n'	3
