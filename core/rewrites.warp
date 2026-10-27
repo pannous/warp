@@ -1528,13 +1528,6 @@ fresh_name(hole: text): any := {
 	symbol(hole.remove_prefix(rule_hole_mark) + "·" + fresh_names)
 }
 
-# the node made at the place of `at`, where the user wrote the rewritten code
-placed(made: any, at: any): any := {
-	line = line_of(at)
-	column = column_of(at)
-	if line is int and column is int then positioned(made, line, column) else made
-}
-
 # the variables assigned code of the shape, then the parameters of the functions called with one, until none is new
 names_assigned_shape(program: any, shape: any): any := {
 	names = {}
