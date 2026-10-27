@@ -1,0 +1,8 @@
+# a call takes the overload its computed arguments fit: a builtin's declared result, √, -, abs and + - * of known
+# numbers (card number-computed-float, notes/overloads: an exact type before a widened one)
+'f(x: int) := "int"; f(x: float) := "float"; f(sqrt(2))'	'float'
+'f(x: int) := "int"; f(x: number) := "number"; f(sqrt(2))'	'number'
+'f(x: int) := "int"; f(x: float) := "float"; f(2 + √2)'	'float'
+'f(x: int) := "int"; f(x: float) := "float"; f(-sqrt(9))'	'float'
+'f(x: int) := "int"; f(x: float) := "float"; f(2 * -3)'	'int'
+'f(x: int) := "int"; f(x: float) := "float"; f(floor(2.5))'	'float'
