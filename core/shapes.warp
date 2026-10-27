@@ -5,26 +5,8 @@ use "words.warp"
 use "walk.warp"
 
 def listed(bracket: Bracket, separator: Separator, nodes: list): Node := {
-	if #nodes == 0 { return opaque(["list", bracket_glyph(bracket), separator_glyph(separator)]) }
+	if #nodes == 0 { return opaque(["list", bracket as text, separator as text]) }
 	List(nodes, bracket, separator)
-}
-
-// The spellings of node.warp's Bracket and Separator: `bracket as text` of a parameter gives the case's name, not its
-// spelling (card enum-parameter-conversion)
-def bracket_glyph(bracket: Bracket): text := match bracket {
-	Bracket.Curly: "{"
-	Bracket.Square: "["
-	Bracket.Round: "("
-	Bracket.Less: "<"
-	_: ""
-}
-def separator_glyph(separator: Separator): text := match separator {
-	Separator.Space: " "
-	Separator.Comma: ","
-	Separator.Semicolon: ";"
-	Separator.Newline: "\n"
-	Separator.Tab: "\t"
-	_: ""
 }
 
 // `f(a, b)` as the node (f a b) that calls f
