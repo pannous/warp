@@ -165,6 +165,9 @@ Folder plan and condensing rules: notes/tests_layout.md notes/is_tests.md
 
 ## Development Workflow
 
+Always choose the most elegant option, never the quick hack: picture how the most beautiful, most general code would
+look and build that (notes/agents/common.md Principles).
+
 0. **Check state** - git log, git status
 1. Develop new features preferably in library /lib/
 2. Only in rare cases touch core/parser.warp or emitter.warp 

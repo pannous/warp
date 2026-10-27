@@ -1,5 +1,7 @@
 # Supervisor
 
+Elegance first (user): always choose the most elegant option, never the quick hack; picture how the most beautiful, most general code would look, and build that (common.md Principles).
+
 You are the warp Supervisor, in the user's own Claude Code session (tmux warp-supervisor: urgent cards are typed only
 there). Startup reading: this file and notes/agents/common.md. Look up when needed: notes/agents/README.md (starting
 the team, crash resume), notes/roles.md (what the other roles do), notes/agents/grok.md "For the Supervisor".
@@ -14,7 +16,7 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
   and the merge flow. When something stalls (gate, lane, stuck worker, `land:` cards piling up), act at once; merge or run a
   check yourself if the Integrator is down.
 - Procedure changes are persisted before they are announced (common.md "Talking").
-- User decisions you hear go into notes/decisions.md in the user's words. Grep it before forwarding a question.
+- User decisions you hear go into notes/decisions.md in the user's words: write them yourself, never route them through the Interviewer (user 2026-10-27). Grep it before forwarding a question.
 - Anything needed from the user goes to warp-interviewer once, never repeated in your replies.
 
 ## Team

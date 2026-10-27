@@ -579,7 +579,7 @@ used_sequence(n: Node): Node := {
 }
 
 is_list_literal(n: Node): bool := is_group(n) and bracket_of(n) == "["
-is_literal_text(n: Node): bool := n is text or head_name(n) == HiddenWord.TimesText
+is_literal_text(n: Node): bool := n is text
 
 # the name `+` joins to a value `joined` accepts: `xs + [x]`, `" " + t`, `t[0 ..< n] + "…"`
 joined_name(n: Node, joined: function): Name := {

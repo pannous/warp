@@ -8,6 +8,7 @@ use "parser.warp"
 use "walk.warp"
 use "uses.warp"
 use "builtin_signatures.warp"
+use "scope.warp"
 
 # [name, text] of each function definition in source: a line starting with a name and its parameters, with the
 # indented or closing lines below it
@@ -83,10 +84,15 @@ words_within(n: Node): list := {
 	found.keys
 }
 
+# the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp)
+function_types = [symbol("function"), symbol("block")]
+lowering_words(program: Node): list := if nodes_in(program).any(n => is_lambda(n) or n in function_types) then ["Cell"] else []
+
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
-# loader places them: a used module's in front of the program, the prelude's after it
-with_reached(program: Node, module: text, in_front: bool): Node := {
+# loader places them: a used module's in front of the program, the prelude's after it. `also` are words the program
+# will say once the sugar rewrote it (passes.warp with_used: `twice {…}` says the prelude's times)
+with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
 	aliases = with_call_forms(module_aliases(module), definition_slices(module).map(slice => slice#1) + own.keys)
@@ -96,7 +102,7 @@ with_reached(program: Node, module: text, in_front: bool): Node := {
 	slices = definition_slices(module).filter(slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
 	# the statements of each reached slice, by its text
 	reached = {}
-	wanted = symbol_words(program)
+	wanted = symbol_words(program) + lowering_words(program) + also
 	while #wanted > 0 {
 		word = wanted#1
 		wanted = wanted[1 ..]
@@ -104,18 +110,23 @@ with_reached(program: Node, module: text, in_front: bool): Node := {
 			if slice#1 == word and slice#2 not in reached {
 				slice_node = early_sugared(plain_node(parsed(slice#2)))
 				reached[slice#2] = statements_in(slice_node)
-				wanted += words_within(slice_node)
+				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
 		}
 	}
 	if #reached == 0 { return program }
 	brought = []
 	for slice in slices { if slice#2 in reached { brought += reached[slice#2] } }
-	parts = if in_front then [] else statements_in(program)
-	for reached_statement in brought { parts += [reached_statement] }
-	if in_front { for own_statement in statements_in(program) { parts += [own_statement] } }
+	# a value the program reaches, `online := system_value("online") != 0`, holds before the program reads it; a
+	# function goes where the module wants its definitions (card prelude-definition-reachability)
+	values = brought.filter(is_value_definition)
+	functions = brought.filter(statement => not is_value_definition(statement))
+	own_statements = statements_in(program)
+	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
 }
+# `name := …`, `name = …`: a value's definition, no function's
+is_value_definition(statement: Node): bool := (is_key(statement, Op.Define) or is_key(statement, Op.Assign)) and key_of(statement) is symbol
 
 # `alias keys = map_keys` of a module: the word by each alias (Rust: src/modules/declarations.rs, an alias declares
 # nothing, its calls call the word)
@@ -282,7 +293,7 @@ called_words(n: Node): list := {
 # case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
 with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(statements_in(program), folder, [])
-	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes)
+	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, [])
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen]
 used_module_sources(statements: any, folder: text, seen: any): list := {

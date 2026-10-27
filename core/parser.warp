@@ -17,10 +17,10 @@ class GroupContext { bracket: Bracket = Bracket.None; grouped: bool = no; in_bra
 // `then` block's `else` (kept for the branch), or, for the rest of an enclosing group or block, whatever closes that one
 enum ItemsEnd { Source, Closer, End, EndOrElse, Rest }
 
-class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: list; circumfixes: list; phrases: list = []; closing_ends: any = {}; word_types: list; line_starts: list }
+class Parser { code: text; n: int; at: int = 0; header: bool = no; iterable: bool = no; indent: int = 0; spaces: bool = no; group: GroupContext; branch_power: int = 0; enum_cases: bool = no; resumes: list; breaks: list; finally_blocks: int = 0; types: list; bangs: list; type_body: bool = no; operators: list; aliases: list; circumfixes: list; phrases: list = []; closing_ends: map = {}; word_types: list; line_starts: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
-def tree(source: text): any := view_of(parsed(source))
+def tree(source: text): list := view_of(parsed(source))
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
@@ -911,7 +911,7 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		} else if left != ø and keyword_at(p, "times") and times_binds(p, min_power) {
 			p.at = p.at + 5
 			skip_spaces(p)
-			left = spaced([left, symbol("times"), repeated(p)])
+			left = operator_call("times", [left, repeated(p)])
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
 			if MEMBERSHIP_POWERS#1 < min_power { break }
@@ -1240,7 +1240,7 @@ def times_binds(p: Parser, min_power: int): bool {
 
 TIMES_POWER = 50
 
-// What `n times` repeats: a block, `: body` as a block, a list or a value
+// What `n times` repeats, the prelude's infix times: a block, `: body` as a block, a list or a value
 // Rust twin: suffixes.rs parse_times_loop
 def repeated(p: Parser): Node := {
 	if is_at(p.code, p.at, ':', p.n) {

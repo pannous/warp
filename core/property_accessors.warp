@@ -13,6 +13,7 @@ use "scope.warp"
 use "uses.warp"
 use "parser.warp"
 use "prelude_words.warp"
+use "plain_enums.warp"
 
 # the parameter of a setter written getter-shaped: `canvas.width := canvas(it, canvas_height)`
 setter_word = "it"
@@ -68,6 +69,15 @@ def properties_collected(definitions: list, module: text, table: PropertyTable) 
 property_definitions(statements: list): list := statements.map(property_definition).filter(found => found != ø)
 # the object of "object.property"
 property_object(name: text): text := name.split(".")#1
+# the properties by object, `{Key: ["escape"]}` of `Key.escape := …`: the values an object, a type, has by name
+property_values(properties: PropertyTable): map := {
+	values = {}
+	for name in properties.getters.keys {
+		object = property_object(name)
+		values[object] = (values.get(object) ?? []) + [name[#object + 1 ..]]
+	}
+	values
+}
 property_table(): PropertyTable := PropertyTable{getters: {}, setters: {}, parameters: {}, owners: {}}
 
 # the standard properties of each module's text, its property lines parsed on their own, into the table
@@ -152,7 +162,9 @@ property_accessors(program: Node): Node := {
 	properties_collected(own, "", properties)
 	kept = statements.filter(statement => property_definition(statement) == ø)
 	scope = scope_of(without_dotted_writes(program))
-	rewritten = kept.map(statement => property_accessed(statement, properties, scope))
+	# an argument for a parameter typed T reads a free x as the property T.x (card expected-type-names, plain_enums.warp)
+	expectation = Expectation(property_values(properties), parameter_types_of(program), scope, program)
+	rewritten = kept.map(statement => property_accessed(expected_in(statement, expectation), properties, scope))
 	# the modules of the properties the program names: `use draw` in front for the canvas's
 	needed = properties.owners.keys.filter(name => property_object(name) in mentioned).map(name => properties.owners[name])
 	uses = statements.map(use_target).filter(target => target is symbol).map(name_of)

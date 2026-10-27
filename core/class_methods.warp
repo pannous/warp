@@ -154,7 +154,7 @@ fields_spelled(top_statement: Node): Node := {
 	}
 }
 # a member `name age` as the fields name and age, `name age: int` as name and `age: int`, else the member itself
-spelled_members(member: any): list := {
+spelled_members(member: list): list := {
 	n = node_of(member)
 	field_words = word_run(n)
 	if #field_words > 0 { return field_words.map(view_of) }
@@ -179,11 +179,11 @@ is_field_part(part: Node): bool := match part {
 }
 
 # the view ["type", name, body] of a class declaration, else ø
-class_view(top_statement: Node): any := match top_statement {
+class_view(top_statement: Node): list? := match top_statement {
 	Key(left, key_op, right): { if left == opaque_symbol and kind_of(right) == "type" and kind_of(right#3) == "list" and declared_type_name(right#2) != ø then right else ø }
 	_: ø
 }
-class_declared(top_statement: Node, view: any): Declared := {
+class_declared(top_statement: Node, view: list): Declared := {
 	members = view#3[3..].map(member_read)
 	methods = members.filter(member => defined_word(member) != ø)
 	Declared(top_statement, base_of(view#2), members.filter(member => defined_word(member) == ø).map(field_name), methods)
@@ -192,7 +192,7 @@ class_declared(top_statement: Node, view: any): Declared := {
 # methods): `def area() -> int {…}` as `area() := …`, `def area(): …` the same. A class body is a type view the early
 # sugar's rules don't enter (rewrites.warp early_sugared), so a member gets it here: the function keyword or modifier
 # before it goes (`def f(): x + 1`, `public fun g() {…}`)
-member_read(member: any): Node := colon_method(bottom_up(early_sugared(node_of(member)), definition))
+member_read(member: list): Node := colon_method(bottom_up(early_sugared(node_of(member)), definition))
 # Python's brace-less `def area(): side * side`, read as `area(): side * side`: a member whose name takes parentheses
 # is a method, its body after the colon (a field has no parentheses)
 colon_method(member: Node): Node := match member {
@@ -200,13 +200,13 @@ colon_method(member: Node): Node := match member {
 	_: member
 }
 # the class a declaration's name says it extends, else "" (not ø: the self lane traps on `ø in` a map)
-base_of(name: any): text := {
+base_of(name: list): text := {
 	if kind_of(name) != "attribute" { return "" }
 	if name#2 in base_layers and kind_of(name#3) == "symbol" { return name#3#2 }
 	base_of(name#4)
 }
 # the name a definition `f(x) := …` or `f := …` defines (in a class body a method or a property), else ø
-defined_word(n: Node): any := match n {
+defined_word(n: Node): text? := match n {
 	Key(method_head, Op.Define, body): { if method_head is symbol then name_of(method_head) else if is_called_name(method_head) then name_of(method_head#1) else ø }
 	_: ø
 }
@@ -214,7 +214,7 @@ is_called_name(method_head: Node): bool := bracket_of(method_head) == "(" and #m
 # the parameters of a method, as its head lists them
 method_parameters(method: Node): list := if key_of(method) is symbol then [] else items_of(key_of(method))[1..]
 # a field `name`, `name: T`, `name: T = v`, `name = v`, `name?`: its name, else ø
-field_name(member: Node): any := match member {
+field_name(member: Node): text? := match member {
 	Symbol(name): { if name.ends_with("?") then name[0..<(#name - 1)] else name }
 	Key(left, key_op, right): { if key_op == Op.Colon or key_op == Op.Assign then field_name(left) else ø }
 	_: ø
@@ -249,7 +249,7 @@ lifts(classes: map, name: text, top_statements: list): bool := {
 }
 
 # the class declaration keeping only its fields
-without_methods(top_statement: Node, view: any): Node := {
+without_methods(top_statement: Node, view: list): Node := {
 	body = view#3
 	kept_members = body[0..<3] + body[3..].filter(member => defined_word(member_read(member)) == ø)
 	match top_statement {
@@ -281,7 +281,7 @@ assigns_name(body: Node, name: text): bool := #assigned_values(body, name) > 0
 # `name(self, parameters…)` of a method several classes declare, of a routed one or of an operator: the call of the
 # instance's class's own, each class tested before the classes it extends; each owner's spelling of it (an operator's
 # `plus` in one class, `+` in another); the last owner taking any other instance, unless it falls back
-method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, operator: any): Node := {
+method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls_back: bool, operator: list?): Node := {
 	parameters = method_parameters(method_in(classes[owners#1], spellings#1))
 	call_arguments = [self_node] + parameters.map(method_parameter => symbol(parameter_name(method_parameter)))
 	called = {}
@@ -319,7 +319,7 @@ routed(n: Node, classes: map, names: list, routed_methods: list): Node := match 
 }
 # the operators lib/aliases.warp names (an entry with its `operator`), by each spelling a method may take: the glyph,
 # the entry's word and its aliases, `+`, add and plus each [add, "+"]; read once per program
-operator_spellings(): any := {
+operator_spellings(): map := {
 	found = {}
 	for row in items_of(written_tree(ALIAS_TABLE)) {
 		glyph = alias_field(row#2, "operator")
@@ -330,7 +330,7 @@ operator_spellings(): any := {
 }
 # the operator a method's name spells (not named operator_word: a plural reads as the function's, and lambdas.warp's
 # global operator_words would be its call), [its word, its glyph] (`plus` and `+` give [add, "+"]), else ø
-spelled_operator(operator_table: map, spelled: text): any := if spelled in operator_table then operator_table[spelled] else ø
+spelled_operator(operator_table: map, spelled: text): list? := if spelled in operator_table then operator_table[spelled] else ø
 # how many parameters the method of that name takes (besides its instance)
 taken_count(classes: map, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
 is_field_of_any(classes: map, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)

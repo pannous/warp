@@ -31,7 +31,7 @@ written_parameter(written: text): Parameter := {
 }
 
 # `upper(t: text): text from warp` → Builtin; ø for a line of another library
-typed_line(line: text, library: text): any := {
+typed_line(line: text, library: text): Builtin? := {
 	line = line.trim()
 	suffix = " from " + library
 	if not line.ends_with(suffix) { return ø }
@@ -104,11 +104,11 @@ lines_of(lines: list, word: text): list := lines.filter(line => line.name == wor
 
 
 # the kind a line's result is held as when it is a text or a list (`list of text` too); ø for another
-line_result_kind(line: Builtin): any := if line.signature.result == "text" then "text" else if line.signature.result.starts_with("list") then "list" else ø
+line_result_kind(line: Builtin): text? := if line.signature.result == "text" then "text" else if line.signature.result.starts_with("list") then "list" else ø
 
 # the kind a call of `arguments` values to a word the emitter expands gives, as its first fitting line declares it; ø
 # when the call decides it (`number("2.5")`, a bool the emitter marks) or the line names no kind
-emitted_call_kind(word: text, arguments: int): any := {
+emitted_call_kind(word: text, arguments: int): text? := {
 	fitting = lines_of(emitter_lines, unaliased(word)).filter(line => takes(line.signature, arguments))
 	if #fitting == 0 { return ø }
 	line = fitting#1
@@ -123,7 +123,7 @@ emitted_call_kind(word: text, arguments: int): any := {
 
 # the argument a word's result follows, and how: `field_with(object, name, value): same as object` → ["same", 1],
 # `map_get_or(m, key, default): value of m` → ["element", 1]; ø for a result of its own
-argument_result(word: text): any := {
+argument_result(word: text): list? := {
 	lines = lines_of(typed_lines, unaliased(word))
 	if #lines == 0 { return ø }
 	line = lines#1
@@ -139,7 +139,7 @@ argument_result(word: text): any := {
 
 # the result of a runtime word for a first value of kind `first`: its overload's for that kind (`reverse(t: text): text`),
 # else the one all its overloads share; ø when the overloads give no text or list
-overload_kind(word: text, first: text): any := {
+overload_kind(word: text, first: text): text? := {
 	overloads = lines_of(runtime_lines, unaliased(word))
 	if #overloads == 0 { return ø }
 	kinds = overloads.map(line => line_result_kind(line))
@@ -153,7 +153,7 @@ overload_kind(word: text, first: text): any := {
 }
 
 # the kind a value of a built-in type word is held as: `int` int, `text` text; ø for a list, a map or no type
-type_word_kind(word: text): any := type_kinds.get(word)
+type_word_kind(word: text): text? := type_kinds.get(word)
 
 # libm's functions as lib/math.warp's foreign lines declare them, `floor(x: float): float from 'm'`: what a call of
 # floor compiles to, so its result is the call's
@@ -161,7 +161,7 @@ foreign_math_lines = module_source("math").split("\n").map(line => typed_line(li
 
 # the kind a declared result is held as: `nothing` and `any` a node of run-time kind, a yes/no an int, a type of
 # values its kind, any other type (`time`, `signal`) an object; ø for `number`, decided where the value is made
-declared_result_kind(result: text): any := {
+declared_result_kind(result: text): text? := {
 	if result == "" or result == "nothing" or result == "any" { return "empty" }
 	if result == "number" { return ø }
 	if result == "bool" { return "int" }
@@ -195,7 +195,7 @@ host_result_kind(results: list): text := if #results == 1 and results#1 != "node
 # the kind a call of `arguments` values to a declared word gives, by the one result all its fitting lines declare: a
 # prelude typed line, a libm foreign line, a host word; ø when its lines differ by the argument (`reverse` of a text
 # or list, `same as object`) or nothing declares it
-declared_call_kind(word: text, arguments: int): any := {
+declared_call_kind(word: text, arguments: int): text? := {
 	fitting = lines_of(typed_lines + foreign_math_lines, unaliased(word)).filter(line => takes(line.signature, arguments))
 	if #fitting > 0 {
 		results = fitting.map(line => line.signature.result)
@@ -210,7 +210,7 @@ typed_libraries = ["warp", "emitter", "'m'"]
 
 # word → its typed lines of lib/prelude.warp and lib/math.warp, the first written first
 global typed_word_lines = ø
-word_lines(): any := {
+word_lines(): map := {
 	if typed_word_lines != ø { return typed_word_lines }
 	typed_word_lines = {}
 	for line in (prelude_text + "\n" + module_source("math")).split("\n") {

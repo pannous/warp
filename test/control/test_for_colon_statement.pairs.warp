@@ -1,0 +1,2 @@
+'s=0; for 1…3: s+=it*it; s'	14
+'s=""; for ["a" "b"]: s+=it; s'	"ab"
