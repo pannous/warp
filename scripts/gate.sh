@@ -49,14 +49,14 @@ red() { echo "gate: RED at tier $1 ($(git rev-parse --short HEAD), $(since $star
 # the first line worth showing of a run: its stdout, else its first error line without the source gutter
 said() { local text; text=$(grep -v '^ *[0-9]* |\|^ *|' "$1" | head -1); echo "${text:0:160}"; }
 
-# the compilers of the tree's lib in its data/ (scripts/rebuild.sh: built only when no build of these inputs exists),
+# the compilers of the tree's lib in that lib/ (scripts/rebuild.sh: built only when no build of these inputs exists),
 # then beside the binary copy, which takes the compiler beside it first: a stale one there never runs the probes
 if ((rebuild)) && wants 0; then
 	WARP_BINARY=$binary "$(dirname "$0")/rebuild.sh" pure "$tree" > "$logs/rebuild-pure.log" 2>&1 || { echo "FAIL rebuild pure: $(grep -i 'error\|refus' "$logs/rebuild-pure.log" | head -1 | cut -c1-160) (log $logs/rebuild-pure.log)"; red 0; }
 fi
 for compiler in warp warp-self; do
 	rm -f "$logs/$compiler.wasm"
-	[ -f "$tree/data/$compiler.wasm" ] && cp -c "$tree/data/$compiler.wasm" "$logs/$compiler.wasm"
+	[ -f "$tree/lib/$compiler.wasm" ] && cp -c "$tree/lib/$compiler.wasm" "$logs/$compiler.wasm"
 done
 
 # the lanes judged: pure, and self when the binary finds a promoted warp-self.wasm (`warp version` names a missing one, on stderr)

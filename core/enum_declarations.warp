@@ -21,9 +21,10 @@ enum_rows(cases: list): list := {
 	rows
 }
 
-# a case of an enum, `north` of Swift's `case north`, else ø
+# a case of an enum, `north` of Swift's `case north`, `Error` of a spelled `Error = "error"`, else ø
 enum_case_name(case: Node): any := match case {
 	Symbol(name): name
+	Key(name, Op.Assign, _): if is_name(name) then name_of(name) else ø
 	List(words, Bracket.None, Separator.Space): if #words == 2 and words#1 == symbol(case_word) and is_name(words#2) then name_of(words#2) else ø
 	_: ø
 }
