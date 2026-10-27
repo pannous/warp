@@ -228,13 +228,6 @@ word_lines(): map := {
 # a word of the runtime, the emitter or a typed line of the library (lib/math.warp's `max`), which a class's method of
 # that name must not hide from the other values (class_methods.warp routes it, rewrites.warp keeps its sugar rules)
 is_library_word(word: text): bool := typed_lines.any(line => line.name == word) or word_lines().has(word)
-# whether a typed line of the word takes `count` values: its parameters, the defaulted ones left out, or more for a rest
-library_word_takes(word: text, count: int): bool := (typed_lines.filter(line => line.name == word) + (word_lines().get(word) ?? [])).any(line => takes_count(line.signature, count))
-takes_count(signature: Signature, count: int): bool := {
-	bounds = arity(signature)
-	rest = signature.parameters.any(parameter => parameter.rest)
-	count >= bounds#1 - (if rest then 1 else 0) and (rest or count <= bounds#2)
-}
 
 # whether the word's first line takes exactly one value, typed
 takes_one_typed_value(word: text): bool := {
