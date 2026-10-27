@@ -2,13 +2,13 @@
 # sequences, appends in place
 # `ran·without·error{statement}`, what `try` lowers to: 1 when the statement finished, 0 when a runtime error was thrown
 # in it; the depth goes up for the statement and back down on both paths (a jump out of it would skip that: refused)
-def ran_without_error(body: Body, statement: Node): list {
+def ran_without_error(body: Body, statement: Node): TypedCode {
 	for jump in ["return", "break", "continue"] { if mentions(statement, jump) { return refuse("a " + jump + " out of a try") } }
 	guarded = [op.try_table, no_value] + uleb(1) + [catch_clause_byte, 0, 0] + nested_effect(body, statement, 3) + [op.end]
 	finished = try_depth_step(op.i64_sub) + [op.i64_const, 1, op.br, 1, op.end]
 	caught = [op.drop] + try_depth_step(op.i64_sub) + [op.i64_const, 0]
 	# the inner block's value: the thrown error's id, an i32
-	["int", try_depth_step(op.i64_add) + [op.block] + value_type("int") + [op.block] + value_type("bool") + guarded + finished + caught + [op.end]]
+	TypedCode("int", try_depth_step(op.i64_add) + [op.block] + value_type("int") + [op.block] + value_type("bool") + guarded + finished + caught + [op.end])
 }
 def try_depth_step(instruction: int): list {
 	depth = uleb(module.globals[try_depth_name]#1)
@@ -18,7 +18,7 @@ def try_depth_step(instruction: int): list {
 # (abi/traps.rs trap_error); while a try runs, the global failed_in keeps its message for `catch e` (runtime.warp
 # caught_error) and it throws
 def error_throw(name: text): list {
-	named = boxed(["text", text_bytes(name)]) + [op.global_set] + uleb(declared_global(trap_name_global, "node")#1)
+	named = boxed(TypedCode("text", text_bytes(name))) + [op.global_set] + uleb(declared_global(trap_name_global, "node")#1)
 	if not module.catches_errors { return named }
 	kept = text_bytes(runtime_error_message(name)) + [op.global_set] + uleb(module.globals[failed_in_name]#1)
 	named + [op.global_get] + uleb(module.globals[try_depth_name]#1) + [op.i64_eqz, op.i32_eqz, op.if, no_value] + kept + [op.i32_const, 0, op.throw, 0, op.end]
@@ -34,35 +34,35 @@ def runtime_error_message(name: text): text {
 }
 # `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
 # has_else: `else ø` is a branch giving ø, no missing one
-def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_else: bool): list {
+def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_else: bool): TypedCode {
 	c = condition_of(body, test, 0)
 	a = nested(body, statements_block(yes_branch), 1)
 	if not has_else { return unmatched(c, a, yes_branch is number) }
 	b = nested(body, statements_block(no_branch), 1)
-	kind = joint_kind(a#1, b#1)
+	kind = joint_kind(a.kind, b.kind)
 	# a first reading whose branches both wait on calls still compiling: its kind is not known yet either (its code is
 	# not kept), so the function's other readings decide it
-	if kind == pending and body.function.result == pending { return [pending, c + [op.if] + value_type("node") + a#2 + [op.else] + b#2 + [op.end]] }
+	if kind == pending and body.function.result == pending { return TypedCode(pending, c + [op.if] + value_type("node") + a.code + [op.else] + b.code + [op.end]) }
 	if kind == pending { kind = "int" }
-	if kind == no_kind or kind == "mixed" { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]] }
-	[kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
+	if kind == no_kind or kind == "mixed" { return TypedCode(no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]) }
+	TypedCode(kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end])
 }
 # `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø, as Rust gives
-def unmatched(c: list, a: TypedCode, numeric: bool): list {
-	if a#1 == no_kind { return [no_kind, c + [op.if, no_value] + a#2 + [op.end]] }
-	if a#1 == "int" or a#1 == pending { return ["int", c + [op.if] + value_type("int") + converted(a, "int") + [op.else, op.i64_const, 0, op.end]] }
-	otherwise = if numeric or a#1 == "float" or a#1 == "bool" then boxed(number_value(0)) else [ref_null, gc_type(gc.node)]
-	["node", c + [op.if] + value_type("node") + boxed(a) + [op.else] + otherwise + [op.end]]
+def unmatched(c: list, a: TypedCode, numeric: bool): TypedCode {
+	if a.kind == no_kind { return TypedCode(no_kind, c + [op.if, no_value] + a.code + [op.end]) }
+	if a.kind == "int" or a.kind == pending { return TypedCode("int", c + [op.if] + value_type("int") + converted(a, "int") + [op.else, op.i64_const, 0, op.end]) }
+	otherwise = if numeric or a.kind == "float" or a.kind == "bool" then boxed(number_value(0)) else [ref_null, gc_type(gc.node)]
+	TypedCode("node", c + [op.if] + value_type("node") + boxed(a) + [op.else] + otherwise + [op.end])
 }
 # `while c do body`: block { loop { exit unless c; block { body }; step; again } }; a `break` in body branches to the
 # outer block's end, a `continue` to the inner one's, so the step a `for` lowering appends (`loop·step: i++`) still runs.
 # Its value is that of the body's last run, ø when it never ran (the local `last` keeps it)
-def loop_of(body: Body, test: Node, block: Node): list {
+def loop_of(body: Body, test: Node, block: Node): TypedCode {
 	last = fresh_local(body, "node")
 	code = loop_code(body, test, block, last)
 	# `while true` without a break ends only by a return: no value, the function's result is its returns' alone
-	if is_endless(test, block) { return [never, code + [op.unreachable]] }
-	["node", code + [op.local_get] + uleb(last)]
+	if is_endless(test, block) { return TypedCode(never, code + [op.unreachable]) }
+	TypedCode("node", code + [op.local_get] + uleb(last))
 }
 # the code of a loop; each run of its body sets the local `last` to its value, or, with last -1, runs it for its effect
 def loop_code(body: Body, test: Node, block: Node, last: int): list {
@@ -74,11 +74,11 @@ def loop_code(body: Body, test: Node, block: Node, last: int): list {
 	body.exits += [body.depth + 1]
 	body.continuable += [has_step or continued_safely(test, parts)]
 	body.depth += 3
-	looped = if #parts == 0 then [no_kind, []] else if last < 0 then [no_kind, effects(body, parts)] else sequence(body, parts)
+	looped = if #parts == 0 then TypedCode(no_kind, []) else if last < 0 then TypedCode(no_kind, effects(body, parts)) else sequence(body, parts)
 	body.depth -= 3
 	body.exits = body.exits[0..<(#body.exits - 1)]
 	body.continuable = body.continuable[0..<(#body.continuable - 1)]
-	kept = if looped#1 == no_kind then looped#2 else boxed(looped) + [op.local_set] + uleb(last)
+	kept = if looped.kind == no_kind then looped.code else boxed(looped) + [op.local_set] + uleb(last)
 	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + kept + [op.end] + again + [op.end, op.end]
 }
 is_endless(test: Node, block: Node): bool := test == yes and not mentions(block, "break")
@@ -126,7 +126,7 @@ def nested_effect(body: Body, n: Node, blocks: int): list {
 }
 
 # the code of n read inside `blocks` more blocks, loops or ifs
-def nested(body: Body, n: Node, blocks: int): list {
+def nested(body: Body, n: Node, blocks: int): TypedCode {
 	body.depth += blocks
 	code = expression_code(body, n)
 	body.depth -= blocks
@@ -134,27 +134,27 @@ def nested(body: Body, n: Node, blocks: int): list {
 }
 
 # `break`: to the end of the innermost loop's block
-def loop_exit(body: Body): list {
+def loop_exit(body: Body): TypedCode {
 	if #body.exits == 0 { return refuse("a break outside a loop") }
-	[no_kind, [op.br] + uleb(body.depth - body.exits.last)]
+	TypedCode(no_kind, [op.br] + uleb(body.depth - body.exits.last))
 }
 
 # `continue`: to the end of the block around the innermost loop's body, before its step
-def loop_again(body: Body): list {
+def loop_again(body: Body): TypedCode {
 	if #body.exits == 0 { return refuse("a continue outside a loop") }
 	if not body.continuable.last { return refuse("a continue in a loop whose last statement may be its step") }
-	[no_kind, [op.br] + uleb(body.depth - body.exits.last - 2)]
+	TypedCode(no_kind, [op.br] + uleb(body.depth - body.exits.last - 2))
 }
 
 # a statement's code, its value dropped
 # `m.size`, `m.keys`: the entry of that name of a map that has one (`{size: 7}.size` is 7), else the word applied to m
-def field_or_word(body: Body, value: TypedCode, name: text, word: function): list {
-	if value#1 != "node" { return word(value) }
+def field_or_word(body: Body, value: TypedCode, name: text, word: function): TypedCode {
+	if value.kind != "node" { return word(value) }
 	held = uleb(fresh_local(body, "node"))
-	receiver = ["node", [op.local_get] + held]
+	receiver = TypedCode("node", [op.local_get] + held)
 	has_it = condition(runtime_call("has_field", [receiver, text_value_of(name)]))
 	read = boxed(runtime_call("map_get", [receiver, text_value_of(name)]))
-	["node", value#2 + [op.local_set] + held + has_it + [op.if] + value_type("node") + read + [op.else] + boxed(word(receiver)) + [op.end]]
+	TypedCode("node", value.code + [op.local_set] + held + has_it + [op.if] + value_type("node") + read + [op.else] + boxed(word(receiver)) + [op.end])
 }
 # the program's statement n about to run, its position in trap_position: a runtime error names it, as Rust's
 # (emit_trap_position); a runtime word's statements leave it
@@ -165,22 +165,22 @@ def position_code(body: Body, n: Node): list {
 	column: int = min(at#2, columns_per_line - 1)
 	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + uleb(declared_global("trap_position", "i32")#1)
 }
-def dropped(value: TypedCode): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
+def dropped(value: TypedCode): list { if value.kind == no_kind then value.code else value.code + [op.drop] }
 
 # `xs += e`: e's items appended to the list xs holds, in place, so every alias sees them; ø when xs holds no list
-appended(body: Body, target_name: Node, addition: Node): list? := {
+appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	target = expression_code(body, target_name)
 	added = expression_code(body, addition)
 	# a list takes any other value than a list as one item: `xs = []; xs += 3` is [3]
-	if target#1 == "list" and added#1 != "list" and added#1 != "node" { added = ["list", vector_code([boxed(added)])] }
+	if target.kind == "list" and added.kind != "list" and added.kind != "node" { added = TypedCode("list", vector_code([boxed(added)])) }
 	# `for w in words { xs += w }`: an addition known only at run time is its items or one item (runtime appended_items)
-	if target#1 == "list" and added#1 == "node" { added = runtime_call("appended_items", [added]) }
-	if target#1 == "list" { return runtime_call("list_append", [target, added]) }
-	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
+	if target.kind == "list" and added.kind == "node" { added = runtime_call("appended_items", [added]) }
+	if target.kind == "list" { return runtime_call("list_append", [target, added]) }
+	if target.kind == "node" { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
 }
 # the statements in order, the value that of the last
-def sequence(body: Body, items: list): list {
+def sequence(body: Body, items: list): TypedCode {
 	if #items == 0 { return refuse("an empty block") }
 	# a class or enum declaration is no value (collect_types reads it): the block's value is its last other statement,
 	# also where a used class's declaration was brought in after the program (the prelude's `class Error` that `x =
@@ -189,16 +189,16 @@ def sequence(body: Body, items: list): list {
 	while #valued > 1 and declares_type(valued.last) { valued = valued[0..<(#valued - 1)] }
 	code = effects(body, valued[0..<(#valued - 1)])
 	last = statement(body, valued.last)
-	[last#1, code + last#2]
+	TypedCode(last.kind, code + last.code)
 }
 # a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,
 # simpler); a fresh list makes it unshared, a list made inside a block of the statement does not outlast it
-def statement(body: Body, n: Node): list {
+def statement(body: Body, n: Node): TypedCode {
 	kept = []
 	for name in body.unshared { if appends_only(n, name) { kept += [name] } }
 	body.unshared = kept
 	value = expression_code(body, n)
-	value = [value#1, position_code(body, n) + value#2]
+	value = TypedCode(value.kind, position_code(body, n) + value.code)
 	after = []
 	for name in body.unshared { if name in kept { after += [name] } }
 	made = fresh_list_name(n)

@@ -16,11 +16,11 @@ lambda_prefixes = ["closure_lambda_", "lambda_value_"]
 # the operators a closure takes part in (node_equal compares closures)
 closure_comparisons = ["==", "!="]
 is_closure_value(n: Node) := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol("closure_new")
-def closure_value(body: Body, target: Node, captured: list): list {
+def closure_value(body: Body, target: Node, captured: list): TypedCode {
 	if not (target is symbol and name_of(target) in module.functions) { return refuse("a closure of " + form_of(target)) }
 	number = closure_number(name_of(target), #captured)
 	items = [boxed(number_value(number))] + captured.map(c => boxed(expression_code(body, c)))
-	["node", key_code(Kind.Function, vector_code(items), name_node(target))]
+	TypedCode("node", key_code(Kind.Function, vector_code(items), name_node(target)))
 }
 closure_number(name: text, captured: int): int := {
 	for i in 0..<#module.closures { if module.closures[i]#1 == name { return i } }
@@ -28,9 +28,9 @@ closure_number(name: text, captured: int): int := {
 	#module.closures - 1
 }
 # the item i of a closure's list: 0 its number, then its captured values
-def closure_item(closure: TypedCode, i: int): list { ["node", payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)])] }
+def closure_item(closure: list, i: int): TypedCode { TypedCode("node", payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)])) }
 captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
-def closure_call(body: Body, arity: int, arguments: list): list {
+def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
 	call_values(dispatcher(arity), arguments.map(a => expression_code(body, a)))
 }
@@ -48,7 +48,7 @@ made_late(name: text, result: text, parameters: list): any := {
 }
 # for each closure: if the closure's number is its own, the text it shows; another value shows "function"
 closure_text_code(f: Function): any := {
-	number = unboxed(closure_item([op.local_get, 0], 0)#2, gc_type(gc.int_box))
+	number = unboxed(closure_item([op.local_get, 0], 0).code, gc_type(gc.int_box))
 	f.code = text_bytes("function")
 	for k in 0..<#module.closures {
 		shown = text_bytes(closure_shown(module.closures[k]#1, module.closures[k]#2))
@@ -81,7 +81,7 @@ late_code(f: Function): int := {
 dispatcher_code(f: Function): any := {
 	arity = #f.kinds - 1
 	closure = [op.local_get, 0]
-	number = unboxed(closure_item(closure, 0)#2, gc_type(gc.int_box))
+	number = unboxed(closure_item(closure, 0).code, gc_type(gc.int_box))
 	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
 	code += kind_code_of(closure) + [op.i64_const] + sleb(Kind.Function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
@@ -93,7 +93,7 @@ dispatcher_code(f: Function): any := {
 		captured = module.closures[k]#2
 		if #target.signature.parameters - captured == arity {
 			labels += [#arms]
-			values = range_list(captured).map(i => closure_item(closure, i + 1)) + range_list(arity).map(j => ["node", [op.local_get] + uleb(j + 1)])
+			values = range_list(captured).map(i => closure_item(closure, i + 1)) + range_list(arity).map(j => TypedCode("node", [op.local_get] + uleb(j + 1)))
 			arms += [boxed(call_values(target, values)) + [op.return]]
 		} else {
 			labels += [-1]

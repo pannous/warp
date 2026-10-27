@@ -1092,7 +1092,7 @@ with_placed_parts(n: Node, placed_code: function): Node := {
 		right = placed_code(right, Place.PairValue)
 	}
 	if is_key(n, Op.Define) { left = head_with_parameters(left, parameter => placed_code(parameter, Place.Parameter)) }
-	if left == key_of(n) and right == value_of(n) and not is_statements_template(left) and not is_statements_template(right) { return n }
+	if not changes(left, key_of(n)) and not changes(right, value_of(n)) and not is_statements_template(left) and not is_statements_template(right) { return n }
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
 }
 

@@ -22,15 +22,15 @@ time_host_words = ["local_offset"]
 makes_time(program: Node): bool := mentions(program, "instant_at") or mentions(program, "time_of")
 
 # time_of(info, position): the time node; instant_at(milliseconds since 1970): an instant
-def time_call(body: Body, name: text, arguments: list): list {
+def time_call(body: Body, name: text, arguments: list): TypedCode {
 	if #arguments != time_words[name] { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	if name == "time_of" and arguments#1 is number and arguments#1 % (form_mask + 1) == TimeFormCode.Zoned { return refuse("a zoned time") }
 	values = arguments.map(a => expression_code(body, a))
 	if name == "instant_at" {
 		nanos = converted(values#1, "int") + [op.i64_const] + sleb(nanos_per_milli) + [shift_ops.i64_mul]
-		return ["time", time_node([op.i64_const, 0], nanos)]
+		return TypedCode("time", time_node([op.i64_const, 0], nanos))
 	}
-	["time", time_node(converted(values#1, "int"), converted(values#2, "int"))]
+	TypedCode("time", time_node(converted(values#1, "int"), converted(values#2, "int")))
 }
 def time_node(info: list, position: list): list {
 	kind = info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(Kind.Time) + [shift_ops.i64_or]
@@ -43,19 +43,19 @@ def kind_word_shifted(code: list, shift: int, signed: bool): list {
 	shifted + [shift_op]
 }
 def masked(code: list, mask: int): list { code + [op.i64_const] + sleb(mask) + [op.i64_and] }
-def time_intrinsic(body: Body, name: text, arguments: list): list {
-	t = expression_code(body, arguments#1)#2
-	if name == "time_form" { return ["int", masked(kind_word_shifted(t, kind_bits, no), form_mask)] }
-	if name == "time_position" { return ["int", unboxed(t, gc_type(gc.int_box))] }
-	if name == "duration_months" { return ["int", kind_word_shifted(t, kind_bits + months_shift, yes)] }
+def time_intrinsic(body: Body, name: text, arguments: list): TypedCode {
+	t = expression_code(body, arguments#1).code
+	if name == "time_form" { return TypedCode("int", masked(kind_word_shifted(t, kind_bits, no), form_mask)) }
+	if name == "time_position" { return TypedCode("int", unboxed(t, gc_type(gc.int_box))) }
+	if name == "duration_months" { return TypedCode("int", kind_word_shifted(t, kind_bits + months_shift, yes)) }
 	# the 32 days bits, sign-extended: shifted to the top of the word, then down again
 	if name == "duration_days" {
 		top = 64 - kind_bits - months_shift
 		days = as_node(t) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(top) + [shift_ops.i64_shl]
-		return ["int", days + [op.i64_const] + sleb(32) + [shift_ops.i64_shr_s]]
+		return TypedCode("int", days + [op.i64_const] + sleb(32) + [shift_ops.i64_shr_s])
 	}
-	if name == "zone_index" { return ["int", masked(kind_word_shifted(t, kind_bits + form_bits, no), zone_mask)] }
+	if name == "zone_index" { return TypedCode("int", masked(kind_word_shifted(t, kind_bits + form_bits, no), zone_mask)) }
 	# seconds east of UTC
 	offset = kind_word_shifted(t, kind_bits + offset_shift, yes)
-	["int", offset + [op.i64_const] + sleb(seconds_per_minute) + [shift_ops.i64_mul]]
+	TypedCode("int", offset + [op.i64_const] + sleb(seconds_per_minute) + [shift_ops.i64_mul])
 }

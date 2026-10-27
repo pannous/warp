@@ -13,7 +13,7 @@ def name_node(name: any): list {
 # (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry)
 is_map_entry(n: Node): bool := is_key(n, Op.Colon) and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global")
 # `{a: 1, b: "x"}`: a map
-def map_value(body: Body, entries: list): list { ["node", entries_code(body, entries.map(e => key_of(e)), entries.map(e => value_of(e)))] }
+def map_value(body: Body, entries: list): TypedCode { TypedCode("node", entries_code(body, entries.map(e => key_of(e)), entries.map(e => value_of(e)))) }
 # the map of the names to the values
 def entries_code(body: Body, entry_names: list, entry_values: list): list {
 	codes = []
@@ -25,11 +25,11 @@ def entries_code(body: Body, entry_names: list, entry_values: list): list {
 # Rust checks each typed field's value (src/declared_values.rs): an instance is built here only when every value has
 # its field's kind already or is checked at run time; a class not declared in the program (a markup tag, a module's)
 # is refused
-def instance_value(body: Body, class_name: text, fields: list): list {
+def instance_value(body: Body, class_name: text, fields: list): TypedCode {
 	instance_of_fields(body, class_name, fields.map(field => name_of(key_of(field))), fields.map(field => value_of(field)))
 }
 # `Point(2, 3)`: the instance whose fields, in the order the class declares them, are the arguments
-def positional_instance(body: Body, class_name: text, arguments: list): list {
+def positional_instance(body: Body, class_name: text, arguments: list): TypedCode {
 	field_names = if class_name in module.classes then module.classes[class_name].keys else []
 	slots = placed_arguments(field_names, arguments)
 	if not (slots is list) { return refuse("an instance of " + class_name + " given more values than fields") }
@@ -37,7 +37,7 @@ def positional_instance(body: Body, class_name: text, arguments: list): list {
 	instance_of_fields(body, class_name, given.map(i => field_names[i]), given.map(i => slots[i]#1))
 }
 # the instance of the class whose fields of these names hold these values
-def instance_of_fields(body: Body, class_name: text, field_names: list, field_values: list): list {
+def instance_of_fields(body: Body, class_name: text, field_names: list, field_values: list): TypedCode {
 	if class_name not in module.classes { return refuse("an instance of " + class_name + ", a class not declared here") }
 	declared = module.classes[class_name]
 	# the fields left out take their defaults, else their type's zero, as Rust's type_constructor.rs with_defaults
@@ -60,10 +60,10 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 		# an optional field `b: text?` takes ø as it is, any other value as its base type
 		field_type = if given[field_name] == ø and written_type != base_type(written_type) then ø else base_type(written_type)
 		value = texted(field_type, expression_code(body, given[field_name]))
-		if not checked_at_run_time(field_type, value#1) and not admits(field_type, value#1) { return refuse("a " + value#1 + " for a typed field of " + class_name) }
+		if not checked_at_run_time(field_type, value.kind) and not admits(field_type, value.kind) { return refuse("a " + value.kind + " for a typed field of " + class_name) }
 		codes += [as_node(boxed(field_value(field_type, value)))]
 	}
-	["node", instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [gc_type(class_struct(class_name))])]
+	TypedCode("node", instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [gc_type(class_struct(class_name))]))
 }
 # a field's type's zero: 0, 0.0, "", no, [], else ø (an untyped or optional field, one of a class)
 field_zeros = {int: 0, float: 0.0, text: "", bool: no, list: []}
@@ -137,26 +137,26 @@ subscript_name(index: Node): any := {
 is_shifted_index(index: Node): bool := op_of(index) == Op.Add and value_of(index) == 1
 # `m.name`, `m["name"]`: a map's or an instance's entry, a swizzle's components of a list of 2 to 4 numbers (`p.zy`),
 # else the run ends in no_field_<name>, which Rust's run reports as "no field name"
-def field_read(body: Body, target: any, name: text, class_name: text = ""): list {
-	held = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
+def field_read(body: Body, target: any, name: text, class_name: text = ""): TypedCode {
+	held = TypedCode("node", [op.local_get] + uleb(fresh_local(body, "node")))
 	named = text_value_of(name)
 	missing = ended_in("node", no_field_prefix + name)
 	if is_swizzle(name) {
 		word = if #name == 1 then "swizzled_one" else "swizzled"
 		fits = condition(runtime_call("swizzle_fits", [held, named]))
-		missing = ["node", fits + if_else_code("node", runtime_call(word, [held, named]), missing)]
+		missing = TypedCode("node", fits + if_else_code("node", runtime_call(word, [held, named]), missing))
 	}
 	# a receiver of a known class: its field, read from its struct; another value as any value
 	if class_name != "" and struct_field(class_name, name) != ø {
 		struct_index = gc_type(class_struct(class_name))
-		read = ["node", held#2 + gc_code(gc_ops.ref_cast, [struct_index]) + gc_code(gc_ops.struct_get, [struct_index, struct_field(class_name, name)])]
-		return ["node", boxed(target) + [op.local_set] + held#2[1..] + held#2 + gc_code(gc_ops.ref_test, [struct_index]) + if_else_code("node", read, call_values(made_late(field_getter_prefix + name, "node", ["m"]), [held]))]
+		read = TypedCode("node", held.code + gc_code(gc_ops.ref_cast, [struct_index]) + gc_code(gc_ops.struct_get, [struct_index, struct_field(class_name, name)]))
+		return TypedCode("node", boxed(target) + [op.local_set] + held.code[1..] + held.code + gc_code(gc_ops.ref_test, [struct_index]) + if_else_code("node", read, call_values(made_late(field_getter_prefix + name, "node", ["m"]), [held])))
 	}
 	# a field some class declares, of a receiver whose class is not known: that field's getter, which tests only the
 	# classes declaring it
-	if declares_field(name) and not is_swizzle(name) { return call_values(made_late(field_getter_prefix + name, "node", ["m"]), [["node", boxed(target)]]) }
+	if declares_field(name) and not is_swizzle(name) { return call_values(made_late(field_getter_prefix + name, "node", ["m"]), [TypedCode("node", boxed(target))]) }
 	found = condition(runtime_call("has_field", [held, named]))
-	["node", boxed(target) + [op.local_set] + held#2[1..] + found + if_else_code("node", runtime_call("map_get", [held, named]), missing)]
+	TypedCode("node", boxed(target) + [op.local_set] + held.code[1..] + found + if_else_code("node", runtime_call("map_get", [held, named]), missing))
 }
 # the class a receiver is declared as, a parameter written `p: Parser`; "" when not known. A subclass's instance passes
 # too: its struct starts with its parent's fields
@@ -199,7 +199,7 @@ def each_class_field(each: function, after: list = []): list {
 	code
 }
 # whether the name (parameter 1) is this field's
-def names_field(field: text): list { condition(runtime_call("node_equal", [["node", [op.local_get, 1]], ["node", boxed(text_value_of(field))]])) }
+def names_field(field: text): list { condition(runtime_call("node_equal", [TypedCode("node", [op.local_get, 1]), TypedCode("node", boxed(text_value_of(field)))])) }
 # instance_set(m, name, value): 1 when m's class declares the field, set in its struct; 0 when it does not, the field
 # set in m's extra fields; 2 when m is no instance of a class (an AST key without an operator is marked so too)
 def instance_set_code(f: Function) {
@@ -207,7 +207,7 @@ def instance_set_code(f: Function) {
 	base = gc_type(instance_struct())
 	extra = [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + gc_code(gc_ops.struct_get, [base, extra_field])
 	name = payload([op.local_get, 1], gc_type(gc.text))
-	put = runtime_call("field_with", [["node", extra], ["text", name], ["node", as_node([op.local_get, 2])]])#2
+	put = runtime_call("field_with", [TypedCode("node", extra), TypedCode("text", name), TypedCode("node", as_node([op.local_get, 2]))]).code
 	extra_set = [op.local_get, 0] + gc_code(gc_ops.ref_cast, [base]) + as_node(put) + gc_code(gc_ops.struct_set, [base, extra_field]) + [op.i64_const, 0, op.return]
 	f.code = each_class_field(write, extra_set) + [op.i64_const, 2]
 }
@@ -224,7 +224,7 @@ def field_getter_code(f: Function) {
 			code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value, op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index]) + gc_code(gc_ops.struct_get, [struct_index, place]) + [op.return, op.end]
 		}
 	}
-	f.code = code + runtime_call("map_get", [["node", [op.local_get, 0]], text_value_of(name)])#2
+	f.code = code + runtime_call("map_get", [TypedCode("node", [op.local_get, 0]), text_value_of(name)]).code
 }
 # `set·code(m, value)`: m with its field code set in the struct of whichever class declaring it m is an instance of;
 # any other value (a map, an instance whose class lacks the field) as field_with sets it
@@ -239,7 +239,7 @@ def field_setter_code(f: Function) {
 			code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value, op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index]) + as_node([op.local_get, 1]) + gc_code(gc_ops.struct_set, [struct_index, place]) + [op.local_get, 0, op.return, op.end]
 		}
 	}
-	f.code = code + runtime_call("field_with", [["node", [op.local_get, 0]], text_value_of(name), ["node", [op.local_get, 1]]])#2
+	f.code = code + runtime_call("field_with", [TypedCode("node", [op.local_get, 0]), text_value_of(name), TypedCode("node", [op.local_get, 1])]).code
 }
 def instance_entries_code(f: Function) {
 	code = []
@@ -248,9 +248,9 @@ def instance_entries_code(f: Function) {
 		fields = module.classes[class_name].keys
 		instance = [op.local_get, 0] + gc_code(gc_ops.ref_cast, [struct_index])
 		entries = range_list(#fields).map(i => keyed_code(name_node(symbol(fields[i])), instance + gc_code(gc_ops.struct_get, [struct_index, i + #instance_fields])))
-		declared = ["node", node(Marked.Map, vector_code(entries))]
-		extra = ["node", instance + gc_code(gc_ops.struct_get, [struct_index, extra_field])]
-		code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value] + runtime_call("with_entries_of", [declared, extra])#2 + [op.return, op.end]
+		declared = TypedCode("node", node(Marked.Map, vector_code(entries)))
+		extra = TypedCode("node", instance + gc_code(gc_ops.struct_get, [struct_index, extra_field]))
+		code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value] + runtime_call("with_entries_of", [declared, extra]).code + [op.return, op.end]
 	}
 	f.code = code + [ref_null, gc_type(gc.node)]
 }
@@ -258,7 +258,7 @@ def instance_entries_code(f: Function) {
 def declares_field(name: text): bool { module.classes.keys.any(class_name => name in module.classes[class_name]) }
 def is_swizzle(name: text): bool { #name >= 1 and #name <= 4 and name.all(c => c in "xyzw") }
 # a value of the kind given that ends the run in the error function named
-def ended_in(kind: text, error: text): list { [kind, [op.call] + uleb(error_function(error)) + [op.drop, op.unreachable]] }
+def ended_in(kind: text, error: text): TypedCode { TypedCode(kind, [op.call] + uleb(error_function(error)) + [op.drop, op.unreachable]) }
 # the index of a function that only traps, named so the run's error reads as Rust's does (src/wasm_emitter/control/traps.rs)
 def error_function(name: text): int {
 	if name in module.errors { return module.errors[name].index }
@@ -268,11 +268,11 @@ def error_function(name: text): int {
 	f.index
 }
 # a recursive call not yet known (pending) is read as the node it may be, as element() takes it (card recursive-class-return)
-def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): list { if value#1 == "node" or value#1 == pending then field_read(body, ["node", value#2], name, class_name) else refuse("the field " + name + " of a " + value#1) }
+def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): TypedCode { if value.kind == "node" or value.kind == pending then field_read(body, TypedCode("node", value.code), name, class_name) else refuse("the field " + name + " of a " + value.kind) }
 # `m.x = v`: the map with its entry x set to v
-def field_assignment(map: any, name: any, value: TypedCode): list { runtime_call("field_with", [["node", boxed(map)], shown_text(name), ["node", boxed(value)]]) }
+def field_assignment(map: any, name: any, value: TypedCode): TypedCode { runtime_call("field_with", [TypedCode("node", boxed(map)), shown_text(name), TypedCode("node", boxed(value))]) }
 # a name as a text value, even of one character (text_value gives a "char" then)
-def text_value_of(name: text): list { ["text", text_bytes(name)] }
+def text_value_of(name: text): TypedCode { TypedCode("text", text_bytes(name)) }
 # the classes and enum cases the program declares, wherever it does (a declaration arrives as an opaque view
 # ["type", name, body], its name an attribute layer for an enum's bare cases or a base class)
 # the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
@@ -336,7 +336,7 @@ def field_kind(type: any): any {
 	"instance"
 }
 # a character given to a field typed text is that text (`"r"` is a character here)
-def texted(type: any, value: TypedCode): list { if value#1 == "char" and field_kind(type) == "text" then shown_text(value) else value }
+def texted(type: any, value: TypedCode): TypedCode { if value.kind == "char" and field_kind(type) == "text" then shown_text(value) else value }
 # whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion; an
 # instance of a class is a node, as Rust's class-typed fields take it
 def admits(type: any, kind: text): bool {
@@ -398,45 +398,45 @@ field_defaults(body: any): any := {
 # (src/wasm_emitter/declared_values.rs), a float field keeping an int
 field_checks = {int: "int_admitted", list: "list_admitted", text: "text_checked", bool: "bool_checked", float: "float_checked"}
 def checked_at_run_time(field_type: any, kind: text): bool { not admits(field_type, kind) and field_kind(field_type) in field_checks }
-def field_value(field_type: any, value: TypedCode): list { if checked_at_run_time(field_type, value#1) then runtime_call(field_checks[field_kind(field_type)], [value]) else value }
+def field_value(field_type: any, value: TypedCode): TypedCode { if checked_at_run_time(field_type, value.kind) then runtime_call(field_checks[field_kind(field_type)], [value]) else value }
 
 # `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
-def map_assignment(body: Body, target: any, name: text, value: TypedCode): list {
-	if checks_fields(body, target) and not field_admits(name, value#1) { return refuse("a " + value#1 + " written to a typed field " + name) }
+def map_assignment(body: Body, target: any, name: text, value: TypedCode): TypedCode {
+	if checks_fields(body, target) and not field_admits(name, value.kind) { return refuse("a " + value.kind + " written to a typed field " + name) }
 	# a field some class declares: that field's setter, which tests only the classes declaring it
 	if declares_field(name) {
-		held = [op.local_get] + uleb(fresh_local(body, value#1))
+		held = [op.local_get] + uleb(fresh_local(body, value.kind))
 		object = expression_code(body, target)
 		setter = made_late(field_setter_prefix + name, "node", ["m", "value"])
-		set = put_back(body, target, object, ["node", call_values(setter, [object, [value#1, held]])#2])
-		return [value#1, value#2 + [op.local_set] + held[1..] + set + held]
+		set = put_back(body, target, object, TypedCode("node", call_values(setter, [object, TypedCode(value.kind, held)]).code))
+		return TypedCode(value.kind, value.code + [op.local_set] + held[1..] + set + held)
 	}
 	entry_assignment(body, target, text_value_of(name), value)
 }
 # the entry named by the text `name` of the map `target` set to value, a variable target holding the result, a map
 # made of ø; the assignment gives the value
-def entry_assignment(body: Body, target: any, name: any, value: TypedCode): list {
+def entry_assignment(body: Body, target: any, name: any, value: TypedCode): TypedCode {
 	if checks_fields(body, target) and name#1 != "text" and #module.classes.keys > 0 { return refuse("a field write by a name a typed field may refuse") }
-	held = [op.local_get] + uleb(fresh_local(body, value#1))
+	held = [op.local_get] + uleb(fresh_local(body, value.kind))
 	object = expression_code(body, target)
-	set = put_back(body, target, object, ["node", field_assignment(object, name, [value#1, held])#2])
-	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+	set = put_back(body, target, object, TypedCode("node", field_assignment(object, name, TypedCode(value.kind, held)).code))
+	TypedCode(value.kind, value.code + [op.local_set] + held[1..] + set + held)
 }
 # `m[k] = v` of a value known only at run time, as lowered `m#(k+1) = v`: an int k sets the item k+1, any other key
 # the entry named so (runtime.warp node_put); a variable m holds the result, a map made of ø; the assignment gives v
-def keyed_assignment(body: Body, target: any, object: any, key: any, value: TypedCode): list {
-	held = [op.local_get] + uleb(fresh_local(body, value#1))
-	put = ["node", runtime_call("node_put", [object, ["node", boxed(key)], ["node", boxed([value#1, held])]])#2]
+def keyed_assignment(body: Body, target: any, object: TypedCode, key: any, value: TypedCode): TypedCode {
+	held = [op.local_get] + uleb(fresh_local(body, value.kind))
+	put = TypedCode("node", runtime_call("node_put", [object, TypedCode("node", boxed(key)), TypedCode("node", boxed(TypedCode(value.kind, held)))]).code)
 	set = put_back(body, target, object, put)
-	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+	TypedCode(value.kind, value.code + [op.local_set] + held[1..] + set + held)
 }
 # the code of a put into the map node a place target holds (a variable, or a field or element of one: `p.b.c = 4`),
 # which takes its result (ø becomes a map), else the put with its result dropped (a local named map reads as the word
 # map: card local-named); a main-level variable a function changes an entry of is changed for every function, as a
 # reference is in Rust's (`module.functions[name] = …`), not a new local of the function
-def put_back(body: Body, target: any, object: any, put: any): list {
-	if target is symbol and object#1 == "node" and is_global(body, name_of(target)) { return dropped(global_assignment(name_of(target), put)) }
-	if is_place(target) and object#1 == "node" then dropped(assignment(body, target, put)) else dropped(put)
+def put_back(body: Body, target: any, object: TypedCode, put: TypedCode): list {
+	if target is symbol and object.kind == "node" and is_global(body, name_of(target)) { return dropped(global_assignment(name_of(target), put)) }
+	if is_place(target) and object.kind == "node" then dropped(assignment(body, target, put)) else dropped(put)
 }
 # a variable, or a field or element of one: what an assignment can write
 def is_place(target: any): bool {

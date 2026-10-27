@@ -1,5 +1,5 @@
 # Functions (emitter.warp's part): calls and their arguments, each function's kinds and code, analyzer.warp's kinds
-def call(body: Body, f: Function, arguments: list): list {
+def call(body: Body, f: Function, arguments: list): TypedCode {
 	parameters = f.signature.parameters
 	if parameters and parameters.last.rest { return rest_call(body, f, arguments) }
 	if #arguments > #parameters { return refuse_arguments(f, #arguments) }
@@ -9,7 +9,7 @@ def call(body: Body, f: Function, arguments: list): list {
 	call_values(f, defaulted(body, f, given, #arguments))
 }
 # `f(1, 2, 3)` of `f(a, *xs)`: the arguments after the fixed ones go as one list, a lone spread `f(1, *ys)` as ys
-def rest_call(body: Body, f: Function, arguments: list): list {
+def rest_call(body: Body, f: Function, arguments: list): TypedCode {
 	fixed = #f.signature.parameters - 1
 	if #arguments < fixed { return refuse_arguments(f, #arguments) }
 	extra = arguments[fixed..]
@@ -44,14 +44,14 @@ placed_arguments(names: list, arguments: list): any := {
 }
 refuse_arguments(f: Function, count: int): any := refuse("a call of " + f.name + " with " + count + " arguments")
 # the default of f's parameter i a call leaves out, compiled where the call is: refused when it reads a parameter
-def default_value(body: Body, f: Function, i: int, count: int): list {
+def default_value(body: Body, f: Function, i: int, count: int): TypedCode {
 	default = f.signature.parameters[i].defaulted_to
 	if default == ø { return refuse_arguments(f, count) }
 	for name in taken_names(f.signature) { if mentions(default#1, name) { return refuse("a default of " + f.name + " reading " + name) } }
 	expression_code(body, default#1)
 }
-def call_values(f: Function, values: list): list {
-	if f.kinds == ø { compile_function(f, values.map(v => v#1)) }
+def call_values(f: Function, values: list): TypedCode {
+	if f.kinds == ø { compile_function(f, values.map(v => v.kind)) }
 	# a function still compiling gives the kind it declares; without one its result is not known yet, and the caller
 	# is read again once every function is compiled
 	result = if f.result == pending then declared_result(f) ?? pending else f.result
@@ -61,7 +61,7 @@ def call_values(f: Function, values: list): list {
 		widen_parameter(f, i, values[i]#1)
 		code += passed(f, i, values[i])
 	}
-	[result, code + [op.call] + uleb(f.index)]
+	TypedCode(result, code + [op.call] + uleb(f.index))
 }
 # a value a compiled function's unannotated parameter cannot take, `last(t)` after `last(xs)`: the module is compiled
 # again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module). A reading that widened
@@ -72,10 +72,10 @@ def passed(f: Function, i: int, value: TypedCode): list {
 	try {
 		# a node may hold any kind (`v.x * s` of a float s): read as an unannotated parameter's int it would trap, so the
 		# parameter widens, as widen_parameter does for a call still compiling
-		if value#1 == "node" and f.kinds[i] != "node" and slot in module.unannotated { refuse("a node where a " + f.kinds[i] + " is needed") }
+		if value.kind == "node" and f.kinds[i] != "node" and slot in module.unannotated { refuse("a node where a " + f.kinds[i] + " is needed") }
 		converted(value, f.kinds[i])
 	} catch refusal {
-		joint = parameter_joint(f.kinds[i], value#1)
+		joint = parameter_joint(f.kinds[i], value.kind)
 		if slot not in module.unannotated or not (joint in type_bytes or joint in references) { throw refusal }
 		known = module.later_kinds.get(slot) == joint
 		if known and slot not in module.widened_now { throw refusal }
@@ -84,7 +84,7 @@ def passed(f: Function, i: int, value: TypedCode): list {
 			module.widened_now[slot] = yes
 			module.widenings += 1
 		}
-		value#2
+		value.code
 	}
 }
 # a call of a function still compiling (its own body, a cycle) passing an argument its unannotated parameter does not
@@ -263,7 +263,7 @@ function_compiled(f: Function, argument_kinds: list): any := {
 		f.kinds = range_list(#parameter_kinds).map(i => if parameter_key(f.name, i) in f.widened then f.widened[parameter_key(f.name, i)] else parameter_kinds[i])
 		f.result = pending
 		first = new_body(f)
-		result = expression_code(first, statements_block(f.body))#1
+		result = expression_code(first, statements_block(f.body)).kind
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
 	if result != no_kind and analyzed_result_kind(f) != ø and (result == pending or held_as(result, analyzed_result_kind(f))) { result = analyzed_result_kind(f) }
@@ -284,8 +284,8 @@ function_compiled(f: Function, argument_kinds: list): any := {
 body_code(f: Function) := {
 	scope = new_body(f)
 	value = expression_code(scope, statements_block(f.body))
-	value = [value#1, position_code(scope, f.body) + value#2]
-	f.code = if f.gives_nothing then value#2 + [ref_null, gc_type(gc.node)] else converted(value, f.result)
+	value = TypedCode(value.kind, position_code(scope, f.body) + value.code)
+	f.code = if f.gives_nothing then value.code + [ref_null, gc_type(gc.node)] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.signature.parameters)..]
 	f.local_names = scope.order
 }

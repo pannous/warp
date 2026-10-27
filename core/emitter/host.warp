@@ -13,18 +13,18 @@ def host_type(kind: text): list { if kind == "i32" or kind == "c_text" then [typ
 
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
-def host_call(body: Body, name: text, arguments: list): list {
+def host_call(body: Body, name: text, arguments: list): TypedCode {
 	signature = module.host[name]
 	if "node" in signature#1 or "node" in signature#2 { exported_builders() }
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	code = []
 	for i in 0..<#arguments { code += host_argument(expression_code(body, arguments[i]), signature#1[i]) }
 	code += [op.call] + uleb(import_index(host_import(name)))
-	if #signature#2 == 0 { return [no_kind, code] }
+	if #signature#2 == 0 { return TypedCode(no_kind, code) }
 	result = signature#2#1
-	if result == "i32" { return ["int", code + [op.i64_extend_i32_s]] }
-	if result == "f32" { return ["float", code + [f64_promote]] }
-	[result, code]
+	if result == "i32" { return TypedCode("int", code + [op.i64_extend_i32_s]) }
+	if result == "f32" { return TypedCode("float", code + [f64_promote]) }
+	TypedCode(result, code)
 }
 # the constructors a host word builds nodes with, as Rust's module exports them (src/host/tasks/values.rs
 # CONSTRUCTORS): [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
@@ -38,9 +38,9 @@ def exported_builders(): any {
 	if #module.builders > 0 { return ø }
 	for builder in host_builders {
 		parameters = builder#2
-		values = range_list(#parameters).map(i => if parameters[i] == "char" then ["int", [op.local_get] + uleb(i) + [op.i64_extend_i32_u]] else [parameters[i], [op.local_get] + uleb(i)])
+		values = range_list(#parameters).map(i => if parameters[i] == "char" then TypedCode("int", [op.local_get] + uleb(i) + [op.i64_extend_i32_u]) else TypedCode(parameters[i], [op.local_get] + uleb(i)))
 		f = exported_function(builder#1, parameters, "node")
-		f.code = runtime_call(builder#3, values)#2
+		f.code = runtime_call(builder#3, values).code
 	}
 	f = exported_function("returned_error", [], no_kind)
 	f.code = error_throw("returned_error") + [op.unreachable]
@@ -72,21 +72,21 @@ exported_function(name: text, kinds: list, result: text): any := {
 def host_argument(value: TypedCode, kind: text): list {
 	if kind == "i32" { return host_int(value) + [op.i32_wrap_i64] }
 	# a text as the C string a host word reads, `system_value("battery")`: its address in linear memory
-	if kind == "c_text" { return runtime_call("c_text", [value])#2 + [op.i32_wrap_i64] }
+	if kind == "c_text" { return runtime_call("c_text", [value]).code + [op.i32_wrap_i64] }
 	if kind == "f32" { return converted(value, "float") + [f32_demote] }
 	if kind == "int" { return host_int(value) }
 	converted(value, kind)
 }
 # `x!`, Rust's unwrap: a number or text is itself; a node may be data Rust runs as code (blocks.rs), which the core
 # can't yet
-def unwrapped(value: list): list {
-	if value#1 == "node" { return refuse("running a node as code (`x!`)") }
+def unwrapped(value: TypedCode): TypedCode {
+	if value.kind == "node" { return refuse("running a node as code (`x!`)") }
 	value
 }
 
 # a number a host word takes as an int: a fraction or a float rounded to the nearest, as Rust passes `sleep(1/60*1000)`
 def host_int(value: TypedCode): list {
-	if value#1 == "node" or value#1 == "float" { return runtime_call("rounded", [["float", converted(value, "float")]])#2 }
+	if value.kind == "node" or value.kind == "float" { return runtime_call("rounded", [TypedCode("float", converted(value, "float"))]).code }
 	converted(value, "int")
 }
 
