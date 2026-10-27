@@ -168,7 +168,7 @@ spelling_functions(enum_name: text): list := {
 	cases_by_spelling = symbol(spelled_function(enum_name, "cases"))
 	every_case = List(cases.map(case => Key(spelling(enum_name, case), Op.Colon, qualified_case(enum_name, case))), Bracket.Curly, Separator.Comma)
 	to_case = chosen(is_spelling, call_of("map_get_or", [cases_by_spelling, value, value]), value)
-	[Key(cases_by_spelling, Op.Assign, every_case), spelling_function(enum_name, "text", "text", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + comparing_functions(enum_name)
+	[Key(cases_by_spelling, Op.Assign, every_case), spelling_function(enum_name, "text", "text?", chosen(is_spelling, value, to_text)), spelling_function(enum_name, "case", ø, to_case)] + comparing_functions(enum_name)
 }
 
 # `Op·is(spelled, case_written, case_spelled)`, `Op·same(spelled, other_spelled)`: two cases compare as they are, a case
@@ -178,7 +178,7 @@ comparing_functions(enum_name: text): list := {
 	case_written = symbol("case_written")
 	other = symbol("other_spelled")
 	text_of = spelled_function(enum_name, "text")
-	# a value neither a case nor a spelling, ø, equals no case, and is never spelled (Op·text gives texts only)
+	# a value neither a case nor a spelling, ø, equals no case
 	spelled_of = side => chosen(type_test(side, "symbol"), applied(text_of, side), side)
 	is_case = chosen(type_test(value, "symbol"), Key(value, Op.Eq, case_written), Key(value, Op.Eq, symbol("case_spelled")))
 	both_cases = Key(type_test(value, "symbol"), Op.And, type_test(other, "symbol"))
