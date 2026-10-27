@@ -233,7 +233,7 @@ with_module_uses(program: Node, modules: list): Node := {
 
 # `sleep(3ms)`: an argument naming a word nothing defines finds it in the module of the class its parameter is typed
 # with, which the program then uses: `sleep(duration: Time)` names Time, units.warp declares it and defines ms
-# (decision expected-type-names); `x = 3ms` expects no type and stays an unknown name
+# (decision expected-type-names), also as a phrase `sleep 50ms`; `x = 3ms` expects no type and stays an unknown name
 with_expected_type_uses(program: Node, prelude: text): Node := {
 	own = own_heads(program)
 	bound = names_bound_in(program)
