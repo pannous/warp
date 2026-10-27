@@ -356,15 +356,19 @@ def longest_first(pairs: list): list {
 // The canonical name of the operator an alias spells, else ""
 def canonical_operator(target: text): text := symbol_operator(target) ?? word_operator(target) ?? ALIAS_TARGET_NAMES.get(target) ?? ""
 // The alias written at the parser's position as [spelling, target], a word one as a whole word, the longest, else []
-def alias_at(p: Parser): list := longest_spelled_at(p, p.aliases) ?? []
-// Of `candidates`, each spelled by its first item, the one written at the parser's position with the longest spelling,
+def alias_at(p: Parser): list := longest_spelled_at(p, p.aliases, alias => alias#1) ?? []
+// Of `candidates`, each spelled as `spelling` gives, the one written at the parser's position with the longest spelling,
 // a word one as a whole word, else ø
-def longest_spelled_at(p: Parser, candidates: list): any {
+def longest_spelled_at(p: Parser, candidates: list, spelling: function): any {
 	longest = ø
+	longest_length = 0
 	for candidate in candidates {
-		spelled = candidate#1
+		spelled = spelling(candidate)
 		here = starts_at(p.code, spelled, p.at, p.n) and not (is_name_start(spelled#1) and is_at_name_char(p, p.at + spelled.length))
-		if here and (longest == ø or spelled.length > longest#1.length) { longest = candidate }
+		if here and (longest == ø or spelled.length > longest_length) {
+			longest = candidate
+			longest_length = spelled.length
+		}
 	}
 	longest
 }
@@ -864,18 +868,18 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			}
 		}
 		user_op = user_operator_at(p)
-		if user_op != ø and user_op#2 != "prefix" and user_op#3 >= min_power and not is_glued_call(p, user_op#1) {
-			p.at = p.at + user_op#1.length
-			if user_op#2 == "suffix" {
-				left = operator_call(user_op#1, [left])
+		if user_op != ø and user_op.fixity != Fixity.Prefix and user_op.level >= min_power and not is_glued_call(p, user_op.glyph) {
+			p.at = p.at + user_op.glyph.length
+			if user_op.fixity == Fixity.Suffix {
+				left = operator_call(user_op.glyph, [left])
 			} else {
 				skip_blanks(p)
-				left = operator_call(user_op#1, [left, expression(p, user_op#3 + 1)])
+				left = operator_call(user_op.glyph, [left, expression(p, user_op.level + 1)])
 			}
 			continue
 		}
 		// a declared operator binding looser than the context ends the operand, unless a built-in one of the glyph binds
-		if user_op != ø and user_op#2 != "prefix" and operator_at(p).length == 0 { break }
+		if user_op != ø and user_op.fixity != Fixity.Prefix and operator_at(p).length == 0 { break }
 		power = superscript_power(p, left, min_power)
 		if power != ø {
 			left = power
@@ -940,11 +944,11 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 		} else {
 			op = operator_at(p)
 			if op.length == 0 and free_infix_at(p, left) {
-				if OPERATOR_LEVELS["infix"] < min_power { break }
+				if fixity_level(Fixity.Infix) < min_power { break }
 				glyph = "$(c)"
 				p.at = p.at + 1
 				skip_blanks(p)
-				left = operator_call(glyph, [left, expression(p, OPERATOR_LEVELS["infix"] + 1)])
+				left = operator_call(glyph, [left, expression(p, fixity_level(Fixity.Infix) + 1)])
 				continue
 			}
 			if op.length == 0 {
@@ -1550,20 +1554,29 @@ DECLARED_ONLY_OPERATORS = ["↑", "↓", "··"]
 // The name of the function an operator declaration defines: `infix operator ⊕` defines operator_⊕
 // Rust twin: operators/mod.rs OPERATOR_FUNCTION_PREFIX
 OPERATOR_FUNCTION_PREFIX = "operator_"
-// The words declaring an operator of a kind: `prefix operator ∆`, `infix operator ⊕`; `operator ⊕` alone is infix
+// Where a declared operator stands to its operands: `prefix operator ∆`, `suffix operator ³`, `infix operator ⊕`
+enum Fixity { Prefix, Suffix, Infix }
+// The words declaring an operator of a fixity; `operator ⊕` alone is infix
 // Rust twin: declaration_scan.rs OPERATOR_KINDS, operators.rs declared_kind
-OPERATOR_KINDS = ["prefix", "suffix", "infix"]
-// How tight a declared operator binds, as the built-ins it resembles: [kind, level]; an infix one's right power is one
-// more than its level
+FIXITY_WORDS = {"prefix": Fixity.Prefix, "suffix": Fixity.Suffix, "infix": Fixity.Infix, "operator": Fixity.Infix}
+// An operator a program or module declares, `infix operator ⊕ := …`, binding as tight as its level
+class DeclaredOperator { glyph: text; fixity: Fixity; level: int }
+
+// How tight a declared operator binds unless a precedence declaration says otherwise, as the built-ins it resembles;
+// an infix one's right power is one more than its level
 // Rust twin: declaration_scan.rs USER_SUFFIX_BP, USER_PREFIX_RIGHT_BP, USER_INFIX_BP
-OPERATOR_LEVELS = {"prefix": 155, "suffix": 165, "infix": 140}
+def fixity_level(fixity: Fixity): int := match fixity {
+	Fixity.Prefix: 155
+	Fixity.Suffix: 165
+	_: 140
+}
 
 // The call of a declared operator's function: `2 ⊕ 3` is operator_⊕(2, 3)
 // Rust twin: operators.rs operator_call
 def operator_call(glyph: text, arguments: list): Node := call_of([symbol(OPERATOR_FUNCTION_PREFIX + glyph)] + arguments)
 
-// The kind of operator a declaration's first word declares, else ""
-def operator_kind_word(word: text): text := if word == "operator" then "infix" else if OPERATOR_KINDS.contains(word) then word else ""
+// A declaration's first word declares an infix operator: `infix operator ⊕`, `operator ⊕`
+def declares_infix(word: text): bool := word in FIXITY_WORDS and FIXITY_WORDS[word] == Fixity.Infix
 
 // A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), no letter or digit;
 // raised digits too (`suffix operator ³`)
@@ -1580,10 +1593,10 @@ def is_operator_glyph(glyph: text): bool {
 // The operator the words after a declaration's first word declare, else "": a glyph (`operator ⊕ := …`), or for infix
 // a word or glyph with its parameters, `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`
 // Rust twin: operators.rs declared_operator, declared_glyph
-def declared_operator(kind: text, words: list): text {
+def declared_operator(infix: bool, words: list): text {
 	glyph = if words.length > 2 and words#1 == "operator" and words#3 == ":=" then words#2 else if words.length > 1 and words#2 == ":=" then words#1 else ""
 	if glyph != "" and is_operator_glyph(glyph) { return glyph }
-	if kind != "infix" or not words.contains(":=") or words.length == 0 { return "" }
+	if not infix or not words.contains(":=") or words.length == 0 { return "" }
 	head = if words#1 == "operator" and words.length > 1 then words#2 else words#1
 	end = if is_name_start(head#1) then name_end(head, 0, head.length) else 0
 	if not is_name_start(head#1) { while end < head.length and head[end] != '(' { end = end + 1 } }
@@ -1598,7 +1611,7 @@ def declared_operator(kind: text, words: list): text {
 // The blank-separated words of a statement
 def blank_words(statement: text): list := statement.replace("\t", " ").split(" ").filter(word => word)
 
-// The [glyph, kind, level] of each operator a source declares: `[prefix|suffix|infix]
+// Each operator a source declares: `[prefix|suffix|infix]
 // operator ⊕ := …` and the pattern `a ⊕ b := …` (infix), at the level a precedence declaration gives it
 // Rust twin: operators.rs declared_operators
 def declared_operators(source: text): list {
@@ -1607,15 +1620,14 @@ def declared_operators(source: text): list {
 	statements = code_statements(source)
 	for statement in statements {
 		if not statement.contains(":=") { continue }
-		declared = operator_declared(blank_words(statement))
-		if declared.length > 0 { found += [declared] }
+		found += operator_declared(blank_words(statement))
 	}
 	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
 	for statement in statements {
 		if not statement.contains("precedence") { continue }
 		ranked = precedence_declaration(blank_words(statement), found)
 		if ranked is empty { continue }
-		found = found.map(operator => if operator#1 == ranked#1 then [operator#1, operator#2, ranked#2] else operator)
+		for operator in found { if operator.glyph == ranked#1 { operator.level = ranked#2 } }
 	}
 	found
 }
@@ -1627,7 +1639,7 @@ def scanned_operators(source: text): list {
 	found = declared_operators(source)
 	for module in used_module_sources(source) { found += declared_operators(module) }
 	for library in library_glyph_operators() {
-		if source.contains(library#1) and declared_level(found, library#1) < 0 { found += [library] }
+		if source.contains(library.glyph) and declared_level(found, library.glyph) < 0 { found += [library] }
 	}
 	found
 }
@@ -1640,7 +1652,7 @@ def library_glyph_operators(): list {
 		sources = module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex")
 		// kept across runs (os.kept) as the alias table's parse is: the sources are the compiler's own
 		name = "the library glyph operators of " + sources
-		library_operators = kept(name) ?? keep(name, declared_operators(sources).filter(operator => not is_name_start(operator#1#1)))
+		library_operators = kept(name) ?? keep(name, declared_operators(sources).filter(operator => not is_name_start(operator.glyph#1)))
 	}
 	library_operators
 }
@@ -1699,25 +1711,24 @@ def precedence_declaration(words: list, declared: list): list {
 }
 // The level of the declared operator spelled `glyph`, else -1
 def declared_level(declared: list, glyph: text): int {
-	operator = declared.find(operator => operator#1 == glyph)
-	if operator == ø then -1 else operator#3
+	operator = declared.find(operator => operator.glyph == glyph)
+	if operator == ø then -1 else operator.level
 }
 
-// [glyph, kind, level] of the operator a statement's words declare, else []
+// The operator a statement's words declare, as a list of it, else []
 def operator_declared(words: list): list {
 	if words.length == 0 { return [] }
-	kind = operator_kind_word(words#1)
-	rest = words[1 .. words.length]
-	glyph = if kind is empty then "" else declared_operator(kind, rest)
-	if glyph != "" and operator_alias(words).length == 0 { return [glyph, kind, OPERATOR_LEVELS[kind]] }
-	if words.length > 3 and words#4 == ":=" and is_operator_glyph(words#2) and is_plain_name(words#1) and is_plain_name(words#3) { return [words#2, "infix", OPERATOR_LEVELS["infix"]] }
+	glyph = if words#1 in FIXITY_WORDS then declared_operator(declares_infix(words#1), words[1 .. words.length]) else ""
+	if glyph != "" and operator_alias(words).length == 0 { return [declared_of(glyph, FIXITY_WORDS[words#1])] }
+	if words.length > 3 and words#4 == ":=" and is_operator_glyph(words#2) and is_plain_name(words#1) and is_plain_name(words#3) { return [declared_of(words#2, Fixity.Infix)] }
 	[]
 }
+def declared_of(glyph: text, fixity: Fixity): DeclaredOperator := DeclaredOperator{glyph: glyph, fixity: fixity, level: fixity_level(fixity)}
 def is_plain_name(word: text): bool := word.length > 0 and name_end(word, 0, word.length) == word.length
 
 // The declared operator written at the parser's position, the longest glyph, a word one as a whole word, else ø
 // Rust twin: operators.rs user_operator_at
-def user_operator_at(p: Parser): list? := longest_spelled_at(p, p.operators)
+def user_operator_at(p: Parser): DeclaredOperator? := longest_spelled_at(p, p.operators, operator => operator.glyph)
 def is_at_name_char(p: Parser, at: int): bool := at < p.n and is_name_char(p.code[at])
 
 // `print matches("abd", "a.c$")`: a word operator glued to `(both, operands)` is its call, as `f(x, y)` is; a right
@@ -1758,8 +1769,8 @@ def holds_top_level_comma(code: text, at: int, n: int): bool {
 // Rust twin: operators.rs try_parse_operator_declaration
 def operator_declaration(p: Parser, word: text): Node := {
 	words = blank_words(p.code[p.at + word.length .. statement_end(p)])
-	kind = operator_kind_word(word)
-	glyph = declared_operator(kind, words)
+	infix = declares_infix(word)
+	glyph = declared_operator(infix, words)
 	if glyph == "" { return ø }
 	p.at = p.at + word.length
 	skip_spaces(p)
@@ -1773,7 +1784,7 @@ def operator_declaration(p: Parser, word: text): Node := {
 	p.at = p.at + 2
 	skip_spaces(p)
 	body = expression(p, 0)
-	parameters = if kind != "infix" then [symbol("it")] else if declared == ø then ø else group_items(declared)
+	parameters = if not infix then [symbol("it")] else if declared == ø then ø else group_items(declared)
 	if parameters == ø { parameters = if mentions(body, "left") or mentions(body, "right") then [symbol("left"), symbol("right")] else [symbol("a"), symbol("b")] }
 	Key(operator_call(glyph, parameters), Op.Define, body)
 }
@@ -2001,10 +2012,10 @@ def prefixed(p: Parser): Node := {
 	c = peek(p.code, p.at, p.n)
 	if starts_path(p) { return path_literal(p) }
 	user_op = user_operator_at(p)
-	if user_op != ø and user_op#2 == "prefix" {
-		p.at = p.at + user_op#1.length
+	if user_op != ø and user_op.fixity == Fixity.Prefix {
+		p.at = p.at + user_op.glyph.length
 		skip_spaces(p)
-		return operator_call(user_op#1, [expression(p, user_op#3)])
+		return operator_call(user_op.glyph, [expression(p, user_op.level)])
 	}
 	if not is_name_start(c) { return prefixed_by_symbol(p, c) }
 	word = word_at(p)
@@ -2012,7 +2023,7 @@ def prefixed(p: Parser): Node := {
 	if guard_word_at(p, word) and not after_member_dot(p) { return guarded(p, word) }
 	// `op.if`, `math.sqrt`: a member's name is no keyword
 	if word_names_key(p, word) or after_member_dot(p) { return atom(p) }
-	if word == "operator" or word == "circumfix" or OPERATOR_KINDS.contains(word) {
+	if word == "circumfix" or word in FIXITY_WORDS {
 		words = statement_words_at(p)
 		// the pre-scans applied both: declared_operators, operator_aliases
 		if precedence_declaration(words, p.operators) or operator_alias(words).length > 0 or circumfix_alias(words).length > 0 { return skip_statement(p) }
