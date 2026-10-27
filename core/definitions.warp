@@ -32,6 +32,7 @@ definition(n: Node): Node := if is_runtime_declaration(n) then Node.Empty else m
 typed_definition_held(n: Node): Node := {
 	typed = declared_result_form(n)
 	if typed == ø { return n }
+	if not is_key(key_of(typed), Op.Colon) { return typed }
 	result_held(key_of(typed), value_of(typed), n)
 }
 
@@ -39,12 +40,18 @@ typed_definition_held(n: Node): Node := {
 # typed_parts, function_heads.rs result_typed_head): `f(x): T = e`, `f(x) as T := e` or `= e`, and C's result type
 # before the name, `T f(x) = e` or `T f(x) := e`; ø for any other statement. `f(x): T := e` itself may name any T, the
 # other forms a type word, collection, class or any (`f(x): y = e` assigns y)
+# `void`, which the parser reads as ø
+is_no_result(n: Node): bool := n == Node.Empty
 declared_result_form(n: Node): Node := match n {
 	Key(target, Op.Define, body): if is_key(target, Op.Colon) then n else typed_by_word(target, body)
 	Key(target, Op.Assign, body): typed_by_word(target, body)
 	List(parts, Bracket.None, Separator.Space): {
-		if #parts != 2 or not is_result_type(parts#1) or name_of(parts#1) in function_keywords { return ø }
+		if #parts != 2 or not (is_result_type(parts#1) or is_no_result(parts#1)) or name_of(parts#1) in function_keywords { return ø }
 		named = parts#2
+		# `T f(x) { … }`: the head glued to its body
+		if is_group(named) and #named == 2 and is_call(named#1) and is_curly_group(named#2) { named = Key(named#1, Op.Define, named#2) }
+		# `void f(x) { … }`: a function of no result
+		if is_no_result(parts#1) and is_key(named, Op.Define) and is_call(key_of(named)) { return named }
 		if not (is_key(named, Op.Define) or is_key(named, Op.Assign)) or not is_call(key_of(named)) { return ø }
 		Key(Key(key_of(named), Op.Colon, parts#1), Op.Define, value_of(named))
 	}

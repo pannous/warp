@@ -74,8 +74,10 @@ each_in_word = "in"
 each_at_word = "at"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions (`key` and `value` of
 # `k: v` the PairKey and PairValue); Anywhere a rule asking none
-enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter, Element }
-PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter, "element": Place.Element}
+enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter, Element, Argument, Operand }
+PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter, "element": Place.Element, "argument": Place.Argument, "operand": Place.Operand}
+# the operators whose two sides the rules `where operand` rewrite
+compared_by = [Op.Eq, Op.Ne, Op.Identical, Op.NotIdentical, Op.Lt, Op.Gt, Op.Le, Op.Ge]
 # the mark of a rule whose pattern's first word spells the template's another way
 alias_mark = "alias"
 takes_word = "takes"
@@ -261,14 +263,26 @@ required_words(pattern: Node): list := {
 
 # `[a, b]`: a list literal, whose items are rewritten by the rules `where element`
 is_element_list(n: Node): bool := is_group(n) and bracket_of(n) == "["
+# `f(a, b)`: a call, whose arguments are rewritten by the rules `where argument`
+is_argument_call(n: Node): bool := match n {
+	List(items, Bracket.Round, Separator.None): #items > 1 and items#1 is symbol
+	_: no
+}
+# a list's elements or a call's arguments, each placed by `placing(code, place)`
+placed_items(n: Node, placing: function): Node := {
+	if is_element_list(n) { return group_like(n, items_of(n).map(element => placing(element, Place.Element))) }
+	if not is_argument_call(n) { return n }
+	items = items_of(n)
+	group_like(n, [items#1] + items[1..].map(argument => placing(argument, Place.Argument)))
+}
 
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
 sugared_node(n: Node, rules: list): Node := {
 	n = with_changed_members(n, member => sugar_at_place(bottom_up(member, part => sugared_node(part, rules)), Place.Member, rules))
 	if holds_statements(n) {
 		n = group_like(n, sugar_runs(spliced_statements(items_of(n).map(statement => sugar_at_place(statement, Place.Statement, rules))), rules))
-	} else if is_element_list(n) {
-		n = group_like(n, items_of(n).map(element => sugar_at_place(element, Place.Element, rules)))
+	} else if is_element_list(n) or is_argument_call(n) {
+		n = placed_items(n, (code, place) => sugar_at_place(code, place, rules))
 	} else if n is key and key_of(n) != opaque_symbol {
 		n = with_placed_parts(n, (code, place) => sugar_at_place(code, place, rules))
 	}
@@ -1015,7 +1029,7 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 	if is_group(n) and separator_of(n) in statement_separators {
 		n = group_like(n, statement_runs(spliced_statements(items_of(n).map(statement => at_place(statement, Place.Statement, rules, origins))), rules, origins))
 	} else if is_group(n) and #n > 0 {
-		if is_element_list(n) { n = group_like(n, items_of(n).map(element => at_place(element, Place.Element, rules, origins))) }
+		n = placed_items(n, (code, place) => at_place(code, place, rules, origins))
 		phrase = bracket_of(n) == "" and separator_of(n) == " "
 		items = items_of(n)
 		runs = with_runs(if phrase then words_of_all(items) else items, rules, origins)
@@ -1092,7 +1106,11 @@ with_placed_parts(n: Node, placed_code: function): Node := {
 		right = placed_code(right, Place.PairValue)
 	}
 	if is_key(n, Op.Define) { left = head_with_parameters(left, parameter => placed_code(parameter, Place.Parameter)) }
-	if left == key_of(n) and right == value_of(n) and not is_statements_template(left) and not is_statements_template(right) { return n }
+	if compared_by.any(operator => is_key(n, operator)) {
+		left = placed_code(left, Place.Operand)
+		right = placed_code(right, Place.Operand)
+	}
+	if not changes(left, key_of(n)) and not changes(right, value_of(n)) and not is_statements_template(left) and not is_statements_template(right) { return n }
 	placed(Key(as_value(left), op_of(n), as_value(right)), n)
 }
 

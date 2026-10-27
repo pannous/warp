@@ -1,0 +1,4 @@
+# A parameter named `block` is a block too, untyped (wiki/block.md, samples/functions/block_arguments.warp)
+
+'def repeats(n: int, block) := { for i in 1...n { block() } }; k = 0; repeats 4 { k += 1 }; k'	4
+'twice(block) := { block(); block() }; s = ""; twice { s += "a" }; s'	'aa'

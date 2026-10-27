@@ -282,8 +282,10 @@ def block_statements(n: Node): list {
 }
 
 # a program of one line, `data [1 2]`, is that one statement: only lines and `;` separate a program's statements
+# and a program of one map, `{a: 1}`, is that map, as `x = {a: 1}` reads it
 def program_statements(program: Node): list {
 	if is_group(program) and bracket_of(program) == "" and separator_of(program) == " " { return [program] }
+	if is_group(program) and bracket_of(program) == "{" and #program > 0 and program.all(is_map_entry) { return [program] }
 	block_statements(program)
 }
 # the definitions of a program into `functions`, the statements left

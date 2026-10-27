@@ -1,0 +1,7 @@
+# A tuple given to a call is the list of its items (core/extensions/tuples.warp `where argument`, samples/advanced/snake.warp)
+
+'f(p) := p#1 + p#2; f((1, 2))'	3
+'g(p, q) := p#2 + q; g((1, 2), 3)'	5
+'x = 4; h(p) := p#1 * p#2; h((x + 1, x))'	20
+# a call's own arguments stay arguments
+'f(a, b) := a - b; f(5, 2)'	3

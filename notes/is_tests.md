@@ -34,7 +34,9 @@ is! 'use sin;sin π' 0
 `warp test` (test/ by default) or `warp test <folder>…` runs every `*.pairs.warp` pair and every top-level `is!`
 line of the `test_*.warp` files under the folders through `warp pure`, with the installed binary
 (src/compiler/pure_tests.rs). Each test is its own program in a child process (`warp test --case <file> <index>`,
-half the cores, at most 8 at once, 30 s each), so a hang, trap or crash fails only that test. Its `use` reads from
+30 s each), so a hang, trap or crash fails only that test. Every case takes a slot of one machine-wide pool
+(~/.cache/warp/test-slots, as many lock files as cores, WARP_TEST_SLOTS overrides): parallel runs of sessions, the
+gate and sweeps queue for the slots instead of piling up (card shared-test-slots). Its `use` reads from
 the test file's folder. An expected column that is not data (`π`, `(-1)`, `1 + pi`) runs through `warp pure` too.
 Prints ⊘ for skipped pairs, a ✗ line per failure (`file:line "code" expected: got …`), then `m of n failed in f files,
 s skipped`; exits 1 on a failure. `--self`: through `warp self` (warp-self.wasm); `--each`: a ✓ line for each passed

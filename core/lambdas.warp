@@ -423,9 +423,14 @@ lowered_statement(statement: Node, top_locals: list, lowering: Lowering): Node :
 
 # A `{…}` given to a parameter typed `function` or `block` is its lazy body (decision block-lazy-body): the lambda of
 # no parameters, of `it` when it mentions it, a closure sharing what it changes; a `block` parameter is a function
+# a parameter named `block` is a block too, untyped (wiki/block.md)
 block_types = [symbol("function"), symbol("block")]
-is_function_parameter(parameter: Node): bool := is_key(parameter, Op.Colon) and value_of(parameter) in block_types
-as_function_parameter(parameter: Node): Node := if is_function_parameter(parameter) then Key(key_of(parameter), Op.Colon, symbol("function")) else parameter
+block_word = symbol("block")
+is_function_parameter(parameter: Node): bool := parameter == block_word or (is_key(parameter, Op.Colon) and value_of(parameter) in block_types)
+as_function_parameter(parameter: Node): Node := {
+	if parameter == block_word { return Key(block_word, Op.Colon, symbol("function")) }
+	if is_function_parameter(parameter) then Key(key_of(parameter), Op.Colon, symbol("function")) else parameter
+}
 with_function_parameters(statement: Node): Node := match statement {
 	Key(List(call, Bracket.Round, Separator.None), Op.Define, body): Key(call_node(call#1, arguments_of(call).map(as_function_parameter)), Op.Define, body)
 	_: statement
