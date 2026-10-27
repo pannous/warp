@@ -643,6 +643,14 @@ enum_hole_of(wanted: Node): text? := {
 # `$c is case of $e`: the code names a case of the enum $e names; with $e unbound (also `$c is case`), of the one enum
 # declaring it, which $e is bound to
 case_holds(code: Node, hole: text?, bound: map): bool := {
+	# a case written with its enum, `Coin.Dime`, the enum named there
+	if is_key(code, Op.Dot) and key_of(code) is symbol and value_of(code) is symbol {
+		owner = name_of(key_of(code))
+		if not (rule_enums.has(owner) and name_of(value_of(code)) in rule_enums[owner]) { return no }
+		if hole != ø and bound.has(hole) { return named_enum(bound[hole]) == owner }
+		if hole != ø { bound[hole] = key_of(code) }
+		return yes
+	}
 	if not (code is symbol) { return no }
 	case = name_of(code)
 	if hole != ø and bound.has(hole) {
@@ -1490,7 +1498,8 @@ cases_spliced(parts: list, bound: map, at: Node): list? := {
 	if parts#1 != symbol(cases_words#1) or parts#2 != symbol(cases_words#2) { return ø }
 	hole = rule_hole(parts#3)
 	if hole == ø or not bound.has(hole) or named_enum(bound[hole]) == "" { return ø }
-	rule_enums[named_enum(bound[hole])].map(case => placed(symbol(case), at))
+	enum_name = named_enum(bound[hole])
+	rule_enums[enum_name].map(case => placed(Key(symbol(enum_name), Op.Dot, symbol(case)), at))
 }
 
 # `T for $x in $xs...`

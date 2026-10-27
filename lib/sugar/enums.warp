@@ -1,7 +1,7 @@
-# Enum cases (notes/layers.md, sugar): `Color.Red`, Rust's `Color::Red` are the case Red the enum Color declares, Swift's
-# arm `case .red:` the case red of the one enum declaring it
-rewrite $e.$c => $c where $c is case of $e
-rewrite $e::$c => $c where $c is case of $e
+# Enum cases (notes/layers.md, sugar): `Color.Red`, Rust's `Color::Red` are the case Red the enum Color declares, kept
+# so to the emitter, which makes each case of each enum once (a case knows its enum, card case-enum-carry); Swift's arm
+# `case .red:` the case red of the one enum declaring it
+rewrite $e::$c => $e.$c where $c is case of $e
 rewrite case.$c => $c where $c is case
 
 # `c is Coin` (type_tests.warp's is_type(c, "Coin")) of an enum: c is one of its cases
