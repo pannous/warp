@@ -20,8 +20,10 @@ fields_of(m: Node): Node := {
 	fields = key_value(m)
 	if not is_null(fields) and kind_code(fields) == Kind.List then fields else map_of([m])
 }
-# the place of m's entry named `name`, counted from 1; 0 when it has none
+# the place of m's entry named `name`, counted from 1; 0 when it has none. A class instance's is its struct's
+# (instance_place), its entries never built for one lookup (card instance-words-build)
 map_index(m: Node, name: text): int := {
+	if is_class_instance(m) { return instance_place(m, name) }
 	entries = unboxed_list(fields_of(m))
 	if #entries < index_least() {
 		for i in 1 to #entries { if kind_code(entries#i) == Kind.Key and same_bytes(entry_name(entries#i), name) { return i } }
@@ -97,7 +99,19 @@ entry_name(entry: Node): text := {
 	if plain then unboxed_text(name) else key_name(entry)
 }
 # 1 when m has fields to look up: a map, or a class instance (the key of its class name and its fields)
-has_fields(m: Node): bool := not is_null(m) and not is_null(fields_of(m)) and kind_code(fields_of(m)) == Kind.List
+has_fields(m: Node): bool := not is_null(m) and (is_class_instance(m) or (not is_null(fields_of(m)) and kind_code(fields_of(m)) == Kind.List))
+# a class instance's extra fields (instance_place, instance_field_at): the place of one after the `count` declared
+# ones, 0 when it has none; the value at a place past them, ø past them all
+extra_place(extra: Node, name: text, count: int): int := {
+	at = if is_null(extra) then 0 else map_index(extra, name)
+	if at == 0 then 0 else count + at
+}
+extra_value_at(extra: Node, at: int, count: int): Node := {
+	if is_null(extra) or at <= count or at - count > #unboxed_list(fields_of(extra)) { return ø }
+	key_value(unboxed_list(fields_of(extra))#(at - count))
+}
+# the value of m's entry at a place map_index gave: a class instance's from its struct
+value_at(m: Node, at: int): Node := if is_class_instance(m) then instance_field_at(m, at) else key_value(unboxed_list(fields_of(m))#at)
 # `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
 map_get(m: Node, name: text): Node := {
 	if is_position_part(m, name) { return position_part(m, name) }
@@ -113,7 +127,7 @@ map_get(m: Node, name: text): Node := {
 	if is_entry(m) and same_bytes(name, "op") { return key_operator(m) }
 	at = if has_fields(m) then map_index(m, name) else 0
 	if at == 0 { missing_field(name) }
-	key_value(unboxed_list(fields_of(m))#at)
+	value_at(m, at)
 }
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
 map_entries(m: Node): Node := {
@@ -218,5 +232,5 @@ map_get_or(m: Node, key: Node, fallback: Node = ø): Node := {
 	if is_null(m) { return fallback }
 	at = map_index(m, node_text(key))
 	if at == 0 { return fallback }
-	key_value(unboxed_list(fields_of(m))#at)
+	value_at(m, at)
 }
