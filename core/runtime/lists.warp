@@ -37,8 +37,9 @@ node_at(n: Node, index: int): Node := {
 	not_a_list()
 }
 # a class instance's default position function: its fields in the order its class declares them, `P(2, 3)#1` is 2
-# (user 2026-10-27, card p1-default-position); a class's own position function is to come (card class-position-index)
-instance_position(instance: Node, index: int): Node := key_value(unboxed_list(fields_of(instance))#index)
+# (user 2026-10-27, card p1-default-position), read from its struct; its extra fields after them, also a declared field
+# holding ø, from its entries. A class's own position function is to come (card class-position-index)
+instance_position(instance: Node, index: int): Node := instance_field_at(instance, index) ?? key_value(unboxed_list(fields_of(instance))#index)
 # `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
 node_length(n: Node): int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing

@@ -32,6 +32,8 @@ closure_text(n: any): text from runtime
 # instance_set_code …; card declared-class; a field read is the emitter's own: field_getter_code)
 instance_set(m: Node, name: text, value: Node): int from runtime
 instance_entries(m: Node): Node from runtime
+# the field of an instance at a place counted from 1 among those its class declares, ø past them
+instance_field_at(m: Node, index: int): Node from runtime
 # exact rationals
 is_ratio(n: any): bool from runtime
 # whether an Int node holds its number in an $i64box, neither a ratio nor a big int

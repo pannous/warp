@@ -176,6 +176,7 @@ def receiver_class(body: Body, n: any): text {
 # of that struct reads, sets or lists its fields by their names
 instance_set_name = "instance_set"
 instance_entries_name = "instance_entries"
+instance_field_at_name = "instance_field_at"
 def class_depth(class_name: text): int { if class_name in module.parents then 1 + class_depth(module.parents[class_name]) else 0 }
 def made_classes(): list {
 	made = module.classes.keys.filter(class_name => instance_struct_prefix + class_name in module.class_structs)
@@ -257,6 +258,12 @@ def instance_entries_code(f: Function) {
 		code += [op.local_get, 0] + gc_code(gc_ops.ref_test, [struct_index]) + [op.if, no_value] + runtime_call("with_entries_of", [declared, extra]).code + [op.return, op.end]
 	}
 	f.code = code + [ref_null, gc_type(gc.node)]
+}
+# instance_field_at(m, index): the declared field at that place (from 1) of whichever class m is an instance of, ø past them
+def instance_field_at_code(f: Function) {
+	index = unboxed([op.local_get, 1], gc_type(gc.int_box))
+	read = (field, instance, struct_index, place) => index + [op.i64_const] + sleb(place - #instance_fields + 1) + [op.i64_eq, op.if, no_value] + instance + gc_code(gc_ops.struct_get, [struct_index, place]) + [op.return, op.end]
+	f.code = each_class_field(read) + [ref_null, gc_type(gc.node)]
 }
 # whether a declared class has a field `name`: a read of it may meet an instance (field_value), else only a map
 def declares_field(name: text): bool { module.classes.keys.any(class_name => name in module.classes[class_name]) }
