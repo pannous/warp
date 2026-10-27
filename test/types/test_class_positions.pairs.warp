@@ -8,3 +8,5 @@
 'class P { x: int; y: int }; P(2, 3)#1'	2
 'use sound; F#4'	369.99
 'class B { n: int; position(p) := p }; xs = [4, 5]; xs#1 += 2; xs'	[6, 5]
+'class X { position(p) := p }; m = {"a": 1}; k = "a"; [m[k], X()[4], X()#4]'	[1, 5, 4]
+'class X { index(i) := i; index(i, v) := print(v) }; m = {"a": 1}; k = "a"; m[k] = 5; X()[2] = 7; m'	{a: 5}
