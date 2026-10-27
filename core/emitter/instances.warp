@@ -135,7 +135,8 @@ def error_function(name: text): int {
 	module.errors[name] = f
 	f.index
 }
-def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): list { if value#1 == "node" then field_read(body, value, name, class_name) else refuse("the field " + name + " of a " + value#1) }
+# a recursive call not yet known (pending) is read as the node it may be, as element() takes it (card recursive-class-return)
+def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): list { if value#1 == "node" or value#1 == pending then field_read(body, ["node", value#2], name, class_name) else refuse("the field " + name + " of a " + value#1) }
 # `m.x = v`: the map with its entry x set to v
 def field_assignment(map: any, name: any, value: TypedCode): list { runtime_call("field_with", [["node", boxed(map)], shown_text(name), ["node", boxed(value)]]) }
 # a name as a text value, even of one character (text_value gives a "char" then)
