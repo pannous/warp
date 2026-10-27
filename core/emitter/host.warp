@@ -9,7 +9,7 @@ def host_import(name: text): list {
 f32_type = 125
 f32_demote = 182
 f64_promote = 187
-def host_type(kind: text): list { if kind == "i32" then [type_bytes.char] else if kind == "f32" then [f32_type] else value_type(kind) }
+def host_type(kind: text): list { if kind == "i32" or kind == "c_text" then [type_bytes.char] else if kind == "f32" then [f32_type] else value_type(kind) }
 
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
@@ -71,6 +71,8 @@ exported_function(name: text, kinds: list, result: text): any := {
 }
 def host_argument(value: TypedCode, kind: text): list {
 	if kind == "i32" { return host_int(value) + [op.i32_wrap_i64] }
+	# a text as the C string a host word reads, `system_value("battery")`: its address in linear memory
+	if kind == "c_text" { return runtime_call("c_text", [value])#2 + [op.i32_wrap_i64] }
 	if kind == "f32" { return converted(value, "float") + [f32_demote] }
 	if kind == "int" { return host_int(value) }
 	converted(value, kind)

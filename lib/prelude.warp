@@ -377,6 +377,26 @@ random_int() := (random_below(0x100000000) - 0x80000000) * 0x100000000 + random_
 random_bool() := random_below(2) == 1
 // a Unicode scalar value: the surrogates 0xD800…0xDFFF are no characters
 random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then n = n + 0x800; n as codepoint }
+// the machine's readings, read now by the host word system_value (Rust: lowering/signals/system_values.rs,
+// warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
+// program's own name of the same word wins
+battery() := system_value("battery")
+charging() := system_value("charging") != 0
+online() := system_value("online") != 0
+mouse_x() := system_value("mouse_x") as float
+mouse_y() := system_value("mouse_y") as float
+mouse_down() := system_value("mouse_down") != 0
+mouse_wheel() := system_value("mouse_wheel")
+key_down() := system_value("key_down") != 0
+window_open() := system_value("window_open") != 0
+view_width() := system_value("view_width")
+view_height() := system_value("view_height")
+gpu_drawing() := system_value("gpu_drawing") != 0
+window_width() := system_value("window_width")
+window_height() := system_value("window_height")
+display_width() := system_value("display_width")
+display_height() := system_value("display_height")
+display_dpi() := system_value("display_dpi")
 // the paint window's size (the playground: the paintings' frame), system values, so `whenever window.width > 800 {…}`
 // listens; written, the window resizes
 window.width := window_width

@@ -25,6 +25,13 @@ before asking a question). After a context swap, this file and your role file be
 - The compiler is warp; the only Rust left is the harness (src/, crates/warp-runtime: host, runtime, CLI), changed
   rarely and through the interviewer. A card that needs Rust work is redone as warp work. The old Rust compiler is the
   snapshot on branch `rust-bootstrap`; do not port its code, write the clean version in warp.
+- Samples are not the spec: before making a failing sample run, ask whether it should be written more beautifully or
+  more generally. Rewrite the sample (its own commit, saying why) rather than add special syntax for it; a special
+  spelling may be given up for the general beauty of the compiler (user 2026-10-27). Dropping a spelling the wiki
+  promises goes to the Interviewer.
+- Plain warp first: a feature is a function, an enum, a class, an overload or a block parameter in lib/ whenever
+  plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
+  only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
 - No new passes. Sugar (new spellings) → rules in lib/sugar/*.warp; new capabilities → one file each in
   core/extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
@@ -34,6 +41,10 @@ before asking a question). After a context swap, this file and your role file be
   two topics with an underscore. core/ is the real folder; lib/compiler links to ../core for a transition
   (the compiler is still found as <lib>/compiler), core/sugar to ../lib/sugar. New syntax goes by layer (notes/layers.md): table row or declaration first, else a
   `rewrite` rule; a parser branch only when the commit names the missing rewrite-engine feature.
+- Vocabulary is library: the names and values of a domain (keys, units, colors, system values, months …) are
+  declared in lib/ as an enum or as values of a class, found through `use` or names from the expected type; never a
+  table in core/, never one rewrite rule per name. core/ holds mechanisms only. A core diff that adds names of a domain
+  is the sign that a mechanism is missing: card it.
 - Rare edge cases (∞/NaN literals, wording nits, odd feature pairs) go to `todo add Later`.
 - Emptiness is tested loosely: `is empty`, `if no x`, `if x`; `x is ø` only tests missing.
 - JSON5 or warp notation for anything people or agents write; strict JSON only where a tool requires it.
@@ -74,6 +85,8 @@ before asking a question). After a context swap, this file and your role file be
 - Outcome tests only: a test checks what warp code produces (is!, output, error), never intermediates, exit codes or
   wording. An error/"not yet"/ignored test that now works is upgraded in its own commit without asking; a change of
   meaning goes to the Interviewer.
+- Tests are spec only when backed: a test file's header names its source (a wiki page or a decision key); add cases
+  only for forms a wiki page or decision shows. Taste by example: notes/taste.md (user 2026-10-27).
 - GitHub API quota is shared: never poll `todo list` or `gh` in a loop.
 
 ## Cards
