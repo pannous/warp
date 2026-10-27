@@ -216,19 +216,6 @@ fn store_file(directory: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()
 	fs::rename(&staging, path)
 }
 
-/// A file of the cache directory by its name, none with the cache off
-pub fn cache_file(name: &str) -> Option<PathBuf> {
-	cache_directory().map(|directory| directory.join(name))
-}
-
-/// The bytes written to a file of the cache directory (cache_file), so parallel runs never read half of it
-pub fn store_cache_file(path: &Path, bytes: &[u8]) {
-	let Some(directory) = path.parent() else { return };
-	if let Err(failure) = store_file(directory, path, bytes) {
-		eprintln!("warning: module cache {}: {failure}", directory.display());
-	}
-}
-
 /// The bytes kept under `key` with `extension` (src/run/program_cache.rs), a hit counting as a use for pruning; none
 /// without them or with the cache off
 pub fn kept_bytes(key: &str, extension: &str) -> Option<Vec<u8>> {
