@@ -661,7 +661,7 @@ condition_holds(condition: Node, bound: map): bool := {
 	}
 	if is_context_word(condition) { return context_holds(rule_matched, name_of(condition)) }
 	listing = membership(condition)
-	if listing != ø { return bound.has(listing#1) and word_listed(bound[listing#1], listing#2) }
+	if listing != ø { return bound.has(listing.hole) and word_listed(bound[listing.hole], listing.words) }
 	hole = rule_hole(key_of(condition))
 	if not bound.has(hole) { return no }
 	code = bound[hole]
@@ -692,13 +692,15 @@ locally_bound(code: Node): bool := code is symbol and name_of(code) in rule_bind
 # `method`, `shadowed`: a condition about where the matched code stands, not about a hole
 is_context_word(condition: Node): bool := condition is symbol and name_of(condition) in context_words
 
-# `$f in [add, push]` (the parser reads `$f is in […]` as it): [the hole, the words listed (names, or texts naming
-# them)], else ø
-membership(condition: Node): list? := {
+# `$f in [add, push]` (the parser reads `$f is in […]` as it): the hole and the words listed (names, or texts naming
+# them)
+class Membership { hole: text; words: list }
+
+membership(condition: Node): Membership? := {
 	if not (is_group(condition) and bracket_of(condition) == "" and #condition == 3 and condition#2 == symbol(listed_word)) { return ø }
 	hole = rule_hole(condition#1)
 	words = listed_words(condition#3)
-	if hole == ø or words == ø then ø else [hole, words]
+	if hole == ø or words == ø then ø else Membership{hole: hole, words: words}
 }
 
 # `[add, "push"]`: the words listed, names or texts naming them, else ø
@@ -847,9 +849,11 @@ rest_hole_name(n: Node): text? := match n {
 	_: ø
 }
 
-# `$x: text`: [the hole, the kind of code it takes], else ø
-typed_hole(n: Node): list? := match n {
-	Key(hole, Op.Colon, kind): { if rule_hole(hole) != ø and kind is symbol and name_of(kind) in hole_kinds then [rule_hole(hole), name_of(kind)] else ø }
+# `$x: text`: the hole and the kind of code it takes
+class TypedHole { hole: text; kind: text }
+
+typed_hole(n: Node): TypedHole? := match n {
+	Key(hole, Op.Colon, kind): { if rule_hole(hole) != ø and kind is symbol and name_of(kind) in hole_kinds then TypedHole{hole: rule_hole(hole), kind: name_of(kind)} else ø }
 	_: ø
 }
 
@@ -1209,7 +1213,7 @@ rule_matches(pattern: Node, code: Node, bound: map): bool := {
 	hole = rule_hole(pattern)
 	if hole != ø { return hole_binding(hole, code, bound) }
 	typed = typed_hole(pattern)
-	if typed != ø { return is_hole_kind(code, typed#2) and hole_binding(typed#1, code, bound) }
+	if typed != ø { return is_hole_kind(code, typed.kind) and hole_binding(typed.hole, code, bound) }
 	if pattern is key { return code is key and op_of(code) == op_of(pattern) and rule_matches(key_of(pattern), key_of(code), bound) and rule_matches(value_of(pattern), value_of(code), bound) }
 	if is_group(pattern) { return is_group(code) and bracket_of(code) == bracket_of(pattern) and tuple_fits(pattern, code) and items_match(items_of(pattern), items_of(code), bound) and one_statement_kept(pattern, code, bound) }
 	if code is key or is_group(code) { return no }
