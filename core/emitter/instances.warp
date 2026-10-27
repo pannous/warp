@@ -103,8 +103,8 @@ def classes_parents_first(): list {
 def instance_head(class_name: text): list {
 	names = module.classes[class_name].keys.map(field => node(Kind.Symbol, text_bytes(field)))
 	shared = uleb(declared_global(class_fields_prefix + class_name, "list")#1)
-	empty = [op.global_get] + shared + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i32_eqz]
-	made = empty + [op.if, no_value] + vector_code(names) + [op.global_set] + shared + [op.end]
+	unmade = [op.global_get] + shared + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i32_eqz]
+	made = unmade + [op.if, no_value] + vector_code(names) + [op.global_set] + shared + [op.end]
 	[op.i64_const] + sleb(Marked.Instance) + node(Kind.Symbol, text_bytes(class_name)) + made + node(Kind.List, [op.global_get] + shared)
 }
 class_fields_prefix = "fields·"
