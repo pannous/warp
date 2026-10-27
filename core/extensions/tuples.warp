@@ -10,6 +10,8 @@ rewrite ([$names...] = $value) => ($t = $value; ($n = $t#$i) for $n at $i in $na
 rewrite ($a, $b, $rest...) => [$a, $b, $rest...] where statement
 # a list's item: `[(1, 0), (2, 1)]` is the list of two lists
 rewrite ($a, $b, $rest...) => [$a, $b, $rest...] where element
+# a call's argument: `is_free((x + 1, y))` is given the list of two items
+rewrite ($a, $b, $rest...) => [$a, $b, $rest...] where argument
 # a loop's tuple or list of names takes each item apart: `for (dx, dy) in [(1, 0), (2, 1)] {…}`
 rewrite for ($names...) in $xs {$body...} => for $item in $xs { ($n = $item#$i) for $n at $i in $names...; $body... }
 rewrite for [$names...] in $xs {$body...} => for $item in $xs { ($n = $item#$i) for $n at $i in $names...; $body... }
