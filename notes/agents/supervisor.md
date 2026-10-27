@@ -22,6 +22,9 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 ## Team
 - Start of day: `tmux ls | grep warp-` and ListAgents; missing services: `notes/agents/start.sh` (integrator,
   interviewer, fixer, reviewer). At most TWO feature workers at once.
+- Leftovers in the main checkout (`git status --short` at every watch round and handover): integrate them in the same
+  turn without asking (user 2026-10-27): run what they touch and commit as "(user)", or, when they cannot work, save a
+  patch in data/stray/ and restore the file from HEAD. At most one line about it to the user, once.
 - New task: `notes/agents/start.sh worker <card> "<task in the user's words>"`. Reuse an idle worker of the same area
   (SendMessage it); an unrelated topic gets a fresh session named for it; a finished area's worker hands over and
   retires. Off-area quick cards go to warp-fixer.
