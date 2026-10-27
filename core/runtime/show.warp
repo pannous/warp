@@ -80,6 +80,7 @@ joined_items(xs: list, joiner: text): text := {
 # `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
 key_text(entry: Node): text := {
 	value = key_value(entry)
+	if marked_kind(entry) == Marked.Instance and not is_null(instance_entries(entry)) { return key_name(entry) + node_text(instance_entries(entry)) }
 	if marked_kind(entry) == Marked.Instance { return key_name(entry) + node_text(value) }
 	operator = key_operator(entry)
 	if text_order(operator, ":") == 0 { return key_name(entry) + ":" + node_code(value) }

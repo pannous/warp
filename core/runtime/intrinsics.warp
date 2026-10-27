@@ -25,6 +25,13 @@ is_meta(n: any): bool from runtime
 meta_line(n: any): int from runtime
 meta_column(n: any): int from runtime
 closure_text(n: any): text from runtime
+# a declared class's instance (its own struct type): its field set (1; 0 when its class declares no such field, 2 for
+# a key that is no class's instance), its fields as the map of
+# name: value entries a map has (ø for a key that is none: a key written without operator, `Point{x: 1}` as code, has
+# an instance's kind too); the emitter writes them once the program's classes are known (emitter instances.warp
+# instance_set_code …; card declared-class; a field read is the emitter's own: field_getter_code)
+instance_set(m: Node, name: text, value: Node): int from runtime
+instance_entries(m: Node): Node from runtime
 # exact rationals
 is_ratio(n: any): bool from runtime
 # whether an Int node holds its number in an $i64box, neither a ratio nor a big int

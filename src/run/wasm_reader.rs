@@ -396,6 +396,12 @@ fn struct_node<T>(
 	let kind = kind.unwrap_i64();
 	let high_byte = (kind >> 8) & 0xFF;
 	let separator = crate::abi::separator_of_kind(kind);
+	if kind == INSTANCE_KIND {
+		if let Some(entries) = instance_fields(structref, &child, store, memory, path) {
+			let name = node_along(&data, store, memory, path);
+			return Node::Key(Box::new(name), crate::operators::code_to_op(high_byte), Box::new(entries));
+		}
+	}
 	let mut node = |val: &Val| node_along(val, store, memory, path);
 	// a runtime word that builds a node wrongly (a text kind over a non-text) fails loudly, never reads as ""
 	let malformed = || crate::node::error(&format!("malformed node: kind {kind:#x} holds no text"));
@@ -441,6 +447,34 @@ fn struct_node<T>(
 }
 
 /// The kind, data and value fields of a `$Node` struct
+/// The kind of a declared class's instance: a Key without operator (emitter instances.warp, Marked.Instance)
+const INSTANCE_KIND: i64 = 6;
+/// The kind of a map, the list of an instance's fields as it reads back (Marked.Map)
+const MAP_KIND: i64 = 8;
+
+/// A declared class's instance, its own struct type (card declared-class): after the node's kind, data (the class name)
+/// and value (the list of its field names) come its fields, read as the map `{name: value …}` an instance shows;
+/// None for another struct of that kind (a key written without operator, a positioned node)
+fn instance_fields<T>(
+	structref: &wasmtime::Rooted<wasmtime::StructRef>,
+	names: &Val,
+	store: &mut StoreContextMut<'_, T>,
+	memory: Option<wasmtime::Memory>,
+	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
+) -> Option<Node> {
+	let count = structref.ty(&*store).ok()?.fields().len();
+	let Node::List(names, _, _) = node_along(names, store, memory, path) else { return None };
+	if count != 3 + names.len() || !names.iter().all(|name| matches!(name, Node::Symbol(_))) {
+		return None;
+	}
+	let mut entries = vec![];
+	for (i, name) in names.into_iter().enumerate() {
+		let value = structref.field(&mut *store, 3 + i).ok()?;
+		entries.push(Node::Key(Box::new(name), crate::operators::Op::Colon, Box::new(node_along(&value, store, memory, path))));
+	}
+	Some(Node::List(entries, crate::node::Bracket::Curly, crate::abi::separator_of_kind(MAP_KIND)))
+}
+
 fn node_fields<T>(
 	structref: &wasmtime::Rooted<wasmtime::StructRef>,
 	store: &mut StoreContextMut<'_, T>,
