@@ -30,7 +30,8 @@ rest_name(written: any): any := {
 parameter_name(named: any): text := {
 	if named is symbol { return name_of(named) }
 	if named is key { return parameter_name(key_of(named)) }
-	parameter_name(named.last)
+	# `with new x`: the label words before the name; a pattern clause's literal, `f(0) := 1`, names nothing
+	if is_group(named) and #named > 0 then parameter_name(named.last) else ""
 }
 # `int` of `x: int`; a type form Rust checks at each call (`xs: [int]`) as written
 type_text(type: any): text := if type is symbol then name_of(type) else "${type}"
