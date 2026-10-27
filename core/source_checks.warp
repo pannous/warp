@@ -15,7 +15,7 @@ error_word = "error"
 fail_word = "fail"
 
 # the program, each check's facts diagnosed; `prelude` names the other spellings of the words (`uppercase`)
-source_checks(program: any, prelude: text): any := {
+source_checks(program: Node, prelude: text): any := {
 	aliases = module_aliases(prelude)
 	for n in nodes_in(program) {
 		located_error(n)
@@ -33,18 +33,18 @@ source_checks(program: any, prelude: text): any := {
 }
 
 # an error the parser leaves in the tree (a negative index), the program's value
-located_error(n: any): any := {
+located_error(n: Node): any := {
 	if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2]), n) }
 	ø
 }
 
 # an attribute layer `x!` as parser.warp writes it, and the node it marks
-has_mutation_mark(n: any): bool := n is key and key_of(n) == symbol(attribute_word) and "${value_of(n)#1}" == mutated_mark
-without_mark(n: any): any := if n is key and key_of(n) == symbol(attribute_word) then without_mark(value_of(n)#3) else n
+has_mutation_mark(n: Node): bool := n is key and key_of(n) == symbol(attribute_word) and "${value_of(n)#1}" == mutated_mark
+without_mark(n: Node): any := if n is key and key_of(n) == symbol(attribute_word) then without_mark(value_of(n)#3) else n
 
 # --- `"3" + 3` joins the texts (card print-oldest; "a" + 3 does not warn) ---
 
-spelled_number_join(n: any): any := {
+spelled_number_join(n: Node): any := {
 	if not is_operator(n, "+") { return ø }
 	left = key_of(n)
 	right = value_of(n)
@@ -77,27 +77,27 @@ is_numeral(t: text): bool := {
 
 # --- `sleep(1)` needs a unit  ---
 
-bare_sleep(n: any): any := {
+bare_sleep(n: Node): any := {
 	if is_group(n) and #n == 2 and n#1 == symbol(sleep_word) and n#2 is number { diagnose(call_of("bare_sleep", ["${n#2}"]), n#2) }
 	ø
 }
 
 # --- a text's index_of names no unit (decision byte-index-of): it counts characters from 1, as find does ---
 
-text_index_of(n: any, program: any): any := {
+text_index_of(n: Node, program: Node): any := {
 	receiver = index_of_receiver(without_mark(n))
 	if receiver != ø and is_evident_text(receiver, program) { diagnose(call_of("text_index_of", []), n) }
 	ø
 }
 # t of `t.index_of(x)`, `t.index_of x` and `index_of(t, x)`, else ø
-index_of_receiver(n: any): any := {
+index_of_receiver(n: Node): any := {
 	if is_operator(n, ".") and is_index_of_call(value_of(n), 1) { return key_of(n) }
 	if is_index_of_call(n, 2) { return n#2 }
 	ø
 }
-is_index_of_call(n: any, receiver_place: int): bool := is_group(n) and #n > receiver_place and n#1 == symbol(index_of_word)
+is_index_of_call(n: Node, receiver_place: int): bool := is_group(n) and #n > receiver_place and n#1 == symbol(index_of_word)
 # a text written as one, or a name the program assigns only such texts
-is_evident_text(n: any, program: any): bool := {
+is_evident_text(n: Node, program: Node): bool := {
 	if n is text { return yes }
 	if not (n is symbol) { return no }
 	given = assigned_values(program, name_of(n))
@@ -107,7 +107,7 @@ is_evident_text(n: any, program: any): bool := {
 # --- values a statement drops (wiki/mutable.md) ---
 
 # `uppercase x;` drops the copy; a dropped `error "…"` makes an error value nothing raises (card error-if)
-dropped_value(statement: any, aliases: any): any := {
+dropped_value(statement: Node, aliases: any): any := {
 	call = copy_call(statement, aliases)
 	if call != ø { diagnose(call_of("dropped_copy", call), statement) }
 	for dropped in dropped_errors(statement) { diagnose(call_of("dropped_error", ["\"" + dropped + "\""]), statement) }
@@ -115,7 +115,7 @@ dropped_value(statement: any, aliases: any): any := {
 }
 
 # `y = x.upper!` changes x too
-assigned_mutation(n: any, aliases: any): any := {
+assigned_mutation(n: Node, aliases: any): any := {
 	if not (is_operator(n, "=") or is_operator(n, ":=")) { return ø }
 	variable = marked_copy_variable(value_of(n), aliases)
 	if variable != ø { diagnose(call_of("assigned_mutation", ["${without_mark(key_of(n))}", variable]), n) }
@@ -154,7 +154,7 @@ marked_copy_variable(value: any, aliases: any): any := {
 
 # the messages of the `error "…"` calls a dropped statement drops: the statement itself, the branches of an if, the
 # last statement of a block
-dropped_errors(statement: any): list := {
+dropped_errors(statement: Node): list := {
 	n = without_mark(statement)
 	if is_group(n) and #n == 2 and n#1 == symbol(error_word) and separator_of(n) != ";" { return ["" + n#2] }
 	if is_operator(n, "then") { return dropped_errors(value_of(n)) }

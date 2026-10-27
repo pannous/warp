@@ -213,11 +213,11 @@ conversion_name(target: text): text := "as·" + target
 converted_value = "converted·value"
 
 # a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
-names_type(n: any, scope: any): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
+names_type(n: Node, scope: any): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))
 
 # [source, target, body, the body's name of the value] of `A as B := body` with A and B types, also of
 # `text(p: A) := body`, else ø
-conversion_of(n: any, scope: any): any := {
+conversion_of(n: Node, scope: any): any := {
 	if not is_key(n, Op.Define) { return ø }
 	head = key_of(n)
 	if is_call(head) and #head == 2 and head#1 == symbol("text") and is_key(head#2, Op.Colon) and key_of(head#2) is symbol {
@@ -234,7 +234,7 @@ shown_converted(x: any): any := if x is text then x else call_of(conversion_name
 
 # every `x as B` of a target B the program converts to as the call of its conversion; `x as B = v` and `f(x) as B := …`
 # declare and stay
-converting_uses(n: any, targets: any): any := {
+converting_uses(n: Node, targets: any): any := {
 	if (is_key(n, Op.Assign) or is_key(n, Op.Define)) and is_key(key_of(n), Op.As) {
 		return Key(key_of(n), op_of(n), converting_uses(value_of(n), targets))
 	}
@@ -268,7 +268,7 @@ conversion_functions(target: text, written: list, targets: any): list := {
 
 # the program with its conversions as functions, before its statements (its last one stays its value), and their uses
 # as calls
-conversions(program: any): any := {
+conversions(program: Node): any := {
 	scope = scope_of(program)
 	targets = {}
 	order = []
