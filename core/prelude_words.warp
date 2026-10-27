@@ -86,6 +86,9 @@ words_within(n: Node): list := {
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
 # loader places them: a used module's in front of the program, the prelude's after it
+# the words of the sugar templates that can fire in the program (passes.warp with_used): the definitions they call are
+# reached too, `on key {…}` calling the prelude's key_name (core/extensions/handlers.warp)
+global template_words = []
 with_reached(program: Node, module: text, in_front: bool): Node := {
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
@@ -96,7 +99,7 @@ with_reached(program: Node, module: text, in_front: bool): Node := {
 	slices = definition_slices(module).filter(slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
 	# the statements of each reached slice, by its text
 	reached = {}
-	wanted = symbol_words(program)
+	wanted = symbol_words(program) + template_words
 	while #wanted > 0 {
 		word = wanted#1
 		wanted = wanted[1 ..]

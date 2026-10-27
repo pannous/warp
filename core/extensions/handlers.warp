@@ -1,0 +1,44 @@
+# Event handlers (extension, card event-handlers-unknown; notes/effect_handlers.md, notes/system_signals.md): `on ask
+# {…}` is the program-wide handler of the event ask, the function on·ask(event); `emit ask` and `emit ask{data}` call
+# it, `event` the data. A handler is a block of the program: the main-level variables it changes are main's
+# (main_globals.warp).
+# Over the paint window `on frame {…}` runs each frame while it shows (headless once, after main), `on key {…}` for
+# each key pressed, `key` (also `event.key`) its name as a page's KeyboardEvent.key names it, `on click {…}` for each
+# click, `event.x` and `event.y` where. The host runs the exported on·every·N (warp-runtime system_signals.rs) that
+# signal_listen(1, N, 16) starts: a frame timer of 16 ms; for keys and clicks it takes the presses the host queued.
+rewrite on frame {$body...} => ((on··every··0)(tick: int) := {$body...}; signal_listen(1, 0, 16)) where statement
+rewrite on $e {$body...} => ((on··$e)(event) := { key = event.key; $body... }; (on··every··1)(tick: int) := { $code = key_pressed; while $code != 0 { (on··$e)({key: key_name($code)}); $code = key_pressed } }; signal_listen(1, 1, 16)) where statement and $e in [key] and not $e is value
+rewrite on $e {$body...} => ((on··$e)(event) := {$body...}; (on··every··1)(tick: int) := { $code = key_pressed; while $code != 0 { (on··$e)({key: key_name($code)}); $code = key_pressed } }; signal_listen(1, 1, 16)) where statement and $e in [key]
+rewrite on $e {$body...} => ((on··$e)(event) := {$body...}; (on··every··2)(tick: int) := { while click_pressed { (on··$e)({x: click_x, y: click_y}) } }; signal_listen(1, 2, 16)) where statement and $e in [click]
+rewrite on $e {$body...} => (on··$e)(event) := {$body...} where statement and $e is symbol
+rewrite emit $e: $data => (on··$e)($data) where $e is symbol
+rewrite emit $e => (on··$e)(ø) where $e is symbol
+# `held_key`: the name of the key held now, "" for none; compared, whether that key is among those held, so two held
+# at once both count (diagonals)
+rewrite held_key => key_name(key_code_held)
+rewrite key_name(key_code_held) == $k => key_held(key_code($k)) != 0
+rewrite key_name(key_code_held) != $k => key_held(key_code($k)) == 0
+# the words naming keys, in capitals, as the page names them, or the distinctive ones in lower case, unless the program
+# names something so: letters stay texts (`key == "a"`). (`up`, `left`, `space`… in lower case only once a rule can
+# ask for a comparison's operand: they name too much else)
+rewrite $k => "Escape" where $k in [ESC, ESCAPE, Escape, esc, escape] and $k is unbound
+rewrite $k => "Enter" where $k in [ENTER, RETURN, Enter, enter] and $k is unbound
+rewrite $k => "Tab" where $k in [TAB, Tab] and $k is unbound
+rewrite $k => "Backspace" where $k in [BACKSPACE, Backspace, backspace] and $k is unbound
+rewrite $k => " " where $k in [SPACE, Space] and $k is unbound
+rewrite $k => "ArrowUp" where $k in [UP, ArrowUp] and $k is unbound
+rewrite $k => "ArrowDown" where $k in [DOWN, ArrowDown] and $k is unbound
+rewrite $k => "ArrowLeft" where $k in [LEFT, ArrowLeft] and $k is unbound
+rewrite $k => "ArrowRight" where $k in [RIGHT, ArrowRight] and $k is unbound
+rewrite $k => "F1" where $k in [F1, f1] and $k is unbound
+rewrite $k => "F2" where $k in [F2, f2] and $k is unbound
+rewrite $k => "F3" where $k in [F3, f3] and $k is unbound
+rewrite $k => "F4" where $k in [F4, f4] and $k is unbound
+rewrite $k => "F5" where $k in [F5, f5] and $k is unbound
+rewrite $k => "F6" where $k in [F6, f6] and $k is unbound
+rewrite $k => "F7" where $k in [F7, f7] and $k is unbound
+rewrite $k => "F8" where $k in [F8, f8] and $k is unbound
+rewrite $k => "F9" where $k in [F9, f9] and $k is unbound
+rewrite $k => "F10" where $k in [F10, f10] and $k is unbound
+rewrite $k => "F11" where $k in [F11, f11] and $k is unbound
+rewrite $k => "F12" where $k in [F12, f12] and $k is unbound

@@ -363,6 +363,19 @@ pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 paint_each(f, width, height) := paint([pixel_color(f(i % width, i /! width)) for i in 0..width * height], width, height)
 // sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
 sleep(amount) := sleep_ms(amount * 1000)
+// the keys over the paint window (core/extensions/handlers.warp): a key's code as the host gives it (src/graphics/
+// paint_window.rs key_code: its character's, an arrow's) and its name, as a page's KeyboardEvent.key names it
+named_keys() := ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Escape", "Backspace", "Tab"]
+named_key_codes() := [63232, 63233, 63234, 63235, 13, 27, 8, 9]
+key_name(code: int): text := {
+	if code == 0 { return "" }
+	for i in 1 to #named_key_codes() { if named_key_codes()#i == code { return named_keys()#i } }
+	"" + chr(code)
+}
+key_code(name: text): int := {
+	for i in 1 to #named_keys() { if named_keys()#i == name { return named_key_codes()#i } }
+	if name == "" then 0 else ord(name#1)
+}
 // random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
 // a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
 random_fraction(a, b) := a + random() * (b - a)

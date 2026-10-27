@@ -517,11 +517,15 @@ def local_value(body: Body, n: Node): list {
 # reading != 0, the mouse's place a float (Rust's FLOAT_VALUES); the phrases (`dark mode`) and listeners on one come later
 system_value_kinds = {battery: "int", charging: "bool", online: "bool", mouse_x: "float", mouse_y: "float", mouse_down: "bool",
 	mouse_wheel: "int", key_down: "bool", window_open: "bool", view_width: "int", view_height: "int", gpu_drawing: "bool",
-	window_width: "int", window_height: "int", display_width: "int", display_height: "int", display_dpi: "int"}
+	window_width: "int", window_height: "int", display_width: "int", display_height: "int", display_dpi: "int",
+	key_pressed: "int", key_code_held: "int", click_pressed: "bool", click_x: "float", click_y: "float"}
+# the host's name of a value whose name has spaces (warp-runtime host_words.rs KEY_CODE_HELD)
+system_value_host_names = {key_code_held: "key code held"}
 # where the name goes, a C string as the host reads it: the scratch bytes past the output's (runtime/extended/wasi.warp scratch_bytes)
 system_name_at = 32
 def system_value_read(name: text): list {
-	bytes = name.bytes + [0]
+	host_name = if system_value_host_names.has(name) then system_value_host_names[name] else name
+	bytes = host_name.bytes + [0]
 	code = []
 	for i in 0..<#bytes { code += [op.i32_const] + sleb(system_name_at + i) + [op.i32_const] + sleb(bytes#(i + 1)) + [op.i32_store8, 0] + uleb(output_address) }
 	code += [op.i32_const] + sleb(output_address + system_name_at) + [op.call] + uleb(import_index(host_import("system_value")))

@@ -20,6 +20,7 @@ target_operators = ["#", ".", ":"]
 # used module's or the prelude's) diagnosed
 main_globals(program: Node, own_names: list): any := {
 	main_names = main_variables(program)
+	program = children(program, statement => if is_handler(statement) then made_global(statement, main_names) else statement)
 	global_names = global_variables(program)
 	for function_definition in nodes_in(program).filter(is_define_statement) {
 		defined_function = define_statement_name(function_definition)
@@ -37,6 +38,23 @@ main_globals(program: Node, own_names: list): any := {
 		}
 	}
 	program
+}
+
+# Blocks share (user 2026-10-27, decision handler-blocks-share): a block of the program, `if`, `for`, `n times {…}` or
+# a handler, changes the main-level variables it assigns, a name only the block uses stays its local; `def f` still
+# needs `global x`. The other blocks stay inline; a handler (`on frame {…}`, core/extensions/handlers.warp) becomes a
+# function, so the main-level names it changes are declared `global` in it.
+handler_prefix = "on·"
+is_handler(n: Node): bool := is_define_statement(n) and define_statement_name(n).starts_with(handler_prefix)
+made_global(handler: Node, main_names: any): Node := {
+	body = value_of(handler)
+	own = parameter_names(key_of(handler))
+	shared = []
+	for name in changed_names(body) { if name in main_names and name not in own and name not in shared { shared += [name] } }
+	if #shared == 0 { return handler }
+	declared = shared.map(name => Key(symbol(global_word), Op.Colon, symbol(name)))
+	statements = if is_group(body) and bracket_of(body) == "{" then items_of(body) else [body]
+	placed(Key(key_of(handler), Op.Define, List(declared + statements, Bracket.Curly, Separator.Semicolon)), handler)
 }
 
 # the variables main assigns, outside the function definitions

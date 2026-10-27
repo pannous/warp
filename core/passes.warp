@@ -102,6 +102,7 @@ with_used(program: Node, source: text, folder: text, prelude: text): Node := {
 	kept_iteration_sugar = sugar_rules(bindings, iteration_sugar_module_names)
 	kept_late_sugar = sugar_rules(bindings, late_sugar_module_names)
 	kept_comprehension_sugar = sugar_rules(bindings, comprehension_sugar_module_names)
+	template_words = reaching_template_words(own, kept_first_sugar + kept_sugar + kept_iteration_sugar + kept_late_sugar + kept_comprehension_sugar)
 	with_reached(with_used_modules(with_type_module_uses(property_accessors(index_positions(rewritten_program(own, source)))), folder), prelude, no)
 }
 

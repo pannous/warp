@@ -96,6 +96,7 @@ one_word = "one"
 extension_module_names = [
 	"compiler/extensions/tuples"
 	"compiler/extensions/safe_navigation"
+	"compiler/extensions/handlers"
 ]
 first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "sugar/test_words"]
 sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls", "sugar/parameters", "sugar/tasks"]
@@ -226,6 +227,9 @@ sugared(program: Node, rules: list): Node := {
 }
 sugared_statement(statement: Node, rules: list, maps: map): Node := placed_map_scoped(statement, n => sugared_node(n, rules), maps)
 
+# the words of the templates of the rules that can fire in the program
+reaching_template_words(program: Node, rules: list): list := rules_reaching(rules, rules.map(rule => required_words(rule.pattern)), rules.map(rule => words_within(rule.template)), program).flat_map(rule => words_within(rule.template))
+
 # the rules that can fire in the statement (card speed-module-cache): those whose pattern's words it mentions, or the
 # result of such a rule does (a result is rewritten again); a rule missing one matches nowhere in it, so walking it
 # with these alone gives what all the rules give, without trying the others at each node
@@ -301,7 +305,10 @@ sugar_at_place(n: Node, place: Place, rules: list): Node := {
 	for rule in rules {
 		if rule.place == place {
 			result = rule_applied(rule, {}, n)
-			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
+			# a template of several statements takes a statement's place as those statements (spliced_statements), so
+			# a definition among them stays one of the program (`on frame {…}`, core/extensions/handlers.warp)
+			made = if place == Place.Statement then result else as_value(result)
+			if changes(result, n) { return bottom_up(made, part => sugar_rewritten(part, rules)) }
 		}
 	}
 	n
@@ -1339,19 +1346,25 @@ glued_key(n: Node, lines: list): Node := {
 is_phrase(n: Node): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) == " "
 
 # `$f(x) := body` in a template, which the parser reads as `$f ((x) := body)`, and `twice·$f(x) := body`, read as
-# `(twice·$f (x)) := body`: the definition of a function the holes name
+# `(twice·$f (x)) := body`: the definition of a function the holes name; a head in parentheses, `(on··every··0)(t)
+# := body`, also one written with `··`, which binds looser than `:=`
 headed_definition(n: Node): Node := {
 	if is_phrase(n) and #n == 2 and is_head_part(n#1) and is_key(n#2, Op.Define) and is_round(key_of(n#2)) {
-		return Key(bracketed([n#1] + items_of(key_of(n#2)), "("), Op.Define, value_of(n#2))
+		return Key(bracketed([head_part(n#1)] + items_of(key_of(n#2)), "("), Op.Define, value_of(n#2))
 	}
 	head = if is_key(n, Op.Define) then key_of(n) else ø
 	if is_phrase(head) and #head == 2 and is_head_part(head#1) and is_round(head#2) {
-		return Key(bracketed([head#1] + items_of(head#2), "("), Op.Define, value_of(n))
+		return Key(bracketed([head_part(head#1)] + items_of(head#2), "("), Op.Define, value_of(n))
+	}
+	# `(on··$e)(event)` outside a definition: the call of the function the glue names
+	if is_phrase(n) and #n == 2 and is_round(n#1) and #n#1 == 1 and is_glue(n#1#1) and is_round(n#2) {
+		return bracketed([n#1#1] + items_of(n#2), "(")
 	}
 	n
 }
 
-is_head_part(n: Node): bool := rule_hole(n) != ø or is_glue(n)
+is_head_part(n: Node): bool := rule_hole(n) != ø or is_glue(n) or (is_round(n) and #n == 1 and is_head_part(n#1))
+head_part(n: Node): Node := if is_round(n) and #n == 1 then head_part(n#1) else n
 
 # a word or a hole: what `·` glues
 is_glued_part(n: Node): bool := n is symbol
@@ -1388,7 +1401,8 @@ first_leaf(n: Node): Node := {
 # the name the spliced parts glue into, their words joined by name_joint (`square`, `a number` → square_a_number); a
 # number among them makes it their product (`$n·ten` of 3 → 3 * ten)
 glued_name(parts: list): Node := {
-	if parts.any(is_number_literal) {
+	# glued with `··` a number is a word of the name: `on··every··0` is the handler on·every·0
+	if parts.any(is_number_literal) and symbol(hidden_joint) not in parts {
 		product = parts#1
 		for part in parts[1 ..] { product = Key(product, Op.Mul, part) }
 		return product
@@ -1399,7 +1413,7 @@ glued_name(parts: list): Node := {
 		if part == symbol(hidden_joint) {
 			joint = glue_mark
 		} else {
-			part_words = words_of(part)
+			part_words = words_of(part).map(word => if is_number_literal(word) then symbol("" + number_of(word)) else word)
 			if not part_words.all(word => word is symbol) { return error_node("`·` builds a name of words, and a hole beside it bound other code") }
 			name += joint + part_words.map(word => name_of(word)).join(name_joint)
 			joint = name_joint

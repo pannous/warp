@@ -103,3 +103,16 @@ error ("battery: this Mac has no battery").
   full"` is a named event without data on "warp", heard by `on "file system full" {…}`. A named event is two or more
   plain words, or words ending in `name{data}`; one word without data stays a value. Without `from` or a text name,
   `on stop the machine {…}` is the in-program handler of `emit`, so no program listens by accident.
+
+## Pure compiler (core/extensions/handlers.warp, 2026-10-27)
+- `on frame {…}`, `on key {…}`, `on click {…}` become the exported on·every·N (0 frames, 1 keys, 2 clicks) that
+  `signal_listen(1, N, 16)` starts; key and click handlers pump the queued presses (system values key_pressed,
+  click_pressed/click_x/click_y) into on·key(event) / on·click(event). Any other `on e {…}` is the function on·e(event),
+  `emit e` / `emit e{data}` call it.
+- `key` names keys as a page's KeyboardEvent.key does; `ESC`, `UP`, `Enter`, `F1`… are those texts unless the program
+  binds the word (prelude key_name / key_code). `held_key == UP` asks key_held, so two held keys both count.
+- Blocks share (user decision handler-blocks-share): main-level names a handler assigns are main's (core/main_globals.warp
+  declares them `global` in the handler function).
+- Prelude words a sugar template names are reached too (rewrites.warp reaching_template_words, prelude_words template_words).
+- Open: `emit` of an event nobody handles (should do nothing), `on every 10 ms` (unit suffixes), `fire`/`send`,
+  `listeners of`.
