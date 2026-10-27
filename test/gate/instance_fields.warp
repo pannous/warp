@@ -13,3 +13,7 @@ print m.x + m.bag_total
 xs = [1, 2, 3]
 print xs.length
 print m.length
+# a parameter declared as a class reads its fields at that class's places, also names other classes place elsewhere
+class Clash { y: int; x: int }
+sum_of(p: Point): int := p.x + p.y
+print sum_of(p) + Clash{x: 1, y: 1}.x

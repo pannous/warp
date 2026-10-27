@@ -79,7 +79,7 @@ subscript_name(index: Node): any := {
 is_shifted_index(index: Node): bool := op_of(index) == Op.Add and value_of(index) == 1
 # `m.name`, `m["name"]`: a map's or an instance's entry, a swizzle's components of a list of 2 to 4 numbers (`p.zy`),
 # else the run ends in no_field_<name>, which Rust's run reports as "no field name"
-def field_read(body: Body, target: any, name: text): list {
+def field_read(body: Body, target: any, name: text, class_name: text = ""): list {
 	held = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	named = text_value_of(name)
 	missing = ended_in("node", no_field_prefix + name)
@@ -88,10 +88,26 @@ def field_read(body: Body, target: any, name: text): list {
 		fits = condition(runtime_call("swizzle_fits", [held, named]))
 		missing = ["node", fits + if_else_code("node", runtime_call(word, [held, named]), missing)]
 	}
-	place = declared_place(name)
+	place = class_place(class_name, name) ?? declared_place(name)
 	if place != ø and not is_swizzle(name) { return runtime_call("slot_field", [["node", boxed(target)], named, ["int", [op.i64_const] + sleb(place)]]) }
 	found = condition(runtime_call("has_field", [held, named]))
 	["node", boxed(target) + [op.local_set] + held#2[1..] + found + if_else_code("node", runtime_call("map_get", [held, named]), missing)]
+}
+# the class a receiver is declared as: a parameter written `p: Parser` of a class no other class extends (a subclass's
+# instance may hold the field elsewhere); "" when not known
+def receiver_class(body: Body, n: any): text {
+	if not (n is symbol) or body.function.signature == ø { return "" }
+	for parameter in body.function.signature.parameters {
+		if parameter.name == name_of(n) and parameter.type_name in module.classes and not module.parents.keys.any(child => module.parents[child] == parameter.type_name) { return parameter.type_name }
+	}
+	""
+}
+# the place, from 1, of the field `name` in the class, ø when the class is not known or lacks it
+def class_place(class_name: text, name: text): any {
+	if class_name == "" { return ø }
+	fields = module.classes[class_name].keys
+	for i in 0..<#fields { if fields[i] == name { return i + 1 } }
+	ø
 }
 # the place, from 1, of the field `name` in every class that declares it, when they all agree; ø when none does or two
 # disagree (an instance holds its fields in declared order: instance_of_fields)
@@ -119,7 +135,7 @@ def error_function(name: text): int {
 	module.errors[name] = f
 	f.index
 }
-def field_of(body: Body, value: TypedCode, name: text): list { if value#1 == "node" then field_read(body, value, name) else refuse("the field " + name + " of a " + value#1) }
+def field_of(body: Body, value: TypedCode, name: text, class_name: text = ""): list { if value#1 == "node" then field_read(body, value, name, class_name) else refuse("the field " + name + " of a " + value#1) }
 # `m.x = v`: the map with its entry x set to v
 def field_assignment(map: any, name: any, value: TypedCode): list { runtime_call("field_with", [["node", boxed(map)], shown_text(name), ["node", boxed(value)]]) }
 # a name as a text value, even of one character (text_value gives a "char" then)
