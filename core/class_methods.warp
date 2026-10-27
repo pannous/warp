@@ -76,6 +76,13 @@ methods_lifted(program: Node): Node := {
 		view = class_view(top_statement)
 		if view != ø { classes[declared_type_name(view#2)] = class_declared(top_statement, view) }
 	}
+	operator_table = operator_spellings()
+	outside = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) != ø)
+	for definition in outside {
+		owner = classes[operated_class(definition, classes, operator_table)]
+		owner.methods = owner.methods + [as_operator_method(definition)]
+	}
+	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
 	extended = classes.keys.any(name => #extending_classes(classes, name) > 1)
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
 	if #liftable == 0 and not extended and not respelled { return program }
@@ -90,7 +97,6 @@ methods_lifted(program: Node): Node := {
 	for name in liftable.filter(name => constructor_of(classes[name]) != ø) { constructed[name] = #method_parameters(method_in(classes[name], constructor_of(classes[name]))) > 0 }
 	if #constructed > 0 { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then constructions(top_statement, constructed) else top_statement) }
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
-	operator_table = operator_spellings()
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and taken_count(classes, liftable, method) == 1)
 	routes = methods.filter(method => is_library_word(method) or method in functions or method in operator_methods)
 	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
@@ -121,6 +127,22 @@ methods_lifted(program: Node): Node := {
 	rewritten += derived_dispatchers(classes, liftable, routes)
 	if extended { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then widened_tests(top_statement, classes) else top_statement) }
 	group_like(program, rewritten)
+}
+# `+(a: Vec, b: Vec) := …` (also `infix operator +(…)`, `plus(…)`) outside a class: an operator its first parameter's
+# class gives its instances, as if the class declared it (as_operator_method); the class's name, else ø
+operated_class(n: Node, classes: map, operator_table: map): text? := {
+	word = defined_word(n)
+	if word == ø or spelled_operator(operator_table, word) == ø { return ø }
+	parameters = method_parameters(n)
+	if #parameters != 2 or not is_key(parameters#1, Op.Colon) or not (value_of(parameters#1) is symbol) { return ø }
+	owner = name_of(value_of(parameters#1))
+	if owner in classes then owner else ø
+}
+# that definition as its class's method, its first parameter the instance
+as_operator_method(n: Node): Node := {
+	parameters = method_parameters(n)
+	instance = key_of(parameters#1)
+	Key(call_of(defined_word(n), parameters[1..]), Op.Define, bottom_up(value_of(n), part => if part == instance then self_node else part))
 }
 # the constructions of the classes with a constructor (`constructed`: whether it takes parameters) through it: a call
 # C(…) as C·new(…) when it takes parameters, else C·made(C(…)), a literal C{…} as C·made(C{…})

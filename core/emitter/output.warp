@@ -18,24 +18,24 @@ instance_text_word = HiddenWord.TextShown as text
 # a value as the text `+` joins it with and print writes
 def shown_text(value: TypedCode): TypedCode {
 	kind = value.kind
-	if kind == "text" { return value }
-	if kind == pending { return TypedCode("text", value.code) }
-	if kind == "list" { return runtime_call("list_text", [value]) }
-	if kind == "int" { return runtime_call("int_text", [value]) }
-	if kind == "float" { return runtime_call("float_text", [value]) }
-	if kind == "char" { return runtime_call("char_text", [value]) }
+	if kind == ValueKind.Text { return value }
+	if kind == pending { return TypedCode(ValueKind.Text, value.code) }
+	if kind == ValueKind.List { return runtime_call("list_text", [value]) }
+	if kind == ValueKind.Int { return runtime_call("int_text", [value]) }
+	if kind == ValueKind.Float { return runtime_call("float_text", [value]) }
+	if kind == ValueKind.Char { return runtime_call("char_text", [value]) }
 	# a value that may be an instance of a class showing by its text() (class_methods.warp text·shown)
-	if kind == "node" and instance_text_word in module.functions { return TypedCode("text", converted(call_values(module.functions[instance_text_word], [value]), "text")) }
-	if kind == "node" or kind == "time" { return runtime_call("node_text", [value]) }
-	if kind != "bool" { return refuse("the text of a " + kind) }
-	TypedCode("text", value.code + [op.if] + gc_bytes(references.text) + text_value("yes").code + [op.else] + text_value("no").code + [op.end])
+	if kind == ValueKind.Node and instance_text_word in module.functions { return TypedCode(ValueKind.Text, converted(call_values(module.functions[instance_text_word], [value]), ValueKind.Text)) }
+	if kind == ValueKind.Node or kind == ValueKind.Time { return runtime_call("node_text", [value]) }
+	if kind != ValueKind.Bool { return refuse("the text of a " + kind_spelling(kind)) }
+	TypedCode(ValueKind.Text, value.code + [op.if] + gc_bytes(references.text) + text_value("yes").code + [op.else] + text_value("no").code + [op.end])
 }
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
 # first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
 def printed_value(body: Body, n: Node): TypedCode {
 	# `print first xs`: a call of a program function prints its value
 	if is_quote(n) or is_spaced_call(body, n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
-	if n#1 is text and text_value(n#1).kind == "text" { return texts_joined(body, items_of(n), "") }
+	if n#1 is text and text_value(n#1).kind == ValueKind.Text { return texts_joined(body, items_of(n), "") }
 	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between (Rust's spaced_values_text)
 	if n.all(is_spaced_value) and not items_of(n)[1..].any(is_negative_literal) { return texts_joined(body, items_of(n), " ") }
 	runtime_call("items_text", [list_value(body, items_of(n))])
@@ -44,7 +44,7 @@ def printed_value(body: Body, n: Node): TypedCode {
 def texts_joined(body: Body, values: list, separator: text): TypedCode {
 	printed_text = shown_text(expression_code(body, values#1))
 	for x in values[1..] {
-		if separator != "" { printed_text = runtime_call("text_join", [printed_text, TypedCode("text", text_bytes(separator))]) }
+		if separator != "" { printed_text = runtime_call("text_join", [printed_text, TypedCode(ValueKind.Text, text_bytes(separator))]) }
 		printed_text = runtime_call("text_join", [printed_text, shown_text(expression_code(body, x))])
 	}
 	printed_text
@@ -58,5 +58,5 @@ is_spaced_value(n: Node): bool := {
 # `5 -2`: a glued sign, a value of its own
 is_negative_literal(n: Node): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
-def printed(value: TypedCode): TypedCode { TypedCode("node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc_type(gc.node)]) }
+def printed(value: TypedCode): TypedCode { TypedCode(ValueKind.Node, dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc_type(gc.node)]) }
 def runtime_call(name: text, values: list): TypedCode { call_values(module.runtime[name], values) }

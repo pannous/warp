@@ -1,15 +1,15 @@
 # The module's sections in order (emitter.warp's part): types, imports, functions, memory, globals, exports, code, data
 # and the names section
 ## the module
-def value_type(kind: text): list { if kind in references then gc_bytes(references[kind]) else [type_bytes[kind]] }
+def value_type(kind: ValueKind): list { if is_reference(kind) then gc_bytes(reference_of(kind)) else [number_byte(kind)] }
 # a global's first value, before its declaration sets it
-def zero_code_of(kind: text): list {
-	if kind == "int" { return [op.i64_const, 0] }
-	if kind == "float" { return [op.f64_const] + le64(0) }
+def zero_code_of(kind: ValueKind): list {
+	if kind == ValueKind.Int { return [op.i64_const, 0] }
+	if kind == ValueKind.Float { return [op.f64_const] + le64(0) }
 	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
-	if kind == "node" { return boxed(number_value(0)) }
-	if kind == "list" { return vector_code([]) }
-	if kind in references { return [ref_null] + (if kind == "time" then [110] else uleb(gc_type(references[kind]#2))) }
+	if kind == ValueKind.Node { return boxed(number_value(0)) }
+	if kind == ValueKind.List { return vector_code([]) }
+	if is_reference(kind) { return [ref_null] + (if kind == ValueKind.Time then [110] else uleb(gc_type(reference_of(kind)#2))) }
 	[op.i32_const, 0]
 }
 def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2) + [op.end] }
@@ -61,7 +61,7 @@ def module_bytes(functions: list): list {
 	globals = section(section_ids.globals, vector(module.global_order.map(global_entry)))
 	# an import's type follows the GC types in the imports' order, so a function's type is #gc_order + its index too
 	# the tag's type after every function's
-	tag_types = if module.catches_errors then [[function_type_byte] + vector([value_type("bool")]) + [0]] else []
+	tag_types = if module.catches_errors then [[function_type_byte] + vector([value_type(ValueKind.Bool)]) + [0]] else []
 	gc_declared = type_entries()
 	types = section(section_ids.type, vector(gc_declared + module.imports.map(i => i#3) + function_types + tag_types))
 	imported = section(section_ids.import, vector(range_list(#module.imports).map(i => import_entry(i))))

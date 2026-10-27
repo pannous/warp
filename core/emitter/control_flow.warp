@@ -8,7 +8,7 @@ def ran_without_error(body: Body, statement: Node): TypedCode {
 	finished = try_depth_step(op.i64_sub) + [op.i64_const, 1, op.br, 1, op.end]
 	caught = [op.drop] + try_depth_step(op.i64_sub) + [op.i64_const, 0]
 	# the inner block's value: the thrown error's id, an i32
-	TypedCode("int", try_depth_step(op.i64_add) + [op.block] + value_type("int") + [op.block] + value_type("bool") + guarded + finished + caught + [op.end])
+	TypedCode(ValueKind.Int, try_depth_step(op.i64_add) + [op.block] + value_type(ValueKind.Int) + [op.block] + value_type(ValueKind.Bool) + guarded + finished + caught + [op.end])
 }
 def try_depth_step(instruction: int): list {
 	depth = uleb(module.globals[try_depth_name]#1)
@@ -18,7 +18,7 @@ def try_depth_step(instruction: int): list {
 # (abi/traps.rs trap_error); while a try runs, the global failed_in keeps its message for `catch e` (runtime.warp
 # caught_error) and it throws
 def error_throw(name: text): list {
-	named = boxed(TypedCode("text", text_bytes(name))) + [op.global_set] + uleb(declared_global(trap_name_global, "node")#1)
+	named = boxed(TypedCode(ValueKind.Text, text_bytes(name))) + [op.global_set] + uleb(declared_global(trap_name_global, ValueKind.Node)#1)
 	if not module.catches_errors { return named }
 	kept = text_bytes(runtime_error_message(name)) + [op.global_set] + uleb(module.globals[failed_in_name]#1)
 	named + [op.global_get] + uleb(module.globals[try_depth_name]#1) + [op.i64_eqz, op.i32_eqz, op.if, no_value] + kept + [op.i32_const, 0, op.throw, 0, op.end]
@@ -42,27 +42,27 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 	kind = joint_kind(a.kind, b.kind)
 	# a first reading whose branches both wait on calls still compiling: its kind is not known yet either (its code is
 	# not kept), so the function's other readings decide it
-	if kind == pending and body.function.result == pending { return TypedCode(pending, c + [op.if] + value_type("node") + a.code + [op.else] + b.code + [op.end]) }
-	if kind == pending { kind = "int" }
-	if kind == no_kind or kind == "mixed" { return TypedCode(no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]) }
+	if kind == pending and body.function.result == pending { return TypedCode(pending, c + [op.if] + value_type(ValueKind.Node) + a.code + [op.else] + b.code + [op.end]) }
+	if kind == pending { kind = ValueKind.Int }
+	if kind == no_kind or kind == ValueKind.Mixed { return TypedCode(no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]) }
 	TypedCode(kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end])
 }
 # `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø, as Rust gives
 def unmatched(c: list, a: TypedCode, numeric: bool): TypedCode {
 	if a.kind == no_kind { return TypedCode(no_kind, c + [op.if, no_value] + a.code + [op.end]) }
-	if a.kind == "int" or a.kind == pending { return TypedCode("int", c + [op.if] + value_type("int") + converted(a, "int") + [op.else, op.i64_const, 0, op.end]) }
-	otherwise = if numeric or a.kind == "float" or a.kind == "bool" then boxed(number_value(0)) else [ref_null, gc_type(gc.node)]
-	TypedCode("node", c + [op.if] + value_type("node") + boxed(a) + [op.else] + otherwise + [op.end])
+	if a.kind == ValueKind.Int or a.kind == pending { return TypedCode(ValueKind.Int, c + [op.if] + value_type(ValueKind.Int) + converted(a, ValueKind.Int) + [op.else, op.i64_const, 0, op.end]) }
+	otherwise = if numeric or a.kind == ValueKind.Float or a.kind == ValueKind.Bool then boxed(number_value(0)) else [ref_null, gc_type(gc.node)]
+	TypedCode(ValueKind.Node, c + [op.if] + value_type(ValueKind.Node) + boxed(a) + [op.else] + otherwise + [op.end])
 }
 # `while c do body`: block { loop { exit unless c; block { body }; step; again } }; a `break` in body branches to the
 # outer block's end, a `continue` to the inner one's, so the step a `for` lowering appends (`loop·step: i++`) still runs.
 # Its value is that of the body's last run, ø when it never ran (the local `last` keeps it)
 def loop_of(body: Body, test: Node, block: Node): TypedCode {
-	last = fresh_local(body, "node")
+	last = fresh_local(body, ValueKind.Node)
 	code = loop_code(body, test, block, last)
 	# `while true` without a break ends only by a return: no value, the function's result is its returns' alone
 	if is_endless(test, block) { return TypedCode(never, code + [op.unreachable]) }
-	TypedCode("node", code + [op.local_get] + uleb(last))
+	TypedCode(ValueKind.Node, code + [op.local_get] + uleb(last))
 }
 # the code of a loop; each run of its body sets the local `last` to its value, or, with last -1, runs it for its effect
 def loop_code(body: Body, test: Node, block: Node, last: int): list {
@@ -149,12 +149,12 @@ def loop_again(body: Body): TypedCode {
 # a statement's code, its value dropped
 # `m.size`, `m.keys`: the entry of that name of a map that has one (`{size: 7}.size` is 7), else the word applied to m
 def field_or_word(body: Body, value: TypedCode, name: text, word: function): TypedCode {
-	if value.kind != "node" { return word(value) }
-	held = uleb(fresh_local(body, "node"))
-	receiver = TypedCode("node", [op.local_get] + held)
+	if value.kind != ValueKind.Node { return word(value) }
+	held = uleb(fresh_local(body, ValueKind.Node))
+	receiver = TypedCode(ValueKind.Node, [op.local_get] + held)
 	has_it = condition(runtime_call("has_field", [receiver, text_value_of(name)]))
 	read = boxed(runtime_call("map_get", [receiver, text_value_of(name)]))
-	TypedCode("node", value.code + [op.local_set] + held + has_it + [op.if] + value_type("node") + read + [op.else] + boxed(word(receiver)) + [op.end])
+	TypedCode(ValueKind.Node, value.code + [op.local_set] + held + has_it + [op.if] + value_type(ValueKind.Node) + read + [op.else] + boxed(word(receiver)) + [op.end])
 }
 # the program's statement n about to run, its position in trap_position: a runtime error names it, as Rust's
 # (emit_trap_position); a runtime word's statements leave it
@@ -163,7 +163,7 @@ def position_code(body: Body, n: Node): list {
 	if not at { return [] }
 	line: int = at#1
 	column: int = min(at#2, columns_per_line - 1)
-	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + uleb(declared_global("trap_position", "i32")#1)
+	[op.i32_const] + sleb(line * columns_per_line + column) + [op.global_set] + uleb(declared_global("trap_position", ValueKind.I32)#1)
 }
 def dropped(value: TypedCode): list { if value.kind == no_kind then value.code else value.code + [op.drop] }
 
@@ -172,11 +172,11 @@ appended(body: Body, target_name: Node, addition: Node): TypedCode? := {
 	target = expression_code(body, target_name)
 	added = expression_code(body, addition)
 	# a list takes any other value than a list as one item: `xs = []; xs += 3` is [3]
-	if target.kind == "list" and added.kind != "list" and added.kind != "node" { added = TypedCode("list", vector_code([boxed(added)])) }
+	if target.kind == ValueKind.List and added.kind != ValueKind.List and added.kind != ValueKind.Node { added = TypedCode(ValueKind.List, vector_code([boxed(added)])) }
 	# `for w in words { xs += w }`: an addition known only at run time is its items or one item (runtime appended_items)
-	if target.kind == "list" and added.kind == "node" { added = runtime_call("appended_items", [added]) }
-	if target.kind == "list" { return runtime_call("list_append", [target, added]) }
-	if target.kind == "node" { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
+	if target.kind == ValueKind.List and added.kind == ValueKind.Node { added = runtime_call("appended_items", [added]) }
+	if target.kind == ValueKind.List { return runtime_call("list_append", [target, added]) }
+	if target.kind == ValueKind.Node { return assignment(body, target_name, runtime_call("node_append", [target, added])) }
 	ø
 }
 # the statements in order, the value that of the last

@@ -38,3 +38,6 @@ is! 'enum Kind { Int = "int", Text = "text" }; k = Kind.Int; [k == Kind.Int, k =
 # card case-enum-carry)
 is! 'enum Level { Error, Warning }; enum Kind { Error, Int }; Level.Error == Kind.Error' false
 is! 'enum Coin { Penny, Dime }; c = Coin.Dime; [c == Coin.Dime, c == Dime, c == symbol("Dime"), c is Coin]' [true, true, false, true]
+
+# a call compared with a case is read once and may give ø, which equals no case
+is! 'enum K { Text = "text" }; f(): K? := ø; g(): K? := K.Text; [f() == K.Text, g() == K.Text, f() != K.Text]' [false, true, true]

@@ -8,10 +8,8 @@ type Name = text
 enum ValueKind { Unknown = "", Int = "int", Float = "float", Text = "text", Codepoint = "codepoint", List = "list",
 	Symbol = "symbol", Data = "data", Empty = "empty", Nil = "nil", Rational = "rational", Function = "function", Key = "key",
 	Error = "error", Pointer = "pointer", I32 = "i32", F32 = "f32", Char = "char", Node = "node", Map = "map", Bool = "bool",
-	Time = "time", Instance = "instance" }
-# the kind emitter.warp holds a value as, spelled: "int", "float", "char", "text", "list", "node" (analyzer.warp emitter_kind)
-type KindName = text
+	Time = "time", Instance = "instance", Pending = "?", Nothing = "none", Mixed = "mixed", CText = "c_text" }
 # a type word, one naming the elements of a list or map as well: `int`, `list of int`, `map of text`
 type TypeWord = text
-# a value's code in the emitter: its kind and its wasm bytes, `TypedCode("int", [op.i64_const, 7])`
-class TypedCode { kind: KindName; code: list }
+# a value's code in the emitter: its kind and its wasm bytes, `TypedCode(ValueKind.Int, [op.i64_const, 7])`
+class TypedCode { kind: ValueKind; code: list }

@@ -9,37 +9,37 @@ def host_import(name: text): list {
 f32_type = 125
 f32_demote = 182
 f64_promote = 187
-def host_type(kind: text): list { if kind == "i32" or kind == "c_text" then [type_bytes.char] else if kind == "f32" then [f32_type] else value_type(kind) }
+def host_type(kind: ValueKind): list { if kind == ValueKind.I32 or kind == ValueKind.CText then [type_bytes.char] else if kind == ValueKind.F32 then [f32_type] else value_type(kind) }
 
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
 def host_call(body: Body, name: text, arguments: list): TypedCode {
 	signature = module.host[name]
-	if "node" in signature#1 or "node" in signature#2 { exported_builders() }
+	if ValueKind.Node in signature#1 or ValueKind.Node in signature#2 { exported_builders() }
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	code = []
 	for i in 0..<#arguments { code += host_argument(expression_code(body, arguments[i]), signature#1[i]) }
 	code += [op.call] + uleb(import_index(host_import(name)))
 	if #signature#2 == 0 { return TypedCode(no_kind, code) }
 	result = signature#2#1
-	if result == "i32" { return TypedCode("int", code + [op.i64_extend_i32_s]) }
-	if result == "f32" { return TypedCode("float", code + [f64_promote]) }
+	if result == ValueKind.I32 { return TypedCode(ValueKind.Int, code + [op.i64_extend_i32_s]) }
+	if result == ValueKind.F32 { return TypedCode(ValueKind.Float, code + [f64_promote]) }
 	TypedCode(result, code)
 }
 # the constructors a host word builds nodes with, as Rust's module exports them (src/host/tasks/values.rs
 # CONSTRUCTORS): [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
-host_builders = [["new_empty", [], "built_empty"], ["new_int", ["int"], "built_int"], ["new_bool", ["int"], "built_bool"],
-	["new_float", ["float"], "built_float"], ["new_codepoint", ["char"], "built_codepoint"], ["new_text", ["char", "char"], "built_text"],
-	["new_symbol", ["char", "char"], "built_symbol"], ["new_key", ["node", "node", "int"], "built_key"],
-	["new_list", ["node", "node", "int"], "built_list"], ["new_type", ["node", "node"], "built_type"], ["error_of", ["node"], "built_error"]]
+host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], "built_int"], ["new_bool", [ValueKind.Int], "built_bool"],
+	["new_float", [ValueKind.Float], "built_float"], ["new_codepoint", [ValueKind.Char], "built_codepoint"], ["new_text", [ValueKind.Char, ValueKind.Char], "built_text"],
+	["new_symbol", [ValueKind.Char, ValueKind.Char], "built_symbol"], ["new_key", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_key"],
+	["new_list", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_list"], ["new_type", [ValueKind.Node, ValueKind.Node], "built_type"], ["error_of", [ValueKind.Node], "built_error"]]
 # made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
 # the trap detail the host left (src/host/native.rs raised)
 def exported_builders(): any {
 	if #module.builders > 0 { return ø }
 	for builder in host_builders {
 		parameters = builder#2
-		values = range_list(#parameters).map(i => if parameters[i] == "char" then TypedCode("int", [op.local_get] + uleb(i) + [op.i64_extend_i32_u]) else TypedCode(parameters[i], [op.local_get] + uleb(i)))
-		f = exported_function(builder#1, parameters, "node")
+		values = range_list(#parameters).map(i => if parameters[i] == ValueKind.Char then TypedCode(ValueKind.Int, [op.local_get] + uleb(i) + [op.i64_extend_i32_u]) else TypedCode(parameters[i], [op.local_get] + uleb(i)))
+		f = exported_function(builder#1, parameters, ValueKind.Node)
 		f.code = runtime_call(builder#3, values).code
 	}
 	f = exported_function("returned_error", [], no_kind)
@@ -54,7 +54,7 @@ placed(f: Function): any := {
 	f
 }
 # a function made by the emitter (no source), at the next index, its code written by the caller
-added_function(name: text, kinds: list, result: text, local_names: list): any := {
+added_function(name: text, kinds: list, result: ValueKind, local_names: list): any := {
 	f = placed(bare_function(name))
 	f.kinds = kinds
 	f.result = result
@@ -63,31 +63,31 @@ added_function(name: text, kinds: list, result: text, local_names: list): any :=
 	f
 }
 # a function the host calls by its name, its code written by the caller
-exported_function(name: text, kinds: list, result: text): any := {
+exported_function(name: text, kinds: list, result: ValueKind): any := {
 	f = added_function(name, kinds, result, range_list(#kinds).map(i => "argument" + (i + 1)))
 	f.is_runtime = yes
 	module.builders += [f]
 	f
 }
-def host_argument(value: TypedCode, kind: text): list {
-	if kind == "i32" { return host_int(value) + [op.i32_wrap_i64] }
+def host_argument(value: TypedCode, kind: ValueKind): list {
+	if kind == ValueKind.I32 { return host_int(value) + [op.i32_wrap_i64] }
 	# a text as the C string a host word reads, `system_value("battery")`: its address in linear memory
-	if kind == "c_text" { return runtime_call("c_text", [value]).code + [op.i32_wrap_i64] }
-	if kind == "f32" { return converted(value, "float") + [f32_demote] }
-	if kind == "int" { return host_int(value) }
+	if kind == ValueKind.CText { return runtime_call("c_text", [value]).code + [op.i32_wrap_i64] }
+	if kind == ValueKind.F32 { return converted(value, ValueKind.Float) + [f32_demote] }
+	if kind == ValueKind.Int { return host_int(value) }
 	converted(value, kind)
 }
 # `x!`, Rust's unwrap: a number or text is itself; a node may be data Rust runs as code (blocks.rs), which the core
 # can't yet
 def unwrapped(value: TypedCode): TypedCode {
-	if value.kind == "node" { return refuse("running a node as code (`x!`)") }
+	if value.kind == ValueKind.Node { return refuse("running a node as code (`x!`)") }
 	value
 }
 
 # a number a host word takes as an int: a fraction or a float rounded to the nearest, as Rust passes `sleep(1/60*1000)`
 def host_int(value: TypedCode): list {
-	if value.kind == "node" or value.kind == "float" { return runtime_call("rounded", [TypedCode("float", converted(value, "float"))]).code }
-	converted(value, "int")
+	if value.kind == ValueKind.Node or value.kind == ValueKind.Float { return runtime_call("rounded", [TypedCode(ValueKind.Float, converted(value, ValueKind.Float))]).code }
+	converted(value, ValueKind.Int)
 }
 
 # `global name = 0`, `= ""` or `= []` at the top of runtime.warp: a module variable of that kind its words share, from
@@ -99,7 +99,7 @@ runtime_global(n: Node): any := {
 	# of the runtime: the program keeps its own `Kind` (card constants-exist)
 	if name in constant_tables { return ø }
 	value = value_of(value_of(n))
-	module.globals[name] = [#module.global_order, if value is number then "int" else if type(value) is list or is_empty_list(value) then "list" else "text"]
+	module.globals[name] = [#module.global_order, if value is number then ValueKind.Int else if type(value) is list or is_empty_list(value) then ValueKind.List else ValueKind.Text]
 	module.runtime_globals += [name]
 	module.global_order += [name]
 }

@@ -16,7 +16,7 @@ def c_function_lines(): list {
 }
 # a module calling C exports text_heap: where the host writes a C function's text before new_text copies it
 def c_function_globals() {
-	if #c_function_lines() > 0 { declared_global(text_heap_name, "char") }
+	if #c_function_lines() > 0 { declared_global(text_heap_name, ValueKind.Char) }
 }
 # the custom section of the C functions, none without one
 def c_functions_custom_section(): list {

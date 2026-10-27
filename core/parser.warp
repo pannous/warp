@@ -3223,10 +3223,9 @@ def operand_before(p: Parser, start: int): bool {
 	at >= 0 and is_operand_end(p.code[at])
 }
 
-// The exact generators: `π` is the real π, not a float (src/extensions/reals.rs); a bare `e` or `i` stays a free name,
-// as `epsilon` does; and `∞`, the float infinity
-// Rust twin: literals/constants.rs check_constants, atoms.rs parse_atom (∞)
-EXACT_CONSTANTS = ["π", "pi", "τ", "tau", "euler", "ℯ", "ⅈ", "ε", "ω", "∞"]
+// The exact generators the core has no value for yet; `π`, `τ`, `ℯ` and `∞` are plain names lib/reals.warp defines
+// Rust twin: literals/constants.rs check_constants
+EXACT_CONSTANTS = ["ⅈ", "ε", "ω"]
 // no node of its own in warp yet (card node-more-cases): the number view, which the Rust side reads as written
 def exact_constant(word: text): Node := opaque(["number", word])
 

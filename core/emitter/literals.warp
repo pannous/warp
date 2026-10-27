@@ -22,7 +22,7 @@ exact_decimal(n: float): any := {
 	if divisor < 0 { divisor = -divisor }
 	if divisor == denominator { return number_value(numerator / divisor) }
 	box = x => [op.i64_const] + sleb(x) + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])
-	TypedCode("node", node(Kind.Int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)])))
+	TypedCode(ValueKind.Node, node(Kind.Int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)])))
 }
 
 # the offset of a text's bytes in the data segment, each text stored once; counted, not measured: a long list's
@@ -37,7 +37,7 @@ text_offset(t: text): int := {
 # a text as its bytes; one code point as its codepoint, as warp holds a literal "a" (a grapheme of more, "👍🏽", is a text)
 one_code_point(t: text): bool := #t == 1 and #codepoints(t) == 1
 def text_value(t: text): TypedCode {
-	if one_code_point(t) { return TypedCode("char", [op.i32_const] + sleb(ord(t))) }
-	TypedCode("text", text_bytes(t))
+	if one_code_point(t) { return TypedCode(ValueKind.Char, [op.i32_const] + sleb(ord(t))) }
+	TypedCode(ValueKind.Text, text_bytes(t))
 }
 def text_bytes(t: text): list { [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code(gc_ops.array_new_data, [gc_type(gc.text), 0]) }
