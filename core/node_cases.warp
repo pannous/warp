@@ -177,7 +177,7 @@ comparing_functions(enum_name: text): list := {
 }
 
 # whether a case of the enum, `Op.Add`, or a spelling function, `Op·text(x)`, occurs anywhere in n
-is_spelling_needed(n: any, enum_name: text, declared: any): bool := match n {
+is_spelling_needed(n: Node, enum_name: text, declared: any): bool := match n {
 	Symbol(name): name in ["text", "case", "is", "same"].map(word => spelled_function(enum_name, word))
 	Key(left, op, right): {
 		if left == opaque_symbol { return no }
@@ -229,7 +229,7 @@ taking_spelled_enums(program: Node): Node := {
 }
 
 # the spelled enums and their spelling functions in front of a program naming them, the program's own always
-with_spelled_enums(program: any, declared: any): any := {
+with_spelled_enums(program: Node, declared: any): any := {
 	declarations = []
 	for enum_name in spelled_enums {
 		if enum_name not in declared and (enum_name not in node_spelled_enums or is_spelling_needed(program, enum_name, declared)) { declarations += [spelled_declaration(enum_name)] + spelling_functions(enum_name) }

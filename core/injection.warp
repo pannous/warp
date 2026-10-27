@@ -21,27 +21,27 @@ global template_variables = []
 code_node(code: text): Node := node_of(plain(tree(code)))
 
 # the tag `sql` or `sh` n is, else ""
-tag_named(n: any): text := {
+tag_named(n: Node): text := {
 	for tag in template_tags {
 		if n == symbol(tag) { return tag }
 	}
 	""
 }
 
-is_template_tag(n: any): bool := tag_named(n) in template_tags
+is_template_tag(n: Node): bool := tag_named(n) in template_tags
 
 # the runner of a tag's templates: `execute` runs sql, `exec` sh
 runner_word(tag: text): text := if tag == "sql" then "execute" else "exec"
-tag_run_by(n: any): text := if n == symbol("execute") then "sql" else if n == symbol("exec") then "sh" else ""
+tag_run_by(n: Node): text := if n == symbol("execute") then "sql" else if n == symbol("exec") then "sh" else ""
 
 # the tag of a template before lowering: `sql "…"`, or the bare tag of a flat `execute sql "…"`; else ""
-template_tag_of(n: any): text := match n {
+template_tag_of(n: Node): text := match n {
 	List(items, _, _): { if #items == 2 then tag_named(items#1) else "" }
 	_: tag_named(n)
 }
 
 # the literal of a template, "…" or ("…"); ø for anything computed
-template_source(n: any): any := {
+template_source(n: Node): any := {
 	if n is text { return n }
 	if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == template_kind { return value_of(n)#2 }
 	if is_group(n) and bracket_of(n) == "(" and #items_of(n) == 1 { return template_source(items_of(n)#1) }
@@ -134,7 +134,7 @@ lowered_template(tag: text, argument: any): any := {
 }
 
 # the tag of the template a variable holds, else ""
-variable_tag(n: any): text := {
+variable_tag(n: Node): text := {
 	for pair in template_variables {
 		if pair#1 == n { return pair#2 }
 	}
@@ -183,7 +183,7 @@ lowered_items(items: list): list := {
 }
 
 # n with each `sql "…"` / `sh "…"` its value, in order, so earlier assignments count for a runner's check
-templates_lowered(n: any): any := match n {
+templates_lowered(n: Node): any := match n {
 	List(items, bracket, separator): {
 		line = flattened(items)
 		if #line == 2 and is_template_tag(line#1) then lowered_template(tag_named(line#1), line#2)

@@ -227,7 +227,7 @@ all_different(variants: list): bool := {
 }
 
 # [kind, element kind or ø] of an argument whose type the compile knows, a literal; ø for one only the run time knows
-static_kind(n: any): any := {
+static_kind(n: Node): any := {
 	if n is bool { return ["bool", ø] }
 	if n is int { return ["int", ø] }
 	if n is float { return ["float", ø] }
@@ -252,7 +252,7 @@ assigned_kinds(program: Node): any := {
 }
 
 # the static_kind of an argument, also of a variable assigned values of one kind
-known_kind(n: any, variables: any): any := {
+known_kind(n: Node, variables: any): any := {
 	if n is symbol and name_of(n) in variables and variables[name_of(n)] { return variables[name_of(n)] }
 	static_kind(n)
 }
