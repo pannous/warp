@@ -37,17 +37,30 @@ red() { # red <what> [--urgent]: a card for the pushers, then on
 	say "RED $1"
 }
 
-# the tree's compilers beside the shared binary, warp-self.wasm only when promoted from the same inputs
+# copy_compilers <lib> <folder>: the compilers a lib/ keeps (warp.wasm; warp-self.wasm only when promoted from the
+# same inputs) into the folder with their machine code (.cwasm) and kept values (.kept/), each file moved into place
+# whole, its machine code before it: a run that finds a compiler finds its code too (card atomic-install)
+copy_compilers() {
+	local from=$1 folder=$2 inputs name part
+	inputs=$(cut -d' ' -f1 "$from/warp.wasm.inputs")
+	for name in warp.wasm warp-self.wasm; do
+		if [ $name = warp-self.wasm ] && [ "$(cut -d' ' -f1 "$from/$name.inputs" 2>/dev/null)" != "$inputs" ]; then
+			rm -f "$folder/$name" "$folder/$name.cwasm"  # an older pair's: `warp self` says it is missing instead of running it
+			continue
+		fi
+		[ -d "$from/$name.kept" ] && mkdir -p "$folder/$name.kept" && cp -R "$from/$name.kept/." "$folder/$name.kept/"
+		for part in "$name.cwasm" "$name"; do
+			[ -f "$from/$part" ] || continue
+			cp "$from/$part" "$folder/$part.new" && mv "$folder/$part.new" "$folder/$part" || return 1
+		done
+	done
+}
+
+# the tree's compilers beside the shared binary
 install_compilers() {
-	local folder compilers=$TREE/lib inputs lane got
+	local folder lane got
 	folder=$(dirname "$(readlink -f "$MAIN_WARP")")
-	inputs=$(cut -d' ' -f1 "$compilers/warp.wasm.inputs")
-	cp "$compilers/warp.wasm" "$folder/warp.wasm.new" && mv "$folder/warp.wasm.new" "$folder/warp.wasm"
-	if [ -f "$compilers/warp-self.wasm" ] && [ "$(cut -d' ' -f1 "$compilers/warp-self.wasm.inputs" 2>/dev/null)" = "$inputs" ]; then
-		cp "$compilers/warp-self.wasm" "$folder/warp-self.wasm.new" && mv "$folder/warp-self.wasm.new" "$folder/warp-self.wasm"
-	else
-		rm -f "$folder/warp-self.wasm"  # an older pair's: `warp self` says it is missing instead of running it
-	fi
+	copy_compilers "$TREE/lib" "$folder"
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
 		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
@@ -63,18 +76,21 @@ harness_current() {
 	[ -n "$built" ] && git -C "$TREE" diff --quiet "$built" "$tip" -- "${HARNESS_PATHS[@]}" 2>/dev/null
 }
 
-# the harness of $tip built and installed: its folder in $BUILDS with warp.wasm built by it, hello, then ~/dev/bin/warp
-# links there and every older folder goes (user: no stale builds, no warp-<hash> links)
+# the harness of $tip built and installed: its folder in $BUILDS with warp.wasm built by it, hello, the compilers
+# copied in, then ~/dev/bin/warp links there by one rename (a run never meets the new binary without its compilers:
+# card atomic-install) and every older folder goes (user: no stale builds, no warp-<hash> links)
 install_harness() {
 	local folder=$BUILDS/${tip:0:9} got built
 	say "harness of ${tip:0:10} changed: cargo build --release"
 	(cd "$TREE" && cargo build --release -q) || { red "harness: cargo build --release failed" --urgent; return 1; }
 	mkdir -p "$folder" && cp "$CARGO_BINARY" "$folder/warp" || return 1
 	# the seed lies beside ~/dev/bin/warp, which the new binary, run from its own folder, does not see
-	built=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib WARP_SEED=$SEED "$folder/warp" rebuild pure 2>&1 | tail -1)
+	# through rebuild.sh, which stamps the build with its inputs: the rebuild.sh of watch then keeps it, not building twice
+	built=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_BINARY=$folder/warp WARP_SEED=$SEED "$scripts/rebuild.sh" pure "$TREE" 2>&1 | tail -1)
 	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$folder/warp" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "harness: hello with the new binary got ${got:0:120} (its rebuild said: ${built:0:120})" --urgent; rm -rf "$folder"; return 1; }
-	ln -sfn "${folder#"$(dirname "$MAIN_WARP")/"}/warp" "$MAIN_WARP"
+	copy_compilers "$TREE/lib" "$folder" || { red "harness: the compilers did not copy into $folder" --urgent; rm -rf "$folder"; return 1; }
+	ln -sfn "${folder#"$(dirname "$MAIN_WARP")/"}/warp" "$MAIN_WARP.new" && mv -f "$MAIN_WARP.new" "$MAIN_WARP" || return 1
 	find "$BUILDS" -mindepth 1 -maxdepth 1 ! -name "${tip:0:9}" -exec rm -rf {} +
 	say "harness of ${tip:0:10} installed: $MAIN_WARP -> $folder/warp"
 }
