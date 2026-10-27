@@ -468,3 +468,5 @@ is!(warp: text, expected: any) := {
 
 // The class of every error (decision error-classes): `class ParseError: Error` declares one, `except Error` catches all
 class Error { message: text }
+# a value that lambdas share, the variable they change (core/lambdas.warp shared captures, P124)
+class Cell { value: any }

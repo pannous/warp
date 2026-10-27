@@ -8,6 +8,7 @@ use "parser.warp"
 use "walk.warp"
 use "uses.warp"
 use "builtin_signatures.warp"
+use "scope.warp"
 
 # [name, text] of each function definition in source: a line starting with a name and its parameters, with the
 # indented or closing lines below it
@@ -83,6 +84,10 @@ words_within(n: Node): list := {
 	found.keys
 }
 
+# the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp)
+function_types = [symbol("function"), symbol("block")]
+lowering_words(program: Node): list := if nodes_in(program).any(n => is_lambda(n) or n in function_types) then ["Cell"] else []
+
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
 # loader places them: a used module's in front of the program, the prelude's after it
@@ -96,7 +101,7 @@ with_reached(program: Node, module: text, in_front: bool): Node := {
 	slices = definition_slices(module).filter(slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
 	# the statements of each reached slice, by its text
 	reached = {}
-	wanted = symbol_words(program)
+	wanted = symbol_words(program) + lowering_words(program)
 	while #wanted > 0 {
 		word = wanted#1
 		wanted = wanted[1 ..]
@@ -104,7 +109,7 @@ with_reached(program: Node, module: text, in_front: bool): Node := {
 			if slice#1 == word and slice#2 not in reached {
 				slice_node = early_sugared(plain_node(parsed(slice#2)))
 				reached[slice#2] = statements_in(slice_node)
-				wanted += words_within(slice_node)
+				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
 		}
 	}
