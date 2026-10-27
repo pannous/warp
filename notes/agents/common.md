@@ -36,7 +36,9 @@ before asking a question). After a context swap, this file and your role file be
   core/extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
   lowering case, special case or refusal path, needs an OK first (files, functions, 3-line reason to the Supervisor,
-  who takes core changes to the user via the Interviewer). Small bug fixes need no question.
+  who takes core changes to the user via the Interviewer). So does any new syntax, whatever its size: a rewrite-engine
+  condition or form, a parser branch, a keyword or a foreign spelling (two lines are no exemption). Small bug fixes of
+  existing behaviour need no question.
 - Layout: core/ = compiler, runtime, sugar, extensions; lib/ = plain modules programs import. Folder names never join
   two topics with an underscore. core/ is the real folder; lib/compiler links to ../core for a transition
   (the compiler is still found as <lib>/compiler), core/sugar to ../lib/sugar. New syntax goes by layer (notes/layers.md): table row or declaration first, else a
