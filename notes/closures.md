@@ -93,3 +93,17 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
 - Nested objects: `x = {a: {f: …}}` defines `x·a·f`, called by `x.a.f(1)` (blocks.rs `object_with_entries` recurses).
 - Open: a function entry of an object passed around (it is data, the
   method belongs to the variable name).
+
+## Pure compiler: shared captures and block parameters (core/lambdas.warp, card block-parameters-captures, 2026-10-27)
+- A variable of a scope (main or a function body) that a lambda in it changes with `+=`, `-=`, `++`… (P124), or that a
+  block given to a function or block parameter assigns at all (handler-blocks-share), lives in a prelude `Cell`:
+  `n·cell = Cell(n)`, each mention `n·cell.value`; the closure captures the cell by value, so the change is shared.
+  A lambda's plain `n = 5` is its own n; `global` names stay global. prelude_words reaches Cell for a program with a
+  lambda or a `function`/`block` type.
+- A `{…}` given to a parameter typed `function` or `block` (`f {…}`, `f(a) {…}`, `f{…}`, `f(a, {…})`) is the lambda
+  `() => {…}`, or `it => {…}` when it mentions it (block-lazy-body); a `block` parameter is a function.
+- `n times x` is the prelude's infix times, overloaded by block, list, text and number (the parser's `times`
+  notation calls operator_times); once/twice/thrice are prelude functions through it. Typed overloads tell a block
+  apart (arity_overloads.warp) and resolve spaced and glued calls.
+- Open: a block given to a function is a closure call per round (card inline-literal-block); run-time overload dispatch
+  compiles every variant with the flowing kind (card overload-dispatch-variants).
