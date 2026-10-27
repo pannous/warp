@@ -11,6 +11,8 @@ rewrite (thrice $body) => (3 times $body) where $body is block
 rewrite for($start; $condition; $step) {$body...} => ($start; while $condition { $body...; loop··step: $step })
 # `for xs {…}` loops with the variable `it`
 rewrite (for $xs $body) => (for it in $xs $body) where $body is block
+# its colon body stays bare (`for 1…100: print it`, parser.warp ranged_loop): the block of that one statement
+rewrite (for $xs $body) => (for it in $xs {$body})
 # `each xs {…}` and `xs.each {…}` head that loop too, as statements with a block (inside an expression, `print each
 # xs`, each is the broadcasting word); warp says for
 rewrite each $xs $body => for $xs $body where statement and $body is block and alias

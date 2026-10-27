@@ -74,8 +74,8 @@ each_in_word = "in"
 each_at_word = "at"
 # the places a rule may ask for (F1), each written as a bare word among the `where` conditions (`key` and `value` of
 # `k: v` the PairKey and PairValue); Anywhere a rule asking none
-enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter }
-PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter}
+enum Place { Anywhere, Statement, Condition, Member, PairKey, PairValue, Parameter, Element }
+PLACE_WORDS = {"statement": Place.Statement, "condition": Place.Condition, "member": Place.Member, "key": Place.PairKey, "value": Place.PairValue, "parameter": Place.Parameter, "element": Place.Element}
 # the mark of a rule whose pattern's first word spells the template's another way
 alias_mark = "alias"
 takes_word = "takes"
@@ -215,7 +215,8 @@ sugared(program: Node, rules: list): Node := {
 	first_parameter_types = typed_first_parameters(program)
 	rule_case_holders = case_holders_of(program)
 	maps = map_names_of(program)
-	if not is_statement_sequence(program) { return placed_map_scoped(program, n => sugared_node(n, rules), maps) }
+	# a program of one statement: that statement, so the rules `where statement` apply to it too
+	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
 	# each statement walked with the rules that can fire in it (rules_reaching), the program's runs with them all
 	needs = rules.map(rule => required_words(rule.pattern))
 	results = rules.map(rule => words_within(rule.template))
@@ -255,11 +256,16 @@ required_words(pattern: Node): list := {
 	if is_group(pattern) then items_of(pattern).flat_map(item => required_words(item)) else []
 }
 
+# `[a, b]`: a list literal, whose items are rewritten by the rules `where element`
+is_element_list(n: Node): bool := is_group(n) and bracket_of(n) == "["
+
 # the node with the sugar rules applied, a class's body too (the walk passes over its opaque view)
 sugared_node(n: Node, rules: list): Node := {
 	n = with_changed_members(n, member => sugar_at_place(bottom_up(member, part => sugared_node(part, rules)), Place.Member, rules))
 	if holds_statements(n) {
 		n = group_like(n, sugar_runs(spliced_statements(items_of(n).map(statement => sugar_at_place(statement, Place.Statement, rules))), rules))
+	} else if is_element_list(n) {
+		n = group_like(n, items_of(n).map(element => sugar_at_place(element, Place.Element, rules)))
 	} else if n is key and key_of(n) != opaque_symbol {
 		n = with_placed_parts(n, (code, place) => sugar_at_place(code, place, rules))
 	}
@@ -995,6 +1001,7 @@ rule_rewritten(n: Node, rules: list, origins: list): Node := {
 	if is_group(n) and separator_of(n) in statement_separators {
 		n = group_like(n, statement_runs(spliced_statements(items_of(n).map(statement => at_place(statement, Place.Statement, rules, origins))), rules, origins))
 	} else if is_group(n) and #n > 0 {
+		if is_element_list(n) { n = group_like(n, items_of(n).map(element => at_place(element, Place.Element, rules, origins))) }
 		phrase = bracket_of(n) == "" and separator_of(n) == " "
 		items = items_of(n)
 		runs = with_runs(if phrase then words_of_all(items) else items, rules, origins)
