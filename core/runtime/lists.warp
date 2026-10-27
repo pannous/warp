@@ -33,8 +33,12 @@ node_at(n: Node, index: int): Node := {
 	if kind_code(n) == Kind.Text { return text_char(unboxed_text(n), index) }
 	# a one-character text given as a value known only at run time is a character: ":"#1 is ':'
 	if kind_code(n) == Kind.Codepoint and index == 1 { return n }
+	if marked_kind(n) == Marked.Instance and has_fields(n) { return instance_position(n, index) }
 	not_a_list()
 }
+# a class instance's default position function: its fields in the order its class declares them, `P(2, 3)#1` is 2
+# (user 2026-10-27, card p1-default-position); a class's own position function is to come (card class-position-index)
+instance_position(instance: Node, index: int): Node := key_value(unboxed_list(fields_of(instance))#index)
 # `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
 node_length(n: Node): int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
