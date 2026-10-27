@@ -62,7 +62,7 @@ pass_owners = {"foreign C call": "c_imports", "runtime declaration": "definition
 	"comprehension": "comprehensions", "lambda": "lambdas", "number word": "number_words_pass", "fallback": "sugar (lib/sugar/fallbacks.warp)"}
 
 # the emitter's refusal naming its form and owner pass: `form` one of pass_owners, ø for a form no pass owns
-owned_refusal(refusal: text, form: any): text := {
+owned_refusal(refusal: text, form: text?): text := {
 	if form == ø { return refusal + " (no owner)" }
 	refusal + " (" + form + "; owner " + (pass_owners.get(form) ?? "none") + " did not claim it)"
 }
@@ -72,7 +72,7 @@ owned_refusal(refusal: text, form: any): text := {
 pure_passes = [parse_words, tries, definitions, arity_overloads, clauses, multiple_assignments, type_tests, spaced_prefix_calls] + passes + [first_sugar, node_matches, node_cases, enums_declared, plain_enums, phrase_blocks, comprehension_sugar, data_items, library_calls, sugar, lambdas, loop_heads, iteration_sugar, late_sugar, number_keys]
 
 # a node after every pure pass, in order
-lowered_node(n: any): any := {
+lowered_node(n: Node): Node := {
 	for pass in pure_passes { n = pass(n) }
 	n
 }

@@ -82,7 +82,7 @@ def loop_code(body: Body, test: Node, block: Node, last: int): list {
 	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + kept + [op.end] + again + [op.end, op.end]
 }
 is_endless(test: Node, block: Node): bool := test == yes and not mentions(block, "break")
-is_loop_step(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol(HiddenWord.LoopStep)
+is_loop_step(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == symbol(HiddenWord.LoopStep as text)
 # whether a continue may skip the loop's last statement: not when it assigns a name the test reads, the shape of a
 # lowered `for`'s step that came unmarked (Rust's iterator loops: `x = x·iterator.next()`)
 step_operators = ["=", "+=", "-=", "++", "--"]
