@@ -1,0 +1,5 @@
+# A program's own s or m leaves the units as they are (lib/units.warp): each unit carries its own SI amount
+'sleep(3ms); s = 0; for x in [1, 2] { s = s + x }; s'	3
+'use units; s = 4; "" + 3km + " " + 2ms'	'3km 2ms'
+'use units; m = 2; (5km).in("m") * m'	10000
+'sleep(3ms); [1, 2].map(x => x + 1)'	[2, 3]
