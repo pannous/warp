@@ -13,5 +13,5 @@ enum ValueKind { Unknown = "", Int = "int", Float = "float", Text = "text", Code
 type KindName = text
 # a type word, one naming the elements of a list or map as well: `int`, `list of int`, `map of text`
 type TypeWord = text
-# a value's code in the emitter: [its KindName, its wasm bytes], `["int", [op.i64_const, 7]]`
-type TypedCode = list
+# a value's code in the emitter: its kind and its wasm bytes, `TypedCode("int", [op.i64_const, 7])`
+class TypedCode { kind: KindName; code: list }
