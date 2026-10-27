@@ -1,0 +1,11 @@
+# a class instance's fields read by their declared place (card instance-field-order): given out of order, defaulted,
+# beside a plain map and a list that have the same names, and a field the map lacks
+class Point { x: int; y: int; length: int = 4 }
+p = Point{y: 2, x: 1}
+print p.x + p.y
+print p.length
+m = {y: 5, x: 7}
+print m.x
+xs = [1, 2, 3]
+print xs.length
+print m.length

@@ -51,15 +51,20 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 			field_values += [node_of(defaults[name]#1)]
 		}
 	}
-	codes = []
+	given = {}
 	for i in 0..<#field_names {
 		if field_names[i] not in declared { return refuse("a field " + class_name + " does not declare") }
-		written_type = declared[field_names[i]]
+		given[field_names[i]] = field_values[i]
+	}
+	# the fields in the order the class declares them, each at its place (declared_place, runtime maps.warp slot_field)
+	codes = []
+	for field_name in declared.keys {
+		written_type = declared[field_name]
 		# an optional field `b: text?` takes ø as it is, any other value as its base type
-		field_type = if field_values[i] == ø and written_type != base_type(written_type) then ø else base_type(written_type)
-		value = texted(field_type, expression_code(body, field_values[i]))
+		field_type = if given[field_name] == ø and written_type != base_type(written_type) then ø else base_type(written_type)
+		value = texted(field_type, expression_code(body, given[field_name]))
 		if not checked_at_run_time(field_type, value#1) and not admits(field_type, value#1) { return refuse("a " + value#1 + " for a typed field of " + class_name) }
-		codes += [keyed_code(name_node(symbol(field_names[i])), boxed(field_value(field_type, value)))]
+		codes += [keyed_code(name_node(symbol(field_name)), boxed(field_value(field_type, value)))]
 	}
 	name = node(Kind.Symbol, text_bytes(class_name))
 	["node", key_code(Marked.Instance, name, node(Marked.Map, vector_code(codes)))]
@@ -83,8 +88,25 @@ def field_read(body: Body, target: any, name: text): list {
 		fits = condition(runtime_call("swizzle_fits", [held, named]))
 		missing = ["node", fits + if_else_code("node", runtime_call(word, [held, named]), missing)]
 	}
+	place = declared_place(name)
+	if place != ø and not is_swizzle(name) { return runtime_call("slot_field", [["node", boxed(target)], named, ["int", [op.i64_const] + sleb(place)]]) }
 	found = condition(runtime_call("has_field", [held, named]))
 	["node", boxed(target) + [op.local_set] + held#2[1..] + found + if_else_code("node", runtime_call("map_get", [held, named]), missing)]
+}
+# the place, from 1, of the field `name` in every class that declares it, when they all agree; ø when none does or two
+# disagree (an instance holds its fields in declared order: instance_of_fields)
+def declared_place(name: text): any {
+	place = ø
+	for class_name in module.classes.keys {
+		fields = module.classes[class_name].keys
+		for i in 0..<#fields {
+			if fields[i] == name {
+				if place != ø and place != i + 1 { return ø }
+				place = i + 1
+			}
+		}
+	}
+	place
 }
 def is_swizzle(name: text): bool { #name >= 1 and #name <= 4 and name.all(c => c in "xyzw") }
 # a value of the kind given that ends the run in the error function named
