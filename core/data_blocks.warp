@@ -1,0 +1,56 @@
+# Data blocks and data parameters (decisions data-parameter, data-names, data-parameters): data is written in a
+# program as it is meant, a tree, its bound names their values (the emitter's spliced quote, emitter/quotes.warp)
+# - a parameter typed `data` takes its argument so: `style{ ul > li { color: red } }` is `style(data·spliced {…})`,
+#   which no pass rewrites
+# - a word nothing binds glued to its block, `div{ class: "box" … }`, is the data pair `div: […]`; a `for` among its
+#   items gives its items, the comprehension `[li{g} for g in guests]` of `for g in guests { li{g} }`
+use "walk.warp"
+use "scope.warp"
+use "lambdas.warp"
+
+data_type = symbol("data")
+for_word = symbol("for")
+in_word = symbol("in")
+
+data_blocks(program: Node): Node := {
+	scope = scope_of(program)
+	positions = data_positions_of(nodes_in(program))
+	bottom_up(program, n => data_argued(with_loops_as_items(n, scope), positions))
+}
+
+is_data_parameter(parameter: Node): bool := is_key(parameter, Op.Colon) and value_of(parameter) == data_type
+# the positions of each function's data parameters, by its name
+data_positions_of(written: list): map := {
+	found = {}
+	for statement in written {
+		parts = definition_of(statement)
+		if parts != ø and parts#2.any(is_data_parameter) { found[parts#1] = (1 to #parts#2).filter(i => is_data_parameter(parts#2#i)) }
+	}
+	found
+}
+spliced(argument: Node): Node := List([spliced_quote_symbol, argument], Bracket.Round, Separator.None)
+# `f{…}` and `f(a, b)` of an f taking data: those arguments spliced quotes
+data_argued(n: Node, positions: map): Node := {
+	if is_key(n, Op.Colon) and key_of(n) is symbol and positions.has(name_of(key_of(n))) and is_curly_group(value_of(n)) {
+		n = call_node(key_of(n), [value_of(n)])
+	}
+	if not (is_round(n) and #n > 1 and n#1 is symbol and positions.has(name_of(n#1))) { return n }
+	taken = positions[name_of(n#1)]
+	group_like(n, (1 to #n).map(i => if i - 1 in taken then spliced(n#i) else n#i))
+}
+
+# `div{…}` of a word the program gives no value, function or type
+is_free_tag(n: Node, scope: any): bool := {
+	if not ((is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n))) { return no }
+	name = name_of(key_of(n))
+	not (binds_value(scope, name) or binds_as(scope, name, Meaning.Function) or binds_as(scope, name, Meaning.Type))
+}
+with_loops_as_items(n: Node, scope: any): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), items_of(value_of(n)).map(loop_as_items))) else n
+# `for g in guests { li{g} }` → `[li{g} for g in guests]`, any other item as it is
+loop_as_items(item: Node): Node := {
+	if not (is_group(item) and bracket_of(item) == "" and #item >= 5 and item#1 == for_word and item#3 == in_word and is_curly_group(item#(#item))) { return item }
+	block = item#(#item)
+	value = if #block == 1 then block#1 else block
+	# as the parser reads a comprehension: the value, then the loop's head with no body
+	List([value, group_like(item, items_of(item)[0..<(#item - 1)] + [Node.Empty])], Bracket.Square, Separator.Space)
+}
