@@ -39,16 +39,13 @@ def positional_instance(body: Body, class_name: text, arguments: list): list {
 # the instance of the class whose fields of these names hold these values
 def instance_of_fields(body: Body, class_name: text, field_names: list, field_values: list): list {
 	if class_name not in module.classes { return refuse("an instance of " + class_name + ", a class not declared here") }
-	# methods (`S·init`, `C·put`) change their instance in place in Rust's: not yet compiled alike here
-	if class_name in module.member_classes or module.functions.keys.any(name => name.starts_with(class_name + "·")) { return refuse("an instance of " + class_name + ", a class with methods") }
 	declared = module.classes[class_name]
-	# the fields left out take their defaults, as Rust's type_constructor.rs with_defaults
+	# the fields left out take their defaults, else their type's zero, as Rust's type_constructor.rs with_defaults
 	defaults = module.class_defaults[class_name]
 	for name in declared.keys {
 		if name not in field_names {
-			if name not in defaults { return refuse("an instance of " + class_name + " not giving each field") }
 			field_names += [name]
-			field_values += [stage_node(defaults[name]#1)]
+			field_values += [if name in defaults then stage_node(defaults[name]#1) else field_zero(declared[name])]
 		}
 	}
 	given = {}
@@ -67,6 +64,12 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 		codes += [as_node(boxed(field_value(field_type, value)))]
 	}
 	["node", instance_head(class_name) + concatenated(codes) + gc_code(gc_ops.struct_new, [gc_type(class_struct(class_name))])]
+}
+# a field's type's zero: 0, 0.0, "", no, [], else ø (an untyped or optional field, one of a class)
+field_zeros = {int: 0, float: 0.0, text: "", bool: no, list: []}
+def field_zero(type: any): any {
+	kind = field_kind(type)
+	if type == base_type(type) and kind in field_zeros then field_zeros[kind] else ø
 }
 # A declared class's instance is its own struct type (card declared-class), a subtype of its parent's struct, else of
 # $Instance: the node's kind (an instance), data (the class name) and value (the list of its field names, as the
