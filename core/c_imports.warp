@@ -33,7 +33,7 @@ c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "bool", char: "i32",
 	f64: "f64", float: "f64", double: "f64", number: "f64", f32: "f32", float32: "f32", text: "text", string: "text", owned_text: "owned_text", handle: "handle", pointer: "handle",
 	out: "out", bytes: "bytes", length: "length", void: "void", nothing: "void"}
 # the kind the emitter passes a type as (host_words.warp's), and the c_signatures.rs name of the parameter
-c_parameter_kinds = {bool: "i32", i32: "i32", i64: "int", f64: "float", f32: "f32", text: "node", bytes: "node", handle: "i32"}
+c_parameter_kinds = {bool: ValueKind.I32, i32: ValueKind.I32, i64: ValueKind.Int, f64: ValueKind.Float, f32: ValueKind.F32, text: ValueKind.Node, bytes: ValueKind.Node, handle: ValueKind.I32}
 c_parameter_names = {bool: "i32", i32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", bytes: "bytes", length: "length",
 	handle: "handle", out: "out"}
 # the parameters the host fills, which take no argument
@@ -247,7 +247,7 @@ c_host_word(declaration: list): any := {
 	if "?" in types or "owned_text" in types or result == "?" or result in c_parameter_only_types { return ø }
 	kinds = types.filter(t => t not in c_filled_types).map(t => c_parameter_kinds[t])
 	gives_text = result == "text" or result == "owned_text"
-	results = if result == "void" then [] else if gives_text then ["node"] else [c_parameter_kinds[result]]
+	results = if result == "void" then [] else if gives_text then [ValueKind.Node] else [c_parameter_kinds[result]]
 	# the first out-pointer's parameter name: a NULL there fails the call naming it
 	pointee = ""
 	i = 0

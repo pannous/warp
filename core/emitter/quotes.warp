@@ -33,13 +33,13 @@ def quoted_code(body: Body, e: Node): list {
 	if module.reads_positions { return refuse("quoted code whose position or comment is read") }
 	if e is symbol { return node(Kind.Symbol, text_bytes(name_of(e))) }
 	if type(e) is key {
-		parts = [TypedCode("node", quoted_code(body, key_of(e))), text_value(op_of(e)), TypedCode("node", quoted_code(body, value_of(e)))]
+		parts = [TypedCode(ValueKind.Node, quoted_code(body, key_of(e))), text_value(op_of(e)), TypedCode(ValueKind.Node, quoted_code(body, value_of(e)))]
 		return runtime_call("key_node", parts).code
 	}
 	if is_group(e) {
 		if #e == 0 { return [ref_null, gc_type(gc.node)] }
-		items = TypedCode("node", node(Marked.SquareList, vector_code(e.map(item => quoted_code(body, item)))))
-		bracketed = TypedCode("node", runtime_call("bracketed_node", [items, text_value(bracket_of(e))]).code)
+		items = TypedCode(ValueKind.Node, node(Marked.SquareList, vector_code(e.map(item => quoted_code(body, item)))))
+		bracketed = TypedCode(ValueKind.Node, runtime_call("bracketed_node", [items, text_value(bracket_of(e))]).code)
 		return runtime_call("separated_node", [bracketed, text_value(separator_of(e))]).code
 	}
 	boxed(expression_code(body, e))
@@ -53,16 +53,16 @@ def spliced_code(body: Body, e: Node): list {
 	if is_group(e) and bracket_of(e) != "{" and separator_of(e) in statement_separators { return boxed(expression_code(body, e)) }
 	if not is_curly_group(e) and not is_word_keyed(e) and #unbound_words(body, e) == 0 { return boxed(expression_code(body, e)) }
 	if is_word_keyed(e) {
-		parts = [TypedCode("node", quoted_code(body, key_of(e))), text_value(op_of(e)), TypedCode("node", spliced_code(body, value_of(e)))]
+		parts = [TypedCode(ValueKind.Node, quoted_code(body, key_of(e))), text_value(op_of(e)), TypedCode(ValueKind.Node, spliced_code(body, value_of(e)))]
 		return runtime_call("key_node", parts).code
 	}
 	if type(e) is key {
-		parts = [TypedCode("node", spliced_code(body, key_of(e))), text_value(op_of(e)), TypedCode("node", spliced_code(body, value_of(e)))]
+		parts = [TypedCode(ValueKind.Node, spliced_code(body, key_of(e))), text_value(op_of(e)), TypedCode(ValueKind.Node, spliced_code(body, value_of(e)))]
 		return runtime_call("key_node", parts).code
 	}
 	if is_group(e) and #e > 0 {
-		items = TypedCode("node", node(Marked.SquareList, vector_code(e.map(item => spliced_code(body, item)))))
-		bracketed = TypedCode("node", runtime_call("bracketed_node", [items, text_value(bracket_of(e))]).code)
+		items = TypedCode(ValueKind.Node, node(Marked.SquareList, vector_code(e.map(item => spliced_code(body, item)))))
+		bracketed = TypedCode(ValueKind.Node, runtime_call("bracketed_node", [items, text_value(bracket_of(e))]).code)
 		return runtime_call("separated_node", [bracketed, text_value(separator_of(e))]).code
 	}
 	quoted_code(body, e)

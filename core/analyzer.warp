@@ -957,7 +957,7 @@ kinds(program: Node): map := {
 }
 
 # the kinds emitter.warp holds values as: int, float, char, text, list, any other value a boxed node
-emitter_kind(kind: ValueKind): KindName := if kind == ValueKind.Codepoint then "char" else if kind in emitter_kept_kinds then kind as text else "node"
+emitter_kind(kind: ValueKind): ValueKind := if kind == ValueKind.Codepoint then ValueKind.Char else if kind in emitter_kept_kinds then kind else ValueKind.Node
 emitter_kept_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Text, ValueKind.List]
 
 # the variables of a scope but its parameters, each with its emitter kind

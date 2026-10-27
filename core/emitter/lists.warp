@@ -1,48 +1,48 @@
 # Lists (emitter.warp's part): literals, length, items read and written by index
-def list_value(body: Body, items: list): TypedCode { TypedCode("list", vector_code(items.map(item => boxed(expression_code(body, item))))) }
+def list_value(body: Body, items: list): TypedCode { TypedCode(ValueKind.List, vector_code(items.map(item => boxed(expression_code(body, item))))) }
 def vector_code(item_codes: list): list {
 	code = [op.i32_const] + sleb(#item_codes) + concatenated(item_codes)
 	code + gc_code(gc_ops.array_new_fixed, [gc_type(gc.items), #item_codes]) + gc_code(gc_ops.struct_new, [gc_type(gc.list)])
 }
 # an int as an i32 index
-def index_code(value: TypedCode): list { converted(value, "int") + [op.i32_wrap_i64] }
+def index_code(value: TypedCode): list { converted(value, ValueKind.Int) + [op.i32_wrap_i64] }
 # `#x`: the characters of a text (a character is a one-character text), the items of a list or map, either known only
 # at run time
 def length_code(value: TypedCode): TypedCode {
-	if value.kind == "text" { return runtime_call("text_count", [value]) }
-	if value.kind == "char" { return length_code(TypedCode("text", converted(value, "text"))) }
-	if value.kind == "list" { return TypedCode("int", value.code + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i64_extend_i32_u]) }
+	if value.kind == ValueKind.Text { return runtime_call("text_count", [value]) }
+	if value.kind == ValueKind.Char { return length_code(TypedCode(ValueKind.Text, converted(value, ValueKind.Text))) }
+	if value.kind == ValueKind.List { return TypedCode(ValueKind.Int, value.code + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i64_extend_i32_u]) }
 	# a recursive call not yet known (pending) is counted as the node it may be, as condition() takes it
-	if value.kind == "node" or value.kind == pending { return runtime_call("node_length", [value]) }
+	if value.kind == ValueKind.Node or value.kind == pending { return runtime_call("node_length", [value]) }
 	refuse("cannot access length code of " + kind_spelling(value.kind))
 }
 # `xs#i = v`: the i-th item becomes v, boxed; the assignment gives v
 def element_assignment(body: Body, list: TypedCode, index: TypedCode, value: TypedCode): TypedCode {
-	if list.kind == "node" { return runtime_call("node_set_at", [list, index, value]) }
-	if list.kind != "list" { return refuse("an assignment to an element of a " + kind_spelling(list.kind)) }
+	if list.kind == ValueKind.Node { return runtime_call("node_set_at", [list, index, value]) }
+	if list.kind != ValueKind.List { return refuse("an assignment to an element of a " + kind_spelling(list.kind)) }
 	held = uleb(fresh_local(body, value.kind))
 	code = value.code + [op.local_set] + held + checked_item(body, list, index) + boxed(TypedCode(value.kind, [op.local_get] + held))
 	TypedCode(value.kind, code + gc_code(gc_ops.array_set, [gc_type(gc.items)]) + [op.local_get] + held)
 }
 # `xs#i`: the i-th item, counted from 1
 def element(body: Body, list: TypedCode, index: TypedCode): TypedCode {
-	if list.kind == "node" { return runtime_call("node_at", [list, index]) }
-	if list.kind != "list" { return refuse("an element of a " + kind_spelling(list.kind)) }
-	TypedCode("node", checked_item(body, list, index) + gc_code(gc_ops.array_get, [gc_type(gc.items)]))
+	if list.kind == ValueKind.Node { return runtime_call("node_at", [list, index]) }
+	if list.kind != ValueKind.List { return refuse("an element of a " + kind_spelling(list.kind)) }
+	TypedCode(ValueKind.Node, checked_item(body, list, index) + gc_code(gc_ops.array_get, [gc_type(gc.items)]))
 }
 # a list's items and the 0-based place of its index-th item; an index outside 1…count fails in index_out_of_range_of
 def checked_item(body: Body, list: TypedCode, index: TypedCode): list {
-	held = uleb(fresh_local(body, "list"))
-	at = [op.local_get] + uleb(fresh_local(body, "int"))
-	count = TypedCode("int", [op.local_get] + held + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i64_extend_i32_u])
+	held = uleb(fresh_local(body, ValueKind.List))
+	at = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))
+	count = TypedCode(ValueKind.Int, [op.local_get] + held + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i64_extend_i32_u])
 	whole = whole_index(index).code
 	code = list.code + [op.local_set] + held + whole + [op.local_set] + at[1..]
 	outside = at + [op.i64_const, 1, op.i64_sub] + count.code + [op.i64_ge_u]
-	code += outside + [op.if, no_value] + dropped(runtime_call("index_out_of_range_of", [TypedCode("int", at), count])) + [op.end]
+	code += outside + [op.if, no_value] + dropped(runtime_call("index_out_of_range_of", [TypedCode(ValueKind.Int, at), count])) + [op.end]
 	code + [op.local_get] + held + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + at + [op.i32_wrap_i64, op.i32_const, 1, op.i32_sub]
 }
 # an index as an int; one known only at run time must be an integer ("index must be an integer", not a cast failure)
 def whole_index(index: TypedCode): TypedCode {
-	if index.kind == "node" { return runtime_call("index_of_node", [index]) }
-	TypedCode("int", converted(index, "int"))
+	if index.kind == ValueKind.Node { return runtime_call("index_of_node", [index]) }
+	TypedCode(ValueKind.Int, converted(index, ValueKind.Int))
 }
