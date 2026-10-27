@@ -48,7 +48,7 @@ def instance_of_fields(body: Body, class_name: text, field_names: list, field_va
 		if name not in field_names {
 			if name not in defaults { return refuse("an instance of " + class_name + " not giving each field") }
 			field_names += [name]
-			field_values += [node_of(defaults[name]#1)]
+			field_values += [stage_node(defaults[name]#1)]
 		}
 	}
 	given = {}
