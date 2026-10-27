@@ -25,6 +25,9 @@ before asking a question). After a context swap, this file and your role file be
 - The compiler is warp; the only Rust left is the harness (src/, crates/warp-runtime: host, runtime, CLI), changed
   rarely and through the interviewer. A card that needs Rust work is redone as warp work. The old Rust compiler is the
   snapshot on branch `rust-bootstrap`; do not port its code, write the clean version in warp.
+- Plain warp first: a feature is a function, an enum, a class, an overload or a block parameter in lib/ whenever
+  plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
+  only for a spelling plain warp cannot parse or mean; its commit names why a function would not do (user 2026-10-27).
 - No new passes. Sugar (new spellings) → rules in lib/sugar/*.warp; new capabilities → one file each in
   core/extensions/<name>.warp. A new pass, pass-list
   entry or core/*.warp file needs the user's yes; more than ~40 changed lines in core/*.warp, or a new
