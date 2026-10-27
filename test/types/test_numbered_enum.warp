@@ -1,0 +1,14 @@
+# enum cases with numbers, raw values as in Swift (decision enum-raw-values, card enum-case)
+
+# a numbered case converts to its number and back
+is! 'enum Coin { Penny = 1, Nickel = 5, Dime = 10 }; Coin.Dime as int' 10
+is! 'enum Coin { Penny = 1, Nickel = 5, Dime = 10 }; 5 as Coin == Coin.Nickel' true
+
+# a case without a number counts on from the case before it, the first from 0
+is! 'enum Level { Low, Mid = 5, High }; [Level.Low as int, Level.High as int]' [0, 6]
+
+# a variable holding a case
+is! 'enum Coin { Penny = 1, Dime = 10 }; c = Coin.Dime; c as int' 10
+
+# the index and position still count the cases
+is! 'enum Coin { Penny = 1, Dime = 10 }; Coin.Dime as index' 1
