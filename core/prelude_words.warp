@@ -239,7 +239,7 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 	bound = names_bound_in(program)
 	prelude_names = definition_slices(prelude).map(slice => slice#1)
 	is_unknown = word => word not in own and word not in bound and word not in prelude_names and not is_declared_word(word)
-	calls = nodes_in(program).filter(n => is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol and items_of(n)[1 ..].any(argument => symbol_words(argument).any(is_unknown)))
+	calls = nodes_in(program).filter(n => is_group(n) and (bracket_of(n) == "(" or bracket_of(n) == "") and #n > 1 and n#1 is symbol and items_of(n)[1 ..].any(argument => symbol_words(argument).any(is_unknown)))
 	if #calls == 0 { return program }
 	modules = bundled_modules()
 	classes = class_modules(modules)
