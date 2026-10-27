@@ -258,6 +258,13 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 	}
 	with_module_uses(program, wanted)
 }
+# the module that defines a word a program names without using it, as the fix of its unknown name: `x = 3ms` gives
+# ": `use units` defines it" (decision expected-type-names); "" when none or several do
+module_hint(word: text): text := {
+	modules = bundled_modules()
+	definers = modules.keys.filter(module => definition_slices(modules[module]).any(slice => slice#1 == word))
+	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
+}
 # module name → text of each module at the top of lib/, `units` → lib/units.warp's
 bundled_modules(): map := {
 	modules = {}
