@@ -71,8 +71,8 @@ tried(name: text, clauses: list, at: int): Node := {
 }
 
 merged_function(name: text, clauses: list): Node := {
-	taken = #clauses#1.patterns
-	if not clauses.all(clause => #clause.patterns == taken) { return untaken(name) }
+	taken = clauses#1.patterns.length
+	if not clauses.all(clause => clause.patterns.length == taken) { return untaken(name) }
 	head = List([symbol(name)] + (1 to taken).map(i => parameter(name, i)), Bracket.Round, Separator.None)
 	Key(head, Op.Define, tried(name, clauses, 1))
 }
