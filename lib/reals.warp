@@ -2,7 +2,7 @@
 # a float or an unrelated sum makes a float. `∞` is the float infinity, `ℯ` Euler's number
 # (decision exact-constants: the parser leaves these words alone, the library gives them their values)
 
-float_pi = 3.141592653589793
+float_pi() := 3.141592653589793
 
 class Real {
 	coefficient: number
