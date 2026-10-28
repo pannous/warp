@@ -46,6 +46,10 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/operators/test_approximately.pairs.warp:19, 20, 21 | truthiness under ≈ (`yes ≈ 2`, `no ≈ ""`) | delete? |
 | test/operators/test_operators.pairs.warp:4, 5, 6 | endless loops (`while True : 2`) expected to give 0; each times out after 30 s | delete |
 
+| test/control/test_cell_truth.pairs.warp:4, 5, 6, 9, 10 | internal cell_new/cell_get API, not a language form | delete? |
+| test/control/test_text_patterns.pairs.warp:25-31 | internal text_holes helper; text patterns are tested by the match lines | delete? |
+| test/control/test_value_methods_are_functions.pairs.warp:5 | methods picked by position (fs#4), an order nobody promises | delete? |
+
 ## Gap groups (cards)
 
 ### welcoming (155 gaps)
@@ -160,3 +164,33 @@ Groups:
 - Postfix words `-7 abs` and `16 sqrt` trap with a null reference; `10%` as a percent. 12 lines.
 - Chained comparisons, `1<2<3` and `1<2==2`. 8 lines.
 - `root`, `function abs` as a value, `xs.map(abs)`, `switch` with list patterns, `"3" == 3`, `like`, `import regex`.
+
+### control (891 lines; results.txt predates the event-handlers-unknown merge 59583676fb, so the event count is high)
+Silently wrong:
+- `match 2 { 1, 2 => "small"; _ => "big" }` gives "big"; `match 1 { 1, 2 => "small" }` gives 1 (test_match_alternatives:10-12).
+- `x = data (n * 1); x is data($a * 1)` gives no (test_code_holes.warp:44); code-statement patterns on `parse(…)` give "no" (test_code_statement_patterns).
+- `string(data point{x:1})` gives "point:{x:1}", `data a:1` prints without braces (test_data_quoting:12-18).
+- `for char in text`, `for byte in t`, `for line in` iterate wrongly or not at all (test_for_forms:24, 25, .warp:7; test_for_unit_words:5, 12, 13), the welcoming `for char` group.
+- Class-filter loops `for friend in xs` count the wrong elements (test_filter_loops.warp:4, 5).
+- `"a" + warn("careful") + "b"` gives "aøb" (test_error_words:9), as warning() in welcoming.
+
+Groups:
+- Events and signals: `on`/`once`/`whenever`/`emit`, `on set`/`on change` with value/old, listeners of, `before`/`after`, events across tasks
+  (reactive_ports, variable_signals, event_footguns, event_handler_lists, page_events, signal_*). About 250 lines before the event merge.
+- Reflection: `.params .signature .doc .dump`, `methods/fields/properties/attributes/dir`, `help`, `type(f)` as a signature,
+  `use reflection` positions (reflection_words, reflection_synonyms, function_objects, library_signatures, doc_strings, help_word). About 125 lines.
+- Tasks: `go`, `await (all)`, `shared`/`atomic` values and arrays, `pause/resume/stop job`, `@parallel`, channels, `sleep(500 ms)`. About 95 lines.
+- Match and switch: alternatives, tuples, list and class patterns with `..`, text patterns `"v" + n: digits`, ranges. About 85 lines.
+- Stores: `storage`, `local`, `session`, `database`, `stored x default …`, values across runs. About 50 lines.
+- Quasi-quotes and code patterns: `data($a + 1)` splices, `$rest...`, `replace data(…) with …`, tree find/replace. About 45 lines.
+- Run-time blocks: `interpret`, `x!` charging a quoted block, `x : a+b` uncharged blocks. About 30 lines.
+- `try … else` over traps: list index, division, named traps, stack overflow, host failure, `break`/`continue` inside try. 28 lines.
+- One-offs: `on every … at 9:00` timers, `undo x`/`redo x`, `for (even number) in`, `[x for x in xs where …]`, Rust `let mut`/`1..=5`/`loop`,
+  `int? i`, `def f(x) as int or error`, pattern schemas `{port: int} is …`, soft `test`/`check` blocks, `exit`, the `is!` word in programs.
+
+Questions for 10:00 (forms nobody has decided are wanted, per tests-serve-the-language):
+- Multi-word event names, `on stop the machine { … }; emit stop the machine` (test_event_signals.warp:4, test_named_broadcast:5, 8, test_reactive_ports.warp:53).
+- Python `try: … except ZeroDivisionError:` blocks (test_try_catch_except.warp:8).
+- `undo x` / `redo x` history for every variable (test_undo_history, 10 lines).
+- `on error of f { 0 }`, a handler attached to a function's failures (test_on_error_of_function, 7 lines).
+- Fixed mouse values in tests, `mouse_x * 100 + mouse_y` → 1207 (test_system_values:26, 27): is there a stubbed pointer, or should these go?
