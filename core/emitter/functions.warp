@@ -244,8 +244,7 @@ aliased_type(word: text): text := {
 	while resolved in module.aliases { resolved = module.aliases[resolved] }
 	if optional then resolved + "?" else resolved
 }
-# the type words' other spellings as the aliases every program starts with: looked up in core_type_words at each
-# aliased_type, they made the compile of compiler.warp 20 % slower
+# the type words' other spellings as the aliases every program starts with, so aliased_type resolves them in its one loop
 type_synonyms(): map := {
 	found = {}
 	for word in core_type_words.keys { if core_type_words.get(word) != word { found[word] = core_type_words.get(word) } }
