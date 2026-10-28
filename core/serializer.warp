@@ -1,3 +1,4 @@
+// todo Is this still needed? We already have warp and JSON as data formats (card serializer-needed)
 // Writing a node as warp text (card self-serializer; Rust twin: Node::serialize, src/node/serialization.rs). A node
 // comes as its plain-data view (tests/common/twins.rs node_view):
 //   a number, yes, no or ø, ["text", "abc"], ["symbol", "x"], ["char", 'c'], ["key", op, left, right],

@@ -113,9 +113,9 @@ def module_bytes(functions: list): list {
 		tables = section(table_section_id, vector([[funcref_byte, 0] + uleb(#module.dispatchers)]))
 	}
 	exported = section(section_ids.export, vector(exports))
-	# the texts' bytes: one passive segment, which array.new_data reads
-	segments = section(section_ids.data_count, uleb(1))
-	texts = section(section_ids.data, vector([passive(data_bytes())]))
+	# the texts' bytes: a passive segment each, which array.new_data reads
+	segments = section(section_ids.data_count, uleb(#module.texts))
+	texts = section(section_ids.data, vector(text_segments()))
 	tags = []
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#module.gc_order + #module.imports + #functions)])) }
 	parts = [types, imported, declared, tables, memory, tags, globals, exported, segments, codes, texts]
@@ -146,7 +146,7 @@ def runtime_exports(functions: list): list {
 def runtime_sections(functions: list): list {
 	if not module.relocating { return [] }
 	own_globals = module.global_order[(if module.prebuilding then 0 else #runtime_image.globals) ..]
-	counts = concatenated([#module.gc_order, #module.imports, #functions, #own_globals, #data_bytes()].map(uleb))
+	counts = concatenated([#module.gc_order, #module.imports, #functions, #own_globals, #module.texts].map(uleb))
 	names = vector(module.dispatchers.map(f => name_bytes(f.name))) + vector(module.left_out.keys.map(name_bytes))
 	globals = vector(own_globals.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2))))
 	words = vector(functions.map(f => name_bytes(f.name) + uleb(f.index) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result)) + signature_bytes(f.signature)))
@@ -209,8 +209,8 @@ def section_place(wasm: list, id: int, name: text = ""): list? {
 	}
 	ø
 }
-# the data segment: each text's bytes once, in the order text_offset gave them their offsets
-def data_bytes(): list { concatenated(module.texts.keys.map(t => t.bytes)) }
+# the data segments: each text's bytes once, in the order text_segment numbered them
+def text_segments(): list { module.texts.keys.map(t => passive(t.bytes)) }
 def passive(bytes: list): list { [passive_segment] + uleb(#bytes) + bytes }
 def import_entry(i: int): list {
 	entry = module.imports#(i + 1)

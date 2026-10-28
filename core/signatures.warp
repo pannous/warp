@@ -10,6 +10,7 @@ use "walk.warp"
 class Parameter { name: text; type_name: text = ""; defaulted_to: any = ø; rest: bool = no }
 # the parameters in order and the declared result, "" when undeclared
 class Signature { parameters: list = []; result: text = "" }
+# class Signature { Parameters = []; result: text = "" } as shortform for : list[Parameter] (card capitalized-field-list)
 
 # `x`, `x: T`, `x = 1`, `x: T = 1`, `with new x` (label words before the name, Rust parameter_head); `*xs` the rest
 parameter_of(written: Node): Parameter := {

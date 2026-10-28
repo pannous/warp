@@ -31,6 +31,11 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
 
 ## runtime.wasm format (card runtime-prebuilt, owner: fixer; built by core/emitter/prebuilt.warp)
 `warp rebuild` writes it beside warp.wasm (compiler.warp's command `runtime [file]`); validated by wasm-tools.
+Every compile is behind a runtime.wasm, the compiler's own (src/compiler/standalone.rs runtime_of), its fifth argument
+in a compile and in a repl-step: warp.wasm's and warp-self.wasm's beside them; the seed's is warp-seed.runtime.wasm
+beside the seed, written by the seed itself when missing or older than the seed (ship_seed; card
+seed-compiler-runtime), so a seed never compiles behind the runtime of the warp.wasm sharing its folder and nothing
+but the seed is published. A seed from before the `runtime` command writes none and needs none (said once per rebuild).
 One file serves both prepending (runtime-prepended) and import/export linking (runtime-separate-modules). It is an
 ordinary, valid wasm module: every runtime word compiled once, from its declared kinds (`any` is a node), with every
 made_case kind made, since no program decides any more what it makes.
@@ -51,14 +56,17 @@ made_case kind made, since no program decides any more what it makes.
 - **Left out**: a word outside the core on its own (an enum's method naming the program's enum: Separator·text) is not
   in runtime.wasm; warp.runtime names it, a program compiles it as today.
 - **Globals**: the runtime's (runtime/walks.warp and the others) first, at fixed indices; a program's after them.
-- **Data**: one passive segment, the runtime's texts from offset 0. A prepended program's texts are a second segment
-  (index 1, from offset 0), so its code is the same linked to runtime.wasm, whose segments it can't read.
+- **Data**: a passive segment per text (card trim-prepended-runtime), so wasm-opt drops the texts no kept code reads
+  (one segment held all of them, and the 12-byte text `show` reads kept 23 KB in a trimmed hello). A text is
+  `i32.const 0, i32.const length, array.new_data $text <segment>`. A prepended program's texts are segments numbered
+  behind the runtime's (first_text_segment); a linked one declares the runtime's as empty segments, so its code is
+  the same (until mod-imports-used maps them away).
 - **Tag**: the error tag, index 0, exported.
 - **Exports**: memory as `memory`, every runtime function and global under its warp name, the tag, the table `hooks`.
 - **Custom sections**:
   - `name`, as the emitter writes it today (functions, locals, types, fields, globals).
   - `warp.runtime`, the layout, binary so a compile reads it in milliseconds with no parser and no cache (user: "read
-    from the WebAssembly modules"): five ulebs G, imports, functions, globals, data size; the hooks' names in
+    from the WebAssembly modules"): five ulebs G, imports, functions, globals, text segments; the hooks' names in
     table-slot order; the left words' names; the globals, each [name, kind]; the words, each [name, index, vector of
     parameter kinds, result kind, vector of parameters, declared result]. A parameter is [name, type name, flags (rest
     1, a default 2), the default packed (pack) if flagged]; what a call needs (named arguments, defaults, rest), so a
@@ -68,8 +76,8 @@ made_case kind made, since no program decides any more what it makes.
     can't tell Bool, Int and Char apart.
   - `warp.relocations` (replaced warp.calls): a vector of [offset, kind, space] uleb triples, one per padded 5-byte
     operand of the code: offset its byte in the code section's content (behind its vector count); kind what it indexes,
-    0 a function (call), 1 a type (a GC op's type immediates), 2 a global (global.get/set), 3 a text's data offset
-    (i32.const ahead of array.new_data); space the index space: 0 runtime, 1 own, 2+k the k-th module a module's
+    0 a function (call), 1 a type (a GC op's type immediates), 2 a global (global.get/set), 3 a text's data segment
+    (array.new_data's segment index); space the index space: 0 runtime, 1 own, 2+k the k-th module a module's
     declarations name. runtime.wasm: all space 0 (5665 entries). Global initializers name only the fixed GC types and
     stay unpadded. One reader and one rule (emitter/module_layout.warp): `relocations_of(wasm)`, and
     `rebased(code, relocations, shifts)` adding shifts[space][kind] to each operand in place, for a module appended
