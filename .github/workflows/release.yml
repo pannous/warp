@@ -2,7 +2,8 @@
 name: Release
 
 # A version tag (v*, matching Cargo.toml's version) publishes a GitHub release with prebuilt binaries: per platform one
-# tarball holding `warp`, `warp-runtime` (the stub `warp build --exe` needs next to warp), `warp-page-runtime` (the
+# tarball holding `warp`, `warp-runtime` (the stub `warp build --exe` needs next to warp), libwarp_wasmtime (warp's wasmtime
+# C API, the native warp's), `warp-page-runtime` (the
 # stub of page apps, with the web view), the warp-written compilers warp.wasm and warp-self.wasm, and lib/. The Homebrew formula
 # (packaging/homebrew/Formula/warp.rb, copied to pannous/homebrew-tap) installs these binaries (no Rust build); its
 # --HEAD install builds main from source. Then the tarballs are repackaged: PyPI wheels (warp-language), .deb and .rpm
@@ -161,7 +162,11 @@ jobs:
       run: |
         chmod +x dist/warp dist/warp-runtime dist/warp-page-runtime dist/warp-host
         cp -RL lib dist/lib
-        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime warp-host warp.wasm runtime.wasm warp-self.wasm lib host-cache
+        # warp's wasmtime C API beside warp, where the native warp and built executables find it (rpath): the newest
+        # wasmtime-c-api-* release's asset (.github/workflows/wasmtime-c-api.yml, card wasmtime-bundled)
+        wasmtime=$(gh release list --repo pannous/warp --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("wasmtime-c-api-"))][0].tagName')
+        gh release download "$wasmtime" --repo pannous/warp --pattern "warp-wasmtime-*-${{ matrix.target }}.tar.gz" --output - | tar -xz -C dist
+        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime warp-host warp.wasm runtime.wasm warp-self.wasm lib host-cache $(cd dist && ls libwarp_wasmtime.*)
         gh release upload "$TAG" "$ARCHIVE" --clobber
 
   packages:
