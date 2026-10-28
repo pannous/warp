@@ -57,7 +57,21 @@ made_case kind made, since no program decides any more what it makes.
   - `warp.runtime`, the layout: G, the import count, the function count, the global count, the data size, the
     hooks' indices, and each runtime word's parameter and result ValueKinds. The emitter's call_values needs these;
     a wasm type alone can't tell Bool, Int and Char apart.
-  - `warp.calls`, the call-site list: the byte offset of every padded call and ref.func operand in the code section.
+  - `warp.calls`, the call-site list: one entry [offset, space] per padded call and ref.func operand, the offset into
+    the code section's content, the space whose index it holds: 0 the runtime, 1 the module's own functions, 2+k the
+    k-th module its declarations name. runtime.wasm writes it too (all 0): one form, one reader (fixer and
+    tables-as-constants, 2026-10-28).
+
+## Library modules (card modules-prebuilt; owner: tables-as-constants)
+- `<module>.wasm` beside the compiler, of runtime.wasm's shape: the canonical types, padded operands, `warp.runtime`
+  (the module's own layout: function, global and data counts, each exported word's kinds) and `warp.calls` with spaces.
+  Its calls into the runtime hold the runtime's fixed indices; its own and other modules' are numbered from 0 and
+  rebased by the module's base offset when it is appended between the runtime and the program.
+- `warp.declarations`: what a program needs of the module (signatures, classes, globals) as one packed node (pack),
+  so a compile reads no module source. A module under WARP_LIB that differs from the bundled one is compiled from
+  source.
+- Modules have no hooks of their own: a module's class (units) is a class of the linked program, its text() and ==
+  go into the program's dispatcher; module code calls the runtime's hook stubs.
 
 ## Hooks (runtime words calling program code: a class's text(), ==)
 One hook list in the warp.runtime section. Prepended: the stub bodies are replaced by the program's. Separately linked:
