@@ -130,7 +130,7 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { raise working_relative(file) + ": no such file to use" }
-	checked_parse(file, source)
+	checked_parse(file, without_primitive_mark(source))
 }
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)

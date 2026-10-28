@@ -136,7 +136,7 @@ fn link_runtime<S>(linker: &mut Linker<S>, store: &mut Store<S>, engine: &wasmti
 	}
 	let path = crate::compiler::standalone::runtime_path();
 	let bytes = std::fs::read(&path).map_err(|failure| anyhow!("{}: {failure} (`warp rebuild` writes it)", path.display()))?;
-	let runtime = crate::run::module_cache::compiled_module(engine, &bytes)?;
+	let runtime = crate::run::module_cache::prebuilt_module(engine, &path, &bytes)?;
 	// runtime.wasm declares every host word; those of a family this run does not link (tasks of a program that starts
 	// none) trap if reached
 	linker.define_unknown_imports_as_traps(&runtime)?;

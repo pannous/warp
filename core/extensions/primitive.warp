@@ -118,11 +118,19 @@ mark_line(lines: list): int? := {
 	if lines#first.trim() == PRIMITIVE_MARK then first else ø
 }
 
-# the MVP wasm module of a primitive file: the mark's line left empty, so lines keep their numbers; lowered with the
-# primitive prelude instead of the GC one
-primitive_module(source: text, folder: text): list := {
+# a primitive file's text with its mark's line left empty, so lines keep their numbers: the mark marks the file, never
+# its first statement; any other text as it is. A file the program uses comes so too (uses.warp file_parsed)
+without_primitive_mark(source: text): text := {
 	lines = source.split("\n")
-	lines[mark_line(lines) - 1] = ""
+	mark = mark_line(lines)
+	if mark == ø { return source }
+	lines[mark - 1] = ""
+	lines.join("\n")
+}
+
+# the MVP wasm module of a primitive file, lowered with the primitive prelude instead of the GC one
+primitive_module(source: text, folder: text): list := {
+	lines = without_primitive_mark(source).split("\n")
 	c_functions = c_imported(lines)
 	program = lowered_program(lines.join("\n"), folder, PRIMITIVE_PRELUDE)
 	primitive_functions = {}

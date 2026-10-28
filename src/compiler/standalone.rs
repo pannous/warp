@@ -48,6 +48,8 @@ const SEED_FILE: &str = "warp-seed.wasm";
 const SEED_VARIABLE: &str = "WARP_SEED";
 /// The ending of an output compiler.warp writes parser.warp's view to, as JSON, instead of a module (its VIEW_SUFFIX)
 const VIEW_EXTENSION: &str = "view.json";
+/// The ending of the module a run's program is compiled to besides, importing runtime.wasm's instance (as `warp build`'s x.mod.wasm)
+const LINKED_EXTENSION: &str = "mod.wasm";
 /// Computing time of the compiler runs of `warp rebuild` (compiling compiler.warp, then warming the new build): the seed
 /// compiling compiler.warp takes minutes on a small VM, no runaway, so a program's 60 s (WARP_TIME_LIMIT) does not apply
 const REBUILD_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(2 * 60 * 60);
@@ -142,7 +144,7 @@ fn parsed_view(code: &str) -> Result<String, Node> {
 	let source = folder.join(format!("warp-parse-{}-{parse}.warp", std::process::id()));
 	let output = source.with_extension(VIEW_EXTENSION);
 	std::fs::write(&source, code).map_err(|failure| error(&format!("{}: {failure}", source.display())))?;
-	let said = run_compiler(&source, &output, &folder, compiler, kept_scope(Compiler::RustCompiled));
+	let said = run_compiler(&source, &output, None, &folder, compiler, kept_scope(Compiler::RustCompiled));
 	let json = std::fs::read_to_string(&output);
 	let _ = std::fs::remove_file(&source);
 	let _ = std::fs::remove_file(&output);
@@ -233,7 +235,15 @@ pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 /// The module compiler.warp makes of the program file with `folder` in scope: `compiler.warp <source> <wasm> <folder> <lib>
 /// <runtime>`
 fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
-	compiled_with(program, folder, compiler(by)?, kept_scope(by))
+	compiled_with(program, folder, compiler(by)?, kept_scope(by), Linking::Linked)
+}
+
+/// Whether a compile's program runs linked to runtime.wasm's instance (a run, `warp test`) or carries the runtime (a
+/// compiler built by rebuild, which runs alone)
+#[derive(Clone, Copy, PartialEq)]
+enum Linking {
+	Linked,
+	Prepended,
 }
 
 /// The module `compiler` (a module of compiler.warp) makes of the program file with `folder` in scope
@@ -242,12 +252,16 @@ fn compiled_with(
 	folder: &Path,
 	compiler: CompiledModule,
 	scope: Option<String>,
+	linking: Linking,
 ) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
+	let linked = output.with_extension(LINKED_EXTENSION);
 	let _ = std::fs::remove_file(&output);
-	let said = run_compiler(program, &output, folder, compiler, scope);
-	let bytes = std::fs::read(&output);
+	let _ = std::fs::remove_file(&linked);
+	let said = run_compiler(program, &output, (linking == Linking::Linked).then_some(&linked), folder, compiler, scope);
+	let bytes = linked_module(&linked).map(Ok).unwrap_or_else(|| std::fs::read(&output));
 	let _ = std::fs::remove_file(&output);
+	let _ = std::fs::remove_file(&linked);
 	match (said.drop_meta(), bytes) {
 		// a position the compiler's run names is no place of the program, nor one in compiler.warp: its line and column
 		// may be in any of core's files, so it is left out (a refusal reads as `outside the core: the call zork(…)`)
@@ -257,21 +271,38 @@ fn compiled_with(
 	}
 }
 
+/// The program compiler.warp wrote as a module importing runtime.wasm's instance, when it wrote one (it writes none for a
+/// program it runs prepended: compiler.warp runs_linked) and the program starts no tasks, which have never run linked.
+/// One that is no valid wasm is said in one line and the program runs with the runtime inside (card
+/// runtime-separate-modules: `sleep(3ms)`'s field?amount names a heap type the linked form lacks)
+fn linked_module(file: &Path) -> Option<Vec<u8>> {
+	let bytes = std::fs::read(file).ok().filter(|bytes| !crate::host::tasks::imports_tasks_in(bytes))?;
+	let (engine, _) = crate::run::wasm_reader::engine_for(&bytes);
+	match wasmtime::Module::validate(&engine, &bytes) {
+		Ok(()) => Some(bytes),
+		Err(failure) => {
+			eprintln!("warp: the program's linked form is no valid wasm ({failure}): run with the runtime inside (card runtime-separate-modules)");
+			None
+		}
+	}
+}
+
 /// What the run of `compiler` (a module of compiler.warp) said, writing `output` of the program file with `folder` in
-/// scope: `compiler.warp <source> <output> <folder> <lib>`, a module, or parser.warp's view when `output` ends in
-/// VIEW_EXTENSION, its kept values in `scope` (kept_scope). The arguments of the program running, if any (a host word
-/// parses in its run), stay its own
+/// scope: `compiler.warp <source> <output> <folder> <lib> <runtime> [<linked>]`, a module (and the program linked to
+/// runtime.wasm's instance), or parser.warp's view when `output` ends in VIEW_EXTENSION, its kept values in `scope`
+/// (kept_scope). The arguments of the program running, if any (a host word parses in its run), stay its own
 fn run_compiler(
 	program: &Path,
 	output: &Path,
+	linked: Option<&PathBuf>,
 	folder: &Path,
 	compiler: CompiledModule,
 	scope: Option<String>,
 ) -> Node {
 	let running = crate::modules::std_adapters::program_arguments();
 	let runtime = runtime_of(&compiler);
-	let arguments = [program, output, folder, library(), &runtime];
-	crate::modules::std_adapters::set_program_arguments(arguments.map(|path| path.display().to_string()).to_vec());
+	let arguments = [program, output, folder, library(), &runtime].into_iter().chain(linked.map(PathBuf::as_path));
+	crate::modules::std_adapters::set_program_arguments(arguments.map(|path| path.display().to_string()).collect());
 	let owner = crate::extensions::hex_text(&crate::run::module_cache::module_digest(&compiler.bytes));
 	// its kept values shipped beside its build file serve a cold cache; a new build's warming run writes them there
 	let shipped = crate::run::module_cache::shipped_kept_folder(&compiler.bytes);
@@ -326,7 +357,7 @@ fn promote(path: &Path) -> Result<CompiledModule, Node> {
 	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let folder = file.parent().unwrap_or(library()).to_path_buf();
 	let next =
-		compiled_with(&file, &folder, shipped(&warp_file, warp_bytes.clone()), kept_scope(pure)).map_err(|failure| {
+		compiled_with(&file, &folder, shipped(&warp_file, warp_bytes.clone()), kept_scope(pure), Linking::Prepended).map_err(|failure| {
 			error(&format!("compiler.warp compiled by {}: {}", warp_file.display(), failure.serialize()))
 		})?;
 	// byte-identical output (the fixpoint) is reported, not required (user 2026-10-26: "If the compiler can compile
@@ -440,7 +471,7 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let folder = file.parent().unwrap_or(library()).to_path_buf();
 	let (builder, compiler, scope) = builder(by)?;
-	let module = compiled_with(&file, &folder, compiler, scope)
+	let module = compiled_with(&file, &folder, compiler, scope, Linking::Prepended)
 		.map_err(|failure| error(&format!("compiler.warp compiled by {builder}: {}", failure.serialize())))?;
 	let mut bytes = optimized(path, module.bytes.clone())?;
 	let section = current_build().join(BUILD_SEPARATOR);
@@ -463,7 +494,10 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 /// runtime.wasm beside warp.wasm: the runtime words compiled once by compiler.warp's `runtime` command, for linking
 /// programs to (notes/runtime_linking.md "runtime.wasm format")
 fn write_runtime(by: Compiler, path: &Path) -> Result<(), Node> {
-	written_by_command(vec![RUNTIME_COMMAND.into(), path.display().to_string()], path, by)
+	written_by_command(vec![RUNTIME_COMMAND.into(), path.display().to_string()], path, by)?;
+	// its machine code beside it: a linked run instantiates it from there (card runtime-cwasm-shipped)
+	let bytes = std::fs::read(path).map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
+	ship(path, &bytes)
 }
 
 /// the standard modules beside runtime.wasm, each compiled once behind it, for linking programs to (notes/runtime_linking.md
