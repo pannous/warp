@@ -39,10 +39,11 @@ handled() { cat "$state/handled" 2>/dev/null; }
 [ -d "$TREE" ] || cowtree add --detach "$TREE" origin/main >/dev/null || exit 1
 mkdir -p "$state"
 [ -n "$if_moved" ] && [ "$(main_tip)" = "$(handled)" ] && exit 0
-kill_tree() { # kill_tree <pid>: the process and all it started, children first
-	local child
-	for child in $(pgrep -P "$1"); do kill_tree "$child"; done
+kill_tree() { # kill_tree <pid>: the process and all it started, the parent first (it would act on a killed child's failure)
+	local children child
+	children=$(pgrep -P "$1")
 	kill "$1" 2>/dev/null
+	for child in $children; do kill_tree "$child"; done
 }
 # the lock holds the runner's pid: a dead runner's (a reboot, a kill) is taken over. The install lane's runner takes the
 # newest tip when it ends; the slow lane's is stopped, so the slow tiers run on the newest install, never queued behind
