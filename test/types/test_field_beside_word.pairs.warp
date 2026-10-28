@@ -1,0 +1,4 @@
+# a parameter of a class declaring a field reads that field, though a function has its name; the function stays
+# callable (card class-field-reads)
+'class F { kinds: list; name: text }; kinds(n: int): int := n * 2; size(f: F): int := #f.kinds; size(F([1, 2, 3], "x")) + kinds(4)'	11
+'class F { count: int }; total(f: F): int := f.count + 1; total(F(41))'	42
