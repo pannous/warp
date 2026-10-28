@@ -2,7 +2,9 @@
 # plain MVP wasm, no GC types, no runtime words, no exceptions, so wasm2c and cc make it a native program. A file
 # whose first line is `@primitive` builds so whole: its definitions become exported functions, its other statements
 # `main`. Values are the FFI types (D16) plus pointer; a form the mode cannot emit is refused at its line.
-PRIMITIVE_MARK = "@primitive"
+PRIMITIVE_ATTRIBUTE = "primitive"
+PRIMITIVE_MARK = "@" + PRIMITIVE_ATTRIBUTE
+# `@primitive f(…) := …` in a GC program: plain_node notes the name it marks (walk.warp read_attributes)
 
 # a primitive type: the wasm value type it is held as, whether it is signed, its width in memory in bytes
 class Scalar { wasm: text; signed: bool; width: int }
@@ -68,6 +70,8 @@ class PrimitiveFunction { name: text; parameters: list; types: list; result: any
 class StructLayout { fields: map; size: int }
 
 global primitive_functions = {}
+# whether primitive functions are compiled into a GC program (else a primitive file is the module)
+global primitive_hosted = no
 global primitive_structs = {}
 global primitive_place = ""
 
@@ -85,6 +89,7 @@ primitive_module(source: text, folder: text): list := {
 	lines[mark_line(lines) - 1] = ""
 	program = lowered_program(lines.join("\n"), folder, "")
 	primitive_functions = {}
+	primitive_hosted = no
 	primitive_structs = {}
 	statements = statements_in(program)
 	for n in statements { if struct_declared(n) { declare_struct(n) } }
@@ -209,7 +214,8 @@ mvp_emitted(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode := {
 	if n == true or n == false { return PrimitiveCode(BOOL_TYPE, [op.i32_const, if n == true then 1 else 0]) }
 	if n is symbol { return mvp_variable(f, n) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in primitive_structs { return mvp_constructed(f, name_of(n#1), items_of(n)[1 ..< #n], n) }
-	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in primitive_functions { return mvp_call(f, n#1, items_of(n)[1 ..< #n], n) }
+	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and primitive_callee(name_of(n#1)) != ø { return mvp_call(f, n#1, items_of(n)[1 ..< #n], n) }
+	if is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol and name_of(n#1) not in f.locals { primitive_refusal(n, form_of(n) + ", not a primitive function: primitive code calls only primitive code") }
 	if is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol { return mvp_spaced(f, n) }
 	if is_group(n) and (bracket_of(n) == "{" or bracket_of(n) == "" or bracket_of(n) == "(") { return mvp_block(f, items_of(n), expected) }
 	match n {
@@ -244,16 +250,16 @@ mvp_spaced(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 		value = mvp_emitted(f, if #rest == 1 then rest#1 else List(rest, Bracket.None, Separator.Space), f.result ?? "")
 		return PrimitiveCode(NO_VALUE, mvp_converted(value, f.result ?? value.type, n).code + [op.return])
 	}
-	if head in primitive_functions { return mvp_call(f, n#1, rest, n) }
+	if primitive_callee(head) != ø { return mvp_call(f, n#1, rest, n) }
 	primitive_refusal(n, form_of(n))
 }
 
 mvp_call(f: PrimitiveFunction, callee: Node, arguments: list, n: Node): PrimitiveCode := {
-	g = primitive_functions[name_of(callee)]
+	g = primitive_callee(name_of(callee))
 	if #arguments != #g.types { primitive_refusal(n, g.name + " with " + #arguments + " arguments, it takes " + #g.types) }
 	code = []
 	for i in 0..#arguments { code += mvp_typed(f, arguments#(i + 1), g.types#(i + 1)) }
-	PrimitiveCode(mvp_result_of(g, n), code + [op.call] + uleb(g.index))
+	PrimitiveCode(mvp_result_of(g, n), code + call_code(g.index))
 }
 
 # n's code as a `type`
@@ -268,16 +274,25 @@ mvp_converted(value: PrimitiveCode, type: text, n: Node): PrimitiveCode := {
 		if value.type == POINTER_TYPE or type == POINTER_TYPE { return PrimitiveCode(type, value.code) }
 		primitive_refusal(n, value.type + " where " + type + " is wanted")
 	}
-	if mvp_wasm_of(value.type) == mvp_wasm_of(type) or mvp_widens(value.type, type) { return mvp_cast(value, type) }
+	if mvp_widens(value.type, type) or (mvp_wasm_of(value.type) == mvp_wasm_of(type) and mvp_scalar(value.type).width == mvp_scalar(type).width) { return mvp_cast(value, type) }
 	primitive_refusal(n, value.type + " where " + type + " is wanted: convert it, `x as " + type + "`")
 }
 mvp_widens(from: text, to: text): bool := mvp_scalar(from).width < mvp_scalar(to).width and (mvp_is_float(to) or not mvp_is_float(from))
 mvp_cast(value: PrimitiveCode, type: text): PrimitiveCode := {
 	from = mvp_wasm_of(value.type)
 	to = mvp_wasm_of(type)
-	if from == to { return PrimitiveCode(type, value.code) }
-	codes = conversion_codes[from + " " + to]
-	PrimitiveCode(type, value.code + [if mvp_scalar(value.type).signed then codes#1 else codes#2])
+	codes = conversion_codes.get(from + " " + to)
+	converted = if codes == ø then value.code else value.code + [if mvp_scalar(value.type).signed then codes#1 else codes#2]
+	PrimitiveCode(type, converted + narrowed(type, mvp_scalar(value.type).width))
+}
+# an i32 cut to a narrower type's bits: masked when unsigned, its sign spread back when signed
+narrowed(type: text, from_width: int): list := {
+	scalar = mvp_scalar(type)
+	if scalar.wasm != "i32" or scalar.width >= 4 or scalar.width >= from_width { return [] }
+	bits = 8 * scalar.width
+	if not scalar.signed { return [op.i32_const] + sleb((1 << bits) - 1) + [op.i32_and] }
+	shift = [op.i32_const] + sleb(32 - bits)
+	shift + [arithmetic_codes.i32 + integer_arithmetic.shl] + shift + [arithmetic_codes.i32 + integer_arithmetic.shr]
 }
 
 mvp_block(f: PrimitiveFunction, statements: list, expected: text): PrimitiveCode := {
@@ -509,3 +524,51 @@ mvp_stored(f: PrimitiveFunction, field: list, value: Node): list := {
 	mvp_typed(f, value, field#2) + [store_codes[scalar.wasm + " " + scalar.width]] + memory_argument(field)
 }
 memory_argument(field: list): list := uleb(alignment_exponents[mvp_scalar(field#2).width]) + uleb(field#1)
+
+## primitive functions in a GC program
+# a function the program marks `@primitive`, called from GC code (decision primitive-annotation)
+is_primitive_function(f: Function): bool := written_name(f.name) in (marked_names.get(PRIMITIVE_ATTRIBUTE) ?? [])
+
+# a primitive function the code may call: one of the file, or in a GC program one marked, compiled at its first call
+primitive_callee(name: text): any := {
+	hosted = if primitive_hosted then module.functions.get(name) else ø
+	if hosted != ø and hosted.kinds == ø and is_primitive_function(hosted) { compile_function(hosted, hosted.signature.parameters.map(p => ValueKind.Int)) }
+	primitive_functions.get(name)
+}
+
+# f as GC code calls it, converting at the boundary like a C call: its ints come as i64 and its floats as f64, each
+# wrapped to the primitive type, the result widened back; behind it the primitive function itself, `f·primitive`,
+# which other primitive code calls directly
+primitive_compiled(f: Function) := {
+	primitive_hosted = yes
+	parameters = f.signature.parameters
+	types = parameters.map(p => primitive_type_name(symbol(if p.type_name then p.type_name else "?")))
+	inner = added_function(f.name + "·primitive", types.map(hosted_kind), ValueKind.Int, [])
+	primitive = PrimitiveFunction(f.name, parameters.map(p => p.name), types, primitive_result(f.body), f.body, inner.index)
+	primitive_functions[f.name] = primitive
+	f.kinds = types.map(boundary_kind)
+	f.locals = []
+	f.local_names = parameters.map(p => p.name)
+	emit_primitive(primitive)
+	inner.result = if primitive.result == NO_VALUE then no_kind else hosted_kind(primitive.result)
+	inner.code = primitive.code
+	inner.locals = primitive.local_types[#types ..< #primitive.local_types].map(hosted_kind)
+	inner.local_names = primitive.locals.keys
+	passed = []
+	for i in 0..#types { passed += mvp_cast(PrimitiveCode(boundary_type(types#(i + 1)), [op.local_get] + uleb(i)), types#(i + 1)).code }
+	f.gives_nothing = primitive.result == NO_VALUE
+	result = if f.gives_nothing then INT_TYPE else boundary_type(primitive.result)
+	f.result = if primitive.result == BOOL_TYPE then ValueKind.Bool else boundary_kind(result)
+	called = passed + call_code(inner.index)
+	f.code = if f.gives_nothing then called + [ref_null, gc_type(gc.node)] else mvp_cast(PrimitiveCode(primitive.result, called), if primitive.result == BOOL_TYPE then BOOL_TYPE else result).code
+}
+# the kind a primitive type is held as inside the GC module; f32 has none there yet
+hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
+	"i32": ValueKind.I32
+	"i64": ValueKind.Int
+	"f64": ValueKind.Float
+	_: primitive_refusal(ø, "an f32 in a primitive function of a GC program (card primitive-f32-hosted)")
+}
+# the GC value a primitive type crosses the boundary as: an int as i64, a float as f64
+boundary_type(type: text): text := if mvp_is_float(type) then FLOAT_TYPE else INT_TYPE
+boundary_kind(type: text): ValueKind := if mvp_is_float(type) then ValueKind.Float else ValueKind.Int

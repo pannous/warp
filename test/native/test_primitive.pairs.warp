@@ -1,0 +1,13 @@
+# @primitive functions called from GC code, converted at the boundary like a C call (decision primitive-annotation,
+# notes/primitive.md); whole primitive files: test_native.sh
+
+'@primitive sq(x: i32): i32 := x * x; sq(7) + 1'	50
+'@primitive fib(n: i32): i32 := if n < 2 then n else fib(n - 1) + fib(n - 2); fib(20)'	6765
+'@primitive small(n: u8): bool := n < 10; small(3)'	yes
+'@primitive quarter(x: f64): f64 := x / 4; @primitive twice(x: f64): f64 := quarter(x) * 8; twice(1.5)'	3
+'@primitive sum(n: i64): i64 := { total = 0; for i in 1..n { total += i }; total }; "sum " + sum(10)'	"sum 45"
+'@primitive wrap(x: i64): u8 := x as u8; wrap(300)'	44
+'h(x: f64): f64 := x / 4; @primitive quarter(x: f64): f64 := h(x); quarter(2)'	error
+'@primitive name(x: i32): text := "a"; name(1)'	error
+'@primitive low(x: i32): i8 := x as i8; low(200)'	-56
+'@primitive narrow(x: i64): u8 := x; narrow(3)'	error
