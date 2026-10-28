@@ -63,8 +63,8 @@ showing_dispatcher = HiddenWord.TextShown as text
 # same word with the value, position(p, v), lifted as position·assigned; `#b` its count()
 position_method = "position"
 index_method = "index"
-assigned_position = "position·assigned"
-assigned_index = "index·assigned"
+assigned_position = HiddenWord.PositionAssigned as text
+assigned_index = HiddenWord.IndexAssigned as text
 counting_method = "count"
 position_words = [position_method, index_method, assigned_position, assigned_index]
 # what a dispatcher of a method no operator spells gives any other value: the function itself; an element read or

@@ -1870,13 +1870,13 @@ def binding_powers(op: text): list {
 
 // The words that guard a statement and the marker call each becomes: `check C` is `assert C` (card check-assert)
 // Rust twin: control/guards.rs GUARD_MARKERS, warp_parser TRY_MARKER, ASSERT_MARKER
-GUARD_MARKERS = {"try": "try·else", "assert": "assert·else", "check": "assert·else"}
+GUARD_MARKERS = {"try": HiddenWord.TryElse as text, "assert": HiddenWord.AssertElse as text, "check": HiddenWord.AssertElse as text}
 // The words that start the fallback of `try X else Y`: classical `catch`, Python's `except` (P60)
 FALLBACK_WORDS = ["else", "catch", "except"]
 // The hidden name `try X` binds X's Error to, to hand it on as the value
-UNCAUGHT_ERROR = "uncaught·error"
+UNCAUGHT_ERROR = HiddenWord.UncaughtError as text
 // The hidden name `except ParseError:` binds the Error to, to test its class
-CAUGHT_ERROR = "caught·error"
+CAUGHT_ERROR = HiddenWord.CaughtError as text
 
 // `try` or `assert` followed by an operand
 // Rust twin: guards.rs guard_word_ahead
@@ -1917,7 +1917,7 @@ def guarded(p: Parser, word: text): Node := {
 	if word == "try" {
 		caught = [UNCAUGHT_ERROR, ""]
 		fallback = symbol(UNCAUGHT_ERROR)
-	} else if marker == "assert·else" {
+	} else if marker == HiddenWord.AssertElse {
 		fallback = "assertion failed: " + written_part
 	}
 	with_finally(p, guarded_by(marker, guarded_part, fallback, caught))

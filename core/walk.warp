@@ -3,9 +3,10 @@
 # A pass twin is a word from node to node: pass_differential (tests/common/twins.rs) hands it the program as Rust's
 # passes before it left it, as a node built by `node_of(view)`, and compares `view_of(result)` with the view after
 # the Rust pass.
+use "words.warp"
 
 # a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
-opaque_word = "view·opaque"
+opaque_word = HiddenWord.ViewOpaque as text
 # the word as a symbol, made once: the walks compare the left side of every key they pass with it
 opaque_symbol = symbol(opaque_word)
 
@@ -37,7 +38,7 @@ assigned_variable(target: Node): Node := match target {
 
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
-attribute_word = "view·attribute"
+attribute_word = HiddenWord.ViewAttribute as text
 # `x!` of a name no mutation takes: run as Rust runs what blocks.rs inlines no block for, `unwrap(x)`
 mutated_mark = "mutated"
 unwrap_word = "unwrap"
@@ -242,7 +243,7 @@ opaque_parts(view: any): list := view.filter(part => part is list).map(node_of)
 quote_word = "data"
 quote_symbol = symbol(quote_word)
 # data with its names spliced in (data_blocks.warp), which no pass rewrites either
-spliced_quote_symbol = symbol("data·spliced")
+spliced_quote_symbol = symbol(HiddenWord.DataSpliced as text)
 def items_walked(items: list, quoting_allowed: bool, f: function): list {
 	walked = []
 	quoting = no
