@@ -5,7 +5,8 @@
 # makes the executable:
 #   driver app.warp args…   compiled by warp.wasm (of $WARP_LIB, else beside the driver), then run
 #   driver app.wasm args…   the module run
-#   a driver with a module appended (<module><its length, u64 little-endian><MODULE_MAGIC>) runs that one
+#   a driver with a module appended (<module><its length, u64 little-endian><MODULE_MAGIC><zeros to a multiple of
+#   16>, as `warp build` writes it) runs that one
 # A module's WASI calls are wasmtime's (the environment inherited, the current folder and the root opened); of the host
 # words the driver answers std_io (host_word), any other is a trap naming it. Its _start runs (a GC program prints its
 # own value), else its main, whose value is printed; a failure's message goes to stderr with status 1, the module's
@@ -154,6 +155,8 @@ executable_path(): text := {
 appended_module(): text := {
 	self = read_file(executable_path())
 	end = self.address + self.length
+	# the zeros that pad the trailer to a multiple of 16
+	for i in 0..TRAILER_BYTES { if self.length >= TRAILER_BYTES and byte_at(end - 1).value == 0 { end = end - 1 } }
 	if self.length < TRAILER_BYTES or long_at(end - 8).value != MODULE_MAGIC { return text_from(0, 0) }
 	size = long_at(end - TRAILER_BYTES).value as u32
 	text_from(end - TRAILER_BYTES - size, size)
