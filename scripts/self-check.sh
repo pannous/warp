@@ -51,7 +51,7 @@ check_lane() {
 scratch=$(mktemp -d /tmp/self-check.XXXXXX) && trap "rm -rf $scratch" EXIT
 warp=$scratch/warp
 cp $main_warp $warp || exit 1
-# the seed lies beside the launcher; the pair in the build folder the launcher links to (main-builds/<tip>)
+# the seed lies beside the launcher; the pair in the build folder the launcher links to (warp-builds/<tip>)
 cp ${main_warp:h}/warp-seed.wasm $scratch/ 2>/dev/null || cp ${main_warp:A:h}/warp-seed.wasm $scratch/ || exit 1
 # main's warp.wasm beside the copy too: the binary takes an empty folder as holding the worktree's pair, and would look
 # for it there instead of in the worktree's lib/ (standalone.rs build_path)
