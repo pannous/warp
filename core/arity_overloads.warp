@@ -497,6 +497,11 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	if call != ø and name_of(call#1) in overloaded {
 		return Key(renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))), Op.Define, typed_resolved(value_of(n), overloaded, judge))
 	}
+	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument
+	method = if is_key(n, Op.Dot) then value_of(n) else ø
+	if method != ø and is_group(method) and bracket_of(method) == "(" and #method > 0 and method#1 is symbol and name_of(method#1) in overloaded {
+		return typed_resolved(group_like(method, [method#1, key_of(n)] + items_of(method)[1 ..]), overloaded, judge)
+	}
 	# a one-line block's words are its phrase already, `{ thrice {n += 1} }` (phrase_blocks.warp)
 	children(typed_call(phrase_block(n), overloaded, judge), x => typed_resolved(x, overloaded, judge))
 }

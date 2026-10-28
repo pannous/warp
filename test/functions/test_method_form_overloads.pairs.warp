@@ -1,0 +1,6 @@
+# a method call of a word overloaded by type is the call with its receiver first: `xs.find(f)` is find(xs, f)
+# (card self-lane: compiler.warp's NEGATED_SPELLINGS.keys.find(…))
+'xs = ["a", "b"]; xs.find(w => w == "b")'	'b'
+'m = {a: 1}; m.keys.find(k => k == "a")'	'a'
+'"abc".find("c")'	3
+'f(x: int, k: int) := "int"; f(x: text, k: int) := "text"; "a".f(1) + 3.f(1)'	'textint'
