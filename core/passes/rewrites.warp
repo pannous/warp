@@ -98,7 +98,13 @@ extension_module_names = [
 	"compiler/extensions/safe_navigation"
 ]
 first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "sugar/test_words"]
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls", "sugar/parameters", "sugar/tasks"]
+# every other file of lib/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
+sugar_folder = "sugar/"
+placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
+sugar_module_names(): list := {
+	placed = placed_sugar_modules()
+	LIBRARY_FILES.keys.filter(path => path.starts_with(sugar_folder) and path.ends_with(module_extension)).map(path => path[0 ..< #path - #module_extension]).filter(name => name not in placed)
+}
 iteration_sugar_module_names = ["sugar/iteration"]
 late_sugar_module_names = ["sugar/ranges", "sugar/method_calls"]
 # the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
@@ -111,7 +117,7 @@ std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", 
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
-early_sugar_module_names = ["sugar/functions", "sugar/declarations"]
+early_sugar_module_names = ["sugar/functions", "sugar/declarations", "sugar/events"]
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
@@ -164,7 +170,7 @@ rewritten_program(program: Node, source: text): Node := {
 	for module in std_module_names {
 		module_source = file_text(std_module_path(module))
 		if module_source != ø and rule_needs(module_source).any(word => mentioned.has(word)) {
-			module_rules += module_rules_of(std_module_path(module), module).filter(rule => mentioned.has(needed_word(rule)))
+			module_rules += module_rules_of(std_module_path(module), module).filter(rule => needed_words(rule).any(word => mentioned.has(word)))
 		}
 	}
 	for module in declaration_sugar_module_names { module_rules += module_rules_of(std_module_path(module), "").filter(rule => mentioned.has(needed_word(rule))) }
@@ -432,8 +438,9 @@ word_set(words: list): map := {
 	set
 }
 
-# the word each rule of a module needs, read off its text: a program mentioning none parses no rules. The first word of
-# the origin's shape after `where … =`, else of the pattern
+# the words each rule of a module needs, read off its text: a program mentioning none parses no rules. The first word of
+# the origin's shape after `where … =`, else of the pattern, else (a pattern starting with a hole, `$n $u`) the words
+# its `in [ms, kg]` listing names
 rule_needs(source: text): list := {
 	if not source.contains(rewrite_line_start) { return [] }
 	needs = []
@@ -444,10 +451,18 @@ rule_needs(source: text): list := {
 			origin = if #parts > 1 then parts#2.split("=") else []
 			needing = if #origin > 1 and rule_hole(symbol(origin#1.trim())) != ø then origin#2 else rule.split("=>")#1
 			word = first_alphabetic_word(needing)
-			if word != "" { needs += [word] }
+			needs += if word != "" then [word] else listed_in_text(rule)
 		}
 	}
 	needs
+}
+
+# the words of a rule's `in [a, b]` listing, as written
+listed_in_text(rule: text): list := {
+	start = rule.find(" " + listed_word + " [")
+	if start == 0 { return [] }
+	listing = rule[start - 1 + #listed_word + 3 ..]
+	listing[0 ..< listing.find("]") - 1].split(",").map(word => word.trim())
 }
 
 # the first run of letters, digits, `_` and `$` starting with a letter
@@ -506,6 +521,12 @@ called_hole(n: Node, lines: list): bool := {
 
 # the word a program must mention for the rule to fire: the first of its origin's shape, else of its pattern
 needed_word(rule: Rule): text := first_word_of(rule.shape ?? rule.pattern) ?? ""
+# that word, else the words its listings name: `$n $u where $u in [ms, kg]` is needed by ms and kg
+needed_words(rule: Rule): list := {
+	word = needed_word(rule)
+	if word != "" { return [word] }
+	rule.conditions.map(membership).filter(listing => listing != ø).flat_map(listing => listing.words)
+}
 
 # `rewrite p => t` and `rewrite p => t where $c = shape`, as parser.warp reads them: the words before the arrow's key
 # start the pattern (`rewrite channel $name => …` reads as `rewrite channel ($name => …)`), the words after it continue

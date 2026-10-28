@@ -1,0 +1,5 @@
+# the bits of a xor of whole numbers are bits again: & and | after it are the bits' and/or (card primitive-bit-and)
+'(3 xor 1) & 6'	2
+'6 & (3 xor 1)'	2
+'x = 1360941695; (x xor 4294967295) & x'	0
+'(5 xor 1) | 2'	6

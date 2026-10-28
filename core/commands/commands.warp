@@ -35,7 +35,7 @@ native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "
 	"home", "lsp", "start", "types", "format", "lint", "beautify", "fix"]
 
 # the commands the native warp runs itself, before warp.wasm sees them (core/native/warp.warp)
-native_warp_commands = ["run", "pure", "self", "eval", "fast", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home"]
+native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home"]
 # set by the native warp for the compiler it hosts: the host's name
 HOST_VARIABLE = "WARP_HOST"
 natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
@@ -43,7 +43,9 @@ natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
 NOT_YET = " is not in the native warp yet: warp-rust "
 
 command_name(entry: list): text := entry#1.split(" ")#1
-command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + ["repl-step"] + running_commands + native_commands
+# the commands only a native host calls, never shown in help: a console line's step, `warp test`'s listing and verdicts
+host_commands = ["repl-step", "test-list", "test-verdicts"]
+command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + running_commands + native_commands
 is_command(word: text): bool := word in command_words()
 
 # the text of the file `target` names, else `target` itself as code
@@ -124,12 +126,14 @@ build_native(source_file: text, library: text) := {
 # -l of each C library the program imports beside libc and libm, found in warp's library folder first (warp's own
 # libraries, libwarp_wasmtime: card wasmtime-bundled), then among the libraries of the wabt's prefix (/opt/homebrew/lib)
 # or the system's; the executable finds them at run time beside itself, in ../lib (a package's <prefix>/bin and
-# <prefix>/lib), else in that library folder (rpath)
+# <prefix>/lib), else in that library folder by its stable name (rpath): the native warp's WARP_LIB_LINK, a link the
+# next install moves to its own build, never the build folder behind it (card native-rpath-builds-folder)
+LIBRARY_LINK_VARIABLE = "WARP_LIB_LINK"
 native_links(wabt: text, library: text): text := {
 	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
 	if #libraries == 0 { return "" }
 	itself = if is_macos() then "@executable_path" else "'$ORIGIN'"
-	run_paths = [itself, itself + "/../lib", quoted_path(library)].map(path => " -Wl,-rpath," + path).join("")
+	run_paths = [itself, itself + "/../lib", quoted_path(env(LIBRARY_LINK_VARIABLE) ?? library)].map(path => " -Wl,-rpath," + path).join("")
 	# GNU ld's --as-needed (Debian's default) drops a library the C calls reach only through dlsym
 	kept = if is_macos() then "" else " -Wl,--no-as-needed"
 	" -L" + quoted_path(library) + " -L" + quoted_path(wabt + "/lib") + run_paths + kept + libraries.map(l => " -l" + l).join("")

@@ -12,6 +12,9 @@
 # warp-self.wasm it promotes when the installed warp.wasm is still of those inputs.
 set -uo pipefail
 MAIN_WARP=/Users/me/dev/bin/warp  # the native warp (core/native/warp.warp), in a folder of its own (install_native)
+# the native warp's folder by a name that outlives installs: what executables it builds find libwarp_wasmtime by
+# (their rpath, card native-rpath-builds-folder)
+MAIN_LIB=/Users/me/dev/bin/lib
 RUST_WARP=/Users/me/dev/bin/warp-rust  # the Rust harness, kept beside it for a round (decision rust-gone-in-1-5)
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
 TREE=/Volumes/Worktrees/integrate2
@@ -162,10 +165,10 @@ install_harness() {
 	say "harness of ${tip:0:10} installed: $RUST_WARP -> $folder/warp"
 }
 
-# linked <file> <link>: the link (~/dev/bin/warp, warp-rust) made to point to the file by one rename, relative to the
-# link's folder
+# linked <file> <link>: the link (~/dev/bin/warp, warp-rust, lib) made to point to the file or folder by one rename,
+# relative to the link's folder (mv -h: a link to a folder is replaced, not moved into)
 linked() {
-	ln -sfn "${1#"$(dirname "$2")/"}" "$2.new" && mv -f "$2.new" "$2"
+	ln -sfn "${1#"$(dirname "$2")/"}" "$2.new" && mv -fh "$2.new" "$2"
 }
 
 # the build folders neither ~/dev/bin/warp nor warp-rust links into removed, only once the links are in place: a link
@@ -203,7 +206,7 @@ install_native() {
 	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
-	linked "$folder/warp" "$MAIN_WARP" || return 1
+	linked "$folder/warp" "$MAIN_WARP" && linked "$folder" "$MAIN_LIB" || return 1
 	pruned
 	say "native warp of ${tip:0:10} installed: $MAIN_WARP -> $folder/warp"
 }

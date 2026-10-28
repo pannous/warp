@@ -1,0 +1,7 @@
+# a runtime error's words, the ones every host prints before its place (core/runtime/error_sentences.warp; card
+# runtime-error-builder): a caught one holds them, the raised value or missing field named
+
+'try { n = 0; 7 % n } catch e { e.message }'	"divide by zero"
+'try { [1 2]#5 } catch e { e.message }'	"index out of range"
+'try { raise "boom" } catch e { e.message }'	"boom"
+'m = {a: 1}; k = "b"; try { m[k] } catch e { e.message }'	"no field b"

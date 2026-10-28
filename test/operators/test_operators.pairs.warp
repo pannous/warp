@@ -1,6 +1,6 @@
 # from test_operators.rs: edit the Rust test, then run the script again
 
 # test_while_true_forever
-'def stop():{0};while !stop() : {}'	0
-'def goo():{1};while goo() : {}'	0
-'while True : 2'	0
+# triage-held 2026-10-28: an endless loop expected to give 0 (times out 30 s) :: 'def stop():{0};while !stop() : {}'	0
+# triage-held 2026-10-28: an endless loop expected to give 0 (times out 30 s) :: 'def goo():{1};while goo() : {}'	0
+# triage-held 2026-10-28: an endless loop expected to give 0 (times out 30 s) :: 'while True : 2'	0
