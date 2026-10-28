@@ -17,8 +17,6 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/numbers/test_implicit_libm.pairs.warp:15 | 0.8414709848078965 | 42 | `def sin(x) := 42` is the program's own sin, which wins over libm (shadowing per arity) |
 | test/text/test_char_parameter_type.pairs.warp:4, 5, 6 | "codepoint" | "class text" | decisions: an untyped parameter given a one-character text takes it as Text (5 even declares t:text) |
 | test/text/test_text_type_words.pairs.warp:12, 13 | π | 3.141592653589793 | `π as float` is the float, not the exact π |
-| test/lists/test_element_wise_vectors.warp:28 | [-9-8] | [-9, -8] | `[-9-8]` reads as [-17]; the result [-9 -8] is right |
-| test/lists/test_element_wise_lists.pairs.warp:6 | [-2-3] | [-2, -3] | the same typo |
 | test/lists/test_min_max.pairs.warp:20 | 2 | 6 | `min(a,b):=a*b` is the program's own min, which wins over the prelude's |
 | test/lists/test_lists.pairs.warp:61, 68, 72, 81 | [1, 2, 3] / ['a', 'b', 'c'] | 3 / 'c' | `;` separates statements: `(1;2;3)` and `{a;b;c}` give their last, as `a;b;c` gives 'c' (line 73) |
 | units without `use units`, 83 lines: test/numbers/ test_decimal_units:4; test_dimension_types:4-7, 19-23; test_dynamic_units:4, 5, 8, 9, 12; test_litre_hectare:4; test_math:42; test_mixed_quantity_arguments:4, 5; test_mixed_units.warp:4, 6; test_pixel_unit:4, 5, 9, 13 and .warp:6, 8, 14; test_quantity_cast:4; test_run_time_power:6; test_time_of_day:4, 6, 9, 13; test_unit_beside_variable:10; test_unit_definitions:4-9, 11, 14, 15, 24, 26, 27, 30 and .warp:4, 7, 9, 11, 15; test_unit_functions_as_values.warp:4, 9; test_unit_literals:4-6; test_unit_prefix_lines.warp:6; test_unit_word_keys:13, 14; test_units_after_numbers.warp:30; test_units_compare:4-14; test_units_type_holes:4-7 | `1 km == 1000 m` | `use units; 1 km == 1000 m` | decision expected-type-names: without an expected type `3ms` is an error whose fix-it is `use units` |
@@ -123,6 +121,7 @@ Groups:
 ### lists (243 gaps)
 Silently wrong:
 - `[a -1]` gives [4] and `[1 -1]` gives [0]. The tests expect a sign glued to its number to start a new item (test_list_literal_sign, test_signed_operand_list, 10 lines).
+  Expectations such as `[-9 -8]` are read the same way, so element_wise_vectors.warp:28 fails even though it gets [-9 -8].
 - `p.@source = "gps"; #p` counts the meta field (test_map_starts:9).
 
 Groups:
