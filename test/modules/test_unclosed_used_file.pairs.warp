@@ -1,0 +1,2 @@
+# a used file that does not parse fails the compile, naming the file, instead of bringing nothing (card unclosed-core)
+'use "../fixtures/unclosed_group.warp"; 1'	error
