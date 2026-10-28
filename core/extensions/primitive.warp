@@ -431,6 +431,7 @@ mvp_block(f: PrimitiveFunction, statements: list, expected: text): PrimitiveCode
 
 mvp_keyed(f: PrimitiveFunction, left: Node, operator: Op, right: Node, n: Node, expected: text): PrimitiveCode := {
 	if operator == Op.Assign { return mvp_assigned(f, left, right, n) }
+	if operator == Op.Colon and not (right is symbol and name_of(right) in scalars) { return mvp_emitted(f, right, expected) }
 	if operator == Op.Colon { return mvp_declared(f, left, right, n) }
 	if operator == Op.Then or operator == Op.Else { return mvp_conditional(f, n, expected) }
 	if operator == Op.Do and is_key(left, Op.While) { return mvp_looped(f, value_of(left), right) }
@@ -493,9 +494,9 @@ mvp_assigned(f: PrimitiveFunction, target: Node, value: Node, n: Node): Primitiv
 	if given.type == NO_VALUE { primitive_refusal(n, "an assignment of a statement") }
 	PrimitiveCode(NO_VALUE, given.code + [op.local_set] + uleb(mvp_local_of(f, name, given.type)))
 }
-# `x: T = e`, `x: T` (0); a label of a statement, `loop·step: i++`, is the statement
+# `x: T = e`, `x: T` (0); a label of a statement, `loop·step: i++` or `data·field: N`, is the statement (mvp_keyed),
+# a literal of it taking the type its place wants
 mvp_declared(f: PrimitiveFunction, target: Node, type: Node, n: Node, value: Node = 0): PrimitiveCode := {
-	if not (type is symbol and name_of(type) in scalars) and is_key(n, Op.Colon) { return mvp_emitted(f, type, "") }
 	if not (target is symbol) { primitive_refusal(n, "a declaration of " + form_of(target)) }
 	written = primitive_type_name(type)
 	index = mvp_local_of(f, name_of(target), written)
