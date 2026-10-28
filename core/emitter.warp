@@ -1397,9 +1397,13 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 			main.code = boxed(TypedCode(main.result, main.code))
 			main.result = ValueKind.Node
 		}
-		# WASI's command entry: main run for what it does, so `wasmtime app.wasm` runs the program
+		# WASI's command entry, which an executable runs: main, its value printed as print shows it unless ø (a print or
+		# a declaration last), so `./app` and `wasmtime app.wasm` say what `warp app.warp` says (P77)
 		start = added_function(wasi_start, [], no_kind, [])
-		start.code = call_code(main.index) + [op.drop]
+		start.locals = [main.result]
+		result = TypedCode(main.result, [op.local_get, 0])
+		absent = if main.result == ValueKind.Node then [op.local_get, 0, op.ref_is_null] else [op.i32_const, 0]
+		start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(result).code + [op.drop, op.end]
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
 			if #module.refusals > 0 { throw module.refusals.join("\n") }

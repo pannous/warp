@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+@primitive
+# C functions of lib/c.warp and lib/math.warp, called natively: `warp build native c_calls.warp`, then
+# `GREETING=Hi ./c_calls` (notes/primitive.md "C calls")
+import (getenv, strlen) from "c"
+import hypot from "m"
+greeting = getenv("GREETING")
+print greeting
+print text_of(strlen(greeting))
+print text_of(hypot(3.0, 4.0) as i64)

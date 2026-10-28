@@ -1,8 +1,6 @@
 //! The command line's flags: hints and warning levels, strictness, the sandbox, compile flags
 use super::*;
 
-pub(crate) const COMPILE_FLAGS: [&str; 8] =
-	[EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, PAGE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
 /// Where earlier versions remembered "got it", in the current folder: their `ack:` lines are adopted
 pub(crate) const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMENTS_FILE];
 /// `warp fuel <steps> …` (an option word like `fast`) and its flag spelling `--fuel <steps>`
@@ -115,19 +113,4 @@ pub(crate) fn tip_hiding_hints_at_exit() {
 	}
 	// SAFETY: atexit only stores the function pointer; tip touches no state torn down before exit handlers run
 	unsafe { atexit(tip) };
-}
-
-/// The compile flags `arguments` start with, in any order, and the arguments after them; `--trim[=<way>]` among them
-/// is skipped here and read by `Trim::of`
-pub(crate) fn leading_flags(mut arguments: String) -> (Vec<&'static str>, String) {
-	let mut flags = vec![];
-	while let Some(word) = arguments.split_whitespace().next().map(str::to_string) {
-		if let Some(flag) = COMPILE_FLAGS.into_iter().find(|flag| word == *flag) {
-			flags.push(flag);
-		} else if !word.starts_with(TRIM_FLAG) {
-			break;
-		}
-		arguments = arguments.trim_start()[word.len()..].trim_start().to_string();
-	}
-	(flags, arguments)
 }

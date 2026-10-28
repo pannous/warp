@@ -1,6 +1,7 @@
 // The WASI preview 1 calls of a primitive program answered by libc in a native build (core/commands.warp build_native,
 // notes/primitive.md "Native build"), and the executable's main. Included behind the header wasm2c wrote for the module
-// "program" and the definition of run_main, which calls the program's main and prints what it gives.
+// "program" and the definitions of instantiate, which hands wasm2c the instance of each module the program imports, and
+// run_main, which calls the program's main and prints what it gives (core/extensions/primitive.warp native_main).
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,11 +14,13 @@ enum { SEEK_FROM_START = 0, SEEK_FROM_HERE = 1 };
 enum { WASI_FAILED = 29 }; // EIO
 
 struct w2c_wasi__snapshot__preview1 {
+	w2c_program* program;
 	wasm_rt_memory_t* memory;
 	int argc;
 	char** argv;
 };
 
+void instantiate(w2c_program* program, struct w2c_wasi__snapshot__preview1* wasi);
 void run_main(w2c_program* program);
 
 static uint8_t* at(struct w2c_wasi__snapshot__preview1* wasi, uint32_t address) { return wasi->memory->data + address; }
@@ -96,9 +99,9 @@ void w2c_wasi__snapshot__preview1_proc_exit(struct w2c_wasi__snapshot__preview1*
 
 int main(int argc, char** argv) {
 	wasm_rt_init();
-	struct w2c_wasi__snapshot__preview1 wasi = {0, argc, argv};
 	w2c_program program;
-	wasm2c_program_instantiate(&program, &wasi);
+	struct w2c_wasi__snapshot__preview1 wasi = {&program, 0, argc, argv};
+	instantiate(&program, &wasi);
 	wasi.memory = w2c_program_memory(&program);
 	run_main(&program);
 	wasm2c_program_free(&program);

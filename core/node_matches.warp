@@ -132,8 +132,10 @@ part_tests(pattern: list, subject: Node): list := {
 
 conjunction_of(test: Node, equalities: list): Node := if #equalities == 0 then test else conjunction_of(Key(test, Op.And, equalities#1), equalities[1..])
 
+# a part the result never names is not read: `Key(left, op, right): [left, right]` spells no op (an operator's case
+# looked up at every key was a sixth of the sugar passes, card sugar-rule-passes)
 arm_value(pattern: list, subject: Node, result: Node): Node := {
-	bound = part_bindings(pattern, subject)
+	bound = part_bindings(pattern, subject).filter(binding => mentions(result, name_of(key_of(binding))))
 	if #bound == 0 { return result }
 	List(bound + [result], Bracket.Round, Separator.Semicolon)
 }

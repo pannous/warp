@@ -105,7 +105,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
 	# behind runtime.wasm
 	prepend_runtime(library_runtime ?? runtime_bytes())
-	relocate_program(separate_file() != "")
+	relocate_program(separate_output != "")
 	# behind the prebuilt modules it uses too; compiled with their sources if their words won't take its values
 	linking = library_runtime == ø and prepended()
 	link_libraries(if linking then linked_libraries(source) else [], if linking then definition_slices(source).map(slice => slice#1) else [])
@@ -150,14 +150,17 @@ compile_file(source_file: text, wasm_file: text, folder: text) := {
 		write(wasm_file, view_json(bridged(stage_view(parsed(read(source_file))))))
 	} else {
 		emitting_file(working_relative(source_file))
-		source = read(source_file)
-		compiled = compile(source, folder)
-		# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
-		if compiled is text { raise compiled }
-		write_bytes(wasm_file, compiled)
-		# a primitive module imports no runtime: its separate form is itself
-		if separate_file() != "" { write_bytes(separate_file(), if is_primitive_file(source) then compiled else separate_module()) }
+		compile_written(read(source_file), wasm_file, folder)
 	}
+}
+# the module of the source written to the wasm file, and as a separate module to separate_output when one is wanted
+compile_written(source: text, wasm_file: text, folder: text) := {
+	compiled = compile(source, folder)
+	# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
+	if compiled is text { raise compiled }
+	write_bytes(wasm_file, compiled)
+	# a primitive module imports no runtime: its separate form is itself
+	if separate_output != "" { write_bytes(separate_output, if is_primitive_file(source) then compiled else separate_module()) }
 }
 
 # the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
@@ -195,10 +198,9 @@ repl() := {
 # runtime.wasm beside this compiler, the harness's fifth argument of a compile: the program is compiled behind it (card
 # runtime-prepended), read once. A compile has no other runtime: without it, it fails
 RUNTIME_ARGUMENT = 5
-# the sixth, of `warp build`: where the same program goes as a separate module, importing runtime.wasm's instance
-# (card wasm-output-variants, notes/runtime_linking.md "Separate modules")
-SEPARATE_ARGUMENT = 6
-separate_file(): text := if command == "" and #args >= SEPARATE_ARGUMENT then args#SEPARATE_ARGUMENT else ""
+# where the program just compiled goes as a separate module too, importing runtime.wasm's instance: `warp build`'s
+# x.mod.wasm (commands.warp build; notes/runtime_linking.md "Separate modules"), none for a plain compile
+global separate_output = ""
 global runtime_held = ø
 runtime_bytes(): list := {
 	if runtime_held == ø {
@@ -242,7 +244,7 @@ match command {
 	"data": show_data()
 	"lower": show_lowered()
 	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
-	"build": if args#2 == NATIVE_WORD and #args > 2 then build_native(args#3, library_folder) else compile_file(args#2, args#2 + ".wasm", folder_of(args#2))
+	"build": build(args[1 ..< #args])
 	"repl": repl()
 	"repl-step": repl_step(args#2, args#3, args#4)
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
