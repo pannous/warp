@@ -36,6 +36,9 @@ def runtime_error_message(name: text): text {
 # has_else: `else ø` is a branch giving ø, no missing one
 def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_else: bool): TypedCode {
 	c = condition_of(body, test, 0)
+	# a branch the kinds rule out is not compiled, as it may not fit them: `if x is text { count(x) }` of a float
+	if c == known_condition(yes) { return nested(body, statements_block(yes_branch), 0) }
+	if c == known_condition(no) { return if has_else then nested(body, statements_block(no_branch), 0) else TypedCode(ValueKind.Node, [ref_null, gc_type(gc.node)]) }
 	a = nested(body, statements_block(yes_branch), 1)
 	if not has_else { return unmatched(c, a, yes_branch is number) }
 	b = nested(body, statements_block(no_branch), 1)
@@ -101,15 +104,18 @@ def effect(body: Body, n: Node): list {
 	if not (type(n) is key) { return dropped(statement(body, n)) }
 	operator = op_of(n)
 	left = key_of(n)
-	if operator == Op.Then and is_key(left, Op.If) {
-		return condition_of(body, right_of_if(left), 0) + [op.if, no_value] + nested_effect(body, value_of(n), 1) + [op.end]
-	}
-	if operator == Op.Else and is_key(left, Op.Then) and is_key(key_of(left), Op.If) {
-		c = condition_of(body, right_of_if(key_of(left)), 0)
-		return c + [op.if, no_value] + nested_effect(body, value_of(left), 1) + [op.else] + nested_effect(body, value_of(n), 1) + [op.end]
-	}
+	if operator == Op.Then and is_key(left, Op.If) { return conditional_effect(body, right_of_if(left), value_of(n), ø, no) }
+	if operator == Op.Else and is_key(left, Op.Then) and is_key(key_of(left), Op.If) { return conditional_effect(body, right_of_if(key_of(left)), value_of(left), value_of(n), yes) }
 	if operator == Op.Do and is_key(left, Op.While) { return loop_code(body, value_of(left), value_of(n), -1) }
 	dropped(statement(body, n))
+}
+# an if run for its effect, a branch the kinds rule out not compiled (as conditional)
+def conditional_effect(body: Body, test: Node, yes_branch: Node, no_branch: any, has_else: bool): list {
+	c = condition_of(body, test, 0)
+	if c == known_condition(yes) { return nested_effect(body, yes_branch, 0) }
+	if c == known_condition(no) { return if has_else then nested_effect(body, no_branch, 0) else [] }
+	otherwise = if has_else then [op.else] + nested_effect(body, no_branch, 1) else []
+	c + [op.if, no_value] + nested_effect(body, yes_branch, 1) + otherwise + [op.end]
 }
 def effects(body: Body, items: list): list {
 	code = []

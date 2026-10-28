@@ -464,9 +464,14 @@ def condition(value: TypedCode): list {
 }
 # the test of an if or a loop read inside `blocks` more blocks: in `if name and …` each side is tested by its own kind
 # (a text by its emptiness), the right one only when the left leaves the answer open
+# a yes/no the kinds already answer, `x is text` of a float, as `and` (no) or `or` (yes) is decided by it: the other
+# operand is never read, nor compiled, as it may not fit that kind (`x is text and count(x) > 1`)
+is_answered(condition: list, symbol: text): bool := condition == known_condition(symbol == "or")
+known_condition(truth: bool): list := [op.i32_const, if truth then 1 else 0]
 def condition_of(body: Body, test: Node, blocks: int): list {
 	if not (type(test) is key and op_of(test) in logical_words) { return condition(nested(body, test, blocks)) }
 	a = condition_of(body, key_of(test), blocks)
+	if is_answered(a, logical_words[op_of(test)]) { return a }
 	b = condition_of(body, value_of(test), blocks + 1)
 	if logical_words[op_of(test)] == "and" { return a + [op.if, type_bytes.bool] + b + [op.else, op.i32_const, 0, op.end] }
 	a + [op.if, type_bytes.bool, op.i32_const, 1, op.else] + b + [op.end]
@@ -1059,7 +1064,11 @@ def negation(body: Body, value: TypedCode): TypedCode {
 # on other values they give one of them, as Rust does: `a and b` is b when a holds, else a; `a or b` a when a holds,
 # else b (`(1==1) and 5` is 5, `x | y` with x 0 is y); a yes/no beside a number counts as 1 or 0
 logical_words = {and: "and", or: "or"}
-def logical(body: Body, symbol: text, left: Node, right: Node): TypedCode { logical_code(body, symbol, expression_code(body, left), nested(body, right, 1)) }
+def logical(body: Body, symbol: text, left: Node, right: Node): TypedCode {
+	a = expression_code(body, left)
+	if a.kind == ValueKind.Bool and is_answered(a.code, symbol) { return a }
+	logical_code(body, symbol, a, nested(body, right, 1))
+}
 # `3 & 5` is 1, `6 | 1` is 7: the bits of two whole numbers; on yes/no and other values the logical and/or, as Rust's
 # BitAnd and BitOr (parser.warp bit_operator). The right operand is read inside one block, as logical's branch reads it.
 bit_words = {"&": "and", "|": "or"}

@@ -1,0 +1,6 @@
+# a type test the argument's kind answers: the branch it rules out is not compiled, as it may not fit that kind
+'p(x) := { if x is text and count(x) > 1 { return 1 }; 2 }; p(round(2.2))'	2
+'p(x) := { if x is text and count(x) > 1 { return 1 }; 2 }; p("abc")'	1
+'p(x) := { if x is text { return count(x) }; 2 }; p(round(2.2))'	2
+'p(x) := if x is float then 1 else count(x); p(round(2.2))'	1
+'p(x) := x is number or count(x) > 1; p(round(2.2))'	true

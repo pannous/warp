@@ -3,10 +3,12 @@
 // and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers. The samples are made here and played by the host word
 // sound_samples: natively a WAV file and the system's player (src/sound/mod.rs; silent under tests and WARP_NO_WINDOW),
 // in the browser WebAudio. Loaded when a program calls one of its words (src/modules.rs SOUND_WORDS)
+use units
+use reals
 global sample_rate = 22050
-// a frequency's or duration's plain number in SI units (Hz, seconds): a unit written in the program is that number at
-// run time already (units stay static), so the amount is the value itself
-si_amount(value) := value
+// a frequency's or duration's plain number in SI units (Hz, seconds): a quantity's amount (lib/units.warp), a plain
+// number as it is
+si_amount(value) := if value is Quantity then value.amount else value
 // the share of the loudest sample: chords and melodies stay below it
 global loudness = 0.3 as float
 // sine, square, triangle, sawtooth or noise
@@ -327,7 +329,7 @@ class Note {
 // `F#4` (decision music-plain-details): a letter is its pitch class, indexed by an octave its sharp note there, F♯4
 class PitchClass {
 	key: int
-	index(octave) := midi_hertz(12 * (octave + 1) + key + 1)
+	position(octave) := midi_hertz(12 * (octave + 1) + key + 1)
 }
 C = PitchClass(0)
 D = PitchClass(2)
@@ -552,10 +554,44 @@ plain_hertz(pitch) := {
 // case for signals)
 play(tone, for duration) := if is_signal(tone) then play_signal(tone, duration) else sound(chord_samples(pitches_of(tone), si_amount(duration), wave_shape))
 // block-wise (decision music-plain-details): hum(block: samples, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi *
-// 220 * (t + (i - 1) / sample_rate)) }; play(hum, 2s) calls hum once a block, t its first sample's time. The type
-// `samples` is a block of 512 samples, a linear float array (src/lowering/collections/shared_arrays.rs SAMPLES_TYPE);
-// class Sample is a clip, a list of them `list of Sample`
-play(fill: (samples, float) -> any, for duration) := std_io("sound", "blocks", [fill, linear_new(512), si_amount(duration), sample_rate])
+// 220 * (t + (i - 1) / sample_rate)) }; play(hum, 2s) calls hum once a block, t its first sample's time. The host
+// calls fill_block, which hands the program's fill the block; class Sample is a clip, a list of them `list of Sample`
+play(fill: (samples, float) -> any, for duration) := {
+	block_filler = fill
+	filled_block = new_samples(block_size)
+	std_io("sound", "blocks", [fill_block, filled_block.address, si_amount(duration), sample_rate])
+}
+global block_filler = ø
+global filled_block = ø
+block_size() := 512
+fill_block(t: float): float := {
+	block_filler(filled_block, t)
+	0.0
+}
+// a block of samples in linear memory, where the host reads and the program writes them in place: [count: i64][count
+// f64 cells] at its address, made by one-instruction words (decision wasm-instruction-body), on pages of its own
+class samples {
+	address: int
+	count() := count_at(address)
+	position(p) := cell_at(address + cell_bytes * p)
+	position(p, value) := set_cell(address + cell_bytes * p, value)
+}
+// nullary words: a class method reaches no module value
+cell_bytes() := 8
+page_bytes() := 65536
+cell_at(address: int): float := wasm f64.load
+set_cell(address: int, value: float) := wasm f64.store
+count_at(address: int): int := wasm i64.load
+set_count_at(address: int, count: int) := wasm i64.store
+memory_pages(): int := wasm memory.size
+grown_pages(pages: int): int := wasm memory.grow
+// n zeroed samples (grown memory is zeroed), never freed
+new_samples(n: int): samples := {
+	address = memory_pages() * page_bytes
+	grown_pages(cell_bytes * (n + 1) /! page_bytes + 1)
+	set_count_at(address, n)
+	samples(address)
+}
 is_signal(tone) := tone is function or tone is list and count(tone) == 2 and tone[0] is function
 // the note played through a bus (card shared-buses stage 2): play(C4, 1s, bus: room)
 play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), play(tone, duration))
@@ -571,8 +607,21 @@ fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gai
 // play_signal) calls hum for every sample, t its time in seconds, a block ahead of the speaker; returns the handle when
 // the last is queued
 play_signal(signal, seconds) := if signal is list then stereo_signal(signal[0], signal[1], seconds) else mono_signal(signal, seconds)
-mono_signal(signal: (float) -> float, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
-stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := std_io("sound", "signal", [[left, right], si_amount(seconds), sample_rate])
+mono_signal(signal: (float) -> float, seconds) := {
+	left_signal = signal
+	std_io("sound", "signal", [left_sample, si_amount(seconds), sample_rate])
+}
+stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := {
+	left_signal = left
+	right_signal = right
+	std_io("sound", "signal", [[left_sample, right_sample], si_amount(seconds), sample_rate])
+}
+global left_signal = ø
+global right_signal = ø
+// the samples the host asks for, a float of a float, whatever number the program's signal gives (0.3 * t of an exact
+// 0.3 is no float for the compiler)
+left_sample(t: float): float := left_signal(t) as float
+right_sample(t: float): float := right_signal(t) as float
 // block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
 // 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.

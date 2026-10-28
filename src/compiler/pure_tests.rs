@@ -224,6 +224,7 @@ fn read_in_background(mut pipe: impl std::io::Read + Send + 'static) -> std::thr
 /// matched permissively (decision warp-is-tests): `got == expected`, or both empty/falsy. Prints `got <value>` and
 /// returns false when it differs
 pub fn run_child_case(command: &str, file: &str, index: &str) -> bool {
+	warp_runtime::engine::compile_on_one_thread();
 	let by = if command == Compiler::SelfCompiled.command() { Compiler::SelfCompiled } else { Compiler::RustCompiled };
 	let file = Path::new(file).canonicalize().unwrap_or_else(|_| PathBuf::from(file));
 	let source = std::fs::read_to_string(&file).unwrap_or_default();

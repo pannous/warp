@@ -5,8 +5,10 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
+- class-index-test (warp-global-named-capital, test/types/test_class_index_operator.pairs.warp:4, from the Rust suite): `class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4` expects 504 (index read as `#`); under position-index-words it is position(4) = index(3) = 503. Options: upgrade the test to 503 (Recommended, follows the naming) / keep 504 (`#` calls index unshifted; then position-index-words changes). Failed on main before too; ask at 10:00.
 
 ## To present
+- test-oversubscribes-mac (harness OK, user away): `warp test` case processes compile single-threaded when cases already run in parallel (load 170 on 10 cores).
 - position-index-words: class `#` = position(p), `[]` = index(i), `#b` = count(); writes position(p, value) / index(i, value), defining one derives the other.
 
 ## Parked

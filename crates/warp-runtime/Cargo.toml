@@ -50,7 +50,10 @@ webview = ["dep:wry", "dep:winit", "dep:objc2"]
 library = ["compiler"]
 # warp-host: a compiler for the modules it is given, on all cores (warp-self's machine code: 8 s on one, 2 s on
 # eight; rayon is ~0.1 MB), WASI preview 1
-host = ["compiler", "wasmtime/parallel-compilation", "dep:wasmtime-wasi", "wat"]
+host = ["compiler", "parallel-compilation", "dep:wasmtime-wasi", "wat"]
+# compiling a module's functions on all cores; a process of many running at once turns it off (engine.rs
+# compile_on_one_thread)
+parallel-compilation = ["compiler", "wasmtime/parallel-compilation"]
 # WAT text (notes/warp_host.md): warp-host runs .wat modules, as warp does (card warp-host-cli-parity: in the host
 # build, 0.66 MB of its 7.3 MB, measured 2026-10-23), and the tool wat2wasm, which tests/host/test_host.sh assembles its
 # C modules with
