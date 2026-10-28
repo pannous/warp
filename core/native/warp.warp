@@ -19,6 +19,7 @@
 # The host words warp.wasm's commands call are answered by driver.warp host_word; library words (graphics, sound, web)
 # are not the core binary's (decision libraries-not-core) and say so
 use "driver.warp"
+use "tests.warp"
 
 setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
 unsetenv(name: pointer): i32 from "c"
@@ -150,19 +151,6 @@ copied(from: text, to: text): nothing := {
 	write_file(aside, read_file(from))
 	rename(c_string(aside), c_string(to))
 }
-# `warp test …`: run by the Rust warp, warp-rust beside this one, else on the PATH, until the native test runner lands
-# (card native-warp-test); said on stderr each time
-tests_handed_off(): nothing := {
-	complain("warp test: run by warp-rust until the native test runner lands (card native-warp-test)")
-	given = arguments()
-	added(given, "warp-rust")
-	for i in 1..arg_count() { added(given, arg(i)) }
-	long_at(given.pointers + given.count * 8).value = 0
-	execv(c_string(joined(folder_of(executable_path()), "/warp-rust")), given.pointers)
-	execvp(c_string("warp-rust"), given.pointers)
-	complain("warp test: no warp-rust beside this warp or on the PATH")
-	exit(1)
-}
 # `warp rebuild [pure|self|seed]`
 rebuild_command(): nothing := {
 	which = if arg_count() > 2 then arg(2) else "pure"
@@ -265,7 +253,7 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	if ends_with(word, ".wasm") { return module_ran(first) }
 	if not prefixed {
 		if same_text(word, "rebuild") { return rebuild_command() }
-		if same_text(word, "test") { return tests_handed_off() }
+		if same_text(word, "test") { return tests_run(compiler, flagged("--self")) }
 		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
 	}
@@ -291,8 +279,11 @@ counting = arg_count() > 3 and same_text(arg(1), "fuel")
 if counting { setenv(c_string("WARP_FUEL"), c_string(arg(2)), 1) }
 prefixed = counting or (arg_count() > 1 and is_prefix(arg(1)))
 first = if counting then 3 else if prefixed then 2 else 1
-# warp.wasm's own commands (build) read the same lib/ as this executable
-setenv(c_string("WARP_LIB"), c_string(library_folder()), 0)
+# warp.wasm's own commands (build) read the same lib/ as this executable, and its stable name, the run path of the
+# executables `warp build native` makes (commands.warp native_links); WARP_LIB names it resolved, as the module's WASI
+# reaches it (no link to an absolute path)
+setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
+setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
 setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
 if prefixed and same_text(arg(1), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }

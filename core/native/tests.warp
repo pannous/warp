@@ -1,0 +1,168 @@
+#!/usr/bin/env warp
+@primitive
+# `warp test [--self] [--each] [folder or file…]` on the native warp (card native-warp-test; twin of
+# src/compiler/pure_tests.rs): warp.wasm lists the cases into a work folder (core/commands/tests.warp test-list), each
+# run of a case's code is a child process of this warp (`warp run <code>`, `warp self <code>` for --self) in the test
+# file's folder with the value printed as data (WARP_VALUE_AS_DATA), its output, errors and exit status written beside
+# its code; the children run in parallel, each in a slot of the machine's pool, one past CASE_SECONDS killed; then
+# warp.wasm prints the verdicts and the total (test-verdicts), the exit status 1 when one failed
+
+creat(path: pointer, mode: i32): i32 from "c"
+dup2(from: i32, to: i32): i32 from "c"
+close(descriptor: i32): i32 from "c"
+chdir(path: pointer): i32 from "c"
+flock(descriptor: i32, operation: i32): i32 from "c"
+kill(child: i32, signal: i32): i32 from "c"
+time(at: pointer): i64 from "c"
+usleep(microseconds: i32): i32 from "c"
+_exit(status: i32) from "c"
+
+CASE_SECONDS = 30
+FILE_MODE = 420
+# flock's LOCK_EX | LOCK_NB
+LOCKED_NOW = 6
+# waitpid's WNOHANG
+NOT_WAITING = 1
+KILLED = 9
+EXEC_FAILED = 127
+POLL_MICROSECONDS = 5000
+SLOT_WAIT_MICROSECONDS = 20000
+MAX_SLOTS = 256
+# a slot's child: its pid (0 for a free slot), its run's line, when it started, its slot's lock
+struct Child { pid: i32; run: i64; started: i64; lock: i32 }
+CHILD_BYTES = 32
+
+tests_run(compiler: text, by_self: bool): nothing := {
+	work = joined(text_from(compiled_path().address, compiled_path().length - 5), ".tests")
+	command_output(joined(joined("rm -rf '", work), "'"))
+	mkdir(c_string(work), FOLDER_MODE)
+	file_ran(compiler, test_words(compiler, "test-list", work))
+	runs = read_file(joined(work, "/runs"))
+	setenv(c_string("WARP_NO_WINDOW"), c_string("1"), 1)
+	setenv(c_string("WARP_HINTS"), c_string("0"), 1)
+	setenv(c_string("WARP_VALUE_AS_DATA"), c_string("1"), 1)
+	all_ran(work, runs, if by_self then "self" else "run")
+	unsetenv(c_string("WARP_VALUE_AS_DATA"))
+	file_ran(compiler, test_words(compiler, "test-verdicts", work))
+	failed = read_file(joined(work, "/failed"))
+	command_output(joined(joined("rm -rf '", work), "'"))
+	if failed.length == 0 or not same_text(failed, "0") { exit(1) }
+}
+# the compiler's arguments for a test command: the command, the work folder, then this warp's words after `test`
+test_words(compiler: text, command: text, work: text): Arguments := {
+	given = words(compiler, command, work, "", "", "")
+	for i in 2..arg_count() { added(given, arg(i)) }
+	given
+}
+
+# every run of the work folder's list run by a child, as many at once as the machine's pool has slots
+all_ran(work: text, runs: text, prefix: text): nothing := {
+	total = if runs.length == 0 then 0 else field_count(runs, NEWLINE)
+	slots = slot_count()
+	children = allocate(slots * CHILD_BYTES)
+	next = 0
+	done = 0
+	status = allocate(4)
+	while done < total {
+		for k in 0..slots {
+			child = child_at(children + k * CHILD_BYTES)
+			if child.pid == 0 and next < total {
+				lock = taken_slot(slots)
+				if lock >= 0 {
+					child.pid = started_run(work, field(runs, next, NEWLINE), prefix, children, slots)
+					child.run = next
+					child.started = time(0)
+					child.lock = lock
+					next = next + 1
+				}
+			}
+		}
+		ended = waitpid(-1, status, NOT_WAITING)
+		for k in 0..slots {
+			child = child_at(children + k * CHILD_BYTES)
+			if child.pid != 0 and child.pid == ended {
+				run_ended(work, field(runs, child.run, NEWLINE), exit_status(word_at(status).value as i32), child)
+				done = done + 1
+			}
+			if child.pid != 0 and time(0) - child.started > CASE_SECONDS {
+				kill(child.pid, KILLED)
+				waitpid(child.pid, status, 0)
+				run_ended(work, field(runs, child.run, NEWLINE), "timeout", child)
+				done = done + 1
+			}
+		}
+		if ended <= 0 { usleep(POLL_MICROSECONDS) }
+	}
+}
+child_at(address: pointer): Child := address
+# a run's status written, its slot freed
+run_ended(work: text, run: text, status: text, child: Child): nothing := {
+	write_file(joined(joined(joined(work, "/"), field(run, 0, TAB)), ".status"), status)
+	close(child.lock)
+	child.pid = 0
+}
+# waitpid's status as the exit status, 128 and the signal for a child a signal ended
+exit_status(status: i32): text := if status % 256 == 0 then text_of(status / 256 % 256) else text_of(128 + status % 128)
+
+# a child running the run `<id>\t<folder>`: this warp with `run` (or `self`) and the code, in the folder, its output
+# and errors into the run's files; the locks of the other slots closed in it
+started_run(work: text, run: text, prefix: text, children: pointer, slots: i32): i32 := {
+	id = joined(joined(work, "/"), field(run, 0, TAB))
+	folder = c_string(field(run, 1, TAB))
+	given = arguments()
+	added(given, executable_path())
+	added(given, prefix)
+	added(given, read_file(joined(id, ".code")))
+	long_at(given.pointers + given.count * 8).value = 0
+	self = c_string(executable_path())
+	output = c_string(joined(id, ".out"))
+	errors = c_string(joined(id, ".err"))
+	pid = fork()
+	if pid == 0 {
+		for k in 0..slots {
+			other = child_at(children + k * CHILD_BYTES)
+			if other.pid != 0 { close(other.lock) }
+		}
+		chdir(folder)
+		dup2(creat(output, FILE_MODE), 1)
+		dup2(creat(errors, FILE_MODE), 2)
+		execv(self, given.pointers)
+		_exit(EXEC_FAILED)
+	}
+	pid
+}
+
+# the number of slots in the machine's pool: WARP_TEST_SLOTS, else the cores
+slot_count(): i32 := {
+	given = getenv("WARP_TEST_SLOTS")
+	count = if given.length > 0 then number_of(given) else number_of(trimmed_end(command_output("getconf _NPROCESSORS_ONLN")))
+	if count < 1 then 1 else if count > MAX_SLOTS then MAX_SLOTS else count
+}
+# a free slot of the machine's pool (card shared-test-slots: lock files in ~/.cache/warp/test-slots, shared by every
+# `warp test` there is), its lock held until closed; -1 after waiting a while for one
+taken_slot(slots: i32): i32 := {
+	folder = joined(getenv("HOME"), "/.cache/warp/test-slots")
+	command_output(joined(joined("mkdir -p '", folder), "'"))
+	first = getpid() % slots
+	for offset in 0..slots {
+		lock = creat(c_string(joined(joined(folder, "/"), text_of((first + offset) % slots))), FILE_MODE)
+		if lock >= 0 and flock(lock, LOCKED_NOW) == 0 { return lock }
+		if lock >= 0 { close(lock) }
+	}
+	usleep(SLOT_WAIT_MICROSECONDS)
+	-1
+}
+# the digits of a text as a number, 0 for none
+number_of(t: text): i32 := {
+	n = 0 as i32
+	for i in 0..t.length {
+		digit = byte_at(t.address + i).value as i32 - 48
+		if digit >= 0 and digit <= 9 { n = n * 10 + digit }
+	}
+	n
+}
+# one of this warp's words is the flag
+flagged(flag: text): bool := {
+	for i in 1..arg_count() { if same_text(arg(i), flag) { return yes } }
+	no
+}
