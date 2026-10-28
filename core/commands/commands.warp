@@ -5,6 +5,8 @@
 use os
 use file
 
+# warp's version, the one place a release bumps (Cargo.toml follows it for the harness)
+VERSION = "1.4.1"
 REPL_PROMPT = "warp> "
 NATIVE = "the native warp"
 HELP_COLUMN = 38
@@ -52,14 +54,8 @@ padded(words: text, width: int): text := {
 	line
 }
 
-# the version of the lib/ beside the compiler: its checkout's Cargo.toml
-version_text(library: text): text := {
-	manifest = try read(folder_of(library) + "/Cargo.toml") else ""
-	for line in manifest.split("\n") {
-		if line.starts_with("version") { return "🌀 Warp " + line.split("\"")#2 + " (compiler.warp of " + library + ")" }
-	}
-	"🌀 Warp (compiler.warp of " + library + ", no Cargo.toml beside it)"
-}
+# the version, and the lib/ the compiler reads
+version_text(library: text): text := "🌀 Warp " + VERSION + " (compiler.warp of " + library + ")"
 
 # the parsed program as `warp parse` shows it, each operation a prefix group: 1+2*x as (+ 1 (* 2 x)) (Rust twin:
 # src/cli/display.rs structure)
@@ -107,15 +103,20 @@ build_native(source_file: text, library: text) := {
 	runtime = wabt + WASM2C_RUNTIME
 	shell("wasm2c " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
 	files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
-	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + native_links(wabt))
+	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + native_links(wabt, library))
 	shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
 	print "built " + executable
 }
-# -l of each C library the program imports beside libc and libm, found among the libraries of the wabt's prefix
-# (/opt/homebrew/lib) or the system's
-native_links(wabt: text): text := {
+# -l of each C library the program imports beside libc and libm, found in warp's library folder first (warp's own
+# libraries, libwarp_wasmtime: card wasmtime-bundled), then among the libraries of the wabt's prefix (/opt/homebrew/lib)
+# or the system's; the executable finds them at run time beside itself, in ../lib (a package's <prefix>/bin and
+# <prefix>/lib), else in that library folder (rpath)
+native_links(wabt: text, library: text): text := {
 	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
-	if #libraries == 0 then "" else " -L" + quoted_path(wabt + "/lib") + libraries.map(l => " -l" + l).join("")
+	if #libraries == 0 { return "" }
+	itself = if shell("uname") == "Darwin" then "@executable_path" else "'$ORIGIN'"
+	run_paths = [itself, itself + "/../lib", quoted_path(library)].map(path => " -Wl,-rpath," + path).join("")
+	" -L" + quoted_path(library) + " -L" + quoted_path(wabt + "/lib") + run_paths + libraries.map(l => " -l" + l).join("")
 }
 # the folder a file's uses are read from: "." for a file named without one
 source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
