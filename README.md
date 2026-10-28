@@ -4,7 +4,7 @@
 
 ```warp
 contact{ name: James  age: 33 }
-contact.age + 1                      // 34
+assert contact.age + 1 == 34
 ```
 
 The same notation holds your config, your markup and your program. Warp compiles it to WebAssembly GC structs (no linear-memory runtime, no JS glue), and the compiler is itself a WebAssembly module written in warp!
@@ -124,6 +124,7 @@ is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice);
 (data "Alice")
 ```
 Texts are GC byte arrays; linear memory is used only to hand bytes to the host or C.
+<!-- and for bootstrapping the native warp via wasm2c -->
 Declare the Rust side with `wasm_struct! { Person { name: String, age: i64 } }`, or inline:
 `wasm_object! { Person { name: String = "Alice", age: i64 = 30 } }`.
 
