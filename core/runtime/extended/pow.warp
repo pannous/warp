@@ -228,3 +228,12 @@ float_pow(x: float, y: float): float := {
 	elo = ylo * lhi + y * llo
 	pow_exp_inline(ehi, elo, sign_bias)
 }
+# `∛x`: the float cube root, of a negative x the negative root; pow's root of |x| refined by one Newton step, so a
+# whole cube's root is whole (∛27 is 3); 0, ∞ and NaN stay themselves
+float_cbrt(x: float): float := {
+	if x == 0.0 or x - x != 0.0 { return x }
+	a = float_abs(x)
+	y = float_pow(a, 1.0 / 3.0)
+	y = y - (y * y * y - a) / (3.0 * y * y)
+	if x < 0.0 then -y else y
+}

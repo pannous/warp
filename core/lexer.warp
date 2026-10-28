@@ -101,7 +101,7 @@ def skipped_end(source: text, at: int, n: int): int {
 	if c == '$' { return name_end(source, at + 1, n) }
 	brace = shader_brace(source, at, n)
 	if brace > at { return block_end(source, brace + 1, n) }
-	if text_starts(source, at, n) { return text_end(source, at + 1, closing_of(c), n) }
+	if text_starts(source, at, n) { return text_end(source, at + 1, closing_of(quote_of(c)), n) }
 	at
 }
 
@@ -167,9 +167,18 @@ def gaps(source: text, n: int): Gaps := {
 
 // A quote opening a text at `at`
 def text_starts(source: text, at: int, n: int): bool {
-	c = source[at]
+	c = quote_of(source[at])
 	c == '«' or c == '"' or c == '`' or c == '\'' and not possessive(source, at, n)
 }
+
+// The character a grapheme of the code starts with: a quote carrying combining marks (an overline after it) opens a
+// text as the quote does (parser.warp quoted reads the marks into it)
+def quote_of(c: text): text {
+	if c.bytecount == 1 { return c }
+	for quote in QUOTES { if c.starts_with(quote) { return quote } }
+	c
+}
+QUOTES = ['"', '\'', '`', '«']
 
 // `shader {` or `wgsl {` at `at`: the index of its brace, else `at`
 // Rust twin: warp_parser/literals.rs parse_shader_block (SHADER_WORDS)

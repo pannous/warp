@@ -1052,6 +1052,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.Not and left == ø { return TypedCode(ValueKind.Bool, condition(expression_code(body, right)) + [op.i32_eqz]) }
 	# `√x`: the float root, as Rust's emitter gives it
 	if operator == Op.Sqrt and left == ø { return TypedCode(ValueKind.Float, converted(expression_code(body, right), ValueKind.Float) + [wasm_instructions["f64.sqrt"]]) }
+	if operator == Op.Cbrt and left == ø { return runtime_call("float_cbrt", [TypedCode(ValueKind.Float, converted(expression_code(body, right), ValueKind.Float))]) }
 	if left === ø or right === ø {
 		other = if left === ø then right else left
 		if operator in identities or operator in equalities { return identity_with_nothing(body, operator, other) }

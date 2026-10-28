@@ -234,8 +234,9 @@ shared_kind(kinds: list): ValueKind := if kinds.all(kind => kind == kinds#1) the
 # whether `converted` takes a value of kind `from` where `to` is needed: as it is, boxed into a node, read from a node,
 # an int as a float or bool, a bool as an int, a character as a text
 converts(from: ValueKind, to: ValueKind): bool := from == to or from == ValueKind.Node or to == ValueKind.Node or (from == ValueKind.Int and (to == ValueKind.Float or to == ValueKind.Bool)) or (from == ValueKind.Bool and to == ValueKind.Int) or (from == ValueKind.Char and to == ValueKind.Text)
-# whether a value of the kind is one of the union's members, as far as the compile knows it: a node is checked when it runs
-fits_union(type: text, kind: ValueKind): bool := union_members(type).any(member => converts(kind, annotated_kind(member)))
+# whether a value of the kind is one of the union's members, as far as the compile knows it: a node is checked when it
+# runs, ø among them; an optional member `text?` takes a text
+fits_union(type: text, kind: ValueKind): bool := union_members(type).any(member => converts(kind, annotated_kind(member.remove_suffix("?"))))
 # the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`, the core's word of
 # a type word's other spelling (`string`, `integer`: type_synonyms); any other word itself
 aliased_type(word: text): text := {

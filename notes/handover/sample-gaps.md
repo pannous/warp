@@ -32,8 +32,17 @@
 6. 2026-10-28 morning: pure-compiled 30486e5e19 (harness: `warp pure` links C imports from warp.c_functions like
    warp-host, one linker in warp_runtime::c_imports; test/ffi 110→87 failing, the rest compile-side), letters-letters
    c9382ea3f5 (c++ steps a character's code point), foo-of-any 10ade6cb89 (`square of number = it*it`; `of` binds
-   tighter than `=` in a phrase), file-global-words 258e6cda68. Cards found: retire-header-linker, sandbox-hello-trap,
-   macos-build-failure (warp-host on macOS).
+   tighter than `=` in a phrase), file-global-words 258e6cda68, raylib-import-failure cdba22378f (`import raylib` loads
+   the native lines), bundled-module 2064325354 (a module slice goes on while a text/bracket is open; slices parse with
+   their module's uses' operators; the lexer reads a quote with combining marks as a quote), paint-shader 3a545a81c4
+   (paint(shader) alone, 5 gpu samples paint), cbrt-refused-pure b0d8489e3d (∛x, cbrt(x)). Sweep before the last
+   four: 98/224. Cards found: retire-header-linker, sandbox-hello-trap, macos-build-failure (warp-host on macOS),
+   paint-shader-dimensions (the program's own width/height).
+   Next groups of the sweep (scratchpad one.sh, 4 at a time): `9 sqrt` / `27 cbrt` postfix and `x.sqrt` method forms
+   trap or are refused (test_postfix_words, test_number_methods); `height * width int` (circle samples, a value after
+   an assignment); byte_slice from emitter (json_parser, calculator); `[1000: "M", …]` int keys (`:` on int and char,
+   arabic-to-roman); `def f(x) = x => …` (y_combinator); `to render text as pdf:` (phrases, return_polymorphism);
+   law (laws samples); get routes (servers); match (matching, parked?); python needs libpython.
 Parked: `on` handlers (user discussing), stored (handler shape), foreign spellings (user audit).
 
 Sweep script: the session scratchpad sweep.sh (each sample with warp pure, 30 s, one at a time); logs in
