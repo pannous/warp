@@ -29,6 +29,24 @@ multiple of its width, the size a multiple of the widest. `Header(…)` (positio
 8, from a bump arena (global 0, from address 16; no memory.grow yet), stores the fields and gives the address; a struct
 value is that pointer, `h.len` loads, `h.len = …` stores.
 
+## The prelude
+lib/primitive.warp is a primitive file's prelude (its words reached as the GC prelude's are; the GC library's typed
+lines are left out, so they make no variants of the file's definitions): WASI's calls as foreign lines (imports of
+`wasi_snapshot_preview1`), `print`, `write`, `text_of(n)`, `arg_count()`, `arg(i)` (the program's path at 0),
+`read_file(path)` (the empty text when it does not open), `write_file(path, content)`, `exit(code)`, and `byte_at`,
+`word_at`, `long_at` (memory read and written as a struct's field). A text is the address of its (address, length) pair,
+the $String layout and a WASI iovec at once; its literals are data in front of the arena. `allocate(bytes)` takes
+memory from the arena. A function declared `: nothing` gives no value.
+
+## Native build
+`warp build native app.warp` (core/commands.warp build_native; Rust only routes the word) compiles the primitive file,
+makes it C with wasm2c (module "program"), writes app.native.main.c (run_main printing main's value by its type) and
+compiles both with cc -O2, wasm2c's runtime (beside the wasm2c on the PATH) and lib/native/wasi.c: libc answering
+fd_write, fd_read, fd_seek, fd_close, path_open (paths of the current folder), args_sizes_get, args_get, proc_exit,
+and main. The executable is `app` beside the file; the intermediate files are removed. Samples: samples/native/ hello,
+arguments, files, fib, structs; test/native/test_native.sh. Under wasmtime (`warp app.warp`) the files sample finds
+no opened folder, so it runs natively only.
+
 ## Not yet (cards)
 - f32 in a primitive function of a GC program (no ValueKind with an f32 wasm type there): refused, card
   f32-primitive-refused.
