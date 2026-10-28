@@ -24,7 +24,7 @@ built(template: text): any := {
 }
 
 # a view with each template in it built: the inside of an opaque type or error
-in_view(view: any): any := {
+in_view(view: View): View := {
 	if kind_of(view) == template_kind { return view_of(built(view#2)) }
 	# a missing value (ø, `size = ø`) stays missing: mapped as an empty list it would become []
 	if view is list and view is not ø { return view.map(in_view) }
