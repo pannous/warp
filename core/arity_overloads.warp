@@ -65,10 +65,12 @@ renamed_target(target: Node, name: text): Node := match target {
 	_: group_like(target, [symbol(name)] + items_of(target)[1 ..])
 }
 
+# `f(a, b)` or the words side by side, `play C4`
+is_call_form(n: Node): bool := is_group(n) and ((bracket_of(n) == "(" and separator_of(n) == "") or (bracket_of(n) == "" and separator_of(n) == " "))
 # the call naming the variant that takes its arguments, `receivers` of them before the dot; the call itself when its
 # name is not overloaded or no single variant takes them
 variant_call(n: Node, overloaded: map, receivers: int): Node := {
-	if not (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 0 and n#1 is symbol) { return n }
+	if not (is_call_form(n) and #n > 0 and n#1 is symbol) { return n }
 	name = name_of(n#1)
 	if name not in overloaded { return n }
 	count = #n - 1 + receivers
@@ -472,8 +474,7 @@ best_first(candidates: list, kinds: list): list := {
 # `f(1.5)`, `f 1.5`: the call of the variant its arguments fit best; a call of a name not overloaded by type as it is
 typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	n = glued_block_call(n, name => name in overloaded)
-	is_call = is_group(n) and ((bracket_of(n) == "(" and separator_of(n) == "") or (bracket_of(n) == "" and separator_of(n) == " "))
-	if not (is_call and #n > 1 and n#1 is symbol) { return n }
+	if not (is_call_form(n) and #n > 1 and n#1 is symbol) { return n }
 	name = name_of(n#1)
 	if name not in overloaded { return n }
 	arguments = items_of(n)[1 ..]

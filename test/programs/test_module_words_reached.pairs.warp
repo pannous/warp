@@ -1,0 +1,7 @@
+# a used module's words reached in every form: a spaced call of an overloaded word, of one with defaults, and a
+# module's global the program assigns
+'use sound; play C4; 1'	1
+'f(a) := a; f(a, b) := a + b; f 3'	3
+'f(a, b = 2) := a + b; x = f 3; x'	5
+'use sound; distortion = 0.8; play(A2, 0.03); distortion'	0.8
+'use sound; tuning = 442; tuning'	442
