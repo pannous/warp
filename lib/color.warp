@@ -1,0 +1,30 @@
+// The standard library module color (decision implicit-standard-words): a color is a number 0xAARRGGBB, the named
+// colors, rgb, hsv, with_alpha and alpha_of; draw paints them
+use math
+black = 0xFF000000
+white = 0xFFFFFFFF
+gray = 0xFF808080
+red = 0xFFFF0000
+green = 0xFF00A000
+blue = 0xFF0000FF
+yellow = 0xFFFFD700
+orange = 0xFFFF8C00
+purple = 0xFF8000C0
+
+// r, g, b from 0 to 255
+rgb(r, g, b) := 0xFF000000 + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)
+// hue in degrees, saturation and value from 0 to 1
+def hsv(h, s, v) {
+	hue = (h % 360) / 60.0
+	c = v * s
+	x = c * (1 - abs(hue % 2 - 1))
+	m = v - c
+	sector = floor(hue) as int
+	r = if sector == 0 or sector == 5 then c else if sector == 1 or sector == 4 then x else 0.0
+	g = if sector == 1 or sector == 2 then c else if sector == 0 or sector == 3 then x else 0.0
+	b = if sector == 3 or sector == 4 then c else if sector == 2 or sector == 5 then x else 0.0
+	rgb((r + m) * 255, (g + m) * 255, (b + m) * 255)
+}
+// alpha from 0 (invisible) to 1 (opaque)
+with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
+alpha_of(color) := color /! 16777216
