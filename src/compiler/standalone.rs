@@ -24,9 +24,6 @@ const RUNTIME_FILE: &str = "runtime.wasm";
 /// modules-prebuilt)
 const MODULES_COMMAND: &str = "modules";
 const MODULES_FOLDER: &str = "modules";
-/// `WARP_MODULES=1`: a rebuild writes the standard modules too (~25 s), until a link appends them; one failing is
-/// said, the rest of the rebuild stands
-const MODULES_SETTING: &str = "WARP_MODULES";
 /// A seed's runtime.wasm, its own beside it (warp-seed.runtime.wasm): what the seed compiles compiler.warp behind,
 /// written by the seed itself (ship_seed), never the runtime of the warp.wasm that shares the seed's folder
 const SEED_RUNTIME_EXTENSION: &str = "runtime.wasm";
@@ -307,6 +304,15 @@ pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	Ok(path)
 }
 
+/// `warp rebuild modules`: the standard modules beside warp.wasm, compiled behind its runtime.wasm (~25 s); a word of
+/// its own until a link appends them, then part of every rebuild (card modules-prebuilt)
+pub fn rebuild_modules() -> Result<PathBuf, Node> {
+	let path = build_path(Compiler::RustCompiled);
+	let folder = path.with_file_name(MODULES_FOLDER);
+	write_modules(Compiler::RustCompiled, &folder, &path.with_file_name(RUNTIME_FILE))?;
+	Ok(folder)
+}
+
 /// The time limit of a rebuild's compiler runs: WARP_REBUILD_TIME_LIMIT seconds when positive, else REBUILD_TIME_LIMIT
 fn rebuild_time_limit() -> std::time::Duration {
 	let seconds =
@@ -459,11 +465,6 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	ship(path, &bytes)?;
 	write_runtime(by, &path.with_file_name(RUNTIME_FILE))?;
-	if std::env::var(MODULES_SETTING).is_ok_and(|setting| setting == "1") {
-		if let Err(failure) = write_modules(by, &path.with_file_name(MODULES_FOLDER), &path.with_file_name(RUNTIME_FILE)) {
-			eprintln!("warp rebuild: the modules not prebuilt: {}", failure.serialize());
-		}
-	}
 	warm(by)?;
 	Ok(module)
 }
