@@ -51,8 +51,8 @@ conversion_codes = {"i64 i32": [167, 167], "i32 i64": [172, 173], "f32 i32": [16
 	"f32 i64": [174, 175], "f64 i64": [176, 177], "i32 f32": [178, 179], "i64 f32": [180, 181], "f64 f32": [182, 182],
 	"i32 f64": [183, 184], "i64 f64": [185, 186], "f32 f64": [187, 187]}
 MEMORY_PAGES = 16
-PAGE_BITS = 16
-PAGE_BYTES = 65536
+WASM_PAGE_BITS = 16
+WASM_PAGE_BYTES = 65536
 memory_size = 63
 memory_grow = 64
 empty_block_type = 64
@@ -672,8 +672,8 @@ arena_taken(size: list): list := {
 }
 # the memory grown by the pages it lacks when the arena's top passed its end (a failed grow traps at the next store)
 arena_grown(): list := {
-	memory_end = [memory_size, 0, op.i32_const, PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shl]
-	missing = [global_get, ARENA_TOP] + memory_end + [op.i32_sub, op.i32_const] + sleb(PAGE_BYTES - 1) + [op.i32_add, op.i32_const, PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shr + 1]
+	memory_end = [memory_size, 0, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shl]
+	missing = [global_get, ARENA_TOP] + memory_end + [op.i32_sub, op.i32_const] + sleb(WASM_PAGE_BYTES - 1) + [op.i32_add, op.i32_const, WASM_PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shr + 1]
 	[global_get, ARENA_TOP] + memory_end + [comparison_codes.i32 + integer_comparisons.gt + 1, op.if, empty_block_type] + missing + [memory_grow, 0, op.drop, op.end]
 }
 
