@@ -45,6 +45,28 @@ pub fn compile_on_one_thread() {
 	COMPILES_ON_ONE_THREAD.store(true, Ordering::Relaxed);
 }
 
+/// Whether an engine made now compiles on all cores: not in a process of many, nor on a machine whose cores are all
+/// busy already (its 1-minute load at the core count or above), where a rebuild's machine code on all cores beside
+/// other sessions' test pools and rebuilds sent the load to 80-150 on 10 cores (card test-oversubscribes-mac)
+#[cfg(feature = "parallel-compilation")]
+fn compiles_in_parallel() -> bool {
+	!COMPILES_ON_ONE_THREAD.load(Ordering::Relaxed) && !machine_is_busy()
+}
+
+#[cfg(all(feature = "parallel-compilation", unix))]
+fn machine_is_busy() -> bool {
+	let mut load = [0f64; 1];
+	// SAFETY: fills at most the one average it is given room for
+	let known = unsafe { libc::getloadavg(load.as_mut_ptr(), 1) } == 1;
+	let cores = std::thread::available_parallelism().map_or(1, |cores| cores.get());
+	known && load[0] >= cores as f64
+}
+
+#[cfg(all(feature = "parallel-compilation", not(unix)))]
+fn machine_is_busy() -> bool {
+	false
+}
+
 /// Engine settings every warp run shares: GC and typed function references. NaNs are canonicalized where they are
 /// observed (floats::canonical_nan, P119), not after every float operation, which doubled the cost of float loops.
 /// Machine code compiled with these settings (`warp compile --aot`, `warp build`) loads into any engine made
@@ -61,7 +83,7 @@ pub fn deterministic_config() -> Config {
 	config.wasm_component_model(false);
 	config.concurrency_support(false);
 	#[cfg(feature = "parallel-compilation")]
-	config.parallel_compilation(!COMPILES_ON_ONE_THREAD.load(Ordering::Relaxed));
+	config.parallel_compilation(compiles_in_parallel());
 	let wasm_stack = wasm_stack_bytes();
 	if wasm_stack > 0 {
 		// wasmtime wants an async stack at least as large; warp makes no async calls, so none is allocated
