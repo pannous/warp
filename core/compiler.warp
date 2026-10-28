@@ -216,7 +216,7 @@ match command {
 	"data": show_data()
 	"lower": show_lowered()
 	"compile": compile_file(args#2, if #args > 2 then args#3 else args#2 + ".wasm", folder_of(args#2))
-	"build": compile_file(args#2, args#2 + ".wasm", folder_of(args#2))
+	"build": if args#2 == NATIVE_WORD and #args > 2 then build_native(args#3, library_folder) else compile_file(args#2, args#2 + ".wasm", folder_of(args#2))
 	"repl": repl()
 	"repl-step": repl_step(args#2, args#3, args#4)
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
