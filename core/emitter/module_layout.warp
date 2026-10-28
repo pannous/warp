@@ -149,8 +149,16 @@ def runtime_sections(functions: list): list {
 	counts = concatenated([#module.gc_order, #module.imports, #functions, #module.global_order, #data_bytes()].map(uleb))
 	names = vector(module.dispatchers.map(f => name_bytes(f.name))) + vector(module.left_out.keys.map(name_bytes))
 	globals = vector(module.global_order.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2))))
-	words = vector(functions.map(f => name_bytes(f.name) + uleb(f.index) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result))))
+	words = vector(functions.map(f => name_bytes(f.name) + uleb(f.index) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result)) + signature_bytes(f.signature)))
 	section(section_ids.custom, name_bytes(runtime_section) + counts + names + globals + words) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
+}
+# a word's signature in warp.runtime, what a call of it reads (named arguments, defaults, a rest parameter, the declared
+# result): each parameter's name, type, flags (rest 1, a default 2) and default, packed; the result as written
+rest_flag = 1
+default_flag = 2
+def signature_bytes(signature: any): list {
+	parameters = signature.parameters.map(p => name_bytes(p.name) + name_bytes(p.type_name) + uleb((if p.rest then rest_flag else 0) + (if p.defaulted_to != ø then default_flag else 0)) + (if p.defaulted_to != ø then name_bytes(pack(p.defaulted_to#1)) else []))
+	vector(parameters) + name_bytes(signature.result)
 }
 # A prebuilt module read back for a link (notes/runtime_linking.md "Relocations"): its relocations, and its code
 # section's content with each relocated operand moved by shifts[space][kind], the one rule for every index space (a

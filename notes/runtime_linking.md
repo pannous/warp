@@ -60,7 +60,9 @@ made_case kind made, since no program decides any more what it makes.
   - `warp.runtime`, the layout, binary so a compile reads it in milliseconds with no parser and no cache (user: "read
     from the WebAssembly modules"): five ulebs G, imports, functions, globals, data size; the hooks' names in
     table-slot order; the left words' names; the globals, each [name, kind]; the words, each [name, index, vector of
-    parameter kinds, result kind]. A name is a uleb length and its UTF-8 bytes, a list a uleb count and its entries, a
+    parameter kinds, result kind, vector of parameters, declared result]. A parameter is [name, type name, flags (rest
+    1, a default 2), the default packed (pack) if flagged]; what a call needs (named arguments, defaults, rest), so a
+    prepended compile neither lowers nor reads the runtime's sources (card runtime-lowering-scope). A name is a uleb length and its UTF-8 bytes, a list a uleb count and its entries, a
     kind its place in prebuilt.warp's held_kinds (Int 0, Float 1, Bool 2, Char 3, I32 4, Text 5, List 6, Node 7,
     Time 8, Nothing 9). Reader: prebuilt.warp ByteReader. The emitter's call_values needs the kinds; a wasm type alone
     can't tell Bool, Int and Char apart.
