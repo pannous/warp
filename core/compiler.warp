@@ -48,6 +48,8 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed
+	# (the standard modules it names words of without their `use`, as if it said them)
+	source = with_implicit_uses(source, library_folder + "/" + MODULES_FOLDER + "/" + WORD_INDEX)
 	# the C functions it calls, its foreign lines left out (c_imports.warp)
 	foreign = c_functions_of(source, library_folder)
 	unknown = foreign#3
@@ -82,6 +84,8 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 # the standard modules the source uses, each prebuilt beside runtime.wasm (`warp rebuild`) and linked behind it
 # when its text is the bundled one; any other compiles from its source (a WARP_LIB edit, a module not prebuilt)
 MODULES_FOLDER = "modules"
+# which standard module defines which word, beside the prebuilt modules (prelude_words.warp word_index)
+WORD_INDEX = "words.tsv"
 linked_libraries(source: text): list := {
 	if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { return [] }
 	folder = folder_of(args#RUNTIME_ARGUMENT) + "/" + MODULES_FOLDER + "/"
@@ -208,6 +212,7 @@ write_modules(folder: text, runtime_file: text) := {
 			write_bytes(file, [])
 		}
 	}
+	write(folder + "/" + WORD_INDEX, word_index_text())
 }
 source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
 show_version() := print version_text(library_folder)

@@ -1,0 +1,8 @@
+# a word of one standard module works without its `use` (decision implicit-standard-words)
+'red == 0xFFFF0000'	true
+'hsv(0, 1, 1) == red'	true
+'A4'	440
+'class C{r:int; f() := r * 2}; C(3).f()'	6
+'c = {red: 3}; c.red'	3
+'transpose([[1, 2]])'	error	a word of two modules needs its `use`
+'use matrix; transpose([[1, 2]])'	[[1], [2]]

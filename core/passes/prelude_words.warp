@@ -361,6 +361,86 @@ global_word_modules(program: Node, own: any, used: list): list := {
 	}
 	modules
 }
+# The standard modules a source uses without saying it (decision implicit-standard-words): the one module defining a
+# word the program names free (never a member's, `c.pi`) that neither it, the prelude nor a module it uses defines,
+# by the index `warp rebuild` writes beside the prebuilt modules (write_word_index); a module's `global` word is its
+# own. A word several modules define fails, naming them. Each one hinted, so that `warp beautify` writes its `use`
+implicit_modules(source: text, index_file: text): list := {
+	index = word_index(index_file)
+	code = code_only(source)
+	candidates = index.keys.filter(word => mentions_word(code, word))
+	if #candidates == 0 { return [] }
+	program = plain_node(parsed(source))
+	own = own_heads(program)
+	bound = names_bound_in(program)
+	classes = declared_classes(program)
+	prelude_names = definition_slices(module_source("prelude")).map(slice => slice#1)
+	used = used_module_sources(statements_in(program), ".", [])#2
+	known = {}
+	for module in used { for slice in definition_slices(file_text(std_module_path(module)) ?? "") { known[slice#1] = yes } }
+	globals = global_words()
+	providers = type_module_providers()
+	free = free_words(program)
+	modules = []
+	for word in candidates.filter(word => word in free and word not in own and word not in bound and word not in classes and word not in prelude_names and word not in known and not is_declared_word(word)) {
+		definers = if word in globals then [globals[word]] else if word in providers then [providers[word]] else index[word]
+		if #definers > 1 { raise word + " is defined by " + definers.join(" and ") + ": say which, " + definers.map(module => "`use " + module + "`").join(" or ") }
+		if definers#1 not in modules and definers#1 not in used {
+			modules += definers
+			diagnose(call_of("implicit_use", [symbol(word), symbol(definers#1)]), program)
+		}
+	}
+	modules
+}
+# the source with a `use` line of each module it uses without saying it, after its last line (no position moves)
+with_implicit_uses(source: text, index_file: text): text := source + implicit_modules(source, index_file).map(module => "\nuse " + module).join("")
+# word → the standard modules defining it, read from the index `warp rebuild` writes (a line `word<TAB>module …`
+# each); none before the first rebuild
+global word_indices = {}
+word_index(file: text): map := {
+	if file not in word_indices {
+		index = {}
+		for line in (file_text(file) ?? "").split("\n") {
+			fields = line.split("\t")
+			if #fields == 2 { index[fields#1] = fields#2.split(" ") }
+		}
+		word_indices[file] = index
+	}
+	word_indices[file]
+}
+# the index of the words each standard module defines but the prelude, as word_index reads it: a word of letters
+# (`red`, `minute`), no operator or made name
+word_index_text(): text := {
+	definers = {}
+	for module in std_module_names.filter(name => name != "prelude") {
+		for slice in definition_slices(file_text(std_module_path(module)) ?? "") {
+			word = slice#1
+			if word is text and #word > 0 and is_name_start(word[0]) and not word.contains(name_joiner) {
+				known = definers.get(word) ?? []
+				if module not in known { definers[word] = known + [module] }
+			}
+		}
+	}
+	definers.keys.map(word => word + "\t" + definers[word].join(" ")).join("\n")
+}
+# the names a program says free, as a value or a call: never a member's, `c.pi` names c, `xs.f(a)` xs and a
+free_words(n: Node): map := {
+	found = {}
+	waiting = [n]
+	at = 1
+	while at <= #waiting {
+		part = waiting#at
+		at += 1
+		if part is symbol { found[name_of(part)] = yes }
+		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }
+		else if is_key(part, Op.Dot) { waiting += [key_of(part)] + member_arguments(value_of(part)) }
+		else if part is key { waiting += [key_of(part), value_of(part)] }
+		else if is_group(part) { for item in part { waiting += [item] } }
+	}
+	found
+}
+# the arguments of a method called on a receiver, `f(a)` of `xs.f(a)`; none of a field `c.pi`
+member_arguments(member: Node): list := if is_group(member) and bracket_of(member) == "(" and #member > 0 then items_of(member)[1 ..] else []
 # the program with a `use` of each module in front of it
 with_module_uses(program: Node, modules: list): Node := {
 	if #modules == 0 { return program }
