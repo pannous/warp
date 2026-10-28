@@ -19,7 +19,6 @@ use "driver.warp"
 
 setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
 unsetenv(name: pointer): i32 from "c"
-realpath(path: pointer, resolved: pointer): handle from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 fork(): i32 from "c"
 waitpid(child: i32, status: pointer, options: i32): i32 from "c"
@@ -134,16 +133,11 @@ words(module: text, a: text, b: text, c: text, d: text, e: text): Arguments := {
 }
 # the path with its links resolved (lib/compiler links to core): a compile's folder is the real one
 real_path(path: text): text := {
-	resolved = realpath(c_string(path), 0)
-	if resolved == 0 {
+	if access(c_string(path), READABLE) != 0 {
 		complain(joined("no file ", path))
 		exit(1)
 	}
-	length = strlen(resolved)
-	copy = allocate(length as i32)
-	memcpy(copy, resolved, length)
-	free(resolved)
-	text_from(copy, length as u32)
+	resolved_path(path)
 }
 # `warp repl`, the console: each line compiled by warp.wasm's repl-step after the lines that stayed (declarations,
 # uses: its state file), then run, in a child process of its own, so a line that fails ends only its child
@@ -189,6 +183,8 @@ is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).le
 # `run` and `pure` say what the bare words do, `self` names warp-self.wasm as the compiler
 prefixed = arg_count() > 1 and (same_text(arg(1), "run") or same_text(arg(1), "pure") or same_text(arg(1), "self"))
 first = if prefixed then 2 else 1
+# warp.wasm's own commands (build) read the same lib/ as this executable
+setenv(c_string("WARP_LIB"), c_string(library_folder()), 0)
 compiler = if prefixed and same_text(arg(1), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path()
 if arg_count() <= first {
 	if not prefixed and isatty(STDIN) != 0 { console(compiler) } else {
