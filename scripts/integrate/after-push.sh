@@ -169,6 +169,9 @@ watch() {
 	pushed=$(git -C "$TREE" log --first-parent --format=%s "$since..$tip" | head -5 | paste -sd ';' -)
 	echo "$tip" >"$state/handled"
 	harness_current || install_harness || return 1
+	# warp's wasmtime C API beside warp and in the user's lib/, where native builds link it from (card wasmtime-bundled)
+	"$scripts/wasmtime-c-api.sh" "$(dirname "$(readlink -f "$MAIN_WARP")")" "$MAIN_CHECKOUT/lib" ||
+		red "wasmtime C API: scripts/wasmtime-c-api.sh failed" --urgent
 	"$scripts/rebuild.sh" both "$TREE" || { red "rebuild pure failed" --urgent; return 1; }
 	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
