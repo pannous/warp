@@ -8,8 +8,8 @@
 # usage: scripts/refresh-seed.sh [--check] [<tree>, default this checkout]   (--check: run the stages, replace nothing)
 # A new seed replaces warp-seed.wasm beside the binary (WARP_SEED names another) and is published as the asset of a
 # GitHub pre-release seed-<date>-<sha8>, where the release workflow and fresh installs fetch it.
-# WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~17-20 min on the Mac: run it
-# in the background. The bytes depend on where lib/ lies (compiler.warp keeps its folder), so
+# WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~1.5-2.5 min on the Mac (2026-10-28:
+# A 88 s, B 126 s, C 139 s, the whole refresh with its speed guard ~10 min): run it in the background. The bytes depend on where lib/ lies (compiler.warp keeps its folder), so
 # a seed refreshed in another tree differs in that path alone.
 set -u
 STAGES=${WARP_SEED_STAGES:-A B C}
