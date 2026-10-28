@@ -41,11 +41,13 @@ MVP wasm.
    stub that executable-prints-value reconnects in the meantime.
 4. **Results without gc_traits**: compiled programs print their own value (card rust-bootstrap, "a standalone
    executable needs the program compiled to print its value"), so the native host never reads GC objects back.
-5. **Host words move to lib/**: the files, time, ffi, web, graphics and sound words in src/ (~20k lines) become warp
-   libraries that call C libraries (libc, raylib/wgpu-native, CoreAudio) through FFI. The bulk of src/ stays in
-   warp.wasm as ordinary GC warp, not in the primitive harness.
+5. **Core host words**: what the core binary itself needs (files, processes, args/env, time, the sandbox, C calls)
+   becomes warp calling libc through FFI. Libraries are not the core binary (user, decision libraries-not-core):
+   graphics, sound, web, database, fetch, MIDI and the extensions are each a warp library (lib/) calling its C library
+   (raylib/wgpu-native, CoreAudio, sqlite, …), loaded only when a program uses it, each its own card, none blocking 6.
 6. **Switch-over**: `warp test` (pure_tests.rs) runs on the native host, the native binary replaces ~/dev/bin/warp
-   when the full suite matches, and src/ goes to a `rust-harness` snapshot branch (the same way as rust-bootstrap).
+   when the core tests match (library tests follow their library's card), and src/ goes to a `rust-harness` snapshot
+   branch (the same way as rust-bootstrap).
 
 ## Open
 - The user decision of 2026-10-23 ("a fully native no-Rust/no-wasmtime host is not a goal") is revisited: wasmtime
