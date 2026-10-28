@@ -92,7 +92,7 @@ made_case kind made, since no program decides any more what it makes.
   their heads only (prelude_words.warp declared_only: `f(x) := ø`), from the slice parses baked into the compiler, so
   nothing of their bodies is lowered or analyzed; the analyzer takes their kinds and results from warp.module
   (analyzer.warp declared_linked), the emitter binds them and refuses to compile one (functions.warp). Its classes and
-  globals come whole (linked_needs), the program runs the globals' initializers. A module whose binding fails is said
+  globals come in (linked_needs), a class with its methods declared alike, its fields whole; the program runs the globals' initializers. A module whose binding fails is said
   on stderr ("units: the linked module didn't bind (…); compiled from source") and the program compiled from source.
   No separate warp.declarations section: the compiler already carries every bundled module's parse.
 - Modules have no hooks of their own: a module's class (units) is a class of the linked program, its text() and ==
