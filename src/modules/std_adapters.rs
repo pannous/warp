@@ -144,9 +144,7 @@ fn file(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("write", [path, text]) => write_file(&path_of(path)?, content_of(text)),
 		("write_bytes", [path, bytes]) => write_file(&path_of(path)?, bytes_of(bytes)?),
-		("read_bytes", [path]) => std::fs::read(path_of(path)?)
-			.map(|bytes| list_of(bytes.into_iter().map(|byte| Node::int(byte.into()))))
-			.map_err(said),
+		("read_bytes", [path]) => std::fs::read(path_of(path)?).map(byte_list).map_err(said),
 		("append", [path, text]) => {
 			use std::io::Write;
 			let path = path_of(path)?;
@@ -257,8 +255,17 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			let command: Vec<String> = command.as_items().iter().map(content_of).collect();
 			executed(&command).map(Node::Text)
 		}
+		// `precompile(module bytes)`: its machine code for warp-runtime's engine, which an executable carries (warp build)
+		#[cfg(feature = "native")]
+		("precompile", [module]) => precompiled(&bytes_of(module)?).map(byte_list),
 		_ => shell_adapters::os(member, arguments),
 	}
+}
+
+#[cfg(feature = "native")]
+fn precompiled(module: &[u8]) -> Result<Vec<u8>, String> {
+	let engine = warp_runtime::standalone::standalone_engine().map_err(said)?;
+	crate::run::module_cache::compiled_module(&engine, module).and_then(|compiled| compiled.serialize()).map_err(said)
 }
 
 /// The value kept under `name` (os.keep) while warp and its lib/ stay as they are: a value a program computes the same
@@ -523,6 +530,10 @@ pub(crate) fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 /// A list of texts
 pub(crate) fn texts(items: impl IntoIterator<Item = String>) -> Node {
 	list_of(items.into_iter().map(Node::Text))
+}
+
+fn byte_list(bytes: Vec<u8>) -> Node {
+	list_of(bytes.into_iter().map(|byte| Node::int(byte.into())))
 }
 
 pub(crate) fn list_of(items: impl IntoIterator<Item = Node>) -> Node {
