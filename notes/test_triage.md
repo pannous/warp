@@ -19,6 +19,9 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/text/test_text_type_words.pairs.warp:12, 13 | π | 3.141592653589793 | `π as float` is the float, not the exact π |
 | test/lists/test_min_max.pairs.warp:20 | 2 | 6 | `min(a,b):=a*b` is the program's own min, which wins over the prelude's |
 | test/lists/test_lists.pairs.warp:61, 68, 72, 81 | [1, 2, 3] / ['a', 'b', 'c'] | 3 / 'c' | `;` separates statements: `(1;2;3)` and `{a;b;c}` give their last, as `a;b;c` gives 'c' (line 73) |
+| test/types/test_one_dispatch.pairs.warp:53, 60, 63 | 'A' / yes / 3 | "U" / no / 7 | the program's own `upper`, `add`, `sum` win over the prelude's, as `min` in lists |
+| test/types/test_dispatch.pairs.warp:7 | yes | no | `def sort(x):=0` is the program's own sort, as above |
+| test/types/test_time_type_names.pairs.warp:4, 5 | "instant" | "class Instant" | type(…) shows a class, as type(π) is "class Real" |
 
 ## Held (esoteric)
 
@@ -49,6 +52,8 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/control/test_cell_truth.pairs.warp:4, 5, 6, 9, 10 | internal cell_new/cell_get API, not a language form | delete? |
 | test/control/test_text_patterns.pairs.warp:25-31 | internal text_holes helper; text patterns are tested by the match lines | delete? |
 | test/control/test_value_methods_are_functions.pairs.warp:5 | methods picked by position (fs#4), an order nobody promises | delete? |
+| test/types/test_kind_marks.pairs.warp:4-9, 12-14, 17-20, 23, 24 | kind_number/kind_info/kind_mark expose the internal kind bits, a layout test | delete? |
+| test/types/test_real_text.pairs.warp:4, 5, 7, 10 | symbolic surds, √2 printed as "√2" | |
 
 ## Gap groups (cards)
 
@@ -194,3 +199,39 @@ Questions for 10:00 (forms nobody has decided are wanted, per tests-serve-the-la
 - `undo x` / `redo x` history for every variable (test_undo_history, 10 lines).
 - `on error of f { 0 }`, a handler attached to a function's failures (test_on_error_of_function, 7 lines).
 - Fixed mouse values in tests, `mouse_x * 100 + mouse_y` → 1207 (test_system_values:26, 27): is there a stubbed pointer, or should these go?
+
+### types (733 lines)
+Silently wrong:
+- `Person{name:"A" hobbies:[1 2]}.name` gives "Person": the tag name shadows the field (test_tagged_objects:4).
+- `F#4` on a class with `index(o)` gives 503: the 1-based index reaches the method as 3 (test_class_index_operator:4).
+- `int 3.7 == 3` gives 0 (test_nested_type_calls:15).
+- `class Bag{items}; def sum(b:Bag):=7; sum([1,2])` gives 7: a typed overload hides the prelude's sum for lists (test_dispatch:15).
+- A class's `text()`, `toString()`, `to_s()` and `equals(o)` aren't used by `as text`, printing in lists, `==` or `in`
+  (test_class_witnesses:5, 6, 10, 12; test_printable_items; test_instance_final_text; test_trait_equals_membership).
+- `use json; to_json(Point(1, 2))` wraps each object in its class name, `{"Point":{"x":1,"y":2}}` (test_class_json, 16 lines).
+- `ps.copy()` shares the instances: `qs#1.x = 9` changes p (test_copies.warp:4).
+- `p.f = 5` on a class with an external `f(p: P, v)` setter, and property `set` blocks, do nothing (test_class_properties, test_one_dispatch:19).
+- `xs: floats = [1/3, 2]; xs[0] is float` gives no: declared floats keep the exact ratio (test_number_converts:4, 7, 9).
+- `names: texts = ["hi"]; ys.add(1)` adds an int to a texts list (test_declared_list_marks.warp:4).
+
+Groups:
+- Dates, times, durations and zones as values: "a data". About 100 lines (duration_comparison, time_values_at_run_time,
+  time_zones_at_run_time, time_variables, time_now, date_arithmetic_at_run_time, partial_time_comparisons): card triage-time-values.
+- Type values and aliases: `class int == int`, `type(ø) == empty`, `integer == int`, `type(now) == instant`, `type([…])`. About 50 lines
+  (empty_type_aliases, bare_class, type_tests, types, type_alias_fields).
+- Declarations without a value and sized arrays: `x : int`, `x: [int] = …`, `int[3]`, `typed arrays` ("an assignment to `… : …`",
+  "unknown name x"). About 60 lines (array_types, typed_arrays, declaration_without_value, sized_array_values, collection_declarations).
+- Traits and interfaces: `trait`, `interface`, default methods, conformance, `Comparable`. About 30 lines.
+- Sum types, enums and destructuring in match: "no case for value". About 25 lines (class_destructuring, sum_types, tagged_unions, enum_cases, variant_payloads).
+- `type(f)` as a signature, "function: (x) -> int", instead of "class function". About 15 lines here, more in control.
+- Code as a type: `code` values and methods on them, "a function value in .". 13 lines (test_code_type).
+- Checked results `def f() -> int or error`, union returns. About 20 lines.
+- `===` identity on ints and lists, `same`. About 15 lines (same_identity, passed_list_identity).
+- Classes: mixins, extension methods, `this`, class forms and cases from the Rust port, generic classes, recursive fields. About 60 lines.
+- `flags`, `hex(…)`, `double(…)`, `x :: int`, `as` on int, bool + int. About 35 lines.
+
+Questions for 10:00:
+- `s = "a"; s++` → "a1" (test_chained_assignments:10): increment a text by appending 1? Today it gives "b".
+- `x is number 9` → yes, "is a number and equals 9" (test_is_declaration:7, 9).
+- `b = byte 65; text(b)` → "0x41" (test_type_calls:11): bytes print in hex?
+- `to_json` of a class: plain fields `{"x":1,"y":2}` as the tests expect, or tagged with the class name as now?
