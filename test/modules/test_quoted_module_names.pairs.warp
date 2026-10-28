@@ -1,0 +1,4 @@
+# a quoted module name without an extension is the bare one: `use "list"` is `use list` (card use-list-traps)
+'use "list"; 1'	1
+'use "list"; count(unique([1, 1, 2]))'	2
+'use "math"; floor(2.5)'	2

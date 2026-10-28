@@ -37,9 +37,9 @@ fi
 
 cd $worktree || exit 1
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
-# the compilers of the branch's lib/: warp.wasm (`warp pure`, built by the seed) and, when promoted, warp-self.wasm
-# (`warp self`, warp.wasm once it compiles itself: scripts/promote-self.sh, no part of this check); a lib/ that passed self alone
-# broke main's `warp rebuild pure` twice on 2026-10-22
+# the compilers of the branch's lib/: warp.wasm (`warp pure`, built by the seed) and warp-self.wasm (`warp self`,
+# warp.wasm once it compiles itself, self_lane below); a lib/ that passed self alone broke main's `warp rebuild pure`
+# twice on 2026-10-22
 check_lane() {
   said=$($warp $1 samples/hello/hello.warp 2>&1 | tail -1)
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp $1 hello said: $said"; return 1; }
@@ -80,11 +80,12 @@ check_host() {
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp-host $* hello said: $said"; return 1; }
   verdict="SELF CHECK ok: $said"
 }
-# the self lane only when there is a promoted warp-self.wasm (`warp version` names a missing one)
+# the self test itself (AGENTS.md "Testing"): warp.wasm compiles compiler.warp and that build, promoted to warp-self.wasm,
+# runs hello; a warp-self.wasm of these inputs in lib/ or the store is taken as it is (scripts/rebuild.sh self). Red
+# when the compile fails: the self lane was red unnoticed for hours while it was skipped here (card self-check-compile)
 self_lane() {
-  if [[ ! -f $worktree/lib/warp-self.wasm && ! -f $scratch/warp-self.wasm ]]; then
-    print -r -- "self-check: no warp-self.wasm: self lane skipped (scripts/promote-self.sh)"; return 0
-  fi
+  said=$(WARP_BINARY=$warp WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} $worktree/scripts/rebuild.sh self $worktree 2>&1) || {
+    verdict="SELF CHECK RED: warp.wasm does not compile compiler.warp: $(print -r -- $said | tail -2 | cut -c1-400)"; return 1; }
   check_lane self
 }
 check_lane pure && self_lane && { [[ ! -x $host ]] || { check_host --compiler full run && check_host run; }; }
