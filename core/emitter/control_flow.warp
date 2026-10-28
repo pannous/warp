@@ -98,17 +98,28 @@ continued_safely(test: Node, parts: list): bool := {
 # statements too (no value boxed for nothing)
 def effect(body: Body, n: Node): list {
 	if is_group(n) {
-		if not is_code_block(n) { return dropped(statement(body, n)) }
+		if not is_code_block(n) or is_lowered_try(n) { return discarded(body, statement(body, n), n) }
 		return effects(body, items_of(n))
 	}
-	if not (type(n) is key) { return dropped(statement(body, n)) }
+	if not (type(n) is key) { return discarded(body, statement(body, n), n) }
 	operator = op_of(n)
 	left = key_of(n)
 	if operator == Op.Then and is_key(left, Op.If) { return conditional_effect(body, right_of_if(left), value_of(n), ø, no) }
 	if operator == Op.Else and is_key(left, Op.Then) and is_key(key_of(left), Op.If) { return conditional_effect(body, right_of_if(key_of(left)), value_of(left), value_of(n), yes) }
 	if operator == Op.Do and is_key(left, Op.While) { return loop_code(body, value_of(left), value_of(n), -1) }
-	dropped(statement(body, n))
+	discarded(body, statement(body, n), n)
 }
+# a statement's value dropped (decision dropped-error-raises): an Error raises, its message stopping the run, but the
+# value of an assignment or definition is kept, a try's is the one it caught, and a runtime word drops its own on purpose
+kept_value_ops = ["=", ":=", ":"]
+def discarded(body: Body, value: TypedCode, n: Node): list {
+	kept = body.function.is_runtime or (type(n) is key and op_of(n) in kept_value_ops) or is_lowered_try(n)
+	if value.kind != ValueKind.Node or kept { return dropped(value) }
+	# the statement's place again, which the words it called moved on: the raise names where the Error was dropped
+	dropped(runtime_call("dropped_value", [TypedCode(value.kind, value.code + position_code(body, n))]))
+}
+# what tries.warp lowers a try to: (try·finished = ran·without·error({…}); …)
+def is_lowered_try(n: Node): bool := is_group(n) and #n > 0 and is_key(n#1, Op.Assign) and mentions(value_of(n#1), HiddenWord.RanWithoutError as text)
 # an if run for its effect, a branch the kinds rule out not compiled (as conditional)
 def conditional_effect(body: Body, test: Node, yes_branch: Node, no_branch: Node?, has_else: bool): list {
 	c = condition_of(body, test, 0)
