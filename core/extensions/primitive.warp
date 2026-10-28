@@ -51,6 +51,11 @@ conversion_codes = {"i64 i32": [167, 167], "i32 i64": [172, 173], "f32 i32": [16
 	"f32 i64": [174, 175], "f64 i64": [176, 177], "i32 f32": [178, 179], "i64 f32": [180, 181], "f64 f32": [182, 182],
 	"i32 f64": [183, 184], "i64 f64": [185, 186], "f32 f64": [187, 187]}
 MEMORY_PAGES = 16
+PAGE_BITS = 16
+PAGE_BYTES = 65536
+memory_size = 63
+memory_grow = 64
+empty_block_type = 64
 # a struct value is the address of its fields in linear memory, taken from a bump arena that starts behind the data of
 # the text literals (address 0 stays the null pointer); its fields laid out as C does, each at a multiple of its width
 POINTER_TYPE = "pointer"
@@ -99,6 +104,9 @@ global primitive_place = ""
 # the bytes of the text literals from DATA_START on, and each text's address there
 global primitive_data = []
 global text_addresses = {}
+# the file's constants: each top-level name given a number literal once, which every function and main read as that
+# literal
+global primitive_constants = {}
 # whether the module is compiled for a native build (commands.warp build_native), the only one that answers C calls:
 # warp's own host would answer them with its GC conventions, wrongly
 global native_build = no
@@ -130,18 +138,34 @@ primitive_module(source: text, folder: text): list := {
 		if foreign_import(n) != ø { declare_import(foreign_import(n)) }
 	}
 	for imported in c_functions { declare_c_function(imported#1, imported#2) }
+	primitive_constants = constants_of(statements)
 	main_statements = []
 	for n in statements.filter(n => not struct_declared(n) and foreign_import(n) == ø) {
 		head = function_head(n)
-		if head == ø { main_statements += [n] } else if not forwards_to_library(name_of(head#1), value_of(n)) { declare_primitive(head, value_of(n)) }
+		if head == ø { if not defines_constant(n) { main_statements += [n] } } else if not forwards_to_library(name_of(head#1), value_of(n)) { declare_primitive(head, value_of(n)) }
 	}
-	main = PrimitiveFunction("main", [], [], ø, List(main_statements, Bracket.Curly, Separator.Semicolon), #primitive_functions)
+	main = PrimitiveFunction("main", [], [], ø, with_constants(List(main_statements, Bracket.Curly, Separator.Semicolon), []), #primitive_functions)
 	primitive_functions["main"] = main
 	functions = primitive_functions.keys.map(name => primitive_functions[name])
 	for f in functions { emit_primitive(f) }
 	primitive_bytes(functions)
 }
 
+# `STDERR = 2`: [name → literal] of the statements assigning a name a number, those of names assigned once
+constants_of(statements: list): map := {
+	assigned = statements.filter(n => is_key(n, Op.Assign) and key_of(n) is symbol).map(n => name_of(key_of(n)))
+	found = {}
+	for n in statements {
+		if is_key(n, Op.Assign) and key_of(n) is symbol and (value_of(n) is int or value_of(n) is float) and #assigned.filter(name => name == name_of(key_of(n))) == 1 { found[name_of(key_of(n))] = value_of(n) }
+	}
+	found
+}
+defines_constant(n: Node): bool := is_key(n, Op.Assign) and key_of(n) is symbol and name_of(key_of(n)) in primitive_constants
+# the body with each constant read as its literal, but where a parameter of that name hides it
+with_constants(body: Node, parameters: list): Node := {
+	for constant in primitive_constants.keys.filter(name => name not in parameters) { body = renamed(body, constant, primitive_constants[constant]) }
+	body
+}
 # `add·list·any(value·1: list, value·2: any) := {add(value·1, value·2)}`, the variant arity_overloads.warp makes of a
 # library word beside a definition of the file: primitive code reaches no library word, so it is left out (a call of
 # it is refused as any unknown call)
@@ -170,7 +194,12 @@ declare_import(foreign: list) := {
 	parameters = head[1 ..< #head]
 	result = if foreign#2 == ø then NO_VALUE else primitive_type_name(foreign#2)
 	name = name_of(head#1)
+	if foreign#3 != WASI_LIBRARY { native_only(name, foreign#3, place_text(written_at(head#1), module.program_file)) }
 	primitive_functions[name] = PrimitiveFunction(name, parameters.map(p => name_of(key_of(p))), parameters.map(p => primitive_parameter_type(p)), result, ø, #primitive_functions, foreign#3)
+}
+# a C function's import, refused but in a native build: warp's own host would answer it with its GC conventions, wrongly
+native_only(name: text, library: text, place: text) := {
+	if not native_build { throw "primitive mode cannot emit " + name + " from '" + library + "' but in a native build: a primitive file's C calls run by `warp build native`" + place }
 }
 
 # `import strlen from "c"`: each line of lib/c.warp or lib/math.warp it names, read as a GC program reads it
@@ -193,7 +222,7 @@ c_imported(lines: list): list := {
 }
 # a catalog line's [name, library, parameter types, parameter names, result type] as an import of the module
 declare_c_function(d: list, line: int) := {
-	if not native_build { throw "primitive mode cannot emit " + d#1 + " from '" + d#2 + "' but in a native build: a primitive file's C calls run by `warp build native`" + place_text([line, 1], module.program_file) }
+	native_only(d#1, d#2, place_text([line, 1], module.program_file))
 	refused = (d#3 + [d#5]).filter(type => type not in c_primitive_types)
 	if #refused > 0 { throw "primitive mode cannot emit " + d#1 + "'s " + refused#1 + place_text([line, 1], module.program_file) }
 	primitive_functions[d#1] = PrimitiveFunction(d#1, d#4, d#3.map(type => c_primitive_types[type]), c_primitive_types[d#5], ø, #primitive_functions, d#2)
@@ -203,7 +232,8 @@ declare_primitive(head: list, body: Node) := {
 	name = name_of(head#1)
 	parameters = head[1 ..< #head]
 	types = parameters.map(p => primitive_parameter_type(p))
-	f = PrimitiveFunction(name, parameters.map(p => name_of(key_of(p))), types, primitive_result(body), giving_body(body), #primitive_functions)
+	names = parameters.map(p => name_of(key_of(p)))
+	f = PrimitiveFunction(name, names, types, primitive_result(with_constants(body, names)), giving_body(with_constants(body, names)), #primitive_functions)
 	primitive_functions[name] = f
 }
 # `struct Header { len: u32; tag: u8 }` (or `class`), which the passes leave as the opaque view ["type", name, body]:
@@ -248,8 +278,8 @@ primitive_result(body: Node): any := {
 	if declared == ø or (declared is symbol and name_of(declared) in nothing_words) { return NO_VALUE }
 	primitive_type_name(declared)
 }
-# (the passes leave `: nothing` as ø)
-nothing_words = ["nothing", "void"]
+# (the passes leave `: nothing` as ø, and the result of a body ending in an `if` without `else` as ø?)
+nothing_words = ["nothing", "void", "ø?"]
 # `the result: T = e`, else ø
 result_declaration(body: Node): any := {
 	first = if is_group(body) and #body > 0 then body#1 else ø
@@ -485,12 +515,21 @@ mvp_wider(a: text, b: text): text := if mvp_widens(a, b) then b else a
 mvp_emitted_type(f: PrimitiveFunction, n: Node): text := mvp_emitted(f, n, "").type
 
 mvp_arithmetic(f: PrimitiveFunction, n: Node, operation: text, expected: text): PrimitiveCode := {
+	if operation in pointer_operations and POINTER_TYPE in [mvp_emitted_type(f, key_of(n)), mvp_emitted_type(f, value_of(n))] { return mvp_pointer_arithmetic(f, n, operation) }
 	type = mvp_operand_type(f, key_of(n), value_of(n), expected)
 	if type == BOOL_TYPE and operation in ["and", "or", "xor"] { type = BOOL_TYPE }
 	table = if mvp_is_float(type) then float_arithmetic else integer_arithmetic
 	if operation not in table { primitive_refusal(n, "`" + operation + "` of " + type + "s") }
 	code = mvp_typed(f, key_of(n), type) + mvp_typed(f, value_of(n), type)
 	PrimitiveCode(type, code + [mvp_operation_code(arithmetic_codes, table, operation, type)])
+}
+# `p + i * 8`: a pointer moved by any integer, as C moves it, the integer cut to the pointer's width
+pointer_operations = ["add", "sub"]
+mvp_pointer_arithmetic(f: PrimitiveFunction, n: Node, operation: text): PrimitiveCode := {
+	operands = [key_of(n), value_of(n)].map(side => mvp_emitted(f, side, POINTER_TYPE))
+	if operands.any(given => mvp_is_float(given.type)) { primitive_refusal(n, "a pointer moved by a float") }
+	code = operands.map(given => mvp_cast(given, POINTER_TYPE).code).flatten()
+	PrimitiveCode(POINTER_TYPE, code + [mvp_operation_code(arithmetic_codes, integer_arithmetic, operation, POINTER_TYPE)])
 }
 mvp_compared(f: PrimitiveFunction, left: Node, operation: text, right: Node): PrimitiveCode := {
 	type = mvp_operand_type(f, left, right, "")
@@ -629,7 +668,13 @@ memory_argument(field: list): list := uleb(alignment_exponents[mvp_scalar(field#
 # to ARENA_ALIGNMENT
 arena_taken(size: list): list := {
 	rounded = size + [op.i32_const] + sleb(ARENA_ALIGNMENT - 1) + [op.i32_add, op.i32_const] + sleb(-ARENA_ALIGNMENT) + [op.i32_and]
-	[global_get, ARENA_TOP, global_get, ARENA_TOP] + rounded + [op.i32_add, global_set, ARENA_TOP]
+	[global_get, ARENA_TOP, global_get, ARENA_TOP] + rounded + [op.i32_add, global_set, ARENA_TOP] + arena_grown()
+}
+# the memory grown by the pages it lacks when the arena's top passed its end (a failed grow traps at the next store)
+arena_grown(): list := {
+	memory_end = [memory_size, 0, op.i32_const, PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shl]
+	missing = [global_get, ARENA_TOP] + memory_end + [op.i32_sub, op.i32_const] + sleb(PAGE_BYTES - 1) + [op.i32_add, op.i32_const, PAGE_BITS, arithmetic_codes.i32 + integer_arithmetic.shr + 1]
+	[global_get, ARENA_TOP] + memory_end + [comparison_codes.i32 + integer_comparisons.gt + 1, op.if, empty_block_type] + missing + [memory_grow, 0, op.drop, op.end]
 }
 
 # the address of a text literal's (address, length) pair in the data, its bytes in front of it; each text once
@@ -713,8 +758,11 @@ c_libraries(foreign: list): list := {
 	for f in foreign { if f.library not in found { found += [f.library] } }
 	found
 }
-# the C name wasm2c gives a module or an import of it: w2c_wasi__snapshot__preview1, w2c_c_getenv
+# the C name wasm2c gives a module, its underscores doubled: w2c_wasi__snapshot__preview1; an import of it is that, "_"
+# and the function's name: w2c_c_getenv
 wasm2c_name(module_name: text): text := "w2c_" + module_name.replace("_", "__")
+# an import's name as wasm2c writes it: a leading underscore escaped (_NSGetExecutablePath → 0x5FNSGetExecutablePath)
+wasm2c_function_name(name: text): text := if name.starts_with("_") then "0x5F" + name.remove_prefix("_") else name
 # what run_main prints of each kind of value main gives
 printed_main = {"": "w2c_program_main(program);", signed: "printf(\"%lld\\n\", (long long)w2c_program_main(program));",
 	unsigned: "printf(\"%llu\\n\", (unsigned long long)w2c_program_main(program));", float: "printf(\"%g\\n\", (double)w2c_program_main(program));"}
@@ -737,7 +785,7 @@ c_function_glue(f: PrimitiveFunction): text := {
 		texts.map(i => "char* text" + i + " = native_text(&library->wasi, value" + i + ")") +
 		[if f.result == NO_VALUE then call else result + " result = " + call] + texts.map(i => "free(text" + i + ")") +
 		(if f.result == NO_VALUE then [] else ["return " + module_value(f.result, "result")])
-	(if f.result == NO_VALUE then "void" else wasm2c_types[mvp_wasm_of(f.result)]) + " " + wasm2c_name(f.library) + "_" + written_name(f.name).replace("_", "__") +
+	(if f.result == NO_VALUE then "void" else wasm2c_types[mvp_wasm_of(f.result)]) + " " + wasm2c_name(f.library) + "_" + wasm2c_function_name(written_name(f.name)) +
 		"(" + parameters.join(", ") + ") {\n" + body.map(line => "\t" + line + ";\n").join("") + "}\n"
 }
 wasm2c_types = {i32: "u32", i64: "u64", f32: "f32", f64: "f64"}

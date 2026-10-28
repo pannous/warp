@@ -106,12 +106,19 @@ build_native(source_file: text, library: text) := {
 	runtime = wabt + WASM2C_RUNTIME
 	shell("wasm2c " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
 	files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
-	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + native_links())
+	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + native_links(wabt))
 	shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
 	print "built " + executable
 }
-# -l of each C library the program imports beside libc and libm
-native_links(): text := c_libraries(c_functions_imported()).filter(l => l not in c_and_m).map(l => " -l" + l).join("")
+# -l of each C library the program imports beside libc and libm, found among the libraries of the wabt's prefix
+# (/opt/homebrew/lib) or the system's
+native_links(wabt: text): text := {
+	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
+	if #libraries == 0 then "" else " -L" + quoted_path(wabt + "/lib") + libraries.map(l => " -l" + l).join("")
+}
 quoted_path(path: text): text := "\"" + path + "\""
 # os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
-shell(line: text): text := std_io("os", "command", [line])
+shell(line: text): text := {
+	printed = std_io("os", "command", [line])
+	if printed is text then printed else raise "`" + line + "` failed: " + printed
+}
