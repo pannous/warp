@@ -20,7 +20,7 @@
 pure_command() {
 	case $1 in
 		run) echo run_file ;;                                     # warp run f.warp [-- args]
-		pure | self) echo run_with ;;                             # warp pure f.warp, warp self f.warp: through warp.wasm, warp-self.wasm
+		pure | self) echo run_with ;;                             # warp self f.warp through warp-self.wasm; warp pure f.warp, the alias of plain warp, through warp.wasm
 		compile) echo compile_module ;;                           # warp compile --wasm f.warp
 		rebuild) echo rebuild_pair ;;                             # warp rebuild [pure|self]: scripts/rebuild.sh of the checkout
 		test) echo run_tests ;;                                   # warp test …: the test runner

@@ -1,6 +1,6 @@
 //! `warp test [folder…]` (card warp-test-runner, decision warp-is-tests, notes/is_tests.md): the test files under the
 //! folders (default test/), `*.pairs.warp` and the `is!` lines of `test_*.warp`, run by the installed binary through
-//! `warp pure` (`--self`: `warp self`), no cargo. Each test runs as its own program in a child process,
+//! warp.wasm (`--self`: `warp self`), no cargo. Each test runs as its own program in a child process,
 //! `warp test --case <pure|self> <file> <index>`, so a hang, trap or crash fails only its own test; the children run in
 //! parallel, their verdicts print in file order (`--each`: a line for every test, to diff two compilers' runs).
 use crate::compiler::standalone::{prepare, run_code, Compiler};
@@ -221,7 +221,7 @@ fn read_in_background(mut pipe: impl std::io::Read + Send + 'static) -> std::thr
 	})
 }
 
-/// `warp test --case <pure|self> <file> <index>`, in the child: the case's code run through `warp pure` or `warp self`
+/// `warp test --case <pure|self> <file> <index>`, in the child: the case's code run through warp.wasm or `warp self`
 /// against its expected value,
 /// matched permissively (decision warp-is-tests): `got == expected`, or both empty/falsy. Prints `got <value>` and
 /// returns false when it differs

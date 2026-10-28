@@ -74,7 +74,7 @@ const SELF_COMMAND: &str = "self";
 const REPL_COMMAND: &str = "repl";
 /// `warp self run <file|code>`, `warp self eval <code>`: the same as without the word, the program run here
 const PURE_RUNNING_WORDS: [&str; 2] = ["run", "eval"];
-/// `warp rebuild [pure|self]`: warp.wasm, the compiler of `warp pure`, built anew from lib/ by the seed
+/// `warp rebuild [pure|self]`: warp.wasm, the compiler of plain `warp`, built anew from lib/ by the seed
 /// (warp-seed.wasm beside the binary); `self`: warp.wasm promoted to warp-self.wasm, `warp self`'s, when it compiles compiler.warp
 /// to its own bytes (decision compiler-build, card rust-bootstrap; src/compiler/standalone.rs)
 const REBUILD_COMMAND: &str = "rebuild";
@@ -183,7 +183,7 @@ fn test_files(args: &[String]) -> Option<&[String]> {
 	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(paths)
 }
 
-/// `warp test [--self] [--each] [folder…]`: the folders whose test files run through `warp pure`
+/// `warp test [--self] [--each] [folder…]`: the folders whose test files run through warp.wasm
 /// (src/compiler/pure_tests.rs), tests/ when none is named and it exists; the words after `test`, flags kept
 fn test_folders(args: &[String]) -> Option<Vec<String>> {
 	use warp::compiler::pure_tests::{DEFAULT_FOLDER, FLAGS};
@@ -209,7 +209,7 @@ fn test_case(args: &[String]) -> Option<&[String; 3]> {
 	}
 }
 
-/// A program file or code, compiled by warp.wasm (the warp compiler, `warp pure`'s) and run: plain `warp <file>`,
+/// A program file or code, compiled by warp.wasm (the warp compiler) and run: plain `warp <file>`,
 /// `warp run`, `warp eval`, piped code and the console run no Rust pipeline (card rust-bootstrap, branch pure). A file's
 /// folder is in scope (D15), code's the working directory; the program's arguments are those set for it
 fn eval(code: &str) -> Node {
@@ -566,11 +566,11 @@ fn unknown_command(args: &[String]) -> Option<String> {
 	Some(format!("warp: unknown command {word}{suggestion} (warp help lists the commands)"))
 }
 
-/// `warp pure|self [run|eval|build|compile|link] <file.warp|code> [arguments…]`: the command as plain `warp` takes it,
+/// `warp self [run|eval|build|compile|link] <file.warp|code> [arguments…]` (and the hidden alias `warp pure`): as plain `warp` takes it,
 /// the program compiled by compiler.warp (`by`): `run`/`eval` run it, `build` writes its module as `warp build --wasm`
 /// does (out.wasm for inline code); with no command word a .warp file or inline code runs. Any other command word is
 /// compiler.warp's own command (core/commands.warp: help, version, parse, data, lower, repl; the others refuse
-/// naming the native warp), never compiled as code (`warp pure build x` compiled `build x`)
+/// naming the native warp), never compiled as code (`warp self build x` compiled `build x`)
 #[cfg(not(test))]
 fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -> ! {
 	use warp::compiler::standalone::{compiled, compiled_code, run, run_code};
@@ -600,7 +600,7 @@ fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -
 		std::process::exit(0);
 	}
 	let runs = PURE_RUNNING_WORDS.contains(&command) && words.len() > 1;
-	// `warp pure <command> …`: the command of compiler.warp itself, written in warp (card wasm-commands); the REPL's
+	// `warp self <command> …`: the command of compiler.warp itself, written in warp (card wasm-commands); the REPL's
 	// lines run here, which plain WASI cannot
 	if !runs && COMMAND_WORDS.contains(&command) && !file_exists(command) {
 		if command == REPL_COMMAND {

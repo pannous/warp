@@ -13,7 +13,7 @@ use file
 # a command (commands.warp), else the source file of a compile
 command = if #args > 0 and is_command(args#1) then args#1 else ""
 
-# lib/: the fourth argument of a compile (`warp pure` gives it), else WARP_LIB, else the folder above this file's
+# lib/: the fourth argument of a compile (the native `warp` gives it), else WARP_LIB, else the folder above this file's
 library_folder = if not command and #args > 3 then args#4 else run_library()
 # the parser's and the uses' standard modules from that lib/ too, never the folder this compiler was built in
 use_library(library_folder)
@@ -164,7 +164,7 @@ repl() := {
 		if line.trim() {
 			try {
 				repl_step(REPL_STATE, line, ".warp-repl-line.wasm")
-				print "compiled; running it needs the native warp (plain WASI has no instantiate): warp repl or warp pure repl"
+				print "compiled; running it needs the native warp (plain WASI has no instantiate): warp repl"
 			} catch failure { print failure }
 		}
 		line = input(REPL_PROMPT)

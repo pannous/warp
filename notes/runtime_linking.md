@@ -120,7 +120,7 @@ All options stay open and are exposed to the build process (`warp build` options
   shaking-build-options); separate modules linked by import/export, in the browser and wherever the ahead-of-time
   compile combines modules natively, so size may not matter at all (card runtime-separate-modules; GC types match
   across modules through the canonical type section).
-- `warp build --trim=<way>` (src/cli/trimming.rs; also `warp pure build`): `optimize` (the default, and bare
+- `warp build --trim=<way>` (src/cli/trimming.rs; also `warp self build`): `optimize` (the default, and bare
   `--trim`), `unused`, `none`, `warp` (refused until runtime-shaking). Trimmed by default (user, 2026-10-28), the way
   picked by measurement: wasm-opt with wasmtime's feature list (never `-all`: custom descriptors write exact
   references wasmtime refuses) and the name section kept. Measured 2026-10-28 on the seed-era modules:
