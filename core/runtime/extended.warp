@@ -20,11 +20,16 @@ use "extended/wasi.warp"
 use "intrinsics.warp"
 use "../kinds.warp"
 use "instructions.warp"
-extended_text(n: Node): text := if kind_code(n) == Kind.Time then time_text(n) else exact_text(n)
+extended_text(n: Node): text := {
+	made_case(Made.Time, time_text(n))
+	made_case(Made.Ratio, exact_text(n))
+	made_case(Made.BigInt, exact_text(n))
+	fail()
+}
 extended_order(a: Node, b: Node): int := exact_order(a, b)
 extended_sum(a: Node, b: Node): Node := exact_add(a, b)
 extended_float(n: Node): float := {
-	big_float_case(n)
+	made_case(Made.BigInt, big_int_float(n))
 	float(exact_numerator(n)) / float(exact_denominator(n))
 }
 extended_truncated(n: Node): int := int_quotient(exact_numerator(n), exact_denominator(n))

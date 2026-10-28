@@ -32,26 +32,28 @@ exact_ratio(n: int, d: int): Node := {
 exact_numerator(n: Node): int := if is_ratio(n) then ratio_numerator(n) else unboxed_int(n)
 exact_denominator(n: Node): int := if is_ratio(n) then ratio_denominator(n) else 1
 # whether an Int node holds a big int: neither its number in an $i64box nor a ratio. The words below hand one to
-# big_ints.warp by the intrinsics big_sum_case(a, b) …: `if holds_big_int(a) or holds_big_int(b) { return
-# big_int_sum(a, b) }`, compiled only into a program that makes big ints (emitter big_int_case), so a plain-int
+# big_ints.warp by the intrinsic made_case(Made.BigInt, big_int_sum(a, b)) …: `if holds_big_int(a) or
+# holds_big_int(b) { return big_int_sum(a, b) }`, compiled only into a program that makes big ints (emitter made_case), so a plain-int
 # program carries none of it
 holds_big_int(n: Node): bool := not is_plain_int(n) and not is_ratio(n)
+# what made_case(Made.Ratio, …) tests
+holds_ratio(n: Node): bool := is_ratio(n)
 exact_add(a: Node, b: Node): Node := {
-	big_sum_case(a, b)
+	made_case(Made.BigInt, big_int_sum(a, b))
 	exact_ratio(exact_numerator(a) * exact_denominator(b) + exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
 }
 exact_sub(a: Node, b: Node): Node := {
-	big_difference_case(a, b)
+	made_case(Made.BigInt, big_int_difference(a, b))
 	exact_ratio(exact_numerator(a) * exact_denominator(b) - exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
 }
 exact_mul(a: Node, b: Node): Node := {
-	big_product_case(a, b)
+	made_case(Made.BigInt, big_int_product(a, b))
 	exact_ratio(exact_numerator(a) * exact_numerator(b), exact_denominator(a) * exact_denominator(b))
 }
 exact_div(a: Node, b: Node): Node := exact_ratio(exact_numerator(a) * exact_denominator(b), exact_denominator(a) * exact_numerator(b))
 # -1, 0 or 1 as a is below, equal to or above b (denominators are positive)
 exact_order(a: Node, b: Node): int := {
-	big_order_case(a, b)
+	made_case(Made.BigInt, big_int_order(a, b))
 	left = exact_numerator(a) * exact_denominator(b)
 	right = exact_numerator(b) * exact_denominator(a)
 	if left < right then -1 else if left > right then 1 else 0

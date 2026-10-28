@@ -226,7 +226,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; makes_big_ints: bool = no; big_int_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = "" }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = "" }
 
 module = Module({}, [])
 
@@ -1250,8 +1250,8 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 	module.saw_pending = no
 	module.rereads = []
 	module.builders = []
-	module.makes_big_ints = no
-	module.big_int_sites = []
+	module.made = {}
+	module.made_sites = []
 	module.gc_indices = {}
 	module.gc_order = []
 	module.class_structs = {}
@@ -1297,10 +1297,11 @@ module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
 			module.saw_pending = no
 			body_code(f)
 		}
-		# a program that makes big ints (big_int_power compiled): the functions with a big_int_case read again, with it
-		if module.runtime["big_int_power"].kinds != ø {
-			module.makes_big_ints = yes
-			for f in module.big_int_sites { body_code(f) }
+		# a kind the program makes (made_case): the functions with a made_case read again with it, until no kind is new
+		read_with = 0
+		while #made_kinds() > read_with {
+			read_with = #module.made.keys
+			for f in module.made_sites { body_code(f) }
 		}
 		# a closure's target compiled late may make big ints: shown_big_int's code once every function is compiled
 		for f in module.dispatchers { if f.name == shown_big_int_name { shown_big_int_code(f) } }
