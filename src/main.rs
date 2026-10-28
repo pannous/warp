@@ -38,6 +38,8 @@ const COMPONENT_FLAG: &str = "--component";
 /// `warp build --wagi app.warp`: app.wagi.wasm, its routes answering one WAGI request (lib/wagi.warp), and app.spin.toml
 /// to run it: `spin up -f app.spin.toml` (Spin's wagi executor; Akamai Functions: `spin aka deploy`)
 const WAGI_FLAG: &str = "--wagi";
+/// The build flags only the harness handles still (card harness-diet's second step)
+const HARNESS_BUILD_FLAGS: [&str; 6] = [AOT_FLAG, SITE_FLAG, PAGE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
 /// `warp run <file>`: the program runs, no executable is left (P105)
@@ -363,10 +365,10 @@ fn run_command(args: &[String], given: &[String]) {
 		// `warp data file.warp` prints the file as data
 		let text = source_of(target);
 		println!("{}", warp::compiler::standalone::parsed(&text).serialize());
-	} else if args.len() > 3 && args[1] == "build" && args[2] == NATIVE_WORD {
-		// `warp build native <file>`: compiler.warp's own command (core/commands.warp build_native), wasm2c and cc driven
-		// in warp
-		print_and_exit(warp::compiler::standalone::command(args[1..].to_vec(), warp::compiler::standalone::Compiler::RustCompiled));
+	} else if let Some(words) = build_in_warp(args) {
+		// `warp build [--wasm] [--trim=<way>] <file>`: compiler.warp's build command (core/commands.warp) picks native for a
+		// primitive file, else writes the modules, trims them and joins the executable, told where the stub lies
+		print_and_exit(warp::compiler::standalone::build_command(words, warp::compiler::standalone::Compiler::RustCompiled));
 	} else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
 		let target = extract_after(&arg_string, " ");
 		let trim = Trim::of(&target);
@@ -688,4 +690,19 @@ fn print_help_rows(rows: &[(&str, &str)], column: usize) {
 	for (usage, meaning) in rows {
 		println!("  {usage:<column$} {meaning}");
 	}
+}
+
+/// `warp build …` of a file that compiler.warp builds: no flag the harness still handles and no page app; its words
+/// with the stub's path (none for `--wasm`)
+fn build_in_warp(args: &[String]) -> Option<Vec<String>> {
+	let (command, words) = args.get(1..)?.split_first()?;
+	let file = words.iter().find(|word| !word.starts_with("--"))?;
+	let in_warp = command == "build"
+		&& !words.iter().any(|word| HARNESS_BUILD_FLAGS.contains(&word.as_str()))
+		&& (file == NATIVE_WORD || file_exists(file) && !builds_an_app(&source_of(file)));
+	in_warp.then(|| {
+		let stub = words.iter().all(|word| word != WASM_FLAG).then(|| runtime_stub_path(&PROGRAM_STUB).ok()).flatten();
+		let stub_option = stub.map(|path| format!("--stub={}", path.display()));
+		args[1..].iter().cloned().chain(stub_option).collect()
+	})
 }
