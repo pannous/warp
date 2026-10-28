@@ -5,6 +5,8 @@
 use os
 use file
 
+# warp's version, the one place a release bumps (Cargo.toml follows it for the harness)
+VERSION = "1.4.1"
 REPL_PROMPT = "warp> "
 NATIVE = "the native warp"
 HELP_COLUMN = 38
@@ -52,14 +54,8 @@ padded(words: text, width: int): text := {
 	line
 }
 
-# the version of the lib/ beside the compiler: its checkout's Cargo.toml
-version_text(library: text): text := {
-	manifest = try read(folder_of(library) + "/Cargo.toml") else ""
-	for line in manifest.split("\n") {
-		if line.starts_with("version") { return "🌀 Warp " + line.split("\"")#2 + " (compiler.warp of " + library + ")" }
-	}
-	"🌀 Warp (compiler.warp of " + library + ", no Cargo.toml beside it)"
-}
+# the version, and the lib/ the compiler reads
+version_text(library: text): text := "🌀 Warp " + VERSION + " (compiler.warp of " + library + ")"
 
 # the parsed program as `warp parse` shows it, each operation a prefix group: 1+2*x as (+ 1 (* 2 x)) (Rust twin:
 # src/cli/display.rs structure)
