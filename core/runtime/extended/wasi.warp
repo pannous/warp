@@ -182,7 +182,7 @@ wasi_list(environment: bool): list := {
 	}
 	found
 }
-# wasi_environment() (lib/prelude.warp, Rust's wasi_emitter.rs): the environment as WASI gives it, each NAME=value line
+# wasi_environment() (core/library/prelude.warp, Rust's wasi_emitter.rs): the environment as WASI gives it, each NAME=value line
 # ended by a zero byte, which lib/wagi.warp splits by chr(0)
 wasi_environment(): text := {
 	joined = ""

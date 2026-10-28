@@ -2,7 +2,7 @@
 # `{ case north, south }`) declares the type Color whose variants are its bare cases, `type @variants(Red Green) Color
 # {}`; a case of node.warp's spelled enums converts to its spelling (`op as text`) and equals it. `Color.Red` as the case
 # Red, `c is Coin`, a case's number `Coin.Dime as int` and the case at an index `2 as Coin` are rewrite rules
-# (lib/sugar/enums.warp), which run after this pass.
+# (core/sugar/enums.warp), which run after this pass.
 use "walk.warp"
 use "phrase_blocks.warp"
 use "shapes.warp"
@@ -144,7 +144,7 @@ enum_type(name: text, cases: list): Node := {
 }
 
 # the types a numbered case converts to its number, `Coin.Dime as int` (decision enum-raw-values); `as index` and
-# `as position` count the cases as of any enum (lib/sugar/enums.warp)
+# `as position` count the cases as of any enum (core/sugar/enums.warp)
 number_types = ["int", "integer"]
 
 # `Coin.Dime as int` of `enum Coin { Penny = 1, Dime = 10 }`: 10, the number the case declares
@@ -161,7 +161,7 @@ numbered_case(enum_name: text, value: Node): Node := {
 }
 
 # `op as text` of node.warp's spelled enums its spelling (node_cases.warp converted the other values to them already);
-# other conversions as they are (a case's number and the case at an index are lib/sugar/enums.warp's rules)
+# other conversions as they are (a case's number and the case at an index are core/sugar/enums.warp's rules)
 case_conversion(value: Node, target: Node, n: Node, enums: map, subjects: map): Node := {
 	numbered = type_of(value, enums, subjects)
 	if is_name(target) and name_of(target) in number_types and numbered in numbered_enums { return case_number(numbered, value) }

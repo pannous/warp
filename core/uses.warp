@@ -61,7 +61,7 @@ aliased(n: Node, aliases: list): any := {
 	n
 }
 
-# `module_source("prelude")`: lib/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
+# `module_source("prelude")`: core/library/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
 # writes it out (the std modules are lib/<name>.warp); `module_source("compiler/errors.data")`, a name with an
 # extension, that file of lib/; `library_sources()`, every module of lib/ (parser.warp LIBRARY_FILES), `library_parses()`
 # their parses (LIBRARY_PARSES), `slice_parses()` their definitions' parses (SLICE_PARSES). A compiled
@@ -87,12 +87,12 @@ packed_parses(files: map): map := {
 # each top-level module's slices parsed, packed, by their place (prelude_words.warp SLICE_PARSES, slice_key)
 packed_slice_parses(files: map): map := {
 	parses = {}
-	for path in files.keys {
-		if not path.contains("/") and path.ends_with(module_extension) {
-			source = files[path]
-			uses = use_lines(source)
-			for span in slice_spans(source) { parses[slice_key(path, "${span#2}")] = pack(plain_node(parsed(source[span#2 ..< span#3], uses))) }
-		}
+	modules = module_files(files)
+	for module in modules.keys {
+		path = modules[module]
+		source = files[path]
+		uses = use_lines(source)
+		for span in slice_spans(source) { parses[slice_key(path, "${span#2}")] = pack(plain_node(parsed(source[span#2 ..< span#3], uses))) }
 	}
 	parses
 }
@@ -194,7 +194,7 @@ call_head(n: Node): any := {
 }
 
 # lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one)
-std_module_path(name: text): text := run_library() + "/" + name + module_extension
+std_module_path(name: text): text := run_library() + "/" + module_file(name)
 
 # what a `use` statement names, ø for another statement
 use_target(statement: Node): any := {

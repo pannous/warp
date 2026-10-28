@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Writes lib/case_tables.warp: the case tables of lib/case_table.warp (card case-table-warp), Python's Unicode case
+"""Writes core/library/case_tables.warp: the case tables of lib/case_table.warp (card case-table-warp), Python's Unicode case
 mappings as flat int lists of six fields per range: start, last, stride, delta, second, third. The Unicode version is
 Python's (`python3 -c "import unicodedata; print(unicodedata.unidata_version)"`)."""
 import pathlib
 import sys
 import unicodedata
 
-OUTPUT = pathlib.Path(__file__).resolve().parent.parent / "lib" / "case_tables.warp"
+OUTPUT = pathlib.Path(__file__).resolve().parent.parent / "core" / "library" / "case_tables.warp"
 STRIDES = (1, 2)
 LAST_CODE_POINT = 0x10FFFF
 SURROGATES = range(0xD800, 0xE000)

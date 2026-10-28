@@ -1,4 +1,4 @@
-// The interactive console in pure warp (card pure-repl), run by warp-host: `warp-host lib/repl.warp`, or warp-host
+// The interactive console in pure warp (card pure-repl), run by warp-host: `warp-host core/commands/repl.warp`, or warp-host
 // alone on a terminal. An entry is compiled together with the session's kept entries and run in this process
 // (compile_wasm, run_wasm), so `a = 7` then `a` gives 7. The session keeps uses and definitions as written, and an
 // assignment as its value (`x = command("date")` kept as `x = "Fri …"`), so later entries never run its effects again;

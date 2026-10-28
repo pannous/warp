@@ -375,7 +375,7 @@ module_hint(word: text): text := {
 # module name → the slices of each module at the top of lib/, `units` → lib/units.warp's
 bundled_slices(): map := {
 	modules = {}
-	for path in LIBRARY_FILES.keys { if not path.contains("/") and path.ends_with(module_extension) { modules[path[0 ..< #path - #module_extension]] = file_slices(run_library() + "/" + path, LIBRARY_FILES[path]) } }
+	for module in STANDARD_MODULES.keys { modules[module] = file_slices(run_library() + "/" + STANDARD_MODULES[module], LIBRARY_FILES[STANDARD_MODULES[module]]) }
 	modules
 }
 # name → the texts of its definitions in these lists of slices, the first written first
@@ -462,7 +462,7 @@ called_words(n: Node): list := {
 }
 
 # the program with the definitions it reaches of the standard modules it uses, those they use in turn included: `use
-# case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
+# case_tables` names core/library/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
 with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(statements_in(program), folder, [])
 	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, [], sources#2.map(std_module_path))

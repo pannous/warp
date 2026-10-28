@@ -2,18 +2,18 @@
 //! sources, their names, and the names each defines, read from the text (`warp help`)
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
 pub(crate) const STD_MODULES: [(&str, &str); 36] = [
-	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
+	(PRELUDE_MODULE, include_str!("../../core/library/prelude.warp")),
 	("memory", include_str!("../../lib/memory.warp")),
 	("net", include_str!("../../lib/net.warp")),
 	("collections", include_str!("../../lib/collections.warp")),
 	("hash", include_str!("../../lib/hash.warp")),
 	("regex", include_str!("../../lib/regex.warp")),
-	("file", include_str!("../../lib/file.warp")),
+	("file", include_str!("../../core/library/file.warp")),
 	("json", include_str!("../../lib/json.warp")),
-	("os", include_str!("../../lib/os.warp")),
+	("os", include_str!("../../core/library/os.warp")),
 	("shell", include_str!("../../lib/shell.warp")),
 	("list", include_str!("../../lib/list.warp")),
-	("math", include_str!("../../lib/math.warp")),
+	("math", include_str!("../../core/library/math.warp")),
 	("fast_math", include_str!("../../lib/fast_math.warp")),
 	("text", include_str!("../../lib/text.warp")),
 	("random", include_str!("../../lib/random.warp")),
@@ -35,9 +35,9 @@ pub(crate) const STD_MODULES: [(&str, &str); 36] = [
 	("extrema", include_str!("../../lib/extrema.warp")),
 	("english", include_str!("../../lib/english.warp")),
 	("case_table", include_str!("../../lib/case_table.warp")),
-	("case_tables", include_str!("../../lib/case_tables.warp")),
+	("case_tables", include_str!("../../core/library/case_tables.warp")),
 	("uncertain", include_str!("../../lib/uncertain.warp")),
-	("wasmtime", include_str!("../../lib/wasmtime.warp")),
+	("wasmtime", include_str!("../../core/native/wasmtime.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 pub(crate) const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];

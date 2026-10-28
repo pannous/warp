@@ -1,6 +1,6 @@
 # A function defined by assignment (card pure-runs): `f(x) = e` is the definition `f(x) := e`, a call of parameter
 # names on the left of `=` assigns nothing (a function keyword, `def f(x) = e`, went before the passes:
-# lib/sugar/functions.warp, as `var x = 1` went to lib/sugar/declarations.warp). `f = { it * 2 }` is the definition
+# core/sugar/functions.warp, as `var x = 1` went to core/sugar/declarations.warp). `f = { it * 2 }` is the definition
 # `f := { it * 2 }`.
 use "walk.warp"
 use "words.warp"
@@ -122,7 +122,7 @@ with_empty_otherwise(value: Node): Node := match value {
 	}
 }
 
-# `for x in xs {…}`, `each x in xs {…}` before lib/sugar/iteration.warp lowers them; `while c {…}` is a `do` key already
+# `for x in xs {…}`, `each x in xs {…}` before core/sugar/iteration.warp lowers them; `while c {…}` is a `do` key already
 loop_words = ["for", "each"]
 is_loop(n: Node): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in loop_words
 

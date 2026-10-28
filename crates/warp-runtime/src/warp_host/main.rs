@@ -164,10 +164,10 @@ fn command(given: Vec<String>) -> i32 {
 			Ok(bytes) => shown(run_wasm(&engine, &bytes, args.clone(), None, false)),
 			Err(problem) => failed(&format!("{file}: {problem}")),
 		},
-		// nothing on a terminal: the console, lib/repl.warp in pure warp (card pure-repl)
+		// nothing on a terminal: the console, core/commands/repl.warp in pure warp (card pure-repl)
 		[] if console_wanted() => match console_file() {
 			Some(console) => run_source(&engine, compiler, &console.display().to_string(), &[]),
-			None => failed("no lib/repl.warp for the console beside warp-host nor in lib/: WARP_LIB names one"),
+			None => failed(&format!("no lib/{CONSOLE_FILE} for the console beside warp-host nor in lib/: WARP_LIB names one")),
 		},
 		// no command: run, as `warp f.warp` and `warp '6*7'` run
 		[source, ..] if !COMMANDS.contains(source) => run_source(&engine, compiler, source, &args[1..]),
@@ -184,11 +184,14 @@ fn console_wanted() -> bool {
 	std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
 }
 
-/// The console's program: lib/repl.warp installed beside warp-host, else in the lib/ the compiler uses
+/// The console's program within a lib/, core's (lib/compiler links to core)
+const CONSOLE_FILE: &str = "compiler/commands/repl.warp";
+
+/// The console's program: in the lib/ installed beside warp-host, else in the lib/ the compiler uses
 fn console_file() -> Option<PathBuf> {
 	let installed = installed_folders().into_iter().map(|folder| folder.join("lib"));
-	let library = library_for(Path::new("repl.warp"));
-	installed.chain(library).map(|lib| lib.join("repl.warp")).find(|file| file.is_file())
+	let library = library_for(Path::new(CONSOLE_FILE));
+	installed.chain(library).map(|lib| lib.join(CONSOLE_FILE)).find(|file| file.is_file())
 }
 
 /// A module to run: a .wasm or .wat file by its name, else a file starting with wasm's magic bytes (`\0asm`)

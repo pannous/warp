@@ -329,7 +329,7 @@ def link_libraries(images: list, own_names: list) {
 # names the program needs of each even when it never says them: its classes and globals
 def linked_slices(): map {
 	slices = {}
-	for image in module.linked_images { for slice in definition_slices(LIBRARY_FILES[image.name + module_extension]) { slices[slice#2] = yes } }
+	for image in module.linked_images { for slice in definition_slices(LIBRARY_FILES[module_file(image.name)]) { slices[slice#2] = yes } }
 	slices
 }
 def linked_needs(): list {

@@ -148,10 +148,11 @@ fn makers_digest(makers: &[String]) -> String {
 	digest.clone()
 }
 
-/// The std modules whose text the compiler embeds when it is built (`module_source("math")`): its inputs until
-/// lib/compiler reads them from the run's lib/ (card compiler-library-source)
+/// The std modules outside core whose text the compiler embeds when it is built (`module_source("list")`): its inputs
+/// until lib/compiler reads them from the run's lib/ (card compiler-library-source); aliases, prelude and math lie in
+/// core/library/, below lib/compiler already
 #[cfg(feature = "native")]
-pub(crate) const EMBEDDED_MODULES: [&str; 5] = ["aliases", "prelude", "math", "list", "regex"];
+pub(crate) const EMBEDDED_MODULES: [&str; 2] = ["list", "regex"];
 
 /// [path inside lib/, contents] of each compiler input: the files below lib/compiler (dot files left out), sorted,
 /// then lib/<module>.warp of each module there is

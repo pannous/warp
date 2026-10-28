@@ -108,7 +108,7 @@ is_case_arm(arm: Node, variants: map): bool := {
 	is_name(pattern) or is_value_pattern(pattern, variants) or is_type_pattern(pattern) or case_pattern(pattern) != ø
 }
 
-# the prelude's matcher (lib/prelude.warp), which a structural arm calls
+# the prelude's matcher (core/library/prelude.warp), which a structural arm calls
 matcher_word = "pattern_bindings"
 
 # `match v {…}` with an arm for the matcher, its definition brought from the prelude before the match is lowered
@@ -133,7 +133,7 @@ structural_test(subject: Node, pattern: Node): Node := {
 
 structural_bindings(pattern: Node, result: Node): list := structural_names(pattern, no).filter(name => mentions(result, name)).map(name => Key(symbol(name), Op.Assign, subscript(symbol(match_bound), name)))
 
-# the names a structural pattern binds (lib/prelude.warp pattern_names): its names but `_` and the type words, `$x`
+# the names a structural pattern binds (core/library/prelude.warp pattern_names): its names but `_` and the type words, `$x`
 # and `...rest` unmarked; of quoted code only its holes, a map's fields by their patterns
 structural_names(pattern: Node, quoted: bool): list := {
 	if is_quote(pattern) { return structural_names(pattern#2, yes) }

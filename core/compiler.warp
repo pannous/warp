@@ -85,7 +85,7 @@ linked_libraries(source: text): list := {
 	folder = folder_of(args#RUNTIME_ARGUMENT) + "/" + MODULES_FOLDER + "/"
 	images = []
 	for name in used_modules(source) {
-		bundled = LIBRARY_FILES.get(name + module_extension)
+		bundled = LIBRARY_FILES.get(module_file(name))
 		if bundled != ø and bundled == (file_text(std_module_path(name)) ?? "") {
 			wasm = try read_bytes(folder + name + ".wasm") else ø
 			image = if wasm == ø then ø else library_image_of(name, wasm)

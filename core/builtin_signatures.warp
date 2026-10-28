@@ -1,4 +1,4 @@
-# What the builtins take and give, as their typed lines of lib/prelude.warp declare it, read once when the file loads:
+# What the builtins take and give, as their typed lines of core/library/prelude.warp declare it, read once when the file loads:
 # the analyzer's signature table (decision compiler-typed; Rust twin: src/ffi/mod.rs foreign_line, library_words.rs
 # emitted_call_kind, call_result_kind and argument_result): `upper(t: text): text from warp` a runtime function,
 # `count(xs: list): int from emitter` a word the emitter expands. A word may have several lines, one per type of its
@@ -9,7 +9,7 @@ use "signatures.warp"
 use "parser.warp"
 use "host_words.warp"
 
-# a builtin word as a typed line of lib/prelude.warp declares it
+# a builtin word as a typed line of core/library/prelude.warp declares it
 class Builtin { name: text; signature: Signature }
 
 prelude_text = module_source("prelude")
@@ -92,7 +92,7 @@ typed_lines = runtime_lines + emitter_lines
 # `alias size = count` → ["size", "count"]
 alias_pairs = prelude_text.split("\n").filter(line => line.starts_with(alias_start)).map(line => line.remove_prefix(alias_start).split("=").map(word => word.trim()))
 
-# the library word a word names: its canonical word (lib/aliases.warp: `size` is count), through the prelude's
+# the library word a word names: its canonical word (core/library/aliases.warp: `size` is count), through the prelude's
 # `alias keys = map_keys` lines
 unaliased(written: text): text := {
 	word = canonical_word(written) ?? written
@@ -155,7 +155,7 @@ overload_kind(word: text, first: text): text? := {
 # the kind a value of a built-in type word is held as: `int` int, `text` text; ø for a list, a map or no type
 type_word_kind(word: text): text? := type_kinds.get(word)
 
-# libm's functions as lib/math.warp's foreign lines declare them, `floor(x: float): float from 'm'`: what a call of
+# libm's functions as core/library/math.warp's foreign lines declare them, `floor(x: float): float from 'm'`: what a call of
 # floor compiles to, so its result is the call's
 foreign_math_lines = module_source("math").split("\n").map(line => typed_line(line, "'m'")).filter(line => line != ø)
 
@@ -208,8 +208,8 @@ declared_call_kind(word: text, arguments: int): text? := {
 # the libraries of the typed lines: warp's runtime, the emitter's expansions, libm
 typed_libraries = ["warp", "emitter", "'m'"]
 
-# word → its typed lines of the prelude the lowering reads (lowering_from) and, beside lib/prelude.warp, of the
-# lib/math.warp it reaches, the first written first. A primitive file's prelude (lib/primitive.warp) has none: no GC
+# word → its typed lines of the prelude the lowering reads (lowering_from) and, beside core/library/prelude.warp, of the
+# core/library/math.warp it reaches, the first written first. A primitive file's prelude (core/native/primitive.warp) has none: no GC
 # library word joins its definitions as a variant (arity_overloads.warp library_variants)
 global typed_word_lines = ø
 global word_lines_prelude = prelude_text
@@ -236,7 +236,7 @@ word_lines(): map := {
 	typed_word_lines
 }
 
-# a word of the runtime, the emitter or a typed line of the library (lib/math.warp's `max`), which a class's method of
+# a word of the runtime, the emitter or a typed line of the library (core/library/math.warp's `max`), which a class's method of
 # that name must not hide from the other values (class_methods.warp routes it, rewrites.warp keeps its sugar rules)
 is_library_word(word: text): bool := typed_lines.any(line => line.name == word) or word_lines().has(word)
 

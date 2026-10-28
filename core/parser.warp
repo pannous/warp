@@ -48,13 +48,53 @@ global given_library = ""
 def run_library(): text := if given_library != "" then given_library else (env("WARP_LIB") ?? (if module_directory.ends_with("/core") then folder_of(module_directory) + "/lib" else folder_of(module_directory)))
 // The lib/ the run was given, which run_library answers from now on
 def use_library(folder: text) { given_library = folder }
-// Every module of lib/ by its path within lib/ ("prelude.warp", "sugar/lists.warp", "native/z.warp"), bundled into the
+// Every module of lib/ by its path within lib/ ("units.warp", "compiler/sugar/lists.warp", "native/z.warp"), bundled into the
 // built compiler: uses.warp's module_text writes them in where library_sources() stands when it compiles the compiler,
 // so a compiler needs no lib/ on any disk (decision built-in-lib). A compiler built by one that bundles none yet (an
 // older seed) calls library_sources below and reads them where it runs
-// lib/'s folders the bundle leaves out: core's link (the compiler itself) and the files a build makes
-UNBUNDLED_FOLDERS = ["compiler", "data"]
-LIBRARY_FILES = library_sources()
+// lib/'s folders the bundle leaves out: the files a build makes; of core's link (the compiler itself) it holds only
+// the folders of text a program uses or a compile reads (BUNDLED_CORE_FOLDERS)
+UNBUNDLED_FOLDERS = ["data"]
+CORE_LINK = "compiler"
+BUNDLED_CORE_FOLDERS = ["compiler/library", "compiler/native", "compiler/sugar"]
+LIBRARY_FILES = with_core_folders(library_sources())
+// the folders within lib/ whose .warp files are the standard modules, `use <name>` naming one wherever it lies: lib/'s
+// top and core's modules the compiler reads (decision core-is-compiler-and-harness)
+MODULE_FOLDERS = ["", "compiler/library/", "compiler/native/"]
+// each standard module's path within lib/ by its name, `os` → "compiler/library/os.warp"
+STANDARD_MODULES = module_files(LIBRARY_FILES)
+// the standard modules among these files by their names: a name two module folders hold is an error, never the first
+// one found
+def module_files(files: map): map {
+	found = {}
+	for path in files.keys {
+		parts = path.split("/")
+		file = parts#(#parts)
+		if file.ends_with(".warp") and MODULE_FOLDERS.contains(path[0 ..< #path - #file]) {
+			name = file[0 ..< #file - 5]
+			if found.has(name) { throw "two standard modules named " + name + ": lib/" + found[name] + " and lib/" + path }
+			found[name] = path
+		}
+	}
+	found
+}
+// a standard module's path within lib/ (prelude.warp, compiler/library/os.warp); a name with a folder names its file
+def module_file(name: text): text := STANDARD_MODULES.get(name) ?? name + ".warp"
+// the bundle, with core's bundled folders read where it runs when an older compiler baked it without them (a seed of
+// before 2026-10-28, whose walk left core's link out), until the seed is refreshed
+def with_core_folders(files: map): map {
+	if files.keys.any(path => path.starts_with(CORE_LINK + "/")) { return files }
+	for folder in BUNDLED_CORE_FOLDERS {
+		inner = library_texts(run_library(), folder + "/")
+		for path in inner.keys { files[path] = inner[path] }
+	}
+	files
+}
+// whether the bundle holds the files of this folder within lib/ (or holds its own folders, core's link)
+def bundles_folder(path: text): bool {
+	if UNBUNDLED_FOLDERS.contains(path) { return no }
+	path == CORE_LINK or not path.starts_with(CORE_LINK + "/") or BUNDLED_CORE_FOLDERS.any(folder => path == folder or path.starts_with(folder + "/"))
+}
 // (its parameter keeps this head apart from the empty call module_text writes the bundle in for)
 def library_sources(within: text = ""): map := library_texts(run_library(), within)
 // the .warp files of lib/<within> and its folders, by their paths within lib/
@@ -66,8 +106,8 @@ def library_texts(library: text, within: text): map {
 	for name in entry_names.sort() {
 		path = within + name
 		if name.ends_with(".warp") {
-			found[path] = try read(library + "/" + path) else ""
-		} else if not name.contains(".") and not UNBUNDLED_FOLDERS.contains(path) {
+			if within != CORE_LINK + "/" { found[path] = try read(library + "/" + path) else "" }
+		} else if not name.contains(".") and bundles_folder(path) {
 			inner = library_texts(library, path + "/")
 			for inner_path in inner.keys { found[inner_path] = inner[inner_path] }
 		}
@@ -82,7 +122,7 @@ def file_source(path: text): text? {
 	if bundled != ø and env("WARP_LIB") == ø { return bundled }
 	(try read(path) else ø) ?? bundled
 }
-// a path's place within lib/ ("sugar/lists.warp"), "" outside it
+// a path's place within lib/ ("compiler/sugar/lists.warp"), "" outside it
 def library_path(path: text): text {
 	library = run_library() + "/"
 	if path.starts_with(library) then path[library.length .. path.length] else ""
@@ -240,7 +280,7 @@ def statement_end(p: Parser): int {
 	while end < p.n and p.code[end] != '\n' and p.code[end] != ';' { end += 1 }
 	end
 }
-// `operator × := *`, `prefix operator √ := sqrt` (lib/math.warp): another spelling of a built-in operator, a statement
+// `operator × := *`, `prefix operator √ := sqrt` (core/library/math.warp): another spelling of a built-in operator, a statement
 // declaring nothing (the pre-scan made the spelling an operator: operator_aliases)
 // [spelling, target] of an alias statement's words (`operator ∧ := and`, `prefix operator √ := sqrt`), else []
 // Rust twin: aliases.rs alias_line
@@ -259,7 +299,7 @@ def operator_aliases(source: text): list {
 	}
 	found
 }
-// lib/math.warp's aliases, which every program reads (decision operator-alias), scanned the first time a parse needs them
+// core/library/math.warp's aliases, which every program reads (decision operator-alias), scanned the first time a parse needs them
 // Rust twin: aliases.rs math_aliases
 global math_aliases = ø
 def math_operator_aliases(): list {
@@ -282,7 +322,7 @@ def circumfix_aliases(source: text): list {
 	}
 	found
 }
-// lib/math.warp's circumfix operators (‖x‖, ⌊x⌋, ⌈x⌉), scanned the first time a parse needs them
+// core/library/math.warp's circumfix operators (‖x‖, ⌊x⌋, ⌈x⌉), scanned the first time a parse needs them
 // Rust twin: aliases.rs math_circumfixes
 global math_circumfixes = ø
 def math_circumfix_aliases(): list {
@@ -293,7 +333,7 @@ def math_circumfix_aliases(): list {
 // Rust twin: spellings.rs OPERATOR_SPELLINGS ("approximately", "+-", "<-")
 ALIAS_TARGET_NAMES = {"approximately": "≈", "+-": "±", "<-": "="}
 
-// The parser's spellings: its own operators and keyword forms, with lib/aliases.warp's (card alias-mechanism,
+// The parser's spellings: its own operators and keyword forms, with core/library/aliases.warp's (card alias-mechanism,
 // notes/aliases.md: one entry per canonical word, `add { operator: "+", aliases: [plus] }`), made the first time a
 // parse asks; reading the table sees the parser's own spellings only. The table is built into the compiler when it is
 // compiled (module_source), never read from a lib/ when it runs 
@@ -311,7 +351,7 @@ def alias_spellings(): Spellings := {
 }
 // the alias table's parse, baked in with the table (LIBRARY_PARSES): parsing it at every run was a sixth of a small
 // program's compile (card speed-module-rules)
-def alias_table_tree(): Node := source_parse(run_library() + "/aliases.warp", ALIAS_TABLE)
+def alias_table_tree(): Node := source_parse(run_library() + "/" + module_file("aliases"), ALIAS_TABLE)
 def own_spellings(): Spellings := {
 	symbols = pairs_of(SYMBOL_OPERATORS)
 	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: []}
@@ -526,7 +566,7 @@ def words_ahead_end(p: Parser, words: list, first_end: int): int {
 
 // The keyword forms: each word with a form of its own and the form's shape; a prefix word's shape is the operator it
 // spells (`sqrt x` is `√x`), a constant word's the constant (any case: `True`, `NULL`); their aliases come from
-// lib/aliases.warp (spellings)
+// core/library/aliases.warp (spellings)
 // Rust twin: atoms.rs keyword_form, expressions.rs parse_expr, if_else.rs, conditions.rs, warp_parser check_constants
 KEYWORD_FORMS = {"return": "return", "if": "condition", "while": "condition", "unless": "condition", "until": "condition", "for": "loop", "loop": "endless",
 	"class": "type", "struct": "type", "type": "type", "global": "global", "export": "global", "not": "not",
@@ -1311,7 +1351,7 @@ def word_before(p: Parser): text {
 	p.code[start .. end]
 }
 
-// An infix word of lib/aliases.warp before a block names it: `div {…}` is the html tag, `7 div 2` divides
+// An infix word of core/library/aliases.warp before a block names it: `div {…}` is the html tag, `7 div 2` divides
 def names_block(p: Parser, word: text): bool := alias_spellings().infix_words.contains(word) and opens_block(p, word.length)
 // A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag
 def opens_block(p: Parser, width: int): bool {
@@ -1413,7 +1453,7 @@ def test_word_at(p: Parser, min_power: int): list {
 	if ends then [end, word, after_is] else []
 }
 // `x is empty`, `x failed` as their phrase, the test word kept as written (`empty` alone reads as ø): its meaning is
-// lib/sugar/test_words.warp's rules
+// core/sugar/test_words.warp's rules
 def tested(left: Node, word: text, after_is: bool): Node := spaced([left] + (if after_is then [symbol("is")] else []) + [symbol(word)])
 
 // The word here begins what follows the operand: a loop clause, a block's `end`, a key (`_: 0`) or an element (`p{m}`)
@@ -1536,15 +1576,15 @@ def is_element(n: Node): bool := match n {
 INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name; alias_spellings() adds their other
-// spellings (lib/aliases.warp)
+// spellings (core/library/aliases.warp)
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
 SYMBOL_OPERATORS = {"?.": "?.", "===": "===", "!==": "!==", ".+": "+", ".-": "-", ".*": "*", "./": "/", ".^": "^", "&&=": "&&=", "||=": "||=", "^^=": "^^=", "/!=": "/!=", "/!": "/!", "??": "??", "?:": "?:", "··": "··", ":=": ":=", "::": "::", "->": "->", "|>": "|>", "+=": "+=", "-=": "-=", "*=": "*=", "/=": "/=", "%=": "%=", "^=": "^=", "<<": "<<", ">>": ">>", "<=": "<=", ">=": ">=", "==": "==", "!=": "!=", "..": "..", ":": ":", "=": "=", ".": ".", "+": "+", "±": "±", "-": "-", "*": "*", "/": "/", "%": "%", "^": "^", "<": "<", ">": ">", "≈": "≈", "~": "~", "#": "#", "?": "?", "↑": "↑", "↓": "↓"}
 // The operators kept as the phrase [a op b] for the sugar to read: `xs .* 2` maps `*` over the elements, binding as `*`
-// does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (lib/sugar/fallbacks.warp)
+// does (Rust twin: spellings.rs element_wise_word); `a ?: b` is a or its fallback (core/sugar/fallbacks.warp)
 PHRASE_OPERATORS = [".+", ".-", ".*", "./", ".^", "?:"]
-// `left op right` as its phrase, for the sugar to read (lib/sugar/arithmetic.warp, fallbacks.warp)
+// `left op right` as its phrase, for the sugar to read (core/sugar/arithmetic.warp, fallbacks.warp)
 def phrase_operation(left: Node, op: text, right: Node): Node := spaced([left, symbol(op), right])
-// The operators written as words, each with its canonical name; alias_spellings() adds the infix words of lib/aliases.warp
+// The operators written as words, each with its canonical name; alias_spellings() adds the infix words of core/library/aliases.warp
 WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "rem": "rem"}
 // The words that are operators in a loop's iterable alone: Kotlin's `for i in 0 until n` (elsewhere `until` guards)
 // Rust twin: lookahead.rs operator_in_context (in_for_header)
@@ -1606,7 +1646,7 @@ def down_to_at(p: Parser): int {
 	if at > p.at + 4 and keyword_at_position(p, "to", at) then at + 2 - p.at else 0
 }
 
-// The operators only a declaration gives meaning (lib/prelude.warp `infix operator ↑`): `2↑3` calls operator_↑(2, 3);
+// The operators only a declaration gives meaning (core/library/prelude.warp `infix operator ↑`): `2↑3` calls operator_↑(2, 3);
 // `loop··step` in a rule's template glues the hidden name loop·step (rewrites.warp), elsewhere the call of no operator
 // Rust twin: Op::is_declared_only, word_operators.rs log_calls
 DECLARED_ONLY_OPERATORS = ["↑", "↓", "··"]
@@ -1730,16 +1770,13 @@ def declared_classes_modules(): map := bundled_declarations()["classes"]
 def declarations_scanned(): map {
 	words = {}
 	classes = {}
-	for path in LIBRARY_FILES.keys {
-		if not path.contains("/") and path.ends_with(module_extension) {
-			module = path[0 ..< #path - #module_extension]
-			for line in LIBRARY_FILES[path].split("\n") {
-				if line.starts_with(GLOBAL_MARK) {
-					word = name_starting(line[#GLOBAL_MARK ..])
-					if word and line[#GLOBAL_MARK + #word ..].starts_with("(") { words[word] = module }
-				}
-				if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
+	for module in STANDARD_MODULES.keys {
+		for line in LIBRARY_FILES[STANDARD_MODULES[module]].split("\n") {
+			if line.starts_with(GLOBAL_MARK) {
+				word = name_starting(line[#GLOBAL_MARK ..])
+				if word and line[#GLOBAL_MARK + #word ..].starts_with("(") { words[word] = module }
 			}
+			if line.starts_with(CLASS_MARK) { classes[name_starting(line[#CLASS_MARK ..])] = module }
 		}
 	}
 	{"words": words, "classes": classes}
@@ -1773,7 +1810,7 @@ def used_module_sources(source: text): list {
 	}
 	sources = []
 	for module in modules {
-		module_source = file_source(run_library() + "/" + module + ".warp") ?? ""
+		module_source = file_source(run_library() + "/" + module_file(module)) ?? ""
 		if module_source { sources += [module_source] }
 	}
 	sources
@@ -2273,8 +2310,8 @@ def expression_ends(p: Parser): bool {
 	at > p.at and "+-*/<".contains(c) and is_blank(peek(p.code, at + 1, p.n))
 }
 
-// The dashes 0x2010..0x2015 and the minus sign: each means `-` (infix ones: lib/aliases.warp, the minus sign
-// lib/math.warp's alias line)
+// The dashes 0x2010..0x2015 and the minus sign: each means `-` (infix ones: core/library/aliases.warp, the minus sign
+// core/library/math.warp's alias line)
 // Rust twin: operators/spellings.rs OPERATOR_SPELLINGS
 DASH_GLYPHS = "‐‑‒–—―−"
 

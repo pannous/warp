@@ -7,7 +7,7 @@
 #   infix: yes when the word and its word aliases are written between operands too (`7 mod 2`), but
 #   name a block written right after them (`div {…}` is the html tag)
 # Keywords, operator words and constants are quoted: written bare, the parser reads them already.
-# A library keeps the aliases of its own words (lib/math.warp: sin and sine, log₂ …).
+# A library keeps the aliases of its own words (core/library/math.warp: sin and sine, log₂ …).
 
 # arithmetic
 add { operator: "+", symbol: Op.Add, aliases: [plus] }

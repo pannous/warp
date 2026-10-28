@@ -6,7 +6,7 @@ rewrite $xs.add($v...) => $xs += [$v...]
 rewrite $xs.append($v...) => $xs += [$v...]
 rewrite $xs.insert($v) => $xs += [$v]
 rewrite $xs.pop() => list_pop($xs)
-# `x.json`: the JSON text of any value (lib/prelude.warp json_text), a map's field json where it has one
+# `x.json`: the JSON text of any value (core/library/prelude.warp json_text), a map's field json where it has one
 rewrite $x.json => json_text($x)
 
 # `x in xs` (a list's item, a map's key, a text's part) is the runtime word collection_contains(xs, x); `xs contains x`,

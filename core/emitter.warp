@@ -57,7 +57,7 @@ wasi_start = "_start"
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
 fd_write_import = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
 stdout = 1
-# the words that warn, `warning "careful"` and its alias warn (lib/prelude.warp), as a line or a call
+# the words that warn, `warning "careful"` and its alias warn (core/library/prelude.warp), as a line or a call
 warning_words = ["warning", "warn"]
 text_heap_name = "text_heap"
 # its linear memory, one page: fd_write's iovec {address, count} at 0, the count it wrote at 8, the bytes it writes from

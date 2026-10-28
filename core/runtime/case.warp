@@ -8,7 +8,7 @@ use "library_words.warp"
 use "text_numbers.warp"
 use "../byte_codes.warp"
 # `t.lower()`, `t.upper()`: an ASCII text with its letters first…last moved by shift, any other mapped code point by
-# code point through the case table (lib/case_tables.warp, the twin of src/wasm_emitter/text/text_unicode.rs)
+# code point through the case table (core/library/case_tables.warp, the twin of src/wasm_emitter/text/text_unicode.rs)
 text_lower(t: text): text := if is_ascii(t) then ascii_case(t, Ascii.UpperA, Ascii.UpperZ, Ascii.CaseShift) else table_case(t, lower_ranges())
 text_upper(t: text): text := if is_ascii(t) then ascii_case(t, Ascii.LowerA, Ascii.LowerZ, -Ascii.CaseShift) else table_case(t, upper_ranges())
 # the case tables' ranges, read from their texts at the first use only

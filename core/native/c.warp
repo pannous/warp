@@ -1,5 +1,5 @@
 // C functions a program calls through the native host warp-host (notes/warp_host.md): one line each, the C function's
-// own shape, `name(parameter: type…): result from 'library'` as lib/math.warp writes them. The pure emitter makes each a
+// own shape, `name(parameter: type…): result from 'library'` as core/library/math.warp writes them. The pure emitter makes each a
 // wasm import of the module 'library' and describes it in the warp.c_functions section (card pure-c-imports); warp-host
 // loads the library (c: the process, m: libm, sqlite3: libsqlite3.so.0 or libsqlite3.dylib) and calls the function.
 // `import strlen from "c"` takes one line of here, `use c` all of them (core/c_imports.warp).
