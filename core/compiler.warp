@@ -86,8 +86,11 @@ lowered_runtime_words(): Node := {
 	words
 }
 
-# the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core
-compile(source: text, folder: text): any := {
+# the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core. Given a
+# runtime.wasm, a library module behind it, its operands relocatable (write_module)
+compile(source: text, folder: text, library_runtime: any = ø): any := {
+	global module
+	module.relocating = library_runtime != ø
 	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed
 	# the C functions it calls, its foreign lines left out (c_imports.warp)
@@ -101,7 +104,7 @@ compile(source: text, folder: text): any := {
 	if failing { throw failing }
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
 	# behind runtime.wasm
-	prepend_runtime(runtime_bytes())
+	prepend_runtime(library_runtime ?? runtime_bytes())
 	relocate_program(separate_file() != "")
 	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, foreign#2), emitter_kinds(program))
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
@@ -188,6 +191,19 @@ write_runtime(file: text) := {
 	if made is text { raise made }
 	write_bytes(file, made)
 }
+# <name>.wasm, the bundled module compiled once behind runtime.wasm (emitter/prebuilt.warp own_items_from), for
+# programs to be linked to; `warp rebuild` writes one beside warp.wasm for each. Every program has the prelude, used
+# again it would define its words twice
+write_module(name: text, runtime_file: text, file: text) := {
+	write_bytes(file, compile(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, read_bytes(runtime_file)))
+}
+# every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder; one refusing to prebuild is
+# named and stays compiled from source
+write_modules(folder: text, runtime_file: text) := {
+	for name in std_module_names {
+		try { write_module(name, runtime_file, folder + "/" + name + ".wasm") } catch refusal { print name + ".wasm not prebuilt: " + refusal }
+	}
+}
 source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
 show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
@@ -205,5 +221,7 @@ match command {
 	"repl": repl()
 	"repl-step": repl_step(args#2, args#3, args#4)
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
+	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
+	"modules": write_modules(args#2, if #args > 2 then args#3 else RUNTIME_WASM)
 	_: if command in running_commands then refuse_running(command) else refuse_native(command)
 }

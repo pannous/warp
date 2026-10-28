@@ -18,12 +18,12 @@ signed_long = Scalar("i64", yes, 8)
 unsigned_long = Scalar("i64", no, 8)
 single_float = Scalar("f32", yes, 4)
 double_float = Scalar("f64", yes, 8)
-# each type word and its scalar, as a foreign line reads it (c_imports.warp c_type_words): `int` is C's, 32 bits, and so
-# is an untyped int literal; `long` and `i64` are 64
+# each type word and its scalar (decision primitive-int-width): `int` is warp's 64-bit int here too, and so is an
+# untyped int literal; 32 bits are spelled `i32` (C's 32-bit int is only a foreign line's reading)
 scalars = {i8: signed_byte, int8: signed_byte, u8: unsigned_byte, uint8: unsigned_byte, byte: unsigned_byte,
 	bool: unsigned_byte, i16: signed_short, int16: signed_short, u16: unsigned_short, uint16: unsigned_short,
 	i32: signed_word, int32: signed_word, u32: unsigned_word, uint32: unsigned_word, char: unsigned_word,
-	pointer: unsigned_word, i64: signed_long, int64: signed_long, int: signed_word, long: signed_long,
+	pointer: unsigned_word, i64: signed_long, int64: signed_long, int: signed_long, long: signed_long,
 	u64: unsigned_long, uint64: unsigned_long, f32: single_float, float32: single_float, f64: double_float,
 	float: double_float, double: double_float, number: double_float}
 NO_VALUE = ""

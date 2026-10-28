@@ -18,8 +18,9 @@ core/extensions/primitive.warp, an emitter of plain MVP wasm of its own: no GC t
 
 ## Types
 The FFI types of a foreign line (c_imports.warp c_type_words) plus the narrow ones of D16: i8/u8/byte/bool,
-i16/u16, i32/u32/int/char/pointer, i64/u64/long, f32, f64/float/double/number. `int` is C's 32-bit int and so is an
-untyped int literal (a literal takes the type it is used as). Widening is implicit (i32 → i64, int → float, f32 →
+i16/u16, i32/u32/char/pointer, i64/u64/int/long, f32, f64/float/double/number. `int` is warp's 64-bit int and so is an
+untyped int literal; a literal takes the width its expected type asks for (`x: i32 = 5`); 32 bits are spelled `i32`
+(decision primitive-int-width). Widening is implicit (i32 → i64, int → float, f32 →
 f64), narrowing is `x as u8`, which cuts the bits (masked or sign-spread). `%` is C's remainder (rem_s).
 
 ## Structs

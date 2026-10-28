@@ -3,10 +3,12 @@
 # the module of the runtime words alone, its bytes: read again while a reading leaves out a word more
 runtime_wasm_module(runtime: Node, host: map): any := {
 	module.prebuilding = yes
+	module.relocating = yes
 	module.left_out = {}
 	made = ø
 	while made == ø { made = typed_wasm_module(Node.Empty, runtime, host, {}) }
 	module.prebuilding = no
+	module.relocating = no
 	made
 }
 # every word compiled in name order, but those outside the core on their own (an enum's method naming the program's
@@ -51,11 +53,11 @@ global runtime_image = ø
 class RuntimeImage { wasm: list; types: int; imports: int; functions: int; data: int; globals: list; words: map; hooks: list }
 def prepend_runtime(wasm: any) { runtime_image = if wasm == ø then ø else runtime_image_of(wasm) }
 def prepended(): bool { runtime_image != ø and not module.prebuilding }
-# whether the code's index operands are emitted relocatable (padded, marked): in runtime.wasm, and in a program that is
-# also written as a separate module (linked_bytes moves them to its numbering)
+# whether the code's index operands are emitted relocatable (padded, marked): in a prebuilt module (relocating), and
+# in a program that is also written as a separate module (linked_bytes moves them to its numbering)
 global relocates_program = no
 def relocate_program(wanted: bool) { relocates_program = wanted }
-def relocates(): bool { module.prebuilding or relocates_program }
+def relocates(): bool { module.relocating or relocates_program }
 # its layout, the binary warp.runtime: the counts, the hooks' and left words' names, each global's name and kind, each
 # word's name, index, parameter kinds and result kind
 def runtime_image_of(wasm: list): any {
@@ -195,7 +197,6 @@ def with_entries(content: list, more: list): list {
 	count = uleb_read(content, 0)
 	uleb(count#1 + #more) + content[count#2 ..] + concatenated(more)
 }
-# the code section's entries of the runtime's functions, a hook's the program's code
 # the runtime's code, each call of a runtime function moved by the C functions' imports (not those of host words)
 def rebased_runtime_code(): list {
 	content = runtime_part(section_ids.code)
@@ -203,19 +204,22 @@ def rebased_runtime_code(): list {
 	calls = relocations_of(runtime_image.wasm).filter(entry => entry#2 == relocated.calls and entry#3 == runtime_space and uleb_read(content, entry#1)#1 >= runtime_image.imports)
 	rebased(content, calls, [[shifted(runtime_shift())]])
 }
-def runtime_code_entries(): list {
-	content = rebased_runtime_code()
-	count = uleb_read(content, 0)
+# the code section's content: the runtime's functions, a hook's the program's code, then the program's functions, each
+# body knowing where it starts (its relocations' offsets)
+def prepended_code(functions: list): list {
+	runtime = rebased_runtime_code()
+	count = uleb_read(runtime, 0)
 	at = count#2
-	entries = []
+	content = uleb(count#1 + #functions)
 	for p in 0..<count#1 {
-		size = uleb_read(content, at)
+		size = uleb_read(runtime, at)
 		end = size#2 + size#1
 		hook = module.dispatchers.filter(f => f.index == #module.imports + p)
-		entries += [if #hook > 0 then function_body(hook#1, 0) else content[at ..< end]]
+		content += if #hook > 0 then function_body(hook#1, #content) else runtime[at ..< end]
 		at = end
 	}
-	uleb(count#1) + concatenated(entries)
+	for f in functions { content += function_body(f, #content) }
+	content
 }
 # a subsection of runtime.wasm's names by its id, its content (an empty vector when it has none); with more entries
 def runtime_subsection(id: int): list {
@@ -264,12 +268,12 @@ def prepended_bytes(functions: list): list {
 	declared = section(section_ids.function, with_entries(runtime_part(section_ids.function), functions.map(f => uleb(own_function_type(f)))))
 	own_globals = module.global_order[#runtime_image.globals ..]
 	globals = section(section_ids.globals, with_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
-	codes = section(section_ids.code, with_entries(runtime_code_entries(), functions.map(f => function_body(f, 0))))
+	codes = section(section_ids.code, prepended_code(functions))
 	texts = section(section_ids.data, with_entries(runtime_part(section_ids.data), text_segments()))
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 	parts = [types, section(section_ids.import, with_entries(runtime_part(section_ids.import), c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
 		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(runtime_image.data + #module.texts)), codes, texts]
-	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks()
+	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks() + runtime_sections(functions)
 }
 # the program's C functions, imported behind the runtime's host words; their types after every other: no runtime type moves
 def c_imports(): list { module.imports[runtime_image.imports ..] }
@@ -295,6 +299,13 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 	content += runtime_names(names_subsections.tags, [])
 	section(section_ids.custom, name_bytes("name") + content)
 }
+
+## a library module prebuilt (card modules-prebuilt, notes/runtime_linking.md "Library modules"): its words compiled
+## once behind runtime.wasm from their declared kinds, its own items numbered from the runtime's counts, every index
+## operand padded and listed, so a link appends it behind the runtime and the modules before it
+# where the module's own items start in each index space (relocated): behind the runtime's imports and functions,
+# types, globals and text segments
+def own_items_from(): list := [#module.imports + runtime_image.functions, runtime_image.types, #runtime_image.globals, runtime_image.data]
 
 ## a program linked to runtime.wasm (card runtime-separate-modules, notes/runtime_linking.md "Separate modules"): numbered
 ## as behind it, but every runtime function, global, the memory, the error tag and the hooks table imported from its

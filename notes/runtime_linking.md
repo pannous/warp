@@ -93,6 +93,17 @@ made_case kind made, since no program decides any more what it makes.
   source.
 - Modules have no hooks of their own: a module's class (units) is a class of the linked program, its text() and ==
   go into the program's dispatcher; module code calls the runtime's hook stubs.
+- Built (2026-10-28): `warp module <name> [runtime.wasm] [<name>.wasm]`, `warp modules <folder> [runtime.wasm]`
+  (core/compiler.warp write_module: compile() given runtime.wasm, `module.relocating`); `warp rebuild modules` writes
+  modules/<name>.wasm beside warp.wasm (std_module_names, ~25 s; part of every rebuild once a link appends them), rebuild.sh keeps them in the
+  store with runtime.wasm. Each file today is the whole prepended module (runtime + own items, valid wasm), its section
+  `warp.module` in warp.runtime's binary layout, counting only its own items; its own operands are marked space 1,
+  offsets from the code section's content start. 26 of 36 prebuild; the rest are named with their refusal, mostly a
+  word whose untyped parameters are nodes reaching a call the core lacks for nodes (sound `number(…)`, math `dot`).
+- Open: a link appending the own items (rebased, shifts per space); the module's prelude words are its own copy
+  (they should be the prelude module's, space 2+k); closures into module.closures behind the program's, closure ids as
+  a padded sleb behind i64.const (fixer's plan); classes from warp.declarations into module.classes before late_code;
+  late_code once all modules are bound.
 
 ## Hooks (runtime words calling program code: a class's text(), ==)
 One hook list in the warp.runtime section. Prepended: the stub bodies are replaced by the program's. Separately linked:

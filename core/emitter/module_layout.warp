@@ -140,15 +140,18 @@ def runtime_exports(functions: list): list {
 	}
 	exports
 }
-# runtime.wasm's layout (warp.runtime, binary: notes/runtime_linking.md "warp.runtime") and its relocations
-# (warp.relocations, a vector of [offset in the code section's content, kind, space]); none in a program's module
+# a prebuilt module's layout (binary: notes/runtime_linking.md "warp.runtime") and its relocations (warp.relocations,
+# a vector of [offset in the code section's content, kind, space]): runtime.wasm's (warp.runtime), a library module's
+# own items behind the runtime (warp.module); none in a program's module
 def runtime_sections(functions: list): list {
-	if not module.prebuilding { return [] }
-	counts = concatenated([#module.gc_order, #module.imports, #functions, #module.global_order, #module.texts].map(uleb))
+	if not module.relocating { return [] }
+	own_globals = module.global_order[(if module.prebuilding then 0 else #runtime_image.globals) ..]
+	counts = concatenated([#module.gc_order, #module.imports, #functions, #own_globals, #module.texts].map(uleb))
 	names = vector(module.dispatchers.map(f => name_bytes(f.name))) + vector(module.left_out.keys.map(name_bytes))
-	globals = vector(module.global_order.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2))))
+	globals = vector(own_globals.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2))))
 	words = vector(functions.map(f => name_bytes(f.name) + uleb(f.index) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result)) + signature_bytes(f.signature)))
-	section(section_ids.custom, name_bytes(runtime_section) + counts + names + globals + words) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
+	name = if module.prebuilding then runtime_section else library_section
+	section(section_ids.custom, name_bytes(name) + counts + names + globals + words) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
 }
 # a word's signature in warp.runtime, what a call of it reads (named arguments, defaults, a rest parameter, the declared
 # result): each parameter's name, type, flags (rest 1, a default 2) and default, packed; the result as written
