@@ -1,5 +1,6 @@
 // The standard library module math (notes/stdlib.md): `use math`, together with the C library libm.
 // Whole-number words declare int parameters, which their signatures show; the others take any number
+use reals
 
 // The math spellings of operators (decision operator-alias), every program reads them: each keeps the precedence
 // of the operator it spells

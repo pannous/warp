@@ -268,10 +268,12 @@ with_call_forms(aliases: map, names: list): any := {
 # or a function taking as many arguments (shadowing is per arity, Rust's library_words.rs word_for_unless: a program's
 # `index_of(source, part, from, n)` leaves `"abc".index_of(c)` to the library); top-down, so a method call
 # `x.f(a)` counts its receiver
-aliased(n: Node, aliases: map, own: map): any := if class_view(n) != ø then with_members(n, member => aliased(member, aliases, own)) else match n {
+aliased(n: Node, aliases: map, own: map): any := if class_view(n) != ø then with_members(n, member => aliased_member(member, aliases, own)) else match n {
 	Key(receiver, Op.Dot, call): Key(aliased(receiver, aliases, own), Op.Dot, aliased_call(children(call, x => aliased(x, aliases, own)), aliases, own, 1))
 	_: children(aliased_call(n, aliases, own, 0), x => aliased(x, aliases, own))
 }
+# a method's body aliased, never its head: `times(k) := …` stays the class's own `*`
+aliased_member(member: Node, aliases: map, own: map): any := if is_key(member, Op.Define) and is_group(key_of(member)) then Key(key_of(member), Op.Define, aliased(value_of(member), aliases, own)) else aliased(member, aliases, own)
 # a class declaration with each member, read as the definitions pass reads it, changed by f: a class body is a type
 # view the walks don't enter (`keys.index_of(x)` in a method is aliased so)
 with_members(n: Node, f: function): Node := {
