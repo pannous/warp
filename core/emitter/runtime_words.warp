@@ -123,7 +123,7 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		"ratio_denominator": TypedCode(ValueKind.Int, ratio_part(values#1.code, 1))
 		# big_int_of(negative, count): an Int $Node of a $BigInt of count zero limbs; limb(n, i), set_limb(n, i, v) one
 		# limb as an int from 0 to 2^32 - 1 (runtime/extended/big_ints.warp)
-		"big_int_of": TypedCode(ValueKind.Node, node(Kind.Int, converted(values#1, ValueKind.Bool) + index_code(values#2) + gc_code(gc_ops.array_new_default, [gc_type(gc.limbs)]) + gc_code(gc_ops.struct_new, [gc_type(gc.big_int)])))
+		"big_int_of": made_by("BigInt", TypedCode(ValueKind.Node, node(Kind.Int, converted(values#1, ValueKind.Bool) + index_code(values#2) + gc_code(gc_ops.array_new_default, [gc_type(gc.limbs)]) + gc_code(gc_ops.struct_new, [gc_type(gc.big_int)]))))
 		"is_big_int": TypedCode(ValueKind.Bool, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.big_int)]))
 		"big_int_negative": TypedCode(ValueKind.Bool, payload(values#1.code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 0]))
 		"limb_count": TypedCode(ValueKind.Int, limbs_of(values#1.code) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u])
@@ -234,16 +234,15 @@ def unboxed(code: list, box: int): list { payload(code, box) + gc_code(gc_ops.st
 def plain_int_test(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.int_box)]) }
 # an Int $Node of the $Ratio of the two ints' code, numerator and denominator, the program then making ratios
 def ratio_node(numerator: list, denominator: list): TypedCode {
-	module.made["Ratio"] = yes
 	box = code => code + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])
-	TypedCode(ValueKind.Node, node(Kind.Int, box(numerator) + box(denominator) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)])))
+	made_by("Ratio", TypedCode(ValueKind.Node, node(Kind.Int, box(numerator) + box(denominator) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)])))
 }
 def ratio_test(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
 def ratio_part(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }
 # the $Limbs array of an Int $Node holding a $BigInt
 def limbs_of(code: list): list { payload(code, gc_type(gc.big_int)) + gc_code(gc_ops.struct_get, [gc_type(gc.big_int), 1]) }
 # `shown_big_int(n)`: a big int's text, a function made at its first call whose code is written last (as closure_text):
-# big_ints.warp's big_int_text when the program makes big ints, that is big_int_power was compiled, else a trap, so
+# big_ints.warp's big_int_text when the program makes big ints (big_int_of compiled), else a trap, so
 # that a program printing only plain ints carries neither big_int_text nor the $Limbs and $BigInt types
 shown_big_int_name = "shown_big_int"
 shown_big_int_code(f: Function): any := {
@@ -253,8 +252,8 @@ shown_big_int_code(f: Function): any := {
 # `made_case(Made.BigInt, big_int_sum(a, b))` in a runtime word: once the program makes values of that kind
 # (module.made), the return of the call where one of its arguments holds such a value; before that nothing, so a
 # program making none carries neither the call nor the words it reaches (a shown value no time's text). Its function
-# is noted (module.made_sites) and read again when a kind is first made (module_compiled): big ints once big_int_power
-# is compiled, times once one is made (times.warp time_node)
+# is noted (module.made_sites) and read again when a kind is first made (module_compiled): each maker notes its kind
+# (made_by: big_int_of, ratio_node, times.warp time_node)
 made_tests = {BigInt: "holds_big_int", Ratio: "holds_ratio", Time: "holds_time"}
 def made_case(body: Body, arguments: list): TypedCode {
 	made = name_of(value_of(arguments#1))
@@ -272,8 +271,8 @@ def made_case(body: Body, arguments: list): TypedCode {
 	called = return_value(body, call_values(module.runtime[name_of(call#1)], values))
 	TypedCode(no_kind, test + [op.if, no_value] + called.code + [op.end])
 }
-# the kinds the program makes so far: big ints once big_int_power is compiled, any other as its maker noted it
-def made_kinds(): list {
-	if module.runtime["big_int_power"].kinds != ø { module.made["BigInt"] = yes }
-	module.made.keys
+# the code of a value of that kind (a case of kinds.warp Made), the program then making it
+def made_by(made: text, code: TypedCode): TypedCode {
+	module.made[made] = yes
+	code
 }

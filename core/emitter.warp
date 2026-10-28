@@ -1307,7 +1307,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		}
 		# a kind the program makes (made_case): the functions with a made_case read again with it, until no kind is new
 		read_with = 0
-		while #made_kinds() > read_with {
+		while #module.made.keys > read_with {
 			read_with = #module.made.keys
 			for f in module.made_sites { body_code(f) }
 		}
