@@ -14,23 +14,12 @@ def try_depth_step(instruction: int): list {
 	depth = relocatable(relocated.globals, module.globals[try_depth_name]#1)
 	[op.global_get] + depth + [op.i64_const, 1, instruction, op.global_set] + depth
 }
-# a runtime error ahead of its trap: the global trap_name names `name`, the function it fails in, for the runner
-# (abi/traps.rs trap_error); while a try runs, the global failed_in keeps its message for `catch e` (runtime.warp
-# caught_error) and it throws
+# a runtime error ahead of its trap: the global trap_name names `name`, the function it fails in, whose words the
+# run's error says (runtime/error_sentences.warp); while a try runs, it throws for `catch e` (runtime.warp caught_error)
 def error_throw(name: text): list {
 	named = boxed(TypedCode(ValueKind.Text, text_bytes(name))) + [op.global_set] + relocatable(relocated.globals, declared_global(trap_name_global, ValueKind.Node)#1)
 	if not module.catches_errors { return named }
-	kept = text_bytes(runtime_error_message(name)) + [op.global_set] + relocatable(relocated.globals, module.globals[failed_in_name]#1)
-	named + [op.global_get] + relocatable(relocated.globals, module.globals[try_depth_name]#1) + [op.i64_eqz, op.i32_eqz, op.if, no_value] + kept + [op.i32_const, 0, op.throw, 0, op.end]
-}
-# the message of the runtime error a function of that name fails with, as Rust's words it (runtime_errors.rs
-# runtime_error_message, control/traps.rs trap_error): its name's words, then its fix; a missing field or switch case
-# keeps its name as written
-def runtime_error_message(name: text): text {
-	if name.starts_with(no_field_prefix) { return "no field " + name[#no_field_prefix..] }
-	if name.starts_with(no_case_prefix) { return "no case for " + name[#no_case_prefix..] }
-	words = name.replace("_", " ")
-	if name in runtime_error_fixes then words + "; " + runtime_error_fixes[name] else words
+	named + [op.global_get] + relocatable(relocated.globals, module.globals[try_depth_name]#1) + [op.i64_eqz, op.i32_eqz, op.if, no_value, op.i32_const, 0, op.throw, 0, op.end]
 }
 # `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
 # has_else: `else ø` is a branch giving ø, no missing one
