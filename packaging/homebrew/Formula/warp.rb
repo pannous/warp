@@ -1,19 +1,16 @@
-# Homebrew formula for the tap pannous/homebrew-tap (brew install pannous/tap/warp): warp and warp-runtime (the stub
-# standalone executables are made from, next to warp), the compilers and lib/ in share/warp, the prebuilt binaries of the tag's GitHub release (seconds, no
-# Rust build); --HEAD builds main from source. Source of truth; the tap gets a copy.
+# Homebrew formula for the tap pannous/homebrew-tap (brew install pannous/tap/warp): the native warp of the tag's GitHub
+# release, the folder holding it, its compilers, lib/ and libwarp_wasmtime in libexec (seconds, no build). Source of
+# truth; the tap gets a copy.
 # At a release: packaging/homebrew/update_formula.sh <version> writes the version and the binaries' sha256, see notes/packaging.md
 class Warp < Formula
-  desc "Wasm-first programming language and data notation (Rust implementation of Wasp)"
+  desc "Wasm-first programming language and data notation (successor of Wasp, written in warp)"
   homepage "https://github.com/pannous/warp"
   version "1.4.1"
   license all_of: ["AGPL-3.0-or-later", "MIT"]
 
-  RELEASE = "https://github.com/pannous/warp/releases/download/v#{version}/warp-v#{version}".freeze
+  depends_on "binaryen" # wasm-opt, which `warp build` trims a program's module with
 
-  head do
-    url "https://github.com/pannous/warp.git", branch: "main"
-    depends_on "rust" => :build
-  end
+  RELEASE = "https://github.com/pannous/warp/releases/download/v#{version}/warp-v#{version}".freeze
 
   on_macos do
     on_arm do
@@ -38,31 +35,13 @@ class Warp < Formula
   end
 
   def install
-    if build.head?
-      ENV["CARGO_NET_OFFLINE"] = "false" # the repository's .cargo/config.toml builds offline, from the local cache
-      system "cargo", "install", *std_cargo_args
-      system "cargo", "install", *std_cargo_args(path: "crates/warp-runtime"), "--bin", "warp-runtime"
-      system "cargo", "install", *std_cargo_args(path: "crates/warp-runtime"),
-             "--features", "webview", "--bin", "warp-page-runtime"
-    else
-      bin.install "warp", "warp-runtime"
-      # releases before the page stub (card build-links) ship none
-      bin.install "warp-page-runtime" if File.exist?("warp-page-runtime")
-      # warp-host and its shipped cache, warp-self's kept values (notes/warp_host.md); newer releases only
-      bin.install "warp-host" if File.exist?("warp-host")
-      pkgshare.install "host-cache" if File.exist?("host-cache")
-      # the warp-written compilers and lib/, found by warp in <prefix>/share/warp (card installed-compilers); releases
-      # before 1.5.0 ship none
-      # (warp.wasm, runtime.wasm, which every compile links, and warp-self.wasm; compiler.wasm and compiler-self.wasm
-      # before the rename)
-      compilers = %w[warp.wasm runtime.wasm warp-self.wasm compiler.wasm compiler-self.wasm].select { |file| File.exist?(file) }
-      pkgshare.install(*compilers, "lib") unless compilers.empty?
-    end
+    # the tarball is warp's lib/ with the native warp, its compilers and libwarp_wasmtime in it (decision
+    # rust-gone-in-1-5): kept whole, bin/warp a link to its warp, which finds its lib/ and library beside its real path
+    libexec.install Dir["*"]
+    bin.install_symlink libexec/"warp"
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/warp --version") unless build.head?
-    assert_equal "42", shell_output("#{bin}/warp eval '6*7'").strip.split.last
-    assert_equal "42", shell_output("#{bin}/warp '6*7'").strip.split.last if (pkgshare/"warp.wasm").exist? || (pkgshare/"compiler.wasm").exist?
+    assert_equal "42", shell_output("#{bin}/warp '6*7'").strip.split.last
   end
 end
