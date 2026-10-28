@@ -42,7 +42,7 @@ cp "$checkout/lib/native/driver.warp" "$stage/"
 (cd "$stage" && "$warp" build native driver.warp >"$stage/build.log" 2>&1)
 module() { # module <sample>: the sample's wasm module in the stage
 	cp "$checkout/samples/native/$1.warp" "$stage/"
-	(cd "$stage" && "$warp" build "$1.warp" >/dev/null 2>&1)
+	(cd "$stage" && "$warp" build --wasm "$1.warp" >/dev/null 2>&1)
 }
 driven() { # driven <sample> <expected> [arguments…]: the driver runs the sample's module with the arguments
 	sample=$1 expected=$2
