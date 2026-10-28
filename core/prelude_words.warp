@@ -238,9 +238,10 @@ with_type_module_uses(program: Node): Node := {
 # the modules of the global words a program names and binds nothing to, each once
 global_word_modules(program: Node, own: any, used: list): list := {
 	bound = names_bound_in(program)
+	words = global_words()
 	modules = []
 	for word in symbol_words(program) {
-		module = global_words.get(word)
+		module = words.get(word)
 		if module != ø and word not in own and word not in bound and module not in used and module not in modules { modules += [module] }
 	}
 	modules
@@ -263,7 +264,7 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 	calls = nodes_in(program).filter(n => is_group(n) and (bracket_of(n) == "(" or bracket_of(n) == "") and #n > 1 and n#1 is symbol and items_of(n)[1 ..].any(argument => symbol_words(argument).any(is_unknown)))
 	if #calls == 0 { return program }
 	modules = bundled_slices()
-	classes = class_modules(modules)
+	classes = declared_classes_modules()
 	definitions = definitions_by_name([definition_slices(prelude)] + modules.values)
 	used = statements_in(program).map(use_target).filter(target => target is symbol).map(name_of)
 	wanted = []
@@ -292,12 +293,6 @@ bundled_slices(): map := {
 	modules = {}
 	for path in LIBRARY_FILES.keys { if not path.contains("/") and path.ends_with(module_extension) { modules[path[0 ..< #path - #module_extension]] = definition_slices(LIBRARY_FILES[path]) } }
 	modules
-}
-# class name → the module declaring it, `Time` → units
-class_modules(modules: map): map := {
-	classes = {}
-	for module in modules.keys { for slice in modules[module] { if slice#2.starts_with("class ") { classes[slice#1] = module } } }
-	classes
 }
 # name → the texts of its definitions in these lists of slices, the first written first
 definitions_by_name(slice_lists: list): map := {

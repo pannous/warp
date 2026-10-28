@@ -1,0 +1,7 @@
+# a character steps by code point: c++ is the next one, so a range of letters counts them
+
+"c = 'y'; c++; c"	'z'
+"c = 'b'; c--; c"	'a'
+"letters = 'a' to 'e'; letters#5"	'e'
+"c = 'b'; s = ''; for x in c to 'd' { s += x }; s"	'bcd'
+'s = "ab"; s++; s'	error

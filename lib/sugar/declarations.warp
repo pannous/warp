@@ -34,3 +34,7 @@ rewrite (const $d) => $d
 rewrite (constant $d) => $d
 rewrite (final $d) => $d
 rewrite (val $d) => $d
+
+# `global play(tone) := …`: a module's word that works without its `use` (decision bizarre-global, which parser.warp
+# bundled_declarations reads off the module's text); as code, the definition itself
+rewrite global: $d => $d where $d is definition

@@ -242,9 +242,10 @@ defined_types(program: Node): map := {
 }
 
 # a library word the program defines for other types, `sin(x: Real) := …` beside math's `sin(x: float)`: the library's
-# lines join its variants (decision sound-core-order), so a float still reaches the library's sin
+# lines join its variants (decision sound-core-order), so a float still reaches the library's sin; an untyped
+# definition, `add(a, b) := …`, `def clear(color)`, takes every type itself and shadows the word
 library_variants(name: text, defined: list): list := {
-	if not word_lines().has(name) { return [] }
+	if not word_lines().has(name) or not defined.all(own => own.any(type => type != any_word)) { return [] }
 	written = word_lines()[name].map(line => line.signature.parameters.map(p => if p.type_name == "" then any_word else p.type_name))
 	joining = []
 	# math declares sin twice, from warp and from 'm': one variant
@@ -323,8 +324,9 @@ prefix_operation(n: Node): list? := {
 numeric_kinds = ["int", "float"]
 known_kind(n: Node, judge: ArgumentJudge): list? := {
 	if n is symbol and name_of(n) in judge.variables and judge.variables[name_of(n)] { return judge.variables[name_of(n)] }
-	# a function the program defines, passed by name (`play(hum, 2s)`): a function of its parameters' count
-	if n is symbol and name_of(n) in judge.own and is_group(judge.own[name_of(n)]) { return ["function", #judge.own[name_of(n)] - 1] }
+	# a function the program defines, passed by name (`play(hum, 2s)`): a function of its parameters' count; one of
+	# none read bare is its call, `sin(π)` of a π() := Real(1, 1)
+	if n is symbol and name_of(n) in judge.own and is_group(judge.own[name_of(n)]) and #judge.own[name_of(n)] > 1 { return ["function", #judge.own[name_of(n)] - 1] }
 	# `(2)`, the operand of `sqrt(2)`, is 2
 	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return known_kind(n#1, judge) }
 	prefixed = prefix_operation(n)

@@ -17,7 +17,21 @@ pub fn confine_process() {
 	PROCESS_SANDBOXED.store(true, Ordering::SeqCst);
 }
 
+thread_local! {
+	/// While warp's own compiler runs on this thread: it is the toolchain, not the sandboxed program
+	static TOOLCHAIN_RUNNING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// `body` run as warp's toolchain, unconfined: the compiler writes its module to the temporary folder and keeps values
+/// in the module cache, outside any state folder (card sandbox-hello-trap)
+pub fn as_toolchain<R>(body: impl FnOnce() -> R) -> R {
+	crate::util::scoped(&TOOLCHAIN_RUNNING, true, body)
+}
+
 pub fn is_sandboxed() -> bool {
+	if TOOLCHAIN_RUNNING.with(|running| running.get()) {
+		return false;
+	}
 	PROCESS_SANDBOXED.load(Ordering::SeqCst) || crate::compiler::compile_context::read(|context| context.sandboxed)
 }
 

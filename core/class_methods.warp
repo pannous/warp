@@ -24,8 +24,8 @@
 # - a class showing its instances by `text()` shows them so wherever a value shows (print, `"at " + x`): the
 #   dispatcher `text·shown(x)` gives an instance its class's text, any other value the builtin's (str); the emitter
 #   shows a value that may be an instance through it (emitter/output.warp shown_text)
-# - `x is Animal` is true of an instance of a class extending Animal too: `x is Animal or x is Dog`, and so is a
-#   dispatcher's test of each owner (widened_tests, after the methods are lifted)
+# - `x is Animal` is true of an instance of a class extending Animal too, a dispatcher's test of each owner as well
+#   (emitter runtime_words.warp type_test_code)
 # - fields a space lists, `class person{name age: int}`, are each a field, `name; age: int` (the last takes the type)
 # - `init(…)` is the class's constructor (card declared-class), `value(…) { … }` and `value { … }` too (a method
 #   `value() := …` stays one), lifted as `init·C(self, …)`: a call `C(…)` is the function `C·new(…)`, which makes the
@@ -110,9 +110,8 @@ methods_lifted(program: Node): Node := {
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
 	for name in classes.keys { classes[name].methods = positions_derived(classes[name].methods, operator_table) }
-	extended = classes.keys.any(name => #extending_classes(classes, name) > 1)
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
-	if #liftable == 0 and not extended and not respelled { return program }
+	if #liftable == 0 and not respelled { return program }
 	rewritten = []
 	for top_statement in top_statements {
 		view = class_view(top_statement)
@@ -160,7 +159,6 @@ methods_lifted(program: Node): Node := {
 	}
 	for name in constructed.keys { rewritten += constructor_functions(classes, name, routes) }
 	rewritten += derived_dispatchers(classes, liftable, routes)
-	if extended { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then widened_tests(top_statement, classes) else top_statement) }
 	group_like(program, rewritten)
 }
 # `+(a: Vec, b: Vec) := …` (also `infix operator +(…)`, `plus(…)`) outside a class: an operator its first parameter's
@@ -585,22 +583,6 @@ spelled_operator(operator_table: map, spelled: text): list? := if spelled in ope
 # how many parameters the method of that name takes (besides its instance)
 taken_count(classes: map, names: list, method: text): int := #method_parameters(method_in(classes[owners_of(classes, names, method)#1], method))
 is_field_of_any(classes: map, names: list, name: text): bool := names.any(owning_class => name in classes[owning_class].fields)
-
-# the class and the classes of the program extending it, directly or through others
-extending_classes(classes: map, name: text): list := classes.keys.filter(other => name in lineage(classes, other))
-# that the value is an instance of the class or of one extending it: `x is Animal or x is Dog`
-instance_check(classes: map, name: text, tested_value: Node): Node := {
-	extending = extending_classes(classes, name)
-	test = Key(tested_value, Op.Is, symbol(name))
-	for class_kind in extending { if class_kind != name { test = Key(test, Op.Or, Key(tested_value, Op.Is, symbol(class_kind))) } }
-	test
-}
-# a program's test `x is Animal` of a class others extend, as instance_check; a value not a name is tested once, as
-# written
-widened_tests(n: Node, classes: map): Node := match n {
-	Key(left, Op.Is, right): { if left is symbol and right is symbol and name_of(right) in classes and #extending_classes(classes, name_of(right)) > 1 then instance_check(classes, name_of(right), left) else children(n, part => widened_tests(part, classes)) }
-	_: children(n, part => widened_tests(part, classes))
-}
 
 # the classes, each before the classes it extends
 deepest_first(classes: map, names: list): list := {

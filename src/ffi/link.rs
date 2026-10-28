@@ -125,23 +125,6 @@ fn link_libm_table(linker: &mut Linker<FfiState>) -> Result<()> {
 	Ok(())
 }
 
-/// Link the functions of a library the module imports, as its headers declare them
-pub fn link_dynamic_library(
-	linker: &mut Linker<FfiState>,
-	engine: &Engine,
-	lib_name: &str,
-	imported: &std::collections::HashSet<String>,
-) -> Result<usize> {
-	// the module imports under the name the program wrote (`use zlib`), the library and its headers go by their own (z)
-	let Some(library) = get_or_load_library(resolve_library_alias(lib_name)) else {
-		return Ok(0);
-	};
-	Ok(header_c_functions(lib_name, imported)
-		.into_iter()
-		.filter(|function| link_c_function(linker, engine, &library, function.clone()).is_ok())
-		.count())
-}
-
 /// Link a single function from a parsed header signature, imported from `module`
 fn link_single_function(
 	linker: &mut Linker<FfiState>,
@@ -163,17 +146,17 @@ fn link_c_function(
 	Ok(warp_runtime::c_calls::link_c_function(linker, engine, function, pointer)?)
 }
 
-/// Link all dynamic libraries required by a WASM module's imports
-/// Scans the module for import statements and links matching libraries via reflection
-pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, module: &wasmtime::Module) -> Result<()> {
-	use std::collections::HashSet;
-
-	// Collect unique library names from imports
-	let mut libs_to_link: HashMap<String, HashSet<String>> = HashMap::new();
-
+/// Link the C functions a module imports beyond the hand-linked libc and libm, as its warp.c_functions section
+/// describes them (else as the import's own type says, warp_runtime::c_imports): warp-host links them alike
+pub fn link_module_libraries(
+	linker: &mut Linker<FfiState>,
+	module: &wasmtime::Module,
+	c: &warp_runtime::c_imports::CImports,
+) -> Result<()> {
+	let mut libs_to_link: HashMap<String, std::collections::HashSet<String>> = HashMap::new();
 	for import in module.imports() {
 		let module_name = import.module();
-		// Skip built-in libraries that are already linked; libc beyond its built-in functions (toupper) is linked here
+		// libc beyond its built-in functions (toupper) is linked here
 		let built_in_libc = matches!(module_name, "c" | "libc") && HAND_LINKED_LIBC.contains(&import.name());
 		let wasm_module = crate::modules::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
 		if !built_in_libc
@@ -183,22 +166,20 @@ pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, mod
 			libs_to_link.entry(module_name.to_string()).or_default().insert(import.name().to_string());
 		}
 	}
-
+	refuse_sandboxed_calls(&libs_to_link)?;
 	refuse_headless_windows(&libs_to_link)?;
-	// Link each discovered library
-	for (lib_name, imported) in libs_to_link {
-		match link_dynamic_library(linker, engine, &lib_name, &imported) {
-			Ok(count) if count > 0 => {}
-			Ok(_) => {
-				eprintln!("[FFI] Warning: No functions linked from {}", lib_name);
-			}
-			Err(e) => {
-				eprintln!("[FFI] Warning: Failed to link {}: {}", lib_name, e);
-			}
-		}
-	}
+	let linked_already = |library: &str, name: &str| !libs_to_link.get(library).is_some_and(|names| names.contains(name));
+	Ok(warp_runtime::c_imports::link_c_imports(linker, module, c, |_, library, name, _| linked_already(library, name))?)
+}
 
-	Ok(())
+/// A sandboxed program calls no C library: one could start a process or write anywhere (libc's system, fopen)
+fn refuse_sandboxed_calls(libs_to_link: &HashMap<String, std::collections::HashSet<String>>) -> Result<()> {
+	match libs_to_link.iter().find_map(|(lib_name, imported)| imported.iter().next().map(|name| (lib_name, name))) {
+		Some((lib_name, name)) if crate::host::sandbox::is_sandboxed() => {
+			anyhow::bail!(crate::host::sandbox::denial(&format!("{lib_name}::{name}"), "ffi"))
+		}
+		_ => Ok(()),
+	}
 }
 
 fn refuse_headless_windows(libs_to_link: &HashMap<String, std::collections::HashSet<String>>) -> Result<()> {

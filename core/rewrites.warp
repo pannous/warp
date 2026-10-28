@@ -4,7 +4,8 @@
 # (also symbol, list, block, map, int, number) only code of that kind, a block code in braces and a map their
 # entries `{a: 1}` or a name holding only maps. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$h is varying` (a value definition reading a variable, lib/sugar/heads.warp), `$x is literal`, `$w is label` (a word labelling a parameter, `with new`), `$x is missing` (ø,
+# `$f is function`, `$h is varying` (a value definition reading a variable, lib/sugar/heads.warp), `$d is definition` (a
+# function's, `f(x) := …`), `$x is literal`, `$w is label` (a word labelling a parameter, `with new`), `$x is missing` (ø,
 # also an operand not written: `rest...`), `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word), `$f takes int` (typed int) and `$f takes one` (a library word the program leaves
@@ -45,7 +46,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition"]
 # `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
 # with (card engine-rule-conditions)
 context_words = ["method", "shadowed"]
@@ -334,7 +335,8 @@ early_module_rules(): list := {
 	}
 	early_rules
 }
-# the words starting a phrase in the node (`var total = 0`'s var, `public static fun f() {3}`'s public)
+# the words starting a phrase in the node (`var total = 0`'s var, `public static fun f() {3}`'s public), also as the
+# parser writes a declaration word (uses.warp declaration_keywords), the key of `global: (play(tone) := …)`
 phrase_heads(n: Node): map := {
 	found = {}
 	waiting = [n]
@@ -342,7 +344,10 @@ phrase_heads(n: Node): map := {
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
-		if part is key { waiting += [key_of(part), value_of(part)] } else if is_group(part) {
+		if part is key {
+			if op_of(part) == Op.Colon and key_of(part) is symbol and name_of(key_of(part)) in declaration_keywords { found[name_of(key_of(part))] = yes }
+			waiting += [key_of(part), value_of(part)]
+		} else if is_group(part) {
 			if bracket_of(part) == "" and separator_of(part) == " " and #part > 1 and part#1 is symbol { found[name_of(part#1)] = yes }
 			for item in part { waiting += [item] }
 		}
@@ -702,6 +707,7 @@ has_property(code: Node, property: text): bool := {
 	if property == "literal" { return is_number_literal(code) or code is text }
 	if property == "enum" { return named_enum(code) != "" }
 	if property == "missing" { return code == ø }
+	if property == "definition" { return definition_of(code) != ø }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }

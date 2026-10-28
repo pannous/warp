@@ -13,6 +13,8 @@
 # a seed refreshed in another tree differs in that path alone.
 set -u
 STAGES=${WARP_SEED_STAGES:-A B C}
+# how much longer than with the old seed `warp rebuild pure` may take with the new one, in percent (noise of a run)
+SLOWER_PERCENT=${WARP_SEED_SLOWER_PERCENT:-115}
 check=
 [ "${1-}" = --check ] && { check=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
@@ -59,6 +61,23 @@ cp "$chosen" "$compilers/warp-self.wasm"
 hello=$(cd "$tree" && "$warp" self samples/hello/hello.warp 2>&1)
 echo "$hello" | grep -q Hello || { echo "refresh-seed: $(basename "$chosen" .wasm) runs no hello ($(echo "$hello" | tail -1 | cut -c1-200)); the seed stays" >&2; exit 1; }
 echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr -d ' ') B sha256 $(shasum -a 256 "$chosen" | cut -d' ' -f1)"
+# a seed is what every `warp rebuild` runs: one that builds warp.wasm slower than the seed it replaces is no refresh
+# (card rebuild-pure-went: two seeds made rebuilds 2.7x slower unnoticed). Each seed's machine code is made by a first
+# build, the second is timed; WARP_SEED_SLOWER_OK=1 takes a slower one anyway
+rebuild_seconds() {
+  (cd "$tree" && WARP_SEED=$1 scripts/rebuild.sh --force pure "$tree" >/dev/null 2>&1)
+  local start=$SECONDS
+  (cd "$tree" && WARP_SEED=$1 scripts/rebuild.sh --force pure "$tree" >/dev/null 2>&1)
+  echo $((SECONDS - start))
+}
+cp "$chosen" "$scratch/candidate.wasm"
+old_seconds=$(rebuild_seconds "$seed")
+new_seconds=$(rebuild_seconds "$scratch/candidate.wasm")
+echo "refresh-seed: warp rebuild pure takes $new_seconds s with it, $old_seconds s with the seed it replaces"
+if [ $((new_seconds * 100)) -gt $((old_seconds * SLOWER_PERCENT)) ] && [ -z "${WARP_SEED_SLOWER_OK-}" ]; then
+  echo "refresh-seed: the new seed builds slower than ${SLOWER_PERCENT}% of the old one's time; the seed stays (WARP_SEED_SLOWER_OK=1 takes it)" >&2
+  exit 1
+fi
 if [ -n "$check" ]; then
   cmp -s "$chosen" "$seed" && echo "refresh-seed: the seed is that stage" || echo "refresh-seed: the seed differs from that stage (--check: kept)"
   exit 0

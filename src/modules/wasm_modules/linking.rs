@@ -365,7 +365,8 @@ pub(crate) fn instance_of(caller: &mut Caller<'_>, path: &str) -> wasmtime::Resu
 	let engine = caller.engine().clone();
 	let module = wasmtime::Module::new(&engine, &bytes)?;
 	let mut linker = wasmtime::Linker::new(&engine);
-	crate::run::wasm_reader::link_imports(&mut linker, &engine, &module, crate::run::wasm_reader::Imports::EVERY)
+	let c = warp_runtime::c_imports::CImports::of(&bytes)?;
+	crate::run::wasm_reader::link_imports(&mut linker, &engine, &module, crate::run::wasm_reader::Imports::EVERY, &c)
 		.map_err(|failure| wasmtime::format_err!("{path}: {failure:#}"))?;
 	let instance = linker.instantiate(&mut *caller, &module)?;
 	caller.data_mut().wasm_modules.insert(file, instance);

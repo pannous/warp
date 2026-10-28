@@ -317,13 +317,14 @@ def text_value_of(name: text): TypedCode { TypedCode(ValueKind.Text, text_bytes(
 base_class_layers = ["extends", "inherited_from"]
 collect_types(n: Node): any := {
 	if declares_type(n) { return record_type(value_of(n)#2, value_of(n)#3) }
-	if is_type_alias(n) { return module.aliases[value_of(key_of(n))#2#2] = name_of(value_of(n)) }
+	if is_type_alias(n) { return module.aliases[value_of(key_of(n))#2#2] = aliased_spelling(value_of(n)) }
 	if is_group(n) { for x in n { collect_types(x) } }
 }
 # a class or enum declaration, the opaque view ["type", name, body]
 declares_type(n: Node): bool := type(n) is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "type"
-# `type Name = text`: a declaration of no body naming another type
-is_type_alias(n: Node): bool := is_key(n, Op.Assign) and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and value_of(n) is symbol
+# `type Name = text`, `type View = list or int`: a declaration of no body naming another type or a union
+is_type_alias(n: Node): bool := is_key(n, Op.Assign) and declares_type(key_of(n)) and value_of(key_of(n))#3 == ø and aliased_spelling(value_of(n)) != ø
+aliased_spelling(type: Node): text? := if type is symbol then name_of(type) else union_spelling(type)
 record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" {
 		module.class_defaults[name#2] = field_defaults(body)
@@ -366,11 +367,11 @@ entries_of_both(inherited: map, own: map): map := {
 # list of a plural type word (`texts`), each through a type alias; ø untyped, an instance of a class or another type
 def field_kind(type: text?): ValueKind? {
 	if type == ø { return ø }
-	if is_union(type) { return annotated_kind(type) }
 	word = aliased_type(base_type(type))
+	if is_union(word) { return annotated_kind(word) }
 	if word in module.classes { return ValueKind.Instance }
 	if word in node_annotations { return ValueKind.Node }
-	if word in core_type_words and core_type_words[word] in declared_kinds { return declared_kinds[core_type_words[word]] }
+	if word in declared_kinds { return declared_kinds[word] }
 	if annotated_kind(word) == ValueKind.List { return ValueKind.List }
 	ValueKind.Instance
 }
@@ -379,7 +380,7 @@ def texted(type: text?, value: TypedCode): TypedCode { if value.kind == ValueKin
 # whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion; an
 # instance of a class is a node, as Rust's class-typed fields take it
 def admits(type: text?, kind: ValueKind): bool {
-	if type != ø and is_union(type) { return fits_union(type, kind) }
+	if type != ø and is_union(aliased_type(type)) { return fits_union(aliased_type(type), kind) }
 	type == ø or field_kind(type) == ValueKind.Node or field_kind(type) == kind or (kind == ValueKind.Node and aliased_type(type) in module.classes)
 }
 # a write to a field `name` of a target known only at run time: every class's field so named takes the kind; a value

@@ -2,6 +2,8 @@
 //! is the standalone executable `warp build` appends a program's machine code to (notes/aot.md)
 #[cfg(feature = "engine")]
 pub mod c_calls;
+#[cfg(feature = "engine")]
+pub mod c_imports;
 pub mod c_signatures;
 #[cfg(feature = "engine")]
 pub mod c_structs;
