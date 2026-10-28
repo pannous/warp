@@ -1,0 +1,202 @@
+# `warp test` on the native warp (card native-warp-test; twin of src/compiler/pure_tests.rs): warp.wasm lists the test
+# cases of the folders' test files into a work folder (test_listed), the native warp (core/native/tests.warp) runs each
+# case's code, and the code of an expected value that is no data, as a program of its own in the test file's folder
+# with WARP_VALUE_AS_DATA set, then warp.wasm judges what they gave (test_verdicts). The test files: `*.pairs.warp`
+# (code ⇥ expected, one a line) and the `is!` lines of `test_*.warp`, under each folder (default test/) or named
+# themselves. The work folder: `runs`, a line `<run>\t<folder>` for each program, its code in `<run>.code`; the native
+# warp writes `<run>.out`, `<run>.err` and `<run>.status` (its exit status, or `timeout`)
+TEST_FOLDER = "test"
+PAIRS_SUFFIX = ".pairs.warp"
+TEST_PREFIX = "test_"
+CHECK_WORD = "is!"
+# a case's expected column `error`: its code fails, as a compile refusal or a raise (tests never pin wording)
+EXPECTED_ERROR = "error"
+EACH_FLAG = "--each"
+# the run of a case's expected value, beside the case's own run <n>
+EXPECTED_RUN = "e"
+TIMED_OUT = "timeout"
+CASE_SECONDS = 30
+use "../emitter/serializer.warp"
+
+class TestCase { file: text, line: int, code: text, expected: any }
+
+# `warp test-list <work folder> [--each] [folder or file…]`: the skipped pairs said, the runs written
+test_listed(work: text, words: list) := {
+	runs = []
+	for file in test_files_of(words) {
+		for skip in skipped_pairs(read(file)) { print "⊘ " + file + ": skipped " + skip }
+	}
+	cases = test_cases_of(words)
+	for n in 0 ..< #cases {
+		case = cases[n]
+		folder = folder_of(case.file) or "."
+		write(work + "/" + n + ".code", case.code)
+		runs += [n + "\t" + folder]
+		if needs_run(case.expected) {
+			write(work + "/" + n + EXPECTED_RUN + ".code", serialize(case.expected))
+			runs += [n + EXPECTED_RUN + "\t" + folder]
+		}
+	}
+	write(work + "/runs", runs.join("\n"))
+}
+
+# `warp test-verdicts <work folder> [--each] [folder or file…]`: a ✗ line for each failed case (`--each`: a ✓ line
+# for each passed one too) and the total; `<work folder>/failed` the count failed
+test_verdicts(work: text, words: list) := {
+	each = EACH_FLAG in words
+	cases = test_cases_of(words)
+	failed = 0
+	for n in 0 ..< #cases {
+		case = cases[n]
+		why = case_failure(case, run_result(work, "" + n), work + "/" + n + EXPECTED_RUN)
+		described = case.file + ":" + case.line + " " + debug_quoted(case.code) + " " + serialize(case.expected)
+		if why != "" { print "✗ " + described + ": " + why } else if each { print "✓ " + described }
+		if why != "" { failed += 1 }
+	}
+	skipped = test_files_of(words).map(file => #skipped_pairs(read(file))).sum()
+	total = if failed > 0 then "" + failed + " of " + #cases + " failed" else "✓ " + #cases + " tests passed"
+	print total + " in " + #test_files_of(words) + " files" + (if skipped > 0 then ", " + skipped + " skipped" else "")
+	write(work + "/failed", "" + failed)
+}
+
+# why the case failed, "" when it gave its expected value: equal, or as Rust's `is!` compared, or both falsy
+case_failure(case: TestCase, got: any, expected_run: text): text := {
+	if got is text { return got }
+	failed = kind(got) == "error"
+	expected = case.expected
+	if expects_error(expected) { return if failed then "" else "got " + serialize(got) }
+	if needs_run(expected) {
+		expected = run_result(expected_run, "")
+		if expected is text { expected = ["error", ["text", expected]] }
+	}
+	if not failed and (same_value(got, expected) or as_is_compares(got, expected) or (is_falsy_view(got) and is_falsy_view(expected))) { return "" }
+	"got " + serialize(got)
+}
+
+# the value a run gave as a view: what it printed after the value mark, ø when it printed none, an error with its
+# message when it failed; a text for a run that timed out
+run_result(work: text, run: text): any := {
+	at = work + (if run == "" then "" else "/" + run)
+	status = (try read(at + ".status") else TIMED_OUT).trim()
+	if status == TIMED_OUT { return "timed out after " + CASE_SECONDS + " s" }
+	if status != "0" { return ["error", ["text", last_line_of(try read(at + ".err") else "")]] }
+	parts = (try read(at + ".out") else "").split(VALUE_MARK + "\n")
+	if #parts < 2 then ø else value_view(parts.last().trim())
+}
+last_line_of(t: text): text := t.trim().split("\n").last() ?? ""
+value_view(printed: text): any := literals_folded(view_of(plain_node(parsed(printed))))
+# a float printed with an exponent, `9.007199254740994e15`, parses as `… as float`: the number it is
+literals_folded(view: any): any := {
+	form = kind(view)
+	if form == "key" and view#2 == "as" and view#3 is number and view#4 == ["symbol", "float"] { return view#3 }
+	if form == "list" then view[0 ..< 3] + view[3 ..< #view].map(literals_folded) else view
+}
+
+# the test files: the folders' test files, sorted, at any depth, and the files named themselves
+test_files_of(words: list): list := {
+	named = words.filter(word => not word.starts_with("--"))
+	(if #named == 0 then [TEST_FOLDER] else named).flat_map(test_files_in)
+}
+# a path ending in .warp is a file (listing one is no error a try catches), any other a folder
+test_files_in(path: text): list := {
+	if path.ends_with(".warp") { return if is_test_file(path) then [path] else [] }
+	(try list_files(path) else []).sort().flat_map(name => {
+		inner = path + "/" + name
+		if is_test_file(name) then [inner] else if name.contains(".") then [] else test_files_in(inner)
+	})
+}
+is_test_file(path: text): bool := {
+	name = path.split("/").last()
+	name.ends_with(PAIRS_SUFFIX) or (name.starts_with(TEST_PREFIX) and name.ends_with(".warp"))
+}
+
+# every case of the test files, in file order
+test_cases_of(words: list): list := test_files_of(words).flat_map(file => cases_in(file, read(file)))
+cases_in(file: text, source: text): list := {
+	cases = []
+	for statement in statements_in(plain_node(parsed(source))) {
+		parts = pair_parts(view_of(plain_node(statement))) ?? check_parts(view_of(plain_node(statement)))
+		if parts != ø { cases += [TestCase(file, statement_line(statement), parts#1, parts#2)] }
+	}
+	cases
+}
+# the line a statement starts on: its own, else its first leaf's (a tab-separated pair carries none itself)
+statement_line(statement: Node): int := line_of(statement) ?? line_of(first_leaf(statement) ?? statement) ?? 0
+# a pair `'1+1'⇥2` (a third column a remark): its code and expected value
+pair_parts(view: any): any := {
+	if kind(view) != "list" or view#3 != "\t" or #view < 5 or #view > 6 { return ø }
+	code = case_code_text(view#4)
+	if code == ø then ø else [code, view#5]
+}
+# `is! '3+3' 6` or `is!('3+3', 6)`: its code and expected value
+check_parts(view: any): any := {
+	if kind(view) != "list" or (view#2 != "" and view#2 != "(") or #view < 4 or view#4 != ["symbol", CHECK_WORD] { return ø }
+	arguments = view[4 ..< #view]
+	if #arguments == 1 and kind(arguments#1) == "list" and arguments#1#2 == "(" { arguments = arguments#1[3 ..< #arguments#1] }
+	if #arguments != 2 { return ø }
+	code = case_code_text(arguments#1)
+	if code == ø then ø else [code, arguments#2]
+}
+case_code_text(view: any): any := if kind(view) == "text" then view#2 else if kind(view) == "char" then "" + view#2 else ø
+
+# the commented-out pairs of a pairs file, `// "fib 10"⇥55⇥card fib-memo: regression`, as `"fib 10" 55: card …`
+skipped_pairs(source: text): list := {
+	skipped = []
+	for line in source.split("\n") {
+		commented = line.trim()
+		commented = if commented.starts_with("//") then commented[2 ..< #commented] else if commented.starts_with("#") then commented[1 ..< #commented] else ø
+		if commented == ø or not commented.contains("\t") { continue }
+		parts = pair_parts(view_of(plain_node(parsed(commented))))
+		if parts == ø { continue }
+		columns = commented.split("\t")
+		pair = serialize(["text", parts#1]) + " " + serialize(parts#2)
+		skipped += [if #columns > 2 then pair + ": " + columns#3.trim() else pair]
+	}
+	skipped
+}
+
+expects_error(expected: any): bool := expected == ["symbol", EXPECTED_ERROR]
+# an expected value written as data, compared as it is; anything else (`π`, `(-1)`, `1 + pi`) is code to run
+is_data_expected(view: any): bool := {
+	if view == ø or view is bool or view is number { return yes }
+	form = kind(view)
+	if form == "text" or form == "char" { return yes }
+	form == "list" and view#2 == "[" and view[3 ..< #view].all(is_data_expected)
+}
+needs_run(expected: any): bool := not is_data_expected(expected) and not expects_error(expected)
+# two values equal as Rust's Node == has them (src/node/comparison.rs): lists item by item whatever their brackets and
+# separators, a text and a symbol of the same name, a character and a text it starts, ø and an empty value, yes and no
+# and the values they are true of
+same_value(a: any, b: any): bool := {
+	if a == b { return yes }
+	if a is bool { return a == not is_falsy_view(b) }
+	if b is bool { return b == not is_falsy_view(a) }
+	if a == ø { return is_empty_view(b) }
+	if b == ø { return is_empty_view(a) }
+	left = kind(a)
+	right = kind(b)
+	if left in NAMED_FORMS and right in NAMED_FORMS { return a#2 == b#2 }
+	if left == "char" and right == "text" { return #b#2 > 0 and "" + a#2 == b#2[0 ..< 1] }
+	if left == "list" and right == "list" { return #a == #b and (3 ..< #a).all(i => same_value(a[i], b[i])) }
+	if left == "list" and right == "key" { return #a == 4 and same_value(a#4, b) }
+	if left == "key" and right == "list" { return same_value(b, a) }
+	left == "key" and right == "key" and a#2 == b#2 and same_value(a#3, b#3) and same_value(a#4, b#4)
+}
+NAMED_FORMS = ["text", "symbol"]
+# Rust's Empty == other: zero, the empty text or symbol, the empty list
+is_empty_view(view: any): bool := view == ø or view == 0 or (kind(view) in NAMED_FORMS and view#2 == "") or (kind(view) == "list" and #view == 3)
+# Rust's `is!` comparisons at the top: an int and a float of the same value, a one-character text and its character
+as_is_compares(got: any, expected: any): bool := {
+	if got is number and expected is number { return got == expected }
+	if kind(got) == "text" and kind(expected) == "char" { return got#2 == "" + expected#2 }
+	kind(got) == "char" and kind(expected) == "text" and expected#2 == "" + got#2
+}
+# Rust's Node is_falsy: ø, no, zero, the empty text, the empty list, an error
+is_falsy_view(view: any): bool := {
+	if view == ø or view == no { return yes }
+	if view is number { return view == 0 }
+	form = kind(view)
+	(form == "text" and view#2 == "") or (form == "list" and #view == 3) or form == "error"
+}
+# a text as Rust's {:?} writes it: in double quotes, its quotes, backslashes and line breaks escaped
+debug_quoted(t: text): text := "\"" + t.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r") + "\""

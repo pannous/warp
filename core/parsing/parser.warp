@@ -1080,15 +1080,15 @@ def bit_operator(written: text, left: Node, right: Node, spelled: text): text {
 }
 
 // A number, a name or an operation that may give a whole number: no float, text, list, type word, capitalized name,
-// comparison or logical operation
+// comparison or logical operation; `a xor b` of whole numbers is their bits' xor, `(e xor m) & g` bits again
 // Rust twin: lowering/nodes.rs may_be_whole_number
 def may_be_whole_number(n: Node): bool := match n {
 	Symbol(name): not is_type_word(name) and not is_capitalized(name)
-	Key(left, op, right): not (NOT_WHOLE_OPERATORS contains op)
+	Key(left, op, right): if op == Op.Xor then may_be_whole_number(left) and may_be_whole_number(right) else not (NOT_WHOLE_OPERATORS contains op)
 	List(items, bracket, separator): bracket != Bracket.Square and (items is empty or may_be_whole_number(items#1))
 	_: n is int and not (n is bool)
 }
-NOT_WHOLE_OPERATORS = [Op.Eq, Op.Is, Op.Ne, Op.Identical, Op.NotIdentical, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.And, Op.Or, Op.Xor, Op.Not]
+NOT_WHOLE_OPERATORS = [Op.Eq, Op.Is, Op.Ne, Op.Identical, Op.NotIdentical, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.And, Op.Or, Op.Not]
 
 // Ruby/Lua `do … end`, `then … else … end`: the words whose body an `end` may close, and those that open such a body
 END_BLOCK_WORDS = ["do", "then", "else"]
@@ -2182,7 +2182,7 @@ def prefixed(p: Parser): Node := {
 		literal = data_literal(p)
 		if literal != ø { return literal }
 	}
-	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
+	if PREFIX_OPERATORS.contains(form) and not defines_word(p, word) { return word_prefixed(p, word, form) }
 	if form == "not" or no_asks_emptiness(p, word) {
 		p.at = p.at + word.length
 		skip_spaces(p)
@@ -2250,6 +2250,23 @@ def emitted(p: Parser, word: text): Node := {
 // (a range's `..sqrt 4` keeps the operator)
 // Rust twin: the member name after `.` never reaches lookahead.rs peek_prefix_operator
 def after_member_dot(p: Parser): bool := p.at > 0 and p.code[p.at - 1] == '.' and not (p.at > 1 and p.code[p.at - 2] == '.')
+
+// `sqrt(x: f64): f64 from "c"`, `abs(x) := …` at a line's start: the word is the name a definition or foreign line
+// gives, no operator (card primitive-c-math-names)
+def defines_word(p: Parser, word: text): bool {
+	at = p.at + word.length
+	if peek(p.code, at, p.n) != '(' or not at_line_start(p.code, p.at) { return false }
+	depth = 0
+	while at < p.n and p.code[at] != '\n' {
+		if p.code[at] == '(' { depth = depth + 1 }
+		if p.code[at] == ')' {
+			depth = depth - 1
+			if depth == 0 { return code_after(p, at + 1) == ':' or starts_at(p.code, "from ", p.resumes[at + 1], p.n) }
+		}
+		at = at + 1
+	}
+	false
+}
 
 // `abs x`, `sqrt(2)`: the operator word and its operand; `f = abs` alone is the operator itself. Braceless, the word
 // takes its argument like a call (`sqrt 4 + 5` is sqrt(9)); glued parentheses are the whole operand (`sqrt(16) + 1`)

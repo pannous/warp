@@ -14,7 +14,7 @@ check() { # check <what> <got> <expected>
 	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
 }
 
-cp "$checkout/core/native/driver.warp" "$checkout/core/native/warp.warp" "$checkout/samples/hello/hello.warp" "$stage/"
+cp "$checkout"/core/native/*.warp "$checkout/samples/hello/hello.warp" "$stage/"
 (cd "$stage" && "$warp" build native warp.warp >"$stage/build.log" 2>&1)
 if [ -x "$stage/warp" ]; then
 	native() { (cd "$stage" && ./warp "$@" 2>&1); }
@@ -32,7 +32,7 @@ if [ -x "$stage/warp" ]; then
 	check "the arguments after --" "$(native arguments.warp -- eins zwei)" '["eins" "zwei"]'
 	check "self, code by warp-self.wasm" "$(native self '3 + 4')" 7
 	printf 'raise "boom"\n' >"$stage/raising.warp"
-	check "what a program raised" "$(native raising.warp)" "boom"
+	check "what a program raised" "$(native raising.warp)" "boom at raising.warp:1:1"
 	check "the console, its lines staying" "$(printf 'a = 7\nx = [1\na * 6\n' | native repl | sed -n 4p)" "🌀42"
 	check "bare warp, a piped program" "$(printf 'a = 7\na * 6\n' | native)" 42
 	check "exit(code) ends the run" "$(native 'exit(3)'; echo $?)" 3
@@ -53,6 +53,17 @@ if [ -x "$stage/warp" ]; then
 	check "sha256" "$(native 'use hash; sha256("abc")')" ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 	check "crc32" "$(native 'use hash; crc32("abc")')" 891568578
 	check "a system value of a library's" "$(native 'battery()')" "the system value battery is not in the native warp yet (warp-rust has it)"
+	# an install as ~/dev/bin has it: bin/warp and bin/lib links to a build; what that warp builds keeps running after
+	# the next install moves bin/lib to another build and removes the old one
+	library=$(cd "${WARP_LIB:-$(dirname "$(command -v "$warp")")}" && pwd -P)
+	mkdir -p "$stage/install/bin" "$stage/install/app" && ln -s "$library" "$stage/install/old" && ln -s ../old "$stage/install/bin/lib"
+	ln -s "$stage/warp" "$stage/install/bin/warp" && cp "$checkout"/core/native/*.warp "$stage/install/app/"
+	(cd "$stage/install/app" && env -u WARP_LIB ../bin/warp build native warp.warp >/dev/null 2>&1)
+	ln -s "$library" "$stage/install/new" && ln -sfn ../new "$stage/install/bin/lib" && rm "$stage/install/old"
+	# never called, so no window even if the refusal failed
+	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
+	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"
+	check "a built executable after the next install" "$(cd "$stage/install/app" && WARP_LIB="$stage/install/bin/lib" ./warp '6 * 7' 2>&1)" 42
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
 fi

@@ -62,3 +62,6 @@ samples/**/*.stored.json
 **/.wrangler
 
 **/.DS_Store
+
+# the native warp `warp build native core/native/warp.warp` writes beside its source
+/core/native/warp

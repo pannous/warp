@@ -7,6 +7,7 @@
 //   exp          8e-14 relative, from x = -700 to 700
 //   pow          1e-14 relative, base > 0; a negative base takes whole exponents only (others give nan)
 //   atan2        3e-12 radians
+use reals
 
 // sin of x reduced to [-π/2, π/2]: its Taylor series to x^15, whose next term is below 1e-11 there
 sin(x: float) := {

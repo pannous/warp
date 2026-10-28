@@ -6,6 +6,7 @@ use "analysis/analyzer.warp"
 use "emitter/emitter.warp"
 use "analysis/host_words.warp"
 use "commands/commands.warp"
+use "commands/tests.warp"
 use "emitter/c_imports.warp"
 use "extensions/primitive.warp"
 use os
@@ -228,5 +229,7 @@ match command {
 	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
 	"modules": write_modules(args#2, if #args > 2 then args#3 else RUNTIME_WASM)
 	"optimize": trim(args#2, args#3, "optimize")
+	"test-list": test_listed(args#2, args[2 ..< #args])
+	"test-verdicts": test_verdicts(args#2, args[2 ..< #args])
 	_: if command in running_commands then refuse_running(command) else refuse_native(command)
 }
