@@ -4,8 +4,7 @@
 # src/wasm_emitter/time/time_arithmetic.rs, notes/dates_at_run_time.md): `d + 1 day`, `t - 90 minutes`, `a - b`,
 # `1 month + 2 days`, `3 * 1 hour`, as calendar.rs `Time::add`, `since`, `Duration::plus` and `times` do for constants.
 # A class library beside lib/units.warp, not a compiler pass nor a runtime part (card time-arithmetic-library): the
-# compiler never loads it, as Span's plus would send every `+` it compiles through operator dispatch. The old path
-# core/time_arithmetic.warp links here while tests/parser/test_self_time_arithmetic.rs reads it there. Its
+# compiler never loads it, as Span's plus would send every `+` it compiles through operator dispatch. Its
 # time_form, day_nanos, hour_nanos and sign_of also clash with the runtime's times.warp and durations.warp. The calendar is plain integers here: a time is its form and position, a
 # duration its month, day and nanosecond counts. Wiring it to run-time time nodes (times.warp's time_form,
 # time_position, duration_months, duration_days, time_of, duration_of) waits for a bridge hook in node_add and the

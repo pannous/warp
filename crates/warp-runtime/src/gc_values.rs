@@ -96,7 +96,7 @@ pub fn json_of<T>(node: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory
 	})
 }
 
-/// The items of a list held as a vector, `$list (len i32, items (array anyref))` (core/emitter.warp): its first
+/// The items of a list held as a vector, `$list (len i32, items (array anyref))` (core/emitter/emitter.warp): its first
 /// field is the i32 length, where a cons cell's first item is a $Node, whose first field is the i64 kind
 pub fn vector_items<T>(data: &Val, store: &mut StoreContextMut<'_, T>) -> Option<Vec<Val>> {
 	let vector = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;

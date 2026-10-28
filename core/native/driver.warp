@@ -447,7 +447,7 @@ item_of(caller: handle, context: handle, list: pointer, index: i64): pointer := 
 	item
 }
 
-## the host words of warp's commands (core/commands.warp), warp over libc
+## the host words of warp's commands (core/commands/commands.warp), warp over libc
 COMMAND_OUTPUT_BYTES = 4096
 # os.command(line): the line run by sh, what it printed, its trailing newlines left off; else the Error naming its exit
 # status and what it said on stderr (as crates/warp-runtime std_adapters.rs executed)

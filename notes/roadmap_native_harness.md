@@ -45,7 +45,7 @@ MVP wasm.
 3b. **The native warp** (decision native-warp-in-core): core/native/warp.warp, `use "driver.warp"`, is the warp
    command. It tells apart only what its words name: a .wasm runs, a .warp file is compiled by warp.wasm and runs with
    its arguments, any other words go to warp.wasm, whose compiler.warp keeps the one command table: a command runs
-   there (core/commands.warp), other words are code compiled to WARP_RUN_TO, which warp.warp then runs. The host words
+   there (core/commands/commands.warp), other words are code compiled to WARP_RUN_TO, which warp.warp then runs. The host words
    those commands call are driver.warp host_word's, warp over libc: os.command so far (popen), its list argument read
    through the module's export item_at. Done so far: a file with arguments, a module, code, help and `warp build`
    (test/native/test_warp_native.sh; `warp build` needs warp.wasm with item_at, so a seed refresh). Next: `warp

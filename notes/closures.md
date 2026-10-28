@@ -94,7 +94,7 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
 - Open: a function entry of an object passed around (it is data, the
   method belongs to the variable name).
 
-## Pure compiler: shared captures and block parameters (core/lambdas.warp, card block-parameters-captures, 2026-10-27)
+## Pure compiler: shared captures and block parameters (core/passes/lambdas.warp, card block-parameters-captures, 2026-10-27)
 - A variable of a scope (main or a function body) that a lambda in it changes with `+=`, `-=`, `++`… (P124), or that a
   block given to a function or block parameter assigns at all (handler-blocks-share), lives in a prelude `Cell`:
   `n·cell = Cell(n)`, each mention `n·cell.value`; the closure captures the cell by value, so the change is shared.

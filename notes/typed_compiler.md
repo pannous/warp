@@ -3,7 +3,7 @@
 Every parameter, field and result in core is typed , with small domain types instead of any
 or plain text.
 
-## Shared types: core/types.warp
+## Shared types: core/analysis/types.warp
 - `Node` (node.warp's enum) for every node of the program; `any` stays only where a value really is any value.
 - `Name` (a word: variable, function, field, type), `KindName` (the analyzer's kind names: "int", "data", "empty", …),
   `TypeWord` (`int`, `list of int`, `map of text`): type aliases of text.

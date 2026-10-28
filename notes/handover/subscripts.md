@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: draft card hDLGqg 'xs[i] and slices as lib/sugar/subscripts.warp rules on first_sugar (subscripts)' (Next)
-- Branch: `subscripts` at `b980d4c91`, 4 ahead / 336 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/passes.warp, core/rewrites.warp)
+- Branch: `subscripts` at `b980d4c91`, 4 ahead / 336 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/passes/passes.warp, core/passes/rewrites.warp)
 - Kind: warp only
 - Owner: warp-layers (Mac session) continues it.
 - State: `xs[i]` and slices as rules in lib/sugar/subscripts.warp, run in a new written_sugar step; main has its own first_sugar phase now, conflicts in passes.warp and rewrites.warp. Its old card retire-hybrid-lane is Done.

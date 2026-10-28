@@ -1,6 +1,6 @@
 ## ordering: node_order and the sort words (Rust's src/wasm_emitter/reflection/library_ops/ordering.rs)
 use "intrinsics.warp"
-use "../kinds.warp"
+use "../analysis/kinds.warp"
 use "arithmetic.warp"
 use "conversions.warp"
 use "bridge.warp"

@@ -18,7 +18,7 @@ use "extended/wasi.warp"
 # and each hook calls the extended word for it. They are this root's own words, not a used file's, so that the root
 # runs alone in the Rust lane, which refuses a word declared in one used file (bridge.warp) and defined in another
 use "intrinsics.warp"
-use "../kinds.warp"
+use "../analysis/kinds.warp"
 use "instructions.warp"
 extended_text(n: Node): text := {
 	made_case(Made.Time, time_text(n))

@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: #3150 pure lane: go and await refuse with unknown name ([pure-refusal-go](https://github.com/pannous/warp/issues/3150))
-- Branch: `pure-refusal-go` at `553cfc43e`, 2 ahead / 303 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/rewrites.warp)
+- Branch: `pure-refusal-go` at `553cfc43e`, 2 ahead / 303 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/passes/rewrites.warp)
 - Kind: warp only
 - Owner: No owner: the card waits in Next for the planner to assign.
 - State: go/await as lib/sugar/tasks.warp rules (task run at once, await within, stop, cancel): 57 of 128 blocked tests pass; WIP, rewrites.warp conflict; on hold until pure class operators work.

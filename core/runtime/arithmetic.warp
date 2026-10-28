@@ -1,6 +1,6 @@
 # `a + b`, `a += b` of values known only at run time, and int arithmetic that traps past 64 bits
 use "intrinsics.warp"
-use "../kinds.warp"
+use "../analysis/kinds.warp"
 use "conversions.warp"
 use "bridge.warp"
 use "lists.warp"

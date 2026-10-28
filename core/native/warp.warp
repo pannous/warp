@@ -6,7 +6,7 @@
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments
 #   warp                  warp.wasm's help
 #   warp rebuild          warp.wasm built anew from lib/ by the seed (rebuilt)
-#   warp <words…>         warp.wasm with the words: its own command (core/commands.warp, the one command table), any
+#   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp, the one command table), any
 #                         other words code it compiles to WARP_RUN_TO (compiler.warp), which then runs
 # The host words warp.wasm's commands call are answered by driver.warp host_word; library words (graphics, sound, web)
 # are not the core binary's (decision libraries-not-core) and say so

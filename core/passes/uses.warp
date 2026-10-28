@@ -1,0 +1,271 @@
+# The pure lane follows `use` (card pure-follows-use): a program's `use "../parsing/lexer.warp"` brings in the declarations of
+# that file, read from the program's folder, as src/modules/loader.rs brings them; each used file once, the files it
+# uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written, a used file's too,
+# so prelude_words.warp brings the words reached of that module.
+use os
+use "walk.warp"
+use "../parsing/parser.warp"
+use "scope.warp"
+use "enum_declarations.warp"
+use "../analysis/signatures.warp"
+
+import_keywords = ["use", "require", "import", "include"]
+# (function_keywords: words.warp's)
+# src/modules/declarations.rs DECLARATION_KEYWORDS and CONSTANT_KEYWORDS
+declaration_keywords = ["let", "var", "global", "stored", "const", "constant", "final", "val"]
+# the declarations that keep a name main's: `global n = 0`; the others make it the function's own, `let n = 5` (Rust
+# is_declaration_word)
+global_declaration_keywords = ["global", "stored"]
+local_declaration_keywords = declaration_keywords.filter(word => word not in global_declaration_keywords)
+module_extension = ".warp"
+# the word a module reads as the folder of its own file (Rust twin: src/modules/loader.rs MODULE_DIRECTORY)
+module_directory_word = "module_directory"
+
+# the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
+# `module_source("prelude")` the text of that standard module
+with_uses(program: Node, folder: text): Node := bottom_up(used_in(with_own_aliases(with_module_directory(program, folder)), folder), module_text)
+# `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in (Rust's
+# loader.rs with_module_directory)
+with_module_directory(n: Node, folder: text): Node := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
+used_in(program: Node, folder: text): any := {
+	statements = statements_in(program)
+	brought = declarations_used(statements, folder, [], {})
+	if #brought#1 == 0 { return program }
+	kept = statements.filter(s => file_used(s, folder) == ø)
+	separated(bracketed(brought#1 + kept, ""), ";")
+}
+
+# `alias deque = Deque` (wiki/alias.md): the program's alias lines taken out, each alias naming its word wherever the
+# program declares nothing of that name, as Rust's modules.rs with_own_aliases
+alias_keyword = "alias"
+with_own_aliases(program: Node): Node := {
+	statements = statements_in(program)
+	aliases = statements.map(word_alias).filter(pair => pair != ø)
+	if #aliases == 0 { return program }
+	own = statements.map(declared_name)
+	renamed = aliases.filter(pair => pair#1 not in own)
+	kept = statements.filter(s => word_alias(s) == ø)
+	bottom_up(separated(bracketed(kept, ""), ";"), n => aliased(n, renamed))
+}
+# [alias, word] of an alias line, ø for another statement (Rust twin: src/modules/declarations.rs word_alias)
+word_alias(statement: Node): any := {
+	if not (is_group(statement) and #statement == 2 and statement#1 == symbol(alias_keyword)) { return ø }
+	match statement#2 {
+		Key(alias, op, word): if op == Op.Assign and alias is symbol and word is symbol then [name_of(alias), name_of(word)] else ø
+		_: ø
+	}
+}
+aliased(n: Node, aliases: list): any := {
+	if not (n is symbol) { return n }
+	for pair in aliases { if name_of(n) == pair#1 { return symbol(pair#2) } }
+	n
+}
+
+# `module_source("prelude")`: lib/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
+# writes it out (the std modules are lib/<name>.warp); `module_source("compiler/analysis/errors.data")`, a name with an
+# extension, that file of lib/; `library_sources()`, every module of lib/ (parser.warp LIBRARY_FILES), `library_parses()`
+# their parses (LIBRARY_PARSES), `slice_parses()` their definitions' parses (SLICE_PARSES). A compiled
+# compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
+module_text(n: Node): any := {
+	if is_empty_call(n, "library_sources") { return library_literal(library_texts(run_library(), "")) }
+	if is_empty_call(n, "library_parses") { return library_literal(packed_parses(library_texts(run_library(), ""))) }
+	if is_empty_call(n, "library_slices") { return library_literal(baked_slices(library_texts(run_library(), ""))) }
+	if is_empty_call(n, "slice_parses") { return library_literal(packed_slice_parses(library_texts(run_library(), ""))) }
+	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
+	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
+	path = module_source_path(n#2)
+	source = try read(path) else ø
+	if source == ø then n else source
+}
+is_empty_call(n: Node, name: text): bool := is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(name)
+# each file's parse, packed (parser.warp LIBRARY_PARSES)
+packed_parses(files: map): map := {
+	parses = {}
+	for path in files.keys { parses[path] = pack(source_parse(run_library() + "/" + path, files[path])) }
+	parses
+}
+# each top-level module's slices parsed, packed, by their place (prelude_words.warp SLICE_PARSES, slice_key)
+packed_slice_parses(files: map): map := {
+	parses = {}
+	for path in files.keys {
+		if not path.contains("/") and path.ends_with(module_extension) {
+			source = files[path]
+			uses = use_lines(source)
+			for span in slice_spans(source) { parses[slice_key(path, "${span#2}")] = pack(plain_node(parsed(source[span#2 ..< span#3], uses))) }
+		}
+	}
+	parses
+}
+# each file's slices (prelude_words.warp LIBRARY_SLICES), a line `name start end` per slice
+baked_slices(files: map): map := {
+	slices = {}
+	for path in files.keys { slices[path] = slice_spans(files[path]).map(span => "${span#1} ${span#2} ${span#3}").join("\n") }
+	slices
+}
+# a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
+library_literal(files: map): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
+# the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
+module_source_path(name: text): text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
+
+# [the declarations, the files read]: those of each file the statements use, not yet among `seen`; each file's own
+# declarations claim their signatures in `claimed` (claim_signatures)
+declarations_used(statements: list, folder: text, seen: list, claimed: map): list := {
+	declarations = []
+	for statement in statements {
+		file = file_used(statement, folder)
+		if file != ø and file not in seen {
+			seen += [file]
+			used = statements_in(with_module_directory(file_parsed(file), folder_of(file)))
+			inner = declarations_used(used, folder_of(file), seen, claimed)
+			seen = inner#2
+			# a primitive file's foreign lines are its imports, declared as its functions are (primitive.warp declare_import)
+			primitive = is_primitive_file(file_text(file))
+			own = used.filter(s => (is_declaration(s) or use_target(s) is symbol or (primitive and foreign_import(s) != ø)) and file_used(s, folder_of(file)) == ø)
+			claim_signatures(own, working_relative(file), claimed)
+			declarations += inner#1 + own
+		}
+	}
+	[declarations, seen]
+}
+
+# a used file's parse, parsed again each compile: keeping parses across runs saved about 1 % (card kept-values-retire)
+file_parsed(file: text): Node := {
+	source = file_text(file)
+	if source is ø { raise working_relative(file) + ": no such file to use" }
+	checked_parse(file, without_primitive_mark(source))
+}
+# a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
+# unclosed-core: an unclosed ( in a core file hid its later definitions)
+checked_parse(file: text, source: text): Node := {
+	tree = plain_node(parsed(source))
+	for n in nodes_in(tree) {
+		message = parse_error_message(n)
+		if message != ø { raise working_relative(file) + ": " + message }
+	}
+	tree
+}
+
+# A used file's declarations claim their signatures: another file declaring one already, differently, is the error
+# naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in
+# both is one
+# Rust twin: src/modules/loader.rs claim_signatures
+claim_signatures(declarations: list, file: text, claimed: map) := {
+	for declaration in declarations {
+		signature = declared_signature(declaration)
+		if signature == ø { continue }
+		if signature not in claimed {
+			claimed[signature] = [file, declaration]
+			continue
+		}
+		earlier = claimed[signature]
+		# written out only on a clash: serializing every declaration of the compiler's files took the self build minutes
+		if earlier#1 != file and "${earlier#2}" != "${declaration}" {
+			raise signature + " is declared in both " + earlier#1 + " and " + file + ": rename one, or keep one of them"
+		}
+	}
+}
+
+# `f(x: int, y)` → "f(int, any)", the name and parameter types a declaration claims; a value's name alone, ø for
+# another statement
+# Rust twin: src/modules/declarations.rs declared_signature, parameter_type
+declared_signature(statement: Node): any := {
+	name = declared_name(statement)
+	if name == ø { return ø }
+	head = declared_head(statement)
+	if head == ø { return name }
+	name + "(" + items_of(head)[1..].map(parameter_type).join(", ") + ")"
+}
+parameter_type(parameter: Node): text := match parameter {
+	Key(typed, op, kind): if op == Op.Colon then type_text(kind) else if op == Op.Assign then parameter_type(typed) else "any"
+	_: "any"
+}
+# the head `(f x y)` of a function declaration, as declared_name finds its name; ø for a value
+declared_head(statement: Node): any := match statement {
+	Key(left, op, right): {
+		if assigns_or_defines(op) { return call_head(left) }
+		if op != Op.Colon { return ø }
+		if is_keyword_group(left) then call_head(left#2) else ø
+	}
+	_: if is_keyword_group(statement) then call_head(statement#2) else ø
+}
+# `(f x)`, also typed `f(x): int` or before its block, `(f x) {…}`
+call_head(n: Node): any := {
+	if n is key { return call_head(key_of(n)) }
+	if not (is_group(n) and #n > 0) { return ø }
+	if n#1 is symbol then (if bracket_of(n) == "(" then n else ø) else call_head(n#1)
+}
+
+# lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one)
+std_module_path(name: text): text := run_library() + "/" + name + module_extension
+
+# what a `use` statement names, ø for another statement
+use_target(statement: Node): any := {
+	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
+	# a quoted name without an extension is the bare one: `use "list"` is `use list`, a file of the folder or a std module
+	if statement#2 is text and not statement#2.contains(".") { return symbol(statement#2) }
+	statement#2
+}
+
+# the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
+file_used(statement: Node, folder: text): any := {
+	module = use_target(statement)
+	if module is text { return path_in(folder, module) }
+	if not (module is symbol) { return ø }
+	path = path_in(folder, name_of(module) + module_extension)
+	if file_text(path) == ø then ø else path
+}
+# a file as Rust's messages name it (loader.rs relative_path): below the working folder relative to it, else as found
+working_relative(file: text): text := {
+	below = cwd + "/"
+	if file.starts_with(below) then file.replace(below, "") else file
+}
+path_in(folder: text, name: text): text := without_steps_up(if name.starts_with("/") then name else folder + "/" + name)
+# the path with each `folder/..` taken out, so a file two folders use is one file (runtime/extended/../text.warp is
+# runtime/text.warp, card runtime-split)
+without_steps_up(path: text): text := {
+	kept = []
+	for part in path.split("/") {
+		if part == ".." and #kept > 0 and kept#(#kept) != ".." { kept = kept[0 ..< #kept - 1] } else { kept += [part] }
+	}
+	kept.join("/")
+}
+# a file of lib/ comes as parser.warp file_source gives it: from the disk under WARP_LIB, else from the bundle, whose
+# texts are lib/ as it was when the compiler was built (a module changed since must be read)
+file_text(path: text): any := file_source(path)
+
+# what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
+# `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program), a named
+# pattern; not its main-level statements
+is_declaration(statement: Node): bool := match statement {
+	Key(left, op, right): {
+		if left == opaque_symbol { return kind_of(right) == "type" }
+		if assigns_or_defines(op) { return yes }
+		# `def f(x): list {…}`: the key of the head and its result type
+		op == Op.Colon and (is_keyword_group(left) or is_declaration_keyword(left))
+	}
+	_: declared_enum(statement) != ø or is_keyword_group(statement) or is_pattern_definition(statement)
+}
+assigns_or_defines(op: Op): bool := op == Op.Assign or op == Op.Define
+is_declaration_keyword(n: Node): bool := n is symbol and name_of(n) in declaration_keywords
+# `def f(x) …`, `global x = 0`: a group a function or declaration keyword starts
+is_keyword_group(n: Node): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or is_declaration_keyword(n#1))
+
+# the name a declaration defines, as src/modules/declarations.rs name_declared_by: `f(x) := …`, `x = …`,
+# `def f(x) …`, `def f(x): T {…}`, `global x = 0`; ø for another statement
+declared_name(statement: Node): any := match statement {
+	Key(left, op, right): {
+		if assigns_or_defines(op) { return aliased_type_name(left) ?? leftmost_name(left) }
+		if op != Op.Colon { return ø }
+		if is_keyword_group(left) { return leftmost_name(left#2) }
+		if is_declaration_keyword(left) then declared_name(right) else ø
+	}
+	_: if is_keyword_group(statement) or is_pattern_definition(statement) then leftmost_name(statement#2) else ø
+}
+# `type View = list or int`: the alias's name, View (its left side is the opaque view ["type", name, ø]), else ø
+aliased_type_name(left: Node): text? := if is_key(left, Op.Colon) and key_of(left) == opaque_symbol and kind_of(value_of(left)) == "type" then declared_type_name(value_of(left)#2) else ø
+leftmost_name(n: Node): any := {
+	if n is symbol { return name_of(n) }
+	if n is key { return leftmost_name(key_of(n)) }
+	if is_group(n) and #n > 0 { return leftmost_name(n#1) }
+	ø
+}

@@ -9,7 +9,7 @@ core/runtime.warp holds the twins of Rust's run-time text casts:
   digits in an f64, so it can be an ulp off there; warp's is the correct one (twins-never-bounce: accepted difference).
 - `text_as_number(t)`: "a/b" the exact ratio (exact_ratio), a whole float below 2^63 an int, else the float.
 
-core/emitter.warp routes `t as int`, `t as float` (text_number_words) and `t as number` of a text value to
+core/emitter/emitter.warp routes `t as int`, `t as float` (text_number_words) and `t as number` of a text value to
 them; `x as number` of an int or float is the value itself; any other kind is refused (Rust takes it).
 
 Differences from Rust, each a later step:

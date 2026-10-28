@@ -67,7 +67,7 @@ Needs, probes/compiler_enums/f_type_values*.warp, f_type_match.warp (2026-10-20)
 
 ## Declarations (superseded for Kind and Held by the section above)
 
-core/kinds.warp, used by every stage that names a kind (words, signatures, analyzer, emitter, serializer):
+core/analysis/kinds.warp, used by every stage that names a kind (words, signatures, analyzer, emitter, serializer):
 
 ```warp
 # the kind of a value as the analyzer infers it

@@ -41,7 +41,7 @@ before asking a question). After a context swap, this file and your role file be
   existing behaviour need no question.
 - Layout: core/ = compiler, runtime, sugar, extensions; lib/ = plain modules programs import. Folder names never join
   two topics with an underscore. core/ is the real folder; lib/compiler links to ../core for a transition
-  (the compiler is still found as <lib>/compiler), core/sugar to ../lib/sugar. New syntax goes by layer (notes/layers.md): table row or declaration first, else a
+  (the compiler is still found as <lib>/compiler). New syntax goes by layer (notes/layers.md): table row or declaration first, else a
   `rewrite` rule; a parser branch only when the commit names the missing rewrite-engine feature.
 - Vocabulary is library: the names and values of a domain (keys, units, colors, system values, months …) are
   declared in lib/ as an enum or as values of a class, found through `use` or names from the expected type; never a

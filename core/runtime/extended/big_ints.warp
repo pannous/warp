@@ -4,7 +4,7 @@
 use "../intrinsics.warp"
 use "../instructions.warp"
 use "../arithmetic.warp"
-use "../../byte_codes.warp"
+use "../../emitter/byte_codes.warp"
 limb_base(): int := 4294967296
 # a limb times a limb is taken in halves of a limb, so that no sum leaves 64 bits
 half_limb_base(): int := 65536

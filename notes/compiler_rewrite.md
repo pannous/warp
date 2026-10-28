@@ -18,7 +18,7 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
 3. **Measured at the start:** parser.warp ~50 % notation, ~16 % kernel, ~34 % sugar (1417 lines); 26 of 62 other
    compiler files (2448 lines) are sugar passes; ~3900 sugar lines in all, expected to shrink to a few hundred rule
    lines.
-4. **Rewrite engine first** (core/rewrites.warp), features F1–F8 named by what the sugar needs; then
+4. **Rewrite engine first** (core/passes/rewrites.warp), features F1–F8 named by what the sugar needs; then
    migration by gain: word aliases → rules that work today → F3 group → F2 group → F1 group → notation tables →
    clauses and English definitions.
 5. **Process:** new syntax is a table row or declaration, else a rewrite line; a new parser branch or pass only when
@@ -45,7 +45,7 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
 - **Not rule-ready yet** (found by warp-layers): of_lookups and number_words (twin stages Rust drives), parse_words'
   eval (needs scoped shadowing), test/emit/unit phrases and `n times` (parser grouping).
 - **Around it:** emitter.warp split into 14 files under core/emitter/ (bb97b383e7); node patterns and
-  beautiful types (named patterns `Definition`, `Call`… in core/node_patterns.warp); sum is a plain warp fold;
+  beautiful types (named patterns `Definition`, `Call`… in core/passes/node_patterns.warp); sum is a plain warp fold;
   both lanes (`warp pure` = compiler.warp built by Rust, `warp self` = built by itself) compile and run hello on main.
 - **Honest count:** the sugar passes are all still there and parser.warp is about its old size (4272 lines); about
   1–3 % of the ~3900 sugar lines have moved. The engine was the first half of the work; the moving starts now.
@@ -66,5 +66,5 @@ Decisions: language-layers, kernel list, alias-mechanism, n-times, runtime-split
    interned texts, unboxed ints, typed structs); twins of Rust removed once the first pipeline runs fully in warp; the
    playground resumes when the warp compiler can replace it (paused 2026-10-22).
 
-Measure progress by the sugar lines left: `wc -l core/parser.warp` plus the pass files in the notes/layers.md
+Measure progress by the sugar lines left: `wc -l core/parsing/parser.warp` plus the pass files in the notes/layers.md
 table, against lib/sugar/*.warp.
