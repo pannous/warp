@@ -1100,8 +1100,9 @@ def closing_ends_of(code: text, n: int, openers: list): ClosingEnds := {
 	ClosingEnds{word_starts: word_starts, balances: balances, lowest_from: lowest_from}
 }
 
-// Whether the word from `start` to `end` is used as a name: an assigned variable (`end = 3`) or a parameter or argument
-// between separators (`f(a, end)`; `foo(if c then 1 else 2 end)` closes a block)
+// Whether the word from `start` to `end` is used as a name: an assigned variable (`end = 3`), a key or field
+// (`{block: 2, end: 11}`, `end: int`) or a parameter or argument between separators (`f(a, end)`; `foo(if c then 1
+// else 2 end)` closes a block)
 // Rust twin: blocks.rs names_block_closer
 def names_word(code: text, start: int, end: int, n: int): bool {
 	before = start - 1
@@ -1110,8 +1111,9 @@ def names_word(code: text, start: int, end: int, n: int): bool {
 	while after < n and is_blank(code[after]) { after = after + 1 }
 	following = peek(code, after, n)
 	assigned = following == '=' and peek(code, after + 1, n) != '='
+	keyed = following == ':'
 	listed = before >= 0 and "(,".contains(code[before]) and ",)".contains(following)
-	assigned or listed
+	assigned or keyed or listed
 }
 
 // Whether an `end` after the parser's position closes the body opened here: the openers between count, each closed by
