@@ -49,7 +49,62 @@ static uint32_t module_text(struct w2c_wasi__snapshot__preview1* wasi, const cha
 // a C function's address by its name, for a program to hand to a C library as a callback
 void* c_function(char* name) { return native_function(name); }
 
-// A host word a program defines for a module it runs through wasmtime's C API (lib/native/driver.warp
+// The C calls of a module the driver runs (core/native/driver.warp c_called), as the Rust stub makes them (c_calls.rs)
+// where a library lies by the name a program imports it under (`sqlite3`); libc's and libm's are the process's
+static const char* LIBRARY_PATHS[] = {"lib%s.dylib", "/opt/homebrew/lib/lib%s.dylib", "/usr/local/lib/lib%s.dylib", "lib%s.so", "lib%s.so.0"};
+static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
+// a library's function, NULL when the library has none of that name: never another library's
+void* library_function(char* library, char* name) {
+	for (size_t i = 0; i < sizeof PROCESS_LIBRARIES / sizeof *PROCESS_LIBRARIES; i++)
+		if (!strcmp(library, PROCESS_LIBRARIES[i])) return dlsym(RTLD_DEFAULT, name);
+	char path[4096];
+	for (size_t i = 0; i < sizeof LIBRARY_PATHS / sizeof *LIBRARY_PATHS; i++) {
+		snprintf(path, sizeof path, LIBRARY_PATHS[i], library);
+		void* loaded = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+		if (loaded) return dlsym(loaded, name);
+	}
+	return NULL;
+}
+// a C function called with up to 8 integers and pointers and up to 8 floats in their registers (the ARM64 and x86-64
+// conventions keep the two apart, `ldexp(double, int)` takes d0 and x0): it reads only the ones its parameters name.
+// Its result is the integer register, or the bits of the float register
+typedef uint64_t (*integer_function)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, double, double, double, double, double, double);
+typedef double (*float_function)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, double, double, double, double, double, double);
+uint64_t native_call(void* function, uint64_t* i, double* f, int32_t float_result) {
+	if (!float_result) return ((integer_function)function)(i[0], i[1], i[2], i[3], i[4], i[5], i[6], i[7], f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7]);
+	double result = ((float_function)function)(i[0], i[1], i[2], i[3], i[4], i[5], i[6], i[7], f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7]);
+	uint64_t bits;
+	memcpy(&bits, &result, sizeof bits);
+	return bits;
+}
+// the C pointers a run got, handed to the module as ids: id n is the n-th pointer, 0 is NULL, the same pointer keeps
+// its id, found again through a table of ids by pointer (open addressing, at most half full)
+static void** handles;
+static int32_t* handle_ids;
+static uint32_t handle_count, handle_room, slot_count;
+static int32_t* slot_of(void* pointer) {
+	uint32_t mask = slot_count - 1;
+	for (uint32_t slot = (uint32_t)(((uintptr_t)pointer * 0x9E3779B97F4A7C15ull) >> 32) & mask;; slot = (slot + 1) & mask)
+		if (!handle_ids[slot] || handles[handle_ids[slot] - 1] == pointer) return &handle_ids[slot];
+}
+int32_t handle_id(void* pointer) {
+	if (!pointer) return 0;
+	if (handle_count * 2 >= slot_count) {
+		slot_count = slot_count ? slot_count * 2 : 64;
+		free(handle_ids);
+		handle_ids = calloc(slot_count, sizeof *handle_ids);
+		for (uint32_t id = 1; id <= handle_count; id++) *slot_of(handles[id - 1]) = (int32_t)id;
+	}
+	int32_t* slot = slot_of(pointer);
+	if (*slot) return *slot;
+	if (handle_count == handle_room) handles = realloc(handles, (handle_room = handle_room * 2 + 16) * sizeof *handles);
+	handles[handle_count++] = pointer;
+	return *slot = (int32_t)handle_count;
+}
+int32_t handle_known(int32_t id) { return id >= 0 && (uint32_t)id <= handle_count; }
+void* handle_pointer(int32_t id) { return id > 0 && (uint32_t)id <= handle_count ? handles[id - 1] : NULL; }
+
+// A host word a program defines for a module it runs through wasmtime's C API (core/native/driver.warp
 // host_words_defined): a wasmtime_func_callback_t whose data is the word's number. The values (wasmtime_val_t, VALUE_BYTES
 // each) cross through the program's arena to its exported host_word(word, caller, values, count, results, count),
 // whose arena is given back after

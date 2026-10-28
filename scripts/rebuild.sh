@@ -89,8 +89,9 @@ besides() {
 	done
 }
 # the files `warp rebuild` writes beside a compiler, kept and fetched with it, as found in the folder: runtime.wasm
-# beside warp.wasm (card runtime-prebuilt), the standard modules in modules/ (card modules-prebuilt)
-companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm modules/*.wasm 2>/dev/null); }
+# beside warp.wasm (card runtime-prebuilt) with its machine code, which linked runs load (card runtime-cwasm-shipped),
+# the standard modules in modules/ (card modules-prebuilt)
+companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm.cwasm runtime.wasm modules/*.wasm 2>/dev/null); }
 # a compiler's name before the rename (transition)
 legacy() { case $1 in warp) echo compiler ;; warp-self) echo compiler-self ;; *) echo "$1" ;; esac; }
 # one <name> [check]: lib/<name>.wasm for these inputs, from lib/, the store, else built (promoted for warp-self)

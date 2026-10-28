@@ -17,7 +17,7 @@ required_type(word: text): text := if word.ends_with("?") then word[0..<(#word -
 enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·step", TryElse = "try·else",
 	AssertElse = "assert·else", DataItem = "data·item", DataField = "data·field", TextShown = "text·shown", OfNone = "of·none",
 	ViewOpaque = "view·opaque", ViewAttribute = "view·attribute", DataSpliced = "data·spliced", GlueName = "glue·name",
-	GlueHidden = "glue·hidden", MatchSubject = "match·subject", PositionAssigned = "position·assigned",
+	GlueHidden = "glue·hidden", MatchSubject = "match·subject", MatchBound = "match·bound", PositionAssigned = "position·assigned",
 	IndexAssigned = "index·assigned", PatternClause = "pattern·clause·", ConvertedValue = "converted·value",
 	UncaughtError = "uncaught·error", CaughtError = "caught·error" }
 # the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }` (Rust twin: words.rs IMPLICIT_PARAMETER)

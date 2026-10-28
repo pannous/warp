@@ -35,10 +35,12 @@ native arguments $'one\ntwo words' one "two words"
 native files "Hello from a file"
 GREETING="Hi there" native c_calls $'Hi there\n8\n5'
 check "c_calls by warp refused" "$(cd "$stage" && "$warp" c_calls.warp 2>&1 | grep -c "C calls run by \`warp build native\`")" 1
+cp "$checkout/samples/native/doubling.warp" "$stage/"
+native uses $'42\n7'
 
-# the native runner lib/native/driver.warp (notes/primitive.md "Driver"): a sample's module run through wasmtime's C API,
+# the native runner core/native/driver.warp (notes/primitive.md "Driver"): a sample's module run through wasmtime's C API,
 # given on the command line or appended to the driver
-cp "$checkout/lib/native/driver.warp" "$stage/"
+cp "$checkout/core/native/driver.warp" "$stage/"
 (cd "$stage" && "$warp" build native driver.warp >"$stage/build.log" 2>&1)
 module() { # module <sample>: the sample's wasm module in the stage
 	cp "$checkout/samples/native/$1.warp" "$stage/"
@@ -63,6 +65,10 @@ if [ -x "$stage/driver" ]; then
 	printf 'use os\nprint run("ls")\n' >"$stage/run.warp"
 	(cd "$stage" && "$warp" build --wasm run.warp >/dev/null 2>&1)
 	check "std_io by the driver" "$(cd "$stage" && ./driver run.wasm)" 'std_io os.run: not in the native driver yet'
+	# a GC program's C calls by the driver, as its warp.c_functions section describes them: texts, numbers, handles
+	printf 'use c\nprint getenv("HOME")\nprint atof("2.5")\nabs(-7)\n' >"$stage/c_texts.warp"
+	(cd "$stage" && "$warp" build --wasm c_texts.warp >/dev/null 2>&1)
+	check "C calls by the driver" "$(cd "$stage" && ./driver c_texts.wasm)" "$HOME"$'\n2.5\n7'
 else
 	echo "✗ driver: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
 fi

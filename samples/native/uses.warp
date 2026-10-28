@@ -1,0 +1,5 @@
+@primitive
+# a primitive file using another primitive file: `use "doubling.warp"` brings its declarations
+use "doubling.warp"
+print(text_of(doubled(21)))
+print(text_of(sum(Pair(3, 4))))

@@ -156,12 +156,16 @@ pub(crate) const EMBEDDED_MODULES: [&str; 5] = ["aliases", "prelude", "math", "l
 /// [path inside lib/, contents] of each compiler input: the files below lib/compiler (dot files left out), sorted,
 /// then lib/<module>.warp of each module there is
 #[cfg(feature = "native")]
+/// The native warp's own sources (core/native/), which no compiler embeds: no compiler input (scripts/compiler-inputs.sh)
+const NATIVE_SOURCES: &str = "compiler/native/";
+
 pub(crate) fn compiler_input_files(modules: &[&str]) -> Vec<(String, Vec<u8>)> {
 	let library = library();
 	let relative = |file: &Path| file.strip_prefix(library).unwrap_or(file).display().to_string();
 	let mut inputs: Vec<(String, Vec<u8>)> = files_below(library.join(crate::modules::COMPILER_FOLDER))
 		.into_iter()
 		.filter(|file| !file.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with('.')))
+		.filter(|file| !relative(file).starts_with(NATIVE_SOURCES))
 		.map(|file| (relative(&file), std::fs::read(&file).unwrap_or_default()))
 		.collect();
 	inputs.sort();

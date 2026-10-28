@@ -39,6 +39,18 @@ MVP wasm.
    callbacks. Done when `warp-native hello.warp` prints Hello. The same runner, with a program's precompiled module
    appended, is the executable `warp build` writes for GC programs (user 2026-10-28), replacing the Rust warp-runtime
    stub that executable-prints-value reconnects in the meantime.
+   Done (2026-10-28): core/native/driver.warp (decision native-warp-in-core moved it to core/); `warp build` writes
+   <driver><module> for every GC program, its C calls linked from the module's warp.c_functions section; the Rust stub
+   is no longer written (stub-retired drops its build).
+3b. **The native warp** (decision native-warp-in-core): core/native/warp.warp, `use "driver.warp"`, is the warp
+   command. It tells apart only what its words name: a .wasm runs, a .warp file is compiled by warp.wasm and runs with
+   its arguments, any other words go to warp.wasm, whose compiler.warp keeps the one command table: a command runs
+   there (core/commands.warp), other words are code compiled to WARP_RUN_TO, which warp.warp then runs. The host words
+   those commands call are driver.warp host_word's, warp over libc: os.command so far (popen), its list argument read
+   through the module's export item_at. Done so far: a file with arguments, a module, code, help and `warp build`
+   (test/native/test_warp_native.sh; `warp build` needs warp.wasm with item_at, so a seed refresh). Next: `warp
+   rebuild` (seed → warp.wasm), `warp test` (pure_tests.rs: parallel children), repl, the remaining core host words;
+   installed beside the Rust binary as warp-native until `warp test` on it matches the core tests.
 4. **Results without gc_traits**: compiled programs print their own value (card rust-bootstrap, "a standalone
    executable needs the program compiled to print its value"), so the native host never reads GC objects back.
 5. **Core host words**: what the core binary itself needs (files, processes, args/env, time, the sandbox, C calls)

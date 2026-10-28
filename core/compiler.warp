@@ -53,7 +53,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	if #unknown > 0 { throw outside_the_core + "no C signature for " + unknown.join(", ") + ": declare it with a foreign line, `name(x: i32): i32 from 'library'`" }
 	# behind runtime.wasm and the prebuilt modules it uses, whose words it declares and never lowers (with_reached)
 	prepend_runtime(library_runtime ?? runtime_bytes())
-	relocate_program(separate_output != "")
+	relocate_program(separate_output != "" or linked_output != "")
 	linking = library_runtime == ø and prepended()
 	link_libraries(if linking then linked_libraries(source) else [], if linking then definition_slices(source).map(slice => slice#1) else [])
 	program = checked_program(foreign#1, folder, prelude_source)
@@ -125,7 +125,12 @@ compile_written(source: text, wasm_file: text, folder: text) := {
 	write_bytes(wasm_file, compiled)
 	# a primitive module imports no runtime: its separate form is itself
 	if separate_output != "" { write_bytes(separate_output, if is_primitive_file(source) then compiled else separate_module()) }
+	if linked_output != "" and runs_linked(source) { write_bytes(linked_output, separate_module()) }
 }
+# a run links its program unless it is primitive (it imports no runtime), makes closures (linked closure ids are open:
+# notes/runtime_linking.md "Open"), counts fuel or links a prebuilt module (`use units`: its linked form is invalid
+# wasm, 2026-10-28): those run as the module of wasm_file
+runs_linked(source: text): bool := not is_primitive_file(source) and #module.closures == 0 and not module.counts_fuel and #module.linked_images == 0
 
 # the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
 REPL_STATE = ".warp-repl-state.warp"
@@ -165,12 +170,15 @@ RUNTIME_ARGUMENT = 5
 # where the program just compiled goes as a separate module too, importing runtime.wasm's instance: `warp build`'s
 # x.mod.wasm (commands.warp build; notes/runtime_linking.md "Separate modules"), none for a plain compile
 global separate_output = ""
+# where a run's program goes as such a module too, the harness's sixth argument of a compile: the harness runs it
+# linked to runtime.wasm's instance, from the machine code shipped beside it (card runtime-cwasm-shipped)
+LINKED_ARGUMENT = 6
+global linked_output = if command == "" and #args >= LINKED_ARGUMENT then args#LINKED_ARGUMENT else ""
 global runtime_held = ø
+# runtime.wasm: a compile's fifth argument, else lib/'s (the native warp's, core/native/warp.warp)
+runtime_path(): text := if command == "" and #args >= RUNTIME_ARGUMENT and args#RUNTIME_ARGUMENT != "" then args#RUNTIME_ARGUMENT else library_folder + "/" + RUNTIME_WASM
 runtime_bytes(): list := {
-	if runtime_held == ø {
-		if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { throw "no runtime.wasm given (the fifth argument): `warp rebuild` writes it beside warp.wasm" }
-		runtime_held = read_bytes(args#RUNTIME_ARGUMENT)
-	}
+	if runtime_held == ø { runtime_held = read_bytes(runtime_path()) }
 	runtime_held
 }
 # the program just compiled behind runtime.wasm, as a module importing it instead
@@ -200,8 +208,12 @@ show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
 show_data() := print plain_node(parsed(source_or_code(1)))
 show_lowered() := print lowered_program(source_or_code(1), ".", prelude_source)
+# where the native warp (core/native/warp.warp) wants the module of words that are neither a command nor a file:
+# they are code, compiled there for it to run; no other harness sets it
+RUN_TO_VARIABLE = "WARP_RUN_TO"
+run_to = env(RUN_TO_VARIABLE) ?? ""
 match command {
-	"": compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
+	"": if run_to then compile_written(args.join(" ") + "\n", run_to, ".") else compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
 	"help": show_help()
 	"version": show_version()
 	"parse": show_parsed()

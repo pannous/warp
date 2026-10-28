@@ -99,7 +99,7 @@ build_native(source_file: text, library: text) := {
 	executable = source_file.remove_suffix(".warp")
 	stem = executable + ".native"
 	native_build = yes
-	write_bytes(stem + ".wasm", compile(source, folder_of(source_file)))
+	write_bytes(stem + ".wasm", compile(source, source_folder(source_file)))
 	header = stem.split("/").last() + ".h"
 	write(stem + ".main.c", native_main(header, library))
 	wabt = folder_of(folder_of(shell("command -v wasm2c").trim()))
@@ -116,6 +116,8 @@ native_links(wabt: text): text := {
 	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
 	if #libraries == 0 then "" else " -L" + quoted_path(wabt + "/lib") + libraries.map(l => " -l" + l).join("")
 }
+# the folder a file's uses are read from: "." for a file named without one
+source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
 quoted_path(path: text): text := "\"" + path + "\""
 # os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
 shell(line: text): text := {
@@ -124,9 +126,9 @@ shell(line: text): text := {
 }
 
 # `warp build [--wasm|--exe] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
-# with --wasm as its module app.wasm (which lib/native/driver.warp runs); any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
+# with --wasm as its module app.wasm (which core/native/driver.warp runs); any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
 # trimmed by Binaryen's wasm-opt) and the executable app (the native driver carrying app.wasm). The native
-# warp adds where runtime.wasm and the stub lie: --runtime=<file> --stub=<file>
+# warp adds where runtime.wasm lies, --runtime=<file> (and the old Rust stub's --stub=<file>, read no more)
 OPTION_MARK = "--"
 WASM_ONLY = "--wasm"
 EXE_ONLY = "--exe"
@@ -152,13 +154,14 @@ build(words: list) := {
 	source = if is_file then read(target) else target
 	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
 	if is_file { emitting_file(working_relative(target)) }
-	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", folder_of(target)) else build_native(target, library_folder) }
-	runtime_held = read_bytes(option_of(options, "runtime"))
+	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", source_folder(target)) else build_native(target, library_folder) }
+	given_runtime = option_of(options, "runtime")
+	if given_runtime != ø { runtime_held = read_bytes(given_runtime) }
 	separate_output = stem + ".mod.wasm"
-	compile_written(source, stem + ".full.wasm", if is_file then folder_of(target) else ".")
+	compile_written(source, stem + ".full.wasm", if is_file then source_folder(target) else ".")
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
 	modules = [stem + ".full.wasm", separate_output, stem + ".wasm"]
-	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", option_of(options, "stub"), stem, c_function_lines()) }
+	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", stem) }
 	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
 		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
 	}
@@ -182,33 +185,17 @@ trim(module: text, trimmed: text, way: text) := {
 	}
 }
 
-# A standalone executable is lib/native/driver.warp built natively, carrying the program's module (notes/primitive.md
-# "Driver"): <driver><module><its length, 8 bytes little-endian>WRPMwasm<zeros to a multiple of 16>, signed on macOS.
-# A program calling C is still the warp-runtime stub carrying its machine code (crates/warp-runtime standalone.rs),
-# <stub><machine code, deflated><its length>WRPCwasm<zeros>, until the driver links C functions (card driver-c-functions)
+# A standalone executable is core/native/driver.warp built natively, carrying the program's module (notes/primitive.md
+# "Driver"), which also makes its C calls: <driver><module><its length, 8 bytes little-endian>WRPMwasm<zeros to a
+# multiple of 16>, signed on macOS
 MODULE_MAGIC = "WRPMwasm"
-TRAILER_MAGIC = "WRPCwasm"
 TRAILER_ALIGNMENT = 16
 # the driver is built once per lib/ and again whenever driver.warp changes, beside a copy of the source it was built
-# from, written once the build succeeded
-DRIVER_SOURCE = "/native/driver.warp"
-DRIVER_BUILT = "/native/built"
-# machine code keeps no custom section: the C functions the module describes (warp.c_functions) go in front of it,
-# after this mark and the table's length (c_signatures.rs with_c_functions), so the stub links them as warp does
-C_FUNCTIONS_MARK = "WRPCcfun"
-with_c_functions_table(lines: list, machine_code: list): list := {
-	if #lines == 0 { return machine_code }
-	table = lines.join("\n").bytes
-	C_FUNCTIONS_MARK.bytes + le64(#table) + table + machine_code
-}
-# gzip -n frames raw deflate in a 10-byte header and an 8-byte trailer (RFC 1952)
-GZIP_HEADER = 10
-GZIP_TRAILER = 8
+# from, written once the build succeeded: in lib/data, which neither the compiler's bundle of lib/ nor its inputs hash
+# reads (parser.warp UNBUNDLED_FOLDERS, scripts/compiler-inputs.sh)
+DRIVER_SOURCE = "/compiler/native/driver.warp"
+DRIVER_BUILT = "/data/native"
 
-write_executable(module: text, stub: any, executable: text, c_functions: list) := {
-	if #c_functions > 0 { return write_stub_executable(module, stub, executable, c_functions) }
-	write_carrying(built_driver(), read_bytes(module), MODULE_MAGIC, executable)
-}
 built_driver(): text := {
 	folder = library_folder + DRIVER_BUILT
 	source = read(library_folder + DRIVER_SOURCE)
@@ -221,22 +208,12 @@ built_driver(): text := {
 	}
 	folder + "/driver"
 }
-write_stub_executable(module: text, stub: any, executable: text, c_functions: list) := {
-	if stub == ø or not exists(stub) { raise "warp build: no runtime stub warp-runtime beside warp (or at WARP_RUNTIME_STUB), so no executable of a program calling C (`cargo build --release -p warp-runtime --bin warp-runtime`, or name one in WARP_RUNTIME_STUB); --wasm builds only the modules" }
-	machine_code = std_io("os", "precompile", [read_bytes(module)])
-	carried = executable + ".carried"
-	write_bytes(carried, with_c_functions_table(c_functions, machine_code))
-	shell("gzip -9 -n -f " + quoted_path(carried))
-	framed = read_bytes(carried + ".gz")
-	shell("rm -f " + quoted_path(carried + ".gz"))
-	write_carrying(stub, framed[GZIP_HEADER ..< #framed - GZIP_TRAILER], TRAILER_MAGIC, executable)
-}
-# the executable: a copy of `runner` with `carried`, its length and `magic` after it, the last segment grown over them
-write_carrying(runner: text, carried: list, magic: text, executable: text) := {
-	shell("cp " + quoted_path(runner) + " " + quoted_path(executable))
+write_executable(module: text, executable: text) := {
+	carried = read_bytes(module)
+	shell("cp " + quoted_path(built_driver()) + " " + quoted_path(executable))
 	signed = shell("uname") == "Darwin"
 	if signed { shell("codesign --remove-signature " + quoted_path(executable)) }
-	image = read_bytes(executable) + carried + le64(#carried) + magic.bytes
+	image = read_bytes(executable) + carried + le64(#carried) + MODULE_MAGIC.bytes
 	while #image % TRAILER_ALIGNMENT != 0 { image += [0] }
 	write_bytes(executable, extended_to_end(image))
 	shell("chmod +x " + quoted_path(executable))

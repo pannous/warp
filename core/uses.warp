@@ -118,7 +118,9 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 			used = statements_in(with_module_directory(file_parsed(file), folder_of(file)))
 			inner = declarations_used(used, folder_of(file), seen, claimed)
 			seen = inner#2
-			own = used.filter(s => (is_declaration(s) or use_target(s) is symbol) and file_used(s, folder_of(file)) == ø)
+			# a primitive file's foreign lines are its imports, declared as its functions are (primitive.warp declare_import)
+			primitive = is_primitive_file(file_text(file))
+			own = used.filter(s => (is_declaration(s) or use_target(s) is symbol or (primitive and foreign_import(s) != ø)) and file_used(s, folder_of(file)) == ø)
 			claim_signatures(own, working_relative(file), claimed)
 			declarations += inner#1 + own
 		}
@@ -130,7 +132,7 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { raise working_relative(file) + ": no such file to use" }
-	checked_parse(file, source)
+	checked_parse(file, without_primitive_mark(source))
 }
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)

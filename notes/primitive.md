@@ -63,27 +63,36 @@ samples/native/c_calls.warp. Under wasmtime, warp's own host answers `c` imports
 primitive file calling C runs natively only.
 
 ## Driver
-lib/native/driver.warp is the native runner (roadmap_native_harness.md milestone 3): a primitive file calling
+core/native/driver.warp is the native runner (roadmap_native_harness.md milestone 3): a primitive file calling
 wasmtime's C API through its own foreign lines (`wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module:
 pointer): handle from "wasmtime"`; the structs the calls fill are arena bytes read with long_at/byte_at, native memory
-copied in with memcpy). `warp build native lib/native/driver.warp` makes `driver`:
+copied in with memcpy). `warp build native core/native/driver.warp` makes `driver`:
 - `driver app.warp args…`: warp.wasm ($WARP_LIB, else beside the driver) compiles the file as the native warp has it
   compile (the file, a module in $TMPDIR, its folder, lib/, runtime.wasm), then the module runs with the arguments.
 - `driver app.wasm args…` runs a module; a driver with a module appended (`<module><length u64 LE>WRPMwasm`, padded to
   16 bytes, at the end or where a later Mach-O signature begins) runs that one with all its arguments.
 `warp build app.warp` of a GC program writes that executable (core/commands.warp write_carrying: __LINKEDIT grown over
-the module, then signed): about 100 KB beside the module. The driver is built once per lib/ into lib/native/built/
+the module, then signed): about 100 KB beside the module. The driver is built once per lib/ into lib/data/native/
 (again when driver.warp changes), in the same run as the program: every compile starts with a fresh Module
-(emitter.warp fresh_module, card module-inheritance). A program calling C is still the Rust warp-runtime stub with its machine code and C functions table
-(card driver-c-functions). Tests: test/native/test_executables.sh.
+(emitter.warp fresh_module, card module-inheritance). The Rust warp-runtime stub is no longer written.
+Tests: test/native/test_executables.sh.
 A module gets WASI (stdin/out/err and the environment inherited, "." and "/" preopened), GC, typed references and
-exceptions, wasmtime's machine-code cache. Its `_start` runs (a GC program prints its own value), else `main`, whose
+exceptions, wasmtime's machine-code cache. warp.wasm's machine code is the driver's own, beside it as
+warp.wasm.driver.cwasm with the fingerprint (FNV-1a) of the warp.wasm it is of in .driver.cwasm.key: the first run after
+a rebuild compiles it (6 s), later ones load it (hello 0.9 s in all). The harness's warp.wasm.cwasm is wasmtime 49's with
+its own flags, never loadable by the driver's (brew's, 50); machine code that won't load is one line on stderr, then
+compiled anew (card native-driver). Its `_start` runs (a GC program prints its own value), else `main`, whose
 value is printed by its kind; an error's or trap's message goes to stderr with status 1, the module's exit status is
 kept. Host words: std_io is a C callback (lib/native/foreign.c warp_host_callback, the values through the driver's
 arena to its exported host_word), which reads its arguments through the module's export shown_at (the node as print
 shows it, in linear memory) and builds answers with new_text/new_empty/error_of: every word is an Error saying
-the driver lacks it (the compiler calls none since kept values were retired). Every other
-host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
+the driver lacks it (the compiler calls none since kept values were retired). A C function the module's
+warp.c_functions section describes (one tab-separated line each, crates/warp-runtime c_signatures.rs) is the same
+callback, its data the line and the function (foreign.c library_function: lib<name>.dylib/.so, libc and libm the
+process's): numbers go in registers (foreign.c native_call, up to 8 integers and 8 floats), a text NUL-terminated
+through shown_at, a handle id through foreign.c's handle table, the first out-pointer to a slot that becomes the
+result; a text result is written at the module's text_heap and made by new_text. Bytes, structs and a failed call stop
+the run with one line naming the function. Every other host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
 warp.wasm has the shown_at export once the seed that builds it has it. Tests: test/native/test_native.sh "by the
 driver".
 
