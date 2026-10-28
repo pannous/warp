@@ -23,6 +23,8 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/types/test_dispatch.pairs.warp:7 | yes | no | `def sort(x):=0` is the program's own sort, as above |
 | test/types/test_time_type_names.pairs.warp:4, 5 | "instant" | "class Instant" | type(…) shows a class, as type(π) is "class Real" |
 | `tests/fixtures/…` in 18 files, 70 failing lines (test/modules/test_wasm_modules, test_include, test_import_compiled, test_module_signals; test/control/test_reflection_words; test/ffi/test_component_short_use; test/wasm/test_wasm.warp) | `include tests/fixtures/counter` | `include test/fixtures/counter` | the folder is test/ now; with the new path `include "test/fixtures/counter.warp"` works, unquoted paths stay a gap |
+| test/parser/test_newline_precedence.warp:18 | 56 | 55 | `fib := it < 2 ? it : …` starts 0, 1: fib(10) is 55 |
+| test/ffi/test_foreign_lines.pairs.warp:4 | π | 3.141592653589793 | atan2 is a float function; the exact π comes only from π |
 
 ## Held (esoteric)
 
@@ -55,6 +57,8 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/control/test_value_methods_are_functions.pairs.warp:5 | methods picked by position (fs#4), an order nobody promises | delete? |
 | test/types/test_kind_marks.pairs.warp:4-9, 12-14, 17-20, 23, 24 | kind_number/kind_info/kind_mark expose the internal kind bits, a layout test | delete? |
 | test/types/test_real_text.pairs.warp:4, 5, 7, 10 | symbolic surds, √2 printed as "√2" | |
+| test/wasm/test_wasm.pairs.warp:252-255 | postfix (RPN) operators, `true true and` | delete? |
+| test/wasm/test_wasm.pairs.warp:307 | a second block as else without `else`, `if(2){3}{4}` | delete? |
 
 ## Gap groups (cards)
 
@@ -290,3 +294,31 @@ Groups:
 
 Questions for 10:00:
 - `first(x) := 7; first([1])` → 1 (test_std_prelude:21) is the builtin-wins side of the shadowing question in functions.
+
+### parser, ffi, wasm, programs, node, scope, web, sweeps (579 lines)
+Silently wrong:
+- Unary plus is a symbol: `+5` gives `'+' 5`, `[+1 -2]` gives ['+' -1] (test/parser/test_unary_plus, 6 lines).
+- `¬ 1`, `¬ false` with a space give "no 1" (test/wasm/test_wasm:268, 269, 283; test/parser/test_surface_syntax:17).
+- A trailing backslash doesn't continue the line: `1 + \` newline `2` gives 2 (test/parser/test_parser_sugar.warp:16, 20).
+- Juxtaposed calls in `and`: `sq 2 == 4 and sq 3 == 9` gives 0, `f 3 and f 5` gives 20 (test_and_after_comparison:5, test_statement_phrases:4).
+- `fib := it<2 then 1 else …` gives 1 and `it<2 and it or …` gives -11 (test/wasm/test_wasm:31, 32, 312, 313).
+- `for i in (1..3)` sums to 3 (test/wasm/test_wasm:477, .warp:64).
+- `π*1000000.` stays exact, 1000000π, though `1000000.` is a float (test/wasm/test_wasm:379).
+- Meta fields count as fields: `p.@s = 30` changes `for k,v in p` and `#p.keys` (test/parser/test_meta_attributes:23, 27), as in lists.
+- `use c; strstr("haystack", "st")` gives 1 instead of "stack" (test/ffi/test_libc_results.warp:26).
+- `prefix operator ∂ := sqrt; ∂16` gives '∂' 16 (test/parser/test_operator_aliases.warp:6).
+
+Groups:
+- `use sound` words without `use` (samples, note values, sound pipes, web sounds): about 60 lines, covered by implicit-standard-words / samples-implicit-use.
+- test/wasm/test_wasm is the old Rust catch-all: 110 lines over xor, puti, `global x = …`, log glyph calls, `⅓x`; it should be split into topic folders.
+- Rust surface forms: paths `a::b`, macros `println!`, items, `mut`, references (rust_paths, rust_macros, rust_items, references). About 40 lines.
+- `±` and surface operators (test_surface_syntax). About 27 lines.
+- Meta attributes `@source:` in maps: "not a function". 10 lines.
+- Foreign JS/Python/WebIDL/cargo crates (`Math`, `stringify`, `Regex`). About 60 lines in ffi.
+- Node: `interpret`, quoted code whose position or comment is read, `.op` of a node. About 25 lines.
+- Scope: `global x = …` declarations, `result`, `export`, `a-b` names. About 30 lines.
+- `√3^2` gives 2.9999999999999996: the card root-power-warning (√ and ^ without grouping).
+
+Questions for 10:00:
+- `use sound; note_value(E4)` expects the text 'E4' but gets the note E4 (test/programs/test_note_values, 11 lines): should a note print as text, or should the expectations become E4?
+- `mouse_wheel` → -2 (test/programs/test_mouse_wheel:4), like `mouse_x` in control: a stubbed pointer or remove?
