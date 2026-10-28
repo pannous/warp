@@ -14,7 +14,7 @@ core/native/driver.warp on brew's libwasmtime 50 rebuilds warp.wasm in 16+ min a
   change; the initial heap still needs a setter.
 
 ## Shipped (card wasmtime-bundled)
-crates/wasmtime-c-api builds libwarp_wasmtime (install name @rpath/libwarp_wasmtime.dylib, soname on Linux), not
+crates/wasmtime-capi builds libwarp_wasmtime (install name @rpath/libwarp_wasmtime.dylib, soname on Linux), not
 `wasmtime`: brew's lib can never stand in silently. scripts/wasmtime-c-api.sh builds it into /opt/cargo/warp-wasmtime and
 copies it into folders: after-push.sh beside the installed warp and into the main checkout's lib/, rebuild.sh into a
 tree's lib/. `warp build native` links C libraries from warp's library folder first, with rpaths @executable_path
