@@ -32,7 +32,11 @@ def closure_item(closure: list, i: int): TypedCode { TypedCode(ValueKind.Node, p
 captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
 def closure_call(body: Body, arity: int, arguments: list): TypedCode {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
-	call_values(dispatcher(arity), arguments.map(a => expression_code(body, a)))
+	callee = expression_code(body, arguments#1)
+	# `(2)(3)`, `(a + b)(c)`: a number glued to a group multiplies it, as `3(4)` does; a variable keeps its call
+	numeric = callee.kind == ValueKind.Int or callee.kind == ValueKind.Float
+	if numeric and arity == 1 and not (arguments#1 is symbol) { return expression_code(body, Key(arguments#1, Op.Mul, arguments#2)) }
+	call_values(dispatcher(arity), [callee] + arguments[1..].map(a => expression_code(body, a)))
 }
 dispatcher(arity: int): any := {
 	made_late(closure_call_prefix + arity, ValueKind.Node, ["closure"] + range_list(arity).map(i => "argument" + (i + 1)))

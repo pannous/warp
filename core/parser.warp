@@ -1525,7 +1525,8 @@ def is_method(node: Node): bool {
 	node is symbol or (parts != ø and #parts#3 > 0 and parts#3#1 is symbol)
 }
 // An operand a glued `(` calls, as `f(x)` calls a name: a group `(x => x*2)(5)`, a call's result `adder(5)(1)`, an
-// element `fs[0](3)`
+// element `fs[0](3)`; a number it multiplies (`(2)(3)`, emitter closure_call). A block `{it*2}(5)` stays side by side
+// with its argument, the one shape `{it*2} 5` applies by
 def is_callee(left: Node): bool := is_list_of(left, "(") or is_element(left)
 def is_element(n: Node): bool := match n {
 	Key(target, op, index): op == Op.Hash
