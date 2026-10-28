@@ -1766,13 +1766,18 @@ def folder_of(path: text): text {
 // The sources of the standard modules a source uses by name, read from lib/ beside this compiler (module_source takes
 // a name written out only), and of those whose global words it names (`play "mozart.mp3"`, words.warp global_words)
 // Rust twin: declaration_scan.rs used_std_modules
-def used_module_sources(source: text): list {
+def used_module_sources(source: text): list := module_sources(reached_modules(source))
+// the standard modules a source uses by name or reaches by one of their global words
+def reached_modules(source: text): list {
 	modules = used_modules(source)
 	code = code_only(source)
 	words = global_words()
 	for word in words.keys {
 		if not modules.contains(words[word]) and mentions_word(code, word) { modules += [words[word]] }
 	}
+	modules
+}
+def module_sources(modules: list): list {
 	sources = []
 	for module in modules {
 		module_source = file_source(run_library() + "/" + module + ".warp") ?? ""

@@ -256,8 +256,37 @@ matched(subject: Node, arms: list, n: Node, variants: map): Node := {
 }
 
 match_block(subject: Node, block: Node, n: Node, variants: map): Node := match block {
-	List(arms, Bracket.Curly, separator): matched(subject, arms, n, variants)
+	List(arms, Bracket.Curly, separator): matched(subject, joined_arms(arms), n, variants)
 	_: n
+}
+
+# `1, 2 => "small"`: the values written before an arm are its alternatives, `1 or 2 => "small"`
+joined_arms(arms: list): list := {
+	joined = []
+	waiting = []
+	for arm in arms.flat_map(comma_items) {
+		if is_arm(arm) {
+			joined += [with_alternatives(waiting, arm)]
+			waiting = []
+		} else { waiting += [arm] }
+	}
+	joined + waiting
+}
+
+comma_items(n: Node): list := match n {
+	List(items, Bracket.None, Separator.Comma): items
+	_: [n]
+}
+
+is_arm(n: Node): bool := is_key(n, Op.Colon) or is_key(n, Op.Arrow)
+
+with_alternatives(values: list, arm: Node): Node := {
+	if #values == 0 { return arm }
+	pattern = values.reverse().fold(arm_pattern(arm), (alternatives, value) => Key(value, Op.Or, alternatives))
+	match arm {
+		Key(written, op, result): Key(pattern, op, result)
+		_: arm
+	}
 }
 
 # `match f(x)` of `match f(x) {…}` as a value, the subject a call ending before the block: `((match f(x)) {…})`

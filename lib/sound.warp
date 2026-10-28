@@ -1,10 +1,12 @@
 // The standard library module sound (card basic-sound): `play(440Hz, 0.5s)`, `play(C4)`, `play([C4 E4 G4])` (a chord, as
 // in Sonic Pi), `play note("C#4")` (a Note), `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
-// and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers. The samples are made here and played by the host word
-// sound_samples: natively a WAV file and the system's player (src/sound/mod.rs; silent under tests and WARP_NO_WINDOW),
-// in the browser WebAudio. Loaded when a program calls one of its words (src/modules.rs SOUND_WORDS)
+// and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers. The samples are made
+// here and become a WAV file here (sounded; silent under tests and WARP_NO_WINDOW), in the browser WebAudio. Loaded when
+// a program calls one of its words (src/modules.rs SOUND_WORDS)
 use units
 use reals
+use os
+use file
 global sample_rate = 22050
 // a frequency's or duration's plain number in SI units (Hz, seconds): a quantity's amount (lib/units.warp), a plain
 // number as it is
@@ -526,7 +528,6 @@ call(b: Bus, signal) := out(signal, b)
 // indexed in place: dry_at(a, i) + dry_at(b, i) of two lists was quadratic (card list-call-copy)
 added(a: [float], b: [float]) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
 out(signal) := sound(clamped_samples(signal))
-// the sound's handle: its number in the run, for stop_sound(handle)
 
 // where the notes sound between the left (-1) and the right speaker (1), 0 in the middle (card stereo-pan)
 global pan = 0.0 as float
@@ -534,8 +535,67 @@ global pan = 0.0 as float
 panned(samples) := if pan == 0 then samples else [sample_offset + (round((sample - sample_offset) * side) as int) for sample in samples for side in [min(1, 1 - pan), min(1, 1 + pan)]]
 sound(samples) := {
 	speakers = panned(through_effects(samples))
-	sound_samples(speakers, count(speakers), sample_rate, if pan == 0 then 1 else 2)
-	std_io("sound", "last", [])
+	sounded(speakers, sample_rate, if pan == 0 then 1 else 2)
+}
+
+// The sound files (card sound-native-library): a sound's samples as a 16-bit PCM WAV in the system's temporary folder,
+// warp-sound/sound-<process id>-<handle>.wav (sound-<process id>.wav the first), and its line on stderr: `sound 0.55 s:
+// <file>`. A run's first sound sweeps the files of runs that ended, so none pile up
+global sounds_made = 0
+getpid(): i32 from 'c'
+fdopen(fd: i32, mode: text): handle from 'c'
+fputs(s: text, file: handle): i32 from 'c'
+fflush(file: handle): i32 from 'c'
+kill(process: i32, signal: i32): i32 from 'c'
+unlink(path: text): i32 from 'c'
+mkdir(path: text, mode: i32): i32 from 'c'
+SOUND_FOLDER = "warp-sound"
+PCM_FORMAT = 1
+BITS_PER_SAMPLE = 16
+// the sound's handle: its number in the run, for stop_sound(handle)
+sounded(speakers, rate, channels) := {
+	if sounds_made == 0 { swept_sound_files() }
+	sounds_made = sounds_made + 1
+	file = sound_folder() + "/" + sound_file_name(getpid(), sounds_made)
+	write_bytes(file, wav_bytes(speakers, rate, channels))
+	said("sound " + hundredths(count(speakers) / channels / rate) + " s: " + file)
+	sounds_made
+}
+sound_folder() := {
+	temporary = env("TMPDIR") ?? "/tmp"
+	(if ends_with(temporary, "/") then temporary else temporary + "/") + SOUND_FOLDER
+}
+sound_file_name(process, handle) := "sound-" + str(process) + (if handle == 1 then "" else "-" + str(handle)) + ".wav"
+// the files of processes no longer running (kill(pid, 0) fails for them)
+swept_sound_files() := {
+	folder = sound_folder()
+	if not exists(folder) { return mkdir(folder, 448) }
+	for name in list_files(folder) {
+		process = sound_file_process(name)
+		if process > 0 and kill(process, 0) != 0 { unlink(folder + "/" + name) }
+	}
+}
+sound_file_process(name) := if starts_with(name, "sound-") then int(name[6..].split("-")[0].split(".")[0]) else 0
+// RIFF, its fmt chunk and its data chunk of little-endian samples
+wav_bytes(speakers, rate, channels) := {
+	data = [byte for sample in speakers for byte in little_endian(pcm_sample(sample), 2)]
+	block = 2 * channels
+	format = little_endian(PCM_FORMAT, 2) + little_endian(channels, 2) + little_endian(rate, 4) + little_endian(rate * block, 4) + little_endian(block, 2) + little_endian(BITS_PER_SAMPLE, 2)
+	codes("RIFF") + little_endian(36 + count(data), 4) + codes("WAVEfmt ") + little_endian(count(format), 4) + format + codes("data") + little_endian(count(data), 4) + data
+}
+// a sample crossing as amplitude + 32768, as the 16 bits of the signed amplitude
+pcm_sample(sample) := (min(max(sample - sample_offset, -32768), 32767) + 65536) % 65536
+little_endian(n, width) := [(n / (256 ** i)) as int % 256 for i in 0..width]
+codes(t) := [ord(c) for c in t]
+hundredths(x) := {
+	n = round(x * 100) as int
+	str(n / 100 as int) + "." + (if n % 100 < 10 then "0" else "") + str(n % 100)
+}
+// a line on stderr
+said(line) := {
+	errors = fdopen(2, "w")
+	fputs(line + "\n", errors)
+	fflush(errors)
 }
 
 // one wave shape: tone(440Hz, 0.5s) (a sine), tone(220Hz, 100ms, "square")
@@ -689,8 +749,7 @@ def sample_repeated(clip: Sample, seconds, from, to) {
 }
 sample_looped(clip: Sample, seconds, from, to) := sample_repeated(clip, si_amount(seconds), si_amount(from), si_amount(to))
 play_sample(clip: Sample, rate) := {
-	sound_samples(clip.frames, count(clip.frames), round(clip.rate * rate) as int, clip.channels)
-	std_io("sound", "last", [])
+	sounded(clip.frames, round(clip.rate * rate) as int, clip.channels)
 }
 global play(tone) := if tone is text then play_file(tone) else if tone is Sample then play_sample(tone, 1) else sound(chord_samples(pitches_of(tone), note_seconds, wave_shape))
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)

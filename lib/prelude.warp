@@ -389,12 +389,24 @@ random_between(a, b) := if a is int and b is int then random_until(a, b + 1) els
 // random(x) by the value's type (card random-dispatches): of a list one of its elements, of a whole number n one of 0…n-1,
 // of a fraction a float from 0 up to it
 random_element(xs) := xs#(random_below(count(xs)) + 1)
-random_of(x) := if x is list then random_element(x) else if x is int then random_below(x) else random_fraction(0, x)
+random_of(x) := if x is list then random_element(x) else random_of_type(x)
+// random int, random bool, random codepoint, random float: a random value of the type, before a whole number n (0…n-1)
+// and a fraction (a float below it)
+random_of_type(x) := {
+	if x == int { return random_int() }
+	if x == bool { return random_bool() }
+	if x == codepoint { return random_codepoint() }
+	if x == float { return random() }
+	if x is int then random_below(x) else random_fraction(0, x)
+}
 // random int, random bool, random codepoint: a random value of the type; random int spans the whole 64-bit range
 random_int() := (random_below(0x100000000) - 0x80000000) * 0x100000000 + random_below(0x100000000)
 random_bool() := random_below(2) == 1
 // a Unicode scalar value: the surrogates 0xD800…0xDFFF are no characters
 random_codepoint() := { n = random_below(0x110000 - 0x800); if n >= 0xD800 then n = n + 0x800; n as codepoint }
+// random(x), random(a, b): the dispatch above; random() itself is the host's float in [0, 1)
+random(x) := random_of(x)
+random(a, b) := random_between(a, b)
 // the machine's readings, read now by the host word system_value (Rust: lowering/signals/system_values.rs,
 // warp-runtime host_words.rs SYSTEM_VALUES): a yes/no one is a reading other than 0, the mouse's place a float; a
 // program's own name of the same word wins

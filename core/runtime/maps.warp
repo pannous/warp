@@ -121,6 +121,8 @@ map_get(m: Node, name: text): Node := {
 	if is_error_message(m, name) { return unboxed_text(m) }
 	# a field of that name wins over the part reader: `.key` of the code `key = 3` is 3 (card node-part-clash)
 	if is_entry(m) and same_bytes(key_name(m), name) { return key_value(m) }
+	# a tagged object's field wins too: `Person{name: "A"}.name` is "A"
+	if is_tagged_field(m, name) { return map_get(key_value(m), name) }
 	if is_entry(m) and same_bytes(name, "name") { return key_name(m) }
 	if is_entry(m) and same_bytes(name, "key") { return entry_key(m) }
 	if is_entry(m) and same_bytes(name, "value") { return key_value(m) }
@@ -129,6 +131,8 @@ map_get(m: Node, name: text): Node := {
 	if at == 0 { missing_field(name) }
 	value_at(m, at)
 }
+# `Person{name: "A"}`: an entry whose value holds the field
+is_tagged_field(m: Node, name: text): bool := is_entry(m) and not is_null(key_value(m)) and kind_code(key_value(m)) == Kind.List and map_index(key_value(m), name) > 0
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
 map_entries(m: Node): Node := {
 	# an instance walks its fields

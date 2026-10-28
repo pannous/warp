@@ -97,8 +97,8 @@ linked_libraries(source: text): list := {
 		if name != "prelude" and bundled != ø and bundled == (file_text(std_module_path(name)) ?? "") {
 			for inner in used_modules(bundled) { if inner not in names { names += [inner] } }
 			wasm = try read_bytes(folder + name + ".wasm") else ø
-			# (a module not prebuilt was said by the rebuild; one prebuilt but not linkable is said here)
-			image = if wasm == ø then ø else library_image_of(name, wasm)
+			# (a module not prebuilt was said by the rebuild, its file left empty; one prebuilt but not linkable is said here)
+			image = if wasm == ø or #wasm == 0 then ø else library_image_of(name, wasm)
 			if image is text { warn name + ".wasm not linked: " + image + "; compiled from source" } else if image != ø { images += [image] }
 		}
 	}
@@ -199,10 +199,14 @@ write_module(name: text, runtime_file: text, file: text) := {
 	write_bytes(file, compile(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, read_bytes(runtime_file)))
 }
 # every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder; one refusing to prebuild is
-# named and stays compiled from source
+# named and stays compiled from source: its file left empty, never an older build linked in its place
 write_modules(folder: text, runtime_file: text) := {
 	for name in std_module_names {
-		try { write_module(name, runtime_file, folder + "/" + name + ".wasm") } catch refusal { print name + ".wasm not prebuilt: " + refusal }
+		file = folder + "/" + name + ".wasm"
+		try { write_module(name, runtime_file, file) } catch refusal {
+			print name + ".wasm not prebuilt: " + refusal
+			write_bytes(file, [])
+		}
 	}
 }
 source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
