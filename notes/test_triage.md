@@ -43,6 +43,9 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/text/test_text_type_words.pairs.warp:9 | symbolic surds, `str(√2)` as "√2" | |
 | test/lists/test_element_wise_scalar.pairs.warp:5, 7, 10 | MATLAB anonymous functions `@(x)` | delete? |
 | test/lists/test_where_filter.pairs.warp:13 | Swift closure arguments `$0 + $1` | delete? |
+| test/operators/test_add_subtract_words.pairs.warp:14, 15, 16 | events named by operator words (`on subtract`, `emit plus`) | delete? |
+| test/operators/test_approximately.pairs.warp:19, 20, 21 | truthiness under ≈ (`yes ≈ 2`, `no ≈ ""`) | delete? |
+| test/operators/test_operators.pairs.warp:4, 5, 6 | endless loops (`while True : 2`) expected to give 0; each times out after 30 s | delete |
 
 ## Gap groups (cards)
 
@@ -140,3 +143,21 @@ Groups:
 - A typed list variable `xs: [P] = …`: "an assignment to `… : …`". 4 lines.
 - `pixels size` and `pixels count` as postfix words. 5 lines.
 - `sort_by`, `h.0` numbered fields, `map<int,int>`, `dict.fromkeys`, `tuple`, `values` of a pair.
+
+### operators (159 gaps)
+Silently wrong:
+- `n = 2; m = 4; n | m` gives 2 (test_bit_operators_on_ints:21), and `-4|abs` gives -4. `|` is both bit-or and the
+  pipe: settle the rule.
+- `x < 2 then 1 else 2` with x = 3 gives 1 (test_then_pipe:11).
+- `x and= no` and `x or= yes` leave x unchanged (test_operator_spellings:33, 34).
+- The `!` bang leaves its variable unchanged: `sort xs!`, `reverse xs!`, `twice x!`, `x.upper!` (test_mutating_bang, test_print_bang).
+- `square numbers |> filter(…) |> sum` gives 0 (test_pipeline.warp:12).
+
+Groups:
+- `≈` and `~` on numbers, texts, lists, maps and classes, with a tolerance (alike, approximately, rough_similarity). 45 lines.
+- English operator words (`plus`, `add`, `divided by`, `greater than`, `the same as`, `circa`). 30 lines.
+- The `|` pipe and `then` pipe over function names, with `square x := …` shadowed by `use math`. 30 lines.
+- A negated or minus-applied call, `-floor 2.5` or `int8 -3`: "unknown name floor". 12 lines.
+- Postfix words `-7 abs` and `16 sqrt` trap with a null reference; `10%` as a percent. 12 lines.
+- Chained comparisons, `1<2<3` and `1<2==2`. 8 lines.
+- `root`, `function abs` as a value, `xs.map(abs)`, `switch` with list patterns, `"3" == 3`, `like`, `import regex`.
