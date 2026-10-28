@@ -30,6 +30,7 @@ RUNTIME_ROOTS = ["runtime.warp", "runtime/extended.warp"]
 # the text of each file the roots reach by `use`, by its path in core, built into the compiler as it is built
 # (module_source; user 2026-10-26: "this should be baked in by now"): its runtime words never read the lib/ it runs
 # with. A file missing here is read from lib/ (uses.warp file_text)
+// TODO get rid of these, just load via loop (card core-compiler)
 RUNTIME_FILES = {
 	"runtime.warp": module_source("compiler/runtime.warp"),
 	"runtime/extended.warp": module_source("compiler/runtime/extended.warp"),
