@@ -2,13 +2,13 @@
 ## kinds.warp TimeFormCode) and a position, read by the intrinsics
 ## time_form, time_position, duration_months, duration_days, zone_index, zone_offset and made by time_of(info, position)
 use "../intrinsics.warp"
-use "../../kinds.warp"
+use "../../analysis/kinds.warp"
 use "../conversions.warp"
 use "exact.warp"
 use "../instructions.warp"
 use "../library_words.warp"
 use "../nodes.warp"
-use "../../byte_codes.warp"
+use "../../emitter/byte_codes.warp"
 # durations.warp's duration_text and its nanosecond constants
 use "../durations.warp"
 is_time(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Time

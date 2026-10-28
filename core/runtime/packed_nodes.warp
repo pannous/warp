@@ -4,7 +4,7 @@
 ## payload. Numbers are ASCII varints and texts their UTF-8, so the whole text is UTF-8 a host keeps as it is.
 ## A class instance or a closure has no bytes: packed_node fails on one
 use "intrinsics.warp"
-use "../kinds.warp"
+use "../analysis/kinds.warp"
 use "instructions.warp"
 use "nodes.warp"
 packed_node(n: Node): text := {

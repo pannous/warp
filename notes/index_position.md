@@ -42,7 +42,7 @@ A text names the unit it counts: `t.find(part)` is a position in characters (gra
 `t.byte_index_of(part)` a byte offset (an index from 0); a missing part is an error. A bare `t.index_of(part)` counts
 as find does and warns. A declared index or position holds its value counted its way: `i: index = t.find("b")` is one
 less than `position p = t.find("b")`, `position top = argmax(xs)` one more than the index (the pure lane,
-core/index_positions.warp; Rust keeps the number as given). The unit is part of the declared type too:
+core/passes/index_positions.warp; Rust keeps the number as given). The unit is part of the declared type too:
 `byte index b = t.find("b")` is 9 for "a👍🏽b" and `byte position` 10 (find answers in the declared unit, as
 byte_index_of); a byte count given to a character count, or the other way, is an error. The parser reads `byte index`
 and `byte position` as one type name (parser.warp COMPOUND_TYPES). `offset` is a synonym of index (`byte offset` of

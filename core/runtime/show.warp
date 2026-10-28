@@ -1,13 +1,13 @@
 # Values as they print: the text of any value known only at run time
 use "intrinsics.warp"
-use "../kinds.warp"
+use "../analysis/kinds.warp"
 use "conversions.warp"
 use "bridge.warp"
 use "floats.warp"
 use "nodes.warp"
 use "text.warp"
 use "types.warp"
-use "../byte_codes.warp"
+use "../emitter/byte_codes.warp"
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
 # a type value `int` prints `class int`; ahead of the match, as `Symbol(_)` tests it as the type it names. Only the
 # empty value prints ø: a `ø:` case would take an empty list too, which prints [] (it equals ø, as in Rust)

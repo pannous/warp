@@ -750,7 +750,7 @@ hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
 boundary_type(type: text): text := if mvp_is_float(type) then BOUNDARY_FLOAT else BOUNDARY_INT
 boundary_kind(type: text): ValueKind := if mvp_is_float(type) then ValueKind.Float else ValueKind.Int
 
-## the native build's C (core/commands.warp build_native)
+## the native build's C (core/commands/commands.warp build_native)
 # the main.c of a native build: wasm2c's header of the module, lib/native/wasi.c and lib/native/foreign.c, each C
 # function the module imports, the instantiation and run_main, which prints what main gives
 native_main(header: text, library: text): text := {

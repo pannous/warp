@@ -1,0 +1,65 @@
+# English number words are numbers (`one plus two` is 3) unless the program names a variable, parameter or function
+# so (card times-phrases; Rust twin: src/lowering/words/number_words.rs). Keys (`{one: 1}`), members (`x.one`) and
+# quoted data (`data [one]`) stay words. Each one hints its digits where it is written (card carries-line).
+use "../passes/walk.warp"
+use "../passes/scope.warp"
+
+number_words = {zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+	eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+	nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90}
+# the number words the program gives no other meaning
+unnamed_numbers = {}
+digits_reason = "a number is written in digits"
+# where a hint is: the last positioned node walked into (normalize set_position_of)
+hint_at = ø
+
+# the first positioned node, its own position or a part's: a word a pass made has none
+start_of(n: Node): any := {
+	if is_positioned(n) { return n }
+	match n {
+		Key(left, op, right): start_of(left) ?? start_of(right)
+		List(items, bracket, separator): first_start(items)
+		_: ø
+	}
+}
+
+# the first positioned node of the items
+first_start(items: Node): any := {
+	for item in items {
+		found = start_of(item)
+		if found != ø { return found }
+	}
+	ø
+}
+
+# `data e`: e as written
+is_quoted(n: Node): bool := match n {
+	List(parts, Bracket.None, Separator.Space): #parts == 2 and parts#1 == symbol("data")
+	_: no
+}
+
+as_numbers(n: Node): any := {
+	global hint_at
+	if is_quoted(n) { return n }
+	if is_positioned(n) { hint_at = n }
+	if n is symbol and unnamed_numbers.has(name_of(n)) {
+		number = unnamed_numbers[name_of(n)]
+		report(hint_at, digits_reason, text(number))
+		return number
+	}
+	match n {
+		Key(name, Op.Colon, value): Key(name, Op.Colon, as_numbers(value))
+		Key(receiver, Op.Dot, member): Key(as_numbers(receiver), Op.Dot, member)
+		_: children(n, as_numbers)
+	}
+}
+
+number_words_pass(program: Node): Node := {
+	global unnamed_numbers
+	global hint_at
+	hint_at = start_of(program)
+	scope = scope_of(program)
+	unnamed_numbers = {}
+	for word in number_words.keys() { if not binds(scope, word) { unnamed_numbers[word] = number_words[word] } }
+	as_numbers(program)
+}

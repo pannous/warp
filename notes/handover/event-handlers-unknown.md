@@ -10,9 +10,9 @@ gate tier 1). What it has, reusable for the new shape:
 - core/extensions/handlers.warp: `on frame/key/click {…}` as the exported on·every·N started by signal_listen(1, N, 16);
   key and click pumps; `emit e{data}`; key word texts (ESC, UP, F1…); `held_key == UP` through key_held.
 - lib/prelude.warp key_name / key_code (KeyboardEvent.key names <-> host codes, arrows 0xF700+).
-- core/main_globals.warp made_global: the main-level names a handler function assigns are declared `global` in it
+- core/passes/main_globals.warp made_global: the main-level names a handler function assigns are declared `global` in it
   (decision handler-blocks-share: blocks share, `def f` still needs `global x`).
-- core/rewrites.warp: a parenthesized glued head `(on··e)(x) := …` (head_part), numbers kept as words beside `··`,
+- core/passes/rewrites.warp: a parenthesized glued head `(on··e)(x) := …` (head_part), numbers kept as words beside `··`,
   statement-place results not made values, prelude words a template names reached (reaching_template_words).
 Results: data/t1 key/frame tests 23/29 (main 4), event tests 25/74 (main 2). Open there: emit without handler,
 `on every 10 ms`, fire/send, listeners of.

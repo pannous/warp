@@ -306,7 +306,7 @@ thread_local! {
 	static KEEPING_SCOPE: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(Some(String::new()));
 }
 
-/// The variable naming the lib/ a compiler run reads its std modules from (core/parser.warp run_library)
+/// The variable naming the lib/ a compiler run reads its std modules from (core/parsing/parser.warp run_library)
 const LIBRARY_VARIABLE: &str = "WARP_LIB";
 
 /// A variable of the environment a run sees: the process's, but WARP_LIB the lib/ of this warp (library_folder) in a

@@ -7,7 +7,7 @@ use "../errors.warp"
 use "../floats.warp"
 use "../instructions.warp"
 use "big_ints.warp"
-use "../../byte_codes.warp"
+use "../../emitter/byte_codes.warp"
 int_gcd(a: int, b: int): int := {
 	if a < 0 { a = -a }
 	if b < 0 { b = -b }

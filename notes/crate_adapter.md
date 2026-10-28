@@ -25,7 +25,7 @@ per library, and nothing about a crate in warp-host. The libraries themselves ar
   `$WARP_CRATES_CACHE/native`: the manifest with the `= rust` parts cut and settings commented out.
 - Both folders are where pure-c-imports (57f273b59 or later) looks, so no environment setup is needed:
   - warp-host searches the cache's lib/ and native/ after WARP_LIBRARY_PATH
-  - core/c_imports.warp reads `<lib>/native/<name>.warp`, else the cache's native/<name>.warp
+  - core/emitter/c_imports.warp reads `<lib>/native/<name>.warp`, else the cache's native/<name>.warp
   - `use crate "regex@1"` is `use rs_regex`
   - The compiler turns the lines into imports of module `rs_regex` with a warp.c_functions section, and warp-host
     dlopens `librs_regex.so`. Nothing about a crate is in warp-host.

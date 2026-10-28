@@ -1,0 +1,173 @@
+# Properties of objects (decision property-accessors; Rust twin: src/lowering/definitions/property_accessors.rs):
+# `canvas.width` read like a field and, where it has a setter, written like one. A property is defined in warp: its
+# getter `canvas.width := canvas_width`, its setter the one-parameter overload `canvas.width(w) := canvas(w,
+# canvas_height)` or a getter-shaped body reading `it`. A use is the definition's body in place: `canvas.width = 300`,
+# `canvas.width(300)`, `+=` and its kin call the setter; writing a property without one fails loudly. The standard ones
+# are lines of lib/prelude.warp (window, display) and lib/draw.warp (the canvas, whose `use` comes along); a program
+# defines its own the same way, and an object the program binds as a value keeps its own fields.
+# Runs on the program and the files it uses, before the standard modules and the prelude are reached, so the words a
+# body calls (canvas_width, set_system_value) bring their definitions.
+# Not yet: a bare `width`, `width(canvas)`, other names (display.dpi), the properties of a class's instances.
+use "walk.warp"
+use "scope.warp"
+use "uses.warp"
+use "../parsing/parser.warp"
+use "prelude_words.warp"
+use "plain_enums.warp"
+
+# the parameter of a setter written getter-shaped: `canvas.width := canvas(it, canvas_height)`
+setter_word = "it"
+# the standard modules defining properties: the prelude's are always there, another's come with its `use`
+property_modules = ["prelude", "draw"]
+prelude_module = "prelude"
+# `+=` and its kin by their text, and the operator each applies
+compound_bases = {"+=": Op.Add, "-=": Op.Sub, "*=": Op.Mul, "/=": Op.Div, "/!=": Op.FloorDiv, "%=": Op.Mod, "^=": Op.Pow} // todo Generalize to all operators x ⨷= y  => x = x ⨷ y (card compound-any-operator)
+
+# `o.p := …` and `o.p(v) := …`: the object, its property, the setter's parameter ("" for a getter) and the body
+class Property { object: text; member: text; parameter: text; body: Node }
+# "object.property" → its getter's body, its setter's body and parameter, the module it needs
+class PropertyTable { getters: map; setters: map; parameters: map; owners: map }
+
+property_definition(n: Node): Property? := {
+	if not is_key(n, Op.Define) { return ø }
+	head = key_of(n)
+	if not is_key(head, Op.Dot) or not (key_of(head) is symbol) { return ø }
+	object = name_of(key_of(head))
+	member = value_of(head)
+	body = value_of(n)
+	if member is symbol { return Property{object: object, member: name_of(member), parameter: if mentions(body, setter_word) then setter_word else "", body: body} }
+	if not is_round(member) { return ø }
+	items = items_of(member)
+	if #items == 2 and items#1 is symbol and items#2 is symbol { return Property{object: object, member: name_of(items#1), parameter: name_of(items#2), body: body} }
+	ø
+}
+
+# `canvas.width := …` or `canvas.width(w) := …` starting a line of a module's text
+defines_property(line: text): bool := {
+	object = leading_name(line)
+	if object == "" or not line[#object ..].starts_with(".") { return no }
+	leading_name(line[#object + 1 ..]) != "" and line.contains(":=")
+}
+
+# the properties `definitions` define, into the table: "object.property" → its getter's body, its setter's body and
+# parameter, the module it needs
+def properties_collected(definitions: list, module: text, table: PropertyTable) {
+	# (through locals: `table.getters[name] = …` errors "not an int", as analyzer.warp notes for `m[k][i] = v`)
+	getters = table.getters
+	setters = table.setters
+	parameters = table.parameters
+	owners = table.owners
+	for found in definitions {
+		name = "${found.object}.${found.member}"
+		if found.parameter == "" { getters[name] = found.body } else {
+			setters[name] = found.body
+			parameters[name] = found.parameter
+		}
+		owners[name] = module
+	}
+}
+property_definitions(statements: list): list := statements.map(property_definition).filter(found => found != ø)
+# the object of "object.property"
+property_object(name: text): text := name.split(".")#1
+# the properties by object, `{Key: ["escape"]}` of `Key.escape := …`: the values an object, a type, has by name
+property_values(properties: PropertyTable): map := {
+	values = {}
+	for name in properties.getters.keys {
+		object = property_object(name)
+		values[object] = (values.get(object) ?? []) + [name[#object + 1 ..]]
+	}
+	values
+}
+property_table(): PropertyTable := PropertyTable{getters: {}, setters: {}, parameters: {}, owners: {}}
+
+# the standard properties of each module's text, its property lines parsed on their own, into the table
+def standard_properties(table: PropertyTable) {
+	for module in property_modules {
+		source = file_text(std_module_path(module))
+		if source != ø {
+			lines = source.split("\n").filter(defines_property)
+			if #lines > 0 { properties_collected(property_definitions(statements_in(plain_node(parsed(lines.join("\n"))))), if module == prelude_module then "" else module, table) }
+		}
+	}
+}
+
+# "object.property" of `object.member`, "" when it names no property or the program binds the object as a value
+property_named(object: Node, member: Node, properties: PropertyTable, scope: map): text := {
+	if not (object is symbol) or not (member is symbol) or binds_value(scope, name_of(object)) { return "" }
+	name = name_of(object) + "." + name_of(member)
+	if properties.getters.has(name) or properties.setters.has(name) then name else ""
+}
+dotted_property(n: Node, properties: PropertyTable, scope: map): text := if is_key(n, Op.Dot) then property_named(key_of(n), value_of(n), properties, scope) else ""
+
+# the body with each `parameter` the value written
+setter_with_value(body: Node, parameter: text, value: Node): Node := bottom_up(body, n => if n == symbol(parameter) then value else n)
+
+# the base operator of `+=` and its kin, ø for another
+compound_base(op: Op): Op? := {
+	written = op as text
+	if compound_bases.has(written) then compound_bases[written] else ø
+}
+
+# the program with each read of a property its getter and each write its setter
+property_accessed(n: Node, properties: PropertyTable, scope: map): Node := {
+	getter_name = dotted_property(n, properties, scope)
+	if getter_name != "" and properties.getters.has(getter_name) { return properties.getters[getter_name] }
+	match n {
+		Key(left, op, right): key_accessed(left, op, right, properties, scope)
+		_: children(n, part => property_accessed(part, properties, scope))
+	}
+}
+# `left op right`: a property written (`=`, `+=`, the setter called `canvas.width(300)`), else its sides walked; a
+# field's name is no read (`{width: 5}`, `p.width`)
+key_accessed(left: Node, op: Op, right: Node, properties: PropertyTable, scope: map): Node := {
+	target = dotted_property(left, properties, scope)
+	value = property_accessed(right, properties, scope)
+	if target != "" and op == Op.Assign { return property_written(target, value, properties) }
+	base = compound_base(op)
+	if target != "" and base != ø and properties.getters.has(target) { return property_written(target, Key(properties.getters[target], base, value), properties) }
+	if op == Op.Dot and is_round(right) and #items_of(right) == 2 {
+		items = items_of(right)
+		called = property_named(left, items#1, properties, scope)
+		if called != "" { return property_written(called, property_accessed(items#2, properties, scope), properties) }
+	}
+	if op == Op.Colon { return Key(left, op, value) }
+	if op == Op.Dot { return Key(property_accessed(left, properties, scope), op, right) }
+	Key(property_accessed(left, properties, scope), op, value)
+}
+
+# the setter's body, its parameter the value; a property without a setter is a loud error where it is written
+property_written(name: text, value: Node, properties: PropertyTable): Node := {
+	# (parsed, not a Text(…) node built here: the self-hosted compiler compiling itself has no node constructors)
+	if not properties.setters.has(name) { return plain_node(parsed("raise \"" + name + " is read-only, it has no setter\"")) }
+	setter_with_value(properties.setters[name], properties.parameters[name], value)
+}
+
+# the program with each write of an object's member, `canvas.width = 300`, `p.x += 1`, its value alone: such a write
+# binds no object, so it leaves `canvas` a property's (scope.warp reads `canvas.width = …` as binding canvas)
+without_dotted_writes(program: Node): Node := bottom_up(program, n => match n {
+	Key(target, op, value): if is_dotted_write(target, op) then value else n
+	_: n
+})
+is_dotted_write(target: Node, op: Op): bool := is_key(target, Op.Dot) and key_of(target) is symbol and (op == Op.Assign or compound_base(op) != ø)
+
+# the program's properties in use, its own definitions gone; `use draw` in front when a canvas property needs it
+property_accessors(program: Node): Node := {
+	statements = statements_in(program)
+	own = property_definitions(statements)
+	mentioned = symbol_words(program)
+	wants_standard = mentioned.any(word => word in ["window", "display", "canvas"])
+	if #own == 0 and not wants_standard { return program }
+	properties = property_table()
+	if wants_standard { standard_properties(properties) }
+	properties_collected(own, "", properties)
+	kept = statements.filter(statement => property_definition(statement) == ø)
+	scope = scope_of(without_dotted_writes(program))
+	# an argument for a parameter typed T reads a free x as the property T.x (card expected-type-names, plain_enums.warp)
+	expectation = Expectation(property_values(properties), parameter_types_of(program), scope, program)
+	rewritten = kept.map(statement => property_accessed(expected_in(statement, expectation), properties, scope))
+	# the modules of the properties the program names: `use draw` in front for the canvas's
+	needed = properties.owners.keys.filter(name => property_object(name) in mentioned).map(name => properties.owners[name])
+	uses = statements.map(use_target).filter(target => target is symbol).map(name_of)
+	brought = property_modules.filter(module => module != prelude_module and module in needed and module not in uses)
+	separated(bracketed(brought.map(module => plain_node(parsed("use " + module))) + rewritten, ""), ";")
+}

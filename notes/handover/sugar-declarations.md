@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: #3120 sugar: var/let declaration words into lib/sugar ([sugar-declarations](https://github.com/pannous/warp/issues/3120))
-- Branch: `sugar-declarations` at `53fd74273`, 9 ahead / 387 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/parser.warp, core/rewrites.warp, lib/sugar/declarations.warp, notes/rewrites.md)
+- Branch: `sugar-declarations` at `53fd74273`, 9 ahead / 387 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/parsing/parser.warp, core/passes/rewrites.warp, lib/sugar/declarations.warp, notes/rewrites.md)
 - Kind: warp only
 - Owner: Warp Code (grok-warp-code; parked 2026-10-23, handover notes/box/handover/warp-code.md): that owner continues it when resumed (the planner reassigns it otherwise).
 - State: var/let/const/final/val as early sugar rules in lib/sugar/declarations.warp (contains sugar-definitions); conflicts in parser.warp, rewrites.warp, declarations.warp (sugar-foreign-forms added the same file on main).

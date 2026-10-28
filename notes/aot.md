@@ -30,7 +30,7 @@ time").
 
 ## Standalone executable, `warp build <file>`
 - `warp build` writes the executable `<file>` and the modules beside it; `--wasm` (and `warp compile`) only the
-  modules. It runs in warp: compiler.warp's build command (core/commands.warp, card harness-diet) picks native for a
+  modules. It runs in warp: compiler.warp's build command (core/commands/commands.warp, card harness-diet) picks native for a
   primitive file, trims with wasm-opt through `shell`, takes the machine code from the host word `os.precompile`
   (wasmtime with the stub's engine settings) and joins the executable itself: deflate by `gzip -n`, the trailer, the
   Mach-O __LINKEDIT extension, codesign. A plain run leaves no executable (WARP_EXECUTABLE's writer never ran in the

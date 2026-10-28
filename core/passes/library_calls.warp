@@ -1,0 +1,48 @@
+# `print #xs` parses as the subscript `print#xs`: a word taking one value, or a function of the program with parameters,
+# counts the value after it, `print(#xs)` (card print-hash-count), from the top, so that `print #s.names` counts the
+# field. (`reverse xs`, a library word of one typed value before its value, is lib/sugar/calls.warp's rule.)
+# Rust twin: negated_calls.rs
+use "walk.warp"
+use "scope.warp"
+use "../analysis/builtin_signatures.warp"
+
+# the functions the program defines with parameters: `f(a) := …`, `def f(a) {…}`
+functions_with_parameters(program: Node): list := {
+	names = []
+	for n in nodes_in(program) {
+		meanings = meanings_of(n)
+		if #meanings > 1 and meanings#1#2 == Meaning.Function and meanings#2#2 == Meaning.Parameter { names += [meanings#1#1] }
+	}
+	names
+}
+
+# whether `word#x` counts x for the word: a printing word or a library word of one value the program leaves free, or
+# a function of the program with parameters. A type takes no count: `int#101` is the subscript of a typed array; nor
+# does a variable or parameter named like a function: `words = [p]; words#1` beside a function words
+counts_after(word: Node, functions: list, scope: map): bool := {
+	if not (word is symbol) { return no }
+	written = name_of(word)
+	if binds_value(scope, written) { return no }
+	if functions contains written { return yes }
+	not binds(scope, written) and (value_taking_words contains written or takes_one_typed_value(unaliased(written)))
+}
+
+# [the word, the counted value] of `word#x`, or of a member chain on it: `print #s.names` parses as `(print#s).names`
+# and counts the field
+counted_parts(n: Node, functions: list, scope: map): list? := match n {
+	Key(word, Op.Hash, counted): { if counts_after(word, functions, scope) then [name_of(word), counted] else ø }
+	Key(base, Op.Dot, member): {
+		inner = counted_parts(base, functions, scope)
+		if inner == ø then ø else [inner#1, Key(inner#2, Op.Dot, member)]
+	}
+	_: ø
+}
+
+# `print#xs` → `print(#xs)`, from the top: a member chain on the count is whole before its parts are rewritten
+counted_calls(n: Node, functions: list, scope: map): any := {
+	parts = counted_parts(n, functions, scope)
+	if parts != ø { return call_of(parts#1, [Key(ø, Op.Hash, counted_calls(parts#2, functions, scope))]) }
+	children(n, x => counted_calls(x, functions, scope))
+}
+
+library_calls(program: Node): Node := counted_calls(program, functions_with_parameters(program), scope_of(program))

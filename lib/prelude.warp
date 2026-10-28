@@ -506,11 +506,11 @@ is!(warp: text, expected: any) := {
 
 // The class of every error (decision error-classes): `class ParseError: Error` declares one, `except Error` catches all
 class Error { message: text }
-# a value that lambdas share, the variable they change (core/lambdas.warp shared captures, P124)
+# a value that lambdas share, the variable they change (core/passes/lambdas.warp shared captures, P124)
 class Cell { value: any }
 
 // Pattern matching (wiki/pattern-matching.md): the names a pattern binds in a value as a map, ø when it doesn't fit.
-// The pattern is an arm's code quoted (core/node_matches.warp asks for an arm of a list, tuple, map, text cut or
+// The pattern is an arm's code quoted (core/passes/node_matches.warp asks for an arm of a list, tuple, map, text cut or
 // `data(…)` pattern): a name binds, `_` takes anything, a type word tests the type, a value must be equal; a rest
 // `...rest` takes what the other items leave; `>= 18`, `18..65` and `a | b` stand for a part. Inside `data(…)` the
 // code must be the same but for its `$holes`, a hole used twice taking equal code

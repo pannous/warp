@@ -36,7 +36,7 @@ kind switches they stand for. Done in slices per word family, each with its net 
 - The untyped single signatures still to type per kind: listed on the card (audit note 2026-10-18).
 
 ## The warp analyzer's signature table (Back-end focus, branch signature-table)
-- core/signatures.warp parses the prelude's `from warp` / `from emitter` lines (overloads, aliases) from
+- core/analysis/signatures.warp parses the prelude's `from warp` / `from emitter` lines (overloads, aliases) from
   `module_source("prelude")`, a compile-time word (library_words.rs word_call) that becomes the embedded std module
   text, so the stage reads it from any working directory and in the browser. It answers emitted_call_kind,
   argument_result and overload_kind (call_result_kind) as Rust does: tests/parser/test_self_signatures.rs compares

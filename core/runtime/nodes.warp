@@ -1,6 +1,6 @@
 # The built-in node's parts: operators, keys, symbols, brackets and separators of lists
 use "intrinsics.warp"
-use "../kinds.warp"
+use "../analysis/kinds.warp"
 use "errors.warp"
 use "instructions.warp"
 use "show.warp"

@@ -213,7 +213,7 @@ An import whose module isn't `host` or WASI is a C function: `name` from the lib
   - `owned_text` (card warp-host-repl-fixes): a `char *` the caller owns, strdup's or readline's, is copied into a
     text like `text` and then given to free(); NULL is ø, freed never. Spelled:
     - in a foreign line, a result type only: `readline(prompt: text): owned_text from 'edit'`
-      (core/c_imports.warp)
+      (core/emitter/c_imports.warp)
     - in warp.c_functions, the result field `owned_text` (c_signatures.rs CPointer::OwnedText)
     - in warp.c_calls, the result letters `ft`, "free the text", beside `t` and `ot` (ffi.rs OWNED_TEXT_LETTERS)
   - A `text` result is built with the module's new_text and needs its text_heap; pure modules don't export text_heap

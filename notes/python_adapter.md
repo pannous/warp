@@ -111,7 +111,7 @@ samples/python/numpy_matrix.warp: `[[7 10] [15 22]]` and `-2.0000000000000004`.
 
 tests/host/test_python.sh: 15/15 passed with this branch's host (2m53s); 15/15 before with pure-c-imports' host and a
 `libpython.so` symlink in WARP_LIBRARY_PATH (6m34s, heavier load). warp-self.wasm was not built here, so the
-default `--compiler self` lane is untested [I: it shares core/c_imports.warp].
+default `--compiler self` lane is untested [I: it shares core/emitter/c_imports.warp].
 
 ## Open
 

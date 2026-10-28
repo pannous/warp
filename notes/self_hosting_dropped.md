@@ -3,12 +3,12 @@
 Where to find things:
 - Rules: the two kinds of entry below; the rule itself is in notes/self_hosting.md ("matching Rust is a check, not
   the goal", "success-driven").
-- Parser (core/parser.warp): dropped forms → "Parser: library data DSLs", "Parser: forms to restore later";
+- Parser (core/parsing/parser.warp): dropped forms → "Parser: library data DSLs", "Parser: forms to restore later";
   tree shapes → "Parser: deviations".
 - Passes (core/*.warp passes): dropped forms → "Passes: dropped forms"; per-pass plan → "Passes: SUGAR_PASSES
   triage"; target order → "Passes: target pipeline"; "Passes: deviations".
-- Analyzer (core/analyzer.warp): "Analyzer: deviations".
-- Emitter (core/emitter.warp): "Emitter: deviations".
+- Analyzer (core/analysis/analyzer.warp): "Analyzer: deviations".
+- Emitter (core/emitter/emitter.warp): "Emitter: deviations".
 
 Two kinds of entry:
 - Dropped form: a form the warp part leaves out (the cleanest, most minimal compiler, not a copy of the Rust one),
@@ -138,7 +138,7 @@ passes (test_blocks, enums, comprehensions, go_blocks, references, lambdas, pipe
 analyzer checks.
 
 ## Passes: deviations
-- Names come from core/scope.warp (one walk for every binding form), not from three per-pass walks
+- Names come from core/passes/scope.warp (one walk for every binding form), not from three per-pass walks
   (of_lookups defined_names, grouped_receivers bound_variables, number_words names_given). Cleaner on one corpus
   source: `fn one() {…}` (probes/algo/queens/p8_plus_eq_call.warp) keeps the function's name, Rust's number_words
   makes it `fn 1() {…}`, since its names_given misses `fn`/`def` definitions (card rust-renames). The pipeline
@@ -153,7 +153,7 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   precise answer.
 - `g := it#2`: Rust adds an extra `g: text` variable; warp reads `g` as a function of it, no variable.
 - closure_call_N helpers: Rust's text lists them, warp leaves them out (lowering artefacts, not program slots).
-- Builtin calls read their kind off `call_kinds` (core/words.warp, checked against Rust's analyzer by
+- Builtin calls read their kind off `call_kinds` (core/analysis/words.warp, checked against Rust's analyzer by
   test_self_words call_kinds_are_rusts); a word nothing defines or tables (a function value, a host word) is any
   value, where Rust says int. `length` is left out of the table (card map-key-length).
 - Element types flow through function results (`r = f(); r#1` is int when f gives a list of ints), where Rust says

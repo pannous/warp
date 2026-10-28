@@ -2,9 +2,9 @@
 
 The warp compiler's errors, warnings and hints are facts plus message files, no enums and no Rust bridge:
 
-- A check (core/kind_changes.warp, …) finds a fact: a node such as `kind_change(x, "Int", "List")`, and calls
-  `diagnose(fact)` (core/diagnostics.warp).
-- `diagnose` looks the fact up in core/errors.data, then warnings.data, then hints.data. Each row is
+- A check (core/passes/kind_changes.warp, …) finds a fact: a node such as `kind_change(x, "Int", "List")`, and calls
+  `diagnose(fact)` (core/analysis/diagnostics.warp).
+- `diagnose` looks the fact up in core/analysis/errors.data, then warnings.data, then hints.data. Each row is
   `pattern TAB message`, read as plain warp data (parser.warp; `#` comments). The first row whose pattern matches wins:
   a `$name` part takes any node, keys and groups match part by part, `data(p)` quotes a pattern.
 - The message fills `{name}` with the bound part and `{a name}` with it after its article (`an Int`).

@@ -7,7 +7,7 @@ The user asked whether to separate the core parser from the core language and th
    comments, operators from one precedence table (extensible by `operator` declarations), juxtaposition; no keywords.
 2. **kernel**: the forms the analyzer and emitter must know. Test: a form is kernel only if it cannot be a rewrite
    into other kernel forms.
-3. **sugar**: everything expressible as `rewrite` rules (core/rewrites.warp) into the kernel, one module per
+3. **sugar**: everything expressible as `rewrite` rules (core/passes/rewrites.warp) into the kernel, one module per
    topic in lib/sugar/*.warp loaded by the prelude. New syntax extends the notation generally (a table row, an
    operator or alias declaration), never a parser keyword branch.
 
@@ -62,7 +62,7 @@ F5 unparked with high priority by the user 2026-10-22 evening, card rewrite-temp
 - **F8 text holes** (open, not started; idea: a text pattern `"…$x…"` binding holes from its
   interpolation parts, the template's text holes spliced the same way): rules over a template's holes (interpolation, `sql "…$x"`); stays a pass otherwise.
 
-## core/parser.warp by form (4237 lines)
+## core/parsing/parser.warp by form (4237 lines)
 
 Notation (2102):
 | lines | form |

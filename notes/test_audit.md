@@ -7,5 +7,5 @@ https://claude.ai/code/artifact/74a487d1-9874-4267-bfa1-ef8fd60f352e (choices in
 with the Artifact tool's read_db). Raw result: data/test-audit/constructs.json in the Supervisor's checkout.
 
 Biggest by value: contextual words a program may also bind (154 cases, ~25 keyword special cases), if/while spelling
-permutations (148), whitespace parse heuristics (92), foreign class forms (72, most of core/foreign_forms.warp), rewrite
+permutations (148), whitespace parse heuristics (92), foreign class forms (72, most of core/parsing/foreign_forms.warp), rewrite
 engine extras (69), booleans expected as 1/0 (184), implementation pins (122+97+40), bulk repeats (233).
