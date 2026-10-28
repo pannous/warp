@@ -9,6 +9,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - class-index-test (warp-global-named-capital, test/types/test_class_index_operator.pairs.warp:4, from the Rust suite): `class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4` expects 504 (index read as `#`); under position-index-words it is position(4) = index(3) = 503. Options: upgrade the test to 503 (Recommended, follows the naming) / keep 504 (`#` calls index unshifted; then position-index-words changes). Failed on main before too; ask at 10:00.
 
 ## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- spaced-units (separate-modules): `sleep 5 ms` / `x = 5 ms` (number, space, unit) stays refused for now; glued `5ms` works (`sleep 5ms` sleeps). Want the spaced form as a quantity? (test_sleep_unit_shadow:6)
 - is-pattern-binds (interviewer): `if p is Point{x, ..}: print x` binds x where the test is known true (then-branch, rest of an `and` chain, match arm); one rule for `is` and `match`.
 - implicit-standard-words, hint part (interviewer): a word used without `use` gets a hint naming its module, so `warp beautify` writes the `use`.
 - program-match lowering (supervisor): "merge all existing branches" taken as the OK for its run-time matcher in lib/prelude.warp + core/node_matches.warp (landed 9f9ef1ce43).
