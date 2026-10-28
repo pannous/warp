@@ -418,6 +418,28 @@ function runProgram(bytes, hooks, awaited = false) {
 // { failure } when it cannot be instantiated
 // `compiled`: the module compiled already, where a host compiles none from bytes (a Cloudflare Worker, cloud-worker.js);
 // `awaited`: main may wait for promises (JSPI)
+// a program built separately (`warp build --separate`) imports its runtime words, memory, error tag and hooks table
+// from runtime.wasm (beside warp.wasm, build.sh): an instance of it for each run, with the run's host words, as the
+// native harness links it (src/run/wasm_reader.rs link_runtime; notes/runtime_linking.md "Separate modules")
+const RUNTIME_MODULE = "warp_runtime";
+const RUNTIME_URL = "runtime.wasm";
+let runtimeModule; // compiled at the first such program
+function withRuntime(module, imports) {
+	if (!WebAssembly.Module.imports(module).some(entry => entry.module === RUNTIME_MODULE)) return imports;
+	runtimeModule ??= new WebAssembly.Module(getSync(RUNTIME_URL, 0, true));
+	const runtime = new WebAssembly.Instance(runtimeModule, withUnlinkedTrapping(runtimeModule, imports));
+	return { ...imports, [RUNTIME_MODULE]: runtime.exports };
+}
+// runtime.wasm declares every host word: one this page does not give fails when reached, not at instantiation
+function withUnlinkedTrapping(module, imports) {
+	const completed = { ...imports };
+	for (const { module: library, name, kind } of WebAssembly.Module.imports(module)) {
+		if (kind !== "function" || completed[library]?.[name]) continue;
+		completed[library] = { ...completed[library], [name]: () => { throw new Error(`${library}.${name} is not linked in the browser`); } };
+	}
+	return completed;
+}
+
 function instantiateProgram(bytes, hooks, compiled, awaited = false) {
 	// the runtime warnings go back to the compiler, which reports them (src/web/mod.rs); the page's path is the page's own
 	const holder = { warnings: [], pagePath: hooks.pagePath?.(), awaited };
@@ -426,7 +448,7 @@ function instantiateProgram(bytes, hooks, compiled, awaited = false) {
 		holder.run = { module, bytes };
 		self.joinVoice?.(); // a program's sounds start now on a fresh voice, not behind an earlier run's (host-tasks.js)
 		eachHostPart("started", holder.run);
-		holder.exports = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks)).exports;
+		holder.exports = new WebAssembly.Instance(holder.run.module, withRuntime(holder.run.module, programImports(holder, hooks))).exports;
 		hooks.instantiated?.(holder);
 	} catch (failure) {
 		return { failure: String(failure.message ?? failure) };

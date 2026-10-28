@@ -101,6 +101,7 @@ fn run_main<S: 'static>(
 	let mut store = crate::util::profiled_store(&engine, state, &module);
 	let mut linker = Linker::new(&engine);
 	link(&mut linker, &engine, &module)?;
+	link_runtime(&mut linker, &mut store, &engine, &module)?;
 	define_imported_entities(&mut linker, &mut store, &module)?;
 	let instance = linker.instantiate(&mut store, &module)?;
 	let main = ENTRY_POINTS
@@ -121,6 +122,27 @@ fn run_main<S: 'static>(
 		Some(()) => Ok((results.first().copied().unwrap_or(Val::AnyRef(None)), store, instance)),
 		None => Ok((Val::AnyRef(None), store, instance)), // `exit` (P121): the run's value is ø
 	}
+}
+
+/// The module a separately linked program (`warp build --separate`) imports its runtime words, memory, error tag and
+/// hooks table from (notes/runtime_linking.md "Separate modules")
+pub const RUNTIME_MODULE: &str = "warp_runtime";
+
+/// A separately linked program's runtime: runtime.wasm instantiated once in the run's store, with the linker's host
+/// words, its exports the program's `warp_runtime` imports; nothing for a program that brings its runtime along
+fn link_runtime<S>(linker: &mut Linker<S>, store: &mut Store<S>, engine: &wasmtime::Engine, module: &Module) -> Result<()> {
+	if !module.imports().any(|import| import.module() == RUNTIME_MODULE) {
+		return Ok(());
+	}
+	let path = crate::compiler::standalone::runtime_path();
+	let bytes = std::fs::read(&path).map_err(|failure| anyhow!("{}: {failure} (`warp rebuild` writes it)", path.display()))?;
+	let runtime = crate::run::module_cache::compiled_module(engine, &bytes)?;
+	// runtime.wasm declares every host word; those of a family this run does not link (tasks of a program that starts
+	// none) trap if reached
+	linker.define_unknown_imports_as_traps(&runtime)?;
+	let instance = linker.instantiate(&mut *store, &runtime)?;
+	linker.instance(&mut *store, RUNTIME_MODULE, instance)?;
+	Ok(())
 }
 
 /// The memories and tables a module imports (`use { memory, table } from "env"`) that nothing linked provides: fresh

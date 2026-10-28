@@ -89,6 +89,8 @@ besides() {
 			cp "$compilers/$name.wasm.inputs" "$folder/$name.wasm.inputs" && echo "rebuild.sh: $name beside ${folder#"$tree"/}"
 	done
 }
+# the files `warp rebuild` writes beside a compiler, kept and fetched with it: runtime.wasm beside warp.wasm (card runtime-prebuilt)
+companions() { [ "$1" = warp ] && echo runtime.wasm; }
 # a compiler's name before the rename (transition)
 legacy() { case $1 in warp) echo compiler ;; warp-self) echo compiler-self ;; *) echo "$1" ;; esac; }
 # one <name> [check]: lib/<name>.wasm for these inputs, from lib/, the store, else built (promoted for warp-self)
@@ -104,6 +106,7 @@ one() {
 	[ -f "$stored" ] || stored=$store/$hash/$(legacy "$name").wasm
 	if [ -z "$force" ] && [ -f "$stored" ]; then
 		copied "$stored" "$file.new-$$" && mv "$file.new-$$" "$file" && inputs_line >"$file.inputs"
+		for companion in $(companions "$name"); do [ -f "$store/$hash/$companion" ] && copied "$store/$hash/$companion" "$compilers/$companion"; done
 		logged "$name" hit-store
 		return 0
 	fi
@@ -120,6 +123,7 @@ one() {
 	[ -f "$file" ] || { echo "rebuild.sh: warp rebuild said no file ($built)" >&2; return 1; }
 	inputs_line >"$file.inputs"
 	publish "$file"
+	for companion in $(companions "$name"); do [ -f "$compilers/$companion" ] && publish "$compilers/$companion"; done
 	logged "$name" built
 }
 

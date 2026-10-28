@@ -561,6 +561,11 @@ fn built_from(bytes: &[u8]) -> Vec<String> {
 	parts
 }
 
+/// runtime.wasm beside the compiler, which a separately linked program imports its runtime words from
+pub fn runtime_path() -> PathBuf {
+	found_path(Compiler::RustCompiled).with_file_name(RUNTIME_FILE)
+}
+
 /// The build file as build_path names it, or the file of the old name in its folder when only that is there
 fn found_path(by: Compiler) -> PathBuf {
 	let path = build_path(by);
