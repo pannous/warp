@@ -260,8 +260,7 @@ def prepended_bytes(functions: list): list {
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 	parts = [types, section(section_ids.import, with_entries(runtime_part(section_ids.import), c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
 		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(1)), codes, texts]
-	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
-	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + marks + c_functions_custom_section()
+	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks()
 }
 # the program's C functions, imported behind the runtime's host words; their types after every other: no runtime type moves
 def c_imports(): list { module.imports[runtime_image.imports ..] }
@@ -269,6 +268,11 @@ def c_import_types(): list { c_imports().map(entry => entry#3) }
 def c_import_entries(first_type: int): list {
 	imports = c_imports()
 	range_list(#imports).map(k => name_bytes(imports[k]#1) + name_bytes(imports[k]#2) + [import_function_byte] + uleb(first_type + k))
+}
+# what the harness reads of a program: whether it counts fuel, its C functions
+def program_marks(): list {
+	fuel = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
+	fuel + c_functions_custom_section()
 }
 # runtime.wasm's names and the program's behind them
 def prepended_names(functions: list, classes: list, own_globals: list): list {
@@ -339,9 +343,8 @@ def linked_bytes(functions: list): list {
 	segment = data_bytes()
 	texts = section(section_ids.data, vector([[passive_segment] + uleb(#segment) + segment]))
 	parts = [types, section(section_ids.import, linked_imports(runtime_image.types + #classes + #functions)), declared, globals, section(section_ids.export, vector(program_exports(functions))), elements, section(section_ids.data_count, uleb(1)), codes, texts]
-	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
 	names = vector(functions.map(f => index_name(f.index, f.name)) + range_list(#hooks).map(i => index_name(first_hook + i, hooks[i].name)))
-	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + marks
+	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks()
 }
 # the type runtime.wasm declares its function of this index with
 def runtime_type_of(f: Function): int {
