@@ -1,4 +1,4 @@
-# The `for` heads a rule cannot take yet, made plain for core/sugar/iteration.warp's rules, which lower every `for` onto
+# The `for` heads a rule cannot take yet, made plain for lib/sugar/iteration.warp's rules, which lower every `for` onto
 # `while` (Rust twin: src/lowering/control/for_loop.rs); a bare body becomes a `{…}` block:
 # `for k, v in m` binds the value beside the key: `for k in m { v = m#(k + 1); body }`, whose map the rule `where $m is
 #   map` walks by its keys (Rust twin: library_words.rs for_over_map); a rule's pattern cannot bind two names yet

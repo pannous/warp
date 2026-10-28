@@ -1,6 +1,6 @@
 # What a function takes and gives, read once for every stage (card function-signature, after wasp's Signature and
 # Function in source/Code.h): the parameters of a program's definition `f(a, b: int = 2) := …`, with no other file read,
-# so every pass may use it (builtin_signatures.warp reads the builtins' typed lines of core/library/prelude.warp)
+# so every pass may use it (builtin_signatures.warp reads the builtins' typed lines of lib/prelude.warp)
 use "words.warp"
 use "walk.warp"
 

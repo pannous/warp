@@ -40,8 +40,8 @@ pub fn libm_f64_functions() -> &'static [(&'static str, usize)] {
 	FUNCTIONS.get_or_init(|| math_foreign_lines(LIBM).map(|line| (line.name, line.arity())).collect())
 }
 
-const MATH_SOURCE: &str = include_str!("../../core/library/math.warp");
-const PRELUDE_SOURCE: &str = include_str!("../../core/library/prelude.warp");
+const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
+const PRELUDE_SOURCE: &str = include_str!("../../lib/prelude.warp");
 /// `floor(x: number): int from warp`: a word warp computes itself, declared with its signature like a foreign one
 pub const BUILTIN_LIBRARY: &str = "warp";
 /// `count(xs): int from emitter`: a builtin the emitter expands in place, without a runtime function

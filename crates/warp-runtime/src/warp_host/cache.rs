@@ -21,8 +21,8 @@ pub fn fingerprint(parts: impl Hash) -> String {
 /// The std modules a compile reads from lib/ besides core: the parser's spellings (aliases), the prelude, and
 /// the modules compiler.warp's lowered runtime words use or reach as type modules (the Rust lane's STAGE_MODULES, card
 /// compiler-cache-keys)
-/// (aliases, prelude, math, os and file lie in core/library/, below core already)
-const COMPILER_MODULES: [&str; 5] = ["list", "regex", "map", "text", "time"];
+/// (os and file lie in core/library/, below core already)
+const COMPILER_MODULES: [&str; 8] = ["aliases", "prelude", "math", "list", "regex", "map", "text", "time"];
 
 /// The fingerprint of what the compiler reads from lib/ for the values it keeps (compiler.warp's lowered runtime
 /// words): the files below core and lib/<module>.warp of COMPILER_MODULES, by their paths within lib/ and their

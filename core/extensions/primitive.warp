@@ -84,7 +84,7 @@ WASI_LIBRARY = "wasi_snapshot_preview1"
 c_primitive_types = {i32: "i32", bool: BOOL_TYPE, i64: "i64", f64: "f64", f32: "f32", text: TEXT_TYPE, handle: HANDLE_TYPE, void: NO_VALUE}
 # `allocate(bytes)`: an address of that many bytes taken from the arena
 ALLOCATE_WORD = "allocate"
-# the code of primitive files: core/native/primitive.warp, their prelude, its words reached as the GC prelude's are
+# the code of primitive files: lib/primitive.warp, their prelude, its words reached as the GC prelude's are
 PRIMITIVE_PRELUDE = module_source("primitive")
 
 class PrimitiveCode { type: text; code: list }
@@ -202,7 +202,7 @@ native_only(name: text, library: text, place: text) := {
 	if not native_build { throw "primitive mode cannot emit " + name + " from '" + library + "' but in a native build: a primitive file's C calls run by `warp build native`" + place }
 }
 
-# `import strlen from "c"`: each line of core/native/c.warp or core/library/math.warp it names, read as a GC program reads it
+# `import strlen from "c"`: each line of lib/c.warp or lib/math.warp it names, read as a GC program reads it
 # (c_imports.warp c_functions_of), as [declaration, line number]; the statement's line left empty
 c_imported(lines: list): list := {
 	catalog = c_catalog(run_library(), [])
@@ -212,7 +212,7 @@ c_imported(lines: list): list := {
 		if imported != ø {
 			for name in imported#2 {
 				lines_of_name = catalog.filter(d => d#1 == name and (d#2 == imported#1 or (imported#1 in c_and_m and d#2 in c_and_m)))
-				if #lines_of_name == 0 { throw "primitive mode cannot emit `import " + name + "`: no line of core/native/c.warp or core/library/math.warp declares it from '" + imported#1 + "'" + place_text([i + 1, 1], module.program_file) }
+				if #lines_of_name == 0 { throw "primitive mode cannot emit `import " + name + "`: no line of lib/c.warp or lib/math.warp declares it from '" + imported#1 + "'" + place_text([i + 1, 1], module.program_file) }
 				found += [[lines_of_name#1, i + 1]]
 			}
 			lines[i] = ""

@@ -3,7 +3,7 @@
 # getter `canvas.width := canvas_width`, its setter the one-parameter overload `canvas.width(w) := canvas(w,
 # canvas_height)` or a getter-shaped body reading `it`. A use is the definition's body in place: `canvas.width = 300`,
 # `canvas.width(300)`, `+=` and its kin call the setter; writing a property without one fails loudly. The standard ones
-# are lines of core/library/prelude.warp (window, display) and lib/draw.warp (the canvas, whose `use` comes along); a program
+# are lines of lib/prelude.warp (window, display) and lib/draw.warp (the canvas, whose `use` comes along); a program
 # defines its own the same way, and an object the program binds as a value keeps its own fields.
 # Runs on the program and the files it uses, before the standard modules and the prelude are reached, so the words a
 # body calls (canvas_width, set_system_value) bring their definitions.

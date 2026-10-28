@@ -1,7 +1,7 @@
 // Other languages' ways of writing a declaration (card pure-class-forms) that decide what the parser reads next: a run
 // of modifiers mixing warp's (`public export fun f()`), and the forms `new Point(1, 2)`, Ruby's `attr_accessor :x`,
 // Kotlin's `enum class` and `data class`, `mixin Name {…}`, read as the warp form they mean. Modifiers without warp
-// meaning alone (`public static fun f()`, `private x = 4`) and `constant x` are rewrite rules: core/sugar/declarations.warp
+// meaning alone (`public static fun f()`, `private x = 4`) and `constant x` are rewrite rules: lib/sugar/declarations.warp
 // Rust twin: src/warp_parser/definitions/foreign.rs
 // A part of parser.warp, which uses it: it reads with the parser's expression and atom, so it compiles only with it
 
@@ -56,7 +56,7 @@ def starts_statement(p: Parser): bool {
 }
 
 // `public export fun f(){…}` (P78): a run of modifiers with one of warp's that ends before a function definition is
-// skipped; the statement after it, marked @static after `static`. A run without warp's is core/sugar/declarations.warp's
+// skipped; the statement after it, marked @static after `static`. A run without warp's is lib/sugar/declarations.warp's
 // Rust twin: foreign.rs skip_foreign_modifiers
 def without_foreign_modifiers(p: Parser, first: text): Node := {
 	if not is_modifier(first) { return ø }

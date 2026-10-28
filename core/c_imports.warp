@@ -3,7 +3,7 @@
 # `library.name` and calls it like any host word, and describes it in the warp.c_functions custom section with one
 # crates/warp-runtime/src/c_signatures.rs line, which warp-host links by dlopen and dlsym.
 #   strlen(s: text): i64 from 'c'          a foreign line: declares the function (the line itself is left out)
-#   import strlen from "c"                 one function of core/native/c.warp or core/library/math.warp's foreign lines
+#   import strlen from "c"                 one function of lib/c.warp or lib/math.warp's foreign lines
 #   import (sin, floor, fabs) from 'm'     several
 #   use sqlite3                            every function those lines give the library
 #   fmin(2, 3)                             libm's functions warp has no word of its own for need no import
@@ -81,7 +81,7 @@ c_type_of(word: text): text := {
 # the foreign lines of `text`
 c_declarations_in(content: text): list := content.split("\n").map(line => c_declaration(line)).filter(d => d != ø)
 
-# the foreign lines of core/native/c.warp, core/library/math.warp and the native files at `native_paths`
+# the foreign lines of lib/c.warp, lib/math.warp and the native files at `native_paths`
 c_catalog(library_folder: text, native_paths: list): list := {
 	found = []
 	for path in c_catalog_modules.map(module => library_folder + "/" + module_file(module)) + native_paths {
@@ -115,7 +115,7 @@ c_crate_use(statement: text): any := {
 	if bare == written { return ø }
 	crate_library_prefix + bare.split("@")#1.replace("-", "_")
 }
-# the names the typed lines of core/library/math.warp and core/library/prelude.warp give warp words of its own: libm's of those names
+# the names the typed lines of lib/math.warp and lib/prelude.warp give warp words of its own: libm's of those names
 # need an import (`floor` is warp's, `fmin` libm's)
 warp_word_names(): any := {
 	names = {}

@@ -4,7 +4,7 @@
 # (also symbol, list, block, map, int, number) only code of that kind, a block code in braces and a map their
 # entries `{a: 1}` or a name holding only maps. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$h is varying` (a value definition reading a variable, core/sugar/heads.warp), `$d is definition` (a
+# `$f is function`, `$h is varying` (a value definition reading a variable, lib/sugar/heads.warp), `$d is definition` (a
 # function's, `f(x) := …`), `$x is literal`, `$w is label` (a word labelling a parameter, `with new`), `$x is missing` (ø,
 # also an operand not written: `rest...`), `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
@@ -84,7 +84,7 @@ yes_no_types = ["bool"]
 value_word = "value"
 # `where $f takes one`: a library word the program leaves free whose first line takes exactly one typed value
 one_word = "one"
-# the sugar of the language (notes/layers.md), core/sugar/<name>.warp: rewrite lines only, whose rules apply to every
+# the sugar of the language (notes/layers.md), lib/sugar/<name>.warp: rewrite lines only, whose rules apply to every
 # program as a standard module's do, bringing no `use` along; a rule of no word (`$a ?? $b`) applies everywhere.
 # Four steps of the passes apply them (passes.warp): the first sugar before the passes that would read its forms as
 # something else (library_calls takes `int[3]`, the subscript `int#4`, for a call of int), the sugar after those
@@ -97,21 +97,21 @@ extension_module_names = [
 	"compiler/extensions/tuples"
 	"compiler/extensions/safe_navigation"
 ]
-first_sugar_module_names = extension_module_names + ["compiler/sugar/lists", "compiler/sugar/comparisons", "compiler/sugar/arms", "compiler/sugar/heads", "compiler/sugar/test_words"]
-sugar_module_names = ["compiler/sugar/fallbacks", "compiler/sugar/methods", "compiler/sugar/arithmetic", "compiler/sugar/loops", "compiler/sugar/enums", "compiler/sugar/extremes", "compiler/sugar/calls", "compiler/sugar/parameters", "compiler/sugar/tasks"]
-iteration_sugar_module_names = ["compiler/sugar/iteration"]
-late_sugar_module_names = ["compiler/sugar/ranges", "compiler/sugar/method_calls"]
+first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "sugar/test_words"]
+sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls", "sugar/parameters", "sugar/tasks"]
+iteration_sugar_module_names = ["sugar/iteration"]
+late_sugar_module_names = ["sugar/ranges", "sugar/method_calls"]
 # the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
 # a list literal (card sugar-comprehensions)
-comprehension_sugar_module_names = ["compiler/sugar/comprehensions"]
-# the sugar of declarations (core/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
-declaration_sugar_module_names = ["compiler/sugar/declarations"]
+comprehension_sugar_module_names = ["sugar/comprehensions"]
+# the sugar of declarations (lib/sugar/declarations.warp): rules applied with the program's own, before every pass reads a definition
+declaration_sugar_module_names = ["sugar/declarations"]
 # the standard modules (Rust's STD_MODULES): those with `rewrite` lines lend their rules to the programs mentioning them
 std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", "file", "json", "os", "shell", "list", "math", "fast_math", "text", "random", "map", "time", "matrix", "draw", "compute_toys", "markup", "router", "wagi", "i18n", "units", "agent", "sound", "R", "PHP", "channels", "extrema", "english", "case_table", "case_tables", "uncertain", "wasmtime"]
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
-early_sugar_module_names = ["compiler/sugar/functions", "compiler/sugar/declarations"]
+early_sugar_module_names = ["sugar/functions", "sugar/declarations"]
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
@@ -186,7 +186,7 @@ rewritten_program(program: Node, source: text): Node := {
 }
 
 # `class Bag { max() := 7 }`: a type declaration; its method named like a library word binds that name in the class
-# only (class_methods.warp routes the calls), so a sugar rule of it (core/sugar/extremes.warp's max) still reaches the
+# only (class_methods.warp routes the calls), so a sugar rule of it (lib/sugar/extremes.warp's max) still reaches the
 # other values
 is_type_declaration(statement: Node): bool := match statement {
 	Key(left, op, right): left == opaque_symbol and kind_of(right) == "type"
@@ -635,7 +635,7 @@ first_parameter_fits(code: Node, wanted: text): bool := {
 	if wanted == value_word then not (typed in yes_no_types) else typed == wanted
 }
 
-# the type of a typed library word's first parameter (core/library/prelude.warp, core/library/math.warp), else ø (builtin_signatures.warp
+# the type of a typed library word's first parameter (lib/prelude.warp, lib/math.warp), else ø (builtin_signatures.warp
 # word_lines)
 library_first_type(word: text): text? := {
 	lines = word_lines()

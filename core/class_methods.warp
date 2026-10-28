@@ -14,7 +14,7 @@
 #   number, an instance of another class) it stays as written, so a list's `xs.sum()` still sums and `names.add(x)`
 #   still adds by its sugar rule; an instance of one calls its class's method; any other value the dispatcher
 #   `sum·method(x)`, which calls the function itself, sum(x), on a value not an instance
-# - a method named by an operator, its glyph, its word or an alias of the word (core/library/aliases.warp: `+(o)`, `add(o)`,
+# - a method named by an operator, its glyph, its word or an alias of the word (lib/aliases.warp: `+(o)`, `add(o)`,
 #   `plus(o)`), is the operator on its instances: the dispatcher `+·operator(a, b)` calls the method of a's class (its
 #   own or an ancestor's) and gives any other value the builtin `a + b`; the emitter calls it for `a + b` of a boxed a,
 #   a value that may be an instance (emitter/operators.warp; card pure-class-operators)
@@ -566,7 +566,7 @@ statement_types(statement: Node, program_types: map, self_types: map, classes: m
 	if defined_word(statement) != ø and defined_word(statement) in self_types { known["self"] = self_types[defined_word(statement)] }
 	known
 }
-# the operators core/library/aliases.warp names (an entry with its `operator`), by each spelling a method may take: the glyph,
+# the operators lib/aliases.warp names (an entry with its `operator`), by each spelling a method may take: the glyph,
 # the entry's word and its aliases, `+`, add and plus each [add, "+"]; read once per program
 operator_spellings(): map := {
 	found = {}

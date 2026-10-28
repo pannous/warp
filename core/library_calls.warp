@@ -1,6 +1,6 @@
 # `print #xs` parses as the subscript `print#xs`: a word taking one value, or a function of the program with parameters,
 # counts the value after it, `print(#xs)` (card print-hash-count), from the top, so that `print #s.names` counts the
-# field. (`reverse xs`, a library word of one typed value before its value, is core/sugar/calls.warp's rule.)
+# field. (`reverse xs`, a library word of one typed value before its value, is lib/sugar/calls.warp's rule.)
 # Rust twin: negated_calls.rs
 use "walk.warp"
 use "scope.warp"

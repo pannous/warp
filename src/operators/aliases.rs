@@ -5,7 +5,7 @@
 use super::Op;
 use std::sync::OnceLock;
 
-const MATH_SOURCE: &str = include_str!("../../core/library/math.warp");
+const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
 const OPERATOR_WORD: &str = "operator";
 const PREFIX_WORD: &str = "prefix";
 pub const CIRCUMFIX_WORD: &str = "circumfix";

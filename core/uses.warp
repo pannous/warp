@@ -61,7 +61,7 @@ aliased(n: Node, aliases: list): any := {
 	n
 }
 
-# `module_source("prelude")`: core/library/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
+# `module_source("prelude")`: lib/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
 # writes it out (the std modules are lib/<name>.warp); `module_source("compiler/errors.data")`, a name with an
 # extension, that file of lib/; `library_sources()`, every module of lib/ (parser.warp LIBRARY_FILES), `library_parses()`
 # their parses (LIBRARY_PARSES), `slice_parses()` their definitions' parses (SLICE_PARSES). A compiled
