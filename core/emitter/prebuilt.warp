@@ -573,6 +573,62 @@ def relocated_operands(functions: list, kind: int): map {
 # the program's hooks: its own functions behind the others, the i-th at the first free index + i, each set into its
 # slot of the runtime's table at instantiation
 def own_hooks(): list { module.dispatchers.filter(f => f.name in runtime_image.hooks) }
+# the hooks the code can reach: one whose stub a runtime function calls that the code calls, directly or through the
+# runtime or another hook it reaches; an unreached hook's slot stays empty (card mod-unused-hooks)
+def reached_hooks(code: list): list {
+	hooks = own_hooks()
+	at_position = {}
+	for f in hooks { at_position[f.index - #module.imports] = f }
+	graph = runtime_call_graph()
+	reached = {}
+	pending = runtime_positions_called(code)
+	i = 0
+	while i < #pending {
+		p = pending[i]
+		i += 1
+		if not reached.has(p) {
+			reached[p] = yes
+			if graph.has(p) { pending += graph[p] }
+			if at_position.has(p) { pending += runtime_positions_called([at_position[p]]) }
+		}
+	}
+	hooks.filter(f => reached.has(f.index - #module.imports))
+}
+# the runtime functions these functions call, by their position among the runtime's functions
+def runtime_positions_called(functions: list): list {
+	called = relocated_operands(functions, relocated.calls)
+	positions = []
+	for p in 0..<runtime_image.functions { if called.has(#module.imports + p) { positions += [p] } }
+	positions
+}
+# each runtime function's position → the positions of the runtime functions it calls, read from its relocations
+global runtime_calls = ø
+def runtime_call_graph(): map {
+	if runtime_calls != ø { return runtime_calls }
+	content = runtime_part(section_ids.code)
+	ends = []
+	count = uleb_read(content, 0)
+	at = count#2
+	for p in 0..<count#1 {
+		size = uleb_read(content, at)
+		at = size#2 + size#1
+		ends += [at]
+	}
+	graph = {}
+	caller = 0
+	for entry in relocations_of(runtime_image.wasm).filter(entry => entry#2 == relocated.calls and entry#3 == runtime_space) {
+		callee = uleb_read(content, entry#1)#1
+		# the entries come in code order; one before the last caller's start is looked up from the first
+		if caller > 0 and ends[caller - 1] > entry#1 { caller = 0 }
+		while ends[caller] <= entry#1 { caller += 1 }
+		if callee >= runtime_image.imports {
+			if not graph.has(caller) { graph[caller] = [] }
+			graph[caller] = graph[caller] + [callee - runtime_image.imports]
+		}
+	}
+	runtime_calls = graph
+	graph
+}
 def hook_elements(hooks: list, first: int): list {
 	vector(range_list(#hooks).map(i => [0, op.i32_const] + sleb(runtime_image.hooks.index_of(hooks[i].name) - 1) + [op.end] + vector([uleb(first + i)])))
 }
@@ -580,7 +636,7 @@ def hook_elements(hooks: list, first: int): list {
 # (relocates), each index moved to the linked numbering: the called imports, its own functions, its hooks; the fixed GC
 # types, the runtime's function types used, its classes, its own function types; its texts from segment 0
 def linked_bytes(functions: list): list {
-	hooks = own_hooks()
+	hooks = reached_hooks(functions)
 	code = functions + hooks
 	calls = relocated_operands(code, relocated.calls)
 	called = range_list(#module.imports + runtime_image.functions).filter(index => calls.has(index))
