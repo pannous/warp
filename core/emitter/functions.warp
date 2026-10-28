@@ -237,13 +237,19 @@ converts(from: ValueKind, to: ValueKind): bool := from == to or from == ValueKin
 # whether a value of the kind is one of the union's members, as far as the compile knows it: a node is checked when it runs
 fits_union(type: text, kind: ValueKind): bool := union_members(type).any(member => converts(kind, annotated_kind(member)))
 # the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`, the core's word of
-# a type word's other spelling (`string`, `integer`); any other word itself
+# a type word's other spelling (`string`, `integer`: type_synonyms); any other word itself
 aliased_type(word: text): text := {
 	optional = word.ends_with("?")
 	resolved = if optional then word[0..<(#word - 1)] else word
 	while resolved in module.aliases { resolved = module.aliases[resolved] }
-	resolved = core_type_words.get(resolved) ?? resolved
 	if optional then resolved + "?" else resolved
+}
+# the type words' other spellings as the aliases every program starts with: looked up in core_type_words at each
+# aliased_type, they made the compile of compiler.warp 20 % slower
+type_synonyms(): map := {
+	found = {}
+	for word in core_type_words.keys { if core_type_words.get(word) != word { found[word] = core_type_words.get(word) } }
+	found
 }
 names_a_type(word: text): bool := is_held_kind(word) or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: list): any := {

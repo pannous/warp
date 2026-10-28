@@ -111,6 +111,8 @@ pub struct TaskTable {
 	engine: Engine,
 	module: Module,
 	imports: Imports,
+	/// the module's C imports, linked into every task
+	c_imports: Arc<warp_runtime::c_imports::CImports>,
 	slots: Mutex<HashMap<i64, Slot>>,
 	finished: Condvar,
 	pool: TaskPool,
@@ -133,6 +135,7 @@ pub fn link(
 	engine: &Engine,
 	module: &Module,
 	imports: Imports,
+	c_imports: Arc<warp_runtime::c_imports::CImports>,
 	shared: Option<Arc<crate::host::shared::SharedArrays>>,
 ) -> Result<Arc<TaskTable>> {
 	let table = Arc::new_cyclic(|own| TaskTable {
@@ -140,6 +143,7 @@ pub fn link(
 		engine: engine.clone(),
 		module: module.clone(),
 		imports,
+		c_imports,
 		slots: Mutex::default(),
 		finished: Condvar::new(),
 		pool: TaskPool::new(),
@@ -406,7 +410,7 @@ impl TaskTable {
 		let mut store =
 			warp_runtime::engine::checked_store(&self.engine, state, fuel, time, move || control.checkpoint());
 		let mut linker = Linker::new(&self.engine);
-		crate::run::wasm_reader::link_imports(&mut linker, &self.engine, &self.module, self.imports)?;
+		crate::run::wasm_reader::link_imports(&mut linker, &self.engine, &self.module, self.imports, &self.c_imports)?;
 		if let Some(shared) = &self.shared {
 			shared.link_into(&mut linker)?;
 		}

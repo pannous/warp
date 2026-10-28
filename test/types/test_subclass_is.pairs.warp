@@ -1,0 +1,3 @@
+# x is Class holds for an instance of a class extending it, whatever the subject: a call, a literal, a name
+'class A {}; class B extends A {}; [B() is A, A() is B]'	[true, false]
+'use units; [(5ms) is Quantity, 5ms is Time]'	[true, true]

@@ -17,6 +17,8 @@ pub(crate) const LIBRARY_MARK: &str = "{lib}";
 
 /// The module the host words are imported from
 pub(crate) const HOST_MODULE: &str = "host";
+/// The module WASI is imported from
+const WASI_MODULE: &str = "wasi_snapshot_preview1";
 
 /// The WARP_ settings that change no stage program's compile, so not its kept module either: where lib/ lies is keyed
 /// by its contents, hints and windows only change what a run shows, a profile only watches it
@@ -44,22 +46,25 @@ pub(crate) fn compiler_folder() -> PathBuf {
 	library().join(crate::modules::COMPILER_FOLDER)
 }
 
-/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word, libm when it
-/// imports pow (a float raised to a power)
+/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word, FFI when it
+/// imports from any other module (libm's pow, a C library, a wasm module)
 pub(crate) fn module_of_bytes(bytes: Vec<u8>) -> crate::compiled_module::CompiledModule {
-	let needs_host = imports_from(&bytes, HOST_MODULE);
-	let needs_ffi = imports_from(&bytes, crate::ffi::LIBM);
+	let modules = imported_modules(&bytes);
+	let needs_host = modules.contains(HOST_MODULE);
+	let needs_ffi = modules.iter().any(|module| ![HOST_MODULE, WASI_MODULE].contains(&module.as_str()));
 	crate::compiled_module::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi }
 }
 
-/// Does the module import a function of `module`
-pub(crate) fn imports_from(bytes: &[u8], module: &str) -> bool {
-	wasmparser::Parser::new(0).parse_all(bytes).any(|payload| match payload {
-		Ok(wasmparser::Payload::ImportSection(imports)) => {
-			imports.into_imports().flatten().any(|import| import.module == module)
-		}
-		_ => false,
-	})
+/// The modules the module imports functions from
+fn imported_modules(bytes: &[u8]) -> HashSet<String> {
+	wasmparser::Parser::new(0)
+		.parse_all(bytes)
+		.filter_map(|payload| match payload {
+			Ok(wasmparser::Payload::ImportSection(imports)) => Some(imports),
+			_ => None,
+		})
+		.flat_map(|imports| imports.into_imports().flatten().map(|import| import.module.to_string()).collect::<Vec<_>>())
+		.collect()
 }
 
 /// How a line names a file or module it uses
