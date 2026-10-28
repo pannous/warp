@@ -78,7 +78,8 @@ jobs:
           target/${{ matrix.target }}/release/warp-host
 
   compilers:
-    # the warp-written compiler as wasm, shipped in every tarball beside the binary and as release assets (user
+    # the warp-written compiler as wasm (with runtime.wasm, the runtime words every compile links, written beside
+    # warp.wasm by `warp rebuild`; card release-ships-runtime), shipped in every tarball beside the binary and as release assets (user
     # 2026-10-22, card installed-compilers): warp.wasm (plain `warp`'s, compiled by the seed) and warp-self.wasm
     # (`warp self`'s: warp.wasm promoted by `warp rebuild self` when it compiles compiler.warp to its own bytes; the job
     # fails without that fixpoint), both from the tag's lib/ by the tag's linux binary; an installed warp never builds one
@@ -125,10 +126,11 @@ jobs:
         name: compilers
         path: |
           bin/warp.wasm
+          bin/runtime.wasm
           bin/warp-self.wasm
           bin/host-cache
     - name: upload
-      run: gh release upload "$TAG" bin/warp.wasm bin/warp-self.wasm --clobber
+      run: gh release upload "$TAG" bin/warp.wasm bin/runtime.wasm bin/warp-self.wasm --clobber
 
   tarballs:
     # per platform one tarball, made once (its sha256 is the formula's): the binaries, the compilers and the tag's lib/
@@ -159,7 +161,7 @@ jobs:
       run: |
         chmod +x dist/warp dist/warp-runtime dist/warp-page-runtime dist/warp-host
         cp -RL lib dist/lib
-        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime warp-host warp.wasm warp-self.wasm lib host-cache
+        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime warp-host warp.wasm runtime.wasm warp-self.wasm lib host-cache
         gh release upload "$TAG" "$ARCHIVE" --clobber
 
   packages:
