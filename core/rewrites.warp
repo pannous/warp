@@ -320,11 +320,11 @@ sugar_at_place(n: Node, place: Place, rules: list): Node := {
 
 # the program with the rules of the early sugar modules applied, before the passes; also each library definition the
 # program reaches (prelude_words.warp with_reached: math's `norm` declares `var total = 0`), whose words are its own.
-# A program starting no phrase with a rule's first word stays as it is (a rule's result may need another's, `fun` `def`)
+# A program with no phrase holding a rule's first word stays as it is (a rule's result may need another's, `fun` `def`)
 early_sugared(program: Node): Node := {
 	rules = early_module_rules()
-	heads = phrase_heads(program)
-	if not rules.any(rule => heads.has(needed_word(rule))) { return program }
+	words = phrase_words(program)
+	if not rules.any(rule => words.has(needed_word(rule))) { return program }
 	sugared(program, unbound_rules(rules, program))
 }
 # the rules of the early sugar modules, read once
@@ -335,9 +335,9 @@ early_module_rules(): list := {
 	}
 	early_rules
 }
-# the words starting a phrase in the node (`var total = 0`'s var, `public static fun f() {3}`'s public), also as the
-# parser writes a declaration word (uses.warp declaration_keywords), the key of `global: (play(tone) := …)`
-phrase_heads(n: Node): map := {
+# the words of the phrases in the node (`var total = 0`'s var, `square of number = …`'s of), also as the parser writes
+# a declaration word (uses.warp declaration_keywords), the key of `global: (play(tone) := …)`
+phrase_words(n: Node): map := {
 	found = {}
 	waiting = [n]
 	at = 1
@@ -348,8 +348,11 @@ phrase_heads(n: Node): map := {
 			if op_of(part) == Op.Colon and key_of(part) is symbol and name_of(key_of(part)) in declaration_keywords { found[name_of(key_of(part))] = yes }
 			waiting += [key_of(part), value_of(part)]
 		} else if is_group(part) {
-			if bracket_of(part) == "" and separator_of(part) == " " and #part > 1 and part#1 is symbol { found[name_of(part#1)] = yes }
-			for item in part { waiting += [item] }
+			phrase = bracket_of(part) == "" and separator_of(part) == " " and #part > 1
+			for item in part {
+				if phrase and item is symbol { found[name_of(item)] = yes }
+				waiting += [item]
+			}
 		}
 	}
 	found
@@ -712,7 +715,7 @@ has_property(code: Node, property: text): bool := {
 	word = name_of(code)
 	if property == "label" { return word in label_words }
 	if property == "varying" { return varying_values().has(word) }
-	if property == "type" { return is_tested_type(word, rule_scope) }
+	if property == "type" { return word == any_word or is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }
 	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) and not locally_bound(code) }
 	not rule_scope.has(word)
