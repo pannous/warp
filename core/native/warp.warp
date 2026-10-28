@@ -7,7 +7,9 @@
 #   warp run app.…        the same; `warp pure …` too (warp.wasm is the pure compiler)
 #   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
 #   warp                  warp.wasm's help
-#   warp rebuild          warp.wasm built anew from lib/ by the seed (rebuilt)
+#   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
+#   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
+#   warp rebuild seed     the seed's runtime and machine code made (seed_shipped)
 #   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp, the one command table), any
 #                         other words code it compiles to WARP_RUN_TO (compiler.warp), which then runs
 # The host words warp.wasm's commands call are answered by driver.warp host_word; library words (graphics, sound, web)
@@ -37,8 +39,7 @@ hosted(compiler: text, first: int): nothing := {
 rebuilt(): nothing := {
 	library = library_folder()
 	seed = seed_path()
-	seed_runtime = joined(text_from(seed.address, seed.length - 5), ".runtime.wasm")
-	if read_file(seed_runtime).length == 0 { file_ran(seed, words(seed, "runtime", seed_runtime, "", "", "")) }
+	seed_runtime = seed_prepared(seed)
 	compiler = real_path(joined(library, "/compiler/compiler.warp"))
 	built = joined(compiler_path(), ".new")
 	file_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
@@ -48,11 +49,64 @@ rebuilt(): nothing := {
 	modules = joined(library, "/modules")
 	mkdir(c_string(modules), FOLDER_MODE)
 	file_ran(built, words(built, "modules", modules, runtime, "", ""))
-	machine_code = joined(built, ".driver.cwasm")
-	rename(c_string(machine_code), c_string(joined(compiler_path(), ".driver.cwasm")))
-	rename(c_string(joined(machine_code, ".key")), c_string(joined(compiler_path(), ".driver.cwasm.key")))
+	machine_code_moved(built, compiler_path())
 	rename(c_string(built), c_string(compiler_path()))
 	print(joined("rebuilt ", compiler_path()))
+}
+# `warp rebuild self` (scripts/promote-self.sh): warp.wasm compiles compiler.warp once more, and when it does it is
+# promoted to warp-self.wasm, with its machine code; whether that build is warp.wasm's own bytes (a fixpoint) is said,
+# not required (user 2026-10-26)
+promoted(): nothing := {
+	library = library_folder()
+	compiler = compiler_path()
+	source = real_path(joined(library, "/compiler/compiler.warp"))
+	next = joined(compiler, ".next")
+	file_ran(compiler, words(compiler, source, next, folder_of(source), library, joined(library, "/runtime.wasm")))
+	fixpoint = same_text(read_file(next), read_file(compiler))
+	unlink(next)
+	promoted_file = joined(library, "/warp-self.wasm")
+	copied(compiler, promoted_file)
+	copied(joined(compiler, ".driver.cwasm"), joined(promoted_file, ".driver.cwasm"))
+	copied(joined(compiler, ".driver.cwasm.key"), joined(promoted_file, ".driver.cwasm.key"))
+	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
+	print(joined(joined(compiler, said), promoted_file))
+}
+# `warp rebuild seed`: the seed's runtime and machine code beside it, made when missing, so no build compiles them
+seed_shipped(): nothing := {
+	seed = seed_path()
+	seed_prepared(seed)
+	machine_code_kept(seed)
+	print(joined("precompiled ", seed))
+}
+# the seed's own runtime.wasm (warp-seed.runtime.wasm), written by the seed's runtime command once per seed; its path
+seed_prepared(seed: text): text := {
+	seed_runtime = joined(text_from(seed.address, seed.length - 5), ".runtime.wasm")
+	if read_file(seed_runtime).length == 0 { file_ran(seed, words(seed, "runtime", seed_runtime, "", "", "")) }
+	seed_runtime
+}
+# a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
+machine_code_moved(from: text, to: text): nothing := {
+	machine_code = joined(from, ".driver.cwasm")
+	rename(c_string(machine_code), c_string(joined(to, ".driver.cwasm")))
+	rename(c_string(joined(machine_code, ".key")), c_string(joined(to, ".driver.cwasm.key")))
+}
+# a file's copy, written aside and renamed, so a run beside this one never reads half of it
+copied(from: text, to: text): nothing := {
+	aside = joined(to, ".new")
+	write_file(aside, read_file(from))
+	rename(c_string(aside), c_string(to))
+}
+# `warp rebuild [pure|self|seed]`
+rebuild_command(): nothing := {
+	which = if arg_count() > 2 then arg(2) else "pure"
+	if same_text(which, "pure") { rebuilt() } else {
+		if same_text(which, "self") { promoted() } else {
+			if same_text(which, "seed") { seed_shipped() } else {
+				complain(joined(joined("warp rebuild: no compiler ", which), "; say `warp rebuild`, `warp rebuild pure`, `warp rebuild self` or `warp rebuild seed`"))
+				exit(1)
+			}
+		}
+	}
 }
 # the seed, the compiler that compiles compiler.warp: $WARP_SEED, else warp-seed.wasm beside this executable
 seed_path(): text := {
@@ -96,7 +150,7 @@ if arg_count() <= first {
 	file_ran(compiler, given)
 } else {
 	if ends_with(arg(first), ".wasm") { module_ran(first) } else {
-		if not prefixed and same_text(arg(1), "rebuild") { rebuilt() } else {
+		if not prefixed and same_text(arg(1), "rebuild") { rebuild_command() } else {
 			if is_warp_file(arg(first)) { compiled_and_run(compiler, first) } else { hosted(compiler, first) }
 		}
 	}

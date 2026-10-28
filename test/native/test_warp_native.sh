@@ -33,6 +33,7 @@ if [ -x "$stage/warp" ]; then
 	check "self, code by warp-self.wasm" "$(native self '3 + 4')" 7
 	printf 'raise "boom"\n' >"$stage/raising.warp"
 	check "what a program raised" "$(native raising.warp)" "boom"
+	check "rebuild of no compiler" "$(native rebuild nonsense | cut -c1-34)" "warp rebuild: no compiler nonsense"
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
 fi
