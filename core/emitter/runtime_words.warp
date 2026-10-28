@@ -186,10 +186,12 @@ passing_kinds = {int: [Kind.Int], rational: [Kind.Int, HeldBit.Rational, Kind.Fl
 covered_kinds = {int: [ValueKind.Int], rational: [ValueKind.Int], float: [ValueKind.Float], number: [ValueKind.Int, ValueKind.Float], text: [ValueKind.Text, ValueKind.Char],
 	char: [ValueKind.Char], bool: [ValueKind.Bool], list: [ValueKind.List], key: [], symbol: [], map: [], error: [], code: [], function: []}
 kind_bit(kind: int): int := 1 << kind
+# whether the class is the ancestor or extends it
+descends(name: text, ancestor: text): bool := name == ancestor or (name in module.parents and descends(module.parents[name], ancestor))
 def type_test_code(body: Body, subject: Node, spec: text): TypedCode {
-	# a parent's subclasses are tested by class_methods.warp's widened_tests (`x is Animal or x is Dog`): only cases refuse
 	if spec in module.sum_types and module.sum_types[spec] == "cases" { return refuse("a test of the type " + spec + ", which has cases") }
-	if spec in module.classes { return runtime_call("instance_of", [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), text_value(spec)]) }
+	# an instance of the class or of one extending it, whatever the subject: `(5ms) is Quantity` of a Time
+	if spec in module.classes { return runtime_call("instance_among", [TypedCode(ValueKind.Node, boxed(expression_code(body, subject))), list_value(body, module.classes.keys.filter(name => descends(name, spec)))]) }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
 	value = expression_code(body, subject)

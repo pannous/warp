@@ -324,8 +324,9 @@ prefix_operation(n: Node): list? := {
 numeric_kinds = ["int", "float"]
 known_kind(n: Node, judge: ArgumentJudge): list? := {
 	if n is symbol and name_of(n) in judge.variables and judge.variables[name_of(n)] { return judge.variables[name_of(n)] }
-	# a function the program defines, passed by name (`play(hum, 2s)`): a function of its parameters' count
-	if n is symbol and name_of(n) in judge.own and is_group(judge.own[name_of(n)]) { return ["function", #judge.own[name_of(n)] - 1] }
+	# a function the program defines, passed by name (`play(hum, 2s)`): a function of its parameters' count; one of
+	# none read bare is its call, `sin(π)` of a π() := Real(1, 1)
+	if n is symbol and name_of(n) in judge.own and is_group(judge.own[name_of(n)]) and #judge.own[name_of(n)] > 1 { return ["function", #judge.own[name_of(n)] - 1] }
 	# `(2)`, the operand of `sqrt(2)`, is 2
 	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return known_kind(n#1, judge) }
 	prefixed = prefix_operation(n)
