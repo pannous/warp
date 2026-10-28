@@ -50,7 +50,7 @@ the team, crash resume), notes/roles.md (what the other roles do), notes/agents/
 ## Incidents
 - Urgent cards (column Now, no Agent): `todo key` and `todo take` at once, assign ahead of all else. A card you add to
   Now yourself needs an immediate take.
-- Red `warp pure hello` on main: within 15 minutes name ONE owner (the area the error points at, else the newest
+- Red `warp hello` on main: within 15 minutes name ONE owner (the area the error points at, else the newest
   suspect merge's author), make the card urgent, tell everyone else not to bisect (notes/postmortem_pure_kinds.md).
 - Before moving a card someone holds, check for its branch and worktree or ask the owner.
 - Do not disturb: `date -v+1d -v8H -v0M -v0S +%s > ~/.claude/quiet-until` and stop warp-interviewer's tmux.

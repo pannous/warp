@@ -21,8 +21,8 @@ command_help = [
 	["build <file>", "The module <file>.wasm (no executable under WASI)"],
 	["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
 	["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
-	["modules [folder]", "Every standard module so, beside the folder's runtime.wasm"],
-	["<file> <out.wasm> [folder [lib]]", "Compile the file to the module, as `warp pure` calls it"]
+	["modules <folder> [runtime.wasm]", "Every standard module so, into the folder"],
+	["<file> <out.wasm> [folder [lib]]", "Compile the file to the module, as the native `warp` calls it"]
 ]
 # the commands that run what they compile: plain WASI cannot instantiate the module
 running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]
@@ -75,7 +75,7 @@ grouped_structure(items: list, bracket: text, separator: text): text := {
 }
 
 refuse_running(command: text) := {
-	raise "warp " + command + " runs the module it compiles, which plain WASI cannot (no instantiate in WASI preview 1): use " + NATIVE + ", `warp " + command + "` or `warp pure " + command + "`"
+	raise "warp " + command + " runs the module it compiles, which plain WASI cannot (no instantiate in WASI preview 1): use " + NATIVE + " or `warp " + command + "`"
 }
 refuse_native(command: text) := {
 	raise "warp " + command + " needs " + NATIVE + "'s host: run `warp " + command + "`"

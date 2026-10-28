@@ -78,7 +78,7 @@ pub(crate) fn console() {
 	});
 }
 
-/// `warp pure repl`, `warp self repl` (card wasm-commands): each line through compiler.warp's repl-step, which keeps
+/// `warp repl`, `warp self repl` (card wasm-commands): each line through compiler.warp's repl-step, which keeps
 /// the lines that stay in its state file, and the module it made run here
 pub(crate) fn pure_console(by: warp::compiler::standalone::Compiler) {
 	let state = std::env::temp_dir().join(format!("warp-repl-{}.warp", std::process::id()));

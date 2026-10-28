@@ -1,7 +1,7 @@
-//! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): core/compiler.warp,
+//! `warp <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): core/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
 //! build output (decision compiler-build): warp.wasm, compiler.warp compiled by the seed (warp-seed.wasm beside the
-//! binary, published on GitHub releases seed-<date>; card rust-bootstrap), for `warp pure`; warp-self.wasm, for `warp
+//! binary, published on GitHub releases seed-<date>; card rust-bootstrap), for plain `warp`; warp-self.wasm, for `warp
 //! self`, is no build of its own: a copy of warp.wasm, promoted when warp.wasm compiles compiler.warp once more (user
 //! 2026-10-26: no fixpoint needed; `warp rebuild self`, scripts/promote-self.sh). The old names compiler.wasm and
 //! compiler-self.wasm are still read when
@@ -20,8 +20,13 @@ const REPL_STEP: &str = "repl-step";
 /// compiler.warp's command writing runtime.wasm, and the file it is beside warp.wasm
 const RUNTIME_COMMAND: &str = "runtime";
 const RUNTIME_FILE: &str = "runtime.wasm";
-/// compiler.warp's command writing every standard module's <name>.wasm beside runtime.wasm (card modules-prebuilt)
+/// compiler.warp's command writing every standard module's <name>.wasm, and their folder beside warp.wasm (card
+/// modules-prebuilt)
 const MODULES_COMMAND: &str = "modules";
+const MODULES_FOLDER: &str = "modules";
+/// Programs compiled behind runtime.wasm, the opt-in compiler.warp reads (card runtime-prepended): only then does a
+/// rebuild write the modules a link appends, minutes of compiles
+const PREPENDED_SETTING: &str = "WARP_PREPENDED";
 
 const COMPILER_FILE: &str = "compiler/compiler.warp";
 /// The custom section of a build file naming what it was built from: lib/, lib/'s fingerprint, the warp build
@@ -49,7 +54,7 @@ const REBUILD_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(2
 /// Overrides REBUILD_TIME_LIMIT, in seconds
 const REBUILD_TIME_LIMIT_VARIABLE: &str = "WARP_REBUILD_TIME_LIMIT";
 
-/// Who builds compiler.warp's module: for `warp pure` the seed; `warp self`'s is warp.wasm itself, promoted when it compiles itself
+/// Who builds compiler.warp's module: for plain `warp` the seed; `warp self`'s is warp.wasm itself, promoted when it compiles itself
 // ⚠ RustCompiled keeps its name until the Rust compiler leaves main (card rust-bootstrap): the seed builds it now
 #[derive(Clone, Copy)]
 pub enum Compiler {
@@ -102,12 +107,12 @@ pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiled(program, by), arguments)
 }
 
-/// The value of `code` (`warp pure "x=√72.;x^2"`, a test case), compiled as a program file of `folder` would be
+/// The value of `code` (`warp "x=√72.;x^2"`, a test case), compiled as a program file of `folder` would be
 pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 	ran(compiled_code(code, folder, by), Vec::new())
 }
 
-/// The node parser.warp reads `code` as: warp.wasm, the compiler of `warp pure`, writes its view as JSON
+/// The node parser.warp reads `code` as: warp.wasm, the compiler of plain `warp`, writes its view as JSON
 /// (compiler.warp's view mode), read back with node_views (card rust-bootstrap: the host reads warp text without a
 /// Rust parser: a channel's message, a console line, a test file, `warp data`, `warp parse`). An error when there is
 /// no warp.wasm or it fails
@@ -160,13 +165,13 @@ pub fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<Compiled
 	module
 }
 
-/// `warp pure <command> …` (card wasm-commands): compiler.warp's own command (core/commands.warp), the command
+/// `warp <command> …` (card wasm-commands): compiler.warp's own command (core/commands.warp), the command
 /// line its arguments
 pub fn command(arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiler(by), arguments)
 }
 
-/// One line of `warp pure repl`: compiler.warp's repl-step compiles it after the lines kept in `state` and decides which
+/// One line of `warp repl`: compiler.warp's repl-step compiles it after the lines kept in `state` and decides which
 /// stay; its module runs here, where plain WASI could not run it
 pub fn repl_line(line: &str, state: &Path, by: Compiler) -> Node {
 	let module = state.with_extension("wasm");
@@ -431,7 +436,9 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	ship(path, &bytes)?;
 	write_runtime(by, &path.with_file_name(RUNTIME_FILE))?;
-	write_modules(by, path.parent().unwrap_or(library()))?;
+	if std::env::var(PREPENDED_SETTING).is_ok_and(|setting| setting == "1") {
+		write_modules(by, &path.with_file_name(MODULES_FOLDER), &path.with_file_name(RUNTIME_FILE))?;
+	}
 	warm(by)?;
 	Ok(module)
 }
@@ -439,17 +446,19 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 /// runtime.wasm beside warp.wasm: the runtime words compiled once by compiler.warp's `runtime` command, for linking
 /// programs to (notes/runtime_linking.md "runtime.wasm format")
 fn write_runtime(by: Compiler, path: &Path) -> Result<(), Node> {
-	written_by_command(RUNTIME_COMMAND, path, by)
+	written_by_command(vec![RUNTIME_COMMAND.into(), path.display().to_string()], path, by)
 }
 
 /// the standard modules beside runtime.wasm, each compiled once behind it, for linking programs to (notes/runtime_linking.md
 /// "Library modules"); compiler.warp names them and those it could not prebuild
-fn write_modules(by: Compiler, folder: &Path) -> Result<(), Node> {
-	written_by_command(MODULES_COMMAND, folder, by)
+fn write_modules(by: Compiler, folder: &Path, runtime: &Path) -> Result<(), Node> {
+	std::fs::create_dir_all(folder).map_err(|failure| error(&format!("{}: {failure}", folder.display())))?;
+	let words = vec![MODULES_COMMAND.into(), folder.display().to_string(), runtime.display().to_string()];
+	written_by_command(words, folder, by)
 }
 
-fn written_by_command(name: &str, path: &Path, by: Compiler) -> Result<(), Node> {
-	let written = command(vec![name.into(), path.display().to_string()], by);
+fn written_by_command(words: Vec<String>, path: &Path, by: Compiler) -> Result<(), Node> {
+	let written = command(words, by);
 	match written.drop_meta() {
 		Node::Error(_) => Err(error(&format!("{}: {}", path.display(), written.serialize()))),
 		_ => Ok(()),

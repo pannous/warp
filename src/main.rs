@@ -60,7 +60,6 @@ const DEPLOY_COMMAND: &str = "deploy";
 const SERVE_COMMAND: &str = "serve";
 
 /// The help menu (user): never extend it without consulting through the interviewer
-const HELP_COLUMN: usize = 30;
 const HELP_COMMANDS: &[(&str, &str)] = &[
 	("warp", "Evaluation console (REPL)"),
 	("warp <code|file(.warp/.wasm)>", "Run warp code or a file"),
@@ -69,40 +68,43 @@ const HELP_COMMANDS: &[(&str, &str)] = &[
 	("warp help [<topic>]", "Show this help"),
 	("warp verify <file>", "Test and prove the laws of a file"),
 	("warp debug <code|file>", "Show the parse, lowering and types"),
-	("warp tool <package> [args]", "Run a package's prebuilt <package>.wasm in its directory"),
-	("warp serve [file] [port]", "Serve the program: its page, server functions and routes (app.warp, port 8080)"),
+	("warp serve [file=app.warp] [port=8080]", "Serve page, functions and routes"),
 	("warp deploy", "Host the program on Cloudflare (see deploy.md)"),
 	("warp fuel <steps> <file|code>", "Count steps"),
 	("warp test", "Run tests"),
 	("warp docs", "Open documentation"),
 ];
 const HELP_OPTIONS: &[(&str, &str)] = &[
-	("--no-ask", "Never prompt \"got it?\" after a warning or note"),
-	("--no-hints", "Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)"),
+	("--no-ask", "Never prompt \"got it?\" after a warning or note"), // todo via: ?
+	("--no-hints", "Hide hints and notes which are shown by default (env WARP_HINTS=0)"),
 	("--warnings=<level>", "Show diagnostics from hint (default), weak, normal or severe up"),
 	("--strict[=<level>]", "Warnings from normal (or the level) up are errors, as `use strict`"),
 	("--sandbox", "No C, shell or other runtime, files only in the working folder"),
 ];
 // Out of the menu (user's notes): self, rebuild: internal; eval: redundant, gets a note; repl: redundant (plain warp);
-// lower, parse, types, format: folded into `warp debug` (TODO card cli-debug-command); data: what for?; dev; fast: get
+// lower, parse, types, format: folded into `warp debug` (TODO card help-menu); data: what for?; dev; fast: get
 // rid; compile --wasm/--aot/--page: redundant with build (aot always with build); build --exe/--wasm: nobody uses them;
 // --trim: see full.wasm / mod.wasm (decision build-three-outputs); app: ?; last.wasm kept in ~/.cache/warp
 /// `warp lower --json <code>`: the lowered program as the JSON node view core reads with `node_of(json(…))`,
 /// lossless where the serialized text is not
 const LOWER_JSON_COMMAND: &str = "lower --json";
-/// `warp pure <file> [arguments…]`: the program compiled by core/compiler.warp, the warp compiler as one warp
-/// program, compiled by Rust, and run (src/compiler/standalone.rs)
+const LOWER_COMMAND: &str = "lower";
+/// `warp runtime <out.wasm>`: runtime.wasm, the runtime words compiled once (notes/runtime_linking.md)
+const RUNTIME_COMMAND: &str = "runtime";
+/// `warp module <name> [runtime.wasm] [<name>.wasm]`, `warp modules <folder>`: a standard module, every one, compiled
+/// behind runtime.wasm (card modules-prebuilt)
+const MODULE_COMMANDS: [&str; 2] = ["module", "modules"];
+/// `warp pure …`: plain `warp …`, the one compiler (core/compiler.warp as warp.wasm) since the Rust compiler went; kept
+/// as a hidden alias that says so (user, card drop-pure-word)
 const PURE_COMMAND: &str = "pure";
-/// `warp self <file> [arguments…]`: as `warp pure`, with warp-self.wasm, warp.wasm promoted at a fixpoint
+const PURE_NOTE: &str = "note: `warp pure` is plain `warp` now";
+/// `warp self <file> [arguments…]`: as plain `warp`, with warp-self.wasm, warp.wasm promoted at a fixpoint
 const SELF_COMMAND: &str = "self";
-/// `warp runtime`, `warp module sound`, `warp modules`: compiler.warp's commands writing the prebuilt modules, as plain
-/// `warp` takes them (notes/runtime_linking.md)
-const PREBUILDING_COMMANDS: [&str; 3] = ["runtime", "module", "modules"];
-/// `warp pure repl`: the console with each line compiled by compiler.warp (card wasm-commands)
+/// `warp repl`: the console with each line compiled by compiler.warp (card wasm-commands)
 const REPL_COMMAND: &str = "repl";
-/// `warp pure run <file|code>`, `warp pure eval <code>`: the same as without the word, the program run here
+/// `warp self run <file|code>`, `warp self eval <code>`: the same as without the word, the program run here
 const PURE_RUNNING_WORDS: [&str; 2] = ["run", "eval"];
-/// `warp rebuild [pure|self]`: warp.wasm, the compiler of `warp pure`, built anew from lib/ by the seed
+/// `warp rebuild [pure|self]`: warp.wasm, the compiler of plain `warp`, built anew from lib/ by the seed
 /// (warp-seed.wasm beside the binary); `self`: warp.wasm promoted to warp-self.wasm, `warp self`'s, when it compiles compiler.warp
 /// to its own bytes (decision compiler-build, card rust-bootstrap; src/compiler/standalone.rs)
 const REBUILD_COMMAND: &str = "rebuild";
@@ -212,7 +214,7 @@ fn test_files(args: &[String]) -> Option<&[String]> {
 	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(paths)
 }
 
-/// `warp test [--self] [--each] [folder…]`: the folders whose test files run through `warp pure`
+/// `warp test [--self] [--each] [folder…]`: the folders whose test files run through warp.wasm
 /// (src/compiler/pure_tests.rs), tests/ when none is named and it exists; the words after `test`, flags kept
 fn test_folders(args: &[String]) -> Option<Vec<String>> {
 	use warp::compiler::pure_tests::{DEFAULT_FOLDER, FLAGS};
@@ -238,7 +240,7 @@ fn test_case(args: &[String]) -> Option<&[String; 3]> {
 	}
 }
 
-/// A program file or code, compiled by warp.wasm (the warp compiler, `warp pure`'s) and run: plain `warp <file>`,
+/// A program file or code, compiled by warp.wasm (the warp compiler) and run: plain `warp <file>`,
 /// `warp run`, `warp eval`, piped code and the console run no Rust pipeline (card rust-bootstrap, branch pure). A file's
 /// folder is in scope (D15), code's the working directory; the program's arguments are those set for it
 fn eval(code: &str) -> Node {
@@ -416,11 +418,12 @@ fn run_command(args: &[String], given: &[String]) {
 		std::process::exit(if failed > 0 { 1 } else { 0 });
 	} else if args[1] == REBUILD_COMMAND {
 		rebuild_compilers(args.get(2).map(String::as_str));
-	} else if PREBUILDING_COMMANDS.contains(&args[1].as_str()) && !file_exists(&args[1]) {
-		run_by_compiler(&args[1..], warp::compiler::standalone::Compiler::RustCompiled);
 	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
 		use warp::compiler::standalone::Compiler;
 		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
+		if args[1] == PURE_COMMAND {
+			eprintln!("{PURE_NOTE}");
+		}
 		run_by_compiler(&args[2..], by);
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
@@ -473,9 +476,10 @@ fn run_command(args: &[String], given: &[String]) {
 		diagnostic::show_lines_of(code, None);
 		show_and_fail_on_error(&eval(code), RESULT_MARK);
 	} else if let Some(code) = command_argument(&arg_string, LOWER_JSON_COMMAND) {
-		fail(not_in_self_lane("warp lower-json", code));
-	} else if let Some(code) = command_argument(&arg_string, "lower") {
-		fail(not_in_self_lane("warp lower", code));
+		fail(not_in_self_lane("warp lower --json", code));
+	} else if [&[LOWER_COMMAND, RUNTIME_COMMAND][..], &MODULE_COMMANDS].concat().contains(&args[1].as_str()) && args.len() > 2 {
+		// compiler.warp's own commands (core/commands.warp), as `warp self lower …` gives them
+		run_by_compiler(&args[1..], warp::compiler::standalone::Compiler::RustCompiled);
 	} else if let Some(code) = command_argument(&arg_string, "parse") {
 		println!("{}", structure(&warp::compiler::standalone::parsed(code)));
 	} else if matches!(arg_string.as_str(), "repl" | "console" | "start" | "run") {
@@ -593,11 +597,11 @@ fn unknown_command(args: &[String]) -> Option<String> {
 	Some(format!("warp: unknown command {word}{suggestion} (warp help lists the commands)"))
 }
 
-/// `warp pure|self [run|eval|build|compile|link] <file.warp|code> [arguments…]`: the command as plain `warp` takes it,
+/// `warp self [run|eval|build|compile|link] <file.warp|code> [arguments…]` (and the hidden alias `warp pure`): as plain `warp` takes it,
 /// the program compiled by compiler.warp (`by`): `run`/`eval` run it, `build` writes its module as `warp build --wasm`
 /// does (out.wasm for inline code); with no command word a .warp file or inline code runs. Any other command word is
 /// compiler.warp's own command (core/commands.warp: help, version, parse, data, lower, repl; the others refuse
-/// naming the native warp), never compiled as code (`warp pure build x` compiled `build x`)
+/// naming the native warp), never compiled as code (`warp self build x` compiled `build x`)
 #[cfg(not(test))]
 fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -> ! {
 	use warp::compiler::standalone::{compiled, compiled_code, run, run_code};
@@ -627,7 +631,7 @@ fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -
 		std::process::exit(0);
 	}
 	let runs = PURE_RUNNING_WORDS.contains(&command) && words.len() > 1;
-	// `warp pure <command> …`: the command of compiler.warp itself, written in warp (card wasm-commands); the REPL's
+	// `warp self <command> …`: the command of compiler.warp itself, written in warp (card wasm-commands); the REPL's
 	// lines run here, which plain WASI cannot
 	if !runs && COMMAND_WORDS.contains(&command) && !file_exists(command) {
 		if command == REPL_COMMAND {
@@ -659,13 +663,14 @@ fn source_of(target: &str) -> String {
 
 // Never extend this menu without consulting through the interviewer
 fn usage() {
-	print_help_rows(HELP_COMMANDS);
+	let column = HELP_COMMANDS.iter().chain(HELP_OPTIONS).map(|(usage, _)| usage.len()).max().unwrap_or(0);
+	print_help_rows(HELP_COMMANDS, column);
 	println!("  Options:");
-	print_help_rows(HELP_OPTIONS);
+	print_help_rows(HELP_OPTIONS, column);
 }
 
-fn print_help_rows(rows: &[(&str, &str)]) {
+fn print_help_rows(rows: &[(&str, &str)], column: usize) {
 	for (usage, meaning) in rows {
-		println!("  {usage:<HELP_COLUMN$} {meaning}");
+		println!("  {usage:<column$} {meaning}");
 	}
 }

@@ -80,7 +80,7 @@ Principles and Talking live only in common.md.
 - Known-good tags and lane bisects: after a green batch gate on main, `scripts/gate.sh --tag-good` tags it
   `good/<YYYY-MM-DD-HHMM>` (Berlin time) and pushes the tag. A lane regression: `git bisect start origin/main <good tag>` and `git
   bisect run` a line that rebuilds pure (`WARP_LIB=$PWD/lib warp rebuild pure`, exit 125 when that fails) and compares
-  `warp pure <program>` with the expected output.
+  `warp <program>` with the expected output.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep test/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders: the Integrator runs the full suite. Never pkill by
   pattern (it matches session prompts; kill by PID).
@@ -132,15 +132,15 @@ Principles and Talking live only in common.md.
   `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp <scratchpad>/<x>.warp` (after `WARP_LIB=<worktree>/lib … warp rebuild pure` when
   core/ or lib/ changed). It catches undefined words, parse errors and wrong values in seconds; `WARP_HINTS=0` hides
   hints. Then the targeted `warp test <folders>`.
-- `warp pure` / `warp self` run compiler.warp's build files warp.wasm / warp-self.wasm (decision
+- `warp` / `warp self` run compiler.warp's build files warp.wasm / warp-self.wasm (decision
   compiler-build): next to the binary for the main checkout's lib/, in <worktree>/lib/ itself for a worktree's
-  (`WARP_LIB=<worktree>/lib`). `warp pure` / `warp self` never build one : a missing one is an error
+  (`WARP_LIB=<worktree>/lib`). `warp` / `warp self` never build one : a missing one is an error
   naming `warp rebuild`; a worktree's stale one in lib/ gets a one-line notice, the pair beside the binary none. Nothing rebuilds a compiler because lib/ changed (user: "we don't want automatic
   rebuilds just by changing of lib"): no cron, no git hook, no watcher. The pair beside the binary is main's
   delivered compiler: the Integrator's push builds both from the pushed tip's committed lib/ and installs them
   together (notes/agents/integrator.md). A worktree's
   pair is yours: after editing lib/, run `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp rebuild pure` before
-  judging `warp pure`.
+  judging `warp`.
 - GitHub's API quota (5000 requests/h) is shared by every session: `gh run watch --interval 60` or more, never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points, `todo list Now` as much, commands naming a card
   by its key ~1. Never `gh project item-list` (200-530 points, trips GitHub's secondary limit; gh refuses it): read

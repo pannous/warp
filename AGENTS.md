@@ -50,7 +50,7 @@ It is similar to JSON5 / ECMA Script but much simplified yet with a richer synta
 `compiler.warp` is the whole compiler as one warp program, source text in, wasm bytes out:
 parser.warp → passes.warp (the lowering passes; sugar as rewrite rules in lib/sugar/) → analyzer.warp → emitter.warp,
 whose runtime words are warp too (runtime.warp, runtime/*.warp). core/node.warp declares the Node enum.
-- `warp pure <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (warp-seed.wasm beside the binary, a
+- `warp <file|code>`: runs warp.wasm, compiler.warp compiled by the seed (warp-seed.wasm beside the binary, a
   compiler that compiles itself; scripts/refresh-seed.sh refreshes and publishes it). No Rust-compiled stage builds either compiler
 - `warp self <file|code>`: runs warp-self.wasm, a copy of warp.wasm promoted when warp.wasm compiles
   compiler.warp once more (a fixpoint, stage N+1 == N, is only reported)
@@ -138,7 +138,7 @@ with origin/main, the worker pushes it to main itself and closes the card with `
 Several agent sessions share this Mac and the full suite is slow, so run the cheapest check that covers the change
 (roles: notes/roles.md):
 - Smoke test (minutes), every branch: `scripts/rebuild.sh pure <worktree>`, then `WARP_LIB=<worktree>/lib`
-  `warp pure samples/hello/hello.warp` prints Hello.
+  `warp samples/hello/hello.warp` prints Hello.
 - Self test, only for parser/compiler changes (core/): `scripts/self-check.sh <worktree>`, the compiler compiles
   itself and that build prints Hello. For core/ changes smoke + self test is the whole check: no test folders.
 - Changes outside core/: the smoke test is enough to merge. `warp test <folders>` of the few test files a lib/
@@ -153,7 +153,7 @@ pusher's card, who fixes it forward.
 Warp tests run locally with the shared binary, through the warp compiler (src/compiler/pure_tests.rs,
 notes/is_tests.md):
 ```bash
-warp test                      # all of test/: each *.pairs.warp pair, each is! line of test_*.warp, via warp pure
+warp test                      # all of test/: each *.pairs.warp pair, each is! line of test_*.warp, via warp.wasm
 warp test test/numbers         # only these folders; --self: via `warp self`
 ```
 
@@ -171,7 +171,7 @@ look and build that (notes/agents/common.md Principles).
 0. **Check state** - git log, git status
 1. Develop new features preferably in library /lib/
 2. Only in rare cases touch core/parser.warp or emitter.warp 
-   /Users/me/dev/bin/warp rebuild pure`, then `… warp pure <program>` 
+   /Users/me/dev/bin/warp rebuild pure`, then `… warp <program>` 
 3. **Experiment** - quick throwaway programs go in the session scratchpad or `data/<topic>/`, never in the repo
 4. **Add tests** - Create or update clean short functional tests in `test/`: every kept test lives there
 5. **Run tests** - warp test <folders>`

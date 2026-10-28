@@ -32,17 +32,17 @@ is! 'use sin;sin π' 0
 
 ## `warp test [folder…]`: the runner (card warp-test-runner)
 `warp test` (test/ by default) or `warp test <folder>…` runs every `*.pairs.warp` pair and every top-level `is!`
-line of the `test_*.warp` files under the folders through `warp pure`, with the installed binary
+line of the `test_*.warp` files under the folders through warp.wasm, with the installed binary
 (src/compiler/pure_tests.rs). Each test is its own program in a child process (`warp test --case <file> <index>`,
 30 s each), so a hang, trap or crash fails only that test. Every case takes a slot of one machine-wide pool
 (~/.cache/warp/test-slots, as many lock files as cores, WARP_TEST_SLOTS overrides): parallel runs of sessions, the
 gate and sweeps queue for the slots instead of piling up (card shared-test-slots). Its `use` reads from
-the test file's folder. An expected column that is not data (`π`, `(-1)`, `1 + pi`) runs through `warp pure` too.
+the test file's folder. An expected column that is not data (`π`, `(-1)`, `1 + pi`) runs through warp.wasm too.
 Prints ⊘ for skipped pairs, a ✗ line per failure (`file:line "code" expected: got …`), then `m of n failed in f files,
 s skipped`; exits 1 on a failure. `--self`: through `warp self` (warp-self.wasm); `--each`: a ✓ line for each passed
 test too. The verdict lines print in file order after the run, so two runs (pure and self) diff line by line. The
 parent builds a missing compiler first, so children never race to build it.
-`warp pure "2+3*4"` / `warp self "…"`: inline code through the warp compiler, `use` reading from the current folder.
+`warp "2+3*4"` / `warp self "…"`: inline code through the warp compiler, `use` reading from the current folder.
 
 ## Known gaps (cards)
 - eval of code holding π, time literals, nan, inf, complex: "parse_code: π cannot cross to another task yet": card
