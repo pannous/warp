@@ -8,6 +8,10 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - resident-compiler (warp-fixer, card program-fixed): a resident compiler instance `warp` reuses over a socket, all state live, so a program costs only its own parse + emit (~20 ms instead of 0.10 s for `"hi"`). Concerns: process lifetime, concurrency, staleness after a rebuild. Options: build it (auto-started, restarts when warp.wasm changes) / not now (keep cutting fixed cost) / opt-in flag.
 - class-index-test (warp-global-named-capital, test/types/test_class_index_operator.pairs.warp:4, from the Rust suite): `class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4` expects 504 (index read as `#`); under position-index-words it is position(4) = index(3) = 503. Options: upgrade the test to 503 (Recommended, follows the naming) / keep 504 (`#` calls index unshifted; then position-index-words changes). Failed on main before too; ask at 10:00.
 
+## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- is-pattern-binds (interviewer): `if p is Point{x, ..}: print x` binds x where the test is known true (then-branch, rest of an `and` chain, match arm); one rule for `is` and `match`.
+- implicit-standard-words, hint part (interviewer): a word used without `use` gets a hint naming its module, so `warp beautify` writes the `use`.
+
 ## To present
 - of-binds-tighter (parser OK, user away, card foo-of-any): `a of b = e` is `(a of b) = e`, so `square of int = it * it` defines square(it: int) and `name of p = "Al"` stays an assignment to p.name.
 - ffi-link-any-import (harness OK, user away, card pure-compiled): pure runs link C libraries for any import module other than wasi/host (was: only libm), so `import strlen from "c"`, sqlite3, raylib run (test/ffi 110/133 failed). Grown: one C linker shared by `warp pure` and warp-host (the module's warp.c_functions, moved into warp-runtime), header parsing only for executables until carded away; `--sandbox` refuses C imports.
