@@ -265,7 +265,9 @@ function_compiled(f: Function, argument_kinds: list): any := {
 		# (in runtime.wasm, any argument: no program decides it)
 		given = if argument_kinds[i] == pending or module.relocating then ValueKind.Node else argument_kinds[i]
 		# analyzer.warp's kind, but a node stays one where it found a list: it may be a list of other brackets (`{1 2}`)
-		analyzed = analyzed_parameter_kind(f, i)
+		# (not in a prebuilt module, whose callers are programs the analyzer never saw: `osc(440, 2ms)` of a parameter
+		# its own calls give floats)
+		analyzed = if module.relocating and not module.prebuilding then ø else analyzed_parameter_kind(f, i)
 		if annotation == ø and analyzed != ø and not (given == ValueKind.Node and analyzed == ValueKind.List) { annotation = analyzed }
 		if parameter_key(f.name, i) in module.literal_arguments {
 			for kind in module.literal_arguments[parameter_key(f.name, i)] { given = parameter_joint(given, kind) }

@@ -87,6 +87,16 @@ def program_exports(functions: list): list {
 			taken += [f.name]
 		}
 	}
+	# a linked module's words too, as compiled from source: a host calls one back by name (sound's left_sample)
+	for image in module.linked_images {
+		for k in 0..<#image.functions {
+			name = image.functions[k].name
+			if name in module.linked_words and name not in taken {
+				exports += [name_bytes(name) + [export_function_byte] + uleb(linked_index(image, k))]
+				taken += [name]
+			}
+		}
+	}
 	exports
 }
 def module_bytes(functions: list): list {

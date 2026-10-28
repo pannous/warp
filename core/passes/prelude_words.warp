@@ -218,6 +218,8 @@ declared_only(n: Node): Node := {
 		if is_key(n, Op.Define) { return Key(head, Op.Define, Node.Empty) }
 		if is_key(n, Op.Assign) { return Key(head, Op.Assign, Node.Empty) }
 	}
+	# `A4 := midi_hertz(69)`, a value the module made a function of (charged, P71): its head, called at each use
+	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
 	if is_key(n, Op.Colon) and is_declaration_keyword(head) then Key(head, Op.Colon, declared_only(value_of(n))) else n
 }
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's

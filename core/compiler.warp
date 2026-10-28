@@ -56,13 +56,14 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	relocate_program(separate_output != "" or linked_output != "")
 	linking = library_runtime == ø and prepended()
 	link_libraries(if linking then linked_libraries(source) else [], if linking then definition_slices(source).map(slice => slice#1) else [])
+	c_functions = with_linked_c_functions(foreign#2, library_folder)
 	program = checked_program(foreign#1, folder, prelude_source)
 	found = diagnosed_since(known)
 	# an error the checks diagnosed fails the compile with Rust's text (card pure-self-ignores-errors)
 	failing = first_error(found, module.program_file)
 	if failing { throw failing }
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
-	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, foreign#2), emitter_kinds(program))
+	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, c_functions), emitter_kinds(program))
 	# a linked module whose words won't take the program's values: said, and the program compiled with its source
 	if made is text and #module.linked_images > 0 {
 		warn module.linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source"
