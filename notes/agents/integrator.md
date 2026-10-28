@@ -31,8 +31,8 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
 - Read each failure's message before passing it as flaky; a different message is a real failure.
 - A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs) is installed by after-push.sh too, before the
   compilers: when the installed binary's `release build <commit>` differs in those paths from main's tip it runs
-  `cargo build --release`, puts the binary in ~/dev/bin/main-builds/<hash>/ with a warp.wasm it built, checks hello,
-  links ~/dev/bin/warp there and deletes every other main-builds/ folder. No ~/dev/bin/warp-<hash> links (user).
+  `cargo build --release`, puts the binary in ~/dev/bin/warp-builds/<hash>/ with a warp.wasm it built, checks hello,
+  links ~/dev/bin/warp there and deletes every other warp-builds/ folder. No ~/dev/bin/warp-<hash> links (user).
 - Compilers beside ~/dev/bin/warp come only with main's tip, never because a lib/ changed, and are never built in the
   main checkout (a pull mid-build paired mismatched compilers).
 
