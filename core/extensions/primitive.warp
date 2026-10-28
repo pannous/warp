@@ -18,17 +18,21 @@ signed_long = Scalar("i64", yes, 8)
 unsigned_long = Scalar("i64", no, 8)
 single_float = Scalar("f32", yes, 4)
 double_float = Scalar("f64", yes, 8)
-# each type word and its scalar; an untyped int literal is an `int`, 64 bits as warp's ints wrap in i64 (D16 i64-wraps)
+# each type word and its scalar, as a foreign line reads it (c_imports.warp c_type_words): `int` is C's, 32 bits, and so
+# is an untyped int literal; `long` and `i64` are 64
 scalars = {i8: signed_byte, int8: signed_byte, u8: unsigned_byte, uint8: unsigned_byte, byte: unsigned_byte,
 	bool: unsigned_byte, i16: signed_short, int16: signed_short, u16: unsigned_short, uint16: unsigned_short,
 	i32: signed_word, int32: signed_word, u32: unsigned_word, uint32: unsigned_word, char: unsigned_word,
-	pointer: unsigned_word, i64: signed_long, int64: signed_long, int: signed_long, long: signed_long,
+	pointer: unsigned_word, i64: signed_long, int64: signed_long, int: signed_word, long: signed_long,
 	u64: unsigned_long, uint64: unsigned_long, f32: single_float, float32: single_float, f64: double_float,
-	float: double_float, double: double_float}
+	float: double_float, double: double_float, number: double_float}
 NO_VALUE = ""
 INT_TYPE = "int"
 FLOAT_TYPE = "float"
 BOOL_TYPE = "bool"
+# the types a GC program's ints and floats cross into primitive code as
+BOUNDARY_INT = "i64"
+BOUNDARY_FLOAT = "f64"
 
 # per wasm value type: its byte in a signature, its const opcode, the first of its comparisons and of its arithmetic
 value_bytes = {i32: 127, i64: 126, f32: 125, f64: 124}
@@ -380,12 +384,15 @@ mvp_declared(f: PrimitiveFunction, target: Node, type: Node, n: Node, value: Nod
 	PrimitiveCode(NO_VALUE, mvp_typed(f, value, written) + [op.local_set] + uleb(index))
 }
 
-# both operands as the type of the first typed one
+# both operands as the type of the typed one, the wider one of two when one widens to the other
 mvp_operand_type(f: PrimitiveFunction, left: Node, right: Node, expected: text): text := {
-	if not (left is int or left is float) { return mvp_emitted_type(f, left) }
+	literal = (left is int or left is float)
+	if not literal and not (right is int or right is float) { return mvp_wider(mvp_emitted_type(f, left), mvp_emitted_type(f, right)) }
+	if not literal { return mvp_emitted_type(f, left) }
 	if not (right is int or right is float) { return mvp_emitted_type(f, right) }
 	if expected and expected != BOOL_TYPE then expected else if left is float or right is float then FLOAT_TYPE else INT_TYPE
 }
+mvp_wider(a: text, b: text): text := if mvp_widens(a, b) then b else a
 # the type of n's value, its code thrown away (a local it declares stays declared)
 mvp_emitted_type(f: PrimitiveFunction, n: Node): text := mvp_emitted(f, n, "").type
 
@@ -557,7 +564,7 @@ primitive_compiled(f: Function) := {
 	passed = []
 	for i in 0..#types { passed += mvp_cast(PrimitiveCode(boundary_type(types#(i + 1)), [op.local_get] + uleb(i)), types#(i + 1)).code }
 	f.gives_nothing = primitive.result == NO_VALUE
-	result = if f.gives_nothing then INT_TYPE else boundary_type(primitive.result)
+	result = if f.gives_nothing then BOUNDARY_INT else boundary_type(primitive.result)
 	f.result = if primitive.result == BOOL_TYPE then ValueKind.Bool else boundary_kind(result)
 	called = passed + call_code(inner.index)
 	f.code = if f.gives_nothing then called + [ref_null, gc_type(gc.node)] else mvp_cast(PrimitiveCode(primitive.result, called), if primitive.result == BOOL_TYPE then BOOL_TYPE else result).code
@@ -570,5 +577,5 @@ hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
 	_: primitive_refusal(ø, "an f32 in a primitive function of a GC program (card primitive-f32-hosted)")
 }
 # the GC value a primitive type crosses the boundary as: an int as i64, a float as f64
-boundary_type(type: text): text := if mvp_is_float(type) then FLOAT_TYPE else INT_TYPE
+boundary_type(type: text): text := if mvp_is_float(type) then BOUNDARY_FLOAT else BOUNDARY_INT
 boundary_kind(type: text): ValueKind := if mvp_is_float(type) then ValueKind.Float else ValueKind.Int
