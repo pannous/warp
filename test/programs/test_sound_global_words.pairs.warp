@@ -1,0 +1,6 @@
+# play, beep, stop_sound and wait_sound work without `use sound`, which they bring in (decision bizarre-global)
+
+'play(440Hz, 5ms); wait_sound; 7'	7
+'beep(); stop_sound(); 8'	8
+'play(x) := x * 2; play(3)'	6
+'display = 3; display'	3
