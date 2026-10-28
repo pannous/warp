@@ -110,7 +110,7 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 # kept by the files that parse (os.keep_of), so an edit of core beyond them keeps the parses
 file_parsed(file: text): Node := {
 	source = file_text(file)
-	if source is ø { return plain_node(parsed(source)) }
+	if source is ø { raise working_relative(file) + ": no such file to use" }
 	name = "the parse of " + source
 	kept_of(name, parse_makers) ?? keep_of(name, checked_parse(file, source), parse_makers)
 }
