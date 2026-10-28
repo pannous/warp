@@ -23,6 +23,8 @@ BUILDS=/Users/me/dev/bin/warp-builds  # one folder: the installed harness and it
 CARGO_TARGET=/Volumes/Build/target-integrate
 
 if_moved= slow=
+arguments=("$@")
+script_sum=$(shasum <"$0")
 [ "${1-}" = --if-moved ] && { if_moved=1; shift; }
 [ "${1-}" = --slow ] && { slow=1; shift; }
 scripts=$(cd "$(dirname "$0")/.." && pwd)
@@ -46,6 +48,13 @@ if ! mkdir "$lock" 2>/dev/null; then
 fi
 echo $$ >"$lock/pid"
 trap 'rm -rf "$lock"' EXIT
+# a loop running on goes on with the functions it read at its start: a changed script starts over (exec skips the trap)
+rerun_if_changed() {
+	[ "$(shasum <"$0")" = "$script_sum" ] && return
+	say "the script changed: it starts over"
+	rm -rf "$lock"
+	exec "$0" "${arguments[@]}"
+}
 
 red() { # red <what: detail> [--urgent]: one card per kind of failure (its key from <what>), noted again per failing tip
 	local key text="main ${tip:0:10}: $1 (pushed since ${since:0:10}: $pushed)"
@@ -100,9 +109,11 @@ install_compilers() {
 
 # whether the installed binary was built from the harness of $tip ("release build <commit>" in `warp version`)
 harness_current() {
-	local built
+	local built folder
 	built=$("$MAIN_WARP" version 2>&1 | sed -n 's/^release build \([0-9a-f]*\).*/\1/p')
-	[ -n "$built" ] && git -C "$TREE" diff --quiet "$built" "$tip" -- "${HARNESS_PATHS[@]}" 2>/dev/null
+	folder=$(dirname "$(readlink -f "$MAIN_WARP")")
+	# an install by an older script lacks what the current one brings
+	[ -x "$folder/warp-runtime" ] && [ -d "$folder/modules" ] && [ -n "$built" ] && git -C "$TREE" diff --quiet "$built" "$tip" -- "${HARNESS_PATHS[@]}" 2>/dev/null
 }
 
 # built_from_tip <folder>: cargo build of $TREE copied there, true when the binary names $tip, on main or detached
@@ -176,6 +187,7 @@ slow_tiers() {
 if [ -n "$slow" ]; then
 	git -C "$TREE" fetch -q origin || exit 1
 	while installed=$(cat "$installed_state/watched") && [ "$installed" != "$(cat "$state/tested" 2>/dev/null)" ]; do
+		rerun_if_changed
 		slow_tiers "$installed" || break
 	done
 	exit 0
@@ -185,5 +197,6 @@ git -C "$TREE" fetch -q origin || exit 1
 watch "$(git -C "$TREE" rev-parse "${1:-origin/main}")"
 [ $# -gt 0 ] && exit 0
 while newest=$(main_tip) && [ "$newest" != "$(handled)" ]; do
+	rerun_if_changed
 	git -C "$TREE" fetch -q origin && watch "$newest"
 done

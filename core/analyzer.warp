@@ -810,7 +810,7 @@ settle(flows: list) := {
 	while changed {
 		changed = no
 		for flow in flows { if apply(flow) { changed = yes } }
-		for name in defined_functions.keys() {
+		for name in analyzed_functions() {
 			kind = result_kind(name)
 			joined = joined_kind(results[name], kind)
 			if joined != results[name] {
@@ -864,8 +864,8 @@ weak_kinds(flows: list): map := {
 defaults(flows: list) := {
 	weak = weak_kinds(flows)
 	forwarded = {}
-	for name in defined_functions.keys() { forwarded[name] = forwarded_kinds(name) }
-	for name in defined_functions.keys() {
+	for name in analyzed_functions() { forwarded[name] = forwarded_kinds(name) }
+	for name in analyzed_functions() {
 		scope = scopes[name]
 		used = usages(value_of(defined_functions[name]))
 		parameters = function_parameters(name)
@@ -902,6 +902,24 @@ register(flows: list) := {
 	}
 }
 
+# a linked module's word, declared without its body: its kinds and result are those the module was compiled with
+# (prebuilt.warp linked_words)
+declares_linked(name: Name): bool := name in linked_words and #linked_words[name].kinds == #function_parameters(name)
+declared_linked(name: Name, scope: Scope) := {
+	word = linked_words[name]
+	parameters = function_parameters(name)
+	for index in 0..<#parameters {
+		own = parameters[index].name
+		scope.kinds[own] = word.kinds[index]
+		scope.pinned[own] = yes
+		scope.parameters[own] = yes
+	}
+	scopes[name] = scope
+	results[name] = word.result
+}
+# the functions whose bodies the analysis reads: all but the linked ones
+analyzed_functions(): list := defined_functions.keys().filter(name => not declares_linked(name))
+
 analyze(program: Node): Node := {
 	global defined_functions
 	global defined_signatures
@@ -926,6 +944,10 @@ analyze(program: Node): Node := {
 		scope = Scope()
 		scope.globals = scopes[""].kinds
 		tested = usages(value_of(defined_functions[name])).tested
+		if declares_linked(name) {
+			declared_linked(name, scope)
+			continue
+		}
 		for parameter in function_parameters(name) {
 			own = parameter.name
 			# `if x is list then … else x`: a plain parameter whose kind the body tests takes any value, as `x: any`
@@ -939,7 +961,7 @@ analyze(program: Node): Node := {
 		results[name] = ValueKind.Unknown
 	}
 	flows = gather(program, "", [])
-	for name in defined_functions.keys() { gather(value_of(defined_functions[name]), name, flows) }
+	for name in analyzed_functions() { gather(value_of(defined_functions[name]), name, flows) }
 	register(flows)
 	settle(flows)
 	defaults(flows)

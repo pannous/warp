@@ -563,6 +563,8 @@ def boxed(value: TypedCode): list {
 	kind = value.kind
 	code = value.code
 	if kind == ValueKind.Node or kind == ValueKind.Time { return code }
+	# a statement's value (`x = print "a"`): ø
+	if kind == no_kind { return code + [ref_null, gc_type(gc.node)] }
 	if kind == ValueKind.Text { return node(Kind.Text, code) }
 	if kind == ValueKind.List { return node(Marked.SquareList, code) }
 	if kind == ValueKind.Char { return node(Kind.Codepoint, code + gc_code(gc_ops.ref_i31, [])) }
@@ -613,6 +615,8 @@ def float_remainder(body: Body, a: list, b: list): TypedCode {
 }
 
 def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
+	# a statement assigned (`x = print "a"`) gives ø
+	if value.kind == no_kind { value = TypedCode(ValueKind.Node, boxed(value)) }
 	if is_key(target, Op.Hash) and key_of(target) != ø and subscript_name(value_of(target)) != ø {
 		return map_assignment(body, key_of(target), subscript_name(value_of(target)), value)
 	}
@@ -1365,7 +1369,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		module.shared = shared_names(block_statements(main.body))
 		compile_function(main, [])
 		if prepended() { linked_builders() }
-		shown_result(main.result)
+		# the host shows no ø: a program giving nothing needs no show
+		if not main.gives_nothing { shown_result(main.result) }
 		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so
 		# a program with one it cannot compile fails there (not the prelude's helpers, compiled when called)
 		for name in module.functions.keys {
@@ -1398,13 +1403,15 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 			main.code = boxed(TypedCode(main.result, main.code))
 			main.result = ValueKind.Node
 		}
-		# WASI's command entry, which an executable runs: main, its value printed as print shows it unless ø (a print or
-		# a declaration last), by its own kind's word when main knows it (a text needs no node_text), so `./app` and `wasmtime app.wasm` say what `warp app.warp` says (P77)
+		# WASI's command entry, which an executable runs: main, its value printed as print shows it unless ø (a print, a
+		# loop or a declaration last: nothing printed, no show code kept), by its own kind's word when main knows it (a
+		# text needs no node_text), so `./app` and `wasmtime app.wasm` say what `warp app.warp` says (P77)
 		start = added_function(wasi_start, [], no_kind, [])
 		start.locals = [main.result]
 		result = TypedCode(main.result, [op.local_get, 0])
 		absent = if main.result == ValueKind.Node then [op.local_get, 0, op.ref_is_null] else [op.i32_const, 0]
-		start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(unboxed_to_show(result, shown_kind)).code + [op.drop, op.end]
+		start.code = call_code(main.index) + [op.drop]
+		if not main.gives_nothing { start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(unboxed_to_show(result, shown_kind)).code + [op.end] }
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
 			if #module.refusals > 0 { throw module.refusals.join("\n") }

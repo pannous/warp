@@ -321,9 +321,26 @@ class LibraryImage { name: text; wasm: list; functions: list; globals: list; tex
 global linked_images = []
 # the names the program defines itself: its own definition, never the module's
 global linked_own_names = []
+# each linked module word by name, its kinds and result: the program declares it (prelude_words.warp declared_only)
+# and the analyzer takes them as they are, never reading its body
+global linked_words = {}
 def link_libraries(images: list, own_names: list) {
 	linked_images = images
 	linked_own_names = own_names
+	linked_words = {}
+	for image in images { for word in image.functions { if word.name not in own_names { linked_words[word.name] = word } } }
+}
+# the definitions of the linked modules, by their text (a slice of one is declared, not brought whole), and the
+# names the program needs of each even when it never says them: its classes and globals
+def linked_slices(): map {
+	slices = {}
+	for image in linked_images { for slice in definition_slices(LIBRARY_FILES[image.name + module_extension]) { slices[slice#2] = yes } }
+	slices
+}
+def linked_needs(): list {
+	names = []
+	for image in linked_images { names += image.classes.map(entry => entry#1[#instance_struct_prefix ..]) + image.globals.map(entry => entry#1) }
+	names
 }
 # ø for a module not linkable behind this runtime: built behind another, making closures (their dispatch is the
 # program's, not linked yet), or importing C functions
@@ -378,7 +395,8 @@ def bind_library_words() {
 	for image in linked_images {
 		for entry in image.classes {
 			if entry#1 == instance_struct() { gc_type(instance_struct()) }
-			if entry#1 not in module.class_structs or struct_written(entry#1) != entry#2 { refuse("the class struct " + entry#1 + " of the linked module " + image.name + " differs from the program's") }
+			if entry#1 not in module.class_structs { refuse("the program declares no class struct " + entry#1 + " of the linked module " + image.name) }
+			if struct_written(entry#1) != entry#2 { refuse("the class struct " + entry#1 + " of the linked module " + image.name + ", " + entry#2 + ", is " + struct_written(entry#1) + " in the program") }
 			gc_type(entry#1)
 		}
 		for k in 0..<#image.functions {

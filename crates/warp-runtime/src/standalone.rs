@@ -195,9 +195,6 @@ pub fn run_module(
 	crate::output::link_output(&mut linker)?;
 	crate::libm::link_libm(&mut linker)?;
 	crate::c_calls::link_libc_functions(&mut linker)?;
-	for function in c_functions {
-		crate::c_calls::link_carried_function(&mut linker, engine, function)?;
-	}
 	linker.func_wrap(
 		crate::host_words::HOST_LIBRARY,
 		FOREIGN_CALL,
@@ -206,6 +203,13 @@ pub fn run_module(
 		},
 	)?;
 	let mut store = limited_store(engine, CHandles::default(), DEFAULT_FUEL, time_limit.unwrap_or(Duration::MAX));
+	// the C functions it carries linked as each import's own type says (a text parameter a warp text, as warp links
+	// them), unless libc's fixed one fits
+	let carried = crate::c_imports::CImports { described: c_functions.to_vec(), lettered: vec![] };
+	crate::c_imports::link_c_imports(&mut linker, module, &carried, |linker, library, name, func_type| {
+		let fitting = linker.get(&mut store, library, name).ok().and_then(|known| known.ty(&store).func().cloned());
+		fitting.is_some_and(|known| known.matches(func_type))
+	})?;
 	// a host word the stub doesn't have (fetch, files, tasks) traps naming itself when the program calls it
 	linker.define_unknown_imports_as_traps(module)?;
 	let instance = linker.instantiate(&mut store, module)?;
