@@ -1550,6 +1550,8 @@ def phrase_operation(left: Node, op: text, right: Node): Node := spaced([left, s
 WORD_OPERATORS = {"then": "then", "else": "else", "and": "and", "xor": "xor", "or": "or", "is": "is", "do": "do", "to": "to", "as": "as", "rem": "rem"}
 // The words that are operators in a loop's iterable alone: Kotlin's `for i in 0 until n` (elsewhere `until` guards)
 // Rust twin: lookahead.rs operator_in_context (in_for_header)
+// a word operator's compound assignment, `x and= no` as `x &&= no` (was silently `(and x =) no`, card silent-wrong-results)
+WORD_ASSIGNMENTS = {"and=": "&&=", "or=": "||=", "xor=": "^^="}
 ITERABLE_WORD_OPERATORS = [["until", ".."]]
 // The iterable's own operator at the parser's position as [written, canonical], else []
 def iterable_operator_at(p: Parser): list {
@@ -1576,6 +1578,7 @@ def operator_at(p: Parser): list {
 }
 // The operator word at the parser's position as [written, canonical], else []
 def word_operator_at(p: Parser, c: text): list {
+	for pair in pairs_of(WORD_ASSIGNMENTS) { if pair#1#1 == c and starts_at(p.code, pair#1, p.at, p.n) { return pair } }
 	for pair in word_operators() {
 		written = pair#1
 		if written#1 == c and keyword_at(p, written) and not (p.group.in_branch and written == "else") and not names_block(p, written) { return pair }

@@ -2,6 +2,10 @@
 # floor_quotient(a, b), and `x /!= b` (also `x ÷= b`) the assignment `x = floor_quotient(x, b)`
 rewrite $a /! $b => floor_quotient($a, $b)
 rewrite ($a /!= $b) => $a = floor_quotient($a, $b)
+# The logical compound assignments: `x &&= y` (also `x and= y`) is `x = x and y`, `||=` (`or=`) and `^^=` (`xor=`) so
+rewrite ($a &&= $b) => $a = $a and $b
+rewrite ($a ||= $b) => $a = $a or $b
+rewrite ($a ^^= $b) => $a = $a xor $b
 # The element-wise operators (notes/layers.md, sugar): `xs .* 2` applies `*` to each element, `xs.map(e -> e * 2)`;
 # the parser keeps the phrase [xs .* 2]. Rust twin: broadcasting.rs lower_element_wise_operators
 rewrite $xs .+ $y => $xs.map($e -> $e + $y)
