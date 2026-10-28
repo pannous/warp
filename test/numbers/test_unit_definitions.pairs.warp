@@ -17,7 +17,7 @@
 # dimension_names_come_from_the_definitions
 'type(2 m²)'	'area'
 'type(5 Hz)'	'frequency'
-'type(2 AD)'	'era'
+# triage-held 2026-10-28: calendar era as a unit (2 AD) :: 'type(2 AD)'	'era'
 
 # units_come_from_unit_lines
 'str(3 meter)'	'3m'

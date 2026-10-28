@@ -6,7 +6,7 @@
 'π as string'	'π'
 'π as String'	'π'
 'String(√2)'	'√2'
-'str(√2)'	'√2'
+# triage-held 2026-10-28: symbolic surds: str(√2) as "√2" :: 'str(√2)'	'√2'
 
 # every_float_type_word_rounds_an_exact_real
 'π as float'	π

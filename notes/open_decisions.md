@@ -8,6 +8,20 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - resident-compiler (warp-fixer, card program-fixed): a resident compiler instance `warp` reuses over a socket, all state live, so a program costs only its own parse + emit (~20 ms instead of 0.10 s for `"hi"`). Concerns: process lifetime, concurrency, staleness after a rebuild. Options: build it (auto-started, restarts when warp.wasm changes) / not now (keep cutting fixed cost) / opt-in flag.
 - class-index-test (warp-global-named-capital, test/types/test_class_index_operator.pairs.warp:4, from the Rust suite): `class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4` expects 504 (index read as `#`); under position-index-words it is position(4) = index(3) = 503. Options: upgrade the test to 503 (Recommended, follows the naming) / keep 504 (`#` calls index unshifted; then position-index-words changes). Failed on main before too; ask at 10:00.
 
+## To confirm (decided on the user's behalf, confirm or undo at 10:00)
+- spaced-units (separate-modules): `sleep 5 ms` / `x = 5 ms` (number, space, unit) stays refused for now; glued `5ms` works (`sleep 5ms` sleeps). Want the spaced form as a quantity? (test_sleep_unit_shadow:6)
+- is-pattern-binds (interviewer): `if p is Point{x, ..}: print x` binds x where the test is known true (then-branch, rest of an `and` chain, match arm); one rule for `is` and `match`.
+- implicit-standard-words, hint part (interviewer): a word used without `use` gets a hint naming its module, so `warp beautify` writes the `use`.
+- program-match lowering (supervisor): "merge all existing branches" taken as the OK for its run-time matcher in lib/prelude.warp + core/node_matches.warp (landed 9f9ef1ce43).
+- test path edit (supervisor): test/node/test_parsed_node_walks.pairs.warp:34 reads core/parsing/parser.warp instead of core/parser.warp after the core/ grouping; the only test edit of the reshuffle.
+- warp test handoff (supervisor): until the native test runner lands, `warp test` on the native warp hands off to warp-rust with one stderr line.
+- build stamp without inputs hash (supervisor): warp.build records lib/, builder, commit and time; the inputs-hash slot stays empty for now (the native warp has no sha256/directory host words yet); nothing compares it.
+- round(2.5) = 3 (supervisor): the decision round-halves (away from zero) beats the Footguns note; the note gets corrected, not the test.
+- triage holds (reviewer): the lines marked `# triage-held 2026-10-28` (list in notes/test_triage.md "Held (esoteric)") are commented out as forms warp doesn't carry over; restore any you want back.
+- unit tests without `use units` (supervisor): the 83 lines the triage listed as wrong are gaps under implicit-standard-words, not wrong expectations.
+- release workflow quiet (supervisor): Release re-enabled with one summary at the end, no per-job notifications; the other workflows stay off.
+- no extra workers tonight (supervisor): the ten triage gap groups wait on the board (Next) for the four feature workers instead of new sessions (rule: at most two feature workers, already exceeded by the runtime-linking team).
+
 ## To present
 - of-binds-tighter (parser OK, user away, card foo-of-any): `a of b = e` is `(a of b) = e`, so `square of int = it * it` defines square(it: int) and `name of p = "Al"` stays an assignment to p.name.
 - ffi-link-any-import (harness OK, user away, card pure-compiled): pure runs link C libraries for any import module other than wasi/host (was: only libm), so `import strlen from "c"`, sqlite3, raylib run (test/ffi 110/133 failed). Grown: one C linker shared by `warp pure` and warp-host (the module's warp.c_functions, moved into warp-runtime), header parsing only for executables until carded away; `--sandbox` refuses C imports.
