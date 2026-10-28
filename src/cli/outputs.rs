@@ -5,21 +5,26 @@ pub(crate) const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 
 /// `warp build`: the WebAssembly module next to the program file (out.wasm for inline code), with `--aot` its machine
 /// code too; under WARP_SELF_HOSTED=pure or pure-only the warp compiler's module, as `warp <file>` runs it
-pub(crate) fn write_module(code: &str, target: &str, ahead_of_time: bool) {
+pub(crate) fn write_module(code: &str, target: &str, trim: Trim, ahead_of_time: bool) {
 	let folder = std::path::Path::new(target)
 		.parent()
 		.filter(|_| file_exists(target))
 		.map_or_else(|| env::current_dir().unwrap_or_default(), std::path::Path::to_path_buf);
 	match warp::compiler::standalone::compiled_code(code, &folder, warp::compiler::standalone::Compiler::RustCompiled) {
-		Ok(module) => {
-			let output_path = compiled_output_path(target);
-			fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
-			println!("compiled {} bytes to {}", module.bytes.len(), output_path);
-			if ahead_of_time {
-				write_machine_code(&module.bytes, &output_path);
-			}
-		}
+		Ok(module) => write_compiled(module.bytes, target, trim, ahead_of_time),
 		Err(final_value) => fail(format!("nothing to compile: {}", final_value.serialize())),
+	}
+}
+
+/// The compiled module written next to the program file (out.wasm for inline code), trimmed as asked, with `--aot` its
+/// machine code too
+pub(crate) fn write_compiled(bytes: Vec<u8>, target: &str, trim: Trim, ahead_of_time: bool) {
+	let output_path = compiled_output_path(target);
+	fs::write(&output_path, &bytes).unwrap_or_else(|failure| fail(format!("{output_path}: {failure}")));
+	println!("compiled {} bytes to {}", bytes.len(), output_path);
+	let bytes = trim.apply(&output_path, bytes);
+	if ahead_of_time {
+		write_machine_code(&bytes, &output_path);
 	}
 }
 

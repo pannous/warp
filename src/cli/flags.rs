@@ -117,12 +117,17 @@ pub(crate) fn tip_hiding_hints_at_exit() {
 	unsafe { atexit(tip) };
 }
 
-/// The compile flags `arguments` start with, in any order, and the arguments after them
+/// The compile flags `arguments` start with, in any order, and the arguments after them; `--trim[=<way>]` among them
+/// is skipped here and read by `Trim::of`
 pub(crate) fn leading_flags(mut arguments: String) -> (Vec<&'static str>, String) {
 	let mut flags = vec![];
-	while let Some(flag) = COMPILE_FLAGS.into_iter().find(|flag| arguments.split_whitespace().next() == Some(flag)) {
-		flags.push(flag);
-		arguments = arguments[flag.len()..].trim_start().to_string();
+	while let Some(word) = arguments.split_whitespace().next().map(str::to_string) {
+		if let Some(flag) = COMPILE_FLAGS.into_iter().find(|flag| word == *flag) {
+			flags.push(flag);
+		} else if !word.starts_with(TRIM_FLAG) {
+			break;
+		}
+		arguments = arguments.trim_start()[word.len()..].trim_start().to_string();
 	}
 	(flags, arguments)
 }

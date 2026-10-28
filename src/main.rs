@@ -326,6 +326,7 @@ fn run_command(args: &[String], given: &[String]) {
 		println!("{}", warp::compiler::standalone::parsed(&text).serialize());
 	} else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
 		let target = extract_after(&arg_string, " ");
+		let trim = Trim::of(&target);
 		let (flags, target) = leading_flags(target);
 		let ahead_of_time = flags.contains(&AOT_FLAG);
 		let standalone = flags.contains(&EXE_FLAG) || !(flags.contains(&WASM_FLAG) || ahead_of_time);
@@ -346,7 +347,7 @@ fn run_command(args: &[String], given: &[String]) {
 			return write_wagi(&code, &target);
 		}
 		// `warp build` writes both (card build-should), `--exe` too, `--wasm` and `--aot` only the module
-		write_module(&code, &target, ahead_of_time);
+		write_module(&code, &target, trim, ahead_of_time);
 		if standalone {
 			let written = if builds_an_app(&code) {
 				write_web_view_app(&code, &target)
@@ -568,6 +569,7 @@ fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -
 	let command = words[0].as_str();
 	let rest = if words.len() > 1 { &words[1..] } else { words };
 	if COMPILE_COMMANDS.contains(&command) && words.len() > 1 {
+		let trim = Trim::of(&rest.join(" "));
 		let (flags, target) = leading_flags(rest.join(" "));
 		let module = if has_warp_extension(&target) && file_exists(&target) {
 			diagnostic::show_lines_of(&source_of(&target), Some(&target));
@@ -577,12 +579,7 @@ fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -
 			compiled_code(&target, &env::current_dir().unwrap_or_default(), by)
 		};
 		let module = module.unwrap_or_else(|failure| print_and_exit(failure));
-		let output_path = compiled_output_path(&target);
-		fs::write(&output_path, &module.bytes).unwrap_or_else(|failure| fail(format!("{output_path}: {failure}")));
-		println!("compiled {} bytes to {}", module.bytes.len(), output_path);
-		if flags.contains(&AOT_FLAG) {
-			write_machine_code(&module.bytes, &output_path);
-		}
+		write_compiled(module.bytes, &target, trim, flags.contains(&AOT_FLAG));
 		if let Some(other) = flags.iter().find(|flag| ![AOT_FLAG, WASM_FLAG].contains(*flag)) {
 			let pure = by.command();
 			eprintln!("note: warp {pure} build {other}: compiler.warp builds only the module yet; warp build {other} makes it");
@@ -662,6 +659,7 @@ fn usage() {
 	println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
 	println!("  warp compile --page <file>  The module for a page of its own, the modules it imports by path in modules/ beside it");
 	println!("  warp build <file.warp>  The standalone executable <file> and <file>.wasm (--exe: only the executable, --wasm: only the module)");
+	println!("    --trim=<way>  the module without the runtime it never reaches, by Binaryen: optimize (the default, wasm-opt -O2), unused (only dropped), none, warp (later)");
 	println!("  warp {APP_COMMAND} <file.warp>    Show the program's page in a window of its own (macOS web view; {APP_CHECK}: print its text)");
 	println!("  warp test            Run tests");
 	println!("  warp docs            Open documentation");
