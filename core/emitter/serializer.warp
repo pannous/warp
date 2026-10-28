@@ -106,7 +106,7 @@ key_text(op: text, left: any, right: any, view: View): text := {
 	if bare(right) is ø and op in suffix_operators { return operand_text(left) + op }
 	if is_word_operator(op) { return operand_text(left) + " " + op + " " + serialize(right) }
 	if op == ":" and kind(bare(right)) == "list" and bare(right)#2 == "{" {
-		return attribute_prefix(right) + shown(left) + written(right, no)
+		return attribute_prefix(right) + shown_view(left) + written(right, no)
 	}
 	// `g[i]` is the ungrouped `g#(i+1)`: an operation after `#` needs its parentheses back
 	if op == "#" and kind(bare(right)) == "key" and not is_prefix_form(right) {
@@ -119,20 +119,20 @@ key_text(op: text, left: any, right: any, view: View): text := {
 
 // the left side of op: a key of `:` stays bare (`name: 1`), a text, template or character operand keeps its quotes
 // (`"ab"+x`, `"n is ${n}"==t`)
-left_side(left: any, op: text): text := if op == ":" then shown(left) else operand_text(left)
-operand_text(left: any): text := if QUOTED_OPERANDS.contains(kind(bare(left))) then serialize(left) else shown(left)
+left_side(left: any, op: text): text := if op == ":" then shown_view(left) else operand_text(left)
+operand_text(left: any): text := if QUOTED_OPERANDS.contains(kind(bare(left))) then serialize(left) else shown_view(left)
 QUOTED_OPERANDS = ["text", "template", "char"]
 
 // a node as Rust's Display shows it: texts and symbols bare, list items with their separator and a space
-shown(view: View): text := {
+shown_view(view: View): text := {
 	if view is number { return "" + view }
 	tag = kind(view)
 	if tag == "symbol" or tag == "text" or tag == "template" or tag == "data" or tag == "number" { return view#2 }
 	if tag == "char" { return "" + view#2 }
-	if is_layer(view) { return shown(layered(view)) }
+	if is_layer(view) { return shown_view(layered(view)) }
 	if tag == "list" {
 		bracket = view#2
-		return opening(bracket) + join([shown(item) for item in view[3:]], view#3 + " ") + closing(bracket)
+		return opening(bracket) + join([shown_view(item) for item in view[3:]], view#3 + " ") + closing(bracket)
 	}
 	serialize(view)
 }

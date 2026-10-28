@@ -6,6 +6,7 @@ use "nodes.warp"
 use "show.warp"
 use "text.warp"
 use "types.warp"
+use "error_sentences.warp"
 divide_by_zero(): int := {
 	fail()
 	0
@@ -89,14 +90,13 @@ raised(value: Node): int := {
 # the run with why
 dropped_value(n: Node) := if node_is_error(n) { raised(n) }
 # `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
-# it, whose message emitter.warp's throw kept in failed_in: a raise's is the raised value, a missing field's names it
+# it, the words of the word it failed in (trap_name): a raise's is the raised value, a missing field's names it
 caught_error(finished: bool, value: Node): Node := {
 	if finished { return value }
-	global failed_in
+	global trap_name
 	global trap_detail
-	if text_order(failed_in, "returned error") == 0 { return error_of(node_text(trap_detail)) }
-	if text_order(failed_in, "missing field") == 0 { return error_of("no field " + node_text(trap_detail)) }
-	error_of(failed_in)
+	name = unboxed_text(trap_name)
+	if name == "returned_error" or name == "missing_field" then error_of(error_sentence(name)) else error_of(error_words(name))
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
 index_of_node(n: Node): int := {

@@ -122,10 +122,15 @@ ms() := known_unit("ms")
 µs() := known_unit("µs")
 ns() := known_unit("ns")
 // `sleep 5 ms`, `x = 3 kg`, `1 minute`: a number and a unit word spaced is their product, as glued `5ms` is
-rewrite $n $u => $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, minute, h, day, Hz, kHz, N, L, ml, ha, dpi]
-rewrite ($x = $n) $u => $x = $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, minute, h, day, Hz, kHz, N, L, ml, ha, dpi]
+rewrite $n $u => $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi]
+rewrite ($x = $n) $u => $x = $n * $u where $n is number and $u in [m, kg, s, K, px, mm, cm, dm, km, inch, ft, yd, mi, g, mg, lb, ms, µs, ns, second, seconds, minute, minutes, hour, hours, h, day, Hz, kHz, N, L, ml, ha, dpi]
 // `min` stays the function min(a, b)
 minute() := known_unit("min")
+minutes() := known_unit("min")
+second() := known_unit("s")
+seconds() := known_unit("s")
+hour() := known_unit("h")
+hours() := known_unit("h")
 h() := known_unit("h")
 day() := known_unit("day")
 Hz() := known_unit("Hz")
