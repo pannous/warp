@@ -565,9 +565,7 @@ global block_filler = ø
 global filled_block = ø
 block_size() := 512
 fill_block(t: float): float := {
-	// a local name, as a global holding a function is no call yet (card global-function-value)
-	fill = block_filler
-	fill(filled_block, t)
+	block_filler(filled_block, t)
 	0.0
 }
 // a block of samples in linear memory, where the host reads and the program writes them in place: [count: i64][count
@@ -621,16 +619,9 @@ stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := {
 global left_signal = ø
 global right_signal = ø
 // the samples the host asks for, a float of a float, whatever number the program's signal gives (0.3 * t of an exact
-// 0.3 is no float for the compiler); a local name, as a global holding a function is no call yet (card
-// global-function-value)
-left_sample(t: float): float := {
-	signal = left_signal
-	signal(t) as float
-}
-right_sample(t: float): float := {
-	signal = right_signal
-	signal(t) as float
-}
+// 0.3 is no float for the compiler)
+left_sample(t: float): float := left_signal(t) as float
+right_sample(t: float): float := right_signal(t) as float
 // block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
 // 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
