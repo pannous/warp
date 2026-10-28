@@ -5,6 +5,7 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
+- modules-on-demand (warp-global-named-capital, card play-mozart; test_music_values:4,:7 read A4 without `use sound`): should every word unique to one bundled module work without its `use`, loaded on demand like file-words-implicit (`A4`, `melody`, `3km`…)? Today: P171 + units-opt-in + bizarre-global (play/beep global, other sound words need `use sound`). Options: keep `use` for most modules, only basic words global (Recommended? conflicts with the tests) / all unique words on demand (overturns P171, units-opt-in) / per module list. Meanwhile `play` works bare (bizarre-global).
 - class-index-test (warp-global-named-capital, test/types/test_class_index_operator.pairs.warp:4, from the Rust suite): `class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4` expects 504 (index read as `#`); under position-index-words it is position(4) = index(3) = 503. Options: upgrade the test to 503 (Recommended, follows the naming) / keep 504 (`#` calls index unshifted; then position-index-words changes). Failed on main before too; ask at 10:00.
 
 ## To present
