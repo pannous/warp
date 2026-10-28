@@ -69,9 +69,13 @@ pointer): handle from "wasmtime"`; the structs the calls fill are arena bytes re
 copied in with memcpy). `warp build native lib/native/driver.warp` makes `driver`:
 - `driver app.warp args…`: warp.wasm ($WARP_LIB, else beside the driver) compiles the file as the native warp has it
   compile (the file, a module in $TMPDIR, its folder, lib/, runtime.wasm), then the module runs with the arguments.
-- `driver app.wasm args…` runs a module; a driver with a module appended (`<module><length u64 LE>WRPMwasm`) runs that
-  one with all its arguments: the executable `warp build` will write for GC programs (the Rust stub's trailer holds
-  deflated machine code instead, standalone.rs).
+- `driver app.wasm args…` runs a module; a driver with a module appended (`<module><length u64 LE>WRPMwasm`, padded to
+  16 bytes, at the end or where a later Mach-O signature begins) runs that one with all its arguments.
+`warp build app.warp` of a GC program writes that executable (core/commands.warp write_carrying: __LINKEDIT grown over
+the module, then signed): about 100 KB beside the module. The driver is built once per lib/ into lib/native/built/
+(again when driver.warp changes), before the program is compiled: a second compile in one run inherits the first
+one's module. A program calling C is still the Rust warp-runtime stub with its machine code and C functions table
+(card driver-c-functions). Tests: test/native/test_executables.sh.
 A module gets WASI (stdin/out/err and the environment inherited, "." and "/" preopened), GC, typed references and
 exceptions, wasmtime's machine-code cache. Its `_start` runs (a GC program prints its own value), else `main`, whose
 value is printed by its kind; an error's or trap's message goes to stderr with status 1, the module's exit status is
