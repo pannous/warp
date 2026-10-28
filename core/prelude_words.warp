@@ -173,6 +173,7 @@ with_reached(program: Node, module: text, in_front: bool, also: list, files: lis
 	# the statements of each reached slice, by its text
 	reached = {}
 	declared = if in_front then linked_slices() else {}
+	if in_front { own_words_unlinked(own_names) }
 	# (a linked module's classes and globals, the prelude's Cell of its closures too)
 	wanted = symbol_words(program) + lowering_words(program) + also + linked_needs()
 	uses = ø

@@ -157,7 +157,7 @@ def runtime_sections(functions: list): list {
 	# structs, the linked program's own of their names and definitions, and whether it calls the host's builders (a program
 	# linking it exports its own)
 	classes = module.gc_order[#gc_names ..]
-	behind = if module.prebuilding then [] else vector(module.own_from.map(uleb)) + vector(module.closures.map(made => name_bytes(made#1) + uleb(made#2) + name_bytes(closure_shown(made#1, made#2)))) + vector(classes.map(name => name_bytes(name) + name_bytes(struct_written(name)))) + uleb(if #module.builders > 0 then 1 else 0)
+	behind = if module.prebuilding then [] else vector(module.own_from.map(uleb)) + vector(module.closures.map(made => name_bytes(made#1) + uleb(made#2) + name_bytes(closure_shown(made#1, made#2)))) + vector(classes.map(name => name_bytes(name) + name_bytes(struct_written(name)))) + uleb(if #module.builders > 0 then 1 else 0) + vector(c_imports().map(entry => name_bytes(entry#2)))
 	section(section_ids.custom, name_bytes(name) + counts + names + globals + words + behind) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
 }
 # a word's signature in warp.runtime, what a call of it reads (named arguments, defaults, a rest parameter, the declared
