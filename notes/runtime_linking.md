@@ -19,8 +19,15 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
 - Library modules (sound, units, markup…) are prebuilt the same way and appended between runtime and user code, each
   rewritten by its base offset through its padded calls (`use sound; midi(440Hz)` costs 2 s today, all of it compiling
   sound.warp).
-- What isn't wasm and needs it (sugar rules, alias and keyword tables, operator instances) is pre-baked, e.g. as
-  constant GC globals of warp.wasm.
+- What isn't wasm and needs it is pre-baked (card tables-as-constants, done): every bundled module's parse is packed
+  (pack) into the compiler beside its text, `LIBRARY_PARSES = library_parses()` in core/parser.warp, which uses.warp's
+  module_text fills in when the compiler is compiled; `source_parse(path, source)` unpacks it on first use when the
+  text is the bundled one (a WARP_LIB edit is parsed). Sugar rules, the alias table and the operator modules read it;
+  no os.kept for them. Packed text rather than constant GC globals: globals are built eagerly at instantiation and
+  would need the class layouts; a packed text is one data segment, unpacked lazily. The Rule, Operator and Spellings
+  instances are derived from the baked trees per run (O(rows)). Measured (2026-10-28, hello-sized program, fresh
+  module cache): cold 7.1 s → 0.22 s, warm 0.55 s → 0.22 s; the cold 7 s were the sugar-rule parses. A compiler built
+  by a seed that bakes none parses at run time (the plain def library_parses), so the seed is refreshed after landing.
 
 ## Steps (sub-cards of runtime-linking)
 | card | step |
@@ -28,7 +35,7 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
 | runtime-prebuilt | runtime.wasm emitted at rebuild beside warp.wasm, padded calls + canonical types + call-site list |
 | runtime-prepended | the emitter writes the runtime first and the user code behind it; no runtime words compiled per program |
 | modules-prebuilt | bundled modules prebuilt and appended by base offset; WARP_LIB overrides compiled from source |
-| tables-as-constants | sugar rules, alias/keyword tables, operator instances as constant GC globals |
+| tables-as-constants | sugar rules, alias/keyword tables, operator modules: their parses baked as packed texts (done) |
 | shaking-build-options | `warp build` options for trimming: none, Binaryen metadce/wasm-opt, own linker later |
 | runtime-separate-modules | runtime, modules and program linked by import/export (browser, AOT combining) |
 | runtime-shaking | our own warp linker (Later) |
