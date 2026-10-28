@@ -20,7 +20,7 @@ def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map
 def function_body(f: Function, at: int): list {
 	locals = vector(f.locals.map(k => [1] + value_type(k)))
 	code = f.code + [op.end]
-	if not module.relocating { return uleb(#locals + #code) + locals + code }
+	if not relocates() { return uleb(#locals + #code) + locals + code }
 	marks = []
 	unmarked = []
 	for byte in code { if byte < 0 { marks += [[#unmarked, byte]] } else { unmarked += [byte] } }
@@ -182,16 +182,42 @@ def relocations_of(wasm: list): list {
 	}
 	entries
 }
-def rebased(code: list, relocations: list, shifts: list): list {
+def rebased(code: list, relocations: list, moves: list): list {
 	for entry in relocations {
 		space = entry#3
-		shift = if space < #shifts and entry#2 < #shifts[space] then shifts[space][entry#2] else 0
-		if shift != 0 {
-			moved = padded_uleb(uleb_read(code, entry#1)#1 + shift)
-			for i in 0..<padded_width { code[entry#1 + i] = moved[i] }
+		if space < #moves and entry#2 < #moves[space] {
+			old = uleb_read(code, entry#1)#1
+			new = moved(moves[space][entry#2], old)
+			if new != old {
+				operand = padded_uleb(new)
+				for i in 0..<padded_width { code[entry#1 + i] = operand[i] }
+			}
 		}
 	}
 	code
+}
+# where an index of one kind goes in a link: the table's entry for it, else shifted (the one old -> new rule of
+# rebased and moved_body, over every index space: functions, types, globals, texts)
+class Move { shift: int; table: map }
+def moved(move: Move, index: int): int { if move.table.has(index) then move.table[index] else index + move.shift }
+def shifted(shift: int): Move { Move(shift, {}) }
+# a function's entry of the code section with each relocatable operand moved by moves[kind], written unpadded
+def moved_body(f: Function, moves: list): list {
+	locals = vector(f.locals.map(k => [1] + value_type(k)))
+	code = f.code + [op.end]
+	out = []
+	at = 0
+	while at < #code {
+		if code[at] < 0 {
+			operand = uleb_read(code, at + 1)
+			out += uleb(moved(moves[kind_marked(code[at])], operand#1))
+			at = operand#2
+		} else {
+			out += [code[at]]
+			at += 1
+		}
+	}
+	uleb(#locals + #out) + locals + out
 }
 # [start, end] of the content of a module's section of this id, a custom one by its name; ø when it has none
 def section_place(wasm: list, id: int, name: text = ""): list? {
