@@ -7,7 +7,7 @@ use "scope.warp"
 use "builtin_signatures.warp"
 
 # the functions the program defines with parameters: `f(a) := …`, `def f(a) {…}`
-functions_with_parameters(program: any): list := {
+functions_with_parameters(program: Node): list := {
 	names = []
 	for n in nodes_in(program) {
 		meanings = meanings_of(n)
@@ -19,7 +19,7 @@ functions_with_parameters(program: any): list := {
 # whether `word#x` counts x for the word: a printing word or a library word of one value the program leaves free, or
 # a function of the program with parameters. A type takes no count: `int#101` is the subscript of a typed array; nor
 # does a variable or parameter named like a function: `words = [p]; words#1` beside a function words
-counts_after(word: any, functions: list, scope: any): bool := {
+counts_after(word: Node, functions: list, scope: map): bool := {
 	if not (word is symbol) { return no }
 	written = name_of(word)
 	if binds_value(scope, written) { return no }
@@ -29,7 +29,7 @@ counts_after(word: any, functions: list, scope: any): bool := {
 
 # [the word, the counted value] of `word#x`, or of a member chain on it: `print #s.names` parses as `(print#s).names`
 # and counts the field
-counted_parts(n: any, functions: list, scope: any): any := match n {
+counted_parts(n: Node, functions: list, scope: map): list? := match n {
 	Key(word, Op.Hash, counted): { if counts_after(word, functions, scope) then [name_of(word), counted] else ø }
 	Key(base, Op.Dot, member): {
 		inner = counted_parts(base, functions, scope)
@@ -39,10 +39,10 @@ counted_parts(n: any, functions: list, scope: any): any := match n {
 }
 
 # `print#xs` → `print(#xs)`, from the top: a member chain on the count is whole before its parts are rewritten
-counted_calls(n: any, functions: list, scope: any): any := {
+counted_calls(n: Node, functions: list, scope: map): any := {
 	parts = counted_parts(n, functions, scope)
 	if parts != ø { return call_of(parts#1, [Key(ø, Op.Hash, counted_calls(parts#2, functions, scope))]) }
 	children(n, x => counted_calls(x, functions, scope))
 }
 
-library_calls(program: any): any := counted_calls(program, functions_with_parameters(program), scope_of(program))
+library_calls(program: Node): Node := counted_calls(program, functions_with_parameters(program), scope_of(program))

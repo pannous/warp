@@ -156,7 +156,7 @@ module_aliases(source: text): any := {
 }
 # aliases with the call form of each word operator the names define: `divides(3, 12)` calls operator_divides unless
 # a function divides is defined (Rust twin: word_operators.rs lower_call_forms)
-with_call_forms(aliases: any, names: list): any := {
+with_call_forms(aliases: map, names: list): any := {
 	for name in names {
 		word = if name.starts_with(OPERATOR_FUNCTION_PREFIX) then name[#OPERATOR_FUNCTION_PREFIX ..] else ""
 		if word and is_name_start(word#1) and word not in names { aliases[word] = name }
@@ -167,12 +167,12 @@ with_call_forms(aliases: any, names: list): any := {
 # or a function taking as many arguments (shadowing is per arity, Rust's library_words.rs word_for_unless: a program's
 # `index_of(source, part, from, n)` leaves `"abc".index_of(c)` to the library); top-down, so a method call
 # `x.f(a)` counts its receiver
-aliased(n: Node, aliases: any, own: any): any := match n {
+aliased(n: Node, aliases: map, own: map): any := match n {
 	Key(receiver, Op.Dot, call): Key(aliased(receiver, aliases, own), Op.Dot, aliased_call(children(call, x => aliased(x, aliases, own)), aliases, own, 1))
 	_: children(aliased_call(n, aliases, own, 0), x => aliased(x, aliases, own))
 }
 
-aliased_call(n: Node, aliases: any, own: any, receivers: int): any := {
+aliased_call(n: Node, aliases: map, own: map, receivers: int): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
 	count = #n - 1 + receivers
@@ -190,7 +190,7 @@ arity_variant(name: text, count: int): any := {
 
 # whether the program's own `name` hides the library word from a call of `count` arguments: a variable always, a
 # function when it takes them (a parameter `b = 1` may be left out)
-shadows(own: any, name: text, count: int): bool := {
+shadows(own: map, name: text, count: int): bool := {
 	if name not in own { return no }
 	head = own[name]
 	if not is_group(head) { return yes }
@@ -306,7 +306,7 @@ parameter_types(definitions: list, at: int): list := {
 	types
 }
 # the words the program names bare that a type module defines as a function taking nothing, `now() := …`
-bare_calls(program: Node, providers: any): list := {
+bare_calls(program: Node, providers: map): list := {
 	nullary = {}
 	for module in type_modules {
 		source = file_text(std_module_path(module)) ?? ""
@@ -342,7 +342,7 @@ leftmost_symbol(n: Node): Node := {
 	if n is symbol then n else symbol("")
 }
 # word → the type module defining it, "" for a word two of them define
-type_module_providers(): any := {
+type_module_providers(): map := {
 	providers = {}
 	for module in type_modules {
 		source = file_text(std_module_path(module))
