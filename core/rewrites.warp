@@ -38,7 +38,6 @@ use "enum_declarations.warp"
 use "words.warp"
 
 rewrite_word = "rewrite"
-rewrite_line_start = "rewrite "
 where_word = "where"
 rule_hole_mark = "$"
 # the characters of a word in a rule's text besides letters and digits
@@ -165,10 +164,10 @@ rewritten_program(program: Node, source: text): Node := {
 	for module in std_module_names {
 		module_source = file_text(std_module_path(module))
 		if module_source != ø and rule_needs(module_source).any(word => mentioned.has(word)) {
-			module_rules += module_rules_of(module_source, module).filter(rule => mentioned.has(needed_word(rule)))
+			module_rules += module_rules_of(std_module_path(module), module).filter(rule => mentioned.has(needed_word(rule)))
 		}
 	}
-	for module in declaration_sugar_module_names { module_rules += module_rules_of(file_text(std_module_path(module)) ?? "", "").filter(rule => mentioned.has(needed_word(rule))) }
+	for module in declaration_sugar_module_names { module_rules += module_rules_of(std_module_path(module), "").filter(rule => mentioned.has(needed_word(rule))) }
 	rules += unbound_rules(module_rules, program)
 	if #rules == 0 { return program }
 	rule_scope = scope_of(program)
@@ -204,7 +203,7 @@ rules_unbound_by(module_rules: list, bindings: list): list := module_rules.filte
 
 # the rules of the sugar modules that the program keeps, chosen by the program's own bindings (rule_bindings: a
 # program's own `push` keeps its own), before the definitions it reaches from the prelude and the modules join it
-sugar_rules(bindings: list, modules: list): list := rules_unbound_by(modules.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", "")), bindings)
+sugar_rules(bindings: list, modules: list): list := rules_unbound_by(modules.flat_map(module => module_rules_of(std_module_path(module), "")), bindings)
 
 # the program as it is, the enums it declares kept for the sugar rules: a pass right before plain_enums.warp lowers
 # their declarations, after node_cases.warp declared node.warp's Op, Bracket and Separator for a program naming them
@@ -330,7 +329,7 @@ early_sugared(program: Node): Node := {
 # the rules of the early sugar modules, read once
 early_module_rules(): list := {
 	if not early_rules_read {
-		early_rules = early_sugar_module_names.flat_map(module => module_rules_of(file_text(std_module_path(module)) ?? "", ""))
+		early_rules = early_sugar_module_names.flat_map(module => module_rules_of(std_module_path(module), ""))
 		early_rules_read = yes
 	}
 	early_rules
@@ -426,30 +425,10 @@ first_alphabetic_word(written: text): text := {
 	""
 }
 
-module_rules_of(source: text, module: text): list := statements_in(rules_parsed(source)).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
-# a rules module's parse, kept by its text as uses.warp's file_parsed keeps a used file's: each compile read every sugar
-# module's rules, and parsing them again at every run was most of a small program's compile (card speed-module-rules)
-rules_parsed(source: text): Node := {
-	name = "the rules parse of " + source
-	kept_of(name, rules_parse_makers) ?? keep_of(name, plain_node(parsed(rules_ended(source))), rules_parse_makers)
-}
-rules_parse_makers = ["parser.warp", "walk.warp", "rewrites.warp"]
-
-# the source with each rule ending its line in `$s...` ended by `;`: the parser reads `...` at the end of a line as a
-# range going on into the next line (`rewrite loudly $s... => $s...` and the line after it as `$s ... (next line)`),
-# which swallowed the next rule or statement
-rules_ended(source: text): text := {
-	if not source.contains(rewrite_line_start) { return source }
-	lines = source.split("\n")
-	ended = []
-	changed = no
-	for line in lines {
-		rule = line.trim()
-		ending = rule.starts_with(rewrite_line_start) and rule.contains("=>") and rule.ends_with("...")
-		if ending { changed = yes }
-		ended += [if ending then line + ";" else line]
-	}
-	if changed then ended.join("\n") else source
+# the rules of the module at `path`, of its baked parse when it is the bundled one
+module_rules_of(path: text, module: text): list := {
+	source = file_text(path) ?? ""
+	statements_in(source_parse(path, source)).map(statement => rule_of(statement, module, source)).filter(rule => rule != ø)
 }
 
 # the rule's code with each hole written right before `(`, `$t($a...)`, the call it is, as the code's `P(1)` is: the

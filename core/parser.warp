@@ -78,10 +78,42 @@ def library_texts(library: text, within: text): map {
 // changed after the build, per module); any other file (the program's own, core reached as lib/compiler) from the disk;
 // ø for none
 def file_source(path: text): text? {
-	library = run_library() + "/"
-	bundled = if path.starts_with(library) then LIBRARY_FILES.get(path[library.length .. path.length]) else ø
+	bundled = LIBRARY_FILES.get(library_path(path))
 	if bundled != ø and env("WARP_LIB") == ø { return bundled }
 	(try read(path) else ø) ?? bundled
+}
+// a path's place within lib/ ("sugar/lists.warp"), "" outside it
+def library_path(path: text): text {
+	library = run_library() + "/"
+	if path.starts_with(library) then path[library.length .. path.length] else ""
+}
+// Every bundled module's parse, packed (pack), baked in beside its text: module_text writes them in where
+// library_parses() stands as it does the texts (decision runtime-prepended: a compile derives no table of its own
+// library). A compiler built by one that bakes none yet (an older seed) parses them where it runs
+LIBRARY_PARSES = library_parses()
+def library_parses(within: text = ""): map := {}
+// a source's parse, the baked one when the file at `path` is the bundled module of this very text
+def source_parse(path: text, source: text): Node {
+	within = library_path(path)
+	packed = if LIBRARY_FILES.get(within) == source then LIBRARY_PARSES.get(within) else ø
+	if packed != ø then unpack(packed) else plain_node(parsed(rules_ended(source)))
+}
+// the source with each rule ending its line in `$s...` ended by `;`: the parser reads `...` at the end of a line as a
+// range going on into the next line (`rewrite loudly $s... => $s...` and the line after it as `$s ... (next line)`),
+// which swallowed the next rule or statement
+rewrite_line_start = "rewrite "
+def rules_ended(source: text): text {
+	if not source.contains(rewrite_line_start) { return source }
+	lines = source.split("\n")
+	ended = []
+	changed = no
+	for line in lines {
+		rule = line.trim()
+		ending = rule.starts_with(rewrite_line_start) and rule.contains("=>") and rule.ends_with("...")
+		if ending { changed = yes }
+		ended += [if ending then line + ";" else line]
+	}
+	if changed then ended.join("\n") else source
 }
 global entity_table = ø
 def entities(): map {
@@ -277,9 +309,9 @@ def alias_spellings(): Spellings := {
 	}
 	spelling_tables
 }
-// the alias table's parse, kept across runs (os.kept): the table is the compiler's own, so is its parse; parsing it at
-// every run was a sixth of a small program's compile (card speed-module-rules)
-def alias_table_tree(): Node := kept("the alias table parse " + ALIAS_TABLE) ?? keep("the alias table parse " + ALIAS_TABLE, written_tree(ALIAS_TABLE))
+// the alias table's parse, baked in with the table (LIBRARY_PARSES): parsing it at every run was a sixth of a small
+// program's compile (card speed-module-rules)
+def alias_table_tree(): Node := source_parse(run_library() + "/aliases.warp", ALIAS_TABLE)
 def own_spellings(): Spellings := {
 	symbols = pairs_of(SYMBOL_OPERATORS)
 	Spellings{operator_symbols: symbols, operator_words: pairs_of(WORD_OPERATORS), forms: copied(KEYWORD_FORMS), canonical: {}, infix_words: []}
@@ -1666,22 +1698,19 @@ global library_operators = ø
 def library_glyph_operators(): list {
 	if library_operators == ø {
 		sources = module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex")
-		// kept across runs (os.kept) as the alias table's parse is: the sources are the compiler's own
-		name = "the library glyph operators of " + sources
-		library_operators = kept(name) ?? keep(name, declared_operators(sources).filter(operator => not is_name_start(operator.glyph#1)))
+		library_operators = declared_operators(sources).filter(operator => not is_name_start(operator.glyph#1))
 	}
 	library_operators
 }
 
-// What the bundled modules at the top of lib/ declare for every program, read off their text once and kept across runs
-// as the glyph operators are: "words", word → the module declaring it global, `global play(file: text) := …` (decision
-// bizarre-global: a program naming it uses the module without its `use`); "classes", class → its module, `class Time`
-// of units (decision expected-type-names: a parameter typed Time finds its values there)
+// What the bundled modules at the top of lib/ declare for every program, read off their text once a run: "words",
+// word → the module declaring it global, `global play(file: text) := …` (decision bizarre-global: a program naming it
+// uses the module without its `use`); "classes", class → its module, `class Time` of units (decision
+// expected-type-names: a parameter typed Time finds its values there)
 global module_declarations = ø
 def bundled_declarations(): map {
 	if module_declarations == ø {
-		name = "the declarations of the bundled modules of " + run_library()
-		module_declarations = kept(name) ?? keep(name, declarations_scanned())
+		module_declarations = declarations_scanned()
 	}
 	module_declarations
 }
