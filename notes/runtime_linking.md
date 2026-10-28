@@ -29,16 +29,16 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
 | runtime-prepended | the emitter writes the runtime first and the user code behind it; no runtime words compiled per program |
 | modules-prebuilt | bundled modules prebuilt and appended by base offset; WARP_LIB overrides compiled from source |
 | tables-as-constants | sugar rules, alias/keyword tables, operator instances as constant GC globals |
-| runtime-shaking | dead-code removal: drop runtime functions the program never reaches (see below) |
+| shaking-build-options | `warp build` options for trimming: none, Binaryen metadce/wasm-opt, own linker later |
+| runtime-separate-modules | runtime, modules and program linked by import/export (browser, AOT combining) |
+| runtime-shaking | our own warp linker (Later) |
 
-## Removing the unused runtime (open, to discuss)
-The padded calls make the call graph readable without decoding instructions (a list of call sites per function), so
-dropping unreached functions is: reachability from the user's code, compact the function list, rewrite each padded
-operand. Options:
-1. A clean linker in warp, from first principles, replacing wasp's C++ one: reachability + compaction + rewriting for
-   functions, globals, data and elements, one pass, its call-site list baked with the runtime.
-2. Shake only for `warp build` artifacts; `warp`/`warp pure` runs keep the whole runtime, whose machine code is cached
-   once, so a run pays nothing for its size.
-3. Binaryen's wasm-metadce / wasm-opt for release builds: no linker of our own, an external tool.
-4. During development the runtime as its own module that programs import (GC types match across modules by the
-   canonical type section), merged and shaken only for standalone builds.
+## Removing the unused runtime (decided: all options open, user)
+All options stay open and are exposed to the build process (`warp build` options); none is the only way.
+- Higher priority: existing tools (Binaryen's wasm-metadce / wasm-opt) for trimmed artifacts (card
+  shaking-build-options); separate modules linked by import/export, in the browser and wherever the ahead-of-time
+  compile combines modules natively, so size may not matter at all (card runtime-separate-modules; GC types match
+  across modules through the canonical type section).
+- Low priority: our own clean linker in warp (card runtime-shaking, Later): reachability from the user's code over the
+  baked call-site list, compact the function list, rewrite the padded operands; the same for globals, data and
+  elements. From first principles, not a port of wasp's C++ linker.

@@ -8,3 +8,8 @@
 'f(x: int): int or text := [x]; f(1)'	error
 # two used files declaring a type alias each declare different types, no clash
 'use "../fixtures/alias_a.warp"; use "../fixtures/alias_b.warp"; f(v: Spot) := 1; f(3)'	1
+# an optional union `(int or text)?` is the type `int or text?`: a result, variable or parameter of it holds ø too
+'f(x: int): (int or text)? := if x > 0 then x else ø; [f(0), f(2)]'	[ø, 2]
+'x: (int or text)? = ø; [x]'	[ø]
+'f(x: (int or text)?) := 1; f(ø) + f(2) + f("ab")'	3
+'f(x: (int or text)?) := 1; f([1])'	error
