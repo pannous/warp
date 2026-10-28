@@ -205,9 +205,10 @@ write_runtime(file: text) := {
 	write_bytes(file, made)
 }
 # <name>.wasm, the bundled module compiled once behind runtime.wasm (emitter/prebuilt.warp library_module), for
-# programs to be linked to; `warp rebuild` writes one beside warp.wasm for each
+# programs to be linked to; `warp rebuild` writes one beside warp.wasm for each. Every program has the prelude, used
+# again it would define its words twice
 write_module(name: text, runtime_file: text, file: text) := {
-	program = checked_program("use " + name + "\nø", library_folder, prelude_source)
+	program = checked_program(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, prelude_source)
 	made = library_module(program, read_bytes(runtime_file), lowered_runtime_words(), host_words)
 	if made is text { raise made }
 	write_bytes(file, made)
