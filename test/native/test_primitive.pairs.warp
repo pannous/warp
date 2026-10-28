@@ -12,3 +12,4 @@
 '@primitive low(x: i32): i8 := x as i8; low(200)'	-56
 '@primitive narrow(x: i64): u8 := x; narrow(3)'	error
 '@primitive big(x: int): int := x * 1000000; big(5000000)'	5000000000000
+'@primitive masked(e: i64, x: i64): i64 := (e xor 4294967295) & x; masked(1360941695, 1360941695)'	0
