@@ -950,6 +950,8 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if is_loop_step(n) { return expression_code(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == opaque_symbol and kind_of(right) == "type" { return TypedCode(no_kind, []) }
+	# an integer literal beyond 64 bits (parser.warp whole_number): the big int of its digits
+	if left == opaque_symbol and kind_of(right) == "number" { return runtime_call("big_int_of_digits", [text_value(right#2)]) }
 	if left == opaque_symbol { return refuse(opaque_form(right)) }
 	if is_data_tag(body, n) { return TypedCode(ValueKind.Node, spliced_code(body, n)) }
 	# the key of `Point{x: 1}` has no operator as parser.warp reads it, `:` as Rust's analysis view shows it
@@ -1050,6 +1052,7 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator == Op.Not and left == ø { return TypedCode(ValueKind.Bool, condition(expression_code(body, right)) + [op.i32_eqz]) }
 	# `√x`: the float root, as Rust's emitter gives it
 	if operator == Op.Sqrt and left == ø { return TypedCode(ValueKind.Float, converted(expression_code(body, right), ValueKind.Float) + [wasm_instructions["f64.sqrt"]]) }
+	if operator == Op.Cbrt and left == ø { return runtime_call("float_cbrt", [TypedCode(ValueKind.Float, converted(expression_code(body, right), ValueKind.Float))]) }
 	if left === ø or right === ø {
 		other = if left === ø then right else left
 		if operator in identities or operator in equalities { return identity_with_nothing(body, operator, other) }

@@ -139,6 +139,23 @@ as_big_int(n: Node): Node := {
 	magnitude = magnitude_of(x)
 	signed_limbs(magnitude, limb_count(magnitude), x < 0)
 }
+# the whole number of a literal's decimal digits beyond 64 bits (parser.warp whole_number), nine digits a step
+big_int_of_digits(digits: text): Node := {
+	magnitude = magnitude_of(0)
+	at = 0
+	while at < byte_count(digits) {
+		end = min_int(at + digit_chunk_length(), byte_count(digits))
+		chunk = 0
+		scale = 1
+		for i in at..end {
+			chunk = chunk * 10 + byte_at(digits, i) - Ascii.Zero
+			scale = scale * 10
+		}
+		magnitude = magnitude_sum(magnitude_product(magnitude, magnitude_of(scale)), magnitude_of(chunk))
+		at = end
+	}
+	normalized_big_int(magnitude, no)
+}
 # a magnitude with a sign as Rust keeps it: a plain int when it fits 64 bits, else a big int, -0 as 0
 normalized_big_int(magnitude: Node, negative: bool): Node := {
 	trimmed = trimmed_magnitude(magnitude)
