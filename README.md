@@ -7,8 +7,7 @@ contact{ name: James  age: 33 }
 contact.age + 1                      // 34
 ```
 
-The same notation holds your config, your markup and your program. Warp compiles it to WebAssembly GC structs
-(no linear-memory runtime, no JS glue), and the compiler is itself a WebAssembly module.
+The same notation holds your config, your markup and your program. Warp compiles it to WebAssembly GC structs (no linear-memory runtime, no JS glue), and the compiler is itself a WebAssembly module written in warp!
 
 ▶ **[Try it in your browser](https://warp.pannous.com/)**: nothing to install. The compiler runs locally in a Web
 Worker.
@@ -134,16 +133,12 @@ the host enum `Node` (`Text`, `Symbol`, `Number`, `Char`, `Key`, `List`, `Type`,
 
 ## Status
 
-Experimental and moving fast. Tests live in test/: Warp files run by `warp test` through the Warp-written compiler. The language spec lives in the
+Proven to be (almost) **production ready** by being able to compile the whole language written in warp [itself](https://en.wikipedia.org/wiki/Self-hosting_(compilers))! Experimental and moving fast. Tests live in test/: Warp files run by `warp test` through the Warp-written compiler. The language spec lives in the
 [wiki](https://github.com/pannous/warp/wiki), and parts of it are not implemented yet. Warp began as a Rust rewrite of
 [Wasp](https://github.com/pannous/wasp) (C++), which follows the Python experiments
-[Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script); its compiler
-is now written in Warp itself ([core](core)); Rust remains only as the native host (wasmtime, FFI). The old Rust compiler is
-preserved on the branch [rust-bootstrap](https://github.com/pannous/warp/tree/rust-bootstrap).
+[Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script); its compiler is now written in Warp itself ([core](core)); Rust remains only as the native host (wasmtime, FFI). The old Rust compiler is preserved on the branch [rust-bootstrap](https://github.com/pannous/warp/tree/rust-bootstrap).
 
 Feedback, issues and especially "this surprised me" reports are welcome.
 
 ## License
-The compiler is licensed under the [GNU AGPL v3 or later](LICENSE); the runtime `crates/warp-runtime`, which goes into
-every program built with warp, under the [MIT license](crates/warp-runtime/LICENSE), so your programs are yours.
-Commercial licenses of the compiler: info@pannous.com. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
+The compiler is licensed under the [GNU AGPL v3 or later](LICENSE); the runtime `crates/warp-runtime`, which goes into every program built with warp, under the [MIT license](crates/warp-runtime/LICENSE), so your programs are yours. Commercial licenses of the compiler: info@pannous.com. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).

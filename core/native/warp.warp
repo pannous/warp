@@ -5,10 +5,10 @@
 #   warp app.wasm args…   the module run
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)
 #   warp run app.…        the same; `warp pure …` and `warp eval <code>` too (warp.wasm is the pure compiler);
-#                         `warp fast …` at full precision yet
+#                         `warp fast …` at full precision yet; `warp fuel <steps> …` counting steps (WARP_FUEL)
 #   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
-#   warp                  the console (as `warp repl`), its lines from a terminal or a pipe
-#   warp beautify|fix …   lib/fix/command.warp with the words
+#   warp                  on a terminal the version, the help and the console; a piped program run, its value shown
+#   warp beautify|fix …   lib/fix/command.warp with the words; warp format|lint … too, the layout only
 #   warp docs|wiki|home   where the documentation is, opened
 #   warp repl|start       the console: each line compiled by warp.wasm's repl-step after the lines that stay, then run
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
@@ -28,6 +28,7 @@ fork(): i32 from "c"
 waitpid(child: i32, status: pointer, options: i32): i32 from "c"
 fdopen(descriptor: i32, mode: pointer): handle from "c"
 getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
+isatty(descriptor: i32): i32 from "c"
 execv(path: pointer, arguments: pointer): i32 from "c"
 execvp(name: pointer, arguments: pointer): i32 from "c"
 FOLDER_MODE = 493
@@ -36,9 +37,20 @@ STDOUT = 1
 
 # a compiler with this executable's words from `first` on: a command runs, code is compiled to WARP_RUN_TO and run after
 hosted(compiler: text, first: int): nothing := {
-	output = compiled_path()
 	given = compiler_arguments(compiler)
-	for i in first..arg_count() { added(given, arg(i)) }
+	for i in first..arg_count() { added(given, reachable_word(arg(i))) }
+	words_ran(compiler, given)
+}
+# a program piped to bare `warp` (no terminal): the whole input one program, run, its value printed
+piped_program(compiler: text): nothing := {
+	printed = piped(fdopen(STDIN, c_string("r")))
+	given = compiler_arguments(compiler)
+	added(given, native_copy(printed.at, printed.size))
+	words_ran(compiler, given)
+}
+# the compiler run with the words; when they were code, the module it wrote to WARP_RUN_TO run after
+words_ran(compiler: text, given: Arguments): nothing := {
+	output = compiled_path()
 	setenv(c_string("WARP_RUN_TO"), c_string(output), 1)
 	file_ran(compiler, given)
 	unsetenv(c_string("WARP_RUN_TO"))
@@ -244,6 +256,10 @@ is_prefix(word: text): bool := same_text(word, "run") or same_text(word, "pure")
 dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	if arg_count() <= first {
 		if prefixed { return helped(compiler) }
+		if isatty(STDIN) == 0 { return piped_program(compiler) }
+		# bare `warp` on a terminal: the version and the help first, then the console
+		versioned(compiler)
+		helped(compiler)
 		return console(compiler)
 	}
 	word = arg(first)
@@ -251,7 +267,7 @@ dispatched(compiler: text, prefixed: bool, first: int): nothing := {
 	if not prefixed {
 		if same_text(word, "rebuild") { return rebuild_command() }
 		if same_text(word, "test") { return tests_run(compiler, flagged("--self")) }
-		if same_text(word, "beautify") or same_text(word, "fix") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
+		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
 		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
 	}
 	if same_text(word, "repl") or same_text(word, "console") or same_text(word, "start") { return console(compiler) }
@@ -271,8 +287,11 @@ documentation_opened(): nothing := {
 	command_output("open https://github.com/pannous/warp/ 2>/dev/null || xdg-open https://github.com/pannous/warp/ 2>/dev/null")
 }
 
-prefixed = arg_count() > 1 and is_prefix(arg(1))
-first = if prefixed then 2 else 1
+# `warp fuel <steps> <file|code…>`: the program counts steps (WARP_FUEL), out of fuel after them
+counting = arg_count() > 3 and same_text(arg(1), "fuel")
+if counting { setenv(c_string("WARP_FUEL"), c_string(arg(2)), 1) }
+prefixed = counting or (arg_count() > 1 and is_prefix(arg(1)))
+first = if counting then 3 else if prefixed then 2 else 1
 # warp.wasm's own commands (build) read the same lib/ as this executable
 setenv(c_string("WARP_LIB"), c_string(library_folder()), 0)
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)

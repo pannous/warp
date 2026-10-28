@@ -34,10 +34,25 @@ if [ -x "$stage/warp" ]; then
 	printf 'raise "boom"\n' >"$stage/raising.warp"
 	check "what a program raised" "$(native raising.warp)" "boom"
 	check "the console, its lines staying" "$(printf 'a = 7\nx = [1\na * 6\n' | native repl | sed -n 4p)" "🌀42"
-	check "bare warp, lines piped: the console" "$(printf 'a = 7\na * 6\n' | native | sed -n 3p)" "🌀42"
+	check "bare warp, a piped program" "$(printf 'a = 7\na * 6\n' | native)" 42
+	check "exit(code) ends the run" "$(native 'exit(3)'; echo $?)" 3
+	printf 'x  =  1\n' >"$stage/spaced.warp"
+	check "format check" "$(native format check spaced.warp | head -1)" "spaced.warp:1: layout: spaces"
 	check "eval, code" "$(native eval '3 * 4')" 12
 	check "a command the native warp lacks yet" "$(native verify 1)" "warp verify is not in the native warp yet: warp-rust verify runs it"
+	mkdir "$stage/below"
+	check "a file above the current folder" "$(cd "$stage/below" && ../warp ../hello.warp 2>&1)" "Hello 🌍2026"
+	check "a command's path above the current folder" "$(cd "$stage/below" && ../warp compile ../hello.warp ../above.wasm >/dev/null 2>&1; ls "$stage/above.wasm" 2>&1)" "$stage/above.wasm"
+	printf 'i = 0\nwhile yes { i += 1 }\n' >"$stage/endless.warp"
+	check "fuel, out of it" "$(native fuel 1_000_000 endless.warp | cut -c1-31)" "out of fuel after 1000000 steps"
 	check "rebuild of no compiler" "$(native rebuild nonsense | cut -c1-34)" "warp rebuild: no compiler nonsense"
+	check "sleep_ms and clock" "$(native 'c = clock(); sleep_ms(50); clock() - c >= 50')" yes
+	check "random, the same after the same seed" "$(native 'random_seed(7); a = random(); random_seed(7); a == random() and a < 1')" yes
+	check "regex replace with groups" "$(native 'use regex; replace_all("john smith", "(\\w+) (\\w+)", "$2 $1")')" "smith john"
+	check "regex all" "$(native 'use regex; find_all("x12y345", "[0-9]+")')" '["12" "345"]'
+	check "sha256" "$(native 'use hash; sha256("abc")')" ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+	check "crc32" "$(native 'use hash; crc32("abc")')" 891568578
+	check "a system value of a library's" "$(native 'battery()')" "the system value battery is not in the native warp yet (warp-rust has it)"
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
 fi
