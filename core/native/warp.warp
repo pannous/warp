@@ -5,7 +5,7 @@
 #   warp app.wasm args…   the module run
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)
 #   warp run app.…        the same; `warp pure …` and `warp eval <code>` too (warp.wasm is the pure compiler);
-#                         `warp fast …` at full precision yet
+#                         `warp fast …` at full precision yet; `warp fuel <steps> …` counting steps (WARP_FUEL)
 #   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
 #   warp                  on a terminal the version, the help and the console; a piped program run, its value shown
 #   warp beautify|fix …   lib/fix/command.warp with the words; warp format|lint … too, the layout only
@@ -286,8 +286,11 @@ documentation_opened(): nothing := {
 	command_output("open https://github.com/pannous/warp/ 2>/dev/null || xdg-open https://github.com/pannous/warp/ 2>/dev/null")
 }
 
-prefixed = arg_count() > 1 and is_prefix(arg(1))
-first = if prefixed then 2 else 1
+# `warp fuel <steps> <file|code…>`: the program counts steps (WARP_FUEL), out of fuel after them
+counting = arg_count() > 3 and same_text(arg(1), "fuel")
+if counting { setenv(c_string("WARP_FUEL"), c_string(arg(2)), 1) }
+prefixed = counting or (arg_count() > 1 and is_prefix(arg(1)))
+first = if counting then 3 else if prefixed then 2 else 1
 # warp.wasm's own commands (build) read the same lib/ as this executable
 setenv(c_string("WARP_LIB"), c_string(library_folder()), 0)
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)

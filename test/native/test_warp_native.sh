@@ -43,6 +43,8 @@ if [ -x "$stage/warp" ]; then
 	mkdir "$stage/below"
 	check "a file above the current folder" "$(cd "$stage/below" && ../warp ../hello.warp 2>&1)" "Hello 🌍2026"
 	check "a command's path above the current folder" "$(cd "$stage/below" && ../warp compile ../hello.warp ../above.wasm >/dev/null 2>&1; ls "$stage/above.wasm" 2>&1)" "$stage/above.wasm"
+	printf 'i = 0\nwhile yes { i += 1 }\n' >"$stage/endless.warp"
+	check "fuel, out of it" "$(native fuel 1_000_000 endless.warp | cut -c1-31)" "out of fuel after 1000000 steps"
 	check "rebuild of no compiler" "$(native rebuild nonsense | cut -c1-34)" "warp rebuild: no compiler nonsense"
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
