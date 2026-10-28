@@ -132,7 +132,7 @@ symbol_words(n: Node): list := {
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
-		if part is symbol { found[name_of(part)] = yes } else if part is key { waiting += [key_of(part), value_of(part)] } else if is_group(part) { for item in part { waiting += [item] } }
+		if part is symbol { found[name_of(part)] = yes } else if part is key { waiting += parts_within(part) } else if is_group(part) { for item in part { waiting += [item] } }
 	}
 	found.keys
 }
