@@ -22,6 +22,7 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/types/test_one_dispatch.pairs.warp:53, 60, 63 | 'A' / yes / 3 | "U" / no / 7 | the program's own `upper`, `add`, `sum` win over the prelude's, as `min` in lists |
 | test/types/test_dispatch.pairs.warp:7 | yes | no | `def sort(x):=0` is the program's own sort, as above |
 | test/types/test_time_type_names.pairs.warp:4, 5 | "instant" | "class Instant" | type(…) shows a class, as type(π) is "class Real" |
+| `tests/fixtures/…` in 18 files, 70 failing lines (test/modules/test_wasm_modules, test_include, test_import_compiled, test_module_signals; test/control/test_reflection_words; test/ffi/test_component_short_use; test/wasm/test_wasm.warp) | `include tests/fixtures/counter` | `include test/fixtures/counter` | the folder is test/ now; with the new path `include "test/fixtures/counter.warp"` works, unquoted paths stay a gap |
 
 ## Held (esoteric)
 
@@ -203,7 +204,7 @@ Questions for 10:00 (forms nobody has decided are wanted, per tests-serve-the-la
 ### types (733 lines)
 Silently wrong:
 - `Person{name:"A" hobbies:[1 2]}.name` gives "Person": the tag name shadows the field (test_tagged_objects:4).
-- `F#4` on a class with `index(o)` gives 503: the 1-based index reaches the method as 3 (test_class_index_operator:4).
+- `F#4` on a class with `index(o)` gives 503 (test_class_index_operator:4): the pending user question class-index-test, not a bug yet.
 - `int 3.7 == 3` gives 0 (test_nested_type_calls:15).
 - `class Bag{items}; def sum(b:Bag):=7; sum([1,2])` gives 7: a typed overload hides the prelude's sum for lists (test_dispatch:15).
 - A class's `text()`, `toString()`, `to_s()` and `equals(o)` aren't used by `as text`, printing in lists, `==` or `in`
@@ -268,3 +269,24 @@ Questions for 10:00:
   test_arity_overloads.warp:4 (`def log(x) { log(x, 10) }; def log(x, base) {x/base}; log(50)` → 3.912) fits neither. The rows in
   "Wrong expectations" for min, sin, upper/add/sum and sort assume the program's own wins.
 - `p's name` as a field read (test_property_access:14).
+
+### modules (229 lines)
+Silently wrong:
+- A program's helper names leak into the prelude: `round_to(x, d) := 99; round(2.555, 2)` gives 99, and `first_items` likewise
+  (test_prelude_shadowing:4, 6). This is a hygiene bug whichever way the shadowing question goes.
+- `use draw; global hue = 10; hsv(120, 1, 1); hue` gives 2: a module writes the program's global (test_use_modules:16).
+- `use collections; OrderedMap()` lists an internal key "view·opaque" in keys(m) (test_std_words.warp:4); LinkedHashMap counts 2 keys for 1 (test_std_collections:35).
+- `use json; parse("{\"a\": 1}") is map` gives no (test_json_parse_form.warp:4, 7).
+- `include …fourty_two` gives ø; an imported wasm `letters("hello")` gives the codepoints instead of 5 (test_wasm_modules:11, 21).
+
+Groups:
+- Stale `tests/fixtures` paths: 70 lines across folders (Wrong expectations above); after the fix, unquoted include/import paths are the gap.
+- `dir(…)` and `function count` of builtin members. About 25 lines (dir_builtin_members, dir_any_value, dir, module_function_dir).
+- Packages and versions: `use uniscript >= 1.0`, `use colors version 1.0.0`, the registry. About 25 lines (versions, package_registry, packages, selective_package).
+- std collections: LinkedHashMap, OrderedMap, Deque, `remove(…)`. About 25 lines.
+- `require`/`import`/`use` of a single word like `square`; `from … import …`. About 15 lines.
+- The rewrite engine: `rewrite scaled $x => …` and `·` as an operator. 8 lines.
+- std: regex, matrix, math text, exec, crc32/XXH hashes, json5. About 20 lines.
+
+Questions for 10:00:
+- `first(x) := 7; first([1])` → 1 (test_std_prelude:21) is the builtin-wins side of the shadowing question in functions.
