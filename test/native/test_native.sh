@@ -27,4 +27,5 @@ native() { # native <sample> <expected>: the sample run natively prints the expe
 }
 
 native fib 832040
+native structs 392
 exit $failures
