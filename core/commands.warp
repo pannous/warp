@@ -124,7 +124,7 @@ shell(line: text): text := {
 }
 
 # `warp build [--wasm|--exe] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
-# with --wasm as its module app.wasm (which lib/native/driver.warp runs); any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
+# with --wasm as its module app.wasm (which core/native/driver.warp runs); any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
 # trimmed by Binaryen's wasm-opt) and the executable app (the native driver carrying app.wasm). The native
 # warp adds where runtime.wasm lies, --runtime=<file> (and the old Rust stub's --stub=<file>, read no more)
 OPTION_MARK = "--"
@@ -182,14 +182,14 @@ trim(module: text, trimmed: text, way: text) := {
 	}
 }
 
-# A standalone executable is lib/native/driver.warp built natively, carrying the program's module (notes/primitive.md
+# A standalone executable is core/native/driver.warp built natively, carrying the program's module (notes/primitive.md
 # "Driver"), which also makes its C calls: <driver><module><its length, 8 bytes little-endian>WRPMwasm<zeros to a
 # multiple of 16>, signed on macOS
 MODULE_MAGIC = "WRPMwasm"
 TRAILER_ALIGNMENT = 16
 # the driver is built once per lib/ and again whenever driver.warp changes, beside a copy of the source it was built
 # from, written once the build succeeded
-DRIVER_SOURCE = "/native/driver.warp"
+DRIVER_SOURCE = "/compiler/native/driver.warp"
 DRIVER_BUILT = "/native/built"
 
 built_driver(): text := {

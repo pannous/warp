@@ -49,7 +49,7 @@ static uint32_t module_text(struct w2c_wasi__snapshot__preview1* wasi, const cha
 // a C function's address by its name, for a program to hand to a C library as a callback
 void* c_function(char* name) { return native_function(name); }
 
-// The C calls of a module the driver runs (lib/native/driver.warp c_called), as the Rust stub makes them (c_calls.rs)
+// The C calls of a module the driver runs (core/native/driver.warp c_called), as the Rust stub makes them (c_calls.rs)
 // where a library lies by the name a program imports it under (`sqlite3`); libc's and libm's are the process's
 static const char* LIBRARY_PATHS[] = {"lib%s.dylib", "/opt/homebrew/lib/lib%s.dylib", "/usr/local/lib/lib%s.dylib", "lib%s.so", "lib%s.so.0"};
 static const char* PROCESS_LIBRARIES[] = {"c", "m", "libc", "libm"};
@@ -93,7 +93,7 @@ int32_t handle_id(void* pointer) {
 int32_t handle_known(int32_t id) { return id >= 0 && id <= handle_count; }
 void* handle_pointer(int32_t id) { return id > 0 && id <= handle_count ? handles[id - 1] : NULL; }
 
-// A host word a program defines for a module it runs through wasmtime's C API (lib/native/driver.warp
+// A host word a program defines for a module it runs through wasmtime's C API (core/native/driver.warp
 // host_words_defined): a wasmtime_func_callback_t whose data is the word's number. The values (wasmtime_val_t, VALUE_BYTES
 // each) cross through the program's arena to its exported host_word(word, caller, values, count, results, count),
 // whose arena is given back after
