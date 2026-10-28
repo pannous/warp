@@ -537,20 +537,22 @@ fits_name(value: any, name: text, bound: map, code: bool): bool := {
 	if is_pattern_type(name) { return has_pattern_type(value, name) }
 	bound_as(value, name, bound)
 }
-pattern_type_words = ["int", "float", "number", "text", "bool", "list", "map", "symbol", "key", "block"]
-is_pattern_type(name: text): bool := name in pattern_type_words
-has_pattern_type(value: any, name: text): bool := {
-	if name == "int" { return is_type(value, "int") }
-	if name == "float" { return is_type(value, "number") and not is_type(value, "int") }
-	if name == "number" { return is_type(value, "number") }
-	if name == "text" { return is_type(value, "text") }
-	if name == "bool" { return is_type(value, "bool") }
-	if name == "list" { return is_type(value, "list") }
-	if name == "map" { return is_type(value, "map") }
-	if name == "symbol" { return is_type(value, "symbol") }
-	if name == "key" { return is_type(value, "key") }
-	bracket_of(value) == "{"
-}
+// the type words a pattern tests a value by, each with its test
+pattern_types = {"int": is_int_value, "float": is_float_value, "number": is_number_value, "text": is_text_value,
+	"bool": is_bool_value, "list": is_list_value, "map": is_map_value, "symbol": is_symbol_value, "key": is_key_value,
+	"block": is_block_value}
+is_int_value(value: any): bool := is_type(value, "int")
+is_float_value(value: any): bool := is_type(value, "number") and not is_type(value, "int")
+is_number_value(value: any): bool := is_type(value, "number")
+is_text_value(value: any): bool := is_type(value, "text")
+is_bool_value(value: any): bool := is_type(value, "bool")
+is_list_value(value: any): bool := is_type(value, "list")
+is_map_value(value: any): bool := is_type(value, "map")
+is_symbol_value(value: any): bool := is_type(value, "symbol")
+is_key_value(value: any): bool := is_type(value, "key")
+is_block_value(value: any): bool := bracket_of(value) == "{"
+is_pattern_type(name: text): bool := name in pattern_types
+has_pattern_type(value: any, name: text): bool := pattern_types[name](value)
 fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 	op = op_of(pattern)
 	left = key_of(pattern)
@@ -560,19 +562,26 @@ fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
 	if op == ":" and is_type(left, "symbol") { return fits_pattern(value, right, bound, no) and fits_name(value, name_of(left), bound, code) }
 	if op == "|" or op == "or" { return fits_pattern(value, left, bound, code) or fits_pattern(value, right, bound, code) }
 	if op == "+" and is_type(left, "text") and not code { return fits_text_cut(value, text_pieces(pattern), ø, bound) }
+	// `not p`, `!= x` (read as `not == x`): the part does not fit p, binding nothing
+	if op == "not" and left == ø and not code { return not fits_pattern(value, right, {}, no) }
 	if left == ø and not code { return compares(value, op, right) }
 	if op == ".." and not code { return value >= left and value <= right }
 	is_type(value, "key") and op_of(value) == op and fits_pattern(key_of(value), left, bound, code) and fits_pattern(value_of(value), right, bound, code)
 }
+// `>= 18`, `!= ""`: the comparison of the part with the limit; an order only between two numbers or two texts
+comparisons = {">=": at_least, ">": above, "<=": at_most, "<": below, "!=": unequal, "==": equal}
 compares(value: any, op: text, limit: any): bool := {
-	if not is_type(value, "number") { return no }
-	if op == ">=" { return value >= limit }
-	if op == ">" { return value > limit }
-	if op == "<=" { return value <= limit }
-	if op == "<" { return value < limit }
-	if op == "!=" { return value != limit }
-	value == limit
+	if not (op in comparisons) { raise "a pattern compares by >=, >, <=, <, != or ==, not " + op }
+	if op != "!=" and op != "==" and not are_ordered(value, limit) { return no }
+	comparisons[op](value, limit)
 }
+are_ordered(a: any, b: any): bool := (is_type(a, "number") and is_type(b, "number")) or (is_type(a, "text") and is_type(b, "text"))
+at_least(a: any, b: any): bool := a >= b
+above(a: any, b: any): bool := a > b
+at_most(a: any, b: any): bool := a <= b
+below(a: any, b: any): bool := a < b
+unequal(a: any, b: any): bool := a != b
+equal(a: any, b: any): bool := a == b
 fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
 	// `data(…)`: the code inside, holes and all
 	if not code and bracket_of(pattern) == "(" and #pattern == 2 and pattern#1 == symbol("data") { return fits_pattern(value, pattern#2, bound, yes) }
@@ -664,11 +673,22 @@ fits_text_cut(value: any, pieces: list, last_type: any, bound: map): bool := {
 	}
 	rest == ""
 }
-// a text part as its hole's type wants it, ø when it isn't one
+// a text part as its hole's type wants it, ø when it isn't one; a type no text converts to is an error
+part_conversions = {"int": int_part, "float": float_part, "number": number_part, "text": text_part}
 converted_part(part: text, type_word: any): any := {
-	if type_word == symbol("int") { return if part != "" and part.all(c => c >= '0' and c <= '9') then int(part) else ø }
-	part
+	name = name_of(type_word)
+	if not (name in part_conversions) { raise "a text cut's last hole converts to int, float, number or text, not " + name }
+	part_conversions[name](part)
 }
+is_digits(t: text): bool := t != "" and t.all(c => c >= '0' and c <= '9')
+int_part(t: text): any := if is_digits(t) then int(t) else ø
+float_part(t: text): any := {
+	pieces = t.split(".")
+	if #pieces > 2 or not is_digits(pieces#1) or (#pieces == 2 and not is_digits(pieces#2)) { return ø }
+	float(t)
+}
+number_part(t: text): any := if is_digits(t) then int(t) else float_part(t)
+text_part(t: text): any := t
 // the name without its mark: `$a` → a, `*rest` → rest
 unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
 

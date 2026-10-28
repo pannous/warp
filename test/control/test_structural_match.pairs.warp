@@ -1,0 +1,19 @@
+# structural match arms, fitted by the prelude's matcher (lib/prelude.warp pattern_bindings)
+
+# lists and rests
+'match [1, 2, 3] { []: "empty"; [first, ...rest]: count(rest) }'	2
+'match [] { []: "empty"; _: "other" }'	'empty'
+'match [3, "a"] { [int, text] => "ok"; _ => "no" }'	'ok'
+
+# maps
+'v = {name: "Ann"}; match v { {name} => name; _ => "none" }'	'Ann'
+'v = {age: 20}; match v { {age: >= 18} => "adult"; _ => "minor" }'	'adult'
+'v = {name: "a"}; match v { {name: not ""} => "named"; _ => "anon" }'	'named'
+
+# text cuts convert their last hole
+'match "/u/41" { "/u/" + id: int => id + 1; _ => 0 }'	42
+'match "/p/1.5" { "/p/" + x: float => x * 2; _ => 0 }'	3
+'match "/p/x" { "/p/" + x: float => x * 2; _ => 0 }'	0
+
+# guards see the pattern's names
+'match [3, 3] { [x, y] if x == y => "pair"; _ => "other" }'	'pair'
