@@ -45,7 +45,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying", "definition", "function_block"]
 # `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
 # with (card engine-rule-conditions)
 context_words = ["method", "shadowed"]
@@ -690,6 +690,8 @@ has_property(code: Node, property: text): bool := {
 	if property == "enum" { return named_enum(code) != "" }
 	if property == "missing" { return code == ø }
 	if property == "definition" { return definition_of(code) != ø }
+	# `{it*2}`: a block reading `it`, a function of it (definitions.warp is_function_block)
+	if property == "function_block" { return bracket_of(code) == "{" and mentions(code, implicit_parameter) }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }
