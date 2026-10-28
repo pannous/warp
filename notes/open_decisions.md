@@ -22,6 +22,9 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - unit tests without `use units` (supervisor): the 83 lines the triage listed as wrong are gaps under implicit-standard-words, not wrong expectations.
 - release workflow quiet (supervisor): Release re-enabled with one summary at the end, no per-job notifications; the other workflows stay off.
 - no extra workers tonight (supervisor): the ten triage gap groups wait on the board (Next) for the four feature workers instead of new sessions (rule: at most two feature workers, already exceeded by the runtime-linking team).
+- split-whitespace (interviewer, card sample-word-functions): `t.split` with no argument splits on runs of whitespace (Python's split()).
+- named-arguments-general (interviewer): any parameter can be named at the call, so `t.replace "tea" with: "coffee"` works because replace's second parameter is named `with`; no special case for replace.
+- length-all-held (interviewer): `length all xs` is triage-held; the forms are `xs.map length` and, per julia-compat, the broadcast `length.(xs)`. A general `all`/`each` broadcast word is for you to revisit.
 
 ## To present
 - of-binds-tighter (parser OK, user away, card foo-of-any): `a of b = e` is `(a of b) = e`, so `square of int = it * it` defines square(it: int) and `name of p = "Al"` stays an assignment to p.name.
