@@ -39,3 +39,20 @@ each, summed with `probes/parser_speed/profile_top.py <files…> --top N [--call
 
 Related: a cold module cache (no kept runtime words) makes `warp self` trap in lowered_program, on main too (cards
 self-traps / self-cold-trap).
+
+## Seed regression 2026-10-27 (card rebuild-pure-went)
+`warp rebuild pure` is the seed compiling compiler.warp, so its time is the seed's speed. Per-hour minima in
+/Volumes/Build/compilers/rebuilds.log (start/end of every build) went 105 s → 148 s → 280 s, each step at a seed swap.
+The same noon tree (c4c601db90) built under load ~5, each seed's .cwasm warm (WARP_SEED=<file>, `--force`):
+
+| seed (compiler.warp of) | rebuild |
+|---|---|
+| 5b3db547 (46581bc7d6) | 74 s |
+| 1ec0b599 (8b4d2a2521) | 115 s |
+| 18e7a6e7 (041a4b87a1) | 237 s |
+| 28abccf4 (0d6920297d) | main: 87 s (warp-fixer, 265 s with 18e7a6e7 back to back) |
+
+Cause: compiler code moved to classes (TypedCode `value.kind`, `f.kinds`, e1a8871bc9 and the emitter-kinds steps);
+a field read sharing its name with a function compiled to has_field + map_get + instance_place name scans.
+class-field-reads (0d6920297d) reads a known class's field by struct.get. Lesson: before publishing a seed, time
+`warp rebuild pure` with it against the installed one (WARP_SEED=<new>), not only its fixpoint.
