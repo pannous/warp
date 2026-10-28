@@ -215,7 +215,7 @@ def statement(body: Body, n: Node): TypedCode {
 # `xs = []`, `xs = ø`, `xs = [a, b]`: the local name holds a list made right here
 fresh_list_name(n: Node): text? := {
 	if not (is_key(n, Op.Assign) and key_of(n) is symbol) { return ø }
-	if value_of(n) is ø or bracket_of(value_of(n)) == "[" { return name_of(key_of(n)) }
+	if value_of(n) is ø or is_empty_list(value_of(n)) or bracket_of(value_of(n)) == "[" { return name_of(key_of(n)) }
 	ø
 }
 # `xs = xs + e`, `xs += e` of e not mentioning xs: the name xs, else ø
