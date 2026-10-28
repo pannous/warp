@@ -40,12 +40,24 @@ memory from the arena. A function declared `: nothing` gives no value.
 
 ## Native build
 `warp build native app.warp` (core/commands.warp build_native; Rust only routes the word) compiles the primitive file,
-makes it C with wasm2c (module "program"), writes app.native.main.c (run_main printing main's value by its type) and
+makes it C with wasm2c (module "program"), writes app.native.main.c (primitive.warp native_main: the C calls' glue, instantiate, run_main printing main's value by its type) and
 compiles both with cc -O2, wasm2c's runtime (beside the wasm2c on the PATH) and lib/native/wasi.c: libc answering
 fd_write, fd_read, fd_seek, fd_close, path_open (paths of the current folder), args_sizes_get, args_get, proc_exit,
-and main. The executable is `app` beside the file; the intermediate files are removed. Samples: samples/native/ hello,
+and main (instantiate and run_main are main.c's). The executable is `app` beside the file; the intermediate files are removed. Samples: samples/native/ hello,
 arguments, files, fib, structs; test/native/test_native.sh. Under wasmtime (`warp app.warp`) the files sample finds
 no opened folder, so it runs natively only.
+
+## C calls
+`import (getenv, strlen) from "c"` (or `from "m"`) in a primitive file takes the lines of lib/c.warp and lib/math.warp
+as a GC program does (c_imports.warp c_catalog, c_import; primitive.warp c_imported), each an import of the module
+`c` or `m`; the file's own foreign lines (`f(x: pointer): i32 from 'c'`) are read with primitive types. In a native
+build, primitive.warp native_main writes each such import's C function for wasm2c (c_function_glue): it finds the C
+function by name in the process (lib/native/foreign.c native_function, dlsym; a library beside libc and libm is
+linked with -l) and passes the values as C takes them: a text a NUL-terminated copy (freed after the call), a text
+result copied into the arena (exported as global `arena`), `pointer` an address of the module's memory, `handle` a C
+pointer as an i64 id (fopen's FILE *). out, bytes, length and owned_text are refused at the import's line. Sample:
+samples/native/c_calls.warp. Under wasmtime, warp's own host answers `c` imports with its GC conventions, so a
+primitive file calling C runs natively only.
 
 ## Not yet (cards)
 - f32 in a primitive function of a GC program (no ValueKind with an f32 wasm type there): refused, card

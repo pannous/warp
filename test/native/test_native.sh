@@ -33,4 +33,5 @@ native hello Hello
 by_warp hello Hello
 native arguments $'one\ntwo words' one "two words"
 native files "Hello from a file"
+GREETING="Hi there" native c_calls $'Hi there\n8\n5'
 exit $failures

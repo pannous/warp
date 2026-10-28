@@ -23,7 +23,7 @@ double_float = Scalar("f64", yes, 8)
 scalars = {i8: signed_byte, int8: signed_byte, u8: unsigned_byte, uint8: unsigned_byte, byte: unsigned_byte,
 	bool: unsigned_byte, i16: signed_short, int16: signed_short, u16: unsigned_short, uint16: unsigned_short,
 	i32: signed_word, int32: signed_word, u32: unsigned_word, uint32: unsigned_word, char: unsigned_word,
-	pointer: unsigned_word, i64: signed_long, int64: signed_long, int: signed_long, long: signed_long,
+	pointer: unsigned_word, handle: unsigned_long, i64: signed_long, int64: signed_long, int: signed_long, long: signed_long,
 	u64: unsigned_long, uint64: unsigned_long, f32: single_float, float32: single_float, f64: double_float,
 	float: double_float, double: double_float, number: double_float}
 NO_VALUE = ""
@@ -58,6 +58,8 @@ DATA_START = 16
 # each struct taken from the arena starts at a multiple of the widest scalar
 ARENA_ALIGNMENT = 8
 ARENA_TOP = 0
+# the arena's top exported, so a native build's C glue takes a C function's text result from it too
+ARENA_EXPORT = "arena"
 # per wasm value type and width in memory: the load opcode [signed, unsigned] and the store opcode
 load_codes = {"i32 1": [44, 45], "i32 2": [46, 47], "i32 4": [40, 40], "i64 8": [41, 41], "f32 4": [42, 42], "f64 8": [43, 43]}
 store_codes = {"i32 1": 58, "i32 2": 59, "i32 4": 54, "i64 8": 55, "f32 4": 56, "f64 8": 57}
@@ -68,6 +70,13 @@ import_function_kind = 0
 # a text is the address of its (address, length) pair, the $String layout of the host edge: a WASI iovec as it is
 TEXT_TYPE = "text"
 text_layout = StructLayout({address: [0, POINTER_TYPE], length: [4, "u32"]}, 8)
+# a C pointer outside the module's memory, held as an id (a C function's `FILE *`, getenv's result before it is copied)
+HANDLE_TYPE = "handle"
+# the library of the WASI calls; any other library of a foreign line is C's, which a native build links
+WASI_LIBRARY = "wasi_snapshot_preview1"
+# a C type of a catalog line (c_imports.warp c_type_words) → the primitive type it is held as; the others (out, bytes,
+# length, owned_text) primitive mode cannot pass yet
+c_primitive_types = {i32: "i32", bool: BOOL_TYPE, i64: "i64", f64: "f64", f32: "f32", text: TEXT_TYPE, handle: HANDLE_TYPE, void: NO_VALUE}
 # `allocate(bytes)`: an address of that many bytes taken from the arena
 ALLOCATE_WORD = "allocate"
 # the code of primitive files: lib/primitive.warp, their prelude, its words reached as the GC prelude's are
@@ -103,6 +112,7 @@ mark_line(lines: list): int? := {
 primitive_module(source: text, folder: text): list := {
 	lines = source.split("\n")
 	lines[mark_line(lines) - 1] = ""
+	c_functions = c_imported(lines)
 	program = lowered_program(lines.join("\n"), folder, PRIMITIVE_PRELUDE)
 	primitive_functions = {}
 	primitive_hosted = no
@@ -116,6 +126,7 @@ primitive_module(source: text, folder: text): list := {
 		if struct_declared(n) { declare_struct(n) }
 		if foreign_import(n) != ø { declare_import(foreign_import(n)) }
 	}
+	for imported in c_functions { declare_c_function(imported#1, imported#2) }
 	main_statements = []
 	for n in statements.filter(n => not struct_declared(n) and foreign_import(n) == ø) {
 		head = function_head(n)
@@ -157,6 +168,31 @@ declare_import(foreign: list) := {
 	result = if foreign#2 == ø then NO_VALUE else primitive_type_name(foreign#2)
 	name = name_of(head#1)
 	primitive_functions[name] = PrimitiveFunction(name, parameters.map(p => name_of(key_of(p))), parameters.map(p => primitive_parameter_type(p)), result, ø, #primitive_functions, foreign#3)
+}
+
+# `import strlen from "c"`: each line of lib/c.warp or lib/math.warp it names, read as a GC program reads it
+# (c_imports.warp c_functions_of), as [declaration, line number]; the statement's line left empty
+c_imported(lines: list): list := {
+	catalog = c_catalog(run_library(), [])
+	found = []
+	for i in 0..#lines {
+		imported = c_import(lines#(i + 1).trim())
+		if imported != ø {
+			for name in imported#2 {
+				lines_of_name = catalog.filter(d => d#1 == name and (d#2 == imported#1 or (imported#1 in c_and_m and d#2 in c_and_m)))
+				if #lines_of_name == 0 { throw "primitive mode cannot emit `import " + name + "`: no line of lib/c.warp or lib/math.warp declares it from '" + imported#1 + "'" + place_text([i + 1, 1], module.program_file) }
+				found += [[lines_of_name#1, i + 1]]
+			}
+			lines[i] = ""
+		}
+	}
+	found
+}
+# a catalog line's [name, library, parameter types, parameter names, result type] as an import of the module
+declare_c_function(d: list, line: int) := {
+	refused = (d#3 + [d#5]).filter(type => type not in c_primitive_types)
+	if #refused > 0 { throw "primitive mode cannot emit " + d#1 + "'s " + refused#1 + place_text([line, 1], module.program_file) }
+	primitive_functions[d#1] = PrimitiveFunction(d#1, d#4, d#3.map(type => c_primitive_types[type]), c_primitive_types[d#5], ø, #primitive_functions, d#2)
 }
 
 declare_primitive(head: list, body: Node) := {
@@ -530,7 +566,7 @@ def primitive_bytes(functions: list): list {
 	declared = vector(defined.map(f => uleb(f.index)))
 	memory = vector([[0] + uleb(MEMORY_PAGES)])
 	arena = vector([[value_bytes.i32, 1, op.i32_const] + sleb(aligned(DATA_START + #primitive_data, ARENA_ALIGNMENT)) + [op.end]])
-	exports = vector([name_bytes("memory") + [export_memory_byte, 0]] + defined.map(f => name_bytes(export_name(f)) + [export_function_byte] + uleb(f.index)))
+	exports = vector([name_bytes("memory") + [export_memory_byte, 0], name_bytes(ARENA_EXPORT) + [export_global_byte, ARENA_TOP]] + defined.map(f => name_bytes(export_name(f)) + [export_function_byte] + uleb(f.index)))
 	code = vector(defined.map(primitive_body))
 	data = vector([[0, op.i32_const] + sleb(DATA_START) + [op.end] + vector(primitive_data.map(b => [b]))])
 	wasm_header + section(section_ids.type, vector(types)) + section(section_ids.import, imports) + section(section_ids.function, declared) + section(section_ids.memory, memory) + section(section_ids.globals, arena) + section(section_ids.export, exports) + section(section_ids.code, code) + section(section_ids.data, data)
@@ -653,9 +689,73 @@ hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
 boundary_type(type: text): text := if mvp_is_float(type) then BOUNDARY_FLOAT else BOUNDARY_INT
 boundary_kind(type: text): ValueKind := if mvp_is_float(type) then ValueKind.Float else ValueKind.Int
 
-# what a primitive file's main gives, as a native build prints it: "" nothing, else signed, unsigned or float
+## the native build's C (core/commands.warp build_native)
+# the main.c of a native build: wasm2c's header of the module, lib/native/wasi.c and lib/native/foreign.c, each C
+# function the module imports, the instantiation and run_main, which prints what main gives
+native_main(header: text, library: text): text := {
+	includes = ["<stdio.h>", "\"" + header + "\"", "\"" + library + "/native/wasi.c\"", "\"" + library + "/native/foreign.c\""]
+	foreign = c_functions_imported()
+	libraries = c_libraries(foreign)
+	instances = ["wasi"] + libraries.map(l => "(struct " + wasm2c_name(l) + "*)wasi")
+	includes.map(file => "#include " + file + "\n").join("") + libraries.map(l => "struct " + wasm2c_name(l) + " { struct " + wasm2c_name(WASI_LIBRARY) + " wasi; };\n").join("") +
+		foreign.map(c_function_glue).join("") +
+		"void instantiate(w2c_program* program, struct " + wasm2c_name(WASI_LIBRARY) + "* wasi) { wasm2c_program_instantiate(program, " + instances.join(", ") + "); }\n" +
+		"void run_main(w2c_program* program) { " + printed_main[main_value_kind()] + " }\n"
+}
+c_functions_imported(): list := primitive_functions.keys.map(name => primitive_functions[name]).filter(f => f.library and f.library != WASI_LIBRARY)
+# the C libraries of the imports, in the order wasm2c's instantiate takes them, which a native build links
+c_libraries(foreign: list): list := {
+	found = []
+	for f in foreign { if f.library not in found { found += [f.library] } }
+	found
+}
+# the C name wasm2c gives a module or an import of it: w2c_wasi__snapshot__preview1, w2c_c_getenv
+wasm2c_name(module_name: text): text := "w2c_" + module_name.replace("_", "__")
+# what run_main prints of each kind of value main gives
+printed_main = {"": "w2c_program_main(program);", signed: "printf(\"%lld\\n\", (long long)w2c_program_main(program));",
+	unsigned: "printf(\"%llu\\n\", (unsigned long long)w2c_program_main(program));", float: "printf(\"%g\\n\", (double)w2c_program_main(program));"}
 main_value_kind(): text := {
 	type = primitive_functions["main"].result
 	if type == NO_VALUE { return "" }
 	if mvp_is_float(type) then "float" else if mvp_scalar(type).signed then "signed" else "unsigned"
+}
+# the import wasm2c calls, which calls the C function of the process by that name (foreign.c native_function) with
+# each value as C takes it: a text a NUL-terminated copy, freed after, a pointer an address in the module's memory
+c_function_glue(f: PrimitiveFunction): text := {
+	numbers = range_list(#f.types).map(i => i + 1)
+	parameters = ["struct " + wasm2c_name(f.library) + "* library"] + numbers.map(i => wasm2c_types[mvp_wasm_of(f.types#i)] + " value" + i)
+	texts = numbers.filter(i => f.types#i == TEXT_TYPE)
+	arguments = numbers.map(i => c_argument(f.types#i, "value" + i, "text" + i))
+	call = "function(" + arguments.join(", ") + ")"
+	result = if f.result == NO_VALUE then "void" else c_type_of_primitive(f.result)
+	body = ["static " + result + " (*function)(" + (if #f.types == 0 then "void" else f.types.map(c_type_of_primitive).join(", ")) + ")",
+		"if (!function) function = native_function(\"" + written_name(f.name) + "\")"] +
+		texts.map(i => "char* text" + i + " = native_text(&library->wasi, value" + i + ")") +
+		[if f.result == NO_VALUE then call else result + " result = " + call] + texts.map(i => "free(text" + i + ")") +
+		(if f.result == NO_VALUE then [] else ["return " + module_value(f.result, "result")])
+	(if f.result == NO_VALUE then "void" else wasm2c_types[mvp_wasm_of(f.result)]) + " " + wasm2c_name(f.library) + "_" + written_name(f.name).replace("_", "__") +
+		"(" + parameters.join(", ") + ") {\n" + body.map(line => "\t" + line + ";\n").join("") + "}\n"
+}
+wasm2c_types = {i32: "u32", i64: "u64", f32: "f32", f64: "f64"}
+# the C type a primitive type is passed to C as
+c_type_of_primitive(type: text): text := {
+	if type == TEXT_TYPE { return "char*" }
+	if type == POINTER_TYPE or type == HANDLE_TYPE { return "void*" }
+	if type == BOOL_TYPE { return "_Bool" }
+	scalar = mvp_scalar(type)
+	if mvp_is_float(type) then (if scalar.width == 4 then "float" else "double") else (if scalar.signed then "int" else "uint") + scalar.width * 8 + "_t"
+}
+# a value of the module as C takes it
+c_argument(type: text, value: text, copy: text): text := {
+	if type == TEXT_TYPE { return copy }
+	if type == POINTER_TYPE { return "native_address(&library->wasi, " + value + ")" }
+	if type == HANDLE_TYPE { return "(void*)(uintptr_t)" + value }
+	"(" + c_type_of_primitive(type) + ")" + value
+}
+# a C value as the module holds it: a text copied into its arena, a pointer into its memory its address there
+module_value(type: text, value: text): text := {
+	if type == TEXT_TYPE { return "module_text(&library->wasi, " + value + ")" }
+	if type == POINTER_TYPE { return "module_address(&library->wasi, " + value + ")" }
+	if type == HANDLE_TYPE { return "(u64)(uintptr_t)" + value }
+	"(" + wasm2c_types[mvp_wasm_of(type)] + ")" + value
 }

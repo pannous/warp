@@ -23,7 +23,7 @@ const COMPRESSION_LEVEL: u8 = 9;
 /// The carried program ends on this boundary, where codesign puts the signature
 const ALIGNMENT: usize = 16;
 /// The exported functions a program starts at, in order of preference
-pub const ENTRY_POINTS: [&str; 2] = ["main", "_start"];
+pub const ENTRY_POINTS: [&str; 2] = ["_start", "main"];
 /// The memory print and the host words read texts from
 const MEMORY_EXPORT: &str = "memory";
 /// An app carrying a site loads it in a hidden window and prints its text (tests), as `warp app --check`
@@ -206,6 +206,8 @@ pub fn run_module(
 		},
 	)?;
 	let mut store = limited_store(engine, CHandles::default(), DEFAULT_FUEL, time_limit.unwrap_or(Duration::MAX));
+	// a host word the stub doesn't have (fetch, files, tasks) traps naming itself when the program calls it
+	linker.define_unknown_imports_as_traps(module)?;
 	let instance = linker.instantiate(&mut store, module)?;
 	let main = ENTRY_POINTS
 		.iter()
