@@ -1,0 +1,2 @@
+# a type alias, used beside alias_a.warp: two files each declaring an alias do not clash (test/types/test_union_aliases)
+type Label = text
