@@ -22,8 +22,10 @@ COMMAND_COUNT_AT = 16
 CODE_SIGNATURE = 29
 SIGNATURE_OFFSET_AT = 8
 STDERR = 2
-# access()'s R_OK
+# access()'s R_OK and X_OK
 READABLE = 4
+EXECUTABLE = 1
+COLON = 58
 # wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
 KIND_I32 = 0
 KIND_I64 = 1
@@ -127,6 +129,7 @@ unlink(path: text): i32 from "c"
 _NSGetExecutablePath(buffer: pointer, size: pointer): i32 from "c"
 readlink(path: pointer, buffer: pointer, size: i64): i64 from "c"
 access(path: pointer, mode: i32): i32 from "c"
+getcwd(buffer: pointer, size: i64): handle from "c"
 native_pointer(address: pointer): handle from "c"
 c_function(name: text): handle from "c"
 nanosleep(wanted: pointer, left: pointer): i32 from "c"
@@ -134,7 +137,8 @@ clock_gettime(clock: i32, time: pointer): i32 from "c"
 localtime_r(seconds: pointer, fields: pointer): handle from "c"
 drand48(): f64 from "c"
 srand48(seed: i64) from "c"
-pow(x: f64, power: f64): f64 from "c"
+sqrt(x: f64): f64 from "c"
+cbrt(x: f64): f64 from "c"
 regcomp(compiled: pointer, pattern: text, flags: i32): i32 from "c"
 regexec(compiled: pointer, subject: pointer, count: i64, groups: pointer, flags: i32): i32 from "c"
 regerror(code: i32, compiled: pointer, buffer: pointer, size: i64): i64 from "c"
@@ -221,6 +225,25 @@ executable_path(): text := {
 	exit(1)
 	text_from(path, 0)
 }
+# this executable's path as the shell named it, its links kept (~/dev/bin/warp, not the build it links to): arg 0 when
+# it names a folder, else the first of $PATH's folders holding it; else its own path
+invoked_path(): text := {
+	named = arg(0)
+	if starts_with(named, "/") { return named }
+	if contains_byte(named, SLASH) { return joined(joined(current_folder(), "/"), named) }
+	folders = getenv("PATH")
+	for i in 0..field_count(folders, COLON) {
+		candidate = joined(joined(field(folders, i, COLON), "/"), named)
+		if access(c_string(candidate), EXECUTABLE) == 0 { return candidate }
+	}
+	executable_path()
+}
+contains_byte(t: text, byte: int): bool := field_count(t, byte) > 1
+current_folder(): text := {
+	folder = allocate(PATH_BYTES)
+	getcwd(folder, PATH_BYTES)
+	text_from(folder, c_length(folder))
+}
 # the module appended to this executable, else the empty text: at its end, or, in a Mach-O executable signed after
 # the module was appended (`warp build`), where its signature begins
 appended_module(): text := {
@@ -248,16 +271,19 @@ signature_offset(image: text): u32 := {
 	image.length
 }
 # warp's lib/, whose warp.wasm compiles a .warp file, in one search order: $WARP_LIB, else the first folder holding a
-# lib/ (its prelude.warp) of this executable's folder (~/dev/bin, a tarball), the folder its links lead to, and
-# <prefix>/share/warp beside that folder's bin/ (brew, deb, pip: bin/warp links to it); none is an error naming them
+# lib/ (its prelude.warp) of this executable's folder (a tarball), its lib/ (~/dev/bin/lib, which the install keeps
+# linked to the current build), the folder its links lead to, and <prefix>/share/warp beside that folder's bin/ (brew,
+# deb, pip: bin/warp links to it); none is an error naming them. The folder as found, its links kept, is a stable
+# name for it (an install replaces the build behind the link): what a native build's executables find libraries by
 library_folder(): text := resolved_path(library_found())
 library_found(): text := {
 	given = getenv("WARP_LIB")
 	if given.length > 0 { return given }
-	own = folder_of(executable_path())
+	own = folder_of(invoked_path())
 	linked = folder_of(resolved_path(executable_path()))
 	shared = joined(folder_of(linked), "/share/warp")
 	if holds_library(own) { return own }
+	if holds_library(joined(own, "/lib")) { return joined(own, "/lib") }
 	if holds_library(linked) { return linked }
 	if holds_library(shared) { return shared }
 	complain(joined(joined(joined(joined(joined(joined("warp: no lib/ (prelude.warp) in ", own), ", "), linked), " or "), shared), "; WARP_LIB names one"))
@@ -392,10 +418,22 @@ host_words_defined(linker: handle, compiled: handle, module: text, trap: pointer
 		from = native_vector_text(wasm_importtype_module(import))
 		name = native_vector_text(wasm_importtype_name(import))
 		line = c_line(table, from, name)
-		if line.length > 0 { word_defined(linker, import, foreign_of(line), trap) }
+		if line.length > 0 {
+			headless_checked(name, field(line, 1, TAB))
+			word_defined(linker, import, foreign_of(line), trap)
+		}
 		if same_text(from, "host") { word_defined(linker, import, answered_word(name), trap) }
 	}
 }
+# a C function that opens a native window (raylib's InitWindow, SDL's, GLFW's) ends the run before it starts under
+# WARP_NO_WINDOW or CI, so no test or agent run pops one up (src/ffi/link.rs WINDOW_OPENERS)
+headless_checked(name: text, library: text): nothing := {
+	if opens_window(name) and (getenv("WARP_NO_WINDOW").length > 0 or getenv("CI").length > 0) {
+		complain(joined(joined(joined(name, " from "), library), " opens a window: refused under WARP_NO_WINDOW or CI"))
+		exit(1)
+	}
+}
+opens_window(name: text): bool := same_text(name, "InitWindow") or same_text(name, "SDL_CreateWindow") or same_text(name, "SDL_CreateWindowAndRenderer") or same_text(name, "glfwCreateWindow")
 # the number of a host word the driver answers, else a word that names it when called
 answered_word(name: text): i64 := {
 	if same_text(name, "std_io") { return STD_IO_WORD }
@@ -903,8 +941,8 @@ sha256_hex(bytes: text): text := {
 	rounds = allocate(256)
 	prime = 2 as i64
 	for i in 0..BLOCK {
-		if i < 8 { word_at(state + i * 4).value = fraction_bits(pow(prime as f64, 0.5)) }
-		word_at(rounds + i * 4).value = fraction_bits(pow(prime as f64, 1.0 / 3.0))
+		if i < 8 { word_at(state + i * 4).value = fraction_bits(sqrt(prime as f64)) }
+		word_at(rounds + i * 4).value = fraction_bits(cbrt(prime as f64))
 		prime = prime_after(prime)
 	}
 	padded_length = (bytes.length as i64 + 9 + BLOCK - 1) / BLOCK * BLOCK
@@ -939,8 +977,6 @@ is_prime(n: i64): bool := {
 }
 hex_digit(n: u8): u8 := if n < 10 then n + 48 else n + 87
 rotated(x: u32, n: u32): u32 := (x >> n) | (x << (32 - n) as u32)
-# x & y, a word of its own: `(x xor y) & z` inline is miscompiled (card primitive-bit-and)
-both(x: u32, y: u32): u32 := x & y
 # one 64-byte block folded into the state
 compressed(state: pointer, rounds: pointer, schedule: pointer, block: pointer): nothing := {
 	for i in 0..16 {
@@ -964,9 +1000,9 @@ compressed(state: pointer, rounds: pointer, schedule: pointer, block: pointer): 
 	g = word_at(state + 24).value
 	h = word_at(state + 28).value
 	for i in 0..64 {
-		choice = both(e, f) xor both(e xor ALL_BITS as u32, g)
+		choice = (e & f) xor ((e xor ALL_BITS as u32) & g)
 		first = h + (rotated(e, 6 as u32) xor rotated(e, 11 as u32) xor rotated(e, 25 as u32)) + choice + word_at(rounds + i * 4).value + word_at(schedule + i * 4).value
-		majority = both(a, b) xor both(a, c) xor both(b, c)
+		majority = (a & b) xor (a & c) xor (b & c)
 		second = (rotated(a, 2 as u32) xor rotated(a, 13 as u32) xor rotated(a, 22 as u32)) + majority
 		h = g
 		g = f

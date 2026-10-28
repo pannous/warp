@@ -291,8 +291,11 @@ counting = arg_count() > 3 and same_text(arg(1), "fuel")
 if counting { setenv(c_string("WARP_FUEL"), c_string(arg(2)), 1) }
 prefixed = counting or (arg_count() > 1 and is_prefix(arg(1)))
 first = if counting then 3 else if prefixed then 2 else 1
-# warp.wasm's own commands (build) read the same lib/ as this executable
-setenv(c_string("WARP_LIB"), c_string(library_folder()), 0)
+# warp.wasm's own commands (build) read the same lib/ as this executable, and its stable name, the run path of the
+# executables `warp build native` makes (commands.warp native_links); WARP_LIB names it resolved, as the module's WASI
+# reaches it (no link to an absolute path)
+setenv(c_string("WARP_LIB_LINK"), c_string(library_found()), 0)
+setenv(c_string("WARP_LIB"), c_string(library_folder()), 1)
 # and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
 setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
 if prefixed and same_text(arg(1), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
