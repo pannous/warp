@@ -20,7 +20,7 @@ def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map
 def function_body(f: Function, at: int): list {
 	locals = vector(f.locals.map(k => [1] + value_type(k)))
 	code = f.code + [op.end]
-	if not module.prebuilding { return uleb(#locals + #code) + locals + code }
+	if not module.relocating { return uleb(#locals + #code) + locals + code }
 	marks = []
 	unmarked = []
 	for byte in code { if byte < 0 { marks += [[#unmarked, byte]] } else { unmarked += [byte] } }

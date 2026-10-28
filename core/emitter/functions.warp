@@ -260,7 +260,7 @@ function_compiled(f: Function, argument_kinds: list): any := {
 		annotation = if declared is empty then ø else annotated_kind(declared)
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
 		# (in runtime.wasm, any argument: no program decides it)
-		given = if argument_kinds[i] == pending or module.prebuilding then ValueKind.Node else argument_kinds[i]
+		given = if argument_kinds[i] == pending or module.relocating then ValueKind.Node else argument_kinds[i]
 		# analyzer.warp's kind, but a node stays one where it found a list: it may be a list of other brackets (`{1 2}`)
 		analyzed = analyzed_parameter_kind(f, i)
 		if annotation == ø and analyzed != ø and not (given == ValueKind.Node and analyzed == ValueKind.List) { annotation = analyzed }

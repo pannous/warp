@@ -3,10 +3,12 @@
 # the module of the runtime words alone, its bytes: read again while a reading leaves out a word more
 runtime_wasm_module(runtime: Node, host: map): any := {
 	module.prebuilding = yes
+	module.relocating = yes
 	module.left_out = {}
 	made = ø
 	while made == ø { made = typed_wasm_module(Node.Empty, runtime, host, {}) }
 	module.prebuilding = no
+	module.relocating = no
 	made
 }
 # every word compiled in name order, but those outside the core on their own (an enum's method naming the program's
