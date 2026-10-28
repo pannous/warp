@@ -1,0 +1,7 @@
+# a chord's or scale's kind is a case of Chord or Scale, found by its name where the parameter wants one
+'use sound; chord(C4, major7) == [C4, E4, G4, B4]'	true
+'use sound; [count(scale(A2, pentatonic)), count(chord(C4, minor)), count(scale(C4, major))]'	[6, 3, 8]
+'use sound; chord(A3, "minor") == [A3, C4, E4]'	true
+# a function of no parameters read bare is its call's value, also for the parameters it flows into
+'use units; m(d) := d; m(0.5 as float); m(5 * ms) == 5ms'	true
+'use sound; melody([C4], 5ms); 1'	1
