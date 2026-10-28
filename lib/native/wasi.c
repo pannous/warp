@@ -20,6 +20,9 @@ struct w2c_wasi__snapshot__preview1 {
 	char** argv;
 };
 
+// the WASI of the program running, for a callback a C library makes into it (foreign.c warp_host_callback)
+static struct w2c_wasi__snapshot__preview1* running_wasi;
+
 void instantiate(w2c_program* program, struct w2c_wasi__snapshot__preview1* wasi);
 void run_main(w2c_program* program);
 
@@ -103,6 +106,7 @@ int main(int argc, char** argv) {
 	struct w2c_wasi__snapshot__preview1 wasi = {&program, 0, argc, argv};
 	instantiate(&program, &wasi);
 	wasi.memory = w2c_program_memory(&program);
+	running_wasi = &wasi;
 	run_main(&program);
 	wasm2c_program_free(&program);
 	wasm_rt_free();
