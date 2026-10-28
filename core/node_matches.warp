@@ -16,7 +16,7 @@ use "words.warp"
 case_types = {"Number": "number", "Char": "codepoint", "Text": "text", "Symbol": "symbol", "Key": "key"}
 case_readers = {"Number": ["itself"], "Char": ["itself"], "Text": ["itself"], "Symbol": ["name_of"],
 	"Key": ["key_of", "op_of", "value_of"], "List": ["itself", "bracket_of", "separator_of"]}
-subject_name = "match·subject"
+subject_name = HiddenWord.MatchSubject as text
 # the readers whose part is a case of an enum spelled as the node carries it (node_cases.rs Part::Spelled)
 spelled_readers = {"op_of": "Op", "bracket_of": "Bracket", "separator_of": "Separator"}
 # `Op·case(t)`: the case spelled t, `Op·text(c)`: the spelling of a case (node_cases.warp spelling_functions)

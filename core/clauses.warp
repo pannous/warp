@@ -99,7 +99,7 @@ clause_parts(name: text, clause: Clause): any := {
 	parts
 }
 
-untaken(name: text): Node := List([symbol("pattern·clause·" + name)], Bracket.Round, Separator.None)
+untaken(name: text): Node := List([symbol((HiddenWord.PatternClause as text) + name)], Bracket.Round, Separator.None)
 # arguments no clause takes, `len(7)` of `len([]) := 0; len([h, t...]) := …`: an error when it runs
 unmatched_clauses(name: text): Node := List([symbol(raise_word), "no clause of " + name + " takes these arguments"], Bracket.None, Separator.Space)
 

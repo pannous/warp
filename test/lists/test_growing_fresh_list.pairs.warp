@@ -1,0 +1,5 @@
+# `xs = xs + [x]` grows a fresh list in place, an empty `xs = []` one too: a million items finish well inside the time
+# limit (quadratic they did not), and a list another name holds is copied (card append-never-fires)
+'count(filled_list(1000000, 0))'	1000000
+'f(n) := { out = []; for i in 1 to n { out = out + [i] }; out }; xs = f(1000000); xs#1000000'	1000000
+'xs = []; ys = xs; xs = xs + [1]; [count(xs), count(ys)]'	[1 0]

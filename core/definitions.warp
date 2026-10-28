@@ -219,7 +219,7 @@ definitions(program: Node): Node := {
 # `as·text`: the function converting to the target, a name no program can write; its parameter, which a body's `it`
 # (or the name `text(p: Person)` gives) is renamed to (lambdas.warp renamed)
 conversion_name(target: text): text := "as·" + target
-converted_value = "converted·value"
+converted_value = HiddenWord.ConvertedValue as text
 
 # a word naming a type: a type word, a collection, or a type the program declares (`class Person {…}`)
 names_type(n: Node, scope: map): bool := n is symbol and (is_tested_type_word(name_of(n)) or binds_as(scope, name_of(n), Meaning.Type))

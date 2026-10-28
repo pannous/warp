@@ -10,9 +10,15 @@ use "uses.warp"
 use "builtin_signatures.warp"
 use "scope.warp"
 
+# source → its slices: the passes ask for each library module's slices per call and argument, cut once
+global source_slices = {}
+definition_slices(source: text): list := {
+	if not source_slices.has(source) { source_slices[source] = slices_cut(source) }
+	source_slices[source]
+}
 # [name, text] of each function definition in source: a line starting with a name and its parameters, with the
 # indented or closing lines below it
-definition_slices(source: text): list := {
+slices_cut(source: text): list := {
 	slices = []
 	name = ""
 	written = ""
@@ -246,17 +252,18 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 	is_unknown = word => word not in own and word not in bound and word not in prelude_names and not is_declared_word(word)
 	calls = nodes_in(program).filter(n => is_group(n) and (bracket_of(n) == "(" or bracket_of(n) == "") and #n > 1 and n#1 is symbol and items_of(n)[1 ..].any(argument => symbol_words(argument).any(is_unknown)))
 	if #calls == 0 { return program }
-	modules = bundled_modules()
+	modules = bundled_slices()
 	classes = class_modules(modules)
+	definitions = definitions_by_name([definition_slices(prelude)] + modules.values)
 	used = statements_in(program).map(use_target).filter(target => target is symbol).map(name_of)
 	wanted = []
 	for call in calls {
 		arguments = items_of(call)[1 ..]
 		for i in 0 ..< #arguments {
 			words = symbol_words(arguments[i]).filter(is_unknown)
-			for type in parameter_types(name_of(call#1), i, [prelude] + modules.values) {
+			for type in parameter_types(definitions.get(name_of(call#1)) ?? [], i) {
 				module = classes.get(type) ?? ""
-				defines = word => definition_slices(modules[module]).any(slice => slice#1 == word)
+				defines = word => modules[module].any(slice => slice#1 == word)
 				if module and module not in wanted and module not in used and words.any(defines) { wanted += [module] }
 			}
 		}
@@ -266,31 +273,35 @@ with_expected_type_uses(program: Node, prelude: text): Node := {
 # the module that defines a word a program names without using it, as the fix of its unknown name: `x = 3ms` gives
 # ": `use units` defines it" (decision expected-type-names); "" when none or several do
 module_hint(word: text): text := {
-	modules = bundled_modules()
-	definers = modules.keys.filter(module => definition_slices(modules[module]).any(slice => slice#1 == word))
+	modules = bundled_slices()
+	definers = modules.keys.filter(module => modules[module].any(slice => slice#1 == word))
 	if #definers == 1 then ": `use " + definers#1 + "` defines it" else ""
 }
-# module name → text of each module at the top of lib/, `units` → lib/units.warp's
-bundled_modules(): map := {
+# module name → the slices of each module at the top of lib/, `units` → lib/units.warp's
+bundled_slices(): map := {
 	modules = {}
-	for path in LIBRARY_FILES.keys { if not path.contains("/") and path.ends_with(module_extension) { modules[path[0 ..< #path - #module_extension]] = LIBRARY_FILES[path] } }
+	for path in LIBRARY_FILES.keys { if not path.contains("/") and path.ends_with(module_extension) { modules[path[0 ..< #path - #module_extension]] = definition_slices(LIBRARY_FILES[path]) } }
 	modules
 }
 # class name → the module declaring it, `Time` → units
 class_modules(modules: map): map := {
 	classes = {}
-	for module in modules.keys { for slice in definition_slices(modules[module]) { if slice#2.starts_with("class ") { classes[slice#1] = module } } }
+	for module in modules.keys { for slice in modules[module] { if slice#2.starts_with("class ") { classes[slice#1] = module } } }
 	classes
 }
-# the types written for parameter `at` (from 0) of each definition of `name` in the sources, `[Time]` of `sleep(duration: Time)`
-parameter_types(name: text, at: int, sources: list): list := {
+# name → the texts of its definitions in these lists of slices, the first written first
+definitions_by_name(slice_lists: list): map := {
+	definitions = {}
+	for slices in slice_lists { for slice in slices { definitions[slice#1] = (definitions.get(slice#1) ?? []) + [slice#2] } }
+	definitions
+}
+# the types written for parameter `at` (from 0) of each definition, `[Time]` of `sleep(duration: Time)`
+parameter_types(definitions: list, at: int): list := {
 	types = []
-	for source in sources {
-		for slice in definition_slices(source).filter(slice => slice#1 == name) {
-			head = definition_head_of(statements_in(plain_node(parsed(slice#2)))#1)
-			parameter = if head != ø and at + 1 < #head then head#(at + 2) else ø
-			if parameter != ø and is_key(parameter, Op.Colon) and value_of(parameter) is symbol { types += [name_of(value_of(parameter))] }
-		}
+	for definition in definitions {
+		head = definition_head_of(statements_in(plain_node(parsed(definition)))#1)
+		parameter = if head != ø and at + 1 < #head then head#(at + 2) else ø
+		if parameter != ø and is_key(parameter, Op.Colon) and value_of(parameter) is symbol { types += [name_of(value_of(parameter))] }
 	}
 	types
 }
