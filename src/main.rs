@@ -61,14 +61,18 @@ const SERVE_COMMAND: &str = "serve";
 /// `warp lower --json <code>`: the lowered program as the JSON node view core reads with `node_of(json(…))`,
 /// lossless where the serialized text is not
 const LOWER_JSON_COMMAND: &str = "lower --json";
-/// `warp pure <file> [arguments…]`: the program compiled by core/compiler.warp, the warp compiler as one warp
-/// program, compiled by Rust, and run (src/compiler/standalone.rs)
+const LOWER_COMMAND: &str = "lower";
+/// `warp runtime <out.wasm>`: runtime.wasm, the runtime words compiled once (notes/runtime_linking.md)
+const RUNTIME_COMMAND: &str = "runtime";
+/// `warp pure …`: plain `warp …`, the one compiler (core/compiler.warp as warp.wasm) since the Rust compiler went; kept
+/// as a hidden alias that says so (user, card drop-pure-word)
 const PURE_COMMAND: &str = "pure";
-/// `warp self <file> [arguments…]`: as `warp pure`, with warp-self.wasm, warp.wasm promoted at a fixpoint
+const PURE_NOTE: &str = "note: `warp pure` is plain `warp` now";
+/// `warp self <file> [arguments…]`: as plain `warp`, with warp-self.wasm, warp.wasm promoted at a fixpoint
 const SELF_COMMAND: &str = "self";
-/// `warp pure repl`: the console with each line compiled by compiler.warp (card wasm-commands)
+/// `warp repl`: the console with each line compiled by compiler.warp (card wasm-commands)
 const REPL_COMMAND: &str = "repl";
-/// `warp pure run <file|code>`, `warp pure eval <code>`: the same as without the word, the program run here
+/// `warp self run <file|code>`, `warp self eval <code>`: the same as without the word, the program run here
 const PURE_RUNNING_WORDS: [&str; 2] = ["run", "eval"];
 /// `warp rebuild [pure|self]`: warp.wasm, the compiler of `warp pure`, built anew from lib/ by the seed
 /// (warp-seed.wasm beside the binary); `self`: warp.wasm promoted to warp-self.wasm, `warp self`'s, when it compiles compiler.warp
@@ -386,6 +390,9 @@ fn run_command(args: &[String], given: &[String]) {
 	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
 		use warp::compiler::standalone::Compiler;
 		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
+		if args[1] == PURE_COMMAND {
+			eprintln!("{PURE_NOTE}");
+		}
 		run_by_compiler(&args[2..], by);
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
@@ -438,9 +445,10 @@ fn run_command(args: &[String], given: &[String]) {
 		diagnostic::show_lines_of(code, None);
 		show_and_fail_on_error(&eval(code), RESULT_MARK);
 	} else if let Some(code) = command_argument(&arg_string, LOWER_JSON_COMMAND) {
-		fail(not_in_self_lane("warp lower-json", code));
-	} else if let Some(code) = command_argument(&arg_string, "lower") {
-		fail(not_in_self_lane("warp lower", code));
+		fail(not_in_self_lane("warp lower --json", code));
+	} else if [LOWER_COMMAND, RUNTIME_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
+		// compiler.warp's own commands (core/commands.warp), as `warp self lower …` gives them
+		run_by_compiler(&args[1..], warp::compiler::standalone::Compiler::RustCompiled);
 	} else if let Some(code) = command_argument(&arg_string, "parse") {
 		println!("{}", structure(&warp::compiler::standalone::parsed(code)));
 	} else if matches!(arg_string.as_str(), "repl" | "console" | "start" | "run") {
@@ -626,10 +634,8 @@ fn usage() {
 	// println!("Usage: warp [options] [file]");
 	println!("  warp <file.warp>     Run a warp file (env WARP_EXECUTABLE=1: also leave its standalone executable <file> next to it)");
 	println!("  warp run <file.warp> Run a warp file, never an executable");
-	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (core/compiler.warp)");
-	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by the seed");
-	println!("  warp pure build <file.warp|code> Its module (out.wasm for code) made by compiler.warp; also run, eval");
-	println!("  warp rebuild [pure|self] Build warp.wasm (by the seed, warp-seed.wasm) anew from lib/ / promote it to warp-self.wasm at a fixpoint (its compiler runs: no 60 s limit, 2 h, env WARP_REBUILD_TIME_LIMIT)");
+	println!("  warp self <file.warp> Run it by compiler.warp compiled by itself rather than by the seed (also build, run, eval)");
+	println!("  warp rebuild [self]   Build warp.wasm (by the seed, warp-seed.wasm) anew from lib/ / promote it to warp-self.wasm at a fixpoint (its compiler runs: no 60 s limit, 2 h, env WARP_REBUILD_TIME_LIMIT)");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
 	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");
