@@ -18,6 +18,8 @@ pub const FIELD_VALUE: usize = 2;
 const MAX_MAIN_RESULTS: usize = 1;
 /// Exported functions a module may start with, in the order they are looked for
 const ENTRY_POINTS: [&str; 4] = ["main", "wasp_main", "warp_main", "_start"];
+/// The export that gives the text main's value prints as (core/emitter/output.warp shown_result)
+const SHOW_EXPORT: &str = "show";
 
 /// Int payload: `$i64box(value)`, `$BigInt(negative: i32, limbs: array i32)` little-endian base 2^32,
 /// or an exact `$Ratio(numerator, denominator)` of two such payloads (wasm_emitter/exact.rs)
@@ -52,17 +54,18 @@ pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
 
 fn read_main_result(bytes: &[u8]) -> Result<Node> {
 	let (result, mut store, instance) = run_main(bytes, (), |_, _, _| Ok(()))?;
-	match result {
+	let node = match result {
 		Val::AnyRef(Some(reference)) => {
 			if !reference.is_struct(&store)? {
 				return Err(anyhow!("main returned a reference that is no Node struct"));
 			}
-			Ok(node_of(&result, &mut store.as_context_mut(), &instance))
+			node_of(&result, &mut store.as_context_mut(), &instance)
 		}
 		// a plain number or the null reference: no Node struct to read
-		Val::I32(_) | Val::I64(_) | Val::F64(_) | Val::AnyRef(None) => val_to_node(&result, &mut store, &instance),
-		other => Err(anyhow!("main returns {:?}, which is no Node and no number", other.ty(&store)?)),
-	}
+		Val::I32(_) | Val::I64(_) | Val::F64(_) | Val::AnyRef(None) => val_to_node(&result, &mut store, &instance)?,
+		other => return Err(anyhow!("main returns {:?}, which is no Node and no number", other.ty(&store)?)),
+	};
+	Ok(shown_by_program(node, &result, &mut store, &instance))
 }
 
 /// The engine that runs `bytes` (a module, or one compiled ahead of time), and whether it is a task engine: a
@@ -225,7 +228,27 @@ fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<c
 /// A program that starts tasks (`go f(x)`) gets the task words; the tasks nobody awaited finish before the result.
 pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	let (result, mut store, instance) = run_main_with_tasks(bytes, imports)?;
-	val_to_node(&result, &mut store, &instance)
+	let node = val_to_node(&result, &mut store, &instance)?;
+	Ok(shown_by_program(node, &result, &mut store, &instance))
+}
+
+/// main's value as the program shows it: the text its export `show` gives (print's, a class's text(): 3.5km) kept as
+/// the value's printed form; a text result stays quoted, ø and errors print as before
+fn shown_by_program<T>(node: Node, result: &Val, store: &mut Store<T>, instance: &Instance) -> Node {
+	if matches!(node.drop_meta(), Node::Text(_) | Node::Empty | Node::Error(_)) {
+		return node;
+	}
+	let Some(show) = instance.get_func(&mut *store, SHOW_EXPORT) else { return node };
+	let mut shown = [Val::AnyRef(None)];
+	if let Err(failure) = show.call(&mut *store, std::slice::from_ref(result), &mut shown) {
+		eprintln!("the program's show failed, its value printed by the host: {failure}");
+		return node;
+	}
+	let memory = instance.get_memory(&mut *store, "memory");
+	match text_of(&mut store.as_context_mut(), &shown[0], memory) {
+		Some(text) => node.with_source_literal(&text),
+		None => node,
+	}
 }
 
 /// Run main with every import it needs, its tasks finished after it (finish_tasks)

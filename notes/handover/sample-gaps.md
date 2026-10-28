@@ -13,7 +13,9 @@
 2. sound + units: DONE 45de9529de (lib-sound, missing-pure, class-position-index): wasm memory bodies, class samples
    in linear memory, a class's position/index/count, F#4; hum_blocks runs. Still failing in samples/sound: play(C4, d)
    (card sound-hertz-length), unknown module names (play, at, unison, tuning …: sound's slices not reached), traps in
-   rhythm/synth/voices, sound_pipes variants; hum(t: float) := 0.3 * t has no float result (card float-result-hum)
+   rhythm/synth/voices, sound_pipes variants. Since: play(C4, d) cbb5e3a005 (rhythm, synth, voices run), signals of
+   any number and function-arity overloads a2cdbb6e5c, global function values 3375c04b54. Left in samples/sound: module
+   names not reached (play, at, unison, tuning, distortion, pattern, midi_on), help(), phase(…), sound_pipes, `on`
 3. `sleep 50ms` without parentheses misses the expected-type units (told warp-text-field; snake, game_of_life)
 4. ∞ and ℯ can't be defined as functions, big floats give 0 (card float-overflow-inf); Real where a float is wanted
    (real-for-float DONE bee9079dc5), `π is real` (pi-real-number)

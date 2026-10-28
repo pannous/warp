@@ -7,21 +7,27 @@
 # them, both moved beside the binary, the user's checkout pulled; then promote-self.sh and tiers 1-2 (gate.sh) of what
 # changed since the tip installed before. What goes red becomes a card in Now naming the commits pushed since (a red
 # smoke test: urgent). One run at a time (a lock): a second one returns, and the running one loops while main moved
-# past what it handled, installing the newest tip first and leaving the slow tiers to the newest.
+# past what it handled, installing the newest tip first. The slow tiers never hold an install: `--slow` runs them in a
+# tree of their own (started by the install, one at a time, looping to the newest tip installed), and installs the
+# warp-self.wasm it promotes when the installed warp.wasm is still of those inputs.
 set -uo pipefail
 MAIN_WARP=/Users/me/dev/bin/warp
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
 TREE=/Volumes/Worktrees/integrate2
+SLOW_TREE=/Volumes/Worktrees/integrate-slow
 EXPECTED=Hello
 HARNESS_PATHS=(src crates Cargo.toml Cargo.lock build.rs)
 SEED=$(dirname "$MAIN_WARP")/warp-seed.wasm  # the seed refresh-seed.sh installs beside the shared binary
 BUILDS=/Users/me/dev/bin/main-builds  # one folder: the installed harness and its compilers, no other builds or links
 CARGO_BINARY=/Volumes/Build/target/release/warp  # ~/.cargo/config.toml's target-dir
 
-if_moved=
+if_moved= slow=
 [ "${1-}" = --if-moved ] && { if_moved=1; shift; }
+[ "${1-}" = --slow ] && { slow=1; shift; }
 scripts=$(cd "$(dirname "$0")/.." && pwd)
-state=$TREE/data/integrate
+installed_state=$TREE/data/integrate
+state=$installed_state
+[ -n "$slow" ] && { TREE=$SLOW_TREE; state=$SLOW_TREE/data/integrate; }
 say() { echo "after-push: $(date '+%H:%M:%S') $*"; }
 main_tip() { git -C "$TREE" ls-remote origin refs/heads/main | cut -f1; }
 handled() { cat "$state/handled" 2>/dev/null; }
@@ -65,6 +71,7 @@ copy_compilers() {
 
 # the tree's compilers beside the shared binary
 install_compilers() {
+	[ -n "$slow" ] && [ "$(cat "$installed_state/watched")" != "$tip" ] && return  # a newer tip is installed meanwhile
 	local folder lane got
 	folder=$(dirname "$(readlink -f "$MAIN_WARP")")
 	copy_compilers "$TREE/lib" "$folder"
@@ -116,16 +123,34 @@ watch() {
 	install_compilers
 	git -C "$MAIN_CHECKOUT" pull -q --rebase --autostash || say "the user's checkout did not pull: look at it"
 	echo "$tip" >"$state/watched"
-	[ "$(main_tip)" = "$tip" ] || return 0
+	"$0" --slow </dev/null &
+	disown
+}
 
+# slow_tiers <commit>: promote-self.sh and tiers 1-2 of what changed since the last commit they ran on
+slow_tiers() {
+	tip=$1
+	since=$(cat "$state/tested" 2>/dev/null || git -C "$TREE" rev-parse "$tip^")
+	pushed=$(git -C "$TREE" log --first-parent --format=%s "$since..$tip" | head -5 | paste -sd ';' -)
+	git -C "$TREE" checkout -q --detach "$tip" || return 1
+	"$scripts/rebuild.sh" both "$TREE" >/dev/null || return 1
 	promoted=$("$scripts/promote-self.sh" "$TREE" | tail -1)
 	echo "$promoted"
 	[[ $promoted == *"NO FIXPOINT"* || $promoted == *FAILED* ]] && red "self lane: ${promoted:0:160}" --urgent
 	install_compilers
 	"$scripts/gate.sh" --no-rebuild --tiers 1-2 --base "$since" --tag-good "$TREE" "$MAIN_WARP" >"$state/gate-${tip:0:10}.log" 2>&1 ||
 		red "tiers 1-2: $(grep -a '^FAIL' "$state/gate-${tip:0:10}.log" | head -3 | paste -sd ';' -)"
-	say "watched ${tip:0:10}"
+	echo "$tip" >"$state/tested"
+	say "slow tiers of ${tip:0:10} done"
 }
+
+if [ -n "$slow" ]; then
+	git -C "$TREE" fetch -q origin || exit 1
+	while installed=$(cat "$installed_state/watched") && [ "$installed" != "$(cat "$state/tested" 2>/dev/null)" ]; do
+		slow_tiers "$installed" || break
+	done
+	exit 0
+fi
 
 git -C "$TREE" fetch -q origin || exit 1
 watch "$(git -C "$TREE" rev-parse "${1:-origin/main}")"

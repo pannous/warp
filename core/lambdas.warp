@@ -414,11 +414,12 @@ celled_definition(statement: Node, positions: map): Node := {
 	}
 }
 
-# a definition with its body lowered, its parameters and variables the locals
+# a definition with its body lowered, its parameters and variables the locals, and the program's variables it sees: a
+# global holding a function value, `g = (x => x * 2); h(t) := g(t)`, is called as one
 lowered_statement(statement: Node, top_locals: list, lowering: Lowering): Node := {
 	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
-	locals = parts.parameters.map(parameter_name) + names_bound(parts.body, [])
+	locals = parts.parameters.map(parameter_name) + names_bound(parts.body, []) + top_locals.filter(name => name not in lowering.arities)
 	match statement {
 		Key(signature, Op.Define, body): Key(signature, Op.Define, lowered_lambdas(body, locals, lowering))
 		_: statement

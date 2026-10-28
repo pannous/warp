@@ -1,0 +1,4 @@
+# a global holding a function value is called as one inside a function
+'global g = ø; g = (x => x * 2); h(t: float) := g(t); h(3.0)'	6
+'global g = ø; f(x) := x + 1; g = f; h(t) := g(t); h(3)'	4
+'g = (x => x * 2); h(t) := g(t); h(4)'	8

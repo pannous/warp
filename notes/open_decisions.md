@@ -8,6 +8,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - class-index-test (warp-global-named-capital, test/types/test_class_index_operator.pairs.warp:4, from the Rust suite): `class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4` expects 504 (index read as `#`); under position-index-words it is position(4) = index(3) = 503. Options: upgrade the test to 503 (Recommended, follows the naming) / keep 504 (`#` calls index unshifted; then position-index-words changes). Failed on main before too; ask at 10:00.
 
 ## To present
+- shown-text-quoted (warp-text-field's assumption under shown-by-warp, ac50b6e2d6): a text result stays quoted (`"Hello 🌍2026"`, test/gate/hello.expected); other values go through show (3km + 500m → 3.5km, π/2, P(3) → P3). Question to raise: should a result show as warp notation throughout (text quoted, an instance as `P{n: 3}` or `P(3)` rather than P3), so a shown result can be pasted back as code?
 - test-oversubscribes-mac (harness OK, user away): `warp test` case processes compile single-threaded when cases already run in parallel (load 170 on 10 cores).
 - position-index-words: class `#` = position(p), `[]` = index(i), `#b` = count(); writes position(p, value) / index(i, value), defining one derives the other.
 
