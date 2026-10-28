@@ -1137,9 +1137,9 @@ def as_rational(value: TypedCode): TypedCode {
 # -value; a value known only at run time as 0 - value
 def negation(body: Body, value: TypedCode): TypedCode {
 	if value.kind == ValueKind.Float { return TypedCode(ValueKind.Float, value.code + [op.f64_neg]) }
-	if value.kind == ValueKind.Node { return operation_code(body, "-", number_value(0), value) }
-	if value.kind != ValueKind.Int { refuse("the negation of a " + kind_spelling(value.kind)) }
-	TypedCode(ValueKind.Int, [op.i64_const, 0] + value.code + [op.i64_sub])
+	if value.kind != ValueKind.Int and value.kind != ValueKind.Node { refuse("the negation of a " + kind_spelling(value.kind)) }
+	# 0 - x, checked as a subtraction: -(-2^63) traps as 2^63 - 1 + 1 does, never wraps to itself
+	operation_code(body, "-", number_value(0), value)
 }
 # `a and b`, `a or b` on yes/no values: b is read only when a leaves the answer open
 # on other values they give one of them, as Rust does: `a and b` is b when a holds, else a; `a or b` a when a holds,
