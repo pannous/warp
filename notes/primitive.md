@@ -81,8 +81,8 @@ exceptions, wasmtime's machine-code cache. Its `_start` runs (a GC program print
 value is printed by its kind; an error's or trap's message goes to stderr with status 1, the module's exit status is
 kept. Host words: std_io is a C callback (lib/native/foreign.c warp_host_callback, the values through the driver's
 arena to its exported host_word), which reads its arguments through the module's export shown_at (the node as print
-shows it, in linear memory) and builds answers with new_text/new_empty/error_of: os.kept is a miss, os.keep does
-nothing (card kept-values-retire: they save 1 %), any other word is an Error saying the driver lacks it. Every other
+shows it, in linear memory) and builds answers with new_text/new_empty/error_of: every word is an Error saying
+the driver lacks it (the compiler calls none since kept values were retired). Every other
 host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
 warp.wasm has the shown_at export once the seed that builds it has it. Tests: test/native/test_native.sh "by the
 driver".

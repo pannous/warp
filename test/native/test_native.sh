@@ -59,10 +59,10 @@ if [ -x "$stage/driver" ]; then
 	cp "$stage/driver" "$stage/app" && cat "$stage/arguments.wasm" >>"$stage/app"
 	python3 -c 'import os, struct, sys; open(sys.argv[1], "ab").write(struct.pack("<Q", os.path.getsize(sys.argv[2])) + b"WRPMwasm")' "$stage/app" "$stage/arguments.wasm"
 	check "arguments appended to the driver" "$(cd "$stage" && ./app eins zwei)" $'eins\nzwei'
-	# a GC program's std_io through the driver's callback: kept a miss, keep nothing, any other word the Error saying so
-	printf 'use os\nprint kept("x")\nkeep("x", 3)\nprint run("ls")\n' >"$stage/kept.warp"
-	(cd "$stage" && "$warp" build --wasm kept.warp >/dev/null 2>&1)
-	check "std_io by the driver" "$(cd "$stage" && ./driver kept.wasm)" $'ø\nstd_io os.run: not in the native driver yet'
+	# a GC program's std_io through the driver's callback: the Error saying the driver lacks the word
+	printf 'use os\nprint run("ls")\n' >"$stage/run.warp"
+	(cd "$stage" && "$warp" build --wasm run.warp >/dev/null 2>&1)
+	check "std_io by the driver" "$(cd "$stage" && ./driver run.wasm)" 'std_io os.run: not in the native driver yet'
 else
 	echo "✗ driver: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
 fi

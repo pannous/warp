@@ -322,17 +322,12 @@ compiled_and_run(file: text): nothing := {
 
 ## host words
 # a host word the module calls (STD_IO_WORD), its arguments and results wasmtime_val_t's, through the caller
-# (foreign.c warp_host_callback). std_io(module, member, arguments): os.kept is a miss and os.keep does nothing, the
-# values the Rust host keeps computed again (card kept-values-retire); any other word is the Error that says so
+# (foreign.c warp_host_callback). std_io(module, member, arguments) is the Error that says the driver lacks it
 host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
 	context = wasmtime_caller_context(caller)
 	module = shown(caller, context, given)
 	member = shown(caller, context, given + VALUE_BYTES)
-	if same_text(module, "os") and (same_text(member, "kept") or same_text(member, "keep")) {
-		guest_call(caller, context, "new_empty", 0, 0, results)
-	} else {
-		guest_error(caller, context, given, joined(joined(joined(joined("std_io ", module), "."), member), ": not in the native driver yet"), results)
-	}
+	guest_error(caller, context, given, joined(joined(joined(joined("std_io ", module), "."), member), ": not in the native driver yet"), results)
 }
 # the module's export `name` called on the values, its result into `result`
 guest_call(caller: handle, context: handle, name: text, values: pointer, count: i64, result: pointer): nothing := {
