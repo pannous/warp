@@ -90,7 +90,7 @@ key_text(entry: Node): text := {
 }
 is_letter_byte(b: int): bool := b >= Ascii.LowerA and b <= Ascii.LowerZ
 # n as print shows it, in linear memory for a host to read where c_text puts a C string (the native driver reads a host
-# word's arguments so, lib/native/driver.warp): its address times 2^32 plus its length; -1 for a text past the output
+# word's arguments so, core/native/driver.warp): its address times 2^32 plus its length; -1 for a text past the output
 # area
 shown_at(n: Node): int := {
 	t = node_text(n)

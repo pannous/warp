@@ -36,9 +36,9 @@ native files "Hello from a file"
 GREETING="Hi there" native c_calls $'Hi there\n8\n5'
 check "c_calls by warp refused" "$(cd "$stage" && "$warp" c_calls.warp 2>&1 | grep -c "C calls run by \`warp build native\`")" 1
 
-# the native runner lib/native/driver.warp (notes/primitive.md "Driver"): a sample's module run through wasmtime's C API,
+# the native runner core/native/driver.warp (notes/primitive.md "Driver"): a sample's module run through wasmtime's C API,
 # given on the command line or appended to the driver
-cp "$checkout/lib/native/driver.warp" "$stage/"
+cp "$checkout/core/native/driver.warp" "$stage/"
 (cd "$stage" && "$warp" build native driver.warp >"$stage/build.log" 2>&1)
 module() { # module <sample>: the sample's wasm module in the stage
 	cp "$checkout/samples/native/$1.warp" "$stage/"

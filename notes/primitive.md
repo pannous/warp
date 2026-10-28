@@ -63,10 +63,10 @@ samples/native/c_calls.warp. Under wasmtime, warp's own host answers `c` imports
 primitive file calling C runs natively only.
 
 ## Driver
-lib/native/driver.warp is the native runner (roadmap_native_harness.md milestone 3): a primitive file calling
+core/native/driver.warp is the native runner (roadmap_native_harness.md milestone 3): a primitive file calling
 wasmtime's C API through its own foreign lines (`wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module:
 pointer): handle from "wasmtime"`; the structs the calls fill are arena bytes read with long_at/byte_at, native memory
-copied in with memcpy). `warp build native lib/native/driver.warp` makes `driver`:
+copied in with memcpy). `warp build native core/native/driver.warp` makes `driver`:
 - `driver app.warp args…`: warp.wasm ($WARP_LIB, else beside the driver) compiles the file as the native warp has it
   compile (the file, a module in $TMPDIR, its folder, lib/, runtime.wasm), then the module runs with the arguments.
 - `driver app.wasm args…` runs a module; a driver with a module appended (`<module><length u64 LE>WRPMwasm`, padded to
