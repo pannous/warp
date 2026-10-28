@@ -48,9 +48,13 @@ MVP wasm.
    there (core/commands/commands.warp), other words are code compiled to WARP_RUN_TO, which warp.warp then runs. The host words
    those commands call are driver.warp host_word's, warp over libc: os.command so far (popen), its list argument read
    through the module's export item_at. Done so far: a file with arguments, a module, code, help and `warp build`
-   (test/native/test_warp_native.sh; `warp build` needs warp.wasm with item_at, so a seed refresh). Next: `warp
-   rebuild` (seed → warp.wasm), `warp test` (pure_tests.rs: parallel children), repl, the remaining core host words;
-   installed beside the Rust binary as warp-native until `warp test` on it matches the core tests.
+   (test/native/test_warp_native.sh; `warp build` needs warp.wasm with item_at, so a seed refresh), and `warp rebuild`
+   (seed → warp.wasm, optimized, runtime.wasm and the modules beside it).
+   **warp-from-warp** (tag, 2026-10-28, on afb75acba6): the native warp, itself built without Rust, rebuilt warp.wasm
+   from the seed (29:45, brew wasmtime 50's DRC collector; card wasmtime-native-rebuild), built itself again with that
+   warp.wasm (26 s) and the new binary ran hello. No Rust of ours in the chain: wasmtime (its C API) and cc remain.
+   Next: `warp test` (pure_tests.rs: parallel children), repl, the remaining core host words; installed beside the
+   Rust binary as warp-native until `warp test` on it matches the core tests.
 4. **Results without gc_traits**: compiled programs print their own value (card rust-bootstrap, "a standalone
    executable needs the program compiled to print its value"), so the native host never reads GC objects back.
 5. **Core host words**: what the core binary itself needs (files, processes, args/env, time, the sandbox, C calls)
