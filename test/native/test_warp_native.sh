@@ -28,6 +28,11 @@ if [ -x "$stage/warp" ]; then
 	mkdir "$stage/built" && cp "$stage/hello.warp" "$stage/built/"
 	(cd "$stage/built" && ../warp build hello.warp >/dev/null 2>&1)
 	check "warp build by the native warp" "$("$stage/built/hello" 2>&1)" "Hello 🌍2026"
+	check "run, a file" "$(native run hello.warp)" "Hello 🌍2026"
+	check "the arguments after --" "$(native arguments.warp -- eins zwei)" '["eins" "zwei"]'
+	check "self, code by warp-self.wasm" "$(native self '3 + 4')" 7
+	printf 'raise "boom"\n' >"$stage/raising.warp"
+	check "what a program raised" "$(native raising.warp)" "boom"
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
 fi
