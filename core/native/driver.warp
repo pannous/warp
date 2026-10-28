@@ -503,19 +503,24 @@ run(module: text, given: Arguments, machine_code: text): nothing := {
 	results = allocate(VALUE_BYTES * MAX_RESULTS)
 	error = wasmtime_func_call(context, function, 0, 0, results, results_count, trap)
 	out_of_fuel(trap, fuel)
-	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(context, instance)) }
+	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(context, instance, trap)) }
 	if results_count > 0 { print_result(results) }
 }
-# what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp), the
-# runtime error's sentence at its place; empty when no runtime word failed (the engine's own trap tells then)
-raised_message(context: handle, instance: pointer): text := {
+# what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp) of the
+# engine's trap code (-1 for none), the runtime error's or that trap's sentence at its place; empty for neither (the
+# error's own message tells then)
+raised_message(context: handle, instance: pointer, failed: pointer): text := {
 	function = allocate(EXTERN_BYTES)
 	memory = allocate(EXTERN_BYTES)
+	code = zeroed(8)
+	argument = zeroed(VALUE_BYTES)
+	byte_at(argument).value = KIND_I64
+	long_at(argument + VALUE_OFFSET).value = if long_at(failed).value != 0 and wasmtime_trap_code(long_at(failed).value, code) then byte_at(code).value as i64 else -1
 	result = allocate(VALUE_BYTES)
 	trap = allocate(8)
 	long_at(trap).value = 0
 	if not wasmtime_instance_export_get(context, instance, "trap_message", 12, function) or not wasmtime_instance_export_get(context, instance, "memory", 6, memory) { "" } else {
-		checked(wasmtime_func_call(context, function + 8, 0, 0, result, 1, trap), trap)
+		checked(wasmtime_func_call(context, function + 8, argument, 1, result, 1, trap), trap)
 		text_in(wasmtime_memory_data(context, memory + 8), long_at(result + VALUE_OFFSET).value)
 	}
 }

@@ -1,6 +1,7 @@
 // The standard library module draw (notes/stdlib.md, card drawing-words): `use draw`, a canvas of colored pixels shown by
-// paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: rgb, hsv, the named colors, with_alpha
+// paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: the color module's (rgb, hsv, the named colors, with_alpha)
 use math
+use color
 // the canvas until canvas(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480 
 global canvas_width = view_width
@@ -11,35 +12,8 @@ global drawing_on_gpu = gpu_drawing
 global canvas_pixels = int[pixels_for(view_width, view_height)]
 // paper: the canvas before anything is drawn, as paint shows 0 (src/graphics/pixels.rs PAPER; test_paint_shades)
 paper = 0xFFFAFAFA
-black = 0xFF000000
-white = 0xFFFFFFFF
-gray = 0xFF808080
-red = 0xFFFF0000
-green = 0xFF00A000
-blue = 0xFF0000FF
-yellow = 0xFFFFD700
-orange = 0xFFFF8C00
-purple = 0xFF8000C0
-
 // the pixel a coordinate falls in
 cell(v) := floor(v) as int
-// r, g, b from 0 to 255
-rgb(r, g, b) := 0xFF000000 + (round(r) as int) * 65536 + (round(g) as int) * 256 + (round(b) as int)
-// hue in degrees, saturation and value from 0 to 1
-def hsv(h, s, v) {
-	hue = (h % 360) / 60.0
-	c = v * s
-	x = c * (1 - abs(hue % 2 - 1))
-	m = v - c
-	sector = cell(hue)
-	r = if sector == 0 or sector == 5 then c else if sector == 1 or sector == 4 then x else 0.0
-	g = if sector == 1 or sector == 2 then c else if sector == 0 or sector == 3 then x else 0.0
-	b = if sector == 3 or sector == 4 then c else if sector == 2 or sector == 5 then x else 0.0
-	rgb((r + m) * 255, (g + m) * 255, (b + m) * 255)
-}
-// alpha from 0 (invisible) to 1 (opaque)
-with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
-alpha_of(color) := color /! 16777216
 
 // what draw_shape's kind says to shape_shader (clear_shape: gpu_canvas.rs CLEAR; test_paint_shades)
 clear_shape = 0
