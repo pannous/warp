@@ -9,6 +9,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - class-index-test (warp-global-named-capital, test/types/test_class_index_operator.pairs.warp:4, from the Rust suite): `class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4` expects 504 (index read as `#`); under position-index-words it is position(4) = index(3) = 503. Options: upgrade the test to 503 (Recommended, follows the naming) / keep 504 (`#` calls index unshifted; then position-index-words changes). Failed on main before too; ask at 10:00.
 
 ## To present
+- parameter-typed (core OK, user away): `a or b` / `a | b` as parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member refused at compile time, a node checked at run time (union-or).
 - host-list-one-shot (harness OK, user away): a host word's list result is built in one shot (shared vector_list), not cell by cell; 44100 sound samples trapped at the 2 GB cap (n² copies).
 - shown-non (core OK, user away): show/print of a statically known Text/Int/Float/Bool/Char uses its own word; node_text's rare-kind branches (Time, Ratio, big int, closure, TypeDef) only when the program makes them, via one kind_case; `"hi"` compiled 119 functions, ~40 unreachable.
 - charged-values-no-pass: 9cc25cc1e0 landed a new pass charged_values (a `h := e` reading a variable becomes `h() := e`, P71) without the user's yes; being folded into a sugar rewrite rule (or an existing pass). Keep the fold, or allow the pass?
