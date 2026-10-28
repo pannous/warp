@@ -129,7 +129,7 @@ def bit_cast(value: TypedCode, cast: list): TypedCode { TypedCode(cast#2, conver
 def floored(value: TypedCode): TypedCode {
 	if value.kind == ValueKind.Int { return value }
 	if value.kind == ValueKind.Float { return TypedCode(ValueKind.Int, value.code + [op.f64_floor, op.i64_trunc_f64_s]) }
-	if value.kind == ValueKind.Node { return runtime_call("floored_node", [value]) }
+	if value.kind == ValueKind.Node or value.kind == pending { return runtime_call("floored_node", [TypedCode(ValueKind.Node, value.code)]) }
 	refuse("floor of a " + kind_spelling(value.kind))
 }
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
