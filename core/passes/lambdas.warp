@@ -76,6 +76,7 @@ renamed(n: Node, from: text, to: Node): Node := match n {
 	Symbol(name): { if name == from then to else n }
 	Key(left, Op.Dot, right): Key(renamed(left, from, to), Op.Dot, renamed_call(right, from, to))
 	Key(left, op, right): Key(renamed(left, from, to), op, renamed(right, from, to))
+	List(items, Bracket.Curly, separator): List(items.map(item => if is_key(item, Op.Colon) and key_of(item) is symbol then Key(key_of(item), Op.Colon, renamed(value_of(item), from, to)) else renamed(item, from, to)), Bracket.Curly, separator)
 	List(items, bracket, separator): List(items.map(item => renamed(item, from, to)), bracket, separator)
 	_: n
 }
