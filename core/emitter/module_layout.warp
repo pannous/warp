@@ -151,7 +151,12 @@ def runtime_sections(functions: list): list {
 	globals = vector(own_globals.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2))))
 	words = vector(functions.map(f => name_bytes(f.name) + uleb(f.index) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result)) + signature_bytes(f.signature)))
 	name = if module.prebuilding then runtime_section else library_section
-	section(section_ids.custom, name_bytes(name) + counts + names + globals + words) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
+	# a library module's: where its own items start (what it was built behind), how many closures it makes, its class
+	# structs, which are the linked program's own of their names, and whether it calls the host's builders (a program
+	# linking it exports its own)
+	classes = module.gc_order[#gc_names ..]
+	behind = if module.prebuilding then [] else vector(module.own_from.map(uleb)) + uleb(#module.closures) + vector(classes.map(name_bytes)) + uleb(if #module.builders > 0 then 1 else 0)
+	section(section_ids.custom, name_bytes(name) + counts + names + globals + words + behind) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
 }
 # a word's signature in warp.runtime, what a call of it reads (named arguments, defaults, a rest parameter, the declared
 # result): each parameter's name, type, flags (rest 1, a default 2) and default, packed; the result as written
