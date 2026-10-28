@@ -201,10 +201,12 @@ with_reached(program: Node, module: text, in_front: bool, also: list, files: lis
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
 }
-# a linked module's definition as the program needs it: a function's head, its body left to the module's code; a
-# value, whose initializer the program runs, and a class as they are
+# a linked module's definition as the program needs it: a function's head, its body left to the module's code, a
+# class with its methods so; a value, whose initializer the program runs, and a field as they are
 declared_only(n: Node): Node := {
 	if is_group(n) { return children(n, declared_only) }
+	view = class_view(n)
+	if view != ø { return opaque([view#1, view#2, view#3[0 ..< 3] + view#3[3 ..].map(member => view_of(declared_only(member_read(member))))] + view[3 ..]) }
 	head = if n is key then key_of(n) else ø
 	if is_group(head) and bracket_of(head) == "(" {
 		if is_key(n, Op.Define) { return Key(head, Op.Define, Node.Empty) }
