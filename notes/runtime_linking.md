@@ -51,8 +51,8 @@ made_case kind made, since no program decides any more what it makes.
 - **Left out**: a word outside the core on its own (an enum's method naming the program's enum: Separator·text) is not
   in runtime.wasm; warp.runtime names it, a program compiles it as today.
 - **Globals**: the runtime's (runtime/walks.warp and the others) first, at fixed indices; a program's after them.
-- **Data**: one passive segment, the runtime's texts from offset 0. A prepended program's texts are appended behind
-  them (text_offset continues), reusing a runtime text that is already there.
+- **Data**: one passive segment, the runtime's texts from offset 0. A prepended program's texts are a second segment
+  (index 1, from offset 0), so its code is the same linked to runtime.wasm, whose segments it can't read.
 - **Tag**: the error tag, index 0, exported.
 - **Exports**: memory as `memory`, every runtime function and global under its warp name, the tag, the table `hooks`.
 - **Custom sections**:
@@ -106,11 +106,12 @@ the function index space anyway, so the program numbers only its own functions, 
 - **Trimming** the shared runtime against one program's imports is where wasm-metadce fits (roots: the imported
   names); a runtime shared by several programs stays whole.
 - **Check**: hello and a class with text() (a hook) built separately print the same as built prepended.
-- **State** (2026-10-28): `WARP_PREPENDED=linked` (emitter `runtime_linked()`, prebuilt.warp linked_bytes) writes the
-  program module; wasmtime links it (src/run/wasm_reader.rs link_runtime), the playground too (host.js withRuntime).
-  hello 22821 bytes linked vs 140696 prepended; hello, a class with text() and a `use c` program print the same both
-  ways; gate tier 1 green linked. The C functions' imports follow the runtime's host words, before its function
-  imports, so indices match the prepended layout. Next: `warp build` writes it as <name>.mod.wasm (build-three-outputs).
+- **State** (2026-10-28): `warp build x.warp` writes x.full.wasm (prepended), x.wasm (that one trimmed) and x.mod.wasm
+  (linked) from one compile: the harness passes the .mod.wasm path as the compile's sixth argument, compiler.warp
+  writes linked_bytes(module.order) of the compile it just made (separate_module). The program's code is the same in
+  both forms: its texts are data segment 1 (own_texts_segment), the runtime's segment 0 (empty in x.mod.wasm), so no
+  offset depends on the runtime's texts. hello: full 140694, trimmed 24216, mod 22823 bytes; hello, a class with
+  text() and a `use c` program print the same all three ways.
 
 ## Steps (sub-cards of runtime-linking)
 | card | step |

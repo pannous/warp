@@ -39,4 +39,6 @@ def text_value(t: text): TypedCode {
 	if one_code_point(t) { return TypedCode(ValueKind.Char, [op.i32_const] + sleb(ord(t))) }
 	TypedCode(ValueKind.Text, text_bytes(t))
 }
-def text_bytes(t: text): list { [op.i32_const] + relocatable(relocated.texts, text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code(gc_ops.array_new_data, [gc_type(gc.text), 0]) }
+def text_bytes(t: text): list { [op.i32_const] + relocatable(relocated.texts, text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code(gc_ops.array_new_data, [gc_type(gc.text), own_texts_segment()]) }
+# behind the runtime the program's texts are a segment of their own, the runtime's segment 0
+own_texts_segment(): int := if prepended() then 1 else 0

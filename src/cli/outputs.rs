@@ -2,26 +2,51 @@
 use super::*;
 
 pub(crate) const DEFAULT_COMPILED_NAME: &str = "out.wasm";
+/// The module with runtime.wasm copied in, untrimmed (x.full.wasm), and the one importing it (x.mod.wasm)
+const FULL_VARIANT: &str = "full";
+const SEPARATE_VARIANT: &str = "mod";
 
-/// `warp build`: the WebAssembly module next to the program file (out.wasm for inline code), with `--aot` its machine
-/// code too; under WARP_SELF_HOSTED=pure or pure-only the warp compiler's module, as `warp <file>` runs it
+/// `warp build`: from one compile, three modules next to the program file (out for inline code): x.full.wasm with
+/// runtime.wasm copied in, x.wasm that one trimmed, x.mod.wasm importing runtime.wasm's instance; with `--aot` the
+/// machine code of x.wasm too
 pub(crate) fn write_module(code: &str, target: &str, trim: Trim, ahead_of_time: bool) {
 	let folder = std::path::Path::new(target)
 		.parent()
 		.filter(|_| file_exists(target))
 		.map_or_else(|| env::current_dir().unwrap_or_default(), std::path::Path::to_path_buf);
-	match warp::compiler::standalone::compiled_code(code, &folder, warp::compiler::standalone::Compiler::RustCompiled) {
-		Ok(module) => write_compiled(module.bytes, target, trim, ahead_of_time),
+	let output_path = compiled_output_path(target);
+	let separate = variant_path(&output_path, SEPARATE_VARIANT);
+	let compiler = warp::compiler::standalone::Compiler::RustCompiled;
+	match warp::compiler::standalone::compiled_code_and_separate(code, &folder, compiler, Some(separate.as_ref())) {
+		Ok(module) => {
+			write_reported(&module.bytes, &variant_path(&output_path, FULL_VARIANT));
+			report_written(&separate);
+			write_compiled(module.bytes, target, trim, ahead_of_time);
+		}
 		Err(final_value) => fail(format!("nothing to compile: {}", final_value.serialize())),
 	}
+}
+
+/// x.wasm as x.<variant>.wasm
+fn variant_path(output_path: &str, variant: &str) -> String {
+	std::path::Path::new(output_path).with_extension(format!("{variant}.wasm")).to_string_lossy().into_owned()
+}
+
+fn write_reported(bytes: &[u8], path: &str) {
+	fs::write(path, bytes).unwrap_or_else(|failure| fail(format!("{path}: {failure}")));
+	report_written(path);
+}
+
+fn report_written(path: &str) {
+	let size = fs::metadata(path).map_or(0, |written| written.len());
+	println!("compiled {size} bytes to {path}");
 }
 
 /// The compiled module written next to the program file (out.wasm for inline code), trimmed as asked, with `--aot` its
 /// machine code too
 pub(crate) fn write_compiled(bytes: Vec<u8>, target: &str, trim: Trim, ahead_of_time: bool) {
 	let output_path = compiled_output_path(target);
-	fs::write(&output_path, &bytes).unwrap_or_else(|failure| fail(format!("{output_path}: {failure}")));
-	println!("compiled {} bytes to {}", bytes.len(), output_path);
+	write_reported(&bytes, &output_path);
 	let bytes = trim.apply(&output_path, bytes);
 	if ahead_of_time {
 		write_machine_code(&bytes, &output_path);
