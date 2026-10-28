@@ -44,6 +44,8 @@ const DEFAULT_EXECUTABLE_NAME: &str = "out";
 const RUN_PREFIX: &str = "run ";
 const TEST_WORD: &str = "test";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
+/// `warp build native <file>`: a primitive file as a native executable (notes/primitive.md "Native build")
+const NATIVE_WORD: &str = "native";
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/modules/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
 /// `warp fetch [package…]`: the packages fetched into packages/ as `use` fetches them; every package of packages.warp
@@ -361,6 +363,10 @@ fn run_command(args: &[String], given: &[String]) {
 		// `warp data file.warp` prints the file as data
 		let text = source_of(target);
 		println!("{}", warp::compiler::standalone::parsed(&text).serialize());
+	} else if args.len() > 3 && args[1] == "build" && args[2] == NATIVE_WORD {
+		// `warp build native <file>`: compiler.warp's own command (core/commands.warp build_native), wasm2c and cc driven
+		// in warp
+		print_and_exit(warp::compiler::standalone::command(args[1..].to_vec(), warp::compiler::standalone::Compiler::RustCompiled));
 	} else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
 		let target = extract_after(&arg_string, " ");
 		let trim = Trim::of(&target);

@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+@primitive
+# a file written and read back by a native program (WASI's calls answered by libc, lib/native/wasi.c)
+write_file("greeting.txt", "Hello from a file")
+print read_file("greeting.txt")

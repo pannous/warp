@@ -232,12 +232,14 @@ lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 	if signature is symbol and name_of(signature) in locals { return call_node(symbol(closure_call_word + #arguments), [signature] + arguments) }
 	if signature is symbol { return call_node(signature, arguments) }
 	callee = lowered_lambdas(signature, locals, lowering)
-	if is_callee(signature) { return call_node(symbol(closure_call_word + #arguments), [callee] + arguments) }
+	if is_callee(signature) or is_lambda(signature) { return call_node(symbol(closure_call_word + #arguments), [callee] + arguments) }
 	call_node(callee, arguments)
 }
 
-# `f 3 4`, words side by side: the first calls the others, its name kept
+# `f 3 4`, words side by side: the first calls the others, its name kept; a lambda first is called with them,
+# `(x => x*2) 4` as `(x => x*2)(4)` (and `{it*2} 4`, lib/sugar/calls.warp)
 lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := {
+	if #words > 1 and is_lambda(words#1) { return lowered_call(words, call_node(words#1, arguments_of(words)), locals, lowering) }
 	if #words == 0 or not (words#1 is symbol) { return group_like(n, words.map(word => lowered_lambdas(word, locals, lowering))) }
 	group_like(n, [words#1] + arguments_of(words).map(word => lowered_lambdas(word, locals, lowering)))
 }

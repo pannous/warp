@@ -1,0 +1,98 @@
+# The prelude of primitive code (notes/primitive.md, decision primitive-annotation): the words a primitive file reaches
+# without a `use`, written in primitive warp over WASI's calls, which wasmtime answers and lib/native/wasi.c answers in
+# a native build. Errors are values here: a failed call gives its WASI error number, a file that will not open the
+# empty text
+fd_write(fd: i32, pieces: pointer, count: i32, written: pointer): i32 from "wasi_snapshot_preview1"
+fd_read(fd: i32, pieces: pointer, count: i32, read: pointer): i32 from "wasi_snapshot_preview1"
+fd_seek(fd: i32, offset: i64, whence: i32, position: pointer): i32 from "wasi_snapshot_preview1"
+fd_close(fd: i32): i32 from "wasi_snapshot_preview1"
+path_open(folder: i32, lookup: i32, path: pointer, length: u32, open: i32, rights: i64, inherited: i64, flags: i32, fd: pointer): i32 from "wasi_snapshot_preview1"
+args_sizes_get(count: pointer, size: pointer): i32 from "wasi_snapshot_preview1"
+args_get(arguments: pointer, buffer: pointer): i32 from "wasi_snapshot_preview1"
+proc_exit(code: i32) from "wasi_snapshot_preview1"
+
+# a byte, a 32-bit and a 64-bit word of memory, read and written as a field: `byte_at(p).value = 10`
+struct Byte { value: u8 }
+struct Word { value: u32 }
+struct Long { value: i64 }
+byte_at(address: pointer): Byte := address
+word_at(address: pointer): Word := address
+long_at(address: pointer): Long := address
+
+# the text of `length` bytes at `address`
+text_from(address: pointer, length: u32): text := text(address, length)
+
+write(t: text): i32 := fd_write(1, t, 1, allocate(4))
+print(t: text): nothing := {
+	write(t)
+	write("\n")
+}
+
+# n in decimal digits
+text_of(n: i64): text := {
+	end = allocate(20) + 20
+	at = end
+	rest = if n < 0 then 0 - n else n
+	while yes {
+		at -= 1
+		byte_at(at).value = (rest % 10 + 48) as u8
+		rest = rest / 10
+		if rest == 0 then break
+	}
+	if n < 0 {
+		at -= 1
+		byte_at(at).value = 45
+	}
+	text_from(at, end - at)
+}
+
+# the bytes before the first 0 byte at p, a C string's
+c_length(p: pointer): u32 := {
+	n: u32 = 0
+	while byte_at(p + n).value != 0 { n += 1 }
+	n
+}
+
+# how many words the command line has, the program's path first
+arg_count(): int := {
+	sizes = allocate(8)
+	args_sizes_get(sizes, sizes + 4)
+	word_at(sizes).value
+}
+# the command line's word i, the program's path at 0
+arg(i: int): text := {
+	sizes = allocate(8)
+	args_sizes_get(sizes, sizes + 4)
+	pointers = allocate(word_at(sizes).value * 4)
+	args_get(pointers, allocate(word_at(sizes + 4).value))
+	start = word_at(pointers + (i * 4) as u32).value
+	text_from(start, c_length(start))
+}
+
+# WASI's numbers below: folder 3, the first one a host opens for the program; open 9, create and truncate; rights 6,
+# read and seek, 64 write; seek origin 2 the end, 0 the start
+# the whole content of the file at path, the empty text when it does not open
+read_file(path: text): text := {
+	opened = allocate(4)
+	if path_open(3, 0, path.address, path.length, 0, 6, 0, 0, opened) != 0 { return text_from(0, 0) }
+	fd = word_at(opened).value as i32
+	position = allocate(8)
+	fd_seek(fd, 0, 2, position)
+	size = long_at(position).value as u32
+	fd_seek(fd, 0, 0, position)
+	content = text_from(allocate(size), size)
+	fd_read(fd, content, 1, allocate(4))
+	fd_close(fd)
+	content
+}
+# the file at path made anew with the content; its WASI error number, 0 when written
+write_file(path: text, content: text): i32 := {
+	opened = allocate(4)
+	error_number = path_open(3, 0, path.address, path.length, 9, 64, 0, 0, opened)
+	if error_number != 0 { return error_number }
+	fd = word_at(opened).value as i32
+	fd_write(fd, content, 1, allocate(4))
+	fd_close(fd)
+}
+
+exit(code: i32): nothing := proc_exit(code)

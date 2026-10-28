@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+@primitive
+# `warp build native hello.warp` makes the executable hello (notes/primitive.md "Native build")
+print "Hello"

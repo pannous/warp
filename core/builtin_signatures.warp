@@ -208,12 +208,23 @@ declared_call_kind(word: text, arguments: int): text? := {
 # the libraries of the typed lines: warp's runtime, the emitter's expansions, libm
 typed_libraries = ["warp", "emitter", "'m'"]
 
-# word → its typed lines of lib/prelude.warp and lib/math.warp, the first written first
+# word → its typed lines of the prelude the lowering reads (lowering_from) and, beside lib/prelude.warp, of the
+# lib/math.warp it reaches, the first written first. A primitive file's prelude (lib/primitive.warp) has none: no GC
+# library word joins its definitions as a variant (arity_overloads.warp library_variants)
 global typed_word_lines = ø
+global word_lines_prelude = prelude_text
+# a lowering of a program behind this prelude: the library words it sees are the prelude's
+lowering_from(prelude: text) := {
+	if prelude != word_lines_prelude {
+		word_lines_prelude = prelude
+		typed_word_lines = ø
+	}
+}
 word_lines(): map := {
 	if typed_word_lines != ø { return typed_word_lines }
 	typed_word_lines = {}
-	for line in (prelude_text + "\n" + module_source("math")).split("\n") {
+	sources = if word_lines_prelude == prelude_text then prelude_text + "\n" + module_source("math") else word_lines_prelude
+	for line in sources.split("\n") {
 		for library in typed_libraries {
 			typed = typed_line(line, library)
 			if typed != ø {

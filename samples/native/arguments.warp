@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+@primitive
+# each word of the command line after the program's path, natively: `warp build native arguments.warp; ./arguments a b`
+for i in 1..arg_count() { print arg(i) }

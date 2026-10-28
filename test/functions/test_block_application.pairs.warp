@@ -1,0 +1,5 @@
+# a block reading it applied to the value beside it, glued or spaced, as a lambda is called; a data block stays data
+'{it*2} 5'	10
+'{it*2}(5)'	10
+'k = 3; {it + k} 4'	7
+'(x => x*2) 4'	8
