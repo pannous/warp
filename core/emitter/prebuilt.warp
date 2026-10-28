@@ -78,7 +78,8 @@ def runtime_image_of(wasm: list, linked: bool): any {
 		index = read_number(layout)
 		kinds = []
 		for j in 0..<read_number(layout) { kinds += [read_kind(layout)] }
-		words[name] = [index, kinds, read_kind(layout)]
+		result = read_kind(layout)
+		words[name] = [index, kinds, result, read_signature(layout)]
 	}
 	types = uleb_read(wasm, section_place(wasm, section_ids.type)#1)#1
 	RuntimeImage(wasm, types, imports, functions, texts_size, globals, words, hooks, linked)
@@ -102,6 +103,17 @@ def read_names(reader: ByteReader): list {
 	names
 }
 def read_kind(reader: ByteReader): ValueKind { held_kinds[read_number(reader)] }
+def read_signature(reader: ByteReader): any {
+	parameters = []
+	for i in 0..<read_number(reader) {
+		name = read_name(reader)
+		type_name = read_name(reader)
+		flags = read_number(reader)
+		default = if bit_and(flags, default_flag) != 0 then [unpack(read_name(reader))] else ø
+		parameters += [Parameter(name, type_name, default, bit_and(flags, rest_flag) != 0)]
+	}
+	Signature(parameters, read_name(reader))
+}
 # the kinds a function or global of runtime.wasm holds, each written as its place here
 held_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Bool, ValueKind.Char, ValueKind.I32, ValueKind.Text, ValueKind.List, ValueKind.Node, ValueKind.Time, ValueKind.Nothing]
 def held_code(kind: ValueKind): int {
@@ -146,15 +158,18 @@ def runtime_imports(host: map): list {
 	imports
 }
 def runtime_shift(): int := #module.imports - runtime_image.imports
-# each runtime word the program calls is runtime.wasm's, at its index, of its kinds: none is compiled again
+# the runtime words a program calls: runtime.wasm's, each at its index, of its kinds and signature; none is lowered or
+# compiled again (the runtime's sources are read only to build runtime.wasm)
 def bind_runtime_words() {
-	for name in module.runtime.keys {
-		if name in runtime_image.words {
+	for name in runtime_image.words.keys {
+		if name not in runtime_image.hooks {
 			word = runtime_image.words[name]
-			f = module.runtime[name]
+			f = Function(name, word#4, ø)
 			f.index = word#1 + runtime_shift()
 			f.kinds = word#2
 			f.result = word#3
+			f.is_runtime = yes
+			module.runtime[name] = f
 		}
 	}
 }
