@@ -3787,7 +3787,7 @@ dependencies = [
 
 [[package]]
 name = "warp-lang"
-version = "1.4.1"
+version = "1.5.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -3824,7 +3824,7 @@ dependencies = [
 
 [[package]]
 name = "warp-runtime"
-version = "1.4.1"
+version = "1.5.0"
 dependencies = [
  "libc",
  "libloading 0.9.0",
