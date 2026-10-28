@@ -48,7 +48,7 @@ def all_hooks() {
 ## functions, globals and texts first, as runtime.wasm has them; the program's numbered behind them
 # runtime.wasm read back (prepend_runtime), ø while a program compiles the runtime words it calls itself
 global runtime_image = ø
-class RuntimeImage { wasm: list; types: int; functions: int; data: int; globals: list; words: map; hooks: list }
+class RuntimeImage { wasm: list; types: int; imports: int; functions: int; data: int; globals: list; words: map; hooks: list }
 def prepend_runtime(wasm: any) { runtime_image = if wasm == ø then ø else runtime_image_of(wasm) }
 def prepended(): bool { runtime_image != ø and not module.prebuilding }
 # its layout, the binary warp.runtime: the counts, the hooks' and left words' names, each global's name and kind, each
@@ -75,7 +75,7 @@ def runtime_image_of(wasm: list): any {
 		words[name] = [index, kinds, read_kind(layout)]
 	}
 	types = uleb_read(wasm, section_place(wasm, section_ids.type)#1)#1
-	RuntimeImage(wasm, types, functions, texts_size, globals, words, hooks)
+	RuntimeImage(wasm, types, imports, functions, texts_size, globals, words, hooks)
 }
 # a reading of bytes from a place on: LEB128 numbers, names (a length and UTF-8 bytes), kinds (held_kinds' places)
 class ByteReader { bytes: list; offset: int }
@@ -128,21 +128,24 @@ def behind_runtime() {
 	module.runtime_types = runtime_image.types - #gc_names
 }
 # the runtime's imports, as runtime_wasm_module declared them: WASI's fd_write, then every host word
+# then the program's C functions, which move the runtime's functions up by their count (runtime_shift)
 def runtime_imports(host: map): list {
 	held = module.host
 	module.host = host
-	imports = imported_words(host.keys, yes)
+	imports = imported_words(host.keys.filter(name => not is_c_function(host[name])), yes)
+	if #imports != runtime_image.imports { throw "runtime.wasm imports other host words than this harness has: warp rebuild writes it anew" }
+	imports += imported_words(host.keys.filter(name => is_c_function(host[name])), no)
 	module.host = held
-	if #imports != uleb_read(runtime_image.wasm, section_place(runtime_image.wasm, section_ids.import)#1)#1 { throw "runtime.wasm imports other host words than this harness has: warp rebuild writes it anew" }
 	imports
 }
+def runtime_shift(): int := #module.imports - runtime_image.imports
 # each runtime word the program calls is runtime.wasm's, at its index, of its kinds: none is compiled again
 def bind_runtime_words() {
 	for name in module.runtime.keys {
 		if name in runtime_image.words {
 			word = runtime_image.words[name]
 			f = module.runtime[name]
-			f.index = word#1
+			f.index = word#1 + runtime_shift()
 			f.kinds = word#2
 			f.result = word#3
 		}
@@ -152,7 +155,7 @@ def bind_runtime_words() {
 runtime_hook(name: text, parameters: list): any := {
 	word = runtime_image.words[name]
 	f = bare_function(name)
-	f.index = word#1
+	f.index = word#1 + runtime_shift()
 	f.kinds = word#2
 	f.result = word#3
 	f.locals = []
@@ -172,8 +175,15 @@ def with_entries(content: list, more: list): list {
 	uleb(count#1 + #more) + content[count#2 ..] + concatenated(more)
 }
 # the code section's entries of the runtime's functions, a hook's the program's code
-def runtime_code_entries(): list {
+# the runtime's code, each call of a runtime function moved by the C functions' imports (not those of host words)
+def rebased_runtime_code(): list {
 	content = runtime_part(section_ids.code)
+	if runtime_shift() == 0 { return content }
+	calls = relocations_of(runtime_image.wasm).filter(entry => entry#2 == relocated.calls and entry#3 == runtime_space and uleb_read(content, entry#1)#1 >= runtime_image.imports)
+	rebased(content, calls, [[runtime_shift()]])
+}
+def runtime_code_entries(): list {
+	content = rebased_runtime_code()
 	count = uleb_read(content, 0)
 	at = count#2
 	entries = []
@@ -192,23 +202,53 @@ def runtime_texts(): list {
 	size = uleb_read(content, 2)
 	content[size#2 ..< size#2 + size#1]
 }
-# a subsection of runtime.wasm's names, by its id, with more entries
-def runtime_names(id: int, more: list): list {
+# a subsection of runtime.wasm's names by its id, its content (an empty vector when it has none); with more entries
+def runtime_subsection(id: int): list {
 	content = runtime_part(section_ids.custom, "name")
 	at = 0
 	while at < #content {
 		size = uleb_read(content, at + 1)
-		if content[at] == id { return subsection(id, with_entries(content[size#2 ..< size#2 + size#1], more)) }
+		if content[at] == id { return content[size#2 ..< size#2 + size#1] }
 		at = size#2 + size#1
 	}
-	subsection(id, vector(more))
+	uleb(0)
+}
+def runtime_names(id: int, more: list): list { subsection(id, with_entries(runtime_subsection(id), more)) }
+# the runtime's local names, each function's moved by runtime_shift, then more
+def shifted_locals(content: list, more: list): list {
+	if runtime_shift() == 0 { return with_entries(content, more) }
+	count = uleb_read(content, 0)
+	at = count#2
+	entries = []
+	for i in 0..<count#1 {
+		index = uleb_read(content, at)
+		end = name_map_end(content, index#2)
+		entries += [uleb(index#1 + runtime_shift()) + content[index#2 ..< end]]
+		at = end
+	}
+	uleb(count#1 + #more) + concatenated(entries) + concatenated(more)
+}
+# where a name map (a vector of index and name) that starts at `at` ends
+def name_map_end(content: list, at: int): int {
+	count = uleb_read(content, at)
+	at = count#2
+	for i in 0..<count#1 {
+		at = uleb_read(content, at)#2
+		size = uleb_read(content, at)
+		at = size#2 + size#1
+	}
+	at
 }
 def own_function_type(f: Function): int := runtime_image.types + #module.gc_order - #gc_names + f.index - #module.imports - runtime_image.functions
 def prepended_bytes(functions: list): list {
 	function_types = functions.map(function_type)
 	classes = module.gc_order[#gc_names ..]
 	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
-	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), class_types + function_types))
+	# the C functions' import types after every other: no runtime type moves
+	c_imports = module.imports[runtime_image.imports ..]
+	c_types = runtime_image.types + #classes + #functions
+	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), class_types + function_types + c_imports.map(entry => entry#3)))
+	c_entries = range_list(#c_imports).map(k => name_bytes(c_imports[k]#1) + name_bytes(c_imports[k]#2) + [import_function_byte] + uleb(c_types + k))
 	declared = section(section_ids.function, with_entries(runtime_part(section_ids.function), functions.map(f => uleb(own_function_type(f)))))
 	own_globals = module.global_order[#runtime_image.globals ..]
 	globals = section(section_ids.globals, with_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
@@ -216,15 +256,17 @@ def prepended_bytes(functions: list): list {
 	segment = runtime_texts() + data_bytes()
 	texts = section(section_ids.data, vector([[passive_segment] + uleb(#segment) + segment]))
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
-	parts = [types, section(section_ids.import, runtime_part(section_ids.import)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
+	parts = [types, section(section_ids.import, with_entries(runtime_part(section_ids.import), c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
 		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(1)), codes, texts]
 	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
-	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + marks
+	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + marks + c_functions_custom_section()
 }
 # runtime.wasm's names and the program's behind them
 def prepended_names(functions: list, classes: list, own_globals: list): list {
-	content = runtime_names(names_subsections.functions, functions.map(f => index_name(f.index, f.name)))
-	content += runtime_names(names_subsections.locals, functions.map(local_name_map))
+	imported = range_list(#module.imports).map(i => index_name(i, module.imports#(i + 1)#2))
+	words = runtime_image.words.keys.map(name => index_name(runtime_image.words[name]#1 + runtime_shift(), name))
+	content = subsection(names_subsections.functions, vector(imported + words + functions.map(f => index_name(f.index, f.name))))
+	content += subsection(names_subsections.locals, shifted_locals(runtime_subsection(names_subsections.locals), functions.map(local_name_map)))
 	content += runtime_names(names_subsections.types, classes.map(name => index_name(module.gc_indices[name], name)))
 	content += runtime_names(names_subsections.globals, own_globals.map(name => index_name(module.globals[name]#1, name)))
 	content += runtime_names(names_subsections.fields, classes.map(name => uleb(module.gc_indices[name]) + name_map(gc_field_names(name))))
