@@ -37,7 +37,7 @@ fi
 
 cd $worktree || exit 1
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_LIB=$worktree/lib
-# the compilers of the branch's lib/: warp.wasm (`warp pure`, built by the seed) and warp-self.wasm (`warp self`,
+# the compilers of the branch's lib/: warp.wasm (plain `warp`'s, built by the seed) and warp-self.wasm (`warp self`,
 # warp.wasm once it compiles itself, self_lane below); a lib/ that passed self alone broke main's `warp rebuild pure`
 # twice on 2026-10-22
 check_lane() {

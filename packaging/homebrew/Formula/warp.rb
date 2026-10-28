@@ -62,6 +62,6 @@ class Warp < Formula
   test do
     assert_match version.to_s, shell_output("#{bin}/warp --version") unless build.head?
     assert_equal "42", shell_output("#{bin}/warp eval '6*7'").strip.split.last
-    assert_equal "42", shell_output("#{bin}/warp pure '6*7'").strip.split.last if (pkgshare/"warp.wasm").exist? || (pkgshare/"compiler.wasm").exist?
+    assert_equal "42", shell_output("#{bin}/warp '6*7'").strip.split.last if (pkgshare/"warp.wasm").exist? || (pkgshare/"compiler.wasm").exist?
   end
 end

@@ -81,7 +81,7 @@ expect "inline code's output" 0 "inline 42" -- "$warp" 'print "inline " + 6*7'
 expect "compile --wasm writes the module" 0 "bytes to $stage/hello.wasm" -- "$warp" compile --wasm "$stage/hello.warp"
 expect "the compiled module runs" 0 "$HELLO" -- "$warp" "$stage/hello.wasm"
 expect "other commands are warp-rust's: version" 0 "🌀 Warp" -- "$warp" version
-expect "other commands are warp-rust's: help" 0 "warp pure <file.warp>" -- "$warp" --help
+expect "other commands are warp-rust's: help" 0 "warp self <file.warp>" -- "$warp" --help
 
 expect "a refused program fails loudly" 1 "$REFUSAL" ! "ran by" -- stub "$stage/stub/refused.warp"
 expect "refused inline code fails loudly" 1 "$REFUSAL" ! "ran by" -- stub 'refused()'
