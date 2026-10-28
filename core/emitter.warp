@@ -1272,6 +1272,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.gc_indices = {}
 	module.gc_order = []
 	module.class_structs = {}
+	module.aliases = type_synonyms()
 	collect_types(program)
 	for child in module.parents.keys { inherit_fields(child) }
 	declare_class_structs()
