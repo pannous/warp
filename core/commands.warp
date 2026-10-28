@@ -84,35 +84,34 @@ refuse_native(command: text) := {
 
 # `warp build native app.warp`: the primitive file (notes/primitive.md "Native build") as the native executable `app`:
 # its module made C by wasm2c (the module named "program": w2c_program_main), compiled by cc with wasm2c's runtime and
-# lib/native/wasi.c, which answers the WASI calls with libc and has main call run_main, written here to print what the
-# program's main gives
+# lib/native/wasi.c, which answers the WASI calls with libc and has main call run_main, and the main.c of primitive.warp
+# native_main, which calls the C functions the program imports and prints what its main gives
 NATIVE_WORD = "native"
 WASM2C_MODULE = "program"
 C_COMPILER = "cc -O2"
 # wasm2c's runtime and headers, in these folders of the wabt whose wasm2c is on the PATH
 WASM2C_RUNTIME = "/share/wabt/wasm2c"
 WABT_HEADERS = "/include"
-# what run_main prints of each kind of value main gives (primitive.warp main_value_kind)
-printed_main = {"": "w2c_program_main(program);", signed: "printf(\"%lld\\n\", (long long)w2c_program_main(program));",
-	unsigned: "printf(\"%llu\\n\", (unsigned long long)w2c_program_main(program));", float: "printf(\"%g\\n\", (double)w2c_program_main(program));"}
-
 build_native(source_file: text, library: text) := {
 	source = read(source_file)
 	if not is_primitive_file(source) { raise "warp build native builds a primitive file, whose first line is `@primitive` (notes/primitive.md)" }
 	emitting_file(working_relative(source_file))
 	executable = source_file.remove_suffix(".warp")
 	stem = executable + ".native"
+	native_build = yes
 	write_bytes(stem + ".wasm", compile(source, folder_of(source_file)))
 	header = stem.split("/").last() + ".h"
-	write(stem + ".main.c", "#include <stdio.h>\n#include \"" + header + "\"\n#include \"" + library + "/native/wasi.c\"\nvoid run_main(w2c_program* program) { " + printed_main[main_value_kind()] + " }\n")
+	write(stem + ".main.c", native_main(header, library))
 	wabt = folder_of(folder_of(shell("command -v wasm2c").trim()))
 	runtime = wabt + WASM2C_RUNTIME
 	shell("wasm2c " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
 	files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
-	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm")
+	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + native_links())
 	shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
 	print "built " + executable
 }
+# -l of each C library the program imports beside libc and libm
+native_links(): text := c_libraries(c_functions_imported()).filter(l => l not in c_and_m).map(l => " -l" + l).join("")
 quoted_path(path: text): text := "\"" + path + "\""
 # os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
 shell(line: text): text := std_io("os", "command", [line])
