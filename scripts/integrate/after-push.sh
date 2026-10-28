@@ -45,9 +45,15 @@ fi
 echo $$ >"$lock/pid"
 trap 'rm -rf "$lock"' EXIT
 
-red() { # red <what> [--urgent]: a card for the pushers, then on
-	todo add Now "main ${tip:0:10}: $1 (pushed since ${since:0:10}: $pushed)" "${@:2}" >/dev/null
-	say "RED $1"
+red() { # red <what: detail> [--urgent]: one card per kind of failure (its key from <what>), noted again per failing tip
+	local key text="main ${tip:0:10}: $1 (pushed since ${since:0:10}: $pushed)"
+	key=$(echo "${1%%:*}" | tr 'A-Z ' 'a-z-' | tr -cd 'a-z0-9-')
+	if todo show "$key" 2>/dev/null | head -1 | grep -qv '^\[Done\]\|Archived'; then
+		todo note "$key" "$text" >/dev/null
+	else
+		todo add Now "$text" --key "$key" "${@:2}" >/dev/null
+	fi
+	say "RED $1 (card $key)"
 }
 
 # copy_compilers <lib> <folder>: the compilers a lib/ keeps (warp.wasm; warp-self.wasm only when promoted from the

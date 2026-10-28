@@ -1,0 +1,27 @@
+# a class method named like a sugar word, a library function or a function of the program keeps both meanings: a call
+# goes by its receiver's static type (decision method-routing-by-type, card method-name-clash)
+
+# a list's own add beside a class's add(x)
+is! 'class Counter { names = []; counts = []
+ add(x) := { i = x in names; if i { counts#i += 1 } else { names.add(x); counts.add(1) } }
+}
+c = Counter(); c.add("a"); c.add("b"); c.add("a"); c.counts#1 * 10 + count(c.names)' 22
+
+# list.warp's tally(xs) beside a class's tally(x)
+is! 'class Votes { names = []
+ tally(x) := { names.add(x) }
+}
+v = Votes(); v.tally("a"); v.tally("b"); count(v.names)' 2
+
+# the program's vote(xs) beside a class's vote(x)
+is! 'vote(xs) := 100
+class V { n = 1
+ vote(x) := n + x
+}
+v = V(); v.vote(2) + vote([1])' 103
+
+# a list's max() beside a class's max(x)
+is! 'class V { n = 1
+ max(x) := n + x
+}
+v = V(); v.max(3) + [1, 5].max()' 9

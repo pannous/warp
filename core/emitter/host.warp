@@ -35,7 +35,7 @@ host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], 
 # made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
 # the trap detail the host left (src/host/native.rs raised)
 def exported_builders(): any {
-	if #module.builders > 0 { return ø }
+	if module.builders.any(f => f.name == host_builders#1#1) { return ø }
 	for builder in host_builders {
 		parameters = builder#2
 		values = range_list(#parameters).map(i => if parameters[i] == ValueKind.Char then TypedCode(ValueKind.Int, [op.local_get] + uleb(i) + [op.i64_extend_i32_u]) else TypedCode(parameters[i], [op.local_get] + uleb(i)))
