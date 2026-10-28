@@ -161,7 +161,10 @@ pub fn link_module_libraries(
 		let wasm_module = crate::modules::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
 		if !built_in_libc
 			&& !wasm_module
-			&& !matches!(module_name, "m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY)
+			&& !matches!(
+				module_name,
+				"m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY | crate::run::wasm_reader::RUNTIME_MODULE
+			)
 		{
 			libs_to_link.entry(module_name.to_string()).or_default().insert(import.name().to_string());
 		}
