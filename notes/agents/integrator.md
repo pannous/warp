@@ -15,7 +15,8 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
   beside ~/dev/bin/warp stay in step (user). In /Volumes/Worktrees/integrate2 at main's tip it takes the compilers of
   its lib (`scripts/rebuild.sh both`: the pusher's smoke build of the same inputs is reused from the store), checks
   hello, moves warp.wasm and warp-self.wasm (only when promoted from the same inputs) beside the binary and pulls the
-  user's checkout first; promote-self.sh and tiers 1-2 (`scripts/gate.sh`) follow. One run at a time: a second one
+  user's checkout first; promote-self.sh and tiers 1-2 (`scripts/gate.sh`) follow apart (`--slow`, in
+  /Volumes/Worktrees/integrate-slow), so they never hold the next install. One run at a time: a second one
   returns, the running one loops while main moved past what it handled, installing the newest tip first.
 - What goes red becomes a card in Now naming the commits pushed since; the pusher fixes it forward. A red smoke test
   (hello) on main is urgent, and revert first, bisect after (user, standing): when the suspect push is known,
