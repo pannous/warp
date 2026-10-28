@@ -1,0 +1,16 @@
+#!/usr/bin/env warp
+@primitive
+# a struct in a primitive file is a fixed layout in linear memory, as in C: len at 0, tag at 4, total at 8
+struct Header { len: u32; tag: u8; total: i64 }
+
+# the sum of the first n squares, kept in a Header
+squares(n: u32): Header := {
+	header = Header(len: 0, tag: 7, total: 0)
+	while header.len < n {
+		header.len += 1
+		header.total += (header.len * header.len) as i64
+	}
+	header
+}
+h = squares(10)
+h.total + h.tag

@@ -20,7 +20,7 @@ def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map
 def function_body(f: Function, at: int): list {
 	locals = vector(f.locals.map(k => [1] + value_type(k)))
 	code = f.code + [op.end]
-	if not module.prebuilding { return uleb(#locals + #code) + locals + code }
+	if not relocates() { return uleb(#locals + #code) + locals + code }
 	marks = []
 	unmarked = []
 	for byte in code { if byte < 0 { marks += [[#unmarked, byte]] } else { unmarked += [byte] } }
@@ -113,9 +113,9 @@ def module_bytes(functions: list): list {
 		tables = section(table_section_id, vector([[funcref_byte, 0] + uleb(#module.dispatchers)]))
 	}
 	exported = section(section_ids.export, vector(exports))
-	# the texts' bytes: one passive segment, which array.new_data reads
-	segments = section(section_ids.data_count, uleb(1))
-	texts = section(section_ids.data, vector([passive(data_bytes())]))
+	# the texts' bytes: a passive segment each, which array.new_data reads
+	segments = section(section_ids.data_count, uleb(#module.texts))
+	texts = section(section_ids.data, vector(text_segments()))
 	tags = []
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#module.gc_order + #module.imports + #functions)])) }
 	parts = [types, imported, declared, tables, memory, tags, globals, exported, segments, codes, texts]
@@ -140,15 +140,18 @@ def runtime_exports(functions: list): list {
 	}
 	exports
 }
-# runtime.wasm's layout (warp.runtime, binary: notes/runtime_linking.md "warp.runtime") and its relocations
-# (warp.relocations, a vector of [offset in the code section's content, kind, space]); none in a program's module
+# a prebuilt module's layout (binary: notes/runtime_linking.md "warp.runtime") and its relocations (warp.relocations,
+# a vector of [offset in the code section's content, kind, space]): runtime.wasm's (warp.runtime), a library module's
+# own items behind the runtime (warp.module); none in a program's module
 def runtime_sections(functions: list): list {
-	if not module.prebuilding { return [] }
-	counts = concatenated([#module.gc_order, #module.imports, #functions, #module.global_order, #data_bytes()].map(uleb))
+	if not module.relocating { return [] }
+	own_globals = module.global_order[(if module.prebuilding then 0 else #runtime_image.globals) ..]
+	counts = concatenated([#module.gc_order, #module.imports, #functions, #own_globals, #module.texts].map(uleb))
 	names = vector(module.dispatchers.map(f => name_bytes(f.name))) + vector(module.left_out.keys.map(name_bytes))
-	globals = vector(module.global_order.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2))))
+	globals = vector(own_globals.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2))))
 	words = vector(functions.map(f => name_bytes(f.name) + uleb(f.index) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result)) + signature_bytes(f.signature)))
-	section(section_ids.custom, name_bytes(runtime_section) + counts + names + globals + words) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
+	name = if module.prebuilding then runtime_section else library_section
+	section(section_ids.custom, name_bytes(name) + counts + names + globals + words) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
 }
 # a word's signature in warp.runtime, what a call of it reads (named arguments, defaults, a rest parameter, the declared
 # result): each parameter's name, type, flags (rest 1, a default 2) and default, packed; the result as written
@@ -179,16 +182,42 @@ def relocations_of(wasm: list): list {
 	}
 	entries
 }
-def rebased(code: list, relocations: list, shifts: list): list {
+def rebased(code: list, relocations: list, moves: list): list {
 	for entry in relocations {
 		space = entry#3
-		shift = if space < #shifts and entry#2 < #shifts[space] then shifts[space][entry#2] else 0
-		if shift != 0 {
-			moved = padded_uleb(uleb_read(code, entry#1)#1 + shift)
-			for i in 0..<padded_width { code[entry#1 + i] = moved[i] }
+		if space < #moves and entry#2 < #moves[space] {
+			old = uleb_read(code, entry#1)#1
+			new = moved(moves[space][entry#2], old)
+			if new != old {
+				operand = padded_uleb(new)
+				for i in 0..<padded_width { code[entry#1 + i] = operand[i] }
+			}
 		}
 	}
 	code
+}
+# where an index of one kind goes in a link: the table's entry for it, else shifted (the one old -> new rule of
+# rebased and moved_body, over every index space: functions, types, globals, texts)
+class Move { shift: int; table: map }
+def moved(move: Move, index: int): int { if move.table.has(index) then move.table[index] else index + move.shift }
+def shifted(shift: int): Move { Move(shift, {}) }
+# a function's entry of the code section with each relocatable operand moved by moves[kind], written unpadded
+def moved_body(f: Function, moves: list): list {
+	locals = vector(f.locals.map(k => [1] + value_type(k)))
+	code = f.code + [op.end]
+	out = []
+	at = 0
+	while at < #code {
+		if code[at] < 0 {
+			operand = uleb_read(code, at + 1)
+			out += uleb(moved(moves[kind_marked(code[at])], operand#1))
+			at = operand#2
+		} else {
+			out += [code[at]]
+			at += 1
+		}
+	}
+	uleb(#locals + #out) + locals + out
 }
 # [start, end] of the content of a module's section of this id, a custom one by its name; ø when it has none
 def section_place(wasm: list, id: int, name: text = ""): list? {
@@ -206,8 +235,8 @@ def section_place(wasm: list, id: int, name: text = ""): list? {
 	}
 	ø
 }
-# the data segment: each text's bytes once, in the order text_offset gave them their offsets
-def data_bytes(): list { concatenated(module.texts.keys.map(t => t.bytes)) }
+# the data segments: each text's bytes once, in the order text_segment numbered them
+def text_segments(): list { module.texts.keys.map(t => passive(t.bytes)) }
 def passive(bytes: list): list { [passive_segment] + uleb(#bytes) + bytes }
 def import_entry(i: int): list {
 	entry = module.imports#(i + 1)

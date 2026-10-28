@@ -93,10 +93,19 @@ plain_node(n: Node): Node := {
 	plain = plain_parts(n)
 	if plain === ø or is_positioned(plain) then plain else placed(plain, n)
 }
+# the attributes an extension reads past plain_node, each the names it marks: `@primitive add(…) := …` marks add,
+# noted as the layer goes (as rewrites.warp lists the extensions' rule files)
+read_attributes = ["primitive"]
+global marked_names = {}
+marked(attribute: any, n: Node): Node := {
+	name = if n is symbol then name_of(n) else if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ø
+	if attribute in read_attributes and name != ø { marked_names[attribute] = (marked_names.get(attribute) ?? []) + [name] }
+	n
+}
 plain_parts(n: Node): Node := match n {
 	Key(left, op, right): {
 		if left == symbol(attribute_word) and right#1 == mutated_mark { return List([symbol(unwrap_word), plain_node(right#3)], Bracket.Round, Separator.None) }
-		if left == symbol(attribute_word) { return plain_node(right#3) }
+		if left == symbol(attribute_word) { return marked(right#1, plain_node(right#3)) }
 		if left == opaque_symbol { return if is_empty_group(right) and right#2 not in ["{", "["] then ø else n }
 		Key(plain_node(left), op, plain_node(right))
 	}

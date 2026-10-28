@@ -56,14 +56,17 @@ made_case kind made, since no program decides any more what it makes.
 - **Left out**: a word outside the core on its own (an enum's method naming the program's enum: Separator·text) is not
   in runtime.wasm; warp.runtime names it, a program compiles it as today.
 - **Globals**: the runtime's (runtime/walks.warp and the others) first, at fixed indices; a program's after them.
-- **Data**: one passive segment, the runtime's texts from offset 0. A prepended program's texts are a second segment
-  (index 1, from offset 0), so its code is the same linked to runtime.wasm, whose segments it can't read.
+- **Data**: a passive segment per text (card trim-prepended-runtime), so wasm-opt drops the texts no kept code reads
+  (one segment held all of them, and the 12-byte text `show` reads kept 23 KB in a trimmed hello). A text is
+  `i32.const 0, i32.const length, array.new_data $text <segment>`. A prepended program's texts are segments numbered
+  behind the runtime's (first_text_segment); a linked one declares the runtime's as empty segments, so its code is
+  the same (until mod-imports-used maps them away).
 - **Tag**: the error tag, index 0, exported.
 - **Exports**: memory as `memory`, every runtime function and global under its warp name, the tag, the table `hooks`.
 - **Custom sections**:
   - `name`, as the emitter writes it today (functions, locals, types, fields, globals).
   - `warp.runtime`, the layout, binary so a compile reads it in milliseconds with no parser and no cache (user: "read
-    from the WebAssembly modules"): five ulebs G, imports, functions, globals, data size; the hooks' names in
+    from the WebAssembly modules"): five ulebs G, imports, functions, globals, text segments; the hooks' names in
     table-slot order; the left words' names; the globals, each [name, kind]; the words, each [name, index, vector of
     parameter kinds, result kind, vector of parameters, declared result]. A parameter is [name, type name, flags (rest
     1, a default 2), the default packed (pack) if flagged]; what a call needs (named arguments, defaults, rest), so a
@@ -73,8 +76,8 @@ made_case kind made, since no program decides any more what it makes.
     can't tell Bool, Int and Char apart.
   - `warp.relocations` (replaced warp.calls): a vector of [offset, kind, space] uleb triples, one per padded 5-byte
     operand of the code: offset its byte in the code section's content (behind its vector count); kind what it indexes,
-    0 a function (call), 1 a type (a GC op's type immediates), 2 a global (global.get/set), 3 a text's data offset
-    (i32.const ahead of array.new_data); space the index space: 0 runtime, 1 own, 2+k the k-th module a module's
+    0 a function (call), 1 a type (a GC op's type immediates), 2 a global (global.get/set), 3 a text's data segment
+    (array.new_data's segment index); space the index space: 0 runtime, 1 own, 2+k the k-th module a module's
     declarations name. runtime.wasm: all space 0 (5665 entries). Global initializers name only the fixed GC types and
     stay unpadded. One reader and one rule (emitter/module_layout.warp): `relocations_of(wasm)`, and
     `rebased(code, relocations, shifts)` adding shifts[space][kind] to each operand in place, for a module appended
@@ -90,6 +93,17 @@ made_case kind made, since no program decides any more what it makes.
   source.
 - Modules have no hooks of their own: a module's class (units) is a class of the linked program, its text() and ==
   go into the program's dispatcher; module code calls the runtime's hook stubs.
+- Built (2026-10-28): `warp module <name> [runtime.wasm] [<name>.wasm]`, `warp modules <folder> [runtime.wasm]`
+  (core/compiler.warp write_module: compile() given runtime.wasm, `module.relocating`); `warp rebuild modules` writes
+  modules/<name>.wasm beside warp.wasm (std_module_names, ~25 s; part of every rebuild once a link appends them), rebuild.sh keeps them in the
+  store with runtime.wasm. Each file today is the whole prepended module (runtime + own items, valid wasm), its section
+  `warp.module` in warp.runtime's binary layout, counting only its own items; its own operands are marked space 1,
+  offsets from the code section's content start. 26 of 36 prebuild; the rest are named with their refusal, mostly a
+  word whose untyped parameters are nodes reaching a call the core lacks for nodes (sound `number(…)`, math `dot`).
+- Open: a link appending the own items (rebased, shifts per space); the module's prelude words are its own copy
+  (they should be the prelude module's, space 2+k); closures into module.closures behind the program's, closure ids as
+  a padded sleb behind i64.const (fixer's plan); classes from warp.declarations into module.classes before late_code;
+  late_code once all modules are bound.
 
 ## Hooks (runtime words calling program code: a class's text(), ==)
 One hook list in the warp.runtime section. Prepended: the stub bodies are replaced by the program's. Separately linked:
@@ -119,6 +133,12 @@ the function index space anyway, so the program numbers only its own functions, 
   both forms: its texts are data segment 1 (own_texts_segment), the runtime's segment 0 (empty in x.mod.wasm), so no
   offset depends on the runtime's texts. hello: full 140694, trimmed 24216, mod 22823 bytes; hello, a class with
   text() and a `use c` program print the same all three ways.
+- **Only what it uses** (card mod-imports-used): a program also written as x.mod.wasm is emitted relocatable
+  (prebuilt.warp relocates(): padded, marked operands as runtime.wasm's), and linked_bytes moves every operand to the
+  module's own numbering with one rule (module_layout.warp Move: a table old -> new, else a shift; rebased() and
+  moved_body() apply it): imports only the host words, C functions and runtime functions its code calls, only the
+  runtime function types used (behind the fixed GC types), its classes and own types behind them, its texts from
+  segment 0. hello.mod.wasm 22823 -> 2727 bytes (imports 1074, code 844, types 271); x.wasm and x.full.wasm as before.
 
 ## Steps (sub-cards of runtime-linking)
 | card | step |

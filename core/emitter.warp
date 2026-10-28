@@ -76,6 +76,7 @@ export_tag_byte = 4
 call_indirect = 17
 hooks_table = "hooks"
 runtime_section = "warp.runtime"
+library_section = "warp.module"
 # its relocations, and a prebuilt module's: each padded operand's [offset, kind, space] (relocatable), the kind of index
 # it holds and the space it indexes: the runtime's, a module's own, its k-th used module's (2 + k)
 relocations_section = "warp.relocations"
@@ -226,8 +227,8 @@ survey_setting = "WARP_EMIT_SURVEY"
 # a function as written, its name, signature and body; compiling it gives the rest: kinds its parameters' kinds, result
 # its result's kind
 class Function { name: text; signature: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: map = {}; sums: map = {}; gives_nothing: bool = no }
-# runtime: the runtime words by name; texts: the offset of each text's bytes in the module's data segment, which
-# holds the texts in the order first used, text_size bytes so far; placed: the functions in order so far
+# runtime: the runtime words by name; texts: the data segment of each text's bytes, numbered in the order first used
+# from first_text_segment on; placed: the functions in order so far
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
@@ -244,9 +245,11 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
+# prebuilding: runtime.wasm is being built; relocating: a prebuilt module is (runtime.wasm or a library module's), its
+# words compiled from their declared kinds and every index operand padded and listed (relocatable)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0 }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; first_text_segment: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocating: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0 }
 
 module = Module({}, [])
 
@@ -515,8 +518,7 @@ def call_code(index: int): list { [op.call] + relocatable(relocated.calls, index
 # behind the mark of its kind and space that function_body takes off (marks); the module's own items are those from
 # module.own_from[kind] on, every index of a kind it has none of is the runtime's
 def relocatable(kind: int, index: int): list {
-	plain = if kind == relocated.texts then sleb(index) else uleb(index)
-	if not module.prebuilding { return plain }
+	if not relocates() { return uleb(index) }
 	space = if kind < #module.own_from and index >= module.own_from[kind] then own_space else runtime_space
 	[relocation_mark(kind, space)] + padded_uleb(index)
 }
@@ -1299,7 +1301,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		declared_global(failed_in_name, ValueKind.Text)
 	}
 	module.texts = {}
-	module.text_size = 0
+	module.first_text_segment = 0
 	# the host words, but those the program defines itself taking as many values: its own `notify(x) := …` is its own,
 	# its own `paint(picture, width, height)` leaves the host's paint of four
 	module.host = {}
@@ -1346,6 +1348,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	# imported ahead of the functions, whose indices follow them: every host or WASI word the program reaches
 	module.imports = imported_words(module.host.keys.filter(name => module.prebuilding or name in reached or (name in time_host_words and makes_time(program))), prints)
 	if prepended() { module.imports = runtime_imports(host) }
+	if prepended() and module.relocating { module.own_from = own_items_from() }
 	c_function_globals()
 	for name in module.runtime.keys {
 		word = module.runtime[name]

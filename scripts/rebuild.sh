@@ -61,11 +61,10 @@ logged() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') tree=$tree hash=$hash $1 $2" >>
 copied() { cp -c "$1" "$2" 2>/dev/null || cp --reflink=auto "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
 inputs_line() { echo "$hash rust=$rust commit=$(git -C "$tree" rev-parse --short HEAD 2>/dev/null) built=$(date '+%Y-%m-%dT%H:%M:%S%z')"; }
 
-# a file into the store under its hash, never over one there (write-once)
+# a file into the store under its hash, by its name or the path given, never over one there (write-once)
 publish() {
-	local file=$1 name
-	name=$(basename "$file")
-	mkdir -p "$store/$hash"
+	local file=$1 name=${2:-$(basename "$1")}
+	mkdir -p "$(dirname "$store/$hash/$name")"
 	[ -f "$store/$hash/$name" ] && return
 	copied "$file" "$store/$hash/$name.new-$$" && mv -n "$store/$hash/$name.new-$$" "$store/$hash/$name"
 	rm -f "$store/$hash/$name.new-$$"
@@ -89,8 +88,9 @@ besides() {
 			cp "$compilers/$name.wasm.inputs" "$folder/$name.wasm.inputs" && echo "rebuild.sh: $name beside ${folder#"$tree"/}"
 	done
 }
-# the files `warp rebuild` writes beside a compiler, kept and fetched with it: runtime.wasm beside warp.wasm (card runtime-prebuilt)
-companions() { [ "$1" = warp ] && echo runtime.wasm; }
+# the files `warp rebuild` writes beside a compiler, kept and fetched with it, as found in the folder: runtime.wasm
+# beside warp.wasm (card runtime-prebuilt), the standard modules in modules/ (card modules-prebuilt)
+companions() { [ "$1" = warp ] && (cd "$2" && ls runtime.wasm modules/*.wasm 2>/dev/null); }
 # a compiler's name before the rename (transition)
 legacy() { case $1 in warp) echo compiler ;; warp-self) echo compiler-self ;; *) echo "$1" ;; esac; }
 # one <name> [check]: lib/<name>.wasm for these inputs, from lib/, the store, else built (promoted for warp-self)
@@ -106,7 +106,7 @@ one() {
 	[ -f "$stored" ] || stored=$store/$hash/$(legacy "$name").wasm
 	if [ -z "$force" ] && [ -f "$stored" ]; then
 		copied "$stored" "$file.new-$$" && mv "$file.new-$$" "$file" && inputs_line >"$file.inputs"
-		for companion in $(companions "$name"); do [ -f "$store/$hash/$companion" ] && copied "$store/$hash/$companion" "$compilers/$companion"; done
+		for companion in $(companions "$name" "$store/$hash"); do mkdir -p "$(dirname "$compilers/$companion")" && copied "$store/$hash/$companion" "$compilers/$companion"; done
 		logged "$name" hit-store
 		return 0
 	fi
@@ -123,7 +123,7 @@ one() {
 	[ -f "$file" ] || { echo "rebuild.sh: warp rebuild said no file ($built)" >&2; return 1; }
 	inputs_line >"$file.inputs"
 	publish "$file"
-	for companion in $(companions "$name"); do [ -f "$compilers/$companion" ] && publish "$compilers/$companion"; done
+	for companion in $(companions "$name" "$compilers"); do publish "$compilers/$companion" "$companion"; done
 	logged "$name" built
 }
 
