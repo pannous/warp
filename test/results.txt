@@ -336,8 +336,8 @@ doubles a number": got Error("outside the core: the call help(…) at 2:6 (no ow
 ✓ test/control/test_error_values.pairs.warp:20 "r = error(\"bad value\"); type(r) == error" yes
 ✓ test/control/test_error_words.pairs.warp:4 "try fail \"boom\" else 3" 3
 ✓ test/control/test_error_words.pairs.warp:5 "try { panic \"boom\" } catch e { e.message }" "boom"
-✗ test/control/test_error_words.pairs.warp:8 "warn \"careful\"; 1" 1: got Error("outside the core: the import fd_write, not declared at 1:6 (no owner)")
-✗ test/control/test_error_words.pairs.warp:9 "\"a\" + warn(\"careful\") + \"b\"" "ab": got Error("outside the core: the import fd_write, not declared at 1:12 (no owner)")
+✓ test/control/test_error_words.pairs.warp:8 "warn \"careful\"; 1" 1
+✗ test/control/test_error_words.pairs.warp:9 "\"a\" + warn(\"careful\") + \"b\"" "ab": got "aøb"
 ✓ test/control/test_error_words.pairs.warp:12 "fail(x) := x + 1; fail 2" 3
 ✓ test/control/test_error_words.pairs.warp:13 "warn(x) := x * 2; warn 4" 8
 ✗ test/control/test_event_footguns.pairs.warp:4 "n=0; emit ping; on ping {n+=1}; n" 1: got Error("outside the core: the unknown name emit at 1:11 (no owner)")
@@ -856,7 +856,7 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/control/test_match_whole_value.pairs.warp:13 "value = 9; match [1, 2] { [a, b] => value; _ => 0 }" 9: got Error("outside the core: the unknown name match at 6:32 (no owner)")
 ✓ test/control/test_match_whole_value.pairs.warp:14 "g(value) := match 1 { _ => value }; g(4)" 4
 ✗ test/control/test_match_whole_value.pairs.warp:17 "f(x) := [x, x+1]; match alle = f(3) { [a, b] => #alle + b; _ => 0 }" 6: got Error("outside the core: the unknown name match at 6:32 (no owner)")
-✗ test/control/test_match_whole_value.pairs.warp:18 "f(x) := [x, x+1]; r = match alle=f(3) { [a, b] => #alle; _ => 0 }; r" 2: got Error("outside the core: the group (… at 1:36 (no owner)")
+✗ test/control/test_match_whole_value.pairs.warp:18 "f(x) := [x, x+1]; r = match alle=f(3) { [a, b] => #alle; _ => 0 }; r" 2: got Error("outside the core: an assignment to `(match …` at 1:15 (no owner)")
 ✗ test/control/test_match_whole_value.pairs.warp:19 "f(x) := [x, x+1]; match (alle=f(3)) { [a, b] => #alle; _ => 0 }" 2: got Error("outside the core: the unknown name match at 6:32 (no owner)")
 ✓ test/control/test_match_whole_value.pairs.warp:20 "f(x) := [x, x+1]; match alle=f(3) { _ => 0 }; alle[1]" 4
 ✗ test/control/test_match_whole_value.pairs.warp:23 "xs = [7, 8, 9]; match xs { [first, ...rest] => #xs; _ => 0 }" 3: got Error("outside the core: the unknown name match at 6:32 (no owner)")
@@ -1982,22 +1982,22 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/functions/test_alias_definition.pairs.warp:15 "doubled(x) := x*2; g := &doubled; h := g; h 4" 8: got doubled 4
 ✗ test/functions/test_alias_definition.pairs.warp:16 "doubled(x) := x*2; g := doubled; h := g; h(4) + g 1" 10: got Error("outside the core: the call h(…) at 1:44 (no owner)")
 ✗ test/functions/test_alias_definition.warp:4 "arc_tangent(x) := atan(x); arctan := arc_tangent; arctan(1) == arc_tangent(1)" yes: got Error("outside the core: the call arctan(…) at 1:58 (no owner)")
-✗ test/functions/test_anonymous_application.pairs.warp:4 "{it*2} 3" 6: got Error("outside the core: the unknown name it at 1:2 (no owner)")
-✗ test/functions/test_anonymous_application.pairs.warp:5 "(x => x*2) 4" 8: got x => x*2 4
+✓ test/functions/test_anonymous_application.pairs.warp:4 "{it*2} 3" 6
+✓ test/functions/test_anonymous_application.pairs.warp:5 "(x => x*2) 4" 8
 ✗ test/functions/test_anonymous_application.pairs.warp:8 "({it^2}[1 2 3])#3" 9: got Error("`]` closes the group opened at 1:1, which needs `)`")
 ✗ test/functions/test_anonymous_application.pairs.warp:9 "{it*it}[1 2 3]" [1 4 9]: got Error("`]` closes no group")
 ✗ test/functions/test_anonymous_application.pairs.warp:10 "(x => x*2)[1 2 3]" [2 4 6]: got Error("`]` closes no group")
-✗ test/functions/test_anonymous_application.pairs.warp:11 "{it*2}([1 2 3])" [2 4 6]: got Error("outside the core: the unknown name it at 1:2 (no owner)")
+✗ test/functions/test_anonymous_application.pairs.warp:11 "{it*2}([1 2 3])" [2 4 6]: got Error("wasm trap: cast failure at 1:2")
 ✓ test/functions/test_anonymous_application.pairs.warp:14 "x = {1 2}; count x" 2
-✗ test/functions/test_anonymous_function_forms.pairs.warp:4 "f = function(a, b) { a + b }; f(3, 4)" 7: got Error("outside the core: the group (… at 1:14 (no owner)")
-✗ test/functions/test_anonymous_function_forms.pairs.warp:5 "mul = fn(a, b) { a * b }; mul(2, 3)" 6: got Error("outside the core: the group (… at 1:10 (no owner)")
-✗ test/functions/test_anonymous_function_forms.pairs.warp:6 "f = function(x) { return x * 2 }; f(4)" 8: got Error("outside the core: the group (… at 1:14 (no owner)")
+✗ test/functions/test_anonymous_function_forms.pairs.warp:4 "f = function(a, b) { a + b }; f(3, 4)" 7: got Error("outside the core: the call function(…) at 1:14 (no owner)")
+✗ test/functions/test_anonymous_function_forms.pairs.warp:5 "mul = fn(a, b) { a * b }; mul(2, 3)" 6: got Error("outside the core: the call fn(…) at 1:10 (no owner)")
+✗ test/functions/test_anonymous_function_forms.pairs.warp:6 "f = function(x) { return x * 2 }; f(4)" 8: got Error("outside the core: the call function(…) at 1:14 (no owner)")
 ✗ test/functions/test_anonymous_function_forms.pairs.warp:7 "map([1,2,3], fn(x) { x * 10 })" [10, 20, 30]: got Error("outside the core: the call map(…) at 1:6 (no owner)")
 ✗ test/functions/test_anonymous_function_forms.pairs.warp:10 "f = lambda x: x * 2; f(4)" 8: got Error("outside the core: the unknown name lambda at 1:5 (no owner)")
 ✗ test/functions/test_anonymous_function_forms.pairs.warp:11 "map([1,2,3], lambda x: x + 1)" [2, 3, 4]: got Error("outside the core: the call map(…) at 1:6 (no owner)")
 ✓ test/functions/test_anonymous_function_forms.pairs.warp:14 "f = (a, b) -> a + b; f(3, 4)" 7
-✗ test/functions/test_anonymous_function_forms.pairs.warp:17 "(() => 7)()" 7: got () => 7 ø
-✗ test/functions/test_anonymous_function_forms.pairs.warp:18 "(function(){ return 5 })()" 5: got Error("outside the core: the group (… at 1:21 (no owner)")
+✗ test/functions/test_anonymous_function_forms.pairs.warp:17 "(() => 7)()" 7: got () => 7
+✓ test/functions/test_anonymous_function_forms.pairs.warp:18 "(function(){ return 5 })()" 5
 ✓ test/functions/test_answered_type_tests.pairs.warp:2 "p(x) := { if x is text and count(x) > 1 { return 1 }; 2 }; p(round(2.2))" 2
 ✓ test/functions/test_answered_type_tests.pairs.warp:3 "p(x) := { if x is text and count(x) > 1 { return 1 }; 2 }; p(\"abc\")" 1
 ✓ test/functions/test_answered_type_tests.pairs.warp:4 "p(x) := { if x is text { return count(x) }; 2 }; p(round(2.2))" 2
@@ -2098,9 +2098,9 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/functions/test_bare_host_words.pairs.warp:31 "all([random 1..4 for i in 1 to 50], x => x >= 1 and x < 4)" yes: got Error("wasm trap: cast failure at 11:111")
 ✗ test/functions/test_bare_host_words.pairs.warp:32 "any([random 1...4 for i in 1 to 80], x => x == 4)" yes: got no
 ✗ test/functions/test_bare_host_words.pairs.warp:33 "type [random int for i in 1 to 2]" "list of int": got Error("outside the core: the type of a list at 1:14 (no owner)")
-✗ test/functions/test_bare_host_words.pairs.warp:34 "random 1..2" 1: got 0.7526980976142361 [1]
-✗ test/functions/test_bare_host_words.pairs.warp:35 "random 3...3" 3: got 0.06038261909466125 [3]
-✗ test/functions/test_bare_host_words.pairs.warp:36 "random 4 to 4" 4: got 0.09686286048000858 [4]
+✗ test/functions/test_bare_host_words.pairs.warp:34 "random 1..2" 1: got 0.44405147635153386 [1]
+✗ test/functions/test_bare_host_words.pairs.warp:35 "random 3...3" 3: got 0.000702470692341528 [3]
+✗ test/functions/test_bare_host_words.pairs.warp:36 "random 4 to 4" 4: got 0.36083354065317164 [4]
 ✗ test/functions/test_bare_host_words.pairs.warp:37 "x = random(int); type x" "int": got Error("outside the core: a call of random with 1 arguments at 1:12 (no owner)")
 ✗ test/functions/test_bare_host_words.pairs.warp:38 "x = random 0.5..2; x >= 0.5 and x < 2" yes: got Error("wasm trap: cast failure at 1:20")
 ✗ test/functions/test_bare_host_words.pairs.warp:41 "int z = random 1..2; z" 1: got Error("wasm trap: wasm `unreachable` instruction executed at 1:19")
@@ -2108,12 +2108,16 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/functions/test_bare_host_words.pairs.warp:43 "float z = random 1..10; z >= 1 and z < 10" yes: got Error("wasm trap: cast failure at 1:21")
 ✗ test/functions/test_bare_host_words.pairs.warp:44 "float z = random 1..10; type z" "float": got Error("wasm trap: cast failure at 1:21")
 ✗ test/functions/test_bare_host_words.pairs.warp:45 "z: float = random(1, 10); type z" "float": got Error("outside the core: a call of random with 2 arguments at 1:19 (no owner)")
-✓ test/functions/test_bare_host_words.pairs.warp:48 "use prelude; random_until(1, 2)" 1
-✓ test/functions/test_bare_host_words.pairs.warp:49 "use prelude; random_between(3, 3)" 3
-✓ test/functions/test_bare_host_words.pairs.warp:50 "use prelude; x = random_fraction(1, 2); x >= 1 and x < 2" yes
-✓ test/functions/test_bare_host_words.pairs.warp:51 "use prelude; type random_int()" "int"
-✓ test/functions/test_bare_host_words.pairs.warp:52 "use prelude; type random_bool()" "bool"
-✓ test/functions/test_bare_host_words.pairs.warp:53 "use prelude; type random_codepoint()" "codepoint"
+✗ test/functions/test_bare_host_words.pairs.warp:48 "use prelude; random_until(1, 2)" 1: got ø
+✗ test/functions/test_bare_host_words.pairs.warp:49 "use prelude; random_between(3, 3)" 3: got ø
+✗ test/functions/test_bare_host_words.pairs.warp:50 "use prelude; x = random_fraction(1, 2); x >= 1 and x < 2" yes: got Error("wasm trap: null reference at 1:41")
+✗ test/functions/test_bare_host_words.pairs.warp:51 "use prelude; type random_int()" "int": got class empty
+✗ test/functions/test_bare_host_words.pairs.warp:52 "use prelude; type random_bool()" "bool": got class empty
+✗ test/functions/test_bare_host_words.pairs.warp:53 "use prelude; type random_codepoint()" "codepoint": got class empty
+✓ test/functions/test_block_application.pairs.warp:2 "{it*2} 5" 10
+✓ test/functions/test_block_application.pairs.warp:3 "{it*2}(5)" 10
+✓ test/functions/test_block_application.pairs.warp:4 "k = 3; {it + k} 4" 7
+✓ test/functions/test_block_application.pairs.warp:5 "(x => x*2) 4" 8
 ✓ test/functions/test_block_function.pairs.warp:4 "f={it*2}; f 3" 6
 ✓ test/functions/test_block_function.pairs.warp:5 "f={it*2}; f(4)" 8
 ✓ test/functions/test_block_function.pairs.warp:6 "f:={it*2}; f 3" 6
@@ -2250,7 +2254,7 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/functions/test_closure_value_arguments.warp:5 "use list; xs = [1, 2, 2, 3]; [count_by(xs, y => y == x) for x in xs]" [1, 2, 2, 1]
 ✓ test/functions/test_closures.pairs.warp:4 "f = x => x*2; f(3)" 6
 ✓ test/functions/test_closures.pairs.warp:7 "make_adder(n) := (x => x+n); add2 = make_adder(2); add2(5)" 7
-✗ test/functions/test_closures.pairs.warp:8 "make_adder(n) := x => x+n; make_adder(10)(1)" 11: got x => x+n 1
+✓ test/functions/test_closures.pairs.warp:8 "make_adder(n) := x => x+n; make_adder(10)(1)" 11
 ✓ test/functions/test_closures.pairs.warp:11 "k=3; f = make(k); make(n) := (x => x*n); k=100; f(2)" 6
 ✓ test/functions/test_closures.pairs.warp:12 "mul(n) := (x => x*n); k=3; g = mul(k); k=5; g(2)" 6
 ✓ test/functions/test_closures.pairs.warp:15 "apply(f, x):=f(x); k=4; apply(y=>y*k, 3)" 12
@@ -2259,13 +2263,13 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/functions/test_closures.pairs.warp:22 "greeter(g) := (name => g + \" \" + name); hi = greeter(\"hi\"); hi(\"bob\")" "hi bob"
 ✓ test/functions/test_closures.pairs.warp:25 "scale(k) := (x => x*k); s = scale(1.5); s(2)" 3
 ✓ test/functions/test_closures.pairs.warp:28 "add(a) := (b => (c => a+b+c)); g = add(1); h = g(2); h(3)" 6
-✗ test/functions/test_closures.pairs.warp:31 "add(a) := (b => (c => a+b+c)); add(1)(2)(3)" 6: got b => (closure_new closure_lambda_2 a b) 2 3
+✓ test/functions/test_closures.pairs.warp:31 "add(a) := (b => (c => a+b+c)); add(1)(2)(3)" 6
 ✓ test/functions/test_closures.pairs.warp:32 "add(a) := (b => (c => a+b+c)); g = add(1); h = g(2); h(3)+1" 7
 ✓ test/functions/test_closures.pairs.warp:35 "make_counter() := (c=0; () => c+1); k=make_counter(); k()" 1
 ✓ test/functions/test_closures.pairs.warp:38 "fs=[x=>x+1, x=>x*2]; f=fs#2; f(5)" 10
 ✓ test/functions/test_closures.pairs.warp:39 "triple(x):=x*3; fs=[triple, x=>x+1]; g=fs#1; g(7)" 21
 ✓ test/functions/test_closures.pairs.warp:42 "apply(f:function, x) := f(x); k=1; apply(x=>x+k, 1)" 2
-✗ test/functions/test_closures.pairs.warp:45 "fs=[x=>x*2, x=>x+1]; (fs#2)(5)" 6: got x => x+1 5
+✓ test/functions/test_closures.pairs.warp:45 "fs=[x=>x*2, x=>x+1]; (fs#2)(5)" 6
 ✗ test/functions/test_closures.pairs.warp:46 "fs=[x=>x*2, x=>x+1]; fs#2(5)" 6: got Error("index out of range: 10 not in 1…2 at 1:22")
 ✗ test/functions/test_closures.pairs.warp:47 "fs=[x=>x*2, x=>x+1]; fs#1(5)" 10: got Error("index out of range: 5 not in 1…2 at 1:22")
 ✓ test/functions/test_closures.pairs.warp:50 "fs=[x=>x*2, x=>x+1]; s=0; for f in fs { s+=f(1) }; s" 4
@@ -2275,10 +2279,10 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/functions/test_closures.pairs.warp:58 "fs=[x=>x+1, x=>x*2.5]; fs#2(2)" 5: got Error("index out of range: 4 not in 1…2 at 1:24")
 ✓ test/functions/test_closures.pairs.warp:61 "fs=[x=>x*2.0, x=>x+0.5]; g = fs#1; g(1.5 as float)" 3
 ✓ test/functions/test_closures.pairs.warp:62 "k=2.5 as float; f = (x => x*k); fs=[f]; h=fs#1; h(2.0 as float)" 5
-✗ test/functions/test_closures.pairs.warp:65 "add(a) := b => a + b; y = add(2)(5); y" 7: got Error("outside the core: a value after an assignment at 1:23 (no owner)")
-✗ test/functions/test_closures.pairs.warp:66 "twice = f => x => f(f(x)); y = twice(x => x + 3)(1); y" 7: got Error("outside the core: a value after an assignment at 1:28 (no owner)")
-✗ test/functions/test_closures.pairs.warp:67 "add(a) := b => a + b; xs = []; xs.push(add(2)(5)); xs#1" 7: got b => a+b
-✗ test/functions/test_closures.pairs.warp:70 "g = s => n => n + 0; A = x => g(v => x(x)(v)); fact = A(A); fact(5)" 5: got Error("outside the core: the unknown name v at 1:43 (no owner)")
+✓ test/functions/test_closures.pairs.warp:65 "add(a) := b => a + b; y = add(2)(5); y" 7
+✓ test/functions/test_closures.pairs.warp:66 "twice = f => x => f(f(x)); y = twice(x => x + 3)(1); y" 7
+✓ test/functions/test_closures.pairs.warp:67 "add(a) := b => a + b; xs = []; xs.push(add(2)(5)); xs#1" 7
+✓ test/functions/test_closures.pairs.warp:70 "g = s => n => n + 0; A = x => g(v => x(x)(v)); fact = A(A); fact(5)" 5
 ✓ test/functions/test_closures.warp:4 "make_adder(n) := (x => x+n); add2 = make_adder(2); add3 = make_adder(3); add2(5) + add3(5)" 15
 ✓ test/functions/test_closures.warp:7 "apply(f, x):=f(x); make_adder(n) := (x => x+n); a = make_adder(4); apply(a, 1)" 5
 ✓ test/functions/test_closures.warp:10 "twice(x):=x*2; square(x):=x*x; pick(c) := if c then twice else square; f = pick(1); f(5)" 10
@@ -2290,7 +2294,7 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/functions/test_closures.warp:22 "apply(g, n) := { s=0; for i in 0..n { s = g(s) }; s }; k=1; apply(x => x+k, 300000)" 300000
 ✓ test/functions/test_closures.warp:25 "apply(g, n) := { s=0.5 as float; for i in 0..n { s = g(s) }; s }; k = 1.5 as float; apply(x => x*k, 3)" 1.6875
 ✓ test/functions/test_closures.warp:28 "twice = f => x => f(f(x)); checks = []; checks.push(twice(x => x + 3)(1) == 7); checks#1" yes
-✗ test/functions/test_closures.warp:31 "def half(f) = x => f(v => x(x)(v))\ndef Z(f) = half(f)(half(f))\nfact = Z(self => n => if n < 2 then 1 else n * self(n - 1))\nfact(10)" 3628800: got Error("outside the core: the unknown name def at 2:1 (no owner)")
+✓ test/functions/test_closures.warp:31 "def half(f) = x => f(v => x(x)(v))\ndef Z(f) = half(f)(half(f))\nfact = Z(self => n => if n < 2 then 1 else n * self(n - 1))\nfact(10)" 3628800
 ✓ test/functions/test_collection_result_types.pairs.warp:4 "f(x: int): list := [x]; f(2)#1" 2
 ✓ test/functions/test_collection_result_types.pairs.warp:5 "f(x: int): list := [x, x]; count(f(2))" 2
 ✓ test/functions/test_collection_result_types.pairs.warp:6 "f(x): map := {a: x}; f(3).a" 3
@@ -2398,7 +2402,7 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/functions/test_definition_bodies.pairs.warp:15 "def foo: hi=2*2; foo" 4: got Error("outside the core: a variable declared hi at 1:15 (no owner)")
 ✗ test/functions/test_definition_bodies.warp:4 "def f(x)\n\tx * 2\nend\nf(3)" 6: got Error("outside the core: the call f(…) at 1:7 (no owner)")
 ✓ test/functions/test_definition_bodies.warp:8 "def f(x)\n\ty = x * 2\n\ty + 1\nend\nf(3)" 7
-✗ test/functions/test_definition_bodies.warp:13 "class Point\n\tdef initialize(x)\n\t\t@x = x\n\tend\n\tdef doubled\n\t\t@x * 2\n\tend\nend\nPoint.new(4).doubled" 8: got Error("outside the core: a none as a value at 2:2 (no owner)")
+✗ test/functions/test_definition_bodies.warp:13 "class Point\n\tdef initialize(x)\n\t\t@x = x\n\tend\n\tdef doubled\n\t\t@x * 2\n\tend\nend\nPoint.new(4).doubled" 8: got Error("outside the core: the unknown name def at 2:2 (no owner)")
 ✗ test/functions/test_definition_bodies.warp:24 "def foo: hi=2*2\nfoo" 4: got Error("outside the core: a variable declared hi at 1:15 (no owner)")
 ✗ test/functions/test_definition_bodies.warp:26 "def foo(x): y = x*2\nfoo(5)" 10: got Error("outside the core: the unknown name x at 1:17 (no owner)")
 ✗ test/functions/test_definition_bodies.warp:28 "def foo: hi=2*2\nfoo\nresult" 4: got Error("outside the core: a variable declared hi at 1:15 (no owner)")
@@ -2448,6 +2452,14 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/functions/test_empty_function_bodies.pairs.warp:8 "f() := ø; f(); 3" 3
 ✓ test/functions/test_empty_function_bodies.pairs.warp:9 "f() := ø; f()" ø
 ✓ test/functions/test_empty_function_bodies.warp:4 "f() := ø\n3" 3
+✓ test/functions/test_expression_calls.pairs.warp:2 "(x => x*2)(5)" 10
+✓ test/functions/test_expression_calls.pairs.warp:3 "((x, y) => x*y)(3, 4)" 12
+✓ test/functions/test_expression_calls.pairs.warp:4 "k = 10; (x => x + k)(1)" 11
+✓ test/functions/test_expression_calls.pairs.warp:5 "adder(n) := x => x + n; adder(5)(1)" 6
+✓ test/functions/test_expression_calls.pairs.warp:6 "fs = [x => x*2]; fs[0](3)" 6
+✓ test/functions/test_expression_calls.pairs.warp:7 "(2)(3)" 6
+✓ test/functions/test_expression_calls.pairs.warp:8 "x = 2; (x)(3)" 6
+✓ test/functions/test_expression_calls.pairs.warp:9 "a = 1; b = 2; c = 3; (a + b)(c)" 9
 ✗ test/functions/test_fail_effect.warp:4 "f(x) := 10/x ! Fail\nf(2)" 5: got Error("outside the core: the unknown name x at 1:12 (no owner)")
 ✗ test/functions/test_fail_effect.warp:6 "f(x) := (try 10/x else 0) ! Pure\nf(0)" 0: got Error("outside the core: the unknown name x at 1:17 (no owner)")
 ✗ test/functions/test_fail_effect.warp:8 "f(x) := 10/x\nk(x) := (try f(x) else 0) ! Pure\nk(0)" 0: got Error("outside the core: the unknown name x at 2:16 (no owner)")
@@ -2509,7 +2521,7 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/functions/test_foreign_spellings.pairs.warp:24 "use R; sapply(c(1, 2, 3), function(x) x * 2)" [2 4 6]: got Error("outside the core: the call function(…) at 1:36 (no owner)")
 ✗ test/functions/test_foreign_spellings.pairs.warp:25 "use R; lapply(c(1, 2), function(x) x + 1)" [2 3]: got Error("outside the core: the call function(…) at 1:33 (no owner)")
 ✗ test/functions/test_foreign_spellings.pairs.warp:26 "use R; vapply(c(1, 2), function(x) x * 3)" [3 6]: got Error("outside the core: the call function(…) at 1:33 (no owner)")
-✗ test/functions/test_foreign_spellings.pairs.warp:27 "use PHP; array_map(fn($x) => $x * 2, [1, 2, 3])" [2 4 6]: got Error("wrong number of arguments at 1:29")
+✗ test/functions/test_foreign_spellings.pairs.warp:27 "use PHP; array_map(fn($x) => $x * 2, [1, 2, 3])" [2 4 6]: got Error("wrong number of arguments at 3:29")
 ✗ test/functions/test_foreign_spellings.pairs.warp:28 "use PHP; array_filter([1, 2, 3], fn($x) => $x > 1)" [2 3]: got Error("wrong number of arguments at 11:111")
 ✓ test/functions/test_foreign_spellings.pairs.warp:29 "use PHP; array_sum([1, 2, 3])" 6
 ✗ test/functions/test_foreign_spellings.pairs.warp:32 "count = 0; on keydown { count += 1 }; emit key; count" 1: got Error("outside the core: the unknown name on at 1:12 (no owner)")
@@ -2689,13 +2701,13 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/functions/test_kebab_members.pairs.warp:4 "p = {phone: 7}; number = 2; p.phone - number" 5
 ✓ test/functions/test_kebab_members.pairs.warp:7 "p = {phone-number: 7}; number = 2; p.phone-number" 7
 ✓ test/functions/test_kebab_members.pairs.warp:8 "p = {phone-number: 7}; p.phone-number" 7
-✓ test/functions/test_kind_tested_parameter.warp:4 "def neg(x) { if x is number { return 0 - x }; [\"key\", \"-\", ø, x] }; #neg([\"symbol\", \"x\"])" 4
+✗ test/functions/test_kind_tested_parameter.warp:4 "def neg(x) { if x is number { return 0 - x }; [\"key\", \"-\", ø, x] }; #neg([\"symbol\", \"x\"])" 4: timed out after 30 s
 ✓ test/functions/test_kind_tested_parameter.warp:5 "def neg(x) { if x is number { return 0 - x }; [\"key\", \"-\", ø, x] }; neg([\"symbol\", \"x\"])#4#2" 'x'
 ✓ test/functions/test_kind_tested_parameter.warp:6 "def neg(x) { if x is number { return 0 - x }; [\"key\", \"-\", ø, x] }; neg(3)" (-3)
 ✗ test/functions/test_lambda_global.pairs.warp:4 "n = 0; f = () => { global n; n += 1 }; f(); f(); n" 2: got 0
 ✗ test/functions/test_lambda_global.pairs.warp:5 "global n = 0; f = () => { global n; n += 1 }; f(); f(); f(); n" 3: got 0
 ✓ test/functions/test_lambda_global.pairs.warp:6 "n = 0; def f() { global n; n += 1 }; f(); f(); n" 2
-✗ test/functions/test_lambda_held_by_field.warp:4 "h = {d: x => x * 3}\n(h.d)(5)" 15: got x => x*3 5
+✓ test/functions/test_lambda_held_by_field.warp:4 "h = {d: x => x * 3}\n(h.d)(5)" 15
 ✓ test/functions/test_lambda_held_by_field.warp:6 "h = {d: x => x * 3}\nh.d(5)" 15
 ✓ test/functions/test_lambda_held_by_field.warp:10 "apply(f, v) := f(v)\nclass Holder {d}\nh = Holder(x => x + 1)\napply(h.d, 5)" 6
 ✓ test/functions/test_lambda_held_by_field.warp:14 "apply(f, v) := f(v)\nh = {d: x => x * 3}\napply(h.d, 5)" 15
@@ -2713,19 +2725,19 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/functions/test_lambda_spaced_body.pairs.warp:11 "adders = [1 2 3].map(n => (x => x + n)); f = adders#2; f(10)" 12
 ✗ test/functions/test_lambda_spaced_body.pairs.warp:12 "adders = [1 2 3].map(n => (x => x + n)); adders#3(10)" 13: got Error("index out of range: 30 not in 1…3 at 1:42")
 ✗ test/functions/test_lambda_spaced_body.pairs.warp:13 "fs = []; for k in 1..4 { fs.add(x => x * k) }; fs#2(10)" 20: got Error("index out of range: 20 not in 1…3 at 1:48")
-✗ test/functions/test_lambda_spaced_body.pairs.warp:14 "(x => x * 2)(5)" 10: got x => x*2 5
+✓ test/functions/test_lambda_spaced_body.pairs.warp:14 "(x => x * 2)(5)" 10
 ✓ test/functions/test_lambda_spellings.pairs.warp:4 "f = |x| x*2; f(3)" 6
 ✓ test/functions/test_lambda_spellings.pairs.warp:5 "f = |a, b| a*b; f(2,3)" 6
 ✓ test/functions/test_lambda_spellings.pairs.warp:6 "f = |a b| a+b; f(2,3)" 5
 ✗ test/functions/test_lambda_spellings.pairs.warp:9 "fold([1,2,3], 0, { |acc, x| acc + x })" 6: got Error("outside the core: the call fold(…) at 1:7 (no owner)")
-✗ test/functions/test_lambda_spellings.pairs.warp:12 "f = fn(a, b) { a*b }; f(2,3)" 6: got Error("outside the core: the group (… at 1:8 (no owner)")
+✗ test/functions/test_lambda_spellings.pairs.warp:12 "f = fn(a, b) { a*b }; f(2,3)" 6: got Error("outside the core: the call fn(…) at 1:8 (no owner)")
 ✗ test/functions/test_lambda_spellings.pairs.warp:13 "f = lambda x: x*2; f(4)" 8: got Error("outside the core: the unknown name lambda at 1:5 (no owner)")
-✗ test/functions/test_lambda_spellings.pairs.warp:14 "f = function(a, b) { return a*b }; f(2,3)" 6: got Error("outside the core: the group (… at 1:14 (no owner)")
+✗ test/functions/test_lambda_spellings.pairs.warp:14 "f = function(a, b) { return a*b }; f(2,3)" 6: got Error("outside the core: the call function(…) at 1:14 (no owner)")
 ✓ test/functions/test_lambda_spellings.pairs.warp:15 "f = { x -> x*2 }; f(3)" 6
-✗ test/functions/test_lambda_tuple_arguments.pairs.warp:4 "((f, x) -> f(x))(y -> y + 3, 7)" 10: got Error("outside the core: the group (… at 1:30 (no owner)")
-✗ test/functions/test_lambda_tuple_arguments.pairs.warp:5 "((f, x) -> f(f(x)))(y -> y + 3, 7)" 13: got Error("outside the core: the group (… at 1:33 (no owner)")
+✓ test/functions/test_lambda_tuple_arguments.pairs.warp:4 "((f, x) -> f(x))(y -> y + 3, 7)" 10
+✓ test/functions/test_lambda_tuple_arguments.pairs.warp:5 "((f, x) -> f(f(x)))(y -> y + 3, 7)" 13
 ✗ test/functions/test_lambda_tuple_arguments.pairs.warp:8 "((x -> x * 2) 7)" 14: got Error("outside the core: the group (… at 1:15 (no owner)")
-✗ test/functions/test_lambda_tuple_arguments.pairs.warp:9 "(x -> x * 2)(7)" 14: got x => x*2 7
+✓ test/functions/test_lambda_tuple_arguments.pairs.warp:9 "(x -> x * 2)(7)" 14
 ✗ test/functions/test_lambdas.pairs.warp:4 "sq = x=>x*x; sq 3" 9: got x => x*x 3
 ✓ test/functions/test_lambdas.pairs.warp:5 "sq = x->x*x; sq(4)" 16
 ✗ test/functions/test_lambdas.pairs.warp:6 "add = (x y)->x+y; add 2 3" 5: got (x, y) => x+y 2 3
@@ -3004,7 +3016,7 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/functions/test_parameter_any.pairs.warp:14 "half(x:any) := x / 2.0; half(3) + \" left\"" "1.5 left"
 ✓ test/functions/test_parameter_any.warp:4 "check(got:any, want:any) := got == want; [check(1, 1), check(\"ab\", \"ab\"), check(\"ab\", \"cd\")]" [1 1 0]
 ✓ test/functions/test_parameter_any.warp:7 "def total(x) = if x is list then sum(x.map(y => total(y))) else x; total([1 [2 3] [4 [5]]])" 15
-✗ test/functions/test_parameter_any.warp:8 "def total(x){ if x is list { s=0; for y in x { s += total(y) }; return s }; x }; total([1 [2 3]])" 6: got Error("could not run the program: failed to compile: wasm[0]::function[2]::total: WebAssembly translation error: Invalid input WebAssembly code at offset 1667: type mismatch: expected anyref, found i64")
+✗ test/functions/test_parameter_any.warp:8 "def total(x){ if x is list { s=0; for y in x { s += total(y) }; return s }; x }; total([1 [2 3]])" 6: got Error("could not run the program: failed to compile: wasm[0]::function[603]::total: WebAssembly translation error: Invalid input WebAssembly code at offset 89068: type mismatch: expected anyref, found i64")
 ✓ test/functions/test_parameter_any.warp:9 "def depth(x) = if x is list then 1 + max(x.map(depth)) else 0; depth([1 [2 [3]]])" 3
 ✓ test/functions/test_parameter_assignment.pairs.warp:4 "f(n: int) := { n = 4; n }; f(3)" 4
 ✓ test/functions/test_parameter_assignment.pairs.warp:5 "f(n: float) := { n = 4; n }; f(3)" 4
@@ -3069,8 +3081,8 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/functions/test_partial_application.pairs.warp:6 "xs=[1 2 3]; mul(a,b):=a*b; map(xs, mul(2, _))" [2, 4, 6]: got Error("outside the core: the call map(…) at 1:32 (no owner)")
 ✓ test/functions/test_partial_application.pairs.warp:9 "mk(n) := { return x => x + n }; f = mk(2); f(5)" 7
 ✓ test/functions/test_partial_application.warp:4 "def counter(start) { count = start; return () => { count = count + 1; return count } }; c = counter(5); c()" 6
-✗ test/functions/test_passed_through_functions.pairs.warp:4 "g = x => x; g(y => y*2)(4)" 8: got y => y*2 4
-✗ test/functions/test_passed_through_functions.pairs.warp:5 "sq(y) := y*y; g = x => x; g(sq)(5)" 25: got sq 5
+✓ test/functions/test_passed_through_functions.pairs.warp:4 "g = x => x; g(y => y*2)(4)" 8
+✓ test/functions/test_passed_through_functions.pairs.warp:5 "sq(y) := y*y; g = x => x; g(sq)(5)" 25
 ✓ test/functions/test_passed_through_functions.pairs.warp:8 "g = x => x; h = g(y => y*2); h(4)" 8
 ✓ test/functions/test_passed_through_functions.pairs.warp:9 "id(x) := x; y = id(5); y + 1" 6
 ✓ test/functions/test_pattern_clauses.pairs.warp:4 "fib(0) := 0; fib(1) := 1; fib(n) := fib(n-1) + fib(n-2); fib(10)" 55
@@ -3080,9 +3092,9 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/functions/test_pattern_clauses.pairs.warp:14 "simplify(data($a * 1)) := a; simplify(n) := n; simplify(7)" 7
 ✓ test/functions/test_pattern_clauses.pairs.warp:17 "n = 7; f(0) := 1; f(n) := n + 1; f(3) + n" 11
 ✓ test/functions/test_pattern_clauses.warp:4 "mul(0, y) := 0; mul(x, 1) := x; mul(x, y) := x * y; mul(0, 9) + mul(5, 1) + mul(2, 3)" 11
-✗ test/functions/test_picked_calls.pairs.warp:4 "fs = [x=>x+1, x=>x*2]; fs[1](3)" 6: got x => x*2 3
+✓ test/functions/test_picked_calls.pairs.warp:4 "fs = [x=>x+1, x=>x*2]; fs[1](3)" 6
 ✗ test/functions/test_picked_calls.pairs.warp:5 "fs = [x=>x+1, x=>x*2]; fs#1(3)" 4: got Error("index out of range: 3 not in 1…2 at 1:24")
-✗ test/functions/test_picked_calls.warp:4 "fs = [x=>x+1, x=>x*2]; s = 0; for i in 0..4 { s += fs[i%2](i) }; s" (1+2+3+6): got Error("wasm trap: wasm `unreachable` instruction executed at 1:47")
+✓ test/functions/test_picked_calls.warp:4 "fs = [x=>x+1, x=>x*2]; s = 0; for i in 0..4 { s += fs[i%2](i) }; s" (1+2+3+6)
 ✗ test/functions/test_preposition_calls.warp:4 "f(x, for y) := x - y\nf 5 for: 2" 3: got Error("wasm trap: cast failure at 1:16")
 ✗ test/functions/test_preposition_calls.warp:6 "f(x, for y) := x - y\nf(5, for: 2)" 3: got Error("wasm trap: cast failure at 1:16")
 ✓ test/functions/test_preposition_calls.warp:8 "f(x, for y) := x - y\nf(5, for=2)" 3
@@ -3186,21 +3198,21 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/functions/test_python_ruby_definitions.warp:107 "k = 0\nwhile k < 3\n  k += 1\nend\nk" 3
 ✗ test/functions/test_python_ruby_definitions.warp:112 "def f\n  k = 0\n  loop do\n    k += 1\n    break if k > 2\n  end\n  k\nend\nf()" 3: got Error("outside the core: the unknown name f at 1:5 (no owner)")
 ✗ test/functions/test_python_ruby_definitions.warp:121 "k = 0\nloop do\n  k += 1\n  break if k > 2\nend\nk" 3: got Error("outside the core: the unknown name loop at 2:1 (no owner)")
-✗ test/functions/test_random_dispatch.pairs.warp:4 "random [7,7]" 7: got 0.5452083263118007 [7 7]
-✗ test/functions/test_random_dispatch.pairs.warp:5 "xs=[7,7]; random xs" 7: got 0.5411961567428648 [7 7]
+✗ test/functions/test_random_dispatch.pairs.warp:4 "random [7,7]" 7: got 0.5167924156078886 [7 7]
+✗ test/functions/test_random_dispatch.pairs.warp:5 "xs=[7,7]; random xs" 7: got 0.2711789791975574 [7 7]
 ✗ test/functions/test_random_dispatch.pairs.warp:6 "xs=[\"a\",\"a\"]; random(xs)" 'a': got Error("outside the core: a call of random with 1 arguments at 1:22 (no owner)")
 ✗ test/functions/test_random_dispatch.pairs.warp:7 "all([random [1 2 3] for i in 1 to 30], x => x >= 1 and x <= 3)" yes: got Error("wasm trap: cast failure at 11:111")
-✓ test/functions/test_random_dispatch.pairs.warp:8 "use prelude; random_element([5])" 5
+✗ test/functions/test_random_dispatch.pairs.warp:8 "use prelude; random_element([5])" 5: got ø
 ✗ test/functions/test_random_dispatch.pairs.warp:11 "x = random 2.5; x >= 0 and x < 2.5" yes: got Error("wasm trap: cast failure at 1:17")
 ✗ test/functions/test_random_dispatch.pairs.warp:12 "x = random 2.5; type x" "float": got class list
 ✗ test/functions/test_random_dispatch.pairs.warp:13 "y = 0.5; x = random y; x >= 0 and x < 0.5" yes: got Error("wasm trap: cast failure at 1:24")
 ✗ test/functions/test_random_dispatch.pairs.warp:16 "n = 6; x = random n; x >= 0 and x < 6" yes: got Error("wasm trap: cast failure at 1:22")
 ✗ test/functions/test_random_dispatch.pairs.warp:17 "n = 6; x = random n; type x" "int": got class list
 ✓ test/functions/test_random_dispatch.pairs.warp:18 "use prelude; random_of(1)" 0
-✗ test/functions/test_random_dispatch.pairs.warp:21 "random 6 < 6" yes: got 0.5747162796414378 no
+✗ test/functions/test_random_dispatch.pairs.warp:21 "random 6 < 6" yes: got 0.17122466377235435 no
 ✗ test/functions/test_random_dispatch.pairs.warp:22 "random 1..4 < 4" yes: got Error("wasm trap: cast failure at 1:11")
 ✗ test/functions/test_random_dispatch.pairs.warp:23 "xs = [1, 2]; random xs < 3" yes: got Error("outside the core: the operator < on list and int at 1:26 (no owner)")
-✗ test/functions/test_random_dispatch.pairs.warp:24 "random 2.5 < 2.5 and yes" yes: got 0.847535797474447 no
+✗ test/functions/test_random_dispatch.pairs.warp:24 "random 2.5 < 2.5 and yes" yes: got 0.2007639392762881 no
 ✓ test/functions/test_recursive_list_functions.pairs.warp:4 "def s(xs){ #xs == 0 ? 0 : xs#1 + s(xs[1:]) }; s([1,2,3])" 6
 ✓ test/functions/test_recursive_list_functions.pairs.warp:5 "def s(xs){ if #xs == 0 {0} else { xs#1 + s(xs[1:]) } }; s([1,2,3])" 6
 ✓ test/functions/test_recursive_list_functions.pairs.warp:6 "def p(xs){ #xs == 0 ? 1 : xs#1 * p(xs[1:]) }; p([2,3,4])" 24
@@ -3625,13 +3637,13 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/lists/test_element_wise_vectors.warp:13 "use sound\nn = note(C4)\n0.5 .+ [1, 2]" [1.5 2.5]: got Error("wasm trap: wasm `unreachable` instruction executed at 11:61")
 ✓ test/lists/test_element_wise_vectors.warp:16 "use sound\nn = note(C4)\nup(ns) := ns .+ 2; up([n, note(E4)]).map(x => x.key)" [62 66]
 ✓ test/lists/test_element_wise_vectors.warp:19 "use sound\nsong = melody_samples([C4], 0.25)\nc() := [1, 2]; taken(p) := p .- c(); 1" 1
-✓ test/lists/test_element_wise_vectors.warp:24 "use prelude\nelement_wise_any(2, [1, 2], (a, b) => a * b)" [2 4]
-✓ test/lists/test_element_wise_vectors.warp:26 "use prelude\nelement_wise_any([1, 2], [3, 4], (a, b) => a + b)" [4 6]
-✗ test/lists/test_element_wise_vectors.warp:28 "use prelude\nelement_wise_any([1, 2], 10, (a, b) => a - b)" [-9-8]: got [-9 -8]
-✓ test/lists/test_element_wise_vectors.warp:30 "use prelude\nelement_wise_any(3, 4, (a, b) => a * b)" 12
-✓ test/lists/test_element_wise_vectors.warp:34 "use prelude\npixel_color([1, 0, 0])" 4294901760
-✓ test/lists/test_element_wise_vectors.warp:36 "use prelude\npixel_color(7)" 7
-✓ test/lists/test_element_wise_vectors.warp:38 "use prelude\n[pixel_channel(0.5), pixel_channel(2), pixel_channel(-1)]" [128 255 0]
+✗ test/lists/test_element_wise_vectors.warp:24 "use prelude\nelement_wise_any(2, [1, 2], (a, b) => a * b)" [2 4]: got ø
+✗ test/lists/test_element_wise_vectors.warp:26 "use prelude\nelement_wise_any([1, 2], [3, 4], (a, b) => a + b)" [4 6]: got ø
+✗ test/lists/test_element_wise_vectors.warp:28 "use prelude\nelement_wise_any([1, 2], 10, (a, b) => a - b)" [-9-8]: got ø
+✗ test/lists/test_element_wise_vectors.warp:30 "use prelude\nelement_wise_any(3, 4, (a, b) => a * b)" 12: got ø
+✗ test/lists/test_element_wise_vectors.warp:34 "use prelude\npixel_color([1, 0, 0])" 4294901760: got ø
+✗ test/lists/test_element_wise_vectors.warp:36 "use prelude\npixel_color(7)" 7: got ø
+✗ test/lists/test_element_wise_vectors.warp:38 "use prelude\n[pixel_channel(0.5), pixel_channel(2), pixel_channel(-1)]" [128 255 0]: got [ø ø ø]
 ✓ test/lists/test_empty_is_absence.pairs.warp:4 "[] == ø" no
 ✓ test/lists/test_empty_is_absence.pairs.warp:5 "\"\" == ø" no
 ✓ test/lists/test_empty_is_absence.pairs.warp:6 "[] != ø" yes
@@ -4458,12 +4470,12 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/modules/test_include.pairs.warp:21 "include tests/fixtures/cycle_a; a_done + b_done" 3: got Error("outside the core: the unknown name a_done at 1:33 (no owner)")
 ✗ test/modules/test_include.pairs.warp:24 "use square; square 7" 49: got Error("outside the core: the unknown name square: `use math` defines it at 1:13 (no owner)")
 ✗ test/modules/test_include.warp:4 "include tests/fixtures/counter; include tests/fixtures/counter; counter" 11: got Error("outside the core: the unknown name counter at 1:65 (no owner)")
-✗ test/modules/test_json5.pairs.warp:4 "x = json(\"{'a':1}\"); x.a" 1: got Error("outside the core: the call json(…) at 1:10 (no owner)")
-✗ test/modules/test_json5.pairs.warp:5 "x = json(\"[1, 2, 3]\"); count(x)" 3: got Error("outside the core: the call json(…) at 1:10 (no owner)")
+✗ test/modules/test_json5.pairs.warp:4 "x = json(\"{'a':1}\"); x.a" 1: got Error("no field a at 1:22")
+✓ test/modules/test_json5.pairs.warp:5 "x = json(\"[1, 2, 3]\"); count(x)" 3
 ✗ test/modules/test_json5.pairs.warp:8 "use json; json.parse(\"{'quote': 'say \\\"hi\\\"'}\").quote" "say \"hi\"": got Error("outside the core: the call parse(…) at 1:11 (no owner)")
 ✗ test/modules/test_json5.pairs.warp:9 "use json; json.parse(\"{'a': 'it\\\\'s'}\").a" "it's": got Error("outside the core: the call parse(…) at 1:11 (no owner)")
 ✗ test/modules/test_json5.pairs.warp:12 "x = json{ 'a':1 }; x.a" 1: got Error("no field a at 1:20")
-✗ test/modules/test_json5.pairs.warp:15 "x = json(\"{\\\"a\\\":1}\"); x.a" 1: got Error("outside the core: the call json(…) at 1:10 (no owner)")
+✗ test/modules/test_json5.pairs.warp:15 "x = json(\"{\\\"a\\\":1}\"); x.a" 1: got Error("no field a at 1:24")
 ✗ test/modules/test_json_parse_form.pairs.warp:4 "json.parse(\"[1, 2]\")" [1 2]: got Error("outside the core: the call parse(…) at 1:1 (no owner)")
 ✗ test/modules/test_json_parse_form.pairs.warp:5 "use json; json.parse(\"{\\\"age\\\": 30}\").age" 30: got Error("outside the core: the call parse(…) at 1:11 (no owner)")
 ✓ test/modules/test_json_parse_form.pairs.warp:8 "use json; parse_json(\"[1, 2]\")" [1 2]
@@ -4490,32 +4502,32 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/modules/test_module_slices.pairs.warp:5 "use compute_toys; compute_toy(\"fn main_image(id: vec3u) { let a = channel0; }\")" error
 ✓ test/modules/test_module_slices.pairs.warp:6 "dict([[\"a\", 2]])[\"a\"]" 2
 ✗ test/modules/test_netbase_package.warp:4 "use netbase; netbase_path(\"all cities with population > 100000\")" "all%20cities%20with%20population%20%3E%20100000": got Error("outside the core: the call netbase_path(…) at 1:27 (no owner)")
-✗ test/modules/test_node_json.pairs.warp:4 "{a: 1}.json" "{\"a\":1}": got Error("no field json at 1:2")
-✗ test/modules/test_node_json.pairs.warp:5 "x = {a: 1, b: [1, 2]}; x.json" "{\"a\":1,\"b\":[1,2]}": got Error("no field json at 1:24")
-✗ test/modules/test_node_json.pairs.warp:6 "[1, 2, 3].json" "[1,2,3]": got Error("outside the core: the field json of a list at 1:8 (no owner)")
-✗ test/modules/test_node_json.pairs.warp:7 "\"hi\".json" "\"hi\"": got Error("outside the core: the field json of a text at 1:1 (no owner)")
-✗ test/modules/test_node_json.pairs.warp:8 "(1 + 2).json" '3': got Error("outside the core: the field json of a int at 1:6 (no owner)")
+✓ test/modules/test_node_json.pairs.warp:4 "{a: 1}.json" "{\"a\":1}"
+✓ test/modules/test_node_json.pairs.warp:5 "x = {a: 1, b: [1, 2]}; x.json" "{\"a\":1,\"b\":[1,2]}"
+✓ test/modules/test_node_json.pairs.warp:6 "[1, 2, 3].json" "[1,2,3]"
+✓ test/modules/test_node_json.pairs.warp:7 "\"hi\".json" "\"hi\""
+✓ test/modules/test_node_json.pairs.warp:8 "(1 + 2).json" '3'
 ✓ test/modules/test_node_json.pairs.warp:11 "x = {json: 3}; x.json" 3
-✗ test/modules/test_node_json.pairs.warp:14 "parse(\"1+1\").json" "{\"+\":[1,1]}": got Error("no field json at 1:1")
-✗ test/modules/test_node_json.pairs.warp:15 "parse(\"a * (b + 1)\").json" "{\"*\":[\"a\",{\"+\":[\"b\",1]}]}": got Error("no field json at 1:1")
-✗ test/modules/test_node_json.pairs.warp:16 "parse(\"not x\").json" "{\"not\":[\"x\"]}": got Error("no field json at 1:5")
-✗ test/modules/test_node_json.pairs.warp:17 "parse(\"{a: 1+2}\").json" "{\"a\":{\"+\":[1,2]}}": got Error("no field json at 1:2")
-✗ test/modules/test_node_json.pairs.warp:20 "{1: \"a\"}.json" "{\"1\":\"a\"}": got Error("no field json at 1:2")
-✗ test/modules/test_node_json.pairs.warp:21 "parse(\"f(x) := x*2\").json" "{\"(f x)\":{\"*\":[\"x\",2]}}": got Error("no field json at 1:3")
-✗ test/modules/test_node_json.pairs.warp:24 "(2^70).json" "1180591620717411303424": got Error("no field json at 1:2")
-✗ test/modules/test_node_json.pairs.warp:25 "[-(2^70) 1].json" "[-1180591620717411303424,1]": got Error("outside the core: the field json of a list at 1:10 (no owner)")
-✗ test/modules/test_node_json.pairs.warp:26 "(1/3).json" "0.3333333333333333": got Error("no field json at 1:2")
-✗ test/modules/test_node_json.pairs.warp:29 "{third: 1/3}.json" "{\"third\":0.3333333333333333}": got Error("no field json at 1:2")
-✗ test/modules/test_node_json.pairs.warp:32 "(-1/8).json" "-0.125": got Error("no field json at 1:2")
+✓ test/modules/test_node_json.pairs.warp:14 "parse(\"1+1\").json" "{\"+\":[1,1]}"
+✓ test/modules/test_node_json.pairs.warp:15 "parse(\"a * (b + 1)\").json" "{\"*\":[\"a\",{\"+\":[\"b\",1]}]}"
+✓ test/modules/test_node_json.pairs.warp:16 "parse(\"not x\").json" "{\"not\":[\"x\"]}"
+✓ test/modules/test_node_json.pairs.warp:17 "parse(\"{a: 1+2}\").json" "{\"a\":{\"+\":[1,2]}}"
+✓ test/modules/test_node_json.pairs.warp:20 "{1: \"a\"}.json" "{\"1\":\"a\"}"
+✓ test/modules/test_node_json.pairs.warp:21 "parse(\"f(x) := x*2\").json" "{\"(f x)\":{\"*\":[\"x\",2]}}"
+✓ test/modules/test_node_json.pairs.warp:24 "(2^70).json" "1180591620717411303424"
+✓ test/modules/test_node_json.pairs.warp:25 "[-(2^70) 1].json" "[-1180591620717411303424,1]"
+✓ test/modules/test_node_json.pairs.warp:26 "(1/3).json" "0.3333333333333333"
+✓ test/modules/test_node_json.pairs.warp:29 "{third: 1/3}.json" "{\"third\":0.3333333333333333}"
+✓ test/modules/test_node_json.pairs.warp:32 "(-1/8).json" "-0.125"
 ✓ test/modules/test_node_json.pairs.warp:35 "use json; exact_json({a: 0.5}, [])" "{\"a\":0.5}"
-✗ test/modules/test_node_json.warp:4 "use strict\n{price: 0.1}.json" "{\"price\":0.1}": got Error("no field json at 2:2")
-✗ test/modules/test_node_json.warp:6 "use strict\n{price: 19.99}.json" "{\"price\":19.99}": got Error("no field json at 2:2")
-✗ test/modules/test_node_json.warp:8 "use strict\np = {price: 2.5}\np.json" "{\"price\":2.5}": got Error("no field json at 3:1")
+✓ test/modules/test_node_json.warp:4 "use strict\n{price: 0.1}.json" "{\"price\":0.1}"
+✓ test/modules/test_node_json.warp:6 "use strict\n{price: 19.99}.json" "{\"price\":19.99}"
+✓ test/modules/test_node_json.warp:8 "use strict\np = {price: 2.5}\np.json" "{\"price\":2.5}"
 ✗ test/modules/test_package_registry.pairs.warp:4 "use uniscript; uniscript(\"<:alpha/>\")" 'α': got Error("outside the core: the call uniscript(…) at 1:26 (no owner)")
 ✗ test/modules/test_package_registry.pairs.warp:7 "use colors; to_hex(from_hex(\"f80\"))" "#ff8800": got Error("outside the core: the call to_hex(…) at 1:29 (no owner)")
 ✗ test/modules/test_package_registry.pairs.warp:10 "use colors version 1.0.0; to_hex(from_hex(\"#ff8800\"))" "#ff8800": got Error("outside the core: the call to_hex(…) at 1:43 (no owner)")
 ✗ test/modules/test_packages.pairs.warp:4 "use uniscript; uniscript(\"<:alpha>\")" 'α': got Error("outside the core: the call uniscript(…) at 1:26 (no owner)")
-✗ test/modules/test_packages.pairs.warp:7 "module_directory" '.': got "/Volumes/Worktrees/test-rate/test/modules"
+✗ test/modules/test_packages.pairs.warp:7 "module_directory" '.': got "/Volumes/Worktrees/integrate/test/modules"
 ✓ test/modules/test_prelude_own_names.pairs.warp:4 "round_to(1.23456, 2)" 1.23
 ✓ test/modules/test_prelude_own_names.pairs.warp:5 "use math; round_to(1.23456, 2)" 1.23
 ✓ test/modules/test_prelude_own_names.pairs.warp:6 "first_items([5, 6, 7], 2)" [5, 6]
@@ -4766,8 +4778,8 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✓ test/modules/test_std_math_text.pairs.warp:69 "use cmath; cos(0) + cbrt(8)" 3
 ✓ test/modules/test_std_math_text.pairs.warp:72 "use text; words = [\"ab\", \"cd\"]; [capitalize w for w in words]" ["Ab", "Cd"]
 ✓ test/modules/test_std_math_text.pairs.warp:73 "f(t) := upper(t[0]) + t[1..]; [f w for w in [\"ab\"]]" ["Ab"]
-✗ test/modules/test_std_math_text.pairs.warp:76 "use text; words = [\"a b\"]; title \"hello world\"" "Hello World": got Error("not a function at 1:48")
-✗ test/modules/test_std_math_text.pairs.warp:77 "use text; words = [\"ab\", \"cd\"]; [title w for w in words]" ["Ab", "Cd"]: got Error("not a function at 1:48")
+✓ test/modules/test_std_math_text.pairs.warp:76 "use text; words = [\"a b\"]; title \"hello world\"" "Hello World"
+✓ test/modules/test_std_math_text.pairs.warp:77 "use text; words = [\"ab\", \"cd\"]; [title w for w in words]" ["Ab", "Cd"]
 ✓ test/modules/test_std_math_text.warp:4 "use math; [is_prime(7), is_prime(9), is_prime(2), is_prime(1)]" [1, 0, 1, 0]
 ✓ test/modules/test_std_math_text.warp:7 "use text; [is_upper(\"AB\"), is_upper(\"Ab\"), is_lower(\"ab1\"), is_upper(\"12\")]" [1, 0, 1, 0]
 ✓ test/modules/test_std_math_text.warp:8 "use text; [is_palindrome(\"A man, a plan, a canal: Panama\"), is_palindrome(\"abc\")]" [1, 0]
@@ -4966,6 +4978,17 @@ fields: a b": got Error("outside the core: the call help(…) at 3:6 (no owner)"
 ✗ test/modules/test_wasm_modules.warp:11 "import tests/fixtures/wasm/xxhash; state = XXH32_createState(); XXH32_reset(state, 0); XXH32_update(state, \"hel\"); XXH32_update(state, \"lo\"); XXH32_digest(state)" 4211111929: got Error("outside the core: the unknown name XXH32_createState at 1:36 (no owner)")
 ✗ test/modules/test_wasm_modules.warp:14 "import tests/fixtures/wasm/shout; loud(t:text) := shout(t); loud(\"ab\")" "AB!": got Error("outside the core: the call shout(…) at 1:57 (no owner)")
 ✗ test/modules/test_wasm_modules.warp:15 "import tests/fixtures/wasm/shout; loud(t) := shout(t); loud(\"a\") + loud(\"b\")" "A!B!": got Error("outside the core: the call shout(…) at 1:52 (no owner)")
+✓ test/native/test_primitive.pairs.warp:4 "@primitive sq(x: i32): i32 := x * x; sq(7) + 1" 50
+✓ test/native/test_primitive.pairs.warp:5 "@primitive fib(n: i32): i32 := if n < 2 then n else fib(n - 1) + fib(n - 2); fib(20)" 6765
+✓ test/native/test_primitive.pairs.warp:6 "@primitive small(n: u8): bool := n < 10; small(3)" yes
+✓ test/native/test_primitive.pairs.warp:7 "@primitive quarter(x: f64): f64 := x / 4; @primitive twice(x: f64): f64 := quarter(x) * 8; twice(1.5)" 3
+✓ test/native/test_primitive.pairs.warp:8 "@primitive sum(n: i64): i64 := { total = 0; for i in 1..n { total += i }; total }; \"sum \" + sum(10)" "sum 45"
+✓ test/native/test_primitive.pairs.warp:9 "@primitive wrap(x: i64): u8 := x as u8; wrap(300)" 44
+✓ test/native/test_primitive.pairs.warp:10 "h(x: f64): f64 := x / 4; @primitive quarter(x: f64): f64 := h(x); quarter(2)" error
+✓ test/native/test_primitive.pairs.warp:11 "@primitive name(x: i32): text := \"a\"; name(1)" error
+✓ test/native/test_primitive.pairs.warp:12 "@primitive low(x: i32): i8 := x as i8; low(200)" -56
+✓ test/native/test_primitive.pairs.warp:13 "@primitive narrow(x: i64): u8 := x; narrow(3)" error
+✓ test/native/test_primitive.pairs.warp:14 "@primitive big(x: int): int := x * 1000000; big(5000000)" 5000000000000
 ✗ test/node/test_comment_meta.warp:4 "use comments\n// Comments attach to the next element as metadata\n// This documents the greeting variable\ngreeting: \"Hello\"\ngreeting.meta.comment" "Comments attach to the next element as metadata
 This documents the greeting variable": got Error("outside the core: the unknown name greeting at 5:1 (no owner)")
 ✗ test/node/test_comment_meta.warp:10 "use comments\n// Comments attach to the next element as metadata\n// This documents the greeting variable\ngreeting: \"Hello\"\ngreeting.@comment" "Comments attach to the next element as metadata
@@ -5756,7 +5779,7 @@ This documents the greeting variable": got Error("outside the core: the unknown 
 ✓ test/numbers/test_nearest_default.pairs.warp:13 "nearest(sqrt(2), rational, within: 1e-12) == 1607521/1136689" yes
 ✓ test/numbers/test_nearest_quiet.pairs.warp:4 "nearest(0.75, rational) == 3/4" yes
 ✓ test/numbers/test_norm.pairs.warp:4 "use math; norm -2.5" 2.5
-✓ test/numbers/test_norm.pairs.warp:5 "use math; x = -7; norm(x) + abs(x)" 14
+✗ test/numbers/test_norm.pairs.warp:5 "use math; x = -7; norm(x) + abs(x)" 14: timed out after 30 s
 ✓ test/numbers/test_number.pairs.warp:4 "42" 42
 ✓ test/numbers/test_number.pairs.warp:5 "0xFF" 255
 ✓ test/numbers/test_number.pairs.warp:6 "0x100" 256
@@ -5797,6 +5820,7 @@ This documents the greeting variable": got Error("outside the core: the unknown 
 ✗ test/numbers/test_pixel_unit.warp:14 "(quantity(1, \"inch\") * quantity(96, \"ppi\")).to(\"px\") == quantity(96, \"px\")" yes: got Error("outside the core: the call to(…) at 1:11 (no owner)")
 ✗ test/numbers/test_quantity_cast.pairs.warp:4 "x = \"2.5 km\"; (x as quantity).in(\"m\")" 2500: got Error("outside the core: the call in(…) at 1:16 (no owner)")
 ✗ test/numbers/test_quantity_cast.pairs.warp:7 "(\"1 km\" as unit) > (\"999 m\" as unit)" yes: got Error("outside the core: the operator as on text and node at 1:12 (no owner)")
+✓ test/numbers/test_quantity_sum_codex.pairs.warp:2 "use units; a = quantity(5, \"m\"); b = quantity(3, \"m\"); (a + b).amount" 8
 ✓ test/numbers/test_ratio_compare_shortcut.pairs.warp:4 "n = 0; x = 1/3; y = 2/7; for i in 1..3000 { if y < x { n += 1 } }; n" 2999
 ✓ test/numbers/test_ratio_gcd_warp.pairs.warp:4 "use math; gcd(-12, 18)" 6
 ✓ test/numbers/test_ratio_gcd_warp.pairs.warp:5 "use math; gcd(12, -18)" 6
@@ -6278,7 +6302,7 @@ This documents the greeting variable": got Error("outside the core: the unknown 
 ✓ test/operators/test_infix_word_operators.warp:24 "infix operator divides(d:int, n:int) := n % d == 0\ndivides(5, 12)" no
 ✓ test/operators/test_infix_word_operators.warp:26 "infix operator times := left * right\ntimes(6, 7)" 42
 ✓ test/operators/test_infix_word_operators.warp:28 "divides(a, b) := 7\ninfix operator divides(d, n) := n % d == 0\ndivides(3, 12) + 0" 7
-✗ test/operators/test_less_than_compare.pairs.warp:4 "k=3; {it<k}(it=1)" 1: got Error("outside the core: the unknown name it at 1:7 (no owner)")
+✓ test/operators/test_less_than_compare.pairs.warp:4 "k=3; {it<k}(it=1)" 1
 ✓ test/operators/test_less_than_compare.pairs.warp:5 "a=1; b=2; a<b" 1
 ✓ test/operators/test_less_than_compare.pairs.warp:8 "x:list<int>=[1 2]; count x" 2
 ✓ test/operators/test_less_than_compare.pairs.warp:9 "x:list<list<int>>=[[1], [2]]; count x" 2
@@ -6637,19 +6661,19 @@ This documents the greeting variable": got Error("outside the core: the unknown 
 ✓ test/parser/test_comments.warp:4 "/* block \n comment */ 1+1" 2
 ✓ test/parser/test_comments.warp:8 "# Rust's\nclass Point { x: int }\n# it's\n/# don't #/\nstr(Point{x: 1})" "Point{x:1}"
 ✓ test/parser/test_comments.warp:13 "f(t) := type\nchanged = yes\nn = 0\nwhile changed {\n\tchanged = no\n\tn += 1\n}\nn" 1
-✗ test/parser/test_element_wise_phrase.pairs.warp:4 "xs=[1 2 3]; xs .* 2" [2 4 6]: got Error("no warp.wasm at /Volumes/Worktrees/test-rate/lib/warp.wasm: `warp rebuild pure` builds it, scripts/rebuild.sh copies the shared pair for its inputs")
+✓ test/parser/test_element_wise_phrase.pairs.warp:4 "xs=[1 2 3]; xs .* 2" [2 4 6]
 ✗ test/parser/test_element_wise_phrase.pairs.warp:5 "xs=[1 2 3]; ys=[4 5 6]; (xs .* 2) .+ ys" [6 9 12]: got Error("wasm trap: cast failure at 1:38")
 ✓ test/parser/test_element_wise_phrase.pairs.warp:6 "xs=[1 2 3]; sum(xs .^ 2)" 14
-✗ test/parser/test_element_wise_phrase.pairs.warp:7 "f(xs) := xs .+ 1; f([1 2])" [2 3]: No such file or directory (os error 2)
-✗ test/parser/test_emoji_atoms.pairs.warp:4 "\\:world == 🌍" yes: No such file or directory (os error 2)
-✗ test/parser/test_emoji_atoms.pairs.warp:5 "🌍 == '🌍'" yes: No such file or directory (os error 2)
-✗ test/parser/test_emoji_atoms.pairs.warp:6 "x = 🌍; x == '🌍'" yes: No such file or directory (os error 2)
-✗ test/parser/test_emoji_atoms.pairs.warp:7 "★ == '★'" yes: No such file or directory (os error 2)
+✓ test/parser/test_element_wise_phrase.pairs.warp:7 "f(xs) := xs .+ 1; f([1 2])" [2 3]
+✓ test/parser/test_emoji_atoms.pairs.warp:4 "\\:world == 🌍" yes
+✓ test/parser/test_emoji_atoms.pairs.warp:5 "🌍 == '🌍'" yes
+✓ test/parser/test_emoji_atoms.pairs.warp:6 "x = 🌍; x == '🌍'" yes
+✓ test/parser/test_emoji_atoms.pairs.warp:7 "★ == '★'" yes
 ✓ test/parser/test_emoji_atoms.pairs.warp:8 "[🍎, 🍌]#2 == '🍌'" yes
 ✓ test/parser/test_emoji_atoms.pairs.warp:11 "x = 🇩🇪; x == \"🇩🇪\"" yes
-✓ test/parser/test_emoji_atoms.pairs.warp:12 "👍🏽" "👍🏽"
+✗ test/parser/test_emoji_atoms.pairs.warp:12 "👍🏽" "👍🏽": got Error("not a character")
 ✓ test/parser/test_emoji_atoms.pairs.warp:13 "#[👨\u{200d}👩\u{200d}👧, 🇩🇪, 🌍]" 3
-✗ test/parser/test_emoji_atoms.pairs.warp:14 "🇩🇪 = 3; 🇩🇪 == \"🇩🇪\"" yes: got Error("outside the core: an assignment to a codepoint at 1:5 (no owner)")
+✗ test/parser/test_emoji_atoms.pairs.warp:14 "🇩🇪 = 3; 🇩🇪 == \"🇩🇪\"" yes: got Error("not a character")
 ✓ test/parser/test_empty_argument.pairs.warp:4 "sum []" 0
 ✓ test/parser/test_empty_argument.pairs.warp:5 "x = sum []; x" 0
 ✓ test/parser/test_empty_argument.pairs.warp:6 "count []" 0
@@ -6874,13 +6898,13 @@ This documents the greeting variable": got Error("outside the core: the unknown 
 ✗ test/parser/test_references.pairs.warp:8 "x = a{ b:2 c{ parent=ref a } }; x.c.parent.b" 2: got Error("no field c at 1:33")
 ✗ test/parser/test_references.pairs.warp:9 "x = a{ b:2 c:{ d:{ up:$c e:5 } } }; x.c.d.up.d.e" 5: got Error("no field c at 1:37")
 ✗ test/parser/test_references.pairs.warp:12 "f = {$0 * 2}; f(3)" 6: got Error("outside the core: the unknown name $0 at 1:6 (no owner)")
-✗ test/parser/test_rust_items.pairs.warp:4 "struct P { x: i32, y: i32 } let p = P { x: 3, y: 4 }; p.x" 3: got Error("outside the core: a none as a value at 1:33 (no owner)")
-✗ test/parser/test_rust_items.pairs.warp:5 "class P { x: int } let p = P { x: 5 }; p.x" 5: got Error("outside the core: a none as a value at 1:24 (no owner)")
+✓ test/parser/test_rust_items.pairs.warp:4 "struct P { x: i32, y: i32 } let p = P { x: 3, y: 4 }; p.x" 3
+✓ test/parser/test_rust_items.pairs.warp:5 "class P { x: int } let p = P { x: 5 }; p.x" 5
 ✗ test/parser/test_rust_items.pairs.warp:8 "fn three() -> i32 { 3 } let x = three(); x + 1" 4: got Error("outside the core: the unknown name fn at 1:1 (no owner)")
 ✓ test/parser/test_rust_items.pairs.warp:11 "if 1 > 0 { 2 } else { 3 }" 2
 ✓ test/parser/test_rust_items.pairs.warp:12 "x = 1; if x > 0 { x = 7 }; x" 7
 ✗ test/parser/test_rust_items.warp:4 "enum C { Red, Green } let c = C::Green; match c { C::Red => 1, C::Green => 2 }" 2: got Error("outside the core: the unknown name enum at 1:1 (no owner)")
-✗ test/parser/test_rust_items.warp:5 "struct P { x: i32 } impl P { fn doubled(&self) -> i32 { self.x * 2 } } let p = P { x: 3 }; p.doubled()" 6: got Error("outside the core: a none as a value at 1:21 (no owner)")
+✗ test/parser/test_rust_items.warp:5 "struct P { x: i32 } impl P { fn doubled(&self) -> i32 { self.x * 2 } } let p = P { x: 3 }; p.doubled()" 6: got Error("outside the core: the unknown name impl at 1:21 (no owner)")
 ✗ test/parser/test_rust_items.warp:8 "struct S { a: i32 }\nimpl Area for S { fn area(&self) -> i32 { self.a * self.a } }\nS { a: 2 }.area()" 4: got Error("outside the core: the unknown name impl at 2:1 (no owner)")
 ✗ test/parser/test_rust_items.warp:13 "trait Area { fn area(&self) -> i32; } struct S { a: i32 } impl Area for S { fn area(&self) -> i32 { self.a * self.a } } S { a: 2 }.area()" 4: got Error("outside the core: the unknown name trait at 1:1 (no owner)")
 ✗ test/parser/test_rust_macros.pairs.warp:4 "format!(\"a={} b={}\", 1, 2)" "a=1 b=2": got Error("outside the core: the call format!(…) at 1:9 (no owner)")
@@ -7091,7 +7115,7 @@ at"
 ✓ test/programs/test_music_kinds.pairs.warp:2 "use sound; chord(C4, major7) == [C4, E4, G4, B4]" yes
 ✓ test/programs/test_music_kinds.pairs.warp:3 "use sound; [count(scale(A2, pentatonic)), count(chord(C4, minor)), count(scale(C4, major))]" [6, 3, 8]
 ✓ test/programs/test_music_kinds.pairs.warp:4 "use sound; chord(A3, \"minor\") == [A3, C4, E4]" yes
-✓ test/programs/test_music_kinds.pairs.warp:6 "use units; m(d) := d; m(0.5 as float); m(5 * ms) == 5ms" yes
+✗ test/programs/test_music_kinds.pairs.warp:6 "use units; m(d) := d; m(0.5 as float); m(5 * ms) == 5ms" yes: got Error("index out of range")
 ✓ test/programs/test_music_kinds.pairs.warp:7 "use sound; melody([C4], 5ms); 1" 1
 ✓ test/programs/test_music_values.warp:4 "tuning = 442\nplay(A4, 5ms)\nA4" 442
 ✓ test/programs/test_music_values.warp:7 "tuning = 432\nplay(440Hz, 5ms)\nA3" 216
@@ -7147,7 +7171,7 @@ at"
 ✗ test/programs/test_property_definitions.warp:50 "class Point{x: int; y: int}\nPoint.norm(self) := self.x * 2\nPoint(3, 4).norm" 6: got Error("no field norm at 3:7")
 ✗ test/programs/test_property_definitions.warp:53 "class Point{x: int; y: int}\nPoint.norm() := self.x\nPoint(3, 4).norm" 3: got Error("outside the core: the unknown name self at 2:17 (no owner)")
 ✗ test/programs/test_property_definitions.warp:56 "class Point{x: int; y: int}\nPoint.sum := this.x + this.y\nPoint(3, 4).sum" 7: got Error("wasm trap: wasm `unreachable` instruction executed at 11:61")
-✗ test/programs/test_property_definitions.warp:59 "class Point{x: int; y: int}\nPoint.shift(d) := self.x = self.x + d\np = Point(3, 4)\np.shift = 10\np.x" 13: got 3
+✗ test/programs/test_property_definitions.warp:59 "class Point{x: int; y: int}\nPoint.shift(d) := self.x = self.x + d\np = Point(3, 4)\np.shift = 10\np.x" 13: timed out after 30 s
 ✗ test/programs/test_samples.pairs.warp:4 "samples/functions/fibonacci.warp" 55: got Error("outside the core: the unknown name samples: `use sound` defines it at 1:1 (no owner)")
 ✗ test/programs/test_samples.pairs.warp:7 "samples/numbers/factorial.warp" 120: got Error("outside the core: the unknown name samples: `use sound` defines it at 1:1 (no owner)")
 ✗ test/programs/test_samples.pairs.warp:10 "samples/lists/primes.warp" 1: got Error("outside the core: the unknown name samples: `use sound` defines it at 1:1 (no owner)")
@@ -7498,7 +7522,7 @@ at"
 ✓ test/text/test_character_comparison.pairs.warp:5 "c='5'; c >= '0' and c <= '9'" yes
 ✓ test/text/test_character_comparison.pairs.warp:6 "c='x'; c >= '0' and c <= '9'" no
 ✓ test/text/test_character_comparison.pairs.warp:7 "c='q'; (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')" yes
-✓ test/text/test_character_comparison.pairs.warp:10 "s=\"a5\"; c=s#2; c >= '0' and c <= '9'" yes
+✗ test/text/test_character_comparison.pairs.warp:10 "s=\"a5\"; c=s#2; c >= '0' and c <= '9'" yes: timed out after 30 s
 ✓ test/text/test_character_comparison.pairs.warp:13 "c='5'; c.is_digit()" yes
 ✓ test/text/test_character_comparison.pairs.warp:14 "'x'.is_digit()" no
 ✓ test/text/test_character_comparison.pairs.warp:15 "c='q'; c.is_alpha()" yes
@@ -7679,13 +7703,13 @@ at"
 ✓ test/text/test_print_arguments.pairs.warp:9 "g=\"hi\"; print(g, g)" ø
 ✓ test/text/test_print_arguments.pairs.warp:10 "g=\"hi\"; print g, g" ø
 ✓ test/text/test_print_arguments.pairs.warp:11 "n=3; print(\"n\", n)" ø
-✗ test/text/test_print_arguments.pairs.warp:14 "print()" ø: got Error("outside the core: the unknown name print (no owner)")
-✗ test/text/test_print_arguments.pairs.warp:15 "x = print(); x" ø: got Error("outside the core: the unknown name print at 1:1 (no owner)")
+✗ test/text/test_print_arguments.pairs.warp:14 "print()" ø: got Error("outside the core: the unknown name print: `use primitive` defines it (no owner)")
+✗ test/text/test_print_arguments.pairs.warp:15 "x = print(); x" ø: got Error("outside the core: the unknown name print: `use primitive` defines it at 1:1 (no owner)")
 ✓ test/text/test_print_gives_nothing.pairs.warp:4 "print 3" ø
 ✓ test/text/test_print_gives_nothing.pairs.warp:5 "x = 3; print x" ø
 ✓ test/text/test_print_gives_nothing.pairs.warp:6 "print \"a\", 2" ø
 ✓ test/text/test_print_gives_nothing.pairs.warp:7 "print [1, 2]" ø
-✗ test/text/test_print_gives_nothing.pairs.warp:8 "print()" ø: got Error("outside the core: the unknown name print (no owner)")
+✗ test/text/test_print_gives_nothing.pairs.warp:8 "print()" ø: got Error("outside the core: the unknown name print: `use primitive` defines it (no owner)")
 ✓ test/text/test_print_gives_nothing.pairs.warp:9 "f(x) := { print(x); x }; f(3)" 3
 ✓ test/text/test_print_gives_nothing.pairs.warp:10 "xs = [1 2]; xs.each(x => print x); 7" 7
 ✓ test/text/test_print_juxtaposed.pairs.warp:4 "x=3; print \"a \" x" ø
@@ -8045,13 +8069,13 @@ ba
 ✓ test/types/test_as_number_variable.warp:9 "n = \"4\" as number\nn + 1" 5
 ✓ test/types/test_as_number_variable.warp:11 "class V{x:float}\nn = \"4.5\" as number\nV(n).x" 4.5
 ✓ test/types/test_as_number_variable.warp:16 "class V{x:int}\nf(t:text) := V(t as number).x\nf(\"4\")" 4
-✗ test/types/test_bare_class.pairs.warp:4 "class int == int" yes: got Error("outside the core: a none as a value at 1:14 (no owner)")
-✗ test/types/test_bare_class.pairs.warp:5 "x = class text; x == text" yes: got Error("outside the core: a none as a value at 1:22 (no owner)")
-✗ test/types/test_bare_class.pairs.warp:6 "x = class time; x == time" yes: got Error("outside the core: a none as a value at 1:22 (no owner)")
-✗ test/types/test_bare_class.pairs.warp:7 "class Int == int" yes: got Error("outside the core: a none as a value at 1:14 (no owner)")
-✗ test/types/test_bare_class.pairs.warp:8 "f(t: type) := t == int; f(class int)" yes: got Error("outside the core: a int given to a variable declared int at 1:20 (no owner)")
+✗ test/types/test_bare_class.pairs.warp:4 "class int == int" yes: got no
+✗ test/types/test_bare_class.pairs.warp:5 "x = class text; x == text" yes: got no
+✗ test/types/test_bare_class.pairs.warp:6 "x = class time; x == time" yes: got no
+✗ test/types/test_bare_class.pairs.warp:7 "class Int == int" yes: got no
+✗ test/types/test_bare_class.pairs.warp:8 "f(t: type) := t == int; f(class int)" yes: got no
 ✗ test/types/test_bare_class.pairs.warp:11 "class Foo; int bar(){ 42 }; Foo().bar()" 42: got Error("outside the core: a call of bar with 1 arguments (no owner)")
-✗ test/types/test_bare_class.warp:4 "sealed class Shape\nclass Circle(val r: Int) : Shape()\nCircle(2).r" 2: got Error("outside the core: a none as a value at 2:18 (no owner)")
+✗ test/types/test_bare_class.warp:4 "sealed class Shape\nclass Circle(val r: Int) : Shape()\nCircle(2).r" 2: got Error("no field r at 3:8")
 ✗ test/types/test_be_definitions.pairs.warp:4 "x be number 9; x+1" 10: got Error("outside the core: the unknown name x at 1:1 (no owner)")
 ✗ test/types/test_be_definitions.pairs.warp:5 "x be 100 times [0]; x.length" 100: got Error("outside the core: the unknown name x at 1:1 (no owner)")
 ✓ test/types/test_binary_int.pairs.warp:4 "0b101" 5
@@ -8143,7 +8167,7 @@ ba
 ✓ test/types/test_class_aliases.pairs.warp:7 "class P { x=1; new(k) := P(x + k) }; p = P(1); p.new(2).x" 3
 ✓ test/types/test_class_aliases.pairs.warp:8 "class P { x=1; Create(k) := P(x * k) }; P(2).Create(3).x" 6
 ✓ test/types/test_class_aliases.pairs.warp:11 "class S{n:int; init(k) := { n = k * 2 }}; S(4).n" 8
-✗ test/types/test_class_aliases.warp:4 "type Point struct {\n    X int\n    Y int\n}\nPoint{1, 2}.Y" 2: got Error("outside the core: a none as a value at 5:7 (no owner)")
+✗ test/types/test_class_aliases.warp:4 "type Point struct {\n    X int\n    Y int\n}\nPoint{1, 2}.Y" 2: got Error("outside the core: the operator  on int at 5:10 (no owner)")
 ✓ test/types/test_class_aliases.warp:11 "class S{items:list; init(xs) := { items = []; for x in xs { if not (x in items) { items.add(x) } } }}; count(S([1 2 2 3]).items)" 3
 ✓ test/types/test_class_aliases.warp:14 "class C{keys=[]; init(xs) := { for x in xs { i = x in keys; if not i { keys.add(x) } } }; last() := { best = 0; for i in 1 to count(keys) { best = keys#i }; best }}; C([7 8 8]).last()" 8
 ✓ test/types/test_class_aliases.warp:15 "class C{keys=[]; init(xs) := { for x in xs { i = x in keys; if not i { keys.add(x) } } }; last() := { best = 0; for i in 1 to count(keys) { best = keys#i }; best }}; count(C([7 8 8]).keys)" 2
@@ -8219,24 +8243,24 @@ ba
 ✓ test/types/test_class_field_type_phrases.pairs.warp:5 "class bag { items: list of text; n: int }; b = bag([\"hi\"], 2); b.n" 2
 ✓ test/types/test_class_field_type_phrases.pairs.warp:6 "class bag { items: list<text> }; count(bag([\"hi\", \"yo\"]).items)" 2
 ✓ test/types/test_class_field_type_phrases.warp:4 "class bag { items: list of list of int }; b = bag([[1, 2]]); b.items#1#2" 2
-✗ test/types/test_class_forms_ported.pairs.warp:4 "data class P(val x: Int); P(1) == P(1)" 1: got Error("outside the core: a none as a value at 1:18 (no owner)")
-✗ test/types/test_class_forms_ported.pairs.warp:5 "class Box(var w: Int = 2); Box().w" 2: got Error("outside the core: a none as a value at 1:15 (no owner)")
+✓ test/types/test_class_forms_ported.pairs.warp:4 "data class P(val x: Int); P(1) == P(1)" 1
+✗ test/types/test_class_forms_ported.pairs.warp:5 "class Box(var w: Int = 2); Box().w" 2: got Error("outside the core: a variable declared Int at 1:24 (no owner)")
 ✓ test/types/test_class_forms_ported.pairs.warp:8 "def twice = 8; twice" 8
 ✗ test/types/test_class_forms_ported.pairs.warp:9 "class P{x:int; def twice = x*2}; P(3).twice" 6: got Error("no field twice at 1:36")
-✗ test/types/test_class_forms_ported.warp:4 "class Point(val x: Int, val y: Int) { fun sum() = x + y }; Point(1, 2).sum()" 3: got Error("outside the core: a none as a value at 1:17 (no owner)")
-✗ test/types/test_class_forms_ported.warp:5 "data class Point(val x: Int, val y: Int)\nval p = Point(1, 2)\np.x + p.y" 3: got Error("outside the core: a none as a value at 1:22 (no owner)")
+✗ test/types/test_class_forms_ported.warp:4 "class Point(val x: Int, val y: Int) { fun sum() = x + y }; Point(1, 2).sum()" 3: got Error("outside the core: the group (… at 1:17 (no owner)")
+✗ test/types/test_class_forms_ported.warp:5 "data class Point(val x: Int, val y: Int)\nval p = Point(1, 2)\np.x + p.y" 3: got Error("outside the core: the group (… at 1:22 (no owner)")
 ✗ test/types/test_class_forms_ported.warp:10 "struct Counter {\n    var count = 0\n    mutating func increment() { count += 1 }\n}\nvar c = Counter()\nc.increment()\nc.increment()\nc.count" 2: got Error("outside the core: the call increment(…) at 6:1 (no owner)")
 ✗ test/types/test_class_forms_ported.warp:20 "record Point(int X, int Y);\nvar p = new Point(1, 2);\np.X + p.Y" 3: got Error("outside the core: the unknown name record at 1:1 (no owner)")
 ✗ test/types/test_class_forms_ported.warp:25 "struct Point { x: i32, y: i32 }\nimpl Point { fn sum(&self) -> i32 { self.x + self.y } }\nlet p = Point { x: 1, y: 2 };\np.sum()" 3: got Error("outside the core: the unknown name impl at 2:1 (no owner)")
-✗ test/types/test_class_forms_ported.warp:31 "data class Point(val x: Int, val y: Int)\nval p = Point(1, 2)\nval q = p.copy(y = 5)\nq.y * 10 + p.y" 52: got Error("outside the core: a none as a value at 1:22 (no owner)")
+✗ test/types/test_class_forms_ported.warp:31 "data class Point(val x: Int, val y: Int)\nval p = Point(1, 2)\nval q = p.copy(y = 5)\nq.y * 10 + p.y" 52: got Error("outside the core: the group (… at 1:22 (no owner)")
 ✓ test/types/test_class_forms_ported.warp:37 "class Point {\n  x: number;\n  constructor(x: number) { this.x = x }\n  twice(): number { return this.x * 2 }\n}\nnew Point(4).twice()" 8
 ✗ test/types/test_class_forms_ported.warp:45 "class Point { public int X { get; set; } }\nvar p = new Point { X = 3 };\np.X" 3: got Error("outside the core: the operator  on int at 2:25 (no owner)")
-✗ test/types/test_class_forms_ported.warp:50 "class Counter:\n    count = 0\n    def __init__(self):\n        Counter.count += 1\nCounter()\nCounter()\nCounter.count" 2: got Error("outside the core: a none as a value at 2:5 (no owner)")
-✗ test/types/test_class_forms_ported.warp:59 "type Point struct {\n    X, Y int\n}\nPoint{X: 1, Y: 2}.Y" 2: got Error("outside the core: a none as a value at 4:7 (no owner)")
-✗ test/types/test_class_forms_ported.warp:65 "class Counter\n  def initialize\n    @count = 0\n  end\n  def current\n    @count\n  end\nend\nCounter.new.current" 0: got Error("outside the core: a none as a value at 2:3 (no owner)")
-✗ test/types/test_class_forms_ported.warp:76 "class Point\n  attr_reader :x\n  def initialize(x)\n    @x = x\n  end\n  def twice = @x * 2\nend\nPoint.new(5).twice" 10: got Error("outside the core: a none as a value at 2:3 (no owner)")
-✗ test/types/test_class_forms_ported.warp:86 "class Point\n  attr_reader :x\n  def initialize(x)\n    @x = x\n  end\n  def twice = @x * 2\nend\nPoint.new(5).twice + Point.new(1).x" 11: got Error("outside the core: a none as a value at 2:3 (no owner)")
-✗ test/types/test_class_forms_ported.warp:94 "type P struct {\n\tx int\n\ty int\n}\nfunc (p P) Sum() int { return p.x + p.y }\nq := P{x: 3, y: 4}\nq.Sum()" 7: got Error("outside the core: a none as a value at 5:1 (no owner)")
+✗ test/types/test_class_forms_ported.warp:50 "class Counter:\n    count = 0\n    def __init__(self):\n        Counter.count += 1\nCounter()\nCounter()\nCounter.count" 2: got Error("outside the core: the unknown name Counter: `use collections` defines it at 4:9 (no owner)")
+✗ test/types/test_class_forms_ported.warp:59 "type Point struct {\n    X, Y int\n}\nPoint{X: 1, Y: 2}.Y" 2: got Error("outside the core: a field Point does not declare at 4:7 (no owner)")
+✗ test/types/test_class_forms_ported.warp:65 "class Counter\n  def initialize\n    @count = 0\n  end\n  def current\n    @count\n  end\nend\nCounter.new.current" 0: got Error("outside the core: the unknown name def at 2:3 (no owner)")
+✗ test/types/test_class_forms_ported.warp:76 "class Point\n  attr_reader :x\n  def initialize(x)\n    @x = x\n  end\n  def twice = @x * 2\nend\nPoint.new(5).twice" 10: got Error("outside the core: the unknown name x at 2:16 (no owner)")
+✗ test/types/test_class_forms_ported.warp:86 "class Point\n  attr_reader :x\n  def initialize(x)\n    @x = x\n  end\n  def twice = @x * 2\nend\nPoint.new(5).twice + Point.new(1).x" 11: got Error("outside the core: the unknown name x at 2:16 (no owner)")
+✗ test/types/test_class_forms_ported.warp:94 "type P struct {\n\tx int\n\ty int\n}\nfunc (p P) Sum() int { return p.x + p.y }\nq := P{x: 3, y: 4}\nq.Sum()" 7: got Error("outside the core: the unknown name func at 5:1 (no owner)")
 ✗ test/types/test_class_index_operator.pairs.warp:4 "class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4" 504: got 503
 ✓ test/types/test_class_index_operator.pairs.warp:5 "class P{n:int; #(o) := n * 100 + o}; F = P(5); F#4" 504
 ✓ test/types/test_class_index_operator.pairs.warp:6 "class P{n:int; operator #(o) := n * 100 + o}; F = P(5); F#4 + 1" 505
@@ -8247,7 +8271,7 @@ ba
 ✗ test/types/test_class_interfaces.warp:13 "trait Shape { area }\nclass Sq{side:int; area() := side*side}\nclass Re{w:int; h:int; area() := w*h}\nf(s:Shape) := s.area()\nf(Sq(3)) + f(Re(2, 5))" 19: got Error("outside the core: the unknown name trait at 1:1 (no owner)")
 ✗ test/types/test_class_interfaces.warp:20 "interface Shape { double area(); }\nclass Square implements Shape {\n  double side;\n  Square(double s) { side = s; }\n  public double area() { return side * side; }\n}\nnew Square(3).area()" 9: got Error("outside the core: the unknown name interface at 1:1 (no owner)")
 ✗ test/types/test_class_interfaces.warp:27 "protocol Shape { func area() -> Double }\nstruct Square: Shape { var side: Double; func area() -> Double { side * side } }\nSquare(side: 3).area()" 9: got Error("outside the core: the unknown name protocol at 1:1 (no owner)")
-✗ test/types/test_class_interfaces.warp:30 "type Shape interface { Area() float64 }\ntype Square struct { Side float64 }\nfunc (s Square) Area() float64 { return s.Side * s.Side }\nfunc total(s Shape) float64 { return s.Area() }\ntotal(Square{Side: 3})" 9: got Error("outside the core: a none as a value at 1:12 (no owner)")
+✗ test/types/test_class_interfaces.warp:30 "type Shape interface { Area() float64 }\ntype Square struct { Side float64 }\nfunc (s Square) Area() float64 { return s.Side * s.Side }\nfunc total(s Shape) float64 { return s.Area() }\ntotal(Square{Side: 3})" 9: got Error("outside the core: the unknown name interface at 1:12 (no owner)")
 ✗ test/types/test_class_interfaces.warp:35 "interface Shape { fun area(): Int }\nclass Square(val side: Int) : Shape { override fun area() = side * side }\nSquare(3).area()" 9: got Error("outside the core: the unknown name interface at 1:1 (no owner)")
 ✗ test/types/test_class_interfaces.warp:38 "interface Shape { area(): number }\nclass Square implements Shape {\n  side: number\n  constructor(side: number) { this.side = side }\n  area(): number { return this.side * this.side }\n}\nnew Square(3).area()" 9: got Error("outside the core: the unknown name interface at 1:1 (no owner)")
 ✗ test/types/test_class_json.pairs.warp:4 "use json; class Point{x:int y:int}; to_json(Point(1, 2))" "{\"x\":1,\"y\":2}": got "{\"Point\":{\"x\":1,\"y\":2}}"
@@ -8264,8 +8288,8 @@ ba
 ✗ test/types/test_class_json.warp:18 "use json; @Serializable data class Point(val x: Int, val y: Int)\nto_json(Point(1, 2))" "{\"x\":1,\"y\":2}": got Error("outside the core: the unknown name data at 1:25 (no owner)")
 ✗ test/types/test_class_json.warp:22 "use json; class Point{x:int y:int}; ps = parse_json(\"[{\\\"x\\\":1,\\\"y\\\":2},{\\\"x\\\":3,\\\"y\\\":4}]\") as [Point]; ps#2.x" 3: got Error("outside the core: the operator as on int at 1:98 (no owner)")
 ✗ test/types/test_class_json.warp:23 "use json; class Point{x:int y:int}; class Poly{points:[Point]}; p = Poly.from_json(to_json(Poly([Point(1, 2), Point(5, 6)]))); p.points#2.y" 6: got Error("outside the core: the call from_json(…) at 1:69 (no owner)")
-✗ test/types/test_class_json.warp:26 "use json; class Todo{title: text}; todos: [Todo] = parse_json(\"[{\\\"Todo\\\":{\\\"title\\\":\\\"tea\\\"}},{\\\"Todo\\\":{\\\"title\\\":\\\"milk\\\"}}]\"); todos#2.title" "milk": got Error("outside the core: an assignment to `… : …` at 1:53 (no owner)")
-✗ test/types/test_class_json.warp:27 "use json; class Todo{title: text}; todos: [Todo] = parse_json(\"[{\\\"Todo\\\":{\\\"title\\\":\\\"tea\\\"}},{\\\"Todo\\\":{\\\"title\\\":\\\"milk\\\"}}]\"); titles = []; for todo in todos { titles.add(todo.title) }; titles#1 + titles#2" "teamilk": got Error("outside the core: an assignment to `… : …` at 1:53 (no owner)")
+✗ test/types/test_class_json.warp:26 "use json; class Todo{title: text}; todos: [Todo] = parse_json(\"[{\\\"Todo\\\":{\\\"title\\\":\\\"tea\\\"}},{\\\"Todo\\\":{\\\"title\\\":\\\"milk\\\"}}]\"); todos#2.title" "milk": got Error("outside the core: an assignment to `… : …` at 1:60 (no owner)")
+✗ test/types/test_class_json.warp:27 "use json; class Todo{title: text}; todos: [Todo] = parse_json(\"[{\\\"Todo\\\":{\\\"title\\\":\\\"tea\\\"}},{\\\"Todo\\\":{\\\"title\\\":\\\"milk\\\"}}]\"); titles = []; for todo in todos { titles.add(todo.title) }; titles#1 + titles#2" "teamilk": got Error("outside the core: an assignment to `… : …` at 1:60 (no owner)")
 ✓ test/types/test_class_members_joined.warp:3 "class V { names = []; counts = []\n vote(x) := { names.add(x); counts.add(1) }\n}\nv = V(); v.vote(\"a\"); v.vote(\"b\"); count(v.names) * 10 + count(v.counts)" 22
 ✓ test/types/test_class_method_changes.pairs.warp:4 "class P { x=0; init(v) := { x = v * 2 } }; P(3).x" 6
 ✓ test/types/test_class_method_changes.pairs.warp:7 "k = {counts: [0, 0]}; k.counts#2 = 7; k.counts#2" 7
@@ -8306,11 +8330,11 @@ ba
 ✓ test/types/test_class_methods.warp:29 "class Square{side:int\n  def area() -> int {\n    return side * side\n  }\n}\nSquare(3).area()" 9
 ✓ test/types/test_class_methods.warp:37 "class C{x:int; doubled() := x*2; quad() := doubled() * 2}; c = C(3); c.quad()" 12
 ✓ test/types/test_class_methods.warp:40 "class Bag{items:list; sum() := 42}; total(x) := x.sum(); total([1, 2, 3]) + total(Bag([1]))" 48
-✗ test/types/test_class_mixins.warp:4 "mixin Walker{steps:int=0; walk() := name + \" walks\"}; class Duck with Walker{name}; Duck(\"Don\").walk()" "Don walks": got Error("outside the core: a none as a value at 1:66 (no owner)")
+✗ test/types/test_class_mixins.warp:4 "mixin Walker{steps:int=0; walk() := name + \" walks\"}; class Duck with Walker{name}; Duck(\"Don\").walk()" "Don walks": got Error("outside the core: the unknown name with at 1:66 (no owner)")
 ✗ test/types/test_class_mixins.warp:5 "mixin Walker{steps:int=0; walk() := name + \" walks\"}; class Duck{name; include Walker}; Duck(\"Don\").walk()" "Don walks": got Error("outside the core: the unknown name name at 1:44 (no owner)")
-✗ test/types/test_class_mixins.warp:6 "mixin Walker{steps:int=0; walk() := name + \" walks\"}; class Duck with Walker{name}; Duck(\"Don\").steps" 0: got Error("outside the core: a none as a value at 1:66 (no owner)")
-✗ test/types/test_class_mixins.warp:9 "mixin Walker{steps:int=0; walk() := name + \" walks\"}; mixin Swimmer{swim() := name + \" swims\"}; class Duck with Walker, Swimmer{name}; Duck(\"Don\").swim()" "Don swims": got Error("outside the core: a none as a value at 1:108 (no owner)")
-✗ test/types/test_class_mixins.warp:10 "mixin Walker{steps:int=0; walk() := name + \" walks\"}; class Duck with Walker{name; walk() := \"waddles\"}; Duck(\"Don\").walk()" "waddles": got Error("outside the core: a none as a value at 1:66 (no owner)")
+✗ test/types/test_class_mixins.warp:6 "mixin Walker{steps:int=0; walk() := name + \" walks\"}; class Duck with Walker{name}; Duck(\"Don\").steps" 0: got Error("outside the core: the unknown name with at 1:66 (no owner)")
+✗ test/types/test_class_mixins.warp:9 "mixin Walker{steps:int=0; walk() := name + \" walks\"}; mixin Swimmer{swim() := name + \" swims\"}; class Duck with Walker, Swimmer{name}; Duck(\"Don\").swim()" "Don swims": got Error("outside the core: the unknown name with at 1:108 (no owner)")
+✗ test/types/test_class_mixins.warp:10 "mixin Walker{steps:int=0; walk() := name + \" walks\"}; class Duck with Walker{name; walk() := \"waddles\"}; Duck(\"Don\").walk()" "waddles": got Error("outside the core: the unknown name with at 1:66 (no owner)")
 ✓ test/types/test_class_operators.pairs.warp:4 "class V{x:int; +(o) := V(x + o.x)}; (V(1) + V(2)).x" 3
 ✓ test/types/test_class_operators.pairs.warp:5 "class V{x:int; -(o) := V(x - o.x)}; (V(5) - V(2)).x" 3
 ✓ test/types/test_class_operators.pairs.warp:6 "class V{x:int; *(k) := V(x * k)}; (V(2) * 3).x" 6
@@ -8323,8 +8347,8 @@ ba
 ✓ test/types/test_class_operators.warp:5 "class V{x:int; y:int; plus(o) := V(x + o.x, y + o.y); times(k) := V(x * k, y * k)}; a = V(1, 2); b = V(3, 4); c = a + b; c.x" 4
 ✓ test/types/test_class_operators.warp:6 "class V{x:int; y:int; plus(o) := V(x + o.x, y + o.y); times(k) := V(x * k, y * k)}; a = V(1, 2); (a * 3).y" 6
 ✓ test/types/test_class_operators.warp:7 "class V{x:int; y:int; plus(o) := V(x + o.x, y + o.y); times(k) := V(x * k, y * k)}; a = V(1, 1); (a + a + a).x" 3
-✗ test/types/test_class_operators.warp:10 "class V:\n    def __init__(self, x):\n        self.x = x\n    def __add__(self, other):\n        return V(self.x + other.x)\n(V(1) + V(2)).x" 3: got Error("outside the core: a none as a value at 2:18 (no owner)")
-✗ test/types/test_class_operators.warp:16 "data class V(val x: Int) { operator fun plus(o: V) = V(x + o.x) }\n(V(1) + V(2)).x" 3: got Error("outside the core: a none as a value at 1:18 (no owner)")
+✗ test/types/test_class_operators.warp:10 "class V:\n    def __init__(self, x):\n        self.x = x\n    def __add__(self, other):\n        return V(self.x + other.x)\n(V(1) + V(2)).x" 3: got Error("outside the core: the unknown name x at 3:18 (no owner)")
+✗ test/types/test_class_operators.warp:16 "data class V(val x: Int) { operator fun plus(o: V) = V(x + o.x) }\n(V(1) + V(2)).x" 3: got Error("outside the core: the unknown name operator at 1:28 (no owner)")
 ✓ test/types/test_class_operators.warp:20 "class V{x:int; plus(o) := V(x + o.x)}; class W{y:int; plus(o) := W(y - o.y)}; t = 0; for q in [V(1), W(9)] { r = q + q; t = t * 100 + (r is V ? r.x : r.y) }; t" 200
 ✓ test/types/test_class_operators.warp:21 "class V{x:int; plus(o) := V(x + o.x)}; class W{y:int; plus(o) := W(y - o.y)}; t = 0; for n in [1, 2] { t = t + n + n }; t" 6
 ✓ test/types/test_class_operators.warp:24 "class Vec{x:int; y:int}; +(a: Vec, b: Vec) := Vec(a.x + b.x, a.y + b.y); (Vec(1, 2) + Vec(3, 4)).y" 6
@@ -8377,7 +8401,7 @@ ba
 ✗ test/types/test_class_witnesses.pairs.warp:12 "class P{x:int; y:int; Equals(o) := x == o.x}; P(3, 1) == P(3, 2)" yes: got no
 ✓ test/types/test_class_witnesses.pairs.warp:15 "class P{x:int; compare(o) := x - o.x}; P(3) < P(4)" yes
 ✗ test/types/test_class_witnesses.pairs.warp:16 "class P{x:int; compareTo(o) := x - o.x}; P(5) < P(4)" no: got Error("wasm trap: cast failure at 1:44")
-✗ test/types/test_class_witnesses.warp:4 "class P:\n    def __init__(self, x):\n        self.x = x\n    def __str__(self):\n        return \"P\" + str(self.x)\nP(3) as text" "P3": got Error("outside the core: a none as a value at 2:18 (no owner)")
+✗ test/types/test_class_witnesses.warp:4 "class P:\n    def __init__(self, x):\n        self.x = x\n    def __str__(self):\n        return \"P\" + str(self.x)\nP(3) as text" "P3": got Error("outside the core: the unknown name x at 3:18 (no owner)")
 ✗ test/types/test_class_witnesses.warp:12 "class P{x:int; compareTo(o) := x - o.x}; (sort [P(3), P(1), P(2)])#1.x" 1: got Error("wasm trap: wasm `unreachable` instruction executed at 1:43")
 ✗ test/types/test_code_type.pairs.warp:4 "def f(x):=x+1; type f.body" "code": got Error("outside the core: a function value in . at 1:21 (no owner)")
 ✗ test/types/test_code_type.pairs.warp:5 "def f(x):=x; type f.body" "code": got Error("outside the core: a function value in . at 1:19 (no owner)")
@@ -8625,8 +8649,8 @@ ba
 ✗ test/types/test_enums_ported.warp:12 "enum class Color { RED, GREEN }\nval c = Color.GREEN\nwhen (c) { Color.RED -> 1; Color.GREEN -> 2 }" 2: got Error("outside the core: the unknown name when at 3:1 (no owner)")
 ✗ test/types/test_enums_ported.warp:15 "enum class Color { RED, GREEN }\nval c = Color.GREEN\nwhen (c) { Color.RED -> 1; else -> 3 }" 3: got Error("outside the core: the unknown name when at 3:1 (no owner)")
 ✗ test/types/test_enums_ported.warp:18 "val n = 5\nwhen (n) { 1, 2 -> 10; 5 -> 50; else -> 0 }" 50: got Error("outside the core: the unknown name when at 2:1 (no owner)")
-✗ test/types/test_enums_ported.warp:22 "sealed class Shape\nclass Circle(val r: Int) : Shape()\nclass Square(val a: Int) : Shape()\nfun area(s: Shape): Int = when (s) { is Circle -> 3 * s.r * s.r; is Square -> s.a * s.a }\narea(Square(2))" 4: got Error("outside the core: a none as a value at 2:18 (no owner)")
-✗ test/types/test_enums_ported.warp:27 "sealed class Shape\nclass Circle(val r: Int) : Shape()\nclass Square(val a: Int) : Shape()\nfun area(s: Shape): Int = when (s) { is Circle -> 3 * s.r * s.r; is Square -> s.a * s.a }\narea(Circle(1))" 3: got Error("outside the core: a none as a value at 2:18 (no owner)")
+✗ test/types/test_enums_ported.warp:22 "sealed class Shape\nclass Circle(val r: Int) : Shape()\nclass Square(val a: Int) : Shape()\nfun area(s: Shape): Int = when (s) { is Circle -> 3 * s.r * s.r; is Square -> s.a * s.a }\narea(Square(2))" 4: got Error("outside the core: the unknown name when at 4:27 (no owner)")
+✗ test/types/test_enums_ported.warp:27 "sealed class Shape\nclass Circle(val r: Int) : Shape()\nclass Square(val a: Int) : Shape()\nfun area(s: Shape): Int = when (s) { is Circle -> 3 * s.r * s.r; is Square -> s.a * s.a }\narea(Circle(1))" 3: got Error("outside the core: the unknown name when at 4:27 (no owner)")
 ✓ test/types/test_enums_ported.warp:34 "enum Color { Red, Green }\nlet c = Color::Green;\nmatch c { Color::Red => 1, Color::Green => 2 }" 2
 ✓ test/types/test_expected_names.warp:5 "enum Color { Red, Green }; enum Wine { Red, White }; paint(c: Color) := c == Color.Red; paint(Red)" yes
 ✓ test/types/test_expected_names.warp:6 "enum Color { Red, Green }; enum Wine { Red, White }; shade(c: Color) := c as index; shade(Green)" 1
@@ -8645,10 +8669,10 @@ ba
 ✓ test/types/test_field_beside_word.pairs.warp:3 "class F { kinds: list; name: text }; kinds(n: int): int := n * 2; size(f: F): int := #f.kinds; size(F([1, 2, 3], \"x\")) + kinds(4)" 11
 ✓ test/types/test_field_beside_word.pairs.warp:4 "class F { count: int }; total(f: F): int := f.count + 1; total(F(41))" 42
 ✓ test/types/test_field_default_variable.pairs.warp:4 "class F { result: int }; F(3).result" 3
-✗ test/types/test_field_default_variable.warp:4 "mark = \"?\"\nclass F { name: text; tag: text = mark }\nf = F(\"a\")\nf.tag" '?': got Error("outside the core: a none as a value at 3:7 (no owner)")
-✗ test/types/test_field_default_variable.warp:8 "mark = \"?\"\nclass F { name: text; tag = mark }\nF(\"a\").tag" '?': got Error("outside the core: a none as a value at 3:3 (no owner)")
+✗ test/types/test_field_default_variable.warp:4 "mark = \"?\"\nclass F { name: text; tag: text = mark }\nf = F(\"a\")\nf.tag" '?': got Error("not a text at 3:1")
+✓ test/types/test_field_default_variable.warp:8 "mark = \"?\"\nclass F { name: text; tag = mark }\nF(\"a\").tag" '?'
 ✓ test/types/test_field_default_variable.warp:11 "mark = \"?\"\nclass F { name: text; tag = mark }\nF(\"a\", \"!\").tag" '!'
-✗ test/types/test_field_default_variable.warp:16 "mark = \"?\"\nclass F { name: text; result: text = mark }\nF(\"a\").result" '?': got Error("outside the core: a none as a value at 3:3 (no owner)")
+✗ test/types/test_field_default_variable.warp:16 "mark = \"?\"\nclass F { name: text; result: text = mark }\nF(\"a\").result" '?': got Error("not a text at 3:3")
 ✗ test/types/test_field_default_variable.warp:19 "class F { result: int }\nf = F(3)\n5\nresult + f.result" 8: got Error("outside the core: the unknown name result at 4:1 (no owner)")
 ✗ test/types/test_field_named_like_builtin.warp:4 "class C{size: float}\nxs: [C] = [C(3.5)]\nxs#1.size" 3.5: got Error("outside the core: an assignment to `… : …` at 2:14 (no owner)")
 ✗ test/types/test_field_named_like_builtin.warp:7 "class C{size: float}\nxs: [C] = [C(3.5)]\nc = xs#1\nc.size" 3.5: got Error("outside the core: an assignment to `… : …` at 2:14 (no owner)")
@@ -8847,7 +8871,7 @@ ba
 ✓ test/types/test_map_type_tests.pairs.warp:5 "m = {n: 1, k: \"x\"}; m is map" yes
 ✗ test/types/test_map_type_tests.pairs.warp:6 "m = {n: 1, k: 2}; m is map of int" yes: got Error("outside the core: the unknown name of at 1:28 (no owner)")
 ✗ test/types/test_map_type_tests.pairs.warp:7 "m = {n: 1, k: 2}; m is map of text" no: got Error("outside the core: the unknown name of at 1:28 (no owner)")
-✓ test/types/test_map_type_tests.pairs.warp:8 "m = [1, 2]; m is map" no
+✗ test/types/test_map_type_tests.pairs.warp:8 "m = [1, 2]; m is map" no: timed out after 30 s
 ✓ test/types/test_map_type_tests.pairs.warp:9 "m = {n: 1, k: 2}; m is list" no
 ✓ test/types/test_match_exhaustive_assigned.warp:4 "enum Coin { Penny, Nickel, Dime }\nc = Dime\nmatch c { Penny: 1; Nickel: 5; Dime: 10 }" 10
 ✓ test/types/test_match_exhaustive_assigned.warp:9 "enum Coin { Penny, Nickel, Dime }\nc = Dime\nmatch c { Dime: 10; Penny: 1 }" 10
@@ -9173,9 +9197,9 @@ ba
 ✗ test/types/test_records_classes.warp:16 "class contact {\n name\n email?\n phone?\n address {\n  street\n  city\n  zip?\n }\n}\nc = contact{name:\"Ann\" address:{street:\"Main\" city:\"X\"}}\nc.name" "Ann": got Error("outside the core: a field contact does not declare at 11:13 (no owner)")
 ✓ test/types/test_recursive_fields.warp:4 "class T { v: int; left: T?; right: T? }; t = T{v: 1 left: T{v: 2 left: ø right: ø} right: ø}; t.left.v + t.v" 3
 ✓ test/types/test_recursive_fields.warp:5 "class Person { name: text; friend: Person? }; b = Person{name:\"bo\" friend: ø}; a = Person{name:\"al\" friend: b}; a.friend.name" "bo"
-✗ test/types/test_recursive_fields.warp:8 "type N: gc struct { tag: i32 value: i64 }; n = N { tag: 1 value: 42 }; n.value" 42: got Error("outside the core: a none as a value at 1:9 (no owner)")
-✗ test/types/test_recursive_fields.warp:9 "type N: gc struct { tag: i32 left: ref N? }; n = N { tag: 7 left: ø }; n.tag" 7: got Error("outside the core: a none as a value at 1:9 (no owner)")
-✗ test/types/test_recursive_fields.warp:12 "type Node: gc struct {\n    tag: i32\n    left: ref Node?\n    right: ref Node?\n}\ntree = Node {\n    tag: 5\n    left: ø\n    right: ø\n}\ntree.tag" 5: got Error("outside the core: a none as a value at 1:12 (no owner)")
+✗ test/types/test_recursive_fields.warp:8 "type N: gc struct { tag: i32 value: i64 }; n = N { tag: 1 value: 42 }; n.value" 42: got Error("outside the core: the unknown name gc at 1:9 (no owner)")
+✗ test/types/test_recursive_fields.warp:9 "type N: gc struct { tag: i32 left: ref N? }; n = N { tag: 7 left: ø }; n.tag" 7: got Error("outside the core: the unknown name gc at 1:9 (no owner)")
+✗ test/types/test_recursive_fields.warp:12 "type Node: gc struct {\n    tag: i32\n    left: ref Node?\n    right: ref Node?\n}\ntree = Node {\n    tag: 5\n    left: ø\n    right: ø\n}\ntree.tag" 5: got Error("outside the core: the unknown name gc at 1:12 (no owner)")
 ✓ test/types/test_recursive_fields.warp:25 "class F { name: text; signature: S }; class S { arity: int }; f = F(\"m\", S(2)); f.signature.arity" 2
 ✓ test/types/test_returned_instances.warp:4 "class V{x:int; plus(o) := V(x + o.x); times(k) := V(x * k)}\nmake(n) := V(n)\na = make(1); b = make(2); (a + b).x" 3
 ✓ test/types/test_returned_instances.warp:7 "class V{x:int; plus(o) := V(x + o.x); times(k) := V(x * k)}\nmake(n) := V(n)\ntwice(n) := make(n * 2)\na = twice(1); (a * 5).x" 10
@@ -10355,25 +10379,25 @@ ba
 ✗ test/wasm/test_wasm.warp:85 "double sin(double x){\n    x = x % tau\n    let z : double = x*x\n    let w : double = z*z\n    S1  = -1.66666666666666324348e-01, /* 0xBFC55555, 0x55555549 */\n    S2  =  8.33333333332248946124e-03, /* 0x3F811111, 0x1110F8A6 */\n    S3  = -1.98412698298579493134e-04, /* 0xBF2A01A0, 0x19C161D5 */\n    S4  =  2.75573137070700676789e-06, /* 0x3EC71DE3, 0x57B1FE7D */\n    S5  = -2.50507602534068634195e-08, /* 0xBE5AE5E6, 0x8A2B9CEB */\n    S6  =  1.58969099521155010221e-10  /* 0x3DE5D93A, 0x5ACFD57C */\n    //\t            tau =  6.283185307179586 // 2π\n    if(x >= PI) return -sin(x % PI)\n    let r : double = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)\n    return x + z*x*(S1 + z*r)\n    };sin π/2" 1: got Error("outside the core: the unknown name PI at 12:13 (no owner)")
 ✓ test/wasm/test_wasm_interop_rest.pairs.warp:4 "type P: { a: int? b: int? }; P{a: 1, b: 2}.b" 2
 ✓ test/wasm/test_wasm_interop_rest.pairs.warp:5 "ok = 1; ok? 7: 8" 7
-✗ test/wasm/test_wasm_interop_rest.warp:4 "type Node: gc struct { tag: i32 left: ref Node? right: ref Node? }; n = Node{tag: 1 left: Node{tag: 2 left: None right: None} right: None}; n.left.tag" 2: got Error("outside the core: a none as a value at 1:12 (no owner)")
+✗ test/wasm/test_wasm_interop_rest.warp:4 "type Node: gc struct { tag: i32 left: ref Node? right: ref Node? }; n = Node{tag: 1 left: Node{tag: 2 left: None right: None} right: None}; n.left.tag" 2: got Error("outside the core: the unknown name gc at 1:12 (no owner)")
 ✗ test/wasm/test_wasm_interop_rest.warp:7 "use memory; memory.copy([104, 105], 60000); memory.slice(60000, 60002)" [104 105]: got Error("outside the core: a call of node_copy with 3 arguments at 1:13 (no owner)")
 ✗ test/wasm/test_wasm_interop_rest.warp:8 "use memory; use text; memory.copy(to_utf8(\"wasm ✓\"), 60000); from_utf8(memory.slice(60000, 60008))" "wasm ✓": got Error("outside the core: a call of node_copy with 3 arguments at 1:23 (no owner)")
 ✗ test/wasm/test_wasm_interop_rest.warp:11 "use { memory, table } from \"env\"\nuse memory\nmemory.copy([7, 8], 100)\nmemory.slice(100, 102)" [7 8]: got Error("outside the core: a call of node_copy with 3 arguments at 3:1 (no owner)")
-✗ test/wasm/test_wasm_interop_rest.warp:17 "type Node: gc struct {\n    tag: i32\n    left: ref Node? right: ref Node?\n}\nn = Node { tag: 1 left: Node { tag: 2 left: None right: None } right: None }\nn.left.tag" 2: got Error("outside the core: a none as a value at 1:12 (no owner)")
-✓ test/web/test_data_blocks.pairs.warp:5 "use markup; to_html(div{ class: \"box\" h1{\"Hi\"} })" "<div class=\"box\"><h1>Hi</h1></div>"
-✓ test/web/test_data_blocks.pairs.warp:6 "use markup; to_html(input{ type: email id: email })" "<input type=\"email\" id=\"email\">"
-✓ test/web/test_data_blocks.pairs.warp:7 "use markup; name = \"Ann\"; to_html(p{ \"Hi \" + name })" "<p>Hi Ann</p>"
-✓ test/web/test_data_blocks.pairs.warp:8 "use markup; xs = [\"a\", \"b\"]; to_html(ul{ [li{ x } for x in xs] })" "<ul><li>a</li><li>b</li></ul>"
-✓ test/web/test_data_blocks.pairs.warp:10 "use markup; gs = [\"a\", \"b\"]; to_html(ul{ for g in gs { li{ g } } })" "<ul><li>a</li><li>b</li></ul>"
-✓ test/web/test_data_blocks.pairs.warp:11 "use markup; to_html(style{ .box { color: red } })" "<style>.box { color: red }</style>"
+✗ test/wasm/test_wasm_interop_rest.warp:17 "type Node: gc struct {\n    tag: i32\n    left: ref Node? right: ref Node?\n}\nn = Node { tag: 1 left: Node { tag: 2 left: None right: None } right: None }\nn.left.tag" 2: got Error("outside the core: the unknown name gc at 1:12 (no owner)")
+✗ test/web/test_data_blocks.pairs.warp:5 "use markup; to_html(div{ class: \"box\" h1{\"Hi\"} })" "<div class=\"box\"><h1>Hi</h1></div>": got "div:{class:&quot;box&quot; h1:{&quot;Hi&quot;}}"
+✗ test/web/test_data_blocks.pairs.warp:6 "use markup; to_html(input{ type: email id: email })" "<input type=\"email\" id=\"email\">": got "input:{type:email id:email}"
+✗ test/web/test_data_blocks.pairs.warp:7 "use markup; name = \"Ann\"; to_html(p{ \"Hi \" + name })" "<p>Hi Ann</p>": got "p:{&quot;Hi Ann&quot;}"
+✗ test/web/test_data_blocks.pairs.warp:8 "use markup; xs = [\"a\", \"b\"]; to_html(ul{ [li{ x } for x in xs] })" "<ul><li>a</li><li>b</li></ul>": got "ul:{[li:{'a'} li:{'b'}]}"
+✗ test/web/test_data_blocks.pairs.warp:10 "use markup; gs = [\"a\", \"b\"]; to_html(ul{ for g in gs { li{ g } } })" "<ul><li>a</li><li>b</li></ul>": got "ul:{[li:{'a'} li:{'b'}]}"
+✗ test/web/test_data_blocks.pairs.warp:11 "use markup; to_html(style{ .box { color: red } })" "<style>.box { color: red }</style>": got Error("not a map; keys, values and entries are a map's; a list's positions are 1..count(xs) at 302:49")
 ✓ test/web/test_data_blocks.pairs.warp:12 "theme = \"red\"; f(x: data) := x; str(f{ color: theme ul })" "{color:\"red\" ul}"
 ✓ test/web/test_data_blocks.pairs.warp:13 "f(x: data) := x; str(f{ a: 1 b })" "{a:1 b}"
-✗ test/web/test_markup_lines.warp:4 "use markup\nto_html(form{ method:\"post\" action:\"/t\"\n button{\"add\"} })" "<form method=\"post\" action=\"/t\"><button>add</button></form>": got "<form><button>add</button></form>"
-✓ test/web/test_markup_lines.warp:9 "use markup\nto_html(input{ name:\"t\" aria-label:\"new todo\" })" "<input name=\"t\" aria-label=\"new todo\">"
-✓ test/web/test_markup_scripts.pairs.warp:4 "use markup; to_html(js{\"alert(1)\"})" "<script>alert(1)</script>"
-✓ test/web/test_markup_scripts.warp:4 "use markup; to_html(html{js{\"alert('ok')\"}})" "<html><script>alert('ok')</script></html>"
-✓ test/web/test_markup_scripts.warp:7 "use markup; to_html(script{\"if (a < b && c > d) go()\"})" "<script>if (a < b && c > d) go()</script>"
-✓ test/web/test_markup_scripts.warp:8 "use markup; to_html(script{\"s = '</script>'\"})" "<script>s = '<\\/script>'</script>"
+✗ test/web/test_markup_lines.warp:4 "use markup\nto_html(form{ method:\"post\" action:\"/t\"\n button{\"add\"} })" "<form method=\"post\" action=\"/t\"><button>add</button></form>": got "form:button:{&quot;add&quot;}"
+✗ test/web/test_markup_lines.warp:9 "use markup\nto_html(input{ name:\"t\" aria-label:\"new todo\" })" "<input name=\"t\" aria-label=\"new todo\">": got "input:{name:'t' aria-label:&quot;new todo&quot;}"
+✗ test/web/test_markup_scripts.pairs.warp:4 "use markup; to_html(js{\"alert(1)\"})" "<script>alert(1)</script>": got "js:{&quot;alert(1)&quot;}"
+✗ test/web/test_markup_scripts.warp:4 "use markup; to_html(html{js{\"alert('ok')\"}})" "<html><script>alert('ok')</script></html>": got "html:{js:{&quot;alert('ok')&quot;}}"
+✗ test/web/test_markup_scripts.warp:7 "use markup; to_html(script{\"if (a < b && c > d) go()\"})" "<script>if (a < b && c > d) go()</script>": got "script:{&quot;if (a &lt; b &amp;&amp; c &gt; d) go()&quot;}"
+✗ test/web/test_markup_scripts.warp:8 "use markup; to_html(script{\"s = '</script>'\"})" "<script>s = '<\\/script>'</script>": got "script:{&quot;s = '&lt;/script&gt;'&quot;}"
 ✗ test/web/test_page_custom_events.pairs.warp:4 "emit saved{id: 7}; 3" 3: got Error("outside the core: the unknown name emit at 1:12 (no owner)")
 ✗ test/web/test_page_rendered_sound.warp:4 "use sound\nplay(C4, 0.2s)\nsave sound as: \"first.wav\"\nplay(E4, 0.1s)\nround(save(sound, \"second.wav\") * 10)" 1: got Error("outside the core: the unknown name sound: `use sound` defines it at 3:6 (no owner)")
 ✗ test/web/test_page_rendered_sound.warp:9 "use sound\nround(save(sound, \"nothing.wav\"))" 0: got Error("outside the core: the unknown name sound: `use sound` defines it at 2:12 (no owner)")
@@ -10399,9 +10423,9 @@ ba
 ✓ test/web/test_task_voices.warp:11 "use sound\nplay(C4, 5s)\njob = go { play(E4, 5s)\nsound_queued() > 6 }\nawait job" yes
 ✗ test/web/test_uniscript.pairs.warp:4 "use strict; use uniscript; uniscript(\"<:greek a/>\")" 'α': got Error("outside the core: the call uniscript(…) at 1:38 (no owner)")
 ✗ test/web/test_uniscript.warp:4 "use uniscript; t=\"∀x∈ℝ: 𝔄 A\u{e0072} 𓀀\u{13440} <: é\"; uniscript(unicode_to_uniscript(t)) == t" yes: got Error("outside the core: the call uniscript(…) at 1:70 (no owner)")
-✓ test/web/test_web.pairs.warp:4 "use markup; to_html(html{b{\"test\"}})" "<html><b>test</b></html>"
-✓ test/web/test_web.warp:4 "use markup; to_html(script{\"alert('Hello')\"})" "<script>alert('Hello')</script>"
-✓ test/web/test_web.warp:7 "use markup; to_html(html{script{\"alert('ok')\"}})" "<html><script>alert('ok')</script></html>"
+✗ test/web/test_web.pairs.warp:4 "use markup; to_html(html{b{\"test\"}})" "<html><b>test</b></html>": got "html:{b:{&quot;test&quot;}}"
+✗ test/web/test_web.warp:4 "use markup; to_html(script{\"alert('Hello')\"})" "<script>alert('Hello')</script>": got "script:{&quot;alert('Hello')&quot;}"
+✗ test/web/test_web.warp:7 "use markup; to_html(html{script{\"alert('ok')\"}})" "<html><script>alert('ok')</script></html>": got "html:{script:{&quot;alert('ok')&quot;}}"
 ✓ test/web/test_web.warp:10 "use draw\ncanvas(200, 150)\nrect(10, 10, 150, 100, red)\n[canvas_pixels[10 * 200 + 10], canvas_pixels[109 * 200 + 159], canvas_pixels[110 * 200 + 160], canvas_pixels[0]].map(p => p == red)" [1, 1, 0, 0]
 ✓ test/web/test_web_apis.pairs.warp:4 "notify(x) := x + 1; notify(2)" 3
 ✓ test/web/test_web_playground.warp:4 "fun h(){ return 5 }\nh() + 3" 8
@@ -10823,12 +10847,12 @@ ba
 ✗ test/welcoming/test_sleep_unit_shadow.pairs.warp:5 "mm = 1; sleep 5 ms; mm" 1: got Error("outside the core: the unknown name sleep at 1:9 (no owner)")
 ✗ test/welcoming/test_sleep_unit_shadow.pairs.warp:6 "s = 1; sleep 5 ms; s" 1: got Error("outside the core: the unknown name sleep at 1:8 (no owner)")
 ✗ test/welcoming/test_strict_warning_statement.pairs.warp:4 "use strict; try { warning \"careful\"; 1 } else 2" 2: got Error("outside the core: a int where a list is needed at 1:38 (no owner)")
-✗ test/welcoming/test_strict_warning_statement.pairs.warp:7 "warning \"careful\"; 1" 1: got Error("outside the core: the import fd_write, not declared at 1:9 (no owner)")
+✓ test/welcoming/test_strict_warning_statement.pairs.warp:7 "warning \"careful\"; 1" 1
 ✓ test/welcoming/test_variable_applied.pairs.warp:4 "x = 1; [x x]" [1, 1]
 ✓ test/welcoming/test_variable_applied.pairs.warp:5 "n = 2; twice(x) := x * 2; twice(n)" 4
-✗ test/welcoming/test_variable_applied.pairs.warp:6 "add(a) := b => a + b; add(2)(5)" 7: got b => a+b 5
+✓ test/welcoming/test_variable_applied.pairs.warp:6 "add(a) := b => a + b; add(2)(5)" 7
 ✓ test/welcoming/test_variable_applied.pairs.warp:7 "inc := {it + 1}; inc(2)" 3
-✗ test/welcoming/test_warning_mode.pairs.warp:4 "\"a\" + warning(\"careful\") + \"b\"" "ab": got Error("outside the core: the import fd_write, not declared at 1:15 (no owner)")
+✗ test/welcoming/test_warning_mode.pairs.warp:4 "\"a\" + warning(\"careful\") + \"b\"" "ab": got "aøb"
 ✓ test/welcoming/test_warning_mode.pairs.warp:7 "7 % -2" 1
 ✓ test/welcoming/test_welcoming_ask.pairs.warp:4 "x=0; for i in 1 upto 4 {x+=i}; x" 6
 ✓ test/welcoming/test_welcoming_ask.pairs.warp:5 "x=0; for i in 1 ... 4 {x+=i}; x" 10
@@ -11156,4 +11180,4 @@ ba
 ✓ test/welcoming/test_welcoming_sugar.warp:35 "x = 7 // 2\nx" 7
 ✓ test/welcoming/test_welcoming_sugar.warp:37 "x = 7    // 2\nx" 7
 ✓ test/welcoming/test_welcoming_sugar.warp:39 "items=[1 2 3 4 5]\nmid = len(items) /! 2\nmid" 2
-4316 of 11139 failed in 1712 files
+4293 of 11163 failed in 1716 files
