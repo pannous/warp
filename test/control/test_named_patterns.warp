@@ -48,5 +48,5 @@ match parse("g := 1") { Definition: body; _: 0 }' 1
 is! 'pattern Definition = Key(head, Op.Define, body)
 body_of(d: Definition): Node := value_of(d)
 body_of(parse("g := 2"))' 2
-is! 'use "tests/modules/used_patterns.warp"
+is! 'use "test/modules/used_patterns.warp"
 parse("f(x) := x") is Definition' true
