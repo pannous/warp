@@ -36,6 +36,15 @@ const HOST_STACK_BYTES: usize = 16 << 20;
 /// The wasm call stack of engines made from now on; 0 keeps wasmtime's default (512 KiB), safe on any thread
 static WASM_STACK_BYTES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+/// Whether engines made from now on compile on the calling thread alone: a `warp test --case` child, of which the runner
+/// runs one per core, would otherwise start a compiling thread per core each (load 170 on 10 cores: card
+/// test-oversubscribes-mac)
+static COMPILES_ON_ONE_THREAD: AtomicBool = AtomicBool::new(false);
+/// Called before any engine is made by a process that is one of many running at once
+pub fn compile_on_one_thread() {
+	COMPILES_ON_ONE_THREAD.store(true, Ordering::Relaxed);
+}
+
 /// Engine settings every warp run shares: GC and typed function references. NaNs are canonicalized where they are
 /// observed (floats::canonical_nan, P119), not after every float operation, which doubled the cost of float loops.
 /// Machine code compiled with these settings (`warp compile --aot`, `warp build`) loads into any engine made
@@ -51,6 +60,8 @@ pub fn deterministic_config() -> Config {
 	#[cfg(feature = "compiler")]
 	config.wasm_component_model(false);
 	config.concurrency_support(false);
+	#[cfg(feature = "parallel-compilation")]
+	config.parallel_compilation(!COMPILES_ON_ONE_THREAD.load(Ordering::Relaxed));
 	let wasm_stack = wasm_stack_bytes();
 	if wasm_stack > 0 {
 		// wasmtime wants an async stack at least as large; warp makes no async calls, so none is allocated
