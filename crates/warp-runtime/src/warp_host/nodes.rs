@@ -391,30 +391,11 @@ impl Builders {
 		Ok(Val::AnyRef(Some(built.to_anyref())))
 	}
 
-	/// A list of the items at once, for a program whose lists are vectors (a node over a `{count: i32, items: array}`
-	/// struct, warp-self's): new_list(first, rest) copies rest's items into a new vector, so building a list a cell
-	/// at a time copies n²/2 items (24,000 bytes of read_bytes: 288 million, past the memory cap). Here new_list makes
-	/// a one-item list, and its vector gets an array of all the items. None for a program whose lists are cons cells.
+	/// A list of the items at once (gc_values::vector_list), None for a program whose lists are cons cells
 	fn vector_list(&self, items: &[Val], info: i64, store: &mut StoreContextMut<'_, Host>) -> Result<Option<Val>> {
 		let Some(first) = items.first() else { return Ok(None) };
-		let list = self.call("new_list", &[*first, Val::AnyRef(None), Val::I64(info)], store)?;
-		let Some((_, data, _)) = fields(&list, store) else { return Ok(None) };
-		let Some(vector) = data.unwrap_anyref().and_then(|data| data.as_struct(&*store).ok().flatten()) else {
-			return Ok(None);
-		};
-		let room = vector.field(&mut *store, 1).ok().and_then(|room| room.unwrap_anyref().copied());
-		let Some(room) = room.and_then(|room| room.as_array(&*store).ok().flatten()) else { return Ok(None) };
-		if !matches!(vector.field(&mut *store, 0), Ok(Val::I32(_))) {
-			return Ok(None);
-		}
-		let room_type = room.ty(&*store)?;
-		let allocator = wasmtime::ArrayRefPre::new(&mut *store, room_type);
-		let array = wasmtime::ArrayRef::new_fixed(&mut *store, &allocator, items)?;
-		if vector.set_field(&mut *store, 1, Val::AnyRef(Some(array.to_anyref()))).is_err() {
-			return Ok(None);
-		}
-		vector.set_field(&mut *store, 0, Val::I32(items.len() as i32))?;
-		Ok(Some(list))
+		let single = self.call("new_list", &[*first, Val::AnyRef(None), Val::I64(info)], store)?;
+		warp_runtime::gc_values::vector_list(single, items, store)
 	}
 
 	fn call(&self, name: &str, arguments: &[Val], store: &mut StoreContextMut<'_, Host>) -> Result<Val> {

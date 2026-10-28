@@ -213,10 +213,16 @@ impl Builders {
 			}
 			// ø, as the emitter makes `[]`: a null would not pass for a Node (a wrapper's empty argument list)
 			TaskValue::List(items, _) if items.is_empty() => self.call("new_empty", &[], store),
-			TaskValue::List(items, bracket) => items.iter().rev().try_fold(Val::AnyRef(None), |rest, item| {
-				let first = self.build(item, store)?;
-				self.call("new_list", &[first, rest, Val::I64(*bracket)], store)
-			}),
+			TaskValue::List(items, bracket) => {
+				let items = items.iter().map(|item| self.build(item, store)).collect::<Result<Vec<_>>>()?;
+				let single = self.call("new_list", &[items[0], Val::AnyRef(None), Val::I64(*bracket)], store)?;
+				if let Some(list) = warp_runtime::gc_values::vector_list(single, &items, store)? {
+					return Ok(list);
+				}
+				items.into_iter().rev().try_fold(Val::AnyRef(None), |rest, first| {
+					self.call("new_list", &[first, rest, Val::I64(*bracket)], store)
+				})
+			}
 			TaskValue::Exact(numerator, denominator) => {
 				let handle = self.exact_handle(numerator, denominator, store)?;
 				self.call("new_int", &[Val::I64(handle)], store)
