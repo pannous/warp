@@ -80,7 +80,7 @@ library_section = "warp.module"
 # its relocations, and a prebuilt module's: each padded operand's [offset, kind, space] (relocatable), the kind of index
 # it holds and the space it indexes: the runtime's, a module's own, its k-th used module's (2 + k)
 relocations_section = "warp.relocations"
-relocated = {calls: 0, types: 1, globals: 2, texts: 3}
+relocated = {calls: 0, types: 1, globals: 2, texts: 3, closures: 4}
 runtime_space = 0
 own_space = 1
 # the closure arities runtime.wasm holds a closure·call hook for, 0 to these

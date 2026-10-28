@@ -309,7 +309,8 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 # where the module's own items start in each index space (relocated): behind the runtime's imports and functions,
 # types, globals and text segments
 def own_items_from(): list := runtime_counts()
-def runtime_counts(): list := [runtime_image.imports + runtime_image.functions, runtime_image.types, #runtime_image.globals, runtime_image.data]
+# (the runtime makes no closures: a module's are numbered from 0)
+def runtime_counts(): list := [runtime_image.imports + runtime_image.functions, runtime_image.types, #runtime_image.globals, runtime_image.data, 0]
 
 ## a program linked to prebuilt library modules (card modules-prebuilt, notes/runtime_linking.md "Library modules"):
 ## each module's own functions, types, globals and texts appended behind the runtime's in the order given, its operands
@@ -317,7 +318,7 @@ def runtime_counts(): list := [runtime_image.imports + runtime_image.functions, 
 ## module's, at its index, of its kinds: never compiled again
 # a module's warp.module read back: its own functions (index, kinds, result, signature), globals [name, kind], text
 # segments, what it was built behind, and where each kind of its items lands here (base: placed, type, text)
-class LibraryImage { name: text; wasm: list; functions: list; globals: list; texts: int; behind: list; classes: list; builds: bool; base: list }
+class LibraryImage { name: text; wasm: list; functions: list; globals: list; texts: int; behind: list; closures: list; classes: list; builds: bool; base: list }
 global linked_images = []
 # the names the program defines itself: its own definition, never the module's
 global linked_own_names = []
@@ -328,8 +329,12 @@ def link_libraries(images: list, own_names: list) {
 	linked_images = images
 	linked_own_names = own_names
 	linked_words = {}
-	for image in images { for word in image.functions { if word.name not in own_names { linked_words[word.name] = word } } }
+	linked_closures_shown = {}
+	# (a lifted lambda is reached through its closure only: its name may be one the program lifts too)
+	for image in images { for word in image.functions { if word.name not in own_names and not lambda_prefixes.any(prefix => word.name.starts_with(prefix)) { linked_words[word.name] = word } } }
 }
+# each linked module's closure by the name the program gives it, `list·closure_lambda_3`, the text it shows
+global linked_closures_shown = {}
 # the definitions of the linked modules, by their text (a slice of one is declared, not brought whole), and the
 # names the program needs of each even when it never says them: its classes and globals
 def linked_slices(): map {
@@ -370,18 +375,23 @@ def library_image_of(name: text, wasm: list): any {
 	}
 	behind = []
 	for i in 0..<read_number(layout) { behind += [read_number(layout)] }
-	closures = read_number(layout)
+	closures = []
+	for i in 0..<read_number(layout) { closures += [[read_name(layout), read_number(layout), read_name(layout)]] }
 	classes = []
 	for i in 0..<read_number(layout) { classes += [[read_name(layout), read_name(layout)]] }
 	builds = read_number(layout) == 1
-	if types != #gc_names + #classes or imports != runtime_image.imports or closures > 0 or behind != runtime_counts() { return ø }
-	LibraryImage(name, wasm, functions, globals, texts, behind, classes, builds, [])
+	if types != #gc_names + #classes or imports != runtime_image.imports or behind != runtime_counts() { return ø }
+	LibraryImage(name, wasm, functions, globals, texts, behind, closures, classes, builds, [])
 }
 # each linked module's place: its functions behind those placed so far, its types (one per function) and texts too,
 # its globals declared by name (one the runtime or a module before it declares is theirs)
 def behind_libraries() {
 	for image in linked_images {
-		image.base = [module.placed, #gc_names + module.runtime_types, module.first_text_segment]
+		image.base = [module.placed, #gc_names + module.runtime_types, module.first_text_segment, #module.closures]
+		for made in image.closures {
+			module.closures += [[linked_closure_name(image, made#1), made#2]]
+			linked_closures_shown[linked_closure_name(image, made#1)] = made#3
+		}
 		for entry in image.globals { declared_global(entry#1, entry#2) }
 		module.placed += #image.functions
 		module.runtime_types += #image.functions
@@ -401,14 +411,24 @@ def bind_library_words() {
 		}
 		for k in 0..<#image.functions {
 			word = image.functions[k]
+			if image.closures.any(made => made#1 == word.name) { module.functions[linked_closure_name(image, word.name)] = linked_function(word, #module.imports + image.base#1 + k) }
 			f = module.functions.get(word.name)
-			if f != ø and f.kinds == ø and word.name not in linked_own_names {
+			if f != ø and f.kinds == ø and word.name in linked_words {
 				f.index = #module.imports + image.base#1 + k
 				f.kinds = word.kinds
 				f.result = word.result
 			}
 		}
 	}
+}
+def linked_closure_name(image: LibraryImage, target: text): text := image.name + name_joiner + target
+# a linked module's function as the program calls it, at its index
+def linked_function(word: Function, index: int): Function {
+	f = Function(word.name, word.signature, ø)
+	f.index = index
+	f.kinds = word.kinds
+	f.result = word.result
+	f
 }
 # the host's builders, exported once main is placed (the first function, which a program's exports name), for a
 # linked module that calls them
@@ -449,7 +469,7 @@ def library_code(image: LibraryImage): list {
 	# its class structs first among its types, the program's of their names, then a type per function
 	types = {}
 	for c in 0..<#image.classes { types[image.behind#2 + c] = module.gc_indices[image.classes[c]#1] }
-	own = [shifted(#module.imports + image.base#1 - image.behind#1), Move(image.base#2 - image.behind#2 - #image.classes, types), Move(0, globals), shifted(image.base#3 - image.behind#4)]
+	own = [shifted(#module.imports + image.base#1 - image.behind#1), Move(image.base#2 - image.behind#2 - #image.classes, types), Move(0, globals), shifted(image.base#3 - image.behind#4), shifted(image.base#4)]
 	entries_after(rebased(content, relocations, [[shifted(shift)], own]), runtime_image.functions, no)
 }
 def library_types(): list := concatenated(linked_images.map(image => image.functions.map(function_type)))
