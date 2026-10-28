@@ -982,6 +982,10 @@ def key_expression(body: Body, n: Node): TypedCode {
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator in bit_words { return bitwise(body, operator, left, right) }
 	if operator == Op.Hash and left == ø { return length_code(expression_code(body, right)) }
+	# a receiver of a known class declaring the field reads it from its struct, ahead of any word of that name: `f.kinds`
+	# of `f: Function`, though analyzer.warp defines kinds(program), asks no has_field at run time
+	known = if operator == Op.Dot and right is symbol then receiver_class(body, left) else ""
+	if known != "" and struct_field(known, name_of(right)) != ø { return field_read(body, expression_code(body, left), name_of(right), known) }
 	if operator == Op.Dot and right is symbol and name_of(right) in counting_properties {
 		return field_or_word(body, expression_code(body, left), name_of(right), length_code)
 	}
