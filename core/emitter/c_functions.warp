@@ -9,11 +9,12 @@ def c_function_lines(): list {
 		name = entry#2
 		if name in module.host {
 			signature = module.host[name]
-			if #signature > 3 and signature#3 == entry#1 { lines += [signature#4] }
+			if is_c_function(signature) and signature#3 == entry#1 { lines += [signature#4] }
 		}
 	}
 	lines
 }
+def is_c_function(signature: list): bool { #signature > 3 }
 # a module calling C exports text_heap: where the host writes a C function's text before new_text copies it
 def c_function_globals() {
 	if #c_function_lines() > 0 { declared_global(text_heap_name, ValueKind.Char) }
