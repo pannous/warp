@@ -235,3 +235,36 @@ Questions for 10:00:
 - `x is number 9` → yes, "is a number and equals 9" (test_is_declaration:7, 9).
 - `b = byte 65; text(b)` → "0x41" (test_type_calls:11): bytes print in hex?
 - `to_json` of a class: plain fields `{"x":1,"y":2}` as the tests expect, or tagged with the class name as now?
+
+### functions (618 lines)
+Silently wrong:
+- A function value applied without parentheses isn't called: `sq = x=>x*x; sq 3` gives the list `x => x*x 3`; the same
+  with `g = function add; g 1 2`, `g := &doubled` (test_lambdas:4, 6, 11; test_function_values:12; test_braceless_closure_call:5, 6; test_alias_definition:15).
+- `random` with an argument and no parentheses gives a list `[float, arg]`: `random 1..2`, `random [7,7]`, `random n`, `random int`
+  (test_random_dispatch, test_bare_host_words:25-36, about 15 lines).
+- `map square xs`, `map floor [1]`, `map (x -> x*2) [1,2,3]` give a list (test_function_words_consume:8, test_map_library_word_first:12, test_ocaml_fun:4).
+- `(() => 7)()` gives the lambda (test_anonymous_function_forms:17); `f(x=1):=x*2; f` gives f, not 2 (test_bare_function_name:7).
+- `global n` inside a lambda doesn't write the global: n stays 0 (test_lambda_global:4, 5); a closure counter returns 1 each time (test_nonlocal_lambdas.warp:4).
+- A Ruby block `[1,2,3].sum { |x| x*2 }` is ignored: 6 (test_round8_call_forms:4, 5).
+- `greet({name}) := …` doesn't destructure: "hi {name:"Ann"}" (test_parameter_map_patterns.warp:4).
+- `"äb".size in bytes` gives no (test_member_phrases:13).
+
+Groups:
+- Preposition calls and multiple return values trap with cast failure (preposition_calls, multi_value, words_in_phrases). About 45 lines.
+- `nonlocal` and late-bound globals (late_binding, nonlocal_*). 22 lines.
+- Foreign definition forms: Python/Ruby `def … end`, `lambda`, `fn`, `function`, Swift closures, Rust `&` references, OCaml `fun`
+  (python_ruby_definitions, foreign_spellings, rust_references, swift_closures, anonymous_function_forms). About 75 lines.
+- Implicit `it` in blocks and nested `it` ("unknown name it"). About 25 lines (nested_it, it_arguments, returned_blocks).
+- Suffix words `3 squared`, `x.squared`, and math words without `use math` ("`use math` defines it"). About 30 lines.
+- Named and labelled arguments, defaults and optional parameters. About 30 lines.
+- Variadic `*xs`, tuple returns and tuple function values ("index out of range"). About 30 lines.
+- Callable parameters `f: (float) -> float`, function values in fields and lists. About 30 lines.
+- Element-wise broadcasting of functions over lists: card triage-element-wise. 7 lines.
+- `render … as …`, `sorted_node`, `random` with 2 arguments, `x(…)` calls of variables, `.` on int.
+
+Questions for 10:00:
+- Which wins when a program defines a word the prelude has: the program's own (as test_implicit_libm, test_min_max, test_one_dispatch:53-63 and
+  test_dispatch:7 would then need new expectations) or the builtin (as test_builtin_clash:5, 14-17 expects: `count(x) := 7; count([1,2])` → 2)?
+  test_arity_overloads.warp:4 (`def log(x) { log(x, 10) }; def log(x, base) {x/base}; log(50)` → 3.912) fits neither. The rows in
+  "Wrong expectations" for min, sin, upper/add/sum and sort assume the program's own wins.
+- `p's name` as a field read (test_property_access:14).
