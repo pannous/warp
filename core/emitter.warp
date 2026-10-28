@@ -68,7 +68,7 @@ written_address = 8
 output_address = 16
 names_subsections = {functions: 1, locals: 2, types: 4, globals: 7, fields: 10, tags: 11}
 # runtime.wasm (notes/runtime_linking.md "runtime.wasm format"): its table of hooks, the funcrefs a separately linked
-# program fills, its custom sections, the mark ahead of a padded call operand until module_bytes notes its offset
+# program fills, its custom sections
 table_section_id = 4
 funcref_byte = 112
 export_table_byte = 1
@@ -76,10 +76,12 @@ export_tag_byte = 4
 call_indirect = 17
 hooks_table = "hooks"
 runtime_section = "warp.runtime"
-calls_section = "warp.calls"
-call_site_mark = -1
-# the index space of a call site in warp.calls: the runtime's (a module's own 1, its k-th used module 2 + k)
+# its relocations, and a prebuilt module's: each padded operand's [offset, kind, space] (relocatable), the kind of index
+# it holds and the space it indexes: the runtime's, a module's own, its k-th used module's (2 + k)
+relocations_section = "warp.relocations"
+relocated = {calls: 0, types: 1, globals: 2, texts: 3}
 runtime_space = 0
+own_space = 1
 # the closure arities runtime.wasm holds a closure·call hook for, 0 to these
 hook_arities = 8
 # `try` (Rust's src/wasm_emitter/control/try_guard.rs): while one runs (try_depth above 0) a runtime error throws the
@@ -155,7 +157,7 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast: 22, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
 	array_set: 14, array_len: 15, array_copy: 17, ref_test: 20, ref_i31: 28, i31_get_u: 30}
-# the abstract heap type i31 (a character boxed in a $Node), as a cast's immediate
+# the abstract heap type i31 (a character boxed in a $Node), as a cast's immediate: written behind gc_code, no index
 i31_type = 108
 ref_null = 208
 int_ops = {"+": 124, "-": 125, "*": 126, "rem": 129, "xor": 133, "<<": 134, ">>": 135, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
@@ -244,7 +246,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; call_sites: list = []; left_out: map = {} }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocations: list = []; own_from: list = []; left_out: map = {} }
 
 module = Module({}, [])
 
@@ -500,11 +502,28 @@ def number_value(n: Node): TypedCode {
 }
 
 # a GC instruction with its immediates
-def gc_code(code: int, immediates: list): list { [gc_prefix] + uleb(code) + concatenated(immediates.map(uleb)) }
+# its first immediate a type (array.copy's second too), relocatable
+def gc_code(code: int, immediates: list): list {
+	types = if code == gc_ops.array_copy then 2 else 1
+	[gc_prefix] + uleb(code) + concatenated(range_list(#immediates).map(i => if i < types then relocatable(relocated.types, immediates[i]) else uleb(immediates[i])))
+}
 # the index of the GC type of this name in the module, taken on the type's first use: after the types it refers to,
 # so each type follows those it names (a type naming itself, as $Node, refers to the index it takes)
 # a call of the function `index`: in runtime.wasm its operand padded, behind the mark module_bytes takes its offset by
-def call_code(index: int): list { if module.prebuilding then [op.call, call_site_mark] + padded_uleb(index) else [op.call] + uleb(index) }
+def call_code(index: int): list { [op.call] + relocatable(relocated.calls, index) }
+# an operand holding an index of this kind (relocated): in a prebuilt module 5 bytes, a link rewrites it in place,
+# behind the mark of its kind and space that function_body takes off (marks); the module's own items are those from
+# module.own_from[kind] on, every index of a kind it has none of is the runtime's
+def relocatable(kind: int, index: int): list {
+	plain = if kind == relocated.texts then sleb(index) else uleb(index)
+	if not module.prebuilding { return plain }
+	space = if kind < #module.own_from and index >= module.own_from[kind] then own_space else runtime_space
+	[relocation_mark(kind, space)] + padded_uleb(index)
+}
+# a mark is a negative "byte" of the code, so no byte is taken for one
+def relocation_mark(kind: int, space: int): int := -1 - kind - #relocated.keys * space
+def kind_marked(mark: int): int := (-1 - mark) % #relocated.keys
+def space_marked(mark: int): int := (-1 - mark) /! #relocated.keys
 # the fixed GC types in gc_names order at indices 0…G-1, each its own group, as runtime.wasm declares them
 def canonical_type_entries() { for entry in gc_names { gc_type(entry#1) } }
 def gc_type(name: text): int {
@@ -560,7 +579,7 @@ def local_value(body: Body, n: Node): TypedCode {
 	name = name_of(n)
 	if is_global(body, name) {
 		entry = module.globals[global_key(body, name)]
-		return TypedCode(entry#2, [op.global_get] + uleb(entry#1))
+		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1))
 	}
 	# a bare enum case is its name, a symbol, at run time, made once: the very case is the one node (decision
 	# enum-identity)
@@ -718,7 +737,7 @@ def global_declaration_code(body: Body, declaration: Node): TypedCode {
 	if declaration is symbol {
 		body.globals[name_of(declaration)] = yes
 		entry = declared_global(global_key(body, name_of(declaration)), ValueKind.Node)
-		return TypedCode(entry#2, [op.global_get] + uleb(entry#1))
+		return TypedCode(entry#2, [op.global_get] + relocatable(relocated.globals, entry#1))
 	}
 	if not (is_key(declaration, Op.Assign) and key_of(declaration) is symbol) {
 		return refuse("the declaration global " + form_of(declaration))
@@ -740,13 +759,13 @@ def declared_global(name: text, kind: ValueKind): list {
 }
 def global_assignment(name: text, value: TypedCode): TypedCode {
 	entry = module.globals[name]
-	index = uleb(entry#1)
+	index = relocatable(relocated.globals, entry#1)
 	TypedCode(entry#2, converted(value, entry#2) + [op.global_set] + index + [op.global_get] + index)
 }
 # `symbol("word")`: one symbol per word and module, made at its first use and kept in the global `symbol·word`, which
 # holds a node of another kind until then (Rust's node_api.rs emit_interned_symbol; card speed-symbol-calls)
 def interned_symbol(body: Body, word: text): TypedCode {
-	index = uleb(declared_global("symbol·" + word, "node")#1)
+	index = relocatable(relocated.globals, declared_global("symbol·" + word, "node")#1)
 	kept = [op.global_get] + index
 	made = runtime_call("symbol_node", [text_value_of(word)]).code
 	TypedCode(ValueKind.Node, kind_code_of(kept) + [op.i64_const] + sleb(Kind.Symbol) + [op.i64_ne, op.if, no_value] + made + [op.global_set] + index + [op.end] + kept)
@@ -756,7 +775,7 @@ def interned_symbol(body: Body, word: text): TypedCode {
 # enum-identity, card case-enum-carry)
 def case_value(enum_name: text, case: text): TypedCode {
 	if enum_name not in module.enum_numbers { module.enum_numbers[enum_name] = #module.enum_numbers.keys + 1 }
-	index = uleb(declared_global("case·" + enum_name + "·" + case, ValueKind.Node)#1)
+	index = relocatable(relocated.globals, declared_global("case·" + enum_name + "·" + case, ValueKind.Node)#1)
 	kept = [op.global_get] + index
 	made = node(Kind.Symbol + module.enum_numbers[enum_name] * KindUnit.Info, text_bytes(case))
 	TypedCode(ValueKind.Node, kind_code_of(kept) + [op.i64_const] + sleb(Kind.Symbol) + [op.i64_ne, op.if, no_value] + made + [op.global_set] + index + [op.end] + kept)
@@ -1296,7 +1315,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.gc_indices = {}
 	module.gc_order = []
 	module.class_structs = {}
-	module.call_sites = []
+	module.relocations = []
 	if module.prebuilding {
 		canonical_type_entries()
 		for kind in Made.keys { module.made[kind] = yes }

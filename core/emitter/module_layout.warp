@@ -12,19 +12,20 @@ def zero_code_of(kind: ValueKind): list {
 	if is_reference(kind) { return [ref_null] + (if kind == ValueKind.Time then [110] else uleb(gc_type(reference_of(kind)#2))) }
 	[op.i32_const, 0]
 }
-def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2) + [op.end] }
+# (a first value names only the fixed GC types: no relocation, its marks dropped)
+def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2).filter(byte => byte >= 0) + [op.end] }
 def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + value_type(f.result)) }
-# a function's entry of the code section, which starts at the offset `at` of the section's content: each padded call
-# operand's offset noted (module.call_sites), its mark dropped
+# a function's entry of the code section, which starts at the offset `at` of the section's content: each relocatable
+# operand noted in module.relocations as [offset, kind, space], its mark dropped
 def function_body(f: Function, at: int): list {
 	locals = vector(f.locals.map(k => [1] + value_type(k)))
 	code = f.code + [op.end]
 	if not module.prebuilding { return uleb(#locals + #code) + locals + code }
 	marks = []
 	unmarked = []
-	for byte in code { if byte == call_site_mark { marks += [#unmarked] } else { unmarked += [byte] } }
+	for byte in code { if byte < 0 { marks += [[#unmarked, byte]] } else { unmarked += [byte] } }
 	size = uleb(#locals + #unmarked)
-	for mark in marks { module.call_sites += [at + #size + #locals + mark] }
+	for mark in marks { module.relocations += [[at + #size + #locals + mark#1, kind_marked(mark#2), space_marked(mark#2)]] }
 	size + locals + unmarked
 }
 # the code section's content: the functions' entries, each knowing where it starts
@@ -135,14 +136,62 @@ def runtime_exports(functions: list): list {
 	}
 	exports
 }
-# runtime.wasm's layout (warp.runtime, warp notation) and its call sites (warp.calls, a vector of [offset in the code
-# section's content, index space]); none in a program's module
+# runtime.wasm's layout (warp.runtime, warp notation) and its relocations (warp.relocations, a vector of [offset in
+# the code section's content, kind, space]); none in a program's module
 def runtime_sections(functions: list): list {
 	if not module.prebuilding { return [] }
 	words = functions.map(f => "\"" + f.name + "\": [" + f.index + ", [" + f.kinds.map(k => "" + k).join(", ") + "], " + f.result + "]")
 	layout = "types: " + #module.gc_order + "\nimports: " + #module.imports + "\nfunctions: " + #functions + "\nglobals: " + #module.global_order
 	layout += "\ndata: " + #data_bytes() + "\nhooks: [" + module.dispatchers.map(f => "\"" + f.name + "\"").join(", ") + "]\nleft: [" + module.left_out.keys.map(name => "\"" + name + "\"").join(", ") + "]\nwords: {" + words.join(", ") + "}"
-	section(section_ids.custom, name_bytes(runtime_section) + layout.bytes) + section(section_ids.custom, name_bytes(calls_section) + vector(module.call_sites.map(offset => uleb(offset) + [runtime_space])))
+	section(section_ids.custom, name_bytes(runtime_section) + layout.bytes) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
+}
+# A prebuilt module read back for a link (notes/runtime_linking.md "Relocations"): its relocations, and its code
+# section's content with each relocated operand moved by shifts[space][kind], the one rule for every index space (a
+# module appended behind others; the runtime's functions behind a program's C imports); a shift not given is 0
+def relocations_of(wasm: list): list {
+	place = section_place(wasm, section_ids.custom, relocations_section)
+	if place == ø { return [] }
+	entries = []
+	at = place#1
+	count = uleb_read(wasm, at)
+	at = count#2
+	for i in 0..<count#1 {
+		entry = []
+		for part in 0..<3 {
+			read = uleb_read(wasm, at)
+			entry += [read#1]
+			at = read#2
+		}
+		entries += [entry]
+	}
+	entries
+}
+def rebased(code: list, relocations: list, shifts: list): list {
+	for entry in relocations {
+		space = entry#3
+		shift = if space < #shifts and entry#2 < #shifts[space] then shifts[space][entry#2] else 0
+		if shift != 0 {
+			moved = padded_uleb(uleb_read(code, entry#1)#1 + shift)
+			for i in 0..<padded_width { code[entry#1 + i] = moved[i] }
+		}
+	}
+	code
+}
+# [start, end] of the content of a module's section of this id, a custom one by its name; ø when it has none
+def section_place(wasm: list, id: int, name: text = ""): list? {
+	at = #wasm_header
+	while at < #wasm {
+		size = uleb_read(wasm, at + 1)
+		start = size#2
+		end = start + size#1
+		if wasm[at] == id and id != section_ids.custom { return [start, end] }
+		if wasm[at] == id {
+			named = uleb_read(wasm, start)
+			if wasm[named#2 ..< named#2 + named#1] == name.bytes { return [named#2 + named#1, end] }
+		}
+		at = end
+	}
+	ø
 }
 # the data segment: each text's bytes once, in the order text_offset gave them their offsets
 def data_bytes(): list { concatenated(module.texts.keys.map(t => t.bytes)) }

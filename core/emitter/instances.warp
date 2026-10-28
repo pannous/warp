@@ -119,7 +119,7 @@ def classes_parents_first(): list {
 # global the class's instances share; a list global starts empty, a node global as 0), no extra fields
 def instance_head(class_name: text): list {
 	names = module.classes[class_name].keys.map(field => node(Kind.Symbol, text_bytes(field)))
-	shared = uleb(declared_global(class_fields_prefix + class_name, ValueKind.List)#1)
+	shared = relocatable(relocated.globals, declared_global(class_fields_prefix + class_name, ValueKind.List)#1)
 	unmade = [op.global_get] + shared + gc_code(gc_ops.struct_get, [gc_type(gc.list), 0]) + [op.i32_eqz]
 	made = unmade + [op.if, no_value] + vector_code(names) + [op.global_set] + shared + [op.end]
 	[op.i64_const] + sleb(Marked.Instance) + node(Kind.Symbol, text_bytes(class_name)) + made + node(Kind.List, [op.global_get] + shared) + [ref_null, gc_type(gc.node)]
