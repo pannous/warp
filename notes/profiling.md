@@ -22,6 +22,9 @@ runtime.wasm), analyzer 0.03 s, parse 0.05 s. Inside checked_program:
 - with_expected_type_uses ~130 ms: the prelude and every bundled module sliced into definitions each compile. Card
   takes-ms: the slices are baked as `name start end` lines (prelude_words.warp LIBRARY_SLICES, uses.warp baked_slices)
   beside the module texts; ~110 ms → ~20 ms in a compiler built by one that bakes them (after the next seed refresh)
+`warp rebuild` writes warp.wasm through wasm-opt -O2 (card wasm-untrimmed-output, src/compiler/binaryen.rs): 3.0 MB →
+2.4 MB in 1.1 s of a ~100 s rebuild; snake 1.08 s → 1.00 s user (min of six), hello unchanged (0.11 s). runtime.wasm
+stays as compiled: its warp.relocations name byte offsets in its code, which an optimizer moves.
 Every compile is prepended behind runtime.wasm (runtime-lowering-scope, 2026-10-28): it lowers and compiles no
 runtime word, so the kept-runtime-words miss (4.5-7 s) is gone with the cache; it costs reading runtime.wasm (~40 ms)
 and ~0.05 s more machine code: hello 0.22 s vs 0.17 s before, snake 1.04 s vs 1.14 s.
