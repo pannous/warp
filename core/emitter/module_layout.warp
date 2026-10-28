@@ -141,19 +141,18 @@ def runtime_exports(functions: list): list {
 	}
 	exports
 }
-in_quotes(t: text): text := "\"" + t + "\""
-# a prebuilt module's layout in warp notation and its relocations (warp.relocations, a vector of [offset in the code
-# section's content, kind, space]): runtime.wasm's (warp.runtime), a library module's own items behind the runtime
-# (warp.module); none in a program's module
+# a prebuilt module's layout (binary: notes/runtime_linking.md "warp.runtime") and its relocations (warp.relocations,
+# a vector of [offset in the code section's content, kind, space]): runtime.wasm's (warp.runtime), a library module's
+# own items behind the runtime (warp.module); none in a program's module
 def runtime_sections(functions: list): list {
 	if not module.relocating { return [] }
-	words = functions.map(f => in_quotes(f.name) + ": [" + f.index + ", [" + f.kinds.map(k => in_quotes(kind_name(k))).join(", ") + "], " + in_quotes(kind_name(f.result)) + "]")
 	own_globals = module.global_order[(if module.prebuilding then 0 else #runtime_image.globals) ..]
-	globals = own_globals.map(name => "[" + in_quotes(name) + ", " + in_quotes(kind_name(module.globals[name]#2)) + "]")
-	layout = "types: " + #module.gc_order + "\nimports: " + #module.imports + "\nfunctions: " + #functions + "\nglobals: " + #own_globals
-	layout += "\ndata: " + #data_bytes() + "\nhooks: [" + module.dispatchers.map(f => in_quotes(f.name)).join(", ") + "]\nleft: [" + module.left_out.keys.map(in_quotes).join(", ") + "]\nglobal_kinds: [" + globals.join(", ") + "]\nwords: {" + words.join(", ") + "}"
+	counts = concatenated([#module.gc_order, #module.imports, #functions, #own_globals, #data_bytes()].map(uleb))
+	names = vector(module.dispatchers.map(f => name_bytes(f.name))) + vector(module.left_out.keys.map(name_bytes))
+	globals = vector(own_globals.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2))))
+	words = vector(functions.map(f => name_bytes(f.name) + uleb(f.index) + vector(f.kinds.map(k => uleb(held_code(k)))) + uleb(held_code(f.result))))
 	name = if module.prebuilding then runtime_section else library_section
-	section(section_ids.custom, name_bytes(name) + layout.bytes) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
+	section(section_ids.custom, name_bytes(name) + counts + names + globals + words) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
 }
 # A prebuilt module read back for a link (notes/runtime_linking.md "Relocations"): its relocations, and its code
 # section's content with each relocated operand moved by shifts[space][kind], the one rule for every index space (a

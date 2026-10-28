@@ -51,33 +51,58 @@ def all_hooks() {
 # runtime.wasm read back (prepend_runtime), ø while a program compiles the runtime words it calls itself
 global runtime_image = ø
 class RuntimeImage { wasm: list; types: int; functions: int; data: int; globals: list; words: map; hooks: list }
-def prepend_runtime(wasm: any, layout: any) { runtime_image = if wasm == ø then ø else runtime_image_of(wasm, layout) }
+def prepend_runtime(wasm: any) { runtime_image = if wasm == ø then ø else runtime_image_of(wasm) }
 def prepended(): bool { runtime_image != ø and not module.prebuilding }
-# its layout, the warp.runtime section parsed (kept across runs by compiler.warp: parsing it took most of a compile)
-def runtime_layout(wasm: list): Node {
+# its layout, the binary warp.runtime: the counts, the hooks' and left words' names, each global's name and kind, each
+# word's name, index, parameter kinds and result kind
+def runtime_image_of(wasm: list): any {
 	place = section_place(wasm, section_ids.custom, runtime_section)
 	if place == ø { throw "runtime.wasm without its " + runtime_section + " section: warp rebuild writes it anew" }
-	plain_node(parsed(utf8_text(wasm[place#1 ..< place#2])))
-}
-# from the layout: each word's index, parameter kinds and result kind; the globals' names and kinds in order
-def runtime_image_of(wasm: list, written: Node): any {
-	layout = {}
-	for item in items_of(written) { layout[name_of(key_of(item))] = value_of(item) }
+	layout = ByteReader(wasm, place#1)
+	if read_number(layout) != #gc_names { throw "runtime.wasm of other GC types: warp rebuild writes it anew" }
+	imports = read_number(layout)
+	functions = read_number(layout)
+	read_number(layout)
+	texts_size = read_number(layout)
+	hooks = read_names(layout)
+	left = read_names(layout)
+	globals = []
+	for i in 0..<read_number(layout) { globals += [[read_name(layout), read_kind(layout)]] }
 	words = {}
-	for entry in listed_items(layout["words"]) {
-		parts = value_of(entry)
-		words[name_of(key_of(entry))] = [parts#1, listed_items(parts#2).map(kind => layout_kind(kind)), layout_kind(parts#3)]
+	for i in 0..<read_number(layout) {
+		name = read_name(layout)
+		index = read_number(layout)
+		kinds = []
+		for j in 0..<read_number(layout) { kinds += [read_kind(layout)] }
+		words[name] = [index, kinds, read_kind(layout)]
 	}
-	globals = listed_items(layout["global_kinds"]).map(entry => [name_of(entry#1), layout_kind(entry#2)])
 	types = uleb_read(wasm, section_place(wasm, section_ids.type)#1)#1
-	RuntimeImage(wasm, types, layout["functions"], layout["data"], globals, words, listed_items(layout["hooks"]).map(name_of))
+	RuntimeImage(wasm, types, functions, texts_size, globals, words, hooks)
 }
-# the kinds a function or global of runtime.wasm holds, each read back by the name warp.runtime writes it under
+# a reading of bytes from a place on: LEB128 numbers, names (a length and UTF-8 bytes), kinds (held_kinds' places)
+class ByteReader { bytes: list; offset: int }
+def read_number(reader: ByteReader): int {
+	read = uleb_read(reader.bytes, reader.offset)
+	reader.offset = read#2
+	read#1
+}
+def read_name(reader: ByteReader): text {
+	count = read_number(reader)
+	name = utf8_text(reader.bytes[reader.offset ..< reader.offset + count])
+	reader.offset += count
+	name
+}
+def read_names(reader: ByteReader): list {
+	names = []
+	for i in 0..<read_number(reader) { names += [read_name(reader)] }
+	names
+}
+def read_kind(reader: ByteReader): ValueKind { held_kinds[read_number(reader)] }
+# the kinds a function or global of runtime.wasm holds, each written as its place here
 held_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Bool, ValueKind.Char, ValueKind.I32, ValueKind.Text, ValueKind.List, ValueKind.Node, ValueKind.Time, ValueKind.Nothing]
-kind_name(kind: ValueKind): text := "" + kind
-def layout_kind(name: text): ValueKind {
-	for kind in held_kinds { if kind_name(kind) == name { return kind } }
-	throw "runtime.wasm names the kind " + name + ", which no value is held as: warp rebuild writes it anew"
+def held_code(kind: ValueKind): int {
+	for i in 0..<#held_kinds { if held_kinds[i] == kind { return i } }
+	throw "runtime.wasm holds no " + kind + " value"
 }
 # UTF-8 bytes as their text, a code point at a time
 def utf8_text(bytes: list): text {
@@ -215,7 +240,7 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 ## once behind runtime.wasm from their declared kinds, its own items numbered from the runtime's counts, every index
 ## operand padded and listed, so a link appends it behind the runtime and the modules before it
 library_module(program: Node, runtime_wasm: list, runtime: Node, host: map): any := {
-	prepend_runtime(runtime_wasm, runtime_layout(runtime_wasm))
+	prepend_runtime(runtime_wasm)
 	module.relocating = yes
 	made = typed_wasm_module(program, runtime, host, {})
 	module.relocating = no
