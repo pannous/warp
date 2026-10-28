@@ -5,7 +5,7 @@ def write_output(count: list): list {
 	iovec = [op.i32_const] + sleb(iovec_address) + [op.i32_const] + sleb(output_address) + word
 	iovec += [op.i32_const] + sleb(iovec_address + 4) + count + word
 	arguments = [op.i32_const] + sleb(stdout) + [op.i32_const] + sleb(iovec_address) + [op.i32_const, 1, op.i32_const] + sleb(written_address)
-	iovec + arguments + [op.call] + uleb(import_index(fd_write_import)) + [op.i64_extend_i32_u]
+	iovec + arguments + call_code(import_index(fd_write_import)) + [op.i64_extend_i32_u]
 }
 import_index(entry: list): int := {
 	index = -1

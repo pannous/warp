@@ -75,10 +75,10 @@ const PURE_RUNNING_WORDS: [&str; 2] = ["run", "eval"];
 /// to its own bytes (decision compiler-build, card rust-bootstrap; src/compiler/standalone.rs)
 const REBUILD_COMMAND: &str = "rebuild";
 /// The first words the command line takes as commands, for unknown_command's suggestion
-const COMMAND_WORDS: [&str; 33] = [
+const COMMAND_WORDS: [&str; 34] = [
 	"run", "pure", "self", "rebuild", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix",
 	"types", "data", "tool", "fetch", "dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app",
-	"help", "version", "docs", "wiki", "home", "lsp", "start",
+	"help", "version", "docs", "wiki", "home", "lsp", "start", "runtime",
 ];
 /// How far a mistyped command may be from the command it suggests (`formt` → format)
 const MISTYPED_LETTERS: usize = 2;

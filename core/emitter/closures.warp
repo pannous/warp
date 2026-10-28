@@ -46,6 +46,12 @@ made_late(name: text, result: ValueKind, parameters: list): any := {
 	module.dispatchers += [f]
 	f
 }
+# the runtime's words whose code the program decides (late_code), each its result and parameters: with the closure
+# calls runtime.wasm's hooks
+late_words = {closure_text: [ValueKind.Text, ["closure"]], instance_set: [ValueKind.Int, ["m", "name", "value"]],
+	instance_entries: [ValueKind.Node, ["m"]], instance_field_at: [ValueKind.Node, ["m", "index"]], instance_place: [ValueKind.Int, ["m", "name"]],
+	is_class_instance: [ValueKind.Bool, ["m"]], shown_big_int: [ValueKind.Text, ["n"]]}
+late_word(name: text): any := made_late(name, late_words[name]#1, late_words[name]#2)
 # for each closure: if the closure's number is its own, the text it shows; another value shows "function"
 closure_text_code(f: Function): any := {
 	number = unboxed(closure_item([op.local_get, 0], 0).code, gc_type(gc.int_box))

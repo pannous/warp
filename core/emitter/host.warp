@@ -19,7 +19,7 @@ def host_call(body: Body, name: text, arguments: list): TypedCode {
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	code = []
 	for i in 0..<#arguments { code += host_argument(expression_code(body, arguments[i]), signature#1[i]) }
-	code += [op.call] + uleb(import_index(host_import(name)))
+	code += call_code(import_index(host_import(name)))
 	if #signature#2 == 0 { return TypedCode(no_kind, code) }
 	result = signature#2#1
 	if result == ValueKind.I32 { return TypedCode(ValueKind.Int, code + [op.i64_extend_i32_s]) }

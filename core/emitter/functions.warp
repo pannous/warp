@@ -61,7 +61,7 @@ def call_values(f: Function, values: list): TypedCode {
 		widen_parameter(f, i, values[i]#1)
 		code += passed(f, i, values[i])
 	}
-	TypedCode(result, code + [op.call] + uleb(f.index))
+	TypedCode(result, code + call_code(f.index))
 }
 # a value a compiled function's unannotated parameter cannot take, `last(t)` after `last(xs)`: the module is compiled
 # again, the parameter of their joint kind from the start (module.later_kinds, typed_wasm_module). A reading that widened
@@ -259,7 +259,8 @@ function_compiled(f: Function, argument_kinds: list): any := {
 		declared = f.signature.parameters[i].type_name
 		annotation = if declared is empty then ø else annotated_kind(declared)
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
-		given = if argument_kinds[i] == pending then ValueKind.Node else argument_kinds[i]
+		# (in runtime.wasm, any argument: no program decides it)
+		given = if argument_kinds[i] == pending or module.prebuilding then ValueKind.Node else argument_kinds[i]
 		# analyzer.warp's kind, but a node stays one where it found a list: it may be a list of other brackets (`{1 2}`)
 		analyzed = analyzed_parameter_kind(f, i)
 		if annotation == ø and analyzed != ø and not (given == ValueKind.Node and analyzed == ValueKind.List) { annotation = analyzed }

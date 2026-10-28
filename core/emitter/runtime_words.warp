@@ -38,6 +38,7 @@ def takes_arguments(f: Function, arguments: list): bool {
 def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 	if name == "made_case" { return made_case(body, arguments) }
 	values = arguments.map(a => expression_code(body, a))
+	if name in late_words { return call_values(late_word(name), values) }
 	match name {
 		"new_text": TypedCode(ValueKind.Text, index_code(values#1) + gc_code(gc_ops.array_new_default, [gc_type(gc.text)]))
 		"byte_count": TypedCode(ValueKind.Int, converted(values#1, ValueKind.Text) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u])
@@ -99,13 +100,6 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		"is_meta": TypedCode(ValueKind.Bool, values#1.code + gc_code(gc_ops.ref_test, [gc_type(gc.meta_node)]))
 		"meta_line": TypedCode(ValueKind.Int, values#1.code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 3]))
 		"meta_column": TypedCode(ValueKind.Int, values#1.code + gc_code(gc_ops.ref_cast_null, [gc_type(gc.meta_node)]) + gc_code(gc_ops.struct_get, [gc_type(gc.meta_node), 4]))
-		"closure_text": call_values(made_late(closure_text_name, ValueKind.Text, ["closure"]), values)
-		"instance_set": call_values(made_late(instance_set_name, ValueKind.Int, ["m", "name", "value"]), values)
-		"instance_entries": call_values(made_late(instance_entries_name, ValueKind.Node, ["m"]), values)
-		"instance_field_at": call_values(made_late(instance_field_at_name, ValueKind.Node, ["m", "index"]), values)
-		"instance_place": call_values(made_late(instance_place_name, ValueKind.Int, ["m", "name"]), values)
-		"is_class_instance": call_values(made_late(is_class_instance_name, ValueKind.Bool, ["m"]), values)
-		"shown_big_int": call_values(made_late(shown_big_int_name, ValueKind.Text, ["n"]), values)
 		"is_null": TypedCode(ValueKind.Bool, values#1.code + [op.ref_is_null])
 		"same_text": TypedCode(ValueKind.Bool, values#1.code + values#2.code + [op.ref_eq])
 		# same_list(a, b): the one list, not two lists of the same items (a map index finds its map so)

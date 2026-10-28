@@ -171,6 +171,13 @@ repl() := {
 	}
 }
 
+# runtime.wasm, the runtime words compiled once (emitter/prebuilt.warp), written beside warp.wasm by `warp rebuild`
+RUNTIME_WASM = "runtime.wasm"
+write_runtime(file: text) := {
+	made = runtime_wasm_module(lowered_runtime_words(), host_words)
+	if made is text { raise made }
+	write_bytes(file, made)
+}
 source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
 show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
@@ -187,5 +194,6 @@ match command {
 	"build": compile_file(args#2, args#2 + ".wasm", folder_of(args#2))
 	"repl": repl()
 	"repl-step": repl_step(args#2, args#3, args#4)
+	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
 	_: if command in running_commands then refuse_running(command) else refuse_native(command)
 }

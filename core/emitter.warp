@@ -33,6 +33,7 @@ use "emitter/quotes.warp"
 use "emitter/host.warp"
 use "emitter/times.warp"
 use "emitter/c_functions.warp"
+use "emitter/prebuilt.warp"
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
 type_bytes = {int: 126, float: 124, bool: 127, char: 127, i32: 127}
@@ -66,6 +67,19 @@ iovec_address = 0
 written_address = 8
 output_address = 16
 names_subsections = {functions: 1, locals: 2, types: 4, globals: 7, fields: 10, tags: 11}
+# runtime.wasm (notes/runtime_linking.md "runtime.wasm format"): its table of hooks, the funcrefs a separately linked
+# program fills, its custom sections, the mark ahead of a padded call operand until module_bytes notes its offset
+table_section_id = 4
+funcref_byte = 112
+export_table_byte = 1
+export_tag_byte = 4
+call_indirect = 17
+hooks_table = "hooks"
+runtime_section = "warp.runtime"
+calls_section = "warp.calls"
+call_site_mark = -1
+# the closure arities runtime.wasm holds a closure·call hook for, 0 to these
+hook_arities = 8
 # `try` (Rust's src/wasm_emitter/control/try_guard.rs): while one runs (try_depth above 0) a runtime error throws the
 # tag warp_error(i32), which the try's try_table catches; otherwise it traps as before
 error_tag_name = "warp_error"
@@ -228,7 +242,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = "" }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; call_sites: list = []; left_out: map = {} }
 
 module = Module({}, [])
 
@@ -487,6 +501,10 @@ def number_value(n: Node): TypedCode {
 def gc_code(code: int, immediates: list): list { [gc_prefix] + uleb(code) + concatenated(immediates.map(uleb)) }
 # the index of the GC type of this name in the module, taken on the type's first use: after the types it refers to,
 # so each type follows those it names (a type naming itself, as $Node, refers to the index it takes)
+# a call of the function `index`: in runtime.wasm its operand padded, behind the mark module_bytes takes its offset by
+def call_code(index: int): list { if module.prebuilding then [op.call, call_site_mark] + padded_uleb(index) else [op.call] + uleb(index) }
+# the fixed GC types in gc_names order at indices 0…G-1, each its own group, as runtime.wasm declares them
+def canonical_type_entries() { for entry in gc_names { gc_type(entry#1) } }
 def gc_type(name: text): int {
 	if name in module.gc_indices { return module.gc_indices[name] }
 	for part in gc_definition(name) { if part is text and part != name { gc_type(part) } }
@@ -1242,7 +1260,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.runtime = {}
 	module.globals = {}
 	module.global_order = []
-	module.catches_errors = mentions(program, HiddenWord.RanWithoutError as text)
+	module.catches_errors = module.prebuilding or mentions(program, HiddenWord.RanWithoutError as text)
 	if module.catches_errors {
 		declared_global(try_depth_name, ValueKind.Int)
 		declared_global(failed_in_name, ValueKind.Text)
@@ -1276,6 +1294,11 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.gc_indices = {}
 	module.gc_order = []
 	module.class_structs = {}
+	module.call_sites = []
+	if module.prebuilding {
+		canonical_type_entries()
+		for kind in Made.keys { module.made[kind] = yes }
+	}
 	module.aliases = type_synonyms()
 	collect_types(program)
 	for child in module.parents.keys { inherit_fields(child) }
@@ -1284,16 +1307,17 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	reached = reached_words(program)
 	# a print, or a runtime word reached that writes to stdout or stderr (a field check failing, card text-field; a
 	# warning, card declared-class)
-	module.imports = if "print" in reached or "write_output" in reached or "fd_write" in reached then [fd_write_import] else []
+	module.imports = if module.prebuilding or "print" in reached or "write_output" in reached or "fd_write" in reached then [fd_write_import] else []
 	# imported ahead of the functions, whose indices follow them: every host or WASI word the program reaches
 	for name in module.host.keys {
-		if (name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
+		if (module.prebuilding or name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
 	}
 	c_function_globals()
 	for name in module.runtime.keys {
 		word = module.runtime[name]
 		word.is_runtime = yes
 	}
+	if module.prebuilding { return prebuilt_runtime() }
 	main = bare_function("main")
 	try {
 		main.body = separated(bracketed(collect_functions(program, module.functions), ""), ";")
@@ -1333,7 +1357,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		}
 		# WASI's command entry: main run for what it does, so `wasmtime app.wasm` runs the program
 		start = added_function(wasi_start, [], no_kind, [])
-		start.code = [op.call] + uleb(main.index) + [op.drop]
+		start.code = call_code(main.index) + [op.drop]
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
 			if #module.refusals > 0 { throw module.refusals.join("\n") }

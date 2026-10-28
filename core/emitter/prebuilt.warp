@@ -1,0 +1,41 @@
+# runtime.wasm (emitter.warp's part; card runtime-prebuilt, notes/runtime_linking.md "runtime.wasm format"): every
+# runtime word compiled once, no program deciding its kinds or what it makes, and the hooks a program gives the code of
+# the module of the runtime words alone, its bytes: read again while a reading leaves out a word more
+runtime_wasm_module(runtime: Node, host: map): any := {
+	module.prebuilding = yes
+	module.left_out = {}
+	made = ø
+	while made == ø { made = typed_wasm_module(Node.Empty, runtime, host, {}) }
+	module.prebuilding = no
+	made
+}
+# every word compiled in name order, but those outside the core on their own (an enum's method naming the program's
+# enum): left out, and named in warp.runtime, for a program to compile as today; then the hooks: the closure calls of
+# each arity up to hook_arities and the late words, each a stub calling its slot of the table `hooks`
+def prebuilt_runtime(): any {
+	left = #module.left_out.keys
+	for name in module.runtime.keys {
+		f = module.runtime[name]
+		if f.kinds == ø and name not in module.left_out {
+			try { compile_function(f, f.signature.parameters.map(p => ValueKind.Node)) } catch refusal {
+				if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
+				module.left_out[name] = "" + refusal
+			}
+		}
+	}
+	if #module.left_out.keys > left { return ø }
+	for arity in 0..(hook_arities + 1) { dispatcher(arity) }
+	for name in late_words.keys { late_word(name) }
+	for f in module.rereads {
+		module.saw_pending = no
+		body_code(f)
+	}
+	for slot in 0..<#module.dispatchers { hook_stub(module.dispatchers[slot], slot) }
+	if module.widened_now { return ø }
+	module_bytes(module.order)
+}
+# a hook's code in runtime.wasm: its parameters passed to the function in its slot of the table, of the hook's own type
+def hook_stub(f: Function, slot: int) {
+	f.code = concatenated(range_list(#f.kinds).map(i => [op.local_get] + uleb(i))) + [op.i32_const] + sleb(slot)
+	f.code += [call_indirect] + uleb(#module.gc_order + f.index) + [0]
+}

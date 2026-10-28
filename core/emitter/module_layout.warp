@@ -14,9 +14,24 @@ def zero_code_of(kind: ValueKind): list {
 }
 def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2) + [op.end] }
 def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + value_type(f.result)) }
-def function_body(f: Function): list {
-	content = vector(f.locals.map(k => [1] + value_type(k))) + f.code + [op.end]
-	uleb(#content) + content
+# a function's entry of the code section, which starts at the offset `at` of the section's content: each padded call
+# operand's offset noted (module.call_sites), its mark dropped
+def function_body(f: Function, at: int): list {
+	locals = vector(f.locals.map(k => [1] + value_type(k)))
+	code = f.code + [op.end]
+	if not module.prebuilding { return uleb(#locals + #code) + locals + code }
+	marks = []
+	unmarked = []
+	for byte in code { if byte == call_site_mark { marks += [#unmarked] } else { unmarked += [byte] } }
+	size = uleb(#locals + #unmarked)
+	for mark in marks { module.call_sites += [at + #size + #locals + mark] }
+	size + locals + unmarked
+}
+# the code section's content: the functions' entries, each knowing where it starts
+def code_entries(functions: list): list {
+	content = uleb(#functions)
+	for f in functions { content += function_body(f, #content) }
+	content
 }
 def index_name(i: int, name: text): list { uleb(i) + name_bytes(name) }
 def name_map(names: list): list { vector(range_list(#names).map(i => index_name(i, names#(i + 1)))) }
@@ -57,7 +72,7 @@ def module_bytes(functions: list): list {
 	# what names a value type first (functions' signatures and locals, globals), so the GC types the module declares
 	# are all known: those its code used, then these (gc_type)
 	function_types = functions.map(function_type)
-	codes = section(section_ids.code, vector(functions.map(function_body)))
+	codes = section(section_ids.code, code_entries(functions))
 	globals = section(section_ids.globals, vector(module.global_order.map(global_entry)))
 	# an import's type follows the GC types in the imports' order, so a function's type is #gc_order + its index too
 	# the tag's type after every function's
@@ -66,7 +81,7 @@ def module_bytes(functions: list): list {
 	types = section(section_ids.type, vector(gc_declared + module.imports.map(i => i#3) + function_types + tag_types))
 	imported = section(section_ids.import, vector(range_list(#module.imports).map(i => import_entry(i))))
 	declared = section(section_ids.function, vector(functions.map(f => uleb(#module.gc_order + f.index))))
-	exports = [name_bytes("main") + [export_function_byte] + uleb(functions#1.index)]
+	exports = if module.prebuilding then [] else [name_bytes("main") + [export_function_byte] + uleb(functions#1.index)]
 	# always a memory, exported as Rust's: the host of a program importing this module compiled reads it
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 	exports += [name_bytes("memory") + [export_memory_byte, 0]]
@@ -86,6 +101,11 @@ def module_bytes(functions: list): list {
 			taken += [f.name]
 		}
 	}
+	tables = []
+	if module.prebuilding {
+		exports = runtime_exports(functions)
+		tables = section(table_section_id, vector([[funcref_byte, 0] + uleb(#module.dispatchers)]))
+	}
 	exported = section(section_ids.export, vector(exports))
 	# the texts' bytes: one passive segment, which array.new_data reads
 	segments = section(section_ids.data_count, uleb(1))
@@ -93,9 +113,36 @@ def module_bytes(functions: list): list {
 	texts = section(section_ids.data, vector([[passive_segment] + uleb(#segment) + segment]))
 	tags = []
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#module.gc_order + #module.imports + #functions)])) }
-	parts = [types, imported, declared, memory, tags, globals, exported, segments, codes, texts]
+	parts = [types, imported, declared, tables, memory, tags, globals, exported, segments, codes, texts]
 	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
-	wasm_header + concatenated(parts) + names_section(functions) + marks + c_functions_custom_section()
+	wasm_header + concatenated(parts) + names_section(functions) + marks + c_functions_custom_section() + runtime_sections(functions)
+}
+# runtime.wasm's exports: memory, every function and global by its name, the error tag, the table of hooks
+def runtime_exports(functions: list): list {
+	exports = [name_bytes("memory") + [export_memory_byte, 0], name_bytes(error_tag_name) + [export_tag_byte, 0], name_bytes(hooks_table) + [export_table_byte, 0]]
+	taken = ["memory", error_tag_name, hooks_table]
+	for f in functions {
+		if f.name not in taken {
+			exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
+			taken += [f.name]
+		}
+	}
+	for name in module.global_order {
+		if name not in taken {
+			exports += [name_bytes(name) + [export_global_byte] + uleb(module.globals[name]#1)]
+			taken += [name]
+		}
+	}
+	exports
+}
+# runtime.wasm's layout (warp.runtime, warp notation) and its call sites (warp.calls, a vector of offsets in the code
+# section's content); none in a program's module
+def runtime_sections(functions: list): list {
+	if not module.prebuilding { return [] }
+	words = functions.map(f => "\"" + f.name + "\": [" + f.index + ", [" + f.kinds.map(k => "" + k).join(", ") + "], " + f.result + "]")
+	layout = "types: " + #module.gc_order + "\nimports: " + #module.imports + "\nfunctions: " + #functions + "\nglobals: " + #module.global_order
+	layout += "\ndata: " + #data_bytes() + "\nhooks: [" + module.dispatchers.map(f => "\"" + f.name + "\"").join(", ") + "]\nleft: [" + module.left_out.keys.map(name => "\"" + name + "\"").join(", ") + "]\nwords: {" + words.join(", ") + "}"
+	section(section_ids.custom, name_bytes(runtime_section) + layout.bytes) + section(section_ids.custom, name_bytes(calls_section) + vector(module.call_sites.map(uleb)))
 }
 # the data segment: each text's bytes once, in the order text_offset gave them their offsets
 def data_bytes(): list { concatenated(module.texts.keys.map(t => t.bytes)) }

@@ -17,6 +17,9 @@ use std::path::{Path, PathBuf};
 
 /// compiler.warp's command compiling one REPL line (core/compiler.warp repl_step)
 const REPL_STEP: &str = "repl-step";
+/// compiler.warp's command writing runtime.wasm, and the file it is beside warp.wasm
+const RUNTIME_COMMAND: &str = "runtime";
+const RUNTIME_FILE: &str = "runtime.wasm";
 
 const COMPILER_FILE: &str = "compiler/compiler.warp";
 /// The custom section of a build file naming what it was built from: lib/, lib/'s fingerprint, the warp build
@@ -421,7 +424,18 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	ship(path, &bytes)?;
 	warm(by)?;
+	write_runtime(by, &path.with_file_name(RUNTIME_FILE))?;
 	Ok(module)
+}
+
+/// runtime.wasm beside warp.wasm: the runtime words compiled once by compiler.warp's `runtime` command, for linking
+/// programs to (notes/runtime_linking.md "runtime.wasm format")
+fn write_runtime(by: Compiler, path: &Path) -> Result<(), Node> {
+	let written = command(vec![RUNTIME_COMMAND.into(), path.display().to_string()], by);
+	match written.drop_meta() {
+		Node::Error(_) => Err(error(&format!("{}: {}", path.display(), written.serialize()))),
+		_ => Ok(()),
+	}
 }
 
 /// Who builds compiler.warp's warp.wasm, named, and its module: the seed, with the scope of its kept values (kept_scope:

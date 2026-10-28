@@ -8,6 +8,13 @@ def uleb(n: int): list {
 	}
 	out + [n]
 }
+# n as a LEB128 of always 5 bytes (a valid non-minimal one), so a link rewrites it in place
+padded_width = 5
+def padded_uleb(n: int): list {
+	out = []
+	for i in 0..padded_width { out += [bit_or(bit_and(n >> (7 * i), 127), if i < padded_width - 1 then 128 else 0)] }
+	out
+}
 def sleb(n: int): list {
 	out = []
 	more = yes
