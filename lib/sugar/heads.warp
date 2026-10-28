@@ -2,3 +2,7 @@
 # bare `return` returns ø, the phrase `return ø` the emitter compiles. (A result arrow `x(p: P) -> int := …` is the
 # parser's typed head.)
 rewrite return => return ø where statement
+
+# A value definition reading a variable, or a word that reads one, is charged (P71, wiki/charged.md): the function of
+# no parameters, whose bare use is its call, so `tuning = 442; A4` follows the tuning; a constant stays a value (P70)
+rewrite ($h := $e) => ($h() := $e) where $h is varying and statement
