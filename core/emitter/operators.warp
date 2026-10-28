@@ -95,7 +95,7 @@ def equality(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
 def tested_as(symbol: text, test: TypedCode): TypedCode := if symbol.starts_with("!") then TypedCode(ValueKind.Bool, condition(test) + [op.i32_eqz]) else test
 # an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
 # operators without one take the floats
-exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod"}
+exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod", "rem": "exact_rem"}
 def exact_operation(body: Body, symbol: text, left: TypedCode, right: TypedCode, floats: TypedCode): TypedCode {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
 	if symbol in comparisons { return operation_code(body, symbol, runtime_call("exact_order", [left, right]), number_value(0)) }
