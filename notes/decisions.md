@@ -325,6 +325,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Ranges: `r: 1..n` is the range itself; `upto` excludes the end with a hint. range-in-brackets: a range inside [ ] is one item, never spread.
 
 ## Functions and calls
+- call-function-values (Supervisor): a glued `(` after a round group or an element calls a function value: `(x => x*2)(5)` 10, `adder(5)(1)` 6, `fs[0](3)`; numbers keep juxtaposed multiplication, `(2)(3)` 6.
 - keywordless-def (user): at statement start `f(x) { body }` with plain parameter names defines f when f is defined nowhere, with a got-it note "I meant: def f(x) { … }"; when f exists it stays a call with a trailing block (block-lazy-body).
 - reflection: function objects have .name, .signature, .return_type, .parameters, .doc; printing one shows its doc above its typed .dump; `methods(x)` returns the function objects; `use reflection` adds compilation unit, compiler, origin, wasm index, effects. A bare parameterless function inside print/help/dump/type is called, with a warning and hint `function now`.
 - function-in-list: in a list or text a function prints as its name; only alone it shows doc + definition.
