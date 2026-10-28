@@ -954,6 +954,9 @@ def continued(p: Parser, left: Node, min_power: int): Node := {
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
 			left = subscript(left, index)
+		} else if c == '(' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power and is_callee(left) {
+			p.at = p.at + 1
+			left = call_of([left] + spread(items_until(p, Bracket.Round, ItemsEnd.Closer)))
 		} else if left != ø and keyword_at(p, "times") and times_binds(p, min_power) {
 			p.at = p.at + 5
 			skip_spaces(p)
@@ -1520,6 +1523,13 @@ def mutated_variable(call: Node): Node := match call {
 def is_method(node: Node): bool {
 	parts = group_parts(node)
 	node is symbol or (parts != ø and #parts#3 > 0 and parts#3#1 is symbol)
+}
+// An operand a glued `(` calls, as `f(x)` calls a name: a group `(x => x*2)(5)`, a call's result `adder(5)(1)`, an
+// element `fs[0](3)`
+def is_callee(left: Node): bool := is_list_of(left, "(") or is_element(left)
+def is_element(n: Node): bool := match n {
+	Key(target, op, index): op == Op.Hash
+	_: false
 }
 // The left power of `#`, which a glued `[` indexes with
 INDEX_POWER = 170

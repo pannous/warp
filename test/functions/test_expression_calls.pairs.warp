@@ -1,0 +1,6 @@
+# a call whose callee is an expression calls the function value it gives, as a named function is called
+'(x => x*2)(5)'	10
+'((x, y) => x*y)(3, 4)'	12
+'k = 10; (x => x + k)(1)'	11
+'adder(n) := x => x + n; adder(5)(1)'	6
+'fs = [x => x*2]; fs[0](3)'	6
