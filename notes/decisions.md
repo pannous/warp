@@ -439,6 +439,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   types only in a text pattern's hole position, nothing reserved (a variable `digits` stays plain; Interviewer's decision).
 
 ## Classes, objects and enums
+- capitalized-field-list (user): a capitalized plural field named after a declared class declares a list of it under the lowercase name: `class Signature { Parameters = [] }` is `parameters: list[Parameter] = []`, read as `sig.parameters`; otherwise an ordinary field.
 - property-accessors: accessors are overloads by arity: getter `canvas.width := canvas_width`, setter `canvas.width(new_width) := …` or with `it`; a getter without setter is read-only (assigning is a loud error).
 - setter-calls: a setter is called by `canvas.width = 12`, `canvas.width(12)`, `width(canvas, 12)`; `width of canvas = 12` is `canvas.width = 12`; `set x to y` is `x = y` with a style hint.
 - saved-words: lib/draw.warp declares `canvas()` (no arguments) as the current Picture, so `save canvas as: "painting.png"` works through the bare-call rule; likewise `sound()`.
