@@ -3,9 +3,17 @@
 # The native warp (decision native-warp-in-core, notes/roadmap_native_harness.md step 2): the warp command as a native
 # executable, warp.wasm hosted through driver.warp. It only tells apart what the words name:
 #   warp app.wasm args…   the module run
-#   warp app.warp args…   compiled by warp.wasm, then run with the arguments
-#   warp                  warp.wasm's help
-#   warp rebuild          warp.wasm built anew from lib/ by the seed (rebuilt)
+#   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)
+#   warp run app.…        the same; `warp pure …` and `warp eval <code>` too (warp.wasm is the pure compiler);
+#                         `warp fast …` at full precision yet; `warp fuel <steps> …` counting steps (WARP_FUEL)
+#   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
+#   warp                  on a terminal the version, the help and the console; a piped program run, its value shown
+#   warp beautify|fix …   lib/fix/command.warp with the words; warp format|lint … too, the layout only
+#   warp docs|wiki|home   where the documentation is, opened
+#   warp repl|start       the console: each line compiled by warp.wasm's repl-step after the lines that stay, then run
+#   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
+#   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
+#   warp rebuild seed     the seed's runtime and machine code made (seed_shipped)
 #   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp, the one command table), any
 #                         other words code it compiles to WARP_RUN_TO (compiler.warp), which then runs
 # The host words warp.wasm's commands call are answered by driver.warp host_word; library words (graphics, sound, web)
@@ -14,17 +22,36 @@ use "driver.warp"
 
 setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
 unsetenv(name: pointer): i32 from "c"
-realpath(path: pointer, resolved: pointer): handle from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
+fork(): i32 from "c"
+waitpid(child: i32, status: pointer, options: i32): i32 from "c"
+fdopen(descriptor: i32, mode: pointer): handle from "c"
+getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
+isatty(descriptor: i32): i32 from "c"
+execv(path: pointer, arguments: pointer): i32 from "c"
+execvp(name: pointer, arguments: pointer): i32 from "c"
 FOLDER_MODE = 493
+STDIN = 0
+STDOUT = 1
 
-# warp.wasm with this executable's words: a command runs, code is compiled to WARP_RUN_TO and run after
-hosted(): nothing := {
+# a compiler with this executable's words from `first` on: a command runs, code is compiled to WARP_RUN_TO and run after
+hosted(compiler: text, first: int): nothing := {
+	given = compiler_arguments(compiler)
+	for i in first..arg_count() { added(given, reachable_word(arg(i))) }
+	words_ran(compiler, given)
+}
+# a program piped to bare `warp` (no terminal): the whole input one program, run, its value printed
+piped_program(compiler: text): nothing := {
+	printed = piped(fdopen(STDIN, c_string("r")))
+	given = compiler_arguments(compiler)
+	added(given, native_copy(printed.at, printed.size))
+	words_ran(compiler, given)
+}
+# the compiler run with the words; when they were code, the module it wrote to WARP_RUN_TO run after
+words_ran(compiler: text, given: Arguments): nothing := {
 	output = compiled_path()
-	given = compiler_arguments()
-	for i in 1..arg_count() { added(given, arg(i)) }
 	setenv(c_string("WARP_RUN_TO"), c_string(output), 1)
-	compiler_ran(given)
+	file_ran(compiler, given)
 	unsetenv(c_string("WARP_RUN_TO"))
 	if read_file(output).length > 0 { written_run(output, "code", arg_count()) }
 }
@@ -35,22 +62,118 @@ hosted(): nothing := {
 rebuilt(): nothing := {
 	library = library_folder()
 	seed = seed_path()
-	seed_runtime = joined(text_from(seed.address, seed.length - 5), ".runtime.wasm")
-	if read_file(seed_runtime).length == 0 { file_ran(seed, words(seed, "runtime", seed_runtime, "", "", "")) }
+	seed_runtime = seed_prepared(seed)
 	compiler = real_path(joined(library, "/compiler/compiler.warp"))
 	built = joined(compiler_path(), ".new")
 	file_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
 	file_ran(built, words(built, "optimize", built, built, "", ""))
+	stamped(built, library)
 	runtime = joined(library, "/runtime.wasm")
 	file_ran(built, words(built, "runtime", runtime, "", "", ""))
 	modules = joined(library, "/modules")
 	mkdir(c_string(modules), FOLDER_MODE)
 	file_ran(built, words(built, "modules", modules, runtime, "", ""))
-	machine_code = joined(built, ".driver.cwasm")
-	rename(c_string(machine_code), c_string(joined(compiler_path(), ".driver.cwasm")))
-	rename(c_string(joined(machine_code, ".key")), c_string(joined(compiler_path(), ".driver.cwasm.key")))
+	machine_code_moved(built, compiler_path())
 	rename(c_string(built), c_string(compiler_path()))
 	print(joined("rebuilt ", compiler_path()))
+}
+# the build stamp appended to a build file, a custom section warp.build of lines as the Rust harness wrote them
+# (src/compiler/standalone.rs current_build): lib/, its compiler inputs hash (left empty: no run compares it, decision
+# compilers-delivered), the warp that built it, lib/'s commit, then when it was built. `warp version` shows it
+stamped(file: text, library: text): nothing := {
+	commit = command_output(joined(joined("git -C '", library), "' rev-parse HEAD 2>/dev/null"))
+	built = command_output("date '+%Y-%m-%d %H:%M'")
+	data = joined(joined(joined(joined(library, "\n\nthe native warp\n"), commit), "\n"), built)
+	name = "warp.build"
+	header = allocate(16)
+	byte_at(header).value = 0
+	size = leb_written(header + 1, 1 + name.length + data.length)
+	byte_at(header + 1 + size).value = name.length as u8
+	stream = fopen(c_string(file), c_string("ab"))
+	fwrite(native_pointer(header), 1, 2 + size, stream)
+	fwrite(native_pointer(name.address), 1, name.length, stream)
+	fwrite(native_pointer(data.address), 1, data.length, stream)
+	fclose(stream)
+}
+# n as unsigned LEB128 at `at`, its byte count
+leb_written(at: pointer, n: i64): i64 := {
+	rest = n
+	count = 0
+	while rest >= 128 {
+		byte_at(at + count).value = (rest % 128 + 128) as u8
+		rest = rest / 128
+		count = count + 1
+	}
+	byte_at(at + count).value = rest as u8
+	count + 1
+}
+# `warp rebuild self` (scripts/promote-self.sh): warp.wasm compiles compiler.warp once more, and when it does it is
+# promoted to warp-self.wasm, with its machine code; whether that build is warp.wasm's own bytes (a fixpoint) is said,
+# not required (user 2026-10-26)
+promoted(): nothing := {
+	library = library_folder()
+	compiler = compiler_path()
+	source = real_path(joined(library, "/compiler/compiler.warp"))
+	next = joined(compiler, ".next")
+	file_ran(compiler, words(compiler, source, next, folder_of(source), library, joined(library, "/runtime.wasm")))
+	fixpoint = same_text(read_file(next), read_file(compiler))
+	unlink(next)
+	promoted_file = joined(library, "/warp-self.wasm")
+	copied(compiler, promoted_file)
+	copied(joined(compiler, ".driver.cwasm"), joined(promoted_file, ".driver.cwasm"))
+	copied(joined(compiler, ".driver.cwasm.key"), joined(promoted_file, ".driver.cwasm.key"))
+	said = if fixpoint then " compiles compiler.warp once more (to its own bytes, a fixpoint), promoted to " else " compiles compiler.warp once more (to other bytes, no fixpoint), promoted to "
+	print(joined(joined(compiler, said), promoted_file))
+}
+# `warp rebuild seed`: the seed's runtime and machine code beside it, made when missing, so no build compiles them
+seed_shipped(): nothing := {
+	seed = seed_path()
+	seed_prepared(seed)
+	machine_code_kept(seed)
+	print(joined("precompiled ", seed))
+}
+# the seed's own runtime.wasm (warp-seed.runtime.wasm), written by the seed's runtime command once per seed; its path
+seed_prepared(seed: text): text := {
+	seed_runtime = joined(text_from(seed.address, seed.length - 5), ".runtime.wasm")
+	if read_file(seed_runtime).length == 0 { file_ran(seed, words(seed, "runtime", seed_runtime, "", "", "")) }
+	seed_runtime
+}
+# a build's machine code (the driver's .cwasm and its key) moved to another build file of the same bytes
+machine_code_moved(from: text, to: text): nothing := {
+	machine_code = joined(from, ".driver.cwasm")
+	rename(c_string(machine_code), c_string(joined(to, ".driver.cwasm")))
+	rename(c_string(joined(machine_code, ".key")), c_string(joined(to, ".driver.cwasm.key")))
+}
+# a file's copy, written aside and renamed, so a run beside this one never reads half of it
+copied(from: text, to: text): nothing := {
+	aside = joined(to, ".new")
+	write_file(aside, read_file(from))
+	rename(c_string(aside), c_string(to))
+}
+# `warp test …`: run by the Rust warp, warp-rust beside this one, else on the PATH, until the native test runner lands
+# (card native-warp-test); said on stderr each time
+tests_handed_off(): nothing := {
+	complain("warp test: run by warp-rust until the native test runner lands (card native-warp-test)")
+	given = arguments()
+	added(given, "warp-rust")
+	for i in 1..arg_count() { added(given, arg(i)) }
+	long_at(given.pointers + given.count * 8).value = 0
+	execv(c_string(joined(folder_of(executable_path()), "/warp-rust")), given.pointers)
+	execvp(c_string("warp-rust"), given.pointers)
+	complain("warp test: no warp-rust beside this warp or on the PATH")
+	exit(1)
+}
+# `warp rebuild [pure|self|seed]`
+rebuild_command(): nothing := {
+	which = if arg_count() > 2 then arg(2) else "pure"
+	if same_text(which, "pure") { rebuilt() } else {
+		if same_text(which, "self") { promoted() } else {
+			if same_text(which, "seed") { seed_shipped() } else {
+				complain(joined(joined("warp rebuild: no compiler ", which), "; say `warp rebuild`, `warp rebuild pure`, `warp rebuild self` or `warp rebuild seed`"))
+				exit(1)
+			}
+		}
+	}
 }
 # the seed, the compiler that compiles compiler.warp: $WARP_SEED, else warp-seed.wasm beside this executable
 seed_path(): text := {
@@ -68,37 +191,109 @@ words(module: text, a: text, b: text, c: text, d: text, e: text): Arguments := {
 	if e.length > 0 { added(list, e) }
 	list
 }
-# the path with its links resolved (lib/compiler links to core): a compile's folder is the real one
-real_path(path: text): text := {
-	resolved = realpath(c_string(path), 0)
-	if resolved == 0 {
-		complain(joined("no file ", path))
-		exit(1)
+# `warp repl`, the console: each line compiled by warp.wasm's repl-step after the lines that stayed (declarations,
+# uses: its state file), then run, in a child process of its own, so a line that fails ends only its child
+console(compiler: text): nothing := {
+	print("Interactive console (Ctrl+D to exit)")
+	state = joined(text_from(compiled_path().address, compiled_path().length - 5), ".repl.warp")
+	write_file(state, "")
+	input = fdopen(STDIN, c_string("r"))
+	line_cell = allocate(8)
+	capacity = allocate(8)
+	while yes {
+		fd_write(STDOUT, "🌀", 1, allocate(4))
+		length = getline(line_cell, capacity, input)
+		if length < 0 then break
+		line = trimmed_end(native_copy(long_at(line_cell).value, length))
+		if line.length > 0 {
+			child = fork()
+			if child == 0 {
+				line_ran(compiler, state, line)
+				exit(0)
+			}
+			waitpid(child, allocate(4), 0)
+		}
 	}
-	length = strlen(resolved)
-	copy = allocate(length as i32)
-	memcpy(copy, resolved, length)
-	free(resolved)
-	text_from(copy, length as u32)
+	print("")
+	unlink(state)
+}
+# one console line compiled after the state's lines (repl-step keeps its declarations there), then its module run
+line_ran(compiler: text, state: text, line: text): nothing := {
+	module = compiled_path()
+	file_ran(compiler, words(compiler, "repl-step", state, line, module, joined(library_folder(), "/runtime.wasm")))
+	written_run(module, "repl", arg_count())
+}
+# `warp version`: warp.wasm's version line, then when this executable was built and the stamps of the compilers
+versioned(compiler: text): nothing := {
+	given = compiler_arguments(compiler)
+	added(given, "version")
+	file_ran(compiler, given)
+	print(joined("the native warp · built ", command_output(joined(joined("date -r '", executable_path()), "' '+%Y-%m-%d %H:%M'"))))
+	self_compiler = joined(library_folder(), "/warp-self.wasm")
+	print(joined(joined(compiler_stamp(compiler_path(), "warp.wasm", "pure"), ", "), compiler_stamp(self_compiler, "warp-self.wasm", "self")))
+}
+# a compiler's build stamp (stamped): `warp.wasm of 1792a05d8a · built 2026-10-28 20:25`
+compiler_stamp(file: text, name: text, rebuild: text): text := {
+	wasm = read_file(file)
+	if wasm.length == 0 { return joined(joined(joined(name, " missing (warp rebuild "), rebuild), ")") }
+	stamp = custom_section(wasm, "warp.build")
+	if stamp.length == 0 { return joined(name, " unstamped") }
+	commit = field(stamp, 3, NEWLINE)
+	built = field(stamp, 4, NEWLINE)
+	shown_length = if commit.length > 10 then 10 else commit.length
+	of = if commit.length > 0 then joined(" of ", text_from(commit.address, shown_length as u32)) else " of no commit"
+	if built.length > 0 then joined(joined(joined(name, of), " · built "), built) else joined(name, of)
 }
 # a file of warp code: its name ends in .warp, or a file of that name exists
 is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).length > 0
 
-if arg_count() < 2 {
-	given = compiler_arguments()
-	added(given, "help")
-	compiler_ran(given)
-} else {
-	if ends_with(arg(1), ".wasm") {
-		module = read_file(arg(1))
-		if module.length == 0 {
-			complain(joined("no module at ", arg(1)))
-			exit(1)
-		}
-		run(module, given_from(1), "")
-	} else {
-		if same_text(arg(1), "rebuild") { rebuilt() } else {
-			if is_warp_file(arg(1)) { compiled_and_run(arg(1)) } else { hosted() }
-		}
+# the words that only say how to run what follows: `run`, `pure` and `eval` what the bare words do, `self` by
+# warp-self.wasm, `fast` (lib/fast_math.warp) at full precision yet
+is_prefix(word: text): bool := same_text(word, "run") or same_text(word, "pure") or same_text(word, "eval") or same_text(word, "self") or same_text(word, "fast")
+# what the words from `first` on ask for, by the compiler: a command the native warp runs itself, a module, a file,
+# else warp.wasm's command or code
+dispatched(compiler: text, prefixed: bool, first: int): nothing := {
+	if arg_count() <= first {
+		if prefixed { return helped(compiler) }
+		if isatty(STDIN) == 0 { return piped_program(compiler) }
+		# bare `warp` on a terminal: the version and the help first, then the console
+		versioned(compiler)
+		helped(compiler)
+		return console(compiler)
 	}
+	word = arg(first)
+	if ends_with(word, ".wasm") { return module_ran(first) }
+	if not prefixed {
+		if same_text(word, "rebuild") { return rebuild_command() }
+		if same_text(word, "test") { return tests_handed_off() }
+		if same_text(word, "beautify") or same_text(word, "fix") or same_text(word, "format") or same_text(word, "lint") { return compiled_and_run(compiler, joined(library_folder(), "/fix/command.warp"), 1) }
+		if same_text(word, "docs") or same_text(word, "wiki") or same_text(word, "home") { return documentation_opened() }
+	}
+	if same_text(word, "repl") or same_text(word, "console") or same_text(word, "start") { return console(compiler) }
+	if same_text(word, "version") or same_text(word, "--version") { return versioned(compiler) }
+	if is_warp_file(word) { return compiled_and_run(compiler, word, first + 1) }
+	hosted(compiler, first)
 }
+# warp.wasm's help
+helped(compiler: text): nothing := {
+	given = compiler_arguments(compiler)
+	added(given, "help")
+	file_ran(compiler, given)
+}
+# `warp docs`: where the documentation is, opened in the browser where one opens
+documentation_opened(): nothing := {
+	print("Warp documentation can be found at https://github.com/pannous/warp/wiki")
+	command_output("open https://github.com/pannous/warp/ 2>/dev/null || xdg-open https://github.com/pannous/warp/ 2>/dev/null")
+}
+
+# `warp fuel <steps> <file|code…>`: the program counts steps (WARP_FUEL), out of fuel after them
+counting = arg_count() > 3 and same_text(arg(1), "fuel")
+if counting { setenv(c_string("WARP_FUEL"), c_string(arg(2)), 1) }
+prefixed = counting or (arg_count() > 1 and is_prefix(arg(1)))
+first = if counting then 3 else if prefixed then 2 else 1
+# warp.wasm's own commands (build) read the same lib/ as this executable
+setenv(c_string("WARP_LIB"), c_string(library_folder()), 0)
+# and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
+setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
+if prefixed and same_text(arg(1), "fast") { complain("note: warp fast is not in the native warp yet; running at full precision") }
+dispatched(if prefixed and same_text(arg(1), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path(), prefixed, first)

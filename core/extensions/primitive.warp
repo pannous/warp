@@ -757,14 +757,16 @@ native_main(header: text, library: text): text := {
 	includes = ["<stdio.h>", "\"" + header + "\"", "\"" + library + "/native/wasi.c\"", "\"" + library + "/native/foreign.c\""]
 	foreign = c_functions_imported()
 	libraries = c_libraries(foreign)
-	instances = ["wasi"] + libraries.map(l => "(struct " + wasm2c_name(l) + "*)wasi")
+	# wasm2c's instantiate takes the imported modules' instances sorted by module name (its std::set), the C ones
+	# reaching wasi.c's instance through the struct that wraps it
+	instances = ([WASI_LIBRARY] + libraries).sort().map(l => if l == WASI_LIBRARY then "wasi" else "(struct " + wasm2c_name(l) + "*)wasi")
 	includes.map(file => "#include " + file + "\n").join("") + libraries.map(l => "struct " + wasm2c_name(l) + " { struct " + wasm2c_name(WASI_LIBRARY) + " wasi; };\n").join("") +
 		foreign.map(c_function_glue).join("") +
 		"void instantiate(w2c_program* program, struct " + wasm2c_name(WASI_LIBRARY) + "* wasi) { wasm2c_program_instantiate(program, " + instances.join(", ") + "); }\n" +
 		"void run_main(w2c_program* program) { " + printed_main[main_value_kind()] + " }\n"
 }
 c_functions_imported(): list := primitive_functions.keys.map(name => primitive_functions[name]).filter(f => f.library and f.library != WASI_LIBRARY)
-# the C libraries of the imports, in the order wasm2c's instantiate takes them, which a native build links
+# the C libraries of the imports, which a native build links
 c_libraries(foreign: list): list := {
 	found = []
 	for f in foreign { if f.library not in found { found += [f.library] } }

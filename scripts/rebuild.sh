@@ -141,4 +141,6 @@ if [ $result = 0 ]; then
 	[ $self_found = 1 ] && besides warp-self
 fi
 [ $result = 0 ] && [ -f "$compilers/warp.wasm" ] && [ -f "$store/$hash/warp.wasm" ] && mark_main
+# warp's wasmtime C API in lib/, which `warp build native` links the driver from (card wasmtime-bundled); a no-op when current
+"$scripts/wasmtime-c-api.sh" "$lib" || echo "rebuild.sh: warp's wasmtime C API did not build (scripts/wasmtime-c-api.sh): native builds of the driver fail" >&2
 exit $result

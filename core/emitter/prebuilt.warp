@@ -418,10 +418,10 @@ def bind_library_words() {
 		}
 		for k in 0..<#image.functions {
 			word = image.functions[k]
-			if image.closures.any(made => made#1 == word.name) { module.functions[linked_closure_name(image, word.name)] = linked_function(word, #module.imports + image.base#1 + k) }
+			if image.closures.any(made => made#1 == word.name) { module.functions[linked_closure_name(image, word.name)] = linked_function(word, linked_index(image, k)) }
 			f = module.functions.get(word.name)
 			if f != ø and f.kinds == ø and word.name in module.linked_words {
-				f.index = #module.imports + image.base#1 + k
+				f.index = linked_index(image, k)
 				f.kinds = word.kinds
 				f.result = word.result
 			}
@@ -429,6 +429,8 @@ def bind_library_words() {
 	}
 }
 def linked_closure_name(image: LibraryImage, target: text): text := image.name + name_joiner + target
+# the program's index of a linked module's k-th function
+def linked_index(image: LibraryImage, k: int): int := #module.imports + image.base#1 + k
 # a linked module's function as the program calls it, at its index
 def linked_function(word: Function, index: int): Function {
 	f = Function(word.name, word.signature, ø)
@@ -481,6 +483,18 @@ def library_code(image: LibraryImage): list {
 	for c in 0..<#image.classes { types[image.behind#2 + c] = module.gc_indices[image.classes[c]#1] }
 	own = [shifted(#module.imports + image.base#1 - image.behind#1), Move(image.base#2 - image.behind#2 - #image.classes, types), Move(0, globals), shifted(image.base#3 - image.behind#4), shifted(image.base#4)]
 	entries_after(rebased(content, relocations, [[runtime_calls], own]), module.runtime_image.functions, no)
+}
+# the program's C functions with those the linked modules call (list's sqrt, which a program using text never names),
+# each by its foreign line in lib/
+def with_linked_c_functions(functions: map, library_folder: text): map {
+	missing = concatenated(module.linked_images.map(image => image.c_functions)).filter(name => not functions.has(name))
+	if #missing == 0 { return functions }
+	catalog = c_catalog(library_folder, [])
+	for name in missing {
+		found = catalog.filter(d => d#1 == name)
+		if #found > 0 { functions[name] = found#1 }
+	}
+	functions
 }
 # the index of the program's import of this C function, which a linked module calls
 def program_import(name: text): int {
