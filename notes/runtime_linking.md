@@ -31,6 +31,11 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
 
 ## runtime.wasm format (card runtime-prebuilt, owner: fixer; built by core/emitter/prebuilt.warp)
 `warp rebuild` writes it beside warp.wasm (compiler.warp's command `runtime [file]`); validated by wasm-tools.
+Every compile is behind a runtime.wasm, the compiler's own (src/compiler/standalone.rs runtime_of), its fifth argument
+in a compile and in a repl-step: warp.wasm's and warp-self.wasm's beside them; the seed's is warp-seed.runtime.wasm
+beside the seed, written by the seed itself when missing or older than the seed (ship_seed; card
+seed-compiler-runtime), so a seed never compiles behind the runtime of the warp.wasm sharing its folder and nothing
+but the seed is published. A seed from before the `runtime` command writes none and needs none (said once per rebuild).
 One file serves both prepending (runtime-prepended) and import/export linking (runtime-separate-modules). It is an
 ordinary, valid wasm module: every runtime word compiled once, from its declared kinds (`any` is a node), with every
 made_case kind made, since no program decides any more what it makes.
@@ -51,8 +56,8 @@ made_case kind made, since no program decides any more what it makes.
 - **Left out**: a word outside the core on its own (an enum's method naming the program's enum: Separator·text) is not
   in runtime.wasm; warp.runtime names it, a program compiles it as today.
 - **Globals**: the runtime's (runtime/walks.warp and the others) first, at fixed indices; a program's after them.
-- **Data**: one passive segment, the runtime's texts from offset 0. A prepended program's texts are appended behind
-  them (text_offset continues), reusing a runtime text that is already there.
+- **Data**: one passive segment, the runtime's texts from offset 0. A prepended program's texts are a second segment
+  (index 1, from offset 0), so its code is the same linked to runtime.wasm, whose segments it can't read.
 - **Tag**: the error tag, index 0, exported.
 - **Exports**: memory as `memory`, every runtime function and global under its warp name, the tag, the table `hooks`.
 - **Custom sections**:
@@ -60,7 +65,9 @@ made_case kind made, since no program decides any more what it makes.
   - `warp.runtime`, the layout, binary so a compile reads it in milliseconds with no parser and no cache (user: "read
     from the WebAssembly modules"): five ulebs G, imports, functions, globals, data size; the hooks' names in
     table-slot order; the left words' names; the globals, each [name, kind]; the words, each [name, index, vector of
-    parameter kinds, result kind]. A name is a uleb length and its UTF-8 bytes, a list a uleb count and its entries, a
+    parameter kinds, result kind, vector of parameters, declared result]. A parameter is [name, type name, flags (rest
+    1, a default 2), the default packed (pack) if flagged]; what a call needs (named arguments, defaults, rest), so a
+    prepended compile neither lowers nor reads the runtime's sources (card runtime-lowering-scope). A name is a uleb length and its UTF-8 bytes, a list a uleb count and its entries, a
     kind its place in prebuilt.warp's held_kinds (Int 0, Float 1, Bool 2, Char 3, I32 4, Text 5, List 6, Node 7,
     Time 8, Nothing 9). Reader: prebuilt.warp ByteReader. The emitter's call_values needs the kinds; a wasm type alone
     can't tell Bool, Int and Char apart.
@@ -88,11 +95,11 @@ made_case kind made, since no program decides any more what it makes.
 One hook list in the warp.runtime section. Prepended: the stub bodies are replaced by the program's. Separately linked:
 the stubs call through an exported funcref table the program fills at start. One runtime build serves both.
 
-## Separate modules (card runtime-separate-modules; draft, owner: separate-modules)
+## Separate modules (card runtime-separate-modules; owner: separate-modules)
 The same runtime.wasm, not copied into the program but instantiated once and imported, as a page or an AOT build
 combines modules natively. Nothing is rewritten: a program's runtime words are imports, and imports come first in
 the function index space anyway, so the program numbers only its own functions, as today.
-- **Program module** (`warp build --separate`, emitter flag `module.links_runtime`): the canonical types first
+- **Program module** (`warp build` writes it as x.mod.wasm, prebuilt.warp linked_bytes): the canonical types first
   (canonical_type_entries(), so its node, text and list types are the runtime's), then its class structs. Every
   runtime word it calls is a function import `warp_runtime.<word>` with the word's type (instead of compiling the
   word); runtime globals it reads are global imports; memory, the error tag and the `hooks` table are imported too.
@@ -106,6 +113,12 @@ the function index space anyway, so the program numbers only its own functions, 
 - **Trimming** the shared runtime against one program's imports is where wasm-metadce fits (roots: the imported
   names); a runtime shared by several programs stays whole.
 - **Check**: hello and a class with text() (a hook) built separately print the same as built prepended.
+- **State** (2026-10-28): `warp build x.warp` writes x.full.wasm (prepended), x.wasm (that one trimmed) and x.mod.wasm
+  (linked) from one compile: the harness passes the .mod.wasm path as the compile's sixth argument, compiler.warp
+  writes linked_bytes(module.order) of the compile it just made (separate_module). The program's code is the same in
+  both forms: its texts are data segment 1 (own_texts_segment), the runtime's segment 0 (empty in x.mod.wasm), so no
+  offset depends on the runtime's texts. hello: full 140694, trimmed 24216, mod 22823 bytes; hello, a class with
+  text() and a `use c` program print the same all three ways.
 
 ## Steps (sub-cards of runtime-linking)
 | card | step |

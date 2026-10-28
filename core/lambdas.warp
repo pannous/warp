@@ -223,14 +223,17 @@ function_value(name: text, n: Node, locals: list, lowering: Lowering): Node := {
 	call_node(symbol("closure_new"), [n])
 }
 
-# `f(a, b)`: a call of a variable is a call of the function value it holds, a function's call keeps its name
+# `f(a, b)`: a call of a variable is a call of the function value it holds, a function's call keeps its name; a call
+# of any other expression calls the function value it gives: `(x => x*2)(5)`, `adder(5)(1)`, `fs[0](3)`
 lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 	if #call == 0 { return n }
 	arguments = arguments_of(call).map(argument => lowered_lambdas(argument, locals, lowering))
 	signature = call#1
 	if signature is symbol and name_of(signature) in locals { return call_node(symbol(closure_call_word + #arguments), [signature] + arguments) }
 	if signature is symbol { return call_node(signature, arguments) }
-	call_node(lowered_lambdas(signature, locals, lowering), arguments)
+	callee = lowered_lambdas(signature, locals, lowering)
+	if is_callee(signature) { return call_node(symbol(closure_call_word + #arguments), [callee] + arguments) }
+	call_node(callee, arguments)
 }
 
 # `f 3 4`, words side by side: the first calls the others, its name kept

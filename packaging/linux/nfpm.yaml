@@ -33,6 +33,9 @@ contents:
   # the warp-written compilers and lib/, where warp in /usr/bin finds them (card installed-compilers)
   - src: ./warp*.wasm
     dst: /usr/share/warp/
+  # the runtime words every compile links (card release-ships-runtime)
+  - src: ./runtime.wasm
+    dst: /usr/share/warp/
   - src: ./lib
     dst: /usr/share/warp/lib
     type: tree

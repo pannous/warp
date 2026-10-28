@@ -72,7 +72,8 @@ def runtime_image_of(wasm: list): any {
 		index = read_number(layout)
 		kinds = []
 		for j in 0..<read_number(layout) { kinds += [read_kind(layout)] }
-		words[name] = [index, kinds, read_kind(layout)]
+		result = read_kind(layout)
+		words[name] = [index, kinds, result, read_signature(layout)]
 	}
 	types = uleb_read(wasm, section_place(wasm, section_ids.type)#1)#1
 	RuntimeImage(wasm, types, imports, functions, texts_size, globals, words, hooks)
@@ -96,6 +97,17 @@ def read_names(reader: ByteReader): list {
 	names
 }
 def read_kind(reader: ByteReader): ValueKind { held_kinds[read_number(reader)] }
+def read_signature(reader: ByteReader): any {
+	parameters = []
+	for i in 0..<read_number(reader) {
+		name = read_name(reader)
+		type_name = read_name(reader)
+		flags = read_number(reader)
+		default = if bit_and(flags, default_flag) != 0 then [unpack(read_name(reader))] else ø
+		parameters += [Parameter(name, type_name, default, bit_and(flags, rest_flag) != 0)]
+	}
+	Signature(parameters, read_name(reader))
+}
 # the kinds a function or global of runtime.wasm holds, each written as its place here
 held_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Bool, ValueKind.Char, ValueKind.I32, ValueKind.Text, ValueKind.List, ValueKind.Node, ValueKind.Time, ValueKind.Nothing]
 def held_code(kind: ValueKind): int {
@@ -124,7 +136,8 @@ def behind_runtime() {
 	module.global_order = []
 	for entry in runtime_image.globals { declared_global(entry#1, entry#2) }
 	module.placed = runtime_image.functions
-	module.text_size = runtime_image.data
+	# the program's texts in a data segment of its own (own_texts_segment), so its code is the same linked as prepended
+	module.text_size = 0
 	module.runtime_types = runtime_image.types - #gc_names
 }
 # the runtime's imports, as runtime_wasm_module declared them: WASI's fd_write, then every host word
@@ -139,15 +152,18 @@ def runtime_imports(host: map): list {
 	imports
 }
 def runtime_shift(): int := #module.imports - runtime_image.imports
-# each runtime word the program calls is runtime.wasm's, at its index, of its kinds: none is compiled again
+# the runtime words a program calls: runtime.wasm's, each at its index, of its kinds and signature; none is lowered or
+# compiled again (the runtime's sources are read only to build runtime.wasm)
 def bind_runtime_words() {
-	for name in module.runtime.keys {
-		if name in runtime_image.words {
+	for name in runtime_image.words.keys {
+		if name not in runtime_image.hooks {
 			word = runtime_image.words[name]
-			f = module.runtime[name]
+			f = Function(name, word#4, ø)
 			f.index = word#1 + runtime_shift()
 			f.kinds = word#2
 			f.result = word#3
+			f.is_runtime = yes
+			module.runtime[name] = f
 		}
 	}
 }
@@ -244,22 +260,29 @@ def prepended_bytes(functions: list): list {
 	function_types = functions.map(function_type)
 	classes = module.gc_order[#gc_names ..]
 	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
-	# the C functions' import types after every other: no runtime type moves
-	c_imports = module.imports[runtime_image.imports ..]
-	c_types = runtime_image.types + #classes + #functions
-	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), class_types + function_types + c_imports.map(entry => entry#3)))
-	c_entries = range_list(#c_imports).map(k => name_bytes(c_imports[k]#1) + name_bytes(c_imports[k]#2) + [import_function_byte] + uleb(c_types + k))
+	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), class_types + function_types + c_import_types()))
+	c_entries = c_import_entries(runtime_image.types + #classes + #functions)
 	declared = section(section_ids.function, with_entries(runtime_part(section_ids.function), functions.map(f => uleb(own_function_type(f)))))
 	own_globals = module.global_order[#runtime_image.globals ..]
 	globals = section(section_ids.globals, with_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
 	codes = section(section_ids.code, with_entries(runtime_code_entries(), functions.map(f => function_body(f, 0))))
-	segment = runtime_texts() + data_bytes()
-	texts = section(section_ids.data, vector([[passive_segment] + uleb(#segment) + segment]))
+	texts = section(section_ids.data, vector([passive(runtime_texts()), passive(data_bytes())]))
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 	parts = [types, section(section_ids.import, with_entries(runtime_part(section_ids.import), c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
-		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(1)), codes, texts]
-	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
-	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + marks + c_functions_custom_section()
+		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(2)), codes, texts]
+	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks()
+}
+# the program's C functions, imported behind the runtime's host words; their types after every other: no runtime type moves
+def c_imports(): list { module.imports[runtime_image.imports ..] }
+def c_import_types(): list { c_imports().map(entry => entry#3) }
+def c_import_entries(first_type: int): list {
+	imports = c_imports()
+	range_list(#imports).map(k => name_bytes(imports[k]#1) + name_bytes(imports[k]#2) + [import_function_byte] + uleb(first_type + k))
+}
+# what the harness reads of a program: whether it counts fuel, its C functions
+def program_marks(): list {
+	fuel = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
+	fuel + c_functions_custom_section()
 }
 # runtime.wasm's names and the program's behind them
 def prepended_names(functions: list, classes: list, own_globals: list): list {
@@ -272,4 +295,71 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 	content += runtime_names(names_subsections.fields, classes.map(name => uleb(module.gc_indices[name]) + name_map(gc_field_names(name))))
 	content += runtime_names(names_subsections.tags, [])
 	section(section_ids.custom, name_bytes("name") + content)
+}
+
+## a program linked to runtime.wasm (card runtime-separate-modules, notes/runtime_linking.md "Separate modules"): numbered
+## as behind it, but every runtime function, global, the memory, the error tag and the hooks table imported from its
+## instance (`warp_runtime`), so no index moves; the hooks' code the program's own, set into the table at instantiation
+runtime_module_name = "warp_runtime"
+element_section_id = 9
+# the runtime's names by function index, as warp.runtime gives them
+def runtime_function_names(): map {
+	names = {}
+	for name in runtime_image.words.keys { names[runtime_image.words[name]#1] = name }
+	names
+}
+# an import of runtime.wasm's: its export of this name, of this kind and description
+def runtime_import(name: text, kind: int, description: list): list { name_bytes(runtime_module_name) + name_bytes(name) + [kind] + description }
+# the entries after the count of one of runtime.wasm's sections
+def runtime_entries(id: int): list {
+	content = runtime_part(id)
+	content[uleb_read(content, 0)#2 ..]
+}
+# the C functions' imports right after the host words, as when prepended, so the runtime's functions move alike
+def linked_imports(c_first_type: int): list {
+	names = runtime_function_names()
+	types = runtime_part(section_ids.function)
+	at = uleb_read(types, 0)#2
+	functions = []
+	for i in 0..<runtime_image.functions {
+		type = uleb_read(types, at)
+		functions += [runtime_import(names[runtime_image.imports + i], export_function_byte, uleb(type#1))]
+		at = type#2
+	}
+	memory = runtime_import("memory", export_memory_byte, [0] + uleb(memory_pages))
+	table = runtime_import(hooks_table, export_table_byte, runtime_entries(table_section_id))
+	tag = runtime_import(error_tag_name, export_tag_byte, runtime_entries(section_ids.tag))
+	globals = runtime_image.globals.map(entry => runtime_import(entry#1, export_global_byte, value_type(entry#2) + [mutable]))
+	with_entries(runtime_part(section_ids.import), c_import_entries(c_first_type) + functions + [memory, table, tag] + globals)
+}
+# the program's hooks: its own functions behind the others, the i-th at the first free index + i, each set into its
+# slot of the runtime's table at instantiation
+def own_hooks(): list { module.dispatchers.filter(f => f.name in runtime_image.hooks) }
+def hook_elements(hooks: list, first: int): list {
+	vector(range_list(#hooks).map(i => [0, op.i32_const] + sleb(runtime_image.hooks.index_of(hooks[i].name) - 1) + [op.end] + vector([uleb(first + i)])))
+}
+def linked_bytes(functions: list): list {
+	hooks = own_hooks()
+	first_hook = functions.last.index + 1
+	hook_types = hooks.map(f => uleb(runtime_type_of(f)))
+	classes = module.gc_order[#gc_names ..]
+	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
+	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), class_types + functions.map(function_type) + c_import_types()))
+	declared = section(section_ids.function, vector(functions.map(f => uleb(own_function_type(f))) + hook_types))
+	own_globals = module.global_order[#runtime_image.globals ..]
+	globals = section(section_ids.globals, vector(own_globals.map(global_entry)))
+	elements = section(element_section_id, hook_elements(hooks, first_hook))
+	codes = section(section_ids.code, vector(functions.map(f => function_body(f, 0)) + hooks.map(f => function_body(f, 0))))
+	# segment 0 the runtime's, empty here: array.new_data reads only its own module's segments
+	texts = section(section_ids.data, vector([passive([]), passive(data_bytes())]))
+	parts = [types, section(section_ids.import, linked_imports(runtime_image.types + #classes + #functions)), declared, globals, section(section_ids.export, vector(program_exports(functions))), elements, section(section_ids.data_count, uleb(2)), codes, texts]
+	names = vector(functions.map(f => index_name(f.index, f.name)) + range_list(#hooks).map(i => index_name(first_hook + i, hooks[i].name)))
+	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks()
+}
+# the type runtime.wasm declares its function of this index with
+def runtime_type_of(f: Function): int {
+	types = runtime_part(section_ids.function)
+	at = uleb_read(types, 0)#2
+	for i in 0..<(f.index - #module.imports) { at = uleb_read(types, at)#2 }
+	uleb_read(types, at)#1
 }

@@ -21,7 +21,7 @@ setter_word = "it"
 property_modules = ["prelude", "draw"]
 prelude_module = "prelude"
 # `+=` and its kin by their text, and the operator each applies
-compound_bases = {"+=": Op.Add, "-=": Op.Sub, "*=": Op.Mul, "/=": Op.Div, "/!=": Op.FloorDiv, "%=": Op.Mod, "^=": Op.Pow}
+compound_bases = {"+=": Op.Add, "-=": Op.Sub, "*=": Op.Mul, "/=": Op.Div, "/!=": Op.FloorDiv, "%=": Op.Mod, "^=": Op.Pow} // todo Generalize to all operators x ⨷= y  => x = x ⨷ y (card compound-any-operator)
 
 # `o.p := …` and `o.p(v) := …`: the object, its property, the setter's parameter ("" for a getter) and the body
 class Property { object: text; member: text; parameter: text; body: Node }

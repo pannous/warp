@@ -1,0 +1,2 @@
+# decision units-as-values: quantities of the same dimension add their SI amounts.
+'use units; a = quantity(5, "m"); b = quantity(3, "m"); (a + b).amount'	8
