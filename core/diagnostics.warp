@@ -26,14 +26,14 @@ global message_rows = ø
 is_operator(n: any, op: text): bool := n is key and op_of(n) == op
 
 # the fact about the program's node `about`, which names where it is written
-diagnose(fact: any, about: any): any := {
+diagnose(fact: Node, about: Node): Node := {
 	diagnosed += [said_fact(fact) + [written_at(about)]]
 	fact
 }
 
 # [level, message, fix, topic@expression] of the first row the fact matches; a fact no row matches is an error
 # naming it, loudly
-said_fact(fact: any): list := {
+said_fact(fact: Node): list := {
 	for row in rows() {
 		bound = {}
 		if matches(row#2, fact, bound) { return [row#1] + row[2..].map(message => filled(message, bound)) }
@@ -58,7 +58,7 @@ unquoted(pattern: any): any := if is_group(pattern) and #pattern == 2 and patter
 
 # whether n has the pattern's shape, each part a hole takes put in `bound`: a hole takes any node, a key or group
 # matches part by part, any other node only itself
-matches(pattern: any, n: any, bound: any): bool := {
+matches(pattern: Node, n: Node, bound: map): bool := {
 	if pattern is symbol and name_of(pattern).starts_with(hole_mark) {
 		bound[name_of(pattern)[1..]] = n
 		return yes
@@ -75,7 +75,7 @@ matches(pattern: any, n: any, bound: any): bool := {
 }
 
 # the message with each hole `{name}` or `{a name}` filled from the bound parts
-filled(message: text, bound: any): text := {
+filled(message: text, bound: map): text := {
 	pieces = message.split("{")
 	result = pieces#1
 	for piece in pieces[1..] {

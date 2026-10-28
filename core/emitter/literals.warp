@@ -21,8 +21,7 @@ exact_decimal(n: float): any := {
 	divisor = gcd(numerator, denominator)
 	if divisor < 0 { divisor = -divisor }
 	if divisor == denominator { return number_value(numerator / divisor) }
-	box = x => [op.i64_const] + sleb(x) + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])
-	TypedCode(ValueKind.Node, node(Kind.Int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)])))
+	ratio_node([op.i64_const] + sleb(numerator / divisor), [op.i64_const] + sleb(denominator / divisor))
 }
 
 # the offset of a text's bytes in the data segment, each text stored once; counted, not measured: a long list's

@@ -22,7 +22,7 @@ chosen_branch(test: Node, yes_branch: Node, no_branch: Node): Node := Key(Key(Ke
 try_name(role: text, number: int): Node := fresh_name("try·" + role, number)
 
 # `try x else y`; with a catch binding (a name, else ø) the else branch binds it to the error before y
-guarded_try(value: Node, fallback: Node, binding: any, number: int): Node := {
+guarded_try(value: Node, fallback: Node, binding: Node?, number: int): Node := {
 	finished = try_name("finished", number)
 	result = try_name("value", number)
 	ran = try_assigned(finished, applied_to(HiddenWord.RanWithoutError as text, [braced(try_assigned(result, value))]))
@@ -31,11 +31,11 @@ guarded_try(value: Node, fallback: Node, binding: any, number: int): Node := {
 	try_statements([ran, chosen_branch(succeeded, braced(result), otherwise)])
 }
 
-is_division(op: any): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
+is_division(op: Op): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
 
 # To do give one-line summaries to all functions where the meaning is not immediately clear from the context and name 
 # todo number: int  Generalize to other numbers 
-divided(dividend: Node, op: any, divisor: Node, fallback: Node, number: int): Node := {
+divided(dividend: Node, op: Op, divisor: Node, fallback: Node, number: int): Node := {
 	held = try_name("divisor", number)
 	quotient = guarded_try(Key(dividend, op, held), fallback, ø, number)
 	try_statements([try_assigned(held, divisor), chosen_branch(Key(held, Op.Eq, 0), braced(fallback), braced(quotient))])
@@ -56,7 +56,7 @@ indexed(written: Node, index: Node, fallback: Node, number: int): Node := {
 }
 
 # the value under try, its fallback, the catch binding or ø
-lowered_try(value: Node, fallback: Node, binding: any): Node := {
+lowered_try(value: Node, fallback: Node, binding: Node?): Node := {
 	number = fresh_number()
 	match value {
 		Key(target, Op.Assign, assigned_value): { if is_name(target) and binding == ø then try_assigned(target, lowered_try(assigned_value, fallback, binding)) else guarded_try(value, fallback, binding, number) }
