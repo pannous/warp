@@ -3,7 +3,7 @@
 # builds, samples.js (samples/<chapter>/*.warp for the example menu), keywords.js (the editor's hard and soft keywords) and
 # version.js (the commit built, shown in the ⋯ menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
-# Usage: build.sh [optimized|debug|components|pinned|served <site>|site <site>]   (all when omitted)
+# Usage: build.sh [optimized|debug|runtime|components|pinned|served <site>|site <site>]   (all when omitted)
 #   optimized → warp.wasm: profile web-release (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
@@ -12,6 +12,9 @@
 #               components/names.txt: jco
 #               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
 #               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
+#   runtime   → runtime.wasm: the runtime words a separately built program imports (`warp build --separate`, host.js
+#               withRuntime), written by the native compiler's `runtime` command (notes/runtime_linking.md); not in
+#               `all`, since CI has no native compiler yet; `site` takes it when built
 #   pinned    → packages/<name>: every package of packages.warp and the default registry (`warp fetch`; the browser
 #               suite reads them from the repository root, pages.yml, scripts/browser-dry-run.sh)
 #   site <site> → collects the built page into a fresh <site> folder, as deployed (pages.yml, scripts/browser-dry-run.sh)
@@ -54,6 +57,11 @@ build_optimized() {
 	# without wasm-opt (or an older one refusing a feature) the module of the LTO build serves, a seventh larger
 	wasm-opt "${WASM_OPT_FLAGS[@]}" "$compiled" -o "$page/warp.wasm" || cp "$compiled" "$page/warp.wasm"
 	echo "built $page/warp.wasm ($(wc -c < "$page/warp.wasm") bytes)"
+}
+
+build_runtime() {
+	"$(scripts/own-warp.sh | tail -1)" pure runtime "$page/runtime.wasm"
+	echo "built $page/runtime.wasm ($(wc -c < "$page/runtime.wasm") bytes)"
 }
 
 build_debug() {
@@ -124,6 +132,9 @@ collect_site() {
 	(cd "$page" && cp -r ${SITE_FILES[@]} "$site/") # unquoted: host-*.js expands in the page folder
 	# the language primer for agents at the conventional path (llmstxt.org)
 	cp "$page/primer.md" "$site/llms.txt"
+	# runtime.wasm only once built (`build.sh runtime` needs the native compiler): without it a separately built program
+	# fails naming the file
+	if [ -f "$page/runtime.wasm" ]; then cp "$page/runtime.wasm" "$site/"; else echo "note: no runtime.wasm in the site (build.sh runtime)" >&2; fi
 	# every host part the worker imports (host.js HOST_PART_FILES) is shipped, else no deploy
 	for part in $(grep -o '"host-[a-z]*\.js"' "$page/host.js" | tr -d '"'); do
 		[ -f "$site/$part" ] || { echo "::error::$part missing from the site" >&2; exit 1; }
@@ -150,10 +161,11 @@ case "${1:-all}" in
 	pinned) fetch_pinned_packages; exit ;;
 	optimized) build_optimized ;;
 	debug) build_debug ;;
+	runtime) build_runtime ;;
 	# test_in_browser.py builds only these, and the worker imports served-files.js (card browser-served)
 	components) build_components; write_repository_served_files; exit ;;
 	all) build_optimized; build_debug; build_components ;;
-	*) echo "usage: $0 [optimized|debug|components|pinned|served <site>|site <site>]" >&2; exit 2 ;;
+	*) echo "usage: $0 [optimized|debug|runtime|components|pinned|served <site>|site <site>]" >&2; exit 2 ;;
 esac
 
 write_repository_served_files
