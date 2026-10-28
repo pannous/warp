@@ -9,6 +9,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - class-index-test (warp-global-named-capital, test/types/test_class_index_operator.pairs.warp:4, from the Rust suite): `class P{n:int; index(o) := n * 100 + o}; F = P(5); F#4` expects 504 (index read as `#`); under position-index-words it is position(4) = index(3) = 503. Options: upgrade the test to 503 (Recommended, follows the naming) / keep 504 (`#` calls index unshifted; then position-index-words changes). Failed on main before too; ask at 10:00.
 
 ## To present
+- global-word-marker: a module marks a word usable without its `use` as `global play(file: text) := …` (no new keyword; the sense of `global tuning = 440`); core reads the markers, its global_words table goes. Alternatives: a module line `global play, beep`, or `@global`.
 - parameter-typed (core OK, user away): `a or b` / `a | b` as parameter, field or local type holds the members' shared kind, else a node; a known kind fitting no member refused at compile time, a node checked at run time (union-or).
 - host-list-one-shot (harness OK, user away): a host word's list result is built in one shot (shared vector_list), not cell by cell; 44100 sound samples trapped at the 2 GB cap (n² copies).
 - shown-non (core OK, user away): show/print of a statically known Text/Int/Float/Bool/Char uses its own word; node_text's rare-kind branches (Time, Ratio, big int, closure, TypeDef) only when the program makes them, via one kind_case; `"hi"` compiled 119 functions, ~40 unreachable.
