@@ -9,3 +9,4 @@ pub mod pure_tests;
 pub mod compiler_files;
 #[cfg(feature = "native")]
 pub mod standalone;
+pub mod binaryen;

@@ -3,26 +3,6 @@
 use super::*;
 
 pub(crate) const TRIM_FLAG: &str = "--trim";
-const BINARYEN_OPTIMIZER: &str = "wasm-opt";
-const BINARYEN_INSTALL: &str = "brew install binaryen";
-/// What wasmtime runs; Binaryen's `-all` would add custom descriptors, whose exact references wasmtime refuses
-const WASMTIME_FEATURES: [&str; 12] = [
-	"--enable-gc",
-	"--enable-reference-types",
-	"--enable-bulk-memory",
-	"--enable-multivalue",
-	"--enable-sign-ext",
-	"--enable-nontrapping-float-to-int",
-	"--enable-mutable-globals",
-	"--enable-tail-call",
-	"--enable-simd",
-	"--enable-extended-const",
-	"--enable-multimemory",
-	"--enable-exception-handling",
-];
-/// The name section stays, so traps and results still name their functions
-const KEEP_NAMES: &str = "--debuginfo";
-
 /// The ways to trim, by the name `--trim=<way>` gives; a build without the flag, or with a bare `--trim`, optimizes
 /// (user: trimmed by default; the faster way unless the other is much smaller for little time: -O2 is a third smaller
 /// for 30–60 ms more, notes/runtime_linking.md)
@@ -66,7 +46,7 @@ impl Trim {
 	fn binaryen_passes(self) -> &'static [&'static str] {
 		match self {
 			Trim::Unused => &["--remove-unused-module-elements"],
-			Trim::Optimize => &["-O2"],
+			Trim::Optimize => warp::compiler::binaryen::OPTIMIZE,
 			Trim::None | Trim::Warp => &[],
 		}
 	}
@@ -76,24 +56,9 @@ impl Trim {
 		match self {
 			Trim::None | Trim::Warp => bytes,
 			Trim::Unused | Trim::Optimize => {
-				let ran = std::process::Command::new(BINARYEN_OPTIMIZER)
-					.args(WASMTIME_FEATURES)
-					.arg(KEEP_NAMES)
-					.args(self.binaryen_passes())
-					.args([path, "-o", path])
-					.status()
-					.unwrap_or_else(|_| {
-						fail(format!(
-							"warp build: {BINARYEN_OPTIMIZER} trims the module and is not installed ({BINARYEN_INSTALL}); \
-							 {TRIM_FLAG}=none builds it untrimmed"
-						))
-					});
-				if !ran.success() {
-					fail(format!(
-						"warp build: {BINARYEN_OPTIMIZER} failed to trim {path} ({TRIM_FLAG}=none builds it untrimmed)"
-					));
-				}
-				let trimmed = fs::read(path).unwrap_or_else(|failure| fail(format!("{path}: {failure}")));
+				let trimmed = warp::compiler::binaryen::rewritten(std::path::Path::new(path), self.binaryen_passes()).unwrap_or_else(|problem| {
+					fail(format!("warp build: {problem}, so it trims nothing; {TRIM_FLAG}=none builds the module untrimmed"))
+				});
 				println!("trimmed {} to {} bytes", bytes.len(), trimmed.len());
 				trimmed
 			}
