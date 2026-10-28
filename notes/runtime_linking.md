@@ -63,6 +63,25 @@ made_case kind made, since no program decides any more what it makes.
 One hook list in the warp.runtime section. Prepended: the stub bodies are replaced by the program's. Separately linked:
 the stubs call through an exported funcref table the program fills at start. One runtime build serves both.
 
+## Separate modules (card runtime-separate-modules; draft, owner: separate-modules)
+The same runtime.wasm, not copied into the program but instantiated once and imported, as a page or an AOT build
+combines modules natively. Nothing is rewritten: a program's runtime words are imports, and imports come first in
+the function index space anyway, so the program numbers only its own functions, as today.
+- **Program module** (`warp build --separate`, emitter flag `module.links_runtime`): the canonical types first
+  (canonical_type_entries(), so its node, text and list types are the runtime's), then its class structs. Every
+  runtime word it calls is a function import `warp_runtime.<word>` with the word's type (instead of compiling the
+  word); runtime globals it reads are global imports; memory, the error tag and the `hooks` table are imported too.
+  Its texts stay in its own passive segment (array.new_data is per module). Its start code fills `hooks` with
+  ref.func of its hook bodies (table.set by the index the warp.runtime section names).
+- **Library modules** the same way: each imports `warp_runtime`, exports its words; a program imports them as
+  `warp_module.<module>.<word>`, so `use sound` costs an instantiate, not a compile.
+- **Hosts**: wasmtime (src/run): instantiate runtime.wasm once per store (from its .cwasm), then the program with a
+  Linker that resolves `warp_runtime` to that instance; the browser (web/playground worker.js) the same with
+  `WebAssembly.instantiate(program, { warp_runtime: runtime.exports, warp_host })`.
+- **Trimming** the shared runtime against one program's imports is where wasm-metadce fits (roots: the imported
+  names); a runtime shared by several programs stays whole.
+- **Check**: hello and a class with text() (a hook) built separately print the same as built prepended.
+
 ## Steps (sub-cards of runtime-linking)
 | card | step |
 |---|---|
