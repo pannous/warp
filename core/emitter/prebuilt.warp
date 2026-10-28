@@ -49,22 +49,26 @@ def all_hooks() {
 # runtime.wasm read back (prepend_runtime), ø while a program compiles the runtime words it calls itself
 global runtime_image = ø
 class RuntimeImage { wasm: list; types: int; functions: int; data: int; globals: list; words: map; hooks: list }
-def prepend_runtime(wasm: any) { runtime_image = if wasm == ø then ø else runtime_image_of(wasm) }
+def prepend_runtime(wasm: any, layout: any) { runtime_image = if wasm == ø then ø else runtime_image_of(wasm, layout) }
 def prepended(): bool { runtime_image != ø and not module.prebuilding }
-# its layout, warp.runtime: each word's index, parameter kinds and result kind; the globals' names and kinds in order
-def runtime_image_of(wasm: list): any {
+# its layout, the warp.runtime section parsed (kept across runs by compiler.warp: parsing it took most of a compile)
+def runtime_layout(wasm: list): Node {
 	place = section_place(wasm, section_ids.custom, runtime_section)
 	if place == ø { throw "runtime.wasm without its " + runtime_section + " section: warp rebuild writes it anew" }
+	plain_node(parsed(utf8_text(wasm[place#1 ..< place#2])))
+}
+# from the layout: each word's index, parameter kinds and result kind; the globals' names and kinds in order
+def runtime_image_of(wasm: list, written: Node): any {
 	layout = {}
-	for item in items_of(plain_node(parsed(utf8_text(wasm[place#1 ..< place#2])))) { layout[name_of(key_of(item))] = value_of(item) }
+	for item in items_of(written) { layout[name_of(key_of(item))] = value_of(item) }
 	words = {}
-	for entry in items_of(layout["words"]) {
+	for entry in listed_items(layout["words"]) {
 		parts = value_of(entry)
-		words[name_of(key_of(entry))] = [parts#1, items_of(parts#2).map(kind => layout_kind(kind)), layout_kind(parts#3)]
+		words[name_of(key_of(entry))] = [parts#1, listed_items(parts#2).map(kind => layout_kind(kind)), layout_kind(parts#3)]
 	}
-	globals = items_of(layout["global_kinds"]).map(entry => [name_of(entry#1), layout_kind(entry#2)])
+	globals = listed_items(layout["global_kinds"]).map(entry => [name_of(entry#1), layout_kind(entry#2)])
 	types = uleb_read(wasm, section_place(wasm, section_ids.type)#1)#1
-	RuntimeImage(wasm, types, layout["functions"], layout["data"], globals, words, items_of(layout["hooks"]).map(name_of))
+	RuntimeImage(wasm, types, layout["functions"], layout["data"], globals, words, listed_items(layout["hooks"]).map(name_of))
 }
 # the kinds a function or global of runtime.wasm holds, each read back by the name warp.runtime writes it under
 held_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Bool, ValueKind.Char, ValueKind.I32, ValueKind.Text, ValueKind.List, ValueKind.Node, ValueKind.Time, ValueKind.Nothing]
@@ -102,7 +106,7 @@ def behind_runtime() {
 def runtime_imports(host: map): list {
 	held = module.host
 	module.host = host
-	imports = [fd_write_import] + host.keys.map(host_import)
+	imports = imported_words(host.keys, yes)
 	module.host = held
 	if #imports != uleb_read(runtime_image.wasm, section_place(runtime_image.wasm, section_ids.import)#1)#1 { throw "runtime.wasm imports other host words than this harness has: warp rebuild writes it anew" }
 	imports
