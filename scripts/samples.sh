@@ -8,6 +8,9 @@ set -uo pipefail
 WARP=${WARP:-/Users/me/dev/bin/warp}
 SECONDS_EACH=30
 PARALLEL=4
+# a sample calling a C window library opens its window whatever WARP_NO_WINDOW says: not run, counted apart (until
+# FFI windows honour WARP_NO_WINDOW, warp-native-harness)
+WINDOW_LIBRARIES='raylib|SDL|glfw'
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 results=$tree/data/samples
@@ -16,6 +19,7 @@ mkdir -p "$results/out"
 # one <sample>: its line of the results
 one() {
 	local out=$results/out/$(echo "$1" | tr / _)
+	grep -qE "$WINDOW_LIBRARIES" "$tree/$1" && { echo "WIN  $1"; return; }
 	(cd "$tree" && WARP_NO_WINDOW=1 timeout "$SECONDS_EACH" "$WARP" "$1" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first
 	[ $status -eq 0 ] && { echo "ok   $1"; return; }
@@ -24,10 +28,10 @@ one() {
 	echo "FAIL $1: ${first:-exit $status, nothing on stderr}"
 }
 export -f one
-export tree results WARP SECONDS_EACH
+export tree results WARP SECONDS_EACH WINDOW_LIBRARIES
 
 day=$results/$(date +%F).txt
 (cd "$tree" && find samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | sort -k2 >"$day"
-echo "samples: $(grep -c '^ok' "$day") of $(wc -l <"$day" | tr -d ' ') run ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $day"
+echo "samples: $(grep -c '^ok' "$day") of $(wc -l <"$day" | tr -d ' ') run, $(grep -c '^WIN' "$day") need a window ($WARP, $(git -C "$tree" rev-parse --short=10 HEAD)) -> $day"
 # the failures by first error, its position and quotes left out so one cause groups
 grep -a '^FAIL' "$day" | sed 's/^FAIL [^:]*: //; s/"[^"]*"/"…"/g; s/ at samples\/[^ ]*//; s/ (no owner)//' | sort | uniq -c | sort -rn
