@@ -67,7 +67,7 @@ add(xs: list, x): same as xs from emitter
 insert(xs: list, x, at: int): same as xs from emitter
 remove(xs: list, x) from emitter
 remove(m: map, key) from emitter
-pop(xs: list): element of xs from emitter
+pop(xs: list): any := list_pop(xs)
 clear(xs: list): same as xs from emitter
 number(x): number from emitter
 // the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
