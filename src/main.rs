@@ -75,8 +75,6 @@ const RUNTIME_COMMAND: &str = "runtime";
 /// `warp module <name> [runtime.wasm] [<name>.wasm]`, `warp modules <folder>`: a standard module, every one, compiled
 /// behind runtime.wasm (card modules-prebuilt)
 const MODULE_COMMANDS: [&str; 2] = ["module", "modules"];
-/// `warp rebuild modules`: every standard module prebuilt beside warp.wasm
-const MODULES_REBUILT: &str = "modules";
 /// `warp pure …`: plain `warp …`, the one compiler (core/compiler.warp as warp.wasm) since the Rust compiler went; kept
 /// as a hidden alias that says so (user, card drop-pure-word)
 const PURE_COMMAND: &str = "pure";
@@ -490,14 +488,7 @@ fn command_line(program: &str, arguments: &[&str]) -> Option<String> {
 /// when it passes the fixpoint test (`self`), each with its machine code beside it (<file>.cwasm); status 1 when that
 /// failed. `warp rebuild seed`: the seed's machine code only
 fn rebuild_compilers(command: Option<&str>) {
-	use warp::compiler::standalone::{rebuild, rebuild_modules, ship_seed, Compiler};
-	if command == Some(MODULES_REBUILT) {
-		match rebuild_modules() {
-			Ok(path) => println!("prebuilt {}", path.display()),
-			Err(failure) => fail(format!("warp rebuild modules: {}", failure.serialize())),
-		}
-		return;
-	}
+	use warp::compiler::standalone::{rebuild, ship_seed, Compiler};
 	if command == Some("seed") {
 		match ship_seed() {
 			Ok(path) => println!("precompiled {}", path.display()),
@@ -509,7 +500,7 @@ fn rebuild_compilers(command: Option<&str>) {
 	let chosen: Vec<Compiler> = Compiler::ALL.into_iter().filter(|by| word == by.command()).collect();
 	if chosen.is_empty() {
 		fail(format!(
-			"warp rebuild: no compiler {:?}; say `warp rebuild`, `warp rebuild pure`, `warp rebuild self`, `warp rebuild seed` or `warp rebuild modules`",
+			"warp rebuild: no compiler {:?}; say `warp rebuild`, `warp rebuild pure`, `warp rebuild self` or `warp rebuild seed`",
 			command.unwrap_or_default()
 		));
 	}

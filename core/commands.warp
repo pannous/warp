@@ -137,7 +137,8 @@ UNBUILT_OPTIONS = ["--site", "--page", "--wit", "--component", "--wagi"]
 TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2"}
 DEFAULT_TRIM = "optimize"
 # what wasmtime runs; Binaryen's -all would add custom descriptors, whose exact references wasmtime refuses. The name
-# section stays (--debuginfo), so traps and results still name their functions
+# section stays (--debuginfo), so traps and results still name their functions. Twin: src/compiler/binaryen.rs, which
+# `warp rebuild` optimizes the compiler with
 WASM_OPT = "wasm-opt --enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext --enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const --enable-multimemory --enable-exception-handling --debuginfo"
 BINARYEN_INSTALL = "brew install binaryen"
 
