@@ -156,7 +156,7 @@ words_within(n: Node): list := {
 function_types = [symbol("function"), symbol("block")]
 lowering_words(program: Node): list := {
 	nodes = nodes_in(program)
-	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(is_structural_match) then [matcher_word] else [])
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(n => is_structural_match(n) or is_pattern_definition(n)) then [matcher_word] else [])
 }
 
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
