@@ -251,15 +251,6 @@ pub fn function_pointer(library: &Library, function: &str) -> Result<usize> {
 	}
 }
 
-/// Load `function`'s library and link it: what an executable does for each C function it carries
-pub fn link_carried_function<T: CallsC>(linker: &mut Linker<T>, engine: &Engine, function: &CFunction) -> Result<()> {
-	let library = get_or_load_library(&function.library).ok_or_else(|| {
-		wasmtime::Error::msg(format!("{}: cannot load the C library {}", function.name, function.library))
-	})?;
-	let pointer = function_pointer(&library, &function.name)?;
-	link_c_function(linker, engine, function.clone(), pointer)
-}
-
 /// The wasm type of a parameter as the warp call passes it: none for an out-pointer
 fn wasm_param(param: ParamType) -> Option<ValType> {
 	match param {
