@@ -13,6 +13,10 @@ yes_word = "yes"
 option_words = [check_word, yes_word, "hash-comments"]
 help_words = ["help", "--help", "-h"]
 usage = "warp beautify [check|yes] <file|folder|code>…  The layout plus the best-practice rewrites (// comments become #, other languages' words the warp words), shown as a diff and applied after \"apply? y/n\" (yes: without asking; warp fix: the same)"
+format_usage = "warp format [check|yes] [hash-comments] <file|folder|code>…  The canonical layout of warp code, only where the meaning stays, shown as a diff and applied after \"apply? y/n\" (check: list what would change, exit 1; hash-comments: // comments become #; warp lint: the same)"
+# the commands that lay out only, never rewriting a word; their // comments stay unless hash-comments
+layout_commands = ["format", "lint"]
+hash_comment_rule = "# comment"
 warp_extensions = [".warp", ".wasp"]
 # code.golf solutions count their bytes: a folder of them keeps its layout, also when named
 skipped_folders = ["golf"]
@@ -108,8 +112,8 @@ listed_change(shown: text, change: text): text := {
 }
 
 # code given instead of files: printed fixed; in check, its changes listed, 1 when there are some
-fixed_code(code: text, checking: bool): int := {
-	result = fixed(code)
+fixed_code(code: text, checking: bool, rules: list, rewriting: bool): int := {
+	result = fixed(code, rules, rewriting)
 	if not checking { print result[0] }
 	if checking { for change in result[1] { print listed_change(code_label, change) } }
 	if checking and #result[1] > 0 then 1 else 0
@@ -117,8 +121,9 @@ fixed_code(code: text, checking: bool): int := {
 
 # the exit code: 1 when a file cannot be fixed or, with check, would change
 fix_command(command: text, arguments: list): int := {
+	rewriting = command not in layout_commands
 	if arguments.any(argument => argument in help_words) {
-		print "  " + usage
+		print "  " + (if rewriting then usage else format_usage)
 		return 0
 	}
 	words = 0
@@ -127,8 +132,9 @@ fix_command(command: text, arguments: list): int := {
 	paths = arguments[words ..]
 	checking = check_word in options
 	without_asking = yes_word in options
+	rules = if rewriting or "hash-comments" in options then layout_rules else layout_rules.filter(rule => rule != hash_comment_rule)
 	if #paths > 0 and paths.all(path => not exists(path) and not looks_like_path(path)) {
-		return fixed_code(paths.join(" "), checking)
+		return fixed_code(paths.join(" "), checking, rules, rewriting)
 	}
 	files = []
 	for path in paths {
@@ -136,7 +142,7 @@ fix_command(command: text, arguments: list): int := {
 		if reason != "" and exists(path) { print path + ": skipped: " + reason } else { files += warp_files(path) }
 	}
 	if #files == 0 {
-		print "warp " + command + ": name the warp files or folders to format, or give code\n  " + usage
+		print "warp " + command + ": name the warp files or folders to format, or give code\n  " + (if rewriting then usage else format_usage)
 		return 2
 	}
 	changed = 0
@@ -148,14 +154,14 @@ fix_command(command: text, arguments: list): int := {
 			print file + ": not formatted: it cannot be read"
 			failed += 1
 		} else {
-			result = fixed(code)
+			result = fixed(code, rules, rewriting)
 			lines = #result[1]
 			if result[0] != code {
 				if checking {
 					changed += 1
 					for change in result[1] { print listed_change(file, change) }
 				} else if not without_asking and not confirmed(file, code, result[0]) {
-					print file + ": not applied: `warp beautify yes " + file + "` applies it"
+					print file + ": not applied: `warp " + command + " yes " + file + "` applies it"
 					not_applied += 1
 				} else {
 					write(file, result[0])
