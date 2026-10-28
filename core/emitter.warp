@@ -660,6 +660,7 @@ def optional_declaration(body: Body, name: text, type_name: text, value: TypedCo
 		if value.kind != ValueKind.Node and value.kind != pending and type_name in module.classes { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name + "?") }
 		return assignment(body, symbol(name), value)
 	}
+	if is_union(type_name) { return union_declaration(body, name, type_name, value) }
 	if type_name not in declared_kinds { return refuse("a variable declared " + type_name + "?") }
 	value = texted(type_name, value)
 	kind = value.kind

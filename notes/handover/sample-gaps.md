@@ -29,6 +29,11 @@
    - main's sound regression since ~06:25: `use sound; si_amount(5ms)` → "floor of a ? at 5:26"; not the harness, nor
      any cache tried (notes in the Supervisor thread); cause unknown
    - p71-says (assigning a `:=` name is an error; test_charged_values:6 expects it), visualizer-pure-refused
+6. 2026-10-28 morning: pure-compiled 30486e5e19 (harness: `warp pure` links C imports from warp.c_functions like
+   warp-host, one linker in warp_runtime::c_imports; test/ffi 110→87 failing, the rest compile-side), letters-letters
+   c9382ea3f5 (c++ steps a character's code point), foo-of-any 10ade6cb89 (`square of number = it*it`; `of` binds
+   tighter than `=` in a phrase), file-global-words 258e6cda68. Cards found: retire-header-linker, sandbox-hello-trap,
+   macos-build-failure (warp-host on macOS).
 Parked: `on` handlers (user discussing), stored (handler shape), foreign spellings (user audit).
 
 Sweep script: the session scratchpad sweep.sh (each sample with warp pure, 30 s, one at a time); logs in
