@@ -228,7 +228,8 @@ signature_offset(image: text): u32 := {
 # warp's lib/, whose warp.wasm compiles a .warp file, in one search order: $WARP_LIB, else the first folder holding a
 # lib/ (its prelude.warp) of this executable's folder (~/dev/bin, a tarball), the folder its links lead to, and
 # <prefix>/share/warp beside that folder's bin/ (brew, deb, pip: bin/warp links to it); none is an error naming them
-library_folder(): text := {
+library_folder(): text := resolved_path(library_found())
+library_found(): text := {
 	given = getenv("WARP_LIB")
 	if given.length > 0 { return given }
 	own = folder_of(executable_path())
@@ -427,11 +428,12 @@ real_path(path: text): text := {
 	}
 	resolved_path(path)
 }
-# a path the module reaches: as given when it lies below the current folder (its messages name it so), else absolute
-# (`../a.warp`: the module's WASI resolves relative paths in the preopened current folder, never above it)
+# a path the module reaches: as given when it is the current folder's real path and that (its messages name it so),
+# else absolute and resolved. The module's WASI resolves relative paths in the preopened current folder, never above
+# it (`../a.warp`), and follows no link to an absolute path (data/ linked to another volume: WASI error 63)
 reachable_path(path: text): text := {
 	absolute = real_path(path)
-	if starts_with(absolute, joined(real_path("."), "/")) then path else absolute
+	if same_text(absolute, joined(joined(real_path("."), "/"), path)) then path else absolute
 }
 # warp.wasm of lib/, the compiler and its commands
 compiler_path(): text := joined(library_folder(), "/warp.wasm")
