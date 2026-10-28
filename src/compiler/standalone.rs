@@ -24,9 +24,9 @@ const RUNTIME_FILE: &str = "runtime.wasm";
 /// modules-prebuilt)
 const MODULES_COMMAND: &str = "modules";
 const MODULES_FOLDER: &str = "modules";
-/// Programs compiled behind runtime.wasm, the opt-in compiler.warp reads (card runtime-prepended): only then does a
-/// rebuild write the modules a link appends, minutes of compiles; one failing is said, the rest of the rebuild stands
-const PREPENDED_SETTING: &str = "WARP_PREPENDED";
+/// `WARP_MODULES=1`: a rebuild writes the standard modules too (~25 s), until a link appends them; one failing is
+/// said, the rest of the rebuild stands
+const MODULES_SETTING: &str = "WARP_MODULES";
 
 const COMPILER_FILE: &str = "compiler/compiler.warp";
 /// The custom section of a build file naming what it was built from: lib/, lib/'s fingerprint, the warp build
@@ -436,7 +436,7 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	ship(path, &bytes)?;
 	write_runtime(by, &path.with_file_name(RUNTIME_FILE))?;
-	if std::env::var(PREPENDED_SETTING).is_ok_and(|setting| setting == "1") {
+	if std::env::var(MODULES_SETTING).is_ok_and(|setting| setting == "1") {
 		if let Err(failure) = write_modules(by, &path.with_file_name(MODULES_FOLDER), &path.with_file_name(RUNTIME_FILE)) {
 			eprintln!("warp rebuild: the modules not prebuilt: {}", failure.serialize());
 		}

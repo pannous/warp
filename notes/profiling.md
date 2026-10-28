@@ -20,6 +20,6 @@ runtime.wasm), analyzer 0.03 s, parse 0.05 s. Inside checked_program:
 - lowered_node ~240 ms, of it the five sugar-rule passes ~145 ms (first_sugar 38, sugar 44, late 23, iteration 21,
   comprehension 17; card sugar-rule-passes)
 - with_expected_type_uses ~130 ms: the prelude and every bundled module sliced into definitions each compile (card takes-ms)
-- a miss of the kept runtime words lowers core/runtime*.warp again: 4.5-7 s (card runtime-lowering-scope)
-Prepending (WARP_PREPENDED=1) saves the per-program runtime compile, ~0.12 s of snake's emitter, and costs reading
-runtime.wasm (~40 ms) and ~0.05 s more machine code: hello 0.22 s vs 0.17 s, snake 1.04 s vs 1.14 s.
+Every compile is prepended behind runtime.wasm (runtime-lowering-scope, 2026-10-28): it lowers and compiles no
+runtime word, so the kept-runtime-words miss (4.5-7 s) is gone with the cache; it costs reading runtime.wasm (~40 ms)
+and ~0.05 s more machine code: hello 0.22 s vs 0.17 s before, snake 1.04 s vs 1.14 s.
