@@ -2535,9 +2535,10 @@ def conditioned(word: text, condition: Node, p: Parser): Node := {
 		p.group.in_branch = outer
 	} else {
 		// `while m > 1` ending its line: the lines indented below (Rust twin: blocks.rs indented_lines_below); without
-		// them `while x-- > 0` is a loop without a body, its condition does the work
+		// them `while x-- > 0` is a loop without a body, its condition does the work; `while c do …` takes its body
+		// from the `do` that follows, as `if c then …` from its `then`
 		body = if only_blanks_before_newline(p) then indented_block(p) else ø
-		if body == ø { return if word == "while" then Key(keyed(word, ø, condition), Op.Do, ø) else keyed(word, ø, condition) }
+		if body == ø { return if word == "while" and not keyword_at(p, "do") then Key(keyed(word, ø, condition), Op.Do, ø) else keyed(word, ø, condition) }
 	}
 	head = keyed(word, ø, condition)
 	if word == "while" { return Key(head, Op.Do, body) }

@@ -1099,6 +1099,11 @@ def key_expression(body: Body, n: Node): TypedCode {
 		return refuse("the operator " + operator + " with nothing " + (if left === ø then "before" else "after") + " it")
 	}
 	if operator == Op.Hash and left is symbol { return analyzed_element(body, left, right) }
+	# `a:1`, a pair: a word key stays the word, as `{a:1}`'s do (hashed+symbolic), any other its value (`1:4`)
+	if operator == Op.Colon {
+		key = if left is symbol then name_node(left) else boxed(expression_code(body, left))
+		return TypedCode(ValueKind.Node, keyed_code(key, boxed(expression_code(body, right))))
+	}
 	# `k == Shade.Green`: compared with the case itself (runtime case_equal), not through node_equal's every kind
 	if operator in equalities and (is_case(body, left) or is_case(body, right)) {
 		case = if is_case(body, right) then right else left
