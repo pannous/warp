@@ -24,9 +24,9 @@ def tree(source: text): list := view_of(parsed(source))
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
-def parsed(source: text): Node := {
+def parsed(source: text, uses: text = ""): Node := {
 	try {
-		written_tree(source)
+		written_tree(source, uses)
 	} catch failure {
 		error_node(failure.message)
 	}
@@ -149,12 +149,13 @@ def entity_read(source: text or list, at: int, n: int): list {
 	if name == "" then [ENTITY_MARK, 2] else [entities()[name], 2 + name.length]
 }
 
-// The tree as the source writes it
-def written_tree(written: text): Node := {
+// The tree as the source writes it; `uses`, the use lines of the module a slice of it comes from, whose operators
+// the slice reads as the module does (compute_toys' `use regex`: `code matches rule#1`)
+def written_tree(written: text, uses: text = ""): Node := {
 	source = expanded_entities(written)
 	found = gaps(source, source.length)
 	word_types = multi_word_types(source)
-	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases(), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), word_types: word_types, line_starts: line_starts_of(source)}
+	p = Parser{code: source, n: source.length, group: GroupContext(), resumes: found.resumes, breaks: found.breaks, types: declared_type_names(source) + word_types.map(type_words => type_words.join("-")), bangs: bang_words(source), operators: scanned_operators(source + uses), aliases: operator_aliases(source) + math_operator_aliases(), circumfixes: circumfix_aliases(source) + math_circumfix_aliases(), word_types: word_types, line_starts: line_starts_of(source)}
 	items_until(p, Bracket.None, ItemsEnd.Source)
 }
 
@@ -1724,11 +1725,7 @@ def folder_of(path: text): text {
 // a name written out only), and of those whose global words it names (`play "mozart.mp3"`, words.warp global_words)
 // Rust twin: declaration_scan.rs used_std_modules
 def used_module_sources(source: text): list {
-	modules = []
-	for statement in code_statements(source) {
-		words = blank_words(statement)
-		if words.length == 2 and USE_KEYWORDS.contains(words#1) and not modules.contains(words#2) { modules += [words#2] }
-	}
+	modules = used_modules(source)
 	code = code_only(source)
 	words = global_words()
 	for word in words.keys {
@@ -1741,6 +1738,17 @@ def used_module_sources(source: text): list {
 	}
 	sources
 }
+// the modules the source's use lines name, each once: `use regex`, `import sound`
+def used_modules(source: text): list {
+	modules = []
+	for statement in code_statements(source) {
+		words = blank_words(statement)
+		if words.length == 2 and USE_KEYWORDS.contains(words#1) and not modules.contains(words#2) { modules += [words#2] }
+	}
+	modules
+}
+// the use lines of a source, as a slice of it reads them (written_tree's `uses`)
+def use_lines(source: text): text := used_modules(source).map(module => "\nuse " + module).join("")
 // whether the code names the word, not as a part of a longer name: `play` in `play(A4)`, not in `display`
 def mentions_word(code: text, word: text): bool {
 	parts = code.split(word)

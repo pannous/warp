@@ -1,0 +1,6 @@
+# a bundled module's definition reaches past an unindented line while a text or bracket of it is open, and reads the
+# operators of the modules it uses (compute_toys: a text over lines, a list over lines, `use regex`'s matches)
+
+'use compute_toys; compute_toy("fn main_image(id: vec3u) {}") contains "struct Time"'	yes
+'use compute_toys; compute_toy("fn main_image(id: vec3u) { let a = channel0; }")'	error
+'dict([["a", 2]])["a"]'	2
