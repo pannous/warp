@@ -90,6 +90,7 @@ def program_exports(functions: list): list {
 	exports
 }
 def module_bytes(functions: list): list {
+	if runtime_linked() { return linked_bytes(functions) }
 	if prepended() { return prepended_bytes(functions) }
 	# what names a value type first (functions' signatures and locals, globals), so the GC types the module declares
 	# are all known: those its code used, then these (gc_type)
