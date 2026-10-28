@@ -24,7 +24,8 @@ MVP wasm.
    - a function: `@primitive add(a: i32, b: i32): i32 := a + b`. GC code calls it with conversion at the boundary,
      like an FFI call; a primitive function calling GC code is refused;
    - a file, as its first line: every definition in it is primitive, and the file builds to MVP wasm;
-   - a class: `@primitive class Header { len: u32; tag: u8 }` is a fixed linear-memory layout, like a C struct.
+   - a class: `@primitive class Header { len: u32; tag: u8 }` is a fixed linear-memory layout, like a C struct; `struct Header { len: u32; tag: u8 }` says
+     the same.
 
    The types are the FFI types, usable everywhere (D16: i32, u8, …), with `pointer` added. Text is a (pointer,
    length) in memory, the existing `$String` layout of the host edge. Lists are fixed arrays in memory. A bump arena
