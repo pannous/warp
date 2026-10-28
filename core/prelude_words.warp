@@ -100,8 +100,11 @@ with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 	aliases = with_call_forms(module_aliases(module), definition_slices(module).map(slice => slice#1) + own.keys)
 	program = aliased(program, aliases, own)
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
-	# numbers' ↑), any other definition replaces the module's
-	slices = definition_slices(module).filter(slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
+	# numbers' ↑), a program's assignment to a module's global sets it (`tuning = 442` retunes sound's notes), any other
+	# definition replaces the module's
+	assigned = statements_in(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(declared_name)
+	kept = slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
+	slices = definition_slices(module).filter(kept)
 	# the statements of each reached slice, by its text
 	reached = {}
 	wanted = symbol_words(program) + lowering_words(program) + also
