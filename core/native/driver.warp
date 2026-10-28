@@ -43,6 +43,8 @@ SPACE = 32
 TEXT_SHIFT = 4294967296
 # the host words the driver answers, the number its callback is defined with
 STD_IO_WORD = 1
+# the host word exit(code), which ends the run with that status
+EXIT_WORD = 2
 
 wasm_config_new(): handle from "warp_wasmtime"
 wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "warp_wasmtime"
@@ -228,7 +230,8 @@ signature_offset(image: text): u32 := {
 # warp's lib/, whose warp.wasm compiles a .warp file, in one search order: $WARP_LIB, else the first folder holding a
 # lib/ (its prelude.warp) of this executable's folder (~/dev/bin, a tarball), the folder its links lead to, and
 # <prefix>/share/warp beside that folder's bin/ (brew, deb, pip: bin/warp links to it); none is an error naming them
-library_folder(): text := {
+library_folder(): text := resolved_path(library_found())
+library_found(): text := {
 	given = getenv("WARP_LIB")
 	if given.length > 0 { return given }
 	own = folder_of(executable_path())
@@ -325,7 +328,7 @@ warp_config(): handle := {
 }
 
 # the host words the module imports that the driver answers, each defined as its callback (lib/native/foreign.c
-# warp_host_callback, which calls host_word) with the type the module declares: std_io, and each C function its
+# warp_host_callback, which calls host_word) with the type the module declares: std_io, exit, and each C function its
 # warp.c_functions section describes
 host_words_defined(linker: handle, compiled: handle, module: text, trap: pointer): nothing := {
 	table = custom_section(module, "warp.c_functions")
@@ -336,6 +339,7 @@ host_words_defined(linker: handle, compiled: handle, module: text, trap: pointer
 		from = native_vector_text(wasm_importtype_module(import))
 		name = native_vector_text(wasm_importtype_name(import))
 		if same_text(from, "host") and same_text(name, "std_io") { word_defined(linker, import, STD_IO_WORD, trap) }
+		if same_text(from, "host") and same_text(name, "exit") { word_defined(linker, import, EXIT_WORD, trap) }
 		line = c_line(table, from, name)
 		if line.length > 0 { word_defined(linker, import, foreign_of(line), trap) }
 	}
@@ -405,8 +409,8 @@ instance_shown(context: handle, instance: pointer, value: pointer): text := {
 
 # `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile (src/compiler/standalone.rs
 # run_compiler: the file, the module, its folder, lib/, runtime.wasm), then the module runs with the arguments
-compiled_and_run(compiler: text, at: int): nothing := {
-	file = reachable_path(arg(at))
+compiled_and_run(compiler: text, given: text, first: int): nothing := {
+	file = reachable_path(given)
 	library = library_folder()
 	output = compiled_path()
 	compiling = compiler_arguments(compiler)
@@ -416,7 +420,7 @@ compiled_and_run(compiler: text, at: int): nothing := {
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
 	file_ran(compiler, compiling)
-	written_run(output, arg(at), at + 1)
+	written_run(output, given, first)
 }
 # the path absolute, its links resolved (lib/compiler links to core): a compile's folder is the real one, and a file
 # above the current folder (`../a.warp`) is one the module reaches through the preopened root
@@ -427,11 +431,20 @@ real_path(path: text): text := {
 	}
 	resolved_path(path)
 }
-# a path the module reaches: as given when it lies below the current folder (its messages name it so), else absolute
-# (`../a.warp`: the module's WASI resolves relative paths in the preopened current folder, never above it)
+# a path the module reaches: as given when it is the current folder's real path and that (its messages name it so),
+# else absolute and resolved. The module's WASI resolves relative paths in the preopened current folder, never above
+# it (`../a.warp`), and follows no link to an absolute path (data/ linked to another volume: WASI error 63)
 reachable_path(path: text): text := {
 	absolute = real_path(path)
-	if starts_with(absolute, joined(real_path("."), "/")) then path else absolute
+	if same_text(absolute, joined(joined(real_path("."), "/"), path)) then path else absolute
+}
+# a word of a command as the module reaches it: an existing path (reachable_path), a new file in an existing folder
+# by that folder's, any other word (code, a name) as it is
+reachable_word(word: text): text := {
+	if access(c_string(word), READABLE) == 0 { return reachable_path(word) }
+	folder = folder_of(word)
+	if same_text(folder, ".") or access(c_string(folder), READABLE) != 0 { return word }
+	joined(joined(reachable_path(folder), "/"), text_from(word.address + folder.length + 1, word.length - folder.length - 1))
 }
 # warp.wasm of lib/, the compiler and its commands
 compiler_path(): text := joined(library_folder(), "/warp.wasm")
@@ -526,6 +539,7 @@ kept_machine_code(compiled: handle, machine_code: text, key: text, fingerprint: 
 # a host word the module calls (STD_IO_WORD), its arguments and results wasmtime_val_t's, through the caller
 # (foreign.c warp_host_callback). std_io(module, member, arguments) is the Error that says the driver lacks it
 host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
+	if word == EXIT_WORD { exit(long_at(given + VALUE_OFFSET).value as i32) }
 	context = wasmtime_caller_context(caller)
 	if word != STD_IO_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)
@@ -902,5 +916,5 @@ if appended.length > 0 { run(appended, given_from(0), "") } else {
 		complain("usage: driver <app.warp | app.wasm> [arguments…]")
 		exit(2)
 	}
-	if ends_with(arg(1), ".warp") { compiled_and_run(compiler_path(), 1) } else { module_ran(1) }
+	if ends_with(arg(1), ".warp") { compiled_and_run(compiler_path(), arg(1), 2) } else { module_ran(1) }
 }
