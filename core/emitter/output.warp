@@ -57,8 +57,9 @@ is_spaced_value(n: Node): bool := {
 }
 # `5 -2`: a glued sign, a value of its own
 is_negative_literal(n: Node): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == Op.Neg and key_of(n) == ø)
-# `print x`: x's text and a newline to stdout; ø, as Rust's print gives
-def printed(value: TypedCode): TypedCode { TypedCode(ValueKind.Node, dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc_type(gc.node)]) }
+# `print x`: x's text and a newline to stdout, a statement: a body ending in it gives ø, as Rust's print does, and
+# a program ending in it prints nothing more (_start)
+def printed(value: TypedCode): TypedCode { TypedCode(no_kind, dropped(runtime_call("print_line", [shown_text(value)]))) }
 # the export `show`: the text the host prints main's result as, as print shows it (3.5km by a class's text(), π/2).
 # It takes main's result as main gives it, a boxed node unless an int or float; one main knows to be a text, list,
 # character or bool is shown by that kind's word, so `"hi"` carries no node_text and the texts of every kind

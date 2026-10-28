@@ -190,7 +190,8 @@ TRAILER_ALIGNMENT = 16
 GZIP_HEADER = 10
 GZIP_TRAILER = 8
 
-write_executable(module: text, stub: text, executable: text) := {
+write_executable(module: text, stub: any, executable: text) := {
+	if stub == ø or not exists(stub) { raise "warp build: no runtime stub warp-runtime beside warp (or at WARP_RUNTIME_STUB), so no executable (`cargo build --release -p warp-runtime --bin warp-runtime`, or name one in WARP_RUNTIME_STUB); --wasm builds only the modules" }
 	machine_code = std_io("os", "precompile", [read_bytes(module)])
 	carried = executable + ".carried"
 	write_bytes(carried, machine_code)

@@ -4,8 +4,9 @@
 # runs a wasm module through wasmtime's C API, called as any C library. `warp build native lib/native/driver.warp`
 # makes the executable; `driver app.wasm args…` runs the module with the arguments, and a driver with a module
 # appended (<module><its length, u64 little-endian><MODULE_MAGIC>) runs that one with all its arguments. The module's
-# WASI calls are wasmtime's, its folder the current one; what its main gives is printed, a failure's message on stderr
-# with status 1, the module's own exit status kept.
+# WASI calls are wasmtime's (the environment inherited, the current folder and the root opened), a host word the driver lacks a trap naming it. Its _start runs
+# (a GC program prints its own value), else its main, whose value is printed; a failure's message goes to stderr with
+# status 1, the module's own exit status kept.
 
 # "WRPMwasm" as a little-endian u64, the last bytes of a driver with a module appended
 MODULE_MAGIC = 7886754537481982551
@@ -24,14 +25,20 @@ VECTOR_BYTES = 16
 MAX_RESULTS = 8
 FLOAT_DIGITS = 17
 
-wasm_engine_new(): handle from "wasmtime"
+wasm_config_new(): handle from "wasmtime"
+wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "wasmtime"
+wasmtime_config_wasm_function_references_set(config: handle, enabled: bool) from "wasmtime"
+wasmtime_config_wasm_exceptions_set(config: handle, enabled: bool) from "wasmtime"
+wasm_engine_new_with_config(config: handle): handle from "wasmtime"
 wasmtime_store_new(engine: handle, data: handle, finalizer: handle): handle from "wasmtime"
 wasmtime_store_context(store: handle): handle from "wasmtime"
 wasmtime_linker_new(engine: handle): handle from "wasmtime"
 wasmtime_linker_define_wasi(linker: handle): handle from "wasmtime"
+wasmtime_linker_define_unknown_imports_as_traps(linker: handle, module: handle): handle from "wasmtime"
 wasi_config_new(): handle from "wasmtime"
 wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "wasmtime"
 wasi_config_inherit_stdin(config: handle) from "wasmtime"
+wasi_config_inherit_env(config: handle) from "wasmtime"
 wasi_config_inherit_stdout(config: handle) from "wasmtime"
 wasi_config_inherit_stderr(config: handle) from "wasmtime"
 wasi_config_preopen_dir(config: handle, host_path: text, guest_path: text, mutable: bool): bool from "wasmtime"
@@ -130,8 +137,17 @@ struct Single { value: f32 }
 float_at(address: pointer): Double := address
 single_at(address: pointer): Single := address
 
+# what warp's modules use beside the MVP: GC, typed function references, exceptions (crates/warp-runtime engine.rs)
+warp_config(): handle := {
+	config = wasm_config_new()
+	wasmtime_config_wasm_gc_set(config, yes)
+	wasmtime_config_wasm_function_references_set(config, yes)
+	wasmtime_config_wasm_exceptions_set(config, yes)
+	config
+}
+
 run(module: text, first_argument: int): nothing := {
-	engine = wasm_engine_new()
+	engine = wasm_engine_new_with_config(warp_config())
 	context = wasmtime_store_context(wasmtime_store_new(engine, 0, 0))
 	linker = wasmtime_linker_new(engine)
 	trap = allocate(8)
@@ -141,18 +157,24 @@ run(module: text, first_argument: int): nothing := {
 	wasi_config_inherit_stdin(config)
 	wasi_config_inherit_stdout(config)
 	wasi_config_inherit_stderr(config)
+	wasi_config_inherit_env(config)
+	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
 	wasi_config_preopen_dir(config, ".", ".", yes)
+	wasi_config_preopen_dir(config, "/", "/", yes)
 	checked(wasmtime_context_set_wasi(context, config), trap)
 	compiled = allocate(8)
 	checked(wasmtime_module_new(engine, module.address, module.length, compiled), trap)
+	# a host word the driver lacks is linked as a trap that names it
+	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, long_at(compiled).value), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, long_at(compiled).value, instance, trap), trap)
-	main = allocate(EXTERN_BYTES)
-	if not wasmtime_instance_export_get(context, instance, "main", 4, main) {
-		complain("the module exports no main")
+	entry = allocate(EXTERN_BYTES)
+	# a GC program's _start runs main and prints its value itself (the stub's ENTRY_POINTS), a primitive one has main
+	if not wasmtime_instance_export_get(context, instance, "_start", 6, entry) and not wasmtime_instance_export_get(context, instance, "main", 4, entry) {
+		complain("the module exports neither _start nor main")
 		exit(1)
 	}
-	function = main + 8
+	function = entry + 8
 	results_count = native_long(wasm_functype_results(wasmtime_func_type(context, function)))
 	results = allocate(VALUE_BYTES * MAX_RESULTS)
 	checked(wasmtime_func_call(context, function, 0, 0, results, results_count, trap), trap)
