@@ -8,6 +8,8 @@ class Warp < Formula
   version "1.4.1"
   license all_of: ["AGPL-3.0-or-later", "MIT"]
 
+  depends_on "binaryen" # wasm-opt, which `warp build` trims a program's module with
+
   RELEASE = "https://github.com/pannous/warp/releases/download/v#{version}/warp-v#{version}".freeze
 
   on_macos do

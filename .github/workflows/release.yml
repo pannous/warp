@@ -31,7 +31,8 @@ env:
   CARGO_NET_OFFLINE: false
   TAG: ${{ inputs.tag || github.ref_name }}
   DRY: ${{ inputs.dry && '1' || '' }}
-  WABT: 1.0.42  # wasm2c, which `warp build native` runs
+  WABT: 1.0.42     # wasm2c, which `warp build native` runs
+  BINARYEN: 133    # wasm-opt, which `warp build` runs
   WARP_NO_WINDOW: 1
   WARP_HINTS: 0
 
@@ -88,11 +89,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - { os: macos-latest, target: aarch64-apple-darwin, wabt: macos-arm64, library: libwarp_wasmtime.dylib }
-        - { os: macos-15-intel, target: x86_64-apple-darwin, wabt: brew, library: libwarp_wasmtime.dylib }
+        - { os: macos-latest, target: aarch64-apple-darwin, wabt: macos-arm64, binaryen: arm64-macos, library: libwarp_wasmtime.dylib }
+        - { os: macos-15-intel, target: x86_64-apple-darwin, wabt: brew, binaryen: x86_64-macos, library: libwarp_wasmtime.dylib }
         # pinned: the runner's glibc is the oldest the binaries run on
-        - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, wabt: linux-x64, library: libwarp_wasmtime.so }
-        - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, wabt: linux-arm64, library: libwarp_wasmtime.so }
+        - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, wabt: linux-x64, binaryen: x86_64-linux, library: libwarp_wasmtime.so }
+        - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, wabt: linux-arm64, binaryen: aarch64-linux, library: libwarp_wasmtime.so }
     runs-on: ${{ matrix.os }}
     env:
       GH_TOKEN: ${{ github.token }}
@@ -106,9 +107,13 @@ jobs:
       with:
         name: compilers
         path: lib
-    - name: wabt
-      # `warp build native` runs the wasm2c on the PATH, with the runtime and headers of its prefix
+    - name: wabt and binaryen
+      # `warp build native` runs the wasm2c on the PATH, with the runtime and headers of its prefix; `warp build` the
+      # wasm-opt that trims a program's module
       run: |
+        gh release download "version_$BINARYEN" --repo WebAssembly/binaryen --pattern "binaryen-version_$BINARYEN-${{ matrix.binaryen }}.tar.gz"
+        tar -xzf "binaryen-version_$BINARYEN-${{ matrix.binaryen }}.tar.gz" -C "$RUNNER_TEMP"
+        echo "$RUNNER_TEMP/binaryen-version_$BINARYEN/bin" >>"$GITHUB_PATH"
         if [ "${{ matrix.wabt }}" = brew ]; then brew install wabt; exit; fi
         gh release download "$WABT" --repo WebAssembly/wabt --pattern "wabt-$WABT-${{ matrix.wabt }}.tar.gz"
         tar -xzf "wabt-$WABT-${{ matrix.wabt }}.tar.gz" -C "$RUNNER_TEMP"

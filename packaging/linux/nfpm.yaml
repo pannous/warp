@@ -16,6 +16,8 @@ description: |-
 vendor: pannous
 homepage: https://warp.pannous.com/
 license: AGPL-3.0-or-later AND MIT # the compiler AGPL, the runtime MIT (CONTRIBUTING.md)
+recommends:
+  - binaryen # wasm-opt, which `warp build` trims a program's module with (or `warp build --trim=none`)
 contents:
   - src: ./
     dst: /usr/lib/warp
