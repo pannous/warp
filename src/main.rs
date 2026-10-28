@@ -6,9 +6,8 @@ use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use warp::node;
 use warp::run::module_cache::COMPILED_EXTENSION;
-use warp::util::{dirs_home, extract_after, file_exists, load_file};
+use warp::util::{dirs_home, file_exists, load_file};
 use warp::{errors::diagnostic, extensions, run, run::wasm_reader, util};
-use warp_runtime::host_words::HOST_LIBRARY;
 
 mod cli;
 use cli::*;
@@ -17,37 +16,15 @@ use cli::*;
 const PROGRAM_ARGUMENTS_SEPARATOR: &str = "--";
 /// `warp compile --aot` also writes the machine code (wasmtime's .cwasm), which `warp <file>.cwasm` runs
 const AOT_FLAG: &str = "--aot";
-/// P103 (user): "Just giving it a file will compile it": `warp hello.warp` runs the program and leaves the standalone
-/// executable `hello` next to it (`hello.exe` on Windows), the warp-runtime stub with the program's machine code appended.
-/// `warp build <file>` / `warp compile <file>` (not in the help any more) only make it, and the module <file>.wasm
-/// (card build-should); `--exe` only the executable, `--wasm` (and `--aot`) only the module
-const EXE_FLAG: &str = "--exe";
+/// `warp build --wasm`: only the modules, no executable (as `warp compile`)
 const WASM_FLAG: &str = "--wasm";
 /// `warp help list`: a standard module's words; `warp help --markdown`: all of them as wiki/standard-library.md
 const HELP_PREFIX: &str = "help ";
 const HELP_MARKDOWN: &str = "help --markdown";
-/// `warp build --site app.warp`: the directory app-site/ a web server serves (src/web/site.rs, card web-ssr)
-const SITE_FLAG: &str = "--site";
-/// `warp compile --page app.warp`: app.wasm for a page of its own, its path imports named page:modules/<file> and those
-/// modules written to modules/ beside it, as a site ships them (web/uniscript/build.sh, card imports-wasm)
-const PAGE_FLAG: &str = "--page";
-/// `warp build --wit app.warp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
-const WIT_FLAG: &str = "--wit";
-/// `warp build --component app.warp`: app.component.wasm, the component of that world (src/modules/component_builder.rs)
-const COMPONENT_FLAG: &str = "--component";
-/// `warp build --wagi app.warp`: app.wagi.wasm, its routes answering one WAGI request (lib/wagi.warp), and app.spin.toml
-/// to run it: `spin up -f app.spin.toml` (Spin's wagi executor; Akamai Functions: `spin aka deploy`)
-const WAGI_FLAG: &str = "--wagi";
-/// The build flags only the harness handles still (card harness-diet's second step)
-const HARNESS_BUILD_FLAGS: [&str; 6] = [AOT_FLAG, SITE_FLAG, PAGE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
-/// The name of an executable built from inline code (plus the platform's extension)
-const DEFAULT_EXECUTABLE_NAME: &str = "out";
 /// `warp run <file>`: the program runs, no executable is left (P105)
 const RUN_PREFIX: &str = "run ";
 const TEST_WORD: &str = "test";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
-/// `warp build native <file>`: a primitive file as a native executable (notes/primitive.md "Native build")
-const NATIVE_WORD: &str = "native";
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/modules/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
 /// `warp fetch [package…]`: the packages fetched into packages/ as `use` fetches them; every package of packages.warp
@@ -365,45 +342,8 @@ fn run_command(args: &[String], given: &[String]) {
 		// `warp data file.warp` prints the file as data
 		let text = source_of(target);
 		println!("{}", warp::compiler::standalone::parsed(&text).serialize());
-	} else if let Some(words) = build_in_warp(args) {
-		// `warp build [--wasm] [--trim=<way>] <file>`: compiler.warp's build command (core/commands.warp) picks native for a
-		// primitive file, else writes the modules, trims them and joins the executable, told where the stub lies
-		print_and_exit(warp::compiler::standalone::build_command(words, warp::compiler::standalone::Compiler::RustCompiled));
-	} else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
-		let target = extract_after(&arg_string, " ");
-		let trim = Trim::of(&target);
-		let (flags, target) = leading_flags(target);
-		let ahead_of_time = flags.contains(&AOT_FLAG);
-		let standalone = flags.contains(&EXE_FLAG) || !(flags.contains(&WASM_FLAG) || ahead_of_time);
-		let code = source_of(&target);
-		if flags.contains(&SITE_FLAG) {
-			return write_site(&code, &target);
-		}
-		if flags.contains(&PAGE_FLAG) {
-			return write_page_module(&code, &target);
-		}
-		if flags.contains(&WIT_FLAG) {
-			return write_wit(&code, &target);
-		}
-		if flags.contains(&COMPONENT_FLAG) {
-			return write_component(&code, &target);
-		}
-		if flags.contains(&WAGI_FLAG) {
-			return write_wagi(&code, &target);
-		}
-		// `warp build` writes both (card build-should), `--exe` too, `--wasm` and `--aot` only the module
-		write_module(&code, &target, trim, ahead_of_time);
-		if standalone {
-			let written = if builds_an_app(&code) {
-				write_web_view_app(&code, &target)
-			} else {
-				write_standalone_executable(&code, &target)
-			};
-			match written {
-				Ok(report) => println!("{report}"),
-				Err(failure) => fail(format!("warp build: {failure}")),
-			}
-		}
+	} else if args.len() > 2 && COMPILE_COMMANDS.contains(&args[1].as_str()) {
+		build_in_warp(&args[1..], warp::compiler::standalone::Compiler::RustCompiled);
 	} else if let Some([by, file, index]) = test_case(args) {
 		std::process::exit(if warp::compiler::pure_tests::run_child_case(by, file, index) { 0 } else { 1 });
 	} else if let Some(folders) = test_folders(args) {
@@ -453,9 +393,6 @@ fn run_command(args: &[String], given: &[String]) {
 		diagnostic::show_lines_of(&source_of(path), Some(path));
 		warp::run::program_cache::enable(); // its next run starts without compiling (card cache-compiled-shader)
 		let result = eval(path); // a file: its folder is in scope (D15)
-		if !only_run && wants_executable() && !matches!(result, Node::Error(_)) {
-			leave_executable(path);
-		}
 		print_and_exit(result);
 	} else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
 		// Compile WAT/WAST text format to WASM binary, then execute
@@ -621,31 +558,11 @@ fn unknown_command(args: &[String]) -> Option<String> {
 /// naming the native warp), never compiled as code (`warp self build x` compiled `build x`)
 #[cfg(not(test))]
 fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -> ! {
-	use warp::compiler::standalone::{compiled, compiled_code, run, run_code};
+	use warp::compiler::standalone::{run, run_code};
 	let command = words[0].as_str();
 	let rest = if words.len() > 1 { &words[1..] } else { words };
 	if COMPILE_COMMANDS.contains(&command) && words.len() > 1 {
-		let trim = Trim::of(&rest.join(" "));
-		let (flags, target) = leading_flags(rest.join(" "));
-		let module = if has_warp_extension(&target) && file_exists(&target) {
-			diagnostic::show_lines_of(&source_of(&target), Some(&target));
-			compiled(std::path::Path::new(&target), by)
-		} else {
-			diagnostic::show_lines_of(&target, None);
-			compiled_code(&target, &env::current_dir().unwrap_or_default(), by)
-		};
-		let module = module.unwrap_or_else(|failure| print_and_exit(failure));
-		write_compiled(module.bytes, &target, trim, flags.contains(&AOT_FLAG));
-		if let Some(other) = flags.iter().find(|flag| ![AOT_FLAG, WASM_FLAG].contains(*flag)) {
-			let pure = by.command();
-			eprintln!("note: warp {pure} build {other}: compiler.warp builds only the module yet; warp build {other} makes it");
-		} else if !flags.contains(&WASM_FLAG) && !flags.contains(&AOT_FLAG) {
-			eprintln!(
-				"note: warp {} build writes the module; warp build makes the standalone executable",
-				by.command()
-			);
-		}
-		std::process::exit(0);
+		build_in_warp(words, by);
 	}
 	let runs = PURE_RUNNING_WORDS.contains(&command) && words.len() > 1;
 	// `warp self <command> …`: the command of compiler.warp itself, written in warp (card wasm-commands); the REPL's
@@ -692,17 +609,23 @@ fn print_help_rows(rows: &[(&str, &str)], column: usize) {
 	}
 }
 
-/// `warp build …` of a file that compiler.warp builds: no flag the harness still handles and no page app; its words
-/// with the stub's path (none for `--wasm`)
-fn build_in_warp(args: &[String]) -> Option<Vec<String>> {
-	let (command, words) = args.get(1..)?.split_first()?;
-	let file = words.iter().find(|word| !word.starts_with("--"))?;
-	let in_warp = command == "build"
-		&& !words.iter().any(|word| HARNESS_BUILD_FLAGS.contains(&word.as_str()))
-		&& (file == NATIVE_WORD || file_exists(file) && !builds_an_app(&source_of(file)));
-	in_warp.then(|| {
-		let stub = words.iter().all(|word| word != WASM_FLAG).then(|| runtime_stub_path(&PROGRAM_STUB).ok()).flatten();
-		let stub_option = stub.map(|path| format!("--stub={}", path.display()));
-		args[1..].iter().cloned().chain(stub_option).collect()
-	})
+/// `warp build|compile|link [--wasm] [--aot] [--trim=<way>] <file|code>`: compiler.warp's build command builds it
+/// (core/commands.warp), natively for a primitive file, told where the executable's stub lies. `compile`, `link` and
+/// `--aot` build only the modules; `--aot` then x.wasm's machine code for this warp's engine, which `warp x.cwasm` runs
+fn build_in_warp(words: &[String], by: warp::compiler::standalone::Compiler) -> ! {
+	let ahead_of_time = words.iter().any(|word| word == AOT_FLAG);
+	let only_modules = words[0] != "build" || ahead_of_time || words.iter().any(|word| word == WASM_FLAG);
+	let stub = (!only_modules).then(|| runtime_stub_path(&PROGRAM_STUB).ok()).flatten();
+	let forwarded = ["build".to_string()]
+		.into_iter()
+		.chain(words[1..].iter().filter(|word| *word != AOT_FLAG).cloned())
+		.chain(only_modules.then(|| WASM_FLAG.to_string()))
+		.chain(stub.map(|path| format!("--stub={}", path.display())))
+		.collect();
+	let built = warp::compiler::standalone::build_command(forwarded, by);
+	if ahead_of_time && !matches!(built.drop_meta(), Node::Error(_)) {
+		let module = compiled_output_path(words.last().map_or("", String::as_str));
+		write_machine_code(&fs::read(&module).unwrap_or_else(|failure| fail(format!("{module}: {failure}"))), &module);
+	}
+	print_and_exit(built)
 }
