@@ -149,7 +149,8 @@ def absolute_value(body: Body, value: TypedCode): TypedCode {
 	TypedCode(value.kind, value.code + [op.local_set] + local + below_zero + [op.if] + value_type(value.kind) + negation(body, saved).code + [op.else] + saved.code + [op.end])
 }
 
-# a % b as in mathematics: never below 0, r + |b| for a negative truncated remainder r
+# a % b as in mathematics: never below 0, r + |b| for a negative truncated remainder r; b = 0 fails in divide_by_zero,
+# which names the error (the engine's own trap knows no source position)
 def euclidean_remainder(body: Body, a: TypedCode, b: TypedCode): TypedCode {
 	divisor = uleb(fresh_local(body, ValueKind.Int))
 	rest = uleb(fresh_local(body, ValueKind.Int))
@@ -157,6 +158,7 @@ def euclidean_remainder(body: Body, a: TypedCode, b: TypedCode): TypedCode {
 	get_rest = [op.local_get] + rest
 	zero = [op.i64_const, 0]
 	absolute = zero + get_divisor + [op.i64_sub] + get_divisor + get_divisor + zero + [op.i64_lt_s, op.select]
-	code = a.code + b.code + [op.local_tee] + divisor + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [op.i64_lt_s]
+	nonzero = [op.local_tee] + divisor + [op.i64_eqz, op.if, no_value] + runtime_call("divide_by_zero", []).code + [op.drop, op.end] + get_divisor
+	code = a.code + b.code + nonzero + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [op.i64_lt_s]
 	TypedCode(ValueKind.Int, code + [op.if, type_bytes.int] + get_rest + absolute + [op.i64_add, op.else] + get_rest + [op.end])
 }

@@ -1,0 +1,105 @@
+## the sentence a runtime error reads as, the one every host prints (the native driver, Rust's harness, the browser):
+## the words of the runtime word it failed in (trap_name, set by emitter error_throw), the value it names (trap_detail)
+## and where it happened (trap_position), as Rust's abi/traps.rs trap_error and located_at word it
+use "intrinsics.warp"
+use "../analysis/kinds.warp"
+use "library_words.warp"
+use "conversions.warp"
+use "instructions.warp"
+use "lists.warp"
+use "text.warp"
+use "text_words.warp"
+use "text_numbers.warp"
+use "nodes.warp"
+use "show.warp"
+use "types.warp"
+whole_number_fix() := "fix: compute it with /! (floor division) or `… as int`"
+error_in_data_fix() := "handle it with try … else, or declare `or error`"
+# how a runtime error is fixed, after its words; "" for one without a fix
+error_fix(name: text): text := {
+	if name == "index_must_be_an_integer" or name == "count_must_be_an_integer" or name == "an_int_must_be_a_whole_number" { return whole_number_fix() }
+	if name == "a_list_item_holds_no_error" or name == "a_field_holds_no_error" { return error_in_data_fix() }
+	if name == "not_a_map" { return "keys, values and entries are a map's; a list's positions are 1..count(xs)" }
+	if name == "ø_plus_a_text" { return "fix: start a text with `t = \"\"`, a list with `t = []`" }
+	if name == "invalid_code_point" { return "a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF" }
+	if name == "list_cannot_hold_this_item" { return "its declared element type does not admit it (P215)" }
+	""
+}
+# `index_out_of_range` reads "index out of range"
+spaced_words(name: text): text := {
+	words = ""
+	start = 0
+	for i in 0..<byte_count(name) {
+		if byte_at(name, i) == Ascii.Underscore {
+			words += bytes_between(name, start, i) + " "
+			start = i + 1
+		}
+	}
+	words + bytes_between(name, start, byte_count(name))
+}
+# the words of the runtime word `name`, its fix after them; a missing field or switch case names its own
+error_words(name: text): text := {
+	if text_starts_with(name, "no_field_") { return "no field " + bytes_between(name, 9, byte_count(name)) }
+	if text_starts_with(name, "no_case_") { return "no case for " + bytes_between(name, 8, byte_count(name)) }
+	if text_starts_with(name, "overflow_of_") { return overflow_words(bytes_between(name, 12, byte_count(name))) }
+	# the int arithmetic past 64 bits (runtime/arithmetic.warp checked_add …)
+	if text_starts_with(name, "checked_") { return overflow_words("int64") }
+	fix = error_fix(name)
+	if fix == "" then spaced_words(name) else spaced_words(name) + "; " + fix
+}
+overflow_words(type: text): text := {
+	if type == "int64" { return "int64 overflow: the value does not fit int64 (-9223372036854775808…9223372036854775807); fix: declare it int, which is unbounded" }
+	type + " overflow"
+}
+# a value a runtime error names as its message reads: an error's own message, a text as it is, else as print shows it
+detail_text(detail: Node): text := if node_is_error(detail) then unboxed_text(detail) else node_text(detail)
+# what the runtime error of the word `name` says, the value it names taken in (what a try's `catch e` holds is the
+# words alone, but a raise's and a missing field's)
+error_sentence(name: text): text := {
+	global trap_detail
+	if is_null(trap_detail) { return error_words(name) }
+	if name == "returned_error" { return detail_text(trap_detail) }
+	if name == "missing_field" { return "no field " + detail_text(trap_detail) }
+	if name == "index_out_of_range" and node_length(trap_detail) == 2 {
+		count = unboxed_int(node_at(trap_detail, 2))
+		range = if count == 0 then "an empty list" else "1…" + int_text(count)
+		return error_words(name) + ": " + int_text(unboxed_int(node_at(trap_detail, 1))) + " not in " + range
+	}
+	if name == "a_list_item_holds_no_error" or name == "a_field_holds_no_error" { return detail_text(trap_detail) + ": " + error_words(name) }
+	if text_starts_with(name, "no_case_") { return error_words(name) + " = " + node_text(trap_detail) }
+	error_words(name)
+}
+# the sentence of the runtime error the run failed in, at `position` (line * 4096 + column, 0 before the first
+# statement) in `file`, before its fix; "" when no runtime word failed (the engine's own trap: its message tells)
+trap_sentence(file: text, position: int): text := {
+	global trap_name
+	if not textual_node(trap_name) { return "" }
+	sentence = error_sentence(unboxed_text(trap_name))
+	if position == 0 or names_place(sentence) { return sentence }
+	place = int_text(int_quotient(position, 4096)) + ":" + int_text(int_remainder(position, 4096))
+	at = " at " + (if file == "" then place else file + ":" + place)
+	fix = text_find(sentence, "; fix: ")
+	if fix == 0 then sentence + at else text_slice(sentence, 1, fix - 1) + at + text_slice(sentence, fix, text_count(sentence))
+}
+# whether a sentence says its place already, ` at 1:6` or ` at file.warp:2:1` (a raised compile error's)
+names_place(sentence: text): bool := {
+	for at in 0..<byte_count(sentence) {
+		if bytes_match_at(sentence, " at ", at) and is_place(place_word(sentence, at + 4)) { return yes }
+	}
+	no
+}
+# the word of the sentence at byte `start`, up to a space, a semicolon or its end
+place_word(sentence: text, start: int): text := {
+	stop = start
+	while stop < byte_count(sentence) and byte_at(sentence, stop) != Ascii.Space and byte_at(sentence, stop) != Ascii.Semicolon { stop += 1 }
+	bytes_between(sentence, start, stop)
+}
+# `1:6`, `f.warp:2:1`: a word ending in a colon and digits, a digit before the colon
+is_place(word: text): bool := {
+	end = byte_count(word)
+	digits = end
+	while digits > 0 and digit_of(byte_at(word, digits - 1)) >= 0 { digits -= 1 }
+	digits < end and digits >= 2 and byte_at(word, digits - 1) == Ascii.Colon and digit_of(byte_at(word, digits - 2)) >= 0
+}
+# that sentence where shown_at puts a text for a host to read
+trap_sentence_at(file: text, position: int): int := shown_at(held(trap_sentence(file, position)))
