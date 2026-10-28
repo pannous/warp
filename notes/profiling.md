@@ -12,3 +12,14 @@ module's name section.
 - Runs counting fuel (`use fuel`, WARP_FUEL) don't tick and give no samples.
 - Feature `profiling` of warp-runtime: warp has it (native), the standalone stubs don't (a build without it says so
   on stderr when WARP_PROFILE is set).
+
+## Where a compile goes (snake, warm caches, 2026-10-28, clock probes in passes.warp; card runtime-prepended)
+`warp pure build samples/advanced/snake.warp` ~1.1 s: checked_program ~0.8 s, emitter 0.23 s (0.11 s prepended behind
+runtime.wasm), analyzer 0.03 s, parse 0.05 s. Inside checked_program:
+- with_used_modules ~235 ms: the used library modules compiled from source (card modules-prebuilt)
+- lowered_node ~240 ms, of it the five sugar-rule passes ~145 ms (first_sugar 38, sugar 44, late 23, iteration 21,
+  comprehension 17; card sugar-rule-passes)
+- with_expected_type_uses ~130 ms: the prelude and every bundled module sliced into definitions each compile (card takes-ms)
+- a miss of the kept runtime words lowers core/runtime*.warp again: 4.5-7 s (card runtime-lowering-scope)
+Prepending (WARP_PREPENDED=1) saves the per-program runtime compile, ~0.12 s of snake's emitter, and costs reading
+runtime.wasm (~40 ms) and ~0.05 s more machine code: hello 0.22 s vs 0.17 s, snake 1.04 s vs 1.14 s.

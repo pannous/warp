@@ -18,16 +18,23 @@ globals), so wasm2c refuses it ("unexpected type form 0x5e"). Even pure-integer 
 MVP wasm.
 
 ## Milestones
-1. **Primitive mode** (core extension core/extensions/primitive.warp, OK needed). A program marked as primitive
-   (spelling: Interviewer) is emitted as MVP wasm: i32/i64/f64 locals, bool as i32, linear memory, no GC types, no
-   runtime words, no try_table/throw (errors are return values). Text is a (pointer, length) in memory, the existing
-   `$String` layout of the host edge. Lists are fixed arrays in memory. A bump arena allocator is written in primitive
-   warp. Any form that needs the runtime is refused loudly (`outside primitive: …`). Done when `fib 30` → wasm2c → cc
-   runs natively and prints the right value.
+1. **`@primitive`** (core extension core/extensions/primitive.warp, user OK; decision primitive-annotation). Marked
+   code is emitted as MVP wasm: i32/i64/f64 locals, bool as i32, linear memory, no GC types, no runtime words, no
+   try_table/throw (errors are return values). The mark goes on
+   - a function: `@primitive add(a: i32, b: i32): i32 := a + b`. GC code calls it with conversion at the boundary,
+     like an FFI call; a primitive function calling GC code is refused;
+   - a file, as its first line: every definition in it is primitive, and the file builds to MVP wasm;
+   - a class: `@primitive class Header { len: u32; tag: u8 }` is a fixed linear-memory layout, like a C struct; `struct Header { len: u32; tag: u8 }` says
+     the same.
+
+   The types are the FFI types, usable everywhere (D16: i32, u8, …), with `pointer` added. Text is a (pointer,
+   length) in memory, the existing `$String` layout of the host edge. Lists are fixed arrays in memory. A bump arena
+   allocator is written in primitive warp. A form the mode cannot emit is refused loudly at its line. Done when an
+   `@primitive` file with `fib 30` goes through wasm2c and cc, runs natively and prints the right value.
 2. **Native build**: `warp build native <file>` (words, no flags) runs primitive wasm → wasm2c → `cc -O2` with
    wasm-rt. Imports from `'c'` bind straight to libc symbols through generated glue, and WASI fd_write/args/exit come
    from a ~50-line C shim or a direct libc import. Done when hello, arguments and file read/write all work.
-3. **Driver**: revive driver.warp as a primitive program. It loads warp.wasm and user modules through wasmtime's C API
+3. **Driver**: revive driver.warp as an `@primitive` file. It loads warp.wasm and user modules through wasmtime's C API
    (libwasmtime + wasm.h, called by FFI like any C library) and links the host words that warp.wasm imports, as C
    callbacks. Done when `warp-native hello.warp` prints Hello.
 4. **Results without gc_traits**: compiled programs print their own value (card rust-bootstrap, "a standalone
@@ -41,7 +48,5 @@ MVP wasm.
 ## Open
 - The user decision of 2026-10-23 ("a fully native no-Rust/no-wasmtime host is not a goal") is revisited: wasmtime
   stays (through its C API), and Rust goes. Recorded as decision native-harness.
-- The primitive marker's spelling, and whether primitive types (i32, u8, pointer) can be used outside primitive mode.
-  Both go to the Interviewer.
 - Alternatives to wasm2c: w2c2 (MVP, faster C), or wasmtime's own AOT for the driver (the driver's .cwasm inside the
   warp-runtime stub; route (c) of the 2026-10-23 evaluation, days of work, but Rust stays).
