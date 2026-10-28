@@ -3,3 +3,4 @@
 
 'use compute_toys; compute_toy("fn main_image(id: vec3u) {}") contains "struct Time"'	yes
 'use compute_toys; compute_toy("fn main_image(id: vec3u) { let a = channel0; }")'	error
+'dict([["a", 2]])["a"]'	2
