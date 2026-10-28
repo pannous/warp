@@ -24,7 +24,8 @@ count { prefix-operator: "#", symbol: Op.Hash, aliases: [size, len, length] }
 position { operator: "#", symbol: Op.Hash }
 
 # comparison and logic
-equal { operator: "==", symbol: Op.Eq }
+equal { operator: "==", symbol: Op.Eq, aliases: [equals, Equals] }
+compare { aliases: [compareTo, compare_to] }
 "<=" { symbol: Op.Le, aliases: ["≤"] }
 ">=" { symbol: Op.Ge, aliases: ["≥"] }
 "!=" { symbol: Op.Ne, aliases: ["≠"] }
@@ -33,6 +34,9 @@ equal { operator: "==", symbol: Op.Eq }
 "or" { symbol: Op.Or, aliases: ["||", "|"] }
 "not" { symbol: Op.Not, aliases: ["!", "¬"] }
 contains { aliases: [has, includes] }
+
+# how a value shows, another language's method names for it (a class's text() method, core/passes/class_methods.warp)
+text { aliases: [toString, to_s, __str__] }
 
 # ranges and arrows
 "to" { symbol: Op.To, aliases: ["...", "..=", "…"] }
