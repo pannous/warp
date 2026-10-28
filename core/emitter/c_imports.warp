@@ -224,8 +224,15 @@ c_functions_of(source: text, library_folder: text): list := {
 	}
 	# libm's functions warp has no pure code for (all but c_emitted_words: sin, cos, exp…), called without an import as
 	# Rust's lane calls them, by the program or a standard module it uses (`use sound`'s log2)
-	calling = ([source] + used_module_sources(source)).join("\n")
+	reached = reached_modules(source)
+	calling = ([source] + module_sources(reached)).join("\n")
 	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not c_warps(own, d#1, "m") and calling.contains(d#1 + "(") { functions[d#1] = d } }
+	# the foreign lines of the standard modules it uses, each it calls (lib/sound.warp's kill, unlink, mkdir); the
+	# catalog's own files (c.warp, math.warp) only as its rules above take them
+	for line in module_sources(reached.filter(name => name + ".warp" not in c_catalog_files)).join("\n").split("\n") {
+		d = c_declaration(line)
+		if d != ø and not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
+	}
 	[c_without(kept, resolved).join("\n"), functions, missing]
 }
 # the lines without the statements of `statements`, the other statements of a line kept (a line left empty stays)
