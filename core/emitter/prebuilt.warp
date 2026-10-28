@@ -24,8 +24,7 @@ def prebuilt_runtime(): any {
 		}
 	}
 	if #module.left_out.keys > left { return ø }
-	for arity in 0..(hook_arities + 1) { dispatcher(arity) }
-	for name in late_words.keys { late_word(name) }
+	all_hooks()
 	for f in module.rereads {
 		module.saw_pending = no
 		body_code(f)
@@ -38,4 +37,168 @@ def prebuilt_runtime(): any {
 def hook_stub(f: Function, slot: int) {
 	f.code = concatenated(range_list(#f.kinds).map(i => [op.local_get] + uleb(i))) + [op.i32_const] + sleb(slot)
 	f.code += [call_indirect] + uleb(#module.gc_order + f.index) + [0]
+}
+# the closure calls of each arity up to hook_arities and the late words: runtime.wasm's hooks
+def all_hooks() {
+	for arity in 0..(hook_arities + 1) { dispatcher(arity) }
+	for name in late_words.keys { late_word(name) }
+}
+
+## a program behind runtime.wasm (card runtime-prepended, notes/runtime_linking.md): the runtime's imports, types,
+## functions, globals and texts first, as runtime.wasm has them; the program's numbered behind them
+# runtime.wasm read back (prepend_runtime), ø while a program compiles the runtime words it calls itself
+global runtime_image = ø
+class RuntimeImage { wasm: list; types: int; functions: int; data: int; globals: list; words: map; hooks: list }
+def prepend_runtime(wasm: any) { runtime_image = if wasm == ø then ø else runtime_image_of(wasm) }
+def prepended(): bool { runtime_image != ø and not module.prebuilding }
+# its layout, warp.runtime: each word's index, parameter kinds and result kind; the globals' names and kinds in order
+def runtime_image_of(wasm: list): any {
+	place = section_place(wasm, section_ids.custom, runtime_section)
+	if place == ø { throw "runtime.wasm without its " + runtime_section + " section: warp rebuild writes it anew" }
+	layout = {}
+	for item in items_of(plain_node(parsed(utf8_text(wasm[place#1 ..< place#2])))) { layout[name_of(key_of(item))] = value_of(item) }
+	words = {}
+	for entry in items_of(layout["words"]) {
+		parts = value_of(entry)
+		words[name_of(key_of(entry))] = [parts#1, items_of(parts#2).map(kind => layout_kind(kind)), layout_kind(parts#3)]
+	}
+	globals = items_of(layout["global_kinds"]).map(entry => [name_of(entry#1), layout_kind(entry#2)])
+	types = uleb_read(wasm, section_place(wasm, section_ids.type)#1)#1
+	RuntimeImage(wasm, types, layout["functions"], layout["data"], globals, words, items_of(layout["hooks"]).map(name_of))
+}
+# the kinds a function or global of runtime.wasm holds, each read back by the name warp.runtime writes it under
+held_kinds = [ValueKind.Int, ValueKind.Float, ValueKind.Bool, ValueKind.Char, ValueKind.I32, ValueKind.Text, ValueKind.List, ValueKind.Node, ValueKind.Time, ValueKind.Nothing]
+kind_name(kind: ValueKind): text := "" + kind
+def layout_kind(name: text): ValueKind {
+	for kind in held_kinds { if kind_name(kind) == name { return kind } }
+	throw "runtime.wasm names the kind " + name + ", which no value is held as: warp rebuild writes it anew"
+}
+# UTF-8 bytes as their text, a code point at a time
+def utf8_text(bytes: list): text {
+	characters = []
+	i = 0
+	while i < #bytes {
+		lead = bytes[i]
+		count = if lead < 128 then 1 else if lead < 224 then 2 else if lead < 240 then 3 else 4
+		code = if count == 1 then lead else bit_and(lead, 255 >> (count + 1))
+		for j in 1..<count { code = code * 64 + bit_and(bytes[i + j], 63) }
+		characters += [chr(code)]
+		i += count
+	}
+	characters.join("")
+}
+# the module behind the runtime: its globals, texts and functions numbered from the runtime's, a class struct's type
+# from the runtime's type count; every Made kind made and errors caught, as the runtime does
+def behind_runtime() {
+	module.catches_errors = yes
+	module.globals = {}
+	module.global_order = []
+	for entry in runtime_image.globals { declared_global(entry#1, entry#2) }
+	module.placed = runtime_image.functions
+	module.text_size = runtime_image.data
+	module.runtime_types = runtime_image.types - #gc_names
+}
+# the runtime's imports, as runtime_wasm_module declared them: WASI's fd_write, then every host word
+def runtime_imports(host: map): list {
+	held = module.host
+	module.host = host
+	imports = [fd_write_import] + host.keys.map(host_import)
+	module.host = held
+	if #imports != uleb_read(runtime_image.wasm, section_place(runtime_image.wasm, section_ids.import)#1)#1 { throw "runtime.wasm imports other host words than this harness has: warp rebuild writes it anew" }
+	imports
+}
+# each runtime word the program calls is runtime.wasm's, at its index, of its kinds: none is compiled again
+def bind_runtime_words() {
+	for name in module.runtime.keys {
+		if name in runtime_image.words {
+			word = runtime_image.words[name]
+			f = module.runtime[name]
+			f.index = word#1
+			f.kinds = word#2
+			f.result = word#3
+		}
+	}
+}
+# a hook of runtime.wasm, whose code the program writes (late_code) over the stub's
+runtime_hook(name: text, parameters: list): any := {
+	word = runtime_image.words[name]
+	f = bare_function(name)
+	f.index = word#1
+	f.kinds = word#2
+	f.result = word#3
+	f.locals = []
+	f.local_names = parameters
+	f.code = [op.unreachable]
+	f
+}
+is_runtime_hook(name: text): bool := prepended() and name in runtime_image.hooks
+
+# the content of runtime.wasm's section of this id, a custom one by its name; the vector it holds with more entries
+def runtime_part(id: int, name: text = ""): list {
+	place = section_place(runtime_image.wasm, id, name)
+	runtime_image.wasm[place#1 ..< place#2]
+}
+def with_entries(content: list, more: list): list {
+	count = uleb_read(content, 0)
+	uleb(count#1 + #more) + content[count#2 ..] + concatenated(more)
+}
+# the code section's entries of the runtime's functions, a hook's the program's code
+def runtime_code_entries(): list {
+	content = runtime_part(section_ids.code)
+	count = uleb_read(content, 0)
+	at = count#2
+	entries = []
+	for p in 0..<count#1 {
+		size = uleb_read(content, at)
+		end = size#2 + size#1
+		hook = module.dispatchers.filter(f => f.index == #module.imports + p)
+		entries += [if #hook > 0 then function_body(hook#1, 0) else content[at ..< end]]
+		at = end
+	}
+	uleb(count#1) + concatenated(entries)
+}
+# the runtime's texts: its one passive segment's bytes
+def runtime_texts(): list {
+	content = runtime_part(section_ids.data)
+	size = uleb_read(content, 2)
+	content[size#2 ..< size#2 + size#1]
+}
+# a subsection of runtime.wasm's names, by its id, with more entries
+def runtime_names(id: int, more: list): list {
+	content = runtime_part(section_ids.custom, "name")
+	at = 0
+	while at < #content {
+		size = uleb_read(content, at + 1)
+		if content[at] == id { return subsection(id, with_entries(content[size#2 ..< size#2 + size#1], more)) }
+		at = size#2 + size#1
+	}
+	subsection(id, vector(more))
+}
+def own_function_type(f: Function): int := runtime_image.types + #module.gc_order - #gc_names + f.index - #module.imports - runtime_image.functions
+def prepended_bytes(functions: list): list {
+	function_types = functions.map(function_type)
+	classes = module.gc_order[#gc_names ..]
+	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
+	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), class_types + function_types))
+	declared = section(section_ids.function, with_entries(runtime_part(section_ids.function), functions.map(f => uleb(own_function_type(f)))))
+	own_globals = module.global_order[#runtime_image.globals ..]
+	globals = section(section_ids.globals, with_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
+	codes = section(section_ids.code, with_entries(runtime_code_entries(), functions.map(f => function_body(f, 0))))
+	segment = runtime_texts() + data_bytes()
+	texts = section(section_ids.data, vector([[passive_segment] + uleb(#segment) + segment]))
+	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
+	parts = [types, section(section_ids.import, runtime_part(section_ids.import)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
+		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(1)), codes, texts]
+	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
+	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + marks
+}
+# runtime.wasm's names and the program's behind them
+def prepended_names(functions: list, classes: list, own_globals: list): list {
+	content = runtime_names(names_subsections.functions, functions.map(f => index_name(f.index, f.name)))
+	content += runtime_names(names_subsections.locals, functions.map(local_name_map))
+	content += runtime_names(names_subsections.types, classes.map(name => index_name(module.gc_indices[name], name)))
+	content += runtime_names(names_subsections.globals, own_globals.map(name => index_name(module.globals[name]#1, name)))
+	content += runtime_names(names_subsections.fields, classes.map(name => uleb(module.gc_indices[name]) + name_map(gc_field_names(name))))
+	content += runtime_names(names_subsections.tags, [])
+	section(section_ids.custom, name_bytes("name") + content)
 }

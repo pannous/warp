@@ -240,7 +240,12 @@ fn compiled_with(
 /// parses in its run), stay its own
 fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: CompiledModule, scope: Option<String>) -> Node {
 	let running = crate::modules::std_adapters::program_arguments();
-	let arguments = [program, output, folder, library()];
+	// runtime.wasm beside the compiler: compiler.warp compiles the program behind it (card runtime-prepended)
+	let runtime = crate::run::module_cache::shipped_file(&compiler.bytes)
+		.map(|file| file.with_file_name(RUNTIME_FILE))
+		.filter(|file| file.exists())
+		.unwrap_or_default();
+	let arguments = [program, output, folder, library(), &runtime];
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
 	);
@@ -423,8 +428,8 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| write_new(path, &bytes));
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	ship(path, &bytes)?;
-	warm(by)?;
 	write_runtime(by, &path.with_file_name(RUNTIME_FILE))?;
+	warm(by)?;
 	Ok(module)
 }
 

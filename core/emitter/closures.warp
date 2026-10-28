@@ -41,7 +41,7 @@ dispatcher(arity: int): any := {
 made_late(name: text, result: ValueKind, parameters: list): any := {
 	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
 	for known in module.dispatchers { if known.name == name { return known } }
-	f = added_function(name, parameters.map(p => ValueKind.Node), result, parameters)
+	f = if is_runtime_hook(name) then runtime_hook(name, parameters) else added_function(name, parameters.map(p => ValueKind.Node), result, parameters)
 	f.code = [op.unreachable]
 	module.dispatchers += [f]
 	f

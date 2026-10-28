@@ -420,8 +420,12 @@ thread_local! {
 
 /// The folder of kept values shipped beside the build file `bytes` were read from (shipped_with), if any
 pub fn shipped_kept_folder(bytes: &[u8]) -> Option<PathBuf> {
-	let build_file = SHIPPED.lock().ok()?.get(module_digest(bytes).as_slice()).cloned()?;
-	Some(shipped_kept_folder_of(&build_file))
+	Some(shipped_kept_folder_of(&shipped_file(bytes)?))
+}
+
+/// The build file a shipped module was read from (shipped_with)
+pub fn shipped_file(bytes: &[u8]) -> Option<PathBuf> {
+	SHIPPED.lock().ok()?.get(module_digest(bytes).as_slice()).cloned()
 }
 
 /// The folder of kept values beside a build file: `<file>.kept/`
