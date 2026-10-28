@@ -374,11 +374,27 @@ host_words_defined(linker: handle, compiled: handle, module: text, trap: pointer
 		import = native_long(long_at(imports + 8).value + i * 8)
 		from = native_vector_text(wasm_importtype_module(import))
 		name = native_vector_text(wasm_importtype_name(import))
-		if same_text(from, "host") and same_text(name, "std_io") { word_defined(linker, import, STD_IO_WORD, trap) }
-		if same_text(from, "host") and same_text(name, "exit") { word_defined(linker, import, EXIT_WORD, trap) }
 		line = c_line(table, from, name)
 		if line.length > 0 { word_defined(linker, import, foreign_of(line), trap) }
+		if same_text(from, "host") {
+			if same_text(name, "std_io") { word_defined(linker, import, STD_IO_WORD, trap) } else {
+				if same_text(name, "exit") { word_defined(linker, import, EXIT_WORD, trap) } else { word_defined(linker, import, unanswered_word(name), trap) }
+			}
+		}
 	}
+}
+# a host word the driver doesn't answer (a library's: draw_shape, gpu_compute, …), as a word that names it when called:
+# the address of its name's (address, length), negated
+unanswered_word(name: text): i64 := {
+	cell = allocate(8)
+	word_at(cell).value = name.address as u32
+	word_at(cell + 4).value = name.length
+	0 - (cell as i64)
+}
+# the run ended naming a host word it called that this host lacks
+unanswered(name: text): nothing := {
+	complain(joined(joined("the host word ", name), " is not in the native warp yet (warp-rust has it)"))
+	exit(1)
 }
 # the import defined as warp_host_callback, `word` its data
 word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing := {
@@ -579,13 +595,14 @@ kept_machine_code(compiled: handle, machine_code: text, key: text, fingerprint: 
 # (foreign.c warp_host_callback). std_io(module, member, arguments) is the Error that says the driver lacks it
 host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
 	if word == EXIT_WORD { exit(long_at(given + VALUE_OFFSET).value as i32) }
+	if word < 0 { return unanswered(text_from(word_at((0 - word) as i32).value, word_at((0 - word) as i32 + 4).value)) }
 	context = wasmtime_caller_context(caller)
 	if word != STD_IO_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)
 	member = shown(caller, context, given + VALUE_BYTES)
 	listed = given + 2 * VALUE_BYTES
 	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
-	guest_error(caller, context, joined(joined(joined(joined("std_io ", module), "."), member), ": not in the native driver yet"), results)
+	guest_error(caller, context, joined(joined(joined(joined("the host word ", module), "."), member), " is not in the native warp yet (warp-rust has it)"), results)
 }
 # the item of a list value of the module, counted from 1, as a value (its export item_at)
 item_of(caller: handle, context: handle, list: pointer, index: i64): pointer := {
