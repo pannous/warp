@@ -408,10 +408,19 @@ celled_scope(statements: list, parameters: list, positions: map): list := {
 	blocks = statements.flat_map(statement => blocks_given(statement, positions))
 	statements = statements.map(statement => with_block_arguments(statement, positions))
 	locals = parameters + statements.fold([], (found, statement) => names_bound(statement, found))
+	statements = statements.map(statement => undeclared_in_lambdas(statement, locals))
 	shared = shared_names(statements, locals, blocks)
 	celled = statements.map(statement => shared.fold(statement, (part, name) => renamed(part, name, cell_of(name))))
 	shared.map(name => set_to(symbol(name + cell_suffix), call_node(symbol(cell_class), [if name in parameters then symbol(name) else ø]))) + celled
 }
+# a lambda's `global n` or `nonlocal n` of a name its scope binds says what sharing does already: it goes, else it
+# would declare a global n of the lambda's own
+undeclared_in_lambdas(statement: Node, locals: list): Node := bottom_up(statement, part => if is_lambda(part) then bottom_up(part, inner => if is_redeclaration(inner, locals) then ø else inner) else part)
+is_redeclaration(n: Node, locals: list): bool := {
+	parts = if is_key(n, Op.Colon) then [key_of(n), value_of(n)] else if is_group(n) and bracket_of(n) == "" and #n == 2 then items_of(n) else []
+	#parts == 2 and parts#1 is symbol and name_of(parts#1) in sharing_declarations and parts#2 is symbol and name_of(parts#2) in locals
+}
+sharing_declarations = ["global", "nonlocal"]
 # a definition with its body in that form
 celled_definition(statement: Node, positions: map): Node := {
 	parts = definition_of(statement)
@@ -518,10 +527,13 @@ lambdas(program: Node): Node := {
 		function = if parts == ø then ø else iteration_function(parts)
 		if function != ø { lowering.inlined[parts.name] = function }
 	}
+	# a global is no lambda's capture: it reads and changes the one global, as a function does
+	globals = global_variables(block_of(written))
 	top_locals = []
 	for statement in written {
 		if definition_of(statement) == ø { top_locals = names_bound(statement, top_locals) }
 	}
+	top_locals = top_locals.filter(name => name not in globals)
 	lowered = written.map(statement => lowered_statement(statement, top_locals, lowering))
 	if is_statement_sequence(program) { return group_like(program, lowering.lambdas_lifted + lowered) }
 	if #lowering.lambdas_lifted == 0 { return lowered#1 }
