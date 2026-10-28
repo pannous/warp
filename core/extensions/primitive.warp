@@ -61,22 +61,39 @@ mark_line(lines: list): int? := {
 	if lines#first.trim() == PRIMITIVE_MARK then first else ø
 }
 
-# the MVP wasm module of a primitive file: the mark's line left empty, so lines keep their numbers
+# the MVP wasm module of a primitive file: the mark's line left empty, so lines keep their numbers; lowered without the
+# prelude, whose words are GC code
 primitive_module(source: text, folder: text): list := {
 	lines = source.split("\n")
 	lines[mark_line(lines) - 1] = ""
-	program = lowered_program(lines.join("\n"), folder, prelude_source)
+	program = lowered_program(lines.join("\n"), folder, "")
 	primitive_functions = {}
 	main_statements = []
 	for n in statements_in(program) {
 		head = function_head(n)
-		if head == ø { main_statements += [n] } else { declare_primitive(head, value_of(n)) }
+		if head == ø { main_statements += [n] } else if not forwards_to_library(name_of(head#1), value_of(n)) { declare_primitive(head, value_of(n)) }
 	}
 	main = PrimitiveFunction("main", [], [], ø, List(main_statements, Bracket.Curly, Separator.Semicolon), #primitive_functions)
 	primitive_functions["main"] = main
 	functions = primitive_functions.keys.map(name => primitive_functions[name])
 	for f in functions { emit_primitive(f) }
 	primitive_bytes(functions)
+}
+
+# `add·list·any(value·1: list, value·2: any) := {add(value·1, value·2)}`, the variant arity_overloads.warp makes of a
+# library word beside a definition of the file: primitive code reaches no library word, so it is left out (a call of
+# it is refused as any unknown call)
+forwards_to_library(name: text, body: Node): bool := {
+	word = written_name(name)
+	call = if is_group(body) and bracket_of(body) == "{" and #body == 1 then body#1 else body
+	word != name and is_group(call) and #call > 0 and call#1 == symbol(word)
+}
+# the name a definition is written with, `add` of its typed variant `add·i32·i32`
+written_name(name: text): text := name.split("·")#1
+# a function's export: its written name, unless several of its variants are exported
+export_name(f: PrimitiveFunction): text := {
+	word = written_name(f.name)
+	if #primitive_functions.keys.filter(name => written_name(name) == word) == 1 then word else f.name
 }
 
 declare_primitive(head: list, body: Node) := {
@@ -141,6 +158,7 @@ mvp_emitted(f: PrimitiveFunction, n: Node, expected: text): PrimitiveCode := {
 	if at { primitive_place = place_text(at, module.program_file) }
 	if n is int or n is float { return mvp_literal(n, expected) }
 	if n === ø { return PrimitiveCode(NO_VALUE, []) }
+	if n == true or n == false { return PrimitiveCode(BOOL_TYPE, [op.i32_const, if n == true then 1 else 0]) }
 	if n is symbol { return mvp_variable(f, n) }
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in primitive_functions { return mvp_call(f, n#1, items_of(n)[1 ..< #n], n) }
 	if is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol { return mvp_spaced(f, n) }
@@ -164,8 +182,6 @@ mvp_literal(n: Node, expected: text): PrimitiveCode := {
 
 mvp_variable(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 	name = name_of(n)
-	if name in ["yes", "true"] { return PrimitiveCode(BOOL_TYPE, [op.i32_const, 1]) }
-	if name in ["no", "false"] { return PrimitiveCode(BOOL_TYPE, [op.i32_const, 0]) }
 	if name == "break" { return mvp_breaking(f, n) }
 	if name not in f.locals { primitive_refusal(n, "the unknown name " + name) }
 	PrimitiveCode(f.locals[name]#2, [op.local_get] + uleb(f.locals[name]#1))
@@ -198,9 +214,9 @@ mvp_typed(f: PrimitiveFunction, n: Node, type: text): list := mvp_converted(mvp_
 # needs `as`
 mvp_converted(value: PrimitiveCode, type: text, n: Node): PrimitiveCode := {
 	if type == "" or value.type == type { return value }
-	if value.type == NO_VALUE { primitive_refusal(n, "a statement where a " + type + " is wanted") }
+	if value.type == NO_VALUE { primitive_refusal(n, "a statement where " + type + " is wanted") }
 	if mvp_wasm_of(value.type) == mvp_wasm_of(type) or mvp_widens(value.type, type) { return mvp_cast(value, type) }
-	primitive_refusal(n, "a " + value.type + " where a " + type + " is wanted: convert it, `x as " + type + "`")
+	primitive_refusal(n, value.type + " where " + type + " is wanted: convert it, `x as " + type + "`")
 }
 mvp_widens(from: text, to: text): bool := scalars[from].width < scalars[to].width and (mvp_is_float(to) or not mvp_is_float(from))
 mvp_cast(value: PrimitiveCode, type: text): PrimitiveCode := {
@@ -384,7 +400,7 @@ def primitive_bytes(functions: list): list {
 	types = functions.map(f => [function_type_byte] + vector(f.types.map(t => [value_bytes[mvp_wasm_of(t)]])) + (if f.result == NO_VALUE then [0] else [1, value_bytes[mvp_wasm_of(f.result)]]))
 	declared = vector(range_list(#functions).map(i => uleb(i)))
 	memory = vector([[0] + uleb(MEMORY_PAGES)])
-	exports = vector([name_bytes("memory") + [export_memory_byte, 0]] + functions.map(f => name_bytes(f.name) + [export_function_byte] + uleb(f.index)))
+	exports = vector([name_bytes("memory") + [export_memory_byte, 0]] + functions.map(f => name_bytes(export_name(f)) + [export_function_byte] + uleb(f.index)))
 	code = vector(functions.map(primitive_body))
 	wasm_header + section(section_ids.type, vector(types)) + section(section_ids.function, declared) + section(section_ids.memory, memory) + section(section_ids.export, exports) + section(section_ids.code, code)
 }
