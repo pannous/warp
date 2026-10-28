@@ -2,7 +2,7 @@
 ## a value kept across runs or handed whole to the host crosses as one text instead of node by node (card
 ## program-fixed). Each node is its shape (kinds.warp NodeShape), its kind field (but for Empty and Meta), then its
 ## payload. Numbers are ASCII varints and texts their UTF-8, so the whole text is UTF-8 a host keeps as it is.
-## A class instance or a closure has no bytes: packed_node fails on one
+## A class instance comes back keyed to its fields, as the host reads one; a closure has no text: packed_node fails on one
 use "intrinsics.warp"
 use "../kinds.warp"
 use "instructions.warp"
@@ -20,7 +20,11 @@ node_written(n: Node, positioned: bool, out: text, at: int): int := {
 		place = varint_written(meta_line(n), out, varint_written(NodeShape.Meta, out, at))
 		return node_written(n, no, out, varint_written(meta_column(n), out, place))
 	}
-	if is_class_instance(n) { fail() }
+	# an instance of a class struct as the host reads one back: its class's name keyed to its fields
+	if is_class_instance(n) {
+		at = varint_written(Marked.Instance, out, varint_written(NodeShape.Pair, out, at))
+		return node_written(instance_entries(n), yes, out, node_written(symbol_of(key_name(n)), yes, out, at))
+	}
 	shape = shape_of(n)
 	at = varint_written(marked_kind(n), out, varint_written(shape, out, at))
 	if shape == NodeShape.Int { return varint_written(unboxed_int(n), out, at) }

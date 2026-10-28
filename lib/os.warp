@@ -6,13 +6,17 @@ env(name: any) := std_io("os", "env", [name])
 args = std_io("os", "args", [])
 // `kept(name) ?? keep(name, value)`: a value computed once and kept across runs (the module cache) while warp and its lib/
 // stay as they are, ø until kept; keep gives the value. The browser keeps nothing: kept is ø there
-kept(name: any) := std_io("os", "kept", [name])
-keep(name: any, value: any) := std_io("os", "keep", [name, value])
+kept(name: any) := unpacked(std_io("os", "kept", [packed_name(name)]))
+keep(name: any, value: any) := { std_io("os", "keep", [packed_name(name), pack(value)]); value }
 // `kept_of(name, ["parser.warp"]) ?? keep_of(name, value, ["parser.warp"])`: a value made by those core files
 // (with the files they use) alone, kept while they, warp and the rest of lib/ stay as they are: an edit of core
 // elsewhere keeps it (card speed-module-cache)
-kept_of(name: any, makers: any) := std_io("os", "kept", [name, makers])
-keep_of(name: any, value: any, makers: any) := std_io("os", "keep", [name, value, makers])
+kept_of(name: any, makers: any) := unpacked(std_io("os", "kept", [packed_name(name), makers]))
+keep_of(name: any, value: any, makers: any) := { std_io("os", "keep", [packed_name(name), pack(value), makers]); value }
+// a value crosses to the host packed, as one text, not node by node (card program-fixed); kept under a name of its own,
+// so a value kept unpacked before is never read as packed
+packed_name(name: any) := "packed " + name
+unpacked(packed: any) := if packed == ø then ø else unpack(packed)
 // `exec sh "crontab -l"`: the command (a sh template, its argument vector) run without a shell, what it printed; natively
 // only, the browser runs no processes
 exec(command: any) := std_io("os", "exec", [command])

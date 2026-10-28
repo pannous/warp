@@ -4,3 +4,4 @@
 'x = [[1, [2, ["deep"]]], {k: ø}, ""]; unpack(pack(x)) == x'	true
 '[unpack(pack(1/3)), unpack(pack(-123456789012)), unpack(pack(-2.5))]'	[1/3, -123456789012, -2.5]
 'x = 2^100 * -3; unpack(pack(x)) == x'	true
+'class P {x: int; y: text}; q = unpack(pack(P(1, "ab"))); [q.x, q.y]'	[1, "ab"]
