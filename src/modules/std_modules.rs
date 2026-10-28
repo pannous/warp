@@ -37,7 +37,7 @@ pub(crate) const STD_MODULES: [(&str, &str); 36] = [
 	("case_table", include_str!("../../lib/case_table.warp")),
 	("case_tables", include_str!("../../core/library/case_tables.warp")),
 	("uncertain", include_str!("../../lib/uncertain.warp")),
-	("wasmtime", include_str!("../../lib/wasmtime.warp")),
+	("wasmtime", include_str!("../../core/native/wasmtime.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 pub(crate) const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];

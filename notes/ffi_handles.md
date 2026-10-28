@@ -56,7 +56,7 @@ holds every member).
   result 0x…)`), as does false from a bool function with an output. Open: the message text (wasmtime_error_message).
 
 ```warp
-use wasmtime                        // lib/wasmtime.warp and the C library libwasmtime
+use wasmtime                        // core/native/wasmtime.warp and the C library libwasmtime
 instance = wasmtime_linker_instantiate(linker, context, module)   // wasmtime_instance_t *: {store_id: 1, __private: 0}
 main = wasmtime_instance_export_get(context, instance, "main")    // wasmtime_extern_t *, false fails
 results = wasmtime_func_call(context, main.of.func, [], 1)       // wasmtime_val_t *results, size_t nresults
@@ -64,4 +64,4 @@ results#1.of.i64
 ```
 A standard module named after an installed C library brings both (`use wasmtime`, as `use math` brings libm).
 Trap: a second wasmtime in the process (Homebrew's beside warp's) installs its own signal handlers on its first
-memory, and warp's next trap becomes a SIGILL: lib/wasmtime.warp turns `signals_based_traps` off.
+memory, and warp's next trap becomes a SIGILL: core/native/wasmtime.warp turns `signals_based_traps` off.

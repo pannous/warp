@@ -58,11 +58,11 @@ def use_library(folder: text) { given_library = folder }
 // the folders of text a program uses or a compile reads (BUNDLED_CORE_FOLDERS)
 UNBUNDLED_FOLDERS = ["data"]
 CORE_LINK = "compiler"
-BUNDLED_CORE_FOLDERS = ["compiler/library"]
+BUNDLED_CORE_FOLDERS = ["compiler/library", "compiler/native"]
 LIBRARY_FILES = with_core_folders(library_sources())
 // the folders within lib/ whose .warp files are the standard modules, `use <name>` naming one wherever it lies: lib/'s
 // top and core's modules the compiler reads (decision core-is-compiler-and-harness)
-MODULE_FOLDERS = ["", "compiler/library/"]
+MODULE_FOLDERS = ["", "compiler/library/", "compiler/native/"]
 // each standard module's path within lib/ by its name, `os` → "compiler/library/os.warp"
 STANDARD_MODULES = module_files(LIBRARY_FILES)
 // the standard modules among these files by their names: a name two module folders hold is an error, never the first
