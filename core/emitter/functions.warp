@@ -69,7 +69,7 @@ def call_values(f: Function, values: list): TypedCode {
 # widened parameter took a reading of the whole compiler for each (card speed-parallel-emit)
 def passed(f: Function, i: int, value: TypedCode): list {
 	slot = parameter_key(f.name, i)
-	declared = if i < #f.signature.parameters then f.signature.parameters[i].type_name else ""
+	declared = if i < #f.signature.parameters then aliased_type(f.signature.parameters[i].type_name) else ""
 	if is_union(declared) and not fits_union(declared, value.kind) { refuse("a " + kind_spelling(value.kind) + " where a " + declared + " is needed") }
 	try {
 		# a node may hold any kind (`v.x * s` of a float s): read as an unannotated parameter's int it would trap, so the
@@ -152,7 +152,7 @@ held_result_type(n: Node): any := {
 }
 # the kind a result declared `T` is held as: an instance or `any` a node; ø for a type word the core holds no kind of
 result_type_kind(type_name: text): any := {
-	word = if type_name in core_type_words then core_type_words[type_name] else type_name
+	word = aliased_type(type_name)
 	if word in declared_kinds then declared_kinds[word] else if type_name == "any" or type_name in module.classes then ValueKind.Node else ø
 }
 analyzed_result_kind(f: Function): any := {
@@ -219,8 +219,9 @@ node_annotations = ["any", "Node", "function", "type", "map", "number", "symbol"
 annotated_kind(written: text): ValueKind := {
 	# `(samples, float) -> any`: a function, held as a node
 	if written.contains(" -> ") { return ValueKind.Node }
-	if is_union(written) { return shared_kind(union_members(written).map(annotated_kind)) }
+	if written.starts_with("[") { return ValueKind.List }
 	word = aliased_type(written)
+	if is_union(word) { return shared_kind(union_members(word).map(annotated_kind)) }
 	if word in node_annotations or word in module.classes or word.ends_with("?") { return ValueKind.Node }
 	# Rust twin: type_names.rs plural_element_type
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return ValueKind.List }
@@ -235,12 +236,20 @@ shared_kind(kinds: list): ValueKind := if kinds.all(kind => kind == kinds#1) the
 converts(from: ValueKind, to: ValueKind): bool := from == to or from == ValueKind.Node or to == ValueKind.Node or (from == ValueKind.Int and (to == ValueKind.Float or to == ValueKind.Bool)) or (from == ValueKind.Bool and to == ValueKind.Int) or (from == ValueKind.Char and to == ValueKind.Text)
 # whether a value of the kind is one of the union's members, as far as the compile knows it: a node is checked when it runs
 fits_union(type: text, kind: ValueKind): bool := union_members(type).any(member => converts(kind, annotated_kind(member)))
-# the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`; any other word itself
+# the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`, the core's word of
+# a type word's other spelling (`string`, `integer`: type_synonyms); any other word itself
 aliased_type(word: text): text := {
 	optional = word.ends_with("?")
 	resolved = if optional then word[0..<(#word - 1)] else word
 	while resolved in module.aliases { resolved = module.aliases[resolved] }
 	if optional then resolved + "?" else resolved
+}
+# the type words' other spellings as the aliases every program starts with: looked up in core_type_words at each
+# aliased_type, they made the compile of compiler.warp 20 % slower
+type_synonyms(): map := {
+	found = {}
+	for word in core_type_words.keys { if core_type_words.get(word) != word { found[word] = core_type_words.get(word) } }
+	found
 }
 names_a_type(word: text): bool := is_held_kind(word) or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: list): any := {

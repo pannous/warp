@@ -4,6 +4,8 @@ use crate::type_kinds::{Kind, KIND_MASK};
 use anyhow::{anyhow, Result};
 use num_bigint::{BigInt, Sign};
 use std::cell::RefCell;
+use std::sync::Arc;
+use warp_runtime::c_imports::CImports;
 use wasmtime::{AsContextMut, Instance, Linker, Module, Store, StoreContextMut, Val};
 use wasmtime_wasi::p1;
 
@@ -168,13 +170,14 @@ pub fn link_imports(
 	engine: &wasmtime::Engine,
 	module: &Module,
 	imports: Imports,
+	c: &CImports,
 ) -> Result<()> {
 	// the host words (sleep, random, clock) are imported like C functions from the host module
 	let host = imports.host || module.imports().any(|import| import.module() == crate::host::HOST_LIBRARY);
 	*linker = family_linker(engine, Imports { host, ..imports })?;
 	if imports.ffi {
 		// the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
-		crate::ffi::link_module_libraries(linker, engine, module)?;
+		crate::ffi::link_module_libraries(linker, module, c)?;
 	}
 	crate::modules::wasm_modules::link(linker, module)?;
 	Ok(())
@@ -254,8 +257,9 @@ fn shown_by_program<T>(node: Node, result: &Val, store: &mut Store<T>, instance:
 /// Run main with every import it needs, its tasks finished after it (finish_tasks)
 fn run_main_with_tasks(bytes: &[u8], imports: Imports) -> Result<(Val, Store<crate::host::HostState>, Instance)> {
 	let mut tasks = None;
+	let c = Arc::new(CImports::of(bytes)?);
 	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| {
-		link_run(linker, engine, module, imports, &mut tasks)
+		link_run(linker, engine, module, imports, &c, &mut tasks)
 	});
 	finish_tasks(outcome, tasks.as_deref())
 }
@@ -266,9 +270,10 @@ fn link_run(
 	engine: &wasmtime::Engine,
 	module: &Module,
 	imports: Imports,
+	c: &Arc<CImports>,
 	tasks: &mut Option<std::sync::Arc<crate::host::tasks::TaskTable>>,
 ) -> Result<()> {
-	link_imports(linker, engine, module, imports)?;
+	link_imports(linker, engine, module, imports, c)?;
 	// the shared arrays of the run: the program's and every task's instance reach the same ones
 	let shared = crate::host::shared::imports_shared(module)
 		.then(|| std::sync::Arc::new(crate::host::shared::SharedArrays::default()));
@@ -276,7 +281,7 @@ fn link_run(
 		shared.link_into(linker)?;
 	}
 	if crate::host::tasks::imports_tasks(module) {
-		*tasks = Some(crate::host::tasks::link(linker, engine, module, imports, shared)?);
+		*tasks = Some(crate::host::tasks::link(linker, engine, module, imports, c.clone(), shared)?);
 	}
 	Ok(())
 }

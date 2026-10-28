@@ -245,8 +245,10 @@ fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: Compiled
 	// its kept values shipped beside its build file serve a cold cache; a new build's warming run writes them there
 	let shipped = crate::run::module_cache::shipped_kept_folder(&compiler.bytes);
 	let warming = crate::run::module_cache::warming();
-	let said = crate::run::module_cache::with_shipped_kept(shipped, warming, || {
-		crate::modules::std_adapters::kept_by(owner, scope, || crate::compiled_module::run_module(compiler))
+	let said = crate::host::sandbox::as_toolchain(|| {
+		crate::run::module_cache::with_shipped_kept(shipped, warming, || {
+			crate::modules::std_adapters::kept_by(owner, scope, || crate::compiled_module::run_module(compiler))
+		})
 	});
 	crate::modules::std_adapters::set_program_arguments(running);
 	said

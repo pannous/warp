@@ -20,8 +20,6 @@ enum HiddenWord { RanWithoutError = "ran·without·error", LoopStep = "loop·ste
 	GlueHidden = "glue·hidden", MatchSubject = "match·subject", PositionAssigned = "position·assigned",
 	IndexAssigned = "index·assigned", PatternClause = "pattern·clause·", ConvertedValue = "converted·value",
 	UncaughtError = "uncaught·error", CaughtError = "caught·error" }
-# the words of a module that work without its `use`, which bring it in (decision bizarre-global): `play "mozart.mp3"`
-global_words = {"play": "sound", "beep": "sound", "stop_sound": "sound", "wait_sound": "sound"}
 # the value a block reads without naming it, `{ it + 1 }`, `for xs { print it }` (Rust twin: words.rs IMPLICIT_PARAMETER)
 implicit_parameter = "it"
 # the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic (Rust twin: errors/run_time.rs RAISE_WORDS)

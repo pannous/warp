@@ -1,0 +1,8 @@
+# a type word's other spellings declare what the core word does: string and str are text, integer is int
+'c(a: integer) := a + 1; c(3)'	4
+'x: string = "a"; x'	"a"
+'f(): integer := 3; f()'	3
+'class P{name: str}; P("a").name'	"a"
+# a parameter typed [T] or with a type phrase `list of T` takes a list
+'f(xs: list of int) := #xs; f([1, 2, 3])'	3
+'f(xs: [int]) := #xs; f([1, 2])'	2

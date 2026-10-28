@@ -27,11 +27,22 @@ source_checks(program: Node, prelude: text): Node := {
 		if is_group(n) and separator_of(n) in statement_separators {
 			listed_statements = items_of(n)
 			for statement in listed_statements[0 ..< (#listed_statements - 1)] { dropped_value(statement, aliases) }
+			charged_assignments(n)
 		}
 	}
 	program
 }
 
+# P71 (wiki/charged.md): `z := 6` is charged, evaluated at each use, so assigning it afterwards in its block, `z = 7`,
+# `z += 1`, is an error naming the definition (P138: also Go's `total := 0; total += n`)
+charged_assignments(block: Node) := {
+	charged = items_of(block).map(plain_node).filter(is_charged_value).map(statement => name_of(key_of(statement)))
+	if #charged == 0 { return ø }
+	for n in nodes_in(block) {
+		if n is key and op_of(n) in assigning_operators and "${without_mark(key_of(n))}" in charged { diagnose(call_of("charged_assignment", ["${without_mark(key_of(n))}"]), n) }
+	}
+	ø
+}
 # an error the parser leaves in the tree (a negative index), the program's value
 located_error(n: Node) := {
 	if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2]), n) }

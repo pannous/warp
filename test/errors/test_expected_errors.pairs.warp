@@ -1,0 +1,5 @@
+# the expected column `error`: the code fails, refused by the compiler or raising as it runs (card pairs-test)
+
+'zork("a")'	error	a call of a name nothing defines is refused
+'raise "boom"'	error	a raise as it runs
+'x := 1; x = 2; x'	error	P71: a charged := takes no assignment

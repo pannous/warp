@@ -1,0 +1,6 @@
+# a pure-compiled module calls C: libc and the libraries its use line names are linked
+
+'import strlen from "c"; strlen("abc")'	3
+'use sqlite3; sqlite3_errstr(0)'	"not an error"
+'use zlib; compressBound(100)'	113
+'import toupper from "c"; toupper(97)'	65

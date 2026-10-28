@@ -24,6 +24,8 @@ const TEST_PREFIX: &str = "test_";
 const WARP_SUFFIX: &str = ".warp";
 /// A test still running after this fails as timed out
 const CASE_SECONDS: u64 = 30;
+/// A case's expected column `error`: its code fails, as a compile refusal or a raise (expects_error)
+const EXPECTED_ERROR: &str = "error";
 const POLL: Duration = Duration::from_millis(5);
 /// The machine-wide pool of case slots every `warp test` takes from (card shared-test-slots): lock files in one folder
 /// below the home directory, as many as the cores, WARP_TEST_SLOTS overriding; parallel runs (sessions, the gate,
@@ -235,9 +237,13 @@ pub fn run_child_case(command: &str, file: &str, index: &str) -> bool {
 	};
 	let folder = file.parent().unwrap_or(Path::new("/"));
 	let got = run_code(&code, folder, by);
-	let expected = if is_data(&expected) { expected } else { run_code(&expected.serialize(), folder, by) };
-	let matches = !matches!(got.drop_meta(), Node::Error(_))
-		&& (got == expected || as_is_compares(&got, &expected) || (got.is_falsy() && expected.is_falsy()));
+	let failed = matches!(got.drop_meta(), Node::Error(_));
+	let matches = if expects_error(&expected) {
+		failed
+	} else {
+		let expected = if is_data(&expected) { expected } else { run_code(&expected.serialize(), folder, by) };
+		!failed && (got == expected || as_is_compares(&got, &expected) || (got.is_falsy() && expected.is_falsy()))
+	};
 	if !matches {
 		println!("{GOT}{}", got.serialize());
 	}
@@ -263,6 +269,12 @@ fn as_is_compares(got: &Node, expected: &Node) -> bool {
 }
 
 /// An expected value written as data, compared as it is; anything else (`π`, `(-1)`, `1 + pi`) is code to run
+/// The expectation `error` (card pairs-test): the case's code fails, refused by the compiler or raising as it runs,
+/// whatever its message says (tests never pin wording)
+fn expects_error(expected: &Node) -> bool {
+	expected.symbol_name() == Some(EXPECTED_ERROR)
+}
+
 fn is_data(expected: &Node) -> bool {
 	match expected.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,

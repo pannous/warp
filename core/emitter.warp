@@ -132,7 +132,7 @@ no_value = 64
 # opcodes (WebAssembly core spec, section 5.4)
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, br_table: 14, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_load: 40, i32_load8_u: 45, i32_store: 54, i32_store8: 58,
-	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_sub: 107, i32_and: 113, i32_or: 114,
+	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_add: 106, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_trunc: 157, f64_nearest: 158, f64_sub: 161, f64_mul: 162, f64_div: 163, f64_abs: 153, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
 # GC instructions, after their prefix 251
@@ -179,6 +179,8 @@ equalities = {"==": yes, "!=": yes}
 identities = {"===": yes, "!==": yes}
 compiled_compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
 steps = {"++": "+", "--": "-"}
+# a character steps by code point: `c++` is the next letter, as `'a' to 'e'` counts
+code_point_steps = {"++": 1, "--": -1}
 smallest_int = -9223372036854775808
 largest_int = 9223372036854775807
 # (a refusal is thrown; a word ends with its value, not with `refuse`, whose kind would become the word's: card
@@ -631,6 +633,7 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode): T
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
+	if is_union(type_name) { return union_declaration(body, name, type_name, value) }
 	# `xs: ints = v`, `xs: list of text = v`: a list as `list` declares it
 	kind_word = if is_list_type(type_name) then "list" else type_name
 	if kind_word not in declared_kinds { return refuse("a variable declared " + type_name) }
@@ -984,7 +987,13 @@ def key_expression(body: Body, n: Node): TypedCode {
 		return assignment(body, left, runtime_call("floor_quotient", [expression_code(body, left), whole(expression_code(body, right))]))
 	}
 	if operator in compiled_compound_ops { return assignment(body, left, operation_code(body, compiled_compound_ops[operator], expression_code(body, left), expression_code(body, right))) }
-	if operator in steps and right == ø { return assignment(body, left, operation_code(body, steps[operator], expression_code(body, left), number_value(1))) }
+	if operator in steps and right == ø {
+		stepped = expression_code(body, left)
+		step = code_point_steps[operator]
+		if stepped.kind == ValueKind.Char { return assignment(body, left, TypedCode(ValueKind.Char, stepped.code + [op.i32_const] + sleb(step) + [op.i32_add])) }
+		if stepped.kind == ValueKind.Text { return assignment(body, left, runtime_call("stepped_character", [stepped, TypedCode(ValueKind.Int, [op.i64_const] + sleb(step))])) }
+		return assignment(body, left, operation_code(body, steps[operator], stepped, number_value(1)))
+	}
 	if operator == Op.Neg and left == ø { return negation(body, expression_code(body, right)) }
 	if operator == Op.Abs and left == ø { return absolute_value(body, expression_code(body, right)) }
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
@@ -1263,6 +1272,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.gc_indices = {}
 	module.gc_order = []
 	module.class_structs = {}
+	module.aliases = type_synonyms()
 	collect_types(program)
 	for child in module.parents.keys { inherit_fields(child) }
 	declare_class_structs()
