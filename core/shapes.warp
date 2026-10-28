@@ -21,6 +21,8 @@ def keyed(op: text, left: Node, right: Node): Node := Key(left, op as Op, right)
 def opaque(view: list): Node := Key(symbol(opaque_word), Op.Colon, view)
 def type_node(name: Node, body: Node): Node := opaque(["type", view_of(name), view_of(body)])
 def error_node(message: text): Node := opaque(["error", ["text", message]])
+// the message of an error a parse wrote into the tree as error_node did, ø of any other node
+def parse_error_message(n: Node): text? := if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "error" then value_of(n)#2#2 else ø
 def template_node(holed: text): Node := opaque(["template", holed])
 def attributed(name: text, value: Node, node: Node): Node := Key(symbol(attribute_word), Op.Colon, [name, value, node])
 

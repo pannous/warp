@@ -1,0 +1,4 @@
+// a used file that does not parse: its error is the program's, never a file of no declarations (test_unclosed_used_file)
+first() := 1
+broken(x) := (x + 1
+later() := 2
