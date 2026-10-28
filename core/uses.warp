@@ -162,6 +162,8 @@ std_module_path(name: text): text := run_library() + "/" + name + module_extensi
 # what a `use` statement names, ø for another statement
 use_target(statement: Node): any := {
 	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
+	# a quoted name without an extension is the bare one: `use "list"` is `use list`, a file of the folder or a std module
+	if statement#2 is text and not statement#2.contains(".") { return symbol(statement#2) }
 	statement#2
 }
 
