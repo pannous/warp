@@ -147,7 +147,7 @@ keep_nodes(n: Node, kept: function) := {
 }
 
 # the scope with each [name, meaning] pair added
-remember(scope: any, pairs: list): any := {
+remember(scope: map, pairs: list): map := {
 	for pair in pairs {
 		name = pair#1
 		if name {
@@ -159,10 +159,10 @@ remember(scope: any, pairs: list): any := {
 }
 
 # name → its meanings, of the whole program
-scope_of(program: Node): any := scope_with({}, nodes_in(program))
+scope_of(program: Node): map := scope_with({}, nodes_in(program))
 
 # a copy of the scope with the names the nodes give added
-scope_with(outer: any, nodes: list): any := {
+scope_with(outer: map, nodes: list): map := {
 	scope = {}
 	for name in outer.keys { scope[name] = outer[name] }
 	for n in nodes {
@@ -181,12 +181,12 @@ is_function_definition(n: Node): bool := match n {
 # collect_outer_assigned_names)
 outer_nodes_in(top: Node): list := nodes_kept(top, n => not is_function_definition(n))
 
-binds(scope: any, name: text): bool := scope.has(name)
-binds_as(scope: any, name: text, meaning: Meaning): bool := scope.has(name) and scope[name] contains meaning
+binds(scope: map, name: text): bool := scope.has(name)
+binds_as(scope: map, name: text, meaning: Meaning): bool := scope.has(name) and scope[name] contains meaning
 # the meanings that make a name a value where it stands: a variable, a parameter, a loop variable (a field or a function
 # of that name is no value there)
 value_meanings = [Meaning.Variable, Meaning.Parameter, Meaning.Loop]
-binds_value(scope: any, name: text): bool := value_meanings.any(meaning => binds_as(scope, name, meaning))
+binds_value(scope: map, name: text): bool := value_meanings.any(meaning => binds_as(scope, name, meaning))
 
 # Keyword-triggered local rewrites (decision pass-triggers; Rust twin: src/lowering/words/keyword_rewrites.rs): each
 # entry [accepts, rewritten] of a table rewrites a node one of whose own words (has_own_word) it accepts,

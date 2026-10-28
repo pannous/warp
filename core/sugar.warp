@@ -45,14 +45,14 @@ slice_bounds(written: Node): list? := match written {
 }
 
 // The bounds of a slice index, else the index itself
-subscript_positions(index: any): list := slice_bounds(index) ?? [index]
+subscript_positions(index: Node): list := slice_bounds(index) ?? [index]
 
 // A negative number or a negated expression: `-1`, `-k`
 // Rust twin: subscripts.rs counts_from_the_end
-counts_from_the_end(bound: any): bool := if bound is number then bound < 0 else type(bound) is key and op_of(bound) == "-" and key_of(bound) == ø
+counts_from_the_end(bound: Node): bool := if bound is number then bound < 0 else type(bound) is key and op_of(bound) == "-" and key_of(bound) == ø
 
 // `-1`, `-k` as written
-negated_form(bound: any): text := if bound is number then "${bound}" else "-${value_of(bound)}"
+negated_form(bound: Node): text := if bound is number then "${bound}" else "-${value_of(bound)}"
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // Rust twin: warp_parser subscript

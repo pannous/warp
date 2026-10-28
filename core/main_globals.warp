@@ -45,7 +45,7 @@ main_variables(program: Node): any := {
 	for statement in statements_in(program) { add_assigned(statement, found) }
 	found
 }
-add_assigned(n: Node, found: any): any := {
+add_assigned(n: Node, found: map): any := {
 	if is_define_statement(n) { return ø }
 	if is_operator(n, "=") {
 		target = key_of(n)
@@ -79,7 +79,7 @@ changed_root(target: Node): any := {
 }
 
 # `let n = 5` in the body: n is explicitly the function's own
-declares_local(body: any, name: text): bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_declaration_keywords and leftmost_name(n#2) == name)
+declares_local(body: Node, name: text): bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_declaration_keywords and leftmost_name(n#2) == name)
 
 # how the body first mentions the name: binding it fresh (`primes = []`, the function's own local, as in Python),
 # reading or updating it (main's variable), or not at all ("")

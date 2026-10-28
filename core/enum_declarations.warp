@@ -49,7 +49,7 @@ declared_enum(n: Node): any := match n {
 }
 
 # the case names of every enum the program declares, by enum name
-enums_in(n: any, enums: any): any := {
+enums_in(n: Node, enums: map): map := {
 	declared = declared_enum(n)
 	if declared != ø { enums[declared#1] = declared#2 }
 	if is_group(n) { for part in n { enums_in(part, enums) } }
@@ -57,7 +57,7 @@ enums_in(n: any, enums: any): any := {
 }
 
 # the cases of those enums, each name once
-case_names_of(enums: any): any := {
+case_names_of(enums: map): map := {
 	variants = {}
 	for name in enums.keys { for case in enums[name] { variants[case] = yes } }
 	variants

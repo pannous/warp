@@ -73,13 +73,13 @@ module_text(n: Node): any := {
 	if source == ø then n else source
 }
 # a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
-library_literal(files: any): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
+library_literal(files: map): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
 # the file module_source names: lib/<name>.warp, or the file within lib/ a name with an extension names
 module_source_path(name: text): text := if name.contains(".") then run_library() + "/" + name else std_module_path(name)
 
 # [the declarations, the files read]: those of each file the statements use, not yet among `seen`; each file's own
 # declarations claim their signatures in `claimed` (claim_signatures)
-declarations_used(statements: any, folder: text, seen: any, claimed: any): list := {
+declarations_used(statements: list, folder: text, seen: list, claimed: map): list := {
 	declarations = []
 	for statement in statements {
 		file = file_used(statement, folder)
@@ -110,7 +110,7 @@ parse_makers = ["parser.warp", "walk.warp"]
 # naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in
 # both is one
 # Rust twin: src/modules/loader.rs claim_signatures
-claim_signatures(declarations: any, file: text, claimed: any) := {
+claim_signatures(declarations: list, file: text, claimed: map) := {
 	for declaration in declarations {
 		signature = declared_signature(declaration)
 		if signature == ø { continue }

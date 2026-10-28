@@ -138,7 +138,7 @@ checked(source: text, folder: text, prelude: text): list := [view_of(checked_pro
 # parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them and the
 # diagnostics of its checks (cards pure-runs, pure-diagnostics), with the definitions of the prelude's text it
 # reaches and the program's uses read from its folder
-stage(request: any, prelude: text): any := {
+stage(request: list, prelude: text): any := {
 	if request#1 == "pure" { return checked(request#2, request#3, prelude) }
 	if request#1 == 0 { return bridged(stage_view(parsed(request#2))) }
 	pass = passes#(request#1)

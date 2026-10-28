@@ -67,4 +67,4 @@ counted_member(n: Node, takers: list): any := match n {
 	}
 	_: ø
 }
-counted_parts(counted: any): any := if counted == ø then ø else [key_of(counted), value_of(counted)]
+counted_parts(counted: Node?): list? := if counted == ø then ø else [key_of(counted), value_of(counted)]

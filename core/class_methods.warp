@@ -466,7 +466,7 @@ is_position(n: Node): bool := is_key(n, Op.Hash) and key_of(n) != ø and not (is
 # `b#(i+1)`, the parser's b[i], is the class's index(i); another b#p its position(p)
 is_shifted(at: Node): bool := is_key(at, Op.Add) and value_of(at) == 1
 element_word(element: Node): text := if is_shifted(value_of(element)) then index_method else position_method
-position_call(element: Node, word: text, written: list, parts: any): Node := {
+position_call(element: Node, word: text, written: list, parts: function): Node := {
 	at = value_of(element)
 	call_of(routed_name(word), [parts(key_of(element)), parts(if word.starts_with(index_method) then key_of(at) else at)] + written)
 }

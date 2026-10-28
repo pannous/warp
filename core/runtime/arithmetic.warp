@@ -40,7 +40,7 @@ checked_multiply(a: int, b: int): int := {
 }
 # what a list takes of b in `xs + b`, `xs += b`: a list its items, ø none, any other value one item: `[] + 3` is [3],
 # `[1] + "a"` [1 'a']
-appended_items(b: any): list := {
+appended_items(b: Node): list := {
 	if is_null(b) { return new_list(0) }
 	if kind_code(b) == Kind.List { return unboxed_list(b) }
 	[b]
