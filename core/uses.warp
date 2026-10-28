@@ -74,7 +74,7 @@ module_text(n: Node): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
 	path = module_source_path(n#2)
-	source = built_in_files.get(path) ?? (try read(path) else ø)
+	source = try read(path) else ø
 	if source == ø then n else source
 }
 is_empty_call(n: Node, name: text): bool := is_group(n) and bracket_of(n) == "(" and #n == 1 and n#1 == symbol(name)
@@ -84,13 +84,14 @@ packed_parses(files: map): map := {
 	for path in files.keys { parses[path] = pack(source_parse(run_library() + "/" + path, files[path])) }
 	parses
 }
-# each top-level module's slices parsed, packed, by their text (prelude_words.warp SLICE_PARSES)
+# each top-level module's slices parsed, packed, by their place (prelude_words.warp SLICE_PARSES, slice_key)
 packed_slice_parses(files: map): map := {
 	parses = {}
 	for path in files.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
-			uses = use_lines(files[path])
-			for slice in slices_cut(files[path]) { parses[slice#2] = pack(plain_node(parsed(slice#2, uses))) }
+			source = files[path]
+			uses = use_lines(source)
+			for span in slice_spans(source) { parses[slice_key(path, "${span#2}")] = pack(plain_node(parsed(source[span#2 ..< span#3], uses))) }
 		}
 	}
 	parses
@@ -229,12 +230,9 @@ without_steps_up(path: text): text := {
 	}
 	kept.join("/")
 }
-# the files the compiler has built in, by path (compiler.warp's runtime files while it lowers its runtime words): their
-# text, never read from lib/
-global built_in_files = {}
 # a file of lib/ comes as parser.warp file_source gives it: from the disk under WARP_LIB, else from the bundle, whose
 # texts are lib/ as it was when the compiler was built (a module changed since must be read)
-file_text(path: text): any := built_in_files.get(path) ?? file_source(path)
+file_text(path: text): any := file_source(path)
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
 # `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program), a named
