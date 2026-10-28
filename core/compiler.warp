@@ -121,11 +121,13 @@ compile_file(source_file: text, wasm_file: text, folder: text) := {
 		write(wasm_file, view_json(bridged(stage_view(parsed(read(source_file))))))
 	} else {
 		emitting_file(working_relative(source_file))
-		compiled = compile(read(source_file), folder)
+		source = read(source_file)
+		compiled = compile(source, folder)
 		# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
 		if compiled is text { raise compiled }
 		write_bytes(wasm_file, compiled)
-		if separate_file() != "" { write_bytes(separate_file(), separate_module()) }
+		# a primitive module imports no runtime: its separate form is itself
+		if separate_file() != "" { write_bytes(separate_file(), if is_primitive_file(source) then compiled else separate_module()) }
 	}
 }
 
