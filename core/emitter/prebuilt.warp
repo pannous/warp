@@ -146,6 +146,7 @@ def behind_runtime() {
 	# the program's texts in segments behind the runtime's, numbered so in the linked module too (empty ones there)
 	module.first_text_segment = runtime_image.data
 	module.runtime_types = runtime_image.types - #gc_names
+	behind_libraries()
 }
 # the runtime's imports, as runtime_wasm_module declared them: WASI's fd_write, then every host word
 # then the program's C functions, which move the runtime's functions up by their count (runtime_shift)
@@ -210,7 +211,8 @@ def prepended_code(functions: list): list {
 	runtime = rebased_runtime_code()
 	count = uleb_read(runtime, 0)
 	at = count#2
-	content = uleb(count#1 + #functions)
+	linked = library_bodies()
+	content = uleb(count#1 + #linked + #functions)
 	for p in 0..<count#1 {
 		size = uleb_read(runtime, at)
 		end = size#2 + size#1
@@ -218,6 +220,7 @@ def prepended_code(functions: list): list {
 		content += if #hook > 0 then function_body(hook#1, #content) else runtime[at ..< end]
 		at = end
 	}
+	for body in linked { content += body }
 	for f in functions { content += function_body(f, #content) }
 	content
 }
@@ -263,16 +266,16 @@ def prepended_bytes(functions: list): list {
 	function_types = functions.map(function_type)
 	classes = module.gc_order[#gc_names ..]
 	class_types = if #classes == 0 then [] else [[rec_group_byte] + uleb(#classes) + concatenated(classes.map(name => gc_bytes(gc_definition(name))))]
-	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), class_types + function_types + c_import_types()))
-	c_entries = c_import_entries(runtime_image.types + #classes + #functions)
-	declared = section(section_ids.function, with_entries(runtime_part(section_ids.function), functions.map(f => uleb(own_function_type(f)))))
+	types = section(section_ids.type, with_entries(runtime_part(section_ids.type), library_types() + class_types + function_types + c_import_types()))
+	c_entries = c_import_entries(runtime_image.types + linked_function_count() + #classes + #functions)
+	declared = section(section_ids.function, with_entries(runtime_part(section_ids.function), library_declared() + functions.map(f => uleb(own_function_type(f)))))
 	own_globals = module.global_order[#runtime_image.globals ..]
 	globals = section(section_ids.globals, with_entries(runtime_part(section_ids.globals), own_globals.map(global_entry)))
 	codes = section(section_ids.code, prepended_code(functions))
-	texts = section(section_ids.data, with_entries(runtime_part(section_ids.data), text_segments()))
+	texts = section(section_ids.data, with_entries(runtime_part(section_ids.data), library_segments() + text_segments()))
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 	parts = [types, section(section_ids.import, with_entries(runtime_part(section_ids.import), c_entries)), declared, section(table_section_id, runtime_part(table_section_id)), memory,
-		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(runtime_image.data + #module.texts)), codes, texts]
+		section(section_ids.tag, runtime_part(section_ids.tag)), globals, section(section_ids.export, vector(program_exports(functions))), section(section_ids.data_count, uleb(runtime_image.data + linked_text_count() + #module.texts)), codes, texts]
 	wasm_header + concatenated(parts) + prepended_names(functions, classes, own_globals) + program_marks() + runtime_sections(functions)
 }
 # the program's C functions, imported behind the runtime's host words; their types after every other: no runtime type moves
@@ -291,7 +294,7 @@ def program_marks(): list {
 def prepended_names(functions: list, classes: list, own_globals: list): list {
 	imported = range_list(#module.imports).map(i => index_name(i, module.imports#(i + 1)#2))
 	words = runtime_image.words.keys.map(name => index_name(runtime_image.words[name]#1 + runtime_shift(), name))
-	content = subsection(names_subsections.functions, vector(imported + words + functions.map(f => index_name(f.index, f.name))))
+	content = subsection(names_subsections.functions, vector(imported + words + library_names() + functions.map(f => index_name(f.index, f.name))))
 	content += subsection(names_subsections.locals, shifted_locals(runtime_subsection(names_subsections.locals), functions.map(local_name_map)))
 	content += runtime_names(names_subsections.types, classes.map(name => index_name(module.gc_indices[name], name)))
 	content += runtime_names(names_subsections.globals, own_globals.map(name => index_name(module.globals[name]#1, name)))
@@ -305,7 +308,137 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 ## operand padded and listed, so a link appends it behind the runtime and the modules before it
 # where the module's own items start in each index space (relocated): behind the runtime's imports and functions,
 # types, globals and text segments
-def own_items_from(): list := [#module.imports + runtime_image.functions, runtime_image.types, #runtime_image.globals, runtime_image.data]
+def own_items_from(): list := runtime_counts()
+def runtime_counts(): list := [runtime_image.imports + runtime_image.functions, runtime_image.types, #runtime_image.globals, runtime_image.data]
+
+## a program linked to prebuilt library modules (card modules-prebuilt, notes/runtime_linking.md "Library modules"):
+## each module's own functions, types, globals and texts appended behind the runtime's in the order given, its operands
+## moved to where they land (rebased); the program's own numbered behind them. A module word the program calls is the
+## module's, at its index, of its kinds: never compiled again
+# a module's warp.module read back: its own functions (index, kinds, result, signature), globals [name, kind], text
+# segments, what it was built behind, and where each kind of its items lands here (base: placed, type, text)
+class LibraryImage { name: text; wasm: list; functions: list; globals: list; texts: int; behind: list; classes: list; builds: bool; base: list }
+global linked_images = []
+# the names the program defines itself: its own definition, never the module's
+global linked_own_names = []
+def link_libraries(images: list, own_names: list) {
+	linked_images = images
+	linked_own_names = own_names
+}
+# ø for a module not linkable behind this runtime: built behind another, making closures (their dispatch is the
+# program's, not linked yet), or importing C functions
+def library_image_of(name: text, wasm: list): any {
+	place = section_place(wasm, section_ids.custom, library_section)
+	if place == ø { return ø }
+	layout = ByteReader(wasm, place#1)
+	types = read_number(layout)
+	imports = read_number(layout)
+	read_number(layout)
+	read_number(layout)
+	texts = read_number(layout)
+	read_names(layout)
+	read_names(layout)
+	globals = []
+	for i in 0..<read_number(layout) { globals += [[read_name(layout), read_kind(layout)]] }
+	functions = []
+	for i in 0..<read_number(layout) {
+		word = Function(read_name(layout), ø, ø)
+		word.index = read_number(layout)
+		kinds = []
+		for j in 0..<read_number(layout) { kinds += [read_kind(layout)] }
+		word.kinds = kinds
+		word.result = read_kind(layout)
+		word.signature = read_signature(layout)
+		functions += [word]
+	}
+	behind = []
+	for i in 0..<read_number(layout) { behind += [read_number(layout)] }
+	closures = read_number(layout)
+	classes = []
+	for i in 0..<read_number(layout) { classes += [[read_name(layout), read_name(layout)]] }
+	builds = read_number(layout) == 1
+	if types != #gc_names + #classes or imports != runtime_image.imports or closures > 0 or behind != runtime_counts() { return ø }
+	LibraryImage(name, wasm, functions, globals, texts, behind, classes, builds, [])
+}
+# each linked module's place: its functions behind those placed so far, its types (one per function) and texts too,
+# its globals declared by name (one the runtime or a module before it declares is theirs)
+def behind_libraries() {
+	for image in linked_images {
+		image.base = [module.placed, #gc_names + module.runtime_types, module.first_text_segment]
+		for entry in image.globals { declared_global(entry#1, entry#2) }
+		module.placed += #image.functions
+		module.runtime_types += #image.functions
+		module.first_text_segment += image.texts
+	}
+}
+# the module words the program reaches: the first module's of a name, unless the program defines the name itself;
+# the module's class structs the program's of their names, which it declares alike (its classes from the module's
+# text), else the program compiles the module from its source
+def bind_library_words() {
+	for image in linked_images {
+		for entry in image.classes {
+			if entry#1 == instance_struct() { gc_type(instance_struct()) }
+			if entry#1 not in module.class_structs or struct_written(entry#1) != entry#2 { refuse("the class struct " + entry#1 + " of the linked module " + image.name + " differs from the program's") }
+			gc_type(entry#1)
+		}
+		for k in 0..<#image.functions {
+			word = image.functions[k]
+			f = module.functions.get(word.name)
+			if f != ø and f.kinds == ø and word.name not in linked_own_names {
+				f.index = #module.imports + image.base#1 + k
+				f.kinds = word.kinds
+				f.result = word.result
+			}
+		}
+	}
+}
+# the host's builders, exported once main is placed (the first function, which a program's exports name), for a
+# linked module that calls them
+def linked_builders() { if linked_images.any(image => image.builds) { exported_builders() } }
+def linked_function_count(): int {
+	count = 0
+	for image in linked_images { count += #image.functions }
+	count
+}
+def linked_text_count(): int {
+	count = 0
+	for image in linked_images { count += image.texts }
+	count
+}
+# a section's entries after the first `skip` (those of the runtime it was built behind), each its bytes: a code
+# section's, each its size first, or a data section's passive segments, a flag byte before the size
+def entries_after(content: list, skip: int, flagged: bool): list {
+	count = uleb_read(content, 0)
+	at = count#2
+	entries = []
+	for i in 0..<count#1 {
+		size = uleb_read(content, if flagged then at + 1 else at)
+		end = size#2 + size#1
+		if i >= skip { entries += [content[at ..< end]] }
+		at = end
+	}
+	entries
+}
+# a linked module's own function bodies, each operand moved to where its item lands: its own items by its bases, the
+# runtime's functions by the program's C imports
+def library_code(image: LibraryImage): list {
+	place = section_place(image.wasm, section_ids.code)
+	content = image.wasm[place#1 ..< place#2]
+	shift = runtime_shift()
+	relocations = relocations_of(image.wasm).filter(entry => entry#3 == own_space or (shift != 0 and entry#3 == runtime_space and entry#2 == relocated.calls and uleb_read(content, entry#1)#1 >= runtime_image.imports))
+	globals = {}
+	for j in 0..<#image.globals { globals[image.behind#3 + j] = module.globals[image.globals[j]#1]#1 }
+	# its class structs first among its types, the program's of their names, then a type per function
+	types = {}
+	for c in 0..<#image.classes { types[image.behind#2 + c] = module.gc_indices[image.classes[c]#1] }
+	own = [shifted(#module.imports + image.base#1 - image.behind#1), Move(image.base#2 - image.behind#2 - #image.classes, types), Move(0, globals), shifted(image.base#3 - image.behind#4)]
+	entries_after(rebased(content, relocations, [[shifted(shift)], own]), runtime_image.functions, no)
+}
+def library_types(): list := concatenated(linked_images.map(image => image.functions.map(function_type)))
+def library_declared(): list := concatenated(linked_images.map(image => range_list(#image.functions).map(k => uleb(image.base#2 + k))))
+def library_bodies(): list := concatenated(linked_images.map(library_code))
+def library_segments(): list := concatenated(linked_images.map(image => entries_after(image.wasm[section_place(image.wasm, section_ids.data)#1 ..< section_place(image.wasm, section_ids.data)#2], runtime_image.data, yes)))
+def library_names(): list := concatenated(linked_images.map(image => range_list(#image.functions).map(k => index_name(#module.imports + image.base#1 + k, image.functions[k].name))))
 
 ## a program linked to runtime.wasm (card runtime-separate-modules, notes/runtime_linking.md "Separate modules"): numbered
 ## as behind it, but every runtime function, global, the memory, the error tag and the hooks table imported from its

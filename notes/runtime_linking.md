@@ -100,7 +100,16 @@ made_case kind made, since no program decides any more what it makes.
   `warp.module` in warp.runtime's binary layout, counting only its own items; its own operands are marked space 1,
   offsets from the code section's content start. 26 of 36 prebuild; the rest are named with their refusal, mostly a
   word whose untyped parameters are nodes reaching a call the core lacks for nodes (sound `number(…)`, math `dot`).
-- Open: a link appending the own items (rebased, shifts per space); the module's prelude words are its own copy
+- Linked (2026-10-28): compile() reads modules/<name>.wasm beside runtime.wasm for each `use`d bundled module whose
+  text is the bundled one (compiler.warp linked_libraries, prebuilt.warp library_image_of). Its own functions, types
+  (one per function), globals (by name: one already declared is that one) and text segments go behind the runtime's,
+  its code moved by separate-modules' `rebased` moves; its words the program calls are bound (bind_library_words),
+  never compiled; its class structs are the program's of the same name when declared alike (struct_written), else
+  the compile goes on from source. Not linked: a module making closures, importing C functions, or built behind
+  another runtime.wasm (warp.module's trailer: own_from, closures, classes, builds). test/modules gives the same
+  results linked and from source. Measured: `use units; 3m + 2m` 0.64 s -> 0.56 s: the program still lowers the
+  module's reached definitions (checked_program, 70 of 84 samples), which only warp.declarations removes.
+- Open: the module's prelude words are its own copy
   (they should be the prelude module's, space 2+k); closures into module.closures behind the program's, closure ids as
   a padded sleb behind i64.const (fixer's plan); classes from warp.declarations into module.classes before late_code;
   late_code once all modules are bound.
