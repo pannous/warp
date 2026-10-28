@@ -8,3 +8,6 @@
 'p = π; sin(0.5) > 0.47'	true
 'class Cm { n: number }; floor(q: Cm) := q.n; floor(Cm(4))'	4
 'class Cm { n: number }; floor(q: Cm) := q.n; floor(9.5)'	9
+# an untyped definition of a library word takes every type itself: no library variant joins it
+'add(a, b) := 7; add(1, 2)'	7
+'def clear(color) { 7 }; clear(3)'	7

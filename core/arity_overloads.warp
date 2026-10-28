@@ -242,9 +242,10 @@ defined_types(program: Node): map := {
 }
 
 # a library word the program defines for other types, `sin(x: Real) := …` beside math's `sin(x: float)`: the library's
-# lines join its variants (decision sound-core-order), so a float still reaches the library's sin
+# lines join its variants (decision sound-core-order), so a float still reaches the library's sin; an untyped
+# definition, `add(a, b) := …`, `def clear(color)`, takes every type itself and shadows the word
 library_variants(name: text, defined: list): list := {
-	if not word_lines().has(name) { return [] }
+	if not word_lines().has(name) or not defined.all(own => own.any(type => type != any_word)) { return [] }
 	written = word_lines()[name].map(line => line.signature.parameters.map(p => if p.type_name == "" then any_word else p.type_name))
 	joining = []
 	# math declares sin twice, from warp and from 'm': one variant
