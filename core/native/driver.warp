@@ -43,6 +43,8 @@ SPACE = 32
 TEXT_SHIFT = 4294967296
 # the host words the driver answers, the number its callback is defined with
 STD_IO_WORD = 1
+# the host word exit(code), which ends the run with that status
+EXIT_WORD = 2
 
 wasm_config_new(): handle from "warp_wasmtime"
 wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "warp_wasmtime"
@@ -326,7 +328,7 @@ warp_config(): handle := {
 }
 
 # the host words the module imports that the driver answers, each defined as its callback (lib/native/foreign.c
-# warp_host_callback, which calls host_word) with the type the module declares: std_io, and each C function its
+# warp_host_callback, which calls host_word) with the type the module declares: std_io, exit, and each C function its
 # warp.c_functions section describes
 host_words_defined(linker: handle, compiled: handle, module: text, trap: pointer): nothing := {
 	table = custom_section(module, "warp.c_functions")
@@ -337,6 +339,7 @@ host_words_defined(linker: handle, compiled: handle, module: text, trap: pointer
 		from = native_vector_text(wasm_importtype_module(import))
 		name = native_vector_text(wasm_importtype_name(import))
 		if same_text(from, "host") and same_text(name, "std_io") { word_defined(linker, import, STD_IO_WORD, trap) }
+		if same_text(from, "host") and same_text(name, "exit") { word_defined(linker, import, EXIT_WORD, trap) }
 		line = c_line(table, from, name)
 		if line.length > 0 { word_defined(linker, import, foreign_of(line), trap) }
 	}
@@ -536,6 +539,7 @@ kept_machine_code(compiled: handle, machine_code: text, key: text, fingerprint: 
 # a host word the module calls (STD_IO_WORD), its arguments and results wasmtime_val_t's, through the caller
 # (foreign.c warp_host_callback). std_io(module, member, arguments) is the Error that says the driver lacks it
 host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
+	if word == EXIT_WORD { exit(long_at(given + VALUE_OFFSET).value as i32) }
 	context = wasmtime_caller_context(caller)
 	if word != STD_IO_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)
