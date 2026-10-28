@@ -77,11 +77,21 @@ pub(crate) fn standalone_note_marker(program: &std::path::Path) -> Option<std::p
 	)
 }
 
-/// The program, printing its value, compiled to machine code and appended to a copy of the compiler-less `warp-runtime`
-/// stub (crates/warp-runtime, notes/aot.md); Ok is the report of what was written
+/// The module `warp build` just wrote (x.wasm, whose `_start` prints the program's value), compiled to machine code and
+/// appended to a copy of the compiler-less `warp-runtime` stub (crates/warp-runtime, notes/aot.md); Ok is the report
 pub(crate) fn write_standalone_executable(code: &str, target: &str) -> Result<String, String> {
-	let _ = (code, carried_c_functions, &PROGRAM_STUB, standalone_output_path(target));
-	Err("a standalone executable needs the program compiled to print its value, which compiler.warp does not do yet (card rust-bootstrap)".to_string())
+	let _ = code;
+	let module_path = super::outputs::compiled_output_path(target);
+	let bytes = fs::read(&module_path).map_err(|failure| format!("{module_path}: {failure}"))?;
+	let c_functions = carried_c_functions(&warp::host::host_parts::imports_of(&bytes)?);
+	let engine = warp_runtime::standalone::standalone_engine().map_err(|failure| failure.to_string())?;
+	let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
+	let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
+	let (stub, runtime) = runtime_stub(&PROGRAM_STUB)?;
+	let output = standalone_output_path(target);
+	let carried = warp_runtime::c_signatures::with_c_functions(&c_functions, &machine_code);
+	write_executable(&warp_runtime::standalone::with_machine_code(&runtime, &carried), &output)?;
+	Ok(format!("wrote {} (runtime {}, machine code {} bytes)", output.display(), stub.display(), machine_code.len()))
 }
 
 /// The C functions among `imports` the stub doesn't link itself, as their library's headers declare them: the

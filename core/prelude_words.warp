@@ -55,6 +55,11 @@ unbaked_slices(baked: text, source: text): list := baked.split("\n").filter(line
 # library_slices() stands); a compiler built by one that bakes none cuts them where it runs
 LIBRARY_SLICES = library_slices()
 library_slices(within: text = ""): map := {}
+# each bundled module's slice parsed with its module's use lines, packed, by the slice's text: a program reaching a
+# module's definition parses none of it (uses.warp module_text writes them where slice_parses() stands, card
+# modules-prebuilt); a slice of other text, a WARP_LIB edit's, is parsed where it's reached
+SLICE_PARSES = slice_parses()
+slice_parses(within: text = ""): map := {}
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
 # `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
@@ -156,8 +161,9 @@ with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 		wanted = wanted[1 ..]
 		for slice in slices {
 			if slice#1 == word and slice#2 not in reached {
-				if uses == ø { uses = use_lines(module) }
-				slice_node = early_sugared(plain_node(parsed(slice#2, uses)))
+				baked = SLICE_PARSES.get(slice#2)
+				if baked == ø and uses == ø { uses = use_lines(module) }
+				slice_node = early_sugared(if baked != ø then unpack(baked) else plain_node(parsed(slice#2, uses)))
 				reached[slice#2] = statements_in(slice_node)
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
@@ -431,7 +437,7 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 			seen += [name_of(used)]
 			source = file_text(std_module_path(name_of(used)))
 			if source != ø {
-				inner = used_module_sources(statements_in(plain_node(parsed(source))), folder, seen)
+				inner = used_module_sources(statements_in(source_parse(std_module_path(name_of(used)), source)), folder, seen)
 				sources += inner#1 + [source]
 				seen = inner#2
 			}

@@ -64,12 +64,13 @@ aliased(n: Node, aliases: list): any := {
 # `module_source("prelude")`: lib/prelude.warp's text, read at compile time as src/lowering/words/library_words.rs
 # writes it out (the std modules are lib/<name>.warp); `module_source("compiler/errors.data")`, a name with an
 # extension, that file of lib/; `library_sources()`, every module of lib/ (parser.warp LIBRARY_FILES), `library_parses()`
-# their parses (LIBRARY_PARSES). A compiled
+# their parses (LIBRARY_PARSES), `slice_parses()` their definitions' parses (SLICE_PARSES). A compiled
 # compiler reads its own data from nowhere (user 2026-10-25: "These should all be built in"; decision built-in-lib)
 module_text(n: Node): any := {
 	if is_empty_call(n, "library_sources") { return library_literal(library_texts(run_library(), "")) }
 	if is_empty_call(n, "library_parses") { return library_literal(packed_parses(library_texts(run_library(), ""))) }
 	if is_empty_call(n, "library_slices") { return library_literal(baked_slices(library_texts(run_library(), ""))) }
+	if is_empty_call(n, "slice_parses") { return library_literal(packed_slice_parses(library_texts(run_library(), ""))) }
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
 	path = module_source_path(n#2)
@@ -81,6 +82,17 @@ is_empty_call(n: Node, name: text): bool := is_group(n) and bracket_of(n) == "("
 packed_parses(files: map): map := {
 	parses = {}
 	for path in files.keys { parses[path] = pack(source_parse(run_library() + "/" + path, files[path])) }
+	parses
+}
+# each top-level module's slices parsed, packed, by their text (prelude_words.warp SLICE_PARSES)
+packed_slice_parses(files: map): map := {
+	parses = {}
+	for path in files.keys {
+		if not path.contains("/") and path.ends_with(module_extension) {
+			uses = use_lines(files[path])
+			for slice in slices_cut(files[path]) { parses[slice#2] = pack(plain_node(parsed(slice#2, uses))) }
+		}
+	}
 	parses
 }
 # each file's slices (prelude_words.warp LIBRARY_SLICES), a line `name start end` per slice
