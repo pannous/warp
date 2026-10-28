@@ -55,11 +55,29 @@ unbaked_slices(baked: text, source: text): list := baked.split("\n").filter(line
 # library_slices() stands); a compiler built by one that bakes none cuts them where it runs
 LIBRARY_SLICES = library_slices()
 library_slices(within: text = ""): map := {}
-# each bundled module's slice parsed with its module's use lines, packed, by the slice's text: a program reaching a
+# each bundled module's slice parsed with its module's use lines, packed, by `<file> <start>`: a program reaching a
 # module's definition parses none of it (uses.warp module_text writes them where slice_parses() stands, card
 # modules-prebuilt); a slice of other text, a WARP_LIB edit's, is parsed where it's reached
 SLICE_PARSES = slice_parses()
 slice_parses(within: text = ""): map := {}
+# each slice text of the bundled files → its key in SLICE_PARSES, `<file> <start>` (a slice keyed by its place, not
+# its text, keeps the texts out of the compiler a second time)
+slice_keys(paths: list): map := {
+	keys = {}
+	for path in paths {
+		within = library_path(path)
+		source = LIBRARY_FILES.get(within)
+		spans = LIBRARY_SLICES.get(within)
+		if source != ø and spans != ø {
+			for line in spans.split("\n").filter(line => line != "") {
+				span = line.split(" ")
+				keys[source[(span#2 as int) ..< (span#3 as int)]] = slice_key(within, span#2)
+			}
+		}
+	}
+	keys
+}
+slice_key(within: text, start: text): text := within + " " + start
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
 # `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
@@ -141,7 +159,7 @@ lowering_words(program: Node): list := if nodes_in(program).any(n => is_lambda(n
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
 # loader places them: a used module's in front of the program, the prelude's after it. `also` are words the program
 # will say once the sugar rewrote it (passes.warp with_used: `twice {…}` says the prelude's times)
-with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
+with_reached(program: Node, module: text, in_front: bool, also: list, files: list = []): Node := {
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
 	aliases = with_call_forms(module_aliases(module), definition_slices(module).map(slice => slice#1) + own.keys)
@@ -157,12 +175,13 @@ with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 	declared = if in_front then linked_slices() else {}
 	wanted = symbol_words(program) + lowering_words(program) + also + (if in_front then linked_needs() else [])
 	uses = ø
+	keys = slice_keys(files)
 	while #wanted > 0 {
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
 			if slice#1 == word and slice#2 not in reached {
-				baked = SLICE_PARSES.get(slice#2)
+				baked = SLICE_PARSES.get(keys.get(slice#2) ?? "")
 				if baked == ø and uses == ø { uses = use_lines(module) }
 				slice_node = early_sugared(if baked != ø then unpack(baked) else plain_node(parsed(slice#2, uses)))
 				if slice#2 in declared { slice_node = declared_only(slice_node) }
@@ -439,7 +458,7 @@ called_words(n: Node): list := {
 # case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
 with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(statements_in(program), folder, [])
-	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, [])
+	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, [], sources#2.map(std_module_path))
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen]
 used_module_sources(statements: any, folder: text, seen: any): list := {

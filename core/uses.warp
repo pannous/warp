@@ -84,13 +84,14 @@ packed_parses(files: map): map := {
 	for path in files.keys { parses[path] = pack(source_parse(run_library() + "/" + path, files[path])) }
 	parses
 }
-# each top-level module's slices parsed, packed, by their text (prelude_words.warp SLICE_PARSES)
+# each top-level module's slices parsed, packed, by their place (prelude_words.warp SLICE_PARSES, slice_key)
 packed_slice_parses(files: map): map := {
 	parses = {}
 	for path in files.keys {
 		if not path.contains("/") and path.ends_with(module_extension) {
-			uses = use_lines(files[path])
-			for slice in slices_cut(files[path]) { parses[slice#2] = pack(plain_node(parsed(slice#2, uses))) }
+			source = files[path]
+			uses = use_lines(source)
+			for span in slice_spans(source) { parses[slice_key(path, "${span#2}")] = pack(plain_node(parsed(source[span#2 ..< span#3], uses))) }
 		}
 	}
 	parses
