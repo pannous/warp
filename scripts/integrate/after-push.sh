@@ -59,7 +59,7 @@ red() { # red <what: detail> [--urgent]: one card per kind of failure (its key f
 }
 
 # copy_compilers <lib> <folder>: the compilers a lib/ keeps (runtime.wasm, which every compile links, and warp.wasm;
-# warp-self.wasm only when promoted from the same inputs) into the folder with their machine code (.cwasm) and kept values (.kept/), each file moved into place
+# warp-self.wasm only when promoted from the same inputs; modules/*.wasm) into the folder with their machine code (.cwasm) and kept values (.kept/), each file moved into place
 # whole, its machine code before it: a run that finds a compiler finds its code too (card atomic-install)
 copy_compilers() {
 	local from=$1 folder=$2 inputs name part
@@ -74,6 +74,13 @@ copy_compilers() {
 			[ -f "$from/$part" ] || continue
 			cp "$from/$part" "$folder/$part.new" && mv "$folder/$part.new" "$folder/$part" || return 1
 		done
+	done
+	# the prebuilt standard modules programs link to (a module missing or older than its text is compiled from source)
+	mkdir -p "$folder/modules"
+	for part in "$from"/modules/*.wasm; do
+		[ -f "$part" ] || continue
+		name=modules/$(basename "$part")
+		cp "$part" "$folder/$name.new" && mv "$folder/$name.new" "$folder/$name" || return 1
 	done
 }
 
