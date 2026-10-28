@@ -103,9 +103,6 @@ mark_line(lines: list): int? := {
 primitive_module(source: text, folder: text): list := {
 	lines = source.split("\n")
 	lines[mark_line(lines) - 1] = ""
-	# the library words a primitive file sees are its prelude's, which has no typed lines of the GC library: none of
-	# those joins a definition of the file as a variant (arity_overloads.warp library_variants)
-	typed_word_lines = {}
 	program = lowered_program(lines.join("\n"), folder, PRIMITIVE_PRELUDE)
 	primitive_functions = {}
 	primitive_hosted = no
