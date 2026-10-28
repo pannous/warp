@@ -732,8 +732,13 @@ def case_value(enum_name: text, case: text): TypedCode {
 	made = node(Kind.Symbol + module.enum_numbers[enum_name] * KindUnit.Info, text_bytes(case))
 	TypedCode(ValueKind.Node, kind_code_of(kept) + [op.i64_const] + sleb(Kind.Symbol) + [op.i64_ne, op.if, no_value] + made + [op.global_set] + index + [op.end] + kept)
 }
-# `Coin.Dime` of an enum the program declares, its name no local's
-is_case_read(body: Body, owner: Node, case: Node): bool := owner is symbol and case is symbol and name_of(owner) not in body.names and name_of(case) in (module.enum_cases.get(name_of(owner)) ?? [])
+# `Coin.Dime`, or a bare `Dime` of the one enum declaring it (local_value)
+is_case(body: Body, n: Node): bool := {
+	if n is symbol { return not body.function.is_runtime and not is_global(body, name_of(n)) and name_of(n) not in body.names and #(module.variants.get(name_of(n)) ?? []) == 1 }
+	n is key and op_of(n) == Op.Dot and is_case_read(body, key_of(n), value_of(n))
+}
+# `Coin.Dime` of an enum the program declares, its name no local's, nor a runtime word's (its own Kind.Int)
+is_case_read(body: Body, owner: Node, case: Node): bool := not body.function.is_runtime and owner is symbol and case is symbol and name_of(owner) not in body.names and name_of(case) in (module.enum_cases.get(name_of(owner)) ?? [])
 # `return x`: x ends the function; what follows it is unreachable, of any kind
 def return_value(body: Body, value: TypedCode): TypedCode {
 	body.returned += [value.kind]
@@ -1029,6 +1034,12 @@ def key_expression(body: Body, n: Node): TypedCode {
 		return refuse("the operator " + operator + " with nothing " + (if left === ø then "before" else "after") + " it")
 	}
 	if operator == Op.Hash and left is symbol { return analyzed_element(body, left, right) }
+	# `k == Shade.Green`: compared with the case itself (runtime case_equal), not through node_equal's every kind
+	if operator in equalities and (is_case(body, left) or is_case(body, right)) {
+		case = if is_case(body, right) then right else left
+		other = if is_case(body, right) then left else right
+		return tested_as(operator, runtime_call("case_equal", [TypedCode(ValueKind.Node, boxed(expression_code(body, other))), expression_code(body, case)]))
+	}
 	operation_code(body, operator, expression_code(body, left), expression_code(body, right))
 }
 # `xs#i` of a list whose elements analyzer.warp knows: the element as that kind, else as a node
