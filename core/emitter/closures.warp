@@ -69,7 +69,7 @@ closure_text_code(f: Function): any := {
 }
 # a lifted lambda as written, its parameters but the captured ones (`x => x*2`); another target by its name
 closure_shown(name: text, captured: int): text := {
-	if name in linked_closures_shown { return linked_closures_shown[name] }
+	if name in module.linked_closures_shown { return module.linked_closures_shown[name] }
 	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return function_name(name) }
 	f = module.functions[name]
 	names = taken_names(f.signature)[captured..]

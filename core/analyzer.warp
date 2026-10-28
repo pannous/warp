@@ -903,10 +903,10 @@ register(flows: list) := {
 }
 
 # a linked module's word, declared without its body: its kinds and result are those the module was compiled with
-# (prebuilt.warp linked_words)
-declares_linked(name: Name): bool := name in linked_words and #linked_words[name].kinds == #function_parameters(name)
+# (Module.linked_words)
+declares_linked(name: Name): bool := name in module.linked_words and #module.linked_words[name].kinds == #function_parameters(name)
 declared_linked(name: Name, scope: Scope) := {
-	word = linked_words[name]
+	word = module.linked_words[name]
 	parameters = function_parameters(name)
 	for index in 0..<#parameters {
 		own = parameters[index].name

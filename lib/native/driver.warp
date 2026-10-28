@@ -5,7 +5,8 @@
 # makes the executable:
 #   driver app.warp args…   compiled by warp.wasm (of $WARP_LIB, else beside the driver), then run
 #   driver app.wasm args…   the module run
-#   a driver with a module appended (<module><its length, u64 little-endian><MODULE_MAGIC>) runs that one
+#   a driver with a module appended (<module><its length, u64 little-endian><MODULE_MAGIC><zeros to a multiple of
+#   16>, as `warp build` writes it) runs that one
 # A module's WASI calls are wasmtime's (the environment inherited, the current folder and the root opened); of the host
 # words the driver answers std_io (host_word), any other is a trap naming it. Its _start runs (a GC program prints its
 # own value), else its main, whose value is printed; a failure's message goes to stderr with status 1, the module's
@@ -14,6 +15,12 @@
 # "WRPMwasm" as a little-endian u64, the last bytes of a driver with a module appended
 MODULE_MAGIC = 7886754537481982551
 TRAILER_BYTES = 16
+# 64-bit Mach-O: its header, the count of load commands in it, and LC_CODE_SIGNATURE's command, data offset 8 bytes in
+MACHO_MAGIC = 4277009103
+MACHO_HEADER = 32
+COMMAND_COUNT_AT = 16
+CODE_SIGNATURE = 29
+SIGNATURE_OFFSET_AT = 8
 STDERR = 2
 # wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
 KIND_I32 = 0
@@ -150,13 +157,31 @@ executable_path(): text := {
 	_NSGetExecutablePath(path, size)
 	text_from(path, c_length(path))
 }
-# the module appended to this executable, else the empty text
+# the module appended to this executable, else the empty text: at its end, or, in a Mach-O executable signed after
+# the module was appended (`warp build`), where its signature begins
 appended_module(): text := {
 	self = read_file(executable_path())
-	end = self.address + self.length
-	if self.length < TRAILER_BYTES or long_at(end - 8).value != MODULE_MAGIC { return text_from(0, 0) }
-	size = long_at(end - TRAILER_BYTES).value as u32
-	text_from(end - TRAILER_BYTES - size, size)
+	at_end = module_before(self, self.length)
+	if at_end.length > 0 then at_end else module_before(self, signature_offset(self))
+}
+# the module whose trailer ends at `end` of the image, else the empty text
+module_before(image: text, end: u32): text := {
+	last = image.address + end
+	# the zeros that pad the trailer to a multiple of 16
+	for i in 0..TRAILER_BYTES { if end >= TRAILER_BYTES and byte_at(last - 1).value == 0 { last = last - 1 } }
+	if end < TRAILER_BYTES or long_at(last - 8).value != MODULE_MAGIC { return text_from(0, 0) }
+	size = long_at(last - TRAILER_BYTES).value as u32
+	text_from(last - TRAILER_BYTES - size, size)
+}
+# where the code signature of a Mach-O executable begins (its LC_CODE_SIGNATURE's data offset), else its length
+signature_offset(image: text): u32 := {
+	if image.length < MACHO_HEADER or word_at(image.address).value != MACHO_MAGIC { return image.length }
+	at = image.address + MACHO_HEADER
+	for i in 0..word_at(image.address + COMMAND_COUNT_AT).value {
+		if word_at(at).value == CODE_SIGNATURE { return word_at(at + SIGNATURE_OFFSET_AT).value }
+		at = at + word_at(at + 4).value
+	}
+	image.length
 }
 # warp's lib/, whose warp.wasm compiles a .warp file: $WARP_LIB, else the folder of the driver
 library_folder(): text := {
