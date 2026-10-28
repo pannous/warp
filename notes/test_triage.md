@@ -272,6 +272,8 @@ Questions for 10:00:
   test_dispatch:7 would then need new expectations) or the builtin (as test_builtin_clash:5, 14-17 expects: `count(x) := 7; count([1,2])` → 2)?
   test_arity_overloads.warp:4 (`def log(x) { log(x, 10) }; def log(x, base) {x/base}; log(50)` → 3.912) fits neither. The rows in
   "Wrong expectations" for min, sin, upper/add/sum and sort assume the program's own wins.
+  Related: decision cross-module-overload (overload by argument type, no shadowing) and merge 90b2efe396 (a program's function
+  named like a host word shadows it per arity); neither says what an untyped `count(x) := 7` does to the prelude's count.
 - `p's name` as a field read (test_property_access:14).
 
 ### modules (229 lines)
