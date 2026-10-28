@@ -6,16 +6,16 @@ use "nodes.warp"
 use "text.warp"
 use "types.warp"
 use "../emitter/byte_codes.warp"
-# whether `m.name` reads a field: m a map or an instance with an entry so named, an entry's key, value or name, a
-# symbol's name
+# whether `m.name` reads a field: m a map, an instance or a list of entries (a tag's `{…}`) with an entry so
+# named, an entry's key, value, name or the fields of its value, a symbol's name
 has_field(m: Node, name: text): bool := {
 	if is_null(m) { return no }
 	if is_position_part(m, name) { return is_meta(m) }
 	if is_list_part(m, name) { return yes }
 	if kind_code(m) == Kind.Symbol { return same_bytes(name, "name") }
 	if node_is_error(m) { return is_error_message(m, name) }
-	if is_entry(m) { return same_bytes(name, "key") or same_bytes(name, "value") or same_bytes(name, "name") or same_bytes(name, "op") }
-	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance { return no }
+	if is_entry(m) { return same_bytes(key_name(m), name) or is_tagged_field(m, name) or same_bytes(name, "key") or same_bytes(name, "value") or same_bytes(name, "name") or same_bytes(name, "op") }
+	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance and kind_code(m) != Kind.List { return no }
 	map_index(m, name) > 0
 }
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's

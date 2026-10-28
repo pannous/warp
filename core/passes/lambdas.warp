@@ -188,7 +188,7 @@ mentioned_names(n: Node, found: list): list := {
 }
 
 # What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
-class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {} }
+class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable_fields: map = {}; function_values: map = {} }
 
 ## the walk
 
@@ -242,6 +242,8 @@ lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
 lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := {
 	if #words > 1 and is_lambda(words#1) { return lowered_call(words, call_node(words#1, arguments_of(words)), locals, lowering) }
 	if #words == 0 or not (words#1 is symbol) { return group_like(n, words.map(word => lowered_lambdas(word, locals, lowering))) }
+	# `sq 3` of `sq = x => x*x`: a variable holding a function, given its arguments, calls it
+	if #words > 1 and name_of(words#1) in locals and lowering.function_values.has(name_of(words#1)) { return lowered_call(words, call_node(words#1, arguments_of(words)), locals, lowering) }
 	group_like(n, [words#1] + arguments_of(words).map(word => lowered_lambdas(word, locals, lowering)))
 }
 
@@ -258,14 +260,15 @@ dotted_lowered(left: Node, right: Node, locals: list, lowering: Lowering): Node 
 	call_node(symbol(closure_call_word + #arguments), [Key(receiver, Op.Dot, called#1)] + arguments)
 }
 
-# the fields the program gives a function value, named unlike any of its functions: `{answer: answer}` of a parameter
-# `answer: function`, `{d: x => x + 1}`, `{f: square}` of a function with parameters
-callable_fields_of(program: Node, arities: map, function_parameters: map): map := {
-	fields = {}
+# the names the program gives a function value by op, named unlike any of its functions: the fields (Op.Colon)
+# `{answer: answer}` of a parameter `answer: function`, `{d: x => x + 1}`, `{f: square}` of a function with parameters;
+# the variables (Op.Assign) `sq = x => x*x`
+callable_names_of(program: Node, op: Op, arities: map, function_parameters: map): map := {
+	names = {}
 	for n in nodes_in(program) {
-		if is_key(n, Op.Colon) and key_of(n) is symbol and not arities.has(name_of(key_of(n))) and gives_function(value_of(n), arities, function_parameters) { fields[name_of(key_of(n))] = yes }
+		if is_key(n, op) and key_of(n) is symbol and not arities.has(name_of(key_of(n))) and gives_function(value_of(n), arities, function_parameters) { names[name_of(key_of(n))] = yes }
 	}
-	fields
+	names
 }
 gives_function(value: Node, arities: map, function_parameters: map): bool := {
 	if is_lambda(value) { return yes }
@@ -507,7 +510,9 @@ lambdas(program: Node): Node := {
 		if parts != ø { arities[parts.name] = #parts.parameters }
 	}
 	lowering = Lowering{arities: arities, lambdas_lifted: []}
-	lowering.callable_fields = callable_fields_of(program, arities, function_parameters_of(written))
+	function_parameters = function_parameters_of(written)
+	lowering.callable_fields = callable_names_of(program, Op.Colon, arities, function_parameters)
+	lowering.function_values = callable_names_of(program, Op.Assign, arities, function_parameters)
 	for statement in written {
 		parts = definition_of(statement)
 		function = if parts == ø then ø else iteration_function(parts)
