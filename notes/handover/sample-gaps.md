@@ -10,11 +10,13 @@
 
 ## Open, in order
 1. paint: DONE 4431a21768 (host words shadowed per arity; paint_function, paint_text, window_size run)
-2. sound + units (card lib-sound): si_amount should read a Quantity; `use units` + `use reals` in lib/sound.warp fails
-   the sound samples on linear_new(…), floor of a ? (/ through the class operator dispatcher), distortion, a list for a text
+2. sound + units: DONE 45de9529de (lib-sound, missing-pure, class-position-index): wasm memory bodies, class samples
+   in linear memory, a class's position/index/count, F#4; hum_blocks runs. Still failing in samples/sound: play(C4, d)
+   (card sound-hertz-length), unknown module names (play, at, unison, tuning …: sound's slices not reached), traps in
+   rhythm/synth/voices, sound_pipes variants; hum(t: float) := 0.3 * t has no float result (card float-result-hum)
 3. `sleep 50ms` without parentheses misses the expected-type units (told warp-text-field; snake, game_of_life)
 4. ∞ and ℯ can't be defined as functions, big floats give 0 (card float-overflow-inf); Real where a float is wanted
-   (card real-for-float), `π is real` (pi-real-number)
+   (real-for-float DONE bee9079dc5), `π is real` (pi-real-number)
 Parked: `on` handlers (user discussing), stored (handler shape), foreign spellings (user audit).
 
 Sweep script: the session scratchpad sweep.sh (each sample with warp pure, 30 s, one at a time); logs in
