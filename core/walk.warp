@@ -171,6 +171,15 @@ unpositioned_view_of(n: Node): any := if n == ø and n !== ø then ["list", "[",
 	_: n
 }
 
+# the members of a union type, `list or text`, `int | text` (decision union-or); a single type is its own one member
+union_members(type: text): list := type.split(" or ").flat_map(part => part.split(" | ")).map(member => member.trim())
+is_union(type: text): bool := #union_members(type) > 1
+# a union type as written, `int or text` (`int | text` parses so too), its members type words; ø for any other node
+union_spelling(type: Node): text? := {
+	if not is_key(type, Op.Or) { return ø }
+	members = [key_of(type), value_of(type)].map(member => if member is symbol then name_of(member) else union_spelling(member))
+	if members.any(member => member == ø) then ø else members.join(" or ")
+}
 # the name of a type declaration's view: `P` of ["symbol", "P"], under the attribute layers of an enum's cases or a
 # base class
 declared_type_name(name: any): text? := {

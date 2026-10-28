@@ -1,0 +1,10 @@
+# a union type, `list or text` (decision union-or): a parameter, a field and a local take a value of any member (card parameter-typed)
+'f(v: list or text): int := #v; [f([1, 2]), f("abc")]'	[2, 3]
+'f(v: int or text) := v; [f(3), f("a")]'	[3, "a"]
+'f(n: int or float) := n * 2; [f(2), f(1.5)]'	[4, 3]
+'class P { v: int or text }; [P("a").v, P(3).v]'	["a", 3]
+'x: int or text = 3; x = "b"; x'	"b"
+'f(v: int | text) := v; f("a")'	"a"
+# a union variant beside other overloads, chosen by the compile or the run-time test of its members
+'f(v: int or text) := "union"; f(v: list) := "list"; [f(1), f("a"), f([1])]'	["union", "union", "list"]
+'f(v: int or text) := "union"; f(v: list) := "list"; xs = [[1], 2]; [f(xs#1), f(xs#2)]'	["list", "union"]
