@@ -510,5 +510,168 @@ class Error { message: text }
 # a value that lambdas share, the variable they change (core/lambdas.warp shared captures, P124)
 class Cell { value: any }
 
+// Pattern matching (wiki/pattern-matching.md): the names a pattern binds in a value as a map, ø when it doesn't fit.
+// The pattern is an arm's code quoted (core/node_matches.warp asks for an arm of a list, tuple, map, text cut or
+// `data(…)` pattern): a name binds, `_` takes anything, a type word tests the type, a value must be equal; a rest
+// `...rest` takes what the other items leave; `>= 18`, `18..65` and `a | b` stand for a part. Inside `data(…)` the
+// code must be the same but for its `$holes`, a hole used twice taking equal code
+pattern_bindings(value: any, pattern: any): any := {
+	bound = {}
+	if fits_pattern(value, pattern, bound, no) then bound else ø
+}
+fits_pattern(value: any, pattern: any, bound: map, code: bool): bool := {
+	if is_type(pattern, "symbol") { return fits_name(value, name_of(pattern), bound, code) }
+	if is_type(pattern, "key") { return fits_key(value, pattern, bound, code) }
+	if bracket_of(pattern) != ø { return fits_group(value, pattern, bound, code) }
+	value == pattern
+}
+// a hole or name takes the value, the same one again where it is bound already
+bound_as(value: any, name: text, bound: map): bool := {
+	if name == "_" { return yes }
+	if name in bound { return bound[name] == value }
+	bound[name] = value
+	yes
+}
+fits_name(value: any, name: text, bound: map, code: bool): bool := {
+	if name.starts_with("$") { return bound_as(value, name[1 ..< #name], bound) }
+	if code { return value == symbol(name) }
+	if is_pattern_type(name) { return has_pattern_type(value, name) }
+	bound_as(value, name, bound)
+}
+pattern_type_words = ["int", "float", "number", "text", "bool", "list", "map", "symbol", "key", "block"]
+is_pattern_type(name: text): bool := name in pattern_type_words
+has_pattern_type(value: any, name: text): bool := {
+	if name == "int" { return is_type(value, "int") }
+	if name == "float" { return is_type(value, "number") and not is_type(value, "int") }
+	if name == "number" { return is_type(value, "number") }
+	if name == "text" { return is_type(value, "text") }
+	if name == "bool" { return is_type(value, "bool") }
+	if name == "list" { return is_type(value, "list") }
+	if name == "map" { return is_type(value, "map") }
+	if name == "symbol" { return is_type(value, "symbol") }
+	if name == "key" { return is_type(value, "key") }
+	bracket_of(value) == "{"
+}
+fits_key(value: any, pattern: any, bound: map, code: bool): bool := {
+	op = op_of(pattern)
+	left = key_of(pattern)
+	right = value_of(pattern)
+	if op == ":" and is_type(left, "key") and op_of(left) == "+" { return fits_text_cut(value, text_pieces(left), right, bound) }
+	// `x: int`, `$k: int`, `$n: > 0`: the part fits the condition, and the name takes it
+	if op == ":" and is_type(left, "symbol") { return fits_pattern(value, right, bound, no) and fits_name(value, name_of(left), bound, code) }
+	if op == "|" or op == "or" { return fits_pattern(value, left, bound, code) or fits_pattern(value, right, bound, code) }
+	if op == "+" and is_type(left, "text") and not code { return fits_text_cut(value, text_pieces(pattern), ø, bound) }
+	if left == ø and not code { return compares(value, op, right) }
+	if op == ".." and not code { return value >= left and value <= right }
+	is_type(value, "key") and op_of(value) == op and fits_pattern(key_of(value), left, bound, code) and fits_pattern(value_of(value), right, bound, code)
+}
+compares(value: any, op: text, limit: any): bool := {
+	if not is_type(value, "number") { return no }
+	if op == ">=" { return value >= limit }
+	if op == ">" { return value > limit }
+	if op == "<=" { return value <= limit }
+	if op == "<" { return value < limit }
+	if op == "!=" { return value != limit }
+	value == limit
+}
+fits_group(value: any, pattern: any, bound: map, code: bool): bool := {
+	// `data(…)`: the code inside, holes and all
+	if not code and bracket_of(pattern) == "(" and #pattern == 2 and pattern#1 == symbol("data") { return fits_pattern(value, pattern#2, bound, yes) }
+	if bracket_of(pattern) == "{" and not code { return fits_map(value, pattern, bound) }
+	if code and bracket_of(value) != bracket_of(pattern) { return no }
+	if not code and not is_type(value, "list") { return no }
+	fits_items(value, pattern, bound, code)
+}
+// the items, a rest among them taking those the others leave, the items after it counted from the end
+fits_items(value: any, pattern: any, bound: map, code: bool): bool := {
+	rest = 0
+	for i in 0..<#pattern { if rest == 0 and is_rest_item(pattern#(i + 1)) { rest = i + 1 } }
+	if rest == 0 {
+		if #value != #pattern { return no }
+		for i in 0..<#pattern { if not fits_pattern(value#(i + 1), pattern#(i + 1), bound, code) { return no } }
+		return yes
+	}
+	after = #pattern - rest
+	if #value < rest - 1 + after { return no }
+	for i in 0..<(rest - 1) { if not fits_pattern(value#(i + 1), pattern#(i + 1), bound, code) { return no } }
+	for i in 0..<after { if not fits_pattern(value#(#value - after + i + 1), pattern#(rest + i + 1), bound, code) { return no } }
+	taken = []
+	for i in (rest - 1)..<(#value - after) { taken += [value#(i + 1)] }
+	fits_rest(taken, pattern#rest, bound, code)
+}
+// `...rest`, `*rest`, `rest...`, `$rest...`, a bare `..`, an item pattern `[n, label]...`
+is_rest_item(item: any): bool := {
+	if is_type(item, "symbol") { return name_of(item).starts_with("*") }
+	is_type(item, "key") and (op_of(item) == "to" or op_of(item) == "..") and value_of(item) == ø
+}
+fits_rest(taken: list, item: any, bound: map, code: bool): bool := {
+	if is_type(item, "symbol") { return bound_as(taken, name_of(item)[1 ..< #name_of(item)], bound) }
+	held = key_of(item)
+	if held == ø { return yes }
+	if is_type(held, "symbol") { return bound_as(taken, unmarked(name_of(held), "$"), bound) }
+	// an item pattern fits each item; each of its names takes the list of its values
+	fitted = []
+	for item_value in taken {
+		one = {}
+		if not fits_pattern(item_value, held, one, code) { return no }
+		fitted += [one]
+	}
+	for name in pattern_names(held) { bound[name] = fitted.map(one => one[name]) }
+	yes
+}
+// the names a pattern binds, in order
+pattern_names(pattern: any): list := {
+	if is_type(pattern, "symbol") { return if name_of(pattern) == "_" or is_pattern_type(name_of(pattern)) then [] else [unmarked(unmarked(name_of(pattern), "$"), "*")] }
+	if is_type(pattern, "key") { return pattern_names(key_of(pattern)) + (if op_of(pattern) == ":" then [] else pattern_names(value_of(pattern))) }
+	if bracket_of(pattern) == ø { return [] }
+	names = []
+	for i in 0..<#pattern { names += pattern_names(pattern#(i + 1)) }
+	names
+}
+// `{status: 200, data: {user: {name}}}`: the fields it names, the others ignored; `{name}` binds the field to its name
+fits_map(value: any, pattern: any, bound: map): bool := {
+	if not is_type(value, "map") { return no }
+	for i in 0..<#pattern {
+		field = pattern#(i + 1)
+		if is_type(field, "symbol") {
+			if not (name_of(field) in value) or not bound_as(value[name_of(field)], name_of(field), bound) { return no }
+		} else if is_type(field, "key") and op_of(field) == ":" {
+			name = if is_type(key_of(field), "symbol") then name_of(key_of(field)) else key_of(field)
+			if not (name in value) or not fits_pattern(value[name], value_of(field), bound, no) { return no }
+		} else { return no }
+	}
+	yes
+}
+// the pieces of `"/users/" + id + "/x"`, texts and holes, in order
+text_pieces(pattern: any): list := if is_type(pattern, "key") and op_of(pattern) == "+" then text_pieces(key_of(pattern)) + text_pieces(value_of(pattern)) else [pattern]
+// the text cut at its literal pieces, each hole taking what lies between, the last its type converting it
+fits_text_cut(value: any, pieces: list, last_type: any, bound: map): bool := {
+	if not is_type(value, "text") { return no }
+	rest = value
+	for i in 0..<#pieces {
+		piece = pieces#(i + 1)
+		if is_type(piece, "text") {
+			if not rest.starts_with(piece) { return no }
+			rest = rest[#piece ..< #rest]
+		} else {
+			next = if i + 1 < #pieces then pieces#(i + 2) else ø
+			ends = if next == ø then #rest + 1 else rest.find(next)
+			if ends == 0 { return no }
+			part = rest[0 ..< ends - 1]
+			rest = rest[ends - 1 ..< #rest]
+			typed = if i + 1 == #pieces and last_type != ø then converted_part(part, last_type) else part
+			if typed == ø or not bound_as(typed, name_of(piece), bound) { return no }
+		}
+	}
+	rest == ""
+}
+// a text part as its hole's type wants it, ø when it isn't one
+converted_part(part: text, type_word: any): any := {
+	if type_word == symbol("int") { return if part != "" and part.all(c => c >= '0' and c <= '9') then int(part) else ø }
+	part
+}
+// the name without its mark: `$a` → a, `*rest` → rest
+unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(name, #mark) else name
+
 // `x.json` (lib/sugar/methods.warp): the JSON text of any value; a map's own field json wins
 json_text(value: any): any := if is_type(value, "map") and "json" in value then value["json"] else std_pure("json", "to_json", [value])

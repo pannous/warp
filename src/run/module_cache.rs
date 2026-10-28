@@ -375,28 +375,12 @@ fn shipped_module(engine: &Engine, bytes: &[u8]) -> Option<Result<Module>> {
 	let digest = module_digest(bytes);
 	let build_file = SHIPPED.lock().ok()?.get(digest.as_slice()).cloned()?;
 	let path = shipped_path(&build_file);
-	let key = format!("shipped {}", crate::extensions::hex_text(&digest));
-	if let Some(module) = remembered(engine, &key) {
-		return Some(Ok(module));
-	}
-	if shipped_mismatch(engine, &path, bytes).is_none() {
-		// SAFETY: a .cwasm stamped with these module bytes and this engine is wasmtime's own output, written by
-		// write_shipped or shipped_module; wasmtime checks its version, settings and CPU features again
-		match unsafe { Module::deserialize_file(engine, &path) } {
-			Ok(module) => {
-				remember(key, &module);
-				return Some(Ok(module));
-			}
-			Err(failure) => eprintln!("warp: {} unusable ({failure}): compiling once", path.display()),
-		}
-	} else {
-		let why = shipped_mismatch(engine, &path, bytes).unwrap_or("unusable");
-		eprintln!(
-			"warp: {} {why}: compiling {} to machine code once (~30 s), written back",
-			path.display(),
-			build_file.display()
-		);
-	}
+	let key = shipped_key(bytes);
+	let why = match loaded_shipped(engine, &path, bytes, &key) {
+		Ok(module) => return Some(Ok(module)),
+		Err(why) => why,
+	};
+	eprintln!("warp: {} {why}: compiling {} to machine code once (~30 s), written back", path.display(), build_file.display());
 	let module = match Module::new(engine, bytes) {
 		Ok(module) => module,
 		Err(failure) => return Some(Err(failure)),
@@ -411,6 +395,39 @@ fn shipped_module(engine: &Engine, bytes: &[u8]) -> Option<Result<Module>> {
 	}
 	remember(key, &module);
 	Some(Ok(module))
+}
+
+fn shipped_key(bytes: &[u8]) -> String {
+	format!("shipped {}", crate::extensions::hex_text(&module_digest(bytes)))
+}
+
+/// The module of the machine code shipped at `path` for `bytes` and `engine` (remembered under `key`), else why not
+fn loaded_shipped(engine: &Engine, path: &Path, bytes: &[u8], key: &str) -> Result<Module, String> {
+	if let Some(module) = remembered(engine, key) {
+		return Ok(module);
+	}
+	if let Some(why) = shipped_mismatch(engine, path, bytes) {
+		return Err(why.to_string());
+	}
+	// SAFETY: a .cwasm stamped with these module bytes and this engine is wasmtime's own output, written by
+	// write_shipped or shipped_module; wasmtime checks its version, settings and CPU features again
+	let module = unsafe { Module::deserialize_file(engine, path) }.map_err(|failure| format!("unusable ({failure})"))?;
+	remember(key.to_string(), &module);
+	Ok(module)
+}
+
+/// A module `warp rebuild` ships the machine code of beside its file (runtime.wasm, which a linked run instantiates),
+/// from there; one it can't load from there is said in one line naming the file and the fix, and compiled through the
+/// cache: a run never writes beside an installed warp
+pub fn prebuilt_module(engine: &Engine, file: &Path, bytes: &[u8]) -> Result<Module> {
+	let path = shipped_path(file);
+	match loaded_shipped(engine, &path, bytes, &shipped_key(bytes)) {
+		Ok(module) => Ok(module),
+		Err(why) => {
+			eprintln!("warp: {} {why}: `warp rebuild` ships it anew (an installed warp: install again); compiling {} meanwhile", path.display(), file.display());
+			compiled_module(engine, bytes)
+		}
+	}
 }
 
 thread_local! {

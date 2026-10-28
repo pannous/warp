@@ -193,8 +193,9 @@ class Lowering { arities: map; lambdas_lifted: list; inlined: map = {}; callable
 ## the walk
 
 # n with its lambdas lifted, its iterations looped, its function names as values and its calls of variables as
-# closures; `locals` the variables and parameters in scope
+# closures; `locals` the variables and parameters in scope; quoted code stays as written
 lowered_lambdas(n: Node, locals: list, lowering: Lowering): Node := {
+	if is_quote(n) { return n }
 	inlined = inlined_call(n, locals, lowering)
 	if inlined != ø { return lowered_lambdas(inlined, locals, lowering) }
 	iteration = iteration_of(n)
