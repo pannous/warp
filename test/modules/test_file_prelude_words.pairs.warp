@@ -1,0 +1,4 @@
+# lib/file.warp's prelude words (P171) need no `use file`: they are marked global there
+
+'exists("/etc/hosts")'	yes
+'exists("/no/such/warp/file")'	no
