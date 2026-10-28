@@ -51,6 +51,9 @@ wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_config_wasm_function_references_set(config: handle, enabled: bool) from "warp_wasmtime"
 wasmtime_config_wasm_exceptions_set(config: handle, enabled: bool) from "warp_wasmtime"
 warp_config_gc_heap_initial_size_set(config: handle, bytes: i64) from "warp_wasmtime"
+wasmtime_config_consume_fuel_set(config: handle, enabled: bool) from "warp_wasmtime"
+wasmtime_context_set_fuel(context: handle, fuel: i64): handle from "warp_wasmtime"
+wasmtime_trap_code(trap: handle, code: pointer): bool from "warp_wasmtime"
 wasmtime_config_cache_config_load(config: handle, path: handle): handle from "warp_wasmtime"
 wasm_engine_new_with_config(config: handle): handle from "warp_wasmtime"
 wasmtime_store_new(engine: handle, data: handle, finalizer: handle): handle from "warp_wasmtime"
@@ -314,11 +317,44 @@ single_at(address: pointer): Single := address
 # The GC heap a run starts with, as crates/warp-runtime engine.rs: reserved, committed lazily; one starting small
 # collects at each of its many growths (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild)
 GC_HEAP_INITIAL_BYTES = 536870912
+# A program's fuel when it counts steps (decision fuel-metering, crates/warp-runtime fuel.rs): wasmtime burns about one
+# a WASM instruction; counting makes calls about four times slower, so only runs that ask for it count
+DEFAULT_FUEL = 100000000000
+OUT_OF_FUEL = 11
+ZERO = 48
+UNDERSCORE = 95
+# the steps a program run counts: WARP_FUEL's (`warp fuel <steps>`), else the default when the module asks for fuel
+# (`use fuel`: its section warp.fuel), else none; a compiler's run (its machine code kept) never counts
+fuel_of(module: text, machine_code: text): i64 := {
+	if machine_code.length > 0 { return 0 }
+	given = getenv("WARP_FUEL")
+	if given.length > 0 { return steps_of(given) }
+	if custom_section(module, "warp.fuel").address != 0 then DEFAULT_FUEL else 0
+}
+# the number a text of digits names, underscores between them allowed (1_000_000)
+steps_of(digits: text): i64 := {
+	steps = 0
+	for i in 0..digits.length {
+		digit = byte_at(digits.address + i).value
+		if digit != UNDERSCORE { steps = steps * 10 + (digit - ZERO) }
+	}
+	steps
+}
+# a run out of its fuel said as the Rust warp says it (errors/run_time.rs out_of_fuel)
+out_of_fuel(trap: pointer, fuel: i64): nothing := {
+	code = allocate(1)
+	if fuel > 0 and long_at(trap).value != 0 and wasmtime_trap_code(long_at(trap).value, code) and byte_at(code).value == OUT_OF_FUEL {
+		complain(joined(joined("out of fuel after ", text_of(fuel)), " steps: the program may not terminate (raise the budget with WARP_FUEL=<steps> or warp fuel <steps>)"))
+		exit(1)
+	}
+}
 # what warp's modules use beside the MVP: GC, typed function references, exceptions (crates/warp-runtime engine.rs),
+# fuel metering when the run counts steps,
 # warp_wasmtime's copying collector with its initial heap; a program's machine code kept in wasmtime's own cache,
 # warp.wasm's beside it (compiled_module)
-warp_config(): handle := {
+warp_config(fuel: bool): handle := {
 	config = wasm_config_new()
+	wasmtime_config_consume_fuel_set(config, fuel)
 	warp_config_gc_heap_initial_size_set(config, GC_HEAP_INITIAL_BYTES)
 	wasmtime_config_wasm_gc_set(config, yes)
 	wasmtime_config_wasm_function_references_set(config, yes)
@@ -354,8 +390,10 @@ word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing 
 
 # the module run with the arguments; its machine code kept in the file `machine_code` when one is named
 run(module: text, given: Arguments, machine_code: text): nothing := {
-	engine = wasm_engine_new_with_config(warp_config())
+	fuel = fuel_of(module, machine_code)
+	engine = wasm_engine_new_with_config(warp_config(fuel > 0))
 	context = wasmtime_store_context(wasmtime_store_new(engine, 0, 0))
+	if fuel > 0 { wasmtime_context_set_fuel(context, fuel) }
 	linker = wasmtime_linker_new(engine)
 	trap = allocate(8)
 	checked(wasmtime_linker_define_wasi(linker), trap)
@@ -384,6 +422,7 @@ run(module: text, given: Arguments, machine_code: text): nothing := {
 	results_count = native_long(wasm_functype_results(wasmtime_func_type(context, function)))
 	results = allocate(VALUE_BYTES * MAX_RESULTS)
 	error = wasmtime_func_call(context, function, 0, 0, results, results_count, trap)
+	out_of_fuel(trap, fuel)
 	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(context, instance)) }
 	if results_count > 0 { print_result(results) }
 }
@@ -499,7 +538,7 @@ compiled_module(engine: handle, module: text, machine_code: text, trap: pointer)
 machine_code_kept(path: text): nothing := {
 	trap = allocate(8)
 	long_at(trap).value = 0
-	compiled_module(wasm_engine_new_with_config(warp_config()), read_file(path), joined(path, ".driver.cwasm"), trap)
+	compiled_module(wasm_engine_new_with_config(warp_config(no)), read_file(path), joined(path, ".driver.cwasm"), trap)
 }
 # the text without its trailing newlines
 trimmed_end(t: text): text := {

@@ -35,7 +35,7 @@ native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "
 	"home", "lsp", "start", "types", "format", "lint", "beautify", "fix"]
 
 # the commands the native warp runs itself, before warp.wasm sees them (core/native/warp.warp)
-native_warp_commands = ["run", "pure", "self", "eval", "fast", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home"]
+native_warp_commands = ["run", "pure", "self", "eval", "fast", "fuel", "rebuild", "test", "repl", "console", "start", "version", "beautify", "fix", "format", "lint", "docs", "wiki", "home"]
 # set by the native warp for the compiler it hosts: the host's name
 HOST_VARIABLE = "WARP_HOST"
 natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
