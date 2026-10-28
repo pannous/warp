@@ -1,0 +1,2 @@
+# a used file that does not exist fails the compile, naming the file, instead of a bare wasm trap (card missing-file-trap)
+'use "../fixtures/no_such_file.warp"; 1'	error
