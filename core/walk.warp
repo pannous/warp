@@ -13,7 +13,7 @@ opaque_symbol = symbol(opaque_word)
 # the arm of a match any value takes, `_: …`
 other_arm = "_"
 
-kind_of(view: any): text := if view is list and #view > 0 then view#1 else ""
+kind_of(view: View): text := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
 is_group(n: Node): bool := bracket_of(n) != ø
 # the separators of a group of statements, `a; b` and lines
@@ -46,7 +46,7 @@ unwrap_word = "unwrap"
 written_index_mark = "written_index"
 
 # the view of `{}`, `[]`, `()`: no items
-is_empty_group(view: any): bool := kind_of(view) == "list" and #view == 3
+is_empty_group(view: View): bool := kind_of(view) == "list" and #view == 3
 # the bracket of an empty map `{}` or list `[]` as plain_node keeps it, behind the opaque word; "" for any other node
 empty_group_bracket(n: Node): text := match n {
 	Key(left, op, right): { if left == opaque_symbol and is_empty_group(right) then right#2 else "" }
@@ -59,15 +59,15 @@ is_empty_list(n: Node): bool := empty_group_bracket(n) == "["
 # the empty map `{}` (decision empty-group-node: the bridge keeps Rust's bracket where a pass reads it, number_keys
 # keys a variable that starts as `{}`) and the empty list `[]`, an opaque type or error whole; Rust twin:
 # compiler/node_views.rs plain
-plain(view: any): any := without_layers(view, no)
+plain(view: View): View := without_layers(view, no)
 
 # the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
 # (mutation.rs reads the mark of `x!`); Rust twin: src/compiler/node_views.rs handled_plain_view
-bridged(view: any): any := without_layers(view, yes)
+bridged(view: View): View := without_layers(view, yes)
 
 # the view without literal layers, without attribute layers unless `attributes`, an empty group but `{}` and `[]` as
 # ø (`[]` as grouped builds it; Rust twin: node_views.rs without_layers)
-without_layers(view: any, attributes: bool): any := {
+without_layers(view: View, attributes: bool): View := {
 	kind = kind_of(view)
 	if kind == "literal" and view#2 == "[]" { return ["list", "[", ""] }
 	if kind == "literal" or (kind == "attribute" and not attributes) { return without_layers(view#(#view), attributes) }
@@ -107,11 +107,11 @@ plain_parts(n: Node): Node := match n {
 }
 
 # the node a view stands for
-node_of(view: any): Node := node_from(view, no)
+node_of(view: View): Node := node_from(view, no)
 # the node of a view Rust hands a pass stage: the empty map `{}` behind the opaque word, as plain_node keeps it for
 # number_keys
-stage_node(view: any): Node := node_from(view, yes)
-node_from(view: any, keeps_maps: bool): Node := {
+stage_node(view: View): Node := node_from(view, yes)
+node_from(view: View, keeps_maps: bool): Node := {
 	kind = kind_of(view)
 	part = inner => node_from(inner, keeps_maps)
 	if kind == "symbol" { return symbol(view#2) }
@@ -133,7 +133,7 @@ global showing_positions = no
 # the view a stage hands back to Rust, each positioned node as ["at", line, column, view], so the Rust passes after it
 # and the program's warnings and errors name where a node stands (card front-end-warnings)
 # Rust twin: node_views.rs positioned_view
-stage_view(n: Node): any := {
+stage_view(n: Node): View := {
 	showing_positions = yes
 	view = view_of(n)
 	showing_positions = no
@@ -142,7 +142,7 @@ stage_view(n: Node): any := {
 
 # a view as JSON, ø as null and 1.0 as 1.0 (Rust twin: compiler/node_views.rs view_json), what the host reads back
 # into a node (compiler.warp's view mode, card rust-bootstrap)
-view_json(view: any): text := {
+view_json(view: View): text := {
 	if view === ø { return "null" }
 	if view is list { return "[" + view.map(view_json).join(", ") + "]" }
 	if view is text or view is char { return json_text("${view}") }
@@ -156,13 +156,13 @@ view_json(view: any): text := {
 json_text(t: text): text := "\"" + t.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
 
 # the view of a node
-view_of(n: Node): any := {
+view_of(n: Node): View := {
 	view = unpositioned_view_of(n)
 	if showing_positions and is_positioned(n) then ["at", line_of(n), column_of(n), view] else view
 }
 
 # (`[]` equals ø but is not ø itself: the empty list, square bracketed as parser.warp's grouped builds it)
-unpositioned_view_of(n: Node): any := if n == ø and n !== ø then ["list", "[", ""] else match n {
+unpositioned_view_of(n: Node): View := if n == ø and n !== ø then ["list", "[", ""] else match n {
 	Key(left, op, right): key_view(left, op as text, right)
 	Symbol(name): ["symbol", name]
 	Char(c): ["char", c]
@@ -189,7 +189,7 @@ declared_type_name(name: any): text? := {
 }
 
 # the view of a key: an opaque view and an attribute layer as they were written
-key_view(left: Node, op: text, right: Node): any := {
+key_view(left: Node, op: text, right: Node): View := {
 	if left == opaque_symbol { return right }
 	if left == symbol(attribute_word) { return ["attribute", right#1, view_of(right#2), view_of(right#3)] }
 	["key", op, view_of(left), view_of(right)]
@@ -245,7 +245,7 @@ parts_within(n: Node): list := match n {
 	Key(left, op, right): { if left == opaque_symbol then opaque_parts(right) else [left, right] }
 	_: parts_of(n)
 }
-opaque_parts(view: any): list := view.filter(part => part is list).map(node_of)
+opaque_parts(view: View): list := view.filter(part => part is list).map(node_of)
 
 # `data e`, `print data e`, `f(data e)`: in a line or a call the item after the word is code as written, which no
 # pass rewrites (Rust lowers no quote)
@@ -303,7 +303,7 @@ place_text(at: list?, file: text): text := {
 	if not at { return "" }
 	" at " + (if file then file + ":" else "") + at#1 + ":" + at#2
 }
-reported(view: any): list := {
+reported(view: View): list := {
 	found = said
 	said = []
 	[view, found]
@@ -392,7 +392,7 @@ has_hole(n: Node, found: function): bool := match n {
 }
 
 # whether `found` holds for the view or a part of it
-view_has(view: any, found: function): bool := {
+view_has(view: View, found: function): bool := {
 	if found(view) { return yes }
 	if view is list {
 		for part in view {
@@ -403,7 +403,7 @@ view_has(view: any, found: function): bool := {
 }
 
 # the leading name of a view, `f` of `f(x)`, `x` of `x: int`, else ""
-view_head_name(view: any): text := {
+view_head_name(view: View): text := {
 	kind = kind_of(view)
 	if kind == "symbol" { return view#2 }
 	if kind == "key" { return view_head_name(view#3) }

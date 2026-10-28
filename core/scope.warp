@@ -224,4 +224,4 @@ is_word_of_item(part: Node, accepts: function): bool := match part {
 	_: no
 }
 # the opaque view of a type whose name is a word accepts takes
-is_declaration_word(view: any, accepts: function): bool := kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" and accepts(node_of(view#2))
+is_declaration_word(view: View, accepts: function): bool := kind_of(view) == "type" and view#2 is list and kind_of(view#2) == "symbol" and accepts(node_of(view#2))

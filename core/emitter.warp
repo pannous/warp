@@ -256,7 +256,7 @@ form_of(n: Node): text := {
 	"a " + type(n).name
 }
 # a template, an error value or an empty group, which travel behind the opaque word (walk.warp), in the program's words
-opaque_form(view: any): text := {
+opaque_form(view: View): text := {
 	kind = kind_of(view)
 	if kind == "list" { return "the empty group " + bracket_pair(view#2) }
 	if kind == "error" { return "an error value" }
@@ -355,7 +355,7 @@ gather_mentions(n: Node, mentioned: Mentions) := match n {
 	_: ø
 }
 # inside an opaque layer: each TypedCode("symbol", name) part of the view, as mentions' view_has finds one
-gather_view_mentions(view: any, mentioned: Mentions) := {
+gather_view_mentions(view: View, mentioned: Mentions) := {
 	if view is list {
 		if #view == 2 and view#1 == "symbol" and view#2 in mentioned.wanted { mentioned.found[view#2] = yes }
 		for part in view { gather_view_mentions(part, mentioned) }
