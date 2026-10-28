@@ -4,7 +4,7 @@
 # runs a wasm module through wasmtime's C API, called as any C library. `warp build native lib/native/driver.warp`
 # makes the executable; `driver app.wasm args…` runs the module with the arguments, and a driver with a module
 # appended (<module><its length, u64 little-endian><MODULE_MAGIC>) runs that one with all its arguments. The module's
-# WASI calls are wasmtime's, its folder the current one, a host word the driver lacks a trap naming it. Its _start runs
+# WASI calls are wasmtime's (the environment inherited, the current folder and the root opened), a host word the driver lacks a trap naming it. Its _start runs
 # (a GC program prints its own value), else its main, whose value is printed; a failure's message goes to stderr with
 # status 1, the module's own exit status kept.
 
@@ -38,6 +38,7 @@ wasmtime_linker_define_unknown_imports_as_traps(linker: handle, module: handle):
 wasi_config_new(): handle from "wasmtime"
 wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "wasmtime"
 wasi_config_inherit_stdin(config: handle) from "wasmtime"
+wasi_config_inherit_env(config: handle) from "wasmtime"
 wasi_config_inherit_stdout(config: handle) from "wasmtime"
 wasi_config_inherit_stderr(config: handle) from "wasmtime"
 wasi_config_preopen_dir(config: handle, host_path: text, guest_path: text, mutable: bool): bool from "wasmtime"
@@ -156,7 +157,10 @@ run(module: text, first_argument: int): nothing := {
 	wasi_config_inherit_stdin(config)
 	wasi_config_inherit_stdout(config)
 	wasi_config_inherit_stderr(config)
+	wasi_config_inherit_env(config)
+	# the current folder for relative paths and the root for absolute ones, as warp's own host opens them
 	wasi_config_preopen_dir(config, ".", ".", yes)
+	wasi_config_preopen_dir(config, "/", "/", yes)
 	checked(wasmtime_context_set_wasi(context, config), trap)
 	compiled = allocate(8)
 	checked(wasmtime_module_new(engine, module.address, module.length, compiled), trap)
