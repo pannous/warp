@@ -747,3 +747,7 @@ kept_listeners(key: text, keep: function): any := {
 	listening_once[key] = onces
 	ø
 }
+
+// Python's range: `range(4)` is [0, 1, 2, 3], `range(1, 4)` [1, 2, 3]
+range(stop: int): list := 0 ..< stop
+range(start: int, stop: int): list := start ..< stop
