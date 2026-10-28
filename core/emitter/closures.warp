@@ -19,7 +19,7 @@ is_closure_value(n: Node) := is_group(n) and bracket_of(n) == "(" and #n > 0 and
 def closure_value(body: Body, target: Node, captured: list): TypedCode {
 	if not (target is symbol and name_of(target) in module.functions) { return refuse("a closure of " + form_of(target)) }
 	number = closure_number(name_of(target), #captured)
-	items = [boxed(number_value(number))] + captured.map(c => boxed(expression_code(body, c)))
+	items = [boxed(closure_number_code(number))] + captured.map(c => boxed(expression_code(body, c)))
 	TypedCode(ValueKind.Node, key_code(Kind.Function, vector_code(items), name_node(target)))
 }
 closure_number(name: text, captured: int): int := {
@@ -27,6 +27,8 @@ closure_number(name: text, captured: int): int := {
 	module.closures += [[name, captured]]
 	#module.closures - 1
 }
+# a closure's number, in a prebuilt module relocatable: a link numbers a module's closures behind those before it
+def closure_number_code(number: int): TypedCode { if module.relocating then TypedCode(ValueKind.Int, [op.i64_const] + relocatable(relocated.closures, number)) else number_value(number) }
 # the item i of a closure's list: 0 its number, then its captured values
 def closure_item(closure: list, i: int): TypedCode { TypedCode(ValueKind.Node, payload(closure, gc_type(gc.list)) + gc_code(gc_ops.struct_get, [gc_type(gc.list), 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc_type(gc.items)])) }
 captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
@@ -67,6 +69,7 @@ closure_text_code(f: Function): any := {
 }
 # a lifted lambda as written, its parameters but the captured ones (`x => x*2`); another target by its name
 closure_shown(name: text, captured: int): text := {
+	if name in module.linked_closures_shown { return module.linked_closures_shown[name] }
 	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return function_name(name) }
 	f = module.functions[name]
 	names = taken_names(f.signature)[captured..]
