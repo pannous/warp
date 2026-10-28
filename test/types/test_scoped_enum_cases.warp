@@ -8,5 +8,5 @@ is! 'enum Op {
 Op.Div as int' 3
 
 # a_match_in_a_used_file_binds_its_cases
-is! 'use "tests/fixtures/used_cases.warp"
+is! 'use "test/fixtures/used_cases.warp"
 f(Thing::Holds(Box(3)), Thing::Counts(2))' 3
