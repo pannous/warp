@@ -123,7 +123,7 @@ def expanded_entities(source: text): text {
 }
 // The known entity name written at `at` (`\:name`), else "": its run of ASCII letters, or a longer known name with
 // hyphenated parts (`\:fracture-A`)
-def entity_name_at(source: any, at: int, n: int): text {
+def entity_name_at(source: text or list, at: int, n: int): text {
 	if not (source[at] == '\\' and peek(source, at + 1, n) == ':') { return "" }
 	letters = at + 2
 	while letters < n and is_alpha(source[letters]) { letters = letters + 1 }
@@ -142,9 +142,9 @@ def entity_name_at(source: any, at: int, n: int): text {
 	if name in entities() then name else ""
 }
 // The characters from `from` to `to` of a text or of its code points
-def text_between(source: any, from: int, to: int): text := if source is text then source[from .. to] else join(source[from .. to], "")
+def text_between(source: text or list, from: int, to: int): text := if source is text then source[from .. to] else join(source[from .. to], "")
 // `\:name` inside a text at `at`: [its characters, the length read]; an unknown one stays as written
-def entity_read(source: any, at: int, n: int): list {
+def entity_read(source: text or list, at: int, n: int): list {
 	name = entity_name_at(source, at, n)
 	if name == "" then [ENTITY_MARK, 2] else [entities()[name], 2 + name.length]
 }

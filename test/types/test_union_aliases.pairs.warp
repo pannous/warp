@@ -1,0 +1,5 @@
+# a type alias may name a union: `type View = list or int` declares parameters, fields and variables as the union does
+'type View = list or int; f(v: View) := 1; f(3) + f([1])'	2
+'type View = list or int; class C{v: View}; C(3).v'	3
+'type View = list or int; x: View = [1]; x'	[1]
+'type View = list or int; f(v: View) := 1; f("ab")'	error

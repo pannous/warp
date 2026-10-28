@@ -631,6 +631,7 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode): T
 	if type_name in node_annotations { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
+	if is_union(type_name) { return union_declaration(body, name, type_name, value) }
 	# `xs: ints = v`, `xs: list of text = v`: a list as `list` declares it
 	kind_word = if is_list_type(type_name) then "list" else type_name
 	if kind_word not in declared_kinds { return refuse("a variable declared " + type_name) }

@@ -69,7 +69,7 @@ def call_values(f: Function, values: list): TypedCode {
 # widened parameter took a reading of the whole compiler for each (card speed-parallel-emit)
 def passed(f: Function, i: int, value: TypedCode): list {
 	slot = parameter_key(f.name, i)
-	declared = if i < #f.signature.parameters then f.signature.parameters[i].type_name else ""
+	declared = if i < #f.signature.parameters then aliased_type(f.signature.parameters[i].type_name) else ""
 	if is_union(declared) and not fits_union(declared, value.kind) { refuse("a " + kind_spelling(value.kind) + " where a " + declared + " is needed") }
 	try {
 		# a node may hold any kind (`v.x * s` of a float s): read as an unannotated parameter's int it would trap, so the
@@ -219,9 +219,9 @@ node_annotations = ["any", "Node", "function", "type", "map", "number", "symbol"
 annotated_kind(written: text): ValueKind := {
 	# `(samples, float) -> any`: a function, held as a node
 	if written.contains(" -> ") { return ValueKind.Node }
-	if is_union(written) { return shared_kind(union_members(written).map(annotated_kind)) }
 	if written.starts_with("[") { return ValueKind.List }
 	word = aliased_type(written)
+	if is_union(word) { return shared_kind(union_members(word).map(annotated_kind)) }
 	if word in node_annotations or word in module.classes or word.ends_with("?") { return ValueKind.Node }
 	# Rust twin: type_names.rs plural_element_type
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return ValueKind.List }
