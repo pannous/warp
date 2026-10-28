@@ -5,8 +5,9 @@
 #   → if is_type(n, "key") and op_of(n) == Op.Colon then (left = key_of(n); right = value_of(n); e) else d
 # A part of Op, Bracket or Separator binds the case, `op = Op·case(op_of(n))` (node_cases.warp spells the cases). A
 # subject other than a name is evaluated once, into match·subject. A guard `n if n > 5 => e` tests its pattern and then its
-# condition, the pattern's names bound; a bare name `n => e` binds the subject. A match with an arm of another form (a
-# list pattern) stays as written: refused downstream.
+# condition, the pattern's names bound; a bare name `n => e` binds the subject. An arm of any other form, a list
+# `[a, ...rest]`, a map `{name}`, a text cut `"/u/" + id: int`, quoted code `data($f($x))`, is fitted at run time by the
+# prelude's matcher: `(match·bound = pattern_bindings(n, data(pattern))) != ø`, each name bound `x = match·bound#"x"`.
 use "walk.warp"
 use "phrase_blocks.warp"
 use "enum_declarations.warp"
@@ -17,6 +18,7 @@ case_types = {"Number": "number", "Char": "codepoint", "Text": "text", "Symbol":
 case_readers = {"Number": ["itself"], "Char": ["itself"], "Text": ["itself"], "Symbol": ["name_of"],
 	"Key": ["key_of", "op_of", "value_of"], "List": ["itself", "bracket_of", "separator_of"]}
 subject_name = HiddenWord.MatchSubject as text
+match_bound = HiddenWord.MatchBound as text
 # the readers whose part is a case of an enum spelled as the node carries it (node_cases.rs Part::Spelled)
 spelled_readers = {"op_of": "Op", "bracket_of": "Bracket", "separator_of": "Separator"}
 # `Op·case(t)`: the case spelled t, `Op·text(c)`: the spelling of a case (node_cases.warp spelling_functions)
@@ -70,6 +72,8 @@ is_value_pattern(pattern: Node, variants: map): bool := pattern is bool or match
 	Key(type_name, Op.Scope, case_name): is_name(type_name) and is_name(case_name)
 	# alternatives `"number" | "bool"`, each a value (Rust twin: switch.rs alternatives)
 	Key(left, Op.Or, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
+	# a value kept as written, the empty list `[]`
+	Key(left, op, right): left == opaque_symbol
 	# `ø: e`, `True: e` (the parser reads True as yes), as Rust's node_cases.rs reads Node.Empty and Node.True
 	_: pattern == ø or pattern is bool
 }
@@ -93,14 +97,65 @@ guard_of(pattern: Node): Node := match pattern {
 	_: ø
 }
 
-guarded_pattern(pattern: Node): Node := if guard_of(pattern) == ø then pattern else pattern#2
+guarded_pattern(pattern: Node): Node := if guard_of(pattern) == ø then pattern else value_of(pattern)
 
 # `n => "hi " + n`: a bare name its result mentions binds the subject (switch.rs is_binding_name), a guard's name too
 is_name_arm(pattern: Node, result: Node, variants: map): bool := is_name(pattern) and not is_other_arm(pattern) and not is_type_pattern(pattern) and not is_value_pattern(pattern, variants) and mentions(result, name_of(pattern))
 
+# an arm of today's if-chain tests, else one for the matcher
 is_case_arm(arm: Node, variants: map): bool := {
 	pattern = guarded_pattern(arm_pattern(arm))
 	is_name(pattern) or is_value_pattern(pattern, variants) or is_type_pattern(pattern) or case_pattern(pattern) != ø
+}
+
+# the prelude's matcher (lib/prelude.warp), which a structural arm calls
+matcher_word = "pattern_bindings"
+
+# `match v {…}` with an arm for the matcher, its definition brought from the prelude before the match is lowered
+is_structural_match(n: Node): bool := match n {
+	List(parts, Bracket.None, Separator.Space): has_structural_arms(parts)
+	_: no
+}
+
+has_structural_arms(parts: list): bool := {
+	for i in 1 ..< #parts {
+		block = if parts#i == symbol("match") and i + 2 <= #parts then parts#(i + 2) else if is_match_head(parts#i) then parts#(i + 1) else ø
+		if block != ø and is_curly_group(block) and items_of(block).any(arm => not is_case_arm(arm, {})) { return yes }
+	}
+	no
+}
+
+# the structural pattern fits: what it binds is held in match·bound
+structural_test(subject: Node, pattern: Node): Node := {
+	fitted = List([symbol(matcher_word), subject, List([quote_symbol, pattern], Bracket.Round, Separator.None)], Bracket.Round, Separator.None)
+	Key(Key(symbol(match_bound), Op.Assign, fitted), Op.Ne, ø)
+}
+
+structural_bindings(pattern: Node, result: Node): list := structural_names(pattern, no).filter(name => mentions(result, name)).map(name => Key(symbol(name), Op.Assign, subscript(symbol(match_bound), name)))
+
+# the names a structural pattern binds (lib/prelude.warp pattern_names): its names but `_` and the type words, `$x`
+# and `...rest` unmarked; of quoted code only its holes, a map's fields by their patterns
+structural_names(pattern: Node, quoted: bool): list := {
+	if is_quote(pattern) { return structural_names(pattern#2, yes) }
+	match pattern {
+		Symbol(name): marked_name(name, quoted)
+		Key(left, Op.Colon, right): structural_names(left, quoted)
+		Key(left, op, right): structural_names(left, quoted) + structural_names(right, quoted)
+		List(items, Bracket.Curly, separator): items.flat_map(field => field_names(field, quoted))
+		List(items, bracket, separator): items.flat_map(item => structural_names(item, quoted))
+		_: []
+	}
+}
+
+field_names(field: Node, quoted: bool): list := match field {
+	Key(name, Op.Colon, value): structural_names(value, quoted)
+	_: structural_names(field, quoted)
+}
+
+marked_name(name: text, quoted: bool): list := {
+	if name.starts_with("$") or name.starts_with("*") { return [name[1..]] }
+	if quoted or name == other_arm or is_tested_type_word(name) { return [] }
+	[name]
 }
 
 kind_test(case_name: text, subject: Node): Node := {
@@ -157,7 +212,7 @@ part_bindings(pattern: list, subject: Node): list := {
 arm_chain(arms: list, subject: Node, variants: map): Node := {
 	if #arms == 0 { return applied("switch_no_case", subject) }
 	guard = guard_of(arm_pattern(arms#1))
-	if guard != ø or is_name_arm(arm_pattern(arms#1), arm_result(arms#1), variants) { return guarded_arm(arms, subject, variants, guard) }
+	if guard != ø or is_name_arm(arm_pattern(arms#1), arm_result(arms#1), variants) or not is_case_arm(arms#1, variants) { return guarded_arm(arms, subject, variants, guard) }
 	pattern = arm_pattern(arms#1)
 	# an unbound bare name its result does not use is the value it names
 	if is_name(pattern) and not is_other_arm(pattern) and not is_type_pattern(pattern) { return chosen(value_test(subject, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
@@ -175,22 +230,27 @@ arm_chain(arms: list, subject: Node, variants: map): Node := {
 guarded_arm(arms: list, subject: Node, variants: map, guard: Node): Node := {
 	pattern = guarded_pattern(arm_pattern(arms#1))
 	result = arm_result(arms#1)
-	test = yes
-	bound = []
+	# ø: the pattern takes any subject
+	test: Node = ø
+	bound: list = []
 	if is_name(pattern) and not is_other_arm(pattern) and (guard != ø or is_name_arm(pattern, result, variants)) { bound = [Key(pattern, Op.Assign, subject)] }
 	else if is_value_pattern(pattern, variants) { test = value_test(subject, pattern) }
 	else if is_type_pattern(pattern) { test = List([symbol("is_type"), subject, name_of(pattern)], Bracket.Round, Separator.None) }
 	else if case_pattern(pattern) != ø { test = arm_test(case_pattern(pattern), subject); bound = part_bindings(case_pattern(pattern), subject) }
-	if guard != ø { test = if test == yes then List(bound + [guard], Bracket.Round, Separator.Semicolon) else Key(test, Op.And, List(bound + [guard], Bracket.Round, Separator.Semicolon)) }
+	else { test = structural_test(subject, pattern); bound = structural_bindings(pattern, List([guard, result], Bracket.Square, Separator.Comma)) }
+	if guard != ø {
+		guarded = List(bound + [guard], Bracket.Round, Separator.Semicolon)
+		test = if test == ø then guarded else Key(test, Op.And, guarded)
+	}
 	value = if #bound == 0 then result else List(bound + [result], Bracket.Round, Separator.Semicolon)
-	if test == yes { return value }
+	if test == ø { return value }
 	chosen(test, value, arm_chain(arms[1..], subject, variants))
 }
 
 chosen(test: Node, value: Node, otherwise: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, value), Op.Else, otherwise)
 
 matched(subject: Node, arms: list, n: Node, variants: map): Node := {
-	if #arms == 0 or not arms.all(arm => is_case_arm(arm, variants)) { return n }
+	if #arms == 0 { return n }
 	if is_name(subject) { return arm_chain(arms, subject, variants) }
 	List([Key(symbol(subject_name), Op.Assign, subject), arm_chain(arms, symbol(subject_name), variants)], Bracket.Round, Separator.Semicolon)
 }
