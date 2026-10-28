@@ -136,6 +136,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Playground CI runs Chrome and Firefox in parallel; workers need not tour with --firefox.
 
 ## Tooling: format, beautify, CLI
+- drop-pure-word (user): `warp pure` is gone: plain `warp <file>` is the warp compiler (warp.wasm); `warp self` stays the self-built variant; `pure` survives only as a hidden CLI alias with a one-line note. Card drop-pure-word.
 - warp-format: `warp format` (synonym `warp lint`, no `fmt`) only fixes layout in one canonical form, never meaning: tabs, `name: value`, spaced binary operators (glued only where spacing changes meaning; checked by comparing parse trees), list separators as written, `{` on its header's line, one space after `,`, none inside brackets, ≤ 1 blank line. Abbreviated words get a soft hint ("warp avoids abbreviations"), never a fix.
 - beautify (also beautify-preview): opinionated rewrites are `warp beautify`: prints the diff, asks "apply? y/n" in a terminal (piped lines answer it, one per file; end of input is no), `beautify yes` applies, `beautify check` previews; rules: hash-comments, alias words to their warp word via the I-meant fixes.
 - cli-words: warp's command options are words, never `--flags` (`warp format check …`); card cli-words migrates the old ones.
