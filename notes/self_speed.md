@@ -29,16 +29,11 @@ each, summed with `probes/parser_speed/profile_top.py <files…> --top N [--call
    directly.
 
 ## What remains (not worth it now)
-- `new_symbol` under `kept`, ~20 % of the remaining run: the host rebuilds the kept runtime words' tree node by node
-  through the exported builders (runtime builders.warp copies each symbol byte by byte out of linear memory). Pure
-  spends the same absolute time (~0.13 s over 8 runs), so it is no gap between the two compilers; a real fix is
-  host-side (keeping the lowered runtime as wasm data instead of a rebuilt tree).
 - The lexer walks texts by code point (code_point_width/at/text, character_end, ~4–8 %): card lexer-walks (Later).
 - Statically warp-self.wasm still re-allocates text literals per use (array.new_data), boxes many ints and casts
   more (ref.cast) than Rust's output, but none of these showed as a hot spot of 10 % or more.
 
-Related: a cold module cache (no kept runtime words) makes `warp self` trap in lowered_program, on main too (cards
-self-traps / self-cold-trap).
+No compile keeps or rebuilds the runtime words any more: they come from runtime.wasm (card runtime-lowering-scope).
 
 ## Seed regression 2026-10-27 (card rebuild-pure-went)
 `warp rebuild pure` is the seed compiling compiler.warp, so its time is the seed's speed. Per-hour minima in
