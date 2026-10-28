@@ -59,6 +59,11 @@ instance_of(n: Node, name: text): bool := {
 	if is_null(n) or kind_code(n) != Kind.Key { return no }
 	text_order(key_name(n), name) == 0
 }
+# `x is Animal`: an instance of one of the classes, Animal and those extending it
+instance_among(n: Node, classes: list): bool := {
+	for class_name in classes { if instance_of(n, class_name) { return yes } }
+	no
+}
 # `type(x)` of a value known only at run time (Rust's list_ops.rs node_type_name): the type value naming its kind as
 # the static names do; an instance names its class, one of the program's `classes`
 node_type_name(n: any, classes: list): any := with_kind(symbol_of(node_type_word(n, classes)), Marked.TypeValue)
