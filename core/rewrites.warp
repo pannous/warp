@@ -116,7 +116,7 @@ early_sugar_module_names = ["sugar/functions", "sugar/declarations"]
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
 # phrase pattern that matches only a whole phrase, not its runs; `alias` for a rule marked alias
-class Rule { pattern: Node; template: Node; hole: Node; shape: Node; conditions: list; place: Place; module: text; whole: bool; alias: bool }
+class Rule { pattern: Node; template: Node; hole: Node; shape: Node; conditions: list; place: Place; module: text; whole: bool; alias: bool; head: text }
 
 # the early sugar modules' rules once read (early_module_rules)
 global early_rules_read = no
@@ -282,6 +282,41 @@ sugared_node(n: Node, rules: list): Node := {
 	sugar_rewritten(n, rules)
 }
 
+# what a pattern needs of the top of the code it matches, as rule_matches tests it first: "" for a hole (any code), the
+# operator of a key, the bracket of a group and its first word when the pattern spells one, an atom; a rule whose head
+# the code lacks is not tried there (card sugar-rule-passes)
+pattern_head(pattern: Node): text := {
+	if rule_hole(pattern) != ø or typed_hole(pattern) != ø { return "" }
+	if pattern is key { return key_head(pattern) }
+	if is_group(pattern) { return group_head(pattern, if #pattern > 0 and rule_hole(pattern#1) == ø and rest_hole_name(pattern#1) == ø and pattern#1 is symbol then name_of(pattern#1) else "") }
+	atom_head
+}
+atom_head = "atom"
+key_head(n: Node): text := match n {
+	Key(_, op, _): "key " + op as text
+	_: ""
+}
+group_head(n: Node, first_word: text): text := "group " + bracket_of(n) + " " + first_word
+# the heads code has, its own and, as rule_applied and sugar_rewritten also try them, those of its statements as one
+# line (a curly group) and of its phrase as written
+code_heads(n: Node, written: any): map := {
+	heads = {}
+	for code in [n, written] {
+		if code != ø {
+			own_heads_of(code, heads)
+			if is_curly_group(code) { own_heads_of(separated(bracketed(items_of(code), ""), separator_of(code)), heads) }
+		}
+	}
+	heads
+}
+own_heads_of(code: Node, heads: map) := {
+	if code is key { heads[key_head(code)] = yes } else if is_group(code) {
+		heads[group_head(code, "")] = yes
+		if #code > 0 and code#1 is symbol { heads[group_head(code, name_of(code#1))] = yes }
+	} else { heads[atom_head] = yes }
+}
+fits_head(rule: Rule, heads: map): bool := rule.head == "" or heads.has(rule.head)
+
 # the statements with each run a sugar rule of several statements `($a; $b)` matches rewritten, as statement_runs
 # does for the program's own rules: right to left, a run made shorter tried again where it stands (F6, F12, F13)
 sugar_runs(statements: list, rules: list): list := {
@@ -308,8 +343,9 @@ holds_statements(n: Node): bool := is_group(n) and (separator_of(n) in statement
 
 # the code rewritten by the first sugar rule of the place matching it, the result rewritten again
 sugar_at_place(n: Node, place: Place, rules: list): Node := {
+	heads = code_heads(n, ø)
 	for rule in rules {
-		if rule.place == place {
+		if rule.place == place and fits_head(rule, heads) {
 			result = rule_applied(rule, {}, n)
 			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
 		}
@@ -361,8 +397,9 @@ phrase_words(n: Node): map := {
 # as the passes left it
 sugar_rewritten(n: Node, rules: list): Node := {
 	written = flattened_phrase(n)
+	heads = code_heads(n, written)
 	for rule in rules {
-		if rule.place == Place.Anywhere {
+		if rule.place == Place.Anywhere and fits_head(rule, heads) {
 			result = rule_applied(rule, {}, n)
 			if not changes(result, n) and written != ø { result = regrouped(rule_applied(rule, {}, written), n) }
 			if changes(result, n) { return bottom_up(as_value(result), part => sugar_rewritten(part, rules)) }
@@ -500,7 +537,7 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	lines = if source.contains(rule_hole_mark) then source.split("\n") else []
 	pattern = with_called_holes(pattern, lines)
 	template = with_called_holes(template, lines)
-	if where_at == #after { return Rule(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no) }
+	if where_at == #after { return Rule(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no, pattern_head(pattern)) }
 	conditions = []
 	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
 	aliased = conditions.any(condition => condition == symbol(alias_mark))
@@ -511,8 +548,8 @@ rule_of(statement: Node, module: text, source: text): Rule? := {
 	place = if #places == 0 then Place.Anywhere else PLACE_WORDS[name_of(places#1)]
 	origins = conditions.filter(condition => is_key(condition, Op.Assign))
 	if #origins > 1 { return ø }
-	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole, aliased) }
-	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module, whole, aliased)
+	if #origins == 0 { return Rule(pattern, template, ø, ø, conditions, place, module, whole, aliased, pattern_head(pattern)) }
+	Rule(pattern, template, key_of(origins#1), value_of(origins#1), conditions.filter(condition => not is_key(condition, Op.Assign)), place, module, whole, aliased, pattern_head(pattern))
 }
 
 # a template cut at a `where` its last words swallowed (`$c + $n where`, `$s where statement`): the template before it
