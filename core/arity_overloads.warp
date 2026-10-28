@@ -196,7 +196,7 @@ overload_kind(type: text): text? := {
 }
 
 # also a class the program declares, `x: Real`, which the run time tells by `is`
-is_overload_type(type: text, classes: list): bool := type == any_word or overload_kind(type) != ø or type in classes
+is_overload_type(type: text, classes: list): bool := type == any_word or overload_kind(type) != ø or type in classes or (is_union(type) and union_members(type).all(member => is_overload_type(member, classes)))
 declared_classes(program: Node): list := statements_in(program).map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
 
 # `x: int` → "int", an untyped parameter "any"; a definition taking a pattern apart, `len([h, t...])`, is a clause of
@@ -209,7 +209,7 @@ pattern_type = "pattern"
 is_list_pattern(written: Node): bool := is_empty_list(written) or (is_group(written) and bracket_of(written) == "[")
 
 # `f·list_of_int·text`: one word
-typed_variant(name: text, types: list): text := name + types.map(t => "·" + (if element_of(t) != ø then "list_of_" + element_of(t) else t)).join("")
+typed_variant(name: text, types: list): text := name + types.map(t => "·" + (if element_of(t) != ø then "list_of_" + element_of(t) else union_members(t).join("_or_"))).join("")
 
 # name → the parameter types of each of its definitions, for each name defined with several, all different, all of
 # the types above and some typed (a class's parameters dispatch through its methods instead)
@@ -378,6 +378,8 @@ element_fit(element: text?, type: text): int? := {
 # an argument the run time tells fits every type for now
 argument_fit(kind: list?, type: text): int? := {
 	if kind == ø { return 0 }
+	# a union fits as well as its best fitting member (decision union-or)
+	if is_union(type) { return union_members(type).map(member => argument_fit(kind, member)).filter(fits => fits != ø).fold(ø, (best, fits) => if best == ø or fits < best then fits else best) }
 	if kind#1 == "function" and kind#2 != ø and function_type_arity(type) not in [ø, kind#2] { return ø }
 	if kind#1 == "list" then element_fit(kind#2, type) else fit(kind#1, type)
 }
@@ -413,6 +415,7 @@ takes_widened(type: text): bool := type == "float" or type == "number"
 # the run-time test of an argument for a parameter type; of a list type also of its first item, as a list keeps no
 # item type at run time (an empty list fits every list type)
 run_time_test(argument: Node, type: text): Node := {
+	if is_union(type) { return union_members(type).map(member => run_time_test(argument, member)).fold(ø, (tests, test) => if tests == ø then test else Key(tests, Op.Or, test)) }
 	element = element_of(type)
 	if element == ø { return call_of("is_type", [argument, if takes_widened(type) then "number" else if overload_kind(type) == "function" then "function" else type]) }
 	no_items = Key(call_of("count", [argument]), Op.Eq, 0)

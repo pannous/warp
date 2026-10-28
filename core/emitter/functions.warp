@@ -69,6 +69,8 @@ def call_values(f: Function, values: list): TypedCode {
 # widened parameter took a reading of the whole compiler for each (card speed-parallel-emit)
 def passed(f: Function, i: int, value: TypedCode): list {
 	slot = parameter_key(f.name, i)
+	declared = if i < #f.signature.parameters then f.signature.parameters[i].type_name else ""
+	if is_union(declared) and not fits_union(declared, value.kind) { refuse("a " + kind_spelling(value.kind) + " where a " + declared + " is needed") }
 	try {
 		# a node may hold any kind (`v.x * s` of a float s): read as an unannotated parameter's int it would trap, so the
 		# parameter widens, as widen_parameter does for a call still compiling
@@ -217,6 +219,7 @@ node_annotations = ["any", "Node", "function", "type", "map", "number", "symbol"
 annotated_kind(written: text): ValueKind := {
 	# `(samples, float) -> any`: a function, held as a node
 	if written.contains(" -> ") { return ValueKind.Node }
+	if is_union(written) { return shared_kind(union_members(written).map(annotated_kind)) }
 	word = aliased_type(written)
 	if word in node_annotations or word in module.classes or word.ends_with("?") { return ValueKind.Node }
 	# Rust twin: type_names.rs plural_element_type
@@ -225,6 +228,13 @@ annotated_kind(written: text): ValueKind := {
 	if word.contains(" of ") { return annotated_kind(word.split(" of ")#1) }
 	word as ValueKind
 }
+# the kind every member holds, else a node, which holds any of them
+shared_kind(kinds: list): ValueKind := if kinds.all(kind => kind == kinds#1) then kinds#1 else ValueKind.Node
+# whether `converted` takes a value of kind `from` where `to` is needed: as it is, boxed into a node, read from a node,
+# an int as a float or bool, a bool as an int, a character as a text
+converts(from: ValueKind, to: ValueKind): bool := from == to or from == ValueKind.Node or to == ValueKind.Node or (from == ValueKind.Int and (to == ValueKind.Float or to == ValueKind.Bool)) or (from == ValueKind.Bool and to == ValueKind.Int) or (from == ValueKind.Char and to == ValueKind.Text)
+# whether a value of the kind is one of the union's members, as far as the compile knows it: a node is checked when it runs
+fits_union(type: text, kind: ValueKind): bool := union_members(type).any(member => converts(kind, annotated_kind(member)))
 # the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`; any other word itself
 aliased_type(word: text): text := {
 	optional = word.ends_with("?")

@@ -586,6 +586,9 @@ def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if is_key(target, Op.Colon) and key_of(target) is symbol and value_of(target) is symbol {
 		return declaration(body, name_of(key_of(target)), name_of(value_of(target)), value)
 	}
+	if is_key(target, Op.Colon) and key_of(target) is symbol and union_spelling(value_of(target)) != ø {
+		return union_declaration(body, name_of(key_of(target)), union_spelling(value_of(target)), value)
+	}
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
@@ -640,6 +643,11 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode): T
 def typed_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
 	if value.kind != ValueKind.Node and value.kind != pending { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
+}
+# `x: int or text = v` (decision union-or): x holds a node, a value of a kind no member takes is refused
+def union_declaration(body: Body, name: text, type_name: text, value: TypedCode): TypedCode {
+	if not fits_union(type_name, value.kind) { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name) }
+	assignment(body, symbol(name), TypedCode(ValueKind.Node, boxed(value)))
 }
 # `x: int? = v` (`line: int? = try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet (Rust's is), a value of another kind is refused; `x: Node? = v` (any node

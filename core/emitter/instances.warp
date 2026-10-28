@@ -366,6 +366,7 @@ entries_of_both(inherited: map, own: map): map := {
 # list of a plural type word (`texts`), each through a type alias; ø untyped, an instance of a class or another type
 def field_kind(type: text?): ValueKind? {
 	if type == ø { return ø }
+	if is_union(type) { return annotated_kind(type) }
 	word = aliased_type(base_type(type))
 	if word in module.classes { return ValueKind.Instance }
 	if word in node_annotations { return ValueKind.Node }
@@ -378,6 +379,7 @@ def texted(type: text?, value: TypedCode): TypedCode { if value.kind == ValueKin
 # whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion; an
 # instance of a class is a node, as Rust's class-typed fields take it
 def admits(type: text?, kind: ValueKind): bool {
+	if type != ø and is_union(type) { return fits_union(type, kind) }
 	type == ø or field_kind(type) == ValueKind.Node or field_kind(type) == kind or (kind == ValueKind.Node and aliased_type(type) in module.classes)
 }
 # a write to a field `name` of a target known only at run time: every class's field so named takes the kind; a value
@@ -418,6 +420,8 @@ base_type(type: text?): text? := if type is text and #type > 1 and type.ends_wit
 type_name_of(type: any): text := {
 	if kind_of(type) == "symbol" { return type#2 }
 	if kind_of(type) == "list" { return "list" }
+	# `int or text`, a union (decision union-or)
+	if kind_of(type) == "key" and type#2 == "or" { return type_name_of(type#3) + " or " + type_name_of(type#4) }
 	if kind_of(type) == "type" and kind_of(type#2) == "symbol" { return type#2#2 }
 	"?"
 }
