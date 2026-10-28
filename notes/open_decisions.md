@@ -13,6 +13,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - fixed-time-units (supervisor's call, separate-modules): `1 minute`, `2 hours`, `90 seconds` are fixed quantities of lib/units.warp (a minute is 60 s, `sleep 1 minute` sleeps); day, week, month and year stay calendar durations (a day can be 23 or 25 h across DST)
 - is-pattern-binds (interviewer): `if p is Point{x, ..}: print x` binds x where the test is known true (then-branch, rest of an `and` chain, match arm); one rule for `is` and `match`.
 - implicit-standard-words, hint part (interviewer): a word used without `use` gets a hint naming its module, so `warp beautify` writes the `use`.
+- implicit-standard-words, index scope (worker samples-implicit-use): the word index (lib/modules/words.tsv) covers every standard module's definitions but the prelude, the dialects R, PHP and english too, read from their sources at rebuild, not only from modules that prebuild; a program's own class names never pull a module in (`class C` is not sound's note C).
 - program-match lowering (supervisor): "merge all existing branches" taken as the OK for its run-time matcher in lib/prelude.warp + core/node_matches.warp (landed 9f9ef1ce43).
 - test path edit (supervisor): test/node/test_parsed_node_walks.pairs.warp:34 reads core/parsing/parser.warp instead of core/parser.warp after the core/ grouping; the only test edit of the reshuffle.
 - warp test handoff (supervisor): until the native test runner lands, `warp test` on the native warp hands off to warp-rust with one stderr line.
