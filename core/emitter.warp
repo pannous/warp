@@ -515,7 +515,7 @@ def call_code(index: int): list { [op.call] + relocatable(relocated.calls, index
 # behind the mark of its kind and space that function_body takes off (marks); the module's own items are those from
 # module.own_from[kind] on, every index of a kind it has none of is the runtime's
 def relocatable(kind: int, index: int): list {
-	if not module.prebuilding { return uleb(index) }
+	if not relocates() { return uleb(index) }
 	space = if kind < #module.own_from and index >= module.own_from[kind] then own_space else runtime_space
 	[relocation_mark(kind, space)] + padded_uleb(index)
 }
