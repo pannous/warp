@@ -27,7 +27,7 @@ def code_only(source: text): text {
 }
 
 // The end of the comment (`// …`, `# …`, `/* … */`, `/# … #/`) or text (`"…"`, `'…'`) starting at `at`, else `at`
-def span_end(source: any, at: int, n: int): int {
+def span_end(source: text or list, at: int, n: int): int {
 	c = source[at]
 	next = peek(source, at + 1, n)
 	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') { return index_of(source, "\n", at, n) }
@@ -41,7 +41,7 @@ def span_end(source: any, at: int, n: int): int {
 
 // After the quote closing a text from `from` on: an escaped quote `\"` leaves it open
 // Rust twin: warp_parser quoted_end
-def quoted_end(source: any, from: int, quote: text, n: int): int {
+def quoted_end(source: text or list, from: int, quote: text, n: int): int {
 	at = from
 	while at < n and source[at] != quote {
 		if source[at] == '\\' { at = at + 1 }
@@ -51,21 +51,21 @@ def quoted_end(source: any, from: int, quote: text, n: int): int {
 }
 
 // Where `part` first starts in the source from `from` on, else the source's length
-def index_of(source: any, part: text, from: int, n: int): int {
+def index_of(source: text or list, part: text, from: int, n: int): int {
 	at = from
 	while at < n and not starts_at(source, part, at, n) { at = at + 1 }
 	at
 }
 
 // The index after the first `part` from `from` on, else the source's length
-def after(source: any, part: text, from: int, n: int): int {
+def after(source: text or list, part: text, from: int, n: int): int {
 	at = index_of(source, part, from, n)
 	if at < n then at + part.length else n
 }
 
 // `part` at `at` of a source of length `n`, the caller's: a text's length counts its characters, so asking
 // source.length here walked the whole source at every test (85% of a rebuild was the parser's keyword tests)
-def starts_at(source: any, part: text, at: int, n: int): bool {
+def starts_at(source: text or list, part: text, at: int, n: int): bool {
 	wanted = part.length
 	room = n - at
 	i = 0
@@ -86,7 +86,7 @@ def is_blank(c: text): bool := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 
 // Only blanks stand before `at` on its line
 // Rust twin: declaration_scan.rs at_line_start
-def at_line_start(source: any, at: int): bool {
+def at_line_start(source: text or list, at: int): bool {
 	before = at - 1
 	while before >= 0 and (source[before] == ' ' or source[before] == '\t') { before = before - 1 }
 	before < 0 or source[before] == '\n'
@@ -265,7 +265,7 @@ def is_letter_beyond_ascii(c: text): bool {
 }
 
 // `# note`, `#!`, `##`, `#use lib`: a comment; `#s`, `#a-1`, `#f(x)` count
-def hash_comment(source: any, at: int, n: int): bool {
+def hash_comment(source: text or list, at: int, n: int): bool {
 	next = peek(source, at + 1, n)
 	if is_blank(next) or next == '!' or next == '#' { return true }
 	width = name_end(source, at + 1, n) - at - 1
@@ -273,13 +273,13 @@ def hash_comment(source: any, at: int, n: int): bool {
 }
 
 // Whether one of `words` is exactly the `width` items at `at` (the source a text or its code points)
-def any_word_at(source: any, at: int, width: int, words: list): bool {
+def any_word_at(source: text or list, at: int, width: int, words: list): bool {
 	for word in words { if word.length == width and starts_at(source, word, at, at + width) { return true } }
 	false
 }
 
 // After the name from `from` on; `$1` is a parameter, no number
-def name_end(source: any, from: int, n: int): int {
+def name_end(source: text or list, from: int, n: int): int {
 	at = from
 	while at < n and is_name_char(source[at]) { at = at + 1 }
 	at
@@ -322,7 +322,7 @@ def digits(source: text, at: int, count: int, n: int): bool {
 def is_at(source: text, at: int, c: text, n: int): bool := at < n and source[at] == c
 
 // The character at `at`, a newline past the end
-def peek(source: any, at: int, n: int): text := if at < n then source[at] else '\n'
+def peek(source: text or list, at: int, n: int): text := if at < n then source[at] else '\n'
 
 // The bracket or quote closing `open`, a quote closing itself
 def closing_of(open: text): text {
