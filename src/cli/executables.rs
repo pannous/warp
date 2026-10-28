@@ -1,5 +1,5 @@
 //! The runtime stub an executable is made of (crates/warp-runtime): found next to warp, else built from warp's source
-//! checkout; compiler.warp's build command joins it with the program (core/commands.warp write_executable)
+//! checkout; compiler.warp's build command joins it with the program (core/commands/commands.warp write_executable)
 use super::*;
 
 /// The crate of the stub in warp's source checkout

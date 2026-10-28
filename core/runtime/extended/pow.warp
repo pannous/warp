@@ -5,7 +5,7 @@
 use "../intrinsics.warp"
 use "../instructions.warp"
 use "pow_tables.warp"
-use "../../byte_codes.warp"
+use "../../emitter/byte_codes.warp"
 # the table's int at index: its 16 hex digits, read in place
 pow_log_entry(index: int): int := hex_entry(pow_log_table_text(), index)
 pow_exp_entry(index: int): int := hex_entry(pow_exp_table_text(), index)

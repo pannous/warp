@@ -18,7 +18,7 @@ Adapt to main's diagnose(fact, about) (definitions.warp:314 calls diagnose with 
 Warp-only gate: `/workspace/box-slot.sh scripts/gate-probes.sh --base origin/main --folders <tree>` (tier 0 rebuild pure+self + hellos, tier 1 probes/gate, tier 2 the changed test folders); compare tier 2's failing count with main's run of the same folders (it must not go up).
 
 ## Known failures
-Merged onto main d665c3937 (Integrator, 2026-10-24 10:01 CEST): `warp rebuild pure` fails: diagnose needs a value for parameter about (it has no default) at core/definitions.warp:314 (main's diagnose(fact, about) since 88122b18f). Merges textually clean, so it looks ready but isn't.
+Merged onto main d665c3937 (Integrator, 2026-10-24 10:01 CEST): `warp rebuild pure` fails: diagnose needs a value for parameter about (it has no default) at core/passes/definitions.warp:314 (main's diagnose(fact, about) since 88122b18f). Merges textually clean, so it looks ready but isn't.
 
 ## Next step
 Pass the statement as `about` in the conversion diagnostics, rebuild pure+self, run tests/types, Ready.

@@ -40,7 +40,7 @@ it comes to Rust's output.
 ## Refusals
 
 warp-rust has no exit status of its own for a refusal. compiler.warp raises `outside the core: …` before the program
-runs (core/compiler.warp; the emitter's text, core/emitter.warp `outside_the_core`), and warp-rust
+runs (core/compiler.warp; the emitter's text, core/emitter/emitter.warp `outside_the_core`), and warp-rust
 prints that Error as the run's value, `Error("outside the core: …")`, on stdout and exits 1 (standalone.rs `run` →
 src/cli/display.rs `print_and_exit`; the source excerpt goes to stderr). The launcher counts a run as refused when it
 exits 1 and its whole stdout is one line starting `Error("outside the core: `: nothing of the program ran before, so

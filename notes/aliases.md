@@ -21,11 +21,11 @@ modulo { operator: "%", symbol: Op.Mod, aliases: [mod], infix: yes }
 
 ## Who reads it
 
-- core/parser.warp `read_aliases`, the first time a parse starts (its own parse sees the parser's own
+- core/parsing/parser.warp `read_aliases`, the first time a parse starts (its own parse sees the parser's own
   operators only): symbol aliases join `symbol_operators` (ordered longest first, so `**` wins over `*`), infix words
   join `word_operators`, word aliases of a keyword take its form in `keyword_forms` (`elif`, `has`, `true`, `null`).
   `canonical_word(spelling)` gives the entry's word.
-- core/builtin_signatures.warp `unaliased`: a call's library word is its canonical word, then the prelude's
+- core/analysis/builtin_signatures.warp `unaliased`: a call's library word is its canonical word, then the prelude's
   `alias keys = map_keys` lines (public name → implementation, not synonyms).
 - The Rust compiler (frozen) keeps its own tables, below; lib/prelude.warp keeps its `alias has = collection_contains`
   lines for it.

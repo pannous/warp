@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: #2976 keys of an empty map is [] in warp ([keys-of-empty](https://github.com/pannous/warp/issues/2976))
-- Branch: `keys-of-empty` at `9561a80a2`, 3 ahead / 815 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/emitter.warp)
+- Branch: `keys-of-empty` at `9561a80a2`, 3 ahead / 815 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/emitter/emitter.warp)
 - Kind: touches Rust (src/, crates/ or *.rs): waits for the Rust lane
 - Owner: No owner: the card waits in Next for the planner to assign.
 - State: emitter.warp: an untyped parameter widens to the kinds passed to it (keys of {}), plus dropping two twin probes where warp is right; the widening broke the self build.

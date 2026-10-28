@@ -143,7 +143,7 @@ fn write(file: &Path, bytes: &[u8]) {
 	}
 }
 
-/// The variable naming the lib/ a compiler run reads its std modules from (core/parser.warp run_library)
+/// The variable naming the lib/ a compiler run reads its std modules from (core/parsing/parser.warp run_library)
 pub const LIBRARY_VARIABLE: &str = "WARP_LIB";
 
 /// The environment a run sees: this process's, with WARP_LIB the compiler run's lib/ (its keeper's) when it has one,

@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: draft card hDLGm4 'compiler helpers that can answer ø declare list? instead of any (optional-helpers)' (Next)
-- Branch: `optional-helpers` at `9376e3bb7`, 1 ahead / 1473 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/parser.warp)
+- Branch: `optional-helpers` at `9376e3bb7`, 1 ahead / 1473 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/parsing/parser.warp)
 - Kind: warp only
 - Owner: No owner: the card waits in Next for the planner to assign.
 - State: Compiler helpers that can answer ø declare `list?` instead of `any` (decision optional-result, beautiful types); 5 lines, 1467 behind, parser.warp conflict.

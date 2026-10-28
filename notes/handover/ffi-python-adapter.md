@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: #3089 general Python adapter: call any Python… ([ffi-python-adapter](https://github.com/pannous/warp/issues/3089))
-- Branch: `ffi-python-adapter` at `71bb36d34`, 11 ahead / 436 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/c_imports.warp)
+- Branch: `ffi-python-adapter` at `71bb36d34`, 11 ahead / 436 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/emitter/c_imports.warp)
 - Kind: warp only
 - Owner: grok-warp-python (parked 2026-10-23; Supervisor: low priority): that owner continues it when resumed (the planner reassigns it otherwise).
 - State: Call Python from warp through libpython (math.sqrt, str methods, json.dumps, exceptions); conflicts in core c_imports.warp.

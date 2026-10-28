@@ -14,5 +14,5 @@ one type word wherever a type stands (`x: …`, `unsigned int y = 3`, parameters
 | unsigned char / signed char | byte / int8 |
 
 Single words keep warp's meaning: `int`, `long` are the unbounded int. The table is COMPOUND_TYPES
-(src/warp_parser/types/expressions.rs, twin in core/parser.warp), beside warp's own `fast int` / `fast float`.
+(src/warp_parser/types/expressions.rs, twin in core/parsing/parser.warp), beside warp's own `fast int` / `fast float`.
 User decision c-int-names: C's fixed widths with a got-it note, not plain unbounded `int`.

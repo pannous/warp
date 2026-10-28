@@ -423,7 +423,7 @@ fn run_command(args: &[String], given: &[String]) {
 	} else if let Some(code) = command_argument(&arg_string, LOWER_JSON_COMMAND) {
 		fail(not_in_self_lane("warp lower --json", code));
 	} else if [&[LOWER_COMMAND, RUNTIME_COMMAND][..], &MODULE_COMMANDS].concat().contains(&args[1].as_str()) && args.len() > 2 {
-		// compiler.warp's own commands (core/commands.warp), as `warp self lower …` gives them
+		// compiler.warp's own commands (core/commands/commands.warp), as `warp self lower …` gives them
 		run_by_compiler(&args[1..], warp::compiler::standalone::Compiler::RustCompiled);
 	} else if let Some(code) = command_argument(&arg_string, "parse") {
 		println!("{}", structure(&warp::compiler::standalone::parsed(code)));
@@ -545,7 +545,7 @@ fn unknown_command(args: &[String]) -> Option<String> {
 /// `warp self [run|eval|build|compile|link] <file.warp|code> [arguments…]` (and the hidden alias `warp pure`): as plain `warp` takes it,
 /// the program compiled by compiler.warp (`by`): `run`/`eval` run it, `build` writes its module as `warp build --wasm`
 /// does (out.wasm for inline code); with no command word a .warp file or inline code runs. Any other command word is
-/// compiler.warp's own command (core/commands.warp: help, version, parse, data, lower, repl; the others refuse
+/// compiler.warp's own command (core/commands/commands.warp: help, version, parse, data, lower, repl; the others refuse
 /// naming the native warp), never compiled as code (`warp self build x` compiled `build x`)
 #[cfg(not(test))]
 fn run_by_compiler(words: &[String], by: warp::compiler::standalone::Compiler) -> ! {
@@ -601,7 +601,7 @@ fn print_help_rows(rows: &[(&str, &str)], column: usize) {
 }
 
 /// `warp build|compile|link [--wasm] [--aot] [--trim=<way>] <file|code>`: compiler.warp's build command builds it
-/// (core/commands.warp), natively for a primitive file, told where the executable's stub lies. `compile`, `link` and
+/// (core/commands/commands.warp), natively for a primitive file, told where the executable's stub lies. `compile`, `link` and
 /// `--aot` build only the modules; `--aot` then x.wasm's machine code for this warp's engine, which `warp x.cwasm` runs
 fn build_in_warp(words: &[String], by: warp::compiler::standalone::Compiler) -> ! {
 	let ahead_of_time = words.iter().any(|word| word == AOT_FLAG);

@@ -9,7 +9,7 @@ use "floats.warp"
 use "instructions.warp"
 use "library_words.warp"
 use "text.warp"
-use "../byte_codes.warp"
+use "../emitter/byte_codes.warp"
 # 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
 sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == Ascii.Minus or byte_at(t, 0) == Ascii.Plus) then 1 else 0
 # t starts with -

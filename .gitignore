@@ -30,8 +30,6 @@ data/
 /lib/runtime.wasm.cwasm
 /lib/compiler.wasm*
 /lib/compiler-self.wasm*
-# the native driver `warp build` builds once per lib/ (core/commands.warp built_driver)
-/lib/native/built/
 
 # packages fetched by `use <name>`, see packages.warp
 /packages/

@@ -5,7 +5,8 @@
 #   warp app.wasm args…   the module run
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments
 #   warp                  warp.wasm's help
-#   warp <words…>         warp.wasm with the words: its own command (core/commands.warp, the one command table), any
+#   warp rebuild          warp.wasm built anew from lib/ by the seed (rebuilt)
+#   warp <words…>         warp.wasm with the words: its own command (core/commands/commands.warp, the one command table), any
 #                         other words code it compiles to WARP_RUN_TO (compiler.warp), which then runs
 # The host words warp.wasm's commands call are answered by driver.warp host_word; library words (graphics, sound, web)
 # are not the core binary's (decision libraries-not-core) and say so
@@ -13,6 +14,9 @@ use "driver.warp"
 
 setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
 unsetenv(name: pointer): i32 from "c"
+realpath(path: pointer, resolved: pointer): handle from "c"
+mkdir(path: pointer, mode: i32): i32 from "c"
+FOLDER_MODE = 493
 
 # warp.wasm with this executable's words: a command runs, code is compiled to WARP_RUN_TO and run after
 hosted(): nothing := {
@@ -23,6 +27,59 @@ hosted(): nothing := {
 	compiler_ran(given)
 	unsetenv(c_string("WARP_RUN_TO"))
 	if read_file(output).length > 0 { written_run(output, "code", arg_count()) }
+}
+# `warp rebuild`: warp.wasm built anew from lib/, as src/compiler/standalone.rs build did: the seed compiles compiler.warp
+# behind its own runtime, then the new warp.wasm optimizes itself and writes runtime.wasm and the modules beside it;
+# warp.wasm is replaced, with its machine code, only once all of that worked. Any step failing stops the rebuild with
+# its message
+rebuilt(): nothing := {
+	library = library_folder()
+	seed = seed_path()
+	seed_runtime = joined(text_from(seed.address, seed.length - 5), ".runtime.wasm")
+	if read_file(seed_runtime).length == 0 { file_ran(seed, words(seed, "runtime", seed_runtime, "", "", "")) }
+	compiler = real_path(joined(library, "/compiler/compiler.warp"))
+	built = joined(compiler_path(), ".new")
+	file_ran(seed, words(seed, compiler, built, folder_of(compiler), library, seed_runtime))
+	file_ran(built, words(built, "optimize", built, built, "", ""))
+	runtime = joined(library, "/runtime.wasm")
+	file_ran(built, words(built, "runtime", runtime, "", "", ""))
+	modules = joined(library, "/modules")
+	mkdir(c_string(modules), FOLDER_MODE)
+	file_ran(built, words(built, "modules", modules, runtime, "", ""))
+	machine_code = joined(built, ".driver.cwasm")
+	rename(c_string(machine_code), c_string(joined(compiler_path(), ".driver.cwasm")))
+	rename(c_string(joined(machine_code, ".key")), c_string(joined(compiler_path(), ".driver.cwasm.key")))
+	rename(c_string(built), c_string(compiler_path()))
+	print(joined("rebuilt ", compiler_path()))
+}
+# the seed, the compiler that compiles compiler.warp: $WARP_SEED, else warp-seed.wasm beside this executable
+seed_path(): text := {
+	given = getenv("WARP_SEED")
+	if given.length > 0 then given else joined(folder_of(executable_path()), "/warp-seed.wasm")
+}
+# a module's arguments: its path, then the words that are not empty
+words(module: text, a: text, b: text, c: text, d: text, e: text): Arguments := {
+	list = arguments()
+	added(list, module)
+	if a.length > 0 { added(list, a) }
+	if b.length > 0 { added(list, b) }
+	if c.length > 0 { added(list, c) }
+	if d.length > 0 { added(list, d) }
+	if e.length > 0 { added(list, e) }
+	list
+}
+# the path with its links resolved (lib/compiler links to core): a compile's folder is the real one
+real_path(path: text): text := {
+	resolved = realpath(c_string(path), 0)
+	if resolved == 0 {
+		complain(joined("no file ", path))
+		exit(1)
+	}
+	length = strlen(resolved)
+	copy = allocate(length as i32)
+	memcpy(copy, resolved, length)
+	free(resolved)
+	text_from(copy, length as u32)
 }
 # a file of warp code: its name ends in .warp, or a file of that name exists
 is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).length > 0
@@ -40,6 +97,8 @@ if arg_count() < 2 {
 		}
 		run(module, given_from(1), "")
 	} else {
-		if is_warp_file(arg(1)) { compiled_and_run(arg(1)) } else { hosted() }
+		if same_text(arg(1), "rebuild") { rebuilt() } else {
+			if is_warp_file(arg(1)) { compiled_and_run(arg(1)) } else { hosted() }
+		}
 	}
 }

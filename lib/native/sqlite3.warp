@@ -5,7 +5,7 @@
 //   db = sqlite3_open(":memory:")
 //   rows(db, "select 1+2, 'a'")        [[3, "a"]]
 //   run_query(db, "create table t(x)") the changed rows' count
-// (`sql` and `execute` are warp's words for sql templates, core/injection.warp)
+// (`sql` and `execute` are warp's words for sql templates, core/parsing/injection.warp)
 sqlite3_libversion(): text from 'sqlite3'
 sqlite3_libversion_number(): i32 from 'sqlite3'
 sqlite3_open(filename: text, db: out): handle from 'sqlite3'

@@ -20,7 +20,7 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
   rewritten by its base offset through its padded calls (`use sound; midi(440Hz)` costs 2 s today, all of it compiling
   sound.warp).
 - What isn't wasm and needs it is pre-baked (card tables-as-constants, done): every bundled module's parse is packed
-  (pack) into the compiler beside its text, `LIBRARY_PARSES = library_parses()` in core/parser.warp, which uses.warp's
+  (pack) into the compiler beside its text, `LIBRARY_PARSES = library_parses()` in core/parsing/parser.warp, which uses.warp's
   module_text fills in when the compiler is compiled; `source_parse(path, source)` unpacks it on first use when the
   text is the bundled one (a WARP_LIB edit is parsed). Sugar rules, the alias table and the operator modules read it;
   no os.kept for them. Packed text rather than constant GC globals: globals are built eagerly at instantiation and
@@ -173,7 +173,7 @@ All options stay open and are exposed to the build process (`warp build` options
   shaking-build-options); separate modules linked by import/export, in the browser and wherever the ahead-of-time
   compile combines modules natively, so size may not matter at all (card runtime-separate-modules; GC types match
   across modules through the canonical type section).
-- `warp build --trim=<way>` (core/commands.warp trim; also `warp self build`): `optimize` (the default, and bare
+- `warp build --trim=<way>` (core/commands/commands.warp trim; also `warp self build`): `optimize` (the default, and bare
   `--trim`), `unused`, `none`, `warp` (refused until runtime-shaking). Trimmed by default (user, 2026-10-28), the way
   picked by measurement: wasm-opt with wasmtime's feature list (never `-all`: custom descriptors write exact
   references wasmtime refuses) and the name section kept. Measured 2026-10-28 on the seed-era modules:

@@ -17,7 +17,7 @@ if n is Definition { … }                         // a test
 match n { Definition: head; _: ø }               // an arm binding head and body
 ```
 
-The compiler's shapes live in core/node_patterns.warp: Assignment, Pair, Definition, Member, Lambda, Call,
+The compiler's shapes live in core/passes/node_patterns.warp: Assignment, Pair, Definition, Member, Lambda, Call,
 Phrase, Block. A used file brings its patterns like its functions. Guarded shapes (`Operation`: any operator, `Call`
 with a name first) wait for pattern guards. Missing shapes are asked of warp-types-back; no branch declares its own.
 

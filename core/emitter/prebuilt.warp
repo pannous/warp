@@ -306,7 +306,8 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 ## operand padded and listed, so a link appends it behind the runtime and the modules before it
 # where the module's own items start in each index space (relocated): behind the runtime's imports and functions,
 # types, globals and text segments
-def own_items_from(): list := runtime_counts()
+# (its functions behind its C imports too, which follow the runtime's)
+def own_items_from(): list := [runtime_counts()#1 + #c_imports()] + runtime_counts()[1 ..]
 # (the runtime makes no closures: a module's are numbered from 0)
 def runtime_counts(): list := [module.runtime_image.imports + module.runtime_image.functions, module.runtime_image.types, #module.runtime_image.globals, module.runtime_image.data, 0]
 
@@ -316,14 +317,24 @@ def runtime_counts(): list := [module.runtime_image.imports + module.runtime_ima
 ## module's, at its index, of its kinds: never compiled again
 # a module's warp.module read back: its own functions (index, kinds, result, signature), globals [name, kind], text
 # segments, what it was built behind, and where each kind of its items lands here (base: placed, type, text)
-class LibraryImage { name: text; wasm: list; functions: list; globals: list; texts: int; behind: list; closures: list; classes: list; builds: bool; base: list }
+class LibraryImage { name: text; wasm: list; functions: list; globals: list; texts: int; behind: list; closures: list; classes: list; builds: bool; c_functions: list; base: list }
 def link_libraries(images: list, own_names: list) {
 	module.linked_images = images
 	module.linked_own_names = own_names
 	module.linked_words = {}
 	module.linked_closures_shown = {}
 	# (a lifted lambda is reached through its closure only: its name may be one the program lifts too)
-	for image in images { for word in image.functions { if word.name not in own_names and not lambda_prefixes.any(prefix => word.name.starts_with(prefix)) { module.linked_words[word.name] = word } } }
+	for image in images { for word in image.functions { if word.name not in own_names and not is_lifted_lambda(word.name) { module.linked_words[word.name] = word } } }
+}
+# the program's own definitions, as parsed (a line holding several, `use units; m(x) := 7; m(1)`, the source's slices
+# miss): never a linked module's word
+def own_words_unlinked(names: list) {
+	for name in names {
+		if name is text and name in module.linked_words {
+			module.linked_words = map_without(module.linked_words, name)
+			module.linked_own_names += [name]
+		}
+	}
 }
 # the definitions of the linked modules, by their text (a slice of one is declared, not brought whole), and the
 # names the program needs of each even when it never says them: its classes and globals
@@ -334,14 +345,14 @@ def linked_slices(): map {
 }
 def linked_needs(): list {
 	names = []
-	for image in module.linked_images { names += image.classes.map(entry => entry#1[#instance_struct_prefix ..]) + image.globals.map(entry => entry#1) }
+	for image in module.linked_images { names += image.classes.map(entry => entry#1[#instance_struct_prefix ..]) + image.globals.map(entry => entry#1).filter(name => name.starts_with(program_global_prefix)).map(name => name[#program_global_prefix ..]) }
 	names
 }
-# ø for a module not linkable behind this runtime: built behind another, making closures (their dispatch is the
-# program's, not linked yet), or importing C functions
+# why a module is not linkable behind this runtime, a text: no warp.module section, of other GC types or host
+# imports, built behind another runtime.wasm
 def library_image_of(name: text, wasm: list): any {
 	place = section_place(wasm, section_ids.custom, library_section)
-	if place == ø { return ø }
+	if place == ø { return "no " + library_section + " section" }
 	layout = ByteReader(wasm, place#1)
 	types = read_number(layout)
 	imports = read_number(layout)
@@ -370,8 +381,13 @@ def library_image_of(name: text, wasm: list): any {
 	classes = []
 	for i in 0..<read_number(layout) { classes += [[read_name(layout), read_name(layout)]] }
 	builds = read_number(layout) == 1
-	if types != #gc_names + #classes or imports != module.runtime_image.imports or behind != runtime_counts() { return ø }
-	LibraryImage(name, wasm, functions, globals, texts, behind, closures, classes, builds, [])
+	# the C functions it imports behind the runtime's imports, which its runtime functions follow
+	c_functions = read_names(layout)
+	runtime_behind = [behind#1 - #c_functions] + behind[1 ..]
+	if types != #gc_names + #classes { return "other canonical or class types than this runtime's" }
+	if imports != module.runtime_image.imports + #c_functions { return "other host imports than this runtime's" }
+	if runtime_behind != runtime_counts() { return "built behind another runtime.wasm (warp rebuild writes it anew)" }
+	LibraryImage(name, wasm, functions, globals, texts, behind, closures, classes, builds, c_functions, [])
 }
 # each linked module's place: its functions behind those placed so far, its types (one per function) and texts too,
 # its globals declared by name (one the runtime or a module before it declares is theirs)
@@ -393,6 +409,7 @@ def behind_libraries() {
 # text), else the program compiles the module from its source
 def bind_library_words() {
 	for image in module.linked_images {
+		for name in image.c_functions { program_import(name) }
 		for entry in image.classes {
 			if entry#1 == instance_struct() { gc_type(instance_struct()) }
 			if entry#1 not in module.class_structs { refuse("the program declares no class struct " + entry#1 + " of the linked module " + image.name) }
@@ -452,15 +469,24 @@ def entries_after(content: list, skip: int, flagged: bool): list {
 def library_code(image: LibraryImage): list {
 	place = section_place(image.wasm, section_ids.code)
 	content = image.wasm[place#1 ..< place#2]
-	shift = runtime_shift()
-	relocations = relocations_of(image.wasm).filter(entry => entry#3 == own_space or (shift != 0 and entry#3 == runtime_space and entry#2 == relocated.calls and uleb_read(content, entry#1)#1 >= module.runtime_image.imports))
+	# a runtime function behind the program's C imports, not the module's; a C function the program's import of it
+	imported = {}
+	for j in 0..<#image.c_functions { imported[module.runtime_image.imports + j] = program_import(image.c_functions[j]) }
+	runtime_calls = Move(runtime_shift() - #image.c_functions, imported)
+	relocations = relocations_of(image.wasm).filter(entry => entry#3 == own_space or (entry#3 == runtime_space and entry#2 == relocated.calls and uleb_read(content, entry#1)#1 >= module.runtime_image.imports))
 	globals = {}
 	for j in 0..<#image.globals { globals[image.behind#3 + j] = module.globals[image.globals[j]#1]#1 }
 	# its class structs first among its types, the program's of their names, then a type per function
 	types = {}
 	for c in 0..<#image.classes { types[image.behind#2 + c] = module.gc_indices[image.classes[c]#1] }
 	own = [shifted(#module.imports + image.base#1 - image.behind#1), Move(image.base#2 - image.behind#2 - #image.classes, types), Move(0, globals), shifted(image.base#3 - image.behind#4), shifted(image.base#4)]
-	entries_after(rebased(content, relocations, [[shifted(shift)], own]), module.runtime_image.functions, no)
+	entries_after(rebased(content, relocations, [[runtime_calls], own]), module.runtime_image.functions, no)
+}
+# the index of the program's import of this C function, which a linked module calls
+def program_import(name: text): int {
+	for i in 0..<#module.imports { if module.imports[i]#2 == name { return i } }
+	refuse("the program imports no C function " + name + " a linked module calls")
+	-1
 }
 def library_types(): list := concatenated(module.linked_images.map(image => image.functions.map(function_type)))
 def library_declared(): list := concatenated(module.linked_images.map(image => range_list(#image.functions).map(k => uleb(image.base#2 + k))))

@@ -13,7 +13,7 @@ Principles and Talking live only in common.md.
   fully and precisely typed. A type that doesn't exist yet is asked of warp-types-back (card beautiful-types), which
   adds the shallow subclasses; don't invent parallel ones in your branch.
 - The sugar migration  keeps one line of history: warp-layers alone removes sugar
-  from core/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
+  from core/parsing/parser.warp and moves passes into lib/sugar/, one module group per branch, branched from
   origin/main after the engine feature it needs has landed (never stacked on warp-rewrite-engine's branch), landed
   the same day. Other branches touching parser.warp or a pass on the migration list stay small and land at once;
   one older than a day merges origin/main or is closed. Folds and fusion (min_max.warp, broadcasting,

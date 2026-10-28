@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: #3061 definitions' def/fun and var/let into… ([sugar-definitions](https://github.com/pannous/warp/issues/3061))
-- Branch: `sugar-definitions` at `0f0cb389d`, 6 ahead / 387 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/parser.warp, core/rewrites.warp, notes/rewrites.md)
+- Branch: `sugar-definitions` at `0f0cb389d`, 6 ahead / 387 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/parsing/parser.warp, core/passes/rewrites.warp, notes/rewrites.md)
 - Kind: warp only
 - Owner: Warp Code (grok-warp-code; parked 2026-10-23, handover notes/box/handover/warp-code.md) / grok-merger: that owner continues it when resumed (the planner reassigns it otherwise).
 - State: Function keywords (def, fun, fn …) as early sugar rules in lib/sugar/functions.warp; readied once, now conflicts (parser.warp, rewrites.warp).

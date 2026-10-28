@@ -1,6 +1,6 @@
 # `a == b` of values known only at run time
 use "intrinsics.warp"
-use "../kinds.warp"
+use "../analysis/kinds.warp"
 use "conversions.warp"
 use "bridge.warp"
 use "nodes.warp"

@@ -1,6 +1,6 @@
 # Lists known only at run time: joining, growing, indexing, counting, filling, summing
 use "intrinsics.warp"
-use "../kinds.warp"
+use "../analysis/kinds.warp"
 use "arithmetic.warp"
 use "characters.warp"
 use "errors.warp"

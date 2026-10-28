@@ -1,0 +1,256 @@
+# warp's commands in warp (card wasm-commands, notes/standalone.md): `wasmtime warp-self.wasm <command> …`, `warp
+# pure <command> …` and `warp self <command> …` all come here through compiler.warp. Plain WASI runs no module the
+# compiler makes, so the commands that run code say so and name the native warp; those that need a host (a server,
+# a window, the network) refuse naming it too
+use os
+use file
+
+REPL_PROMPT = "warp> "
+NATIVE = "the native warp"
+HELP_COLUMN = 38
+
+# each command and what it does, in `warp help`'s order
+command_help = [
+	["help", "Show this help"],
+	["version", "Show version"],
+	["repl", "Start interactive console: definitions stay for the next lines"],
+	["parse <code|file>", "Show the parsed program"],
+	["data <file>", "Read untrusted data without evaluating it"],
+	["lower <code|file>", "Show the program after the lowering passes"],
+	["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
+	["build [--wasm|--exe] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
+	["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
+	["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
+	["optimize <in.wasm> <out.wasm>", "The module optimized by Binaryen's wasm-opt, as warp rebuild optimizes warp.wasm"],
+	["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
+	["modules <folder> [runtime.wasm]", "Every standard module so, into the folder"],
+	["<file> <out.wasm> [folder [lib]]", "Compile the file to the module, as the native `warp` calls it"]
+]
+# the commands that run what they compile: plain WASI cannot instantiate the module
+running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]
+# the commands that need the native warp's host: a server, a window, the network, the Lean model, the build files
+native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "deploy", "link", "app", "docs", "wiki",
+	"home", "lsp", "start", "types", "format", "lint", "beautify", "fix"]
+
+command_name(entry: list): text := entry#1.split(" ")#1
+command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + ["repl-step"] + running_commands + native_commands
+is_command(word: text): bool := word in command_words()
+
+# the text of the file `target` names, else `target` itself as code
+source_of(target: text): text := try read(target) else target
+
+show_help() := {
+	print "warp, the compiler written in warp (core/compiler.warp), its commands:"
+	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
+	print "  need the native warp: " + (running_commands + native_commands).join(" ")
+}
+
+# words, then spaces up to width, at least one
+padded(words: text, width: int): text := {
+	line = words + " "
+	while #line < width { line = line + " " }
+	line
+}
+
+# the version of the lib/ beside the compiler: its checkout's Cargo.toml
+version_text(library: text): text := {
+	manifest = try read(folder_of(library) + "/Cargo.toml") else ""
+	for line in manifest.split("\n") {
+		if line.starts_with("version") { return "🌀 Warp " + line.split("\"")#2 + " (compiler.warp of " + library + ")" }
+	}
+	"🌀 Warp (compiler.warp of " + library + ", no Cargo.toml beside it)"
+}
+
+# the parsed program as `warp parse` shows it, each operation a prefix group: 1+2*x as (+ 1 (* 2 x)) (Rust twin:
+# src/cli/display.rs structure)
+structure(n: Node): text := match n {
+	Key(left, op, right): "(" + (op as text) + " " + structure(left) + " " + structure(right) + ")"
+	List(items, bracket, separator): grouped_structure(items.map(structure), bracket as text, separator as text)
+	_: "${n}"
+}
+# the items' texts in their brackets, between them the separator ("⏎" for a line break)
+grouped_structure(items: list, bracket: text, separator: text): text := {
+	joiner = if separator == "\n" then "⏎ " else if separator == "" or separator == " " then " " else separator + " "
+	if #bracket == 2 { return bracket#1 + items.join(joiner) + bracket#2 }
+	closing = {"{": "}", "[": "]", "(": ")", "<": ">", "": ""}
+	bracket + items.join(joiner) + closing[bracket]
+}
+
+refuse_running(command: text) := {
+	raise "warp " + command + " runs the module it compiles, which plain WASI cannot (no instantiate in WASI preview 1): use " + NATIVE + " or `warp " + command + "`"
+}
+refuse_native(command: text) := {
+	raise "warp " + command + " needs " + NATIVE + "'s host: run `warp " + command + "`"
+}
+
+# `warp build native app.warp`: the primitive file (notes/primitive.md "Native build") as the native executable `app`:
+# its module made C by wasm2c (the module named "program": w2c_program_main), compiled by cc with wasm2c's runtime and
+# lib/native/wasi.c, which answers the WASI calls with libc and has main call run_main, and the main.c of primitive.warp
+# native_main, which calls the C functions the program imports and prints what its main gives
+NATIVE_WORD = "native"
+WASM2C_MODULE = "program"
+C_COMPILER = "cc -O2"
+# wasm2c's runtime and headers, in these folders of the wabt whose wasm2c is on the PATH
+WASM2C_RUNTIME = "/share/wabt/wasm2c"
+WABT_HEADERS = "/include"
+build_native(source_file: text, library: text) := {
+	source = read(source_file)
+	if not is_primitive_file(source) { raise "warp build native builds a primitive file, whose first line is `@primitive` (notes/primitive.md)" }
+	emitting_file(working_relative(source_file))
+	executable = source_file.remove_suffix(".warp")
+	stem = executable + ".native"
+	native_build = yes
+	write_bytes(stem + ".wasm", compile(source, source_folder(source_file)))
+	header = stem.split("/").last() + ".h"
+	write(stem + ".main.c", native_main(header, library))
+	wabt = folder_of(folder_of(shell("command -v wasm2c").trim()))
+	runtime = wabt + WASM2C_RUNTIME
+	shell("wasm2c " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
+	files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
+	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + native_links(wabt))
+	shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
+	print "built " + executable
+}
+# -l of each C library the program imports beside libc and libm, found among the libraries of the wabt's prefix
+# (/opt/homebrew/lib) or the system's
+native_links(wabt: text): text := {
+	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
+	if #libraries == 0 then "" else " -L" + quoted_path(wabt + "/lib") + libraries.map(l => " -l" + l).join("")
+}
+# the folder a file's uses are read from: "." for a file named without one
+source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
+quoted_path(path: text): text := "\"" + path + "\""
+# os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
+shell(line: text): text := {
+	printed = std_io("os", "command", [line])
+	if printed is text then printed else raise "`" + line + "` failed: " + printed
+}
+
+# `warp build [--wasm|--exe] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
+# with --wasm as its module app.wasm (which core/native/driver.warp runs); any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
+# trimmed by Binaryen's wasm-opt) and the executable app (the native driver carrying app.wasm). The native
+# warp adds where runtime.wasm lies, --runtime=<file> (and the old Rust stub's --stub=<file>, read no more)
+OPTION_MARK = "--"
+WASM_ONLY = "--wasm"
+EXE_ONLY = "--exe"
+# what a build of inline code is called: out.wasm, the executable out
+INLINE_STEM = "out"
+# what the Rust compiler built and the warp one doesn't yet: a page's site, its module, WIT, a component, WAGI
+UNBUILT_OPTIONS = ["--site", "--page", "--wit", "--component", "--wagi"]
+TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2"}
+DEFAULT_TRIM = "optimize"
+# what wasmtime runs; Binaryen's -all would add custom descriptors, whose exact references wasmtime refuses. The name
+# section stays (--debuginfo), so traps and results still name their functions. Twin: src/compiler/binaryen.rs, which
+# `warp rebuild` optimizes the compiler with
+WASM_OPT = "wasm-opt --enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext --enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const --enable-multimemory --enable-exception-handling --debuginfo"
+BINARYEN_INSTALL = "brew install binaryen"
+
+build(words: list) := {
+	options = words.filter(word => word.starts_with(OPTION_MARK))
+	targets = words.filter(word => not word.starts_with(OPTION_MARK))
+	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet (card harness-diet)" } }
+	if targets#1 == NATIVE_WORD { return build_native(targets#2, library_folder) }
+	target = targets#1
+	is_file = exists(target)
+	source = if is_file then read(target) else target
+	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
+	if is_file { emitting_file(working_relative(target)) }
+	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", source_folder(target)) else build_native(target, library_folder) }
+	given_runtime = option_of(options, "runtime")
+	if given_runtime != ø { runtime_held = read_bytes(given_runtime) }
+	separate_output = stem + ".mod.wasm"
+	compile_written(source, stem + ".full.wasm", if is_file then source_folder(target) else ".")
+	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
+	modules = [stem + ".full.wasm", separate_output, stem + ".wasm"]
+	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", stem) }
+	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
+		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
+	}
+	ø
+}
+# a file's size in bytes, as text
+size_of(file: text): text := shell("wc -c < " + quoted_path(file)).trim()
+# the value of `--name=value` among the options, ø without one
+option_of(options: list, name: text): any := {
+	for option in options { if option.starts_with(OPTION_MARK + name + "=") { return option.remove_prefix(OPTION_MARK + name + "=") } }
+	ø
+}
+
+# the module trimmed of what its exports never reach, as `way` says (notes/runtime_linking.md "Removing the unused
+# runtime"): by default also optimized (-O2: a third smaller for 30–60 ms more)
+trim(module: text, trimmed: text, way: text) := {
+	if not (way in TRIM_WAYS) { raise "warp build --trim=" + way + ": no such way, the ways are " + TRIM_WAYS.keys.join(", ") + " (warp, our own linker, is card runtime-shaking)" }
+	if way == "none" { return write_bytes(trimmed, read_bytes(module)) }
+	try { shell(WASM_OPT + " " + TRIM_WAYS[way] + " " + quoted_path(module) + " -o " + quoted_path(trimmed)) } catch failure {
+		raise "warp build: wasm-opt trims the module (" + BINARYEN_INSTALL + "), --trim=none builds it untrimmed: " + failure
+	}
+}
+
+# A standalone executable is core/native/driver.warp built natively, carrying the program's module (notes/primitive.md
+# "Driver"), which also makes its C calls: <driver><module><its length, 8 bytes little-endian>WRPMwasm<zeros to a
+# multiple of 16>, signed on macOS
+MODULE_MAGIC = "WRPMwasm"
+TRAILER_ALIGNMENT = 16
+# the driver is built once per lib/ and again whenever driver.warp changes, beside a copy of the source it was built
+# from, written once the build succeeded: in lib/data, which neither the compiler's bundle of lib/ nor its inputs hash
+# reads (parser.warp UNBUNDLED_FOLDERS, scripts/compiler-inputs.sh)
+DRIVER_SOURCE = "/compiler/native/driver.warp"
+DRIVER_BUILT = "/data/native"
+
+built_driver(): text := {
+	folder = library_folder + DRIVER_BUILT
+	source = read(library_folder + DRIVER_SOURCE)
+	built_from = folder + "/driver.built.warp"
+	if not (exists(built_from) and read(built_from) == source) {
+		shell("mkdir -p " + quoted_path(folder))
+		write(folder + "/driver.warp", source)
+		build_native(folder + "/driver.warp", library_folder)
+		write(built_from, source)
+	}
+	folder + "/driver"
+}
+write_executable(module: text, executable: text) := {
+	carried = read_bytes(module)
+	shell("cp " + quoted_path(built_driver()) + " " + quoted_path(executable))
+	signed = shell("uname") == "Darwin"
+	if signed { shell("codesign --remove-signature " + quoted_path(executable)) }
+	image = read_bytes(executable) + carried + le64(#carried) + MODULE_MAGIC.bytes
+	while #image % TRAILER_ALIGNMENT != 0 { image += [0] }
+	write_bytes(executable, extended_to_end(image))
+	shell("chmod +x " + quoted_path(executable))
+	if signed { shell("codesign --sign - --force " + quoted_path(executable)) }
+	carried_size = #carried
+	print "wrote " + executable + " (" + size_of(executable) + " bytes, carrying ${carried_size})"
+}
+
+# Just enough of 64-bit Mach-O (crates/warp-runtime macho.rs): codesign wants every byte of the file inside a segment, so
+# the last one (__LINKEDIT) grows to the end of the file, over the program carried there
+MACHO_MAGIC = 0xfeedfacf
+MACHO_HEADER = 32
+COMMAND_COUNT_AT = 16
+SEGMENT_64 = 0x19
+# segment_command_64: vmsize, fileoff and filesize follow its name and vmaddr
+SEGMENT_VMSIZE_AT = 32
+SEGMENT_FILEOFF_AT = 40
+SEGMENT_FILESIZE_AT = 48
+# a segment's memory size is whole pages: arm64's 16 KB, a multiple of x86-64's 4 KB
+PAGE_BYTES = 0x4000
+
+extended_to_end(image: list): list := {
+	if little_endian(image, 0, 4) != MACHO_MAGIC { return image }
+	at = MACHO_HEADER
+	last = 0
+	for i in 0..little_endian(image, COMMAND_COUNT_AT, 4) {
+		if little_endian(image, at, 4) == SEGMENT_64 and (last == 0 or little_endian(image, at + SEGMENT_FILEOFF_AT, 8) > little_endian(image, last + SEGMENT_FILEOFF_AT, 8)) { last = at }
+		at += little_endian(image, at + 4, 4)
+	}
+	size = #image - little_endian(image, last + SEGMENT_FILEOFF_AT, 8)
+	pages = bit_and(size + PAGE_BYTES - 1, -PAGE_BYTES)
+	image[0 ..< last + SEGMENT_VMSIZE_AT] + le64(pages) + image[last + SEGMENT_FILEOFF_AT ..< last + SEGMENT_FILESIZE_AT] + le64(size) + image[last + SEGMENT_FILESIZE_AT + 8 ..< #image]
+}
+# the int of `width` bytes at `at`, little-endian
+little_endian(bytes: list, at: int, width: int): int := {
+	n = 0
+	for i in 0..width { n += bytes[at + i] << (8 * i) }
+	n
+}

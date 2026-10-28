@@ -1,12 +1,12 @@
 # The warp compiler as one warp program (card standalone, notes/standalone_compiler.md): source text in, wasm bytes out,
 # its stages handing each other plain warp values. `warp core/compiler.warp app.warp app.wasm`, then
 # `warp app.wasm`; a form beyond the emitter's core is the compile's error ("outside the core: …")
-use "passes.warp"
-use "analyzer.warp"
-use "emitter.warp"
-use "host_words.warp"
-use "commands.warp"
-use "c_imports.warp"
+use "passes/passes.warp"
+use "analysis/analyzer.warp"
+use "emitter/emitter.warp"
+use "analysis/host_words.warp"
+use "commands/commands.warp"
+use "emitter/c_imports.warp"
 use "extensions/primitive.warp"
 use os
 use file
@@ -84,12 +84,20 @@ linked_libraries(source: text): list := {
 	if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { return [] }
 	folder = folder_of(args#RUNTIME_ARGUMENT) + "/" + MODULES_FOLDER + "/"
 	images = []
-	for name in used_modules(source) {
+	# the modules it uses and those they use in turn (sound's units): each one's words declared, not brought whole
+	names = used_modules(source)
+	at = 0
+	while at < #names {
+		name = names[at]
+		at += 1
 		bundled = LIBRARY_FILES.get(name + module_extension)
-		if bundled != ø and bundled == (file_text(std_module_path(name)) ?? "") {
+		# (the prelude is every program's own, its words reached as it reaches them)
+		if name != "prelude" and bundled != ø and bundled == (file_text(std_module_path(name)) ?? "") {
+			for inner in used_modules(bundled) { if inner not in names { names += [inner] } }
 			wasm = try read_bytes(folder + name + ".wasm") else ø
+			# (a module not prebuilt was said by the rebuild; one prebuilt but not linkable is said here)
 			image = if wasm == ø then ø else library_image_of(name, wasm)
-			if image != ø { images += [image] }
+			if image is text { warn name + ".wasm not linked: " + image + "; compiled from source" } else if image != ø { images += [image] }
 		}
 	}
 	images
@@ -218,5 +226,6 @@ match command {
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
 	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
 	"modules": write_modules(args#2, if #args > 2 then args#3 else RUNTIME_WASM)
+	"optimize": trim(args#2, args#3, "optimize")
 	_: if command in running_commands then refuse_running(command) else refuse_native(command)
 }

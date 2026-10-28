@@ -5,7 +5,7 @@ use "library_words.warp"
 use "text.warp"
 use "walks.warp"
 use "conversions.warp"
-use "../byte_codes.warp"
+use "../emitter/byte_codes.warp"
 # the bytes of the code point whose UTF-8 starts with the byte lead
 code_point_width(lead: int): int := if lead < Utf8.Continuation then 1 else if lead < Utf8.ThreeByte then 2 else if lead < Utf8.FourByte then 3 else 4
 # the code point whose UTF-8 bytes start at byte `at` of t

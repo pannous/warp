@@ -1,6 +1,6 @@
 # What kind a value known only at run time is: ø, errors, texts, `x is type`, `x is Name`
 use "intrinsics.warp"
-use "../kinds.warp"
+use "../analysis/kinds.warp"
 use "characters.warp"
 use "nodes.warp"
 use "show.warp"

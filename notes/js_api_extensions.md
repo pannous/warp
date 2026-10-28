@@ -7,10 +7,10 @@ Sources at the end, fetched 2026-10-28. "?" marks a value that is not verified.
 ## Where warp stands (grounding)
 - Texts are `$Text = (array (mut i8))`, UTF-8 (AGENTS.md "Serialization"). Linear memory is used only at the
   host/FFI edge: `text_address` copies a text there, `print_line` streams through one page (notes/self_hosting.md).
-- emitter.warp imports WASI `fd_write` and the "host" module's words (core/emitter.warp `imported_words`, about
+- emitter.warp imports WASI `fd_write` and the "host" module's words (core/emitter/emitter.warp `imported_words`, about
   line 530). There are no `wasm:` builtin imports and no externref values.
 - Errors: inside a `try`, a runtime error throws the tag `warp_error(i32)`, which a `try_table` catches (final
-  exnref EH). Outside a try it traps (core/emitter.warp about line 88).
+  exnref EH). Outside a try it traps (core/emitter/emitter.warp about line 88).
 - The playground still runs the Rust-era compiler: web/playground/warp.wasm is built by build.sh from src/web.
   emitter.warp modules do not run in the browser yet (notes/self_hosting.md; card `playground-compiles`).
 - The playground already uses JSPI: `WebAssembly.Suspending`/`promising` (host.js:405, host-foreign.js:272,
