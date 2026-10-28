@@ -40,6 +40,7 @@ wasi_stdin(): int := 0
 wasi_stderr(): int := 2
 wasi_first_preopen(): int := 3
 wasi_no_entry(): int := 44
+wasi_not_a_folder(): int := 54
 # path_open's flag for a folder, and the right to read its entries
 wasi_directory(): int := 2
 wasi_readdir_right(): int := 16384
@@ -121,6 +122,19 @@ read_file(path: Node): Node := {
 	answer
 }
 
+# `use file; read_bytes(path)`: the file's bytes, ints 0 to 255; the Error of why not
+std_file_read_bytes(path: Node): Node := {
+	content = read_file(path)
+	if kind_code(content) == Kind.Error then content else text_byte_list(unboxed_text(content))
+}
+# `use file; exists(path)`: whether there is a file or folder at path, which a failure but "no such entry" or "not a
+# folder" on the way also says (a folder opened as a file, a file not to be read)
+std_file_exists(path: Node): bool := {
+	fd = opened_file(text_of_textual(path), 0)
+	if fd >= 0 { fd_close(fd) }
+	fd >= 0 or (0 - fd != wasi_no_entry() and 0 - fd != wasi_not_a_folder())
+}
+
 # `use file; list_files(folder)`: the names of the folder's entries without . and .., in the order WASI gives them;
 # the Error of why not
 std_file_list(path: Node): Node := {
@@ -188,6 +202,9 @@ std_os_env(name: Node): Node := {
 	}
 	ø
 }
+# `use os; cwd`: the folder the program started in, as its environment's PWD says; "." without one (WASI has no
+# working folder of its own, relative paths are the preopened "."'s)
+std_os_cwd(): Node := std_os_env("PWD") ?? "."
 # `use os; input(prompt)`: the prompt written, then a line of stdin without its newline; ø at the end of the input. A
 # byte a read, so no byte of the next line is taken. `input()` gives no prompt: os.warp's input() calls this with none
 std_os_input(prompt: Node = ø): Node := {
