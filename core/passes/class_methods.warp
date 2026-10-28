@@ -293,7 +293,13 @@ class_declared(top_statement: Node, view: list): Declared := {
 # methods): `def area() -> int {…}` as `area() := …`, `def area(): …` the same. A class body is a type view the early
 # sugar's rules don't enter (rewrites.warp early_sugared), so a member gets it here: the function keyword or modifier
 # before it goes (`def f(): x + 1`, `public fun g() {…}`)
-member_read(member: list): Node := brace_method(colon_method(bottom_up(early_sugared(node_of(member)), definition)))
+member_read(member: list): Node := special_named(brace_method(colon_method(bottom_up(early_sugared(node_of(member)), definition))))
+# a method another language's name for showing or ordering spells (lib/aliases.warp) as warp's: `toString()` and
+# `to_s()` as text(), `compareTo(o)` as compare(o)
+special_named(member: Node): Node := match member {
+	Key(head, Op.Define, body): { word = canonical_word(defined_word(member) ?? ""); if word in [showing_method, ordering_method] and is_called_name(head) then Key(call_of(word, items_of(head)[1..]), Op.Define, body) else member }
+	_: member
+}
 # a method written with its body in braces, `area(side) { … }` (a call beside a block as it parses), read as
 # `area(side) := { … }`; a constructor so, `value(n) { … }`, `value { … }` (a tagged block as it parses), as init
 brace_method(member: Node): Node := {
