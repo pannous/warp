@@ -33,3 +33,8 @@ rewrite ($it => $body) | $g => $it => $body | $g where $g is function
 rewrite $f | $g => $it => $it | $f | $g where $f is function and $g is function
 rewrite $x | $f => $f($x) where $f is function
 rewrite $x | $f => $f($x) where $f takes one
+
+# A block reading `it` applied to the value beside it: `{it*2} 5` and `{it*2}(5)` are (it => {it*2}) 5, called as a
+# lambda before its argument is (lambdas.warp lowered_phrase); a block of data `{1 2} 3` stays data (card
+# block-application)
+rewrite ($b $x) => (it => $b) $x where $b is function_block
