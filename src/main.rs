@@ -634,8 +634,10 @@ fn usage() {
 	// println!("Usage: warp [options] [file]");
 	println!("  warp <file.warp>     Run a warp file (env WARP_EXECUTABLE=1: also leave its standalone executable <file> next to it)");
 	println!("  warp run <file.warp> Run a warp file, never an executable");
-	println!("  warp self <file.warp> Run it by compiler.warp compiled by itself rather than by the seed (also build, run, eval)");
-	println!("  warp rebuild [self]   Build warp.wasm (by the seed, warp-seed.wasm) anew from lib/ / promote it to warp-self.wasm at a fixpoint (its compiler runs: no 60 s limit, 2 h, env WARP_REBUILD_TIME_LIMIT)");
+	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (core/compiler.warp)");
+	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by the seed");
+	println!("  warp pure build <file.warp|code> Its module (out.wasm for code) made by compiler.warp; also run, eval");
+	println!("  warp rebuild [pure|self] Build warp.wasm (by the seed, warp-seed.wasm) anew from lib/ / promote it to warp-self.wasm at a fixpoint (its compiler runs: no 60 s limit, 2 h, env WARP_REBUILD_TIME_LIMIT)");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
 	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");
