@@ -110,7 +110,7 @@ def effect(body: Body, n: Node): list {
 	dropped(statement(body, n))
 }
 # an if run for its effect, a branch the kinds rule out not compiled (as conditional)
-def conditional_effect(body: Body, test: Node, yes_branch: Node, no_branch: any, has_else: bool): list {
+def conditional_effect(body: Body, test: Node, yes_branch: Node, no_branch: Node?, has_else: bool): list {
 	c = condition_of(body, test, 0)
 	if c == known_condition(yes) { return nested_effect(body, yes_branch, 0) }
 	if c == known_condition(no) { return if has_else then nested_effect(body, no_branch, 0) else [] }
