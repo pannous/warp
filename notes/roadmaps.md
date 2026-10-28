@@ -27,5 +27,5 @@ Rules
 Plan notes and their topic cards: web_framework.md + server_routes.md → web-framework, signals.md → signals,
 sound.md → sound, type_theory.md → type-theory, classes.md → class-system, orm.md → database-tables, simd.md + gpu.md →
 fast-numbers, threads.md → threads, reflection.md → reflection-words, stdlib_connectors.md → connectors,
-effect_handlers.md → effects, web_playground.md → playground, hosting.md → hosting, cleanup.md → cleanup,
+effect_handlers.md → effects, web_playground.md → playground, hosting.md → hosting, cleanup.md → cleanup, runtime_linking.md → runtime-linking,
 self_hosting.md → self-hosted.

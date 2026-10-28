@@ -23,7 +23,6 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - position-index-words: class `#` = position(p), `[]` = index(i), `#b` = count(); writes position(p, value) / index(i, value), defining one derives the other.
 
 ## Parked
-- runtime-by-heart (prose discussion with the user): the compiler knows its runtime, prelude and sugar by heart and reads no sources or per-run files (the kept blob is stopped, user). Options: precompiled bodies + relocations, signature table, GC constant globals baked at rebuild; or runtime.wasm's bytes embedded and read by reflection. Open: specialized runtime words, WARP_LIB overrides.
 - event-handlers (prose discussion with the user, no popups; block-parameters-captures landed): proposed `on(event: Event, body: block)` in the prelude, `emit(event, data)` runs the listeners, no handler core. Open: (1) event data as `it`, a chosen name (`on key k {…}`) or both; (2) user events declared (`enum Event += ask`) or any symbol; (3) `on frame` once headless or never. Branch event-handlers-unknown (a4d0dde771) only a reference.
 - graphics-plain (warp-markup, parked): display alias table with notes (stays in Rust); bare width/height as canvas sides with did-you-mean (stays).
 - maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.
