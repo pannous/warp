@@ -24,8 +24,10 @@ and push it (common.md "Done", user decision self-landing). You repeat no test. 
   owner re-lands it fixed. A lane regression with no suspect: `git bisect run` from the newest good/* tag (handbook).
 - `warp self` red never blocks anything: an urgent card for the author of the newest core change. The self lane may
   pass up to 5 % fewer tests than the pure lane.
-- The full suite (`warp test`) at rare intervals (nightly, before a release), in the background; its failures grouped
-  into cards.
+- The full suite at rare intervals (nightly, before a release), in the background, as `warp test --each test >
+  test/results.txt` (a ✓ or ✗ line per test, in file order, and the `m of n failed` summary): commit it to main, so
+  `git diff test/results.txt` (or `git log -p`) shows what went green or red since the last run (user 2026-10-28). Its
+  failures are grouped into cards.
 - Read each failure's message before passing it as flaky; a different message is a real failure.
 - A rare change to the Rust harness (src/, crates/, Cargo.*, build.rs) is installed by after-push.sh too, before the
   compilers: when the installed binary's `release build <commit>` differs in those paths from main's tip it runs
