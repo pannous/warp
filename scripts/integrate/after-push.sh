@@ -183,12 +183,23 @@ pruned() {
 # `warp build native`); hello by it, then ~/dev/bin/warp links there by one rename and the older native folders go.
 # The seed stays beside ~/dev/bin/warp, where the native `warp rebuild` looks (the link's folder)
 NATIVE_PREFIX=native-
+# the warp that builds the next native warp: the installed one when it is native (the warp-from-warp chain), else, on
+# the first install, the Rust one
+native_builder() {
+	[[ $(readlink "$MAIN_WARP") == */$NATIVE_PREFIX*/warp ]] && echo "$MAIN_WARP" || echo "$RUST_WARP"
+}
+# native_built <folder> <builder>: the native warp built from the folder's core/native/warp.warp into <folder>/warp
+native_built() {
+	(cd "$1/compiler/native" && WARP_NO_WINDOW=1 WARP_LIB=$1 "$2" build native warp.warp >/dev/null 2>&1) &&
+		mv "$1/compiler/native/warp" "$1/warp"
+}
 install_native() {
 	local folder=$BUILDS/$NATIVE_PREFIX${tip:0:9} got
 	rm -rf "$folder.new" && mkdir -p "$folder.new" || return 1
 	rsync -aL --exclude /data "$TREE/lib/" "$folder.new/" || { red "native warp: lib/ did not copy" --urgent; return 1; }
-	(cd "$folder.new/compiler/native" && WARP_NO_WINDOW=1 WARP_LIB=$folder.new "$RUST_WARP" build native warp.warp >/dev/null 2>&1) &&
-		mv "$folder.new/compiler/native/warp" "$folder.new/warp" || { red "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
+	native_built "$folder.new" "$(native_builder)" ||
+		{ say "native warp: the build by $(native_builder) failed: built by $RUST_WARP instead"; native_built "$folder.new" "$RUST_WARP"; } ||
+		{ red "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
 	rm -rf "$folder" && mv "$folder.new" "$folder" || return 1
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
