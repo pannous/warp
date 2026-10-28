@@ -108,8 +108,31 @@ fn stop(message: &str) -> ! {
 	std::process::exit(1)
 }
 
+/// The computing time of the calling thread, readable from another thread: its Mach thread's user and system time
+#[cfg(target_vendor = "apple")]
+fn thread_clock() -> impl Fn() -> Duration + Send + 'static {
+	// SAFETY: the Mach port of the calling thread, which stays valid while the thread runs
+	let thread = unsafe { libc::pthread_mach_thread_np(libc::pthread_self()) };
+	let started = std::time::Instant::now();
+	move || {
+		// SAFETY: a plain C struct, all zeros a valid value
+		let mut info: libc::thread_basic_info = unsafe { std::mem::zeroed() };
+		let mut count = libc::THREAD_BASIC_INFO_COUNT;
+		let info_out = &mut info as *mut libc::thread_basic_info as libc::thread_info_t;
+		// SAFETY: fills `info`, of the size `count` gives, about the thread found above
+		let read = unsafe { libc::thread_info(thread, libc::THREAD_BASIC_INFO as u32, info_out, &mut count) };
+		match read == libc::KERN_SUCCESS {
+			true => [info.user_time, info.system_time]
+				.iter()
+				.map(|time| Duration::new(time.seconds as u64, time.microseconds as u32 * 1000))
+				.sum(),
+			false => started.elapsed(),
+		}
+	}
+}
+
 /// The computing time of the calling thread, readable from another thread
-#[cfg(unix)]
+#[cfg(all(unix, not(target_vendor = "apple")))]
 fn thread_clock() -> impl Fn() -> Duration + Send + 'static {
 	let mut clock: libc::clockid_t = 0;
 	// SAFETY: asks for the CPU clock of the calling thread, written into `clock`

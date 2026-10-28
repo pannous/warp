@@ -4,6 +4,7 @@ use "errors.warp"
 use "library_words.warp"
 use "text.warp"
 use "walks.warp"
+use "conversions.warp"
 use "../byte_codes.warp"
 # the bytes of the code point whose UTF-8 starts with the byte lead
 code_point_width(lead: int): int := if lead < Utf8.Continuation then 1 else if lead < Utf8.ThreeByte then 2 else if lead < Utf8.FourByte then 3 else 4
@@ -13,6 +14,12 @@ code_point_at(t: text, at: int): int := {
 	n = if lead < Utf8.Continuation then lead else if lead < Utf8.ThreeByte then lead - Utf8.TwoByte else if lead < Utf8.FourByte then lead - Utf8.ThreeByte else lead - Utf8.FourByte
 	for k in 1 to code_point_width(lead) - 1 { n = n * Utf8.ContinuationUnit + byte_at(t, at + k) - Utf8.Continuation }
 	n
+}
+# `c++`, `c--` of a character held as a text: the character of the next (or previous) code point, as `'a' to 'e'`
+# counts; a text of more or less than one code point is not a character
+stepped_character(t: text, step: int): text := {
+	if byte_count(t) == 0 or byte_count(t) != code_point_width(byte_at(t, 0)) { not_a_character() }
+	code_point_text(code_point_at(t, 0) + step)
 }
 # `ord(c)`: the code point of the character c (a text of one)
 first_code_point(t: text): int := code_point_at(t, 0)
