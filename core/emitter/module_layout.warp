@@ -69,7 +69,28 @@ def type_entries(): list {
 	first = module.gc_indices[module.gc_order.filter(name => name in module.class_structs)#1]
 	entries[0 ..< first] + [[rec_group_byte] + uleb(#group) + concatenated(group)] + entries[first ..< #entries]
 }
+# main, memory, the globals the runner reads after a trap, then the program's functions under the names left free, as
+# Rust's export_names: a module imported compiled calls them
+def program_exports(functions: list): list {
+	exports = [name_bytes("main") + [export_function_byte] + uleb(functions#1.index), name_bytes("memory") + [export_memory_byte, 0]]
+	for name in exported_globals {
+		if name in module.globals { exports += [name_bytes(name) + [export_global_byte] + uleb(module.globals[name]#1)] }
+	}
+	taken = ["main", "memory"] + exported_globals
+	for f in module.builders {
+		exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
+		taken += [f.name]
+	}
+	for f in functions[1..] {
+		if not f.is_runtime and f.name not in taken {
+			exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
+			taken += [f.name]
+		}
+	}
+	exports
+}
 def module_bytes(functions: list): list {
+	if prepended() { return prepended_bytes(functions) }
 	# what names a value type first (functions' signatures and locals, globals), so the GC types the module declares
 	# are all known: those its code used, then these (gc_type)
 	function_types = functions.map(function_type)
@@ -82,26 +103,10 @@ def module_bytes(functions: list): list {
 	types = section(section_ids.type, vector(gc_declared + module.imports.map(i => i#3) + function_types + tag_types))
 	imported = section(section_ids.import, vector(range_list(#module.imports).map(i => import_entry(i))))
 	declared = section(section_ids.function, vector(functions.map(f => uleb(#module.gc_order + f.index))))
-	exports = if module.prebuilding then [] else [name_bytes("main") + [export_function_byte] + uleb(functions#1.index)]
 	# always a memory, exported as Rust's: the host of a program importing this module compiled reads it
 	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
-	exports += [name_bytes("memory") + [export_memory_byte, 0]]
 	if #module.imports == 0 { imported = [] }
-	for name in exported_globals {
-		if name in module.globals { exports += [name_bytes(name) + [export_global_byte] + uleb(module.globals[name]#1)] }
-	}
-	# the program's functions under the names left free, as Rust's export_names: a module imported compiled calls them
-	taken = ["main", "memory"] + exported_globals
-	for f in module.builders {
-		exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
-		taken += [f.name]
-	}
-	for f in functions[1..] {
-		if not f.is_runtime and f.name not in taken {
-			exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
-			taken += [f.name]
-		}
-	}
+	exports = program_exports(functions)
 	tables = []
 	if module.prebuilding {
 		exports = runtime_exports(functions)
@@ -136,13 +141,15 @@ def runtime_exports(functions: list): list {
 	}
 	exports
 }
+in_quotes(t: text): text := "\"" + t + "\""
 # runtime.wasm's layout (warp.runtime, warp notation) and its relocations (warp.relocations, a vector of [offset in
 # the code section's content, kind, space]); none in a program's module
 def runtime_sections(functions: list): list {
 	if not module.prebuilding { return [] }
-	words = functions.map(f => "\"" + f.name + "\": [" + f.index + ", [" + f.kinds.map(k => "" + k).join(", ") + "], " + f.result + "]")
+	words = functions.map(f => in_quotes(f.name) + ": [" + f.index + ", [" + f.kinds.map(k => in_quotes(kind_name(k))).join(", ") + "], " + in_quotes(kind_name(f.result)) + "]")
+	globals = module.global_order.map(name => "[" + in_quotes(name) + ", " + in_quotes(kind_name(module.globals[name]#2)) + "]")
 	layout = "types: " + #module.gc_order + "\nimports: " + #module.imports + "\nfunctions: " + #functions + "\nglobals: " + #module.global_order
-	layout += "\ndata: " + #data_bytes() + "\nhooks: [" + module.dispatchers.map(f => "\"" + f.name + "\"").join(", ") + "]\nleft: [" + module.left_out.keys.map(name => "\"" + name + "\"").join(", ") + "]\nwords: {" + words.join(", ") + "}"
+	layout += "\ndata: " + #data_bytes() + "\nhooks: [" + module.dispatchers.map(f => in_quotes(f.name)).join(", ") + "]\nleft: [" + module.left_out.keys.map(in_quotes).join(", ") + "]\nglobal_kinds: [" + globals.join(", ") + "]\nwords: {" + words.join(", ") + "}"
 	section(section_ids.custom, name_bytes(runtime_section) + layout.bytes) + section(section_ids.custom, name_bytes(relocations_section) + vector(module.relocations.map(entry => concatenated(entry.map(uleb)))))
 }
 # A prebuilt module read back for a link (notes/runtime_linking.md "Relocations"): its relocations, and its code

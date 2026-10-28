@@ -246,7 +246,7 @@ class Function { name: text; signature: any; body: any; index: int = -1; kinds: 
 # gc_indices: the index of each GC type the module declares, by its name; gc_order: their names in index order (gc_type)
 # program_file: the file the program was read from (compiler.warp names it); emitting_at: ` at file:line:column` of
 # the program's latest written node being emitted, the place a refusal names (card error-names)
-class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocations: list = []; own_from: list = []; left_out: map = {} }
+class Module { functions: map; order: list; placed: int = 0; runtime: map = {}; texts: map = {}; text_size: int = 0; globals: map = {}; global_order: list = []; imports: list = []; host: map = {}; classes: map = {}; parents: map = {}; variants: map = {}; enum_cases: map = {}; enum_numbers: map = {}; sum_types: map = {}; errors: map = {}; closures: list = []; dispatchers: list = []; surveying: bool = no; refusals: list = []; kinds: map = {}; shared: map = {}; saw_pending: bool = no; rereads: list = []; builders: list = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: map = {}; reads_positions: bool = no; literal_arguments: map = {}; class_defaults: map = {}; member_classes: map = {}; unannotated: map = {}; later_kinds: map = {}; widened_now: map = {}; widenings: int = 0; made: map = {}; made_sites: list = []; gc_indices: map = {}; gc_order: list = []; class_structs: map = {}; program_file: text = ""; emitting_at: text = ""; prebuilding: bool = no; relocations: list = []; own_from: list = []; left_out: map = {}; runtime_types: int = 0 }
 
 module = Module({}, [])
 
@@ -529,7 +529,8 @@ def canonical_type_entries() { for entry in gc_names { gc_type(entry#1) } }
 def gc_type(name: text): int {
 	if name in module.gc_indices { return module.gc_indices[name] }
 	for part in gc_definition(name) { if part is text and part != name { gc_type(part) } }
-	module.gc_indices[name] = #module.gc_order
+	# (behind runtime.wasm a class struct after the runtime's types)
+	module.gc_indices[name] = #module.gc_order + module.runtime_types
 	module.gc_order += [name]
 	module.gc_indices[name]
 }
@@ -1321,10 +1322,12 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.gc_order = []
 	module.class_structs = {}
 	module.relocations = []
-	if module.prebuilding {
+	module.runtime_types = 0
+	if module.prebuilding or prepended() {
 		canonical_type_entries()
 		for kind in Made.keys { module.made[kind] = yes }
 	}
+	if prepended() { behind_runtime() }
 	module.aliases = type_synonyms()
 	collect_types(program)
 	for child in module.parents.keys { inherit_fields(child) }
@@ -1338,11 +1341,13 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	for name in module.host.keys {
 		if (module.prebuilding or name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
 	}
+	if prepended() { module.imports = runtime_imports(host) }
 	c_function_globals()
 	for name in module.runtime.keys {
 		word = module.runtime[name]
 		word.is_runtime = yes
 	}
+	if prepended() { bind_runtime_words() }
 	if module.prebuilding { return prebuilt_runtime() }
 	main = bare_function("main")
 	try {
@@ -1358,6 +1363,8 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 			f = module.functions[name]
 			if f.kinds == ø and not name.starts_with(prelude_prefix) { compile_function(f, f.signature.parameters.map(p => ValueKind.Node)) }
 		}
+		# behind runtime.wasm the program writes every hook's code, which the runtime's words call
+		if prepended() { all_hooks() }
 		# a dispatcher's call may compile a target that makes more closures, dispatchers or class structs: again until none is new
 		seen = -1
 		while seen != #module.closures + #module.dispatchers + #module.class_structs.keys {

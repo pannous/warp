@@ -58,6 +58,35 @@ const APP_CHECK: &str = "--check";
 const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
+
+/// The help menu (user): never extend it without consulting through the interviewer
+const HELP_COLUMN: usize = 30;
+const HELP_COMMANDS: &[(&str, &str)] = &[
+	("warp", "Evaluation console (REPL)"),
+	("warp <code|file(.warp/.wasm)>", "Run warp code or a file"),
+	("warp build <code|file.warp>", "Create native app and wasm"),
+	("warp version", "Show version"),
+	("warp help [<topic>]", "Show this help"),
+	("warp verify <file>", "Test and prove the laws of a file"),
+	("warp debug <code|file>", "Show the parse, lowering and types"),
+	("warp tool <package> [args]", "Run a package's prebuilt <package>.wasm in its directory"),
+	("warp serve [file] [port]", "Serve the program: its page, server functions and routes (app.warp, port 8080)"),
+	("warp deploy", "Host the program on Cloudflare (see deploy.md)"),
+	("warp fuel <steps> <file|code>", "Count steps"),
+	("warp test", "Run tests"),
+	("warp docs", "Open documentation"),
+];
+const HELP_OPTIONS: &[(&str, &str)] = &[
+	("--no-ask", "Never prompt \"got it?\" after a warning or note"),
+	("--no-hints", "Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)"),
+	("--warnings=<level>", "Show diagnostics from hint (default), weak, normal or severe up"),
+	("--strict[=<level>]", "Warnings from normal (or the level) up are errors, as `use strict`"),
+	("--sandbox", "No C, shell or other runtime, files only in the working folder"),
+];
+// Out of the menu (user's notes): self, rebuild: internal; eval: redundant, gets a note; repl: redundant (plain warp);
+// lower, parse, types, format: folded into `warp debug` (TODO card cli-debug-command); data: what for?; dev; fast: get
+// rid; compile --wasm/--aot/--page: redundant with build (aot always with build); build --exe/--wasm: nobody uses them;
+// --trim: see full.wasm / mod.wasm (decision build-three-outputs); app: ?; last.wasm kept in ~/.cache/warp
 /// `warp lower --json <code>`: the lowered program as the JSON node view core reads with `node_of(json(…))`,
 /// lossless where the serialized text is not
 const LOWER_JSON_COMMAND: &str = "lower --json";
@@ -630,50 +659,15 @@ fn source_of(target: &str) -> String {
 	}
 }
 
+// Never extend this menu without consulting through the interviewer
 fn usage() {
-	// println!("Usage: warp [options] [file]");
-	println!("  warp <file.warp>     Run a warp file (env WARP_EXECUTABLE=1: also leave its standalone executable <file> next to it)");
-	println!("  warp run <file.warp> Run a warp file, never an executable");
-	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (core/compiler.warp)");
-	println!("  warp self <file.warp> The same, with compiler.warp compiled by itself rather than by the seed");
-	println!("  warp pure build <file.warp|code> Its module (out.wasm for code) made by compiler.warp; also run, eval");
-	println!("  warp rebuild [pure|self] Build warp.wasm (by the seed, warp-seed.wasm) anew from lib/ / promote it to warp-self.wasm at a fixpoint (its compiler runs: no 60 s limit, 2 h, env WARP_REBUILD_TIME_LIMIT)");
-	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
-	println!("  warp eval <code>     Evaluate code");
-	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");
-	println!("  warp parse <code>    Show the parsed AST");
-	println!("  warp verify <file>   Test and prove the laws of a file");
-	println!("  {FORMAT_USAGE}");
-	println!("  warp types <file>    The program in W0, the proved model of warp's types, and both verdicts");
-	println!("  warp data <file>     Read untrusted data without evaluating it");
-	println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
-	println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
-	println!(
-		"  warp serve [file] [port]  Serve the program: its page, server functions and routes (app.warp, port 8080)"
-	);
-	println!("  warp deploy [--dev|--dry-run|--hosted] <file>  The program's routes as a Cloudflare Worker, by wrangler (--dev: on this machine, --dry-run: only <file>-worker/, --hosted: at warp-<file>.pannous.workers.dev, by your GitHub login)");
-	println!("  warp repl            Start interactive console");
-	println!("  warp fuel <steps> <file|code>  Count steps, 'out of fuel' after them (env WARP_FUEL, `use fuel`); else a run stops after 60 s of computing (env WARP_TIME_LIMIT=<seconds>)");
-	println!("  warp fast <file|code> sin cos exp pow atan2 as quick wasm polynomials, as `use fast_math` (errors: lib/fast_math.warp)");
-	println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
-	println!("  --no-hints           Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)");
-	println!("  --warnings=<level>   Show diagnostics from hint (default), weak, normal or severe up");
-	println!("  --strict[=<level>]   Warnings from normal (or the level) up are errors, as `use strict`");
-	println!("  --sandbox            No C, shell or other runtime, files written only in the working folder (as hosted programs run)");
-	println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
-	println!(
-		"  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running"
-	);
-	println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
-	println!("  warp compile --page <file>  The module for a page of its own, the modules it imports by path in modules/ beside it");
-	println!("  warp build <file.warp>  The standalone executable <file> and <file>.wasm (--exe: only the executable, --wasm: only the module)");
-	println!("    --trim=<way>  the module without the runtime it never reaches, by Binaryen: optimize (the default, wasm-opt -O2), unused (only dropped), none, warp (later)");
-	println!("  warp {APP_COMMAND} <file.warp>    Show the program's page in a window of its own (macOS web view; {APP_CHECK}: print its text)");
-	println!("  warp test            Run tests");
-	println!("  warp docs            Open documentation");
-	println!("  warp version         Show version");
-	println!("  warp help            Show this help");
-	println!(
-		"  warp help <module>   A standard module's words (warp help --markdown: all, as wiki/standard-library.md)"
-	);
+	print_help_rows(HELP_COMMANDS);
+	println!("  Options:");
+	print_help_rows(HELP_OPTIONS);
+}
+
+fn print_help_rows(rows: &[(&str, &str)]) {
+	for (usage, meaning) in rows {
+		println!("  {usage:<HELP_COLUMN$} {meaning}");
+	}
 }

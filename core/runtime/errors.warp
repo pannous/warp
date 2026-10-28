@@ -85,6 +85,9 @@ raised(value: Node): int := {
 	global trap_detail = value
 	returned_error()
 }
+# a statement's dropped value (decision dropped-error-raises): an Error raises, `write(…)` into a missing folder stops
+# the run with why
+dropped_value(n: Node) := if node_is_error(n) { raised(n) }
 # `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
 # it, whose message emitter.warp's throw kept in failed_in: a raise's is the raised value, a missing field's names it
 caught_error(finished: bool, value: Node): Node := {
