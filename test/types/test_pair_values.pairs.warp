@@ -1,0 +1,5 @@
+# a pair as a value: a word key stays the word as written, any other key is its value (interviewer decision 2026-10-28 for card unknown-name-error; wiki/SPECIFICATION.md `:` pair)
+'x = a:1; x is pair'	yes
+'a = 5; x = a:1; x'	a:1
+'a = 5; x = (a):1; x.key'	5
+'x = 1:4; x.value'	4
