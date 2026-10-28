@@ -48,7 +48,7 @@ def intrinsic(body: Body, name: text, arguments: list): TypedCode {
 		"marked_kind": TypedCode(ValueKind.Int, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]))
 		"unboxed_list": TypedCode(ValueKind.List, payload(values#1.code, gc_type(gc.list)))
 		"unboxed_text": TypedCode(ValueKind.Text, payload(values#1.code, gc_type(gc.text)))
-		"unboxed_char": TypedCode(ValueKind.Char, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, [i31_type]) + gc_code(gc_ops.i31_get_u, []))
+		"unboxed_char": TypedCode(ValueKind.Char, as_node(values#1.code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_cast_null, []) + [i31_type] + gc_code(gc_ops.i31_get_u, []))
 		"char_of": TypedCode(ValueKind.Char, index_code(values#1))
 		"new_list": {
 			count = [op.local_get] + uleb(fresh_local(body, ValueKind.Int))

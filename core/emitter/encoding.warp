@@ -15,6 +15,17 @@ def padded_uleb(n: int): list {
 	for i in 0..padded_width { out += [bit_or(bit_and(n >> (7 * i), 127), if i < padded_width - 1 then 128 else 0)] }
 	out
 }
+# [the LEB128 number at `at`, where the bytes after it start]
+def uleb_read(bytes: list, at: int): list {
+	n = 0
+	shift = 0
+	while bytes[at] >= 128 {
+		n += bit_and(bytes[at], 127) << shift
+		shift += 7
+		at += 1
+	}
+	[n + (bytes[at] << shift), at + 1]
+}
 def sleb(n: int): list {
 	out = []
 	more = yes

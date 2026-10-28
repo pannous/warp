@@ -60,13 +60,18 @@ made_case kind made, since no program decides any more what it makes.
   - `warp.runtime`, the layout as warp-notation text: `types` (G), `imports`, `functions`, `globals`, `data` (bytes),
     `hooks` (names in table-slot order), `left`, `words: {"name": [index, [parameter kinds], result kind]}`. The
     emitter's call_values needs the kinds; a wasm type alone can't tell Bool, Int and Char apart.
-  - `warp.calls`, the call-site list: a vector of [offset, space] uleb pairs, offset the byte of a padded operand in
-    the code section's content (behind its vector count), space the index space it names: 0 runtime, 1 own, 2+k the
-    k-th module a module's declarations name (runtime.wasm: all 0; modules-prebuilt).
+  - `warp.relocations` (replaced warp.calls): a vector of [offset, kind, space] uleb triples, one per padded 5-byte
+    operand of the code: offset its byte in the code section's content (behind its vector count); kind what it indexes,
+    0 a function (call), 1 a type (a GC op's type immediates), 2 a global (global.get/set), 3 a text's data offset
+    (i32.const ahead of array.new_data); space the index space: 0 runtime, 1 own, 2+k the k-th module a module's
+    declarations name. runtime.wasm: all space 0 (5665 entries). Global initializers name only the fixed GC types and
+    stay unpadded. One reader and one rule (emitter/module_layout.warp): `relocations_of(wasm)`, and
+    `rebased(code, relocations, shifts)` adding shifts[space][kind] to each operand in place, for a module appended
+    behind others and for the runtime's functions behind a program's C imports.
 
 ## Library modules (card modules-prebuilt; owner: tables-as-constants)
 - `<module>.wasm` beside the compiler, of runtime.wasm's shape: the canonical types, padded operands, `warp.runtime`
-  (the module's own layout: function, global and data counts, each exported word's kinds) and `warp.calls` with spaces.
+  (the module's own layout: function, global and data counts, each exported word's kinds) and `warp.relocations`.
   Its calls into the runtime hold the runtime's fixed indices; its own and other modules' are numbered from 0 and
   rebased by the module's base offset when it is appended between the runtime and the program.
 - `warp.declarations`: what a program needs of the module (signatures, classes, globals) as one packed node (pack),
