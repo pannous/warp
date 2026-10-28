@@ -376,7 +376,7 @@ regrouped(result: Node, n: Node): Node := if result != ø and is_round(n) then L
 
 # whether a rule's result changes the code it rewrote, positions aside: a rule whose result is that code didn't fire (else a rule
 # matching its own result, `match $s {…}` of the arms it left, would rewrite it forever)
-changes(result: Node, n: Node): bool := result != ø and view_of(result) != view_of(n)
+changes(result: Node, n: Node): bool := result != ø and not same_view(result, n)
 
 # a phrase holding phrases as its words as written, which a phrase rule matches as the module rules do (the parser
 # nests `print each xs` as `print (each xs)`), also a phrase in parentheses; else ø

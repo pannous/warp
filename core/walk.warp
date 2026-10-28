@@ -204,6 +204,33 @@ key_view(left: Node, op: text, right: Node): View := {
 	["key", op, view_of(left), view_of(right)]
 }
 
+# whether a and b have the same view, compared as they are walked, no view built (the sugar passes ask it of every
+# rule that fired, card sugar-rule-passes); the forms whose view is not their shape, `[]`, an opaque or attribute key,
+# and shown positions, by their views
+same_view(a: Node, b: Node): bool := {
+	if showing_positions or viewed_as_other(a) or viewed_as_other(b) { return view_of(a) == view_of(b) }
+	match a {
+		Key(left, op, right): same_key_view(left, op, right, b)
+		Symbol(name): b is symbol and name_of(b) == name
+		List(items, bracket, separator): same_list_view(items, bracket, separator, b)
+		_: not (b is key or b is symbol or is_group(b)) and unpositioned_view_of(a) == unpositioned_view_of(b)
+	}
+}
+same_key_view(left: Node, op: Op, right: Node, b: Node): bool := match b {
+	Key(other_left, other_op, other_right): op == other_op and same_view(left, other_left) and same_view(right, other_right)
+	_: no
+}
+same_list_view(items: list, bracket: Bracket, separator: Separator, b: Node): bool := match b {
+	List(others, other_bracket, other_separator): bracket == other_bracket and separator == other_separator and same_items_view(items, others)
+	_: no
+}
+same_items_view(items: list, others: list): bool := {
+	if #items != #others { return no }
+	for i in 0 ..< #items { if not same_view(items[i], others[i]) { return no } }
+	yes
+}
+viewed_as_other(n: Node): bool := (n == ø and n !== ø) or (n is key and (key_of(n) == opaque_symbol or key_of(n) == symbol(attribute_word)))
+
 # one node of several juxtaposed words: `upper w`
 words_phrase(words: list): Node := if #words == 1 then words#1 else List(words, Bracket.None, Separator.Space)
 
