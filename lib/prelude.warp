@@ -508,3 +508,6 @@ is!(warp: text, expected: any) := {
 class Error { message: text }
 # a value that lambdas share, the variable they change (core/lambdas.warp shared captures, P124)
 class Cell { value: any }
+
+// `x.json` (lib/sugar/methods.warp): the JSON text of any value; a map's own field json wins
+json_text(value: any): any := if is_type(value, "map") and "json" in value then value["json"] else std_pure("json", "to_json", [value])
