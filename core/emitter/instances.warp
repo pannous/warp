@@ -370,7 +370,7 @@ def field_kind(type: text?): ValueKind? {
 	word = aliased_type(base_type(type))
 	if word in module.classes { return ValueKind.Instance }
 	if word in node_annotations { return ValueKind.Node }
-	if word in core_type_words and core_type_words[word] in declared_kinds { return declared_kinds[core_type_words[word]] }
+	if word in declared_kinds { return declared_kinds[word] }
 	if annotated_kind(word) == ValueKind.List { return ValueKind.List }
 	ValueKind.Instance
 }

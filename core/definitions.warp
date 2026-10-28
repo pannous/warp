@@ -24,9 +24,14 @@ is_parameter(n: Node): bool := match n {
 
 definition(n: Node): Node := if is_runtime_declaration(n) then Node.Empty else match n {
 	List(parts, Bracket.None, Separator.Space): typed_definition_held(n)
-	Key(head, Op.Assign, body): { if is_head(head) or is_function_block(head, body) then Key(head, Op.Define, body) else typed_definition_held(n) }
-	Key(_, Op.Define, _): typed_definition_held(n)
+	Key(head, Op.Assign, body): { if is_head(head) or is_function_block(head, body) then Key(phrased_head(head), Op.Define, body) else typed_definition_held(n) }
+	Key(head, Op.Define, body): typed_definition_held(Key(phrased_head(head), Op.Define, body))
 	_: n
+}
+# `f(xs: list of int)`: a parameter's type phrase is one type, as a class field's (sugar.warp with_type_phrases)
+phrased_head(head: Node): Node := {
+	if is_call(head) { return call_node(head#1, with_type_phrases(arguments_of(head))) }
+	if is_key(head, Op.Colon) and is_call(key_of(head)) then Key(phrased_head(key_of(head)), Op.Colon, value_of(head)) else head
 }
 
 # A definition with a declared result type, its result held as that type (result_held), else n as it is
