@@ -4,7 +4,7 @@
 #include <dlfcn.h>
 #include <stdint.h>
 
-enum { ARENA_ALIGNMENT = 8, TEXT_RECORD = 8 }; // primitive.warp ARENA_ALIGNMENT, text_layout's size
+enum { ARENA_ALIGNMENT = 8, TEXT_RECORD = 8, PAGE_BYTES = 65536 }; // primitive.warp ARENA_ALIGNMENT, text_layout's size
 
 // the C function of that name the executable or a library it links has; a program calling one it lacks stops here
 static void* native_function(const char* name) {
@@ -20,6 +20,9 @@ static void* native_address(struct w2c_wasi__snapshot__preview1* wasi, uint32_t 
 static uint32_t module_address(struct w2c_wasi__snapshot__preview1* wasi, void* pointer) {
 	return pointer ? (uint32_t)((uint8_t*)pointer - wasi->memory->data) : 0;
 }
+// an address of the module's memory as the C pointer it is, for a program to hold as a handle (`native_pointer(address:
+// pointer): handle from "c"`): the glue made it the pointer already
+void* native_pointer(void* address) { return address; }
 // a text of the module, the address of its (address, length) pair, as a NUL-terminated copy the caller frees
 static char* native_text(struct w2c_wasi__snapshot__preview1* wasi, uint32_t text) {
 	return strndup((char*)at(wasi, load32(wasi, text)), load32(wasi, text + 4));
@@ -31,6 +34,7 @@ static uint32_t module_text(struct w2c_wasi__snapshot__preview1* wasi, const cha
 	uint32_t* top = w2c_program_arena(wasi->program);
 	uint32_t pair = *top;
 	*top = (pair + TEXT_RECORD + length + ARENA_ALIGNMENT - 1) & -ARENA_ALIGNMENT;
+	if (*top > wasi->memory->size) wasm_rt_grow_memory(wasi->memory, (*top - wasi->memory->size + PAGE_BYTES - 1) / PAGE_BYTES);
 	store32(wasi, pair, pair + TEXT_RECORD);
 	store32(wasi, pair + 4, length);
 	memcpy(at(wasi, pair + TEXT_RECORD), text, length);

@@ -106,18 +106,25 @@ build_native(source_file: text, library: text) := {
 	runtime = wabt + WASM2C_RUNTIME
 	shell("wasm2c " + quoted_path(stem + ".wasm") + " -n " + WASM2C_MODULE + " -o " + quoted_path(stem + ".c"))
 	files = [stem + ".c", stem + ".main.c", runtime + "/wasm-rt-impl.c", runtime + "/wasm-rt-mem-impl.c"].map(quoted_path).join(" ")
-	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + native_links())
+	shell(C_COMPILER + " -I" + quoted_path(runtime) + " -I" + quoted_path(wabt + WABT_HEADERS) + " -o " + quoted_path(executable) + " " + files + " -lm" + native_links(wabt))
 	shell("rm -f " + [".wasm", ".c", ".h", ".main.c"].map(suffix => quoted_path(stem + suffix)).join(" "))
 	print "built " + executable
 }
-# -l of each C library the program imports beside libc and libm
-native_links(): text := c_libraries(c_functions_imported()).filter(l => l not in c_and_m).map(l => " -l" + l).join("")
+# -l of each C library the program imports beside libc and libm, found among the libraries of the wabt's prefix
+# (/opt/homebrew/lib) or the system's
+native_links(wabt: text): text := {
+	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
+	if #libraries == 0 then "" else " -L" + quoted_path(wabt + "/lib") + libraries.map(l => " -l" + l).join("")
+}
 quoted_path(path: text): text := "\"" + path + "\""
 # os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
-shell(line: text): text := std_io("os", "command", [line])
+shell(line: text): text := {
+	printed = std_io("os", "command", [line])
+	if printed is text then printed else raise "`" + line + "` failed: " + printed
+}
 
 # `warp build [--wasm|--exe] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
-# any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
+# with --wasm as its module app.wasm (which lib/native/driver.warp runs); any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
 # trimmed by Binaryen's wasm-opt) and the executable app (warp-runtime carrying app.wasm's machine code). The native
 # warp adds where runtime.wasm and the stub lie: --runtime=<file> --stub=<file>
 OPTION_MARK = "--"
@@ -143,9 +150,9 @@ build(words: list) := {
 	target = targets#1
 	is_file = exists(target)
 	source = if is_file then read(target) else target
-	if is_file and is_primitive_file(source) { return build_native(target, library_folder) }
 	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
 	if is_file { emitting_file(working_relative(target)) }
+	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", folder_of(target)) else build_native(target, library_folder) }
 	runtime_held = read_bytes(option_of(options, "runtime"))
 	separate_output = stem + ".mod.wasm"
 	compile_written(source, stem + ".full.wasm", if is_file then folder_of(target) else ".")

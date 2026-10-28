@@ -21,12 +21,15 @@ The FFI types of a foreign line (c_imports.warp c_type_words) plus the narrow on
 i16/u16, i32/u32/char/pointer, i64/u64/int/long, f32, f64/float/double/number. `int` is warp's 64-bit int and so is an
 untyped int literal; a literal takes the width its expected type asks for (`x: i32 = 5`); 32 bits are spelled `i32`
 (decision primitive-int-width). Widening is implicit (i32 → i64, int → float, f32 →
-f64), narrowing is `x as u8`, which cuts the bits (masked or sign-spread). `%` is C's remainder (rem_s).
+f64), narrowing is `x as u8`, which cuts the bits (masked or sign-spread). `%` is C's remainder (rem_s). A pointer
+plus or minus any integer is a pointer, as in C (`p + i * 8`). `handle` is a C pointer outside the module's memory, an
+i64 id. A top-level name given a number literal once (`STDERR = 2`) is a constant: every function and main read it as
+that literal, so it takes the type its place wants.
 
 ## Structs
 `struct Header { len: u32; tag: u8; total: i64 }` (or `class`) in a primitive file is a C layout: each field at a
 multiple of its width, the size a multiple of the widest. `Header(…)` (positional or named) takes the size, rounded to
-8, from a bump arena (global 0, from address 16; no memory.grow yet), stores the fields and gives the address; a struct
+8, from a bump arena (global 0, from address 16; the memory grows when the arena passes its end), stores the fields and gives the address; a struct
 value is that pointer, `h.len` loads, `h.len = …` stores.
 
 ## The prelude
@@ -59,9 +62,21 @@ pointer as an i64 id (fopen's FILE *). out, bytes, length and owned_text are ref
 samples/native/c_calls.warp. Under wasmtime, warp's own host answers `c` imports with its GC conventions, so a
 primitive file calling C runs natively only.
 
+## Driver
+lib/native/driver.warp is the native runner (roadmap_native_harness.md milestone 3): a primitive file calling
+wasmtime's C API through its own foreign lines (`wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module:
+pointer): handle from "wasmtime"`; the structs the calls fill are arena bytes read with long_at/byte_at, native memory
+copied in with memcpy). `warp build native lib/native/driver.warp` makes `driver`; `driver app.wasm args…` runs a
+module with WASI (stdin/out/err inherited, the current folder preopened, the arguments from the module on), prints what
+main gives by its kind (i32, i64, f32/f64 by gcvt), puts an error's or trap's message on stderr with status 1 and keeps
+the module's exit status. A driver with a module appended (`<module><length u64 LE>WRPMwasm`) runs that one with all
+its arguments: the executable `warp build` will write for GC programs (milestone 3's user addition; the Rust stub's
+trailer holds deflated machine code instead, standalone.rs). The executable's path is _NSGetExecutablePath's (macOS;
+Linux needs /proc/self/exe). Tests: test/native/test_native.sh "by the driver".
+
 ## Not yet (cards)
 - f32 in a primitive function of a GC program (no ValueKind with an f32 wasm type there): refused, card
   f32-primitive-refused.
-- (card primitive-class-gc) `@primitive class` in a GC program; lists, texts as (pointer, length), `use` of other primitive files, globals,
-  `continue`, memory.grow, printing (milestone 2: WASI or libc imports).
+- (card primitive-class-gc) `@primitive class` in a GC program; lists, texts as (pointer, length), `use` of other primitive files,
+  `continue`, globals beyond number constants.
 - A primitive file's refusal of a struct field has no line: declarations reach the passes as opaque views.

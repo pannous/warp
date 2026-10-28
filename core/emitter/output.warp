@@ -65,8 +65,12 @@ def printed(value: TypedCode): TypedCode { TypedCode(ValueKind.Node, dropped(run
 def shown_result(result: ValueKind): any {
 	kind = if result == ValueKind.Int or result == ValueKind.Float then result else ValueKind.Node
 	f = exported_function("show", [kind], ValueKind.Text)
-	given = TypedCode(kind, [op.local_get, 0])
-	f.code = shown_text(if result in kinds_shown_unboxed then TypedCode(result, converted(given, result)) else given).code
+	f.code = shown_text(unboxed_to_show(TypedCode(kind, [op.local_get, 0]), result)).code
+}
+# main's value as given, unboxed when main knows its kind to be one shown by that kind's own word
+def unboxed_to_show(given: TypedCode, result: ValueKind): TypedCode {
+	if result in kinds_shown_unboxed { return TypedCode(result, converted(given, result)) }
+	given
 }
 kinds_shown_unboxed = [ValueKind.Text, ValueKind.List, ValueKind.Char, ValueKind.Bool]
 def runtime_call(name: text, values: list): TypedCode { call_values(module.runtime[name], values) }
