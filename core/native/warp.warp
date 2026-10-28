@@ -6,7 +6,7 @@
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)
 #   warp run app.…        the same; `warp pure …` too (warp.wasm is the pure compiler)
 #   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
-#   warp                  the console on a terminal (as `warp repl`), else warp.wasm's help
+#   warp                  the console (as `warp repl`), its lines from a terminal or a pipe
 #   warp repl             the console: each line compiled by warp.wasm's repl-step after the lines that stay, then run
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
 #   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
@@ -24,7 +24,6 @@ fork(): i32 from "c"
 waitpid(child: i32, status: pointer, options: i32): i32 from "c"
 fdopen(descriptor: i32, mode: pointer): handle from "c"
 getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
-isatty(descriptor: i32): i32 from "c"
 execv(path: pointer, arguments: pointer): i32 from "c"
 execvp(name: pointer, arguments: pointer): i32 from "c"
 FOLDER_MODE = 493
@@ -238,9 +237,11 @@ prefixed = arg_count() > 1 and (same_text(arg(1), "run") or same_text(arg(1), "p
 first = if prefixed then 2 else 1
 # warp.wasm's own commands (build) read the same lib/ as this executable
 setenv(c_string("WARP_LIB"), c_string(library_folder()), 0)
+# and know the native warp hosts them (commands.warp: what it runs itself, what it lacks yet)
+setenv(c_string("WARP_HOST"), c_string("the native warp"), 1)
 compiler = if prefixed and same_text(arg(1), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path()
 if arg_count() <= first {
-	if not prefixed and isatty(STDIN) != 0 { console(compiler) } else {
+	if not prefixed { console(compiler) } else {
 		given = compiler_arguments(compiler)
 		added(given, "help")
 		file_ran(compiler, given)

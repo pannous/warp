@@ -34,6 +34,14 @@ running_commands = ["run", "eval", "test", "verify", "fuel", "fast", "console"]
 native_commands = ["pure", "self", "rebuild", "tool", "fetch", "dev", "serve", "deploy", "link", "app", "docs", "wiki",
 	"home", "lsp", "start", "types", "format", "lint", "beautify", "fix"]
 
+# the commands the native warp runs itself, before warp.wasm sees them (core/native/warp.warp)
+native_warp_commands = ["run", "pure", "self", "rebuild", "repl", "console", "version"]
+# set by the native warp for the compiler it hosts: the host's name
+HOST_VARIABLE = "WARP_HOST"
+natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
+# what no host of these commands has yet: under the native warp, the commands it lacks (warp-rust has them)
+NOT_YET = " is not in the native warp yet: warp-rust "
+
 command_name(entry: list): text := entry#1.split(" ")#1
 command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + ["repl-step"] + running_commands + native_commands
 is_command(word: text): bool := word in command_words()
@@ -44,7 +52,11 @@ source_of(target: text): text := try read(target) else target
 show_help() := {
 	print "warp, the compiler written in warp (core/compiler.warp), its commands:"
 	for entry in command_help { print "  " + padded("warp " + entry#1, HELP_COLUMN) + entry#2 }
-	print "  need the native warp: " + (running_commands + native_commands).join(" ")
+	host_commands = running_commands + native_commands
+	if natively_hosted() {
+		print "  the native warp itself: " + native_warp_commands.join(" ")
+		print "  not in the native warp yet (warp-rust has them): " + host_commands.filter(word => word not in native_warp_commands).join(" ")
+	} else { print "  need the native warp: " + host_commands.join(" ") }
 }
 
 # words, then spaces up to width, at least one
@@ -73,9 +85,11 @@ grouped_structure(items: list, bracket: text, separator: text): text := {
 }
 
 refuse_running(command: text) := {
+	if natively_hosted() { raise "warp " + command + NOT_YET + command + " runs it" }
 	raise "warp " + command + " runs the module it compiles, which plain WASI cannot (no instantiate in WASI preview 1): use " + NATIVE + " or `warp " + command + "`"
 }
 refuse_native(command: text) := {
+	if natively_hosted() { raise "warp " + command + NOT_YET + command + " runs it" }
 	raise "warp " + command + " needs " + NATIVE + "'s host: run `warp " + command + "`"
 }
 

@@ -34,6 +34,8 @@ if [ -x "$stage/warp" ]; then
 	printf 'raise "boom"\n' >"$stage/raising.warp"
 	check "what a program raised" "$(native raising.warp)" "boom"
 	check "the console, its lines staying" "$(printf 'a = 7\nx = [1\na * 6\n' | native repl | sed -n 4p)" "🌀42"
+	check "bare warp, lines piped: the console" "$(printf 'a = 7\na * 6\n' | native | sed -n 3p)" "🌀42"
+	check "a command the native warp lacks yet" "$(native eval 1)" "warp eval is not in the native warp yet: warp-rust eval runs it"
 	check "rebuild of no compiler" "$(native rebuild nonsense | cut -c1-34)" "warp rebuild: no compiler nonsense"
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
