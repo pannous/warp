@@ -429,6 +429,12 @@ compiled_module(engine: handle, module: text, machine_code: text, trap: pointer)
 	if machine_code.length > 0 { kept_machine_code(long_at(compiled).value, machine_code, key, fingerprint, trap) }
 	long_at(compiled).value
 }
+# the machine code of the module at `path` kept beside it, current for this wasmtime, nothing run
+machine_code_kept(path: text): nothing := {
+	trap = allocate(8)
+	long_at(trap).value = 0
+	compiled_module(wasm_engine_new_with_config(warp_config()), read_file(path), joined(path, ".driver.cwasm"), trap)
+}
 # the text without its trailing newlines
 trimmed_end(t: text): text := {
 	end = t.length
