@@ -19,7 +19,6 @@ use "driver.warp"
 
 setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
 unsetenv(name: pointer): i32 from "c"
-realpath(path: pointer, resolved: pointer): handle from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
 fork(): i32 from "c"
 waitpid(child: i32, status: pointer, options: i32): i32 from "c"
@@ -162,17 +161,6 @@ words(module: text, a: text, b: text, c: text, d: text, e: text): Arguments := {
 	if d.length > 0 { added(list, d) }
 	if e.length > 0 { added(list, e) }
 	list
-}
-# the path with its links resolved (lib/compiler links to core): a compile's folder is the real one
-real_path(path: text): text := {
-	resolved = realpath(c_string(path), 0)
-	if resolved == 0 {
-		complain(joined("no file ", path))
-		exit(1)
-	}
-	copy = native_copy(resolved, strlen(resolved))
-	free(resolved)
-	copy
 }
 # `warp repl`, the console: each line compiled by warp.wasm's repl-step after the lines that stayed (declarations,
 # uses: its state file), then run, in a child process of its own, so a line that fails ends only its child

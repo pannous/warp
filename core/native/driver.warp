@@ -42,47 +42,48 @@ TEXT_SHIFT = 4294967296
 # the host words the driver answers, the number its callback is defined with
 STD_IO_WORD = 1
 
-wasm_config_new(): handle from "wasmtime"
-wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "wasmtime"
-wasmtime_config_wasm_function_references_set(config: handle, enabled: bool) from "wasmtime"
-wasmtime_config_wasm_exceptions_set(config: handle, enabled: bool) from "wasmtime"
-wasmtime_config_cache_config_load(config: handle, path: handle): handle from "wasmtime"
-wasm_engine_new_with_config(config: handle): handle from "wasmtime"
-wasmtime_store_new(engine: handle, data: handle, finalizer: handle): handle from "wasmtime"
-wasmtime_store_context(store: handle): handle from "wasmtime"
-wasmtime_linker_new(engine: handle): handle from "wasmtime"
-wasmtime_linker_define_wasi(linker: handle): handle from "wasmtime"
-wasmtime_linker_define_unknown_imports_as_traps(linker: handle, module: handle): handle from "wasmtime"
-wasmtime_linker_define_func(linker: handle, module: text, module_size: i64, name: text, size: i64, type: handle, callback: handle, data: handle, finalizer: handle): handle from "wasmtime"
-wasi_config_new(): handle from "wasmtime"
-wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "wasmtime"
-wasi_config_inherit_stdin(config: handle) from "wasmtime"
-wasi_config_inherit_env(config: handle) from "wasmtime"
-wasi_config_inherit_stdout(config: handle) from "wasmtime"
-wasi_config_inherit_stderr(config: handle) from "wasmtime"
-wasi_config_preopen_dir(config: handle, host_path: text, guest_path: text, mutable: bool): bool from "wasmtime"
-wasmtime_context_set_wasi(context: handle, config: handle): handle from "wasmtime"
-wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module: pointer): handle from "wasmtime"
-wasmtime_module_imports(module: handle, imports: pointer) from "wasmtime"
-wasm_importtype_module(import: handle): handle from "wasmtime"
-wasm_importtype_name(import: handle): handle from "wasmtime"
-wasm_importtype_type(import: handle): handle from "wasmtime"
-wasm_externtype_as_functype_const(type: handle): handle from "wasmtime"
-wasmtime_linker_instantiate(linker: handle, context: handle, module: handle, instance: pointer, trap: pointer): handle from "wasmtime"
-wasmtime_instance_export_get(context: handle, instance: pointer, name: text, size: i64, item: pointer): bool from "wasmtime"
-wasmtime_caller_context(caller: handle): handle from "wasmtime"
-wasmtime_caller_export_get(caller: handle, name: text, size: i64, item: pointer): bool from "wasmtime"
-wasmtime_memory_data(context: handle, memory: pointer): handle from "wasmtime"
-wasmtime_func_type(context: handle, function: pointer): handle from "wasmtime"
-wasm_functype_results(type: handle): handle from "wasmtime"
-wasmtime_func_call(context: handle, function: pointer, arguments: pointer, count: i64, results: pointer, results_count: i64, trap: pointer): handle from "wasmtime"
-wasmtime_error_message(error: handle, message: pointer) from "wasmtime"
-wasmtime_error_exit_status(error: handle, status: pointer): bool from "wasmtime"
-wasm_trap_message(trap: handle, message: pointer) from "wasmtime"
-wasmtime_global_get(context: handle, global: pointer, value: pointer) from "wasmtime"
-wasmtime_global_set(context: handle, global: pointer, value: pointer): handle from "wasmtime"
-wasmtime_memory_data_size(context: handle, memory: pointer): i64 from "wasmtime"
-wasmtime_memory_grow(context: handle, memory: pointer, delta: i64, previous: pointer): handle from "wasmtime"
+wasm_config_new(): handle from "warp_wasmtime"
+wasmtime_config_wasm_gc_set(config: handle, enabled: bool) from "warp_wasmtime"
+wasmtime_config_wasm_function_references_set(config: handle, enabled: bool) from "warp_wasmtime"
+wasmtime_config_wasm_exceptions_set(config: handle, enabled: bool) from "warp_wasmtime"
+warp_config_gc_heap_initial_size_set(config: handle, bytes: i64) from "warp_wasmtime"
+wasmtime_config_cache_config_load(config: handle, path: handle): handle from "warp_wasmtime"
+wasm_engine_new_with_config(config: handle): handle from "warp_wasmtime"
+wasmtime_store_new(engine: handle, data: handle, finalizer: handle): handle from "warp_wasmtime"
+wasmtime_store_context(store: handle): handle from "warp_wasmtime"
+wasmtime_linker_new(engine: handle): handle from "warp_wasmtime"
+wasmtime_linker_define_wasi(linker: handle): handle from "warp_wasmtime"
+wasmtime_linker_define_unknown_imports_as_traps(linker: handle, module: handle): handle from "warp_wasmtime"
+wasmtime_linker_define_func(linker: handle, module: text, module_size: i64, name: text, size: i64, type: handle, callback: handle, data: handle, finalizer: handle): handle from "warp_wasmtime"
+wasi_config_new(): handle from "warp_wasmtime"
+wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "warp_wasmtime"
+wasi_config_inherit_stdin(config: handle) from "warp_wasmtime"
+wasi_config_inherit_env(config: handle) from "warp_wasmtime"
+wasi_config_inherit_stdout(config: handle) from "warp_wasmtime"
+wasi_config_inherit_stderr(config: handle) from "warp_wasmtime"
+wasi_config_preopen_dir(config: handle, host_path: text, guest_path: text, mutable: bool): bool from "warp_wasmtime"
+wasmtime_context_set_wasi(context: handle, config: handle): handle from "warp_wasmtime"
+wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module: pointer): handle from "warp_wasmtime"
+wasmtime_module_imports(module: handle, imports: pointer) from "warp_wasmtime"
+wasm_importtype_module(import: handle): handle from "warp_wasmtime"
+wasm_importtype_name(import: handle): handle from "warp_wasmtime"
+wasm_importtype_type(import: handle): handle from "warp_wasmtime"
+wasm_externtype_as_functype_const(type: handle): handle from "warp_wasmtime"
+wasmtime_linker_instantiate(linker: handle, context: handle, module: handle, instance: pointer, trap: pointer): handle from "warp_wasmtime"
+wasmtime_instance_export_get(context: handle, instance: pointer, name: text, size: i64, item: pointer): bool from "warp_wasmtime"
+wasmtime_caller_context(caller: handle): handle from "warp_wasmtime"
+wasmtime_caller_export_get(caller: handle, name: text, size: i64, item: pointer): bool from "warp_wasmtime"
+wasmtime_memory_data(context: handle, memory: pointer): handle from "warp_wasmtime"
+wasmtime_func_type(context: handle, function: pointer): handle from "warp_wasmtime"
+wasm_functype_results(type: handle): handle from "warp_wasmtime"
+wasmtime_func_call(context: handle, function: pointer, arguments: pointer, count: i64, results: pointer, results_count: i64, trap: pointer): handle from "warp_wasmtime"
+wasmtime_error_message(error: handle, message: pointer) from "warp_wasmtime"
+wasmtime_error_exit_status(error: handle, status: pointer): bool from "warp_wasmtime"
+wasm_trap_message(trap: handle, message: pointer) from "warp_wasmtime"
+wasmtime_global_get(context: handle, global: pointer, value: pointer) from "warp_wasmtime"
+wasmtime_global_set(context: handle, global: pointer, value: pointer): handle from "warp_wasmtime"
+wasmtime_memory_data_size(context: handle, memory: pointer): i64 from "warp_wasmtime"
+wasmtime_memory_grow(context: handle, memory: pointer, delta: i64, previous: pointer): handle from "warp_wasmtime"
 library_function(library: pointer, name: pointer): handle from "c"
 native_call(function: handle, integers: pointer, floats: pointer, float_result: i32): i64 from "c"
 handle_id(pointer: handle): i32 from "c"
@@ -100,10 +101,11 @@ pclose(stream: handle): i32 from "c"
 fread(data: handle, size: i64, count: i64, stream: handle): i64 from "c"
 malloc(size: i64): handle from "c"
 realloc(pointer: handle, size: i64): handle from "c"
-wasmtime_module_serialize(module: handle, bytes: pointer): handle from "wasmtime"
-wasmtime_module_deserialize_file(engine: handle, path: pointer, module: pointer): handle from "wasmtime"
+wasmtime_module_serialize(module: handle, bytes: pointer): handle from "warp_wasmtime"
+wasmtime_module_deserialize_file(engine: handle, path: pointer, module: pointer): handle from "warp_wasmtime"
 memmove(destination: handle, source: handle, size: i64): handle from "c"
 memcmp(a: pointer, b: pointer, size: i64): i32 from "c"
+realpath(path: pointer, resolved: pointer): handle from "c"
 gcvt(value: f64, digits: i32, buffer: pointer): handle from "c"
 getenv(name: text): text from "c"
 getpid(): i32 from "c"
@@ -128,6 +130,7 @@ native_vector_text(vector: handle): text := {
 	text_from(copy, size as u32)
 }
 same_text(a: text, b: text): bool := a.length == b.length and memcmp(a.address, b.address, a.length) == 0
+starts_with(t: text, start: text): bool := t.length >= start.length and memcmp(t.address, start.address, start.length) == 0
 ends_with(t: text, end: text): bool := t.length >= end.length and memcmp(t.address + t.length - end.length, end.address, end.length) == 0
 joined(a: text, b: text): text := {
 	copy = allocate((a.length + b.length) as i32)
@@ -275,10 +278,15 @@ struct Single { value: f32 }
 float_at(address: pointer): Double := address
 single_at(address: pointer): Single := address
 
-# what warp's modules use beside the MVP: GC, typed function references, exceptions (crates/warp-runtime engine.rs);
-# a program's machine code kept in wasmtime's own cache, warp.wasm's beside it (compiled_module)
+# The GC heap a run starts with, as crates/warp-runtime engine.rs: reserved, committed lazily; one starting small
+# collects at each of its many growths (the native `warp rebuild` 6:03 -> ~2 min, card wasmtime-native-rebuild)
+GC_HEAP_INITIAL_BYTES = 536870912
+# what warp's modules use beside the MVP: GC, typed function references, exceptions (crates/warp-runtime engine.rs),
+# warp_wasmtime's copying collector with its initial heap; a program's machine code kept in wasmtime's own cache,
+# warp.wasm's beside it (compiled_module)
 warp_config(): handle := {
 	config = wasm_config_new()
+	warp_config_gc_heap_initial_size_set(config, GC_HEAP_INITIAL_BYTES)
 	wasmtime_config_wasm_gc_set(config, yes)
 	wasmtime_config_wasm_function_references_set(config, yes)
 	wasmtime_config_wasm_exceptions_set(config, yes)
@@ -368,7 +376,7 @@ instance_shown(context: handle, instance: pointer, value: pointer): text := {
 # `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile (src/compiler/standalone.rs
 # run_compiler: the file, the module, its folder, lib/, runtime.wasm), then the module runs with the arguments
 compiled_and_run(compiler: text, at: int): nothing := {
-	file = arg(at)
+	file = reachable_path(arg(at))
 	library = library_folder()
 	output = compiled_path()
 	compiling = compiler_arguments(compiler)
@@ -378,7 +386,25 @@ compiled_and_run(compiler: text, at: int): nothing := {
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
 	file_ran(compiler, compiling)
-	written_run(output, file, at + 1)
+	written_run(output, arg(at), at + 1)
+}
+# the path absolute, its links resolved (lib/compiler links to core): a compile's folder is the real one, and a file
+# above the current folder (`../a.warp`) is one the module reaches through the preopened root
+real_path(path: text): text := {
+	resolved = realpath(c_string(path), 0)
+	if resolved == 0 {
+		complain(joined("no file ", path))
+		exit(1)
+	}
+	copy = native_copy(resolved, strlen(resolved))
+	free(resolved)
+	copy
+}
+# a path the module reaches: as given when it lies below the current folder (its messages name it so), else absolute
+# (`../a.warp`: the module's WASI resolves relative paths in the preopened current folder, never above it)
+reachable_path(path: text): text := {
+	absolute = real_path(path)
+	if starts_with(absolute, joined(real_path("."), "/")) then path else absolute
 }
 # warp.wasm of lib/, the compiler and its commands
 compiler_path(): text := joined(library_folder(), "/warp.wasm")
