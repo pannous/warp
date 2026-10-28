@@ -13,6 +13,7 @@ name_joiner = "·"
 closure_text_name = "closure_text"
 # the targets Rust's lowering lifts from a lambda (src/lowering/definitions/closures.rs is_lambda_function)
 lambda_prefixes = ["closure_lambda_", "lambda_value_"]
+is_lifted_lambda(name: text): bool := lambda_prefixes.any(prefix => name.starts_with(prefix))
 # the operators a closure takes part in (node_equal compares closures)
 closure_comparisons = ["==", "!="]
 is_closure_value(n: Node) := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol("closure_new")
@@ -70,7 +71,7 @@ closure_text_code(f: Function): any := {
 # a lifted lambda as written, its parameters but the captured ones (`x => x*2`); another target by its name
 closure_shown(name: text, captured: int): text := {
 	if name in module.linked_closures_shown { return module.linked_closures_shown[name] }
-	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return function_name(name) }
+	if not is_lifted_lambda(name) { return function_name(name) }
 	f = module.functions[name]
 	names = taken_names(f.signature)[captured..]
 	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + str(f.body)
