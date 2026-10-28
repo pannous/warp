@@ -694,3 +694,60 @@ unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(
 
 // `x.json` (lib/sugar/methods.warp): the JSON text of any value; a map's own field json wins
 json_text(value: any): any := if is_type(value, "map") and "json" in value then value["json"] else std_pure("json", "to_json", [value])
+
+// Named events (lib/sugar/events.warp): each event's listeners in order, with their numbers (counted within the event
+// from 1) and whether they listen once, as three lists of the same length
+global event_listeners = {}
+global listener_numbers = {}
+global listening_once = {}
+global listener_counts = {}
+listen(name: any, listener: function, once: bool): int := {
+	key = name_of(name)
+	if not (key in event_listeners) {
+		event_listeners[key] = []
+		listener_numbers[key] = []
+		listening_once[key] = []
+		listener_counts[key] = 0
+	}
+	listener_counts[key] += 1
+	event_listeners[key] += [listener]
+	listener_numbers[key] += [listener_counts[key]]
+	listening_once[key] += [once]
+	listener_counts[key]
+}
+emitted(name: any, data: any): any := {
+	key = name_of(name)
+	if not (key in event_listeners) { return ø }
+	running = event_listeners[key]
+	kept_listeners(key, i => not listening_once[key]#i)
+	result = ø
+	for listener in running { result = listener(data) }
+	result
+}
+listeners_of(name: any): list := if name_of(name) in listener_numbers then listener_numbers[name_of(name)] else []
+unlisten(name: any, number: int): any := {
+	key = name_of(name)
+	if key in event_listeners { kept_listeners(key, i => listener_numbers[key]#i != number) }
+	ø
+}
+// the listeners of an event at the positions keep holds for
+kept_listeners(key: text, keep: function): any := {
+	listeners = []
+	numbers = []
+	onces = []
+	for i in 1 ..< #event_listeners[key] + 1 {
+		if keep(i) {
+			listeners += [event_listeners[key]#i]
+			numbers += [listener_numbers[key]#i]
+			onces += [listening_once[key]#i]
+		}
+	}
+	event_listeners[key] = listeners
+	listener_numbers[key] = numbers
+	listening_once[key] = onces
+	ø
+}
+
+// Python's range: `range(4)` is [0, 1, 2, 3], `range(1, 4)` [1, 2, 3]
+range(stop: int): list := 0 ..< stop
+range(start: int, stop: int): list := start ..< stop

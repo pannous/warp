@@ -1,23 +1,24 @@
 # warp fix and warp beautify (card fix-in-lib): the code with its hints' replacements (rewrites.warp), then laid out
-# (layout.warp), read as text only, without the parser or the compiler. The command line around it (files, the diff,
-# "apply? y/n", check and yes) is src/cli/formatting.rs's.
+# (layout.warp), read as text only, without the parser or the compiler; warp format and warp lint the layout only. The
+# command line around it (files, the diff, "apply? y/n", check and yes) is command.warp.
 use "scan.warp"
 use "layout.warp"
 use "rewrites.warp"
 
 final_newline_rule = "final newline"
 
-# the code fixed and what changed: [text, changes], each change "<line> <rule>", the line in the code as given
-fixed(code: text): list := {
+# the code fixed and what changed: [text, changes], each change "<line> <rule>", the line in the code as given; by
+# the layout rules given, after the hints' replacements when rewriting (warp format lays out only)
+fixed(code: text, rules: list = layout_rules, rewriting: bool = yes): list := {
 	lines = code.split("\n")
 	if code.ends_with("\n") { lines = lines[0 ..< #lines - 1] }
 	numbers = []
 	for k in 0 ..< #lines { numbers += [k + 1] }
 	changes = []
-	hints = hints_of(scanned(lines))
+	hints = if rewriting then hints_of(scanned(lines)) else []
 	for hint in hints { changes += ["" + hint.line_number + " " + hint.rule] }
 	lines = with_hints_applied(lines, hints)
-	for rule in layout_rules {
+	for rule in rules {
 		scans = scanned(lines)
 		if rule == "blank lines" {
 			deleted = deleted_blank_lines(scans)

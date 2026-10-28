@@ -98,7 +98,13 @@ extension_module_names = [
 	"compiler/extensions/safe_navigation"
 ]
 first_sugar_module_names = extension_module_names + ["sugar/lists", "sugar/comparisons", "sugar/arms", "sugar/heads", "sugar/test_words"]
-sugar_module_names = ["sugar/fallbacks", "sugar/methods", "sugar/arithmetic", "sugar/loops", "sugar/enums", "sugar/extremes", "sugar/calls", "sugar/parameters", "sugar/tasks"]
+# every other file of lib/sugar/ is sugar applied where the sugar pass stands: a new rule file needs no line here
+sugar_folder = "sugar/"
+placed_sugar_modules(): list := first_sugar_module_names + iteration_sugar_module_names + late_sugar_module_names + comprehension_sugar_module_names + declaration_sugar_module_names + early_sugar_module_names
+sugar_module_names(): list := {
+	placed = placed_sugar_modules()
+	LIBRARY_FILES.keys.filter(path => path.starts_with(sugar_folder) and path.ends_with(module_extension)).map(path => path[0 ..< #path - #module_extension]).filter(name => name not in placed)
+}
 iteration_sugar_module_names = ["sugar/iteration"]
 late_sugar_module_names = ["sugar/ranges", "sugar/method_calls"]
 # the comprehension sugar, where the comprehensions pass ran: after phrase_blocks, before data_items marks the items of
@@ -111,7 +117,7 @@ std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", 
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
-early_sugar_module_names = ["sugar/functions", "sugar/declarations"]
+early_sugar_module_names = ["sugar/functions", "sugar/declarations", "sugar/events"]
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a
