@@ -73,8 +73,8 @@ copied in with memcpy). `warp build native lib/native/driver.warp` makes `driver
   16 bytes, at the end or where a later Mach-O signature begins) runs that one with all its arguments.
 `warp build app.warp` of a GC program writes that executable (core/commands.warp write_carrying: __LINKEDIT grown over
 the module, then signed): about 100 KB beside the module. The driver is built once per lib/ into lib/native/built/
-(again when driver.warp changes), before the program is compiled: a second compile in one run inherits the first
-one's module. A program calling C is still the Rust warp-runtime stub with its machine code and C functions table
+(again when driver.warp changes), in the same run as the program: every compile starts with a fresh Module
+(emitter.warp fresh_module, card module-inheritance). A program calling C is still the Rust warp-runtime stub with its machine code and C functions table
 (card driver-c-functions). Tests: test/native/test_executables.sh.
 A module gets WASI (stdin/out/err and the environment inherited, "." and "/" preopened), GC, typed references and
 exceptions, wasmtime's machine-code cache. Its `_start` runs (a GC program prints its own value), else `main`, whose

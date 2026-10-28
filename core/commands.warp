@@ -154,13 +154,11 @@ build(words: list) := {
 	if is_file { emitting_file(working_relative(target)) }
 	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", folder_of(target)) else build_native(target, library_folder) }
 	runtime_held = read_bytes(option_of(options, "runtime"))
-	# before the program: a second compile in one run inherits the first one's module (card compile-twice)
-	driver = if WASM_ONLY in options then ø else built_driver()
 	separate_output = stem + ".mod.wasm"
 	compile_written(source, stem + ".full.wasm", if is_file then folder_of(target) else ".")
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
 	modules = [stem + ".full.wasm", separate_output, stem + ".wasm"]
-	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", driver, option_of(options, "stub"), stem, c_function_lines()) }
+	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", option_of(options, "stub"), stem, c_function_lines()) }
 	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
 		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
 	}
@@ -207,9 +205,9 @@ with_c_functions_table(lines: list, machine_code: list): list := {
 GZIP_HEADER = 10
 GZIP_TRAILER = 8
 
-write_executable(module: text, driver: text, stub: any, executable: text, c_functions: list) := {
+write_executable(module: text, stub: any, executable: text, c_functions: list) := {
 	if #c_functions > 0 { return write_stub_executable(module, stub, executable, c_functions) }
-	write_carrying(driver, read_bytes(module), MODULE_MAGIC, executable)
+	write_carrying(built_driver(), read_bytes(module), MODULE_MAGIC, executable)
 }
 built_driver(): text := {
 	folder = library_folder + DRIVER_BUILT

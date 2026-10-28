@@ -147,7 +147,7 @@ def runtime_exports(functions: list): list {
 def struct_written(name: text): text := gc_definition(name).map(part => "" + part).join(" ")
 def runtime_sections(functions: list): list {
 	if not module.relocating { return [] }
-	own_globals = module.global_order[(if module.prebuilding then 0 else #runtime_image.globals) ..]
+	own_globals = module.global_order[(if module.prebuilding then 0 else #module.runtime_image.globals) ..]
 	counts = concatenated([#module.gc_order, #module.imports, #functions, #own_globals, #module.texts].map(uleb))
 	names = vector(module.dispatchers.map(f => name_bytes(f.name))) + vector(module.left_out.keys.map(name_bytes))
 	globals = vector(own_globals.map(name => name_bytes(name) + uleb(held_code(module.globals[name]#2))))
