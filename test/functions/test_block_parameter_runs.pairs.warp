@@ -1,0 +1,6 @@
+# `body!` runs a block parameter as `body()` does, and a block after a call argument is the outer word's (wiki/block.md)
+
+'repeats(n: int, body: block) := { for i in 1...n { body! } }; k = 0; repeats 3 { k += 1 }; k'	3
+'f(t, actions: block) := { actions!; actions! }; n = 0; f(1) { n += 2 }; n'	4
+'b(n) := n; at(t, actions: block) := { actions!; t }; s = ""; at b(5) { s += "a" }; s'	'a'
+'b(n) := n * 2; at(t, actions: block) := { actions!; t }; at b(5) { 0 }'	10
