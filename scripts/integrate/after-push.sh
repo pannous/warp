@@ -158,7 +158,7 @@ install_harness() {
 	[[ $got == *$EXPECTED* ]] || { red "harness: hello with the new binary got ${got:0:120} (its rebuild said: ${built:0:120})" --urgent; rm -rf "$folder"; return 1; }
 	copy_compilers "$TREE/lib" "$folder" || { red "harness: the compilers did not copy into $folder" --urgent; rm -rf "$folder"; return 1; }
 	linked "$folder/warp" "$RUST_WARP" || return 1
-	find "$BUILDS" -mindepth 1 -maxdepth 1 ! -name "${tip:0:9}" ! -name "$NATIVE_PREFIX*" -exec rm -rf {} +
+	pruned
 	say "harness of ${tip:0:10} installed: $RUST_WARP -> $folder/warp"
 }
 
@@ -166,6 +166,16 @@ install_harness() {
 # link's folder
 linked() {
 	ln -sfn "${1#"$(dirname "$2")/"}" "$2.new" && mv -f "$2.new" "$2"
+}
+
+# the build folders neither ~/dev/bin/warp nor warp-rust links into removed, only once the links are in place: a link
+# never dangles (2026-10-28: warp pointed into a folder the Rust install had pruned)
+pruned() {
+	local kept=() link
+	for link in "$MAIN_WARP" "$RUST_WARP"; do kept+=("$(basename "$(dirname "$(readlink "$link")")")"); done
+	for folder in "$BUILDS"/*; do
+		[[ " ${kept[*]} " == *" $(basename "$folder") "* ]] || rm -rf "$folder"
+	done
 }
 
 # the native warp of $tip in a folder of its own, as a release lays it out (decision rust-gone-in-1-5): the tree's lib/
@@ -183,7 +193,7 @@ install_native() {
 	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "native warp: hello got ${got:0:120}" --urgent; rm -rf "$folder"; return 1; }
 	linked "$folder/warp" "$MAIN_WARP" || return 1
-	find "$BUILDS" -mindepth 1 -maxdepth 1 -name "$NATIVE_PREFIX*" ! -name "$NATIVE_PREFIX${tip:0:9}" -exec rm -rf {} +
+	pruned
 	say "native warp of ${tip:0:10} installed: $MAIN_WARP -> $folder/warp"
 }
 
