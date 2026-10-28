@@ -34,7 +34,10 @@ if [ -x "$stage/warp" ]; then
 	printf 'raise "boom"\n' >"$stage/raising.warp"
 	check "what a program raised" "$(native raising.warp)" "boom"
 	check "the console, its lines staying" "$(printf 'a = 7\nx = [1\na * 6\n' | native repl | sed -n 4p)" "🌀42"
-	check "bare warp, lines piped: the console" "$(printf 'a = 7\na * 6\n' | native | sed -n 3p)" "🌀42"
+	check "bare warp, a piped program" "$(printf 'a = 7\na * 6\n' | native)" 42
+	check "exit(code) ends the run" "$(native 'exit(3)'; echo $?)" 3
+	printf 'x  =  1\n' >"$stage/spaced.warp"
+	check "format check" "$(native format check spaced.warp | head -1)" "spaced.warp:1: layout: spaces"
 	check "eval, code" "$(native eval '3 * 4')" 12
 	check "a command the native warp lacks yet" "$(native verify 1)" "warp verify is not in the native warp yet: warp-rust verify runs it"
 	mkdir "$stage/below"
