@@ -60,7 +60,6 @@ const DEPLOY_COMMAND: &str = "deploy";
 const SERVE_COMMAND: &str = "serve";
 
 /// The help menu (user): never extend it without consulting through the interviewer
-const HELP_COLUMN: usize = 30;
 const HELP_COMMANDS: &[(&str, &str)] = &[
 	("warp", "Evaluation console (REPL)"),
 	("warp <code|file(.warp/.wasm)>", "Run warp code or a file"),
@@ -69,22 +68,21 @@ const HELP_COMMANDS: &[(&str, &str)] = &[
 	("warp help [<topic>]", "Show this help"),
 	("warp verify <file>", "Test and prove the laws of a file"),
 	("warp debug <code|file>", "Show the parse, lowering and types"),
-	("warp tool <package> [args]", "Run a package's prebuilt <package>.wasm in its directory"),
-	("warp serve [file] [port]", "Serve the program: its page, server functions and routes (app.warp, port 8080)"),
+	("warp serve [file=app.warp] [port=8080]", "Serve page, functions and routes"),
 	("warp deploy", "Host the program on Cloudflare (see deploy.md)"),
 	("warp fuel <steps> <file|code>", "Count steps"),
 	("warp test", "Run tests"),
 	("warp docs", "Open documentation"),
 ];
 const HELP_OPTIONS: &[(&str, &str)] = &[
-	("--no-ask", "Never prompt \"got it?\" after a warning or note"),
-	("--no-hints", "Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)"),
+	("--no-ask", "Never prompt \"got it?\" after a warning or note"), // todo via: ?
+	("--no-hints", "Hide hints and notes which are shown by default (env WARP_HINTS=0)"),
 	("--warnings=<level>", "Show diagnostics from hint (default), weak, normal or severe up"),
 	("--strict[=<level>]", "Warnings from normal (or the level) up are errors, as `use strict`"),
 	("--sandbox", "No C, shell or other runtime, files only in the working folder"),
 ];
 // Out of the menu (user's notes): self, rebuild: internal; eval: redundant, gets a note; repl: redundant (plain warp);
-// lower, parse, types, format: folded into `warp debug` (TODO card cli-debug-command); data: what for?; dev; fast: get
+// lower, parse, types, format: folded into `warp debug` (TODO card help-menu); data: what for?; dev; fast: get
 // rid; compile --wasm/--aot/--page: redundant with build (aot always with build); build --exe/--wasm: nobody uses them;
 // --trim: see full.wasm / mod.wasm (decision build-three-outputs); app: ?; last.wasm kept in ~/.cache/warp
 /// `warp lower --json <code>`: the lowered program as the JSON node view core reads with `node_of(json(…))`,
@@ -661,13 +659,14 @@ fn source_of(target: &str) -> String {
 
 // Never extend this menu without consulting through the interviewer
 fn usage() {
-	print_help_rows(HELP_COMMANDS);
+	let column = HELP_COMMANDS.iter().chain(HELP_OPTIONS).map(|(usage, _)| usage.len()).max().unwrap_or(0);
+	print_help_rows(HELP_COMMANDS, column);
 	println!("  Options:");
-	print_help_rows(HELP_OPTIONS);
+	print_help_rows(HELP_OPTIONS, column);
 }
 
-fn print_help_rows(rows: &[(&str, &str)]) {
+fn print_help_rows(rows: &[(&str, &str)], column: usize) {
 	for (usage, meaning) in rows {
-		println!("  {usage:<HELP_COLUMN$} {meaning}");
+		println!("  {usage:<column$} {meaning}");
 	}
 }
