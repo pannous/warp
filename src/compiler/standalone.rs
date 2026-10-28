@@ -182,6 +182,15 @@ pub fn command(arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiler(by), arguments)
 }
 
+/// `warp build …`: compiler.warp's build command, told where the runtime it compiles behind lies (--runtime=)
+pub fn build_command(mut arguments: Vec<String>, by: Compiler) -> Node {
+	let compiler = compiler(by);
+	if let Ok(module) = &compiler {
+		arguments.push(format!("--runtime={}", runtime_of(module).display()));
+	}
+	ran(compiler, arguments)
+}
+
 /// One line of `warp repl`: compiler.warp's repl-step compiles it after the lines kept in `state` and decides which
 /// stay; its module runs here, where plain WASI could not run it
 pub fn repl_line(line: &str, state: &Path, by: Compiler) -> Node {

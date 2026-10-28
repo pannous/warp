@@ -18,7 +18,7 @@ command_help = [
 	["data <file>", "Read untrusted data without evaluating it"],
 	["lower <code|file>", "Show the program after the lowering passes"],
 	["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
-	["build <file>", "The module <file>.wasm (no executable under WASI)"],
+	["build [--wasm] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
 	["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
 	["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
 	["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
@@ -116,3 +116,107 @@ build_native(source_file: text, library: text) := {
 quoted_path(path: text): text := "\"" + path + "\""
 # os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
 shell(line: text): text := std_io("os", "command", [line])
+
+# `warp build [--wasm] [--trim=<way>] app.warp` (wiki/cli.md): a primitive file as a native executable (build_native),
+# any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
+# trimmed by Binaryen's wasm-opt) and the executable app (warp-runtime carrying app.wasm's machine code). The native
+# warp adds where runtime.wasm and the stub lie: --runtime=<file> --stub=<file>
+OPTION_MARK = "--"
+WASM_ONLY = "--wasm"
+TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2"}
+DEFAULT_TRIM = "optimize"
+# what wasmtime runs; Binaryen's -all would add custom descriptors, whose exact references wasmtime refuses. The name
+# section stays (--debuginfo), so traps and results still name their functions
+WASM_OPT = "wasm-opt --enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext --enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const --enable-multimemory --enable-exception-handling --debuginfo"
+BINARYEN_INSTALL = "brew install binaryen"
+
+build(words: list) := {
+	options = words.filter(word => word.starts_with(OPTION_MARK))
+	files = words.filter(word => not word.starts_with(OPTION_MARK))
+	if files#1 == NATIVE_WORD { return build_native(files#2, library_folder) }
+	if is_primitive_file(read(files#1)) { return build_native(files#1, library_folder) }
+	stem = files#1.remove_suffix(".warp")
+	runtime_held = read_bytes(option_of(options, "runtime"))
+	separate_output = stem + ".mod.wasm"
+	compile_file(files#1, stem + ".full.wasm", folder_of(files#1))
+	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
+	for written in [stem + ".full.wasm", separate_output, stem + ".wasm"] { print "compiled " + size_of(written) + " bytes to " + written }
+	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", option_of(options, "stub"), stem) }
+}
+# a file's size in bytes, as text
+size_of(file: text): text := shell("wc -c < " + quoted_path(file)).trim()
+# the value of `--name=value` among the options, ø without one
+option_of(options: list, name: text): any := {
+	for option in options { if option.starts_with(OPTION_MARK + name + "=") { return option.remove_prefix(OPTION_MARK + name + "=") } }
+	ø
+}
+
+# the module trimmed of what its exports never reach, as `way` says (notes/runtime_linking.md "Removing the unused
+# runtime"): by default also optimized (-O2: a third smaller for 30–60 ms more)
+trim(module: text, trimmed: text, way: text) := {
+	if not (way in TRIM_WAYS) { raise "warp build --trim=" + way + ": no such way, the ways are " + TRIM_WAYS.keys.join(", ") + " (warp, our own linker, is card runtime-shaking)" }
+	if way == "none" { return write_bytes(trimmed, read_bytes(module)) }
+	try { shell(WASM_OPT + " " + TRIM_WAYS[way] + " " + quoted_path(module) + " -o " + quoted_path(trimmed)) } catch failure {
+		raise "warp build: wasm-opt trims the module (" + BINARYEN_INSTALL + "), --trim=none builds it untrimmed: " + failure
+	}
+}
+
+# A standalone executable is the warp-runtime stub carrying a program's machine code (crates/warp-runtime standalone.rs):
+# <stub><machine code, deflated><its length, 8 bytes little-endian>WRPCwasm<zeros to a multiple of 16>, signed on macOS
+TRAILER_MAGIC = "WRPCwasm"
+TRAILER_ALIGNMENT = 16
+# gzip -n frames raw deflate in a 10-byte header and an 8-byte trailer (RFC 1952)
+GZIP_HEADER = 10
+GZIP_TRAILER = 8
+
+write_executable(module: text, stub: text, executable: text) := {
+	machine_code = std_io("os", "precompile", [read_bytes(module)])
+	carried = executable + ".carried"
+	write_bytes(carried, machine_code)
+	shell("gzip -9 -n -f " + quoted_path(carried))
+	framed = read_bytes(carried + ".gz")
+	shell("rm -f " + quoted_path(carried + ".gz"))
+	deflated = framed[GZIP_HEADER ..< #framed - GZIP_TRAILER]
+	shell("cp " + quoted_path(stub) + " " + quoted_path(executable))
+	signed = shell("uname") == "Darwin"
+	if signed { shell("codesign --remove-signature " + quoted_path(executable)) }
+	image = read_bytes(executable) + deflated + le64(#deflated) + TRAILER_MAGIC.bytes
+	while #image % TRAILER_ALIGNMENT != 0 { image += [0] }
+	write_bytes(executable, extended_to_end(image))
+	shell("chmod +x " + quoted_path(executable))
+	if signed { shell("codesign --sign - --force " + quoted_path(executable)) }
+	code_size = #machine_code
+	print "wrote " + executable + " (" + size_of(executable) + " bytes, machine code ${code_size})"
+}
+
+# Just enough of 64-bit Mach-O (crates/warp-runtime macho.rs): codesign wants every byte of the file inside a segment, so
+# the last one (__LINKEDIT) grows to the end of the file, over the program carried there
+MACHO_MAGIC = 0xfeedfacf
+MACHO_HEADER = 32
+COMMAND_COUNT_AT = 16
+SEGMENT_64 = 0x19
+# segment_command_64: vmsize, fileoff and filesize follow its name and vmaddr
+SEGMENT_VMSIZE_AT = 32
+SEGMENT_FILEOFF_AT = 40
+SEGMENT_FILESIZE_AT = 48
+# a segment's memory size is whole pages: arm64's 16 KB, a multiple of x86-64's 4 KB
+PAGE_BYTES = 0x4000
+
+extended_to_end(image: list): list := {
+	if little_endian(image, 0, 4) != MACHO_MAGIC { return image }
+	at = MACHO_HEADER
+	last = 0
+	for i in 0..little_endian(image, COMMAND_COUNT_AT, 4) {
+		if little_endian(image, at, 4) == SEGMENT_64 and (last == 0 or little_endian(image, at + SEGMENT_FILEOFF_AT, 8) > little_endian(image, last + SEGMENT_FILEOFF_AT, 8)) { last = at }
+		at += little_endian(image, at + 4, 4)
+	}
+	size = #image - little_endian(image, last + SEGMENT_FILEOFF_AT, 8)
+	pages = bit_and(size + PAGE_BYTES - 1, -PAGE_BYTES)
+	image[0 ..< last + SEGMENT_VMSIZE_AT] + le64(pages) + image[last + SEGMENT_FILEOFF_AT ..< last + SEGMENT_FILESIZE_AT] + le64(size) + image[last + SEGMENT_FILESIZE_AT + 8 ..< #image]
+}
+# the int of `width` bytes at `at`, little-endian
+little_endian(bytes: list, at: int, width: int): int := {
+	n = 0
+	for i in 0..width { n += bytes[at + i] << (8 * i) }
+	n
+}
