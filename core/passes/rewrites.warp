@@ -117,7 +117,7 @@ std_module_names = ["prelude", "memory", "net", "collections", "hash", "regex", 
 # the sugar modules whose rules rewrite the program before any pass, for forms no pass is to see: a function keyword
 # or a declaration word before definitions.warp, also behind another language's modifier (`public static fun f() {3}`:
 # sugar/declarations strips it, and the function keyword's rule rewrites the rest)
-early_sugar_module_names = ["sugar/functions", "sugar/declarations"]
+early_sugar_module_names = ["sugar/functions", "sugar/declarations", "sugar/events"]
 
 # a rule: `where $hole = shape` its origin (ø both without one), `conditions` the other `where` conditions, `place`
 # the one Place it rewrites only, else Anywhere, `module` the standard module declaring it, else ""; `whole` for a

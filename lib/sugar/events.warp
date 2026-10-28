@@ -6,7 +6,8 @@ rewrite on $e $body => listen(data $e, event => $body, no) where $e is symbol
 rewrite on $e: $body => listen(data $e, event => $body, no) where $e is symbol
 rewrite once $e $body => listen(data $e, event => $body, yes) where $e is symbol
 rewrite remove $h from listeners of $e => unlisten(data $e, $h) where $e is symbol
-rewrite listeners of $e -= $h => unlisten(data $e, $h) where $e is symbol
+rewrite listeners of ($e -= $h) => unlisten(data $e, $h) where $e is symbol
+rewrite count listeners of $e => count(listeners_of(data $e)) where $e is symbol
 rewrite listeners of $e => listeners_of(data $e) where $e is symbol
 rewrite emit $e: $v => emitted(data $e, $v)
 rewrite emit $e $v => emitted(data $e, $v) where $e is symbol
