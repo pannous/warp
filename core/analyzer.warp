@@ -182,7 +182,7 @@ kind_of_key(n: Node, scope: Scope): ValueKind := {
 	if op == "±" { return ValueKind.Data }
 	# `p.code`: a field, whose kind the emitter knows from the class (a node at run time here); `xs.length` counts
 	if op == "." and value_of(n) is symbol { return if name_of(value_of(n)) in counting_words then ValueKind.Int else ValueKind.Data }
-	if op in arithmetic_ops and not is_empty(key_of(n)) { return arithmetic_kind(inferred_kind(key_of(n), scope), op, inferred_kind(value_of(n), scope)) }
+	if op in arithmetic_ops and not is_empty(key_of(n)) { return arithmetic_kind(operand_kind(key_of(n), scope), op, operand_kind(value_of(n), scope)) }
 	if op == "=" or op == ":=" { return held_kind(assigned_value(n), scope) }
 	if op in compound_ops { return compound_kind(inferred_kind(key_of(n), scope), compound_ops[op], inferred_kind(value_of(n), scope)) }
 	if (op == "++" or op == "--") and inferred_kind(key_of(n), scope) == ValueKind.Float { return ValueKind.Float }
@@ -302,6 +302,11 @@ typed_element_kind(type_name: TypeWord?): ValueKind? := {
 	if kind != ø { kind } else { ValueKind.Empty }
 }
 
+# an operand's kind; a function of no parameters read bare is its call, `5 * ms` (lib/units.warp) a quantity
+operand_kind(n: Node, scope: Scope): ValueKind := {
+	if n is symbol and binding(scope, name_of(n)) == ø and name_of(n) in defined_signatures and #function_parameters(name_of(n)) == 0 { return inferred_kind(call_of(name_of(n), []), scope) }
+	inferred_kind(n, scope)
+}
 inferred_kind(n: Node, scope: Scope): ValueKind := {
 	if is_empty(n) { return ValueKind.Empty }
 	if n == yes or n == no { return ValueKind.Int }
