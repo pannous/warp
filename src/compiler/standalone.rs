@@ -138,7 +138,7 @@ fn parsed_view(code: &str) -> Result<String, Node> {
 	let source = folder.join(format!("warp-parse-{}-{parse}.warp", std::process::id()));
 	let output = source.with_extension(VIEW_EXTENSION);
 	std::fs::write(&source, code).map_err(|failure| error(&format!("{}: {failure}", source.display())))?;
-	let said = run_compiler(&source, &output, &folder, compiler, kept_scope(Compiler::RustCompiled));
+	let said = run_compiler(&source, &output, &folder, compiler, kept_scope(Compiler::RustCompiled), None);
 	let json = std::fs::read_to_string(&output);
 	let _ = std::fs::remove_file(&source);
 	let _ = std::fs::remove_file(&output);
@@ -154,9 +154,20 @@ fn parsed_view(code: &str) -> Result<String, Node> {
 
 /// The module compiler.warp makes of `code`, compiled as a program file of `folder` would be
 pub fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
+	compiled_code_and_separate(code, folder, by, None)
+}
+
+/// The module of `code` behind runtime.wasm, and from the same compile, written to `separate`, the module importing
+/// runtime.wasm's instance instead (notes/runtime_linking.md "Separate modules")
+pub fn compiled_code_and_separate(
+	code: &str,
+	folder: &Path,
+	by: Compiler,
+	separate: Option<&Path>,
+) -> Result<CompiledModule, Node> {
 	let file = std::env::temp_dir().join(format!("warp-inline-{}.warp", std::process::id()));
 	std::fs::write(&file, format!("{code}\n")).map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
-	let module = compiled_in(&file, folder, by).map_err(|failure| inline_positions(&failure, &file));
+	let module = compiled_in(&file, folder, by, separate).map_err(|failure| inline_positions(&failure, &file));
 	let _ = std::fs::remove_file(&file);
 	module
 }
@@ -214,12 +225,13 @@ fn ran(module: Result<CompiledModule, Node>, arguments: Vec<String>) -> Node {
 pub fn compiled(program: &Path, by: Compiler) -> Result<CompiledModule, Node> {
 	let program = program.canonicalize().map_err(|failure| error(&format!("{}: {failure}", program.display())))?;
 	let folder = program.parent().unwrap_or(Path::new("/")).to_path_buf();
-	compiled_in(&program, &folder, by)
+	compiled_in(&program, &folder, by, None)
 }
 
-/// The module compiler.warp makes of the program file with `folder` in scope: `compiler.warp <source> <wasm> <folder> <lib>`
-fn compiled_in(program: &Path, folder: &Path, by: Compiler) -> Result<CompiledModule, Node> {
-	compiled_with(program, folder, compiler(by)?, kept_scope(by))
+/// The module compiler.warp makes of the program file with `folder` in scope: `compiler.warp <source> <wasm> <folder> <lib>
+/// <runtime> [<separate>]`
+fn compiled_in(program: &Path, folder: &Path, by: Compiler, separate: Option<&Path>) -> Result<CompiledModule, Node> {
+	compiled_with(program, folder, compiler(by)?, kept_scope(by), separate)
 }
 
 /// The module `compiler` (a module of compiler.warp) makes of the program file with `folder` in scope
@@ -228,10 +240,11 @@ fn compiled_with(
 	folder: &Path,
 	compiler: CompiledModule,
 	scope: Option<String>,
+	separate: Option<&Path>,
 ) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
-	let said = run_compiler(program, &output, folder, compiler, scope);
+	let said = run_compiler(program, &output, folder, compiler, scope, separate);
 	let bytes = std::fs::read(&output);
 	let _ = std::fs::remove_file(&output);
 	match (said.drop_meta(), bytes) {
@@ -247,13 +260,18 @@ fn compiled_with(
 /// scope: `compiler.warp <source> <output> <folder> <lib>`, a module, or parser.warp's view when `output` ends in
 /// VIEW_EXTENSION, its kept values in `scope` (kept_scope). The arguments of the program running, if any (a host word
 /// parses in its run), stay its own
-fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: CompiledModule, scope: Option<String>) -> Node {
+fn run_compiler(
+	program: &Path,
+	output: &Path,
+	folder: &Path,
+	compiler: CompiledModule,
+	scope: Option<String>,
+	separate: Option<&Path>,
+) -> Node {
 	let running = crate::modules::std_adapters::program_arguments();
 	let runtime = runtime_of(&compiler);
-	let arguments = [program, output, folder, library(), &runtime];
-	crate::modules::std_adapters::set_program_arguments(
-		arguments.iter().map(|path| path.display().to_string()).collect(),
-	);
+	let arguments = [program, output, folder, library(), &runtime].into_iter().chain(separate);
+	crate::modules::std_adapters::set_program_arguments(arguments.map(|path| path.display().to_string()).collect());
 	let owner = crate::extensions::hex_text(&crate::run::module_cache::module_digest(&compiler.bytes));
 	// its kept values shipped beside its build file serve a cold cache; a new build's warming run writes them there
 	let shipped = crate::run::module_cache::shipped_kept_folder(&compiler.bytes);
@@ -308,7 +326,7 @@ fn promote(path: &Path) -> Result<CompiledModule, Node> {
 	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let folder = file.parent().unwrap_or(library()).to_path_buf();
 	let next =
-		compiled_with(&file, &folder, shipped(&warp_file, warp_bytes.clone()), kept_scope(pure)).map_err(|failure| {
+		compiled_with(&file, &folder, shipped(&warp_file, warp_bytes.clone()), kept_scope(pure), None).map_err(|failure| {
 			error(&format!("compiler.warp compiled by {}: {}", warp_file.display(), failure.serialize()))
 		})?;
 	// byte-identical output (the fixpoint) is reported, not required (user 2026-10-26: "If the compiler can compile
@@ -422,7 +440,7 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let file = file.canonicalize().map_err(|failure| error(&format!("{}: {failure}", file.display())))?;
 	let folder = file.parent().unwrap_or(library()).to_path_buf();
 	let (builder, compiler, scope) = builder(by)?;
-	let module = compiled_with(&file, &folder, compiler, scope)
+	let module = compiled_with(&file, &folder, compiler, scope, None)
 		.map_err(|failure| error(&format!("compiler.warp compiled by {builder}: {}", failure.serialize())))?;
 	let mut bytes = module.bytes.clone();
 	let section = current_build().join(BUILD_SEPARATOR);

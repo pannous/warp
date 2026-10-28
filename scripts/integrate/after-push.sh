@@ -26,6 +26,7 @@ if_moved= slow=
 [ "${1-}" = --if-moved ] && { if_moved=1; shift; }
 [ "${1-}" = --slow ] && { slow=1; shift; }
 scripts=$(cd "$(dirname "$0")/.." && pwd)
+cd "$MAIN_CHECKOUT" || exit 1  # todo finds the board through the checkout's repo (the cron starts in ~)
 installed_state=$TREE/data/integrate
 state=$installed_state
 [ -n "$slow" ] && { TREE=$SLOW_TREE; state=$SLOW_TREE/data/integrate; }
@@ -57,13 +58,13 @@ red() { # red <what: detail> [--urgent]: one card per kind of failure (its key f
 	say "RED $1 (card $key)"
 }
 
-# copy_compilers <lib> <folder>: the compilers a lib/ keeps (warp.wasm; warp-self.wasm only when promoted from the
-# same inputs) into the folder with their machine code (.cwasm) and kept values (.kept/), each file moved into place
+# copy_compilers <lib> <folder>: the compilers a lib/ keeps (runtime.wasm, which every compile links, and warp.wasm;
+# warp-self.wasm only when promoted from the same inputs) into the folder with their machine code (.cwasm) and kept values (.kept/), each file moved into place
 # whole, its machine code before it: a run that finds a compiler finds its code too (card atomic-install)
 copy_compilers() {
 	local from=$1 folder=$2 inputs name part
 	inputs=$(cut -d' ' -f1 "$from/warp.wasm.inputs")
-	for name in warp.wasm warp-self.wasm; do
+	for name in runtime.wasm warp.wasm warp-self.wasm; do
 		if [ $name = warp-self.wasm ] && [ "$(cut -d' ' -f1 "$from/$name.inputs" 2>/dev/null)" != "$inputs" ]; then
 			rm -f "$folder/$name" "$folder/$name.cwasm"  # an older pair's: `warp self` says it is missing instead of running it
 			continue

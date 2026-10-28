@@ -1,5 +1,6 @@
 // Positions in a source text, as the lexer counts them (card self-differential; Rust twin: warp_parser/scanning.rs
 // advance, a column per code point: a character such as שָ of a letter and its vowel point takes two)
+// todo code_points(line) These are probably calculated elsewhere too and can be optimized? (card code-points-once)
 line_widths(source: text): list := [count(code_points(line)) for line in split(source, "\n")]
 
 // The code points of a text as a list

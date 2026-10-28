@@ -6,7 +6,7 @@ pub(crate) const TRIM_FLAG: &str = "--trim";
 const BINARYEN_OPTIMIZER: &str = "wasm-opt";
 const BINARYEN_INSTALL: &str = "brew install binaryen";
 /// What wasmtime runs; Binaryen's `-all` would add custom descriptors, whose exact references wasmtime refuses
-const WASMTIME_FEATURES: [&str; 11] = [
+const WASMTIME_FEATURES: [&str; 12] = [
 	"--enable-gc",
 	"--enable-reference-types",
 	"--enable-bulk-memory",
@@ -18,6 +18,7 @@ const WASMTIME_FEATURES: [&str; 11] = [
 	"--enable-simd",
 	"--enable-extended-const",
 	"--enable-multimemory",
+	"--enable-exception-handling",
 ];
 /// The name section stays, so traps and results still name their functions
 const KEEP_NAMES: &str = "--debuginfo";
