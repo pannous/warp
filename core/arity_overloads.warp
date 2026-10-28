@@ -321,6 +321,8 @@ prefix_operation(n: Node): list? := {
 numeric_kinds = ["int", "float"]
 known_kind(n: Node, judge: ArgumentJudge): list? := {
 	if n is symbol and name_of(n) in judge.variables and judge.variables[name_of(n)] { return judge.variables[name_of(n)] }
+	# a function the program defines, passed by name (`play(hum, 2s)`): a function of its parameters' count
+	if n is symbol and name_of(n) in judge.own and is_group(judge.own[name_of(n)]) { return ["function", #judge.own[name_of(n)] - 1] }
 	# `(2)`, the operand of `sqrt(2)`, is 2
 	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return known_kind(n#1, judge) }
 	prefixed = prefix_operation(n)
@@ -374,7 +376,22 @@ element_fit(element: text?, type: text): int? := {
 # an argument the run time tells fits every type for now
 argument_fit(kind: list?, type: text): int? := {
 	if kind == ø { return 0 }
+	if kind#1 == "function" and kind#2 != ø and function_type_arity(type) not in [ø, kind#2] { return ø }
 	if kind#1 == "list" then element_fit(kind#2, type) else fit(kind#1, type)
+}
+# the parameters a function type names, 2 of `(samples, float) -> any`; ø of a type without them, `function`
+function_type_arity(type: text): int? := {
+	arrows = ["->", "=>", "→"].filter(arrow => type.contains(arrow))
+	if #arrows == 0 { return ø }
+	head = type.split(arrows#1)#1.trim()
+	if head.starts_with("(") and head.ends_with(")") { head = head[1 ..< #head - 1].trim() }
+	if head == "" { return 0 }
+	depth = 0
+	count = 1
+	for c in head {
+		if c == '(' { depth += 1 } else if c == ')' { depth -= 1 } else if c == ',' and depth == 0 { count += 1 }
+	}
+	count
 }
 
 # the sum of the arguments' fits, ø when one does not fit
@@ -438,6 +455,20 @@ dispatched(name: text, candidates: list, kinds: list, arguments: list, refusal: 
 	if not bindings then chain else List(bindings + [chain], Bracket.Round, Separator.Semicolon)
 }
 
+# the variants the known arguments fit best
+best_fitting(candidates: list, kinds: list): list := candidates.filter(types => candidates.all(other => variant_fit(kinds, other) >= variant_fit(kinds, types)))
+# the variants the known arguments fit better first, in declaration order among equals: a run-time test that passes
+# both takes the better, `play(hum, 2s)` of a hum(block, t) the block filler, not play(tone, …)
+best_first(candidates: list, kinds: list): list := {
+	ordered = []
+	left = candidates
+	while #left > 0 {
+		best = best_fitting(left, kinds)
+		ordered += best
+		left = left.filter(types => types not in best)
+	}
+	ordered
+}
 # `f(1.5)`, `f 1.5`: the call of the variant its arguments fit best; a call of a name not overloaded by type as it is
 typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	n = glued_block_call(n, name => name in overloaded)
@@ -452,10 +483,10 @@ typed_call(n: Node, overloaded: map, judge: ArgumentJudge): Node := {
 	written = "${n}"
 	listed = variants.map(types => name + "(" + types.join(", ") + ")").join(", ")
 	if not kinds.all(kind => kind != ø) and #fitting > 1 {
-		return dispatched(name, fitting, kinds, arguments, "`" + written + "` fits no single variant of " + listed)
+		return dispatched(name, best_first(fitting, kinds), kinds, arguments, "`" + written + "` fits no single variant of " + listed)
 	}
 	if not fitting { return diagnose(call_of("no_single_variant", [written, listed]), n) }
-	chosen = fitting.filter(types => fitting.all(other => variant_fit(kinds, other) >= variant_fit(kinds, types)))
+	chosen = best_fitting(fitting, kinds)
 	if #chosen != 1 { return diagnose(call_of("tied_variants", [written, listed]), n) }
 	call_of(typed_variant(name, chosen#1), arguments)
 }
