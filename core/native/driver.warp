@@ -113,6 +113,7 @@ getenv(name: text): text from "c"
 getpid(): i32 from "c"
 unlink(path: text): i32 from "c"
 _NSGetExecutablePath(buffer: pointer, size: pointer): i32 from "c"
+readlink(path: pointer, buffer: pointer, size: i64): i64 from "c"
 access(path: pointer, mode: i32): i32 from "c"
 native_pointer(address: pointer): handle from "c"
 c_function(name: text): handle from "c"
@@ -186,11 +187,17 @@ checked(error: handle, trap: pointer): nothing := {
 ## where things are
 # this executable's own path
 executable_path(): text := {
+	path = allocate(PATH_BYTES)
+	# Linux: the link /proc/self/exe names it (macOS has no /proc)
+	length = readlink(c_string("/proc/self/exe"), path, PATH_BYTES)
+	if length > 0 { return text_from(path, length as u32) }
+	# macOS: dyld says it (a C function Linux lacks, looked up only when called)
 	size = allocate(4)
 	word_at(size).value = PATH_BYTES
-	path = allocate(PATH_BYTES)
-	_NSGetExecutablePath(path, size)
-	text_from(path, c_length(path))
+	if _NSGetExecutablePath(path, size) == 0 { return text_from(path, c_length(path)) }
+	complain("this executable's path is unknown: neither /proc/self/exe (Linux) nor _NSGetExecutablePath (macOS) says it")
+	exit(1)
+	text_from(path, 0)
 }
 # the module appended to this executable, else the empty text: at its end, or, in a Mach-O executable signed after
 # the module was appended (`warp build`), where its signature begins
