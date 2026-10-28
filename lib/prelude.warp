@@ -694,3 +694,33 @@ unmarked(name: text, mark: text): text := if starts_with(name, mark) then slice(
 
 // `x.json` (lib/sugar/methods.warp): the JSON text of any value; a map's own field json wins
 json_text(value: any): any := if is_type(value, "map") and "json" in value then value["json"] else std_pure("json", "to_json", [value])
+
+// Named events (lib/sugar/events.warp): each event's listeners in order, [number, listener, once]; numbers count
+// within an event from 1
+global event_listeners = {}
+global listener_counts = {}
+listen(name: any, listener: function, once: bool): int := {
+	key = name_of(name)
+	if not (key in event_listeners) {
+		event_listeners[key] = []
+		listener_counts[key] = 0
+	}
+	listener_counts[key] += 1
+	event_listeners[key] += [[listener_counts[key], listener, once]]
+	listener_counts[key]
+}
+emitted(name: any, data: any): any := {
+	key = name_of(name)
+	if not (key in event_listeners) { return ø }
+	running = event_listeners[key]
+	event_listeners[key] = running.filter(entry => not entry#3)
+	result = ø
+	for entry in running { result = entry#2(data) }
+	result
+}
+listeners_of(name: any): list := if name_of(name) in event_listeners then event_listeners[name_of(name)].map(entry => entry#1) else []
+unlisten(name: any, number: int): any := {
+	key = name_of(name)
+	if key in event_listeners { event_listeners[key] = event_listeners[key].filter(entry => entry#1 != number) }
+	ø
+}
