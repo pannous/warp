@@ -151,9 +151,13 @@ words_within(n: Node): list := {
 	found.keys
 }
 
-# the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp)
+# the words a later step writes: the cell of a shared capture, for a lambda or a block given to a parameter (lambdas.warp),
+# the matcher of a structural match arm (node_matches.warp)
 function_types = [symbol("function"), symbol("block")]
-lowering_words(program: Node): list := if nodes_in(program).any(n => is_lambda(n) or n in function_types) then ["Cell"] else []
+lowering_words(program: Node): list := {
+	nodes = nodes_in(program)
+	(if nodes.any(n => is_lambda(n) or n in function_types) then ["Cell"] else []) + (if nodes.any(is_structural_match) then [matcher_word] else [])
+}
 
 # the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
