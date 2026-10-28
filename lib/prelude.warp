@@ -67,7 +67,7 @@ add(xs: list, x): same as xs from emitter
 insert(xs: list, x, at: int): same as xs from emitter
 remove(xs: list, x) from emitter
 remove(m: map, key) from emitter
-pop(xs: list): element of xs from emitter
+pop(xs: list): any := list_pop(xs)
 clear(xs: list): same as xs from emitter
 number(x): number from emitter
 // the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
@@ -114,8 +114,9 @@ alias contains = collection_contains
 alias has = collection_contains
 alias includes = collection_contains
 alias get = map_get_or
-// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
-alias index_of = collection_position
+// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent); a function, not an alias, so a class's method
+// body finds it too
+index_of(c: any, x: any): int := collection_position(c, x)
 // card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:
 // `t.graphemes`, `t.codepoints` are the lists
 alias characters = chars
