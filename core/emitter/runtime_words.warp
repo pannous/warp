@@ -163,7 +163,7 @@ library_words = {join: "joined", zero_fill: "zero_fill", round: "rounded", len: 
 	bracket_of: "list_bracket", separator_of: "list_separator", line_of: "node_line", column_of: "node_column", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", copy: "node_copy", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", byte_at: "text_byte", float_bits: "bits_of_float", wasi_environment: "wasi_environment"}
+	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", removed_value: "removed_value", map_without: "map_without", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", pack: "packed_node", unpack: "unpacked_node", byte_at: "text_byte", float_bits: "bits_of_float", wasi_environment: "wasi_environment"}
 # node_order knows no user compare: a program ordering instances by its own sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # a `compare(a: T, b: T)` of the program (its witness compare·T once Rust's traits.rs named it): the order of T's
@@ -237,7 +237,7 @@ def plain_int_test(code: list): list { as_node(code) + gc_code(gc_ops.struct_get
 # an Int $Node of the $Ratio of the two ints' code, numerator and denominator, the program then making ratios
 def ratio_node(numerator: list, denominator: list): TypedCode {
 	box = code => code + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)])
-	made_by("Ratio", TypedCode(ValueKind.Node, node(Kind.Int, box(numerator) + box(denominator) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)])))
+	made_by("Ratio", TypedCode(ValueKind.Node, node(Kind.Int, box(numerator) + box(denominator) + gc_code(gc_ops.struct_new, [gc_type(gc.ratio)]))))
 }
 def ratio_test(code: list): list { as_node(code) + gc_code(gc_ops.struct_get, [gc_type(gc.node), 1]) + gc_code(gc_ops.ref_test, [gc_type(gc.ratio)]) }
 def ratio_part(code: list, field: int): list { payload(code, gc_type(gc.ratio)) + gc_code(gc_ops.struct_get, [gc_type(gc.ratio), field]) + gc_code(gc_ops.ref_cast_null, [gc_type(gc.int_box)]) + gc_code(gc_ops.struct_get, [gc_type(gc.int_box), 0]) }

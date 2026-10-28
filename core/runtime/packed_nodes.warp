@@ -1,48 +1,48 @@
-## node_bytes(n): any value as one text, node_of_bytes(t) the value again, its kinds, positions and texts as they were:
+## packed_node(n): any value as one text, unpacked_node(t) the value again, its kinds, positions and texts as they were:
 ## a value kept across runs or handed whole to the host crosses as one text instead of node by node (card
 ## program-fixed). Each node is its shape (kinds.warp NodeShape), its kind field (but for Empty and Meta), then its
 ## payload. Numbers are ASCII varints and texts their UTF-8, so the whole text is UTF-8 a host keeps as it is.
-## A class instance or a closure has no bytes: node_bytes fails on one
+## A class instance or a closure has no bytes: packed_node fails on one
 use "intrinsics.warp"
 use "../kinds.warp"
 use "instructions.warp"
 use "nodes.warp"
-node_bytes(n: Node): text := {
-	parts = []
-	write_node(parts, n, yes)
-	concatenated(parts)
+packed_node(n: Node): text := {
+	whole = new_text(node_written(n, yes, new_text(0), 0))
+	node_written(n, yes, whole, 0)
+	whole
 }
-write_node(parts: list, n: Node, positioned: bool) := {
-	if is_null(n) {
-		parts += [varint_text(NodeShape.Empty)]
-		return
-	}
+# n written into `out` from `at`, where its bytes end: a text of no room only measures, so one walk sizes the text and
+# the next fills it
+node_written(n: Node, positioned: bool, out: text, at: int): int := {
+	if is_null(n) { return varint_written(NodeShape.Empty, out, at) }
 	if positioned and is_meta(n) {
-		parts += [varint_text(NodeShape.Meta), varint_text(meta_line(n)), varint_text(meta_column(n))]
-		write_node(parts, n, no)
-		return
+		place = varint_written(meta_line(n), out, varint_written(NodeShape.Meta, out, at))
+		return node_written(n, no, out, varint_written(meta_column(n), out, place))
 	}
 	if is_class_instance(n) { fail() }
 	shape = shape_of(n)
-	parts += [varint_text(shape), varint_text(marked_kind(n))]
-	if shape == NodeShape.Int { parts += [varint_text(unboxed_int(n))] }
-	if shape == NodeShape.Ratio { parts += [varint_text(ratio_numerator(n)), varint_text(ratio_denominator(n))] }
+	at = varint_written(marked_kind(n), out, varint_written(shape, out, at))
+	if shape == NodeShape.Int { return varint_written(unboxed_int(n), out, at) }
+	if shape == NodeShape.Ratio { return varint_written(ratio_denominator(n), out, varint_written(ratio_numerator(n), out, at)) }
 	if shape == NodeShape.BigInt {
-		parts += [varint_text(if big_int_negative(n) then 1 else 0), varint_text(limb_count(n))]
-		for i in 0..<limb_count(n) { parts += [varint_text(limb(n, i))] }
+		at = varint_written(limb_count(n), out, varint_written(if big_int_negative(n) then 1 else 0, out, at))
+		for i in 0..<limb_count(n) { at = varint_written(limb(n, i), out, at) }
+		return at
 	}
-	if shape == NodeShape.Float { parts += [varint_text(bits_of_float(unboxed_float(n)))] }
-	if shape == NodeShape.Codepoint { parts += [varint_text(code_of(unboxed_char(n)))] }
-	if shape == NodeShape.Text { parts += [varint_text(byte_count(unboxed_text(n))), unboxed_text(n)] }
-	if shape == NodeShape.Pair {
-		write_node(parts, entry_key(n), yes)
-		write_node(parts, key_value(n), yes)
+	if shape == NodeShape.Float { return varint_written(bits_of_float(unboxed_float(n)), out, at) }
+	if shape == NodeShape.Codepoint { return varint_written(code_of(unboxed_char(n)), out, at) }
+	if shape == NodeShape.Text {
+		t = unboxed_text(n)
+		at = varint_written(byte_count(t), out, at)
+		if byte_count(out) > 0 { copy_text(out, at, t, 0, byte_count(t)) }
+		return at + byte_count(t)
 	}
-	if shape == NodeShape.List {
-		items = unboxed_list(n)
-		parts += [varint_text(#items)]
-		for item in items { write_node(parts, item, yes) }
-	}
+	if shape == NodeShape.Pair { return node_written(key_value(n), yes, out, node_written(entry_key(n), yes, out, at)) }
+	items = unboxed_list(n)
+	at = varint_written(#items, out, at)
+	for item in items { at = node_written(item, yes, out, at) }
+	at
 }
 # the shape of a node's payload, by its kind; a closure, a pointer or an uncertain value fails
 shape_of(n: Node): int := {
@@ -57,35 +57,22 @@ shape_of(n: Node): int := {
 	fail()
 	0
 }
-# the texts one after the other, copied once into a text of their whole length
-concatenated(parts: list): text := {
-	size = 0
-	for part in parts { size += byte_count(part) }
-	whole = new_text(size)
-	at = 0
-	for part in parts {
-		copy_text(whole, at, part, 0, byte_count(part))
-		at += byte_count(part)
-	}
-	whole
-}
-# an int as ASCII bytes: zigzag (a small negative one small too), 6 bits a byte, low ones first, 64 marking a byte
-# that more follow
-varint_text(value: int): text := {
+# an int as ASCII bytes from `at` (where a text of no room only measures), where they end: zigzag, so a small negative
+# one is small too, 6 bits a byte, low ones first, 64 marking a byte that more follow
+varint_written(value: int, out: text, at: int): int := {
 	rest = bits_xor(shifted_left(value, 1), shifted_right_signed(value, 63))
-	count = 1
-	while shifted_right(rest, 6 * count) != 0 { count += 1 }
-	out = new_text(count)
-	for i in 0..<count {
-		group = bits_and(shifted_right(rest, 6 * i), 63)
-		set_byte(out, i, if i < count - 1 then group + 64 else group)
+	while shifted_right(rest, 6) != 0 {
+		if byte_count(out) > 0 { set_byte(out, at, bits_and(rest, 63) + 64) }
+		rest = shifted_right(rest, 6)
+		at += 1
 	}
-	out
+	if byte_count(out) > 0 { set_byte(out, at, rest) }
+	at + 1
 }
 
-# where node_of_bytes reads next in its text
+# where unpacked_node reads next in its text
 global bytes_read = 0
-node_of_bytes(t: text): Node := {
+unpacked_node(t: text): Node := {
 	bytes_read = 0
 	read_node(t)
 }
@@ -105,6 +92,7 @@ read_node(t: text): Node := {
 	if shape == NodeShape.List {
 		count = read_varint(t)
 		items = new_list(count)
+		set_count(items, 0)
 		for i in 0..<count { items += [read_node(t)] }
 		return list_node(kind, items)
 	}
