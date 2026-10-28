@@ -61,12 +61,12 @@ rewrite_depth_limit = 64
 # `square·$a` in a template: `·` glues words and holes into one name (F5, decision name-glue), joined by name_joint;
 # the parser reads it as `*`, so the rule's text tells the two apart, and the parts wait in a glue_marker group
 glue_mark = "·"
-glue_marker = "glue·name"
+glue_marker = HiddenWord.GlueName as text
 name_joint = "_"
 # `loop··step`: `··` glues with the mark itself, a hidden compiler name (notes/compiler_temporaries.md) no program can
 # write; the parser reads it as the call operator_··(loop, step), whose parts wait beside hidden_joint in the glue
 hidden_glue = "··"
-hidden_joint = "glue·hidden"
+hidden_joint = HiddenWord.GlueHidden as text
 # `T for $x in $xs...` in a template: T once for each item of the rest hole (F4)
 each_word = "for"
 each_in_word = "in"
