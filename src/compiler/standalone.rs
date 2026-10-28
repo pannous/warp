@@ -20,6 +20,9 @@ const REPL_STEP: &str = "repl-step";
 /// compiler.warp's command writing runtime.wasm, and the file it is beside warp.wasm
 const RUNTIME_COMMAND: &str = "runtime";
 const RUNTIME_FILE: &str = "runtime.wasm";
+/// A seed's runtime.wasm, its own beside it (warp-seed.runtime.wasm): what the seed compiles compiler.warp behind,
+/// written by the seed itself (ship_seed), never the runtime of the warp.wasm that shares the seed's folder
+const SEED_RUNTIME_EXTENSION: &str = "runtime.wasm";
 
 const COMPILER_FILE: &str = "compiler/compiler.warp";
 /// The custom section of a build file naming what it was built from: lib/, lib/'s fingerprint, the warp build
@@ -168,8 +171,14 @@ pub fn command(arguments: Vec<String>, by: Compiler) -> Node {
 /// stay; its module runs here, where plain WASI could not run it
 pub fn repl_line(line: &str, state: &Path, by: Compiler) -> Node {
 	let module = state.with_extension("wasm");
-	let step = [REPL_STEP, &state.display().to_string(), line, &module.display().to_string()].map(String::from);
-	let stepped = command(step.to_vec(), by);
+	let compiler = match compiler(by) {
+		Ok(compiler) => compiler,
+		Err(failure) => return failure,
+	};
+	// a line compiles as a program does, behind the compiler's runtime, its fifth argument too
+	let runtime = runtime_of(&compiler);
+	let step = [REPL_STEP, &state.display().to_string(), line, &module.display().to_string(), &runtime.display().to_string()];
+	let stepped = ran(Ok(compiler), step.map(String::from).to_vec());
 	if let Node::Error(_) = stepped.drop_meta() {
 		return stepped;
 	}
@@ -240,11 +249,7 @@ fn compiled_with(
 /// parses in its run), stay its own
 fn run_compiler(program: &Path, output: &Path, folder: &Path, compiler: CompiledModule, scope: Option<String>) -> Node {
 	let running = crate::modules::std_adapters::program_arguments();
-	// runtime.wasm beside the compiler: compiler.warp compiles the program behind it (card runtime-prepended)
-	let runtime = crate::run::module_cache::shipped_file(&compiler.bytes)
-		.map(|file| file.with_file_name(RUNTIME_FILE))
-		.filter(|file| file.exists())
-		.unwrap_or_default();
+	let runtime = runtime_of(&compiler);
 	let arguments = [program, output, folder, library(), &runtime];
 	crate::modules::std_adapters::set_program_arguments(
 		arguments.iter().map(|path| path.display().to_string()).collect(),
@@ -443,6 +448,19 @@ fn write_runtime(by: Compiler, path: &Path) -> Result<(), Node> {
 	}
 }
 
+/// The runtime.wasm a compiler compiles a program behind (card runtime-prepended): a seed's own, else the one beside
+/// it (warp.wasm's and warp-self.wasm's); none (an empty path, which compiler.warp refuses loudly) when it is missing
+fn runtime_of(compiler: &CompiledModule) -> PathBuf {
+	crate::run::module_cache::shipped_file(&compiler.bytes)
+		.map(|file| if file == seed_file() { seed_runtime(&file) } else { file.with_file_name(RUNTIME_FILE) })
+		.filter(|file| file.exists())
+		.unwrap_or_default()
+}
+
+fn seed_runtime(seed: &Path) -> PathBuf {
+	seed.with_extension(SEED_RUNTIME_EXTENSION)
+}
+
 /// Who builds compiler.warp's warp.wasm, named, and its module: the seed, with the scope of its kept values (kept_scope:
 /// its own). No Rust-compiled stage (card rust-bootstrap); warp-self.wasm is never built, only promoted (promote)
 fn builder(_by: Compiler) -> Result<(String, CompiledModule, Option<String>), Node> {
@@ -468,7 +486,27 @@ pub fn ship_seed() -> Result<PathBuf, Node> {
 		eprintln!("precompiling the seed {} (once per seed and engine)", seed.display());
 		ship(&seed, &bytes)?;
 	}
+	let runtime = seed_runtime(&seed);
+	if !is_newer(&runtime, &seed) {
+		write_seed_runtime(&seed, bytes, &runtime);
+	}
 	Ok(crate::run::module_cache::shipped_path(&seed))
+}
+
+/// The seed's runtime.wasm, written by the seed's `runtime` command (once per seed); a seed of before the command
+/// writes none and needs none, said once
+fn write_seed_runtime(seed: &Path, bytes: Vec<u8>, runtime: &Path) {
+	eprintln!("writing the seed's runtime {} (once per seed)", runtime.display());
+	let arguments = vec![RUNTIME_COMMAND.into(), runtime.display().to_string()];
+	let written = ran(Ok(shipped(seed, bytes)), arguments);
+	if !runtime.exists() {
+		eprintln!("note: the seed wrote no runtime ({}): it compiles without one", written.serialize());
+	}
+}
+
+fn is_newer(file: &Path, than: &Path) -> bool {
+	let modified = |path: &Path| std::fs::metadata(path).and_then(|metadata| metadata.modified()).ok();
+	matches!((modified(file), modified(than)), (Some(file), Some(than)) if file >= than)
 }
 
 /// Where a compiler's run keeps the values its makers made (os.keep_of; std_adapters kept_by): warp.wasm, which the

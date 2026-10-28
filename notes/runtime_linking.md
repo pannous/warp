@@ -31,6 +31,11 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
 
 ## runtime.wasm format (card runtime-prebuilt, owner: fixer; built by core/emitter/prebuilt.warp)
 `warp rebuild` writes it beside warp.wasm (compiler.warp's command `runtime [file]`); validated by wasm-tools.
+Every compile is behind a runtime.wasm, the compiler's own (src/compiler/standalone.rs runtime_of), its fifth argument
+in a compile and in a repl-step: warp.wasm's and warp-self.wasm's beside them; the seed's is warp-seed.runtime.wasm
+beside the seed, written by the seed itself when missing or older than the seed (ship_seed; card
+seed-compiler-runtime), so a seed never compiles behind the runtime of the warp.wasm sharing its folder and nothing
+but the seed is published. A seed from before the `runtime` command writes none and needs none (said once per rebuild).
 One file serves both prepending (runtime-prepended) and import/export linking (runtime-separate-modules). It is an
 ordinary, valid wasm module: every runtime word compiled once, from its declared kinds (`any` is a node), with every
 made_case kind made, since no program decides any more what it makes.
