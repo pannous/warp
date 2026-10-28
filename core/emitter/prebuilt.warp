@@ -213,7 +213,7 @@ def prepended_names(functions: list, classes: list, own_globals: list): list {
 ## once behind runtime.wasm from their declared kinds, its own items numbered from the runtime's counts, every index
 ## operand padded and listed, so a link appends it behind the runtime and the modules before it
 library_module(program: Node, runtime_wasm: list, runtime: Node, host: map): any := {
-	prepend_runtime(runtime_wasm)
+	prepend_runtime(runtime_wasm, runtime_layout(runtime_wasm))
 	module.relocating = yes
 	made = typed_wasm_module(program, runtime, host, {})
 	module.relocating = no
