@@ -609,8 +609,28 @@ fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gai
 // play_signal) calls hum for every sample, t its time in seconds, a block ahead of the speaker; returns the handle when
 // the last is queued
 play_signal(signal, seconds) := if signal is list then stereo_signal(signal[0], signal[1], seconds) else mono_signal(signal, seconds)
-mono_signal(signal: (float) -> float, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
-stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := std_io("sound", "signal", [[left, right], si_amount(seconds), sample_rate])
+mono_signal(signal: (float) -> float, seconds) := {
+	left_signal = signal
+	std_io("sound", "signal", [left_sample, si_amount(seconds), sample_rate])
+}
+stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := {
+	left_signal = left
+	right_signal = right
+	std_io("sound", "signal", [[left_sample, right_sample], si_amount(seconds), sample_rate])
+}
+global left_signal = ø
+global right_signal = ø
+// the samples the host asks for, a float of a float, whatever number the program's signal gives (0.3 * t of an exact
+// 0.3 is no float for the compiler); a local name, as a global holding a function is no call yet (card
+// global-function-value)
+left_sample(t: float): float := {
+	signal = left_signal
+	signal(t) as float
+}
+right_sample(t: float): float := {
+	signal = right_signal
+	signal(t) as float
+}
 // block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
 // 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
