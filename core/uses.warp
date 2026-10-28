@@ -218,13 +218,15 @@ is_keyword_group(n: Node): bool := is_group(n) and #n >= 2 and n#1 is symbol and
 # `def f(x) …`, `def f(x): T {…}`, `global x = 0`; ø for another statement
 declared_name(statement: Node): any := match statement {
 	Key(left, op, right): {
-		if assigns_or_defines(op) { return leftmost_name(left) }
+		if assigns_or_defines(op) { return aliased_type_name(left) ?? leftmost_name(left) }
 		if op != Op.Colon { return ø }
 		if is_keyword_group(left) { return leftmost_name(left#2) }
 		if is_declaration_keyword(left) then declared_name(right) else ø
 	}
 	_: if is_keyword_group(statement) or is_pattern_definition(statement) then leftmost_name(statement#2) else ø
 }
+# `type View = list or int`: the alias's name, View (its left side is the opaque view ["type", name, ø]), else ø
+aliased_type_name(left: Node): text? := if is_key(left, Op.Colon) and key_of(left) == opaque_symbol and kind_of(value_of(left)) == "type" then declared_type_name(value_of(left)#2) else ø
 leftmost_name(n: Node): any := {
 	if n is symbol { return name_of(n) }
 	if n is key { return leftmost_name(key_of(n)) }
