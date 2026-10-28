@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 @primitive
 # The native runner (notes/roadmap_native_harness.md milestone 3, notes/primitive.md "Driver"): a primitive file that
-# runs wasm modules through wasmtime's C API, called as any C library. `warp build native lib/native/driver.warp`
+# runs wasm modules through wasmtime's C API, called as any C library. `warp build native core/native/driver.warp`
 # makes the executable:
 #   driver app.warp args…   compiled by warp.wasm (of $WARP_LIB, else beside the driver), then run
 #   driver app.wasm args…   the module run
@@ -524,15 +524,58 @@ c_line(table: text, from: text, name: text): text := {
 	}
 	text_from(0, 0)
 }
-# a C function as its callback's data: its line and its address
-struct Foreign { line: pointer; length: u32; function: handle }
+# a C function as its callback's data, its line read once: its address and name, each parameter's kind (a byte each),
+# its result's register and what it crosses as, how a failure shows, the first out-pointer's pointee
+struct Foreign { function: handle; name: pointer; name_length: u32; kinds: pointer; count: i32; register: i32; crossing: i32; failure: i32; pointee: pointer; pointee_length: u32 }
 foreign_at(address: pointer): Foreign := address
+# the kinds, as their positions among the names c_signatures.rs gives them (parameter_kind, register_of, …)
+PARAMETER_I32 = 1
+PARAMETER_I64 = 2
+PARAMETER_F32 = 3
+PARAMETER_F64 = 4
+PARAMETER_TEXT = 5
+PARAMETER_HANDLE = 6
+PARAMETER_OUT = 7
+REGISTER_I64 = 2
+REGISTER_F32 = 3
+REGISTER_F64 = 4
+REGISTER_BOOL = 5
+CROSSING_TEXT = 2
+CROSSING_OWNED_TEXT = 3
+CROSSING_HANDLE = 4
+FAILURE_NOT_NULL = 1
+FAILURE_FALSE = 2
+parameter_kind(name: text): i32 := position_in(name, "i32 i64 f32 f64 ptr handle out")
+register_of(name: text): i32 := position_in(name, "i32 i64 f32 f64 bool void")
+crossing_of(name: text): i32 := position_in(name, "number text owned_text handle")
+failure_of(name: text): i32 := position_in(name, "not_null false")
+# the position of a word among space-separated names, from 1; 0 when it is none of them
+position_in(word: text, names: text): i32 := {
+	for i in 0..field_count(names, SPACE) { if same_text(field(names, i, SPACE), word) { return (i + 1) as i32 } }
+	0
+}
+# the C function of a line, found in its library; one the driver can't call stops the run naming it
 foreign_of(line: text): i64 := {
 	library = field(line, 1, TAB)
 	name = field(line, 2, TAB)
 	function = library_function(c_string(library), c_string(name))
 	if function == 0 { failed_call(joined(joined(joined("no C function ", name), " in the library "), library)) }
-	Foreign(line.address, line.length, function) as i64
+	parameters = field(line, 3, TAB)
+	count = field_count(parameters, COMMA)
+	kinds = allocate(count as i32)
+	floats = 0
+	for p in 0..count {
+		type = field(parameters, p, COMMA)
+		kind = parameter_kind(type)
+		if kind == 0 { failed_call(joined(joined(joined(name, ": a "), type), " parameter, not in the native driver yet")) }
+		byte_at(kinds + p).value = kind as u8
+		if kind == PARAMETER_F32 or kind == PARAMETER_F64 { floats = floats + 1 }
+	}
+	if floats > REGISTERS or count - floats > REGISTERS { failed_call(joined(name, ": more than 8 integer or float parameters, not in the native driver yet")) }
+	crossing = crossing_of(field(line, 5, TAB))
+	if crossing == 0 { failed_call(joined(joined(joined(name, ": a result crossing as "), field(line, 5, TAB)), ", not in the native driver yet")) }
+	pointee = field(line, 6, TAB)
+	Foreign(function, name.address, name.length, kinds, count as i32, register_of(field(line, 4, TAB)), crossing, failure_of(field(line, 8, TAB)), pointee.address, pointee.length) as i64
 }
 failed_call(message: text): nothing := {
 	complain(message)
@@ -542,12 +585,7 @@ failed_call(message: text): nothing := {
 # the call of a C function with the module's values: numbers as they are, a text NUL-terminated, a handle id its C
 # pointer, the first out-pointer a slot that becomes the result; its result crossed back the same way
 c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
-	line = text_from(c.line, c.length)
-	name = field(line, 2, TAB)
-	parameters = field(line, 3, TAB)
-	register = field(line, 4, TAB)
-	pointee = field(line, 6, TAB)
-	failure = field(line, 8, TAB)
+	name = text_from(c.name, c.name_length)
 	integers = zeroed(REGISTERS * 8)
 	floats = zeroed(REGISTERS * 8)
 	out = zeroed(8)
@@ -555,24 +593,22 @@ c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: p
 	float_count = 0
 	passed = 0
 	outs = 0
-	for p in 0..field_count(parameters, COMMA) {
-		type = field(parameters, p, COMMA)
+	for p in 0..c.count {
+		kind = byte_at(c.kinds + p).value as i32
 		value = given + passed * VALUE_BYTES + VALUE_OFFSET
-		if integer_count == REGISTERS or float_count == REGISTERS { failed_call(joined(name, ": more than 8 integer or float parameters, not in the native driver yet")) }
-		if same_text(type, "f64") or same_text(type, "f32") {
-			long_at(floats + float_count * 8).value = if same_text(type, "f64") then long_at(value).value else word_at(value).value as i64
+		if kind == PARAMETER_F32 or kind == PARAMETER_F64 {
+			long_at(floats + float_count * 8).value = if kind == PARAMETER_F64 then long_at(value).value else word_at(value).value as i64
 			float_count = float_count + 1
 		} else {
-			long_at(integers + integer_count * 8).value = c_argument(caller, context, name, type, value, if outs == 0 then out else 0)
+			long_at(integers + integer_count * 8).value = c_argument(caller, context, name, kind, value, if outs == 0 then out else 0)
 			integer_count = integer_count + 1
 		}
-		if same_text(type, "out") { outs = outs + 1 } else { passed = passed + 1 }
+		if kind == PARAMETER_OUT { outs = outs + 1 } else { passed = passed + 1 }
 	}
-	floating = same_text(register, "f64") or same_text(register, "f32")
-	returned = native_call(c.function, integers, floats, if floating then 1 else 0)
-	if (same_text(failure, "not_null") and returned != 0) or (same_text(failure, "false") and returned % 256 == 0) { failed_call(joined(joined(name, " failed, C result "), text_of(returned))) }
-	if pointee.length > 0 and long_at(out).value == 0 { failed_call(joined(joined(joined(joined(name, " gave no "), pointee), ", C status "), text_of(returned % 4294967296))) }
-	if results_count > 0 { c_result(caller, context, line, if pointee.length > 0 then long_at(out).value else returned, results) }
+	returned = native_call(c.function, integers, floats, if c.register == REGISTER_F32 or c.register == REGISTER_F64 then 1 else 0)
+	if (c.failure == FAILURE_NOT_NULL and returned != 0) or (c.failure == FAILURE_FALSE and returned % 256 == 0) { failed_call(joined(joined(name, " failed, C result "), text_of(returned))) }
+	if c.pointee_length > 0 and long_at(out).value == 0 { failed_call(joined(joined(joined(joined(name, " gave no "), text_from(c.pointee, c.pointee_length)), ", C status "), text_of(returned % 4294967296))) }
+	if results_count > 0 { c_result(caller, context, c, if c.pointee_length > 0 then long_at(out).value else returned, results) }
 }
 # allocated bytes, all zero
 zeroed(size: i32): pointer := {
@@ -581,36 +617,32 @@ zeroed(size: i32): pointer := {
 	bytes
 }
 # the register of a parameter that is no float: a number, a text's C copy, a handle's pointer, an out-pointer's slot
-c_argument(caller: handle, context: handle, name: text, type: text, value: pointer, out: pointer): i64 := {
-	if same_text(type, "i32") { return word_at(value).value as i64 }
-	if same_text(type, "i64") { return long_at(value).value }
-	if same_text(type, "ptr") { return native_pointer(c_string(shown(caller, context, value - VALUE_OFFSET))) }
-	if same_text(type, "out") { return if out == 0 then 0 else native_pointer(out) }
-	if not same_text(type, "handle") { failed_call(joined(joined(joined(name, ": a "), type), " parameter, not in the native driver yet")) }
+c_argument(caller: handle, context: handle, name: text, kind: i32, value: pointer, out: pointer): i64 := {
+	if kind == PARAMETER_I32 { return word_at(value).value as i64 }
+	if kind == PARAMETER_I64 { return long_at(value).value }
+	if kind == PARAMETER_TEXT { return native_pointer(c_string(shown(caller, context, value - VALUE_OFFSET))) }
+	if kind == PARAMETER_OUT { return if out == 0 then 0 else native_pointer(out) }
 	id = word_at(value).value as i32
 	if not handle_known(id) { failed_call(joined(joined(name, ": no handle "), text_of(id))) }
 	handle_pointer(id)
 }
 # the C result as the module's value: a text, a handle id, else the number in its register
-c_result(caller: handle, context: handle, line: text, returned: i64, result: pointer): nothing := {
-	crossing = field(line, 5, TAB)
-	register = field(line, 4, TAB)
+c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: pointer): nothing := {
 	value = result + VALUE_OFFSET
-	if same_text(crossing, "text") or same_text(crossing, "owned_text") {
+	if c.crossing == CROSSING_TEXT or c.crossing == CROSSING_OWNED_TEXT {
 		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned, strlen(returned), result) }
-		if same_text(crossing, "owned_text") and returned != 0 { free(returned) }
+		if c.crossing == CROSSING_OWNED_TEXT and returned != 0 { free(returned) }
 	} else {
-		if same_text(crossing, "handle") {
+		if c.crossing == CROSSING_HANDLE {
 			byte_at(result).value = KIND_I32
 			word_at(value).value = handle_id(returned) as u32
 		} else {
-			if not same_text(crossing, "number") { failed_call(joined(joined(field(line, 2, TAB), ": a result crossing as "), joined(crossing, ", not in the native driver yet"))) }
-			byte_at(result).value = register_kind(register)
-			long_at(value).value = if same_text(register, "bool") then (if returned % 256 == 0 then 0 else 1) else (if same_text(register, "i64") or same_text(register, "f64") then returned else returned % 4294967296)
+			byte_at(result).value = register_kind(c.register)
+			long_at(value).value = if c.register == REGISTER_BOOL then (if returned % 256 == 0 then 0 else 1) else (if c.register == REGISTER_I64 or c.register == REGISTER_F64 then returned else returned % 4294967296)
 		}
 	}
 }
-register_kind(register: text): u8 := if same_text(register, "i64") then KIND_I64 else if same_text(register, "f64") then KIND_F64 else if same_text(register, "f32") then KIND_F32 else KIND_I32
+register_kind(register: i32): u8 := if register == REGISTER_I64 then KIND_I64 else if register == REGISTER_F64 then KIND_F64 else if register == REGISTER_F32 then KIND_F32 else KIND_I32
 # the module's text of `length` bytes at a C pointer, into `result`: written where its text_heap global says, the
 # memory grown when they pass its end (crates/warp-runtime gc_values.rs write_to_heap)
 guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: pointer): nothing := {
