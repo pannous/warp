@@ -750,6 +750,8 @@ has_property(code: Node, property: text): bool := {
 	if property == "definition" { return definition_of(code) != ø }
 	# `{it*2}`: a block reading `it`, a function of it (definitions.warp is_function_block)
 	if property == "function_block" { return bracket_of(code) == "{" and mentions(code, implicit_parameter) }
+	# `x -> x * 2`, `(x -> x * 2)`: a lambda is a function too
+	if property == "function" and (is_lambda(code) or (is_round(code) and #code == 1 and is_lambda(code#1))) { return yes }
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }

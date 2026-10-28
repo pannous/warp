@@ -10,6 +10,8 @@ rewrite ($f $x $more...) => $f(($x $more...)) where $f takes one
 # (one typed value) leaves it out. Not a name nothing binds: `int x = 3` declares x; before several words it takes
 # the phrase they make, `int float 3` is int(float(3))
 rewrite (int $x) => int($x) where $x is not unbound
+# `map square xs`, `map (x -> x * 2) [1, 2, 3]`: a function before a list maps it, as `xs.map(square)` does
+rewrite (map $f $xs) => map($xs, $f) where $f is function
 rewrite (float $x) => float($x) where $x is not unbound
 rewrite (double $x) => double($x) where $x is not unbound
 rewrite (long $x) => long($x) where $x is not unbound
