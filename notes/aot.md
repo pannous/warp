@@ -29,10 +29,12 @@ Its executables are copies of warp-host itself, so they keep WASI, std_io and C 
 time").
 
 ## Standalone executable, `warp build <file>`
-- `warp build`/`compile` write the executable `<file>` (`<file>.exe` on Windows) and the module `<file>.wasm`; `--exe`
-  is accepted (redundant), `--wasm` writes only the module. A plain run leaves an executable next to the file only with
-  `WARP_EXECUTABLE=1` (or true/yes/on), rebuilt only when the source is newer (P103); a program the runtime cannot
-  carry gets a note. `warp run <file>` never leaves one (P105).
+- `warp build` writes the executable `<file>` and the modules beside it; `--wasm` (and `warp compile`) only the
+  modules. It runs in warp: compiler.warp's build command (core/commands.warp, card harness-diet) picks native for a
+  primitive file, trims with wasm-opt through `shell`, takes the machine code from the host word `os.precompile`
+  (wasmtime with the stub's engine settings) and joins the executable itself: deflate by `gzip -n`, the trailer, the
+  Mach-O __LINKEDIT extension, codesign. A plain run leaves no executable (WARP_EXECUTABLE's writer never ran in the
+  self lane and is gone).
 - The executable is a copy of the prebuilt stub `warp-runtime` (crates/warp-runtime: wasmtime with `runtime`, `gc`,
   `gc-copying`, `std`, no Cranelift; ~1 MB release) with the program's machine code appended, deflated (miniz_oxide)
   (`[stub][cwasm][u64 le length][WRPCwasm]`); at start the stub reads its own last 16 bytes and runs what it carries.
@@ -136,8 +138,6 @@ under `warp run`.
 - The fresh case is the front end: parse and lowering (`warp lower`) and emitting the module; wasmtime's JIT compile and
   the run add only ~8 ms. Cranelift `OptLevel::None` made no difference, so the default stays; Winch has no GC support.
   Speeding up `warp run` further is the compiler-speed card (lowering passes, the emitted runtime).
-- A plain run that builds an executable (`WARP_EXECUTABLE=1`) pays for the printing variant compiled once more and its
-  machine code written; unchanged files skip it (the executable is newer).
 
 ## libwarp_runtime: the runtime as a C library (card run-wasm-lib)
 `cargo rustc --release -p warp-runtime --lib --crate-type cdylib --features library` builds libwarp_runtime (6.2 MB

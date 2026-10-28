@@ -1,9 +1,10 @@
-//! Binaryen's wasm-opt over a written module: `warp build`'s trimming (src/cli/trimming.rs) and `warp rebuild`'s
-//! optimized compilers (card wasm-untrimmed-output) run it alike
+//! Binaryen's wasm-opt over the compiler `warp rebuild` writes (card wasm-untrimmed-output). Twin of core/commands.warp
+//! WASM_OPT, which `warp build` trims programs with: the rebuild runs before any compiler that could run that one, and
+//! goes once rebuilding moves into compiler.warp as building did
 use std::path::Path;
 
-pub const OPTIMIZER: &str = "wasm-opt";
-pub const INSTALL: &str = "brew install binaryen";
+const OPTIMIZER: &str = "wasm-opt";
+const INSTALL: &str = "brew install binaryen";
 /// What wasmtime runs; Binaryen's `-all` would add custom descriptors, whose exact references wasmtime refuses
 const WASMTIME_FEATURES: [&str; 12] = [
 	"--enable-gc",
