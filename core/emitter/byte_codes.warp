@@ -1,7 +1,7 @@
 # TODO move into core/text folder  (card byte-codes-move)
 # The bytes and code points the runtime words read and write by number (emitter.warp constant_tables, as kinds.warp's)
 # ASCII characters, and CaseShift from an upper case letter to its lower case
-Ascii = {Tab: 9, Newline: 10, Return: 13, Space: 32, Quote: 34, Plus: 43, Minus: 45, Point: 46, Zero: 48, Nine: 57, UpperA: 65, UpperE: 69, UpperZ: 90, Backslash: 92, LowerA: 97, LowerE: 101, LowerW: 119, LowerZ: 122, Delete: 127, CaseShift: 32}
+Ascii = {Tab: 9, Newline: 10, Return: 13, Space: 32, Quote: 34, Plus: 43, Minus: 45, Point: 46, Zero: 48, Nine: 57, Colon: 58, Semicolon: 59, UpperA: 65, UpperE: 69, UpperZ: 90, Backslash: 92, Underscore: 95, LowerA: 97, LowerE: 101, LowerW: 119, LowerZ: 122, Delete: 127, CaseShift: 32}
 # UTF-8: the first byte of each kind (a continuation byte 10xxxxxx from Continuation, the lead bytes of two, three and
 # four bytes from TwoByte, ThreeByte, FourByte), the 6 bits each continuation byte carries, and the first code point
 # that takes two, three and four bytes

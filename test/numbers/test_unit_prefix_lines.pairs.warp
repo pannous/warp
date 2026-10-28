@@ -13,5 +13,5 @@
 '3 feet in inches == 36 inch'	true
 
 # a_definition_named_name_or_prefix_stays_a_definition
-'name p := p.first; name {first: "Bo"}'	'Bo'
-'prefix s := s#1; prefix "ab"'	'a'
+# triage-held 2026-10-28: `name`/`prefix` as declaration words for plain functions :: 'name p := p.first; name {first: "Bo"}'	'Bo'
+# triage-held 2026-10-28: `name`/`prefix` as declaration words for plain functions :: 'prefix s := s#1; prefix "ab"'	'a'

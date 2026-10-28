@@ -132,9 +132,25 @@ symbol_words(n: Node): list := {
 	while at <= #waiting {
 		part = waiting#at
 		at += 1
-		if part is symbol { found[name_of(part)] = yes } else if part is key { waiting += parts_within(part) } else if is_group(part) { for item in part { waiting += [item] } }
+		if part is symbol { found[name_of(part)] = yes }
+		else if part is key and key_of(part) == opaque_symbol { for word in class_words(part) { found[word] = yes } }
+		else if part is key { waiting += [key_of(part), value_of(part)] }
+		else if is_group(part) { for item in part { waiting += [item] } }
 	}
 	found.keys
+}
+
+# the words a class's body mentions but its own fields and methods: `class C{pi = 3; f() := pi * r}` names no library pi
+class_words(view: Node): list := {
+	parts = parts_within(view)
+	own = parts.flat_map(part => if is_group(part) then items_of(part) else [part]).map(member_name)
+	parts.flat_map(symbol_words).filter(word => word not in own)
+}
+
+# the field `r: int` or `pi = 3`, the method `f() := …`
+member_name(statement: Node): any := match statement {
+	Key(Symbol(name), op, value): name
+	_: declared_name(statement)
 }
 
 # the words a slice mentions, those inside a class's methods too (the opaque view of `class Instant { … text() :=
@@ -217,6 +233,8 @@ declared_only(n: Node): Node := {
 		if is_key(n, Op.Define) { return Key(head, Op.Define, Node.Empty) }
 		if is_key(n, Op.Assign) { return Key(head, Op.Assign, Node.Empty) }
 	}
+	# `A4 := midi_hertz(69)`, a value the module made a function of (charged, P71): its head, called at each use
+	if is_key(n, Op.Define) and head is symbol and name_of(head) in module.linked_words { return Key(call_of(name_of(head), []), Op.Define, Node.Empty) }
 	if is_key(n, Op.Colon) and is_declaration_keyword(head) then Key(head, Op.Colon, declared_only(value_of(n))) else n
 }
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
