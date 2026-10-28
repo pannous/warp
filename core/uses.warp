@@ -193,7 +193,13 @@ without_steps_up(path: text): text := {
 # the files the compiler has built in, by path (compiler.warp's runtime files while it lowers its runtime words): their
 # text, never read from lib/
 global built_in_files = {}
-file_text(path: text): any := built_in_files.get(path) ?? file_source(path)
+file_text(path: text): any := built_in_files.get(path) ?? library_file(path) ?? file_source(path)
+# a file of lib/ as the compiler read it at its start (parser.warp LIBRARY_FILES): the sugar modules, read for their
+# rules at every compile, were read from disk once more each time
+library_file(path: text): any := {
+	library = run_library() + "/"
+	if path.starts_with(library) then LIBRARY_FILES.get(path[#library ..]) else ø
+}
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
 # `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program), a named
