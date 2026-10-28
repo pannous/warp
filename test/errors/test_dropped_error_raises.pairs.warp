@@ -1,0 +1,9 @@
+# decision dropped-error-raises (user): an Error value a statement drops raises it; a kept Error stays a value, try catches
+
+'write("no such folder/x.txt", "hi"); 1'	error	a failed write used for its effect stops the run
+'for i in 1..2 { read("no such file") }; 2'	error	in a loop body too
+'r = write("no such folder/x.txt", "hi"); 3'	3
+'is_error(write("no such folder/x.txt", "hi"))'	true
+'try write("no such folder/x.txt", "hi"); 4'	4
+'try write("no such folder/x.txt", "hi") catch e { 5 }'	5
+'try read("no such file") else 6'	6
