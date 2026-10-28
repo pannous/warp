@@ -124,7 +124,7 @@ shell(line: text): text := {
 }
 
 # `warp build [--wasm] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
-# any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
+# with --wasm as its module app.wasm (which lib/native/driver.warp runs); any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
 # trimmed by Binaryen's wasm-opt) and the executable app (warp-runtime carrying app.wasm's machine code). The native
 # warp adds where runtime.wasm and the stub lie: --runtime=<file> --stub=<file>
 OPTION_MARK = "--"
@@ -148,9 +148,9 @@ build(words: list) := {
 	target = targets#1
 	is_file = exists(target)
 	source = if is_file then read(target) else target
-	if is_file and is_primitive_file(source) { return build_native(target, library_folder) }
 	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
 	if is_file { emitting_file(working_relative(target)) }
+	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", folder_of(target)) else build_native(target, library_folder) }
 	runtime_held = read_bytes(option_of(options, "runtime"))
 	separate_output = stem + ".mod.wasm"
 	compile_written(source, stem + ".full.wasm", if is_file then folder_of(target) else ".")
