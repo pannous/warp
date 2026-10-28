@@ -27,16 +27,45 @@ void* native_pointer(void* address) { return address; }
 static char* native_text(struct w2c_wasi__snapshot__preview1* wasi, uint32_t text) {
 	return strndup((char*)at(wasi, load32(wasi, text)), load32(wasi, text + 4));
 }
+// bytes taken from the module's arena (primitive.warp arena_taken), its memory grown when they pass its end
+static uint32_t arena_bytes(struct w2c_wasi__snapshot__preview1* wasi, uint32_t size) {
+	uint32_t* top = w2c_program_arena(wasi->program);
+	uint32_t taken = *top;
+	*top = (taken + size + ARENA_ALIGNMENT - 1) & -ARENA_ALIGNMENT;
+	if (*top > wasi->memory->size) wasm_rt_grow_memory(wasi->memory, (*top - wasi->memory->size + PAGE_BYTES - 1) / PAGE_BYTES);
+	return taken;
+}
 // a C text copied into the module's arena as a text, its bytes behind its pair; NULL the null address
 static uint32_t module_text(struct w2c_wasi__snapshot__preview1* wasi, const char* text) {
 	if (!text) return 0;
 	uint32_t length = (uint32_t)strlen(text);
-	uint32_t* top = w2c_program_arena(wasi->program);
-	uint32_t pair = *top;
-	*top = (pair + TEXT_RECORD + length + ARENA_ALIGNMENT - 1) & -ARENA_ALIGNMENT;
-	if (*top > wasi->memory->size) wasm_rt_grow_memory(wasi->memory, (*top - wasi->memory->size + PAGE_BYTES - 1) / PAGE_BYTES);
+	uint32_t pair = arena_bytes(wasi, TEXT_RECORD + length);
 	store32(wasi, pair, pair + TEXT_RECORD);
 	store32(wasi, pair + 4, length);
 	memcpy(at(wasi, pair + TEXT_RECORD), text, length);
 	return pair;
+}
+
+// a C function's address by its name, for a program to hand to a C library as a callback
+void* c_function(char* name) { return native_function(name); }
+
+// A host word a program defines for a module it runs through wasmtime's C API (lib/native/driver.warp
+// host_words_defined): a wasmtime_func_callback_t whose data is the word's number. The values (wasmtime_val_t, VALUE_BYTES
+// each) cross through the program's arena to its exported host_word(word, caller, values, count, results, count),
+// whose arena is given back after
+enum { VALUE_BYTES = 32 };
+typedef void (*host_word_t)(w2c_program*, u64, u64, u32, u64, u32, u64);
+void* warp_host_callback(void* word, void* caller, const void* values, size_t count, void* results, size_t results_count) {
+	static host_word_t answer;
+	if (!answer) answer = (host_word_t)native_function("w2c_program_host_word");
+	struct w2c_wasi__snapshot__preview1* wasi = running_wasi;
+	uint32_t* top = w2c_program_arena(wasi->program);
+	uint32_t before = *top;
+	uint32_t given = arena_bytes(wasi, (uint32_t)(count * VALUE_BYTES));
+	uint32_t answered = arena_bytes(wasi, (uint32_t)(results_count * VALUE_BYTES));
+	memcpy(at(wasi, given), values, count * VALUE_BYTES);
+	answer(wasi->program, (u64)(uintptr_t)word, (u64)(uintptr_t)caller, given, count, answered, results_count);
+	memcpy(results, at(wasi, answered), results_count * VALUE_BYTES);
+	*top = before;
+	return NULL;
 }

@@ -154,7 +154,8 @@ with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 	slices = definition_slices(module).filter(kept)
 	# the statements of each reached slice, by its text
 	reached = {}
-	wanted = symbol_words(program) + lowering_words(program) + also
+	declared = if in_front then linked_slices() else {}
+	wanted = symbol_words(program) + lowering_words(program) + also + (if in_front then linked_needs() else [])
 	uses = ø
 	while #wanted > 0 {
 		word = wanted#1
@@ -164,6 +165,7 @@ with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 				baked = SLICE_PARSES.get(slice#2)
 				if baked == ø and uses == ø { uses = use_lines(module) }
 				slice_node = early_sugared(if baked != ø then unpack(baked) else plain_node(parsed(slice#2, uses)))
+				if slice#2 in declared { slice_node = declared_only(slice_node) }
 				reached[slice#2] = statements_in(slice_node)
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
@@ -179,6 +181,17 @@ with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 	own_statements = statements_in(program)
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
 	separated(bracketed(parts, ""), ";")
+}
+# a linked module's definition as the program needs it: a function's head, its body left to the module's code; a
+# value, whose initializer the program runs, and a class as they are
+declared_only(n: Node): Node := {
+	if is_group(n) { return children(n, declared_only) }
+	head = if n is key then key_of(n) else ø
+	if is_group(head) and bracket_of(head) == "(" {
+		if is_key(n, Op.Define) { return Key(head, Op.Define, Node.Empty) }
+		if is_key(n, Op.Assign) { return Key(head, Op.Assign, Node.Empty) }
+	}
+	if is_key(n, Op.Colon) and is_declaration_keyword(head) then Key(head, Op.Colon, declared_only(value_of(n))) else n
 }
 # `name := …`, `name = …`, `global name = …`: a value's definition, no function's
 is_value_definition(statement: Node): bool := {

@@ -88,9 +88,13 @@ made_case kind made, since no program decides any more what it makes.
   (the module's own layout: function, global and data counts, each exported word's kinds) and `warp.relocations`.
   Its calls into the runtime hold the runtime's fixed indices; its own and other modules' are numbered from 0 and
   rebased by the module's base offset when it is appended between the runtime and the program.
-- `warp.declarations`: what a program needs of the module (signatures, classes, globals) as one packed node (pack),
-  so a compile reads no module source. A module under WARP_LIB that differs from the bundled one is compiled from
-  source.
+- Declared (2026-10-28, card prebuilt-module-declarations): a linked module's functions come into the program as
+  their heads only (prelude_words.warp declared_only: `f(x) := ø`), from the slice parses baked into the compiler, so
+  nothing of their bodies is lowered or analyzed; the analyzer takes their kinds and results from warp.module
+  (analyzer.warp declared_linked), the emitter binds them and refuses to compile one (functions.warp). Its classes and
+  globals come whole (linked_needs), the program runs the globals' initializers. A module whose binding fails is said
+  on stderr ("units: the linked module didn't bind (…); compiled from source") and the program compiled from source.
+  No separate warp.declarations section: the compiler already carries every bundled module's parse.
 - Modules have no hooks of their own: a module's class (units) is a class of the linked program, its text() and ==
   go into the program's dispatcher; module code calls the runtime's hook stubs.
 - Built (2026-10-28): `warp module <name> [runtime.wasm] [<name>.wasm]`, `warp modules <folder> [runtime.wasm]`
@@ -108,7 +112,7 @@ made_case kind made, since no program decides any more what it makes.
   the compile goes on from source. Not linked: a module making closures, importing C functions, or built behind
   another runtime.wasm (warp.module's trailer: own_from, closures, classes, builds). test/modules gives the same
   results linked and from source. Measured: `use units; 3m + 2m` 0.64 s -> 0.56 s: the program still lowers the
-  module's reached definitions (checked_program, 70 of 84 samples), which only warp.declarations removes.
+  module's reached definitions (checked_program, 70 of 84 samples); declared: 0.36 s, 46 samples.
 - Open: the module's prelude words are its own copy
   (they should be the prelude module's, space 2+k); closures into module.closures behind the program's, closure ids as
   a padded sleb behind i64.const (fixer's plan); classes from warp.declarations into module.classes before late_code;

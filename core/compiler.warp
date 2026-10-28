@@ -97,21 +97,23 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	foreign = c_functions_of(source, library_folder)
 	unknown = foreign#3
 	if #unknown > 0 { throw outside_the_core + "no C signature for " + unknown.join(", ") + ": declare it with a foreign line, `name(x: i32): i32 from 'library'`" }
+	# behind runtime.wasm and the prebuilt modules it uses, whose words it declares and never lowers (with_reached)
+	prepend_runtime(library_runtime ?? runtime_bytes())
+	relocate_program(separate_output != "")
+	linking = library_runtime == ø and prepended()
+	link_libraries(if linking then linked_libraries(source) else [], if linking then definition_slices(source).map(slice => slice#1) else [])
 	program = checked_program(foreign#1, folder, prelude_source)
 	found = diagnosed_since(known)
 	# an error the checks diagnosed fails the compile with Rust's text (card pure-self-ignores-errors)
 	failing = first_error(found, module.program_file)
 	if failing { throw failing }
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
-	# behind runtime.wasm
-	prepend_runtime(library_runtime ?? runtime_bytes())
-	relocate_program(separate_output != "")
-	# behind the prebuilt modules it uses too; compiled with their sources if their words won't take its values
-	linking = library_runtime == ø and prepended()
-	link_libraries(if linking then linked_libraries(source) else [], if linking then definition_slices(source).map(slice => slice#1) else [])
 	made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, foreign#2), emitter_kinds(program))
+	# a linked module whose words won't take the program's values: said, and the program compiled with its source
 	if made is text and #linked_images > 0 {
+		warn linked_images.map(image => image.name).join(", ") + ": the linked module didn't bind (" + made + "); compiled from source"
 		link_libraries([], [])
+		program = checked_program(foreign#1, folder, prelude_source)
 		made = typed_wasm_module(program, Node.Empty, with_c_functions(host_words, foreign#2), emitter_kinds(program))
 	}
 	# a form beyond the emitter's core gives the refusal's text, the compile's error

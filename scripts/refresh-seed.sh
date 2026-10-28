@@ -8,10 +8,10 @@
 # usage: scripts/refresh-seed.sh [--check] [<tree>, default this checkout]   (--check: run the stages, replace nothing)
 # A new seed replaces warp-seed.wasm beside the binary (WARP_SEED names another) and is published as the asset of a
 # GitHub pre-release seed-<date>-<sha8>, where the release workflow and fresh installs fetch it.
-# WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~1.5-2.5 min on the Mac (2026-10-28:
-# A 88 s, B 126 s, C 139 s): run it in the background. The bytes depend on where lib/ lies (compiler.warp keeps its
+# WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~1.5-2.5 min on the Mac: run it in
+# the background. The bytes depend on where lib/ lies (compiler.warp keeps its
 # folder), so a seed refreshed in another tree differs in that path alone.
-set -u
+set -u -o pipefail
 STAGES=${WARP_SEED_STAGES:-A B C}
 # how much longer than the old seed the new compiler may take to compile compiler.warp, in percent: the stages' own
 # times, A (the old seed) against B (the new compiler), the same source; only a clearly slower one is refused
@@ -23,29 +23,26 @@ tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 warp=${WARP_BINARY:-warp}
 seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}
 compilers=$tree/lib
-built=$tree/core/compiler.wasm  # where `warp self build --wasm core/compiler.warp` writes
+built=$compilers/warp.wasm  # where `warp rebuild pure` writes, with WARP_LIB set
 [ -f "$seed" ] || { echo "refresh-seed: no seed at $seed" >&2; exit 2; }
-# a self build of the compiler runs for minutes: an exported short limit (600 s) must not cut it
-export WARP_LIB=$tree/lib WARP_TIME_LIMIT=${WARP_SEED_TIME_LIMIT:-7200} WARP_NO_WINDOW=1 WARP_HINTS=0
+# a rebuild runs for minutes: an exported short limit (600 s) must not cut it
+export WARP_LIB=$tree/lib WARP_REBUILD_TIME_LIMIT=${WARP_SEED_TIME_LIMIT:-7200} WARP_NO_WINDOW=1 WARP_HINTS=0
 unset WARP_SELF_HOSTED WARP_EMITTER
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/refresh-seed.XXXXXX") || exit 2
-kept=
-[ -f "$compilers/warp-self.wasm" ] && { kept=$scratch/kept.wasm; cp "$compilers/warp-self.wasm" "$kept"; }
-restore() {
-  if [ -n "$kept" ]; then cp "$kept" "$compilers/warp-self.wasm"; else rm -f "$compilers/warp-self.wasm"; fi
-  rm -rf "$scratch"
-}
-trap restore EXIT
-# stage <compiler> <output>: compiler.warp compiled by <compiler>
+trap 'rm -rf "$scratch"' EXIT
+# stage <compiler> <output>: `warp rebuild pure` with <compiler> as the seed, the one thing a seed is asked to do (a seed
+# older than the harness may lack its newer commands: the seed of 14:52 traps in `warp self build` since the build
+# moved into compiler.warp, 2026-10-28). It leaves the tree's lib/ compilers those of the last stage's rebuild.
 stage() {
-  cp "$1" "$compilers/warp-self.wasm" || exit 1
+  (cd "$tree" && WARP_SEED=$1 "$warp" rebuild seed 2>&1 | tail -2)  # its machine code and runtime, outside the time
   rm -f "$built"
   local start=$SECONDS
   # the CPU seconds (user + system) are the speed guard's measure: wall time swings with the box's load (2026-10-28:
   # the same compile took 95 s at load 10, 233 s at load 89)
-  { time (cd "$tree" && "$warp" self build --wasm core/compiler.warp 2>&1 | tail -5); } 2>"$scratch/cpu"
-  [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: compiled by $(basename "$1") wrote no module" >&2; exit 1; }
-  mv "$built" "$2"
+  # a failed rebuild fails the stage even when it wrote warp.wasm (a runtime.wasm or the warming that failed)
+  { time (cd "$tree" && WARP_SEED=$1 "$warp" rebuild pure 2>&1 | tail -5); } 2>"$scratch/cpu" &&
+    [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed" >&2; exit 1; }
+  cp "$built" "$2"
   stage_seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
   echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $((SECONDS - start)) s, $stage_seconds s CPU, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
 }
@@ -64,17 +61,15 @@ for name in $STAGES; do
   previous=$scratch/$name.wasm
 done
 [ -n "$chosen" ] || { echo "refresh-seed: no stage compiled itself once more (WARP_SEED_STAGES: $STAGES); the seed stays" >&2; exit 1; }
-# and the chosen stage runs a program (decision no-fixpoint: it compiles compiler.warp again and that build runs hello)
-cp "$chosen" "$compilers/warp-self.wasm"
-hello=$(cd "$tree" && "$warp" self samples/hello/hello.warp 2>&1)
+# and the chosen stage runs a program (decision no-fixpoint): the last rebuild, by the chosen stage, runs hello
+hello=$(cd "$tree" && "$warp" samples/hello/hello.warp 2>&1)
 echo "$hello" | grep -q Hello || { echo "refresh-seed: $(basename "$chosen" .wasm) runs no hello ($(echo "$hello" | tail -1 | cut -c1-200)); the seed stays" >&2; exit 1; }
 echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr -d ' ') B sha256 $(shasum -a 256 "$chosen" | cut -d' ' -f1)"
 # a seed is what every `warp rebuild` runs: one that builds warp.wasm clearly slower than the seed it replaces is no
-# refresh (card rebuild-pure-went: two seeds made rebuilds 2.7x slower unnoticed). Stage A is the old seed compiling
-# compiler.warp, stage B the new compiler compiling the same source: their times are the comparison, no extra
-# rebuilds (decision seed-speed-from-stages); B also makes A's machine code once. WARP_SEED_SLOWER_OK=1 takes a slower
-# one anyway
-echo "refresh-seed: compiling compiler.warp took $new_seconds s CPU with the new compiler, $old_seconds s CPU with the seed it replaces"
+# refresh (card rebuild-pure-went: two seeds made rebuilds 2.7x slower unnoticed). Stage A is the old seed's rebuild,
+# stage B the new compiler's of the same source: their times are the comparison, no extra rebuilds (decision
+# seed-speed-from-stages). WARP_SEED_SLOWER_OK=1 takes a slower one anyway
+echo "refresh-seed: a rebuild took $new_seconds s CPU with the new compiler, $old_seconds s CPU with the seed it replaces"
 if [ $((new_seconds * 100)) -gt $((old_seconds * SLOWER_PERCENT)) ] && [ -z "${WARP_SEED_SLOWER_OK-}" ]; then
   echo "refresh-seed: the new compiler takes over ${SLOWER_PERCENT}% of the old seed's time; the seed stays (WARP_SEED_SLOWER_OK=1 takes it)" >&2
   exit 1

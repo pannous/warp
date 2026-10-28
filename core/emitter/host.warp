@@ -45,6 +45,9 @@ def exported_builders(): any {
 	}
 	f = exported_function("returned_error", [], no_kind)
 	f.code = error_throw("returned_error") + [op.unreachable]
+	# a node a host reads as the text print shows (runtime/text.warp shown_at), which no host walking GC objects needs
+	f = exported_function("shown_at", [ValueKind.Node], ValueKind.Int)
+	f.code = runtime_call("shown_at", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
 }
 # f at the module's next function index (results `any`: a declared Function result fails, card class-result-type),
 # the functions counted as placed, not measured: a long list's count walks it

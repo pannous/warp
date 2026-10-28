@@ -66,13 +66,22 @@ primitive file calling C runs natively only.
 lib/native/driver.warp is the native runner (roadmap_native_harness.md milestone 3): a primitive file calling
 wasmtime's C API through its own foreign lines (`wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module:
 pointer): handle from "wasmtime"`; the structs the calls fill are arena bytes read with long_at/byte_at, native memory
-copied in with memcpy). `warp build native lib/native/driver.warp` makes `driver`; `driver app.wasm args…` runs a
-module with WASI (stdin/out/err inherited, the current folder preopened, the arguments from the module on), prints what
-main gives by its kind (i32, i64, f32/f64 by gcvt), puts an error's or trap's message on stderr with status 1 and keeps
-the module's exit status. A driver with a module appended (`<module><length u64 LE>WRPMwasm`) runs that one with all
-its arguments: the executable `warp build` will write for GC programs (milestone 3's user addition; the Rust stub's
-trailer holds deflated machine code instead, standalone.rs). The executable's path is _NSGetExecutablePath's (macOS;
-Linux needs /proc/self/exe). Tests: test/native/test_native.sh "by the driver".
+copied in with memcpy). `warp build native lib/native/driver.warp` makes `driver`:
+- `driver app.warp args…`: warp.wasm ($WARP_LIB, else beside the driver) compiles the file as the native warp has it
+  compile (the file, a module in $TMPDIR, its folder, lib/, runtime.wasm), then the module runs with the arguments.
+- `driver app.wasm args…` runs a module; a driver with a module appended (`<module><length u64 LE>WRPMwasm`) runs that
+  one with all its arguments: the executable `warp build` will write for GC programs (the Rust stub's trailer holds
+  deflated machine code instead, standalone.rs).
+A module gets WASI (stdin/out/err and the environment inherited, "." and "/" preopened), GC, typed references and
+exceptions, wasmtime's machine-code cache. Its `_start` runs (a GC program prints its own value), else `main`, whose
+value is printed by its kind; an error's or trap's message goes to stderr with status 1, the module's exit status is
+kept. Host words: std_io is a C callback (lib/native/foreign.c warp_host_callback, the values through the driver's
+arena to its exported host_word), which reads its arguments through the module's export shown_at (the node as print
+shows it, in linear memory) and builds answers with new_text/new_empty/error_of: os.kept is a miss, os.keep does
+nothing (card kept-values-retire: they save 1 %), any other word is an Error saying the driver lacks it. Every other
+host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
+warp.wasm has the shown_at export once the seed that builds it has it. Tests: test/native/test_native.sh "by the
+driver".
 
 ## Not yet (cards)
 - f32 in a primitive function of a GC program (no ValueKind with an f32 wasm type there): refused, card
