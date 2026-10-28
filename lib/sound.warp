@@ -10,7 +10,7 @@ use file
 global sample_rate = 22050
 // a frequency's or duration's plain number in SI units (Hz, seconds): a quantity's amount (lib/units.warp), a plain
 // number as it is
-si_amount(value) := if value is Quantity then value.amount else value
+si_amount(value: any) := if value is Quantity then value.amount else value
 // the share of the loudest sample: chords and melodies stay below it
 global loudness = 0.3 as float
 // sine, square, triangle, sawtooth or noise
@@ -556,10 +556,70 @@ BITS_PER_SAMPLE = 16
 sounded(speakers, rate, channels) := {
 	if sounds_made == 0 { swept_sound_files() }
 	sounds_made = sounds_made + 1
+	seconds = count(speakers) / channels / rate
+	recorded = recorded + [RecordedSound(scheduled(seconds)#2, rate, channels, speakers)]
 	file = sound_folder() + "/" + sound_file_name(getpid(), sounds_made)
 	write_bytes(file, wav_bytes(speakers, rate, channels))
-	said("sound " + hundredths(count(speakers) / channels / rate) + " s: " + file)
+	said("sound " + hundredths(seconds) + " s: " + file)
 	sounds_made
+}
+
+// The voice's clock (card sound-native-clock): where its queued sounds end in real time (clock() milliseconds) and its
+// place, the seconds of sound since its first, which save sound mixes by; `at` moves both for its block
+global voice_end = 0
+global voice_place = 0.0 as float
+global voice_origin = 0
+global before_at = []
+// the seconds added behind the voice's queued sounds: [their start in real time, their place]
+scheduled(seconds) := {
+	now = clock()
+	start = max(voice_end, now)
+	place = voice_place
+	if voice_origin == 0 { voice_origin = start - (round(place * 1000) as int) }
+	voice_end = (start + round(seconds * 1000)) as int
+	voice_place = (place + seconds) as float
+	[start, place]
+}
+clock_at(seconds) := {
+	before_at = before_at + [[voice_end, voice_place]]
+	if voice_origin == 0 { voice_origin = clock() }
+	voice_end = voice_origin + (round(seconds * 1000) as int)
+	voice_place = seconds as float
+}
+clock_at_end() := {
+	if count(before_at) > 0 {
+		voice_end = last(before_at)#1
+		voice_place = last(before_at)#2
+		before_at = before_at[0..count(before_at) - 1]
+	}
+}
+// The sounds since the last save, each at its place, mixed into one WAV (at the highest rate and the most channels of
+// them, a mono sound on both speakers alike); its seconds
+class RecordedSound { place: float; rate: int; channels: int; speakers: list }
+global recorded = []
+global rendered_until = 0.0 as float
+rendered(file) := {
+	if count(recorded) == 0 { return 0 }
+	rate = max([sound.rate for sound in recorded])
+	channels = max([sound.channels for sound in recorded])
+	first = min(rendered_until, min([sound.place for sound in recorded]))
+	mixed = []
+	for sound in recorded {
+		start = round((sound.place - first) * rate) as int * channels
+		frames = count(sound.speakers) / sound.channels as int
+		length = round(frames * rate / sound.rate) as int
+		needed = start + length * channels
+		if count(mixed) < needed { mixed = mixed + [0 for i in 0..(needed - count(mixed))] }
+		for frame in 0..length {
+			from = min(frames - 1, frame * sound.rate / rate as int) * sound.channels
+			for channel in 0..channels { mixed[start + frame * channels + channel] += sound.speakers[from + min(channel, sound.channels - 1)] - sample_offset }
+		}
+	}
+	write_bytes(file, wav_bytes([min(max(sum, -32768), 32767) + sample_offset for sum in mixed], rate, channels))
+	seconds = count(mixed) / channels / rate
+	rendered_until = (first + seconds) as float
+	recorded = []
+	seconds
 }
 sound_folder() := {
 	temporary = env("TMPDIR") ?? "/tmp"
@@ -693,22 +753,23 @@ play_blocks(fill: (float) -> float, blocks, seconds) := std_io("sound", "blocks"
 
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
-sound_queued() := std_io("sound", "queued", [])
-global wait_sound() := std_io("sound", "wait", [])
+sound_queued() := max(0, voice_end - clock()) / 1000
+// (headless nothing plays: nothing to wait for)
+global wait_sound() := ø
 // the sounds since the last save (or the start), which `save sound as: "song.wav"` (or `save(sound, "song.wav")`)
 // writes one after another in one WAV file, offline (also without speakers), giving its seconds (card save-sound)
 class Recording {}
 // the sounds made so far (decision saved-words): sound() beside sound(samples), so the bare word sound, its call, is a
 // Recording
 sound() := Recording()
-save(made: Recording, as file) := std_io("sound", "render", [file])
+save(made: Recording, as file) := rendered(file)
 // the old name, with a note naming save (std_aliases.rs)
 render_sound(path) := save(Recording(), path)
 // `at beats(2) { play C4 }`, `at bar(1) { … }` (card sample-accurate): the block's sounds start that many seconds after
 // the voice's first sound, exactly so in save sound; the voice goes on where it stood
 at(time, actions: block) := { sound_at(time); actions!; sound_at_end() }
-sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])
-sound_at_end() := std_io("sound", "at_end", [])
+sound_at(seconds) := clock_at(si_amount(seconds))
+sound_at_end() := clock_at_end()
 // a live loop says this first each cycle: the playground hands the loop over to the next run at its next cycle (card
 // playground-live), natively it does nothing
 live_cycle_started(name) := std_io("sound", "live_cycle", [name])
@@ -728,10 +789,28 @@ class Sample {
 	channels: int
 	frames: [int]
 }
-sample(path: text) := {
-	loaded = std_io("sound", "load", [path])
-	Sample(loaded[0], loaded[1], loaded[2..])
+sample(path: text) := wav_sample(read_bytes(path), path)
+// a 16-bit PCM WAV's chunks: fmt's channels and rate, data's samples (the formats beside it: card sound-native-files)
+wav_sample(bytes, path) := {
+	if count(bytes) < 12 or bytes[0..4] != codes("RIFF") or bytes[8..12] != codes("WAVE") { raise path + ": not a WAV file (other audio files are not in the native warp yet)" }
+	at = 12
+	channels = 0
+	rate = 0
+	while at + 8 <= count(bytes) {
+		size = little_endian_at(bytes, at + 4, 4)
+		if bytes[at..at + 4] == codes("fmt ") {
+			if little_endian_at(bytes, at + 8, 2) != PCM_FORMAT or little_endian_at(bytes, at + 22, 2) != BITS_PER_SAMPLE { raise path + ": a WAV of other than 16-bit PCM samples" }
+			channels = little_endian_at(bytes, at + 10, 2)
+			rate = little_endian_at(bytes, at + 12, 4)
+		}
+		if bytes[at..at + 4] == codes("data") {
+			return Sample(rate, channels, [(little_endian_at(bytes, at + 8 + 2 * i, 2) + sample_offset) % 65536 for i in 0..(size / 2 as int)])
+		}
+		at = at + 8 + size + size % 2
+	}
+	raise path + ": a WAV without its data"
 }
+little_endian_at(bytes, at, width) := sum([bytes[at + i] * 256 ** i for i in 0..width]) as int
 sample_seconds(clip: Sample) := count(clip.frames) / clip.channels / clip.rate
 // plain seconds below; the words take si_amount once, as melody does (notes/units_runtime.md)
 // where the frame at that many seconds starts among the interleaved values, at most the end
@@ -891,7 +970,7 @@ midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
 // a note of that length: on at the voice's place, off after it; the next sound or message follows (card midi-clock)
 midi_note(pitch, duration, velocity = 100, channel = 1) := {
 	midi_on(pitch, velocity, channel)
-	std_io("sound", "rest", [si_amount(duration)])
+	scheduled(si_amount(duration))
 	midi_off(pitch, channel)
 }
 midi_outputs() := std_io("midi", "outputs", [])
