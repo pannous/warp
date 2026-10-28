@@ -7,6 +7,7 @@ use "emitter.warp"
 use "host_words.warp"
 use "commands.warp"
 use "c_imports.warp"
+use "extensions/primitive.warp"
 use os
 use file
 
@@ -102,6 +103,7 @@ lowered_runtime_words(): Node := kept(RUNTIME_WORDS) ?? fresh_runtime_words()
 
 # the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core
 compile(source: text, folder: text): any := {
+	if is_primitive_file(source) { return primitive_module(source, folder) }
 	known = #diagnosed
 	# the C functions it calls, its foreign lines left out (c_imports.warp)
 	foreign = c_functions_of(source, library_folder)
