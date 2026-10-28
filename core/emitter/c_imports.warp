@@ -16,6 +16,7 @@
 #   bytes    a warp text's bytes or a list of 0 to 255 as a pointer, NULs and all; the length a `length` parameter after it
 #            gets: `crc32(start: i64, data: bytes, size: length): i64 from 'z'` is called crc32(0, [97, 0, 98])
 #   length   the byte count of the bytes parameter before it: no argument
+#   texts    a list of warp texts as a NULL-terminated `char *[]` of their copies (argv: posix_spawn, execv)
 #   void     no result
 
 # the names the libraries go by in a program: `use libm` is `use m`
@@ -31,15 +32,15 @@ c_quotes = ["'", "\""]
 # a type word of a foreign line → the type it crosses as
 c_type_words = {i32: "i32", int: "i32", int32: "i32", bool: "bool", char: "i32", i64: "i64", int64: "i64", long: "i64", size_t: "i64",
 	f64: "f64", float: "f64", double: "f64", number: "f64", f32: "f32", float32: "f32", text: "text", string: "text", owned_text: "owned_text", handle: "handle", pointer: "handle",
-	out: "out", bytes: "bytes", length: "length", void: "void", nothing: "void"}
+	out: "out", bytes: "bytes", length: "length", texts: "texts", void: "void", nothing: "void"}
 # the kind the emitter passes a type as (host_words.warp's), and the c_signatures.rs name of the parameter
-c_parameter_kinds = {bool: ValueKind.I32, i32: ValueKind.I32, i64: ValueKind.Int, f64: ValueKind.Float, f32: ValueKind.F32, text: ValueKind.Node, bytes: ValueKind.Node, handle: ValueKind.I32}
+c_parameter_kinds = {bool: ValueKind.I32, i32: ValueKind.I32, i64: ValueKind.Int, f64: ValueKind.Float, f32: ValueKind.F32, text: ValueKind.Node, bytes: ValueKind.Node, texts: ValueKind.Node, handle: ValueKind.I32}
 c_parameter_names = {bool: "i32", i32: "i32", i64: "i64", f64: "f64", f32: "f32", text: "ptr", bytes: "bytes", length: "length",
-	handle: "handle", out: "out"}
+	handle: "handle", out: "out", texts: "texts"}
 # the parameters the host fills, which take no argument
 c_filled_types = ["out", "length"]
 # the types only a parameter has
-c_parameter_only_types = ["out", "bytes", "length"]
+c_parameter_only_types = ["out", "bytes", "length", "texts"]
 
 # a library as written, `'m'`, `"c"`, `sqlite3`, `libm` → its name; ø for none or a library of warp's
 c_library_of(written: text, quoted: bool): any := {
