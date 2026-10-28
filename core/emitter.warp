@@ -915,7 +915,7 @@ def data_item(body: Body, mark: text, item: Node): TypedCode {
 	runtime_call(data_item_check(mark), [value])
 }
 # the tables a runtime word reads a number of by name, `Kind.List` (kinds.warp), folded into the code
-constant_tables = {Kind: Kind, HeldBit: HeldBit, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode, TimeInfoUnit: TimeInfoUnit, Ascii: Ascii, Utf8: Utf8, Unicode: Unicode}
+constant_tables = {Kind: Kind, HeldBit: HeldBit, Marked: Marked, KindUnit: KindUnit, BracketCode: BracketCode, TimeFormCode: TimeFormCode, TimeInfoUnit: TimeInfoUnit, NodeShape: NodeShape, Ascii: Ascii, Utf8: Utf8, Unicode: Unicode}
 # the number `Kind.List` names in its table, else ø
 table_number(table: any, case: any): any := {
 	if not (table is symbol and name_of(table) in constant_tables) { return ø }
@@ -1318,7 +1318,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		}
 		# a kind the program makes (made_case): the functions with a made_case read again with it, until no kind is new
 		read_with = 0
-		while #made_kinds() > read_with {
+		while #module.made.keys > read_with {
 			read_with = #module.made.keys
 			for f in module.made_sites { body_code(f) }
 		}

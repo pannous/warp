@@ -1,0 +1,6 @@
+# pack(x) is any value as one text, unpack(t) the value again: every kind of node comes back as it was
+'unpack(pack([1, "two", 3.5, -7, yes, ø]))'	[1, "two", 3.5, -7, yes, ø]
+'x = {a: [1, 2], b: "ü", c: {d: [3, 4]}}; unpack(pack(x)) == x'	true
+'x = [[1, [2, ["deep"]]], {k: ø}, ""]; unpack(pack(x)) == x'	true
+'[unpack(pack(1/3)), unpack(pack(-123456789012)), unpack(pack(-2.5))]'	[1/3, -123456789012, -2.5]
+'x = 2^100 * -3; unpack(pack(x)) == x'	true
