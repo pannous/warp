@@ -77,7 +77,11 @@ the module, then signed): about 100 KB beside the module. The driver is built on
 (emitter.warp fresh_module, card module-inheritance). The Rust warp-runtime stub is no longer written.
 Tests: test/native/test_executables.sh.
 A module gets WASI (stdin/out/err and the environment inherited, "." and "/" preopened), GC, typed references and
-exceptions, wasmtime's machine-code cache. Its `_start` runs (a GC program prints its own value), else `main`, whose
+exceptions, wasmtime's machine-code cache. warp.wasm's machine code is the driver's own, beside it as
+warp.wasm.driver.cwasm with the fingerprint (FNV-1a) of the warp.wasm it is of in .driver.cwasm.key: the first run after
+a rebuild compiles it (6 s), later ones load it (hello 0.9 s in all). The harness's warp.wasm.cwasm is wasmtime 49's with
+its own flags, never loadable by the driver's (brew's, 50); machine code that won't load is one line on stderr, then
+compiled anew (card native-driver). Its `_start` runs (a GC program prints its own value), else `main`, whose
 value is printed by its kind; an error's or trap's message goes to stderr with status 1, the module's exit status is
 kept. Host words: std_io is a C callback (lib/native/foreign.c warp_host_callback, the values through the driver's
 arena to its exported host_word), which reads its arguments through the module's export shown_at (the node as print

@@ -37,6 +37,7 @@ MAX_ARGUMENTS = 256
 FLOAT_DIGITS = 17
 PATH_BYTES = 4096
 SLASH = 47
+SPACE = 32
 TEXT_SHIFT = 4294967296
 # the host words the driver answers, the number its callback is defined with
 STD_IO_WORD = 1
@@ -90,6 +91,12 @@ handle_pointer(id: i32): handle from "c"
 strlen(text: handle): i64 from "c"
 free(pointer: handle) from "c"
 memcpy(destination: pointer, source: handle, size: i64): handle from "c"
+fopen(path: pointer, mode: pointer): handle from "c"
+fwrite(data: handle, size: i64, count: i64, file: handle): i64 from "c"
+fclose(file: handle): i32 from "c"
+rename(from: pointer, to: pointer): i32 from "c"
+wasmtime_module_serialize(module: handle, bytes: pointer): handle from "wasmtime"
+wasmtime_module_deserialize_file(engine: handle, path: pointer, module: pointer): handle from "wasmtime"
 memmove(destination: handle, source: handle, size: i64): handle from "c"
 memcmp(a: pointer, b: pointer, size: i64): i32 from "c"
 gcvt(value: f64, digits: i32, buffer: pointer): handle from "c"
@@ -241,7 +248,7 @@ float_at(address: pointer): Double := address
 single_at(address: pointer): Single := address
 
 # what warp's modules use beside the MVP: GC, typed function references, exceptions (crates/warp-runtime engine.rs);
-# machine code kept in wasmtime's own cache, so warp.wasm is compiled once
+# a program's machine code kept in wasmtime's own cache, warp.wasm's beside it (compiled_module)
 warp_config(): handle := {
 	config = wasm_config_new()
 	wasmtime_config_wasm_gc_set(config, yes)
@@ -275,7 +282,8 @@ word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing 
 	checked(wasmtime_linker_define_func(linker, from, from.length, name, name.length, type, c_function("warp_host_callback"), word, 0), trap)
 }
 
-run(module: text, given: Arguments): nothing := {
+# the module run with the arguments; its machine code kept in the file `machine_code` when one is named
+run(module: text, given: Arguments, machine_code: text): nothing := {
 	engine = wasm_engine_new_with_config(warp_config())
 	context = wasmtime_store_context(wasmtime_store_new(engine, 0, 0))
 	linker = wasmtime_linker_new(engine)
@@ -291,12 +299,11 @@ run(module: text, given: Arguments): nothing := {
 	wasi_config_preopen_dir(config, ".", ".", yes)
 	wasi_config_preopen_dir(config, "/", "/", yes)
 	checked(wasmtime_context_set_wasi(context, config), trap)
-	compiled = allocate(8)
-	checked(wasmtime_module_new(engine, module.address, module.length, compiled), trap)
-	host_words_defined(linker, long_at(compiled).value, module, trap)
-	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, long_at(compiled).value), trap)
+	compiled = compiled_module(engine, module, machine_code, trap)
+	host_words_defined(linker, compiled, module, trap)
+	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, compiled), trap)
 	instance = allocate(INSTANCE_BYTES)
-	checked(wasmtime_linker_instantiate(linker, context, long_at(compiled).value, instance, trap), trap)
+	checked(wasmtime_linker_instantiate(linker, context, compiled, instance, trap), trap)
 	entry = allocate(EXTERN_BYTES)
 	# a GC program's _start runs main and prints its value itself (the stub's ENTRY_POINTS), a primitive one has main
 	if not wasmtime_instance_export_get(context, instance, "_start", 6, entry) and not wasmtime_instance_export_get(context, instance, "main", 4, entry) {
@@ -328,7 +335,7 @@ compiled_and_run(file: text): nothing := {
 	added(compiling, folder_of(file))
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
-	run(compiler, compiling)
+	run(compiler, compiling, joined(compiler_path, ".driver.cwasm"))
 	program = read_file(output)
 	unlink(output)
 	if program.length == 0 {
@@ -338,7 +345,57 @@ compiled_and_run(file: text): nothing := {
 	running = arguments()
 	added(running, file)
 	for i in 2..arg_count() { added(running, arg(i)) }
-	run(program, running)
+	run(program, running, "")
+}
+
+## machine code
+# warp.wasm's machine code for this driver's wasmtime, kept beside it with the fingerprint of the warp.wasm it is of:
+# the harness's warp.wasm.cwasm is another wasmtime's (crates/warp-runtime 49, other flags), never loadable here.
+# Machine code that won't load (another wasmtime) is said in one line, then compiled anew
+FNV_OFFSET = -3750763034362895579
+FNV_PRIME = 1099511628211
+compiled_module(engine: handle, module: text, machine_code: text, trap: pointer): handle := {
+	compiled = allocate(8)
+	key = joined(machine_code, ".key")
+	fingerprint = text_of(fingerprint_of(module))
+	if machine_code.length > 0 and same_text(read_file(key), fingerprint) {
+		error = wasmtime_module_deserialize_file(engine, c_string(machine_code), compiled)
+		if error == 0 { return long_at(compiled).value }
+		message = allocate(VECTOR_BYTES)
+		wasmtime_error_message(error, message)
+		complain(joined(joined(machine_code, ": not this wasmtime's machine code, compiled anew: "), last_line(native_vector_text(native_pointer(message)))))
+	}
+	checked(wasmtime_module_new(engine, module.address, module.length, compiled), trap)
+	if machine_code.length > 0 { kept_machine_code(long_at(compiled).value, machine_code, key, fingerprint, trap) }
+	long_at(compiled).value
+}
+# the last line of a text that isn't empty: the cause in a wasmtime error's chain
+last_line(t: text): text := {
+	end = t.length
+	while end > 0 and byte_at(t.address + end - 1).value == NEWLINE { end = end - 1 }
+	start = end
+	while start > 0 and byte_at(t.address + start - 1).value != NEWLINE { start = start - 1 }
+	while start < end and byte_at(t.address + start).value == SPACE { start = start + 1 }
+	text_from(t.address + start, end - start)
+}
+# the module's FNV-1a hash
+fingerprint_of(module: text): i64 := {
+	hash = FNV_OFFSET
+	for i in 0..module.length { hash = (hash xor byte_at(module.address + i).value as i64) * FNV_PRIME }
+	hash
+}
+# the compiled module's machine code written to its file, then the fingerprint that names it current; written aside
+# and renamed, so a run beside this one never reads half of it
+kept_machine_code(compiled: handle, machine_code: text, key: text, fingerprint: text, trap: pointer): nothing := {
+	bytes = allocate(VECTOR_BYTES)
+	checked(wasmtime_module_serialize(compiled, bytes), trap)
+	aside = joined(joined(machine_code, "."), text_of(getpid()))
+	file = fopen(c_string(aside), c_string("wb"))
+	if file == 0 { return complain(joined(machine_code, ": not writable, warp.wasm compiles anew each run")) }
+	fwrite(native_long(native_pointer(bytes) + 8), 1, native_long(native_pointer(bytes)), file)
+	fclose(file)
+	rename(c_string(aside), c_string(machine_code))
+	write_file(key, fingerprint)
 }
 
 ## host words
@@ -581,7 +638,7 @@ guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: 
 }
 
 appended = appended_module()
-if appended.length > 0 { run(appended, given_from(0)) } else {
+if appended.length > 0 { run(appended, given_from(0), "") } else {
 	if arg_count() < 2 {
 		complain("usage: driver <app.warp | app.wasm> [arguments…]")
 		exit(2)
@@ -592,6 +649,6 @@ if appended.length > 0 { run(appended, given_from(0)) } else {
 			complain(joined("no module at ", arg(1)))
 			exit(1)
 		}
-		run(module, given_from(1))
+		run(module, given_from(1), "")
 	}
 }
