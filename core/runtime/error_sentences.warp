@@ -69,13 +69,20 @@ error_sentence(name: text): text := {
 	if text_starts_with(name, "no_case_") { return error_words(name) + " = " + node_text(trap_detail) }
 	error_words(name)
 }
+# the words of the engine's own trap of that code (wasmtime's trap codes and words, wasmtime/trap.h), a trap no
+# runtime word named: `2^70 | 1` casts a big int to a bool; "" for no trap (-1) or a code not known
+engine_trap_words(code: int): text := {
+	if code == 7 { return "divide by zero" }
+	words = ["call stack exhausted", "out of bounds memory access", "misaligned memory access", "undefined element: out of bounds table access", "uninitialized element", "indirect call type mismatch", "integer overflow", "integer divide by zero", "invalid conversion to integer", "wasm `unreachable` instruction executed", "interrupt", "all fuel consumed by WebAssembly", "atomic wait on non-shared memory", "null reference", "out of bounds array access", "allocation size too large", "cast failure"]
+	if code < 0 or code >= #words then "" else "wasm trap: " + words#(code + 1)
+}
 # the sentence of the runtime error the run failed in, at `position` (line * 4096 + column, 0 before the first
-# statement) in `file`, before its fix; "" when no runtime word failed (the engine's own trap: its message tells)
-trap_sentence(file: text, position: int): text := {
+# statement or in the compiler's own source) in `file`, before its fix: the runtime word's it failed in, else the
+# engine's trap of `code`; "" for neither (an error of the host's own tells)
+trap_sentence(file: text, position: int, code: int): text := {
 	global trap_name
-	if not textual_node(trap_name) { return "" }
-	sentence = error_sentence(unboxed_text(trap_name))
-	if position == 0 or names_place(sentence) { return sentence }
+	sentence = if textual_node(trap_name) then error_sentence(unboxed_text(trap_name)) else engine_trap_words(code)
+	if sentence == "" or position == 0 or names_place(sentence) { return sentence }
 	place = int_text(int_quotient(position, 4096)) + ":" + int_text(int_remainder(position, 4096))
 	at = " at " + (if file == "" then place else file + ":" + place)
 	fix = text_find(sentence, "; fix: ")
@@ -102,4 +109,4 @@ is_place(word: text): bool := {
 	digits < end and digits >= 2 and byte_at(word, digits - 1) == Ascii.Colon and digit_of(byte_at(word, digits - 2)) >= 0
 }
 # that sentence where shown_at puts a text for a host to read
-trap_sentence_at(file: text, position: int): int := shown_at(held(trap_sentence(file, position)))
+trap_sentence_at(file: text, position: int, code: int): int := shown_at(held(trap_sentence(file, position, code)))

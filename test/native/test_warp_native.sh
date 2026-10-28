@@ -60,6 +60,10 @@ if [ -x "$stage/warp" ]; then
 	ln -s "$stage/warp" "$stage/install/bin/warp" && cp "$checkout"/core/native/*.warp "$stage/install/app/"
 	(cd "$stage/install/app" && env -u WARP_LIB ../bin/warp build native warp.warp >/dev/null 2>&1)
 	ln -s "$library" "$stage/install/new" && ln -sfn ../new "$stage/install/bin/lib" && rm "$stage/install/old"
+	played=$(native 'use sound; play(440Hz, 0.5s)')
+	check "a sound, its line" "$(sed -n 1p <<<"$played" | cut -d: -f1)" "sound 0.50 s"
+	wav=$(sed -n 1p <<<"$played" | cut -d' ' -f4-)
+	check "a sound, its WAV" "$(head -c 4 "$wav"; wc -c <"$wav" | tr -d ' ')" RIFF22094
 	# never called, so no window even if the refusal failed
 	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
 	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"
