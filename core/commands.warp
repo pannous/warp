@@ -99,7 +99,7 @@ build_native(source_file: text, library: text) := {
 	executable = source_file.remove_suffix(".warp")
 	stem = executable + ".native"
 	native_build = yes
-	write_bytes(stem + ".wasm", compile(source, folder_of(source_file)))
+	write_bytes(stem + ".wasm", compile(source, source_folder(source_file)))
 	header = stem.split("/").last() + ".h"
 	write(stem + ".main.c", native_main(header, library))
 	wabt = folder_of(folder_of(shell("command -v wasm2c").trim()))
@@ -116,6 +116,8 @@ native_links(wabt: text): text := {
 	libraries = c_libraries(c_functions_imported()).filter(l => l not in c_and_m)
 	if #libraries == 0 then "" else " -L" + quoted_path(wabt + "/lib") + libraries.map(l => " -l" + l).join("")
 }
+# the folder a file's uses are read from: "." for a file named without one
+source_folder(file: text): text := if folder_of(file) == "" then "." else folder_of(file)
 quoted_path(path: text): text := "\"" + path + "\""
 # os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
 shell(line: text): text := {
@@ -152,10 +154,10 @@ build(words: list) := {
 	source = if is_file then read(target) else target
 	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
 	if is_file { emitting_file(working_relative(target)) }
-	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", folder_of(target)) else build_native(target, library_folder) }
+	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", source_folder(target)) else build_native(target, library_folder) }
 	runtime_held = read_bytes(option_of(options, "runtime"))
 	separate_output = stem + ".mod.wasm"
-	compile_written(source, stem + ".full.wasm", if is_file then folder_of(target) else ".")
+	compile_written(source, stem + ".full.wasm", if is_file then source_folder(target) else ".")
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
 	modules = [stem + ".full.wasm", separate_output, stem + ".wasm"]
 	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", stem) }
