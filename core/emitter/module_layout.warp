@@ -135,14 +135,14 @@ def runtime_exports(functions: list): list {
 	}
 	exports
 }
-# runtime.wasm's layout (warp.runtime, warp notation) and its call sites (warp.calls, a vector of offsets in the code
-# section's content); none in a program's module
+# runtime.wasm's layout (warp.runtime, warp notation) and its call sites (warp.calls, a vector of [offset in the code
+# section's content, index space]); none in a program's module
 def runtime_sections(functions: list): list {
 	if not module.prebuilding { return [] }
 	words = functions.map(f => "\"" + f.name + "\": [" + f.index + ", [" + f.kinds.map(k => "" + k).join(", ") + "], " + f.result + "]")
 	layout = "types: " + #module.gc_order + "\nimports: " + #module.imports + "\nfunctions: " + #functions + "\nglobals: " + #module.global_order
 	layout += "\ndata: " + #data_bytes() + "\nhooks: [" + module.dispatchers.map(f => "\"" + f.name + "\"").join(", ") + "]\nleft: [" + module.left_out.keys.map(name => "\"" + name + "\"").join(", ") + "]\nwords: {" + words.join(", ") + "}"
-	section(section_ids.custom, name_bytes(runtime_section) + layout.bytes) + section(section_ids.custom, name_bytes(calls_section) + vector(module.call_sites.map(uleb)))
+	section(section_ids.custom, name_bytes(runtime_section) + layout.bytes) + section(section_ids.custom, name_bytes(calls_section) + vector(module.call_sites.map(offset => uleb(offset) + [runtime_space])))
 }
 # the data segment: each text's bytes once, in the order text_offset gave them their offsets
 def data_bytes(): list { concatenated(module.texts.keys.map(t => t.bytes)) }

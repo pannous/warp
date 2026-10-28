@@ -78,6 +78,8 @@ hooks_table = "hooks"
 runtime_section = "warp.runtime"
 calls_section = "warp.calls"
 call_site_mark = -1
+# the index space of a call site in warp.calls: the runtime's (a module's own 1, its k-th used module 2 + k)
+runtime_space = 0
 # the closure arities runtime.wasm holds a closure·call hook for, 0 to these
 hook_arities = 8
 # `try` (Rust's src/wasm_emitter/control/try_guard.rs): while one runs (try_depth above 0) a runtime error throws the

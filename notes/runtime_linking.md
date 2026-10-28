@@ -29,7 +29,8 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
   module cache): cold 7.1 s → 0.22 s, warm 0.55 s → 0.22 s; the cold 7 s were the sugar-rule parses. A compiler built
   by a seed that bakes none parses at run time (the plain def library_parses), so the seed is refreshed after landing.
 
-## runtime.wasm format (card runtime-prebuilt; draft, owner: fixer)
+## runtime.wasm format (card runtime-prebuilt, owner: fixer; built by core/emitter/prebuilt.warp)
+`warp rebuild` writes it beside warp.wasm (compiler.warp's command `runtime [file]`); validated by wasm-tools.
 One file serves both prepending (runtime-prepended) and import/export linking (runtime-separate-modules). It is an
 ordinary, valid wasm module: every runtime word compiled once, from its declared kinds (`any` is a node), with every
 made_case kind made, since no program decides any more what it makes.
@@ -44,9 +45,11 @@ made_case kind made, since no program decides any more what it makes.
   5-byte LEB128 (a valid non-minimal encoding), so an index changes in place without moving code.
 - **Hooks**: the functions whose code depends on the program (today's made_late: closure·call·N for each arity,
   closure_text, shown_big_int, instance_set, instance_entries, instance_field_at, instance_place, is_class_instance,
-  the text·shown dispatcher). In runtime.wasm each is a stub with its final signature. Prepending replaces a stub's
-  body with the program's code; a separately linked program fills the exported funcref table `hooks` at its start, and
-  the stubs call through it (open: a stub that calls through the table, or two stub flavours).
+  the text·shown dispatcher). In runtime.wasm each is a stub with its final signature: its parameters, `i32.const slot`,
+  `call_indirect` of its own type on table 0. Prepending replaces a stub's body with the program's code; a separately
+  linked program fills the exported funcref table `hooks` at its start (closure·call for arities 0…hook_arities, 8).
+- **Left out**: a word outside the core on its own (an enum's method naming the program's enum: Separator·text) is not
+  in runtime.wasm; warp.runtime names it, a program compiles it as today.
 - **Globals**: the runtime's (runtime/walks.warp and the others) first, at fixed indices; a program's after them.
 - **Data**: one passive segment, the runtime's texts from offset 0. A prepended program's texts are appended behind
   them (text_offset continues), reusing a runtime text that is already there.
@@ -54,10 +57,12 @@ made_case kind made, since no program decides any more what it makes.
 - **Exports**: memory as `memory`, every runtime function and global under its warp name, the tag, the table `hooks`.
 - **Custom sections**:
   - `name`, as the emitter writes it today (functions, locals, types, fields, globals).
-  - `warp.runtime`, the layout: G, the import count, the function count, the global count, the data size, the
-    hooks' indices, and each runtime word's parameter and result ValueKinds. The emitter's call_values needs these;
-    a wasm type alone can't tell Bool, Int and Char apart.
-  - `warp.calls`, the call-site list: the byte offset of every padded call and ref.func operand in the code section.
+  - `warp.runtime`, the layout as warp-notation text: `types` (G), `imports`, `functions`, `globals`, `data` (bytes),
+    `hooks` (names in table-slot order), `left`, `words: {"name": [index, [parameter kinds], result kind]}`. The
+    emitter's call_values needs the kinds; a wasm type alone can't tell Bool, Int and Char apart.
+  - `warp.calls`, the call-site list: a vector of [offset, space] uleb pairs, offset the byte of a padded operand in
+    the code section's content (behind its vector count), space the index space it names: 0 runtime, 1 own, 2+k the
+    k-th module a module's declarations name (runtime.wasm: all 0; modules-prebuilt).
 
 ## Hooks (runtime words calling program code: a class's text(), ==)
 One hook list in the warp.runtime section. Prepended: the stub bodies are replaced by the program's. Separately linked:
