@@ -54,13 +54,10 @@ set_limb(n: any, at: int, value: int) from runtime
 # a big int's text by big_ints.warp's big_int_text where the program makes big ints (big_int_power compiled), else a
 # trap: what prints an int at run time carries no big int code nor GC type unless the program can make one
 shown_big_int(n: any): text from runtime
-# where the program makes big ints, the return of big_ints.warp's word when an operand holds a big int, else nothing
-# at all (emitter runtime_words.warp big_int_case; exact.warp, runtime/extended.warp)
-big_sum_case(a: any, b: any) from runtime
-big_difference_case(a: any, b: any) from runtime
-big_product_case(a: any, b: any) from runtime
-big_order_case(a: any, b: any) from runtime
-big_float_case(n: any) from runtime
+# `made_case(Made.BigInt, word(a, b))`: where the program makes values of that kind (kinds.warp Made), the
+# return of the call when an argument holds one, else nothing at all (emitter runtime_words.warp made_case;
+# exact.warp, runtime/extended.warp)
+made_case(made: any, call: any) from runtime
 # texts, their bytes and characters
 new_text(length: int): text from runtime
 copy_text(to: text, at: int, source: text, start: int, count: int) from runtime

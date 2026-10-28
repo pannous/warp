@@ -30,6 +30,8 @@ local_offset_at(t: Node): int := local_offset(floor_quotient(time_position(t), m
 ## of kind Time, its form in the info bits (src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
 ## date, nanoseconds since 1970 for an instant and a local time, since midnight for a time of day
 time_form(n: Node): int := int_remainder(info_byte(n), TimeInfoUnit.Days)
+# whether n is a time, what made_case(Made.Time, …) tests
+holds_time(n: Node): bool := kind_code(n) == Kind.Time
 # RFC 3339 as calendar.rs shows a time, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
 # local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
 time_text(n: Node): text := {

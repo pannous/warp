@@ -33,7 +33,8 @@ def time_call(body: Body, name: text, arguments: list): TypedCode {
 	TypedCode(ValueKind.Time, time_node(converted(values#1, ValueKind.Int), converted(values#2, ValueKind.Int)))
 }
 def time_node(info: list, position: list): list {
-	kind = info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(Kind.Time) + [shift_ops.i64_or]
+	module.made["Time"] = yes
+	kind =info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(Kind.Time) + [shift_ops.i64_or]
 	kind + position + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)]) + [ref_null, gc_type(gc.node)] + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
 }
 # the kind word of a time node shifted right by `shift` bits, arithmetic (`signed`) or logical
