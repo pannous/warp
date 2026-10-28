@@ -78,6 +78,17 @@ wasmtime_func_call(context: handle, function: pointer, arguments: pointer, count
 wasmtime_error_message(error: handle, message: pointer) from "wasmtime"
 wasmtime_error_exit_status(error: handle, status: pointer): bool from "wasmtime"
 wasm_trap_message(trap: handle, message: pointer) from "wasmtime"
+wasmtime_global_get(context: handle, global: pointer, value: pointer) from "wasmtime"
+wasmtime_global_set(context: handle, global: pointer, value: pointer): handle from "wasmtime"
+wasmtime_memory_data_size(context: handle, memory: pointer): i64 from "wasmtime"
+wasmtime_memory_grow(context: handle, memory: pointer, delta: i64, previous: pointer): handle from "wasmtime"
+library_function(library: pointer, name: pointer): handle from "c"
+native_call(function: handle, integers: pointer, floats: pointer, float_result: i32): i64 from "c"
+handle_id(pointer: handle): i32 from "c"
+handle_known(id: i32): bool from "c"
+handle_pointer(id: i32): handle from "c"
+strlen(text: handle): i64 from "c"
+free(pointer: handle) from "c"
 memcpy(destination: pointer, source: handle, size: i64): handle from "c"
 memmove(destination: handle, source: handle, size: i64): handle from "c"
 memcmp(a: pointer, b: pointer, size: i64): i32 from "c"
@@ -241,17 +252,27 @@ warp_config(): handle := {
 }
 
 # the host words the module imports that the driver answers, each defined as its callback (lib/native/foreign.c
-# warp_host_callback, which calls host_word) with the type the module declares
-host_words_defined(linker: handle, module: handle, trap: pointer): nothing := {
+# warp_host_callback, which calls host_word) with the type the module declares: std_io, and each C function its
+# warp.c_functions section describes
+host_words_defined(linker: handle, compiled: handle, module: text, trap: pointer): nothing := {
+	table = custom_section(module, "warp.c_functions")
 	imports = allocate(VECTOR_BYTES)
-	wasmtime_module_imports(module, imports)
+	wasmtime_module_imports(compiled, imports)
 	for i in 0..long_at(imports).value {
 		import = native_long(long_at(imports + 8).value + i * 8)
-		if same_text(native_vector_text(wasm_importtype_module(import)), "host") and same_text(native_vector_text(wasm_importtype_name(import)), "std_io") {
-			type = wasm_externtype_as_functype_const(wasm_importtype_type(import))
-			checked(wasmtime_linker_define_func(linker, "host", 4, "std_io", 6, type, c_function("warp_host_callback"), STD_IO_WORD, 0), trap)
-		}
+		from = native_vector_text(wasm_importtype_module(import))
+		name = native_vector_text(wasm_importtype_name(import))
+		if same_text(from, "host") and same_text(name, "std_io") { word_defined(linker, import, STD_IO_WORD, trap) }
+		line = c_line(table, from, name)
+		if line.length > 0 { word_defined(linker, import, foreign_of(line), trap) }
 	}
+}
+# the import defined as warp_host_callback, `word` its data
+word_defined(linker: handle, import: handle, word: i64, trap: pointer): nothing := {
+	from = native_vector_text(wasm_importtype_module(import))
+	name = native_vector_text(wasm_importtype_name(import))
+	type = wasm_externtype_as_functype_const(wasm_importtype_type(import))
+	checked(wasmtime_linker_define_func(linker, from, from.length, name, name.length, type, c_function("warp_host_callback"), word, 0), trap)
 }
 
 run(module: text, given: Arguments): nothing := {
@@ -272,7 +293,7 @@ run(module: text, given: Arguments): nothing := {
 	checked(wasmtime_context_set_wasi(context, config), trap)
 	compiled = allocate(8)
 	checked(wasmtime_module_new(engine, module.address, module.length, compiled), trap)
-	host_words_defined(linker, long_at(compiled).value, trap)
+	host_words_defined(linker, long_at(compiled).value, module, trap)
 	checked(wasmtime_linker_define_unknown_imports_as_traps(linker, long_at(compiled).value), trap)
 	instance = allocate(INSTANCE_BYTES)
 	checked(wasmtime_linker_instantiate(linker, context, long_at(compiled).value, instance, trap), trap)
@@ -325,6 +346,7 @@ compiled_and_run(file: text): nothing := {
 # (foreign.c warp_host_callback). std_io(module, member, arguments) is the Error that says the driver lacks it
 host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointer, results_count: i64): nothing := {
 	context = wasmtime_caller_context(caller)
+	if word != STD_IO_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)
 	member = shown(caller, context, given + VALUE_BYTES)
 	guest_error(caller, context, given, joined(joined(joined(joined("std_io ", module), "."), member), ": not in the native driver yet"), results)
@@ -377,6 +399,185 @@ guest_error(caller: handle, context: handle, value: pointer, message: text, resu
 	built = allocate(VALUE_BYTES)
 	guest_call(caller, context, "new_text", values, 2, built)
 	guest_call(caller, context, "error_of", built, 1, result)
+}
+
+## C calls
+# a module calling C describes each C function in its warp.c_functions section, a line of tab-separated fields each
+# (crates/warp-runtime c_signatures.rs): import module, library, name, parameters, C result register, what the result
+# crosses as, the first out-pointer's pointee, struct layouts, how a failure shows. One the driver can't make (bytes,
+# structs) stops the run saying so
+WASM_HEADER = 8
+CUSTOM_SECTION = 0
+TAB = 9
+NEWLINE = 10
+COMMA = 44
+REGISTERS = 8
+WASM_PAGE_BYTES = 65536
+# the section `name` of a wasm module, else the empty text
+custom_section(module: text, name: text): text := {
+	at = module.address + WASM_HEADER
+	end = module.address + module.length
+	while at < end {
+		size = leb_at(at + 1)
+		content = at + 1 + leb_length(at + 1)
+		if byte_at(at).value == CUSTOM_SECTION {
+			named = text_from(content + leb_length(content), leb_at(content))
+			body = named.address + named.length
+			if same_text(named, name) { return text_from(body, (content + size - body) as u32) }
+		}
+		at = content + size
+	}
+	text_from(0, 0)
+}
+# the unsigned LEB128 number at `at`, and how many bytes it takes
+leb_at(at: pointer): u32 := {
+	n = 0 as u32
+	for i in 0..leb_length(at) { n = n + ((byte_at(at + i).value % 128) as u32 << (7 * i) as u32) }
+	n
+}
+leb_length(at: pointer): u32 := {
+	length = 1 as u32
+	while byte_at(at + length - 1).value >= 128 { length = length + 1 }
+	length
+}
+# the field `index` of a text split by `separator`, the empty text past its last
+field(line: text, index: int, separator: int): text := {
+	start = 0
+	seen = 0
+	for i in 0..line.length {
+		if byte_at(line.address + i).value == separator {
+			if seen == index { return text_from(line.address + start, (i - start) as u32) }
+			seen = seen + 1
+			start = i + 1
+		}
+	}
+	if seen == index then text_from(line.address + start, (line.length - start) as u32) else text_from(0, 0)
+}
+field_count(line: text, separator: int): int := {
+	if line.length == 0 { return 0 }
+	count = 1
+	for i in 0..line.length { if byte_at(line.address + i).value == separator { count = count + 1 } }
+	count
+}
+# the line of the C function the module imports as `from`.`name`, else the empty text
+c_line(table: text, from: text, name: text): text := {
+	for i in 0..field_count(table, NEWLINE) {
+		line = field(table, i, NEWLINE)
+		if same_text(field(line, 0, TAB), from) and same_text(field(line, 2, TAB), name) { return line }
+	}
+	text_from(0, 0)
+}
+# a C function as its callback's data: its line and its address
+struct Foreign { line: pointer; length: u32; function: handle }
+foreign_at(address: pointer): Foreign := address
+foreign_of(line: text): i64 := {
+	library = field(line, 1, TAB)
+	name = field(line, 2, TAB)
+	function = library_function(c_string(library), c_string(name))
+	if function == 0 { failed_call(joined(joined(joined("no C function ", name), " in the library "), library)) }
+	Foreign(line.address, line.length, function) as i64
+}
+failed_call(message: text): nothing := {
+	complain(message)
+	exit(1)
+}
+
+# the call of a C function with the module's values: numbers as they are, a text NUL-terminated, a handle id its C
+# pointer, the first out-pointer a slot that becomes the result; its result crossed back the same way
+c_called(c: Foreign, caller: handle, context: handle, given: pointer, results: pointer, results_count: i64): nothing := {
+	line = text_from(c.line, c.length)
+	name = field(line, 2, TAB)
+	parameters = field(line, 3, TAB)
+	register = field(line, 4, TAB)
+	pointee = field(line, 6, TAB)
+	failure = field(line, 8, TAB)
+	integers = zeroed(REGISTERS * 8)
+	floats = zeroed(REGISTERS * 8)
+	out = zeroed(8)
+	integer_count = 0
+	float_count = 0
+	passed = 0
+	outs = 0
+	for p in 0..field_count(parameters, COMMA) {
+		type = field(parameters, p, COMMA)
+		value = given + passed * VALUE_BYTES + VALUE_OFFSET
+		if integer_count == REGISTERS or float_count == REGISTERS { failed_call(joined(name, ": more than 8 integer or float parameters, not in the native driver yet")) }
+		if same_text(type, "f64") or same_text(type, "f32") {
+			long_at(floats + float_count * 8).value = if same_text(type, "f64") then long_at(value).value else word_at(value).value as i64
+			float_count = float_count + 1
+		} else {
+			long_at(integers + integer_count * 8).value = c_argument(caller, context, name, type, value, if outs == 0 then out else 0)
+			integer_count = integer_count + 1
+		}
+		if same_text(type, "out") { outs = outs + 1 } else { passed = passed + 1 }
+	}
+	floating = same_text(register, "f64") or same_text(register, "f32")
+	returned = native_call(c.function, integers, floats, if floating then 1 else 0)
+	if (same_text(failure, "not_null") and returned != 0) or (same_text(failure, "false") and returned % 256 == 0) { failed_call(joined(joined(name, " failed, C result "), text_of(returned))) }
+	if pointee.length > 0 and long_at(out).value == 0 { failed_call(joined(joined(joined(joined(name, " gave no "), pointee), ", C status "), text_of(returned % 4294967296))) }
+	if results_count > 0 { c_result(caller, context, line, if pointee.length > 0 then long_at(out).value else returned, results) }
+}
+# allocated bytes, all zero
+zeroed(size: i32): pointer := {
+	bytes = allocate(size)
+	for i in 0..size { byte_at(bytes + i).value = 0 }
+	bytes
+}
+# the register of a parameter that is no float: a number, a text's C copy, a handle's pointer, an out-pointer's slot
+c_argument(caller: handle, context: handle, name: text, type: text, value: pointer, out: pointer): i64 := {
+	if same_text(type, "i32") { return word_at(value).value as i64 }
+	if same_text(type, "i64") { return long_at(value).value }
+	if same_text(type, "ptr") { return native_pointer(c_string(shown(caller, context, value - VALUE_OFFSET))) }
+	if same_text(type, "out") { return if out == 0 then 0 else native_pointer(out) }
+	if not same_text(type, "handle") { failed_call(joined(joined(joined(name, ": a "), type), " parameter, not in the native driver yet")) }
+	id = word_at(value).value as i32
+	if not handle_known(id) { failed_call(joined(joined(name, ": no handle "), text_of(id))) }
+	handle_pointer(id)
+}
+# the C result as the module's value: a text, a handle id, else the number in its register
+c_result(caller: handle, context: handle, line: text, returned: i64, result: pointer): nothing := {
+	crossing = field(line, 5, TAB)
+	register = field(line, 4, TAB)
+	value = result + VALUE_OFFSET
+	if same_text(crossing, "text") or same_text(crossing, "owned_text") {
+		if returned == 0 { guest_call(caller, context, "new_empty", 0, 0, result) } else { guest_text(caller, context, returned, strlen(returned), result) }
+		if same_text(crossing, "owned_text") and returned != 0 { free(returned) }
+	} else {
+		if same_text(crossing, "handle") {
+			byte_at(result).value = KIND_I32
+			word_at(value).value = handle_id(returned) as u32
+		} else {
+			if not same_text(crossing, "number") { failed_call(joined(joined(field(line, 2, TAB), ": a result crossing as "), joined(crossing, ", not in the native driver yet"))) }
+			byte_at(result).value = register_kind(register)
+			long_at(value).value = if same_text(register, "bool") then (if returned % 256 == 0 then 0 else 1) else (if same_text(register, "i64") or same_text(register, "f64") then returned else returned % 4294967296)
+		}
+	}
+}
+register_kind(register: text): u8 := if same_text(register, "i64") then KIND_I64 else if same_text(register, "f64") then KIND_F64 else if same_text(register, "f32") then KIND_F32 else KIND_I32
+# the module's text of `length` bytes at a C pointer, into `result`: written where its text_heap global says, the
+# memory grown when they pass its end (crates/warp-runtime gc_values.rs write_to_heap)
+guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: pointer): nothing := {
+	heap = allocate(EXTERN_BYTES)
+	if not wasmtime_caller_export_get(caller, "text_heap", 9, heap) { failed_call("the module calling C exports no text_heap") }
+	memory = allocate(EXTERN_BYTES)
+	wasmtime_caller_export_get(caller, "memory", 6, memory)
+	top = allocate(VALUE_BYTES)
+	wasmtime_global_get(context, heap + 8, top)
+	place = word_at(top + VALUE_OFFSET).value as i64
+	size = wasmtime_memory_data_size(context, memory + 8)
+	if place == 0 or place + length > size {
+		if wasmtime_memory_grow(context, memory + 8, length / WASM_PAGE_BYTES + 1, allocate(8)) != 0 { failed_call("the module's memory would not grow for a C text") }
+		place = size
+	}
+	memmove(wasmtime_memory_data(context, memory + 8) + place, bytes, length)
+	word_at(top + VALUE_OFFSET).value = (place + length) as u32
+	if wasmtime_global_set(context, heap + 8, top) != 0 { failed_call("the module's text_heap would not move") }
+	values = allocate(2 * VALUE_BYTES)
+	byte_at(values).value = KIND_I32
+	word_at(values + VALUE_OFFSET).value = place as u32
+	byte_at(values + VALUE_BYTES).value = KIND_I32
+	word_at(values + VALUE_BYTES + VALUE_OFFSET).value = length as u32
+	guest_call(caller, context, "new_text", values, 2, result)
 }
 
 appended = appended_module()

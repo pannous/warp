@@ -63,6 +63,10 @@ if [ -x "$stage/driver" ]; then
 	printf 'use os\nprint run("ls")\n' >"$stage/run.warp"
 	(cd "$stage" && "$warp" build --wasm run.warp >/dev/null 2>&1)
 	check "std_io by the driver" "$(cd "$stage" && ./driver run.wasm)" 'std_io os.run: not in the native driver yet'
+	# a GC program's C calls by the driver, as its warp.c_functions section describes them: texts, numbers, handles
+	printf 'use c\nprint getenv("HOME")\nprint atof("2.5")\nabs(-7)\n' >"$stage/c_texts.warp"
+	(cd "$stage" && "$warp" build --wasm c_texts.warp >/dev/null 2>&1)
+	check "C calls by the driver" "$(cd "$stage" && ./driver c_texts.wasm)" "$HOME"$'\n2.5\n7'
 else
 	echo "✗ driver: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
 fi
