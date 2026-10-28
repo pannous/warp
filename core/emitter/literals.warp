@@ -24,13 +24,10 @@ exact_decimal(n: float): any := {
 	ratio_node([op.i64_const] + sleb(numerator / divisor), [op.i64_const] + sleb(denominator / divisor))
 }
 
-# the offset of a text's bytes in the data segment, each text stored once; counted, not measured: a long list's
-# count walks it, and module_bytes joins the bytes once (data_bytes)
-text_offset(t: text): int := {
-	if t not in module.texts {
-		module.texts[t] = module.text_size
-		module.text_size += #t.bytes
-	}
+# the passive data segment of a text's bytes, each text stored once in a segment of its own, so a trimmer drops the
+# texts no code reads (behind the runtime numbered from its segments on)
+text_segment(t: text): int := {
+	if t not in module.texts { module.texts[t] = module.first_text_segment + #module.texts }
 	module.texts[t]
 }
 # a text as its bytes; one code point as its codepoint, as warp holds a literal "a" (a grapheme of more, "👍🏽", is a text)
@@ -39,6 +36,6 @@ def text_value(t: text): TypedCode {
 	if one_code_point(t) { return TypedCode(ValueKind.Char, [op.i32_const] + sleb(ord(t))) }
 	TypedCode(ValueKind.Text, text_bytes(t))
 }
-def text_bytes(t: text): list { [op.i32_const] + relocatable(relocated.texts, text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code(gc_ops.array_new_data, [gc_type(gc.text), own_texts_segment()]) }
-# behind the runtime the program's texts are a segment of their own, the runtime's segment 0
-own_texts_segment(): int := if prepended() then 1 else 0
+def text_bytes(t: text): list {
+	[op.i32_const, 0, op.i32_const] + sleb(#t.bytes) + [gc_prefix] + uleb(gc_ops.array_new_data) + relocatable(relocated.types, gc_type(gc.text)) + relocatable(relocated.texts, text_segment(t))
+}
