@@ -69,7 +69,7 @@ case_failure(case: TestCase, got: any, expected_run: text): text := {
 		expected = run_result(expected_run, "")
 		if expected is text { expected = ["error", ["text", expected]] }
 	}
-	if not failed and (got == expected or as_is_compares(got, expected) or (is_falsy_view(got) and is_falsy_view(expected))) { return "" }
+	if not failed and (same_value(got, expected) or as_is_compares(got, expected) or (is_falsy_view(got) and is_falsy_view(expected))) { return "" }
 	"got " + serialize(got)
 }
 
@@ -84,7 +84,13 @@ run_result(work: text, run: text): any := {
 	if #parts < 2 then ø else value_view(parts.last().trim())
 }
 last_line_of(t: text): text := t.trim().split("\n").last() ?? ""
-value_view(printed: text): any := view_of(plain_node(parsed(printed)))
+value_view(printed: text): any := literals_folded(view_of(plain_node(parsed(printed))))
+# a float printed with an exponent, `9.007199254740994e15`, parses as `… as float`: the number it is
+literals_folded(view: any): any := {
+	form = kind(view)
+	if form == "key" and view#2 == "as" and view#3 is number and view#4 == ["symbol", "float"] { return view#3 }
+	if form == "list" then view[0 ..< 3] + view[3 ..< #view].map(literals_folded) else view
+}
 
 # the test files: the folders' test files, sorted, at any depth, and the files named themselves
 test_files_of(words: list): list := {
@@ -158,6 +164,27 @@ is_data_expected(view: any): bool := {
 	form == "list" and view#2 == "[" and view[3 ..< #view].all(is_data_expected)
 }
 needs_run(expected: any): bool := not is_data_expected(expected) and not expects_error(expected)
+# two values equal as Rust's Node == has them (src/node/comparison.rs): lists item by item whatever their brackets and
+# separators, a text and a symbol of the same name, a character and a text it starts, ø and an empty value, yes and no
+# and the values they are true of
+same_value(a: any, b: any): bool := {
+	if a == b { return yes }
+	if a is bool { return a == not is_falsy_view(b) }
+	if b is bool { return b == not is_falsy_view(a) }
+	if a == ø { return is_empty_view(b) }
+	if b == ø { return is_empty_view(a) }
+	left = kind(a)
+	right = kind(b)
+	if left in NAMED_FORMS and right in NAMED_FORMS { return a#2 == b#2 }
+	if left == "char" and right == "text" { return #b#2 > 0 and "" + a#2 == b#2[0 ..< 1] }
+	if left == "list" and right == "list" { return #a == #b and (3 ..< #a).all(i => same_value(a[i], b[i])) }
+	if left == "list" and right == "key" { return #a == 4 and same_value(a#4, b) }
+	if left == "key" and right == "list" { return same_value(b, a) }
+	left == "key" and right == "key" and a#2 == b#2 and same_value(a#3, b#3) and same_value(a#4, b#4)
+}
+NAMED_FORMS = ["text", "symbol"]
+# Rust's Empty == other: zero, the empty text or symbol, the empty list
+is_empty_view(view: any): bool := view == ø or view == 0 or (kind(view) in NAMED_FORMS and view#2 == "") or (kind(view) == "list" and #view == 3)
 # Rust's `is!` comparisons at the top: an int and a float of the same value, a one-character text and its character
 as_is_compares(got: any, expected: any): bool := {
 	if got is number and expected is number { return got == expected }

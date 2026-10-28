@@ -574,7 +574,7 @@ def gc_position(name: text): int {
 def gc_bytes(parts: list): list { concatenated(parts.map(part => if part is text then uleb(gc_type(part)) else [part])) }
 # _start's printing of main's value, in local 0 as main gives it, as data after VALUE_MARK (value_as_data)
 def value_printed_as_data(result: TypedCode): list {
-	printed(text_value(VALUE_MARK)).code + printed(runtime_call("node_code", [TypedCode(ValueKind.Node, boxed(result))])).code
+	printed(text_value(VALUE_MARK)).code + printed(runtime_call("value_code", [TypedCode(ValueKind.Node, boxed(result))])).code
 }
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
 def node(kind_code: int, payload: list): list { node_code([op.i64_const] + sleb(kind_code), payload) }

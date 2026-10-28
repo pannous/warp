@@ -151,19 +151,6 @@ copied(from: text, to: text): nothing := {
 	write_file(aside, read_file(from))
 	rename(c_string(aside), c_string(to))
 }
-# `warp test …`: run by the Rust warp, warp-rust beside this one, else on the PATH, until the native test runner lands
-# (card native-warp-test); said on stderr each time
-tests_handed_off(): nothing := {
-	complain("warp test: run by warp-rust until the native test runner lands (card native-warp-test)")
-	given = arguments()
-	added(given, "warp-rust")
-	for i in 1..arg_count() { added(given, arg(i)) }
-	long_at(given.pointers + given.count * 8).value = 0
-	execv(c_string(joined(folder_of(executable_path()), "/warp-rust")), given.pointers)
-	execvp(c_string("warp-rust"), given.pointers)
-	complain("warp test: no warp-rust beside this warp or on the PATH")
-	exit(1)
-}
 # `warp rebuild [pure|self|seed]`
 rebuild_command(): nothing := {
 	which = if arg_count() > 2 then arg(2) else "pure"
