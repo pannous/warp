@@ -191,9 +191,10 @@ trim(module: text, trimmed: text, way: text) := {
 MODULE_MAGIC = "WRPMwasm"
 TRAILER_ALIGNMENT = 16
 # the driver is built once per lib/ and again whenever driver.warp changes, beside a copy of the source it was built
-# from, written once the build succeeded
+# from, written once the build succeeded: in lib/data, which neither the compiler's bundle of lib/ nor its inputs hash
+# reads (parser.warp UNBUNDLED_FOLDERS, scripts/compiler-inputs.sh)
 DRIVER_SOURCE = "/compiler/native/driver.warp"
-DRIVER_BUILT = "/native/built"
+DRIVER_BUILT = "/data/native"
 
 built_driver(): text := {
 	folder = library_folder + DRIVER_BUILT

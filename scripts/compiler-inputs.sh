@@ -7,12 +7,13 @@
 # (parser.warp LIBRARY_FILES, decision built-in-lib: a built compiler reads no lib/ from disk; a set WARP_LIB lets a
 # module changed since then win over its bundled copy without a rebuild). Other lib/ files never change the hash.
 # The seed building warp.wasm (WARP_SEED, its SHA-256): a refreshed seed builds anew (card scripts-rebuild).
+# core/native/ is no input: the native warp's own sources, which no compiler embeds (Rust twin: compiler_files.rs).
 set -euo pipefail
 lib=$(cd "${1:?usage: scripts/compiler-inputs.sh <lib> [<rust fingerprint>] [-v]}" && pwd)
 rust=${2-}
 [ -d "$lib/compiler" ] || { echo "compiler-inputs.sh: no compiler/ in $lib" >&2; exit 1; }
 files() {
-	(cd "$lib" && find -H compiler -type f ! -name '.*' | LC_ALL=C sort
+	(cd "$lib" && find -H compiler -path compiler/native -prune -o -type f ! -name '.*' -print | LC_ALL=C sort
 		find . -path ./compiler -prune -o -path ./data -prune -o -name '*.warp' -type f -print | sed 's|^\./||' | LC_ALL=C sort)
 }
 [ "${3-}" = -v ] && files >&2

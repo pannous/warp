@@ -72,7 +72,7 @@ copied in with memcpy). `warp build native core/native/driver.warp` makes `drive
 - `driver app.wasm args…` runs a module; a driver with a module appended (`<module><length u64 LE>WRPMwasm`, padded to
   16 bytes, at the end or where a later Mach-O signature begins) runs that one with all its arguments.
 `warp build app.warp` of a GC program writes that executable (core/commands.warp write_carrying: __LINKEDIT grown over
-the module, then signed): about 100 KB beside the module. The driver is built once per lib/ into lib/native/built/
+the module, then signed): about 100 KB beside the module. The driver is built once per lib/ into lib/data/native/
 (again when driver.warp changes), in the same run as the program: every compile starts with a fresh Module
 (emitter.warp fresh_module, card module-inheritance). The Rust warp-runtime stub is no longer written.
 Tests: test/native/test_executables.sh.
