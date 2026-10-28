@@ -23,16 +23,12 @@ slices_cut(source: text): list := {
 	name = ""
 	written = ""
 	for line in source.split("\n") {
-		started = name_defined_in(line)
-		if started {
-			if name { slices += [[name, written]] }
-			name = started
-			written = line
-		} else if name and continues(line) {
+		if name and (continues(line) or is_open(written)) {
 			written = written + "\n" + line
-		} else if name {
-			slices += [[name, written]]
-			name = ""
+		} else {
+			if name { slices += [[name, written]] }
+			name = name_defined_in(line)
+			written = line
 		}
 	}
 	if name { slices += [[name, written]] }
@@ -64,6 +60,25 @@ is_name_part(c: char): bool := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z'
 # of an if over several lines
 continues(line: text): bool := #line > 0 and (line#1 == '\t' or line#1 == ' ' or line#1 == '}' or leading_name(line) in continuing_words)
 continuing_words = ["else", "then", "and", "or"]
+# a definition so far leaves a bracket, a text or a shader block open: the lines below go on with it, unindented ones
+# too (a value `[` … `]`, a text over lines)
+is_open(written: text): bool := {
+	source = written + "\n"
+	n = source.length
+	depth = 0
+	at = 0
+	while at < n {
+		skipped = skipped_end(source, at, n)
+		if skipped == n { return yes }
+		if skipped > at { at = skipped } else {
+			c = source[at]
+			if c == '(' or c == '[' or c == '{' { depth += 1 }
+			if c == ')' or c == ']' or c == '}' { depth -= 1 }
+			at += 1
+		}
+	}
+	depth > 0
+}
 
 # the words a node mentions as symbols, each once (a map as the set: an 89 KB program has tens of thousands)
 symbol_words(n: Node): list := {
@@ -114,12 +129,14 @@ with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
 	# the statements of each reached slice, by its text
 	reached = {}
 	wanted = symbol_words(program) + lowering_words(program) + also
+	uses = ø
 	while #wanted > 0 {
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
 			if slice#1 == word and slice#2 not in reached {
-				slice_node = early_sugared(plain_node(parsed(slice#2)))
+				if uses == ø { uses = use_lines(module) }
+				slice_node = early_sugared(plain_node(parsed(slice#2, uses)))
 				reached[slice#2] = statements_in(slice_node)
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
