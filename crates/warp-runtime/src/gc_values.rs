@@ -395,6 +395,32 @@ pub fn write_to_heap<T>(
 	Ok(written)
 }
 
+/// A list of all the items at once, for a program whose lists are vectors (a node over a `{count: i32, items: array}`
+/// struct, warp-self's): new_list(first, rest) copies rest's items into a new vector, so building a list a cell at a
+/// time copies n²/2 items (24,000 bytes of read_bytes: 288 million, past the memory cap). `single` is new_list's
+/// one-item list of the first item; its vector gets an array of all the items. None for a program whose lists are cons
+/// cells, which the caller then builds a cell at a time
+pub fn vector_list<T>(single: Val, items: &[Val], store: &mut StoreContextMut<'_, T>) -> Result<Option<Val>> {
+	let node = single.anyref().flatten().and_then(|node| node.as_struct(&*store).ok().flatten());
+	let Some(data) = node.and_then(|node| node.field(&mut *store, 1).ok()) else { return Ok(None) };
+	let Some(vector) = data.unwrap_anyref().and_then(|data| data.as_struct(&*store).ok().flatten()) else {
+		return Ok(None);
+	};
+	let room = vector.field(&mut *store, 1).ok().and_then(|room| room.unwrap_anyref().copied());
+	let Some(room) = room.and_then(|room| room.as_array(&*store).ok().flatten()) else { return Ok(None) };
+	if !matches!(vector.field(&mut *store, 0), Ok(Val::I32(_))) {
+		return Ok(None);
+	}
+	let room_type = room.ty(&*store)?;
+	let allocator = wasmtime::ArrayRefPre::new(&mut *store, room_type);
+	let array = wasmtime::ArrayRef::new_fixed(&mut *store, &allocator, items)?;
+	if vector.set_field(&mut *store, 1, Val::AnyRef(Some(array.to_anyref()))).is_err() {
+		return Ok(None);
+	}
+	vector.set_field(&mut *store, 0, Val::I32(items.len() as i32))?;
+	Ok(Some(single))
+}
+
 /// The bytes at `pointer`, the memory grown to hold them
 pub fn write_at<T>(
 	memory: &Memory,
