@@ -1,0 +1,6 @@
+# a case compared with == is that very node, past node_equal's every kind (card enum-case-speed); a runtime word's own
+# Kind is never the program's enum Kind
+'enum Coin { Penny, Dime }; c = Coin.Dime; [c == Coin.Dime, c == Dime, c == symbol("Dime"), c != Coin.Penny, Penny == c]'	[yes, yes, no, yes, no]
+'enum Coin { Penny, Dime }; x = ø; [x == Coin.Dime, x != Coin.Dime, 3 == Coin.Dime]'	[no, yes, no]
+'enum Level { Error, Warning }; enum Kind { Error, Int }; Level.Error == Kind.Error'	no
+'enum Kind { Error, Int }; Kind.Int'	Int

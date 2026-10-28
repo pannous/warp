@@ -36,6 +36,9 @@ node_equal(a: Node, b: Node): bool := {
 	if not (numeric_node(a) and numeric_node(b)) { return no }
 	float_of_node(a) == float_of_node(b)
 }
+# a value is an enum's case (made once, emitter.warp case_value) by being that very node; a copy, another module's or
+# the host's, by its kind (the enum's number in the info byte) and name, past node_equal's tests of every other kind
+case_equal(value: Node, case: Node): bool := same_node(value, case) or (not is_null(value) and code_free_kind(value) == code_free_kind(case) and same_bytes(unboxed_text(value), unboxed_text(case)))
 # two texts or characters equal as texts: two characters by their code points, no text made of either
 textual_equal(a: Node, b: Node): bool := {
 	if kind_code(a) == Kind.Codepoint and kind_code(b) == Kind.Codepoint { return unboxed_char(a) == unboxed_char(b) }
