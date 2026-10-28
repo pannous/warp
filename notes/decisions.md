@@ -389,6 +389,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - cleanup-cuts: dropped compile-time lambdas, generators/yield, type-name parameters `fib int i`, scoped handlers `on … in {…}`, the defined-twice diagnostic, all phrase calls (until prepositions-call: `move x from: a to: b`). Kept: return-type overloads, tuple returns, list element checks, instance destructuring, object-shaped parameters, dispatch by class, version literals (rebuilt small). Traits are a thin alias of classes with default methods; ORM keeps only `stored people: [Person]`; `a of b` ≡ `b.a`.
 
 ## Lists, maps and indexing
+- bare-pair (user): `a:1` as a value is a pair; a word key stays the word as written, as `{a:1}`'s keys (`a = 5; x = a:1` is a:1, `x is pair` yes); any other key is its value (`1:4`); a computed key is `(a):1` → 5:1.
 - to-inclusive (user): `a to b` always includes b, also when b is a length: walking 0-based indexes is `1 ..< #a` or `1 to #a - 1` (samples/lists/sorting.warp).
 - #4/P40 `size` = count; bytes via `byte_size` / `number of bytes`; `len(x)` counts with a hint `#x`.
 - P43 lists do not grow past the end: setting past it is a catchable `index out of range`.
