@@ -527,6 +527,12 @@ def relocatable(kind: int, index: int): list {
 def relocation_mark(kind: int, space: int): int := -1 - kind - #relocated.keys * space
 def kind_marked(mark: int): int := (-1 - mark) % #relocated.keys
 def space_marked(mark: int): int := (-1 - mark) /! #relocated.keys
+# the imports of these host words, each once, behind WASI's fd_write for a module that prints
+def imported_words(names: list, prints: bool): list {
+	imports = if prints then [fd_write_import] else []
+	for name in names { if host_import(name) not in imports { imports += [host_import(name)] } }
+	imports
+}
 # the fixed GC types in gc_names order at indices 0…G-1, each its own group, as runtime.wasm declares them
 def canonical_type_entries() { for entry in gc_names { gc_type(entry#1) } }
 def gc_type(name: text): int {
@@ -847,7 +853,7 @@ def group_expression(body: Body, n: Node): TypedCode {
 		return positional_instance(body, name_of(n#1), items_of(n)[1..])
 	}
 	std = std_word(n)
-	if std != ø { return call(body, module.runtime[std], std_arguments(n#4)) }
+	if std != ø { return call(body, module.runtime[std], listed_items(n#4)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host {
 		# `exit(1)` ends the run: never a value, so `try 42 catch e { exit(1) }` and `if x > 0 { x } else { exit(1) }`
 		# take the other branch's kind (card pure-exit-miscompile)
@@ -1258,8 +1264,8 @@ def std_word(n: Node): any {
 	name = "std_" + n#2 + "_" + n#3
 	if name in module.runtime then name else ø
 }
-# the arguments of a std word: `[]` is held behind the opaque word (is_empty_list)
-std_arguments(arguments: Node): list := if is_empty_list(arguments) then [] else items_of(arguments)
+# the items of a written list, a std word's arguments: `[]` is held behind the opaque word (is_empty_list)
+listed_items(n: Node): list := if is_empty_list(n) then [] else items_of(n)
 # the module of a lowered program, or a text naming the first form outside the core; `runtime` is
 # core/runtime.warp lowered by the same pipeline
 wasm_module(program: Node, runtime: Node): any := hosted_wasm_module(program, runtime, {})
@@ -1339,11 +1345,9 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	reached = reached_words(program)
 	# a print, or a runtime word reached that writes to stdout or stderr (a field check failing, card text-field; a
 	# warning, card declared-class)
-	module.imports = if module.prebuilding or "print" in reached or "write_output" in reached or "fd_write" in reached then [fd_write_import] else []
+	prints = module.prebuilding or "print" in reached or "write_output" in reached or "fd_write" in reached
 	# imported ahead of the functions, whose indices follow them: every host or WASI word the program reaches
-	for name in module.host.keys {
-		if (module.prebuilding or name in reached or (name in time_host_words and makes_time(program))) and host_import(name) not in module.imports { module.imports += [host_import(name)] }
-	}
+	module.imports = imported_words(module.host.keys.filter(name => module.prebuilding or name in reached or (name in time_host_words and makes_time(program))), prints)
 	if prepended() { module.imports = runtime_imports(host) }
 	if prepended() and module.relocating { module.own_from = own_items_from() }
 	c_function_globals()
