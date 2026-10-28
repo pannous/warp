@@ -20,6 +20,10 @@ const REPL_STEP: &str = "repl-step";
 /// compiler.warp's command writing runtime.wasm, and the file it is beside warp.wasm
 const RUNTIME_COMMAND: &str = "runtime";
 const RUNTIME_FILE: &str = "runtime.wasm";
+/// compiler.warp's command writing every standard module's <name>.wasm, and their folder beside warp.wasm (card
+/// modules-prebuilt)
+const MODULES_COMMAND: &str = "modules";
+const MODULES_FOLDER: &str = "modules";
 /// A seed's runtime.wasm, its own beside it (warp-seed.runtime.wasm): what the seed compiles compiler.warp behind,
 /// written by the seed itself (ship_seed), never the runtime of the warp.wasm that shares the seed's folder
 const SEED_RUNTIME_EXTENSION: &str = "runtime.wasm";
@@ -300,6 +304,15 @@ pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	Ok(path)
 }
 
+/// `warp rebuild modules`: the standard modules beside warp.wasm, compiled behind its runtime.wasm (~25 s); a word of
+/// its own until a link appends them, then part of every rebuild (card modules-prebuilt)
+pub fn rebuild_modules() -> Result<PathBuf, Node> {
+	let path = build_path(Compiler::RustCompiled);
+	let folder = path.with_file_name(MODULES_FOLDER);
+	write_modules(Compiler::RustCompiled, &folder, &path.with_file_name(RUNTIME_FILE))?;
+	Ok(folder)
+}
+
 /// The time limit of a rebuild's compiler runs: WARP_REBUILD_TIME_LIMIT seconds when positive, else REBUILD_TIME_LIMIT
 fn rebuild_time_limit() -> std::time::Duration {
 	let seconds =
@@ -459,7 +472,19 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 /// runtime.wasm beside warp.wasm: the runtime words compiled once by compiler.warp's `runtime` command, for linking
 /// programs to (notes/runtime_linking.md "runtime.wasm format")
 fn write_runtime(by: Compiler, path: &Path) -> Result<(), Node> {
-	let written = command(vec![RUNTIME_COMMAND.into(), path.display().to_string()], by);
+	written_by_command(vec![RUNTIME_COMMAND.into(), path.display().to_string()], path, by)
+}
+
+/// the standard modules beside runtime.wasm, each compiled once behind it, for linking programs to (notes/runtime_linking.md
+/// "Library modules"); compiler.warp names them and those it could not prebuild
+fn write_modules(by: Compiler, folder: &Path, runtime: &Path) -> Result<(), Node> {
+	std::fs::create_dir_all(folder).map_err(|failure| error(&format!("{}: {failure}", folder.display())))?;
+	let words = vec![MODULES_COMMAND.into(), folder.display().to_string(), runtime.display().to_string()];
+	written_by_command(words, folder, by)
+}
+
+fn written_by_command(words: Vec<String>, path: &Path, by: Compiler) -> Result<(), Node> {
+	let written = command(words, by);
 	match written.drop_meta() {
 		Node::Error(_) => Err(error(&format!("{}: {}", path.display(), written.serialize()))),
 		_ => Ok(()),
