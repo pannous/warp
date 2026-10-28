@@ -8,7 +8,7 @@
 # changed since the tip installed before. What goes red becomes a card in Now naming the commits pushed since (a red
 # smoke test: urgent). One run at a time (a lock): a second one returns, and the running one loops while main moved
 # past what it handled, installing the newest tip first. The slow tiers never hold an install: `--slow` runs them in a
-# tree of their own (started by the install, one at a time, looping to the newest tip installed), and installs the
+# tree of their own (started by each install, which stops the one still running on an older tip), and installs the
 # warp-self.wasm it promotes when the installed warp.wasm is still of those inputs.
 set -uo pipefail
 MAIN_WARP=/Users/me/dev/bin/warp
@@ -39,11 +39,22 @@ handled() { cat "$state/handled" 2>/dev/null; }
 [ -d "$TREE" ] || cowtree add --detach "$TREE" origin/main >/dev/null || exit 1
 mkdir -p "$state"
 [ -n "$if_moved" ] && [ "$(main_tip)" = "$(handled)" ] && exit 0
-# the lock holds the runner's pid: a dead runner's (a reboot, a kill) is taken over
+kill_tree() { # kill_tree <pid>: the process and all it started, children first
+	local child
+	for child in $(pgrep -P "$1"); do kill_tree "$child"; done
+	kill "$1" 2>/dev/null
+}
+# the lock holds the runner's pid: a dead runner's (a reboot, a kill) is taken over. The install lane's runner takes the
+# newest tip when it ends; the slow lane's is stopped, so the slow tiers run on the newest install, never queued behind
 lock=$state/lock
 if ! mkdir "$lock" 2>/dev/null; then
 	holder=$(cat "$lock/pid" 2>/dev/null)
-	if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then say "run $holder is going: it takes the newest tip when it ends"; exit 0; fi
+	if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+		[ -z "$slow" ] && { say "run $holder is going: it takes the newest tip when it ends"; exit 0; }
+		say "slow tiers of run $holder stopped for a newer install"
+		kill_tree "$holder"
+		while kill -0 "$holder" 2>/dev/null; do sleep 1; done
+	fi
 	rm -rf "$lock" && mkdir "$lock" 2>/dev/null || exit 0
 fi
 echo $$ >"$lock/pid"
@@ -186,10 +197,8 @@ slow_tiers() {
 
 if [ -n "$slow" ]; then
 	git -C "$TREE" fetch -q origin || exit 1
-	while installed=$(cat "$installed_state/watched") && [ "$installed" != "$(cat "$state/tested" 2>/dev/null)" ]; do
-		rerun_if_changed
-		slow_tiers "$installed" || break
-	done
+	installed=$(cat "$installed_state/watched")
+	[ "$installed" = "$(cat "$state/tested" 2>/dev/null)" ] || slow_tiers "$installed"
 	exit 0
 fi
 
