@@ -1,0 +1,10 @@
+# A library word the program defines for other types overloads it (decision sound-core-order): sin of a Real is
+# lib/reals.warp's, exact on whole half turns; a float still reaches the library's sin
+'sin(π)'	0
+'sin(π/2)'	1
+'cos(π)'	-1
+'use math; sin 3*π/2'	-1
+'x: float = 0.25; sin(2 * pi * x)'	1
+'p = π; sin(0.5) > 0.47'	true
+'class Cm { n: number }; floor(q: Cm) := q.n; floor(Cm(4))'	4
+'class Cm { n: number }; floor(q: Cm) := q.n; floor(9.5)'	9

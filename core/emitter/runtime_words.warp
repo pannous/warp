@@ -1,10 +1,20 @@
 # The runtime words a program links (emitter.warp's part): wasm intrinsics, library words, type tests on boxed values
 # `name(a: float): float := wasm f64.floor`: the parameters in order, then the instruction, which leaves the result
 def wasm_instruction(body: Body, name: text): TypedCode {
+	if name in memory_instructions { return memory_instruction(body, name) }
 	if name not in wasm_instructions { return refuse("wasm " + name) }
 	code = []
 	for i in 0..<#body.function.signature.parameters { code += [op.local_get] + uleb(i) }
 	TypedCode(if name.starts_with("i64") then ValueKind.Int else ValueKind.Float, code + [wasm_instructions[name]])
+}
+# `get(address: int): float := wasm f64.load`: the first parameter, an address or a count of pages, wrapped to i32; a
+# store leaves nothing, memory.size and memory.grow a count of pages (-1 where it can't grow)
+def memory_instruction(body: Body, name: text): TypedCode {
+	code = []
+	for i in 0..<#body.function.signature.parameters { code += [op.local_get] + uleb(i) + (if i == 0 then [op.i32_wrap_i64] else []) }
+	code += memory_instructions[name]
+	if name.starts_with("memory") { return TypedCode(ValueKind.Int, code + [op.i64_extend_i32_s]) }
+	TypedCode(if name.ends_with("store") then no_kind else if name.starts_with("i64") then ValueKind.Int else ValueKind.Float, code)
 }
 # a word runtime.warp's own functions call: theirs, even where the program defines a function of that name
 # (shapes.warp's keyed(op, left, right) is no intrinsic keyed(kind, left, right))

@@ -1,0 +1,5 @@
+# a note played pure: a test the argument's kind answers leaves its other branch uncompiled (plain_hertz of a float),
+# a module definition over several lines, `else if …` at a line's start, is reached whole (lib/sound.warp wave)
+'use sound; plain_hertz(C4)'	261.63
+'use sound; wave("sine", 0.25, 0.01) > 0.99'	true
+'use sound; play(C4, 0.05s); 1'	1

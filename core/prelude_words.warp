@@ -54,8 +54,10 @@ leading_name(line: text): text := {
 	line[0 ..< stop]
 }
 is_name_part(c: char): bool := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_' or c > '~'
-# a line inside the definition above it: indented, or the brace closing it
-continues(line: text): bool := #line > 0 and (line#1 == '\t' or line#1 == ' ' or line#1 == '}')
+# a line inside the definition above it: indented, the brace closing it, or a word no statement starts with, `else if …`
+# of an if over several lines
+continues(line: text): bool := #line > 0 and (line#1 == '\t' or line#1 == ' ' or line#1 == '}' or leading_name(line) in continuing_words)
+continuing_words = ["else", "then", "and", "or"]
 
 # the words a node mentions as symbols, each once (a map as the set: an 89 KB program has tens of thousands)
 symbol_words(n: Node): list := {

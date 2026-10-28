@@ -58,6 +58,22 @@ ordering_operators = ["<", "<=", ">", ">="]
 # the method a class's instances show by, and its dispatcher (emitter/output.warp reads the name)
 showing_method = "text"
 showing_dispatcher = HiddenWord.TextShown as text
+# a class's positions (card class-position-index, decisions instance-position and property-accessors): `b#p` is its
+# position(p), from 1, `b[i]` (the parser's b#(i+1)) its index(i), from 0, either one deriving the other; `b#p = v` the
+# same word with the value, position(p, v), lifted as position·assigned; `#b` its count()
+position_method = "position"
+index_method = "index"
+assigned_position = "position·assigned"
+assigned_index = "index·assigned"
+counting_method = "count"
+position_words = [position_method, index_method, assigned_position, assigned_index]
+# what a dispatcher of a method no operator spells gives any other value: the function itself; an element read or
+# written, `b#(i+1)` (the parser's b[i]), `b#p = v`, as written
+builtin_call(method: text, arguments: list): Node := {
+	if method not in position_words { return call_of(method, arguments) }
+	element = Key(arguments#1, Op.Hash, if method.starts_with(index_method) then Key(arguments#2, Op.Add, 1) else arguments#2)
+	if method.ends_with("·assigned") then Key(element, Op.Assign, arguments#3) else element
+}
 # the dispatcher a call `x.sum()` of a method named like a function or a library word calls
 routed_name(method: text): text := method + "·method"
 # a method named by a type word or a word of the syntax, `float()`, `in(u)`, is routed: lifted as itself it would change
@@ -93,6 +109,7 @@ methods_lifted(program: Node): Node := {
 		owner.methods = owner.methods + [as_operator_method(definition)]
 	}
 	top_statements = top_statements.filter(top_statement => operated_class(top_statement, classes, operator_table) == ø)
+	for name in classes.keys { classes[name].methods = positions_derived(classes[name].methods, operator_table) }
 	extended = classes.keys.any(name => #extending_classes(classes, name) > 1)
 	liftable = classes.keys.filter(name => lifts(classes, name, top_statements))
 	if #liftable == 0 and not extended and not respelled { return program }
@@ -108,7 +125,7 @@ methods_lifted(program: Node): Node := {
 	if #constructed > 0 { rewritten = rewritten.map(top_statement => if class_view(top_statement) == ø then constructions(top_statement, constructed) else top_statement) }
 	methods = methods_of(classes, liftable).filter(method => method != constructor_method)
 	operator_methods = methods.filter(method => spelled_operator(operator_table, method) != ø and taken_count(classes, liftable, method) == 1)
-	routes = methods.filter(method => is_library_word(method) or method in functions or method in operator_methods or names_syntax(method))
+	routes = methods.filter(method => is_library_word(method) or method in functions or method in operator_methods or names_syntax(method) or method in position_words)
 	for name in methods { rewritten += functions_of(classes, liftable, name, routes) }
 	entry_words = []
 	for method in operator_methods {
@@ -350,6 +367,28 @@ lifts(classes: map, name: text, top_statements: list): bool := {
 	declared.parent not in classes or #classes[declared.parent].methods == 0 or lifts(classes, declared.parent, top_statements)
 }
 
+# a class's position words, `#(p)` as position(p), a setter renamed (position(p, v) is position·assigned), each one
+# missing derived from its twin: position(p) := index(p - 1), index(i) := position(i + 1), and so the setters
+positions_derived(methods: list, operator_table: map): list := {
+	renamed = methods.map(method => position_named(method, operator_table))
+	words = renamed.map(defined_word)
+	derived = []
+	for twins in [[position_method, index_method, Op.Sub], [index_method, position_method, Op.Add], [assigned_position, assigned_index, Op.Sub], [assigned_index, assigned_position, Op.Add]] {
+		if twins#1 not in words and twins#2 in words { derived += [shifted_twin(twins#1, twins#2, twins#3)] }
+	}
+	renamed + derived
+}
+position_named(method: Node, operator_table: map): Node := {
+	spelled = spelled_operator(operator_table, defined_word(method))
+	word = if spelled != ø and spelled#1 == position_method then position_method else defined_word(method)
+	if word not in [position_method, index_method] { return method }
+	name = if #method_parameters(method) == 2 then word + "·assigned" else word
+	Key(call_of(name, method_parameters(method)), Op.Define, value_of(method))
+}
+shifted_twin(name: text, twin: text, shift: Op): Node := {
+	setting = if name.ends_with("·assigned") then [symbol("value")] else []
+	Key(call_of(name, [symbol("at")] + setting), Op.Define, call_of(twin, [Key(symbol("at"), shift, 1)] + setting))
+}
 # the class declaration keeping only its fields
 without_methods(top_statement: Node, view: list): Node := {
 	body = view#3
@@ -393,7 +432,7 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
 	written = Key(self_node, Op.Dot, call_of(spellings#1, call_arguments[1..]))
-	fallback = if not falls_back then ø else if operator == ø then written else if operated then reflected else call_of(spellings#1, call_arguments)
+	fallback = if not falls_back then ø else if operator == ø then written else if operated then reflected else builtin_call(spellings#1, call_arguments)
 	# an operator's operands are any values: a number reaches the builtin, an instance its class's method; a routed
 	# method's instance too, so a list `[3, 1].sort()` passes none of the owners' methods its kind (their `self.n`)
 	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [if falls_back then Key(self_node, Op.Colon, symbol("any")) else self_node] + parameters
@@ -414,7 +453,25 @@ class_dispatch(owners: list, called: map, call_arguments: list, fallback: Node, 
 # a call `x.sum(…)` of a routed method passing as many arguments as the method takes (`x.sum` the same of a method of
 # none not also a field's name): the dispatcher's `sum·method(x, …)`, unless x is statically no instance of a class
 # declaring it, then it stays as written; a call on a class (`Math.max(a, b)`) stays
-routed(n: Node, routing: Routing): Node := match n {
+routed(n: Node, routing: Routing): Node := {
+	parts = (part => routed(part, routing))
+	if is_key(n, Op.Assign) and is_position(key_of(n)) and element_word(key_of(n)) + "·assigned" in routing.methods { return position_call(key_of(n), element_word(key_of(n)) + "·assigned", [parts(value_of(n))], parts) }
+	# an element written in another way, `xs#1 = 7`, `b#p += 1`, keeps its place
+	if n is key and op_of(n) in assigning_operators and is_position(key_of(n)) { return Key(Key(parts(key_of(key_of(n))), Op.Hash, parts(value_of(key_of(n)))), op_of(n), parts(value_of(n))) }
+	if is_position(n) and element_word(n) in routing.methods { return position_call(n, element_word(n), [], parts) }
+	if is_key(n, Op.Hash) and key_of(n) == ø and counting_method in routing.methods { return call_of(routed_name(counting_method), [parts(value_of(n))]) }
+	method_routed(n, routing)
+}
+# `b#p` of a value, no field read `m#("x"+1)`
+is_position(n: Node): bool := is_key(n, Op.Hash) and key_of(n) != ø and not (is_key(value_of(n), Op.Add) and key_of(value_of(n)) is text)
+# `b#(i+1)`, the parser's b[i], is the class's index(i); another b#p its position(p)
+is_shifted(at: Node): bool := is_key(at, Op.Add) and value_of(at) == 1
+element_word(element: Node): text := if is_shifted(value_of(element)) then index_method else position_method
+position_call(element: Node, word: text, written: list, parts: any): Node := {
+	at = value_of(element)
+	call_of(routed_name(word), [parts(key_of(element)), parts(if word.starts_with(index_method) then key_of(at) else at)] + written)
+}
+method_routed(n: Node, routing: Routing): Node := match n {
 	Key(left, Op.Dot, right): {
 		object = routed(left, routing)
 		member = routed(right, routing)

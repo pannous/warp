@@ -1,0 +1,5 @@
+# a signal plays whatever number it gives (0.3 * t of an exact 0.3), a block filler by its two parameters
+'use sound; hum(t: float) := 0.3 * t; play_signal(hum, 0.03); 1'	1
+'use sound; hum(t) := 0.3 * sin(2 * pi * 220 * t); play(hum, 0.03s); 1'	1
+'use sound; l(t) := 0.3 * t; r(t) := 0.2; play([l, r], 0.03); 1'	1
+'use sound; hum(block: samples, t) := for i in 1 to #block { block#i = t }; play(hum, 0.03s); 1'	1
