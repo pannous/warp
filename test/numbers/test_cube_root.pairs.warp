@@ -1,0 +1,6 @@
+# ∛x and cbrt(x): the float cube root, a whole cube's root whole, a negative's negative
+
+'∛27'	3
+'f(x) := ∛x; f(-27)'	-3.0
+'cbrt(8)'	2
+'∛2 > 1.2599 and ∛2 < 1.26'	yes
