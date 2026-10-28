@@ -1,0 +1,5 @@
+# an integer literal beyond 64 bits is the exact big int it writes, 1e20 too (card exponent-literal-overflow)
+'[1e20 == 10^20, 9223372036854775808 == 2^63, 100000000000000000000 + 1 == 10^20 + 1]'	[true, true, true]
+'1e300 == 10^300'	true
+'-1e20 == -(10^20)'	true
+'"" + 12345678901234567890123'	"12345678901234567890123"

@@ -127,11 +127,11 @@ const WRITTEN_INDEX_MARK: &str = "written_index";
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WrittenIndex(pub Number);
 
-/// A number or data the view writes as text: an Int, a Float, else the text as a symbol
+/// A number or data the view writes as text: an Int (a big one beyond 64 bits), a Float, else the text as a symbol
 fn written_number(text: &str) -> Node {
 	let digits = text.replace('_', "");
-	match (digits.parse::<i64>(), digits.parse::<f64>()) {
-		(Ok(int), _) => Node::Number(Number::Int(int)),
+	match (digits.parse::<num_bigint::BigInt>(), digits.parse::<f64>()) {
+		(Ok(int), _) => Node::Number(Number::from_bigint(int)),
 		(_, Ok(float)) => Node::Number(Number::Float(float)),
 		_ => Node::Symbol(text.to_string()),
 	}

@@ -3066,7 +3066,16 @@ FLOAT_SUFFIXES = "fFdD"
 // the type words naming a kind of number, `number` itself not (Rust twin: type_tests.rs is_number_type_word)
 NUMBER_TYPE_WORDS = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32", "float32", "float64", "fast"]
 // the number a literal was written as: a float with a point or an exponent, else an int
-def written_number(written: text): Node := if written.contains(".") or written.contains("e") then float(written) else int(written)
+def written_number(written: text): Node := if written.contains(".") or written.contains("e") then float(written) else whole_number(written)
+// the int a literal's digits write; beyond 64 bits, `1e20` and `100000000000000000000`, the number view of its digits,
+// an exact big int to the host and to the run (emitter.warp; card exponent-literal-overflow)
+INT_MAX_DIGITS = "9223372036854775807"
+def whole_number(digits: text): Node := {
+	significant = digits
+	while #significant > 1 and significant.starts_with("0") { significant = significant[1..] }
+	fits = #significant < #INT_MAX_DIGITS or (#significant == #INT_MAX_DIGITS and significant <= INT_MAX_DIGITS)
+	if fits then int(digits) else opaque(["number", significant])
+}
 
 // A number, text, name or bracketed group
 // Rust twin: atoms.rs parse_atom, literals.rs read_number_value
@@ -3113,7 +3122,7 @@ def bare_atom(p: Parser): Node := {
 			duration = with_time_unit(p, int(written))
 			if duration != ø { return duration }
 		}
-		return with_glued_factor(p, int(written))
+		return with_glued_factor(p, whole_number(written))
 	}
 	if VULGAR_FRACTIONS.contains(c) { return vulgar_fraction(p, c) }
 	if opens_text(c) { return quoted(p) }
