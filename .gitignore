@@ -27,6 +27,7 @@ data/
 # the compilers `warp rebuild` builds in a lib/ (WARP_LIB's folder itself), with their machine code, inputs and kept values
 /lib/warp.wasm*
 /lib/warp-self.wasm*
+/lib/runtime.wasm.cwasm
 /lib/compiler.wasm*
 /lib/compiler-self.wasm*
 # the native driver `warp build` builds once per lib/ (core/commands.warp built_driver)
