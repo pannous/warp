@@ -1,0 +1,45 @@
+#!/usr/bin/env warp
+@primitive
+# The native warp (decision native-warp-in-core, notes/roadmap_native_harness.md step 2): the warp command as a native
+# executable, warp.wasm hosted through driver.warp. It only tells apart what the words name:
+#   warp app.wasm args…   the module run
+#   warp app.warp args…   compiled by warp.wasm, then run with the arguments
+#   warp                  warp.wasm's help
+#   warp <words…>         warp.wasm with the words: its own command (core/commands.warp, the one command table), any
+#                         other words code it compiles to WARP_RUN_TO (compiler.warp), which then runs
+# The host words warp.wasm's commands call are answered by driver.warp host_word; library words (graphics, sound, web)
+# are not the core binary's (decision libraries-not-core) and say so
+use "driver.warp"
+
+setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
+unsetenv(name: pointer): i32 from "c"
+
+# warp.wasm with this executable's words: a command runs, code is compiled to WARP_RUN_TO and run after
+hosted(): nothing := {
+	output = compiled_path()
+	given = compiler_arguments()
+	for i in 1..arg_count() { added(given, arg(i)) }
+	setenv(c_string("WARP_RUN_TO"), c_string(output), 1)
+	compiler_ran(given)
+	unsetenv(c_string("WARP_RUN_TO"))
+	if read_file(output).length > 0 { written_run(output, "code", arg_count()) }
+}
+# a file of warp code: its name ends in .warp, or a file of that name exists
+is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).length > 0
+
+if arg_count() < 2 {
+	given = compiler_arguments()
+	added(given, "help")
+	compiler_ran(given)
+} else {
+	if ends_with(arg(1), ".wasm") {
+		module = read_file(arg(1))
+		if module.length == 0 {
+			complain(joined("no module at ", arg(1)))
+			exit(1)
+		}
+		run(module, given_from(1), "")
+	} else {
+		if is_warp_file(arg(1)) { compiled_and_run(arg(1)) } else { hosted() }
+	}
+}

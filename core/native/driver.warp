@@ -95,6 +95,11 @@ fopen(path: pointer, mode: pointer): handle from "c"
 fwrite(data: handle, size: i64, count: i64, file: handle): i64 from "c"
 fclose(file: handle): i32 from "c"
 rename(from: pointer, to: pointer): i32 from "c"
+popen(command: pointer, mode: pointer): handle from "c"
+pclose(stream: handle): i32 from "c"
+fread(data: handle, size: i64, count: i64, stream: handle): i64 from "c"
+malloc(size: i64): handle from "c"
+realloc(pointer: handle, size: i64): handle from "c"
 wasmtime_module_serialize(module: handle, bytes: pointer): handle from "wasmtime"
 wasmtime_module_deserialize_file(engine: handle, path: pointer, module: pointer): handle from "wasmtime"
 memmove(destination: handle, source: handle, size: i64): handle from "c"
@@ -321,30 +326,44 @@ run(module: text, given: Arguments, machine_code: text): nothing := {
 # run_compiler: the file, the module, its folder, lib/, runtime.wasm), then the module runs with the arguments
 compiled_and_run(file: text): nothing := {
 	library = library_folder()
-	compiler_path = joined(library, "/warp.wasm")
-	compiler = read_file(compiler_path)
-	if compiler.length == 0 {
-		complain(joined("no warp compiler at ", compiler_path))
-		exit(1)
-	}
 	output = compiled_path()
-	compiling = arguments()
-	added(compiling, compiler_path)
+	compiling = compiler_arguments()
 	added(compiling, file)
 	added(compiling, output)
 	added(compiling, folder_of(file))
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
-	run(compiler, compiling, joined(compiler_path, ".driver.cwasm"))
+	compiler_ran(compiling)
+	written_run(output, file, 2)
+}
+# warp.wasm of lib/, the compiler and its commands
+compiler_path(): text := joined(library_folder(), "/warp.wasm")
+# its arguments: its own path, the words after it added
+compiler_arguments(): Arguments := {
+	list = arguments()
+	added(list, compiler_path())
+	list
+}
+# warp.wasm run with the arguments, its machine code kept beside it (compiled_module)
+compiler_ran(given: Arguments): nothing := {
+	compiler = read_file(compiler_path())
+	if compiler.length == 0 {
+		complain(joined("no warp compiler at ", compiler_path()))
+		exit(1)
+	}
+	run(compiler, given, joined(compiler_path(), ".driver.cwasm"))
+}
+# the module warp.wasm wrote to `output` run, named `name`, with this executable's arguments from `first` on
+written_run(output: text, name: text, first: int): nothing := {
 	program = read_file(output)
 	unlink(output)
 	if program.length == 0 {
-		complain(joined("warp.wasm wrote no module of ", file))
+		complain(joined("warp.wasm wrote no module of ", name))
 		exit(1)
 	}
 	running = arguments()
-	added(running, file)
-	for i in 2..arg_count() { added(running, arg(i)) }
+	added(running, name)
+	for i in first..arg_count() { added(running, arg(i)) }
 	run(program, running, "")
 }
 
@@ -369,10 +388,15 @@ compiled_module(engine: handle, module: text, machine_code: text, trap: pointer)
 	if machine_code.length > 0 { kept_machine_code(long_at(compiled).value, machine_code, key, fingerprint, trap) }
 	long_at(compiled).value
 }
-# the last line of a text that isn't empty: the cause in a wasmtime error's chain
-last_line(t: text): text := {
+# the text without its trailing newlines
+trimmed_end(t: text): text := {
 	end = t.length
 	while end > 0 and byte_at(t.address + end - 1).value == NEWLINE { end = end - 1 }
+	text_from(t.address, end)
+}
+# the last line of a text that isn't empty: the cause in a wasmtime error's chain
+last_line(t: text): text := {
+	end = trimmed_end(t).length
 	start = end
 	while start > 0 and byte_at(t.address + start - 1).value != NEWLINE { start = start - 1 }
 	while start < end and byte_at(t.address + start).value == SPACE { start = start + 1 }
@@ -406,7 +430,55 @@ host_word(word: i64, caller: handle, given: pointer, count: i64, results: pointe
 	if word != STD_IO_WORD { return c_called(foreign_at(word as i32), caller, context, given, results, results_count) }
 	module = shown(caller, context, given)
 	member = shown(caller, context, given + VALUE_BYTES)
-	guest_error(caller, context, given, joined(joined(joined(joined("std_io ", module), "."), member), ": not in the native driver yet"), results)
+	listed = given + 2 * VALUE_BYTES
+	if same_text(module, "os") and same_text(member, "command") { return os_command(caller, context, listed, results) }
+	guest_error(caller, context, joined(joined(joined(joined("std_io ", module), "."), member), ": not in the native driver yet"), results)
+}
+# the item of a list value of the module, counted from 1, as a value (its export item_at)
+item_of(caller: handle, context: handle, list: pointer, index: i64): pointer := {
+	values = allocate(2 * VALUE_BYTES)
+	memcpy(values, native_pointer(list), VALUE_BYTES)
+	byte_at(values + VALUE_BYTES).value = KIND_I64
+	long_at(values + VALUE_BYTES + VALUE_OFFSET).value = index
+	item = allocate(VALUE_BYTES)
+	guest_call(caller, context, "item_at", values, 2, item)
+	item
+}
+
+## the host words of warp's commands (core/commands.warp), warp over libc
+COMMAND_OUTPUT_BYTES = 4096
+# os.command(line): the line run by sh, what it printed, its trailing newlines left off; else the Error naming its exit
+# status and what it said on stderr (as crates/warp-runtime std_adapters.rs executed)
+os_command(caller: handle, context: handle, listed: pointer, result: pointer): nothing := {
+	line = shown(caller, context, item_of(caller, context, listed, 1))
+	said = joined(compiled_path(), ".stderr")
+	pipe = popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
+	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
+	room = COMMAND_OUTPUT_BYTES
+	printed = malloc(room)
+	size = 0
+	got = 1
+	while got > 0 {
+		if size == room {
+			room = room * 2
+			printed = realloc(printed, room)
+		}
+		got = fread(printed + size, 1, room - size, pipe)
+		size = size + got
+	}
+	status = pclose(pipe)
+	while size > 0 and native_byte(printed + size - 1) == NEWLINE { size = size - 1 }
+	if status == 0 { guest_text(caller, context, printed, size, result) } else {
+		guest_error(caller, context, joined(joined(joined(joined(joined("sh -c ", line), " failed (exit status: "), text_of(status / 256)), "): "), trimmed_end(read_file(said))), result)
+	}
+	unlink(said)
+	free(printed)
+}
+# the byte at a C pointer
+native_byte(at: handle): u8 := {
+	cell = allocate(1)
+	memcpy(cell, at, 1)
+	byte_at(cell).value
 }
 # the module's export `name` called on the values, its result into `result`
 guest_call(caller: handle, context: handle, name: text, values: pointer, count: i64, result: pointer): nothing := {
@@ -444,17 +516,10 @@ shown(caller: handle, context: handle, value: pointer): text := {
 	memcpy(copy, guest_memory(caller, context) + packed / TEXT_SHIFT, length)
 	text_from(copy, length as u32)
 }
-# the module's Error of the message, built in the memory where it showed `value`
-guest_error(caller: handle, context: handle, value: pointer, message: text, result: pointer): nothing := {
-	address = shown_packed(caller, context, value) / TEXT_SHIFT
-	memmove(guest_memory(caller, context) + address, native_pointer(message.address), message.length)
-	values = allocate(2 * VALUE_BYTES)
-	byte_at(values).value = KIND_I32
-	word_at(values + VALUE_OFFSET).value = address as u32
-	byte_at(values + VALUE_BYTES).value = KIND_I32
-	word_at(values + VALUE_BYTES + VALUE_OFFSET).value = message.length
+# the module's Error of the message
+guest_error(caller: handle, context: handle, message: text, result: pointer): nothing := {
 	built = allocate(VALUE_BYTES)
-	guest_call(caller, context, "new_text", values, 2, built)
+	guest_text(caller, context, native_pointer(message.address), message.length as i64, built)
 	guest_call(caller, context, "error_of", built, 1, result)
 }
 
@@ -676,24 +741,29 @@ c_result(caller: handle, context: handle, c: Foreign, returned: i64, result: poi
 	}
 }
 register_kind(register: i32): u8 := if register == REGISTER_I64 then KIND_I64 else if register == REGISTER_F64 then KIND_F64 else if register == REGISTER_F32 then KIND_F32 else KIND_I32
-# the module's text of `length` bytes at a C pointer, into `result`: written where its text_heap global says, the
-# memory grown when they pass its end (crates/warp-runtime gc_values.rs write_to_heap)
+# the module's text of `length` bytes at a C pointer, into `result`: written where its text_heap global says (a module
+# calling C exports it), else at the end of its memory, grown for them (crates/warp-runtime gc_values.rs write_to_heap)
 guest_text(caller: handle, context: handle, bytes: handle, length: i64, result: pointer): nothing := {
 	heap = allocate(EXTERN_BYTES)
-	if not wasmtime_caller_export_get(caller, "text_heap", 9, heap) { failed_call("the module calling C exports no text_heap") }
+	has_heap = wasmtime_caller_export_get(caller, "text_heap", 9, heap)
 	memory = allocate(EXTERN_BYTES)
 	wasmtime_caller_export_get(caller, "memory", 6, memory)
 	top = allocate(VALUE_BYTES)
-	wasmtime_global_get(context, heap + 8, top)
-	place = word_at(top + VALUE_OFFSET).value as i64
+	place = 0 as i64
+	if has_heap {
+		wasmtime_global_get(context, heap + 8, top)
+		place = word_at(top + VALUE_OFFSET).value as i64
+	}
 	size = wasmtime_memory_data_size(context, memory + 8)
 	if place == 0 or place + length > size {
-		if wasmtime_memory_grow(context, memory + 8, length / WASM_PAGE_BYTES + 1, allocate(8)) != 0 { failed_call("the module's memory would not grow for a C text") }
+		if wasmtime_memory_grow(context, memory + 8, length / WASM_PAGE_BYTES + 1, allocate(8)) != 0 { failed_call("the module's memory would not grow for a host text") }
 		place = size
 	}
 	memmove(wasmtime_memory_data(context, memory + 8) + place, bytes, length)
-	word_at(top + VALUE_OFFSET).value = (place + length) as u32
-	if wasmtime_global_set(context, heap + 8, top) != 0 { failed_call("the module's text_heap would not move") }
+	if has_heap {
+		word_at(top + VALUE_OFFSET).value = (place + length) as u32
+		if wasmtime_global_set(context, heap + 8, top) != 0 { failed_call("the module's text_heap would not move") }
+	}
 	values = allocate(2 * VALUE_BYTES)
 	byte_at(values).value = KIND_I32
 	word_at(values + VALUE_OFFSET).value = place as u32

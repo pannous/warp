@@ -48,6 +48,11 @@ def exported_builders(): any {
 	# a node a host reads as the text print shows (runtime/text.warp shown_at), which no host walking GC objects needs
 	f = exported_function("shown_at", [ValueKind.Node], ValueKind.Int)
 	f.code = runtime_call("shown_at", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
+	# a host word's list arguments for a host that reads no GC objects (the native driver): how many, and each from 1
+	f = exported_function("item_count", [ValueKind.Node], ValueKind.Int)
+	f.code = runtime_call("node_length", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
+	f = exported_function("item_at", [ValueKind.Node, ValueKind.Int], ValueKind.Node)
+	f.code = runtime_call("node_at", [TypedCode(ValueKind.Node, [op.local_get, 0]), TypedCode(ValueKind.Int, [op.local_get, 1])]).code
 }
 # f at the module's next function index (results `any`: a declared Function result fails, card class-result-type),
 # the functions counted as placed, not measured: a long list's count walks it

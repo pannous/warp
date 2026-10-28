@@ -155,7 +155,8 @@ build(words: list) := {
 	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
 	if is_file { emitting_file(working_relative(target)) }
 	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", source_folder(target)) else build_native(target, library_folder) }
-	runtime_held = read_bytes(option_of(options, "runtime"))
+	given_runtime = option_of(options, "runtime")
+	if given_runtime != ø { runtime_held = read_bytes(given_runtime) }
 	separate_output = stem + ".mod.wasm"
 	compile_written(source, stem + ".full.wasm", if is_file then source_folder(target) else ".")
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)

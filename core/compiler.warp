@@ -167,11 +167,10 @@ global separate_output = ""
 LINKED_ARGUMENT = 6
 global linked_output = if command == "" and #args >= LINKED_ARGUMENT then args#LINKED_ARGUMENT else ""
 global runtime_held = ø
+# runtime.wasm: a compile's fifth argument, else lib/'s (the native warp's, core/native/warp.warp)
+runtime_path(): text := if command == "" and #args >= RUNTIME_ARGUMENT and args#RUNTIME_ARGUMENT != "" then args#RUNTIME_ARGUMENT else library_folder + "/" + RUNTIME_WASM
 runtime_bytes(): list := {
-	if runtime_held == ø {
-		if #args < RUNTIME_ARGUMENT or args#RUNTIME_ARGUMENT == "" { throw "no runtime.wasm given (the fifth argument): `warp rebuild` writes it beside warp.wasm" }
-		runtime_held = read_bytes(args#RUNTIME_ARGUMENT)
-	}
+	if runtime_held == ø { runtime_held = read_bytes(runtime_path()) }
 	runtime_held
 }
 # the program just compiled behind runtime.wasm, as a module importing it instead
@@ -201,8 +200,12 @@ show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
 show_data() := print plain_node(parsed(source_or_code(1)))
 show_lowered() := print lowered_program(source_or_code(1), ".", prelude_source)
+# where the native warp (core/native/warp.warp) wants the module of words that are neither a command nor a file:
+# they are code, compiled there for it to run; no other harness sets it
+RUN_TO_VARIABLE = "WARP_RUN_TO"
+run_to = env(RUN_TO_VARIABLE) ?? ""
 match command {
-	"": compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
+	"": if run_to then compile_written(args.join(" ") + "\n", run_to, ".") else compile_file(args#1, args#2, if #args > 2 then args#3 else folder_of(args#1))
 	"help": show_help()
 	"version": show_version()
 	"parse": show_parsed()
