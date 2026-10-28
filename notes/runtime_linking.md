@@ -64,6 +64,17 @@ made_case kind made, since no program decides any more what it makes.
     the code section's content (behind its vector count), space the index space it names: 0 runtime, 1 own, 2+k the
     k-th module a module's declarations name (runtime.wasm: all 0; modules-prebuilt).
 
+## Library modules (card modules-prebuilt; owner: tables-as-constants)
+- `<module>.wasm` beside the compiler, of runtime.wasm's shape: the canonical types, padded operands, `warp.runtime`
+  (the module's own layout: function, global and data counts, each exported word's kinds) and `warp.calls` with spaces.
+  Its calls into the runtime hold the runtime's fixed indices; its own and other modules' are numbered from 0 and
+  rebased by the module's base offset when it is appended between the runtime and the program.
+- `warp.declarations`: what a program needs of the module (signatures, classes, globals) as one packed node (pack),
+  so a compile reads no module source. A module under WARP_LIB that differs from the bundled one is compiled from
+  source.
+- Modules have no hooks of their own: a module's class (units) is a class of the linked program, its text() and ==
+  go into the program's dispatcher; module code calls the runtime's hook stubs.
+
 ## Hooks (runtime words calling program code: a class's text(), ==)
 One hook list in the warp.runtime section. Prepended: the stub bodies are replaced by the program's. Separately linked:
 the stubs call through an exported funcref table the program fills at start. One runtime build serves both.
