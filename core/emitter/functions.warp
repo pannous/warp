@@ -254,6 +254,7 @@ type_synonyms(): map := {
 names_a_type(word: text): bool := is_held_kind(word) or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: list): any := {
 	placed(f)
+	if is_primitive_function(f) { return primitive_compiled(f) }
 	parameter_kinds = []
 	for i in 0..<#f.signature.parameters {
 		declared = f.signature.parameters[i].type_name
