@@ -53,6 +53,10 @@ made_case kind made, since no program decides any more what it makes.
     a wasm type alone can't tell Bool, Int and Char apart.
   - `warp.calls`, the call-site list: the byte offset of every padded call and ref.func operand in the code section.
 
+## Hooks (runtime words calling program code: a class's text(), ==)
+One hook list in the warp.runtime section. Prepended: the stub bodies are replaced by the program's. Separately linked:
+the stubs call through an exported funcref table the program fills at start. One runtime build serves both.
+
 ## Steps (sub-cards of runtime-linking)
 | card | step |
 |---|---|
