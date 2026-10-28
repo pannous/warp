@@ -19,7 +19,6 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 | test/text/test_text_type_words.pairs.warp:12, 13 | π | 3.141592653589793 | `π as float` is the float, not the exact π |
 | test/lists/test_min_max.pairs.warp:20 | 2 | 6 | `min(a,b):=a*b` is the program's own min, which wins over the prelude's |
 | test/lists/test_lists.pairs.warp:61, 68, 72, 81 | [1, 2, 3] / ['a', 'b', 'c'] | 3 / 'c' | `;` separates statements: `(1;2;3)` and `{a;b;c}` give their last, as `a;b;c` gives 'c' (line 73) |
-| units without `use units`, 83 lines: test/numbers/ test_decimal_units:4; test_dimension_types:4-7, 19-23; test_dynamic_units:4, 5, 8, 9, 12; test_litre_hectare:4; test_math:42; test_mixed_quantity_arguments:4, 5; test_mixed_units.warp:4, 6; test_pixel_unit:4, 5, 9, 13 and .warp:6, 8, 14; test_quantity_cast:4; test_run_time_power:6; test_time_of_day:4, 6, 9, 13; test_unit_beside_variable:10; test_unit_definitions:4-9, 11, 14, 15, 24, 26, 27, 30 and .warp:4, 7, 9, 11, 15; test_unit_functions_as_values.warp:4, 9; test_unit_literals:4-6; test_unit_prefix_lines.warp:6; test_unit_word_keys:13, 14; test_units_after_numbers.warp:30; test_units_compare:4-14; test_units_type_holes:4-7 | `1 km == 1000 m` | `use units; 1 km == 1000 m` | decision expected-type-names: without an expected type `3ms` is an error whose fix-it is `use units` |
 
 ## Held (esoteric)
 
@@ -76,8 +75,6 @@ Groups:
 
 ### numbers (263 gaps)
 Silently wrong:
-- `round(2.5)` gives 3 (test_float_to_int_range:6, test_rounding_in_functions:6). wiki/Footguns.md says round is
-  half even, but notes/decisions.md round-halves says halves round away from zero: the user decides which.
 - `2^62 | 2^61` gives 2^62 (test_big_int_bits:18).
 - `1 << 100 == 2^100` gives no (test_shift_operators:18).
 - `ε*ω` gives 2876127 (test_hyperreals).
@@ -87,6 +84,8 @@ Silently wrong:
 - `sqrt(2).round(2)` ignores its argument (test_method_on_operator_call:4).
 
 Groups:
+- Standard unit words without `use` (decision implicit-standard-words, e7d456f44e: `ms`, `km`, `minute` work without
+  `use units`; covered by samples-implicit-use). 83 lines: test/numbers/ test_decimal_units:4; test_dimension_types:4-7, 19-23; test_dynamic_units:4, 5, 8, 9, 12; test_litre_hectare:4; test_math:42; test_mixed_quantity_arguments:4, 5; test_mixed_units.warp:4, 6; test_pixel_unit:4, 5, 9, 13 and .warp:6, 8, 14; test_quantity_cast:4; test_run_time_power:6; test_time_of_day:4, 6, 9, 13; test_unit_beside_variable:10; test_unit_definitions:4-9, 11, 14, 15, 24, 26, 27, 30 and .warp:4, 7, 9, 11, 15; test_unit_functions_as_values.warp:4, 9; test_unit_literals:4-6; test_unit_prefix_lines.warp:6; test_unit_word_keys:13, 14; test_units_after_numbers.warp:30; test_units_compare:4-14; test_units_type_holes:4-7.
 - Unbounded ints past 64 bits, the D16 rule: they trap with cast failure or unreachable (big_int_bits, big_ratio,
   int_division, unbounded_int, ratio_gcd_warp, shift_operators). About 45 lines.
 - A spaced unit after an assignment, `x = 2 km`: "a value after an assignment". 20 lines.

@@ -17,6 +17,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - warp test handoff (supervisor): until the native test runner lands, `warp test` on the native warp hands off to warp-rust with one stderr line.
 - build stamp without inputs hash (supervisor): warp.build records lib/, builder, commit and time; the inputs-hash slot stays empty for now (the native warp has no sha256/directory host words yet); nothing compares it.
 - round(2.5) = 3 (supervisor): the decision round-halves (away from zero) beats the Footguns note; the note gets corrected, not the test.
+- triage holds (reviewer): the lines marked `# triage-held 2026-10-28` (list in notes/test_triage.md "Held (esoteric)") are commented out as forms warp doesn't carry over; restore any you want back.
 - unit tests without `use units` (supervisor): the 83 lines the triage listed as wrong are gaps under implicit-standard-words, not wrong expectations.
 - release workflow quiet (supervisor): Release re-enabled with one summary at the end, no per-job notifications; the other workflows stay off.
 - no extra workers tonight (supervisor): the ten triage gap groups wait on the board (Next) for the four feature workers instead of new sessions (rule: at most two feature workers, already exceeded by the runtime-linking team).
