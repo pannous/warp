@@ -300,15 +300,6 @@ pub fn rebuild(by: Compiler) -> Result<PathBuf, Node> {
 	Ok(path)
 }
 
-/// `warp rebuild modules`: the standard modules beside warp.wasm, compiled behind its runtime.wasm (~25 s); a word of
-/// its own until a link appends them, then part of every rebuild (card modules-prebuilt)
-pub fn rebuild_modules() -> Result<PathBuf, Node> {
-	let path = build_path(Compiler::RustCompiled);
-	let folder = path.with_file_name(MODULES_FOLDER);
-	write_modules(Compiler::RustCompiled, &folder, &path.with_file_name(RUNTIME_FILE))?;
-	Ok(folder)
-}
-
 /// The time limit of a rebuild's compiler runs: WARP_REBUILD_TIME_LIMIT seconds when positive, else REBUILD_TIME_LIMIT
 fn rebuild_time_limit() -> std::time::Duration {
 	let seconds =
@@ -451,7 +442,7 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	let (builder, compiler, scope) = builder(by)?;
 	let module = compiled_with(&file, &folder, compiler, scope)
 		.map_err(|failure| error(&format!("compiler.warp compiled by {builder}: {}", failure.serialize())))?;
-	let mut bytes = module.bytes.clone();
+	let mut bytes = optimized(path, module.bytes.clone())?;
 	let section = current_build().join(BUILD_SEPARATOR);
 	wasm_encoder::Section::append_to(
 		&wasm_encoder::CustomSection { name: BUILD_SECTION.into(), data: section.as_bytes().into() },
@@ -461,6 +452,10 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	ship(path, &bytes)?;
 	write_runtime(by, &path.with_file_name(RUNTIME_FILE))?;
+	// the standard modules programs link to; one failing is said, the rebuild stands (programs compile it from source)
+	if let Err(failure) = write_modules(by, &path.with_file_name(MODULES_FOLDER), &path.with_file_name(RUNTIME_FILE)) {
+		eprintln!("warp rebuild: the modules not prebuilt: {}", failure.serialize());
+	}
 	warm(by)?;
 	Ok(module)
 }
@@ -591,6 +586,32 @@ fn warm(by: Compiler) -> Result<(), Node> {
 }
 
 /// A new file moved into place: writing over a module another warp run reads would hand it half a module
+/// A built compiler through wasm-opt's optimizing passes, beside `path` until it replaces it: a compile through it takes
+/// a fifth less (card wasm-untrimmed-output). Without wasm-opt it stays as compiled, said loudly
+fn optimized(path: &Path, bytes: Vec<u8>) -> Result<Vec<u8>, Node> {
+	let side = path.with_extension(format!("optimizing-{}", std::process::id()));
+	std::fs::write(&side, &bytes).map_err(|failure| error(&format!("{}: {failure}", side.display())))?;
+	let started = std::time::Instant::now();
+	let rewritten = crate::compiler::binaryen::rewritten(&side, crate::compiler::binaryen::OPTIMIZE);
+	let _ = std::fs::remove_file(&side);
+	match rewritten {
+		Ok(optimized) => {
+			eprintln!(
+				"optimized {} from {} to {} bytes in {:.1} s",
+				path.display(),
+				bytes.len(),
+				optimized.len(),
+				started.elapsed().as_secs_f64()
+			);
+			Ok(optimized)
+		}
+		Err(problem) => {
+			eprintln!("warning: {problem}: {} stays unoptimized, every compile through it a fifth slower", path.display());
+			Ok(bytes)
+		}
+	}
+}
+
 fn write_new(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 	let new = path.with_extension(format!("new-{}", std::process::id()));
 	std::fs::write(&new, bytes)?;

@@ -121,7 +121,7 @@ compile(source: text, folder: text, library_runtime: any = ø): any := {
 	made
 }
 
-# the standard modules the source uses, each prebuilt beside runtime.wasm (`warp rebuild modules`) and linked behind it
+# the standard modules the source uses, each prebuilt beside runtime.wasm (`warp rebuild`) and linked behind it
 # when its text is the bundled one; any other compiles from its source (a WARP_LIB edit, a module not prebuilt)
 MODULES_FOLDER = "modules"
 linked_libraries(source: text): list := {

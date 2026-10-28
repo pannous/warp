@@ -1,0 +1,175 @@
+#!/usr/bin/env warp
+@primitive
+# The native runner (notes/roadmap_native_harness.md milestone 3, notes/primitive.md "Driver"): a primitive file that
+# runs a wasm module through wasmtime's C API, called as any C library. `warp build native lib/native/driver.warp`
+# makes the executable; `driver app.wasm args…` runs the module with the arguments, and a driver with a module
+# appended (<module><its length, u64 little-endian><MODULE_MAGIC>) runs that one with all its arguments. The module's
+# WASI calls are wasmtime's, its folder the current one; what its main gives is printed, a failure's message on stderr
+# with status 1, the module's own exit status kept.
+
+# "WRPMwasm" as a little-endian u64, the last bytes of a driver with a module appended
+MODULE_MAGIC = 7886754537481982551
+TRAILER_BYTES = 16
+STDERR = 2
+# wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
+KIND_I32 = 0
+KIND_I64 = 1
+KIND_F32 = 2
+KIND_F64 = 3
+VALUE_OFFSET = 8
+EXTERN_BYTES = 32
+INSTANCE_BYTES = 16
+VALUE_BYTES = 32
+VECTOR_BYTES = 16
+MAX_RESULTS = 8
+FLOAT_DIGITS = 17
+
+wasm_engine_new(): handle from "wasmtime"
+wasmtime_store_new(engine: handle, data: handle, finalizer: handle): handle from "wasmtime"
+wasmtime_store_context(store: handle): handle from "wasmtime"
+wasmtime_linker_new(engine: handle): handle from "wasmtime"
+wasmtime_linker_define_wasi(linker: handle): handle from "wasmtime"
+wasi_config_new(): handle from "wasmtime"
+wasi_config_set_argv(config: handle, count: i64, arguments: pointer): bool from "wasmtime"
+wasi_config_inherit_stdin(config: handle) from "wasmtime"
+wasi_config_inherit_stdout(config: handle) from "wasmtime"
+wasi_config_inherit_stderr(config: handle) from "wasmtime"
+wasi_config_preopen_dir(config: handle, host_path: text, guest_path: text, mutable: bool): bool from "wasmtime"
+wasmtime_context_set_wasi(context: handle, config: handle): handle from "wasmtime"
+wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module: pointer): handle from "wasmtime"
+wasmtime_linker_instantiate(linker: handle, context: handle, module: handle, instance: pointer, trap: pointer): handle from "wasmtime"
+wasmtime_instance_export_get(context: handle, instance: pointer, name: text, size: i64, item: pointer): bool from "wasmtime"
+wasmtime_func_type(context: handle, function: pointer): handle from "wasmtime"
+wasm_functype_results(type: handle): handle from "wasmtime"
+wasmtime_func_call(context: handle, function: pointer, arguments: pointer, count: i64, results: pointer, results_count: i64, trap: pointer): handle from "wasmtime"
+wasmtime_error_message(error: handle, message: pointer) from "wasmtime"
+wasmtime_error_exit_status(error: handle, status: pointer): bool from "wasmtime"
+wasm_trap_message(trap: handle, message: pointer) from "wasmtime"
+memcpy(destination: pointer, source: handle, size: i64): handle from "c"
+gcvt(value: f64, digits: i32, buffer: pointer): handle from "c"
+_NSGetExecutablePath(buffer: pointer, size: pointer): i32 from "c"
+native_pointer(address: pointer): handle from "c"
+
+# the i64 at a C pointer
+native_long(at: handle): i64 := {
+	cell = allocate(8)
+	memcpy(cell, at, 8)
+	long_at(cell).value
+}
+# the bytes of a wasm_byte_vec_t the call filled (its size, then its data), as a text; a trailing NUL left out
+vector_text(vector: pointer): text := {
+	size = long_at(vector).value
+	copy = allocate(size as i32)
+	memcpy(copy, long_at(vector + 8).value, size)
+	if size > 0 and byte_at(copy + size as i32 - 1).value == 0 { size = size - 1 }
+	text_from(copy, size as u32)
+}
+
+# a line on stderr
+complain(line: text): nothing := {
+	fd_write(STDERR, line, 1, allocate(4))
+	fd_write(STDERR, "\n", 1, allocate(4))
+}
+# a failed call: the module's exit status if it exited, else the error's or the trap's message, status 1
+failed(error: handle, trap: pointer): nothing := {
+	message = allocate(VECTOR_BYTES)
+	if error != 0 {
+		status = allocate(4)
+		if wasmtime_error_exit_status(error, status) { exit(word_at(status).value as i32) }
+		wasmtime_error_message(error, message)
+	} else {
+		wasm_trap_message(long_at(trap).value, message)
+	}
+	complain(vector_text(message))
+	exit(1)
+}
+checked(error: handle, trap: pointer): nothing := {
+	if error != 0 or long_at(trap).value != 0 { failed(error, trap) }
+}
+
+# this executable's own path
+executable_path(): text := {
+	size = allocate(4)
+	word_at(size).value = 4096
+	path = allocate(4096)
+	_NSGetExecutablePath(path, size)
+	text_from(path, c_length(path))
+}
+# the module appended to this executable, else the empty text
+appended_module(): text := {
+	self = read_file(executable_path())
+	end = self.address + self.length
+	if self.length < TRAILER_BYTES or long_at(end - 8).value != MODULE_MAGIC { return text_from(0, 0) }
+	size = long_at(end - TRAILER_BYTES).value as u32
+	text_from(end - TRAILER_BYTES - size, size)
+}
+
+# the module's WASI arguments, those of the driver from `first` on, as an array of C pointers
+wasi_arguments(config: handle, first: int): nothing := {
+	count = (arg_count() - first) as i32
+	pointers = allocate(count * 8)
+	for i in 0..count { long_at(pointers + i * 8).value = native_pointer(arg(first + i).address) }
+	wasi_config_set_argv(config, count, pointers)
+}
+
+# what main gave, printed as its kind is
+print_result(result: pointer): nothing := {
+	kind = byte_at(result).value
+	value = result + VALUE_OFFSET
+	if kind == KIND_I32 { print text_of(word_at(value).value as i32) }
+	if kind == KIND_I64 { print text_of(long_at(value).value) }
+	if kind == KIND_F32 or kind == KIND_F64 {
+		number = if kind == KIND_F64 then float_at(value).value else single_at(value).value
+		buffer = allocate(32)
+		gcvt(number, FLOAT_DIGITS, buffer)
+		print text_from(buffer, c_length(buffer))
+	}
+}
+struct Double { value: f64 }
+struct Single { value: f32 }
+float_at(address: pointer): Double := address
+single_at(address: pointer): Single := address
+
+run(module: text, first_argument: int): nothing := {
+	engine = wasm_engine_new()
+	context = wasmtime_store_context(wasmtime_store_new(engine, 0, 0))
+	linker = wasmtime_linker_new(engine)
+	trap = allocate(8)
+	checked(wasmtime_linker_define_wasi(linker), trap)
+	config = wasi_config_new()
+	wasi_arguments(config, first_argument)
+	wasi_config_inherit_stdin(config)
+	wasi_config_inherit_stdout(config)
+	wasi_config_inherit_stderr(config)
+	wasi_config_preopen_dir(config, ".", ".", yes)
+	checked(wasmtime_context_set_wasi(context, config), trap)
+	compiled = allocate(8)
+	checked(wasmtime_module_new(engine, module.address, module.length, compiled), trap)
+	instance = allocate(INSTANCE_BYTES)
+	checked(wasmtime_linker_instantiate(linker, context, long_at(compiled).value, instance, trap), trap)
+	main = allocate(EXTERN_BYTES)
+	if not wasmtime_instance_export_get(context, instance, "main", 4, main) {
+		complain("the module exports no main")
+		exit(1)
+	}
+	function = main + 8
+	results_count = native_long(wasm_functype_results(wasmtime_func_type(context, function)))
+	results = allocate(VALUE_BYTES * MAX_RESULTS)
+	checked(wasmtime_func_call(context, function, 0, 0, results, results_count, trap), trap)
+	if results_count > 0 { print_result(results) }
+}
+
+appended = appended_module()
+if appended.length > 0 { run(appended, 0) } else {
+	if arg_count() < 2 {
+		complain("usage: driver <module.wasm> [arguments…]")
+		exit(2)
+	}
+	module = read_file(arg(1))
+	if module.length == 0 {
+		fd_write(STDERR, "no module at ", 1, allocate(4))
+		complain(arg(1))
+		exit(1)
+	}
+	run(module, 1)
+}

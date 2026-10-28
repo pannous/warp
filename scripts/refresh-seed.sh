@@ -16,6 +16,7 @@ STAGES=${WARP_SEED_STAGES:-A B C}
 # how much longer than the old seed the new compiler may take to compile compiler.warp, in percent: the stages' own
 # times, A (the old seed) against B (the new compiler), the same source; only a clearly slower one is refused
 SLOWER_PERCENT=${WARP_SEED_SLOWER_PERCENT:-150}
+TIMEFORMAT="%U %S"
 check=
 [ "${1-}" = --check ] && { check=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
@@ -40,11 +41,13 @@ stage() {
   cp "$1" "$compilers/warp-self.wasm" || exit 1
   rm -f "$built"
   local start=$SECONDS
-  (cd "$tree" && "$warp" self build --wasm core/compiler.warp) 2>&1 | tail -5
+  # the CPU seconds (user + system) are the speed guard's measure: wall time swings with the box's load (2026-10-28:
+  # the same compile took 95 s at load 10, 233 s at load 89)
+  { time (cd "$tree" && "$warp" self build --wasm core/compiler.warp 2>&1 | tail -5); } 2>"$scratch/cpu"
   [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: compiled by $(basename "$1") wrote no module" >&2; exit 1; }
   mv "$built" "$2"
-  stage_seconds=$((SECONDS - start))
-  echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $stage_seconds s, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
+  stage_seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
+  echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $((SECONDS - start)) s, $stage_seconds s CPU, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
 }
 previous=$seed
 chosen=
@@ -71,7 +74,7 @@ echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr
 # compiler.warp, stage B the new compiler compiling the same source: their times are the comparison, no extra
 # rebuilds (decision seed-speed-from-stages); B also makes A's machine code once. WARP_SEED_SLOWER_OK=1 takes a slower
 # one anyway
-echo "refresh-seed: compiling compiler.warp took $new_seconds s with the new compiler, $old_seconds s with the seed it replaces"
+echo "refresh-seed: compiling compiler.warp took $new_seconds s CPU with the new compiler, $old_seconds s CPU with the seed it replaces"
 if [ $((new_seconds * 100)) -gt $((old_seconds * SLOWER_PERCENT)) ] && [ -z "${WARP_SEED_SLOWER_OK-}" ]; then
   echo "refresh-seed: the new compiler takes over ${SLOWER_PERCENT}% of the old seed's time; the seed stays (WARP_SEED_SLOWER_OK=1 takes it)" >&2
   exit 1
