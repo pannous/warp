@@ -120,8 +120,9 @@ compile_written(source: text, wasm_file: text, folder: text) := {
 	if linked_output != "" and runs_linked(source) { write_bytes(linked_output, separate_module()) }
 }
 # a run links its program unless it is primitive (it imports no runtime), makes closures (linked closure ids are open:
-# notes/runtime_linking.md "Open") or counts fuel: those run as the module of wasm_file
-runs_linked(source: text): bool := not is_primitive_file(source) and #module.closures == 0 and not module.counts_fuel
+# notes/runtime_linking.md "Open"), counts fuel or links a prebuilt module (`use units`: its linked form is invalid
+# wasm, 2026-10-28): those run as the module of wasm_file
+runs_linked(source: text): bool := not is_primitive_file(source) and #module.closures == 0 and not module.counts_fuel and #module.linked_images == 0
 
 # the REPL (`warp repl`): the lines that stay for the next ones, a program's declarations and uses, as warp text
 REPL_STATE = ".warp-repl-state.warp"

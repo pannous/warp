@@ -272,9 +272,19 @@ fn compiled_with(
 }
 
 /// The program compiler.warp wrote as a module importing runtime.wasm's instance, when it wrote one (it writes none for a
-/// program it runs prepended: compiler.warp runs_linked) and the program starts no tasks, which have never run linked
+/// program it runs prepended: compiler.warp runs_linked) and the program starts no tasks, which have never run linked.
+/// One that is no valid wasm is said in one line and the program runs with the runtime inside (card
+/// runtime-separate-modules: `sleep(3ms)`'s field?amount names a heap type the linked form lacks)
 fn linked_module(file: &Path) -> Option<Vec<u8>> {
-	std::fs::read(file).ok().filter(|bytes| !crate::host::tasks::imports_tasks_in(bytes))
+	let bytes = std::fs::read(file).ok().filter(|bytes| !crate::host::tasks::imports_tasks_in(bytes))?;
+	let (engine, _) = crate::run::wasm_reader::engine_for(&bytes);
+	match wasmtime::Module::validate(&engine, &bytes) {
+		Ok(()) => Some(bytes),
+		Err(failure) => {
+			eprintln!("warp: the program's linked form is no valid wasm ({failure}): run with the runtime inside (card runtime-separate-modules)");
+			None
+		}
+	}
 }
 
 /// What the run of `compiler` (a module of compiler.warp) said, writing `output` of the program file with `folder` in
