@@ -9,12 +9,13 @@
 # A new seed replaces warp-seed.wasm beside the binary (WARP_SEED names another) and is published as the asset of a
 # GitHub pre-release seed-<date>-<sha8>, where the release workflow and fresh installs fetch it.
 # WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~1.5-2.5 min on the Mac (2026-10-28:
-# A 88 s, B 126 s, C 139 s, the whole refresh with its speed guard ~10 min): run it in the background. The bytes depend on where lib/ lies (compiler.warp keeps its folder), so
-# a seed refreshed in another tree differs in that path alone.
+# A 88 s, B 126 s, C 139 s): run it in the background. The bytes depend on where lib/ lies (compiler.warp keeps its
+# folder), so a seed refreshed in another tree differs in that path alone.
 set -u
 STAGES=${WARP_SEED_STAGES:-A B C}
-# how much longer than with the old seed `warp rebuild pure` may take with the new one, in percent (noise of a run)
-SLOWER_PERCENT=${WARP_SEED_SLOWER_PERCENT:-115}
+# how much longer than the old seed the new compiler may take to compile compiler.warp, in percent: the stages' own
+# times, A (the old seed) against B (the new compiler), the same source; only a clearly slower one is refused
+SLOWER_PERCENT=${WARP_SEED_SLOWER_PERCENT:-150}
 check=
 [ "${1-}" = --check ] && { check=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
@@ -42,12 +43,16 @@ stage() {
   (cd "$tree" && "$warp" self build --wasm core/compiler.warp) 2>&1 | tail -5
   [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: compiled by $(basename "$1") wrote no module" >&2; exit 1; }
   mv "$built" "$2"
-  echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $((SECONDS - start)) s, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
+  stage_seconds=$((SECONDS - start))
+  echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $stage_seconds s, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
 }
 previous=$seed
 chosen=
+old_seconds=
+new_seconds=
 for name in $STAGES; do
   stage "$previous" "$scratch/$name.wasm"
+  if [ -z "$old_seconds" ]; then old_seconds=$stage_seconds; elif [ -z "$new_seconds" ]; then new_seconds=$stage_seconds; fi
   [ "$previous" != "$seed" ] && chosen=$previous
   if [ "$previous" != "$seed" ] && cmp -s "$previous" "$scratch/$name.wasm"; then
     echo "refresh-seed: $name is the same bytes as the stage before: a fixpoint"
@@ -61,27 +66,14 @@ cp "$chosen" "$compilers/warp-self.wasm"
 hello=$(cd "$tree" && "$warp" self samples/hello/hello.warp 2>&1)
 echo "$hello" | grep -q Hello || { echo "refresh-seed: $(basename "$chosen" .wasm) runs no hello ($(echo "$hello" | tail -1 | cut -c1-200)); the seed stays" >&2; exit 1; }
 echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr -d ' ') B sha256 $(shasum -a 256 "$chosen" | cut -d' ' -f1)"
-# a seed is what every `warp rebuild` runs: one that builds warp.wasm slower than the seed it replaces is no refresh
-# (card rebuild-pure-went: two seeds made rebuilds 2.7x slower unnoticed). Each seed's machine code is made by a first
-# build, then the two seeds take turns twice and each keeps its faster time: the load of a shared Mac moves a single
-# time by 20 s (card global-map-read: one load spike refused a seed as 75 % slower). WARP_SEED_SLOWER_OK=1 takes a
-# slower one anyway
-rebuild_seconds() {
-  local start=$SECONDS
-  (cd "$tree" && WARP_SEED=$1 scripts/rebuild.sh --force pure "$tree" >/dev/null 2>&1)
-  echo $((SECONDS - start))
-}
-faster() { [ "$1" -lt "$2" ] && echo "$1" || echo "$2"; }
-cp "$chosen" "$scratch/candidate.wasm"
-rebuild_seconds "$seed" >/dev/null
-rebuild_seconds "$scratch/candidate.wasm" >/dev/null
-old_seconds=$(rebuild_seconds "$seed")
-new_seconds=$(rebuild_seconds "$scratch/candidate.wasm")
-old_seconds=$(faster "$old_seconds" "$(rebuild_seconds "$seed")")
-new_seconds=$(faster "$new_seconds" "$(rebuild_seconds "$scratch/candidate.wasm")")
-echo "refresh-seed: warp rebuild pure takes $new_seconds s with it, $old_seconds s with the seed it replaces"
+# a seed is what every `warp rebuild` runs: one that builds warp.wasm clearly slower than the seed it replaces is no
+# refresh (card rebuild-pure-went: two seeds made rebuilds 2.7x slower unnoticed). Stage A is the old seed compiling
+# compiler.warp, stage B the new compiler compiling the same source: their times are the comparison, no extra
+# rebuilds (decision seed-speed-from-stages); B also makes A's machine code once. WARP_SEED_SLOWER_OK=1 takes a slower
+# one anyway
+echo "refresh-seed: compiling compiler.warp took $new_seconds s with the new compiler, $old_seconds s with the seed it replaces"
 if [ $((new_seconds * 100)) -gt $((old_seconds * SLOWER_PERCENT)) ] && [ -z "${WARP_SEED_SLOWER_OK-}" ]; then
-  echo "refresh-seed: the new seed builds slower than ${SLOWER_PERCENT}% of the old one's time; the seed stays (WARP_SEED_SLOWER_OK=1 takes it)" >&2
+  echo "refresh-seed: the new compiler takes over ${SLOWER_PERCENT}% of the old seed's time; the seed stays (WARP_SEED_SLOWER_OK=1 takes it)" >&2
   exit 1
 fi
 if [ -n "$check" ]; then
