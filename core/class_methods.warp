@@ -12,8 +12,8 @@
 #   runtime or the emitter defines (`sort`) is `sum·Bag` in each class declaring it, and a call `x.sum()` is routed by
 #   x's static type (decision method-routing-by-type): on a value statically no instance of those classes (a list, a
 #   number, an instance of another class) it stays as written, so a list's `xs.sum()` still sums and `names.add(x)`
-#   still adds by its sugar rule; on any other the dispatcher `sum·method(x)`, whose fallback is the call as written,
-#   `x.sum()` on a value not an instance
+#   still adds by its sugar rule; an instance of one calls its class's method; any other value the dispatcher
+#   `sum·method(x)`, which calls the function itself, sum(x), on a value not an instance
 # - a method named by an operator, its glyph, its word or an alias of the word (lib/aliases.warp: `+(o)`, `add(o)`,
 #   `plus(o)`), is the operator on its instances: the dispatcher `+·operator(a, b)` calls the method of a's class (its
 #   own or an ancestor's) and gives any other value the builtin `a + b`; the emitter calls it for `a + b` of a boxed a,
@@ -143,7 +143,7 @@ methods_lifted(program: Node): Node := {
 		# a word of the syntax has no function of its own to fall back to, nor a word no definition of which takes the
 		# call (list.warp's tally(xs) beside a class's tally(x))
 		falls_back = name in routes and (is_library_word(name) or name in functions or not names_syntax(name)) and written_call_fits(rewritten, name, taken_count(classes, liftable, name) + 1)
-		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, ø)]
+		rewritten += [method_dispatcher(classes, owners, owners.map(owning_class => name), called_name(name, routes), falls_back, spelled_operator(operator_table, name))]
 	}
 	for word in entry_words {
 		spellings = operator_methods.filter(method => spelled_operator(operator_table, method)#1 == word)
@@ -431,8 +431,7 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	builtin = if operated then Key(call_arguments#1, operator#2 as Op, call_arguments#2) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
 	reflected = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
-	written = Key(self_node, Op.Dot, call_of(spellings#1, call_arguments[1..]))
-	fallback = if not falls_back then ø else if operator == ø then written else if operated then reflected else builtin_call(spellings#1, call_arguments)
+	fallback = if not falls_back then ø else if operated then reflected else builtin_call(spellings#1, call_arguments)
 	# an operator's operands are any values: a number reaches the builtin, an instance its class's method; a routed
 	# method's instance too, so a list `[3, 1].sort()` passes none of the owners' methods its kind (their `self.n`)
 	head = if operated then call_arguments.map(operand => Key(operand, Op.Colon, symbol("any"))) else [if falls_back then Key(self_node, Op.Colon, symbol("any")) else self_node] + parameters

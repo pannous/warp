@@ -1,8 +1,10 @@
 # min and max (notes/layers.md, sugar): of two values the comparison `a < b ? a : b`, each value computed once; of
 # more, the extremum of the first two against the rest; of one list literal its items; `min xs` and `max 3 7` are the
-# calls; of one list value the first item improved by every later one, an empty list the run time error
+# calls, `xs.max()` and `xs.min(3)` too; of one list value the first item improved by every later one, an empty list the run time error
 # empty_extremum(min); of one number that number. A program's own min or max keeps its function. Rust twin:
 # src/lowering/collections/min_max.rs
+rewrite $a.min($rest...) => min($a, $rest...)
+rewrite $a.max($rest...) => max($a, $rest...)
 rewrite min($a, $b) => ($x = $a; $y = $b; $x < $y ? $x : $y)
 rewrite max($a, $b) => ($x = $a; $y = $b; $x > $y ? $x : $y)
 rewrite min($a, $b, $c, $rest...) => min(min($a, $b), $c, $rest...)
