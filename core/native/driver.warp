@@ -155,15 +155,21 @@ complain(line: text): nothing := {
 	fd_write(STDERR, "\n", 1, allocate(4))
 }
 # a failed call: the module's exit status if it exited, else the error's or the trap's message, status 1
-failed(error: handle, trap: pointer): nothing := {
+failed(error: handle, trap: pointer): nothing := failed_raising(error, trap, "")
+# a failed call of a module that may have raised: the module's exit status if it exited, else what it raised (its
+# trap_detail as print shows it, as the Rust harness's with_trap_detail) or, raising nothing, the error's or the trap's
+# message, status 1
+failed_raising(error: handle, trap: pointer, raised: text): nothing := {
 	message = allocate(VECTOR_BYTES)
 	if error != 0 {
 		status = allocate(4)
 		if wasmtime_error_exit_status(error, status) { exit(word_at(status).value as i32) }
-		wasmtime_error_message(error, message)
-	} else {
-		wasm_trap_message(long_at(trap).value, message)
 	}
+	if raised.length > 0 {
+		complain(raised)
+		exit(1)
+	}
+	if error != 0 { wasmtime_error_message(error, message) } else { wasm_trap_message(long_at(trap).value, message) }
 	complain(native_vector_text(native_pointer(message)))
 	exit(1)
 }
@@ -318,8 +324,28 @@ run(module: text, given: Arguments, machine_code: text): nothing := {
 	function = entry + 8
 	results_count = native_long(wasm_functype_results(wasmtime_func_type(context, function)))
 	results = allocate(VALUE_BYTES * MAX_RESULTS)
-	checked(wasmtime_func_call(context, function, 0, 0, results, results_count, trap), trap)
+	error = wasmtime_func_call(context, function, 0, 0, results, results_count, trap)
+	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(context, instance)) }
 	if results_count > 0 { print_result(results) }
+}
+# what the module raised, the value its exported trap_detail global holds, as print shows it; empty when it holds none
+raised_message(context: handle, instance: pointer): text := {
+	detail = allocate(EXTERN_BYTES)
+	value = allocate(VALUE_BYTES)
+	if wasmtime_instance_export_get(context, instance, "trap_detail", 11, detail) { wasmtime_global_get(context, detail + 8, value) }
+	if long_at(value + VALUE_OFFSET).value == 0 { "" } else { instance_shown(context, instance, value) }
+}
+# a value of the module as print shows it, by the instance's exports (outside a host word, which has its caller's)
+instance_shown(context: handle, instance: pointer, value: pointer): text := {
+	function = allocate(EXTERN_BYTES)
+	memory = allocate(EXTERN_BYTES)
+	result = allocate(VALUE_BYTES)
+	trap = allocate(8)
+	long_at(trap).value = 0
+	if not wasmtime_instance_export_get(context, instance, "shown_at", 8, function) or not wasmtime_instance_export_get(context, instance, "memory", 6, memory) { "" } else {
+		checked(wasmtime_func_call(context, function + 8, value, 1, result, 1, trap), trap)
+		text_in(wasmtime_memory_data(context, memory + 8), long_at(result + VALUE_OFFSET).value)
+	}
 }
 
 # `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile (src/compiler/standalone.rs
@@ -511,11 +537,12 @@ shown_packed(caller: handle, context: handle, value: pointer): i64 := {
 	packed
 }
 # a value of the module as print shows it
-shown(caller: handle, context: handle, value: pointer): text := {
-	packed = shown_packed(caller, context, value)
+shown(caller: handle, context: handle, value: pointer): text := text_in(guest_memory(caller, context), shown_packed(caller, context, value))
+# the text shown_at packed (address, length) in the module's memory at `memory`, copied out
+text_in(memory: handle, packed: i64): text := {
 	length = packed % TEXT_SHIFT
 	copy = allocate(length as i32)
-	memcpy(copy, guest_memory(caller, context) + packed / TEXT_SHIFT, length)
+	memcpy(copy, memory + packed / TEXT_SHIFT, length)
 	text_from(copy, length as u32)
 }
 # the module's Error of the message
