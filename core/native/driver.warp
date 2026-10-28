@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 @primitive
 # The native runner (notes/roadmap_native_harness.md milestone 3, notes/primitive.md "Driver"): a primitive file that
-# runs wasm modules through wasmtime's C API, called as any C library. `warp build native lib/native/driver.warp`
+# runs wasm modules through wasmtime's C API, called as any C library. `warp build native core/native/driver.warp`
 # makes the executable:
 #   driver app.warp args…   compiled by warp.wasm (of $WARP_LIB, else beside the driver), then run
 #   driver app.wasm args…   the module run
