@@ -37,7 +37,7 @@ STDOUT = 1
 hosted(compiler: text, first: int): nothing := {
 	output = compiled_path()
 	given = compiler_arguments(compiler)
-	for i in first..arg_count() { added(given, arg(i)) }
+	for i in first..arg_count() { added(given, reachable_word(arg(i))) }
 	setenv(c_string("WARP_RUN_TO"), c_string(output), 1)
 	file_ran(compiler, given)
 	unsetenv(c_string("WARP_RUN_TO"))

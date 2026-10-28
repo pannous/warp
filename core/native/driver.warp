@@ -435,6 +435,14 @@ reachable_path(path: text): text := {
 	absolute = real_path(path)
 	if same_text(absolute, joined(joined(real_path("."), "/"), path)) then path else absolute
 }
+# a word of a command as the module reaches it: an existing path (reachable_path), a new file in an existing folder
+# by that folder's, any other word (code, a name) as it is
+reachable_word(word: text): text := {
+	if access(c_string(word), READABLE) == 0 { return reachable_path(word) }
+	folder = folder_of(word)
+	if same_text(folder, ".") or access(c_string(folder), READABLE) != 0 { return word }
+	joined(joined(reachable_path(folder), "/"), text_from(word.address + folder.length + 1, word.length - folder.length - 1))
+}
 # warp.wasm of lib/, the compiler and its commands
 compiler_path(): text := joined(library_folder(), "/warp.wasm")
 # a compiler's arguments: its own path, the words after it added

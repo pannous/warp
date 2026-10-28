@@ -37,6 +37,9 @@ if [ -x "$stage/warp" ]; then
 	check "bare warp, lines piped: the console" "$(printf 'a = 7\na * 6\n' | native | sed -n 3p)" "🌀42"
 	check "eval, code" "$(native eval '3 * 4')" 12
 	check "a command the native warp lacks yet" "$(native verify 1)" "warp verify is not in the native warp yet: warp-rust verify runs it"
+	mkdir "$stage/below"
+	check "a file above the current folder" "$(cd "$stage/below" && ../warp ../hello.warp 2>&1)" "Hello 🌍2026"
+	check "a command's path above the current folder" "$(cd "$stage/below" && ../warp compile ../hello.warp ../above.wasm >/dev/null 2>&1; ls "$stage/above.wasm" 2>&1)" "$stage/above.wasm"
 	check "rebuild of no compiler" "$(native rebuild nonsense | cut -c1-34)" "warp rebuild: no compiler nonsense"
 else
 	echo "✗ warp: no executable"; head -5 "$stage/build.log"; failures=$((failures + 1))
