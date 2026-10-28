@@ -102,6 +102,10 @@ harness_current() {
 built_from_tip() {
 	(cd "$TREE" && CARGO_TARGET_DIR=$CARGO_TARGET cargo build --release -q) || { red "harness: cargo build --release failed" --urgent; return 1; }
 	cp "$CARGO_TARGET/release/warp" "$1/warp" || return 1
+	# the stub `warp build` appends a program's machine code to, built alone: with warp's features unified it is 6.9 MB,
+	# not 1.3 MB (card executable-prints-value)
+	(cd "$TREE" && CARGO_TARGET_DIR=$CARGO_TARGET cargo build --release -q -p warp-runtime --bin warp-runtime) &&
+		cp "$CARGO_TARGET/release/warp-runtime" "$1/warp-runtime" || red "harness: the runtime stub warp-runtime did not build"
 	local said
 	said=$("$1/warp" version 2>&1)  # read whole: grep -q quitting early would fail the pipe (pipefail)
 	grep -Eq "^release build ${tip:0:9}( on main)? " <<<"$said"
