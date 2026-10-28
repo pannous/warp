@@ -572,7 +572,7 @@ statement_types(statement: Node, program_types: map, self_types: map, classes: m
 # the entry's word and its aliases, `+`, add and plus each [add, "+"]; read once per program
 operator_spellings(): map := {
 	found = {}
-	for row in items_of(written_tree(ALIAS_TABLE)) {
+	for row in items_of(alias_table_tree()) {
 		glyph = alias_field(row#2, "operator")
 		word = spelling_text(row#1)
 		if glyph is text { for spelling in [glyph, word] + (alias_field(row#2, "aliases") ?? []) { found[spelling] = [word, glyph] } }
