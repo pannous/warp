@@ -218,5 +218,6 @@ match command {
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
 	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
 	"modules": write_modules(args#2, if #args > 2 then args#3 else RUNTIME_WASM)
+	"optimize": trim(args#2, args#3, "optimize")
 	_: if command in running_commands then refuse_running(command) else refuse_native(command)
 }
