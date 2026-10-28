@@ -57,9 +57,13 @@ made_case kind made, since no program decides any more what it makes.
 - **Exports**: memory as `memory`, every runtime function and global under its warp name, the tag, the table `hooks`.
 - **Custom sections**:
   - `name`, as the emitter writes it today (functions, locals, types, fields, globals).
-  - `warp.runtime`, the layout as warp-notation text: `types` (G), `imports`, `functions`, `globals`, `data` (bytes),
-    `hooks` (names in table-slot order), `left`, `words: {"name": [index, [parameter kinds], result kind]}`. The
-    emitter's call_values needs the kinds; a wasm type alone can't tell Bool, Int and Char apart.
+  - `warp.runtime`, the layout, binary so a compile reads it in milliseconds with no parser and no cache (user: "read
+    from the WebAssembly modules"): five ulebs G, imports, functions, globals, data size; the hooks' names in
+    table-slot order; the left words' names; the globals, each [name, kind]; the words, each [name, index, vector of
+    parameter kinds, result kind]. A name is a uleb length and its UTF-8 bytes, a list a uleb count and its entries, a
+    kind its place in prebuilt.warp's held_kinds (Int 0, Float 1, Bool 2, Char 3, I32 4, Text 5, List 6, Node 7,
+    Time 8, Nothing 9). Reader: prebuilt.warp ByteReader. The emitter's call_values needs the kinds; a wasm type alone
+    can't tell Bool, Int and Char apart.
   - `warp.relocations` (replaced warp.calls): a vector of [offset, kind, space] uleb triples, one per padded 5-byte
     operand of the code: offset its byte in the code section's content (behind its vector count); kind what it indexes,
     0 a function (call), 1 a type (a GC op's type immediates), 2 a global (global.get/set), 3 a text's data offset
