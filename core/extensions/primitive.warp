@@ -352,10 +352,13 @@ mvp_literal(n: Node, expected: text): PrimitiveCode := {
 	bytes = match wasm {
 		"f64": le64(float_bits(n * 1.0))
 		"f32": le64(float_bits(n * 1.0)) + [conversion_codes["f64 f32"]#1]
+		"i32": sleb(as_i32(n))
 		_: sleb(n)
 	}
 	PrimitiveCode(type, [const_codes[if wasm == "f32" then "f64" else wasm]] + bytes)
 }
+# i32.const takes a signed 32-bit number: an unsigned one above 2^31 (0xfeedfacf) is its two's complement
+as_i32(n: int): int := if n >= 1 << 31 then n - (1 << 32) else n
 
 mvp_variable(f: PrimitiveFunction, n: Node): PrimitiveCode := {
 	name = name_of(n)

@@ -126,13 +126,11 @@ declarations_used(statements: list, folder: text, seen: list, claimed: map): lis
 	[declarations, seen]
 }
 
-# a used file's parse, kept by its text (card speed-module-cache): a rebuild parses again only the files that changed;
-# kept by the files that parse (os.keep_of), so an edit of core beyond them keeps the parses
+# a used file's parse, parsed again each compile: keeping parses across runs saved about 1 % (card kept-values-retire)
 file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { raise working_relative(file) + ": no such file to use" }
-	name = "the parse of " + source
-	kept_of(name, parse_makers) ?? keep_of(name, checked_parse(file, source), parse_makers)
+	checked_parse(file, source)
 }
 # a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
 # unclosed-core: an unclosed ( in a core file hid its later definitions)
@@ -144,7 +142,6 @@ checked_parse(file: text, source: text): Node := {
 	}
 	tree
 }
-parse_makers = ["parser.warp", "walk.warp"]
 
 # A used file's declarations claim their signatures: another file declaring one already, differently, is the error
 # naming both, since the later would silently replace the earlier (card module-name-clash); the same declaration in

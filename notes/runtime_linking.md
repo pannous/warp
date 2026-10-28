@@ -92,7 +92,7 @@ made_case kind made, since no program decides any more what it makes.
   their heads only (prelude_words.warp declared_only: `f(x) := ø`), from the slice parses baked into the compiler, so
   nothing of their bodies is lowered or analyzed; the analyzer takes their kinds and results from warp.module
   (analyzer.warp declared_linked), the emitter binds them and refuses to compile one (functions.warp). Its classes and
-  globals come whole (linked_needs), the program runs the globals' initializers. A module whose binding fails is said
+  globals come in (linked_needs), a class with its methods declared alike, its fields whole; the program runs the globals' initializers. A module whose binding fails is said
   on stderr ("units: the linked module didn't bind (…); compiled from source") and the program compiled from source.
   No separate warp.declarations section: the compiler already carries every bundled module's parse.
 - Modules have no hooks of their own: a module's class (units) is a class of the linked program, its text() and ==
@@ -109,13 +109,16 @@ made_case kind made, since no program decides any more what it makes.
   (one per function), globals (by name: one already declared is that one) and text segments go behind the runtime's,
   its code moved by separate-modules' `rebased` moves; its words the program calls are bound (bind_library_words),
   never compiled; its class structs are the program's of the same name when declared alike (struct_written), else
-  the compile goes on from source. Not linked: a module making closures, importing C functions, or built behind
-  another runtime.wasm (warp.module's trailer: own_from, closures, classes, builds). test/modules gives the same
+  the compile goes on from source. Not linked: a module importing C functions, or built behind another
+  runtime.wasm (warp.module's trailer: own_from, closures, classes, builds).
+- Closures (2026-10-28): a module's closure numbers are relocatable operands (kind closures, i64.const padded); its
+  trailer lists each closure [target, captured, shown text]; a link numbers them first, as `<module>·<target>` at the
+  module's index, so the program's dispatchers (runtime hooks) call them; lifted lambdas are never bound by name.
+  list, text, shell and matrix link. test/modules gives the same
   results linked and from source. Measured: `use units; 3m + 2m` 0.64 s -> 0.56 s: the program still lowers the
   module's reached definitions (checked_program, 70 of 84 samples); declared: 0.36 s, 46 samples.
 - Open: the module's prelude words are its own copy
-  (they should be the prelude module's, space 2+k); closures into module.closures behind the program's, closure ids as
-  a padded sleb behind i64.const (fixer's plan); classes from warp.declarations into module.classes before late_code;
+  (they should be the prelude module's, space 2+k); classes from warp.declarations into module.classes before late_code;
   late_code once all modules are bound.
 
 ## Hooks (runtime words calling program code: a class's text(), ==)
