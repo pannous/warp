@@ -123,12 +123,16 @@ shell(line: text): text := {
 	if printed is text then printed else raise "`" + line + "` failed: " + printed
 }
 
-# `warp build [--wasm] [--trim=<way>] app.warp` (wiki/cli.md): a primitive file as a native executable (build_native),
+# `warp build [--wasm] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
 # any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
 # trimmed by Binaryen's wasm-opt) and the executable app (warp-runtime carrying app.wasm's machine code). The native
 # warp adds where runtime.wasm and the stub lie: --runtime=<file> --stub=<file>
 OPTION_MARK = "--"
 WASM_ONLY = "--wasm"
+# what a build of inline code is called: out.wasm, the executable out
+INLINE_STEM = "out"
+# what the Rust compiler built and the warp one doesn't yet: a page's site, its module, WIT, a component, WAGI
+UNBUILT_OPTIONS = ["--site", "--page", "--wit", "--component", "--wagi"]
 TRIM_WAYS = {none: "", unused: "--remove-unused-module-elements", optimize: "-O2"}
 DEFAULT_TRIM = "optimize"
 # what wasmtime runs; Binaryen's -all would add custom descriptors, whose exact references wasmtime refuses. The name
@@ -138,13 +142,18 @@ BINARYEN_INSTALL = "brew install binaryen"
 
 build(words: list) := {
 	options = words.filter(word => word.starts_with(OPTION_MARK))
-	files = words.filter(word => not word.starts_with(OPTION_MARK))
-	if files#1 == NATIVE_WORD { return build_native(files#2, library_folder) }
-	if is_primitive_file(read(files#1)) { return build_native(files#1, library_folder) }
-	stem = files#1.remove_suffix(".warp")
+	targets = words.filter(word => not word.starts_with(OPTION_MARK))
+	for option in options { if option in UNBUILT_OPTIONS { raise "warp build " + option + ": not in the warp compiler yet (card harness-diet)" } }
+	if targets#1 == NATIVE_WORD { return build_native(targets#2, library_folder) }
+	target = targets#1
+	is_file = exists(target)
+	source = if is_file then read(target) else target
+	if is_file and is_primitive_file(source) { return build_native(target, library_folder) }
+	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
+	if is_file { emitting_file(working_relative(target)) }
 	runtime_held = read_bytes(option_of(options, "runtime"))
 	separate_output = stem + ".mod.wasm"
-	compile_file(files#1, stem + ".full.wasm", folder_of(files#1))
+	compile_written(source, stem + ".full.wasm", if is_file then folder_of(target) else ".")
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
 	for written in [stem + ".full.wasm", separate_output, stem + ".wasm"] { print "compiled " + size_of(written) + " bytes to " + written }
 	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", option_of(options, "stub"), stem) }
