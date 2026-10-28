@@ -224,7 +224,7 @@ c_functions_of(source: text, library_folder: text): list := {
 	}
 	# libm's functions warp has no pure code for (all but c_emitted_words: sin, cos, exp…), called without an import as
 	# Rust's lane calls them, by the program or a standard module it uses (`use sound`'s log2)
-	reached = reached_modules(source)
+	reached = reached_within(source)
 	calling = ([source] + module_sources(reached)).join("\n")
 	for d in catalog { if d#2 == "m" and not functions.has(d#1) and not c_warps(own, d#1, "m") and calling.contains(d#1 + "(") { functions[d#1] = d } }
 	# the foreign lines of the standard modules it uses, each it calls (lib/sound.warp's kill, unlink, mkdir); the
@@ -234,6 +234,16 @@ c_functions_of(source: text, library_folder: text): list := {
 		if d != ø and not functions.has(d#1) and calling.contains(d#1 + "(") { functions[d#1] = d }
 	}
 	[c_without(kept, resolved).join("\n"), functions, missing]
+}
+# the standard modules a source reaches, those they use in turn too (matrix's math uses reals, whose sin is libm's)
+reached_within(source: text): list := {
+	reached = reached_modules(source)
+	at = 1
+	while at <= #reached {
+		for module in used_modules(file_source(run_library() + "/" + reached#at + ".warp") ?? "") { if module not in reached { reached += [module] } }
+		at += 1
+	}
+	reached
 }
 # the lines without the statements of `statements`, the other statements of a line kept (a line left empty stays)
 c_without(lines: list, statements: list): list := {
