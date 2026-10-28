@@ -102,7 +102,9 @@ harness_current() {
 built_from_tip() {
 	(cd "$TREE" && CARGO_TARGET_DIR=$CARGO_TARGET cargo build --release -q) || { red "harness: cargo build --release failed" --urgent; return 1; }
 	cp "$CARGO_TARGET/release/warp" "$1/warp" || return 1
-	"$1/warp" version 2>&1 | grep -Eq "^release build ${tip:0:9}( on main)? "
+	local said
+	said=$("$1/warp" version 2>&1)  # read whole: grep -q quitting early would fail the pipe (pipefail)
+	grep -Eq "^release build ${tip:0:9}( on main)? " <<<"$said"
 }
 
 # the harness of $tip built and installed: its folder in $BUILDS with warp.wasm built by it, hello, the compilers
