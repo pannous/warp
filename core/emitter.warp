@@ -759,11 +759,12 @@ def expression_code(body: Body, n: Node): TypedCode {
 	group_expression(body, n)
 }
 
-# `f 3 4`: a program function's name before as many spaced arguments as it takes calls it, as `f(3, 4)`
+# `f 3 4`: a program function's name before spaced arguments it takes calls it, as `f(3, 4)`; `midi_on C4` too,
+# the rest defaulted
 is_spaced_call(body: Body, n: Node): bool := {
 	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
 	name = name_of(n#1)
-	name in module.functions and name not in body.names and #module.functions[name].signature.parameters == #n - 1
+	name in module.functions and name not in body.names and takes_arguments(module.functions[name], items_of(n)[1..])
 }
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: Node): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
