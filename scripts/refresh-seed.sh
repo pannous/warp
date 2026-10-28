@@ -63,16 +63,22 @@ echo "$hello" | grep -q Hello || { echo "refresh-seed: $(basename "$chosen" .was
 echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr -d ' ') B sha256 $(shasum -a 256 "$chosen" | cut -d' ' -f1)"
 # a seed is what every `warp rebuild` runs: one that builds warp.wasm slower than the seed it replaces is no refresh
 # (card rebuild-pure-went: two seeds made rebuilds 2.7x slower unnoticed). Each seed's machine code is made by a first
-# build, the second is timed; WARP_SEED_SLOWER_OK=1 takes a slower one anyway
+# build, then the two seeds take turns twice and each keeps its faster time: the load of a shared Mac moves a single
+# time by 20 s (card global-map-read: one load spike refused a seed as 75 % slower). WARP_SEED_SLOWER_OK=1 takes a
+# slower one anyway
 rebuild_seconds() {
-  (cd "$tree" && WARP_SEED=$1 scripts/rebuild.sh --force pure "$tree" >/dev/null 2>&1)
   local start=$SECONDS
   (cd "$tree" && WARP_SEED=$1 scripts/rebuild.sh --force pure "$tree" >/dev/null 2>&1)
   echo $((SECONDS - start))
 }
+faster() { [ "$1" -lt "$2" ] && echo "$1" || echo "$2"; }
 cp "$chosen" "$scratch/candidate.wasm"
+rebuild_seconds "$seed" >/dev/null
+rebuild_seconds "$scratch/candidate.wasm" >/dev/null
 old_seconds=$(rebuild_seconds "$seed")
 new_seconds=$(rebuild_seconds "$scratch/candidate.wasm")
+old_seconds=$(faster "$old_seconds" "$(rebuild_seconds "$seed")")
+new_seconds=$(faster "$new_seconds" "$(rebuild_seconds "$scratch/candidate.wasm")")
 echo "refresh-seed: warp rebuild pure takes $new_seconds s with it, $old_seconds s with the seed it replaces"
 if [ $((new_seconds * 100)) -gt $((old_seconds * SLOWER_PERCENT)) ] && [ -z "${WARP_SEED_SLOWER_OK-}" ]; then
   echo "refresh-seed: the new seed builds slower than ${SLOWER_PERCENT}% of the old one's time; the seed stays (WARP_SEED_SLOWER_OK=1 takes it)" >&2

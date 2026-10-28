@@ -5,6 +5,7 @@
 use os
 use "walk.warp"
 use "parser.warp"
+use "scope.warp"
 use "enum_declarations.warp"
 use "signatures.warp"
 
@@ -102,7 +103,17 @@ file_parsed(file: text): Node := {
 	source = file_text(file)
 	if source is ø { return plain_node(parsed(source)) }
 	name = "the parse of " + source
-	kept_of(name, parse_makers) ?? keep_of(name, plain_node(parsed(source)), parse_makers)
+	kept_of(name, parse_makers) ?? keep_of(name, checked_parse(file, source), parse_makers)
+}
+# a used file's tree; one that does not parse is the error naming the file, never a file of no declarations (card
+# unclosed-core: an unclosed ( in a core file hid its later definitions)
+checked_parse(file: text, source: text): Node := {
+	tree = plain_node(parsed(source))
+	for n in nodes_in(tree) {
+		message = parse_error_message(n)
+		if message != ø { raise working_relative(file) + ": " + message }
+	}
+	tree
 }
 parse_makers = ["parser.warp", "walk.warp"]
 

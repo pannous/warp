@@ -56,3 +56,11 @@ Cause: compiler code moved to classes (TypedCode `value.kind`, `f.kinds`, e1a887
 a field read sharing its name with a function compiled to has_field + map_get + instance_place name scans.
 class-field-reads (0d6920297d) reads a known class's field by struct.get. Lesson: before publishing a seed, time
 `warp rebuild pure` with it against the installed one (WARP_SEED=<new>), not only its fixpoint.
+
+## Noise of a single timing (2026-10-28, card global-map-read)
+
+One `warp pure build core/compiler.warp` moves by ±20 s with the load of the shared Mac: main's warp.wasm took 84 s and
+a branch's 65 s back to back at load ~6, and refresh-seed refused seed 30d01c7a as 115 s vs 65 s during a load spike
+(~31). A suspected 20 % cost of a `core_type_words.get` in aliased_type was that noise: 300k gets of the global map take
+< 0.2 s inside the compiler (~350k aliased_type calls per self build). Compare timings only back to back, alternating,
+taking each side's fastest; refresh-seed.sh does so (two alternating rounds after a warm build of each seed).

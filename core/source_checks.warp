@@ -45,7 +45,8 @@ charged_assignments(block: Node) := {
 }
 # an error the parser leaves in the tree (a negative index), the program's value
 located_error(n: Node) := {
-	if n is key and key_of(n) == opaque_symbol and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2]), n) }
+	message = parse_error_message(n)
+	if message != ø { diagnose(call_of("parse_error", [message]), n) }
 	ø
 }
 
