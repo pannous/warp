@@ -80,6 +80,21 @@ All options stay open and are exposed to the build process (`warp build` options
   shaking-build-options); separate modules linked by import/export, in the browser and wherever the ahead-of-time
   compile combines modules natively, so size may not matter at all (card runtime-separate-modules; GC types match
   across modules through the canonical type section).
+- `warp build --trim=<way>` (src/cli/trimming.rs; also `warp pure build`): `optimize` (the default, and bare
+  `--trim`), `unused`, `none`, `warp` (refused until runtime-shaking). Trimmed by default (user, 2026-10-28), the way
+  picked by measurement: wasm-opt with wasmtime's feature list (never `-all`: custom descriptors write exact
+  references wasmtime refuses) and the name section kept. Measured 2026-10-28 on the seed-era modules:
+
+  | module | compiled | `unused` (--remove-unused-module-elements) | `optimize` (-O2) |
+  |---|---|---|---|
+  | hello | 2135 | 1562, 33 ms | 917, 32 ms |
+  | sudoku | 32694 | 31086, 25 ms | 19640, 59 ms |
+  | raytracer | 48280 | 46126, 26 ms | 31431, 87 ms |
+  | neural_net | 49098 | 46647, 26 ms | 29474, 72 ms |
+  | snake | 86064 | 82755, 28 ms | 61172, 82 ms |
+
+  -O2 is about a third smaller for 30–60 ms more, so it is the default; outputs identical. Today's emitter already
+  writes only the reached runtime words; once the runtime is prepended whole (runtime-prepended), `unused` matters.
 - Low priority: our own clean linker in warp (card runtime-shaking, Later): reachability from the user's code over the
   baked call-site list, compact the function list, rewrite the padded operands; the same for globals, data and
   elements. From first principles, not a port of wasp's C++ linker.
