@@ -1,0 +1,6 @@
+@primitive
+# a primitive file another one uses (uses.warp): its constants, structs and functions come along
+TWICE = 2
+struct Pair { left: i64; right: i64 }
+doubled(n: i64): i64 := n * TWICE
+sum(p: Pair): i64 := p.left + p.right

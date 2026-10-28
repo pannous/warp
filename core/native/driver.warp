@@ -528,7 +528,8 @@ c_line(table: text, from: text, name: text): text := {
 # its result's register and what it crosses as, how a failure shows, the first out-pointer's pointee
 struct Foreign { function: handle; name: pointer; name_length: u32; kinds: pointer; count: i32; register: i32; crossing: i32; failure: i32; pointee: pointer; pointee_length: u32 }
 foreign_at(address: pointer): Foreign := address
-# the kinds, as their positions among the names c_signatures.rs gives them (parameter_kind, register_of, …)
+# the kinds of the words c_signatures.rs names them by, each word's kind in one place (parameter_kind, register_of, …);
+# 0 is a word the driver doesn't know
 PARAMETER_I32 = 1
 PARAMETER_I64 = 2
 PARAMETER_F32 = 3
@@ -536,23 +537,55 @@ PARAMETER_F64 = 4
 PARAMETER_TEXT = 5
 PARAMETER_HANDLE = 6
 PARAMETER_OUT = 7
+REGISTER_I32 = 1
 REGISTER_I64 = 2
 REGISTER_F32 = 3
 REGISTER_F64 = 4
 REGISTER_BOOL = 5
+REGISTER_VOID = 6
+CROSSING_NUMBER = 1
 CROSSING_TEXT = 2
 CROSSING_OWNED_TEXT = 3
 CROSSING_HANDLE = 4
-FAILURE_NOT_NULL = 1
-FAILURE_FALSE = 2
-parameter_kind(name: text): i32 := position_in(name, "i32 i64 f32 f64 ptr handle out")
-register_of(name: text): i32 := position_in(name, "i32 i64 f32 f64 bool void")
-crossing_of(name: text): i32 := position_in(name, "number text owned_text handle")
-failure_of(name: text): i32 := position_in(name, "not_null false")
-# the position of a word among space-separated names, from 1; 0 when it is none of them
-position_in(word: text, names: text): i32 := {
-	for i in 0..field_count(names, SPACE) { if same_text(field(names, i, SPACE), word) { return (i + 1) as i32 } }
+FAILURE_NONE = 1
+FAILURE_NOT_NULL = 2
+FAILURE_FALSE = 3
+parameter_kind(name: text): i32 := {
+	if same_text(name, "i32") { return PARAMETER_I32 }
+	if same_text(name, "i64") { return PARAMETER_I64 }
+	if same_text(name, "f32") { return PARAMETER_F32 }
+	if same_text(name, "f64") { return PARAMETER_F64 }
+	if same_text(name, "ptr") { return PARAMETER_TEXT }
+	if same_text(name, "handle") { return PARAMETER_HANDLE }
+	if same_text(name, "out") { return PARAMETER_OUT }
 	0
+}
+register_of(name: text): i32 := {
+	if same_text(name, "i32") { return REGISTER_I32 }
+	if same_text(name, "i64") { return REGISTER_I64 }
+	if same_text(name, "f32") { return REGISTER_F32 }
+	if same_text(name, "f64") { return REGISTER_F64 }
+	if same_text(name, "bool") { return REGISTER_BOOL }
+	if same_text(name, "void") { return REGISTER_VOID }
+	0
+}
+crossing_of(name: text): i32 := {
+	if same_text(name, "number") { return CROSSING_NUMBER }
+	if same_text(name, "text") { return CROSSING_TEXT }
+	if same_text(name, "owned_text") { return CROSSING_OWNED_TEXT }
+	if same_text(name, "handle") { return CROSSING_HANDLE }
+	0
+}
+failure_of(name: text): i32 := {
+	if name.length == 0 { return FAILURE_NONE }
+	if same_text(name, "not_null") { return FAILURE_NOT_NULL }
+	if same_text(name, "false") { return FAILURE_FALSE }
+	0
+}
+# a field of a C function's line the driver doesn't know stops the run naming it
+known(kind: i32, name: text, what: text, word: text): i32 := {
+	if kind == 0 { failed_call(joined(joined(joined(joined(name, ": "), what), word), ", not in the native driver yet")) }
+	kind
 }
 # the C function of a line, found in its library; one the driver can't call stops the run naming it
 foreign_of(line: text): i64 := {
@@ -566,16 +599,16 @@ foreign_of(line: text): i64 := {
 	floats = 0
 	for p in 0..count {
 		type = field(parameters, p, COMMA)
-		kind = parameter_kind(type)
-		if kind == 0 { failed_call(joined(joined(joined(name, ": a "), type), " parameter, not in the native driver yet")) }
+		kind = known(parameter_kind(type), name, "a parameter ", type)
 		byte_at(kinds + p).value = kind as u8
 		if kind == PARAMETER_F32 or kind == PARAMETER_F64 { floats = floats + 1 }
 	}
 	if floats > REGISTERS or count - floats > REGISTERS { failed_call(joined(name, ": more than 8 integer or float parameters, not in the native driver yet")) }
-	crossing = crossing_of(field(line, 5, TAB))
-	if crossing == 0 { failed_call(joined(joined(joined(name, ": a result crossing as "), field(line, 5, TAB)), ", not in the native driver yet")) }
+	register = known(register_of(field(line, 4, TAB)), name, "a result register ", field(line, 4, TAB))
+	crossing = known(crossing_of(field(line, 5, TAB)), name, "a result crossing as ", field(line, 5, TAB))
+	failure = known(failure_of(field(line, 8, TAB)), name, "a failure shown as ", field(line, 8, TAB))
 	pointee = field(line, 6, TAB)
-	Foreign(function, name.address, name.length, kinds, count as i32, register_of(field(line, 4, TAB)), crossing, failure_of(field(line, 8, TAB)), pointee.address, pointee.length) as i64
+	Foreign(function, name.address, name.length, kinds, count as i32, register, crossing, failure, pointee.address, pointee.length) as i64
 }
 failed_call(message: text): nothing := {
 	complain(message)
