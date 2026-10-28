@@ -185,9 +185,8 @@ complain(line: text): nothing := {
 }
 # a failed call: the module's exit status if it exited, else the error's or the trap's message, status 1
 failed(error: handle, trap: pointer): nothing := failed_raising(error, trap, "")
-# a failed call of a module that may have raised: the module's exit status if it exited, else what it raised (its
-# trap_detail as print shows it, as the Rust harness's with_trap_detail) or, raising nothing, the error's or the trap's
-# message, status 1
+# a failed call of a module that may have raised: the module's exit status if it exited, else the sentence of the
+# runtime error it failed in (raised_message) or, when none failed, the error's or the trap's message, status 1
 failed_raising(error: handle, trap: pointer, raised: text): nothing := {
 	message = allocate(VECTOR_BYTES)
 	if error != 0 {
@@ -469,22 +468,16 @@ run(module: text, given: Arguments, machine_code: text): nothing := {
 	if error != 0 or long_at(trap).value != 0 { failed_raising(error, trap, raised_message(context, instance)) }
 	if results_count > 0 { print_result(results) }
 }
-# what the module raised, the value its exported trap_detail global holds, as print shows it; empty when it holds none
+# what the run failed in, as every host says it: the module's trap_message (core/runtime/error_sentences.warp), the
+# runtime error's sentence at its place; empty when no runtime word failed (the engine's own trap tells then)
 raised_message(context: handle, instance: pointer): text := {
-	detail = allocate(EXTERN_BYTES)
-	value = allocate(VALUE_BYTES)
-	if wasmtime_instance_export_get(context, instance, "trap_detail", 11, detail) { wasmtime_global_get(context, detail + 8, value) }
-	if long_at(value + VALUE_OFFSET).value == 0 { "" } else { instance_shown(context, instance, value) }
-}
-# a value of the module as print shows it, by the instance's exports (outside a host word, which has its caller's)
-instance_shown(context: handle, instance: pointer, value: pointer): text := {
 	function = allocate(EXTERN_BYTES)
 	memory = allocate(EXTERN_BYTES)
 	result = allocate(VALUE_BYTES)
 	trap = allocate(8)
 	long_at(trap).value = 0
-	if not wasmtime_instance_export_get(context, instance, "shown_at", 8, function) or not wasmtime_instance_export_get(context, instance, "memory", 6, memory) { "" } else {
-		checked(wasmtime_func_call(context, function + 8, value, 1, result, 1, trap), trap)
+	if not wasmtime_instance_export_get(context, instance, "trap_message", 12, function) or not wasmtime_instance_export_get(context, instance, "memory", 6, memory) { "" } else {
+		checked(wasmtime_func_call(context, function + 8, 0, 0, result, 1, trap), trap)
 		text_in(wasmtime_memory_data(context, memory + 8), long_at(result + VALUE_OFFSET).value)
 	}
 }

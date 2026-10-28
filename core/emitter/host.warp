@@ -59,6 +59,13 @@ def exported_shown_at(): any {
 	f = exported_function("shown_at", [ValueKind.Node], ValueKind.Int)
 	f.code = runtime_call("shown_at", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
 }
+# the sentence of the runtime error a run failed in, at its place in the program's file (runtime/error_sentences.warp),
+# packed as shown_at's: what every host prints of a failed run, 0 when no runtime word failed
+def exported_trap_message() {
+	f = exported_function("trap_message", [], ValueKind.Int)
+	position = [op.global_get] + relocatable(relocated.globals, declared_global("trap_position", ValueKind.I32)#1) + [op.i64_extend_i32_s]
+	f.code = runtime_call("trap_sentence_at", [TypedCode(ValueKind.Text, text_bytes(module.program_file)), TypedCode(ValueKind.Int, position)]).code
+}
 # f at the module's next function index (results `any`: a declared Function result fails, card class-result-type),
 # the functions counted as placed, not measured: a long list's count walks it
 placed(f: Function): any := {
