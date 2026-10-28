@@ -147,13 +147,25 @@ c_import(statement: text): any := {
 	names = parts#1.replace("(", " ").replace(")", " ").replace(",", " ").split(" ").map(n => n.trim()).filter(n => n != "")
 	[library, names]
 }
-# `use sqlite3` → "sqlite3", `use crate "regex@1"` → "rs_regex"; ø for another statement
+# what `use sqlite3`, `import raylib` or `require z` names (parser.warp USE_KEYWORDS), a comment after it left out
+# (`import raylib # all of it`); ø for another statement
+used_word(statement: text): any := {
+	for keyword in USE_KEYWORDS {
+		if statement.starts_with(keyword + " ") {
+			words = statement.remove_prefix(keyword + " ").trim().split(" ")
+			commented = #words > 1 and comment_marks.any(mark => words#2.starts_with(mark))
+			return if commented then words#1 else words.join(" ")
+		}
+	}
+	ø
+}
+comment_marks = ["#", "//"]
+# `use sqlite3` → "sqlite3", `import raylib` too, `use crate "regex@1"` → "rs_regex"; ø for another statement
 c_use(statement: text): any := {
 	crate = c_crate_use(statement)
 	if crate != ø { return crate }
-	if not statement.starts_with("use ") { return ø }
-	word = statement.remove_prefix("use ").trim()
-	if word == "" or word.contains(" ") or word.contains("\"") or word.contains("'") { return ø }
+	word = used_word(statement)
+	if word == ø or word == "" or word.contains(" ") or word.contains("\"") or word.contains("'") { return ø }
 	c_library_aliases.get(word) ?? word
 }
 
@@ -229,7 +241,7 @@ c_emitted_words = ["floor"]
 c_warps(own: map, name: text, library: text): bool := library in c_and_m and own.has(name) and name in c_emitted_words
 # the line with each `use sqlite3` of a library of `native` ([library, path] each) a `use` of its native file
 native_uses(line: text, native: list): text := {
-	if #native == 0 or not line.contains("use ") { return line }
+	if #native == 0 { return line }
 	parts = []
 	for part in line.split(";") {
 		library = c_use(part.trim())

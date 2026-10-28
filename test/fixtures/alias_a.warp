@@ -1,0 +1,2 @@
+# a type alias of a union, used beside alias_b.warp (test/types/test_union_aliases)
+type Spot = list or int

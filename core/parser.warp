@@ -770,10 +770,23 @@ def grouped(pairs: list, bracket: Bracket): Node := {
 def phrase(bracket: Bracket, nodes: list): Node := {
 	guarded = if bracket == Bracket.Square then ø else guarded_command(nodes)
 	if guarded != ø { return guarded }
+	assigned = if bracket == Bracket.Square then ø else of_assignment(nodes)
+	if assigned != ø { return if bracket == Bracket.None then assigned else listed(bracket, Separator.Space, [assigned]) }
 	if not (bracket == Bracket.None or bracket == Bracket.Curly) or nodes.length < 3 or nodes#1 != PRINT { return listed(bracket, Separator.Space, nodes) }
 	listed(bracket, Separator.Space, [nodes#1, spaced(nodes[1:])])
 }
 PRINT = symbol("print")
+OF = symbol("of")
+
+// `of` binds tighter than `=`: `width of canvas = 12` and `square of int = it * it` assign to the phrase, not to its
+// last word
+def of_assignment(nodes: list): Node? := {
+	if nodes.length < 3 or not nodes[0 ..< nodes.length - 1].contains(OF) { return ø }
+	match nodes#(nodes.length) {
+		Key(target, Op.Assign, value): Key(listed(Bracket.None, Separator.Space, nodes[0 ..< nodes.length - 1] + [target]), Op.Assign, value)
+		_: ø
+	}
+}
 
 // `print a, b` and `{ print i, i*2 }`: the comma binds looser than the space, so [[print a], b] is the call print(a, b)
 // Rust twin: commands.rs grouped_list, print_call

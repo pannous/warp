@@ -3,3 +3,8 @@
 'type View = list or int; class C{v: View}; C(3).v'	3
 'type View = list or int; x: View = [1]; x'	[1]
 'type View = list or int; f(v: View) := 1; f("ab")'	error
+# a function typed with a union may answer ø, which no member holds
+'type V = list or int; f(x: int): V := if x > 0 then x else ø; [f(0), f(2)]'	[ø, 2]
+'f(x: int): int or text := [x]; f(1)'	error
+# two used files declaring a type alias each declare different types, no clash
+'use "../fixtures/alias_a.warp"; use "../fixtures/alias_b.warp"; f(v: Spot) := 1; f(3)'	1

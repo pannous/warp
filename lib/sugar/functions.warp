@@ -14,3 +14,8 @@ rewrite def $h($p...) {$b...} => ($h($p...) := {$b...})
 # f(x): {body}
 rewrite (def $h($p...): {$b...}) => ($h($p...) := {$b...})
 rewrite (def $d) => $d
+# `square of number = it * it` (wiki/function.md, inventions.md "Of keyword"), also `square of a number`: the
+# bracket-less `square(it: number) := it * it`, a variant of each type it is defined of
+rewrite ($f of a $t = $e) => ($f(it: $t) := $e) where $t is type
+rewrite ($f of an $t = $e) => ($f(it: $t) := $e) where $t is type
+rewrite ($f of $t = $e) => ($f(it: $t) := $e) where $t is type
