@@ -29,7 +29,7 @@ fn files_below(path: &std::path::Path) -> Vec<std::path::PathBuf> {
 }
 
 /// WARP_SOURCE: a fingerprint of the sources and features the build compiled, the same for a debug and a release build
-/// of them, so `warp pure`'s build of compiler.warp by one is the other's too (card self-warming)
+/// of them, so plain `warp`'s build of compiler.warp by one is the other's too (card self-warming)
 fn embed_source_fingerprint() {
 	use std::hash::{Hash, Hasher};
 	let mut hasher = std::collections::hash_map::DefaultHasher::new();

@@ -80,7 +80,7 @@ before asking a question). After a context swap, this file and your role file be
 - Start from the clean baseline: don't rebuild or retest main before your change; whoever pushes keeps main green (a red main: fix it at once or revert your push).
 - Only the pure pipeline counts. Check .warp changes with the shared binary from your worktree:
   `scripts/rebuild.sh pure <worktree>` (it publishes the build to the shared store, so the install after your push
-  reuses it), then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp pure <program>` / `warp test <folders>`.
+  reuses it), then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` / `warp test <folders>`.
   Never rebuild in the main checkout. A core change also runs `scripts/self-check.sh <worktree>`.
 - Long commands with `run_in_background`, no polling. Kill your own leftover processes by PID, never `pkill -f`, and
   stop only your own jobs. Every CLI run that might paint gets `WARP_NO_WINDOW=1`. No browsers on the Mac.

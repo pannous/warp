@@ -1,7 +1,7 @@
-//! `warp pure <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): core/compiler.warp,
+//! `warp <program.warp> [arguments…]` (card warp-pure, notes/standalone_compiler.md): core/compiler.warp,
 //! the warp compiler as one warp program, makes the program's module, which then runs. compiler.warp's own module is a
 //! build output (decision compiler-build): warp.wasm, compiler.warp compiled by the seed (warp-seed.wasm beside the
-//! binary, published on GitHub releases seed-<date>; card rust-bootstrap), for `warp pure`; warp-self.wasm, for `warp
+//! binary, published on GitHub releases seed-<date>; card rust-bootstrap), for plain `warp`; warp-self.wasm, for `warp
 //! self`, is no build of its own: a copy of warp.wasm, promoted when warp.wasm compiles compiler.warp once more (user
 //! 2026-10-26: no fixpoint needed; `warp rebuild self`, scripts/promote-self.sh). The old names compiler.wasm and
 //! compiler-self.wasm are still read when
@@ -47,7 +47,7 @@ const REBUILD_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(2
 /// Overrides REBUILD_TIME_LIMIT, in seconds
 const REBUILD_TIME_LIMIT_VARIABLE: &str = "WARP_REBUILD_TIME_LIMIT";
 
-/// Who builds compiler.warp's module: for `warp pure` the seed; `warp self`'s is warp.wasm itself, promoted when it compiles itself
+/// Who builds compiler.warp's module: for plain `warp` the seed; `warp self`'s is warp.wasm itself, promoted when it compiles itself
 // ⚠ RustCompiled keeps its name until the Rust compiler leaves main (card rust-bootstrap): the seed builds it now
 #[derive(Clone, Copy)]
 pub enum Compiler {
@@ -100,12 +100,12 @@ pub fn run(program: &Path, arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiled(program, by), arguments)
 }
 
-/// The value of `code` (`warp pure "x=√72.;x^2"`, a test case), compiled as a program file of `folder` would be
+/// The value of `code` (`warp "x=√72.;x^2"`, a test case), compiled as a program file of `folder` would be
 pub fn run_code(code: &str, folder: &Path, by: Compiler) -> Node {
 	ran(compiled_code(code, folder, by), Vec::new())
 }
 
-/// The node parser.warp reads `code` as: warp.wasm, the compiler of `warp pure`, writes its view as JSON
+/// The node parser.warp reads `code` as: warp.wasm, the compiler of plain `warp`, writes its view as JSON
 /// (compiler.warp's view mode), read back with node_views (card rust-bootstrap: the host reads warp text without a
 /// Rust parser: a channel's message, a console line, a test file, `warp data`, `warp parse`). An error when there is
 /// no warp.wasm or it fails
@@ -158,13 +158,13 @@ pub fn compiled_code(code: &str, folder: &Path, by: Compiler) -> Result<Compiled
 	module
 }
 
-/// `warp pure <command> …` (card wasm-commands): compiler.warp's own command (core/commands.warp), the command
+/// `warp <command> …` (card wasm-commands): compiler.warp's own command (core/commands.warp), the command
 /// line its arguments
 pub fn command(arguments: Vec<String>, by: Compiler) -> Node {
 	ran(compiler(by), arguments)
 }
 
-/// One line of `warp pure repl`: compiler.warp's repl-step compiles it after the lines kept in `state` and decides which
+/// One line of `warp repl`: compiler.warp's repl-step compiles it after the lines kept in `state` and decides which
 /// stay; its module runs here, where plain WASI could not run it
 pub fn repl_line(line: &str, state: &Path, by: Compiler) -> Node {
 	let module = state.with_extension("wasm");

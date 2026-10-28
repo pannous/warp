@@ -18,8 +18,9 @@ SLOW_TREE=/Volumes/Worktrees/integrate-slow
 EXPECTED=Hello
 HARNESS_PATHS=(src crates Cargo.toml Cargo.lock build.rs)
 SEED=$(dirname "$MAIN_WARP")/warp-seed.wasm  # the seed refresh-seed.sh installs beside the shared binary
-BUILDS=/Users/me/dev/bin/main-builds  # one folder: the installed harness and its compilers, no other builds or links
-CARGO_BINARY=/Volumes/Build/target/release/warp  # ~/.cargo/config.toml's target-dir
+BUILDS=/Users/me/dev/bin/warp-builds  # one folder: the installed harness and its compilers, no other builds or links
+# a target dir of its own: the shared one (~/.cargo/config.toml) is overwritten by other sessions' branch builds
+CARGO_TARGET=/Volumes/Build/target-integrate
 
 if_moved= slow=
 [ "${1-}" = --if-moved ] && { if_moved=1; shift; }
@@ -96,14 +97,22 @@ harness_current() {
 	[ -n "$built" ] && git -C "$TREE" diff --quiet "$built" "$tip" -- "${HARNESS_PATHS[@]}" 2>/dev/null
 }
 
+# built_from_tip <folder>: cargo build of $TREE copied there, true when the binary names $tip, on main or detached
+built_from_tip() {
+	(cd "$TREE" && CARGO_TARGET_DIR=$CARGO_TARGET cargo build --release -q) || { red "harness: cargo build --release failed" --urgent; return 1; }
+	cp "$CARGO_TARGET/release/warp" "$1/warp" || return 1
+	"$1/warp" version 2>&1 | grep -Eq "^release build ${tip:0:9}( on main)? "
+}
+
 # the harness of $tip built and installed: its folder in $BUILDS with warp.wasm built by it, hello, the compilers
 # copied in, then ~/dev/bin/warp links there by one rename (a run never meets the new binary without its compilers:
 # card atomic-install) and every older folder goes (user: no stale builds, no warp-<hash> links)
 install_harness() {
 	local folder=$BUILDS/${tip:0:9} got built
 	say "harness of ${tip:0:10} changed: cargo build --release"
-	(cd "$TREE" && cargo build --release -q) || { red "harness: cargo build --release failed" --urgent; return 1; }
-	mkdir -p "$folder" && cp "$CARGO_BINARY" "$folder/warp" || return 1
+	mkdir -p "$folder" || return 1
+	built_from_tip "$folder" || built_from_tip "$folder" ||
+		{ red "harness: the build says $("$folder/warp" version 2>&1 | sed -n 2p), not ${tip:0:9} of main" --urgent; rm -rf "$folder"; return 1; }
 	# the seed lies beside ~/dev/bin/warp, which the new binary, run from its own folder, does not see
 	# through rebuild.sh, which stamps the build with its inputs: the rebuild.sh of watch then keeps it, not building twice
 	built=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_BINARY=$folder/warp WARP_SEED=$SEED "$scripts/rebuild.sh" pure "$TREE" 2>&1 | tail -1)

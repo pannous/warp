@@ -32,7 +32,7 @@ wasmtime run -W gc=y,function-references=y,exceptions=y hello.wasm
 ## Commands
 
 The same compiler answers warp's commands (core/commands.warp, card wasm-commands), under plain wasmtime and
-as `warp pure <command>` / `warp self <command>`:
+as `warp <command>` / `warp self <command>`:
 
 ```bash
 W="wasmtime run -W gc=y,function-references=y,exceptions=y --dir / --dir .::. /Users/me/dev/bin/warp-self.wasm"
@@ -44,7 +44,7 @@ warp self repl           # the same REPL, each line's module run by the native w
 ```
 
 - Plain WASI has no way to instantiate a module, so under wasmtime `repl` compiles each line and says that running it
-  needs the native warp; `run`, `eval`, `test` refuse the same way. `warp pure|self repl` runs each line.
+  needs the native warp; `run`, `eval`, `test` refuse the same way. `warp repl` / `warp self repl` runs each line.
 - Commands needing a host (serve, fetch, app, lsp …) and those not yet written in warp (format, lint, types, verify)
   refuse naming the native warp.
 

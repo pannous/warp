@@ -9,7 +9,7 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
   user-facing binary (warp-host, a built executable) rebuilds a compiler or the runtime at run time. A stale pair
   can at most print a hint. `scripts/rebuild.sh` builds only when it is run by hand, and `scripts/self-check.sh` builds
   only with `--rebuild`.
-- warp.wasm (`warp pure`) is the one build: the seed (warp-seed.wasm beside the binary, user 2026-10-26: out of git, each
+- warp.wasm (plain `warp`'s) is the one build: the seed (warp-seed.wasm beside the binary, user 2026-10-26: out of git, each
   refresh published as a GitHub pre-release seed-<date>-<sha8> by scripts/refresh-seed.sh) compiles core/compiler.warp.
   warp-self.wasm (`warp self`) is no build of its own: `warp rebuild self` lets warp.wasm compile compiler.warp again
   and copies warp.wasm to warp-self.wasm when it does (user 2026-10-26: "If the compiler can compile itself once more,
@@ -69,7 +69,7 @@ lib/, or none once the tree was removed. That was the 2026-10-22 refusal "a call
   lib's os.warp.
 
 What src/ still needs (card compiler-cache-keys):
-- standalone.rs should export WARP_LIB to the compiler run of `warp pure` / `warp self` (as warp-host does).
+- standalone.rs should export WARP_LIB to the compiler run of `warp` / `warp self` (as warp-host does).
 - `build_path` should stop choosing the build file by the lib/ *path* recorded in it.
 - `judged_build` (standalone.rs:208) and `stage_key` (self_hosted.rs:673) should hash the compiler inputs, not all of lib/.
   Today any lib/ edit invalidates the stage cache, and the next self build compiles every stage again.
