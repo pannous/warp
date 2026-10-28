@@ -133,7 +133,7 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
    written bare in runtime.warp: warp-compiler-enums). Whether emitter.warp emits the same from it as from Rust's
    lowering is the next probe. Cost: lowered once per compiler run; if that is slow, the general fix is lowering
    only the runtime words a program reaches (as the prelude words are, card prelude-for-pure), never a cached JSON.
-3. Host words as warp data: core/host_words.warp, `{draw_shape: [[int, float, float, float, float, int],
+3. Host words as warp data: core/analysis/host_words.warp, `{draw_shape: [[int, float, float, float, float, int],
    []], …}`, the one source of truth; build.rs generates src/host.rs HOST_WORD_SIGNATURES from it (the host is an
    edge, its table is not).
 4. `library_folder`, `folder_of`: words the compiler needs from os/file (the folder of lib/, a path's folder);

@@ -1,4 +1,4 @@
-# The intrinsics of core/emitter.warp (`intrinsic` and `time_intrinsic` there), each one or two instructions,
+# The intrinsics of core/emitter/emitter.warp (`intrinsic` and `time_intrinsic` there), each one or two instructions,
 # declared by their typed heads (decision bodiless-imports): emitter.warp supplies them, so a part of the runtime
 # compiles alone; the Rust lane, which has none, traps when one is called
 # nodes: their kind field, payloads and the nodes built of them

@@ -3,7 +3,7 @@
 Written 2026-10-24 by the Integrator (branch-card rule, notes/agents/common.md). Update it when you pick the branch up.
 
 - Card: #2701 compiling core warns about its own lines ([compiling-lib](https://github.com/pannous/warp/issues/2701))
-- Branch: `compiling-lib` at `2a3d838b8`, 2 ahead / 747 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/parser.warp)
+- Branch: `compiling-lib` at `2a3d838b8`, 2 ahead / 747 behind origin/main `b8d2c4e99`; merges cleanly: no (conflicts: core/parsing/parser.warp)
 - Kind: warp only
 - Owner: No owner: the card waits in Next for the planner to assign.
 - State: core compiles without its own local-or-global warnings and indexing hints (8 lines); 741 commits behind, parser.warp conflict.

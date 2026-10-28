@@ -2,7 +2,7 @@
 
 // `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it)
 now() := Instant(wall_clock_ms())
-// the one hook into the host: WASI's clock_time_get (core/host_words.warp) of the wall clock
+// the one hook into the host: WASI's clock_time_get (core/analysis/host_words.warp) of the wall clock
 // (CLOCK_REALTIME, 0), a millisecond's precision asked for. It writes the u64 nanoseconds since 1970 into linear
 // memory's first 8 bytes (the scratch fd_write takes only within its call), read back little-endian
 wall_clock_ms() := {

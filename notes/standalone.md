@@ -31,7 +31,7 @@ wasmtime run -W gc=y,function-references=y,exceptions=y hello.wasm
 
 ## Commands
 
-The same compiler answers warp's commands (core/commands.warp, card wasm-commands), under plain wasmtime and
+The same compiler answers warp's commands (core/commands/commands.warp, card wasm-commands), under plain wasmtime and
 as `warp <command>` / `warp self <command>`:
 
 ```bash

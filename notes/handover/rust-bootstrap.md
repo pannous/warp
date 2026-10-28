@@ -135,7 +135,7 @@ Harness → compiler edges, as found on rust-bootstrap-cut 567ce244f (each must 
 - da2b1c45aa step 2: compiled_module.rs (CompiledModule, run_module), compiler/compiler_files.rs (library, keys,
   module_of_bytes, use_closure, view_of_json).
 - b500ea913c step 3: host aliases into lowering, TEMPORARY_SEPARATOR / WARP_CALL / OPTIONAL_MARK into abi.rs.
-- 47e727ba59 merge origin/main (test/, lib/compiler/commands.warp); c956aaa012 drop tests/ (decision above).
+- 47e727ba59 merge origin/main (test/, lib/compiler/commands/commands.warp); c956aaa012 drop tests/ (decision above).
 - 475d65f8c7 step 5: the Rust compiler deleted (462 files, -137k lines; analyzer, lowering, wasm_emitter,
   warp_parser, pipeline, normalize, law, formatting, units, real, text, compile-side modules/ and web/). Runtime
   pieces moved: pure_tests test_cases/skipped_pairs, web/route_paths.rs, modules/foreign.rs, graphics/shader_holes.rs,

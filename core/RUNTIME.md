@@ -26,9 +26,7 @@ there: only `runtime/extended.warp` uses it, and `scripts/self-check.sh` counts 
 Calendar arithmetic is not part of the runtime: `lib/time_arithmetic.warp` (card time-arithmetic-library) is a class
 library beside `lib/units.warp`, over plain integers (form and position, month/day/nanosecond counts). The compiler
 never loads it: its Span's plus would send every `+` the compiler compiles through operator dispatch, and some of its
-names (time_form, day_nanos, hour_nanos, sign_of) clash with times' and durations'. `core/time_arithmetic.warp`
-is only a link to it, kept while tests/parser/test_self_time_arithmetic.rs reads the file at that path; nothing in the
-compiler uses it.
+names (time_form, day_nanos, hour_nanos, sign_of) clash with times' and durations'. Nothing in the compiler uses it.
 
 Both roots are loaded, core first: by `compiler.warp` (`RUNTIME_ROOTS`) and by `src/compiler/self_hosted.rs`
 (`EXTENDED_RUNTIME_WORDS`), each `use` path from the folder of the file it is in (compiler.warp `root_text` prefixes

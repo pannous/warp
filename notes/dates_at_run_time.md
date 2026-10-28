@@ -77,7 +77,7 @@ round), `a - b` of two times of one form (days between dates, else a duration). 
 no months or days. `1 month 2 days` is lexed as one duration
 (literals.rs `with_time_unit`).
 - warp twin (card time-arithmetic-warp): lib/time_arithmetic.warp, a class library beside lib/units.warp
-  that the compiler never loads (card time-arithmetic-library; core/time_arithmetic.warp links to it), the same arithmetic typed over plain
+  that the compiler never loads (card time-arithmetic-library), the same arithmetic typed over plain
   integers (enum TimeForm, class Span of month/day/nano counts, class Moment of form and position, enum Operand);
   test tests/parser/test_self_time_arithmetic.rs. Not wired yet: node_add/sub/mul still call the Rust function until
   card time-primitives reads a node's form, position and parts. Zoned times are refused there (card time-zones-warp).

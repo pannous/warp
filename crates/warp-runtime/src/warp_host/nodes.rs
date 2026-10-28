@@ -7,7 +7,7 @@ use wasmtime::{Extern, Func, Global, Memory, Result, StoreContextMut, Val};
 
 const TYPE_DEF: u8 = 12;
 const PAGE_BITS: u32 = 16;
-/// A list's bracket code above the Kind (core/kinds.warp BracketCode)
+/// A list's bracket code above the Kind (core/analysis/kinds.warp BracketCode)
 const BRACKETS: [(&str, &str); 4] = [("{", "}"), ("[", "]"), ("(", ")"), ("<", ">")];
 /// A curly list of `key: value` entries, and its entries' kind (kinds.warp Marked)
 pub const MAP: i64 = LIST as i64;
@@ -21,7 +21,7 @@ pub enum Node {
 	Bool(bool),
 	Float(f64),
 	/// an exact rational, numerator and denominator (above 1): the pure lane's `2.5` and `1/3`, an Int node holding a
-	/// $Ratio of two $i64box (core/emitter.warp gc_types)
+	/// $Ratio of two $i64box (core/emitter/emitter.warp gc_types)
 	Ratio(i64, i64),
 	Codepoint(u32),
 	Text(Vec<u8>),

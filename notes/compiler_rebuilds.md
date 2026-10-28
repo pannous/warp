@@ -60,7 +60,7 @@ the investigation of 2026-10-23 is in /workspace/cow/compiler-rebuilds.md on the
 A compiler bakes the absolute path of the core it was built in (`module_directory`). Before this card it read
 `use os`, sugar rules, aliases and entities from that folder, so a pair copied from another tree used that tree's
 lib/, or none once the tree was removed. That was the 2026-10-22 refusal "a call of run_wasm with 2 arguments".
-- core/parser.warp `run_library()` (main, ab93badf7) reads WARP_LIB first.
+- core/parsing/parser.warp `run_library()` (main, ab93badf7) reads WARP_LIB first.
 - warp-host now gives the compiler run WARP_LIB, the lib/ it resolved: WARP_LIB, else the lib/ beside the binary, else the
   one above the program or the current folder (`environment` in crates/warp-runtime/src/warp_host/main.rs). A
   program's own run sees the environment unchanged.

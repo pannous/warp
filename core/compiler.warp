@@ -1,12 +1,12 @@
 # The warp compiler as one warp program (card standalone, notes/standalone_compiler.md): source text in, wasm bytes out,
 # its stages handing each other plain warp values. `warp core/compiler.warp app.warp app.wasm`, then
 # `warp app.wasm`; a form beyond the emitter's core is the compile's error ("outside the core: …")
-use "passes.warp"
-use "analyzer.warp"
-use "emitter.warp"
-use "host_words.warp"
-use "commands.warp"
-use "c_imports.warp"
+use "passes/passes.warp"
+use "analysis/analyzer.warp"
+use "emitter/emitter.warp"
+use "analysis/host_words.warp"
+use "commands/commands.warp"
+use "emitter/c_imports.warp"
 use "extensions/primitive.warp"
 use os
 use file
