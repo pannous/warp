@@ -27,6 +27,13 @@ built_list(first: Node, rest: Node, info: int): Node := {
 	items = if is_null(rest) then [] else unboxed_list(rest)
 	list_node(info * KindUnit.Info + Kind.List, list_join([first], items))
 }
+# a list of bytes the host left in linear memory (`read_bytes`), each an Int: built in one call, not a host call per
+# byte (card compile-reads)
+built_bytes(address: int, length: int, info: int): Node := {
+	items = []
+	for i in 0..<length { items += [held(memory_byte(address + i))] }
+	list_node(info * KindUnit.Info + Kind.List, items)
+}
 # a type declaration as written, `class P { x: int }`: its name and body
 built_type(name: Node, body: Node): Node := keyed(Kind.TypeDef, name, body)
 # a parse failure the program's `try` catches: the Error of the host's message

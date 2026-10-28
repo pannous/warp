@@ -4,7 +4,7 @@ use super::*;
 pub(crate) const CAPTURED_FIELD: usize = 1;
 
 /// The exported constructors a value is rebuilt with in an instance
-pub(crate) const CONSTRUCTORS: [&str; 12] = [
+pub(crate) const CONSTRUCTORS: [&str; 13] = [
 	"new_empty",
 	"new_int",
 	crate::abi::NEW_BOOL,
@@ -17,12 +17,18 @@ pub(crate) const CONSTRUCTORS: [&str; 12] = [
 	crate::abi::NEW_TYPE,
 	crate::abi::CLOSURE_REBUILD,
 	NODE_AT,
+	crate::abi::NEW_BYTES,
 ];
 pub(crate) const LIMB_BITS: i64 = 32;
 /// The node fields (CLAUDE.md "Serialization") and the closure's captured values (wasm_emitter/closures.rs)
 pub(crate) const KIND_FIELD: usize = 0;
 pub(crate) const DATA_FIELD: usize = 1;
 pub(crate) const VALUE_FIELD: usize = 2;
+
+/// The bytes a list of Ints 0 to 255 stands for; none for any other list
+fn bytes_of(items: &[TaskValue]) -> Option<Vec<u8>> {
+	items.iter().map(|item| if let TaskValue::Int(n) = item { u8::try_from(*n).ok() } else { None }).collect()
+}
 
 /// A value crossing between threads: what a task takes and gives, free of any instance (a Node may hold data that
 /// cannot leave its thread)
@@ -213,6 +219,11 @@ impl Builders {
 			}
 			// ø, as the emitter makes `[]`: a null would not pass for a Node (a wrapper's empty argument list)
 			TaskValue::List(items, _) if items.is_empty() => self.call("new_empty", &[], store),
+			// a list of bytes (read_bytes) crosses as bytes, in one copy and one call
+			TaskValue::List(items, bracket) if self.functions.contains_key(crate::abi::NEW_BYTES) && let Some(bytes) = bytes_of(items) => {
+				let (pointer, length) = crate::host::write_bytes(&self.memory, self.heap, store, &bytes)?;
+				self.call(crate::abi::NEW_BYTES, &[Val::I32(pointer as i32), Val::I32(length as i32), Val::I64(*bracket)], store)
+			}
 			TaskValue::List(items, bracket) => {
 				let items = items.iter().map(|item| self.build(item, store)).collect::<Result<Vec<_>>>()?;
 				let single = self.call("new_list", &[items[0], Val::AnyRef(None), Val::I64(*bracket)], store)?;
