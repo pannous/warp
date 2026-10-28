@@ -574,7 +574,7 @@ hosted_kind(type: text): ValueKind := match mvp_wasm_of(type) {
 	"i32": ValueKind.I32
 	"i64": ValueKind.Int
 	"f64": ValueKind.Float
-	_: primitive_refusal(ø, "an f32 in a primitive function of a GC program (card primitive-f32-hosted)")
+	_: primitive_refusal(ø, "an f32 in a primitive function of a GC program (card f32-primitive-refused)")
 }
 # the GC value a primitive type crosses the boundary as: an int as i64, a float as f64
 boundary_type(type: text): text := if mvp_is_float(type) then BOUNDARY_FLOAT else BOUNDARY_INT

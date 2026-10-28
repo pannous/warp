@@ -30,7 +30,7 @@ value is that pointer, `h.len` loads, `h.len = …` stores.
 
 ## Not yet (cards)
 - f32 in a primitive function of a GC program (no ValueKind with an f32 wasm type there): refused, card
-  primitive-f32-hosted.
-- `@primitive class` in a GC program; lists, texts as (pointer, length), `use` of other primitive files, globals,
+  f32-primitive-refused.
+- (card primitive-class-gc) `@primitive class` in a GC program; lists, texts as (pointer, length), `use` of other primitive files, globals,
   `continue`, memory.grow, printing (milestone 2: WASI or libc imports).
 - A primitive file's refusal of a struct field has no line: declarations reach the passes as opaque views.
