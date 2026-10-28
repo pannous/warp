@@ -221,6 +221,8 @@ is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).le
 # `run` and `pure` say what the bare words do, `self` names warp-self.wasm as the compiler
 prefixed = arg_count() > 1 and (same_text(arg(1), "run") or same_text(arg(1), "pure") or same_text(arg(1), "self"))
 first = if prefixed then 2 else 1
+# warp.wasm's own commands (build) read the same lib/ as this executable
+setenv(c_string("WARP_LIB"), c_string(library_folder()), 0)
 compiler = if prefixed and same_text(arg(1), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path()
 if arg_count() <= first {
 	if not prefixed and isatty(STDIN) != 0 { console(compiler) } else {

@@ -22,6 +22,8 @@ COMMAND_COUNT_AT = 16
 CODE_SIGNATURE = 29
 SIGNATURE_OFFSET_AT = 8
 STDERR = 2
+# access()'s R_OK
+READABLE = 4
 # wasmtime_val_t's kinds, its value 8 bytes in; the sizes of the C structs the calls fill
 KIND_I32 = 0
 KIND_I64 = 1
@@ -111,6 +113,7 @@ getenv(name: text): text from "c"
 getpid(): i32 from "c"
 unlink(path: text): i32 from "c"
 _NSGetExecutablePath(buffer: pointer, size: pointer): i32 from "c"
+access(path: pointer, mode: i32): i32 from "c"
 native_pointer(address: pointer): handle from "c"
 c_function(name: text): handle from "c"
 
@@ -215,10 +218,30 @@ signature_offset(image: text): u32 := {
 	}
 	image.length
 }
-# warp's lib/, whose warp.wasm compiles a .warp file: $WARP_LIB, else the folder of the driver
+# warp's lib/, whose warp.wasm compiles a .warp file, in one search order: $WARP_LIB, else the first folder holding a
+# lib/ (its prelude.warp) of this executable's folder (~/dev/bin, a tarball), the folder its links lead to, and
+# <prefix>/share/warp beside that folder's bin/ (brew, deb, pip: bin/warp links to it); none is an error naming them
 library_folder(): text := {
 	given = getenv("WARP_LIB")
-	if given.length > 0 then given else folder_of(executable_path())
+	if given.length > 0 { return given }
+	own = folder_of(executable_path())
+	linked = folder_of(resolved_path(executable_path()))
+	shared = joined(folder_of(linked), "/share/warp")
+	if holds_library(own) { return own }
+	if holds_library(linked) { return linked }
+	if holds_library(shared) { return shared }
+	complain(joined(joined(joined(joined(joined(joined("warp: no lib/ (prelude.warp) in ", own), ", "), linked), " or "), shared), "; WARP_LIB names one"))
+	exit(1)
+	own
+}
+holds_library(folder: text): bool := access(c_string(joined(folder, "/prelude.warp")), READABLE) == 0
+# the path with its links resolved, the path itself when it names no file
+resolved_path(path: text): text := {
+	resolved = realpath(c_string(path), 0)
+	if resolved == 0 { return path }
+	copy = native_copy(resolved, strlen(resolved))
+	free(resolved)
+	copy
 }
 # where the compiled module goes for its run: a file of this process in $TMPDIR
 compiled_path(): text := {
@@ -391,14 +414,11 @@ compiled_and_run(compiler: text, at: int): nothing := {
 # the path absolute, its links resolved (lib/compiler links to core): a compile's folder is the real one, and a file
 # above the current folder (`../a.warp`) is one the module reaches through the preopened root
 real_path(path: text): text := {
-	resolved = realpath(c_string(path), 0)
-	if resolved == 0 {
+	if access(c_string(path), READABLE) != 0 {
 		complain(joined("no file ", path))
 		exit(1)
 	}
-	copy = native_copy(resolved, strlen(resolved))
-	free(resolved)
-	copy
+	resolved_path(path)
 }
 # a path the module reaches: as given when it lies below the current folder (its messages name it so), else absolute
 # (`../a.warp`: the module's WASI resolves relative paths in the preopened current folder, never above it)
