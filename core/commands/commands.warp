@@ -43,7 +43,9 @@ natively_hosted(): bool := (env(HOST_VARIABLE) ?? "") != ""
 NOT_YET = " is not in the native warp yet: warp-rust "
 
 command_name(entry: list): text := entry#1.split(" ")#1
-command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + ["repl-step"] + running_commands + native_commands
+# the commands only a native host calls, never shown in help: a console line's step, `warp test`'s listing and verdicts
+host_commands = ["repl-step", "test-list", "test-verdicts"]
+command_words(): list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + running_commands + native_commands
 is_command(word: text): bool := word in command_words()
 
 # the text of the file `target` names, else `target` itself as code

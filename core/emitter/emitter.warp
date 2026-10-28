@@ -54,6 +54,11 @@ columns_per_line = 4096
 import_function_byte = 0
 # the export WASI hosts run a module by (Rust's wasi_emitter.rs WASI_START)
 wasi_start = "_start"
+# WARP_VALUE_AS_DATA set: _start prints main's value as data after a line of its own, VALUE_MARK, as a list shows an
+# item (a text quoted, a character in single quotes: runtime node_code), ø too, so `warp test` reads back the value
+# the case gave, not its printed text (card native-warp-test)
+value_as_data = env("WARP_VALUE_AS_DATA") != ø
+VALUE_MARK = "§warp value§"
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
 fd_write_import = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
 stdout = 1
@@ -567,6 +572,10 @@ def gc_position(name: text): int {
 # bytes that name GC types by their names (a type's definition in gc_types, a reference in references): each name the
 # index the module takes the type under
 def gc_bytes(parts: list): list { concatenated(parts.map(part => if part is text then uleb(gc_type(part)) else [part])) }
+# _start's printing of main's value, in local 0 as main gives it, as data after VALUE_MARK (value_as_data)
+def value_printed_as_data(result: TypedCode): list {
+	printed(text_value(VALUE_MARK)).code + printed(runtime_call("node_code", [TypedCode(ValueKind.Node, boxed(result))])).code
+}
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
 def node(kind_code: int, payload: list): list { node_code([op.i64_const] + sleb(kind_code), payload) }
 # a $Node of the kind field the code gives
@@ -1429,6 +1438,7 @@ module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 		absent = if main.result == ValueKind.Node then [op.local_get, 0, op.ref_is_null] else [op.i32_const, 0]
 		start.code = call_code(main.index) + [op.drop]
 		if not main.gives_nothing { start.code = call_code(main.index) + [op.local_set, 0] + absent + [op.i32_eqz, op.if, no_value] + printed(unboxed_to_show(result, shown_kind)).code + [op.end] }
+		if not main.gives_nothing and value_as_data { start.code = call_code(main.index) + [op.local_set, 0] + value_printed_as_data(result) }
 		# a reading that widened a parameter is read again: its bytes would be dropped
 		if module.widened_now { ø } else {
 			if #module.refusals > 0 { throw module.refusals.join("\n") }
