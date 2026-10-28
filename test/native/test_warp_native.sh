@@ -64,6 +64,8 @@ if [ -x "$stage/warp" ]; then
 	check "a sound, its line" "$(sed -n 1p <<<"$played" | cut -d: -f1)" "sound 0.50 s"
 	wav=$(sed -n 1p <<<"$played" | cut -d' ' -f4-)
 	check "a sound, its WAV" "$(head -c 4 "$wav"; wc -c <"$wav" | tr -d ' ')" RIFF22094
+	check "a sound saved, loaded and saved with another" "$(native $'use sound\ntone(440Hz, 0.5s)\nrender_sound("a.wav")\nkick = sample("a.wav")\nplay_sample(kick, 2)\ntone(440Hz, 0.5s)\n[kick.rate, kick.channels, round(render_sound("b.wav") * 100)]' | tail -1)" "[22050 1 75]"
+	check "a sound at its time in the save" "$(native $'use sound\ntone(440Hz, 0.5s)\nat 2s { tone(880, 0.5s) }\nround(render_sound("c.wav") * 100)' | tail -1)" 250
 	# never called, so no window even if the refusal failed
 	printf 'import InitWindow from "raylib"\nprint "reached"\n' >"$stage/window.warp"
 	check "a window opener under WARP_NO_WINDOW" "$(native window.warp)" "InitWindow from raylib opens a window: refused under WARP_NO_WINDOW or CI"
