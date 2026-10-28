@@ -4,7 +4,7 @@
 # (also symbol, list, block, map, int, number) only code of that kind, a block code in braces and a map their
 # entries `{a: 1}` or a name holding only maps. More conditions follow `where`, joined by `and`:
 # `$t is type` (a type word no value is named), `$x is unbound` (a word the program binds nothing to), `$x is value`,
-# `$f is function`, `$x is literal`, `$w is label` (a word labelling a parameter, `with new`), `$x is missing` (ø,
+# `$f is function`, `$h is varying` (a value definition reading a variable, lib/sugar/heads.warp), `$x is literal`, `$w is label` (a word labelling a parameter, `with new`), `$x is missing` (ø,
 # also an operand not written: `rest...`), `$x is text` (a hole kind), each also `is not`, `$n < 0` (a number literal
 # compared, also > <= >= == !=), `$f takes value` (f's first parameter is typed, not yes/no: of a function of the
 # program or a typed library word), `$f takes int` (typed int) and `$f takes one` (a library word the program leaves
@@ -45,7 +45,7 @@ rule_word_marks = "_$"
 # the kinds a typed hole `$x: text` names
 hole_kinds = ["text", "symbol", "list", "block", "map", "int", "number"]
 # what `where $x is …` asks of the code a hole binds, besides a hole kind
-code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label"]
+code_properties = ["type", "unbound", "value", "function", "literal", "enum", "missing", "label", "varying"]
 # `where not method`, `where not shadowed`: conditions about where the matched code stands, asked of the word it starts
 # with (card engine-rule-conditions)
 context_words = ["method", "shadowed"]
@@ -138,6 +138,10 @@ global rule_case_holders = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
 # plain_enums.warp lowers the declarations: by rewritten_program, and by the pass enums_declared for the sugar rules
 global rule_enums = {}
+# the program being rewritten, and its varying values (`where $h is varying`), worked out when a rule first asks
+global rule_program = Node.Empty
+global rule_varying = {}
+global rule_varying_known = no
 # where the node the rules try stands, for `where not method` and `where not shadowed`: the method part of the `.`
 # being walked (the right of `x.f(…)`), else ø; the names the definitions around it bind
 global rule_method_part = ø
@@ -215,6 +219,8 @@ sugared(program: Node, rules: list): Node := {
 	rule_scope = scope_of(program)
 	first_parameter_types = typed_first_parameters(program)
 	rule_case_holders = case_holders_of(program)
+	rule_program = program
+	rule_varying_known = no
 	maps = map_names_of(program)
 	# a program of one statement: that statement, so the rules `where statement` apply to it too
 	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
@@ -699,11 +705,52 @@ has_property(code: Node, property: text): bool := {
 	if not (code is symbol) { return no }
 	word = name_of(code)
 	if property == "label" { return word in label_words }
+	if property == "varying" { return varying_values().has(word) }
 	if property == "type" { return is_tested_type(word, rule_scope) }
 	if property == "value" { return binds_value(rule_scope, word) }
 	if property == "function" { return binds_as(rule_scope, word, Meaning.Function) and not locally_bound(code) }
 	not rule_scope.has(word)
 }
+
+# The program's value definitions `A4 := midi_hertz(69)` that read a variable, directly or through any chain of words,
+# `tuning` of midi_hertz: charged (P71, wiki/charged.md), they follow it. One reading only constants is none (P70), nor
+# one whose name is assigned too, a variable
+varying_values(): map := {
+	if not rule_varying_known {
+		rule_varying = varying_of(statements_in(rule_program))
+		rule_varying_known = yes
+	}
+	rule_varying
+}
+varying_of(statements: list): map := {
+	varying = {}
+	for name in statements.fold([], (bound, statement) => names_bound(statement, bound)) { varying[name] = yes }
+	readings = statements.map(reading).filter(read => read != ø and not varying.has(read#1))
+	grown = yes
+	while grown {
+		grown = no
+		for read in readings {
+			if not varying.has(read#1) and read#2.any(name => varying.has(name)) {
+				varying[read#1] = yes
+				grown = yes
+			}
+		}
+	}
+	assigned = {}
+	for n in nodes_in(rule_program) { if is_key(n, Op.Assign) and key_of(n) is symbol { assigned[name_of(key_of(n))] = yes } }
+	values = {}
+	for statement in statements {
+		if is_charged_value(statement) and varying.has(name_of(key_of(statement))) and not assigned.has(name_of(key_of(statement))) { values[name_of(key_of(statement))] = yes }
+	}
+	values
+}
+# [name, the names it mentions] of a function or value definition, else ø
+reading(statement: Node): list? := {
+	parts = definition_of(statement)
+	if parts != ø { return [parts.name, mentioned_names(parts.body, [])] }
+	if is_charged_value(statement) then [name_of(key_of(statement)), mentioned_names(value_of(statement), [])] else ø
+}
+is_charged_value(n: Node): bool := is_key(n, Op.Define) and key_of(n) is symbol and not is_lambda(value_of(n)) and not mentions(value_of(n), implicit_parameter)
 
 # a name a definition around the code binds, a parameter or a local (`listed = …; assigned or listed`): it shadows the
 # program's function and the library word of that name (notes/dispatch.md: shadowing is scoped), so `x | listed` is
