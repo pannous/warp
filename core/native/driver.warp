@@ -501,25 +501,48 @@ os_command(caller: handle, context: handle, listed: pointer, result: pointer): n
 	said = joined(compiled_path(), ".stderr")
 	pipe = popen(c_string(joined(joined(joined("{ ", line), "\n} 2>"), said)), c_string("r"))
 	if pipe == 0 { return guest_error(caller, context, joined("cannot run sh for ", line), result) }
+	printed = piped(pipe)
+	status = pclose(pipe)
+	size = printed.size
+	while size > 0 and native_byte(printed.at + size - 1) == NEWLINE { size = size - 1 }
+	if status == 0 { guest_text(caller, context, printed.at, size, result) } else {
+		guest_error(caller, context, joined(joined(joined(joined(joined("sh -c ", line), " failed (exit status: "), text_of(status / 256)), "): "), trimmed_end(read_file(said))), result)
+	}
+	unlink(said)
+	free(printed.at)
+}
+# what a pipe gives until its end, in a C buffer
+struct Printed { at: handle; size: i64 }
+piped(pipe: handle): Printed := {
 	room = COMMAND_OUTPUT_BYTES
-	printed = malloc(room)
+	at = malloc(room)
 	size = 0
 	got = 1
 	while got > 0 {
 		if size == room {
 			room = room * 2
-			printed = realloc(printed, room)
+			at = realloc(at, room)
 		}
-		got = fread(printed + size, 1, room - size, pipe)
+		got = fread(at + size, 1, room - size, pipe)
 		size = size + got
 	}
-	status = pclose(pipe)
-	while size > 0 and native_byte(printed + size - 1) == NEWLINE { size = size - 1 }
-	if status == 0 { guest_text(caller, context, printed, size, result) } else {
-		guest_error(caller, context, joined(joined(joined(joined(joined("sh -c ", line), " failed (exit status: "), text_of(status / 256)), "): "), trimmed_end(read_file(said))), result)
-	}
-	unlink(said)
-	free(printed)
+	Printed(at, size)
+}
+# what a sh line printed on stdout, its trailing newlines left off; "" when sh cannot run
+command_output(line: text): text := {
+	pipe = popen(c_string(line), c_string("r"))
+	if pipe == 0 { return "" }
+	printed = piped(pipe)
+	pclose(pipe)
+	output = trimmed_end(native_copy(printed.at, printed.size))
+	free(printed.at)
+	output
+}
+# the `length` bytes at a C pointer, copied into a text
+native_copy(at: handle, length: i64): text := {
+	copy = allocate(length as i32)
+	memcpy(copy, at, length)
+	text_from(copy, length as u32)
 }
 # the byte at a C pointer
 native_byte(at: handle): u8 := {
