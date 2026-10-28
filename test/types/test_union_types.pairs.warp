@@ -8,3 +8,7 @@
 # a union variant beside other overloads, chosen by the compile or the run-time test of its members
 'f(v: int or text) := "union"; f(v: list) := "list"; [f(1), f("a"), f([1])]'	["union", "union", "list"]
 'f(v: int or text) := "union"; f(v: list) := "list"; xs = [[1], 2]; [f(xs#1), f(xs#2)]'	["list", "union"]
+
+# a value of no member's kind is refused (emitter/functions.warp passed, emitter.warp union_declaration)
+'f(v: int or float) := v; f("a")'	error
+'x: int or float = "a"; x'	error
