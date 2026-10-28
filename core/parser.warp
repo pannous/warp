@@ -98,6 +98,11 @@ def source_parse(path: text, source: text): Node {
 	packed = if LIBRARY_FILES.get(within) == source then LIBRARY_PARSES.get(within) else ø
 	if packed != ø then unpack(packed) else plain_node(parsed(rules_ended(source)))
 }
+// Every bundled top-level module's definition slices (prelude_words.warp definition_slices), each with its parse,
+// packed and baked in as LIBRARY_PARSES are (module_text writes them where library_slices() stands): a program reaching
+// a module's definitions cuts and parses none of them (card modules-prebuilt)
+LIBRARY_SLICES = library_slices()
+def library_slices(within: text = ""): map := {}
 // the source with each rule ending its line in `$s...` ended by `;`: the parser reads `...` at the end of a line as a
 // range going on into the next line (`rewrite loudly $s... => $s...` and the line after it as `$s ... (next line)`),
 // which swallowed the next rule or statement

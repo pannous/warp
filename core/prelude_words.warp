@@ -10,12 +10,23 @@ use "uses.warp"
 use "builtin_signatures.warp"
 use "scope.warp"
 
-# source → its slices: the passes ask for each library module's slices per call and argument, cut once
+# source → its slices, each [name, text, its parse packed or ø, the source's use lines]: the passes ask for each library module's
+# slices per call and argument, cut once; a bundled module's are baked in, parsed (parser.warp LIBRARY_SLICES)
 global source_slices = {}
 definition_slices(source: text): list := {
-	if not source_slices.has(source) { source_slices[source] = slices_cut(source) }
+	if not source_slices.has(source) { source_slices[source] = baked_slices(source) ?? cut_slices(source, no) }
 	source_slices[source]
 }
+baked_slices(source: text): any := {
+	for path in LIBRARY_SLICES.keys { if LIBRARY_FILES.get(path) == source { return unpack(LIBRARY_SLICES[path]) } }
+	ø
+}
+# the slices of source, parsed now (each parse packed, unpacked only when reached) or when reached (slice_parse)
+cut_slices(source: text, parsing: bool = yes): list := {
+	uses = use_lines(source)
+	slices_cut(source).map(slice => [slice#1, slice#2, if parsing then pack(plain_node(parsed(slice#2, uses))) else ø, uses])
+}
+slice_parse(slice: list): Node := if slice#3 != ø then unpack(slice#3) else plain_node(parsed(slice#2, slice#4))
 # [name, text] of each function definition in source: a line starting with a name and its parameters, with the
 # indented or closing lines below it
 slices_cut(source: text): list := {
@@ -115,28 +126,33 @@ lowering_words(program: Node): list := if nodes_in(program).any(n => is_lambda(n
 # once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
 # loader places them: a used module's in front of the program, the prelude's after it. `also` are words the program
 # will say once the sugar rewrote it (passes.warp with_used: `twice {…}` says the prelude's times)
-with_reached(program: Node, module: text, in_front: bool, also: list): Node := {
+with_reached(program: Node, modules: list, in_front: bool, also: list): Node := {
 	own_names = statements_in(program).map(declared_name)
 	own = own_heads(program)
-	aliases = with_call_forms(module_aliases(module), definition_slices(module).map(slice => slice#1) + own.keys)
+	all_slices = []
+	module_words = {}
+	for module in modules {
+		all_slices += definition_slices(module)
+		aliases = module_aliases(module)
+		for word in aliases.keys { module_words[word] = aliases[word] }
+	}
+	aliases = with_call_forms(module_words, all_slices.map(slice => slice#1) + own.keys)
 	program = aliased(program, aliases, own)
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
 	# numbers' ↑), a program's assignment to a module's global sets it (`tuning = 442` retunes sound's notes), any other
 	# definition replaces the module's
 	assigned = statements_in(program).filter(statement => is_key(statement, Op.Assign) and key_of(statement) is symbol).map(declared_name)
 	kept = slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX) or (slice#2.starts_with("global ") and slice#1 in assigned)
-	slices = definition_slices(module).filter(kept)
+	slices = all_slices.filter(kept)
 	# the statements of each reached slice, by its text
 	reached = {}
 	wanted = symbol_words(program) + lowering_words(program) + also
-	uses = ø
 	while #wanted > 0 {
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
 			if slice#1 == word and slice#2 not in reached {
-				if uses == ø { uses = use_lines(module) }
-				slice_node = early_sugared(plain_node(parsed(slice#2, uses)))
+				slice_node = early_sugared(slice_parse(slice))
 				reached[slice#2] = statements_in(slice_node)
 				wanted += words_within(slice_node) + lowering_words(slice_node)
 			}
@@ -397,7 +413,7 @@ called_words(n: Node): list := {
 # case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
 with_used_modules(program: Node, folder: text): Node := {
 	sources = used_module_sources(statements_in(program), folder, [])
-	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes, [])
+	if #sources#1 == 0 then program else with_reached(program, sources#1, yes, [])
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen]
 used_module_sources(statements: any, folder: text, seen: any): list := {
@@ -408,7 +424,7 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 			seen += [name_of(used)]
 			source = file_text(std_module_path(name_of(used)))
 			if source != ø {
-				inner = used_module_sources(statements_in(plain_node(parsed(source))), folder, seen)
+				inner = used_module_sources(statements_in(source_parse(std_module_path(name_of(used)), source)), folder, seen)
 				sources += inner#1 + [source]
 				seen = inner#2
 			}
