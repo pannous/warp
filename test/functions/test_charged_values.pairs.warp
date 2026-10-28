@@ -1,0 +1,8 @@
+# `h := e` is charged (P71, wiki/charged.md): evaluated at each use, so it follows the variables it reads, through words
+
+'g = 1; h := g * 10; g = 2; h'	20
+'g = 1; h := g * 10; k := h + 1; g = 2; k'	21
+'g = 1; f(n) := n * g; h := f(3); g = 5; h'	15
+'c := 5 * 2; c'	10
+'x := 1; x = 2; x'	2
+'use sound; tuning = 442; A4'	442

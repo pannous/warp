@@ -209,6 +209,44 @@ definitions(program: Node): Node := {
 	data_blocks(bottom_up(conversions(methods_lifted(program)), definition))
 }
 
+# A value definition `A4 := midi_hertz(69)` is charged (P71, wiki/charged.md): evaluated at each use, so it follows
+# what it reads, `tuning = 442; A4` is 442. One reading a variable, or a word that reads one, through any chain of
+# words, is the function of no parameters `A4() := …`, whose bare use is its call; one reading only constants stays a
+# value (P70)
+charged_values(program: Node): Node := {
+	statements = statements_in(program)
+	variables = []
+	for statement in statements { variables = names_bound(statement, variables) }
+	varying = {}
+	for name in variables { varying[name] = yes }
+	readings = statements.map(statement => reading(statement)).filter(read => read != ø and not varying.has(read#1))
+	grown = yes
+	while grown {
+		grown = no
+		for read in readings {
+			if not varying.has(read#1) and read#2.any(name => varying.has(name)) {
+				varying[read#1] = yes
+				grown = yes
+			}
+		}
+	}
+	assigned = {}
+	for n in nodes_in(program) { if is_key(n, Op.Assign) and key_of(n) is symbol { assigned[name_of(key_of(n))] = yes } }
+	if not is_statement_sequence(program) { return program }
+	group_like(program, statements.map(statement => charged(statement, varying, assigned)))
+}
+# [name, the names it mentions] of a function or value definition, else ø
+reading(statement: Node): list? := {
+	parts = definition_of(statement)
+	if parts != ø { return [parts.name, mentioned_names(parts.body, [])] }
+	if is_charged_value(statement) then [name_of(key_of(statement)), mentioned_names(value_of(statement), [])] else ø
+}
+is_charged_value(n: Node): bool := is_key(n, Op.Define) and key_of(n) is symbol and not is_lambda(value_of(n)) and not mentions(value_of(n), implicit_parameter)
+# a value definition of a varying name, unless the name is also assigned, `x := 1; x = 2`, a variable
+charged(statement: Node, varying: map, assigned: map): Node := {
+	if is_charged_value(statement) and varying.has(name_of(key_of(statement))) and not assigned.has(name_of(key_of(statement))) then Key(call_node(key_of(statement), []), Op.Define, value_of(statement)) else statement
+}
+
 # A program's conversions (decision general-conversions; Rust twin: src/lowering/types/conversions.rs): `Person as
 # text := it.name` says how a Person turns into text, and every `p as text` of the program then uses it. Each target
 # gets one function trying the program's conversions to it in the order written, the built-in one last:
