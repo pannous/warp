@@ -1,0 +1,24 @@
+# warp's wasmtime C API (card wasmtime-bundled, notes/native_rebuild_speed.md): wasmtime's own C API with the copying
+# collector, which Collector::Auto then picks, and the setters its C API lacks. The native warp (core/native/driver.warp)
+# and built executables load it beside warp as libwarp_wasmtime (@rpath). Its own workspace: wasmtime 50 here, the
+# harness's 49 elsewhere. Built per platform by .github/workflows/wasmtime-c-api.yml, locally by scripts/wasmtime-c-api.sh
+[package]
+name = "warp-wasmtime"
+version = "50.0.0"
+edition = "2024"
+# wasmtime 50's own minimum: the lock file stays buildable by CI's stable toolchain
+rust-version = "1.97"
+publish = false
+
+[lib]
+name = "warp_wasmtime"
+crate-type = ["cdylib"]
+
+[dependencies]
+wasmtime-c-api = { version = "=50.0.0", package = "wasmtime-c-api-impl", default-features = false, features = ["wasi", "cache", "parallel-compilation", "gc", "gc-drc", "gc-copying", "cranelift"] }
+wasmtime = { version = "=50.0.0", default-features = false }
+
+[profile.release]
+strip = "debuginfo"
+
+[workspace]
