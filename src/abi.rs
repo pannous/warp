@@ -20,6 +20,8 @@ pub fn value_of_text(text: &str) -> Node {
 }
 
 pub const NEW_BOOL: &str = "new_bool";
+/// The constructor of a list of bytes the host left in memory, one call for the whole list (core/runtime/builders.warp)
+pub const NEW_BYTES: &str = "new_bytes";
 
 /// new_type(name, body): a type declaration in code, `class P {x: int}` (Kind::TypeDef)
 pub const NEW_TYPE: &str = "new_type";

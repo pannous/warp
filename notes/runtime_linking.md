@@ -133,6 +133,12 @@ the function index space anyway, so the program numbers only its own functions, 
   both forms: its texts are data segment 1 (own_texts_segment), the runtime's segment 0 (empty in x.mod.wasm), so no
   offset depends on the runtime's texts. hello: full 140694, trimmed 24216, mod 22823 bytes; hello, a class with
   text() and a `use c` program print the same all three ways.
+- **Only what it uses** (card mod-imports-used): a program also written as x.mod.wasm is emitted relocatable
+  (prebuilt.warp relocates(): padded, marked operands as runtime.wasm's), and linked_bytes moves every operand to the
+  module's own numbering with one rule (module_layout.warp Move: a table old -> new, else a shift; rebased() and
+  moved_body() apply it): imports only the host words, C functions and runtime functions its code calls, only the
+  runtime function types used (behind the fixed GC types), its classes and own types behind them, its texts from
+  segment 0. hello.mod.wasm 22823 -> 2727 bytes (imports 1074, code 844, types 271); x.wasm and x.full.wasm as before.
 
 ## Steps (sub-cards of runtime-linking)
 | card | step |

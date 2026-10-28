@@ -31,7 +31,8 @@ def host_call(body: Body, name: text, arguments: list): TypedCode {
 host_builders = [["new_empty", [], "built_empty"], ["new_int", [ValueKind.Int], "built_int"], ["new_bool", [ValueKind.Int], "built_bool"],
 	["new_float", [ValueKind.Float], "built_float"], ["new_codepoint", [ValueKind.Char], "built_codepoint"], ["new_text", [ValueKind.Char, ValueKind.Char], "built_text"],
 	["new_symbol", [ValueKind.Char, ValueKind.Char], "built_symbol"], ["new_key", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_key"],
-	["new_list", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_list"], ["new_type", [ValueKind.Node, ValueKind.Node], "built_type"], ["error_of", [ValueKind.Node], "built_error"]]
+	["new_list", [ValueKind.Node, ValueKind.Node, ValueKind.Int], "built_list"], ["new_type", [ValueKind.Node, ValueKind.Node], "built_type"], ["error_of", [ValueKind.Node], "built_error"],
+	["new_bytes", [ValueKind.Char, ValueKind.Char, ValueKind.Int], "built_bytes"]]
 # made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
 # the trap detail the host left (src/host/native.rs raised)
 def exported_builders(): any {

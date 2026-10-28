@@ -69,6 +69,7 @@ aliased(n: Node, aliases: list): any := {
 module_text(n: Node): any := {
 	if is_empty_call(n, "library_sources") { return library_literal(library_texts(run_library(), "")) }
 	if is_empty_call(n, "library_parses") { return library_literal(packed_parses(library_texts(run_library(), ""))) }
+	if is_empty_call(n, "library_slices") { return library_literal(baked_slices(library_texts(run_library(), ""))) }
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
 	# the file itself, never a bundled copy: the compiler being built carries this tree's lib/
 	path = module_source_path(n#2)
@@ -81,6 +82,12 @@ packed_parses(files: map): map := {
 	parses = {}
 	for path in files.keys { parses[path] = pack(source_parse(run_library() + "/" + path, files[path])) }
 	parses
+}
+# each file's slices (prelude_words.warp LIBRARY_SLICES), a line `name start end` per slice
+baked_slices(files: map): map := {
+	slices = {}
+	for path in files.keys { slices[path] = slice_spans(files[path]).map(span => "${span#1} ${span#2} ${span#3}").join("\n") }
+	slices
 }
 # a map of texts as the code of its literal, `{"prelude.warp": "…", …}`: a map value is no code the passes can walk
 library_literal(files: map): Node := listed("{", ",", files.keys.map(path => keyed(":", path, files[path])))
