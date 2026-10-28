@@ -92,6 +92,7 @@ wasmtime_caller_export_get(caller: handle, name: text, size: i64, item: pointer)
 wasmtime_memory_data(context: handle, memory: pointer): handle from "warp_wasmtime"
 wasmtime_func_type(context: handle, function: pointer): handle from "warp_wasmtime"
 wasm_functype_results(type: handle): handle from "warp_wasmtime"
+wasm_functype_params(type: handle): handle from "warp_wasmtime"
 wasmtime_func_call(context: handle, function: pointer, arguments: pointer, count: i64, results: pointer, results_count: i64, trap: pointer): handle from "warp_wasmtime"
 wasmtime_error_message(error: handle, message: pointer) from "warp_wasmtime"
 wasmtime_error_exit_status(error: handle, status: pointer): bool from "warp_wasmtime"
@@ -520,7 +521,9 @@ raised_message(context: handle, instance: pointer, failed: pointer): text := {
 	trap = allocate(8)
 	long_at(trap).value = 0
 	if not wasmtime_instance_export_get(context, instance, "trap_message", 12, function) or not wasmtime_instance_export_get(context, instance, "memory", 6, memory) { "" } else {
-		checked(wasmtime_func_call(context, function + 8, argument, 1, result, 1, trap), trap)
+		# a compiler the seed built before trap_message took the code exports it without one
+		taken = native_long(wasm_functype_params(wasmtime_func_type(context, function + 8)))
+		checked(wasmtime_func_call(context, function + 8, argument, taken, result, 1, trap), trap)
 		text_in(wasmtime_memory_data(context, memory + 8), long_at(result + VALUE_OFFSET).value)
 	}
 }
