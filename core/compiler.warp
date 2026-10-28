@@ -100,8 +100,11 @@ fresh_runtime_words(): Node := {
 # across runs and lowered once (card pure-warm-start); lowered at the first compile, so `help` needs none
 lowered_runtime_words(): Node := kept(RUNTIME_WORDS) ?? fresh_runtime_words()
 
-# the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core
-compile(source: text, folder: text): any := {
+# the wasm module of the source, as bytes; the refusal, a text, of a program outside the emitter's core. Given a
+# runtime.wasm, a library module behind it, its operands relocatable (write_module)
+compile(source: text, folder: text, library_runtime: any = ø): any := {
+	global module
+	module.relocating = library_runtime != ø
 	known = #diagnosed
 	# the C functions it calls, its foreign lines left out (c_imports.warp)
 	foreign = c_functions_of(source, library_folder)
@@ -114,7 +117,7 @@ compile(source: text, folder: text): any := {
 	if failing { throw failing }
 	// TODO runtime_words Instead of work-based, should we create a class for (partial) modules?  (card runtime-words-modules)
 	# behind runtime.wasm
-	prepend_runtime(runtime_bytes())
+	prepend_runtime(library_runtime ?? runtime_bytes())
 	made = typed_wasm_module(program, lowered_runtime_words(), with_c_functions(host_words, foreign#2), emitter_kinds(program))
 	# a form beyond the emitter's core gives the refusal's text, the compile's error
 	if made is text { throw owned_refusal(made, c_refused_form(made, foreign#2, library_folder)) }
@@ -194,14 +197,11 @@ write_runtime(file: text) := {
 	if made is text { raise made }
 	write_bytes(file, made)
 }
-# <name>.wasm, the bundled module compiled once behind runtime.wasm (emitter/prebuilt.warp library_module), for
+# <name>.wasm, the bundled module compiled once behind runtime.wasm (emitter/prebuilt.warp own_items_from), for
 # programs to be linked to; `warp rebuild` writes one beside warp.wasm for each. Every program has the prelude, used
 # again it would define its words twice
 write_module(name: text, runtime_file: text, file: text) := {
-	program = checked_program(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, prelude_source)
-	made = library_module(program, read_bytes(runtime_file), lowered_runtime_words(), host_words)
-	if made is text { raise made }
-	write_bytes(file, made)
+	write_bytes(file, compile(if name == "prelude" then "ø" else "use " + name + "\nø", library_folder, read_bytes(runtime_file)))
 }
 # every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder; one refusing to prebuild is
 # named and stays compiled from source
