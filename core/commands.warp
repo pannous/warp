@@ -98,6 +98,7 @@ build_native(source_file: text, library: text) := {
 	emitting_file(working_relative(source_file))
 	executable = source_file.remove_suffix(".warp")
 	stem = executable + ".native"
+	native_build = yes
 	write_bytes(stem + ".wasm", compile(source, folder_of(source_file)))
 	header = stem.split("/").last() + ".h"
 	write(stem + ".main.c", native_main(header, library))

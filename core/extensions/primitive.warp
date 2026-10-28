@@ -99,6 +99,9 @@ global primitive_place = ""
 # the bytes of the text literals from DATA_START on, and each text's address there
 global primitive_data = []
 global text_addresses = {}
+# whether the module is compiled for a native build (commands.warp build_native), the only one that answers C calls:
+# warp's own host would answer them with its GC conventions, wrongly
+global native_build = no
 
 # a source whose first line, after a `#!` line, is the mark builds whole in primitive mode
 is_primitive_file(source: text): bool := mark_line(source.split("\n")) != ø
@@ -190,6 +193,7 @@ c_imported(lines: list): list := {
 }
 # a catalog line's [name, library, parameter types, parameter names, result type] as an import of the module
 declare_c_function(d: list, line: int) := {
+	if not native_build { throw "primitive mode cannot emit " + d#1 + " from '" + d#2 + "' but in a native build: a primitive file's C calls run by `warp build native`" + place_text([line, 1], module.program_file) }
 	refused = (d#3 + [d#5]).filter(type => type not in c_primitive_types)
 	if #refused > 0 { throw "primitive mode cannot emit " + d#1 + "'s " + refused#1 + place_text([line, 1], module.program_file) }
 	primitive_functions[d#1] = PrimitiveFunction(d#1, d#4, d#3.map(type => c_primitive_types[type]), c_primitive_types[d#5], ø, #primitive_functions, d#2)
