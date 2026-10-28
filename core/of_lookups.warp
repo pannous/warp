@@ -39,7 +39,7 @@ as_one_phrase(n: Node): any := {
 }
 
 # `name words… last = body`: the words through last, else ø
-spaced_words(parts: any): any := {
+spaced_words(parts: list): any := {
 	if #parts < 2 { return ø }
 	head = assignment_head(parts#(#parts))
 	if head == ø { return ø }
@@ -60,7 +60,7 @@ assignment_head(n: Node): any := match n {
 }
 
 # `square of a number = …`, `f x = …`: a definition head; `width of p = 12` without a type word assigns the lookup
-is_spaced_definition(parts: any): bool := {
+is_spaced_definition(parts: list): bool := {
 	words = spaced_words(parts)
 	if words == ø { return no }
 	if not (words contains of_word) { return yes }
@@ -85,7 +85,7 @@ member_of(object: Node, member: Node): Node := match object {
 }
 
 # `of` after anything but a type head, `in` and `from` after a selector word: `words in t`
-is_selection(parts: any, at: int): bool := {
+is_selection(parts: list, at: int): bool := {
 	word = parts[at]
 	before = parts[at - 1]
 	if is_word(word, of_word) { return not is_type_head(before) }
@@ -93,13 +93,13 @@ is_selection(parts: any, at: int): bool := {
 }
 
 # where the object starting at `at` ends: after its item, or with a qualifier at the end of the phrase
-phrase_end(parts: any, at: int): int := {
+phrase_end(parts: list, at: int): int := {
 	if at + 1 < #parts and parts[at + 1] is symbol and qualifier_words contains name_of(parts[at + 1]) { return #parts }
 	at + 1
 }
 
 # the last `of` first: `a of b of c` is `a of c.b`, then `c.b.a`
-looked_up(parts: any): any := {
+looked_up(parts: list): any := {
 	at = #parts - 2
 	while at >= 1 {
 		if is_selection(parts, at) {
@@ -131,7 +131,7 @@ type_of_body(n: Node): any := match n {
 none_word = symbol(HiddenWord.OfNone as text)
 
 # `type of x` as `type(x)`, `print type of x` as `print type(x)`
-type_of_called(parts: any): any := {
+type_of_called(parts: list): any := {
 	at = 0
 	while at < #parts and type_of_body(parts[at]) == none_word { at += 1 }
 	if at == #parts { return parts }

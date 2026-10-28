@@ -164,12 +164,12 @@ member_word(name: text): any := {
 keeps_word(name: text, word: text): bool := takes_map_first(name) or module.runtime[word].signature.result not in ["", "any"]
 # whether the variable only ever holds map literals with that entry in the function: `n = {keys: 5}; n.keys` is its
 # own member 5, known as it compiles (Rust's OwnMember of a variable only holding object literals)
-holds_entry(body: Body, receiver: any, entry: text): bool := {
+holds_entry(body: Body, receiver: Node, entry: text): bool := {
 	if not (receiver is symbol) { return no }
 	values = assigned_values(body.function.body, name_of(receiver))
 	#values > 0 and values.all(value => is_group(value) and bracket_of(value) == "{" and #value > 0 and value.all(is_map_entry) and value.any(item => entry_name(item) == entry))
 }
-entry_name(entry: any): text := if key_of(entry) is symbol then name_of(key_of(entry)) else "" + key_of(entry)
+entry_name(entry: Node): text := if key_of(entry) is symbol then name_of(key_of(entry)) else "" + key_of(entry)
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list (Rust's node_bytes)
 byte_count_words = {bytecount: yes, byte_size: yes}
 def byte_size_code(value: TypedCode): TypedCode { runtime_call("node_bytes", [TypedCode(ValueKind.Node, boxed(value))]) }
@@ -306,7 +306,7 @@ def program_statements(program: Node): list {
 	block_statements(program)
 }
 # the definitions of a program into `functions`, the statements left
-def collect_functions(program: Node, functions: any): list {
+def collect_functions(program: Node, functions: map): list {
 	kept = []
 	for n in program_statements(program).map(unkeyworded) {
 		head = function_head(n)
@@ -562,7 +562,7 @@ def float_remainder(body: Body, a: list, b: list): TypedCode {
 	TypedCode(ValueKind.Float, kept + get_dividend + get_dividend + get_divisor + [op.f64_div, op.f64_trunc] + get_divisor + [op.f64_mul, op.f64_sub])
 }
 
-def assignment(body: Body, target: any, value: TypedCode): TypedCode {
+def assignment(body: Body, target: Node, value: TypedCode): TypedCode {
 	if is_key(target, Op.Hash) and key_of(target) != ø and subscript_name(value_of(target)) != ø {
 		return map_assignment(body, key_of(target), subscript_name(value_of(target)), value)
 	}
@@ -1140,7 +1140,7 @@ def reached_words(program: Node): any {
 	reached
 }
 # the words a runtime word refers to, but its parameters and locals: time_text's local `clock` imports no host clock
-def collect_referred_outside(word: Function, found: any) {
+def collect_referred_outside(word: Function, found: map) {
 	referred = {}
 	collect_referred(word.body, referred)
 	own = {}
@@ -1149,7 +1149,7 @@ def collect_referred_outside(word: Function, found: any) {
 	for name in referred.keys { if name not in own { found[name] = yes } }
 }
 # the names a body assigns, `x = …`
-def collect_assigned(n: Node, found: any) {
+def collect_assigned(n: Node, found: map) {
 	if type(n) is key {
 		if op_of(n) == Op.Assign and key_of(n) is symbol { found[name_of(key_of(n))] = yes }
 		collect_assigned(value_of(n), found)
@@ -1161,7 +1161,7 @@ def collect_assigned(n: Node, found: any) {
 # stderr: a field the class does not declare), `m[k] = v` too (node_put) (cards text-field, declared-class)
 emitter_operator_words = {".": ["map_get", "has_field", "field_with"], "#": ["node_put"]}
 
-def collect_referred(n: Node, found: any) {
+def collect_referred(n: Node, found: map) {
 	if n is symbol { found[name_of(n)] = yes }
 	if type(n) is key and op_of(n) in emitter_operator_words { for word in emitter_operator_words[op_of(n)] { found[word] = yes } }
 	if type(n) is key and key_of(n) != opaque_symbol {
@@ -1193,14 +1193,14 @@ def std_word(n: Node): any {
 std_arguments(arguments: Node): list := if is_empty_list(arguments) then [] else items_of(arguments)
 # the module of a lowered program, or a text naming the first form outside the core; `runtime` is
 # core/runtime.warp lowered by the same pipeline
-wasm_module(program: Node, runtime: any): any := hosted_wasm_module(program, runtime, {})
+wasm_module(program: Node, runtime: Node): any := hosted_wasm_module(program, runtime, {})
 
 # as wasm_module, the host words `host` names importable (src/compiler/self_hosted.rs passes src/host.rs's)
-hosted_wasm_module(program: Node, runtime: any, host: any): any := typed_wasm_module(program, runtime, host, {})
+hosted_wasm_module(program: Node, runtime: Node, host: map): any := typed_wasm_module(program, runtime, host, {})
 
 # as hosted_wasm_module, an unannotated parameter of the kind analyzer.warp found in `kinds` (WARP_SELF_ANALYSIS); again
 # while a call widens a parameter (passed)
-typed_wasm_module(program: Node, runtime: any, host: any, kinds: any): any := {
+typed_wasm_module(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.later_kinds = {}
 	module.widenings = 0
 	widenings = -1
@@ -1211,7 +1211,7 @@ typed_wasm_module(program: Node, runtime: any, host: any, kinds: any): any := {
 	}
 	compiled
 }
-module_compiled(program: Node, runtime: any, host: any, kinds: any): any := {
+module_compiled(program: Node, runtime: Node, host: map, kinds: map): any := {
 	module.kinds = kinds
 	module.emitting_at = ""
 	module.widened_now = {}

@@ -45,7 +45,7 @@ define_statement_name(n: Node): text := {
 definition_bodies(program: Node): list := nodes_in(program).filter(is_define_statement).map(value_of)
 
 # the variables declared `global: y`
-global_variables(program: Node): any := {
+global_variables(program: Node): map := {
 	found = {}
 	for part in nodes_in(program) {
 		if is_operator(part, ":") and key_of(part) == symbol(global_word) {
@@ -72,7 +72,7 @@ declared_nonlocals(body: Node): any := {
 
 # the kind a value evidently has as written: a literal, a list literal, `v as T`, arithmetic of numbers, or a name or
 # call whose kind `known` gives; "" for anything else
-evident_kind(value: any, known: any): text := {
+evident_kind(value: Node, known: map): text := {
 	if value is int { return "Int" }
 	if value is number { return "Float" }
 	if value is text { return "Text" }
@@ -93,10 +93,10 @@ evident_kind(value: any, known: any): text := {
 # the kind of a type word as messages name it, "" for another type
 type_kind(type_name: any): text := if type_name is symbol then entry(shown_kinds, entry(type_kinds, name_of(type_name).lower())) else ""
 # the map's entry of the key, "" when it has none (an empty map is ø)
-entry(map: any, key: text): text := if key in map then map[key] else ""
+entry(map: map, key: text): text := if key in map then map[key] else ""
 
 # the evident kind for kind changes, bools and functions apart (card bool-assign)
-given_kind_of(value: any, results: any): text := {
+given_kind_of(value: Node, results: map): text := {
 	if value is bool { return bool_kind }
 	if value is key and op_of(value) in bool_operators { return bool_kind }
 	if is_operator(value, "as") and value_of(value) is symbol and name_of(value_of(value)).lower() in bool_types { return bool_kind }
@@ -142,7 +142,7 @@ last_expression(body: Node): any := {
 
 # the first kind change of the assignments in program order, not into function definitions (their own scopes):
 # `kinds` holds variable variable's evident kind, "" once it was given a value of no evident kind
-first_kind_change(n: Node, kinds: any, results: any, global_names: any): any := {
+first_kind_change(n: Node, kinds: map, results: map, global_names: map): any := {
 	if is_define_statement(n) {
 		name = define_statement_name(n)
 		if name is empty { return ø }
@@ -173,7 +173,7 @@ first_kind_change(n: Node, kinds: any, results: any, global_names: any): any := 
 }
 
 # the variable `name` is given `value` of the evident kind `given`: the change as a fact, else ø, its kind noted
-given_kind(name: text, given: text, value: any, kinds: any): any := {
+given_kind(name: text, given: text, value: Node, kinds: map): any := {
 	was = if name in kinds then kinds[name] else ø
 	kind = given
 	if was and given {

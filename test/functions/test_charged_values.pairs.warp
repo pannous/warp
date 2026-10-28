@@ -4,5 +4,5 @@
 'g = 1; h := g * 10; k := h + 1; g = 2; k'	21
 'g = 1; f(n) := n * g; h := f(3); g = 5; h'	15
 'c := 5 * 2; c'	10
-'x := 1; x = 2; x'	2
+'try { eval("x := 1; x = 2; x") } catch e { is_error(e) }'	1	P71: assigning a := name afterwards is an error (card p71-says)
 'use sound; tuning = 442; A4'	442
