@@ -19,8 +19,9 @@ module, beside the compiler; not embedded, user), and a program is the runtime w
 - Library modules (sound, units, markup…) are prebuilt the same way and appended between runtime and user code, each
   rewritten by its base offset through its padded calls (`use sound; midi(440Hz)` costs 2 s today, all of it compiling
   sound.warp).
-- What isn't wasm and needs it (sugar rules, alias and keyword tables, operator instances) is pre-baked, e.g. as
-  constant GC globals of warp.wasm.
+- What isn't wasm and needs it (sugar rules, alias and keyword tables, operator instances) is pre-baked into warp.wasm
+  as packed literals unpacked lazily on first use (Supervisor's call: constant GC globals would build every tree at
+  instantiation, even for hello).
 
 ## Steps (sub-cards of runtime-linking)
 | card | step |
