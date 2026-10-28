@@ -1,22 +1,28 @@
 # .github/workflows/release.yml
 name: Release
 
-# A version tag (v*, matching Cargo.toml's version) publishes a GitHub release with prebuilt binaries: per platform one
-# tarball holding `warp`, `warp-runtime` (the stub `warp build --exe` needs next to warp), `warp-page-runtime` (the
-# stub of page apps, with the web view), the warp-written compilers warp.wasm and warp-self.wasm, and lib/. The Homebrew formula
-# (packaging/homebrew/Formula/warp.rb, copied to pannous/homebrew-tap) installs these binaries (no Rust build); its
-# --HEAD install builds main from source. Then the tarballs are repackaged: PyPI wheels (warp-language), .deb and .rpm
-# (warp-lang) on the release; notes/packaging.md
+# A version tag (v*, matching Cargo.toml's version) publishes a GitHub release of the native warp (decision
+# rust-gone-in-1-5: no Rust binary shipped): per platform one tarball, a folder that is warp's lib/ with the compilers
+# warp.wasm, runtime.wasm, warp-self.wasm and modules/ in it, the native warp (core/native/warp.warp built by
+# `warp build native`) and our libwarp_wasmtime beside it (packaging/native_dist.sh). The Homebrew formula
+# (packaging/homebrew/Formula/warp.rb, copied to pannous/homebrew-tap) installs it; .deb and .rpm (warp-lang) repackage
+# it; notes/packaging.md. A dry run (workflow_dispatch, dry) builds and gates everything and publishes nothing.
+# Bootstrap: the compilers are built by the seed, run by a cargo-built harness used as a build tool only (1.5: no
+# release before it ships a native warp; from 1.6 the previous release's native warp runs them, card native-bootstrap).
 on:
   push:
     tags: [ "v*" ]
   workflow_dispatch:
     inputs:
       tag:
-        description: existing tag to (re)build the binaries for
+        description: existing tag (or, for a dry run, any ref) to build the release of
         required: true
       repackage:
-        description: only the packages (wheels, deb, rpm, AUR) from the release's existing tarballs, which keep their sha256
+        description: only the packages (deb, rpm) from the release's existing tarballs, which keep their sha256
+        type: boolean
+        default: false
+      dry:
+        description: build and gate the tarballs as workflow artifacts, publish nothing
         type: boolean
         default: false
 
@@ -24,162 +30,124 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_NET_OFFLINE: false
   TAG: ${{ inputs.tag || github.ref_name }}
+  DRY: ${{ inputs.dry && '1' || '' }}
+  WABT: 1.0.42  # wasm2c, which `warp build native` runs
+  WARP_NO_WINDOW: 1
+  WARP_HINTS: 0
 
 permissions:
   contents: write
 
 jobs:
   release:
-    if: ${{ !inputs.repackage }}
+    if: ${{ !inputs.repackage && !inputs.dry }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
     - name: create the release (once)
       env:
         GH_TOKEN: ${{ github.token }}
-      run: gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --generate-notes --title "warp $TAG"
+      run: gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --notes-file "notes/releases/$TAG.md" --title "warp $TAG"
 
-  binaries:
+  compilers:
+    # warp.wasm built from the tag's lib/ by the seed (the newest seed-* release's asset, scripts/refresh-seed.sh),
+    # runtime.wasm and modules/ beside it, warp-self.wasm promoted when warp.wasm compiles compiler.warp once more
     needs: release
-    if: ${{ !inputs.repackage }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - { os: macos-latest, target: aarch64-apple-darwin }
-        - { os: macos-latest, target: x86_64-apple-darwin }
-        # pinned: the runner's glibc is the oldest the binaries run on (ubuntu-latest becomes 26.04, glibc 2.43)
-        - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
-        - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
-    runs-on: ${{ matrix.os }}
+    if: ${{ !cancelled() && !inputs.repackage }}
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WARP_TIME_LIMIT: 900
     steps:
     - uses: actions/checkout@v7
       with:
         ref: ${{ env.TAG }}
     - uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
     - name: build
-      # four builds: built on its own, warp-runtime has no Cranelift (about 1 MB); the page stub adds the web view;
-      # warp-host (notes/warp_host.md), the small host of pure programs, in its size profile, copied beside the others
       run: |
-        cargo build --release --locked --target ${{ matrix.target }}
-        cargo build --release --locked --target ${{ matrix.target }} -p warp-runtime --features webview --bin warp-page-runtime
-        cargo build --release --locked --target ${{ matrix.target }} -p warp-runtime --bin warp-runtime
-        cargo build --profile host --locked --target ${{ matrix.target }} -p warp-runtime --features host --bin warp-host
-        cp target/${{ matrix.target }}/host/warp-host target/${{ matrix.target }}/release/warp-host
-    - uses: actions/upload-artifact@v7
-      with:
-        name: binaries-${{ matrix.target }}
-        path: |
-          target/${{ matrix.target }}/release/warp
-          target/${{ matrix.target }}/release/warp-runtime
-          target/${{ matrix.target }}/release/warp-page-runtime
-          target/${{ matrix.target }}/release/warp-host
-
-  compilers:
-    # the warp-written compiler as wasm (with runtime.wasm, the runtime words every compile links, written beside
-    # warp.wasm by `warp rebuild`; card release-ships-runtime), shipped in every tarball beside the binary and as release assets (user
-    # 2026-10-22, card installed-compilers): warp.wasm (plain `warp`'s, compiled by the seed) and warp-self.wasm
-    # (`warp self`'s: warp.wasm promoted by `warp rebuild self` when it compiles compiler.warp to its own bytes; the job
-    # fails without that fixpoint), both from the tag's lib/ by the tag's linux binary; an installed warp never builds one
-    needs: binaries
-    if: ${{ !inputs.repackage }}
-    runs-on: ubuntu-24.04
-    env:
-      GH_TOKEN: ${{ github.token }}
-      # the first `warp self` after a build computes the compiler's kept values: more than the 60 s default on a runner
-      WARP_TIME_LIMIT: 900
-      WARP_NO_WINDOW: 1
-      WARP_HINTS: 0
-    steps:
-    - uses: actions/checkout@v7
-      with:
-        ref: ${{ env.TAG }}
-    - uses: actions/download-artifact@v8
-      with:
-        name: binaries-x86_64-unknown-linux-gnu
-        path: bin
-    - name: build
-      # gated on `warp` hello; `warp self` hello traps on a cold cache (card self-cold-trap), so it is only shown
-      run: |
-        chmod +x bin/*
-        export WARP_LIB=$PWD/lib
-        # the seed beside the binary: the newest seed-* release's asset (scripts/refresh-seed.sh publishes them)
+        cargo build --release --locked --bin warp
         seed=$(gh release list --repo pannous/warp --limit 100 --json tagName -q '[.[] | select(.tagName | startswith("seed-"))][0].tagName')
-        gh release download "$seed" --repo pannous/warp --pattern warp-seed.wasm --dir bin
-        bin/warp rebuild pure
-        bin/warp rebuild self
-        said=$(bin/warp samples/hello/hello.warp 2>&1) || true
-        echo "$said"
-        [[ $said == *Hello* ]]
-        bin/warp self samples/hello/hello.warp || echo "warp self hello failed (card self-cold-trap)"
-    - name: warp-host's shipped cache
-      # warp-self's kept values, made once in a tarball's layout and shipped in every one (the same on every
-      # platform), so an installed warp-host's first run takes ~4 s, not ~26 s; no machine code (card warp-host-size)
-      run: |
-        mkdir -p stage && cp bin/warp-host bin/warp-self.wasm stage/ && cp -RL lib stage/lib
-        packaging/host_cache.sh stage
-        mv stage/host-cache bin/host-cache
+        gh release download "$seed" --repo pannous/warp --pattern warp-seed.wasm --dir target/release
+        export WARP_LIB=$PWD/lib
+        target/release/warp rebuild pure
+        target/release/warp rebuild self
+        target/release/warp samples/hello/hello.warp | grep Hello
     - uses: actions/upload-artifact@v7
       with:
         name: compilers
         path: |
-          bin/warp.wasm
-          bin/runtime.wasm
-          bin/warp-self.wasm
-          bin/host-cache
-    - name: upload
-      run: gh release upload "$TAG" bin/warp.wasm bin/runtime.wasm bin/warp-self.wasm --clobber
+          lib/warp.wasm
+          lib/runtime.wasm
+          lib/warp-self.wasm
+          lib/modules/*.wasm
 
-  tarballs:
-    # per platform one tarball, made once (its sha256 is the formula's): the binaries, the compilers and the tag's lib/
-    # side by side, as an installed warp finds them (src/modules/program_file.rs installed_folder)
+  native:
     needs: compilers
-    if: ${{ !inputs.repackage }}
+    if: ${{ !cancelled() && needs.compilers.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
-        target: [ aarch64-apple-darwin, x86_64-apple-darwin, x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu ]
-    runs-on: ubuntu-latest
+        include:
+        - { os: macos-latest, target: aarch64-apple-darwin, wabt: macos-arm64, library: libwarp_wasmtime.dylib }
+        - { os: macos-15-intel, target: x86_64-apple-darwin, wabt: brew, library: libwarp_wasmtime.dylib }
+        # pinned: the runner's glibc is the oldest the binaries run on
+        - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu, wabt: linux-x64, library: libwarp_wasmtime.so }
+        - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, wabt: linux-arm64, library: libwarp_wasmtime.so }
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ARCHIVE: warp-${{ inputs.tag || github.ref_name }}-${{ matrix.target }}.tar.gz
     steps:
     - uses: actions/checkout@v7
       with:
         ref: ${{ env.TAG }}
-    - uses: actions/download-artifact@v8
-      with:
-        name: binaries-${{ matrix.target }}
-        path: dist
+    - uses: dtolnay/rust-toolchain@stable
     - uses: actions/download-artifact@v8
       with:
         name: compilers
-        path: dist
-    - name: upload
-      env:
-        GH_TOKEN: ${{ github.token }}
-        ARCHIVE: warp-${{ env.TAG }}-${{ matrix.target }}.tar.gz
+        path: lib
+    - name: wabt
+      # `warp build native` runs the wasm2c on the PATH, with the runtime and headers of its prefix
       run: |
-        chmod +x dist/warp dist/warp-runtime dist/warp-page-runtime dist/warp-host
-        cp -RL lib dist/lib
-        tar -czf "$ARCHIVE" -C dist warp warp-runtime warp-page-runtime warp-host warp.wasm runtime.wasm warp-self.wasm lib host-cache
-        gh release upload "$TAG" "$ARCHIVE" --clobber
+        if [ "${{ matrix.wabt }}" = brew ]; then brew install wabt; exit; fi
+        gh release download "$WABT" --repo WebAssembly/wabt --pattern "wabt-$WABT-${{ matrix.wabt }}.tar.gz"
+        tar -xzf "wabt-$WABT-${{ matrix.wabt }}.tar.gz" -C "$RUNNER_TEMP"
+        echo "$RUNNER_TEMP/wabt-$WABT/bin" >>"$GITHUB_PATH"
+    - name: our wasmtime C API
+      # the copying collector and the GC setters wasmtime's own lacks (card wasmtime-bundled), in lib/, where
+      # `warp build native` links it from and the native warp finds it beside itself
+      run: |
+        cargo build --release --locked --manifest-path crates/wasmtime-capi/Cargo.toml
+        cp crates/wasmtime-capi/target/release/${{ matrix.library }} lib/
+    - name: the native warp
+      run: |
+        cargo build --release --locked --bin warp
+        WARP_LIB=$PWD/lib target/release/warp build native core/native/warp.warp
+    - name: the release folder, gated
+      run: |
+        packaging/native_dist.sh dist
+        tar -czf "$ARCHIVE" -C dist .
+    - uses: actions/upload-artifact@v7
+      with:
+        name: tarball-${{ matrix.target }}
+        path: ${{ env.ARCHIVE }}
+    - name: upload
+      if: ${{ !inputs.dry }}
+      run: gh release upload "$TAG" "$ARCHIVE" --clobber
 
   packages:
-    # the tarballs repackaged: PyPI wheels of warp-language, .deb and .rpm of warp-lang, all attached to the release
-    needs: tarballs
-    if: ${{ !cancelled() && contains(fromJSON('["success", "skipped"]'), needs.tarballs.result) }}
+    # the linux tarballs repackaged as .deb and .rpm of warp-lang, attached to the release
+    needs: native
+    if: ${{ !cancelled() && !inputs.dry && contains(fromJSON('["success", "skipped"]'), needs.native.result) }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       NFPM: https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz
     steps:
     - uses: actions/checkout@v7 # the workflow's own commit (the tag, on a tag push), with its packaging/ files
-    - name: wheels
-      run: |
-        gh release download "$TAG" -p 'warp-*.tar.gz' -D dist/tarballs
-        python3 packaging/pypi/build_wheels.py "${TAG#v}" dist/tarballs dist/wheels
     - name: deb and rpm
       run: |
+        gh release download "$TAG" -p 'warp-*linux-gnu.tar.gz' -D dist/tarballs
         curl -sSfL "$NFPM" | sudo tar -xz -C /usr/local/bin nfpm
         mkdir -p dist/linux # nfpm writes a file of that name when the directory is missing
         for arch in x86_64:amd64 aarch64:arm64; do
@@ -190,38 +158,9 @@ jobs:
             (cd "dist/$target" && VERSION=${TAG#v} ARCH=${arch#*:} nfpm package -f "$GITHUB_WORKSPACE/packaging/linux/nfpm.yaml" -p "$format" -t "$GITHUB_WORKSPACE/dist/linux")
           done
         done
-    - name: check the amd64 .deb and wheel
+    - name: check the amd64 .deb
       run: |
         sudo dpkg -i dist/linux/warp-lang_*_amd64.deb
-        warp eval '6*7' | grep -q 42
-        # outside the checkout: the installed lib/ and compilers in share/warp (card installed-compilers)
         (cd "$RUNNER_TEMP" && warp '6*7' | grep -q 42)
-        pip install --no-deps --break-system-packages --prefix "$RUNNER_TEMP/pip" dist/wheels/*manylinux*_x86_64.whl
-        "$RUNNER_TEMP/pip/bin/warp" eval '6*7' | grep -q 42
-        (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/pip/bin/warp" pure '6*7' | grep -q 42)
     - name: upload
-      run: gh release upload "$TAG" dist/wheels/*.whl dist/linux/* --clobber
-    - uses: actions/upload-artifact@v7
-      with:
-        name: wheels
-        path: dist/wheels
-
-  pypi:
-    # trusted publishing: no token, PyPI trusts this workflow (one-time setup in notes/packaging.md, then the repository
-    # variable PYPI_PUBLISH=true turns this job on)
-    needs: packages
-    # !cancelled(): a repackage run skips binaries, and a skipped ancestor would skip this job too
-    if: ${{ !cancelled() && needs.packages.result == 'success' && vars.PYPI_PUBLISH == 'true' }}
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-    steps:
-    - uses: actions/download-artifact@v8
-      with:
-        name: wheels
-        path: dist/wheels
-    - uses: pypa/gh-action-pypi-publish@v1.14.0
-      with:
-        packages-dir: dist/wheels
-        skip-existing: true
+      run: gh release upload "$TAG" dist/linux/* --clobber
