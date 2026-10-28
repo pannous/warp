@@ -21,6 +21,7 @@ command_help = [
 	["build <file>", "The module <file>.wasm (no executable under WASI)"],
 	["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
 	["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
+	["modules [folder]", "Every standard module so, beside the folder's runtime.wasm"],
 	["<file> <out.wasm> [folder [lib]]", "Compile the file to the module, as `warp pure` calls it"]
 ]
 # the commands that run what they compile: plain WASI cannot instantiate the module

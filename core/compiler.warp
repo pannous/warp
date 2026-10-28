@@ -202,6 +202,13 @@ write_module(name: text, runtime_file: text, file: text) := {
 	if made is text { raise made }
 	write_bytes(file, made)
 }
+# every standard module (rewrites.warp std_module_names) as <name>.wasm in the folder of runtime.wasm; one refusing to
+# prebuild is named and stays compiled from source
+write_modules(folder: text) := {
+	for name in std_module_names {
+		try { write_module(name, folder + "/" + RUNTIME_WASM, folder + "/" + name + ".wasm") } catch refusal { print name + ".wasm not prebuilt: " + refusal }
+	}
+}
 source_or_code(position: int): text := if #args > position then source_of(args#(position + 1)) else ""
 show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
@@ -220,5 +227,6 @@ match command {
 	"repl-step": repl_step(args#2, args#3, args#4)
 	"runtime": write_runtime(if #args > 1 then args#2 else RUNTIME_WASM)
 	"module": write_module(args#2, if #args > 2 then args#3 else RUNTIME_WASM, if #args > 3 then args#4 else args#2 + ".wasm")
+	"modules": write_modules(if #args > 1 then args#2 else ".")
 	_: if command in running_commands then refuse_running(command) else refuse_native(command)
 }

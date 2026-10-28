@@ -20,6 +20,8 @@ const REPL_STEP: &str = "repl-step";
 /// compiler.warp's command writing runtime.wasm, and the file it is beside warp.wasm
 const RUNTIME_COMMAND: &str = "runtime";
 const RUNTIME_FILE: &str = "runtime.wasm";
+/// compiler.warp's command writing every standard module's <name>.wasm beside runtime.wasm (card modules-prebuilt)
+const MODULES_COMMAND: &str = "modules";
 
 const COMPILER_FILE: &str = "compiler/compiler.warp";
 /// The custom section of a build file naming what it was built from: lib/, lib/'s fingerprint, the warp build
@@ -429,6 +431,7 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 	written.map_err(|failure| error(&format!("{}: {failure}", path.display())))?;
 	ship(path, &bytes)?;
 	write_runtime(by, &path.with_file_name(RUNTIME_FILE))?;
+	write_modules(by, path.parent().unwrap_or(library()))?;
 	warm(by)?;
 	Ok(module)
 }
@@ -436,7 +439,17 @@ fn build(by: Compiler, path: &Path) -> Result<CompiledModule, Node> {
 /// runtime.wasm beside warp.wasm: the runtime words compiled once by compiler.warp's `runtime` command, for linking
 /// programs to (notes/runtime_linking.md "runtime.wasm format")
 fn write_runtime(by: Compiler, path: &Path) -> Result<(), Node> {
-	let written = command(vec![RUNTIME_COMMAND.into(), path.display().to_string()], by);
+	written_by_command(RUNTIME_COMMAND, path, by)
+}
+
+/// the standard modules beside runtime.wasm, each compiled once behind it, for linking programs to (notes/runtime_linking.md
+/// "Library modules"); compiler.warp names them and those it could not prebuild
+fn write_modules(by: Compiler, folder: &Path) -> Result<(), Node> {
+	written_by_command(MODULES_COMMAND, folder, by)
+}
+
+fn written_by_command(name: &str, path: &Path, by: Compiler) -> Result<(), Node> {
+	let written = command(vec![name.into(), path.display().to_string()], by);
 	match written.drop_meta() {
 		Node::Error(_) => Err(error(&format!("{}: {}", path.display(), written.serialize()))),
 		_ => Ok(()),

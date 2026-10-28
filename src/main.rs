@@ -95,6 +95,9 @@ const LOWER_JSON_COMMAND: &str = "lower --json";
 const PURE_COMMAND: &str = "pure";
 /// `warp self <file> [arguments…]`: as `warp pure`, with warp-self.wasm, warp.wasm promoted at a fixpoint
 const SELF_COMMAND: &str = "self";
+/// `warp runtime`, `warp module sound`, `warp modules`: compiler.warp's commands writing the prebuilt modules, as plain
+/// `warp` takes them (notes/runtime_linking.md)
+const PREBUILDING_COMMANDS: [&str; 3] = ["runtime", "module", "modules"];
 /// `warp pure repl`: the console with each line compiled by compiler.warp (card wasm-commands)
 const REPL_COMMAND: &str = "repl";
 /// `warp pure run <file|code>`, `warp pure eval <code>`: the same as without the word, the program run here
@@ -104,10 +107,11 @@ const PURE_RUNNING_WORDS: [&str; 2] = ["run", "eval"];
 /// to its own bytes (decision compiler-build, card rust-bootstrap; src/compiler/standalone.rs)
 const REBUILD_COMMAND: &str = "rebuild";
 /// The first words the command line takes as commands, for unknown_command's suggestion
-const COMMAND_WORDS: [&str; 34] = [
+const COMMAND_WORDS: [&str; 36] = [
 	"run", "pure", "self", "rebuild", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix",
 	"types", "data", "tool", "fetch", "dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app",
-	"help", "version", "docs", "wiki", "home", "lsp", "start", "runtime",
+	"help", "version", "docs", "wiki", "home", "lsp", "start", "runtime", "module",
+	"modules",
 ];
 /// How far a mistyped command may be from the command it suggests (`formt` → format)
 const MISTYPED_LETTERS: usize = 2;
@@ -412,6 +416,8 @@ fn run_command(args: &[String], given: &[String]) {
 		std::process::exit(if failed > 0 { 1 } else { 0 });
 	} else if args[1] == REBUILD_COMMAND {
 		rebuild_compilers(args.get(2).map(String::as_str));
+	} else if PREBUILDING_COMMANDS.contains(&args[1].as_str()) && !file_exists(&args[1]) {
+		run_by_compiler(&args[1..], warp::compiler::standalone::Compiler::RustCompiled);
 	} else if [PURE_COMMAND, SELF_COMMAND].contains(&args[1].as_str()) && args.len() > 2 {
 		use warp::compiler::standalone::Compiler;
 		let by = if args[1] == SELF_COMMAND { Compiler::SelfCompiled } else { Compiler::RustCompiled };
