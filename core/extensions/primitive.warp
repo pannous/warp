@@ -119,7 +119,8 @@ export_name(f: PrimitiveFunction): text := {
 declare_primitive(head: list, body: Node) := {
 	name = name_of(head#1)
 	parameters = head[1 ..< #head]
-	f = PrimitiveFunction(name, parameters.map(p => name_of(key_of(p))), parameters.map(p => primitive_parameter_type(p)), primitive_result(body), body, #primitive_functions)
+	types = parameters.map(p => primitive_parameter_type(p))
+	f = PrimitiveFunction(name, parameters.map(p => name_of(key_of(p))), types, primitive_result(body), body, #primitive_functions)
 	primitive_functions[name] = f
 }
 # `struct Header { len: u32; tag: u8 }` (or `class`), which the passes leave as the opaque view ["type", name, body]:
