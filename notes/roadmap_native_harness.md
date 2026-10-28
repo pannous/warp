@@ -36,7 +36,9 @@ MVP wasm.
    from a ~50-line C shim or a direct libc import. Done when hello, arguments and file read/write all work.
 3. **Driver**: revive driver.warp as an `@primitive` file. It loads warp.wasm and user modules through wasmtime's C API
    (libwasmtime + wasm.h, called by FFI like any C library) and links the host words that warp.wasm imports, as C
-   callbacks. Done when `warp-native hello.warp` prints Hello.
+   callbacks. Done when `warp-native hello.warp` prints Hello. The same runner, with a program's precompiled module
+   appended, is the executable `warp build` writes for GC programs (user 2026-10-28), replacing the Rust warp-runtime
+   stub that executable-prints-value reconnects in the meantime.
 4. **Results without gc_traits**: compiled programs print their own value (card rust-bootstrap, "a standalone
    executable needs the program compiled to print its value"), so the native host never reads GC objects back.
 5. **Host words move to lib/**: the files, time, ffi, web, graphics and sound words in src/ (~20k lines) become warp
