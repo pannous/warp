@@ -6,7 +6,8 @@
 #   warp app.warp args…   compiled by warp.wasm, then run with the arguments (a `--` before them left out)
 #   warp run app.…        the same; `warp pure …` too (warp.wasm is the pure compiler)
 #   warp self …           the same by warp-self.wasm, warp.wasm's build of itself
-#   warp                  warp.wasm's help
+#   warp                  the console on a terminal (as `warp repl`), else warp.wasm's help
+#   warp repl             the console: each line compiled by warp.wasm's repl-step after the lines that stay, then run
 #   warp rebuild [pure]   warp.wasm built anew from lib/ by the seed (rebuilt)
 #   warp rebuild self     warp.wasm promoted to warp-self.wasm once it compiles itself (promoted)
 #   warp rebuild seed     the seed's runtime and machine code made (seed_shipped)
@@ -20,7 +21,14 @@ setenv(name: pointer, value: pointer, overwrite: i32): i32 from "c"
 unsetenv(name: pointer): i32 from "c"
 realpath(path: pointer, resolved: pointer): handle from "c"
 mkdir(path: pointer, mode: i32): i32 from "c"
+fork(): i32 from "c"
+waitpid(child: i32, status: pointer, options: i32): i32 from "c"
+fdopen(descriptor: i32, mode: pointer): handle from "c"
+getline(line: pointer, capacity: pointer, stream: handle): i64 from "c"
+isatty(descriptor: i32): i32 from "c"
 FOLDER_MODE = 493
+STDIN = 0
+STDOUT = 1
 
 # a compiler with this executable's words from `first` on: a command runs, code is compiled to WARP_RUN_TO and run after
 hosted(compiler: text, first: int): nothing := {
@@ -137,6 +145,44 @@ real_path(path: text): text := {
 	free(resolved)
 	text_from(copy, length as u32)
 }
+# `warp repl`, the console: each line compiled by warp.wasm's repl-step after the lines that stayed (declarations,
+# uses: its state file), then run, in a child process of its own, so a line that fails ends only its child
+console(compiler: text): nothing := {
+	print("Interactive console (Ctrl+D to exit)")
+	state = joined(text_from(compiled_path().address, compiled_path().length - 5), ".repl.warp")
+	write_file(state, "")
+	input = fdopen(STDIN, c_string("r"))
+	line_cell = allocate(8)
+	capacity = allocate(8)
+	while yes {
+		fd_write(STDOUT, "🌀", 1, allocate(4))
+		length = getline(line_cell, capacity, input)
+		if length < 0 then break
+		line = trimmed_end(native_copy(long_at(line_cell).value, length))
+		if line.length > 0 {
+			child = fork()
+			if child == 0 {
+				line_ran(compiler, state, line)
+				exit(0)
+			}
+			waitpid(child, allocate(4), 0)
+		}
+	}
+	print("")
+	unlink(state)
+}
+# one console line compiled after the state's lines (repl-step keeps its declarations there), then its module run
+line_ran(compiler: text, state: text, line: text): nothing := {
+	module = compiled_path()
+	file_ran(compiler, words(compiler, "repl-step", state, line, module, joined(library_folder(), "/runtime.wasm")))
+	written_run(module, "repl", arg_count())
+}
+# the `length` bytes at a C pointer, copied into a text
+native_copy(at: handle, length: i64): text := {
+	copy = allocate(length as i32)
+	memcpy(copy, at, length)
+	text_from(copy, length as u32)
+}
 # a file of warp code: its name ends in .warp, or a file of that name exists
 is_warp_file(name: text): bool := ends_with(name, ".warp") or read_file(name).length > 0
 
@@ -145,13 +191,17 @@ prefixed = arg_count() > 1 and (same_text(arg(1), "run") or same_text(arg(1), "p
 first = if prefixed then 2 else 1
 compiler = if prefixed and same_text(arg(1), "self") then joined(library_folder(), "/warp-self.wasm") else compiler_path()
 if arg_count() <= first {
-	given = compiler_arguments(compiler)
-	added(given, "help")
-	file_ran(compiler, given)
+	if not prefixed and isatty(STDIN) != 0 { console(compiler) } else {
+		given = compiler_arguments(compiler)
+		added(given, "help")
+		file_ran(compiler, given)
+	}
 } else {
 	if ends_with(arg(first), ".wasm") { module_ran(first) } else {
 		if not prefixed and same_text(arg(1), "rebuild") { rebuild_command() } else {
-			if is_warp_file(arg(first)) { compiled_and_run(compiler, first) } else { hosted(compiler, first) }
+			if same_text(arg(first), "repl") or same_text(arg(first), "console") { console(compiler) } else {
+				if is_warp_file(arg(first)) { compiled_and_run(compiler, first) } else { hosted(compiler, first) }
+			}
 		}
 	}
 }
