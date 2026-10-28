@@ -18,7 +18,7 @@ command_help = [
 	["data <file>", "Read untrusted data without evaluating it"],
 	["lower <code|file>", "Show the program after the lowering passes"],
 	["compile <file> [out.wasm]", "Only the module, <file>.wasm, without running"],
-	["build [--wasm] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
+	["build [--wasm|--exe] [--trim=<way>] <file>", "The executable <file> and its modules; a primitive file natively (wasm2c, cc)"],
 	["build native <file>", "A primitive file as a native executable, by wasm2c and cc"],
 	["runtime [runtime.wasm]", "The runtime words compiled once, for linking programs to"],
 	["module <name> [runtime.wasm] [<name>.wasm]", "A bundled module compiled once behind runtime.wasm, for linking programs to"],
@@ -116,12 +116,13 @@ quoted_path(path: text): text := "\"" + path + "\""
 # os's `command(line)`, a shell line run, what it printed; compiler.warp's `command` is its command word
 shell(line: text): text := std_io("os", "command", [line])
 
-# `warp build [--wasm] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
+# `warp build [--wasm|--exe] [--trim=<way>] app.warp` (wiki/cli.md; `warp compile` is build --wasm): a primitive file as a native executable (build_native),
 # any other as app.full.wasm (behind the whole runtime), app.mod.wasm (importing runtime.wasm), app.wasm (app.full.wasm
 # trimmed by Binaryen's wasm-opt) and the executable app (warp-runtime carrying app.wasm's machine code). The native
 # warp adds where runtime.wasm and the stub lie: --runtime=<file> --stub=<file>
 OPTION_MARK = "--"
 WASM_ONLY = "--wasm"
+EXE_ONLY = "--exe"
 # what a build of inline code is called: out.wasm, the executable out
 INLINE_STEM = "out"
 # what the Rust compiler built and the warp one doesn't yet: a page's site, its module, WIT, a component, WAGI
@@ -148,8 +149,12 @@ build(words: list) := {
 	separate_output = stem + ".mod.wasm"
 	compile_written(source, stem + ".full.wasm", if is_file then folder_of(target) else ".")
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? DEFAULT_TRIM)
-	for written in [stem + ".full.wasm", separate_output, stem + ".wasm"] { print "compiled " + size_of(written) + " bytes to " + written }
+	modules = [stem + ".full.wasm", separate_output, stem + ".wasm"]
 	if not (WASM_ONLY in options) { write_executable(stem + ".wasm", option_of(options, "stub"), stem) }
+	if EXE_ONLY in options { shell("rm -f " + modules.map(quoted_path).join(" ")) } else {
+		for written in modules { print "compiled " + size_of(written) + " bytes to " + written }
+	}
+	ø
 }
 # a file's size in bytes, as text
 size_of(file: text): text := shell("wc -c < " + quoted_path(file)).trim()
